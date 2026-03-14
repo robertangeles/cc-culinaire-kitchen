@@ -19,7 +19,28 @@ import {
   text,
   boolean,
   timestamp,
+  customType,
 } from "drizzle-orm/pg-core";
+
+/**
+ * pgvector column type (1536 dimensions — OpenAI text-embedding-3-small).
+ * Stored as a PostgreSQL `vector` type; retrieved as a number array.
+ * All vector similarity operations are performed via raw SQL (`<=>` operator).
+ */
+const vector1536 = customType<{ data: number[]; driverData: string }>({
+  dataType() {
+    return "vector(1536)";
+  },
+  fromDriver(value: string) {
+    return value
+      .replace(/^\[|\]$/g, "")
+      .split(",")
+      .map(Number);
+  },
+  toDriver(value: number[]) {
+    return `[${value.join(",")}]`;
+  },
+});
 
 /**
  * The `prompt` table stores system prompt templates used by the AI chatbot.
@@ -327,6 +348,55 @@ export const credential = pgTable("credential", {
   credentialCategory: varchar("credential_category", { length: 30 }).notNull(),
   keyVersion: integer("key_version").notNull().default(1),
   updatedBy: integer("updated_by"),
+  createdDttm: timestamp("created_dttm").notNull().defaultNow(),
+  updatedDttm: timestamp("updated_dttm").notNull().defaultNow(),
+});
+
+/**
+ * The `knowledge_document` table stores curated culinary knowledge base
+ * documents with their vector embeddings for semantic (RAG) search.
+ *
+ * Populated at server startup by `syncDocuments()` in knowledgeService.
+ * The `content_hash` column (SHA-256 of file contents) allows the sync
+ * to skip documents that have not changed since they were last embedded.
+ * The `embedding` column holds a 1536-dimensional OpenAI embedding vector;
+ * cosine similarity search is performed via the `<=>` pgvector operator.
+ */
+export const knowledgeDocument = pgTable("knowledge_document", {
+  documentId: serial("document_id").primaryKey(),
+  filePath: varchar("file_path", { length: 500 }).notNull().unique(),
+  title: varchar("title", { length: 200 }).notNull(),
+  category: varchar("category", { length: 100 }).notNull(),
+  tags: text("tags").array().notNull().default([]),
+  body: text("body").notNull(),
+  contentHash: varchar("content_hash", { length: 64 }).notNull(),
+  embedding: vector1536("embedding"),
+  embeddedAtDttm: timestamp("embedded_at"),
+  createdDttm: timestamp("created_dttm").notNull().defaultNow(),
+  updatedDttm: timestamp("updated_dttm").notNull().defaultNow(),
+});
+
+/**
+ * The `kitchen_profile` table stores each user's culinary preferences.
+ *
+ * Populated via the My Kitchen onboarding wizard shown after first login,
+ * and editable from the Profile → My Kitchen tab at any time.
+ * The profile is injected as context into every AI chat and recipe request
+ * so that responses are personalised to the user's skill level, equipment,
+ * and dietary restrictions.
+ *
+ * `onboarding_done_ind` is set to TRUE once the user completes or skips
+ * the wizard so it is never shown again.
+ */
+export const kitchenProfile = pgTable("kitchen_profile", {
+  kitchenProfileId: serial("kitchen_profile_id").primaryKey(),
+  userId: integer("user_id").notNull().unique(),
+  skillLevel: varchar("skill_level", { length: 50 }).notNull().default("home_cook"),
+  cuisinePreferences: text("cuisine_preferences").array().notNull().default([]),
+  dietaryRestrictions: text("dietary_restrictions").array().notNull().default([]),
+  kitchenEquipment: text("kitchen_equipment").array().notNull().default([]),
+  servingsDefault: integer("servings_default").notNull().default(4),
+  onboardingDoneInd: boolean("onboarding_done_ind").notNull().default(false),
   createdDttm: timestamp("created_dttm").notNull().defaultNow(),
   updatedDttm: timestamp("updated_dttm").notNull().defaultNow(),
 });

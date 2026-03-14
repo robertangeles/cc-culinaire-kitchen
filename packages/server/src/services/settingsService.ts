@@ -26,6 +26,9 @@ const SETTING_DEFAULTS: Record<string, string> = {
   image_generation_enabled: "true",
   image_generation_model: "gemini-2.0-flash-exp-image-generation",
   guest_session_idle_hours: "24",
+  // Vector search is off by default; enable after confirming pgvector extension
+  // is installed on Railway PostgreSQL and OPENAI_API_KEY is configured.
+  vector_search_enabled: "false",
 };
 
 /**

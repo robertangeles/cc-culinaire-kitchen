@@ -7,7 +7,7 @@
  */
 
 import { Link, NavLink } from "react-router";
-import { ChefHat, Settings } from "lucide-react";
+import { ChefHat, Settings, UtensilsCrossed, Croissant, GlassWater, MessageSquare } from "lucide-react";
 import { useSettings } from "../../context/SettingsContext.js";
 import { useAuth } from "../../context/AuthContext.js";
 import { UserMenu } from "./UserMenu.js";
@@ -54,6 +54,27 @@ export function Sidebar() {
         )}
         <span className="font-semibold text-lg truncate text-center w-full">{pageTitle}</span>
       </Link>
+
+      {/* Module navigation */}
+      <nav className="px-3 pt-4 flex flex-col gap-1">
+        <p className="px-3 text-xs font-medium text-stone-500 uppercase tracking-wider mb-1">Modules</p>
+        <NavLink to="/chat/new" className={navLinkClass}>
+          <MessageSquare className="size-4" />
+          Chat Assistant
+        </NavLink>
+        <NavLink to="/recipes" className={navLinkClass}>
+          <UtensilsCrossed className="size-4" />
+          Recipe Lab
+        </NavLink>
+        <NavLink to="/patisserie" className={navLinkClass}>
+          <Croissant className="size-4" />
+          Patisserie Lab
+        </NavLink>
+        <NavLink to="/spirits" className={navLinkClass}>
+          <GlassWater className="size-4" />
+          Spirits Lab
+        </NavLink>
+      </nav>
 
       {/* Spacer — pushes settings + user menu to the bottom */}
       <div className="flex-1" />

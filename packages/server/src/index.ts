@@ -23,9 +23,10 @@ import stripeRouter from "./routes/stripe.js";
 import { credentialsRouter } from "./routes/credentials.js";
 import guestRouter from "./routes/guest.js";
 import { sitemapRouter } from "./routes/sitemap.js";
+import { recipesRouter } from "./routes/recipes.js";
 import { handleWebhook } from "./controllers/stripeController.js";
 import { errorHandler } from "./middleware/errorHandler.js";
-import { buildIndex } from "./services/knowledgeService.js";
+import { syncDocuments } from "./services/knowledgeService.js";
 import { hydrateEnvFromCredentials } from "./services/credentialService.js";
 import { ensureEncryptionKey, ensurePiiKeys } from "./utils/crypto.js";
 import { cleanupStaleSessions } from "./services/guestService.js";
@@ -76,6 +77,7 @@ app.use("/api/permissions", permissionsRouter);
 app.use("/api/stripe", stripeRouter);
 app.use("/api/credentials", credentialsRouter);
 app.use("/api/guest", guestRouter);
+app.use("/api/recipes", recipesRouter);
 
 // Sitemap
 app.use("/sitemap.xml", sitemapRouter);
@@ -90,7 +92,7 @@ app.use(errorHandler);
 ensureEncryptionKey();
 ensurePiiKeys();
 hydrateEnvFromCredentials().then(() => {
-  buildIndex().then(() => {
+  syncDocuments().then(() => {
     const server = app.listen(port, () => {
       log.info(`CulinAIre Kitchen server running on http://localhost:${port}`);
       log.info(`AI Provider: ${process.env.AI_PROVIDER ?? "anthropic"}`);
