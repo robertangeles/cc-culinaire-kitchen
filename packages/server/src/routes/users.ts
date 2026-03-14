@@ -27,6 +27,7 @@ import {
   handleUpdateSubscription,
   handleRemoveUserOrganisation,
 } from "../controllers/userController.js";
+import { handleGetKitchenProfile, handleUpsertKitchenProfile } from "../controllers/kitchenProfileController.js";
 
 const router = Router();
 
@@ -35,6 +36,10 @@ router.use(authenticate);
 
 // Profile (self)
 router.get("/profile", handleGetProfile);
+
+// Kitchen profile (personalisation)
+router.get("/kitchen-profile", handleGetKitchenProfile);
+router.put("/kitchen-profile", handleUpsertKitchenProfile);
 router.patch("/profile", handleUpdateProfile);
 router.post("/change-password", handleChangePassword);
 router.post("/profile/avatar", (req, res, next) => {

@@ -20,6 +20,7 @@ import { getModel, getProviderName } from "./providerService.js";
 import { getSystemPrompt } from "./promptService.js";
 import { searchKnowledge, readKnowledgeFile } from "./knowledgeService.js";
 import { getAllSettings } from "./settingsService.js";
+import { buildContextString } from "./userContextService.js";
 import pino from "pino";
 
 const logger = pino({ name: "aiService" });
@@ -56,6 +57,8 @@ const logger = pino({ name: "aiService" });
 export interface ChatOptions {
   /** When true, enable web search for this request (requires global setting). */
   webSearch?: boolean;
+  /** Authenticated user ID for kitchen profile context injection (0 = guest). */
+  userId?: number;
 }
 
 export async function streamChat(
@@ -70,6 +73,18 @@ export async function streamChat(
     logger.error({ err }, "Failed to load system prompt");
     throw err;
   }
+
+  // Inject personalised kitchen context into the system prompt.
+  // The {{KITCHEN_CONTEXT}} placeholder is replaced with the user's profile
+  // string, or removed when the user is a guest or has no profile.
+  const kitchenContext = await buildContextString(options.userId ?? 0).catch((err) => {
+    logger.warn({ err }, "streamChat: failed to build kitchen context — proceeding without");
+    return "";
+  });
+  systemPrompt = systemPrompt.replace(
+    "{{KITCHEN_CONTEXT}}",
+    kitchenContext ? `\n${kitchenContext}\n` : ""
+  );
 
   // Web search requires both the global admin setting AND a per-request toggle.
   const settings = await getAllSettings();

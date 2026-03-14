@@ -101,13 +101,41 @@
 - [x] Trust proxy configuration for Railway deployment
 - [x] Guest limit reached → redirect to login page
 
+### Phase 6 — Knowledge Expansion + Recipe Labs
+- [x] Create feature branch: `feature/knowledge-expansion-recipe-lab`
+- [x] DB migration: `add-knowledge-vector.ts` (knowledge_document table + pgvector + IVFFlat index)
+- [x] DB migration: `add-kitchen-profile.ts` (kitchen_profile table + user_id index)
+- [x] Schema: added `knowledgeDocument` + `kitchenProfile` Drizzle table definitions
+- [x] Settings: added `vector_search_enabled: "false"` default (safe rollout flag)
+- [x] Upgraded `knowledgeService.ts`: `syncDocuments()` startup sync (SHA-256 hash check + pgvector embed), `vectorSearch()` via `@ai-sdk/openai` text-embedding-3-small, keyword fallback on failure
+- [x] Wrote `userContextService.ts`: `getProfile()`, `upsertProfile()`, `buildContextString()` (kitchen context injected into AI system prompt)
+- [x] Updated `systemPrompt.md`: allergen guardrail (non-negotiable), confidence language tiers, `{{KITCHEN_CONTEXT}}` placeholder
+- [x] Updated `aiService.ts`: kitchen context injection replacing `{{KITCHEN_CONTEXT}}` placeholder
+- [x] Wrote three recipe prompt files: `prompts/recipe/recipePrompt.md`, `patisseriePrompt.md`, `spiritsPrompt.md` (domain-specific AI personas)
+- [x] Wrote `recipeService.ts`: `generateRecipe()` with shared Zod schema, retry + prose fallback, hero image via imageService
+- [x] Wrote `recipeController.ts`: input validation + domain routing
+- [x] Wrote `recipes.ts` route: POST /api/recipes/generate, /patisserie, /spirits
+- [x] Wrote `kitchenProfileController.ts`: GET/PUT /api/users/kitchen-profile
+- [x] Updated `users.ts` route: added kitchen-profile endpoints
+- [x] Updated `index.ts`: syncDocuments() replaces buildIndex(), recipesRouter mounted
+- [x] Wrote `KitchenWizard.tsx`: 4-step onboarding modal
+- [x] Wrote `KitchenOnboarding.tsx`: top-level onboarding orchestrator
+- [x] Wrote `RecipeForm.tsx`: domain-aware recipe generation form
+- [x] Wrote `RecipeHero.tsx`: full-width hero image component
+- [x] Wrote `RecipeCard.tsx`: two-column ingredients/method layout with interactive checkboxes
+- [x] Wrote `RecipeLabPage.tsx`: domain-aware page (recipe/patisserie/spirits)
+- [x] Updated `Sidebar.tsx`: added Recipe Lab / Patisserie Lab / Spirits Lab nav links
+- [x] Updated `App.tsx`: added /recipes, /patisserie, /spirits routes + KitchenOnboarding overlay
+- [x] Wrote eval suite: `knowledge-search.eval.ts` (20 cases), `recipe-output.eval.ts` (15 cases), `allergen-guardrail.eval.ts` (10 cases)
+
 ## Up Next
-- [x] Run database migrations (add-address-bio-reset, add-pii-encryption-columns, add-guest-session, add-guest-ip-tracking)
-- [x] Run PII data migration (encrypt-existing-pii)
-- [ ] Clean up debug console.log statements
+- [ ] Run DB migrations on Railway: `add-knowledge-vector.ts` + `add-kitchen-profile.ts`
+- [ ] Enable pgvector extension in Railway PostgreSQL dashboard
+- [ ] Add `OPENAI_API_KEY` credential via Integrations panel (for embeddings)
+- [ ] Flip `vector_search_enabled = true` in Site Settings once pgvector is confirmed
 - [ ] Rotate exposed Anthropic API key
 - [ ] Deploy to Railway
-- [ ] Commit to GitHub
+- [ ] Merge feature branch to main (`--no-ff`)
 
 ## Future Modules
 - [ ] Recipe Development Lab

@@ -25,6 +25,8 @@ import { ForgotPasswordPage } from "./pages/ForgotPasswordPage.js";
 import { ResetPasswordPage } from "./pages/ResetPasswordPage.js";
 import { MfaSetupPage } from "./pages/MfaSetupPage.js";
 import { ProfilePage } from "./pages/ProfilePage.js";
+import { RecipeLabPage } from "./pages/RecipeLabPage.js";
+import { KitchenOnboarding } from "./components/onboarding/KitchenOnboarding.js";
 
 /**
  * Context that lets any component force a fresh ChatPage remount on "/chat/new".
@@ -90,6 +92,8 @@ export function App() {
                     <ChatStreamProvider>
                     <ConversationProvider>
                     <div className="flex h-screen overflow-hidden bg-stone-50">
+                      {/* Kitchen onboarding wizard — shown once to new users */}
+                      <KitchenOnboarding />
                       {/* Slim icon rail — branding, new chat, settings, user */}
                       <Sidebar />
                       {/* Main content area */}
@@ -102,6 +106,9 @@ export function App() {
                           <Route path="/settings" element={<AuthenticatedOnly><SettingsPage /></AuthenticatedOnly>} />
                           <Route path="/profile" element={<AuthenticatedOnly><ProfilePage /></AuthenticatedOnly>} />
                           <Route path="/mfa-setup" element={<AuthenticatedOnly><MfaSetupPage /></AuthenticatedOnly>} />
+                          <Route path="/recipes" element={<RecipeLabPage domain="recipe" />} />
+                          <Route path="/patisserie" element={<RecipeLabPage domain="patisserie" />} />
+                          <Route path="/spirits" element={<RecipeLabPage domain="spirits" />} />
                         </Routes>
                         <Footer />
                       </main>

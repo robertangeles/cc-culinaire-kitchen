@@ -54,7 +54,10 @@ export async function handleChatStream(
 
   try {
     log.info({ messageCount: parsed.data.messages.length, webSearch: parsed.data.webSearch }, "Chat request");
-    await streamChat(parsed.data.messages, res, { webSearch: parsed.data.webSearch });
+    await streamChat(parsed.data.messages, res, {
+      webSearch: parsed.data.webSearch,
+      userId: req.user?.sub ?? 0,
+    });
   } catch (err) {
     log.error(err, "Chat stream error");
     next(err);
