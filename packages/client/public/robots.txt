@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /
+Allow: /login
+Allow: /register
+Disallow: /chat/
+Disallow: /settings
+Disallow: /profile
+Disallow: /mfa-setup
+Disallow: /verify-email
+Sitemap: https://culinaire.kitchen/sitemap.xml

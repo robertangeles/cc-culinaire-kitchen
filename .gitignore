@@ -31,3 +31,9 @@ coverage/
 
 # Misc
 *.tsbuildinfo
+
+# Local tooling state
+.claude/
+
+# User uploads
+uploads/

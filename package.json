@@ -4,6 +4,7 @@
   "private": true,
   "description": "AI-powered platform for chefs, restaurateurs, and culinary professionals",
   "scripts": {
+    "predev": "node scripts/kill-dev-ports.mjs",
     "dev": "turbo run dev",
     "build": "turbo run build",
     "lint": "turbo run lint",
@@ -20,7 +21,8 @@
   },
   "pnpm": {
     "onlyBuiltDependencies": [
-      "esbuild"
+      "esbuild",
+      "bcrypt"
     ]
   }
 }

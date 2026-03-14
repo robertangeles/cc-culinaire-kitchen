@@ -37,6 +37,9 @@ Project Rules for Claude Code Project: CulinAIre Kitchen
 -   Diff behavior between main and your changes when relevant
 -   Ask: "Would a staff engineer approve this?"
 -   Run tests, check logs, demonstrate correctness
+-   When any user-facing feature is added or modified, the corresponding
+    `docs/` file must be created or updated before the task is marked
+    complete
 
 ## 5. Demand Elegance (Balanced)
 
@@ -49,6 +52,42 @@ Project Rules for Claude Code Project: CulinAIre Kitchen
 -   When given a bug report: investigate logs and errors and resolve it
 -   Do not require the user to guide debugging steps
 -   Fix failing tests and CI issues independently when possible
+
+## 7. Testing Standards
+
+Act as a senior QA engineer. Test at the smallest level possible.
+
+When a new feature is added, generate:
+
+1.  Unit tests — for services, utilities, and pure functions
+2.  Integration tests — for API routes with real database
+3.  End-to-end tests — for full user flows
+4.  Edge cases and failure scenarios
+
+Rules:
+
+-   Every new service function needs a unit test
+-   Every new API endpoint needs an integration test
+-   Every user-facing feature needs at least one E2E test
+-   Test the unhappy path: invalid input, missing auth, rate limits,
+    edge cases
+
+## 8. Enterprise Code Quality
+
+Every change must meet production-grade standards:
+
+-   No shortcuts, workarounds, or "good enough" implementations
+-   Every feature must be tested end-to-end before marking complete
+-   Error handling must be specific and actionable (no generic messages)
+-   Configuration must be admin-controllable (no hardcoded values that
+    users need to change)
+-   API keys and credentials must be database-driven via the
+    Integrations panel
+-   UI changes must refresh immediately without requiring a page reload
+-   Unused or experimental code must not ship — verify all code paths
+    work
+-   When integrating any external API, make a real test call during
+    implementation to verify the endpoint/model/key works
 
 ------------------------------------------------------------------------
 
@@ -93,24 +132,30 @@ remain separated.
 
 # Project Folder Structure
 
+This is a **pnpm monorepo**. All application code lives under `packages/`.
+
     culinaire-kitchen/
 
-    client/
-      components/
-      pages/
-      styles/
-      hooks/
-
-    server/
-      routes/
-      controllers/
-      services/
-      models/
-      middleware/
-
-    shared/
-      types/
-      utils/
+    packages/
+      client/
+        src/
+          components/
+          pages/
+          context/
+          hooks/
+          styles/
+      server/
+        src/
+          routes/
+          controllers/
+          services/
+          db/            ← Drizzle ORM schema + migrations (no models/ folder)
+          middleware/
+          utils/
+      shared/
+        src/
+          types/
+          utils/
 
     knowledge-base/
       techniques/
@@ -129,7 +174,9 @@ remain separated.
       todo.md
       lessons.md
 
-Claude must follow this structure when generating code.
+Claude must follow this structure when generating code. Never create
+files under `client/`, `server/`, or `shared/` at the repo root —
+always use `packages/client/`, `packages/server/`, `packages/shared/`.
 
 ------------------------------------------------------------------------
 
@@ -139,7 +186,7 @@ Claude must follow this structure when generating code.
 
 Location:
 
-    client/
+    packages/client/src/
 
 Responsibilities:
 
@@ -161,7 +208,7 @@ Rules:
 
 Location:
 
-    server/
+    packages/server/src/
 
 Responsibilities:
 
@@ -178,7 +225,7 @@ Backend must never contain frontend UI logic.
 
 Location:
 
-    server/services/
+    packages/server/src/services/
 
 Examples:
 
@@ -198,7 +245,7 @@ Responsibilities:
 
 Location:
 
-    server/routes/
+    packages/server/src/routes/
 
 Routes must remain thin.
 
@@ -214,7 +261,7 @@ They should:
 
 Location:
 
-    server/controllers/
+    packages/server/src/controllers/
 
 Responsibilities:
 
@@ -226,17 +273,17 @@ Controllers must not contain heavy business logic.
 
 ------------------------------------------------------------------------
 
-## Models
+## Database / Models
 
 Location:
 
-    server/models/
+    packages/server/src/db/
 
-Models represent database entities such as:
-
--   User
--   Conversation
--   Message
+The project uses **Drizzle ORM** with PostgreSQL. There is no `models/`
+folder. Database entities (User, Conversation, Message, etc.) are
+defined as Drizzle table schemas in `packages/server/src/db/schema.ts`.
+Migrations are managed via `drizzle-kit` and output to
+`packages/server/drizzle/`.
 
 ------------------------------------------------------------------------
 
@@ -284,83 +331,78 @@ Examples:
     systemPrompt.md
     techniquePrompt.md
     troubleshootingPrompt.md
-    ``>
 
-    Prompts must never be hardcoded inside application logic.
+Prompts must never be hardcoded inside application logic.
 
-    ---
+------------------------------------------------------------------------
 
-    # API Design
+# API Design
 
-    Example endpoint:
+Example endpoint:
 
     POST /api/chat
 
-    Request:
+Request:
 
-{ "message": "How do I sear scallops?" }
+    { "message": "How do I sear scallops?" }
 
+Response:
 
-    Response:
+    { "response": "...", "sources": [] }
 
-{ "response": "...", "sources": \[\] }
+------------------------------------------------------------------------
 
+# Conversation Handling
 
-    ---
+Conversation schema example:
 
-    # Conversation Handling
+    conversation: id, user_id, created_at
+    message:      id, conversation_id, role, content, timestamp
 
-    Conversation schema example:
+Roles:
 
-conversation id user_id created_at
+-   user
+-   assistant
 
-message id conversation_id role content timestamp
+------------------------------------------------------------------------
 
+# AI Integration
 
-    Roles:
+AI service location:
 
-    - user
-    - assistant
+    packages/server/src/services/aiService.ts
 
-    ---
+Responsibilities:
 
-    # AI Integration
+-   construct prompts
+-   call LLM APIs
+-   return responses
 
-    AI service location:
+Routes must never call LLM APIs directly.
 
-server/services/aiService
+------------------------------------------------------------------------
 
+# Security Guidelines
 
-    Responsibilities:
+-   Store API keys in environment variables
+-   Never commit secrets
+-   Validate all request inputs
+-   Sanitize user data
+-   Implement rate limiting
 
-    - construct prompts
-    - call LLM APIs
-    - return responses
+------------------------------------------------------------------------
 
-    Routes must never call LLM APIs directly.
+# Documentation
 
-    ---
+Documentation location:
 
-    # Security Guidelines
+    docs/
 
-    - Store API keys in environment variables
-    - Never commit secrets
-    - Validate all request inputs
-    - Sanitize user data
-    - Implement rate limiting
+Structure:
 
-    ---
-
-    # Documentation
-
-    Documentation location:
-
-docs/
-
-
-    Structure:
-
-docs/ architecture/ specs/ \`\`\`
+    docs/
+      architecture/
+      specs/
 
 ------------------------------------------------------------------------
 
@@ -383,3 +425,74 @@ Claude must:
 -   keep files modular
 -   avoid monolithic code
 -   generate production-quality implementations
+
+# Security and Testing Standards
+
+Security must be considered during development, not after.
+
+All new functionality must include security review and testing aligned with OWASP principles.
+
+## Security Review Requirements
+
+When generating or modifying code:
+
+- Review for common vulnerabilities
+- Validate input handling
+- Ensure proper authentication and authorization
+- Prevent injection vulnerabilities
+- Avoid hardcoded secrets
+- Validate external dependencies
+- Ensure secure configuration defaults
+
+## OWASP Risk Categories
+
+Code and APIs must be reviewed for the following classes of risk:
+
+1. Broken Access Control
+2. Cryptographic Failures
+3. Injection Vulnerabilities
+4. Insecure Design
+5. Security Misconfiguration
+6. Vulnerable or Outdated Components
+7. Authentication Failures
+8. Software and Data Integrity Failures
+9. Logging and Monitoring Failures
+10. Server-Side Request Forgery (SSRF)
+
+## Security Testing Expectations
+
+When implementing a feature Claude must generate:
+
+- Unit tests for validation logic
+- Integration tests for API and service communication
+- Security tests for malicious inputs
+- Authentication and authorization tests
+- Edge-case and failure scenario tests
+
+## Threat Modeling
+
+For new features Claude should evaluate:
+
+- potential attack surfaces
+- privilege escalation risks
+- data exposure risks
+- abuse scenarios
+
+## Secure Coding Practices
+
+Claude must prefer:
+
+- parameterized queries
+- strict input validation
+- least privilege access
+- strong encryption libraries
+- environment variables for secrets
+- dependency vulnerability checks
+
+## Security First Principle
+
+If a feature introduces security risk, Claude must:
+
+- flag the risk
+- propose a safer implementation
+- document the mitigation
