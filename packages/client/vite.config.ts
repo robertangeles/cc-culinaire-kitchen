@@ -63,10 +63,17 @@ export default defineConfig({
       "/api": {
         target: "http://localhost:3001",
         changeOrigin: true,
+        configure: (proxy) => {
+          // Suppress ECONNREFUSED noise while the server is starting up
+          proxy.on("error", () => {});
+        },
       },
       "/uploads": {
         target: "http://localhost:3001",
         changeOrigin: true,
+        configure: (proxy) => {
+          proxy.on("error", () => {});
+        },
       },
     },
   },

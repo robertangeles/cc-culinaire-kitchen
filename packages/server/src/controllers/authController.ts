@@ -61,7 +61,8 @@ function setAuthCookies(
     httpOnly: true,
     secure: IS_PROD,
     sameSite: "lax",
-    maxAge: 15 * 60 * 1000, // 15 minutes
+    maxAge: 60 * 60 * 1000, // 1 hour
+    path: "/",
   });
 
   res.cookie("refresh_token", refreshTokenValue, {
@@ -75,7 +76,7 @@ function setAuthCookies(
 
 /** Clears auth cookies from the response. */
 function clearAuthCookies(res: Response) {
-  res.clearCookie("access_token");
+  res.clearCookie("access_token", { path: "/" });
   res.clearCookie("refresh_token", { path: "/" });
 }
 
@@ -235,7 +236,9 @@ export async function handleRefresh(
         err.message === "INVALID_REFRESH_TOKEN" ||
         err.message === "REFRESH_TOKEN_EXPIRED"
       ) {
-        clearAuthCookies(res);
+        // Do NOT clear cookies here — the access_token may still be valid
+        // and the client needs it for the verification call to /api/auth/me.
+        // Cookies expire naturally via maxAge. Only explicit logout clears them.
         res.status(401).json({ error: "Session expired. Please log in again." });
         return;
       }

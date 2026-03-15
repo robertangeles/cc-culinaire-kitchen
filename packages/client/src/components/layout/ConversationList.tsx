@@ -110,9 +110,15 @@ export function ConversationList() {
               onSelect={() => navigate(`/chat/${conv.conversationId}`)}
               onDelete={async () => {
                 await remove(conv.conversationId);
-                // If deleting the active conversation, navigate to new chat
-                if (conv.conversationId === activeId) {
-                  navigate("/chat/new");
+                // If deleting the active conversation, redirect to new chat.
+                // Check both React Router params AND the actual browser URL,
+                // since the URL may have been updated via replaceState.
+                const currentPath = window.location.pathname;
+                if (
+                  conv.conversationId === activeId ||
+                  currentPath === `/chat/${conv.conversationId}`
+                ) {
+                  window.location.href = "/chat/new";
                 }
               }}
             />

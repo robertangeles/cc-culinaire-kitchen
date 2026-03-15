@@ -25,11 +25,14 @@ import {
 } from "../db/schema.js";
 import { sendVerificationEmail, sendPasswordResetEmail } from "./emailService.js";
 import { encryptUserPii, decryptUserPii, hashForLookup } from "./piiService.js";
+import { getAllSettings } from "./settingsService.js";
+
+const DEFAULT_REGISTERED_SESSIONS = 10;
 
 const BCRYPT_ROUNDS = parseInt(process.env.BCRYPT_ROUNDS ?? "12", 10);
 const ACCESS_SECRET = process.env.JWT_ACCESS_SECRET ?? "dev-access-secret";
 const REFRESH_SECRET = process.env.JWT_REFRESH_SECRET ?? "dev-refresh-secret";
-const ACCESS_EXPIRY = "15m";
+const ACCESS_EXPIRY = "1h";
 const REFRESH_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 const MFA_SESSION_SECRET = process.env.JWT_ACCESS_SECRET ?? "dev-mfa-secret";
 
@@ -77,6 +80,14 @@ export async function registerUser(
 
   const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
 
+  // Read default free sessions from site settings
+  let defaultFreeSessions = DEFAULT_REGISTERED_SESSIONS;
+  try {
+    const settings = await getAllSettings();
+    const val = parseInt(settings.default_registered_sessions ?? "", 10);
+    if (Number.isFinite(val) && val > 0) defaultFreeSessions = val;
+  } catch { /* use hardcoded default */ }
+
   const piiData = encryptUserPii({
     userName: name,
     userEmail: email.toLowerCase(),
@@ -88,6 +99,7 @@ export async function registerUser(
       userName: name,
       userEmail: email.toLowerCase(),
       userPasswordHash: passwordHash,
+      freeSessions: defaultFreeSessions,
       ...piiData,
     })
     .returning({ userId: user.userId });

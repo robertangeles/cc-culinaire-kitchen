@@ -496,3 +496,46 @@ If a feature introduces security risk, Claude must:
 - flag the risk
 - propose a safer implementation
 - document the mitigation
+
+------------------------------------------------------------------------
+
+# Git Workflow
+
+Solo developer. `main` is the production branch — Railway auto-deploys on every push to it.
+
+## Rules
+
+- Work in a **feature branch** for anything beyond a 2-file change
+- Merge to `main` with `--no-ff` when the feature is tested and ready to deploy
+- For small bug fixes or config changes, commit directly to `main`
+- For production hotfixes, use a `hotfix/` branch
+
+## Branch Naming
+
+    feature/recipe-dev-lab
+    fix/guest-session-timeout
+    hotfix/stripe-webhook-failure
+
+## Merge Flow
+
+    git checkout -b feature/my-feature
+    # ... work and commit ...
+    git checkout main
+    git merge feature/my-feature --no-ff
+    git push origin main
+    git branch -d feature/my-feature
+
+## Commit Message Format
+
+    <verb> <area>: <detail>
+
+    Examples:
+    Add recipe parsing endpoint
+    Fix streaming burst mode: selfHandleResponse in Vite proxy
+    Update usage middleware: replace console.log with pino logger
+
+## Never
+
+- Push broken code to `main`
+- Commit `.env` files or secrets
+- Use PRs for solo work (unnecessary overhead)

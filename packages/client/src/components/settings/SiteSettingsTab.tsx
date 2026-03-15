@@ -61,7 +61,10 @@ export function SiteSettingsTab() {
     web_search_enabled: "false",
     image_generation_enabled: "false",
     image_generation_model: "gemini-2.0-flash-exp-image-generation",
+    vector_search_enabled: "false",
     guest_session_idle_hours: "24",
+    default_guest_sessions: "10",
+    default_registered_sessions: "10",
   });
 
   /** Track whether the form has been initialized from settings. */
@@ -81,7 +84,10 @@ export function SiteSettingsTab() {
         web_search_enabled: settings.web_search_enabled ?? "false",
         image_generation_enabled: settings.image_generation_enabled ?? "false",
         image_generation_model: settings.image_generation_model ?? "gemini-2.0-flash-exp-image-generation",
+        vector_search_enabled: settings.vector_search_enabled ?? "false",
         guest_session_idle_hours: settings.guest_session_idle_hours ?? "24",
+        default_guest_sessions: settings.default_guest_sessions ?? "10",
+        default_registered_sessions: settings.default_registered_sessions ?? "10",
       });
       initialized.current = true;
     }
@@ -354,19 +360,96 @@ export function SiteSettingsTab() {
               </select>
             </div>
           )}
+          {/* Vector Search Toggle */}
+          <div className="flex items-center justify-between rounded-lg border border-stone-200 bg-white px-4 py-3 mt-3">
+            <div>
+              <div className="text-sm font-medium text-stone-800">
+                Enable Semantic Vector Search
+              </div>
+              <p className="text-xs text-stone-500 mt-0.5">
+                Use AI embeddings for semantic knowledge search instead of keyword matching.
+                Requires pgvector on your PostgreSQL instance and an OpenAI API key.
+                Falls back to keyword search when disabled.
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={form.vector_search_enabled === "true"}
+              onClick={() =>
+                updateField(
+                  "vector_search_enabled",
+                  form.vector_search_enabled === "true" ? "false" : "true"
+                )
+              }
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 ${
+                form.vector_search_enabled === "true"
+                  ? "bg-amber-600"
+                  : "bg-stone-300"
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  form.vector_search_enabled === "true"
+                    ? "translate-x-6"
+                    : "translate-x-1"
+                }`}
+              />
+            </button>
+          </div>
         </div>
 
         {/* ── Guest Sessions ─────────────────────────────── */}
         <div className="space-y-3">
           <h2 className="text-sm font-semibold text-stone-700 uppercase tracking-wide">
-            Guest Sessions
+            Sessions &amp; Limits
           </h2>
+
+          {/* Default free sessions for guest users */}
+          <div className="flex items-center justify-between rounded-lg border border-stone-200 bg-white px-4 py-3">
+            <div>
+              <div className="text-sm font-medium text-stone-800">
+                Default Guest Sessions
+              </div>
+              <p className="text-xs text-stone-500 mt-0.5">
+                Number of free chat sessions available to unauthenticated guest users.
+              </p>
+            </div>
+            <input
+              type="number"
+              min="1"
+              max="1000"
+              value={form.default_guest_sessions}
+              onChange={(e) => updateField("default_guest_sessions", e.target.value)}
+              className="w-20 rounded-lg border border-stone-300 bg-stone-50 px-3 py-1.5 text-sm text-stone-800 text-right focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+            />
+          </div>
+
+          {/* Default free sessions for registered users */}
+          <div className="flex items-center justify-between rounded-lg border border-stone-200 bg-white px-4 py-3">
+            <div>
+              <div className="text-sm font-medium text-stone-800">
+                Default Registered User Sessions
+              </div>
+              <p className="text-xs text-stone-500 mt-0.5">
+                Number of free chat sessions granted to newly registered users.
+              </p>
+            </div>
+            <input
+              type="number"
+              min="1"
+              max="1000"
+              value={form.default_registered_sessions}
+              onChange={(e) => updateField("default_registered_sessions", e.target.value)}
+              className="w-20 rounded-lg border border-stone-300 bg-stone-50 px-3 py-1.5 text-sm text-stone-800 text-right focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+            />
+          </div>
 
           {/* Idle session cleanup hours */}
           <div className="flex items-center justify-between rounded-lg border border-stone-200 bg-white px-4 py-3">
             <div>
               <div className="text-sm font-medium text-stone-800">
-                Session Idle Timeout (hours)
+                Guest Session Idle Timeout (hours)
               </div>
               <p className="text-xs text-stone-500 mt-0.5">
                 Guest sessions inactive for longer than this are automatically

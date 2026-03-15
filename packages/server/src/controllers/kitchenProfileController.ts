@@ -18,7 +18,7 @@ const logger = pino({ name: "kitchenProfileController" });
 
 const KitchenProfileUpdateSchema = z.object({
   skillLevel: z
-    .enum(["home_cook", "culinary_student", "line_cook", "sous_chef", "head_chef"])
+    .enum(["home_cook", "culinary_student", "line_cook", "sous_chef", "head_chef", "restaurant_owner"])
     .optional(),
   cuisinePreferences: z.array(z.string().max(100)).max(20).optional(),
   dietaryRestrictions: z.array(z.string().max(100)).max(20).optional(),

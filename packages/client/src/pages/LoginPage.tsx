@@ -207,14 +207,23 @@ export function LoginPage() {
               </Link>
             </div>
 
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="w-full flex items-center justify-center gap-2 py-2.5 text-sm font-medium text-white bg-amber-600 rounded-lg hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              {isSubmitting && <Loader2 className="size-4 animate-spin" />}
-              Sign In
-            </button>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => navigate("/")}
+                className="flex-1 py-2.5 text-sm font-medium text-stone-600 bg-stone-100 rounded-lg hover:bg-stone-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium text-white bg-amber-600 rounded-lg hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {isSubmitting && <Loader2 className="size-4 animate-spin" />}
+                Sign In
+              </button>
+            </div>
 
             <OAuthButtons />
           </form>

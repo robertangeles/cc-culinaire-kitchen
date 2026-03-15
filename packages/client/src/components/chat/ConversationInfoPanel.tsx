@@ -133,7 +133,10 @@ export function ConversationInfoPanel({
     setDeleting(true);
     try {
       await remove(conversationId);
-      navigate("/chat/new");
+      // Use window.location to force a full navigation to /chat/new.
+      // React Router may not recognize the current URL if it was set via
+      // window.history.replaceState (used to avoid reload flash after streaming).
+      window.location.href = "/chat/new";
     } finally {
       setDeleting(false);
     }

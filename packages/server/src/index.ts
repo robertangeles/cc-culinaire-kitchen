@@ -24,9 +24,11 @@ import { credentialsRouter } from "./routes/credentials.js";
 import guestRouter from "./routes/guest.js";
 import { sitemapRouter } from "./routes/sitemap.js";
 import { recipesRouter } from "./routes/recipes.js";
+import { personalisationOptionsRouter, adminPersonalisationOptionsRouter } from "./routes/personalisationOptions.js";
 import { handleWebhook } from "./controllers/stripeController.js";
 import { errorHandler } from "./middleware/errorHandler.js";
-import { syncDocuments } from "./services/knowledgeService.js";
+import { knowledgeRouter } from "./routes/knowledge.js";
+import { recoverStaleDocuments } from "./services/knowledgeManagementService.js";
 import { hydrateEnvFromCredentials } from "./services/credentialService.js";
 import { ensureEncryptionKey, ensurePiiKeys } from "./utils/crypto.js";
 import { cleanupStaleSessions } from "./services/guestService.js";
@@ -78,6 +80,9 @@ app.use("/api/stripe", stripeRouter);
 app.use("/api/credentials", credentialsRouter);
 app.use("/api/guest", guestRouter);
 app.use("/api/recipes", recipesRouter);
+app.use("/api", personalisationOptionsRouter);
+app.use("/api/admin", adminPersonalisationOptionsRouter);
+app.use("/api/knowledge", knowledgeRouter);
 
 // Sitemap
 app.use("/sitemap.xml", sitemapRouter);
@@ -92,7 +97,14 @@ app.use(errorHandler);
 ensureEncryptionKey();
 ensurePiiKeys();
 hydrateEnvFromCredentials().then(() => {
-  syncDocuments().then(() => {
+  recoverStaleDocuments()
+    .then((count) => {
+      if (count > 0) log.info({ count }, "Recovered stale knowledge documents");
+    })
+    .catch((err) => {
+      log.warn({ err }, "Knowledge recovery check failed (non-fatal)");
+    })
+    .then(() => {
     const server = app.listen(port, () => {
       log.info(`CulinAIre Kitchen server running on http://localhost:${port}`);
       log.info(`AI Provider: ${process.env.AI_PROVIDER ?? "anthropic"}`);

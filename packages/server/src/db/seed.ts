@@ -28,7 +28,7 @@ const { join, dirname } = await import("path");
 const { fileURLToPath } = await import("url");
 const matter = (await import("gray-matter")).default;
 const { db } = await import("./index.js");
-const { prompt, role, permission, rolePermission } = await import("./schema.js");
+const { prompt, role, permission, rolePermission, siteSetting } = await import("./schema.js");
 const { eq, and } = await import("drizzle-orm");
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -168,6 +168,38 @@ async function seed() {
         });
         console.log(`Linked ${roleName} → ${pk}`);
       }
+    }
+  }
+
+  // -----------------------------------------------------------------
+  // Seed default site settings
+  // -----------------------------------------------------------------
+  const defaultSettings: Array<{ key: string; value: string }> = [
+    { key: "page_title", value: "CulinAIre Kitchen" },
+    { key: "title_separator", value: "|" },
+    { key: "tagline", value: "Your AI Culinary Knowledge Engine" },
+    { key: "meta_description", value: "AI-powered platform for chefs, restaurateurs, and culinary professionals" },
+    { key: "robots_meta", value: "index, follow" },
+    { key: "footer_text", value: "© 2026 CulinAIre Kitchen. All rights reserved." },
+    { key: "web_search_enabled", value: "false" },
+    { key: "image_generation_enabled", value: "false" },
+    { key: "image_generation_model", value: "gemini-2.0-flash-exp-image-generation" },
+    { key: "vector_search_enabled", value: "false" },
+    { key: "guest_session_idle_hours", value: "24" },
+    { key: "default_guest_sessions", value: "10" },
+    { key: "default_registered_sessions", value: "10" },
+  ];
+
+  for (const s of defaultSettings) {
+    const exists = await db
+      .select()
+      .from(siteSetting)
+      .where(eq(siteSetting.settingKey, s.key));
+    if (exists.length === 0) {
+      await db.insert(siteSetting).values({ settingKey: s.key, settingValue: s.value });
+      console.log(`Inserted setting: ${s.key} = ${s.value}`);
+    } else {
+      console.log(`Setting ${s.key} already exists, skipping`);
     }
   }
 

@@ -20,6 +20,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { UserDetailPanel } from "./UserDetailPanel.js";
+import { PersonalisationTab } from "./PersonalisationTab.js";
 
 interface UserRow {
   userId: number;
@@ -42,6 +43,8 @@ interface RoleOption {
 }
 
 export function UsersTab() {
+  const [subTab, setSubTab] = useState<"users" | "personalisation">("users");
+
   const [users, setUsers] = useState<UserRow[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -148,6 +151,36 @@ export function UsersTab() {
   };
 
   return (
+    <div className="flex flex-col h-full">
+      {/* Sub-tab bar */}
+      <div className="flex gap-1 px-6 pt-5 pb-0 border-b border-stone-200">
+        <button
+          onClick={() => setSubTab("users")}
+          className={`px-4 py-2 text-sm font-medium rounded-t-lg border-b-2 transition-colors ${
+            subTab === "users"
+              ? "border-amber-600 text-amber-700"
+              : "border-transparent text-stone-500 hover:text-stone-700"
+          }`}
+        >
+          User Management
+        </button>
+        <button
+          onClick={() => setSubTab("personalisation")}
+          className={`px-4 py-2 text-sm font-medium rounded-t-lg border-b-2 transition-colors ${
+            subTab === "personalisation"
+              ? "border-amber-600 text-amber-700"
+              : "border-transparent text-stone-500 hover:text-stone-700"
+          }`}
+        >
+          Personalisation
+        </button>
+      </div>
+
+      {/* Personalisation sub-tab */}
+      {subTab === "personalisation" && <PersonalisationTab />}
+
+      {/* User Management sub-tab */}
+      {subTab === "users" && (
     <div className="p-6 space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-stone-800">User Management</h2>
@@ -350,6 +383,8 @@ export function UsersTab() {
             fetchUsers();
           }}
         />
+      )}
+    </div>
       )}
     </div>
   );

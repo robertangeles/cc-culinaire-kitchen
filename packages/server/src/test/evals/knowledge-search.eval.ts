@@ -15,7 +15,7 @@
  */
 
 import "dotenv/config";
-import { searchKnowledge, syncDocuments } from "../../services/knowledgeService.js";
+import { searchKnowledge } from "../../services/knowledgeService.js";
 
 interface EvalCase {
   id: string;
@@ -236,9 +236,7 @@ async function runEval(c: EvalCase): Promise<EvalResult> {
 async function main() {
   console.log("=== Knowledge Search Eval Suite ===\n");
 
-  // Sync documents before running evals
-  await syncDocuments();
-
+  // Knowledge documents are now managed via admin UI, no startup sync needed
   const results = await Promise.all(EVAL_CASES.map(runEval));
 
   let passed = 0;

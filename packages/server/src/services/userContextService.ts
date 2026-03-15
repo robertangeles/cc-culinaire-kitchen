@@ -193,6 +193,7 @@ function formatSkillLevel(level: string): string {
     line_cook: "Line Cook",
     sous_chef: "Sous Chef",
     head_chef: "Head Chef / Executive Chef",
+    restaurant_owner: "Restaurant Owner / Restaurateur",
   };
   return map[level] ?? level;
 }

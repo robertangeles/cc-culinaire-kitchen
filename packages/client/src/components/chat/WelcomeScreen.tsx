@@ -1,5 +1,6 @@
 import { ChefHat } from "lucide-react";
 import { useSettings } from "../../context/SettingsContext.js";
+import { useAuth } from "../../context/AuthContext.js";
 
 interface WelcomeScreenProps {
   onSelectPrompt: (prompt: string) => void;
@@ -14,10 +15,16 @@ const suggestions = [
 
 export function WelcomeScreen({ onSelectPrompt }: WelcomeScreenProps) {
   const { settings } = useSettings();
+  const { user, isGuest } = useAuth();
   const pageTitle = settings.page_title || "CulinAIre Kitchen";
   const logoPath = settings.logo_path;
-  const subtitle =
-    settings.meta_description || "Your AI Culinary Knowledge Engine";
+
+  // Derive greeting: "Hello [FirstName]" for authenticated users, site name for guests
+  const firstName = user && !isGuest ? user.userName.split(" ")[0] : null;
+  const heading = firstName ? `Hello, ${firstName}` : `Welcome to ${pageTitle}`;
+  const subtitle = firstName
+    ? settings.meta_description || "Your AI Culinary Knowledge Engine"
+    : settings.meta_description || "Your AI Culinary Knowledge Engine";
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center px-4 py-12">
@@ -37,7 +44,7 @@ export function WelcomeScreen({ onSelectPrompt }: WelcomeScreenProps) {
           )}
         </div>
         <h1 className="text-3xl font-bold text-stone-800 mb-2">
-          {pageTitle}
+          {heading}
         </h1>
         <p className="text-stone-500 text-lg">
           {subtitle}
