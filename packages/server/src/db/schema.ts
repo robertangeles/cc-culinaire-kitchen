@@ -20,6 +20,7 @@ import {
   boolean,
   timestamp,
   customType,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 /**
@@ -354,26 +355,57 @@ export const credential = pgTable("credential", {
 
 /**
  * The `knowledge_document` table stores curated culinary knowledge base
- * documents with their vector embeddings for semantic (RAG) search.
+ * documents managed via the admin Knowledge Base tab.
  *
- * Populated at server startup by `syncDocuments()` in knowledgeService.
- * The `content_hash` column (SHA-256 of file contents) allows the sync
- * to skip documents that have not changed since they were last embedded.
- * The `embedding` column holds a 1536-dimensional OpenAI embedding vector;
- * cosine similarity search is performed via the `<=>` pgvector operator.
+ * Documents are ingested from multiple sources (PDF, DOCX, TXT, MD, URL,
+ * manual text entry). The full extracted text is stored in `body`, while
+ * individual chunks with embeddings live in `knowledge_chunk`.
+ *
+ * The `content_hash` (SHA-256 of extracted text) detects duplicates.
+ * Source metadata (`source_url`, `original_filename`) is admin-only and
+ * is NEVER exposed to the AI or end users — all knowledge is presented
+ * as internally curated.
+ *
+ * Status flow: processing → ready | failed
  */
 export const knowledgeDocument = pgTable("knowledge_document", {
   documentId: serial("document_id").primaryKey(),
-  filePath: varchar("file_path", { length: 500 }).notNull().unique(),
   title: varchar("title", { length: 200 }).notNull(),
   category: varchar("category", { length: 100 }).notNull(),
   tags: text("tags").array().notNull().default([]),
   body: text("body").notNull(),
   contentHash: varchar("content_hash", { length: 64 }).notNull(),
+  sourceType: varchar("source_type", { length: 20 }).notNull().default("manual"),
+  sourceUrl: varchar("source_url", { length: 2000 }),
+  originalFilename: varchar("original_filename", { length: 500 }),
+  fileSizeBytes: integer("file_size_bytes"),
+  chunkCount: integer("chunk_count").notNull().default(0),
+  status: varchar("status", { length: 20 }).notNull().default("processing"),
+  errorMessage: text("error_message"),
+  createdDttm: timestamp("created_dttm").notNull().defaultNow(),
+  updatedDttm: timestamp("updated_dttm").notNull().defaultNow(),
+});
+
+/**
+ * The `knowledge_chunk` table stores text segments of knowledge documents
+ * with their vector embeddings for semantic (RAG) search.
+ *
+ * Each document is split into ~1000-token chunks with 200-token overlap
+ * for context continuity. Search queries are embedded and compared against
+ * chunk embeddings via cosine similarity (`<=>` pgvector operator).
+ *
+ * Linked to `knowledge_document` via `document_id` with CASCADE delete —
+ * deleting a document automatically removes all its chunks.
+ */
+export const knowledgeChunk = pgTable("knowledge_chunk", {
+  chunkId: serial("chunk_id").primaryKey(),
+  documentId: integer("document_id").notNull(),
+  chunkIndex: integer("chunk_index").notNull(),
+  chunkText: text("chunk_text").notNull(),
+  tokenCount: integer("token_count").notNull().default(0),
   embedding: vector1536("embedding"),
   embeddedAtDttm: timestamp("embedded_at"),
   createdDttm: timestamp("created_dttm").notNull().defaultNow(),
-  updatedDttm: timestamp("updated_dttm").notNull().defaultNow(),
 });
 
 /**
@@ -400,6 +432,34 @@ export const kitchenProfile = pgTable("kitchen_profile", {
   createdDttm: timestamp("created_dttm").notNull().defaultNow(),
   updatedDttm: timestamp("updated_dttm").notNull().defaultNow(),
 });
+
+/**
+ * The `kitchen_profile_option` table stores the admin-managed set of
+ * selectable options for each personalization dimension.
+ *
+ * option_type values: 'skill_level' | 'cuisine' | 'dietary' | 'equipment'
+ *
+ * Admins can add, edit, or remove options via Settings → Personalisation
+ * without a code deploy. The KitchenWizard and My Kitchen tab fetch
+ * active options from the API at runtime.
+ */
+export const kitchenProfileOption = pgTable(
+  "kitchen_profile_option",
+  {
+    optionId:          serial("option_id").primaryKey(),
+    optionType:        varchar("option_type", { length: 50 }).notNull(),
+    optionValue:       varchar("option_value", { length: 100 }).notNull(),
+    optionLabel:       varchar("option_label", { length: 200 }).notNull(),
+    optionDescription: varchar("option_description", { length: 500 }),
+    sortOrder:         integer("sort_order").notNull().default(0),
+    activeInd:         boolean("active_ind").notNull().default(true),
+    createdDttm:       timestamp("created_dttm").notNull().defaultNow(),
+    updatedDttm:       timestamp("updated_dttm").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("idx_kpo_type_value").on(table.optionType, table.optionValue),
+  ]
+);
 
 /**
  * The `guest_session` table tracks anonymous guest users who can

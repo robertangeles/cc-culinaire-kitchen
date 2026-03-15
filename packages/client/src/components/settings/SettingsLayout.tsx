@@ -40,7 +40,7 @@ const tabs: TabItem[] = [
   { id: "roles", label: "Roles", icon: Shield },
   { id: "integrations", label: "Integrations", icon: Plug },
   { id: "models", label: "Models", icon: Bot, disabled: true },
-  { id: "knowledge", label: "Knowledge Base", icon: BookOpen, disabled: true },
+  { id: "knowledge", label: "Knowledge Base", icon: BookOpen },
 ];
 
 /** Props for {@link SettingsLayout}. */

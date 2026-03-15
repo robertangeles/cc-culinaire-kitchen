@@ -6,7 +6,7 @@ export function TypingIndicator() {
       <div className="size-8 rounded-full bg-amber-100 flex items-center justify-center animate-bounce">
         <ChefHat className="size-4 text-amber-600" />
       </div>
-      <span className="text-sm text-stone-400 animate-pulse">Thinking...</span>
+      <span className="text-sm text-stone-400 animate-pulse">Prepping...</span>
     </div>
   );
 }

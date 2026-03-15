@@ -17,14 +17,17 @@ import {
   Copy,
   ShieldCheck,
   Camera,
+  UtensilsCrossed,
 } from "lucide-react";
+import { MyKitchenTab } from "../components/profile/MyKitchenTab.js";
 import { useAuth } from "../context/AuthContext.js";
 import { ImageCropModal } from "../components/ui/ImageCropModal.js";
 
-const tabs: { id: "account" | "password" | "organisation"; label: string; Icon: ElementType }[] = [
+const tabs: { id: "account" | "password" | "organisation" | "kitchen"; label: string; Icon: ElementType }[] = [
   { id: "account", label: "Account Details", Icon: User },
   { id: "password", label: "Change Password", Icon: Key },
   { id: "organisation", label: "Organisation", Icon: Building2 },
+  { id: "kitchen", label: "My Kitchen", Icon: UtensilsCrossed },
 ];
 
 interface Organisation {
@@ -52,7 +55,7 @@ export function ProfilePage() {
   const navigate = useNavigate();
 
   // Tabs
-  const [activeTab, setActiveTab] = useState<"account" | "password" | "organisation">("account");
+  const [activeTab, setActiveTab] = useState<"account" | "password" | "organisation" | "kitchen">("account");
 
   // Profile
   const [name, setName] = useState(user?.userName ?? "");
@@ -1053,6 +1056,13 @@ export function ProfilePage() {
                 )}
               </div>
             )}
+          </div>
+        )}
+
+        {/* My Kitchen Tab */}
+        {activeTab === "kitchen" && (
+          <div role="tabpanel" id="profile-tabpanel-kitchen" aria-labelledby="profile-tab-kitchen">
+            <MyKitchenTab />
           </div>
         )}
       </div>

@@ -25,9 +25,9 @@ import { useChatStream } from "../../context/ChatStreamContext.js";
 
 const GUEST_TOKEN_KEY = "culinaire_guest_token";
 
-/** Build headers with guest token if present. */
-function getGuestHeaders(): Record<string, string> {
-  const token = localStorage.getItem(GUEST_TOKEN_KEY);
+/** Build headers with guest token if present (reads localStorage as fallback). */
+function getGuestHeaders(guestToken?: string | null): Record<string, string> {
+  const token = guestToken ?? localStorage.getItem(GUEST_TOKEN_KEY);
   return token ? { "X-Guest-Token": token } : {};
 }
 
@@ -61,7 +61,7 @@ export function ChatContainer({
 }: ChatContainerProps) {
   const navigate = useNavigate();
   const { refresh } = useConversationContext();
-  const { isGuest, refreshGuestUsage, refreshUser } = useAuth();
+  const { isGuest, guestToken, refreshGuestUsage, refreshUser } = useAuth();
   const { settings } = useSettings();
   const { transferToBackground, claimStream } = useChatStream();
 
@@ -153,16 +153,9 @@ export function ChatContainer({
       // conversation URL that only contains their question.
       const hasAssistantMsg = msgs.some((m) => m.messageRole === "assistant");
       if (isFirstPersist && convIdRef.current && hasAssistantMsg) {
-        // Pass current messages via router state so ChatPage can skip the API
-        // round-trip and avoid the loading flash ("postback").
-        navigate(`/chat/${convIdRef.current}`, {
-          replace: true,
-          state: {
-            initialMessages: allMessages.filter(
-              (m) => typeof m.content === "string" && m.content.trim().length > 0
-            ),
-          },
-        });
+        // Update URL without triggering React Router navigation —
+        // avoids unmount/remount cycle that causes reload flash.
+        window.history.replaceState(null, "", `/chat/${convIdRef.current}`);
         refresh();
       }
     },
@@ -183,7 +176,7 @@ export function ChatContainer({
     api: "/api/chat",
     id: conversationId,
     initialMessages,
-    headers: getGuestHeaders(),
+    headers: getGuestHeaders(guestToken),
     body: { webSearch: webSearchEnabled },
   });
 
@@ -348,6 +341,16 @@ export function ChatContainer({
                   Upgrade to continue
                 </Link>
               )}
+            </div>
+          ) : error.message?.includes("401") || error.message?.includes("Authentication") ? (
+            <div className="flex items-center justify-between">
+              <span>Your session expired.</span>
+              <button
+                onClick={() => window.location.reload()}
+                className="ml-2 font-medium text-amber-600 hover:text-amber-700 underline"
+              >
+                Refresh to continue
+              </button>
             </div>
           ) : (
             "Something went wrong. Please try again."

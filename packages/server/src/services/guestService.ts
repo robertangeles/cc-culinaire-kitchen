@@ -9,11 +9,23 @@ import { eq, sql, lt } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { guestSession, conversation } from "../db/schema.js";
 import { pino } from "pino";
+import { getAllSettings } from "./settingsService.js";
 
 const log = pino({ name: "guestService" });
 
-const GUEST_SESSION_LIMIT = 10;
+const DEFAULT_GUEST_SESSION_LIMIT = 10;
 export const MAX_SESSIONS_PER_IP = 50;
+
+/** Read the guest session limit from site settings, falling back to the default. */
+async function getGuestSessionLimit(): Promise<number> {
+  try {
+    const settings = await getAllSettings();
+    const val = parseInt(settings.default_guest_sessions ?? "", 10);
+    return Number.isFinite(val) && val > 0 ? val : DEFAULT_GUEST_SESSION_LIMIT;
+  } catch {
+    return DEFAULT_GUEST_SESSION_LIMIT;
+  }
+}
 
 /** Count how many guest sessions exist for a given IP address. */
 export async function countSessionsByIp(ip: string): Promise<number> {
@@ -26,8 +38,9 @@ export async function countSessionsByIp(ip: string): Promise<number> {
 
 /** Create a new guest session with the given token and client IP. */
 export async function createGuestSession(token: string, ipAddress?: string) {
+  const limit = await getGuestSessionLimit();
   await db.insert(guestSession).values({ sessionToken: token, ipAddress: ipAddress ?? null });
-  return { sessionToken: token, sessionsUsed: 0, sessionsLimit: GUEST_SESSION_LIMIT };
+  return { sessionToken: token, sessionsUsed: 0, sessionsLimit: limit };
 }
 
 /** Validate and return a guest session by token. Returns null if not found. */
@@ -52,7 +65,8 @@ export async function getGuestSession(token: string) {
 export async function hasGuestQuota(token: string): Promise<boolean> {
   const session = await getGuestSession(token);
   if (!session) return false;
-  return session.sessionsUsed < GUEST_SESSION_LIMIT;
+  const limit = await getGuestSessionLimit();
+  return session.sessionsUsed < limit;
 }
 
 /** Increment the sessions_used counter for a guest. */
@@ -74,10 +88,11 @@ export async function getGuestUsage(token: string) {
   const session = await getGuestSession(token);
   if (!session) return null;
 
+  const limit = await getGuestSessionLimit();
   return {
     sessionsUsed: session.sessionsUsed,
-    sessionsLimit: GUEST_SESSION_LIMIT,
-    sessionsRemaining: GUEST_SESSION_LIMIT - session.sessionsUsed,
+    sessionsLimit: limit,
+    sessionsRemaining: limit - session.sessionsUsed,
   };
 }
 

@@ -70,7 +70,7 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue>(null as unknown as AuthContextValue);
 
-const REFRESH_INTERVAL = 12 * 60 * 1000; // 12 minutes (3-min buffer before 15-min token expiry)
+const REFRESH_INTERVAL = 50 * 60 * 1000; // 50 minutes (10-min buffer before 1-hour token expiry)
 const GUEST_TOKEN_KEY = "culinaire_guest_token";
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -80,49 +80,50 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [guestUsage, setGuestUsage] = useState<GuestUsage | null>(null);
   const [guestLimitReached, setGuestLimitReached] = useState(false);
   const refreshTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastRefreshTime = useRef<number>(0);
 
-  /** Fetches current user from the session cookie. */
-  const fetchMe = useCallback(async (): Promise<AuthUser | null> => {
+  /** Fetches current user from the session cookie.
+   *  Returns null on definitive 401 (not authenticated).
+   *  Returns undefined on network errors or server errors (caller should preserve existing state). */
+  const fetchMe = useCallback(async (): Promise<AuthUser | null | undefined> => {
     try {
       const res = await fetch("/api/auth/me", { credentials: "include" });
-      if (!res.ok) return null;
+      if (res.status === 401) return null;  // definitive "not authenticated"
+      if (!res.ok) return undefined;         // server error — keep existing state
       const data = await res.json();
       return data.user;
     } catch {
-      return null;
+      return undefined; // network error — keep existing state
     }
   }, []);
 
   /** Refreshes the access token using the refresh token cookie.
-   *  Retries once on transient failures. Only hard-logouts on explicit 401. */
+   *  NEVER calls setUser(null) — only explicit logout can do that.
+   *  On failure, silently retries in 30s. If session is truly expired,
+   *  API calls will return 401 errors in the UI and user re-logins manually. */
   const refreshToken = useCallback(async () => {
-    for (let attempt = 0; attempt < 2; attempt++) {
-      try {
-        const res = await fetch("/api/auth/refresh", {
-          method: "POST",
-          credentials: "include",
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setUser(data.user);
-          return;
-        }
-        if (res.status === 401) {
-          // Refresh token is truly expired/invalid — logout
-          setUser(null);
-          if (refreshTimer.current) {
-            clearInterval(refreshTimer.current);
-            refreshTimer.current = null;
-          }
-          return;
-        }
-        // Other server error (500, 503, etc.) — retry
-      } catch {
-        // Network error — retry once, then leave user state unchanged
-        if (attempt === 1) return;
-        await new Promise((r) => setTimeout(r, 2000));
+    try {
+      const res = await fetch("/api/auth/refresh", {
+        method: "POST",
+        credentials: "include",
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setUser(data.user);
+        lastRefreshTime.current = Date.now();
+        return;
       }
+      // Any non-ok response (401, 500, etc.) — schedule retry, never logout
+    } catch {
+      // Network error — schedule retry, never logout
     }
+    // Schedule a retry in 30s for transient failures
+    if (retryTimer.current) clearTimeout(retryTimer.current);
+    retryTimer.current = setTimeout(() => {
+      retryTimer.current = null;
+      refreshToken();
+    }, 30_000);
   }, []);
 
   /** Starts automatic token refresh interval. */
@@ -205,51 +206,67 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     (async () => {
       const me = await fetchMe();
-      setUser(me);
+      // me === null  → definitive 401 (not authenticated)
+      // me === undefined → network/server error (keep existing state, don't logout)
+      // me === AuthUser  → authenticated
 
-      if (me) {
-        startRefreshLoop();
-        // Clear guest token if user is logged in
-        localStorage.removeItem(GUEST_TOKEN_KEY);
-        setGuestToken(null);
-        setGuestUsage(null);
-      } else {
-        // Restore existing guest session if token is in localStorage
-        const existingToken = localStorage.getItem(GUEST_TOKEN_KEY);
-        if (existingToken) {
-          try {
-            const res = await fetch("/api/guest/session", {
-              headers: { "X-Guest-Token": existingToken },
-            });
-            if (res.ok) {
-              const data = await res.json();
-              setGuestToken(existingToken);
-              setGuestUsage(data);
-            } else {
-              localStorage.removeItem(GUEST_TOKEN_KEY);
+      if (me !== undefined) {
+        setUser(me ?? null);
+
+        if (me) {
+          startRefreshLoop();
+          lastRefreshTime.current = Date.now();
+          // Clear guest token if user is logged in
+          localStorage.removeItem(GUEST_TOKEN_KEY);
+          setGuestToken(null);
+          setGuestUsage(null);
+        } else {
+          // me is definitively null — confirmed not authenticated
+          // Restore existing guest session if token is in localStorage
+          const existingToken = localStorage.getItem(GUEST_TOKEN_KEY);
+          if (existingToken) {
+            try {
+              const res = await fetch("/api/guest/session", {
+                headers: { "X-Guest-Token": existingToken },
+              });
+              if (res.ok) {
+                const data = await res.json();
+                setGuestToken(existingToken);
+                setGuestUsage(data);
+              } else {
+                localStorage.removeItem(GUEST_TOKEN_KEY);
+              }
+            } catch {
+              // Silently fail
             }
-          } catch {
-            // Silently fail
           }
+          // If no token exists, ProtectedRoute will call initGuest()
         }
-        // If no token exists, ProtectedRoute will call initGuest()
       }
+      // If me === undefined (network/server error on mount), preserve existing state.
+      // isLoading still resolves so the UI doesn't spin forever.
 
       setIsLoading(false);
     })();
 
-    // Refresh token immediately when the tab becomes visible again.
-    // Browsers throttle setInterval in background tabs (Chrome/Firefox ≥ 1 min),
-    // so the 12-min refresh can fire late and the 15-min token may have expired.
+    // Refresh token when the tab becomes visible again — but only if enough time has
+    // passed since the last refresh. Browsers throttle setInterval in background tabs
+    // (Chrome/Firefox ≥ 1 min), so the 12-min refresh can fire late and the 15-min
+    // token may have expired. We skip the refresh if we know it ran recently to avoid
+    // unnecessary /api/auth/refresh calls (which risk transient 401s causing logout).
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
-        refreshToken();
+        const tenMinutes = 10 * 60 * 1000;
+        if (Date.now() - lastRefreshTime.current > tenMinutes) {
+          refreshToken();
+        }
       }
     };
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
       stopRefreshLoop();
+      if (retryTimer.current) clearTimeout(retryTimer.current);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [fetchMe, startRefreshLoop, stopRefreshLoop, refreshToken]);
@@ -292,6 +309,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.removeItem(GUEST_TOKEN_KEY);
       setGuestToken(null);
       setGuestUsage(null);
+      lastRefreshTime.current = Date.now();
       startRefreshLoop();
       return { requiresMfa: false };
     },
@@ -331,6 +349,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.removeItem(GUEST_TOKEN_KEY);
       setGuestToken(null);
       setGuestUsage(null);
+      lastRefreshTime.current = Date.now();
       startRefreshLoop();
     },
     [startRefreshLoop],
@@ -392,10 +411,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     stopRefreshLoop();
   }, [stopRefreshLoop]);
 
+  /** Refreshes user data from the server.
+   *  NEVER calls setUser(null) — only explicit logout can do that.
+   *  On 401, attempts a token refresh. On failure, keeps existing state. */
   const refreshUser = useCallback(async () => {
-    const me = await fetchMe();
-    setUser(me);
-  }, [fetchMe]);
+    try {
+      const res = await fetch("/api/auth/me", { credentials: "include" });
+      if (res.ok) {
+        const data = await res.json();
+        setUser(data.user);
+        return;
+      }
+      if (res.status === 401) {
+        // Access token may have expired — try refreshing
+        try {
+          const refreshRes = await fetch("/api/auth/refresh", {
+            method: "POST",
+            credentials: "include",
+          });
+          if (refreshRes.ok) {
+            const data = await refreshRes.json();
+            setUser(data.user);
+            lastRefreshTime.current = Date.now();
+          }
+        } catch {
+          // Can't reach server — keep existing state
+        }
+      }
+      // Any other error — keep existing state, never logout
+    } catch {
+      // Network error — keep existing state
+    }
+  }, []);
 
   return (
     <AuthContext.Provider

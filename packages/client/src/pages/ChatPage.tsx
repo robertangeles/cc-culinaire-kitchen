@@ -11,6 +11,7 @@ import { useEffect, useState } from "react";
 import { ChatContainer } from "../components/chat/ChatContainer.js";
 import type { UIMessage } from "ai";
 import { useChatStream } from "../context/ChatStreamContext.js";
+import { useAuth } from "../context/AuthContext.js";
 
 const GUEST_TOKEN_KEY = "culinaire_guest_token";
 
@@ -32,6 +33,7 @@ export function ChatPage() {
   const location = useLocation();
   const isNew = !id || id === "new";
   const { claimStream, hasBackgroundStream } = useChatStream();
+  const { isAuthenticated, isGuest } = useAuth();
 
   const [initialMessages, setInitialMessages] = useState<UIMessage[] | null>(
     isNew ? [] : null
@@ -44,31 +46,38 @@ export function ChatPage() {
       return;
     }
 
-    // If we just navigated here from /chat/new with messages in router state,
-    // use them directly — avoids the API round-trip and loading flash.
+    // Check for optimistic preload sources (router state from navigate, or
+    // background stream). Show these IMMEDIATELY to avoid white flash, then
+    // verify ownership in background. If verification fails → redirect.
+    let cancelled = false;
+
     const navMessages = (location.state as { initialMessages?: UIMessage[] } | null)
       ?.initialMessages;
-    if (navMessages && navMessages.length > 0) {
-      setInitialMessages(navMessages);
-      return;
-    }
+    let hasOptimistic = false;
 
-    // Check for a completed background stream first
-    if (id && hasBackgroundStream(id)) {
+    if (navMessages && navMessages.length > 0) {
+      // Show immediately — came from our own ChatContainer navigate
+      setInitialMessages(navMessages);
+      hasOptimistic = true;
+    } else if (id && hasBackgroundStream(id)) {
       const stream = claimStream(id);
       if (stream && stream.messages.length > 0) {
         setInitialMessages(stream.messages);
-        return;
+        hasOptimistic = true;
       }
     }
 
-    let cancelled = false;
-
-    async function loadConversation() {
+    // SECURITY: Always verify conversation ownership via API.
+    // If we have optimistic messages, verification runs in background.
+    // If not, show loading state while we fetch.
+    async function verifyAndLoad() {
       try {
         const guestToken = localStorage.getItem(GUEST_TOKEN_KEY);
         const headers: Record<string, string> = guestToken ? { "X-Guest-Token": guestToken } : {};
-        const res = await fetch(`/api/conversations/${id}`, { headers });
+        const res = await fetch(`/api/conversations/${id}`, {
+          headers,
+          credentials: "include",
+        });
         if (!res.ok) throw new Error("Not found");
         const data = await res.json();
         if (cancelled) return;
@@ -81,21 +90,25 @@ export function ChatPage() {
             parts: [{ type: "text" as const, text: m.messageBody }],
           })
         );
-        // Treat an empty conversation (orphaned from a failed stream) as not found.
-        // This redirects the user to /chat/new instead of showing a blank chat.
+
         if (msgs.length === 0) {
           if (!cancelled) setError(true);
-        } else {
+        } else if (!hasOptimistic) {
+          // No optimistic data — use API response
           if (!cancelled) setInitialMessages(msgs);
         }
+        // If we had optimistic data, keep it (it's fresher from the stream)
       } catch {
         if (!cancelled) setError(true);
       }
     }
 
-    setInitialMessages(null);
+    if (!hasOptimistic) {
+      // No optimistic data — show loading state
+      setInitialMessages(null);
+    }
     setError(false);
-    loadConversation();
+    verifyAndLoad();
 
     return () => {
       cancelled = true;

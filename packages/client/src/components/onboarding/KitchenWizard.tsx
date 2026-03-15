@@ -14,44 +14,8 @@
  */
 
 import { useState } from "react";
-import { ChefHat, X, ArrowRight, ArrowLeft, Check } from "lucide-react";
-
-// ---------------------------------------------------------------------------
-// Option data
-// ---------------------------------------------------------------------------
-
-const SKILL_LEVELS = [
-  { value: "home_cook", label: "Home Cook", desc: "I cook for pleasure and family" },
-  { value: "culinary_student", label: "Culinary Student", desc: "Studying the craft" },
-  { value: "line_cook", label: "Line Cook", desc: "Working in a professional kitchen" },
-  { value: "sous_chef", label: "Sous Chef", desc: "Leading a kitchen team" },
-  { value: "head_chef", label: "Head Chef / Executive Chef", desc: "Running the show" },
-];
-
-const CUISINE_OPTIONS = [
-  "French Classical", "Contemporary French", "Italian", "Spanish",
-  "Japanese", "Chinese", "Korean", "Thai", "Vietnamese",
-  "Indian", "Middle Eastern", "Mexican", "American BBQ",
-  "Pastry & Baking", "Plant-Based / Vegan", "Seafood-Focused",
-];
-
-const DIETARY_OPTIONS = [
-  "Vegetarian", "Vegan", "Gluten-Free", "Dairy-Free",
-  "Nut-Free", "Kosher", "Halal", "Low-Carb / Keto",
-  "Diabetic-Friendly", "Low-FODMAP",
-];
-
-const EQUIPMENT_OPTIONS = [
-  "Home Oven (Conventional)", "Convection Oven", "Combi Oven",
-  "Stand Mixer (e.g. KitchenAid)", "Food Processor",
-  "Immersion Circulator (Sous Vide)", "Immersion Blender",
-  "High-Speed Blender (e.g. Vitamix)", "Thermomix",
-  "Induction Cooktop", "Gas Burner", "Carbon Steel Wok",
-  "Cast Iron Pan", "Dutch Oven / Cocotte",
-  "Chocolate Tempering Equipment", "Pasta Machine",
-  "Ice Cream Machine", "Dehydrator", "Smoke Gun",
-  "Whipping Siphon (ISI)",
-];
+import { ChefHat, X, ArrowRight, ArrowLeft, Check, Loader2 } from "lucide-react";
+import { usePersonalisationOptions } from "../../hooks/usePersonalisationOptions.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -82,6 +46,13 @@ export function KitchenWizard({ onComplete, onSkip }: KitchenWizardProps) {
     dietaryRestrictions: [],
     kitchenEquipment: [],
   });
+
+  const { options, loading: optionsLoading } = usePersonalisationOptions();
+
+  const skillLevels   = options?.skill_level ?? [];
+  const cuisineOpts   = options?.cuisine     ?? [];
+  const dietaryOpts   = options?.dietary     ?? [];
+  const equipmentOpts = options?.equipment   ?? [];
 
   const TOTAL_STEPS = 4;
 
@@ -134,135 +105,146 @@ export function KitchenWizard({ onComplete, onSkip }: KitchenWizardProps) {
 
         {/* Step content */}
         <div className="px-6 py-6 min-h-[320px]">
-          {/* Step 0: Skill level */}
-          {step === 0 && (
-            <div>
-              <h3 className="font-semibold text-stone-800 text-base mb-1">
-                What best describes your skill level?
-              </h3>
-              <p className="text-stone-500 text-sm mb-4">
-                CulinAIre will tailor explanations and technique depth to match you.
-              </p>
-              <div className="space-y-2">
-                {SKILL_LEVELS.map((level) => (
-                  <button
-                    key={level.value}
-                    onClick={() => setData((d) => ({ ...d, skillLevel: level.value }))}
-                    className={`w-full text-left px-4 py-3 rounded-lg border-2 transition-colors ${
-                      data.skillLevel === level.value
-                        ? "border-amber-500 bg-amber-50"
-                        : "border-stone-200 hover:border-stone-300 bg-white"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-medium text-stone-800 text-sm">{level.label}</p>
-                        <p className="text-stone-500 text-xs">{level.desc}</p>
-                      </div>
-                      {data.skillLevel === level.value && (
-                        <Check className="size-4 text-amber-600 shrink-0" />
-                      )}
-                    </div>
-                  </button>
-                ))}
-              </div>
+          {optionsLoading ? (
+            <div className="flex items-center justify-center h-[280px] text-stone-400">
+              <Loader2 className="size-5 animate-spin mr-2" />
+              Loading options…
             </div>
-          )}
+          ) : (
+            <>
+              {/* Step 0: Skill level */}
+              {step === 0 && (
+                <div>
+                  <h3 className="font-semibold text-stone-800 text-base mb-1">
+                    What best describes your skill level?
+                  </h3>
+                  <p className="text-stone-500 text-sm mb-4">
+                    CulinAIre will tailor explanations and technique depth to match you.
+                  </p>
+                  <div className="space-y-2">
+                    {skillLevels.map((level) => (
+                      <button
+                        key={level.optionValue}
+                        onClick={() => setData((d) => ({ ...d, skillLevel: level.optionValue }))}
+                        className={`w-full text-left px-4 py-3 rounded-lg border-2 transition-colors ${
+                          data.skillLevel === level.optionValue
+                            ? "border-amber-500 bg-amber-50"
+                            : "border-stone-200 hover:border-stone-300 bg-white"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="font-medium text-stone-800 text-sm">{level.optionLabel}</p>
+                            {level.optionDescription && (
+                              <p className="text-stone-500 text-xs">{level.optionDescription}</p>
+                            )}
+                          </div>
+                          {data.skillLevel === level.optionValue && (
+                            <Check className="size-4 text-amber-600 shrink-0" />
+                          )}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
-          {/* Step 1: Cuisine preferences */}
-          {step === 1 && (
-            <div>
-              <h3 className="font-semibold text-stone-800 text-base mb-1">
-                What cuisine styles interest you most?
-              </h3>
-              <p className="text-stone-500 text-sm mb-4">
-                Select all that apply — CulinAIre will lean towards these when generating recipes.
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {CUISINE_OPTIONS.map((opt) => (
-                  <button
-                    key={opt}
-                    onClick={() =>
-                      setData((d) => ({
-                        ...d,
-                        cuisinePreferences: toggleArrayItem(d.cuisinePreferences, opt),
-                      }))
-                    }
-                    className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${
-                      data.cuisinePreferences.includes(opt)
-                        ? "bg-amber-500 border-amber-500 text-white"
-                        : "bg-white border-stone-300 text-stone-700 hover:border-amber-400"
-                    }`}
-                  >
-                    {opt}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
+              {/* Step 1: Cuisine preferences */}
+              {step === 1 && (
+                <div>
+                  <h3 className="font-semibold text-stone-800 text-base mb-1">
+                    What cuisine styles interest you most?
+                  </h3>
+                  <p className="text-stone-500 text-sm mb-4">
+                    Select all that apply — CulinAIre will lean towards these when generating recipes.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {cuisineOpts.map((opt) => (
+                      <button
+                        key={opt.optionValue}
+                        onClick={() =>
+                          setData((d) => ({
+                            ...d,
+                            cuisinePreferences: toggleArrayItem(d.cuisinePreferences, opt.optionLabel),
+                          }))
+                        }
+                        className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${
+                          data.cuisinePreferences.includes(opt.optionLabel)
+                            ? "bg-amber-500 border-amber-500 text-white"
+                            : "bg-white border-stone-300 text-stone-700 hover:border-amber-400"
+                        }`}
+                      >
+                        {opt.optionLabel}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
-          {/* Step 2: Dietary restrictions */}
-          {step === 2 && (
-            <div>
-              <h3 className="font-semibold text-stone-800 text-base mb-1">
-                Any dietary restrictions to always respect?
-              </h3>
-              <p className="text-stone-500 text-sm mb-4">
-                CulinAIre will factor these into every recipe and suggestion.
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {DIETARY_OPTIONS.map((opt) => (
-                  <button
-                    key={opt}
-                    onClick={() =>
-                      setData((d) => ({
-                        ...d,
-                        dietaryRestrictions: toggleArrayItem(d.dietaryRestrictions, opt),
-                      }))
-                    }
-                    className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${
-                      data.dietaryRestrictions.includes(opt)
-                        ? "bg-amber-500 border-amber-500 text-white"
-                        : "bg-white border-stone-300 text-stone-700 hover:border-amber-400"
-                    }`}
-                  >
-                    {opt}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
+              {/* Step 2: Dietary restrictions */}
+              {step === 2 && (
+                <div>
+                  <h3 className="font-semibold text-stone-800 text-base mb-1">
+                    Any dietary restrictions to always respect?
+                  </h3>
+                  <p className="text-stone-500 text-sm mb-4">
+                    CulinAIre will factor these into every recipe and suggestion.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {dietaryOpts.map((opt) => (
+                      <button
+                        key={opt.optionValue}
+                        onClick={() =>
+                          setData((d) => ({
+                            ...d,
+                            dietaryRestrictions: toggleArrayItem(d.dietaryRestrictions, opt.optionLabel),
+                          }))
+                        }
+                        className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${
+                          data.dietaryRestrictions.includes(opt.optionLabel)
+                            ? "bg-amber-500 border-amber-500 text-white"
+                            : "bg-white border-stone-300 text-stone-700 hover:border-amber-400"
+                        }`}
+                      >
+                        {opt.optionLabel}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
-          {/* Step 3: Equipment */}
-          {step === 3 && (
-            <div>
-              <h3 className="font-semibold text-stone-800 text-base mb-1">
-                What equipment do you have access to?
-              </h3>
-              <p className="text-stone-500 text-sm mb-4">
-                CulinAIre will only suggest techniques your kitchen can execute.
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {EQUIPMENT_OPTIONS.map((opt) => (
-                  <button
-                    key={opt}
-                    onClick={() =>
-                      setData((d) => ({
-                        ...d,
-                        kitchenEquipment: toggleArrayItem(d.kitchenEquipment, opt),
-                      }))
-                    }
-                    className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${
-                      data.kitchenEquipment.includes(opt)
-                        ? "bg-amber-500 border-amber-500 text-white"
-                        : "bg-white border-stone-300 text-stone-700 hover:border-amber-400"
-                    }`}
-                  >
-                    {opt}
-                  </button>
-                ))}
-              </div>
-            </div>
+              {/* Step 3: Equipment */}
+              {step === 3 && (
+                <div>
+                  <h3 className="font-semibold text-stone-800 text-base mb-1">
+                    What equipment do you have access to?
+                  </h3>
+                  <p className="text-stone-500 text-sm mb-4">
+                    CulinAIre will only suggest techniques your kitchen can execute.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {equipmentOpts.map((opt) => (
+                      <button
+                        key={opt.optionValue}
+                        onClick={() =>
+                          setData((d) => ({
+                            ...d,
+                            kitchenEquipment: toggleArrayItem(d.kitchenEquipment, opt.optionLabel),
+                          }))
+                        }
+                        className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${
+                          data.kitchenEquipment.includes(opt.optionLabel)
+                            ? "bg-amber-500 border-amber-500 text-white"
+                            : "bg-white border-stone-300 text-stone-700 hover:border-amber-400"
+                        }`}
+                      >
+                        {opt.optionLabel}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
 

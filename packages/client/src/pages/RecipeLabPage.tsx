@@ -78,6 +78,24 @@ export function RecipeLabPage({ domain }: RecipeLabPageProps) {
   const config = DOMAIN_CONFIG[domain];
   const DomainIcon = config.icon;
 
+  // Coming Soon for domains not yet functional
+  if (domain === "patisserie" || domain === "spirits") {
+    return (
+      <div className="flex-1 flex items-center justify-center px-4">
+        <div className="text-center max-w-md">
+          <div className={`inline-flex items-center justify-center size-16 rounded-2xl ${config.bg} mb-4`}>
+            <DomainIcon className={`size-8 ${config.accent}`} />
+          </div>
+          <h1 className={`text-2xl font-bold ${config.accent} mb-2`}>{config.label}</h1>
+          <p className="text-stone-500 mb-6">{config.tagline}</p>
+          <span className="inline-block px-4 py-2 text-sm font-semibold text-white bg-stone-400 rounded-full uppercase tracking-wider">
+            Coming Soon
+          </span>
+        </div>
+      </div>
+    );
+  }
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [generated, setGenerated] = useState<GeneratedRecipe | null>(null);

@@ -7,8 +7,11 @@
 
 import type { Request, Response, NextFunction } from "express";
 import { eq } from "drizzle-orm";
+import pino from "pino";
 import { db } from "../db/index.js";
 import { user } from "../db/schema.js";
+
+const logger = pino({ name: "usage" });
 
 /**
  * Checks whether the authenticated user has usage quota remaining.
@@ -72,16 +75,14 @@ export async function decrementFreeSessions(userId: number) {
     .where(eq(user.userId, userId));
 
   if (rows.length === 0) {
-    console.log("[decrementFreeSessions] user not found:", userId);
+    logger.warn({ userId }, "decrementFreeSessions: user not found");
     return;
   }
 
   const { freeSessions, subscriptionStatus } = rows[0];
-  console.log("[decrementFreeSessions] userId:", userId, "| status:", subscriptionStatus, "| sessions:", freeSessions);
 
   // Only decrement for free-tier users
   if (subscriptionStatus === "active" || freeSessions <= 0) {
-    console.log("[decrementFreeSessions] skipping — paid or exhausted");
     return;
   }
 
@@ -90,5 +91,5 @@ export async function decrementFreeSessions(userId: number) {
     .set({ freeSessions: freeSessions - 1, updatedDttm: new Date() })
     .where(eq(user.userId, userId));
 
-  console.log("[decrementFreeSessions] decremented to", freeSessions - 1);
+  logger.debug({ userId, freeSessions: freeSessions - 1 }, "decrementFreeSessions: session decremented");
 }

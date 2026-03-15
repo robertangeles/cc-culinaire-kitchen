@@ -2,36 +2,22 @@
  * @module MessageBubble
  * Renders an individual chat message as a styled bubble with an avatar icon,
  * distinguishing between user and assistant messages.
+ *
+ * Memoized to prevent re-rendering historical messages during streaming.
  */
 
+import { memo } from "react";
 import type { UIMessage } from "ai";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { ChefHat, User } from "lucide-react";
 import { useSettings } from "../../context/SettingsContext.js";
 
-/**
- * Props for the {@link MessageBubble} component.
- * @property message - The chat message object to render.
- */
 interface MessageBubbleProps {
   message: UIMessage;
 }
 
-/**
- * Renders a single chat message as a styled bubble with an accompanying avatar.
- *
- * User messages are displayed right-aligned with a dark stone background and
- * plain text. Assistant messages are left-aligned with a white background and
- * rendered as Markdown (with GitHub Flavored Markdown support via `remark-gfm`).
- *
- * The maximum bubble width is controlled by the `chat_output_width` user setting
- * (expressed as a percentage).
- *
- * @param props - {@link MessageBubbleProps}
- * @returns The rendered message bubble element.
- */
-export function MessageBubble({ message }: MessageBubbleProps) {
+function MessageBubbleInner({ message }: MessageBubbleProps) {
   const { settings } = useSettings();
   const bubbleMaxWidth = settings.chat_output_width
     ? `${settings.chat_output_width}%`
@@ -91,3 +77,14 @@ export function MessageBubble({ message }: MessageBubbleProps) {
     </div>
   );
 }
+
+/**
+ * Memoized message bubble. Only re-renders when the message content changes.
+ * Historical messages (whose content is stable) never re-render during streaming.
+ */
+export const MessageBubble = memo(MessageBubbleInner, (prev, next) => {
+  return (
+    prev.message.id === next.message.id &&
+    prev.message.content === next.message.content
+  );
+});
