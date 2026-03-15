@@ -123,6 +123,38 @@ export const RecipeOutputSchema = z.object({
 
   // Wine pairing (V2, optional)
   winePairing: WinePairingSchema.optional(),
+
+  // Patisserie-specific (V2)
+  bakerPercentages: z.array(z.object({
+    ingredient: z.string(),
+    weight: z.string(),
+    percentage: z.string(),
+  })).optional(),
+  textureContrast: z.string().optional(),
+  makeAheadComponents: z.array(z.string()).optional(),
+  criticalTemperatures: z.string().optional(),
+
+  // Spirits-specific (V2)
+  venueType: z.string().optional(),
+  buildTime: z.string().optional(),
+  ice: z.string().optional(),
+  abv: z.string().optional(),
+  standardDrinks: z.string().optional(),
+  batchSpec: z.object({
+    servings: z.number(),
+    components: z.array(z.string()),
+    storage: z.string(),
+    toServe: z.string(),
+  }).optional(),
+  variations: z.array(z.object({
+    name: z.string(),
+    description: z.string(),
+    specAdjustment: z.string(),
+  })).optional(),
+  foodPairing: z.object({
+    primary: z.object({ dish: z.string(), why: z.string() }),
+    alternatives: z.array(z.object({ dish: z.string(), why: z.string() })).optional(),
+  }).optional(),
 });
 
 export type RecipeOutput = z.infer<typeof RecipeOutputSchema>;
@@ -139,12 +171,19 @@ export interface RecipeInput {
   difficulty?: string;
   cuisine?: string;
   mainIngredients?: string[];
+  /** Patisserie fields */
   pastryType?: string;
+  pastryStyle?: string;
   keyTechnique?: string;
+  componentCount?: string;
   occasion?: string;
+  /** Spirits fields */
   spiritBase?: string;
   flavourProfile?: string;
   alcoholic?: boolean;
+  venueType?: string;
+  drinkStyle?: string;
+  season?: string;
   kitchenContext?: string;
   /** User ID for persistence (null for guests) */
   userId?: number;
@@ -233,14 +272,19 @@ function buildUserMessage(input: RecipeInput, ragContext: string): string {
       parts.push(`Key ingredients to feature: ${input.mainIngredients.join(", ")}`);
     }
   } else if (input.domain === "patisserie") {
+    if (input.pastryStyle) parts.push(`Pastry style: ${input.pastryStyle}`);
     if (input.pastryType) parts.push(`Pastry type: ${input.pastryType}`);
     if (input.keyTechnique) parts.push(`Key technique to showcase: ${input.keyTechnique}`);
+    if (input.componentCount) parts.push(`Complexity: ${input.componentCount}`);
     if (input.occasion) parts.push(`Occasion: ${input.occasion}`);
   } else if (input.domain === "spirits") {
-    if (input.spiritBase) parts.push(`Spirit base or style: ${input.spiritBase}`);
+    if (input.venueType) parts.push(`Venue type: ${input.venueType}`);
+    if (input.spiritBase) parts.push(`Spirit base: ${input.spiritBase}`);
+    if (input.drinkStyle) parts.push(`Drink style: ${input.drinkStyle}`);
     if (input.flavourProfile) parts.push(`Flavour profile: ${input.flavourProfile}`);
+    if (input.season) parts.push(`Season: ${input.season}`);
     if (input.occasion) parts.push(`Occasion: ${input.occasion}`);
-    if (input.alcoholic === false) parts.push("Make this non-alcoholic (mocktail).");
+    if (input.alcoholic === false) parts.push("Make this non-alcoholic (mocktail/zero-proof).");
   }
 
   return parts.join("\n");

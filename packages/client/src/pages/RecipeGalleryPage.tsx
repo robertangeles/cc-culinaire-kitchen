@@ -57,7 +57,12 @@ export function RecipeGalleryPage() {
         <div className="text-center mb-8">
           <ChefHat className="size-10 mx-auto mb-3 text-amber-600" />
           <h1 className="text-2xl md:text-3xl font-bold text-stone-800">The Kitchen Shelf</h1>
-          <p className="text-stone-500 mt-2">AI-generated recipes from our culinary community</p>
+          <p className="text-stone-500 mt-2">AI Recipes for Inspiration. Season to your own Judgment.</p>
+          <p className="text-xs text-stone-400 max-w-2xl mx-auto mt-3 leading-relaxed">
+            All recipes are AI-generated and should be reviewed by a qualified professional before use.
+            CulinAIre Kitchen does not guarantee outcomes, nutritional accuracy, or allergen completeness.
+            Always verify ingredient safety, cooking temperatures, and dietary suitability.
+          </p>
         </div>
 
         {/* Filters */}
