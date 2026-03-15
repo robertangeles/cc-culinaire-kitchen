@@ -7,7 +7,7 @@
  */
 
 import { Link, NavLink } from "react-router";
-import { ChefHat, Settings, UtensilsCrossed, Croissant, GlassWater, MessageSquare } from "lucide-react";
+import { ChefHat, Settings, UtensilsCrossed, Croissant, GlassWater, MessageSquare, LayoutGrid } from "lucide-react";
 import { useSettings } from "../../context/SettingsContext.js";
 import { useAuth } from "../../context/AuthContext.js";
 import { UserMenu } from "./UserMenu.js";
@@ -73,6 +73,10 @@ export function Sidebar() {
         <NavLink to="/spirits" className={navLinkClass}>
           <GlassWater className="size-4" />
           Spirits Lab
+        </NavLink>
+        <NavLink to="/kitchen-shelf" className={navLinkClass}>
+          <LayoutGrid className="size-4" />
+          The Kitchen Shelf
         </NavLink>
       </nav>
 

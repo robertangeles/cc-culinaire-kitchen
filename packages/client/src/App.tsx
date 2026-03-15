@@ -5,7 +5,7 @@
  * routing, authentication, and the top-level page layout.
  */
 
-import { BrowserRouter, Routes, Route, Navigate } from "react-router";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router";
 import { createContext, useContext, useState } from "react";
 import { SettingsProvider } from "./context/SettingsContext.js";
 import { AuthProvider, useAuth } from "./context/AuthContext.js";
@@ -26,6 +26,8 @@ import { ResetPasswordPage } from "./pages/ResetPasswordPage.js";
 import { MfaSetupPage } from "./pages/MfaSetupPage.js";
 import { ProfilePage } from "./pages/ProfilePage.js";
 import { RecipeLabPage } from "./pages/RecipeLabPage.js";
+import { RecipeGalleryPage } from "./pages/RecipeGalleryPage.js";
+import { RecipeDetailPage } from "./pages/RecipeDetailPage.js";
 import { KitchenOnboarding } from "./components/onboarding/KitchenOnboarding.js";
 
 /**
@@ -67,6 +69,13 @@ function AuthenticatedOnly({ children }: { children: React.ReactNode }) {
  * Public routes: /login, /register
  * Protected routes: /chat/*, /settings
  */
+/** Shows ConversationSidebar only on chat routes. */
+function ChatOnlySidebar() {
+  const { pathname } = useLocation();
+  if (!pathname.startsWith("/chat")) return null;
+  return <ConversationSidebar />;
+}
+
 export function App() {
   const [chatKey, setChatKey] = useState(0);
   const incrementChatKey = () => setChatKey((k) => k + 1);
@@ -109,11 +118,13 @@ export function App() {
                           <Route path="/recipes" element={<RecipeLabPage domain="recipe" />} />
                           <Route path="/patisserie" element={<RecipeLabPage domain="patisserie" />} />
                           <Route path="/spirits" element={<RecipeLabPage domain="spirits" />} />
+                          <Route path="/kitchen-shelf" element={<RecipeGalleryPage />} />
+                          <Route path="/kitchen-shelf/:id" element={<RecipeDetailPage />} />
                         </Routes>
                         <Footer />
                       </main>
-                      {/* Right sidebar — conversation history */}
-                      <ConversationSidebar />
+                      {/* Right sidebar — conversation history (chat pages only) */}
+                      <ChatOnlySidebar />
                     </div>
                     </ConversationProvider>
                     </ChatStreamProvider>

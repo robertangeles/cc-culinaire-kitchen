@@ -21,6 +21,8 @@ import {
   timestamp,
   customType,
   uniqueIndex,
+  jsonb,
+  uuid,
 } from "drizzle-orm/pg-core";
 
 /**
@@ -473,4 +475,41 @@ export const guestSession = pgTable("guest_session", {
   sessionsUsed: integer("sessions_used").notNull().default(0),
   createdDttm: timestamp("created_dttm").notNull().defaultNow(),
   lastActiveDttm: timestamp("last_active_dttm").notNull().defaultNow(),
+});
+
+/**
+ * The `recipe` table persists generated recipes for the Recipe Lab.
+ *
+ * Each recipe has a UUID primary key (used as the shareable URL slug).
+ * The `recipe_data` JSONB column stores the full structured output
+ * (ingredients, steps, flavor balance, nutrition, etc.) while
+ * `editorial_content` holds the rich markdown for PDF/email/social.
+ *
+ * Recipes can be made public (`is_public_ind`) to appear in the
+ * Recipe Lab Gallery. Admins can feature recipes (`gallery_featured_ind`).
+ *
+ * The `kitchen_context` snapshot captures the user's profile at generation
+ * time so the recipe's personalization is preserved even if the user
+ * later changes their profile.
+ */
+export const recipe = pgTable("recipe", {
+  recipeId: uuid("recipe_id").defaultRandom().primaryKey(),
+  slug: varchar("slug", { length: 400 }).unique(),
+  userId: integer("user_id"),
+  domain: varchar("domain", { length: 20 }).notNull().default("recipe"),
+  title: varchar("title", { length: 300 }).notNull(),
+  description: text("description"),
+  recipeData: jsonb("recipe_data").notNull(),
+  editorialContent: text("editorial_content"),
+  imageUrl: varchar("image_url", { length: 500 }),
+  imagePrompt: text("image_prompt"),
+  kitchenContext: text("kitchen_context"),
+  requestParams: jsonb("request_params"),
+  isPublicInd: boolean("is_public_ind").notNull().default(false),
+  galleryFeaturedInd: boolean("gallery_featured_ind").notNull().default(false),
+  archivedInd: boolean("archived_ind").notNull().default(false),
+  archivedAtDttm: timestamp("archived_at"),
+  viewCount: integer("view_count").notNull().default(0),
+  createdDttm: timestamp("created_dttm").notNull().defaultNow(),
+  updatedDttm: timestamp("updated_dttm").notNull().defaultNow(),
 });

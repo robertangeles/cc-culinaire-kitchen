@@ -1,40 +1,48 @@
 /**
  * @module routes/recipes
  *
- * API routes for the three CulinAIre Kitchen recipe labs:
+ * API routes for recipe generation, management, and gallery:
  *
- *   POST /api/recipes/generate   — CulinAIre Recipe (general culinary)
- *   POST /api/recipes/patisserie — CulinAIre Patisserie (pastry/baked goods)
- *   POST /api/recipes/spirits    — CulinAIre Spirits (cocktails/mocktails)
- *
- * All routes accept both authenticated users and guest sessions (same as chat).
- * Authenticated users get kitchen profile context injected into the generation;
- * guests receive generic responses without personalisation.
- *
- * The general app-level rate limit (60 req/min) covers these endpoints.
- * Kitchen profile context is loaded server-side so it cannot be spoofed.
+ *   POST   /api/recipes/generate    — Generate recipe (general culinary)
+ *   POST   /api/recipes/patisserie  — Generate recipe (pastry)
+ *   POST   /api/recipes/spirits     — Generate recipe (cocktails)
+ *   GET    /api/recipes/gallery     — Public gallery (no auth required)
+ *   GET    /api/recipes/my          — User's saved recipes (auth required)
+ *   GET    /api/recipes/:id         — Single recipe by UUID
+ *   PATCH  /api/recipes/:id         — Update recipe (auth required, owner only)
+ *   DELETE /api/recipes/:id         — Delete recipe (auth required, owner only)
  */
 
 import { Router } from "express";
 import { authenticateOrGuest } from "../middleware/guestAuth.js";
-import { recipeHandler } from "../controllers/recipeController.js";
+import { authenticate } from "../middleware/auth.js";
+import {
+  recipeHandler,
+  handleGallery,
+  handleMyRecipes,
+  handleGetRecipe,
+  handleUpdateRecipe,
+  handleDeleteRecipe,
+  handleArchiveRecipe,
+} from "../controllers/recipeController.js";
 
 export const recipesRouter = Router();
 
-/**
- * POST /api/recipes/generate
- * CulinAIre Recipe Lab — general culinary across all cuisines and techniques.
- */
+// Generation endpoints (authenticated or guest)
 recipesRouter.post("/generate", authenticateOrGuest, recipeHandler("recipe"));
-
-/**
- * POST /api/recipes/patisserie
- * CulinAIre Patisserie Lab — pastry, baked goods, confectionery, chocolate.
- */
 recipesRouter.post("/patisserie", authenticateOrGuest, recipeHandler("patisserie"));
-
-/**
- * POST /api/recipes/spirits
- * CulinAIre Spirits Lab — cocktails, mocktails, alcoholic and non-alcoholic beverages.
- */
 recipesRouter.post("/spirits", authenticateOrGuest, recipeHandler("spirits"));
+
+// Gallery (public — no auth required)
+recipesRouter.get("/gallery", handleGallery);
+
+// My Recipes (auth required)
+recipesRouter.get("/my", authenticate, handleMyRecipes);
+
+// Single recipe (public recipes visible to all, private to owner only)
+recipesRouter.get("/:id", authenticateOrGuest, handleGetRecipe);
+
+// Update, Archive, Delete (auth required)
+recipesRouter.patch("/:id", authenticate, handleUpdateRecipe);
+recipesRouter.post("/:id/archive", authenticate, handleArchiveRecipe);
+recipesRouter.delete("/:id", authenticate, handleDeleteRecipe);
