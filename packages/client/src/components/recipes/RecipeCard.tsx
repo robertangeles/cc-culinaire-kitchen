@@ -7,7 +7,7 @@
  */
 
 import { useState } from "react";
-import { Printer, Clock, Users, ChefHat, AlertTriangle, Thermometer, GlassWater } from "lucide-react";
+import { Printer, Clock, Users, ChefHat, AlertTriangle, Thermometer, GlassWater, Flame, Wine, Hash, Sparkles, Share2, Copy, Check } from "lucide-react";
 import type { RecipeDomain } from "./RecipeForm.js";
 
 interface Ingredient {
@@ -20,6 +20,25 @@ interface Ingredient {
 interface Step {
   step: number;
   instruction: string;
+}
+
+interface FlavorScore {
+  score: number;
+  description: string;
+}
+
+interface NutritionInfo {
+  nutrient: string;
+  amount: string;
+  dailyValue?: string;
+}
+
+interface WinePairingPrimary {
+  wine: string;
+  intensityMatch?: number;
+  flavorHarmony?: number;
+  textureInteraction?: number;
+  why: string;
 }
 
 export interface RecipeData {
@@ -38,11 +57,39 @@ export interface RecipeData {
   proTips?: string[];
   allergenNote: string;
   confidenceNote: string;
+  // V2 fields
+  whyThisWorks?: string;
+  theResult?: string;
+  flavorBalance?: {
+    sweet: FlavorScore;
+    salty: FlavorScore;
+    sour: FlavorScore;
+    bitter: FlavorScore;
+    umami: FlavorScore;
+  };
+  nutritionPerServing?: NutritionInfo[];
+  storageAndSafety?: string;
+  hookLine?: string;
+  storyBehindTheDish?: string;
+  platingGuide?: string;
+  hashtags?: string[];
+  winePairing?: {
+    primary: WinePairingPrimary;
+    alternatives?: { wine: string; why: string }[];
+  };
 }
 
 interface RecipeCardProps {
   recipe: RecipeData;
   domain: RecipeDomain;
+  /** Recipe UUID for share link */
+  recipeId?: string;
+  /** URL slug for share link (preferred over recipeId) */
+  slug?: string;
+  /** Callback when user toggles public visibility */
+  onTogglePublic?: (isPublic: boolean) => void;
+  /** Current public state */
+  isPublic?: boolean;
 }
 
 const DIFFICULTY_COLORS: Record<string, string> = {
@@ -52,9 +99,10 @@ const DIFFICULTY_COLORS: Record<string, string> = {
   expert: "bg-red-100 text-red-800",
 };
 
-export function RecipeCard({ recipe, domain }: RecipeCardProps) {
+export function RecipeCard({ recipe, domain, recipeId, slug, onTogglePublic, isPublic }: RecipeCardProps) {
   const [checkedIngredients, setCheckedIngredients] = useState<Set<number>>(new Set());
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
+  const [copied, setCopied] = useState(false);
 
   function toggleIngredient(index: number) {
     setCheckedIngredients((prev) => {
@@ -127,7 +175,34 @@ export function RecipeCard({ recipe, domain }: RecipeCardProps) {
           )}
         </div>
 
-        <div className="mt-4 flex justify-end">
+        {/* Action buttons */}
+        <div className="mt-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            {onTogglePublic && (
+              <button
+                onClick={() => onTogglePublic(!isPublic)}
+                className={`flex items-center gap-1.5 text-sm transition-colors ${
+                  isPublic ? "text-green-600 hover:text-green-700" : "text-stone-500 hover:text-stone-700"
+                }`}
+              >
+                <Share2 className="size-4" />
+                {isPublic ? "Public" : "Make Public"}
+              </button>
+            )}
+            {recipeId && (
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(`${window.location.origin}/kitchen-shelf/${slug ?? recipeId}`);
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 2000);
+                }}
+                className="flex items-center gap-1.5 text-sm text-stone-500 hover:text-stone-700 transition-colors"
+              >
+                {copied ? <Check className="size-4 text-green-600" /> : <Copy className="size-4" />}
+                {copied ? "Copied!" : "Share Link"}
+              </button>
+            )}
+          </div>
           <button
             onClick={handlePrint}
             className="flex items-center gap-1.5 text-sm text-stone-500 hover:text-stone-700 transition-colors"
@@ -136,6 +211,13 @@ export function RecipeCard({ recipe, domain }: RecipeCardProps) {
             Print
           </button>
         </div>
+
+        {/* Hook line (social caption) */}
+        {recipe.hookLine && (
+          <div className="mt-4 bg-gradient-to-r from-amber-50 to-orange-50 rounded-lg px-4 py-3 border border-amber-200">
+            <p className="text-sm font-medium text-amber-900 italic">"{recipe.hookLine}"</p>
+          </div>
+        )}
       </div>
 
       {/* Two-column layout */}
@@ -229,6 +311,122 @@ export function RecipeCard({ recipe, domain }: RecipeCardProps) {
         <AlertTriangle className="size-4 text-amber-600 shrink-0 mt-0.5" />
         <p className="text-sm text-amber-800 leading-relaxed">{recipe.allergenNote}</p>
       </div>
+
+      {/* Why This Works */}
+      {recipe.whyThisWorks && (
+        <div className="mx-6 md:mx-10 mb-6">
+          <h3 className="text-sm font-semibold text-stone-700 mb-2 flex items-center gap-2">
+            <Sparkles className="size-4 text-amber-500" />
+            Why This Works
+          </h3>
+          <p className="text-sm text-stone-600 leading-relaxed">{recipe.whyThisWorks}</p>
+        </div>
+      )}
+
+      {/* The Result */}
+      {recipe.theResult && (
+        <div className="mx-6 md:mx-10 mb-6">
+          <h3 className="text-sm font-semibold text-stone-700 mb-2">The Result</h3>
+          <p className="text-sm text-stone-600 leading-relaxed italic">{recipe.theResult}</p>
+        </div>
+      )}
+
+      {/* Flavor Balance */}
+      {recipe.flavorBalance && (
+        <div className="mx-6 md:mx-10 mb-6 bg-stone-50 rounded-xl p-5 border border-stone-200">
+          <h3 className="text-sm font-semibold text-stone-700 mb-4 flex items-center gap-2">
+            <Flame className="size-4 text-orange-500" />
+            Flavor Balance
+          </h3>
+          <div className="grid grid-cols-5 gap-3">
+            {(["sweet", "salty", "sour", "bitter", "umami"] as const).map((taste) => {
+              const data = recipe.flavorBalance![taste];
+              return (
+                <div key={taste} className="text-center">
+                  <div className="text-xs font-medium text-stone-500 uppercase mb-1">{taste}</div>
+                  <div className="text-lg font-bold text-stone-800">{data.score}<span className="text-xs text-stone-400">/10</span></div>
+                  <div className="w-full bg-stone-200 rounded-full h-1.5 mt-1">
+                    <div className="bg-amber-500 h-1.5 rounded-full" style={{ width: `${data.score * 10}%` }} />
+                  </div>
+                  <p className="text-xs text-stone-400 mt-1 leading-tight">{data.description}</p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Nutrition */}
+      {recipe.nutritionPerServing && recipe.nutritionPerServing.length > 0 && (
+        <div className="mx-6 md:mx-10 mb-6">
+          <h3 className="text-sm font-semibold text-stone-700 mb-3">Nutrition Per Serving</h3>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {recipe.nutritionPerServing.map((n, i) => (
+              <div key={i} className="bg-stone-50 rounded-lg px-3 py-2 text-center">
+                <div className="text-xs text-stone-500">{n.nutrient}</div>
+                <div className="text-sm font-semibold text-stone-800">{n.amount}</div>
+                {n.dailyValue && <div className="text-xs text-stone-400">{n.dailyValue} DV</div>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Wine Pairing */}
+      {recipe.winePairing && (
+        <div className="mx-6 md:mx-10 mb-6 bg-purple-50 rounded-xl p-5 border border-purple-200">
+          <h3 className="text-sm font-semibold text-purple-800 mb-3 flex items-center gap-2">
+            <Wine className="size-4" />
+            Wine Pairing
+          </h3>
+          <p className="text-sm font-medium text-purple-900">{recipe.winePairing.primary.wine}</p>
+          <p className="text-sm text-purple-700 mt-1">{recipe.winePairing.primary.why}</p>
+          {recipe.winePairing.alternatives && recipe.winePairing.alternatives.length > 0 && (
+            <div className="mt-3 pt-3 border-t border-purple-200">
+              <p className="text-xs font-medium text-purple-600 mb-1">Alternatives:</p>
+              {recipe.winePairing.alternatives.map((alt, i) => (
+                <p key={i} className="text-xs text-purple-600"><strong>{alt.wine}</strong> — {alt.why}</p>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Storage & Safety */}
+      {recipe.storageAndSafety && (
+        <div className="mx-6 md:mx-10 mb-6">
+          <h3 className="text-sm font-semibold text-stone-700 mb-2">Storage & Food Safety</h3>
+          <p className="text-sm text-stone-600 leading-relaxed whitespace-pre-line">{recipe.storageAndSafety}</p>
+        </div>
+      )}
+
+      {/* Plating Guide */}
+      {recipe.platingGuide && (
+        <div className="mx-6 md:mx-10 mb-6">
+          <h3 className="text-sm font-semibold text-stone-700 mb-2">Plating Guide</h3>
+          <p className="text-sm text-stone-600 leading-relaxed italic">{recipe.platingGuide}</p>
+        </div>
+      )}
+
+      {/* Story Behind the Dish */}
+      {recipe.storyBehindTheDish && (
+        <div className="mx-6 md:mx-10 mb-6">
+          <h3 className="text-sm font-semibold text-stone-700 mb-2">The Story</h3>
+          <p className="text-sm text-stone-600 leading-relaxed">{recipe.storyBehindTheDish}</p>
+        </div>
+      )}
+
+      {/* Hashtags */}
+      {recipe.hashtags && recipe.hashtags.length > 0 && (
+        <div className="mx-6 md:mx-10 mb-6 flex flex-wrap gap-2">
+          <Hash className="size-4 text-stone-400" />
+          {recipe.hashtags.map((tag, i) => (
+            <span key={i} className="text-xs text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">
+              {tag.startsWith("#") ? tag : `#${tag}`}
+            </span>
+          ))}
+        </div>
+      )}
 
       {/* Confidence note */}
       <div className="px-6 md:px-10 pb-8">

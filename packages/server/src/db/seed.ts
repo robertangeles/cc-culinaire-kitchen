@@ -34,6 +34,8 @@ const { eq, and } = await import("drizzle-orm");
 const __dirname = dirname(fileURLToPath(import.meta.url));
 /** Absolute path to the chatbot prompts directory in the monorepo. */
 const PROMPTS_DIR = join(__dirname, "../../../../prompts/chatbot");
+/** Absolute path to the recipe prompts directory in the monorepo. */
+const RECIPE_PROMPTS_DIR = join(__dirname, "../../../../prompts/recipe");
 
 /**
  * Reads the system prompt markdown file and seeds both the active and
@@ -83,6 +85,61 @@ async function seed() {
     console.log("Inserted default systemPrompt");
   } else {
     console.log("Default systemPrompt already exists, skipping");
+  }
+
+  // -----------------------------------------------------------------
+  // Seed recipe lab prompts (recipe, patisserie, spirits)
+  // -----------------------------------------------------------------
+  const recipePrompts = [
+    { name: "recipePrompt", key: "recipe-prompt", file: "recipePromptV2.md" },
+    { name: "patisseriePrompt", key: "patisserie-prompt", file: "patisseriePrompt.md" },
+    { name: "spiritsPrompt", key: "spirits-prompt", file: "spiritsPrompt.md" },
+  ];
+
+  for (const rp of recipePrompts) {
+    try {
+      const rpPath = join(RECIPE_PROMPTS_DIR, rp.file);
+      const rpRaw = await readFile(rpPath, "utf-8");
+      const rpContent = matter(rpRaw).content.trim();
+
+      // Active copy
+      const rpExisting = await db
+        .select()
+        .from(prompt)
+        .where(and(eq(prompt.promptName, rp.name), eq(prompt.defaultInd, false)));
+
+      if (rpExisting.length === 0) {
+        await db.insert(prompt).values({
+          promptName: rp.name,
+          promptKey: rp.key,
+          promptBody: rpContent,
+          defaultInd: false,
+        });
+        console.log(`Inserted active ${rp.name}`);
+      } else {
+        console.log(`Active ${rp.name} already exists, skipping`);
+      }
+
+      // Default copy
+      const rpDefault = await db
+        .select()
+        .from(prompt)
+        .where(and(eq(prompt.promptName, rp.name), eq(prompt.defaultInd, true)));
+
+      if (rpDefault.length === 0) {
+        await db.insert(prompt).values({
+          promptName: rp.name,
+          promptKey: rp.key,
+          promptBody: rpContent,
+          defaultInd: true,
+        });
+        console.log(`Inserted default ${rp.name}`);
+      } else {
+        console.log(`Default ${rp.name} already exists, skipping`);
+      }
+    } catch (err) {
+      console.warn(`Warning: Could not seed ${rp.name} — file may not exist:`, (err as Error).message);
+    }
   }
 
   // -----------------------------------------------------------------
@@ -188,6 +245,7 @@ async function seed() {
     { key: "guest_session_idle_hours", value: "24" },
     { key: "default_guest_sessions", value: "10" },
     { key: "default_registered_sessions", value: "10" },
+    { key: "recipe_archive_retention_days", value: "30" },
   ];
 
   for (const s of defaultSettings) {

@@ -72,6 +72,8 @@ interface RecipeLabPageProps {
 interface GeneratedRecipe {
   recipe: RecipeData;
   imageUrl: string | null;
+  recipeId: string | null;
+  slug: string | null;
 }
 
 export function RecipeLabPage({ domain }: RecipeLabPageProps) {
@@ -96,10 +98,19 @@ export function RecipeLabPage({ domain }: RecipeLabPageProps) {
     );
   }
 
+  const storageKey = `recipe_lab_${domain}`;
+
+  // Restore from sessionStorage on mount
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [generated, setGenerated] = useState<GeneratedRecipe | null>(null);
+  const [generated, setGenerated] = useState<GeneratedRecipe | null>(() => {
+    try {
+      const saved = sessionStorage.getItem(storageKey);
+      return saved ? JSON.parse(saved) : null;
+    } catch { return null; }
+  });
   const [proseResponse, setProseResponse] = useState<string | null>(null);
+  const [isPublic, setIsPublic] = useState(false);
 
   async function handleGenerate(formData: RecipeFormData) {
     setLoading(true);
@@ -131,13 +142,23 @@ export function RecipeLabPage({ domain }: RecipeLabPageProps) {
       const data = (await res.json()) as {
         recipe?: RecipeData;
         imageUrl?: string | null;
+        recipeId?: string | null;
+        slug?: string | null;
         prose?: string;
       };
 
       if (data.prose) {
         setProseResponse(data.prose);
       } else if (data.recipe) {
-        setGenerated({ recipe: data.recipe, imageUrl: data.imageUrl ?? null });
+        const gen: GeneratedRecipe = {
+          recipe: data.recipe,
+          imageUrl: data.imageUrl ?? null,
+          recipeId: data.recipeId ?? null,
+          slug: data.slug ?? null,
+        };
+        setGenerated(gen);
+        setIsPublic(false);
+        try { sessionStorage.setItem(storageKey, JSON.stringify(gen)); } catch { /* quota */ }
       } else {
         throw new Error("Unexpected response from server.");
       }
@@ -152,11 +173,66 @@ export function RecipeLabPage({ domain }: RecipeLabPageProps) {
     setGenerated(null);
     setProseResponse(null);
     setError(null);
+    sessionStorage.removeItem(storageKey);
   }
 
-  // State: recipe generated — show hero + card
-  if (generated) {
+  // ---------------------------------------------------------------------------
+  // Split-screen layout: form left, output right (md+). Stacked on mobile.
+  // When no recipe generated yet: form centered full-width.
+  // ---------------------------------------------------------------------------
+
+  // Form panel (shared between initial and split-screen states)
+  const formPanel = (
+    <div className={`${generated ? "" : "w-full max-w-xl"} bg-white rounded-2xl shadow-sm border border-stone-200 p-6 md:p-8`}>
+      {error && (
+        <div className="mb-4 flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg p-3">
+          <AlertCircle className="size-4 text-red-500 shrink-0 mt-0.5" />
+          <p className="text-sm text-red-700">{error}</p>
+        </div>
+      )}
+      {proseResponse && (
+        <div className="mb-4 bg-amber-50 border border-amber-200 rounded-lg p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <AlertCircle className="size-4 text-amber-600" />
+            <h3 className="text-sm font-semibold text-amber-800">Suggestions</h3>
+          </div>
+          <p className="text-sm text-amber-700 whitespace-pre-line">{proseResponse}</p>
+        </div>
+      )}
+      <RecipeForm domain={domain} onSubmit={handleGenerate} loading={loading} />
+    </div>
+  );
+
+  // No recipe generated yet — centered form
+  if (!generated) {
     return (
+      <div className={`flex-1 overflow-y-auto ${config.bg}`}>
+        <div className="min-h-full flex flex-col items-center justify-center p-6 md:p-10">
+          <div className="text-center mb-8">
+            <DomainIcon className={`size-12 mx-auto mb-3 ${config.accent}`} />
+            <h1 className="text-2xl md:text-3xl font-bold text-stone-800">{config.label}</h1>
+            <p className="text-stone-500 mt-2 text-sm md:text-base">{config.tagline}</p>
+          </div>
+          {formPanel}
+        </div>
+      </div>
+    );
+  }
+
+  // Recipe generated — split screen
+  return (
+    <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
+      {/* Left: form panel (sticky, scrollable) */}
+      <div className="md:w-[380px] lg:w-[420px] md:flex-shrink-0 md:border-r border-stone-200 bg-stone-50 overflow-y-auto p-6">
+        <div className="mb-4">
+          <DomainIcon className={`size-8 mb-2 ${config.accent}`} />
+          <h2 className="text-lg font-bold text-stone-800">{config.label}</h2>
+          <p className="text-xs text-stone-500">{config.tagline}</p>
+        </div>
+        {formPanel}
+      </div>
+
+      {/* Right: recipe output (scrollable) */}
       <div className="flex-1 overflow-y-auto">
         <RecipeHero
           imageUrl={generated.imageUrl}
@@ -164,63 +240,24 @@ export function RecipeLabPage({ domain }: RecipeLabPageProps) {
           domain={domain}
         />
         <div className="max-w-5xl mx-auto">
-          <RecipeCard recipe={generated.recipe} domain={domain} />
-          <div className="px-6 md:px-10 pb-10 flex justify-center">
-            <button
-              onClick={handleReset}
-              className="flex items-center gap-2 px-6 py-2.5 rounded-xl border-2 border-stone-300 text-stone-700 font-medium text-sm hover:border-stone-400 transition-colors"
-            >
-              <RefreshCw className="size-4" />
-              Generate Another
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // State: prose fallback
-  if (proseResponse) {
-    return (
-      <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center p-8">
-        <div className="max-w-xl w-full bg-white rounded-2xl shadow-sm border border-stone-200 p-8">
-          <div className="flex items-center gap-3 mb-4">
-            <AlertCircle className="size-5 text-amber-600" />
-            <h2 className="font-semibold text-stone-800">Here are some suggestions</h2>
-          </div>
-          <p className="text-stone-600 text-sm leading-relaxed whitespace-pre-line">{proseResponse}</p>
-          <button
-            onClick={handleReset}
-            className="mt-6 flex items-center gap-2 px-5 py-2 rounded-lg bg-stone-800 text-white text-sm font-medium hover:bg-stone-700 transition-colors"
-          >
-            <RefreshCw className="size-4" />
-            Try Again
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // State: form (initial or after error)
-  return (
-    <div className={`flex-1 overflow-y-auto ${config.bg}`}>
-      <div className="min-h-full flex flex-col items-center justify-center p-6 md:p-10">
-        {/* Lab header */}
-        <div className="text-center mb-8">
-          <DomainIcon className={`size-12 mx-auto mb-3 ${config.accent}`} />
-          <h1 className="text-2xl md:text-3xl font-bold text-stone-800">{config.label}</h1>
-          <p className="text-stone-500 mt-2 text-sm md:text-base">{config.tagline}</p>
-        </div>
-
-        {/* Form card */}
-        <div className="w-full max-w-xl bg-white rounded-2xl shadow-sm border border-stone-200 p-6 md:p-8">
-          {error && (
-            <div className="mb-4 flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg p-3">
-              <AlertCircle className="size-4 text-red-500 shrink-0 mt-0.5" />
-              <p className="text-sm text-red-700">{error}</p>
-            </div>
-          )}
-          <RecipeForm domain={domain} onSubmit={handleGenerate} loading={loading} />
+          <RecipeCard
+            recipe={generated.recipe}
+            domain={domain}
+            recipeId={generated.recipeId ?? undefined}
+            slug={generated.slug ?? undefined}
+            isPublic={isPublic}
+            onTogglePublic={generated.recipeId ? async (pub) => {
+              try {
+                await fetch(`/api/recipes/${generated.recipeId}`, {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  credentials: "include",
+                  body: JSON.stringify({ isPublicInd: pub }),
+                });
+                setIsPublic(pub);
+              } catch { /* silent */ }
+            } : undefined}
+          />
         </div>
       </div>
     </div>

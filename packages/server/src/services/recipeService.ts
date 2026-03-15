@@ -1,44 +1,34 @@
 /**
  * @module recipeService
  *
- * AI recipe generation service for the three CulinAIre Kitchen recipe labs:
- *  - CulinAIre Recipe  (general culinary, all cuisines + techniques)
- *  - CulinAIre Patisserie (pastry, baked goods, confectionery, chocolate)
- *  - CulinAIre Spirits (cocktails, mocktails, alcoholic/non-alcoholic beverages)
+ * AI recipe generation service for the CulinAIre Kitchen recipe labs.
+ * V2: Enhanced with RAG knowledge search, editorial depth, virality
+ * elements, and automatic persistence to the recipe table.
  *
- * All three labs share this service via the `domain` parameter.  Each domain
- * loads its own system prompt from `prompts/recipe/` and produces a structured
- * JSON recipe via Vercel AI SDK `generateObject` with a shared Zod schema (plus
- * domain-specific optional fields).
+ * ## Pipeline
+ *  1. Load kitchen context (user's skill, equipment, dietary)
+ *  2. RAG search for relevant culinary knowledge (flavor pairings, techniques)
+ *  3. Generate structured recipe via generateObject + enhanced Zod schema
+ *  4. Generate hero image (non-fatal)
+ *  5. Persist to database → return recipe with UUID
  *
  * ## Failure handling
- *  1. Attempt structured generation (generateObject) — success → return recipe
- *  2. If structured generation fails (JSON parse error, schema mismatch, API
- *     timeout, rate limit) → retry ONCE with a stricter prompt
- *  3. If retry also fails → return a prose fallback so the user gets something
- *     useful rather than a blank error screen
- *
- * ## Image generation
- * After a successful recipe generation the service calls the imageService to
- * produce a hero image from `recipe.imagePrompt`.  Image failure is non-fatal:
- * a null URL is returned and the UI falls back to a static placeholder.
+ *  1. Attempt structured generation → success → persist + return
+ *  2. Retry with stricter prompt → success → persist + return
+ *  3. Final fallback → prose response (not persisted)
  */
 
-import { readFile } from "fs/promises";
-import { join, dirname } from "path";
-import { fileURLToPath } from "url";
 import { generateObject } from "ai";
 import { z } from "zod";
-import matter from "gray-matter";
 import pino from "pino";
 import { getModel } from "./providerService.js";
 import { generateImage } from "./imageService.js";
 import { getAllSettings } from "./settingsService.js";
+import { searchKnowledge } from "./knowledgeService.js";
+import { saveRecipe } from "./recipePersistenceService.js";
+import { getPromptRaw } from "./promptService.js";
 
 const logger = pino({ name: "recipeService" });
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const PROMPTS_DIR = join(__dirname, "../../../../prompts/recipe");
 
 // ---------------------------------------------------------------------------
 // Domain type
@@ -47,7 +37,7 @@ const PROMPTS_DIR = join(__dirname, "../../../../prompts/recipe");
 export type RecipeDomain = "recipe" | "patisserie" | "spirits";
 
 // ---------------------------------------------------------------------------
-// Shared Zod output schema
+// Zod output schema (V2 — enhanced)
 // ---------------------------------------------------------------------------
 
 const IngredientSchema = z.object({
@@ -62,92 +52,170 @@ const StepSchema = z.object({
   instruction: z.string(),
 });
 
+const FlavorScoreSchema = z.object({
+  score: z.number().min(0).max(10),
+  description: z.string(),
+});
+
+const NutritionSchema = z.object({
+  nutrient: z.string(),
+  amount: z.string(),
+  dailyValue: z.string().optional(),
+});
+
+const WinePairingPrimarySchema = z.object({
+  wine: z.string(),
+  intensityMatch: z.number().optional(),
+  flavorHarmony: z.number().optional(),
+  textureInteraction: z.number().optional(),
+  why: z.string(),
+});
+
+const WinePairingSchema = z.object({
+  primary: WinePairingPrimarySchema,
+  alternatives: z.array(z.object({ wine: z.string(), why: z.string() })).optional(),
+});
+
 /**
- * Shared recipe output schema.  Domain-specific fields (temperature,
- * glassware, garnish, alcoholic) are optional at the schema level and
- * populated by the domain-specific prompt.
+ * Enhanced recipe output schema (V2).
+ * Includes editorial depth, flavor balance, nutrition, virality elements,
+ * and optional wine pairing.
  */
 export const RecipeOutputSchema = z.object({
+  // Core fields
   name: z.string(),
   description: z.string(),
   yield: z.string(),
   prepTime: z.string(),
   cookTime: z.string(),
   difficulty: z.enum(["beginner", "intermediate", "advanced", "expert"]),
-  /** Patisserie: oven temperature + mode */
-  temperature: z.string().optional(),
-  /** Spirits: glassware type */
-  glassware: z.string().optional(),
-  /** Spirits: garnish specification */
-  garnish: z.string().optional(),
-  /** Spirits: true for alcoholic, false for mocktail/non-alcoholic */
-  alcoholic: z.boolean().optional(),
   ingredients: z.array(IngredientSchema),
   steps: z.array(StepSchema),
   proTips: z.array(z.string()).optional(),
   allergenNote: z.string(),
-  /** Used to generate the hero image */
   imagePrompt: z.string(),
   confidenceNote: z.string(),
+
+  // Domain-specific (optional)
+  temperature: z.string().optional(),
+  glassware: z.string().optional(),
+  garnish: z.string().optional(),
+  alcoholic: z.boolean().optional(),
+
+  // Editorial depth (V2)
+  whyThisWorks: z.string().optional(),
+  theResult: z.string().optional(),
+  flavorBalance: z.object({
+    sweet: FlavorScoreSchema,
+    salty: FlavorScoreSchema,
+    sour: FlavorScoreSchema,
+    bitter: FlavorScoreSchema,
+    umami: FlavorScoreSchema,
+  }).optional(),
+  nutritionPerServing: z.array(NutritionSchema).optional(),
+  storageAndSafety: z.string().optional(),
+
+  // Virality (V2)
+  hookLine: z.string().optional(),
+  storyBehindTheDish: z.string().optional(),
+  platingGuide: z.string().optional(),
+  hashtags: z.array(z.string()).optional(),
+
+  // Wine pairing (V2, optional)
+  winePairing: WinePairingSchema.optional(),
 });
 
 export type RecipeOutput = z.infer<typeof RecipeOutputSchema>;
 
 // ---------------------------------------------------------------------------
-// Recipe input schemas (per-domain)
+// Recipe input
 // ---------------------------------------------------------------------------
 
 export interface RecipeInput {
   domain: RecipeDomain;
-  /** Free-text description, name hint, or what they want to make */
   request: string;
-  /** Optional constraints */
   dietary?: string[];
   servings?: number;
   difficulty?: string;
-  /** Recipe-specific */
   cuisine?: string;
   mainIngredients?: string[];
-  /** Patisserie-specific */
   pastryType?: string;
   keyTechnique?: string;
   occasion?: string;
-  /** Spirits-specific */
   spiritBase?: string;
   flavourProfile?: string;
   alcoholic?: boolean;
-  /** Kitchen context string from userContextService (optional) */
   kitchenContext?: string;
+  /** User ID for persistence (null for guests) */
+  userId?: number;
 }
 
 // ---------------------------------------------------------------------------
 // Prompt loading
 // ---------------------------------------------------------------------------
 
-const PROMPT_FILES: Record<RecipeDomain, string> = {
-  recipe: "recipePrompt.md",
-  patisserie: "patisseriePrompt.md",
-  spirits: "spiritsPrompt.md",
+/** Maps recipe domain to the prompt name stored in the database. */
+const PROMPT_NAMES: Record<RecipeDomain, string> = {
+  recipe: "recipePrompt",
+  patisserie: "patisseriePrompt",
+  spirits: "spiritsPrompt",
 };
 
-/** Load and parse a domain-specific recipe prompt file. */
+/** Load a domain-specific recipe prompt from the database (via promptService). */
 async function loadDomainPrompt(domain: RecipeDomain): Promise<string> {
-  const filePath = join(PROMPTS_DIR, PROMPT_FILES[domain]);
-  const raw = await readFile(filePath, "utf-8");
-  const { content } = matter(raw);
-  return content.trim();
+  return getPromptRaw(PROMPT_NAMES[domain]);
 }
 
 // ---------------------------------------------------------------------------
-// User request → prompt message
+// RAG knowledge search
 // ---------------------------------------------------------------------------
 
-/** Build the user-facing message that drives recipe generation. */
-function buildUserMessage(input: RecipeInput): string {
+/**
+ * Search the knowledge base for relevant culinary context based on the
+ * user's recipe request. Returns formatted reference text to inject
+ * into the generation prompt.
+ */
+async function searchRecipeContext(input: RecipeInput): Promise<string> {
+  try {
+    // Build search query from request + key ingredients + cuisine
+    const searchTerms = [input.request];
+    if (input.mainIngredients?.length) searchTerms.push(...input.mainIngredients);
+    if (input.cuisine) searchTerms.push(input.cuisine);
+    if (input.spiritBase) searchTerms.push(input.spiritBase);
+
+    const query = searchTerms.join(" ");
+    const results = await searchKnowledge(query);
+
+    if (results.length === 0) return "";
+
+    const context = results
+      .slice(0, 3)
+      .map((r) => r.snippet)
+      .join("\n\n");
+
+    logger.debug({ resultCount: results.length }, "RAG context loaded for recipe generation");
+
+    return `\n## Culinary Reference (use as inspiration, do not cite):\n${context}\n`;
+  } catch (err) {
+    logger.warn({ err }, "RAG search failed for recipe context — proceeding without");
+    return "";
+  }
+}
+
+// ---------------------------------------------------------------------------
+// User message builder
+// ---------------------------------------------------------------------------
+
+function buildUserMessage(input: RecipeInput, ragContext: string): string {
   const parts: string[] = [];
 
   if (input.kitchenContext) {
     parts.push(input.kitchenContext);
+    parts.push("");
+  }
+
+  if (ragContext) {
+    parts.push(ragContext);
     parts.push("");
   }
 
@@ -159,7 +227,6 @@ function buildUserMessage(input: RecipeInput): string {
     parts.push(`Dietary restrictions to respect: ${input.dietary.join(", ")}`);
   }
 
-  // Domain-specific constraints
   if (input.domain === "recipe") {
     if (input.cuisine) parts.push(`Cuisine style: ${input.cuisine}`);
     if (input.mainIngredients && input.mainIngredients.length > 0) {
@@ -195,30 +262,33 @@ function proseFallback(input: RecipeInput): string {
 }
 
 // ---------------------------------------------------------------------------
-// Core generation
+// Core generation (V2)
 // ---------------------------------------------------------------------------
 
 /**
- * Generate a structured recipe for the given domain and input.
- *
- * @returns An object containing the structured recipe and an optional hero
- *          image URL (null when image generation is unavailable or fails).
+ * Generate a structured recipe, persist it to the database, and return
+ * the recipe with its shareable UUID.
  */
 export async function generateRecipe(input: RecipeInput): Promise<{
   recipe: RecipeOutput | null;
   imageUrl: string | null;
   proseResponse: string | null;
+  recipeId: string | null;
+  slug: string | null;
 }> {
   let systemPrompt: string;
   try {
     systemPrompt = await loadDomainPrompt(input.domain);
   } catch (err) {
     logger.error({ err, domain: input.domain }, "generateRecipe: failed to load domain prompt");
-    return { recipe: null, imageUrl: null, proseResponse: proseFallback(input) };
+    return { recipe: null, imageUrl: null, proseResponse: proseFallback(input), recipeId: null, slug: null };
   }
 
+  // RAG knowledge search — inject relevant culinary context
+  const ragContext = await searchRecipeContext(input);
+
   const model = getModel();
-  const userMessage = buildUserMessage(input);
+  const userMessage = buildUserMessage(input, ragContext);
 
   // Attempt 1
   let recipe: RecipeOutput | null = null;
@@ -249,11 +319,11 @@ export async function generateRecipe(input: RecipeInput): Promise<{
     } catch (retryErr) {
       const retryMsg = retryErr instanceof Error ? retryErr.message : String(retryErr);
       logger.error({ domain: input.domain, error: retryMsg }, "generateRecipe: retry also failed — prose fallback");
-      return { recipe: null, imageUrl: null, proseResponse: proseFallback(input) };
+      return { recipe: null, imageUrl: null, proseResponse: proseFallback(input), recipeId: null, slug: null };
     }
   }
 
-  // Generate hero image (non-fatal if unavailable)
+  // Generate hero image (non-fatal)
   let imageUrl: string | null = null;
   const settings = await getAllSettings();
   if (settings.image_generation_enabled === "true" && recipe.imagePrompt) {
@@ -266,5 +336,34 @@ export async function generateRecipe(input: RecipeInput): Promise<{
     }
   }
 
-  return { recipe, imageUrl, proseResponse: null };
+  // Persist recipe to database
+  let recipeId: string | null = null;
+  let slug: string | null = null;
+  try {
+    const saved = await saveRecipe({
+      userId: input.userId,
+      domain: input.domain,
+      title: recipe.name,
+      description: recipe.description,
+      recipeData: recipe as unknown as Record<string, unknown>,
+      imageUrl,
+      imagePrompt: recipe.imagePrompt,
+      kitchenContext: input.kitchenContext,
+      requestParams: {
+        request: input.request,
+        servings: input.servings,
+        difficulty: input.difficulty,
+        dietary: input.dietary,
+        cuisine: input.cuisine,
+        mainIngredients: input.mainIngredients,
+      },
+    });
+    recipeId = saved.recipeId;
+    slug = saved.slug;
+    logger.info({ recipeId, slug, title: recipe.name }, "generateRecipe: recipe persisted");
+  } catch (err) {
+    logger.warn({ err }, "generateRecipe: failed to persist recipe — returning without ID");
+  }
+
+  return { recipe, imageUrl, proseResponse: null, recipeId, slug };
 }

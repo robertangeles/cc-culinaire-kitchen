@@ -1,14 +1,15 @@
 /**
  * @module controllers/recipeController
  *
- * Controller for the three CulinAIre Kitchen recipe labs.
+ * Controller for the CulinAIre Kitchen recipe labs + recipe management.
  *
- * Validates the incoming request body, calls recipeService.generateRecipe,
- * and returns either a structured recipe JSON object or a prose fallback.
- *
- * All three labs share the same controller logic — the `domain` parameter
- * (injected by the route handler) determines which AI persona and prompt
- * are used.
+ * Handles:
+ * - Recipe generation (POST /generate, /patisserie, /spirits)
+ * - My Recipes listing (GET /my)
+ * - Public gallery (GET /gallery)
+ * - Single recipe (GET /:id)
+ * - Update recipe (PATCH /:id)
+ * - Delete recipe (DELETE /:id)
  */
 
 import type { Request, Response, NextFunction } from "express";
@@ -16,59 +17,44 @@ import { z } from "zod";
 import pino from "pino";
 import { generateRecipe, type RecipeDomain } from "../services/recipeService.js";
 import { buildContextString } from "../services/userContextService.js";
+import {
+  getRecipe,
+  listUserRecipes,
+  listGalleryRecipes,
+  updateRecipe,
+  deleteRecipe,
+  archiveRecipe,
+} from "../services/recipePersistenceService.js";
 
 const logger = pino({ name: "recipeController" });
 
 // ---------------------------------------------------------------------------
-// Request body schema (shared across all three labs)
+// Request schemas
 // ---------------------------------------------------------------------------
 
 const RecipeRequestSchema = z.object({
-  /** Free-text recipe request — the primary user intent */
   request: z.string().min(3).max(500),
-  /** Servings (optional, defaults to 4) */
   servings: z.number().int().min(1).max(100).optional(),
-  /** Difficulty preference */
   difficulty: z.enum(["beginner", "intermediate", "advanced", "expert"]).optional(),
-  /** Dietary restrictions to always respect */
   dietary: z.array(z.string().max(50)).max(10).optional(),
-  /** Recipe lab: cuisine style (e.g. "French Classical", "Japanese") */
   cuisine: z.string().max(100).optional(),
-  /** Recipe lab: key ingredients to feature */
   mainIngredients: z.array(z.string().max(50)).max(20).optional(),
-  /** Patisserie lab: type of pastry (tart, cake, bread, chocolate, candy) */
   pastryType: z.string().max(100).optional(),
-  /** Patisserie lab: technique to showcase (lamination, tempering, etc.) */
   keyTechnique: z.string().max(100).optional(),
-  /** Shared: occasion (dinner party, holiday, casual) */
   occasion: z.string().max(100).optional(),
-  /** Spirits lab: spirit base or style (rum, whisky, gin, tequila, wine-based) */
   spiritBase: z.string().max(100).optional(),
-  /** Spirits lab: desired flavour profile */
   flavourProfile: z.string().max(100).optional(),
-  /** Spirits lab: false = mocktail / non-alcoholic */
   alcoholic: z.boolean().optional(),
 });
 
 type RecipeRequest = z.infer<typeof RecipeRequestSchema>;
 
 // ---------------------------------------------------------------------------
-// Controller factory
+// Generate recipe handler
 // ---------------------------------------------------------------------------
 
-/**
- * Returns an Express request handler for the given recipe domain.
- *
- * Usage in routes:
- * ```ts
- * router.post("/generate", authenticate, recipeHandler("recipe"));
- * router.post("/patisserie", authenticate, recipeHandler("patisserie"));
- * router.post("/spirits", authenticate, recipeHandler("spirits"));
- * ```
- */
 export function recipeHandler(domain: RecipeDomain) {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    // --- Input validation ---
     const parsed = RecipeRequestSchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({
@@ -79,19 +65,17 @@ export function recipeHandler(domain: RecipeDomain) {
     }
 
     const body: RecipeRequest = parsed.data;
-
-    // --- Kitchen context (personalisation) ---
     const userId = req.user?.sub ?? 0;
+
     let kitchenContext: string | undefined;
     try {
       kitchenContext = (await buildContextString(userId)) || undefined;
     } catch (err) {
-      logger.warn({ userId, err }, "recipeHandler: failed to load kitchen context — proceeding without it");
+      logger.warn({ userId, err }, "recipeHandler: failed to load kitchen context");
     }
 
     logger.info({ domain, request: body.request.slice(0, 80), userId }, "recipeHandler: generating recipe");
 
-    // --- Generate ---
     let result: Awaited<ReturnType<typeof generateRecipe>>;
     try {
       result = await generateRecipe({
@@ -109,6 +93,7 @@ export function recipeHandler(domain: RecipeDomain) {
         flavourProfile: body.flavourProfile,
         alcoholic: body.alcoholic,
         kitchenContext,
+        userId: userId > 0 ? userId : undefined,
       });
     } catch (err) {
       logger.error({ domain, err }, "recipeHandler: unexpected error during generation");
@@ -116,9 +101,7 @@ export function recipeHandler(domain: RecipeDomain) {
       return;
     }
 
-    // --- Respond ---
     if (result.proseResponse) {
-      // Graceful degradation: prose fallback after two failed attempts
       res.status(200).json({ prose: result.proseResponse });
       return;
     }
@@ -126,6 +109,188 @@ export function recipeHandler(domain: RecipeDomain) {
     res.status(200).json({
       recipe: result.recipe,
       imageUrl: result.imageUrl,
+      recipeId: result.recipeId,
+      slug: result.slug,
     });
   };
+}
+
+// ---------------------------------------------------------------------------
+// My Recipes
+// ---------------------------------------------------------------------------
+
+/** GET /api/recipes/my — List authenticated user's saved recipes. */
+export async function handleMyRecipes(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const userId = req.user?.sub;
+    if (!userId) {
+      res.status(401).json({ error: "Authentication required." });
+      return;
+    }
+
+    const page = Math.max(1, parseInt(req.query.page as string, 10) || 1);
+    const result = await listUserRecipes(userId, page);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Gallery (public)
+// ---------------------------------------------------------------------------
+
+/** GET /api/recipes/gallery — List public recipes for the gallery. */
+export async function handleGallery(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const page = Math.max(1, parseInt(req.query.page as string, 10) || 1);
+    const domain = req.query.domain as string | undefined;
+    const difficulty = req.query.difficulty as string | undefined;
+    const search = req.query.search as string | undefined;
+    const result = await listGalleryRecipes(page, 20, { domain, difficulty, search });
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Single recipe
+// ---------------------------------------------------------------------------
+
+/** GET /api/recipes/:id — Get a single recipe by UUID. */
+export async function handleGetRecipe(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const id = req.params.id as string;
+    const rec = await getRecipe(id, true); // increment view count
+    if (!rec) {
+      res.status(404).json({ error: "Recipe not found." });
+      return;
+    }
+
+    // Non-public recipes are only visible to their owner
+    if (!rec.isPublicInd && rec.userId !== req.user?.sub) {
+      res.status(404).json({ error: "Recipe not found." });
+      return;
+    }
+
+    res.json(rec);
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Update recipe
+// ---------------------------------------------------------------------------
+
+/** PATCH /api/recipes/:id — Update recipe (toggle public, edit title). */
+export async function handleUpdateRecipe(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const userId = req.user?.sub;
+    if (!userId) {
+      res.status(401).json({ error: "Authentication required." });
+      return;
+    }
+
+    const id = req.params.id as string;
+    const { title, isPublicInd } = req.body;
+
+    const updates: Record<string, unknown> = {};
+    if (typeof title === "string" && title.trim()) updates.title = title.trim();
+    if (typeof isPublicInd === "boolean") updates.isPublicInd = isPublicInd;
+
+    if (Object.keys(updates).length === 0) {
+      res.status(400).json({ error: "No valid fields to update." });
+      return;
+    }
+
+    const updated = await updateRecipe(id, userId, updates);
+    if (!updated) {
+      res.status(404).json({ error: "Recipe not found or not owned by you." });
+      return;
+    }
+
+    res.json({ message: "Recipe updated." });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Delete recipe
+// ---------------------------------------------------------------------------
+
+/** DELETE /api/recipes/:id — Delete a recipe. */
+export async function handleDeleteRecipe(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const userId = req.user?.sub;
+    if (!userId) {
+      res.status(401).json({ error: "Authentication required." });
+      return;
+    }
+
+    const id = req.params.id as string;
+    const deleted = await deleteRecipe(id, userId);
+    if (!deleted) {
+      res.status(404).json({ error: "Recipe not found or not owned by you." });
+      return;
+    }
+
+    res.json({ message: "Recipe deleted." });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Archive recipe
+// ---------------------------------------------------------------------------
+
+/** POST /api/recipes/:id/archive — Archive a recipe (soft delete). */
+export async function handleArchiveRecipe(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const userId = req.user?.sub;
+    if (!userId) {
+      res.status(401).json({ error: "Authentication required." });
+      return;
+    }
+
+    const id = req.params.id as string;
+    const isAdmin = req.user?.roles?.includes("Administrator") ?? false;
+
+    const archived = await archiveRecipe(id, userId, isAdmin);
+    if (!archived) {
+      res.status(404).json({ error: "Recipe not found or not authorized." });
+      return;
+    }
+
+    res.json({ message: "Recipe archived." });
+  } catch (err) {
+    next(err);
+  }
 }

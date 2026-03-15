@@ -50,7 +50,7 @@ export function ConversationSidebar() {
             Register for free
           </Link>
         </div>
-      ) : user && user.subscriptionStatus !== "active" ? (
+      ) : user && user.subscriptionTier !== "paid" ? (
         <div className="px-4 py-3 border-t border-stone-700 text-xs">
           <p className="text-stone-300">
             {user.freeSessions > 0 ? (
@@ -62,7 +62,7 @@ export function ConversationSidebar() {
               <span className="text-red-400">No free sessions remaining</span>
             )}
           </p>
-          {user.freeSessions <= 2 && (
+          {user.subscriptionStatus !== "active" && user.freeSessions <= 2 && (
             <button
               onClick={() => (window.location.href = "/profile")}
               className="mt-1 text-amber-400 hover:text-amber-300 font-medium transition-colors"
