@@ -37,14 +37,22 @@ const RecipeRequestSchema = z.object({
   servings: z.number().int().min(1).max(100).optional(),
   difficulty: z.enum(["beginner", "intermediate", "advanced", "expert"]).optional(),
   dietary: z.array(z.string().max(50)).max(10).optional(),
+  // Recipe Lab
   cuisine: z.string().max(100).optional(),
   mainIngredients: z.array(z.string().max(50)).max(20).optional(),
+  // Patisserie Lab
   pastryType: z.string().max(100).optional(),
+  pastryStyle: z.string().max(100).optional(),
   keyTechnique: z.string().max(100).optional(),
+  componentCount: z.string().max(50).optional(),
   occasion: z.string().max(100).optional(),
+  // Spirits Lab
   spiritBase: z.string().max(100).optional(),
   flavourProfile: z.string().max(100).optional(),
   alcoholic: z.boolean().optional(),
+  venueType: z.string().max(100).optional(),
+  drinkStyle: z.string().max(100).optional(),
+  season: z.string().max(50).optional(),
 });
 
 type RecipeRequest = z.infer<typeof RecipeRequestSchema>;
@@ -86,12 +94,19 @@ export function recipeHandler(domain: RecipeDomain) {
         dietary: body.dietary,
         cuisine: body.cuisine,
         mainIngredients: body.mainIngredients,
+        // Patisserie
         pastryType: body.pastryType,
+        pastryStyle: body.pastryStyle,
         keyTechnique: body.keyTechnique,
+        componentCount: body.componentCount,
         occasion: body.occasion,
+        // Spirits
         spiritBase: body.spiritBase,
         flavourProfile: body.flavourProfile,
         alcoholic: body.alcoholic,
+        venueType: body.venueType,
+        drinkStyle: body.drinkStyle,
+        season: body.season,
         kitchenContext,
         userId: userId > 0 ? userId : undefined,
       });
@@ -203,11 +218,7 @@ export async function handleUpdateRecipe(
   next: NextFunction,
 ): Promise<void> {
   try {
-    const userId = req.user?.sub;
-    if (!userId) {
-      res.status(401).json({ error: "Authentication required." });
-      return;
-    }
+    const userId = req.user?.sub ?? 0;
 
     const id = req.params.id as string;
     const { title, isPublicInd } = req.body;

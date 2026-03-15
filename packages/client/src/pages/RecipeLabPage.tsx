@@ -80,24 +80,6 @@ export function RecipeLabPage({ domain }: RecipeLabPageProps) {
   const config = DOMAIN_CONFIG[domain];
   const DomainIcon = config.icon;
 
-  // Coming Soon for domains not yet functional
-  if (domain === "patisserie" || domain === "spirits") {
-    return (
-      <div className="flex-1 flex items-center justify-center px-4">
-        <div className="text-center max-w-md">
-          <div className={`inline-flex items-center justify-center size-16 rounded-2xl ${config.bg} mb-4`}>
-            <DomainIcon className={`size-8 ${config.accent}`} />
-          </div>
-          <h1 className={`text-2xl font-bold ${config.accent} mb-2`}>{config.label}</h1>
-          <p className="text-stone-500 mb-6">{config.tagline}</p>
-          <span className="inline-block px-4 py-2 text-sm font-semibold text-white bg-stone-400 rounded-full uppercase tracking-wider">
-            Coming Soon
-          </span>
-        </div>
-      </div>
-    );
-  }
-
   const storageKey = `recipe_lab_${domain}`;
 
   // Restore from sessionStorage on mount
@@ -127,9 +109,13 @@ export function RecipeLabPage({ domain }: RecipeLabPageProps) {
           : undefined,
       };
 
+      const guestToken = localStorage.getItem("culinaire_guest_token");
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (guestToken) headers["X-Guest-Token"] = guestToken;
+
       const res = await fetch(config.apiEndpoint, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         credentials: "include",
         body: JSON.stringify(body),
       });
@@ -248,13 +234,16 @@ export function RecipeLabPage({ domain }: RecipeLabPageProps) {
             isPublic={isPublic}
             onTogglePublic={generated.recipeId ? async (pub) => {
               try {
-                await fetch(`/api/recipes/${generated.recipeId}`, {
+                const gt = localStorage.getItem("culinaire_guest_token");
+                const hdrs: Record<string, string> = { "Content-Type": "application/json" };
+                if (gt) hdrs["X-Guest-Token"] = gt;
+                const patchRes = await fetch(`/api/recipes/${generated.recipeId}`, {
                   method: "PATCH",
-                  headers: { "Content-Type": "application/json" },
+                  headers: hdrs,
                   credentials: "include",
                   body: JSON.stringify({ isPublicInd: pub }),
                 });
-                setIsPublic(pub);
+                if (patchRes.ok) setIsPublic(pub);
               } catch { /* silent */ }
             } : undefined}
           />

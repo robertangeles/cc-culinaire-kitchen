@@ -42,7 +42,7 @@ recipesRouter.get("/my", authenticate, handleMyRecipes);
 // Single recipe (public recipes visible to all, private to owner only)
 recipesRouter.get("/:id", authenticateOrGuest, handleGetRecipe);
 
-// Update, Archive, Delete (auth required)
-recipesRouter.patch("/:id", authenticate, handleUpdateRecipe);
+// Update (auth or guest), Archive + Delete (auth required)
+recipesRouter.patch("/:id", authenticateOrGuest, handleUpdateRecipe);
 recipesRouter.post("/:id/archive", authenticate, handleArchiveRecipe);
 recipesRouter.delete("/:id", authenticate, handleDeleteRecipe);

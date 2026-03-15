@@ -77,6 +77,20 @@ export interface RecipeData {
     primary: WinePairingPrimary;
     alternatives?: { wine: string; why: string }[];
   };
+  // Patisserie-specific
+  bakerPercentages?: { ingredient: string; weight: string; percentage: string }[];
+  textureContrast?: string;
+  makeAheadComponents?: string[];
+  criticalTemperatures?: string;
+  // Spirits-specific
+  venueType?: string;
+  buildTime?: string;
+  ice?: string;
+  abv?: string;
+  standardDrinks?: string;
+  batchSpec?: { servings: number; components: string[]; storage: string; toServe: string };
+  variations?: { name: string; description: string; specAdjustment: string }[];
+  foodPairing?: { primary: { dish: string; why: string }; alternatives?: { dish: string; why: string }[] };
 }
 
 interface RecipeCardProps {
@@ -389,6 +403,124 @@ export function RecipeCard({ recipe, domain, recipeId, slug, onTogglePublic, isP
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* === Patisserie-specific sections === */}
+
+      {/* Baker's Percentages */}
+      {recipe.bakerPercentages && recipe.bakerPercentages.length > 0 && (
+        <div className="mx-6 md:mx-10 mb-6">
+          <h3 className="text-sm font-semibold text-stone-700 mb-3">Baker's Percentages</h3>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-stone-200 text-left">
+                  <th className="py-2 pr-4 font-medium text-stone-600">Ingredient</th>
+                  <th className="py-2 pr-4 font-medium text-stone-600">Weight</th>
+                  <th className="py-2 font-medium text-stone-600">%</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recipe.bakerPercentages.map((bp, i) => (
+                  <tr key={i} className="border-b border-stone-100">
+                    <td className="py-1.5 pr-4 text-stone-700">{bp.ingredient}</td>
+                    <td className="py-1.5 pr-4 text-stone-600">{bp.weight}</td>
+                    <td className="py-1.5 text-stone-600 font-medium">{bp.percentage}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Texture Contrast */}
+      {recipe.textureContrast && (
+        <div className="mx-6 md:mx-10 mb-6">
+          <h3 className="text-sm font-semibold text-stone-700 mb-2">Texture Contrast</h3>
+          <p className="text-sm text-stone-600 leading-relaxed italic">{recipe.textureContrast}</p>
+        </div>
+      )}
+
+      {/* Critical Temperatures */}
+      {recipe.criticalTemperatures && (
+        <div className="mx-6 md:mx-10 mb-6 bg-red-50 rounded-xl p-4 border border-red-200">
+          <h3 className="text-sm font-semibold text-red-800 mb-2 flex items-center gap-2">
+            <Thermometer className="size-4" />
+            Critical Temperatures
+          </h3>
+          <p className="text-sm text-red-700 leading-relaxed">{recipe.criticalTemperatures}</p>
+        </div>
+      )}
+
+      {/* Make-Ahead Components */}
+      {recipe.makeAheadComponents && recipe.makeAheadComponents.length > 0 && (
+        <div className="mx-6 md:mx-10 mb-6">
+          <h3 className="text-sm font-semibold text-stone-700 mb-2">Make-Ahead Components</h3>
+          <ul className="space-y-1">
+            {recipe.makeAheadComponents.map((c, i) => (
+              <li key={i} className="text-sm text-stone-600">• {c}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* === Spirits-specific sections === */}
+
+      {/* Batch Spec */}
+      {recipe.batchSpec && (
+        <div className="mx-6 md:mx-10 mb-6 bg-amber-50 rounded-xl p-5 border border-amber-200">
+          <h3 className="text-sm font-semibold text-amber-800 mb-3">Batch Spec ({recipe.batchSpec.servings} Servings)</h3>
+          <ul className="space-y-1 mb-3">
+            {recipe.batchSpec.components.map((c, i) => (
+              <li key={i} className="text-sm text-amber-700">• {c}</li>
+            ))}
+          </ul>
+          <p className="text-xs text-amber-600"><strong>Storage:</strong> {recipe.batchSpec.storage}</p>
+          <p className="text-xs text-amber-600 mt-1"><strong>To serve:</strong> {recipe.batchSpec.toServe}</p>
+        </div>
+      )}
+
+      {/* Variations */}
+      {recipe.variations && recipe.variations.length > 0 && (
+        <div className="mx-6 md:mx-10 mb-6">
+          <h3 className="text-sm font-semibold text-stone-700 mb-3">Variations</h3>
+          <div className="space-y-3">
+            {recipe.variations.map((v, i) => (
+              <div key={i} className="bg-stone-50 rounded-lg p-4 border border-stone-200">
+                <p className="text-sm font-medium text-stone-800">{v.name}</p>
+                <p className="text-xs text-stone-500 mt-1">{v.description}</p>
+                <p className="text-xs text-stone-600 mt-1"><strong>Change:</strong> {v.specAdjustment}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Food Pairing (Spirits) */}
+      {recipe.foodPairing && (
+        <div className="mx-6 md:mx-10 mb-6 bg-stone-50 rounded-xl p-5 border border-stone-200">
+          <h3 className="text-sm font-semibold text-stone-700 mb-3">Food Pairing</h3>
+          <p className="text-sm font-medium text-stone-800">{recipe.foodPairing.primary.dish}</p>
+          <p className="text-sm text-stone-600 mt-1">{recipe.foodPairing.primary.why}</p>
+          {recipe.foodPairing.alternatives && recipe.foodPairing.alternatives.length > 0 && (
+            <div className="mt-3 pt-3 border-t border-stone-200">
+              {recipe.foodPairing.alternatives.map((a, i) => (
+                <p key={i} className="text-xs text-stone-600 mt-1"><strong>{a.dish}</strong> — {a.why}</p>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ABV / Safety Disclosure (Spirits) */}
+      {(recipe.abv || recipe.standardDrinks) && (
+        <div className="mx-6 md:mx-10 mb-6 flex flex-wrap items-center gap-3 text-xs text-stone-500">
+          {recipe.abv && <span className="bg-stone-100 px-2 py-1 rounded">ABV: {recipe.abv}</span>}
+          {recipe.standardDrinks && <span className="bg-stone-100 px-2 py-1 rounded">{recipe.standardDrinks}</span>}
+          {recipe.venueType && <span className="bg-stone-100 px-2 py-1 rounded capitalize">{recipe.venueType}</span>}
+          {recipe.buildTime && <span className="bg-stone-100 px-2 py-1 rounded">Build: {recipe.buildTime}</span>}
         </div>
       )}
 

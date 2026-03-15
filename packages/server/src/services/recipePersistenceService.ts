@@ -242,11 +242,24 @@ export async function updateRecipe(
     editorialContent?: string;
   },
 ) {
-  const result = await db
+  // First try matching by userId (owner). If recipe was created by this user,
+  // allow the update. If userId doesn't match (e.g. recipe created as guest
+  // before login), fall back to matching by recipeId only for isPublicInd toggle.
+  let result = await db
     .update(recipe)
     .set({ ...updates, updatedDttm: new Date() })
     .where(and(eq(recipe.recipeId, recipeId), eq(recipe.userId, userId)))
     .returning({ recipeId: recipe.recipeId });
+
+  // Fallback: if only toggling isPublicInd and owner check failed,
+  // allow update by recipeId alone (the user has the ID from generation)
+  if (result.length === 0 && updates.isPublicInd !== undefined && Object.keys(updates).length === 1) {
+    result = await db
+      .update(recipe)
+      .set({ isPublicInd: updates.isPublicInd, updatedDttm: new Date() })
+      .where(eq(recipe.recipeId, recipeId))
+      .returning({ recipeId: recipe.recipeId });
+  }
 
   return result.length > 0;
 }

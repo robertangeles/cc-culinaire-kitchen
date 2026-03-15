@@ -91,7 +91,7 @@ export function RecipeGalleryCard({ recipe, onArchive }: { recipe: GalleryRecipe
           </div>
           {onArchive && user?.roles?.includes("Administrator") && (
             <button
-              onClick={(e) => { e.preventDefault(); onArchive(recipe.recipeId); }}
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); onArchive(recipe.recipeId); }}
               className="p-1 rounded hover:bg-stone-100 text-stone-400 hover:text-red-500 transition-colors"
               title="Archive recipe"
             >
