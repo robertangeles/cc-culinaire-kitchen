@@ -20,6 +20,7 @@ import { ChefHat, Croissant, GlassWater, AlertCircle, RefreshCw } from "lucide-r
 import { RecipeForm, type RecipeFormData, type RecipeDomain } from "../components/recipes/RecipeForm.js";
 import { RecipeHero } from "../components/recipes/RecipeHero.js";
 import { RecipeCard, type RecipeData } from "../components/recipes/RecipeCard.js";
+import { useAuth } from "../context/AuthContext.js";
 
 // ---------------------------------------------------------------------------
 // Domain configuration
@@ -79,8 +80,11 @@ interface GeneratedRecipe {
 export function RecipeLabPage({ domain }: RecipeLabPageProps) {
   const config = DOMAIN_CONFIG[domain];
   const DomainIcon = config.icon;
+  const { user, isGuest, guestToken, refreshGuestUsage, refreshUser } = useAuth();
 
-  const storageKey = `recipe_lab_${domain}`;
+  // User-specific storage key prevents recipe data leaking between accounts
+  const userKey = user?.userId ?? guestToken ?? "anon";
+  const storageKey = `recipe_lab_${domain}_${userKey}`;
 
   // Restore from sessionStorage on mount
   const [loading, setLoading] = useState(false);
@@ -145,6 +149,12 @@ export function RecipeLabPage({ domain }: RecipeLabPageProps) {
         setGenerated(gen);
         setIsPublic(false);
         try { sessionStorage.setItem(storageKey, JSON.stringify(gen)); } catch { /* quota */ }
+        // Refresh session counter immediately (no page reload)
+        if (isGuest) {
+          refreshGuestUsage();
+        } else {
+          setTimeout(() => refreshUser(), 300);
+        }
       } else {
         throw new Error("Unexpected response from server.");
       }
@@ -231,6 +241,7 @@ export function RecipeLabPage({ domain }: RecipeLabPageProps) {
             domain={domain}
             recipeId={generated.recipeId ?? undefined}
             slug={generated.slug ?? undefined}
+            imageUrl={generated.imageUrl}
             isPublic={isPublic}
             onTogglePublic={generated.recipeId ? async (pub) => {
               try {

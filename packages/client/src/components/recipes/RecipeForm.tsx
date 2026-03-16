@@ -41,15 +41,31 @@ interface RecipeFormProps {
 const DIETARY_OPTIONS = ["Vegetarian", "Vegan", "Gluten-Free", "Dairy-Free", "Nut-Free", "Halal", "Kosher"];
 
 /**
- * Difficulty levels aligned with culinary education progression
- * (CIA ProChef levels, Le Cordon Bleu Basic → Superior).
+ * Difficulty levels — domain-aware, aligned with industry progression.
+ * Culinary: CIA ProChef levels / Le Cordon Bleu
+ * Patisserie: ACF CMPC / Le Cordon Bleu pastry progression
+ * Spirits: Professional bartender career ladder
  */
-const DIFFICULTY_OPTIONS = [
-  { value: "beginner", label: "Home Cook" },
-  { value: "intermediate", label: "Skilled Home Cook / Culinary Student" },
-  { value: "advanced", label: "Professional / Line Cook" },
-  { value: "expert", label: "Chef de Partie / Master Level" },
-];
+const DIFFICULTY_OPTIONS: Record<RecipeDomain, { value: string; label: string }[]> = {
+  recipe: [
+    { value: "beginner", label: "Home Cook" },
+    { value: "intermediate", label: "Skilled Home Cook / Culinary Student" },
+    { value: "advanced", label: "Professional / Line Cook" },
+    { value: "expert", label: "Chef de Partie / Master Level" },
+  ],
+  patisserie: [
+    { value: "beginner", label: "Home Baker" },
+    { value: "intermediate", label: "Skilled Home Baker / Pastry Student" },
+    { value: "advanced", label: "Professional Pastry Cook" },
+    { value: "expert", label: "Pastry Chef / Master Pâtissier" },
+  ],
+  spirits: [
+    { value: "beginner", label: "Home Bartender" },
+    { value: "intermediate", label: "Enthusiast / Hobbyist" },
+    { value: "advanced", label: "Professional Bartender" },
+    { value: "expert", label: "Head Bartender / Bar Manager" },
+  ],
+};
 
 const PLACEHOLDERS: Record<RecipeDomain, string> = {
   recipe: "e.g. French chicken thigh braise with cider and shallot confit",
@@ -328,7 +344,7 @@ export function RecipeForm({ domain, onSubmit, loading }: RecipeFormProps) {
           <label className="block text-xs font-medium text-stone-600 mb-1">Difficulty</label>
           <select value={difficulty} onChange={(e) => setDifficulty(e.target.value)} className={selectClass}>
             <option value="">Any</option>
-            {DIFFICULTY_OPTIONS.map((opt) => (
+            {DIFFICULTY_OPTIONS[domain].map((opt) => (
               <option key={opt.value} value={opt.value}>{opt.label}</option>
             ))}
           </select>

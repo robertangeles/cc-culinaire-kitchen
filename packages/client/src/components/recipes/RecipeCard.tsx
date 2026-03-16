@@ -9,6 +9,7 @@
 import { useState } from "react";
 import { Printer, Clock, Users, ChefHat, AlertTriangle, Thermometer, GlassWater, Flame, Wine, Hash, Sparkles, Share2, Copy, Check } from "lucide-react";
 import type { RecipeDomain } from "./RecipeForm.js";
+import { RecipeShareBar } from "./RecipeShareBar.js";
 
 interface Ingredient {
   amount: string;
@@ -100,6 +101,8 @@ interface RecipeCardProps {
   recipeId?: string;
   /** URL slug for share link (preferred over recipeId) */
   slug?: string;
+  /** Hero image URL for social sharing */
+  imageUrl?: string | null;
   /** Callback when user toggles public visibility */
   onTogglePublic?: (isPublic: boolean) => void;
   /** Current public state */
@@ -113,7 +116,7 @@ const DIFFICULTY_COLORS: Record<string, string> = {
   expert: "bg-red-100 text-red-800",
 };
 
-export function RecipeCard({ recipe, domain, recipeId, slug, onTogglePublic, isPublic }: RecipeCardProps) {
+export function RecipeCard({ recipe, domain, recipeId, slug, imageUrl, onTogglePublic, isPublic }: RecipeCardProps) {
   const [checkedIngredients, setCheckedIngredients] = useState<Set<number>>(new Set());
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
   const [copied, setCopied] = useState(false);
@@ -230,6 +233,22 @@ export function RecipeCard({ recipe, domain, recipeId, slug, onTogglePublic, isP
         {recipe.hookLine && (
           <div className="mt-4 bg-gradient-to-r from-amber-50 to-orange-50 rounded-lg px-4 py-3 border border-amber-200">
             <p className="text-sm font-medium text-amber-900 italic">"{recipe.hookLine}"</p>
+          </div>
+        )}
+
+        {/* Social share bar */}
+        {(recipeId || slug) && (
+          <div className="mt-4 flex items-center gap-2">
+            <span className="text-xs text-stone-400">Share:</span>
+            <RecipeShareBar
+              title={recipe.name}
+              description={recipe.description}
+              hookLine={recipe.hookLine}
+              hashtags={recipe.hashtags}
+              imageUrl={imageUrl}
+              slug={slug}
+              recipeId={recipeId}
+            />
           </div>
         )}
       </div>
@@ -386,8 +405,8 @@ export function RecipeCard({ recipe, domain, recipeId, slug, onTogglePublic, isP
         </div>
       )}
 
-      {/* Wine Pairing */}
-      {recipe.winePairing && (
+      {/* Wine Pairing (not shown for spirits — spirits uses foodPairing instead) */}
+      {recipe.winePairing && domain !== "spirits" && (
         <div className="mx-6 md:mx-10 mb-6 bg-purple-50 rounded-xl p-5 border border-purple-200">
           <h3 className="text-sm font-semibold text-purple-800 mb-3 flex items-center gap-2">
             <Wine className="size-4" />
@@ -561,8 +580,17 @@ export function RecipeCard({ recipe, domain, recipeId, slug, onTogglePublic, isP
       )}
 
       {/* Confidence note */}
-      <div className="px-6 md:px-10 pb-8">
+      <div className="px-6 md:px-10 pb-4">
         <p className="text-xs text-stone-400 italic">{recipe.confidenceNote}</p>
+      </div>
+
+      {/* AI Disclaimer */}
+      <div className="px-6 md:px-10 pb-8">
+        <p className="text-xs text-stone-400 leading-relaxed">
+          All recipes are AI-generated and should be reviewed by a qualified professional before use.
+          CulinAIre Kitchen does not guarantee outcomes, nutritional accuracy, or allergen completeness.
+          Always verify ingredient safety, cooking temperatures, and dietary suitability.
+        </p>
       </div>
     </div>
   );

@@ -213,7 +213,7 @@ export function LoginPage() {
                 onClick={() => navigate("/")}
                 className="flex-1 py-2.5 text-sm font-medium text-stone-600 bg-stone-100 rounded-lg hover:bg-stone-200 transition-colors"
               >
-                Cancel
+                Back
               </button>
               <button
                 type="submit"

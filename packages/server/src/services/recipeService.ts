@@ -121,8 +121,8 @@ export const RecipeOutputSchema = z.object({
   platingGuide: z.string().optional(),
   hashtags: z.array(z.string()).optional(),
 
-  // Wine pairing (V2, optional)
-  winePairing: WinePairingSchema.optional(),
+  // Wine pairing (V2, optional — null for spirits domain)
+  winePairing: WinePairingSchema.optional().nullable(),
 
   // Patisserie-specific (V2)
   bakerPercentages: z.array(z.object({
@@ -134,27 +134,27 @@ export const RecipeOutputSchema = z.object({
   makeAheadComponents: z.array(z.string()).optional(),
   criticalTemperatures: z.string().optional(),
 
-  // Spirits-specific (V2)
+  // Spirits-specific (V2) — lenient types to handle AI output variations
   venueType: z.string().optional(),
   buildTime: z.string().optional(),
   ice: z.string().optional(),
   abv: z.string().optional(),
   standardDrinks: z.string().optional(),
   batchSpec: z.object({
-    servings: z.number(),
+    servings: z.union([z.number(), z.string()]),
     components: z.array(z.string()),
     storage: z.string(),
     toServe: z.string(),
-  }).optional(),
+  }).optional().nullable(),
   variations: z.array(z.object({
     name: z.string(),
     description: z.string(),
-    specAdjustment: z.string(),
-  })).optional(),
+    specAdjustment: z.string().optional(),
+  })).optional().nullable(),
   foodPairing: z.object({
     primary: z.object({ dish: z.string(), why: z.string() }),
     alternatives: z.array(z.object({ dish: z.string(), why: z.string() })).optional(),
-  }).optional(),
+  }).optional().nullable(),
 });
 
 export type RecipeOutput = z.infer<typeof RecipeOutputSchema>;
@@ -295,13 +295,24 @@ function buildUserMessage(input: RecipeInput, ragContext: string): string {
 // ---------------------------------------------------------------------------
 
 function proseFallback(input: RecipeInput): string {
+  const examples: Record<RecipeDomain, string> = {
+    recipe: '"braised chicken thighs with cider"',
+    patisserie: '"dark chocolate tart with raspberry"',
+    spirits: '"autumn whiskey sour with honey"',
+  };
+  const labels: Record<RecipeDomain, string> = {
+    recipe: "recipe",
+    patisserie: "pastry recipe",
+    spirits: "drink recipe",
+  };
+
   return (
-    `I wasn't able to generate a structured ${input.domain} recipe for "${input.request}" right now. ` +
+    `I wasn't able to generate a structured ${labels[input.domain]} for "${input.request}" right now. ` +
     `Here are some suggestions to get you started:\n\n` +
-    `- Try simplifying your request (e.g. "classic beef stew" instead of multiple constraints at once)\n` +
-    `- Check that your request is specific enough for a single recipe\n` +
+    `- Try simplifying your request (e.g. ${examples[input.domain]} instead of multiple constraints at once)\n` +
+    `- Check that your request is specific enough for a single ${labels[input.domain]}\n` +
     `- Try again in a moment if the AI service is under load\n\n` +
-    `If the issue persists, ask the CulinAIre Kitchen chat assistant — it can help you build a recipe through conversation.`
+    `If the issue persists, ask the CulinAIre Kitchen chat assistant — it can help you build a ${labels[input.domain]} through conversation.`
   );
 }
 

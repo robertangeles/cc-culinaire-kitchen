@@ -29,12 +29,12 @@ interface CredentialMeta {
 
 /** Registry of known credential keys with display metadata. */
 export const CREDENTIAL_REGISTRY: Record<string, CredentialMeta> = {
-  GOOGLE_CLIENT_ID:        { category: "oauth",    label: "Google Client ID",        sensitive: false },
+  GOOGLE_CLIENT_ID:        { category: "oauth",    label: "Google Client ID",        sensitive: true },
   GOOGLE_CLIENT_SECRET:    { category: "oauth",    label: "Google Client Secret",    sensitive: true },
-  GOOGLE_CALLBACK_URL:     { category: "oauth",    label: "Google Callback URL",     sensitive: false },
-  MICROSOFT_CLIENT_ID:     { category: "oauth",    label: "Microsoft Client ID",     sensitive: false },
+  GOOGLE_CALLBACK_URL:     { category: "oauth",    label: "Google Callback URL",     sensitive: true },
+  MICROSOFT_CLIENT_ID:     { category: "oauth",    label: "Microsoft Client ID",     sensitive: true },
   MICROSOFT_CLIENT_SECRET: { category: "oauth",    label: "Microsoft Client Secret", sensitive: true },
-  MICROSOFT_CALLBACK_URL:  { category: "oauth",    label: "Microsoft Callback URL",  sensitive: false },
+  MICROSOFT_CALLBACK_URL:  { category: "oauth",    label: "Microsoft Callback URL",  sensitive: true },
   AI_PROVIDER:             { category: "ai",       label: "AI Provider",             sensitive: false },
   AI_MODEL:                { category: "ai",       label: "AI Model",                sensitive: false },
   ANTHROPIC_API_KEY:       { category: "ai",       label: "Anthropic API Key",       sensitive: true },

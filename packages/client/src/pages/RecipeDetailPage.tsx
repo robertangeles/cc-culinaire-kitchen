@@ -213,6 +213,7 @@ export function RecipeDetailPage() {
           domain={recipe.domain as RecipeDomain}
           recipeId={recipe.recipeId}
           slug={recipe.slug ?? undefined}
+          imageUrl={recipe.imageUrl}
         />
         {/* AI Disclaimer */}
         <div className="px-6 md:px-10 pb-8 mt-4">

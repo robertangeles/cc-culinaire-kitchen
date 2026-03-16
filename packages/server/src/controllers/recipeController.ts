@@ -25,6 +25,7 @@ import {
   deleteRecipe,
   archiveRecipe,
 } from "../services/recipePersistenceService.js";
+import { sendRecipeEmail } from "../services/emailService.js";
 
 const logger = pino({ name: "recipeController" });
 
@@ -301,6 +302,90 @@ export async function handleArchiveRecipe(
     }
 
     res.json({ message: "Recipe archived." });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Email recipe
+// ---------------------------------------------------------------------------
+
+const EmailSchema = z.object({
+  to: z.string().email("Invalid email address"),
+});
+
+/** POST /api/recipes/:id/email — Send a formatted recipe email. */
+export async function handleEmailRecipe(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const id = req.params.id as string;
+
+    const parsed = EmailSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "Valid email address is required." });
+      return;
+    }
+
+    const rec = await getRecipe(id);
+    if (!rec) {
+      res.status(404).json({ error: "Recipe not found." });
+      return;
+    }
+
+    const data = rec.recipeData as Record<string, unknown>;
+    const result = await sendRecipeEmail(
+      parsed.data.to,
+      {
+        name: (data.name as string) ?? rec.title,
+        description: (data.description as string) ?? "",
+        hookLine: data.hookLine as string | undefined,
+        yield: (data.yield as string) ?? "",
+        prepTime: (data.prepTime as string) ?? "",
+        cookTime: (data.cookTime as string) ?? "",
+        difficulty: (data.difficulty as string) ?? "",
+        temperature: data.temperature as string | undefined,
+        glassware: data.glassware as string | undefined,
+        garnish: data.garnish as string | undefined,
+        ingredients: (data.ingredients as any[]) ?? [],
+        steps: (data.steps as any[]) ?? [],
+        proTips: data.proTips as string[] | undefined,
+        allergenNote: (data.allergenNote as string) ?? "",
+        confidenceNote: data.confidenceNote as string | undefined,
+        whyThisWorks: data.whyThisWorks as string | undefined,
+        theResult: data.theResult as string | undefined,
+        flavorBalance: data.flavorBalance as any,
+        storageAndSafety: data.storageAndSafety as string | undefined,
+        platingGuide: data.platingGuide as string | undefined,
+        storyBehindTheDish: data.storyBehindTheDish as string | undefined,
+        textureContrast: data.textureContrast as string | undefined,
+        criticalTemperatures: data.criticalTemperatures as string | undefined,
+        makeAheadComponents: data.makeAheadComponents as string[] | undefined,
+        winePairing: data.winePairing as any,
+        abv: data.abv as string | undefined,
+        standardDrinks: data.standardDrinks as string | undefined,
+        buildTime: data.buildTime as string | undefined,
+        ice: data.ice as string | undefined,
+        venueType: data.venueType as string | undefined,
+        batchSpec: data.batchSpec as any,
+        variations: data.variations as any,
+        foodPairing: data.foodPairing as any,
+        hashtags: data.hashtags as string[] | undefined,
+      },
+      rec.imageUrl,
+      rec.slug,
+      rec.recipeId,
+    );
+
+    if (!result.sent) {
+      res.status(500).json({ error: result.error ?? "Failed to send email." });
+      return;
+    }
+
+    res.json({ message: "Recipe emailed successfully." });
   } catch (err) {
     next(err);
   }

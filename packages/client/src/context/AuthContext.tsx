@@ -409,6 +409,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
     setUser(null);
     stopRefreshLoop();
+    // Clear recipe session data to prevent data leaking between accounts
+    for (const key of Object.keys(sessionStorage)) {
+      if (key.startsWith("recipe_lab_")) sessionStorage.removeItem(key);
+    }
   }, [stopRefreshLoop]);
 
   /** Refreshes user data from the server.

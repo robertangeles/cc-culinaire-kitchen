@@ -118,7 +118,9 @@ export function ConversationList() {
                   conv.conversationId === activeId ||
                   currentPath === `/chat/${conv.conversationId}`
                 ) {
-                  window.location.href = "/chat/new";
+                  // Navigate without page reload — use navigate + key trick
+                  // to force React Router to remount even if path hasn't changed
+                  navigate("/chat/new", { replace: true });
                 }
               }}
             />

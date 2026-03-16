@@ -1,21 +1,18 @@
 /**
  * @module routes/recipes
  *
- * API routes for recipe generation, management, and gallery:
+ * API routes for recipe generation, management, and gallery.
  *
- *   POST   /api/recipes/generate    — Generate recipe (general culinary)
- *   POST   /api/recipes/patisserie  — Generate recipe (pastry)
- *   POST   /api/recipes/spirits     — Generate recipe (cocktails)
- *   GET    /api/recipes/gallery     — Public gallery (no auth required)
- *   GET    /api/recipes/my          — User's saved recipes (auth required)
- *   GET    /api/recipes/:id         — Single recipe by UUID
- *   PATCH  /api/recipes/:id         — Update recipe (auth required, owner only)
- *   DELETE /api/recipes/:id         — Delete recipe (auth required, owner only)
+ * Generation routes mirror the chat route's usage tracking:
+ *   authenticateOrGuest → usageCheck → generate → sessionDecrement
  */
 
 import { Router } from "express";
 import { authenticateOrGuest } from "../middleware/guestAuth.js";
 import { authenticate } from "../middleware/auth.js";
+import { checkUsageLimit, decrementFreeSessions } from "../middleware/usage.js";
+import { checkGuestUsageLimit } from "../middleware/guestUsage.js";
+import { incrementGuestSessions } from "../services/guestService.js";
 import {
   recipeHandler,
   handleGallery,
@@ -24,14 +21,55 @@ import {
   handleUpdateRecipe,
   handleDeleteRecipe,
   handleArchiveRecipe,
+  handleEmailRecipe,
 } from "../controllers/recipeController.js";
 
 export const recipesRouter = Router();
 
-// Generation endpoints (authenticated or guest)
-recipesRouter.post("/generate", authenticateOrGuest, recipeHandler("recipe"));
-recipesRouter.post("/patisserie", authenticateOrGuest, recipeHandler("patisserie"));
-recipesRouter.post("/spirits", authenticateOrGuest, recipeHandler("spirits"));
+/**
+ * Wraps a recipe generation handler with usage check + session decrement.
+ * Same pattern as the chat route:
+ * 1. authenticateOrGuest (already applied)
+ * 2. Check usage limits (guest or authenticated)
+ * 3. Run the handler
+ * 4. Decrement session on success
+ */
+function withUsageTracking(domain: "recipe" | "patisserie" | "spirits") {
+  const handler = recipeHandler(domain);
+
+  return [
+    // Usage check middleware (guest vs authenticated)
+    (req: any, res: any, next: any) => {
+      if (req.user) {
+        checkUsageLimit(req, res, next);
+      } else {
+        checkGuestUsageLimit(req, res, next);
+      }
+    },
+    // Handler + decrement
+    async (req: any, res: any, next: any) => {
+      let succeeded = false;
+      try {
+        await handler(req, res, next);
+        // If response was sent successfully (not an error), mark as succeeded
+        succeeded = res.statusCode >= 200 && res.statusCode < 300;
+      } finally {
+        if (succeeded) {
+          if (req.user) {
+            await decrementFreeSessions(req.user.sub).catch(() => {});
+          } else if (req.guestToken) {
+            await incrementGuestSessions(req.guestToken).catch(() => {});
+          }
+        }
+      }
+    },
+  ];
+}
+
+// Generation endpoints with usage tracking
+recipesRouter.post("/generate", authenticateOrGuest, ...withUsageTracking("recipe"));
+recipesRouter.post("/patisserie", authenticateOrGuest, ...withUsageTracking("patisserie"));
+recipesRouter.post("/spirits", authenticateOrGuest, ...withUsageTracking("spirits"));
 
 // Gallery (public — no auth required)
 recipesRouter.get("/gallery", handleGallery);
@@ -45,4 +83,5 @@ recipesRouter.get("/:id", authenticateOrGuest, handleGetRecipe);
 // Update (auth or guest), Archive + Delete (auth required)
 recipesRouter.patch("/:id", authenticateOrGuest, handleUpdateRecipe);
 recipesRouter.post("/:id/archive", authenticate, handleArchiveRecipe);
+recipesRouter.post("/:id/email", authenticateOrGuest, handleEmailRecipe);
 recipesRouter.delete("/:id", authenticate, handleDeleteRecipe);

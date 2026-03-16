@@ -136,7 +136,7 @@ export function ConversationInfoPanel({
       // Use window.location to force a full navigation to /chat/new.
       // React Router may not recognize the current URL if it was set via
       // window.history.replaceState (used to avoid reload flash after streaming).
-      window.location.href = "/chat/new";
+      navigate("/chat/new", { replace: true });
     } finally {
       setDeleting(false);
     }
