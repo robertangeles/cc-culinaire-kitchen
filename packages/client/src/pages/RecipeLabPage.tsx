@@ -243,6 +243,17 @@ export function RecipeLabPage({ domain }: RecipeLabPageProps) {
             slug={generated.slug ?? undefined}
             imageUrl={generated.imageUrl}
             isPublic={isPublic}
+            creator={user ? {
+              userName: user.userName,
+              userPhotoPath: user.userPhotoPath,
+              userBio: null,
+              userFacebook: null,
+              userInstagram: null,
+              userTiktok: null,
+              userPinterest: null,
+              userLinkedin: null,
+              restaurantName: null,
+            } : null}
             onTogglePublic={generated.recipeId ? async (pub) => {
               try {
                 const gt = localStorage.getItem("culinaire_guest_token");
