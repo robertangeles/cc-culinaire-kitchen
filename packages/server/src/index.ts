@@ -97,7 +97,11 @@ app.get("/api/admin/database/stats", authenticate, requireRole("Administrator"),
 app.use("/sitemap.xml", sitemapRouter);
 
 // Static file serving for uploaded images (favicon, logo)
-app.use("/uploads", express.static(join(__dirname, "../../../uploads")));
+// Ensure uploads directory exists (Render has ephemeral filesystem)
+import { mkdirSync } from "fs";
+const uploadsDir = join(__dirname, "../../../uploads");
+try { mkdirSync(uploadsDir, { recursive: true }); } catch { /* already exists */ }
+app.use("/uploads", express.static(uploadsDir));
 
 // ---------------------------------------------------------------------------
 // Server-side meta injection for recipe SEO
