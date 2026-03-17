@@ -58,7 +58,7 @@ export async function handleUpdateRole(req: Request, res: Response, next: NextFu
       res.status(400).json({ error: parsed.error.flatten() });
       return;
     }
-    await updateRole(parseInt(req.params.id), parsed.data);
+    await updateRole(parseInt(req.params.id as string), parsed.data);
     res.json({ success: true });
   } catch (err) {
     next(err);
@@ -68,7 +68,7 @@ export async function handleUpdateRole(req: Request, res: Response, next: NextFu
 /** DELETE /api/roles/:id — delete a role. */
 export async function handleDeleteRole(req: Request, res: Response, next: NextFunction) {
   try {
-    await deleteRole(parseInt(req.params.id));
+    await deleteRole(parseInt(req.params.id as string));
     res.json({ success: true });
   } catch (err) {
     next(err);
@@ -97,7 +97,7 @@ export async function handleSetRolePermissions(req: Request, res: Response, next
       res.status(400).json({ error: parsed.error.flatten() });
       return;
     }
-    await setRolePermissions(parseInt(req.params.id), parsed.data.permissionIds);
+    await setRolePermissions(parseInt(req.params.id as string), parsed.data.permissionIds);
     res.json({ success: true });
   } catch (err) {
     next(err);

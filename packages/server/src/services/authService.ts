@@ -386,7 +386,7 @@ export async function revokeRefreshToken(rawToken: string) {
  * Verifies a JWT access token and returns the decoded payload.
  */
 export function verifyAccessToken(token: string): TokenPayload {
-  return jwt.verify(token, ACCESS_SECRET) as TokenPayload;
+  return jwt.verify(token, ACCESS_SECRET) as unknown as TokenPayload;
 }
 
 /**
@@ -795,7 +795,7 @@ export async function completeMfaLogin(
 ): Promise<AuthUser> {
   let decoded: { sub: number; purpose: string };
   try {
-    decoded = jwt.verify(mfaSessionToken, MFA_SESSION_SECRET) as typeof decoded;
+    decoded = jwt.verify(mfaSessionToken, MFA_SESSION_SECRET) as unknown as typeof decoded;
   } catch {
     throw new Error("INVALID_MFA_SESSION");
   }

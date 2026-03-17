@@ -116,7 +116,7 @@ export async function handleUpdateOption(
   res: Response,
   next: NextFunction
 ): Promise<void> {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) {
     res.status(400).json({ error: "Invalid option ID." });
     return;
@@ -149,7 +149,7 @@ export async function handleDeleteOption(
   res: Response,
   next: NextFunction
 ): Promise<void> {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) {
     res.status(400).json({ error: "Invalid option ID." });
     return;

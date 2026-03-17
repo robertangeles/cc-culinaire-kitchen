@@ -101,7 +101,7 @@ export async function getPrompt(
   next: NextFunction
 ): Promise<void> {
   try {
-    const { name } = req.params;
+    const name = req.params.name as string;
     const content = await getPromptRaw(name);
     log.info({ name }, "Prompt retrieved");
     res.json({ name, content });
@@ -125,7 +125,7 @@ export async function updatePrompt(
   next: NextFunction
 ): Promise<void> {
   try {
-    const { name } = req.params;
+    const name = req.params.name as string;
 
     const parsed = UpdateSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -153,7 +153,7 @@ export async function handleResetPrompt(
   next: NextFunction
 ): Promise<void> {
   try {
-    const { name } = req.params;
+    const name = req.params.name as string;
     const content = await resetPrompt(name);
     log.info({ name }, "Prompt reset to default");
     res.json({ name, content });
@@ -178,7 +178,7 @@ export async function listVersions(
   next: NextFunction
 ): Promise<void> {
   try {
-    const { name } = req.params;
+    const name = req.params.name as string;
 
     const promptId = await getActivePromptId(name);
     if (promptId === null) {
@@ -207,7 +207,8 @@ export async function handleRollback(
   next: NextFunction
 ): Promise<void> {
   try {
-    const { name, versionId } = req.params;
+    const name = req.params.name as string;
+    const versionId = req.params.versionId as string;
 
     const id = parseInt(versionId, 10);
     if (isNaN(id)) {

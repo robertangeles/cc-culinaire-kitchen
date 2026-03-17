@@ -140,7 +140,7 @@ export async function handleListUsers(req: Request, res: Response, next: NextFun
 /** GET /api/users/:id — full user profile for admin (decrypted PII + org). */
 export async function handleGetUserById(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = parseInt(req.params.id);
+    const userId = parseInt(req.params.id as string);
     const profile = await getUserProfile(userId);
     if (!profile) {
       res.status(404).json({ error: "User not found." });
@@ -162,7 +162,7 @@ const AdminUpdateUserSchema = z.object({
 /** PATCH /api/users/:id — admin update user fields. */
 export async function handleAdminUpdateUser(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = parseInt(req.params.id);
+    const userId = parseInt(req.params.id as string);
     const parsed = AdminUpdateUserSchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({ error: parsed.error.flatten() });
@@ -178,7 +178,7 @@ export async function handleAdminUpdateUser(req: Request, res: Response, next: N
 /** PATCH /api/users/:id/suspend */
 export async function handleSuspendUser(req: Request, res: Response, next: NextFunction) {
   try {
-    await suspendUser(parseInt(req.params.id));
+    await suspendUser(parseInt(req.params.id as string));
     res.json({ success: true });
   } catch (err) {
     next(err);
@@ -188,7 +188,7 @@ export async function handleSuspendUser(req: Request, res: Response, next: NextF
 /** PATCH /api/users/:id/reactivate */
 export async function handleReactivateUser(req: Request, res: Response, next: NextFunction) {
   try {
-    await reactivateUser(parseInt(req.params.id));
+    await reactivateUser(parseInt(req.params.id as string));
     res.json({ success: true });
   } catch (err) {
     next(err);
@@ -198,7 +198,7 @@ export async function handleReactivateUser(req: Request, res: Response, next: Ne
 /** PATCH /api/users/:id/cancel */
 export async function handleCancelUser(req: Request, res: Response, next: NextFunction) {
   try {
-    await cancelUser(parseInt(req.params.id));
+    await cancelUser(parseInt(req.params.id as string));
     res.json({ success: true });
   } catch (err) {
     next(err);
@@ -215,7 +215,7 @@ export async function handleUpdateFreeSessions(req: Request, res: Response, next
       res.status(400).json({ error: parsed.error.flatten() });
       return;
     }
-    await updateFreeSessions(parseInt(req.params.id), parsed.data.freeSessions);
+    await updateFreeSessions(parseInt(req.params.id as string), parsed.data.freeSessions);
     res.json({ success: true });
   } catch (err) {
     next(err);
@@ -232,7 +232,7 @@ export async function handleAssignRole(req: Request, res: Response, next: NextFu
       res.status(400).json({ error: parsed.error.flatten() });
       return;
     }
-    await assignRole(parseInt(req.params.id), parsed.data.roleId);
+    await assignRole(parseInt(req.params.id as string), parsed.data.roleId);
     res.json({ success: true });
   } catch (err) {
     next(err);
@@ -242,7 +242,7 @@ export async function handleAssignRole(req: Request, res: Response, next: NextFu
 /** DELETE /api/users/:id/roles/:roleId — remove a role. */
 export async function handleRemoveRole(req: Request, res: Response, next: NextFunction) {
   try {
-    await removeRole(parseInt(req.params.id), parseInt(req.params.roleId));
+    await removeRole(parseInt(req.params.id as string), parseInt(req.params.roleId as string));
     res.json({ success: true });
   } catch (err) {
     next(err);
@@ -257,7 +257,7 @@ export async function handleRemoveRole(req: Request, res: Response, next: NextFu
  */
 export async function handleDeleteUser(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = parseInt(req.params.id);
+    const userId = parseInt(req.params.id as string);
     if (userId === req.user?.sub) {
       res.status(400).json({ error: "Cannot delete your own account" });
       return;
@@ -286,7 +286,7 @@ const SendEmailSchema = z.object({
  */
 export async function handleSendEmail(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = parseInt(req.params.id);
+    const userId = parseInt(req.params.id as string);
     const parsed = SendEmailSchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({ error: parsed.error.flatten() });
@@ -324,7 +324,7 @@ const SubscriptionSchema = z.object({
 /** PATCH /api/users/:id/subscription — admin update subscription fields. */
 export async function handleUpdateSubscription(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = parseInt(req.params.id);
+    const userId = parseInt(req.params.id as string);
     const parsed = SubscriptionSchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({ error: parsed.error.flatten() });
@@ -340,7 +340,7 @@ export async function handleUpdateSubscription(req: Request, res: Response, next
 /** DELETE /api/users/:id/organisation — admin remove user from organisation. */
 export async function handleRemoveUserOrganisation(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = parseInt(req.params.id);
+    const userId = parseInt(req.params.id as string);
     await removeUserOrganisation(userId);
     res.json({ success: true });
   } catch (err) {

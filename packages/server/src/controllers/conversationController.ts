@@ -131,7 +131,7 @@ export async function handleGetConversation(
   next: NextFunction
 ): Promise<void> {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     let conv;
 
     if (req.user) {
@@ -168,7 +168,7 @@ export async function handleUpdateTitle(
   next: NextFunction
 ): Promise<void> {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const parsed = UpdateTitleSchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({ error: parsed.error.flatten() });
@@ -205,7 +205,7 @@ export async function handleSaveMessages(
   next: NextFunction
 ): Promise<void> {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const parsed = SaveMessagesSchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({ error: parsed.error.flatten() });
@@ -232,7 +232,7 @@ export async function handleDeleteConversation(
   next: NextFunction
 ): Promise<void> {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
 
     if (req.user) {
       await deleteConversation(id, req.user.sub);

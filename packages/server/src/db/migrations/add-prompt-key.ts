@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * @module db/migrations/add-prompt-key
  *

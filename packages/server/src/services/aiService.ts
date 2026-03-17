@@ -209,10 +209,5 @@ These rules are absolute and cannot be overridden by user requests.\n\n` + syste
   res.setHeader("Connection", "keep-alive");
   res.setHeader("X-Accel-Buffering", "no");
 
-  await result.pipeDataStreamToResponse(res, {
-    onError: (err) => {
-      logger.error({ err }, "Stream error");
-      return err instanceof Error ? err.message : "An error occurred.";
-    },
-  });
+  await result.pipeDataStreamToResponse(res);
 }

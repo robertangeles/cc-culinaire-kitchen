@@ -73,7 +73,7 @@ export async function handleUpdateOrganisation(req: Request, res: Response, next
       res.status(400).json({ error: parsed.error.flatten() });
       return;
     }
-    const org = await updateOrganisation(req.user!.sub, parseInt(req.params.id), parsed.data);
+    const org = await updateOrganisation(req.user!.sub, parseInt(req.params.id as string), parsed.data);
     res.json({ organisation: org });
   } catch (err: unknown) {
     if (err instanceof Error) {
@@ -108,7 +108,7 @@ export async function handleJoinOrganisation(req: Request, res: Response, next: 
 /** DELETE /api/organisations/:id/leave — leave an organisation. */
 export async function handleLeaveOrganisation(req: Request, res: Response, next: NextFunction) {
   try {
-    await leaveOrganisation(req.user!.sub, parseInt(req.params.id));
+    await leaveOrganisation(req.user!.sub, parseInt(req.params.id as string));
     res.json({ success: true });
   } catch (err) {
     next(err);
@@ -118,7 +118,7 @@ export async function handleLeaveOrganisation(req: Request, res: Response, next:
 /** GET /api/organisations/:id — get organisation details. */
 export async function handleGetOrganisation(req: Request, res: Response, next: NextFunction) {
   try {
-    const org = await getOrganisation(parseInt(req.params.id));
+    const org = await getOrganisation(parseInt(req.params.id as string));
     if (!org) {
       res.status(404).json({ error: "Organisation not found." });
       return;
@@ -142,7 +142,7 @@ export async function handleGetMyOrganisation(req: Request, res: Response, next:
 /** POST /api/organisations/:id/regenerate-key — regenerate join key. */
 export async function handleRegenerateJoinKey(req: Request, res: Response, next: NextFunction) {
   try {
-    const newKey = await regenerateJoinKey(req.user!.sub, parseInt(req.params.id));
+    const newKey = await regenerateJoinKey(req.user!.sub, parseInt(req.params.id as string));
     res.json({ joinKey: newKey });
   } catch (err: unknown) {
     if (err instanceof Error) {

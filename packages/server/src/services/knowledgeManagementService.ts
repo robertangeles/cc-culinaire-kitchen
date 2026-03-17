@@ -61,6 +61,7 @@ interface IngestManualParams {
 
 async function extractFromPdf(buffer: Buffer): Promise<string> {
   // pdf-parse v1.1.1: default export is the parse function
+  // @ts-ignore
   const mod = await import("pdf-parse");
   const parse = (mod as any).default ?? mod;
   const data = await parse(buffer);

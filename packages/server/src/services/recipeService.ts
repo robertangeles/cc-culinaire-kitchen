@@ -402,7 +402,7 @@ export async function generateRecipe(input: RecipeInput): Promise<{
       title: recipe.name,
       description: recipe.description,
       recipeData: recipe as unknown as Record<string, unknown>,
-      imageUrl,
+      imageUrl: imageUrl ?? undefined,
       imagePrompt: recipe.imagePrompt,
       kitchenContext: input.kitchenContext,
       requestParams: {
