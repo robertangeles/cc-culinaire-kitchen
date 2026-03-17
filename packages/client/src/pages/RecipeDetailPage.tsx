@@ -17,6 +17,7 @@ import { RecipeHero } from "../components/recipes/RecipeHero.js";
 import type { RecipeDomain } from "../components/recipes/RecipeForm.js";
 import { useRecipeRatings } from "../hooks/useRecipeRatings.js";
 import type { CreatorInfo } from "../components/recipes/CreatorCard.js";
+import { useAuth } from "../context/AuthContext.js";
 
 interface RecipeDetail {
   recipeId: string;
@@ -25,6 +26,7 @@ interface RecipeDetail {
   domain: string;
   recipeData: RecipeData;
   imageUrl: string | null;
+  userId: number | null;
   isPublicInd: boolean;
   creator: CreatorInfo | null;
 }
@@ -78,10 +80,13 @@ function toPTDuration(timeStr: string): string {
 
 export function RecipeDetailPage() {
   const { id } = useParams();
+  const { user } = useAuth();
   const [recipe, setRecipe] = useState<RecipeDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [isPublic, setIsPublic] = useState(false);
   const { data: ratingsData } = useRecipeRatings(recipe?.recipeId);
+  const isOwner = user && recipe && recipe.userId === user.userId;
 
   useEffect(() => {
     if (!id) return;
@@ -108,9 +113,11 @@ export function RecipeDetailPage() {
           domain: data.domain,
           recipeData: data.recipeData as RecipeData,
           imageUrl: data.imageUrl,
+          userId: data.userId ?? null,
           isPublicInd: data.isPublicInd,
           creator: data.creator ?? null,
         });
+        setIsPublic(data.isPublicInd ?? false);
       } catch {
         setNotFound(true);
       } finally {
@@ -231,6 +238,18 @@ export function RecipeDetailPage() {
           slug={recipe.slug ?? undefined}
           imageUrl={recipe.imageUrl}
           creator={recipe.creator}
+          isPublic={isPublic}
+          onTogglePublic={isOwner ? async (pub) => {
+            try {
+              await fetch(`/api/recipes/${recipe.recipeId}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                credentials: "include",
+                body: JSON.stringify({ isPublicInd: pub }),
+              });
+              setIsPublic(pub);
+            } catch { /* silent */ }
+          } : undefined}
         />
         {/* AI Disclaimer */}
         <div className="px-6 md:px-10 pb-8 mt-4">
