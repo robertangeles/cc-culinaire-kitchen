@@ -22,6 +22,9 @@ const logger = pino({ name: "imageService" });
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const GENERATED_DIR = join(__dirname, "../../../../uploads/generated");
+// Ensure directory exists (Render persistent disk may not have subdirectories)
+import { mkdirSync } from "fs";
+try { mkdirSync(GENERATED_DIR, { recursive: true }); } catch { /* exists */ }
 
 /** Default model when no setting is configured. */
 const DEFAULT_MODEL = "gemini-2.0-flash-exp-image-generation";
