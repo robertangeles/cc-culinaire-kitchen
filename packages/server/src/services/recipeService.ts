@@ -259,6 +259,7 @@ function buildUserMessage(input: RecipeInput, ragContext: string): string {
   }
 
   parts.push(`Create a ${input.domain === "spirits" ? "drink" : "recipe"}: ${input.request}`);
+  parts.push("IMPORTANT: The recipe name must be the dish name only. Never include restaurant names, business names, brand names, or establishment names in the recipe title.");
 
   if (input.servings) parts.push(`Servings: ${input.servings}`);
   if (input.difficulty) parts.push(`Difficulty: ${input.difficulty}`);

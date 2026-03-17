@@ -4,3 +4,5 @@
 export function generateId(): string {
   return crypto.randomUUID();
 }
+
+export * from "./kitchenProfileConstants.js";

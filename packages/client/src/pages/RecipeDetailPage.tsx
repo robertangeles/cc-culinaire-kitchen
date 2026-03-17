@@ -15,6 +15,8 @@ import { Loader2 } from "lucide-react";
 import { RecipeCard, type RecipeData } from "../components/recipes/RecipeCard.js";
 import { RecipeHero } from "../components/recipes/RecipeHero.js";
 import type { RecipeDomain } from "../components/recipes/RecipeForm.js";
+import { useRecipeRatings } from "../hooks/useRecipeRatings.js";
+import type { CreatorInfo } from "../components/recipes/CreatorCard.js";
 
 interface RecipeDetail {
   recipeId: string;
@@ -24,6 +26,7 @@ interface RecipeDetail {
   recipeData: RecipeData;
   imageUrl: string | null;
   isPublicInd: boolean;
+  creator: CreatorInfo | null;
 }
 
 /** Set or update a <meta> tag by property or name. */
@@ -78,6 +81,7 @@ export function RecipeDetailPage() {
   const [recipe, setRecipe] = useState<RecipeDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const { data: ratingsData } = useRecipeRatings(recipe?.recipeId);
 
   useEffect(() => {
     if (!id) return;
@@ -105,6 +109,7 @@ export function RecipeDetailPage() {
           recipeData: data.recipeData as RecipeData,
           imageUrl: data.imageUrl,
           isPublicInd: data.isPublicInd,
+          creator: data.creator ?? null,
         });
       } catch {
         setNotFound(true);
@@ -185,8 +190,19 @@ export function RecipeDetailPage() {
       }
     }
 
+    // Add aggregate rating for rich snippets
+    if (ratingsData && ratingsData.count > 0) {
+      jsonLd.aggregateRating = {
+        "@type": "AggregateRating",
+        ratingValue: ratingsData.average,
+        ratingCount: ratingsData.count,
+        bestRating: 5,
+        worstRating: 1,
+      };
+    }
+
     setJsonLd(jsonLd);
-  }, [recipe]);
+  }, [recipe, ratingsData]);
 
   if (notFound) return <Navigate to="/kitchen-shelf" replace />;
 
@@ -214,6 +230,7 @@ export function RecipeDetailPage() {
           recipeId={recipe.recipeId}
           slug={recipe.slug ?? undefined}
           imageUrl={recipe.imageUrl}
+          creator={recipe.creator}
         />
         {/* AI Disclaimer */}
         <div className="px-6 md:px-10 pb-8 mt-4">

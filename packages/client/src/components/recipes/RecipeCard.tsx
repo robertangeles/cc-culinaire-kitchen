@@ -10,6 +10,8 @@ import { useState } from "react";
 import { Printer, Clock, Users, ChefHat, AlertTriangle, Thermometer, GlassWater, Flame, Wine, Hash, Sparkles, Share2, Copy, Check } from "lucide-react";
 import type { RecipeDomain } from "./RecipeForm.js";
 import { RecipeShareBar } from "./RecipeShareBar.js";
+import RecipeRatings from "./RecipeRatings.js";
+import { CreatorCard, type CreatorInfo } from "./CreatorCard.js";
 
 interface Ingredient {
   amount: string;
@@ -107,6 +109,8 @@ interface RecipeCardProps {
   onTogglePublic?: (isPublic: boolean) => void;
   /** Current public state */
   isPublic?: boolean;
+  /** Recipe creator info for "Added By" display */
+  creator?: CreatorInfo | null;
 }
 
 const DIFFICULTY_COLORS: Record<string, string> = {
@@ -116,7 +120,7 @@ const DIFFICULTY_COLORS: Record<string, string> = {
   expert: "bg-red-100 text-red-800",
 };
 
-export function RecipeCard({ recipe, domain, recipeId, slug, imageUrl, onTogglePublic, isPublic }: RecipeCardProps) {
+export function RecipeCard({ recipe, domain, recipeId, slug, imageUrl, onTogglePublic, isPublic, creator }: RecipeCardProps) {
   const [checkedIngredients, setCheckedIngredients] = useState<Set<number>>(new Set());
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
   const [copied, setCopied] = useState(false);
@@ -206,19 +210,6 @@ export function RecipeCard({ recipe, domain, recipeId, slug, imageUrl, onToggleP
                 {isPublic ? "Public" : "Make Public"}
               </button>
             )}
-            {recipeId && (
-              <button
-                onClick={() => {
-                  navigator.clipboard.writeText(`${window.location.origin}/kitchen-shelf/${slug ?? recipeId}`);
-                  setCopied(true);
-                  setTimeout(() => setCopied(false), 2000);
-                }}
-                className="flex items-center gap-1.5 text-sm text-stone-500 hover:text-stone-700 transition-colors"
-              >
-                {copied ? <Check className="size-4 text-green-600" /> : <Copy className="size-4" />}
-                {copied ? "Copied!" : "Share Link"}
-              </button>
-            )}
           </div>
           <button
             onClick={handlePrint}
@@ -236,19 +227,33 @@ export function RecipeCard({ recipe, domain, recipeId, slug, imageUrl, onToggleP
           </div>
         )}
 
-        {/* Social share bar */}
+        {/* Social share bar + star rating + Added By */}
         {(recipeId || slug) && (
-          <div className="mt-4 flex items-center gap-2">
-            <span className="text-xs text-stone-400">Share:</span>
-            <RecipeShareBar
-              title={recipe.name}
-              description={recipe.description}
-              hookLine={recipe.hookLine}
-              hashtags={recipe.hashtags}
-              imageUrl={imageUrl}
-              slug={slug}
-              recipeId={recipeId}
-            />
+          <div className="mt-4 space-y-2">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-stone-400">Share:</span>
+                <RecipeShareBar
+                  title={recipe.name}
+                  description={recipe.description}
+                  hookLine={recipe.hookLine}
+                  hashtags={recipe.hashtags}
+                  imageUrl={imageUrl}
+                  slug={slug}
+                  recipeId={recipeId}
+                />
+              </div>
+              <div className="flex flex-col items-end gap-1">
+                {recipeId && (
+                  <RecipeRatings recipeId={recipeId} compact />
+                )}
+                {creator ? (
+                  <CreatorCard creator={creator} />
+                ) : (
+                  <span className="text-xs text-stone-400">Added by <span className="font-medium text-stone-500">Anonymous</span></span>
+                )}
+              </div>
+            </div>
           </div>
         )}
       </div>
@@ -577,6 +582,11 @@ export function RecipeCard({ recipe, domain, recipeId, slug, imageUrl, onToggleP
             </span>
           ))}
         </div>
+      )}
+
+      {/* Star Ratings & Reviews */}
+      {recipeId && (
+        <RecipeRatings recipeId={recipeId} />
       )}
 
       {/* Confidence note */}

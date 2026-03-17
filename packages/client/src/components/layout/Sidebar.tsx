@@ -7,7 +7,7 @@
  */
 
 import { Link, NavLink } from "react-router";
-import { ChefHat, Settings, UtensilsCrossed, Croissant, GlassWater, MessageSquare, LayoutGrid } from "lucide-react";
+import { ChefHat, Settings, UtensilsCrossed, Croissant, GlassWater, MessageSquare, LayoutGrid, BookMarked, MessagesSquare, BarChart3 } from "lucide-react";
 import { useSettings } from "../../context/SettingsContext.js";
 import { useAuth } from "../../context/AuthContext.js";
 import { UserMenu } from "./UserMenu.js";
@@ -53,6 +53,9 @@ export function Sidebar() {
           <ChefHat className="size-12 text-amber-500" />
         )}
         <span className="font-semibold text-lg truncate text-center w-full">{pageTitle}</span>
+        <span className="text-[10px] font-medium text-amber-600 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full">
+          Open Beta
+        </span>
       </Link>
 
       {/* Module navigation */}
@@ -74,9 +77,25 @@ export function Sidebar() {
           <GlassWater className="size-4" />
           Spirits Lab
         </NavLink>
+        {!isGuest && user && (
+          <NavLink to="/menu-intelligence" className={navLinkClass}>
+            <BarChart3 className="size-4" />
+            Menu Intelligence
+          </NavLink>
+        )}
+        {!isGuest && user && (
+          <NavLink to="/my-shelf" className={navLinkClass}>
+            <BookMarked className="size-4" />
+            My Shelf
+          </NavLink>
+        )}
         <NavLink to="/kitchen-shelf" className={navLinkClass}>
           <LayoutGrid className="size-4" />
-          The Kitchen Shelf
+          Kitchen Shelf
+        </NavLink>
+        <NavLink to="/bench" className={navLinkClass}>
+          <MessagesSquare className="size-4" />
+          The Bench
         </NavLink>
       </nav>
 

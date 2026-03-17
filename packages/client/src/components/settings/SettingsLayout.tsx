@@ -16,6 +16,7 @@ import {
   Users,
   Shield,
   Plug,
+  MessagesSquare,
   type LucideIcon,
 } from "lucide-react";
 
@@ -41,6 +42,7 @@ const tabs: TabItem[] = [
   { id: "integrations", label: "Integrations", icon: Plug },
   { id: "models", label: "Models", icon: Bot, disabled: true },
   { id: "knowledge", label: "Knowledge Base", icon: BookOpen },
+  { id: "bench", label: "The Bench", icon: MessagesSquare },
 ];
 
 /** Props for {@link SettingsLayout}. */

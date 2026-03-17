@@ -4,9 +4,10 @@
  */
 
 import { Link } from "react-router";
-import { Clock, Eye, ChefHat, Croissant, GlassWater, Archive } from "lucide-react";
+import { Clock, Eye, ChefHat, Croissant, GlassWater, Archive, Globe, Lock } from "lucide-react";
 import type { GalleryRecipe } from "../../hooks/useRecipeGallery";
 import { useAuth } from "../../context/AuthContext.js";
+import { StarDisplay } from "./RecipeRatings.js";
 
 const DOMAIN_ICONS: Record<string, typeof ChefHat> = {
   recipe: ChefHat,
@@ -27,7 +28,15 @@ const DIFFICULTY_COLORS: Record<string, string> = {
   expert: "text-red-600",
 };
 
-export function RecipeGalleryCard({ recipe, onArchive }: { recipe: GalleryRecipe; onArchive?: (id: string) => void }) {
+interface RecipeGalleryCardProps {
+  recipe: GalleryRecipe;
+  onArchive?: (id: string) => void;
+  /** Owner mode — shows visibility toggle and archive button */
+  isOwner?: boolean;
+  onToggleVisibility?: (id: string, isPublic: boolean) => void;
+}
+
+export function RecipeGalleryCard({ recipe, onArchive, isOwner, onToggleVisibility }: RecipeGalleryCardProps) {
   const { user } = useAuth();
   const data = recipe.recipeData as Record<string, unknown>;
   const difficulty = (data.difficulty as string) ?? "";
@@ -40,7 +49,7 @@ export function RecipeGalleryCard({ recipe, onArchive }: { recipe: GalleryRecipe
       className="group block bg-white rounded-xl shadow-sm border border-stone-200 overflow-hidden hover:shadow-md transition-shadow"
     >
       {/* Image */}
-      <div className="aspect-[4/3] bg-stone-100 overflow-hidden">
+      <div className="aspect-[4/3] bg-stone-100 overflow-hidden relative">
         {recipe.imageUrl ? (
           <img
             src={recipe.imageUrl}
@@ -51,6 +60,19 @@ export function RecipeGalleryCard({ recipe, onArchive }: { recipe: GalleryRecipe
           <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-stone-100 to-stone-200">
             <DomainIcon className="size-12 text-stone-300" />
           </div>
+        )}
+        {/* Visibility badge for owner view */}
+        {isOwner && (
+          <span
+            className={`absolute top-2 right-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium backdrop-blur-sm ${
+              recipe.isPublicInd
+                ? "bg-green-100/90 text-green-700"
+                : "bg-stone-100/90 text-stone-600"
+            }`}
+          >
+            {recipe.isPublicInd ? <Globe className="size-3" /> : <Lock className="size-3" />}
+            {recipe.isPublicInd ? "Public" : "Private"}
+          </span>
         )}
       </div>
 
@@ -73,7 +95,13 @@ export function RecipeGalleryCard({ recipe, onArchive }: { recipe: GalleryRecipe
         </h3>
 
         {recipe.description && (
-          <p className="text-xs text-stone-500 line-clamp-2 mb-3">{recipe.description}</p>
+          <p className="text-xs text-stone-500 line-clamp-2 mb-2">{recipe.description}</p>
+        )}
+
+        {recipe.ratingCount > 0 && (
+          <div className="mb-2">
+            <StarDisplay average={recipe.averageRating} count={recipe.ratingCount} size={14} />
+          </div>
         )}
 
         <div className="flex items-center justify-between text-xs text-stone-400">
@@ -89,15 +117,42 @@ export function RecipeGalleryCard({ recipe, onArchive }: { recipe: GalleryRecipe
               {recipe.viewCount}
             </span>
           </div>
-          {onArchive && user?.roles?.includes("Administrator") && (
-            <button
-              onClick={(e) => { e.preventDefault(); e.stopPropagation(); onArchive(recipe.recipeId); }}
-              className="p-1 rounded hover:bg-stone-100 text-stone-400 hover:text-red-500 transition-colors"
-              title="Archive recipe"
-            >
-              <Archive className="size-3.5" />
-            </button>
-          )}
+          <div className="flex items-center gap-1">
+            {/* Owner: toggle visibility */}
+            {isOwner && onToggleVisibility && (
+              <button
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onToggleVisibility(recipe.recipeId, !recipe.isPublicInd);
+                }}
+                className="p-1 rounded hover:bg-stone-100 text-stone-400 hover:text-amber-600 transition-colors"
+                title={recipe.isPublicInd ? "Make private" : "Make public"}
+              >
+                {recipe.isPublicInd ? <Lock className="size-3.5" /> : <Globe className="size-3.5" />}
+              </button>
+            )}
+            {/* Owner: archive */}
+            {isOwner && onArchive && (
+              <button
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); onArchive(recipe.recipeId); }}
+                className="p-1 rounded hover:bg-stone-100 text-stone-400 hover:text-red-500 transition-colors"
+                title="Archive recipe"
+              >
+                <Archive className="size-3.5" />
+              </button>
+            )}
+            {/* Admin archive (gallery view) */}
+            {!isOwner && onArchive && user?.roles?.includes("Administrator") && (
+              <button
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); onArchive(recipe.recipeId); }}
+                className="p-1 rounded hover:bg-stone-100 text-stone-400 hover:text-red-500 transition-colors"
+                title="Archive recipe"
+              >
+                <Archive className="size-3.5" />
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </Link>

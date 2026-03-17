@@ -75,6 +75,15 @@ export default defineConfig({
           proxy.on("error", () => {});
         },
       },
+      // Socket.io — proxy WebSocket upgrade + polling fallback
+      "/socket.io": {
+        target: "http://localhost:3001",
+        changeOrigin: true,
+        ws: true,
+        configure: (proxy) => {
+          proxy.on("error", () => {});
+        },
+      },
     },
   },
 });

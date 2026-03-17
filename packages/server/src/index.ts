@@ -1,3 +1,4 @@
+import { createServer } from "http";
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
@@ -84,6 +85,13 @@ app.use("/api/recipes", recipesRouter);
 app.use("/api", personalisationOptionsRouter);
 app.use("/api/admin", adminPersonalisationOptionsRouter);
 app.use("/api/knowledge", knowledgeRouter);
+app.use("/api/bench", benchRouter);
+app.use("/api/menu", menuIntelligenceRouter);
+
+// Database stats (admin only)
+import { authenticate, requireRole } from "./middleware/auth.js";
+import { handleDatabaseStats } from "./controllers/databaseController.js";
+app.get("/api/admin/database/stats", authenticate, requireRole("Administrator"), handleDatabaseStats);
 
 // Sitemap
 app.use("/sitemap.xml", sitemapRouter);
@@ -100,6 +108,10 @@ app.use("/uploads", express.static(join(__dirname, "../../../uploads")));
 const CLIENT_DIST = join(__dirname, "../../../client/dist");
 import { readFile as readFileAsync } from "fs/promises";
 import { getRecipe as getRecipeForSeo } from "./services/recipePersistenceService.js";
+import { getRatingsSummary } from "./services/ratingService.js";
+import { initBenchSocket } from "./services/benchSocketService.js";
+import { benchRouter } from "./routes/bench.js";
+import { menuIntelligenceRouter } from "./routes/menuIntelligence.js";
 
 app.get("/kitchen-shelf/:slug", async (req, res, next) => {
   // Only handle HTML requests (not API calls or assets)
@@ -134,7 +146,10 @@ app.get("/kitchen-shelf/:slug", async (req, res, next) => {
     const ingredients = (data.ingredients as Array<{ amount: string; unit: string; name: string }>) || [];
     const steps = (data.steps as Array<{ step: number; instruction: string }>) || [];
 
-    const jsonLd = JSON.stringify({
+    // Fetch aggregate rating for SEO
+    const ratingsSummary = await getRatingsSummary(recipe.recipeId);
+
+    const jsonLdObj: Record<string, unknown> = {
       "@context": "https://schema.org",
       "@type": "Recipe",
       name: recipe.title,
@@ -146,7 +161,19 @@ app.get("/kitchen-shelf/:slug", async (req, res, next) => {
       recipeYield: data.yield,
       recipeIngredient: ingredients.map((i) => `${i.amount} ${i.unit} ${i.name}`),
       recipeInstructions: steps.map((s) => ({ "@type": "HowToStep", position: s.step, text: s.instruction })),
-    });
+    };
+
+    if (ratingsSummary.count > 0) {
+      jsonLdObj.aggregateRating = {
+        "@type": "AggregateRating",
+        ratingValue: ratingsSummary.average,
+        ratingCount: ratingsSummary.count,
+        bestRating: 5,
+        worstRating: 1,
+      };
+    }
+
+    const jsonLd = JSON.stringify(jsonLdObj);
 
     // Replace meta tags in HTML
     html = html
@@ -204,7 +231,9 @@ hydrateEnvFromCredentials().then(() => {
       log.warn({ err }, "Knowledge recovery check failed (non-fatal)");
     })
     .then(() => {
-    const server = app.listen(port, () => {
+    const httpServer = createServer(app);
+    initBenchSocket(httpServer);
+    httpServer.listen(port, () => {
       log.info(`CulinAIre Kitchen server running on http://localhost:${port}`);
       log.info(`AI Provider: ${process.env.AI_PROVIDER ?? "anthropic"}`);
 
@@ -239,7 +268,7 @@ hydrateEnvFromCredentials().then(() => {
         log.info(`${signal} received — shutting down`);
         clearInterval(cleanupInterval);
         clearInterval(purgeInterval);
-        server.close(() => {
+        httpServer.close(() => {
           log.info("Server closed");
           process.exit(0);
         });

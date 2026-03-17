@@ -25,6 +25,17 @@ const KitchenProfileUpdateSchema = z.object({
   kitchenEquipment: z.array(z.string().max(100)).max(30).optional(),
   servingsDefault: z.number().int().min(1).max(100).optional(),
   onboardingDoneInd: z.boolean().optional(),
+  // Restaurant / business profile
+  restaurantName: z.string().max(200).optional().nullable(),
+  establishmentType: z.string().max(50).optional().nullable(),
+  cuisineIdentity: z.string().max(200).optional().nullable(),
+  targetDiner: z.string().max(200).optional().nullable(),
+  pricePoint: z.enum(["budget", "mid_range", "upper_mid", "premium", "fine_dining"]).optional().nullable(),
+  restaurantVoice: z.string().max(200).optional().nullable(),
+  sourcingValues: z.array(z.string().max(100)).max(15).optional(),
+  platingStyle: z.enum(["rustic", "structured", "architectural", "bowl_casual", "minimal"]).optional().nullable(),
+  kitchenConstraints: z.array(z.string().max(100)).max(15).optional(),
+  menuNeeds: z.array(z.string().max(100)).max(3).optional(),
 });
 
 /**

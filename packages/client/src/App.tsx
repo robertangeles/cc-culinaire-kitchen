@@ -28,6 +28,9 @@ import { ProfilePage } from "./pages/ProfilePage.js";
 import { RecipeLabPage } from "./pages/RecipeLabPage.js";
 import { RecipeGalleryPage } from "./pages/RecipeGalleryPage.js";
 import { RecipeDetailPage } from "./pages/RecipeDetailPage.js";
+import { MyShelfPage } from "./pages/MyShelfPage.js";
+import { BenchPage } from "./pages/BenchPage.js";
+import { MenuIntelligencePage } from "./pages/MenuIntelligencePage.js";
 import { KitchenOnboarding } from "./components/onboarding/KitchenOnboarding.js";
 
 /**
@@ -118,6 +121,9 @@ export function App() {
                           <Route path="/recipes" element={<RecipeLabPage domain="recipe" />} />
                           <Route path="/patisserie" element={<RecipeLabPage domain="patisserie" />} />
                           <Route path="/spirits" element={<RecipeLabPage domain="spirits" />} />
+                          <Route path="/my-shelf" element={<AuthenticatedOnly><MyShelfPage /></AuthenticatedOnly>} />
+                          <Route path="/menu-intelligence" element={<AuthenticatedOnly><MenuIntelligencePage /></AuthenticatedOnly>} />
+                          <Route path="/bench" element={<BenchPage />} />
                           <Route path="/kitchen-shelf" element={<RecipeGalleryPage />} />
                           <Route path="/kitchen-shelf/:id" element={<RecipeDetailPage />} />
                         </Routes>

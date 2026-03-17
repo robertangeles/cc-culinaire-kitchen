@@ -54,6 +54,7 @@ const CATEGORY_ICONS: Record<string, typeof KeyRound> = {
   email: Mail,
   payments: CreditCard,
   security: Shield,
+  database: Database,
 };
 
 /** Badge showing the credential's source (DB, .env, or not set). */
@@ -433,6 +434,9 @@ export function IntegrationsTab() {
         ) : (
           activeCredentials.map((cred) => renderCredentialCard(cred))
         )}
+
+        {/* Database storage viewer */}
+        {activeTab === "database" && <DatabaseStorageViewer />}
       </div>
 
       {/* Bottom bar */}
@@ -450,6 +454,136 @@ export function IntegrationsTab() {
           </span>
         )}
       </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Database Storage Viewer
+// ---------------------------------------------------------------------------
+
+interface TableStat {
+  tableName: string;
+  rowCount: number;
+  totalSize: string;
+  totalBytes: number;
+  dataSize: string;
+  indexSize: string;
+}
+
+interface DbStats {
+  totalSize: string;
+  totalBytes: number;
+  embeddingCount: number;
+  tables: TableStat[];
+}
+
+function DatabaseStorageViewer() {
+  const [stats, setStats] = useState<DbStats | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function fetchStats() {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/admin/database/stats", { credentials: "include" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setStats(await res.json());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load stats");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { fetchStats(); }, []);
+
+  const maxBytes = stats?.tables?.[0]?.totalBytes ?? 1;
+
+  return (
+    <div className="mt-6 border-t border-stone-200 pt-6">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-sm font-semibold text-stone-700 flex items-center gap-2">
+          <Server className="size-4 text-stone-400" />
+          Storage Overview
+        </h3>
+        <button
+          onClick={fetchStats}
+          disabled={loading}
+          className="text-xs text-amber-600 hover:text-amber-700 font-medium disabled:opacity-50"
+        >
+          {loading ? "Loading..." : "Refresh"}
+        </button>
+      </div>
+
+      {error && (
+        <div className="flex items-center gap-2 text-sm text-red-600 mb-4">
+          <CircleAlert className="size-4" />
+          {error}
+        </div>
+      )}
+
+      {stats && (
+        <>
+          {/* Summary cards */}
+          <div className="grid grid-cols-3 gap-3 mb-5">
+            <div className="bg-stone-50 rounded-lg p-3 text-center">
+              <p className="text-xs text-stone-500">Total Size</p>
+              <p className="text-lg font-bold text-stone-800">{stats.totalSize}</p>
+            </div>
+            <div className="bg-stone-50 rounded-lg p-3 text-center">
+              <p className="text-xs text-stone-500">Tables</p>
+              <p className="text-lg font-bold text-stone-800">{stats.tables.length}</p>
+            </div>
+            <div className="bg-stone-50 rounded-lg p-3 text-center">
+              <p className="text-xs text-stone-500">Embeddings</p>
+              <p className="text-lg font-bold text-stone-800">{stats.embeddingCount.toLocaleString()}</p>
+            </div>
+          </div>
+
+          {/* Table breakdown */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-stone-200 text-left">
+                  <th className="py-2 pr-3 font-medium text-stone-600">Table</th>
+                  <th className="py-2 pr-3 font-medium text-stone-600 text-right">Rows</th>
+                  <th className="py-2 pr-3 font-medium text-stone-600 text-right">Size</th>
+                  <th className="py-2 pr-3 font-medium text-stone-600 text-right">Data</th>
+                  <th className="py-2 pr-3 font-medium text-stone-600 text-right">Indexes</th>
+                  <th className="py-2 font-medium text-stone-600" style={{ width: "120px" }}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {stats.tables.map((t) => (
+                  <tr key={t.tableName} className="border-b border-stone-100">
+                    <td className="py-2 pr-3 text-stone-800 font-mono text-xs">{t.tableName}</td>
+                    <td className="py-2 pr-3 text-stone-600 text-right">{t.rowCount.toLocaleString()}</td>
+                    <td className="py-2 pr-3 text-stone-600 text-right">{t.totalSize}</td>
+                    <td className="py-2 pr-3 text-stone-400 text-right">{t.dataSize}</td>
+                    <td className="py-2 pr-3 text-stone-400 text-right">{t.indexSize}</td>
+                    <td className="py-2">
+                      <div className="w-full bg-stone-100 rounded-full h-2">
+                        <div
+                          className="bg-amber-500 h-2 rounded-full"
+                          style={{ width: `${Math.max(2, (t.totalBytes / maxBytes) * 100)}%` }}
+                        />
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+
+      {loading && !stats && (
+        <div className="flex items-center justify-center py-8">
+          <Loader2 className="size-5 animate-spin text-amber-600" />
+        </div>
+      )}
     </div>
   );
 }

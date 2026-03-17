@@ -23,6 +23,9 @@ import {
   uniqueIndex,
   jsonb,
   uuid,
+  smallint,
+  numeric,
+  date,
 } from "drizzle-orm/pg-core";
 
 /**
@@ -431,6 +434,17 @@ export const kitchenProfile = pgTable("kitchen_profile", {
   kitchenEquipment: text("kitchen_equipment").array().notNull().default([]),
   servingsDefault: integer("servings_default").notNull().default(4),
   onboardingDoneInd: boolean("onboarding_done_ind").notNull().default(false),
+  // Restaurant / business profile fields
+  restaurantName: varchar("restaurant_name", { length: 200 }),
+  establishmentType: varchar("establishment_type", { length: 50 }),
+  cuisineIdentity: varchar("cuisine_identity", { length: 200 }),
+  targetDiner: varchar("target_diner", { length: 200 }),
+  pricePoint: varchar("price_point", { length: 20 }),
+  restaurantVoice: varchar("restaurant_voice", { length: 200 }),
+  sourcingValues: text("sourcing_values").array().default([]),
+  platingStyle: varchar("plating_style", { length: 20 }),
+  kitchenConstraints: text("kitchen_constraints").array().default([]),
+  menuNeeds: text("menu_needs").array().default([]),
   createdDttm: timestamp("created_dttm").notNull().defaultNow(),
   updatedDttm: timestamp("updated_dttm").notNull().defaultNow(),
 });
@@ -513,3 +527,195 @@ export const recipe = pgTable("recipe", {
   createdDttm: timestamp("created_dttm").notNull().defaultNow(),
   updatedDttm: timestamp("updated_dttm").notNull().defaultNow(),
 });
+
+/**
+ * The `recipe_rating` table stores per-user star ratings (1-5) for recipes.
+ * One rating per user per recipe (upsert on conflict).
+ */
+export const recipeRating = pgTable(
+  "recipe_rating",
+  {
+    ratingId: serial("rating_id").primaryKey(),
+    recipeId: uuid("recipe_id").notNull(),
+    userId: integer("user_id").notNull(),
+    rating: smallint("rating").notNull(),
+    createdDttm: timestamp("created_dttm").notNull().defaultNow(),
+    updatedDttm: timestamp("updated_dttm").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("idx_recipe_rating_unique").on(table.recipeId, table.userId),
+  ],
+);
+
+/**
+ * The `recipe_review` table stores text reviews for recipes.
+ * Each review is tied to the user's star rating.
+ */
+export const recipeReview = pgTable("recipe_review", {
+  reviewId: serial("review_id").primaryKey(),
+  recipeId: uuid("recipe_id").notNull(),
+  userId: integer("user_id").notNull(),
+  userName: varchar("user_name", { length: 100 }).notNull(),
+  reviewTitle: varchar("review_title", { length: 200 }),
+  reviewBody: text("review_body").notNull(),
+  rating: smallint("rating").notNull(),
+  createdDttm: timestamp("created_dttm").notNull().defaultNow(),
+});
+
+// ---------------------------------------------------------------------------
+// The Bench — Community Chat
+// ---------------------------------------------------------------------------
+
+/**
+ * The `bench_channel` table defines chat channels.
+ * "everyone" is a global channel for all registered users.
+ * Organisation channels are created on demand (one per org).
+ */
+export const benchChannel = pgTable("bench_channel", {
+  channelId: serial("channel_id").primaryKey(),
+  channelKey: varchar("channel_key", { length: 50 }).notNull().unique(),
+  channelName: varchar("channel_name", { length: 200 }).notNull(),
+  channelType: varchar("channel_type", { length: 20 }).notNull(), // "global" | "organisation"
+  organisationId: integer("organisation_id"),
+  channelBanner: varchar("channel_banner", { length: 500 }),
+  createdDttm: timestamp("created_dttm").notNull().defaultNow(),
+});
+
+/**
+ * The `bench_message` table stores all community chat messages.
+ * Supports text messages and recipe card shares.
+ */
+export const benchMessage = pgTable("bench_message", {
+  messageId: uuid("message_id").defaultRandom().primaryKey(),
+  channelId: integer("channel_id"),
+  dmThreadId: integer("dm_thread_id"),
+  userId: integer("user_id").notNull(),
+  messageBody: text("message_body").notNull(),
+  messageType: varchar("message_type", { length: 20 }).notNull().default("text"), // "text" | "recipe_share"
+  recipeId: uuid("recipe_id"),
+  editedInd: boolean("edited_ind").notNull().default(false),
+  deletedInd: boolean("deleted_ind").notNull().default(false),
+  createdDttm: timestamp("created_dttm").notNull().defaultNow(),
+  updatedDttm: timestamp("updated_dttm").notNull().defaultNow(),
+});
+
+/**
+ * The `bench_reaction` table stores emoji reactions on messages.
+ * One reaction type per user per message.
+ */
+export const benchReaction = pgTable(
+  "bench_reaction",
+  {
+    reactionId: serial("reaction_id").primaryKey(),
+    messageId: uuid("message_id").notNull(),
+    userId: integer("user_id").notNull(),
+    emoji: varchar("emoji", { length: 20 }).notNull(),
+    createdDttm: timestamp("created_dttm").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("idx_bench_reaction_unique").on(table.messageId, table.userId, table.emoji),
+  ],
+);
+
+/**
+ * The `bench_mention` table tracks @mentions for notifications.
+ */
+export const benchMention = pgTable("bench_mention", {
+  mentionId: serial("mention_id").primaryKey(),
+  messageId: uuid("message_id").notNull(),
+  mentionedUserId: integer("mentioned_user_id").notNull(),
+  readInd: boolean("read_ind").notNull().default(false),
+  createdDttm: timestamp("created_dttm").notNull().defaultNow(),
+});
+
+/**
+ * The `bench_pin` table stores pinned messages per channel.
+ * Admin-only in organisation channels.
+ */
+export const benchPin = pgTable("bench_pin", {
+  pinId: serial("pin_id").primaryKey(),
+  messageId: uuid("message_id").notNull().unique(),
+  channelId: integer("channel_id").notNull(),
+  pinnedBy: integer("pinned_by").notNull(),
+  createdDttm: timestamp("created_dttm").notNull().defaultNow(),
+});
+
+/**
+ * The `bench_dm_thread` table represents a direct message conversation
+ * between two users. user_a_id is always the lower userId to ensure
+ * a single unique row per pair.
+ */
+export const benchDmThread = pgTable(
+  "bench_dm_thread",
+  {
+    dmThreadId: serial("dm_thread_id").primaryKey(),
+    userAId: integer("user_a_id").notNull(),
+    userBId: integer("user_b_id").notNull(),
+    lastMessageAt: timestamp("last_message_at").notNull().defaultNow(),
+    createdDttm: timestamp("created_dttm").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("idx_bench_dm_thread_pair").on(table.userAId, table.userBId),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// Menu Intelligence
+// ---------------------------------------------------------------------------
+
+/**
+ * The `menu_item` table stores a user's menu items with calculated
+ * cost metrics and menu engineering classification.
+ */
+export const menuItem = pgTable("menu_item", {
+  menuItemId: uuid("menu_item_id").defaultRandom().primaryKey(),
+  userId: integer("user_id").notNull(),
+  name: varchar("name", { length: 200 }).notNull(),
+  category: varchar("category", { length: 100 }).notNull(),
+  sellingPrice: numeric("selling_price", { precision: 10, scale: 2 }).notNull(),
+  foodCost: numeric("food_cost", { precision: 10, scale: 2 }),
+  foodCostPct: numeric("food_cost_pct", { precision: 5, scale: 2 }),
+  contributionMargin: numeric("contribution_margin", { precision: 10, scale: 2 }),
+  unitsSold: integer("units_sold").notNull().default(0),
+  menuMixPct: numeric("menu_mix_pct", { precision: 5, scale: 2 }),
+  classification: varchar("classification", { length: 20 }).notNull().default("unclassified"),
+  periodStart: date("period_start"),
+  periodEnd: date("period_end"),
+  createdDttm: timestamp("created_dttm").notNull().defaultNow(),
+  updatedDttm: timestamp("updated_dttm").notNull().defaultNow(),
+});
+
+/**
+ * The `menu_item_ingredient` table stores ingredients and their costs
+ * for each menu item. Line cost = (quantity × unit_cost) / (yield_pct / 100).
+ */
+export const menuItemIngredient = pgTable("menu_item_ingredient", {
+  id: serial("id").primaryKey(),
+  menuItemId: uuid("menu_item_id").notNull(),
+  ingredientName: varchar("ingredient_name", { length: 200 }).notNull(),
+  quantity: numeric("quantity", { precision: 10, scale: 3 }).notNull(),
+  unit: varchar("unit", { length: 20 }).notNull(),
+  unitCost: numeric("unit_cost", { precision: 10, scale: 2 }).notNull(),
+  yieldPct: numeric("yield_pct", { precision: 5, scale: 2 }).notNull().default("100"),
+  lineCost: numeric("line_cost", { precision: 10, scale: 2 }),
+  createdDttm: timestamp("created_dttm").notNull().defaultNow(),
+});
+
+/**
+ * The `menu_category_setting` table stores configurable target
+ * food cost percentage per menu category per user.
+ */
+export const menuCategorySetting = pgTable(
+  "menu_category_setting",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id").notNull(),
+    categoryName: varchar("category_name", { length: 100 }).notNull(),
+    targetFoodCostPct: numeric("target_food_cost_pct", { precision: 5, scale: 2 }).notNull().default("30"),
+    createdDttm: timestamp("created_dttm").notNull().defaultNow(),
+    updatedDttm: timestamp("updated_dttm").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("idx_menu_cat_user").on(table.userId, table.categoryName),
+  ],
+);

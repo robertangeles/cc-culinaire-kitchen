@@ -46,13 +46,25 @@ export function KitchenOnboarding() {
     cuisinePreferences: string[];
     dietaryRestrictions: string[];
     kitchenEquipment: string[];
+    establishmentType: string;
+    menuNeeds: string[];
   }) {
     try {
+      // Send all wizard fields including restaurant profile fields
+      const payload: Record<string, unknown> = {
+        ...data,
+        onboardingDoneInd: true,
+      };
+      // Only send establishmentType if user selected one
+      if (!data.establishmentType) delete payload.establishmentType;
+      // Only send menuNeeds if user selected any
+      if (!data.menuNeeds?.length) delete payload.menuNeeds;
+
       await fetch("/api/users/kitchen-profile", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ ...data, onboardingDoneInd: true }),
+        body: JSON.stringify(payload),
       });
     } catch {
       // Non-fatal

@@ -49,6 +49,7 @@ export const CREDENTIAL_REGISTRY: Record<string, CredentialMeta> = {
   STRIPE_PRICE_YEARLY:     { category: "payments", label: "Stripe Yearly Price ID",  sensitive: false },
   RECAPTCHA_SITE_KEY:      { category: "security", label: "reCAPTCHA Site Key",      sensitive: false },
   RECAPTCHA_SECRET_KEY:    { category: "security", label: "reCAPTCHA Secret Key",    sensitive: true },
+  DATABASE_URL:            { category: "database", label: "Database Connection URL", sensitive: true },
 };
 
 /** Category display order and labels for the frontend. */
@@ -58,6 +59,7 @@ export const CREDENTIAL_CATEGORIES = [
   { id: "email",    label: "Email" },
   { id: "payments", label: "Payments" },
   { id: "security", label: "Security" },
+  { id: "database", label: "Database" },
 ];
 
 // ---------------------------------------------------------------------------

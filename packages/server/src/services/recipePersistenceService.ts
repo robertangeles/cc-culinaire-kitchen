@@ -7,7 +7,7 @@
 
 import pino from "pino";
 import { db } from "../db/index.js";
-import { recipe } from "../db/schema.js";
+import { recipe, recipeRating, user, kitchenProfile } from "../db/schema.js";
 import { eq, and, or, sql, desc } from "drizzle-orm";
 
 const logger = pino({ name: "recipePersistence" });
@@ -85,6 +85,9 @@ async function generateSlug(title: string): Promise<string> {
 export async function saveRecipe(params: SaveRecipeParams): Promise<{ recipeId: string; slug: string }> {
   const slug = await generateSlug(params.title);
 
+  // Guest recipes are automatically public (go to The Kitchen Shelf)
+  const isGuest = !params.userId;
+
   const [saved] = await db
     .insert(recipe)
     .values({
@@ -99,6 +102,7 @@ export async function saveRecipe(params: SaveRecipeParams): Promise<{ recipeId: 
       imagePrompt: params.imagePrompt ?? null,
       kitchenContext: params.kitchenContext ?? null,
       requestParams: params.requestParams ?? null,
+      isPublicInd: isGuest,
     })
     .returning({ recipeId: recipe.recipeId, slug: recipe.slug });
 
@@ -137,7 +141,51 @@ export async function getRecipe(idOrSlug: string, incrementView = false) {
       .where(eq(recipe.recipeId, rec.recipeId));
   }
 
-  return rec;
+  // Fetch creator info if recipe has a userId
+  let creator: {
+    userName: string;
+    userPhotoPath: string | null;
+    userBio: string | null;
+    userFacebook: string | null;
+    userInstagram: string | null;
+    userTiktok: string | null;
+    userPinterest: string | null;
+    userLinkedin: string | null;
+    restaurantName: string | null;
+  } | null = null;
+
+  if (rec.userId) {
+    const [u] = await db
+      .select({
+        userName: user.userName,
+        userPhotoPath: user.userPhotoPath,
+        userBio: user.userBio,
+        userFacebook: user.userFacebook,
+        userInstagram: user.userInstagram,
+        userTiktok: user.userTiktok,
+        userPinterest: user.userPinterest,
+        userLinkedin: user.userLinkedin,
+      })
+      .from(user)
+      .where(eq(user.userId, rec.userId))
+      .limit(1);
+
+    // Also fetch restaurant name from kitchen_profile
+    const [kp] = await db
+      .select({ restaurantName: kitchenProfile.restaurantName })
+      .from(kitchenProfile)
+      .where(eq(kitchenProfile.userId, rec.userId))
+      .limit(1);
+
+    if (u) {
+      creator = {
+        ...u,
+        restaurantName: kp?.restaurantName ?? null,
+      };
+    }
+  }
+
+  return { ...rec, creator };
 }
 
 /**
@@ -149,6 +197,7 @@ export async function listUserRecipes(userId: number, page = 1, limit = 20) {
   const recipes = await db
     .select({
       recipeId: recipe.recipeId,
+      slug: recipe.slug,
       title: recipe.title,
       description: recipe.description,
       domain: recipe.domain,
@@ -156,6 +205,8 @@ export async function listUserRecipes(userId: number, page = 1, limit = 20) {
       isPublicInd: recipe.isPublicInd,
       viewCount: recipe.viewCount,
       createdDttm: recipe.createdDttm,
+      averageRating: sql<number>`COALESCE((SELECT ROUND(AVG(rating)::numeric, 1) FROM recipe_rating WHERE recipe_id = ${recipe.recipeId}), 0)`.as("average_rating"),
+      ratingCount: sql<number>`COALESCE((SELECT COUNT(*)::int FROM recipe_rating WHERE recipe_id = ${recipe.recipeId}), 0)`.as("rating_count"),
     })
     .from(recipe)
     .where(eq(recipe.userId, userId))
@@ -209,6 +260,8 @@ export async function listGalleryRecipes(
       viewCount: recipe.viewCount,
       recipeData: recipe.recipeData,
       createdDttm: recipe.createdDttm,
+      averageRating: sql<number>`COALESCE((SELECT ROUND(AVG(rating)::numeric, 1) FROM recipe_rating WHERE recipe_id = ${recipe.recipeId}), 0)`.as("average_rating"),
+      ratingCount: sql<number>`COALESCE((SELECT COUNT(*)::int FROM recipe_rating WHERE recipe_id = ${recipe.recipeId}), 0)`.as("rating_count"),
     })
     .from(recipe)
     .where(whereClause)

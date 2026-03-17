@@ -4,24 +4,29 @@
  * Service for managing user kitchen profiles (personalization layer).
  *
  * Each authenticated user can have a `kitchen_profile` row that stores
- * their skill level, cuisine preferences, dietary restrictions, and
- * available equipment. This profile is injected as context text into
- * every AI chat request and recipe generation call so that responses are
- * personalised to the individual user.
+ * their skill level, cuisine preferences, dietary restrictions, available
+ * equipment, and restaurant/business context. This profile is injected
+ * as context text into every AI chat request and recipe generation call
+ * so that responses are personalised to the individual user.
  *
  * The `buildContextString()` function returns a compact Markdown block
  * that is prepended to the AI system prompt at request time.
- *
- * Data classified as health data (dietary restrictions) follows the same
- * PII handling principles used for user addresses: stored plaintext in DB
- * (not encrypted) for now — no free-text fields, only pre-defined enum
- * values, so exposure risk is low.
  */
 
 import { eq } from "drizzle-orm";
 import pino from "pino";
 import { db } from "../db/index.js";
 import { kitchenProfile } from "../db/schema.js";
+import {
+  ESTABLISHMENT_TYPES,
+  PRICE_POINTS,
+  PLATING_STYLES,
+  SOURCING_VALUES,
+  KITCHEN_CONSTRAINTS_OPTIONS,
+  MENU_NEEDS,
+  getOptionLabel,
+  getOptionLabels,
+} from "@culinaire/shared";
 
 const logger = pino({ name: "userContextService" });
 
@@ -35,6 +40,17 @@ export interface KitchenProfile {
   kitchenEquipment: string[];
   servingsDefault: number;
   onboardingDoneInd: boolean;
+  // Restaurant / business profile
+  restaurantName: string | null;
+  establishmentType: string | null;
+  cuisineIdentity: string | null;
+  targetDiner: string | null;
+  pricePoint: string | null;
+  restaurantVoice: string | null;
+  sourcingValues: string[];
+  platingStyle: string | null;
+  kitchenConstraints: string[];
+  menuNeeds: string[];
 }
 
 /**
@@ -48,13 +64,20 @@ const DEFAULT_PROFILE: Omit<KitchenProfile, "kitchenProfileId" | "userId"> = {
   kitchenEquipment: [],
   servingsDefault: 4,
   onboardingDoneInd: false,
+  restaurantName: null,
+  establishmentType: null,
+  cuisineIdentity: null,
+  targetDiner: null,
+  pricePoint: null,
+  restaurantVoice: null,
+  sourcingValues: [],
+  platingStyle: null,
+  kitchenConstraints: [],
+  menuNeeds: [],
 };
 
 /**
  * Retrieve the kitchen profile for a user, returning defaults when none exists.
- *
- * @param userId - The authenticated user's ID.
- * @returns The kitchen profile, or defaults if the user has not set one yet.
  */
 export async function getProfile(userId: number): Promise<KitchenProfile> {
   const rows = await db
@@ -77,15 +100,21 @@ export async function getProfile(userId: number): Promise<KitchenProfile> {
     kitchenEquipment: (row.kitchenEquipment as string[]) ?? [],
     servingsDefault: row.servingsDefault,
     onboardingDoneInd: row.onboardingDoneInd,
+    restaurantName: row.restaurantName ?? null,
+    establishmentType: row.establishmentType ?? null,
+    cuisineIdentity: row.cuisineIdentity ?? null,
+    targetDiner: row.targetDiner ?? null,
+    pricePoint: row.pricePoint ?? null,
+    restaurantVoice: row.restaurantVoice ?? null,
+    sourcingValues: (row.sourcingValues as string[]) ?? [],
+    platingStyle: row.platingStyle ?? null,
+    kitchenConstraints: (row.kitchenConstraints as string[]) ?? [],
+    menuNeeds: (row.menuNeeds as string[]) ?? [],
   };
 }
 
 /**
  * Upsert a kitchen profile for a user (create on first save, update thereafter).
- *
- * @param userId  - The authenticated user's ID.
- * @param updates - Partial profile fields to save.
- * @returns The saved profile.
  */
 export async function upsertProfile(
   userId: number,
@@ -108,6 +137,16 @@ export async function upsertProfile(
       kitchenEquipment: (updates.kitchenEquipment ?? DEFAULT_PROFILE.kitchenEquipment) as string[],
       servingsDefault: updates.servingsDefault ?? DEFAULT_PROFILE.servingsDefault,
       onboardingDoneInd: updates.onboardingDoneInd ?? DEFAULT_PROFILE.onboardingDoneInd,
+      restaurantName: updates.restaurantName ?? null,
+      establishmentType: updates.establishmentType ?? null,
+      cuisineIdentity: updates.cuisineIdentity ?? null,
+      targetDiner: updates.targetDiner ?? null,
+      pricePoint: updates.pricePoint ?? null,
+      restaurantVoice: updates.restaurantVoice ?? null,
+      sourcingValues: (updates.sourcingValues ?? []) as string[],
+      platingStyle: updates.platingStyle ?? null,
+      kitchenConstraints: (updates.kitchenConstraints ?? []) as string[],
+      menuNeeds: (updates.menuNeeds ?? []) as string[],
       updatedDttm: now,
     });
     logger.debug({ userId }, "upsertProfile: profile created");
@@ -120,6 +159,16 @@ export async function upsertProfile(
     if (updates.kitchenEquipment !== undefined) setValues.kitchenEquipment = updates.kitchenEquipment;
     if (updates.servingsDefault !== undefined) setValues.servingsDefault = updates.servingsDefault;
     if (updates.onboardingDoneInd !== undefined) setValues.onboardingDoneInd = updates.onboardingDoneInd;
+    if (updates.restaurantName !== undefined) setValues.restaurantName = updates.restaurantName;
+    if (updates.establishmentType !== undefined) setValues.establishmentType = updates.establishmentType;
+    if (updates.cuisineIdentity !== undefined) setValues.cuisineIdentity = updates.cuisineIdentity;
+    if (updates.targetDiner !== undefined) setValues.targetDiner = updates.targetDiner;
+    if (updates.pricePoint !== undefined) setValues.pricePoint = updates.pricePoint;
+    if (updates.restaurantVoice !== undefined) setValues.restaurantVoice = updates.restaurantVoice;
+    if (updates.sourcingValues !== undefined) setValues.sourcingValues = updates.sourcingValues;
+    if (updates.platingStyle !== undefined) setValues.platingStyle = updates.platingStyle;
+    if (updates.kitchenConstraints !== undefined) setValues.kitchenConstraints = updates.kitchenConstraints;
+    if (updates.menuNeeds !== undefined) setValues.menuNeeds = updates.menuNeeds;
 
     await db
       .update(kitchenProfile)
@@ -132,21 +181,24 @@ export async function upsertProfile(
 }
 
 /**
+ * Sanitize freeform text before injecting into AI prompts.
+ * Strips markdown headers, code fences, and instruction-like patterns
+ * to mitigate prompt injection from profile fields.
+ */
+function sanitizeForPrompt(text: string | null): string {
+  if (!text) return "";
+  return text
+    .replace(/^#{1,6}\s/gm, "")       // Strip markdown headers
+    .replace(/```[\s\S]*?```/g, "")    // Strip code fences
+    .replace(/SYSTEM:|INSTRUCTION:|ASSISTANT:|USER:/gi, "")
+    .trim();
+}
+
+/**
  * Build a compact context string from a kitchen profile for injection into
  * the AI system prompt. Returns an empty string for guest users (userId 0).
  *
- * The format is intentionally terse to avoid consuming too many tokens:
- * ```
- * ## My Kitchen Context
- * - Skill level: sous_chef
- * - Cuisine preferences: French Classical, Japanese
- * - Dietary restrictions: gluten-free
- * - Equipment: combi oven, stand mixer, immersion circulator
- * - Default servings: 4
- * ```
- *
- * @param userId - The authenticated user's ID (0 = guest, no context injected).
- * @returns A Markdown string to prepend to the system prompt, or "".
+ * The format is intentionally terse to avoid consuming too many tokens.
  */
 export async function buildContextString(userId: number): Promise<string> {
   if (!userId || userId <= 0) return "";
@@ -159,28 +211,79 @@ export async function buildContextString(userId: number): Promise<string> {
     return "";
   }
 
-  // A completely blank profile adds no useful context
-  const hasContent =
+  const lines: string[] = [];
+
+  // ── My Kitchen Context ──────────────────────────────────
+  const hasKitchenContent =
     profile.skillLevel !== "home_cook" ||
     profile.cuisinePreferences.length > 0 ||
     profile.dietaryRestrictions.length > 0 ||
     profile.kitchenEquipment.length > 0;
 
-  if (!hasContent) return "";
+  if (hasKitchenContent) {
+    lines.push("## My Kitchen Context");
+    lines.push(`- Skill level: ${formatSkillLevel(profile.skillLevel)}`);
 
-  const lines: string[] = ["## My Kitchen Context"];
-  lines.push(`- Skill level: ${formatSkillLevel(profile.skillLevel)}`);
+    if (profile.cuisinePreferences.length > 0) {
+      lines.push(`- Cuisine preferences: ${profile.cuisinePreferences.join(", ")}`);
+    }
+    if (profile.dietaryRestrictions.length > 0) {
+      lines.push(`- Always respect dietary restrictions: **${profile.dietaryRestrictions.join(", ")}**`);
+    }
+    if (profile.kitchenEquipment.length > 0) {
+      lines.push(`- Available equipment: ${profile.kitchenEquipment.join(", ")}`);
+    }
+    lines.push(`- Default servings: ${profile.servingsDefault}`);
+  }
 
-  if (profile.cuisinePreferences.length > 0) {
-    lines.push(`- Cuisine preferences: ${profile.cuisinePreferences.join(", ")}`);
+  // ── Restaurant Context ──────────────────────────────────
+  const hasRestaurantContent =
+    profile.restaurantName ||
+    profile.establishmentType ||
+    profile.cuisineIdentity ||
+    profile.targetDiner ||
+    profile.pricePoint ||
+    profile.restaurantVoice ||
+    profile.sourcingValues.length > 0 ||
+    profile.platingStyle ||
+    profile.kitchenConstraints.length > 0 ||
+    profile.menuNeeds.length > 0;
+
+  if (hasRestaurantContent) {
+    lines.push("");
+    lines.push("## Restaurant Context");
+
+    if (profile.restaurantName) {
+      lines.push(`- Restaurant: ${sanitizeForPrompt(profile.restaurantName)}`);
+    }
+    if (profile.establishmentType) {
+      lines.push(`- Establishment: ${getOptionLabel(ESTABLISHMENT_TYPES, profile.establishmentType)}`);
+    }
+    if (profile.cuisineIdentity) {
+      lines.push(`- Cuisine identity: ${sanitizeForPrompt(profile.cuisineIdentity)}`);
+    }
+    if (profile.targetDiner) {
+      lines.push(`- Target diner: ${sanitizeForPrompt(profile.targetDiner)}`);
+    }
+    if (profile.pricePoint) {
+      lines.push(`- Price point: ${getOptionLabel(PRICE_POINTS, profile.pricePoint)}`);
+    }
+    if (profile.restaurantVoice) {
+      lines.push(`- Restaurant voice: ${sanitizeForPrompt(profile.restaurantVoice)}`);
+    }
+    if (profile.sourcingValues.length > 0) {
+      lines.push(`- Sourcing values: ${getOptionLabels(SOURCING_VALUES, profile.sourcingValues).join(", ")}`);
+    }
+    if (profile.platingStyle) {
+      lines.push(`- Plating style: ${getOptionLabel(PLATING_STYLES, profile.platingStyle)}`);
+    }
+    if (profile.kitchenConstraints.length > 0) {
+      lines.push(`- Kitchen constraints: ${getOptionLabels(KITCHEN_CONSTRAINTS_OPTIONS, profile.kitchenConstraints).join(", ")}`);
+    }
+    if (profile.menuNeeds.length > 0) {
+      lines.push(`- Menu priorities: ${getOptionLabels(MENU_NEEDS, profile.menuNeeds).join(", ")}`);
+    }
   }
-  if (profile.dietaryRestrictions.length > 0) {
-    lines.push(`- Always respect dietary restrictions: **${profile.dietaryRestrictions.join(", ")}**`);
-  }
-  if (profile.kitchenEquipment.length > 0) {
-    lines.push(`- Available equipment: ${profile.kitchenEquipment.join(", ")}`);
-  }
-  lines.push(`- Default servings: ${profile.servingsDefault}`);
 
   return lines.join("\n");
 }

@@ -23,6 +23,12 @@ import {
   handleArchiveRecipe,
   handleEmailRecipe,
 } from "../controllers/recipeController.js";
+import {
+  handleGetRatings,
+  handleSubmitRating,
+  handleSubmitReview,
+  handleDeleteReview,
+} from "../controllers/ratingController.js";
 
 export const recipesRouter = Router();
 
@@ -85,3 +91,9 @@ recipesRouter.patch("/:id", authenticateOrGuest, handleUpdateRecipe);
 recipesRouter.post("/:id/archive", authenticate, handleArchiveRecipe);
 recipesRouter.post("/:id/email", authenticateOrGuest, handleEmailRecipe);
 recipesRouter.delete("/:id", authenticate, handleDeleteRecipe);
+
+// Ratings & Reviews
+recipesRouter.get("/:id/ratings", authenticateOrGuest, handleGetRatings);
+recipesRouter.post("/:id/ratings", authenticate, handleSubmitRating);
+recipesRouter.post("/:id/reviews", authenticate, handleSubmitReview);
+recipesRouter.delete("/:id/reviews/:reviewId", authenticate, handleDeleteReview);

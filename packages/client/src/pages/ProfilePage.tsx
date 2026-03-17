@@ -50,6 +50,90 @@ interface Organisation {
   createdBy: number;
 }
 
+/** Inline component for org owners to edit their My Kitchen bench banner */
+function OrgBenchBanner({ orgId }: { orgId: number }) {
+  const [banner, setBanner] = useState("");
+  const [loaded, setLoaded] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  const channelKey = `org_${orgId}`;
+  const API = import.meta.env.VITE_API_URL ?? "";
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const res = await fetch(`${API}/api/bench/channels`, { credentials: "include" });
+        if (!res.ok) return;
+        const channels = await res.json();
+        const ch = channels.find((c: any) => c.channelKey === channelKey);
+        if (ch?.channelBanner) setBanner(ch.channelBanner);
+      } catch {
+        // silent
+      } finally {
+        setLoaded(true);
+      }
+    }
+    load();
+  }, [channelKey]);
+
+  async function handleSave() {
+    setSaving(true);
+    setSaved(false);
+    try {
+      await fetch(`${API}/api/bench/channels/${channelKey}/banner`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ banner }),
+      });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch {
+      // silent
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!loaded) return null;
+
+  return (
+    <div className="border-t border-stone-100 pt-3 mt-3">
+      <label className="block text-sm font-medium text-stone-700 mb-1">
+        My Kitchen Banner
+      </label>
+      <p className="text-xs text-stone-400 mb-2">
+        This message appears at the top of your organisation's chat channel in The Bench.
+      </p>
+      <textarea
+        value={banner}
+        onChange={(e) => setBanner(e.target.value.slice(0, 500))}
+        rows={2}
+        maxLength={500}
+        placeholder="e.g., Team — menu tasting Friday 3pm. Bring your best seasonal dish idea."
+        className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm text-stone-800 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent resize-none"
+      />
+      <div className="flex items-center justify-between mt-1">
+        <span className={`text-xs ${banner.length > 450 ? "text-amber-600" : "text-stone-400"}`}>
+          {banner.length}/500
+        </span>
+        <div className="flex items-center gap-2">
+          {saved && <span className="text-xs text-green-600">Saved</span>}
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saving}
+            className="px-3 py-1 text-xs font-medium text-white bg-amber-600 rounded-lg hover:bg-amber-700 disabled:opacity-50 transition-colors"
+          >
+            {saving ? "Saving..." : "Save Banner"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function ProfilePage() {
   const { user, refreshUser } = useAuth();
   const navigate = useNavigate();
@@ -900,6 +984,11 @@ export function ProfilePage() {
                       >
                         Edit Organisation
                       </button>
+                    )}
+
+                    {/* My Kitchen banner — org owner only */}
+                    {user && org.createdBy === user.userId && (
+                      <OrgBenchBanner orgId={org.organisationId} />
                     )}
                   </>
                 )}

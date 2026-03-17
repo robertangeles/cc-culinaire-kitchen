@@ -16,6 +16,9 @@ export interface GalleryRecipe {
   viewCount: number;
   recipeData: Record<string, unknown>;
   createdDttm: string;
+  averageRating: number;
+  ratingCount: number;
+  isPublicInd?: boolean;
 }
 
 export function useRecipeGallery(filters?: { domain?: string; search?: string }) {

@@ -1,7 +1,7 @@
 /**
  * @module components/onboarding/KitchenWizard
  *
- * My Kitchen onboarding wizard — a 4-step modal shown to newly registered
+ * My Kitchen onboarding wizard — a 6-step modal shown to newly registered
  * users when their kitchen_profile is empty.
  *
  * Steps:
@@ -9,6 +9,8 @@
  *  2. Cuisine style preferences (multi-select)
  *  3. Dietary restrictions to always respect (multi-select)
  *  4. Available kitchen equipment (multi-select)
+ *  5. Establishment type (single-select + other)
+ *  6. Menu needs (multi-select, max 3)
  *
  * Skippable at any step. Also completable from Profile → My Kitchen tab.
  */
@@ -16,6 +18,7 @@
 import { useState } from "react";
 import { ChefHat, X, ArrowRight, ArrowLeft, Check, Loader2 } from "lucide-react";
 import { usePersonalisationOptions } from "../../hooks/usePersonalisationOptions.js";
+import { ESTABLISHMENT_TYPES, MENU_NEEDS } from "@culinaire/shared";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -26,6 +29,8 @@ interface WizardData {
   cuisinePreferences: string[];
   dietaryRestrictions: string[];
   kitchenEquipment: string[];
+  establishmentType: string;
+  menuNeeds: string[];
 }
 
 interface KitchenWizardProps {
@@ -45,6 +50,8 @@ export function KitchenWizard({ onComplete, onSkip }: KitchenWizardProps) {
     cuisinePreferences: [],
     dietaryRestrictions: [],
     kitchenEquipment: [],
+    establishmentType: "",
+    menuNeeds: [],
   });
 
   const { options, loading: optionsLoading } = usePersonalisationOptions();
@@ -54,7 +61,7 @@ export function KitchenWizard({ onComplete, onSkip }: KitchenWizardProps) {
   const dietaryOpts   = options?.dietary     ?? [];
   const equipmentOpts = options?.equipment   ?? [];
 
-  const TOTAL_STEPS = 4;
+  const TOTAL_STEPS = 6;
 
   function toggleArrayItem(arr: string[], item: string): string[] {
     return arr.includes(item) ? arr.filter((x) => x !== item) : [...arr, item];
@@ -242,6 +249,83 @@ export function KitchenWizard({ onComplete, onSkip }: KitchenWizardProps) {
                       </button>
                     ))}
                   </div>
+                </div>
+              )}
+
+              {/* Step 4: Establishment type */}
+              {step === 4 && (
+                <div>
+                  <h3 className="font-semibold text-stone-800 text-base mb-1">
+                    What type of kitchen do you work in?
+                  </h3>
+                  <p className="text-stone-500 text-sm mb-4">
+                    Tell us about your kitchen — this helps us generate recipes tailored to your establishment's style and needs.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {ESTABLISHMENT_TYPES.map((opt) => (
+                      <button
+                        key={opt.value}
+                        onClick={() =>
+                          setData((d) => ({
+                            ...d,
+                            establishmentType: d.establishmentType === opt.value ? "" : opt.value,
+                          }))
+                        }
+                        className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${
+                          data.establishmentType === opt.value
+                            ? "bg-amber-500 border-amber-500 text-white"
+                            : "bg-white border-stone-300 text-stone-700 hover:border-amber-400"
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Step 5: Menu needs */}
+              {step === 5 && (
+                <div>
+                  <h3 className="font-semibold text-stone-800 text-base mb-1">
+                    What does your menu need right now?
+                  </h3>
+                  <p className="text-stone-500 text-sm mb-4">
+                    Pick up to 3 — we'll prioritise recipes that fill these gaps.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {MENU_NEEDS.map((opt) => {
+                      const isSelected = data.menuNeeds.includes(opt.value);
+                      const atMax = !isSelected && data.menuNeeds.length >= 3;
+                      return (
+                        <button
+                          key={opt.value}
+                          onClick={() =>
+                            !atMax &&
+                            setData((d) => ({
+                              ...d,
+                              menuNeeds: toggleArrayItem(d.menuNeeds, opt.value),
+                            }))
+                          }
+                          disabled={atMax}
+                          className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${
+                            isSelected
+                              ? "bg-amber-500 border-amber-500 text-white"
+                              : atMax
+                                ? "bg-stone-100 border-stone-200 text-stone-400 cursor-not-allowed"
+                                : "bg-white border-stone-300 text-stone-700 hover:border-amber-400"
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {data.menuNeeds.length > 0 && (
+                    <p className="text-xs text-stone-400 mt-2">
+                      {data.menuNeeds.length}/3 selected
+                    </p>
+                  )}
                 </div>
               )}
             </>
