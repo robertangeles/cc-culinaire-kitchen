@@ -508,7 +508,7 @@ export const guestSession = pgTable("guest_session", {
  */
 export const recipe = pgTable("recipe", {
   recipeId: uuid("recipe_id").defaultRandom().primaryKey(),
-  slug: varchar("slug", { length: 400 }),
+  slug: varchar("slug", { length: 400 }).unique(),
   userId: integer("user_id"),
   domain: varchar("domain", { length: 20 }).notNull().default("recipe"),
   title: varchar("title", { length: 300 }).notNull(),
