@@ -105,7 +105,7 @@ app.use("/uploads", express.static(join(__dirname, "../../../uploads")));
 // recipe-specific meta tags (og:title, og:description, og:image, JSON-LD)
 // into the HTML before serving — so crawlers see proper SEO data.
 // ---------------------------------------------------------------------------
-const CLIENT_DIST = join(__dirname, "../../../client/dist");
+const CLIENT_DIST = join(__dirname, "../../client/dist");
 import { readFile as readFileAsync } from "fs/promises";
 import { getRecipe as getRecipeForSeo } from "./services/recipePersistenceService.js";
 import { getRatingsSummary } from "./services/ratingService.js";
