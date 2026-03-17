@@ -119,7 +119,7 @@ export function RecipeShareBar({
   return (
     <div className="flex items-center gap-1 flex-wrap">
       {/* Native Share — primary button on mobile (opens share sheet with Instagram, WhatsApp, etc.) */}
-      {typeof navigator !== "undefined" && navigator.share && (
+      {typeof navigator !== "undefined" && typeof navigator.share === "function" && (
         <button onClick={handleNativeShare} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-600 text-white text-xs font-medium hover:bg-amber-700 transition-colors" title="Share to any app">
           <Share2 className="size-4" />
           Share
