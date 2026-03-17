@@ -1,6 +1,6 @@
 [build]
 builder = "NIXPACKS"
-buildCommand = "pnpm install && pnpm run build && npx tsx packages/server/src/db/migrations/fix-duplicate-slugs.ts && cd packages/server && yes | npx drizzle-kit push && cd ../.. && pnpm --filter @culinaire/server db:seed"
+buildCommand = "pnpm install && pnpm run build && npx tsx packages/server/src/db/migrations/fix-duplicate-slugs.ts && cd packages/server && npx drizzle-kit push --force && cd ../.. && pnpm --filter @culinaire/server db:seed"
 
 [deploy]
 startCommand = "node packages/server/dist/index.js"
