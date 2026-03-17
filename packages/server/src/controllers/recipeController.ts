@@ -26,6 +26,10 @@ import {
   archiveRecipe,
 } from "../services/recipePersistenceService.js";
 import { sendRecipeEmail } from "../services/emailService.js";
+import { generateImage } from "../services/imageService.js";
+import { db } from "../db/index.js";
+import { recipe as recipeTable } from "../db/schema.js";
+import { eq, and, isNull, isNotNull } from "drizzle-orm";
 
 const logger = pino({ name: "recipeController" });
 
@@ -386,6 +390,61 @@ export async function handleEmailRecipe(
     }
 
     res.json({ message: "Recipe emailed successfully." });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Bulk regenerate images (admin only)
+// ---------------------------------------------------------------------------
+
+/** POST /api/recipes/regenerate-images — regenerate images for all recipes missing them */
+export async function handleRegenerateImages(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    // Find recipes with image_prompt but no image_url
+    const recipes = await db
+      .select({
+        recipeId: recipeTable.recipeId,
+        title: recipeTable.title,
+        imagePrompt: recipeTable.imagePrompt,
+      })
+      .from(recipeTable)
+      .where(and(isNull(recipeTable.imageUrl), isNotNull(recipeTable.imagePrompt)));
+
+    logger.info({ count: recipes.length }, "Regenerating images for recipes");
+
+    let success = 0;
+    let failed = 0;
+    const results: { title: string; status: string }[] = [];
+
+    for (const r of recipes) {
+      try {
+        const generated = await generateImage(r.imagePrompt!);
+        if (generated?.url) {
+          await db
+            .update(recipeTable)
+            .set({ imageUrl: generated.url })
+            .where(eq(recipeTable.recipeId, r.recipeId));
+          success++;
+          results.push({ title: r.title, status: "ok" });
+          logger.info({ recipeId: r.recipeId, title: r.title }, "Image regenerated");
+        } else {
+          failed++;
+          results.push({ title: r.title, status: "no image returned" });
+        }
+      } catch (err) {
+        failed++;
+        results.push({ title: r.title, status: `error: ${err instanceof Error ? err.message : "unknown"}` });
+        logger.warn({ err, recipeId: r.recipeId }, "Image regeneration failed");
+      }
+    }
+
+    res.json({ total: recipes.length, success, failed, results });
   } catch (err) {
     next(err);
   }

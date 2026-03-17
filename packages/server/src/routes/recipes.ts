@@ -22,6 +22,7 @@ import {
   handleDeleteRecipe,
   handleArchiveRecipe,
   handleEmailRecipe,
+  handleRegenerateImages,
 } from "../controllers/recipeController.js";
 import {
   handleGetRatings,
@@ -76,6 +77,9 @@ function withUsageTracking(domain: "recipe" | "patisserie" | "spirits") {
 recipesRouter.post("/generate", authenticateOrGuest, ...withUsageTracking("recipe"));
 recipesRouter.post("/patisserie", authenticateOrGuest, ...withUsageTracking("patisserie"));
 recipesRouter.post("/spirits", authenticateOrGuest, ...withUsageTracking("spirits"));
+
+// Bulk regenerate images (admin only)
+recipesRouter.post("/regenerate-images", authenticate, handleRegenerateImages);
 
 // Gallery (public — no auth required)
 recipesRouter.get("/gallery", handleGallery);
