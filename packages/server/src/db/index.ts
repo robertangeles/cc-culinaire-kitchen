@@ -28,7 +28,9 @@ export function getDb(): PostgresJsDatabase<typeof schema> {
     throw new Error("DATABASE_URL environment variable is required");
   }
 
-  const client = postgres(connectionString);
+  const client = postgres(connectionString, {
+    ssl: connectionString.includes("render.com") ? { rejectUnauthorized: false } : false,
+  });
   _db = drizzle(client, { schema });
   return _db;
 }

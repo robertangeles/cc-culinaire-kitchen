@@ -109,7 +109,9 @@ export async function handleDatabaseQuery(
     logger.info({ query: trimmed.slice(0, 200), userId: (req as any).user?.sub }, "Admin SQL query executed");
 
     const start = Date.now();
-    const pgSql = postgres(process.env.DATABASE_URL!);
+    const pgSql = postgres(process.env.DATABASE_URL!, {
+      ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false,
+    });
 
     try {
       const result = await pgSql.unsafe(trimmed);
