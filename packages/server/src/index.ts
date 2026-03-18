@@ -50,7 +50,18 @@ app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), handl
 app.set("trust proxy", 1);
 
 // Middleware
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      imgSrc: ["'self'", "data:", "https://res.cloudinary.com", "blob:"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com"],
+      connectSrc: ["'self'", "https://res.cloudinary.com", "wss:", "ws:"],
+    },
+  },
+}));
 app.use(cors({
   origin: process.env.CLIENT_URL ?? "http://localhost:5173",
   credentials: true,
