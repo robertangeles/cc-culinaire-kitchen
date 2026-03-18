@@ -60,9 +60,10 @@ export async function uploadFileBuffer(
   originalName: string,
   folder = "culinaire/uploads",
 ): Promise<string> {
-  const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
-  const apiKey = process.env.CLOUDINARY_API_KEY;
-  const apiSecret = process.env.CLOUDINARY_API_SECRET;
+  const { getCredentialValueWithFallback } = await import("../services/credentialService.js");
+  const cloudName = await getCredentialValueWithFallback("CLOUDINARY_CLOUD_NAME");
+  const apiKey = await getCredentialValueWithFallback("CLOUDINARY_API_KEY");
+  const apiSecret = await getCredentialValueWithFallback("CLOUDINARY_API_SECRET");
 
   if (cloudName && apiKey && apiSecret) {
     // Upload to Cloudinary

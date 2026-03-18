@@ -26,11 +26,12 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const GENERATED_DIR = join(__dirname, "../../../../uploads/generated");
 try { mkdirSync(GENERATED_DIR, { recursive: true }); } catch { /* exists */ }
 
-/** Check if Cloudinary is configured and initialize */
-function getCloudinary(): boolean {
-  const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
-  const apiKey = process.env.CLOUDINARY_API_KEY;
-  const apiSecret = process.env.CLOUDINARY_API_SECRET;
+/** Check if Cloudinary is configured and initialize (reads from DB first, env fallback) */
+async function getCloudinary(): Promise<boolean> {
+  const { getCredentialValueWithFallback } = await import("./credentialService.js");
+  const cloudName = await getCredentialValueWithFallback("CLOUDINARY_CLOUD_NAME");
+  const apiKey = await getCredentialValueWithFallback("CLOUDINARY_API_KEY");
+  const apiSecret = await getCredentialValueWithFallback("CLOUDINARY_API_SECRET");
   if (!cloudName || !apiKey || !apiSecret) return false;
   cloudinary.config({ cloud_name: cloudName, api_key: apiKey, api_secret: apiSecret });
   return true;
@@ -131,7 +132,7 @@ export async function generateImage(prompt: string): Promise<GeneratedImage | nu
 
       // Try Cloudinary first, fall back to local disk
       let url: string;
-      if (getCloudinary()) {
+      if (await getCloudinary()) {
         try {
           url = await uploadToCloudinary(buffer, "culinaire/recipes");
           logger.info({ url, model, mimeType, sizeBytes: buffer.length }, "Image uploaded to Cloudinary");
