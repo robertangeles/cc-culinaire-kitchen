@@ -50,6 +50,9 @@ export const CREDENTIAL_REGISTRY: Record<string, CredentialMeta> = {
   RECAPTCHA_SITE_KEY:      { category: "security", label: "reCAPTCHA Site Key",      sensitive: false },
   RECAPTCHA_SECRET_KEY:    { category: "security", label: "reCAPTCHA Secret Key",    sensitive: true },
   DATABASE_URL:            { category: "database", label: "Database Connection URL", sensitive: true },
+  CLOUDINARY_CLOUD_NAME:   { category: "cloudinary", label: "Cloud Name",           sensitive: false },
+  CLOUDINARY_API_KEY:      { category: "cloudinary", label: "API Key",              sensitive: true },
+  CLOUDINARY_API_SECRET:   { category: "cloudinary", label: "API Secret",           sensitive: true },
 };
 
 /** Category display order and labels for the frontend. */
@@ -60,6 +63,7 @@ export const CREDENTIAL_CATEGORIES = [
   { id: "payments", label: "Payments" },
   { id: "security", label: "Security" },
   { id: "database", label: "Database" },
+  { id: "cloudinary", label: "Cloudinary (Images)" },
 ];
 
 // ---------------------------------------------------------------------------

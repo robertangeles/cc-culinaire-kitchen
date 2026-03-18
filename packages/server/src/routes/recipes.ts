@@ -23,6 +23,7 @@ import {
   handleArchiveRecipe,
   handleEmailRecipe,
   handleRegenerateImages,
+  handleMigrateImages,
 } from "../controllers/recipeController.js";
 import {
   handleGetRatings,
@@ -80,6 +81,7 @@ recipesRouter.post("/spirits", authenticateOrGuest, ...withUsageTracking("spirit
 
 // Bulk regenerate images (admin only)
 recipesRouter.post("/regenerate-images", authenticate, handleRegenerateImages);
+recipesRouter.post("/migrate-images", authenticate, handleMigrateImages);
 
 // Gallery (public — no auth required)
 recipesRouter.get("/gallery", handleGallery);

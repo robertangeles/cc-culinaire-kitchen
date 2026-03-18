@@ -33,6 +33,7 @@ import {
   Terminal,
   AlertTriangle,
   Clock,
+  Cloud,
 } from "lucide-react";
 
 /** Shape of a single credential returned by the API. */
@@ -61,6 +62,7 @@ const CATEGORY_ICONS: Record<string, typeof KeyRound> = {
   payments: CreditCard,
   security: Shield,
   database: Database,
+  cloudinary: Cloud,
 };
 
 /** Badge showing the credential's source (DB, .env, or not set). */

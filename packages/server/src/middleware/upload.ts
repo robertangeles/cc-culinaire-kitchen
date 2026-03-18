@@ -3,19 +3,27 @@
  *
  * Multer configuration for file uploads.
  *
- * Exports two instances:
- * - `upload` — image uploads (favicon, logo): 10 MB, image MIME types only
- * - `knowledgeUpload` — knowledge document uploads: 25 MB, PDF/DOCX/TXT/MD
+ * Exports:
+ * - `upload` — image uploads (favicon, logo, profile photos): 10 MB, image MIME types only
+ * - `knowledgeUpload` — knowledge document uploads: 100 MB, PDF/DOCX/TXT/MD
+ * - `uploadToCloudinary` — helper to upload a buffer to Cloudinary (if configured)
+ *
+ * Image uploads use memoryStorage so the buffer can be sent to Cloudinary.
+ * If Cloudinary is not configured, falls back to saving to local disk.
  */
 
 import multer from "multer";
 import { join, dirname, extname } from "path";
 import { fileURLToPath } from "url";
+import { writeFile } from "fs/promises";
+import { mkdirSync } from "fs";
+import { v2 as cloudinary } from "cloudinary";
+import pino from "pino";
 
+const logger = pino({ name: "upload" });
 const __dirname = dirname(fileURLToPath(import.meta.url));
-
-/** Absolute path to the uploads directory at the monorepo root. */
 const UPLOADS_DIR = join(__dirname, "../../../../uploads");
+try { mkdirSync(UPLOADS_DIR, { recursive: true }); } catch { /* exists */ }
 
 /** Allowed MIME types for image uploads. */
 const ALLOWED_MIMES = [
@@ -27,23 +35,12 @@ const ALLOWED_MIMES = [
   "image/webp",
 ];
 
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, UPLOADS_DIR),
-  filename: (_req, file, cb) => {
-    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-    cb(null, `${uniqueSuffix}${extname(file.originalname)}`);
-  },
-});
-
 /**
  * Pre-configured multer instance for image uploads.
- *
- * - Storage: disk-based in `/uploads`
- * - Size limit: 10 MB
- * - File filter: images only (png, jpg, svg, ico, webp)
+ * Uses memoryStorage so buffer can be sent to Cloudinary.
  */
 export const upload = multer({
-  storage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     if (ALLOWED_MIMES.includes(file.mimetype)) {
@@ -54,11 +51,51 @@ export const upload = multer({
   },
 });
 
+/**
+ * Upload a file buffer to Cloudinary or local disk.
+ * Returns the URL (Cloudinary https:// or local /uploads/).
+ */
+export async function uploadFileBuffer(
+  buffer: Buffer,
+  originalName: string,
+  folder = "culinaire/uploads",
+): Promise<string> {
+  const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+  const apiKey = process.env.CLOUDINARY_API_KEY;
+  const apiSecret = process.env.CLOUDINARY_API_SECRET;
+
+  if (cloudName && apiKey && apiSecret) {
+    // Upload to Cloudinary
+    cloudinary.config({ cloud_name: cloudName, api_key: apiKey, api_secret: apiSecret });
+    return new Promise((resolve, reject) => {
+      const stream = cloudinary.uploader.upload_stream(
+        { folder, resource_type: "auto" },
+        (error, result) => {
+          if (error) reject(error);
+          else {
+            logger.info({ url: result!.secure_url, folder }, "File uploaded to Cloudinary");
+            resolve(result!.secure_url);
+          }
+        },
+      );
+      stream.end(buffer);
+    });
+  }
+
+  // Fallback: save to local disk
+  const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+  const filename = `${uniqueSuffix}${extname(originalName)}`;
+  const filePath = join(UPLOADS_DIR, filename);
+  await writeFile(filePath, buffer);
+  const url = `/uploads/${filename}`;
+  logger.info({ url }, "File saved locally (Cloudinary not configured)");
+  return url;
+}
+
 // ---------------------------------------------------------------------------
 // Knowledge document uploads (PDF, DOCX, TXT, MD)
 // ---------------------------------------------------------------------------
 
-/** Allowed MIME types for knowledge document uploads. */
 const KNOWLEDGE_MIMES = [
   "application/pdf",
   "text/plain",
@@ -66,17 +103,8 @@ const KNOWLEDGE_MIMES = [
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 ];
 
-const knowledgeStorage = multer.memoryStorage();
-
-/**
- * Pre-configured multer instance for knowledge document uploads.
- *
- * - Storage: memory (buffer passed to extraction pipeline)
- * - Size limit: 25 MB
- * - File filter: PDF, TXT, MD, DOCX only
- */
 export const knowledgeUpload = multer({
-  storage: knowledgeStorage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 100 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     if (KNOWLEDGE_MIMES.includes(file.mimetype)) {

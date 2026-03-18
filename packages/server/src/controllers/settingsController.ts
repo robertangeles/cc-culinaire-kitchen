@@ -87,7 +87,8 @@ export async function handleUpload(
       return;
     }
 
-    const publicPath = `/uploads/${req.file.filename}`;
+    const { uploadFileBuffer } = await import("../middleware/upload.js");
+    const publicPath = await uploadFileBuffer(req.file.buffer, req.file.originalname, "culinaire/site");
     log.info({ path: publicPath }, "File uploaded");
     res.json({ path: publicPath });
   } catch (err) {

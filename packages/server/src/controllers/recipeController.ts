@@ -29,7 +29,7 @@ import { sendRecipeEmail } from "../services/emailService.js";
 import { generateImage } from "../services/imageService.js";
 import { db } from "../db/index.js";
 import { recipe as recipeTable } from "../db/schema.js";
-import { eq, and, isNull, isNotNull } from "drizzle-orm";
+import { eq, and, isNull, isNotNull, sql } from "drizzle-orm";
 
 const logger = pino({ name: "recipeController" });
 
@@ -445,6 +445,97 @@ export async function handleRegenerateImages(
     }
 
     res.json({ total: recipes.length, success, failed, results });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Migrate local images to Cloudinary (admin only)
+// ---------------------------------------------------------------------------
+
+import { readFile } from "fs/promises";
+import { join, dirname } from "path";
+import { fileURLToPath } from "url";
+import { uploadFileBuffer } from "../middleware/upload.js";
+
+const __recipeDir = dirname(fileURLToPath(import.meta.url));
+
+/** POST /api/recipes/migrate-images — upload local /uploads/ images to Cloudinary */
+export async function handleMigrateImages(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    // Find all recipes with local image URLs
+    const recipes = await db
+      .select({
+        recipeId: recipeTable.recipeId,
+        title: recipeTable.title,
+        imageUrl: recipeTable.imageUrl,
+      })
+      .from(recipeTable)
+      .where(sql`${recipeTable.imageUrl} LIKE '/uploads/%'`);
+
+    // Also check user photos and site settings
+    const users = await db.execute(sql`SELECT user_id, user_photo_path FROM "user" WHERE user_photo_path LIKE '/uploads/%'`);
+    const settings = await db.execute(sql`SELECT setting_key, setting_value FROM site_setting WHERE setting_value LIKE '/uploads/%'`);
+
+    logger.info({ recipeCount: recipes.length, userCount: (users as any[]).length, settingCount: (settings as any[]).length }, "Migrating local images to Cloudinary");
+
+    let success = 0;
+    let failed = 0;
+    const results: { type: string; name: string; status: string }[] = [];
+
+    const rootDir = join(__recipeDir, "../../../..");
+
+    // Migrate recipe images
+    for (const r of recipes) {
+      try {
+        const localPath = join(rootDir, r.imageUrl!);
+        const buffer = await readFile(localPath);
+        const cloudUrl = await uploadFileBuffer(buffer, r.imageUrl!, "culinaire/recipes");
+        await db.update(recipeTable).set({ imageUrl: cloudUrl }).where(eq(recipeTable.recipeId, r.recipeId));
+        success++;
+        results.push({ type: "recipe", name: r.title, status: "ok" });
+      } catch (err: any) {
+        failed++;
+        results.push({ type: "recipe", name: r.title, status: err.message ?? "failed" });
+      }
+    }
+
+    // Migrate user photos
+    for (const u of users as any[]) {
+      try {
+        const localPath = join(rootDir, u.user_photo_path);
+        const buffer = await readFile(localPath);
+        const cloudUrl = await uploadFileBuffer(buffer, u.user_photo_path, "culinaire/profiles");
+        await db.execute(sql`UPDATE "user" SET user_photo_path = ${cloudUrl} WHERE user_id = ${u.user_id}`);
+        success++;
+        results.push({ type: "user_photo", name: `user_${u.user_id}`, status: "ok" });
+      } catch (err: any) {
+        failed++;
+        results.push({ type: "user_photo", name: `user_${u.user_id}`, status: err.message ?? "failed" });
+      }
+    }
+
+    // Migrate site settings (logo, favicon)
+    for (const s of settings as any[]) {
+      try {
+        const localPath = join(rootDir, s.setting_value);
+        const buffer = await readFile(localPath);
+        const cloudUrl = await uploadFileBuffer(buffer, s.setting_value, "culinaire/site");
+        await db.execute(sql`UPDATE site_setting SET setting_value = ${cloudUrl} WHERE setting_key = ${s.setting_key}`);
+        success++;
+        results.push({ type: "setting", name: s.setting_key, status: "ok" });
+      } catch (err: any) {
+        failed++;
+        results.push({ type: "setting", name: s.setting_key, status: err.message ?? "failed" });
+      }
+    }
+
+    res.json({ total: recipes.length + (users as any[]).length + (settings as any[]).length, success, failed, results });
   } catch (err) {
     next(err);
   }

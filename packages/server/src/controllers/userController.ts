@@ -107,7 +107,8 @@ export async function handleAvatarUpload(req: Request, res: Response, next: Next
     }
 
     const userId = req.user!.sub;
-    const filePath = `/uploads/${req.file.filename}`;
+    const { uploadFileBuffer } = await import("../middleware/upload.js");
+    const filePath = await uploadFileBuffer(req.file.buffer, req.file.originalname, "culinaire/profiles");
 
     await db
       .update(user)

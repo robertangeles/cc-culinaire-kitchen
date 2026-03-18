@@ -12,19 +12,43 @@
  */
 
 import { GoogleGenAI } from "@google/genai";
-import { writeFile, mkdir } from "fs/promises";
+import { writeFile } from "fs/promises";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
+import { mkdirSync } from "fs";
 import pino from "pino";
+import { v2 as cloudinary } from "cloudinary";
 import { getAllSettings } from "./settingsService.js";
 
 const logger = pino({ name: "imageService" });
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const GENERATED_DIR = join(__dirname, "../../../../uploads/generated");
-// Ensure directory exists (Render persistent disk may not have subdirectories)
-import { mkdirSync } from "fs";
 try { mkdirSync(GENERATED_DIR, { recursive: true }); } catch { /* exists */ }
+
+/** Check if Cloudinary is configured and initialize */
+function getCloudinary(): boolean {
+  const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+  const apiKey = process.env.CLOUDINARY_API_KEY;
+  const apiSecret = process.env.CLOUDINARY_API_SECRET;
+  if (!cloudName || !apiKey || !apiSecret) return false;
+  cloudinary.config({ cloud_name: cloudName, api_key: apiKey, api_secret: apiSecret });
+  return true;
+}
+
+/** Upload a buffer to Cloudinary, returns the secure URL */
+async function uploadToCloudinary(buffer: Buffer, folder: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      { folder, resource_type: "image" },
+      (error, result) => {
+        if (error) reject(error);
+        else resolve(result!.secure_url);
+      },
+    );
+    stream.end(buffer);
+  });
+}
 
 /** Default model when no setting is configured. */
 const DEFAULT_MODEL = "gemini-2.0-flash-exp-image-generation";
@@ -79,9 +103,6 @@ export async function generateImage(prompt: string): Promise<GeneratedImage | nu
   const settings = await getAllSettings();
   const model = settings.image_generation_model || DEFAULT_MODEL;
 
-  // Ensure the generated images directory exists
-  await mkdir(GENERATED_DIR, { recursive: true });
-
   let response;
   try {
     response = await ai.models.generateContent({
@@ -106,16 +127,29 @@ export async function generateImage(prompt: string): Promise<GeneratedImage | nu
   for (const part of parts) {
     if (part.inlineData?.data) {
       const mimeType = part.inlineData.mimeType ?? "image/png";
-      const extension = mimeType.includes("jpeg") ? ".jpg" : ".png";
-      const filename = `${Date.now()}-${Math.round(Math.random() * 1e9)}${extension}`;
-      const filePath = join(GENERATED_DIR, filename);
-
-      // Decode base64 and write to disk
       const buffer = Buffer.from(part.inlineData.data, "base64");
-      await writeFile(filePath, buffer);
 
-      const url = `/uploads/generated/${filename}`;
-      logger.info({ url, model, mimeType, sizeBytes: buffer.length }, "Image generated");
+      // Try Cloudinary first, fall back to local disk
+      let url: string;
+      if (getCloudinary()) {
+        try {
+          url = await uploadToCloudinary(buffer, "culinaire/recipes");
+          logger.info({ url, model, mimeType, sizeBytes: buffer.length }, "Image uploaded to Cloudinary");
+        } catch (err) {
+          logger.warn({ err }, "Cloudinary upload failed, falling back to local disk");
+          const extension = mimeType.includes("jpeg") ? ".jpg" : ".png";
+          const filename = `${Date.now()}-${Math.round(Math.random() * 1e9)}${extension}`;
+          await writeFile(join(GENERATED_DIR, filename), buffer);
+          url = `/uploads/generated/${filename}`;
+        }
+      } else {
+        const extension = mimeType.includes("jpeg") ? ".jpg" : ".png";
+        const filename = `${Date.now()}-${Math.round(Math.random() * 1e9)}${extension}`;
+        await writeFile(join(GENERATED_DIR, filename), buffer);
+        url = `/uploads/generated/${filename}`;
+        logger.info({ url, model, mimeType, sizeBytes: buffer.length }, "Image saved locally (Cloudinary not configured)");
+      }
+
       return { url, mimeType };
     }
   }
