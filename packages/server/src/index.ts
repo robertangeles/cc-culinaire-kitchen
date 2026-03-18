@@ -90,8 +90,9 @@ app.use("/api/menu", menuIntelligenceRouter);
 
 // Database stats (admin only)
 import { authenticate, requireRole } from "./middleware/auth.js";
-import { handleDatabaseStats } from "./controllers/databaseController.js";
+import { handleDatabaseStats, handleDatabaseQuery } from "./controllers/databaseController.js";
 app.get("/api/admin/database/stats", authenticate, requireRole("Administrator"), handleDatabaseStats);
+app.post("/api/admin/database/query", authenticate, requireRole("Administrator"), handleDatabaseQuery);
 
 // Sitemap
 app.use("/sitemap.xml", sitemapRouter);

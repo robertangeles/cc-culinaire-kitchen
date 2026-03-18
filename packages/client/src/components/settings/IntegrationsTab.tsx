@@ -27,6 +27,12 @@ import {
   Mail,
   CreditCard,
   Shield,
+  ChevronDown,
+  ChevronUp,
+  Play,
+  Terminal,
+  AlertTriangle,
+  Clock,
 } from "lucide-react";
 
 /** Shape of a single credential returned by the API. */
@@ -482,6 +488,13 @@ function DatabaseStorageViewer() {
   const [stats, setStats] = useState<DbStats | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [storageOpen, setStorageOpen] = useState(false);
+
+  // Query tool state
+  const [query, setQuery] = useState("");
+  const [queryResult, setQueryResult] = useState<{ columns: string[]; rows: unknown[][]; rowCount: number; duration: number } | null>(null);
+  const [queryError, setQueryError] = useState("");
+  const [querying, setQuerying] = useState(false);
 
   async function fetchStats() {
     setLoading(true);
@@ -499,91 +512,193 @@ function DatabaseStorageViewer() {
 
   useEffect(() => { fetchStats(); }, []);
 
+  async function executeQuery() {
+    if (!query.trim()) return;
+    setQuerying(true);
+    setQueryError("");
+    setQueryResult(null);
+    try {
+      const res = await fetch("/api/admin/database/query", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ query: query.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Query failed");
+      setQueryResult(data);
+    } catch (err) {
+      setQueryError(err instanceof Error ? err.message : "Query failed");
+    } finally {
+      setQuerying(false);
+    }
+  }
+
   const maxBytes = stats?.tables?.[0]?.totalBytes ?? 1;
 
   return (
-    <div className="mt-6 border-t border-stone-200 pt-6">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-semibold text-stone-700 flex items-center gap-2">
-          <Server className="size-4 text-stone-400" />
-          Storage Overview
-        </h3>
+    <div className="mt-6 border-t border-stone-200 pt-6 space-y-6">
+      {/* ─── Storage Overview (collapsible) ─────────────────── */}
+      <div>
         <button
-          onClick={fetchStats}
-          disabled={loading}
-          className="text-xs text-amber-600 hover:text-amber-700 font-medium disabled:opacity-50"
+          onClick={() => { setStorageOpen(!storageOpen); if (!stats) fetchStats(); }}
+          className="w-full flex items-center justify-between"
         >
-          {loading ? "Loading..." : "Refresh"}
+          <h3 className="text-sm font-semibold text-stone-700 flex items-center gap-2">
+            <Server className="size-4 text-stone-400" />
+            Storage Overview
+          </h3>
+          {storageOpen ? <ChevronUp className="size-4 text-stone-400" /> : <ChevronDown className="size-4 text-stone-400" />}
         </button>
+
+        {storageOpen && (
+          <div className="mt-3">
+            <div className="flex justify-end mb-2">
+              <button onClick={fetchStats} disabled={loading} className="text-xs text-amber-600 hover:text-amber-700 font-medium disabled:opacity-50">
+                {loading ? "Loading..." : "Refresh"}
+              </button>
+            </div>
+
+            {error && (
+              <div className="flex items-center gap-2 text-sm text-red-600 mb-4">
+                <CircleAlert className="size-4" /> {error}
+              </div>
+            )}
+
+            {stats && (
+              <>
+                <div className="grid grid-cols-3 gap-3 mb-5">
+                  <div className="bg-stone-50 rounded-lg p-3 text-center">
+                    <p className="text-xs text-stone-500">Total Size</p>
+                    <p className="text-lg font-bold text-stone-800">{stats.totalSize}</p>
+                  </div>
+                  <div className="bg-stone-50 rounded-lg p-3 text-center">
+                    <p className="text-xs text-stone-500">Tables</p>
+                    <p className="text-lg font-bold text-stone-800">{stats.tables.length}</p>
+                  </div>
+                  <div className="bg-stone-50 rounded-lg p-3 text-center">
+                    <p className="text-xs text-stone-500">Embeddings</p>
+                    <p className="text-lg font-bold text-stone-800">{stats.embeddingCount.toLocaleString()}</p>
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-stone-200 text-left">
+                        <th className="py-2 pr-3 font-medium text-stone-600">Table</th>
+                        <th className="py-2 pr-3 font-medium text-stone-600 text-right">Rows</th>
+                        <th className="py-2 pr-3 font-medium text-stone-600 text-right">Size</th>
+                        <th className="py-2 pr-3 font-medium text-stone-600 text-right">Data</th>
+                        <th className="py-2 pr-3 font-medium text-stone-600 text-right">Indexes</th>
+                        <th className="py-2 font-medium text-stone-600" style={{ width: "120px" }}></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {stats.tables.map((t) => (
+                        <tr key={t.tableName} className="border-b border-stone-100">
+                          <td className="py-2 pr-3 text-stone-800 font-mono text-xs">{t.tableName}</td>
+                          <td className="py-2 pr-3 text-stone-600 text-right">{t.rowCount.toLocaleString()}</td>
+                          <td className="py-2 pr-3 text-stone-600 text-right">{t.totalSize}</td>
+                          <td className="py-2 pr-3 text-stone-400 text-right">{t.dataSize}</td>
+                          <td className="py-2 pr-3 text-stone-400 text-right">{t.indexSize}</td>
+                          <td className="py-2">
+                            <div className="w-full bg-stone-100 rounded-full h-2">
+                              <div className="bg-amber-500 h-2 rounded-full" style={{ width: `${Math.max(2, (t.totalBytes / maxBytes) * 100)}%` }} />
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+
+            {loading && !stats && (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="size-5 animate-spin text-amber-600" />
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
-      {error && (
-        <div className="flex items-center gap-2 text-sm text-red-600 mb-4">
-          <CircleAlert className="size-4" />
-          {error}
+      {/* ─── SQL Query Tool ──────────────────────────────────── */}
+      <div>
+        <h3 className="text-sm font-semibold text-stone-700 flex items-center gap-2 mb-3">
+          <Terminal className="size-4 text-stone-400" />
+          Query Tool
+        </h3>
+
+        <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3 flex items-center gap-2">
+          <AlertTriangle className="size-4 text-amber-600 flex-shrink-0" />
+          <p className="text-xs text-amber-800">Direct database access. Use with caution.</p>
         </div>
-      )}
 
-      {stats && (
-        <>
-          {/* Summary cards */}
-          <div className="grid grid-cols-3 gap-3 mb-5">
-            <div className="bg-stone-50 rounded-lg p-3 text-center">
-              <p className="text-xs text-stone-500">Total Size</p>
-              <p className="text-lg font-bold text-stone-800">{stats.totalSize}</p>
-            </div>
-            <div className="bg-stone-50 rounded-lg p-3 text-center">
-              <p className="text-xs text-stone-500">Tables</p>
-              <p className="text-lg font-bold text-stone-800">{stats.tables.length}</p>
-            </div>
-            <div className="bg-stone-50 rounded-lg p-3 text-center">
-              <p className="text-xs text-stone-500">Embeddings</p>
-              <p className="text-lg font-bold text-stone-800">{stats.embeddingCount.toLocaleString()}</p>
-            </div>
-          </div>
+        <textarea
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="SELECT * FROM recipe LIMIT 10;"
+          rows={4}
+          className="w-full px-3 py-2 text-sm font-mono border border-stone-200 rounded-lg bg-stone-50 focus:outline-none focus:ring-2 focus:ring-amber-400/50 focus:bg-white resize-none"
+          onKeyDown={(e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) executeQuery(); }}
+        />
 
-          {/* Table breakdown */}
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-stone-200 text-left">
-                  <th className="py-2 pr-3 font-medium text-stone-600">Table</th>
-                  <th className="py-2 pr-3 font-medium text-stone-600 text-right">Rows</th>
-                  <th className="py-2 pr-3 font-medium text-stone-600 text-right">Size</th>
-                  <th className="py-2 pr-3 font-medium text-stone-600 text-right">Data</th>
-                  <th className="py-2 pr-3 font-medium text-stone-600 text-right">Indexes</th>
-                  <th className="py-2 font-medium text-stone-600" style={{ width: "120px" }}></th>
-                </tr>
-              </thead>
-              <tbody>
-                {stats.tables.map((t) => (
-                  <tr key={t.tableName} className="border-b border-stone-100">
-                    <td className="py-2 pr-3 text-stone-800 font-mono text-xs">{t.tableName}</td>
-                    <td className="py-2 pr-3 text-stone-600 text-right">{t.rowCount.toLocaleString()}</td>
-                    <td className="py-2 pr-3 text-stone-600 text-right">{t.totalSize}</td>
-                    <td className="py-2 pr-3 text-stone-400 text-right">{t.dataSize}</td>
-                    <td className="py-2 pr-3 text-stone-400 text-right">{t.indexSize}</td>
-                    <td className="py-2">
-                      <div className="w-full bg-stone-100 rounded-full h-2">
-                        <div
-                          className="bg-amber-500 h-2 rounded-full"
-                          style={{ width: `${Math.max(2, (t.totalBytes / maxBytes) * 100)}%` }}
-                        />
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
-      )}
-
-      {loading && !stats && (
-        <div className="flex items-center justify-center py-8">
-          <Loader2 className="size-5 animate-spin text-amber-600" />
+        <div className="flex items-center justify-between mt-2">
+          <span className="text-xs text-stone-400">Ctrl+Enter to execute</span>
+          <button
+            onClick={executeQuery}
+            disabled={querying || !query.trim()}
+            className="flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium text-white bg-amber-600 rounded-lg hover:bg-amber-700 disabled:opacity-50 transition-colors"
+          >
+            {querying ? <Loader2 className="size-3 animate-spin" /> : <Play className="size-3" />}
+            Execute
+          </button>
         </div>
-      )}
+
+        {queryError && (
+          <div className="mt-3 flex items-center gap-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+            <CircleAlert className="size-4 flex-shrink-0" /> {queryError}
+          </div>
+        )}
+
+        {queryResult && (
+          <div className="mt-3">
+            <div className="flex items-center gap-3 text-xs text-stone-500 mb-2">
+              <span>{queryResult.rowCount} row{queryResult.rowCount !== 1 ? "s" : ""}</span>
+              <span className="flex items-center gap-1"><Clock className="size-3" /> {queryResult.duration}ms</span>
+            </div>
+
+            {queryResult.columns.length > 0 ? (
+              <div className="overflow-x-auto border border-stone-200 rounded-lg max-h-80 overflow-y-auto">
+                <table className="w-full text-xs">
+                  <thead className="sticky top-0 bg-stone-100">
+                    <tr>
+                      {queryResult.columns.map((col) => (
+                        <th key={col} className="px-3 py-2 text-left font-medium text-stone-600 border-b border-stone-200 whitespace-nowrap">{col}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="font-mono">
+                    {queryResult.rows.map((row, i) => (
+                      <tr key={i} className="border-b border-stone-100 hover:bg-stone-50">
+                        {row.map((cell, j) => (
+                          <td key={j} className="px-3 py-1.5 text-stone-700 whitespace-nowrap max-w-xs truncate">
+                            {cell === null ? <span className="text-stone-300 italic">NULL</span> : String(cell)}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="text-sm text-stone-500">Query executed successfully. No rows returned.</p>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

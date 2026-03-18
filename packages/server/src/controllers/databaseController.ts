@@ -7,7 +7,11 @@
 
 import type { Request, Response, NextFunction } from "express";
 import { sql } from "drizzle-orm";
+import pino from "pino";
 import { db } from "../db/index.js";
+import postgres from "postgres";
+
+const logger = pino({ name: "databaseController" });
 
 /**
  * GET /api/admin/database/stats
@@ -72,5 +76,64 @@ export async function handleDatabaseStats(
     });
   } catch (err) {
     next(err);
+  }
+}
+
+/**
+ * POST /api/admin/database/query
+ *
+ * Execute a SQL query against the database. Admin only.
+ * Returns columns, rows, row count, and execution duration.
+ */
+export async function handleDatabaseQuery(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const { query } = req.body;
+    if (!query || typeof query !== "string" || !query.trim()) {
+      res.status(400).json({ error: "SQL query required" });
+      return;
+    }
+
+    const trimmed = query.trim();
+
+    // Block destructive operations
+    const blocked = /^\s*(DROP|TRUNCATE|ALTER\s+TABLE.*DROP)/i;
+    if (blocked.test(trimmed)) {
+      res.status(403).json({ error: "DROP and TRUNCATE operations are not allowed from the query tool" });
+      return;
+    }
+
+    logger.info({ query: trimmed.slice(0, 200), userId: (req as any).user?.sub }, "Admin SQL query executed");
+
+    const start = Date.now();
+    const pgSql = postgres(process.env.DATABASE_URL!);
+
+    try {
+      const result = await pgSql.unsafe(trimmed);
+      const duration = Date.now() - start;
+
+      // Extract columns from first row
+      const columns = result.length > 0 ? Object.keys(result[0]) : [];
+      const rows = result.slice(0, 500).map((row: Record<string, unknown>) =>
+        columns.map((col) => row[col])
+      );
+
+      res.json({
+        columns,
+        rows,
+        rowCount: result.count ?? rows.length,
+        duration,
+      });
+    } finally {
+      await pgSql.end();
+    }
+  } catch (err: any) {
+    // Return SQL errors as user-facing messages
+    res.status(400).json({
+      error: err.message ?? "Query execution failed",
+    });
   }
 }
