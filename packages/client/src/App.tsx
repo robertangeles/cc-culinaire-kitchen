@@ -15,6 +15,7 @@ import { ProtectedRoute } from "./components/auth/ProtectedRoute.js";
 import { BackgroundStreamBanner } from "./components/chat/BackgroundStreamBanner.js";
 import { Sidebar } from "./components/layout/Sidebar.js";
 import { ConversationSidebar } from "./components/layout/ConversationSidebar.js";
+import { GuideSidebar } from "./components/layout/GuideSidebar.js";
 import { Footer } from "./components/layout/Footer.js";
 import { ChatPage } from "./pages/ChatPage.js";
 import { SettingsPage } from "./pages/SettingsPage.js";
@@ -81,6 +82,17 @@ function ChatOnlySidebar() {
   return <ConversationSidebar />;
 }
 
+/** Shows GuideSidebar only on Intelligence routes. */
+function IntelligenceGuideSidebar() {
+  const { pathname } = useLocation();
+  const isIntelligence =
+    pathname.startsWith("/waste-intelligence") ||
+    pathname.startsWith("/kitchen-copilot") ||
+    pathname.startsWith("/menu-intelligence");
+  if (!isIntelligence) return null;
+  return <GuideSidebar />;
+}
+
 export function App() {
   const [chatKey, setChatKey] = useState(0);
   const incrementChatKey = () => setChatKey((k) => k + 1);
@@ -135,6 +147,8 @@ export function App() {
                       </main>
                       {/* Right sidebar — conversation history (chat pages only) */}
                       <ChatOnlySidebar />
+                      {/* Right sidebar — guide content (Intelligence pages only) */}
+                      <IntelligenceGuideSidebar />
                     </div>
                     </ConversationProvider>
                     </ChatStreamProvider>

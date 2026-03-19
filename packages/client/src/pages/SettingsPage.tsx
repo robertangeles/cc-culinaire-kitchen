@@ -16,6 +16,7 @@ import { RolesTab } from "../components/settings/RolesTab.js";
 import { IntegrationsTab } from "../components/settings/IntegrationsTab.js";
 import KnowledgeBaseTab from "../components/settings/KnowledgeBaseTab.js";
 import { TheBenchTab } from "../components/settings/TheBenchTab.js";
+import { UserGuideTab } from "../components/settings/UserGuideTab.js";
 
 /**
  * Page component mounted at `/settings`. Defaults to the "prompts" tab
@@ -34,6 +35,7 @@ export function SettingsPage() {
       {activeTab === "integrations" && <IntegrationsTab />}
       {activeTab === "knowledge" && <KnowledgeBaseTab />}
       {activeTab === "bench" && <TheBenchTab />}
+      {activeTab === "userGuide" && <UserGuideTab />}
     </SettingsLayout>
   );
 }

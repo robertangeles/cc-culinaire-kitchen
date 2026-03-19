@@ -28,7 +28,7 @@ const { join, dirname } = await import("path");
 const { fileURLToPath } = await import("url");
 const matter = (await import("gray-matter")).default;
 const { db } = await import("./index.js");
-const { prompt, role, permission, rolePermission, siteSetting } = await import("./schema.js");
+const { prompt, role, permission, rolePermission, siteSetting, guide } = await import("./schema.js");
 const { eq, and } = await import("drizzle-orm");
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -258,6 +258,37 @@ async function seed() {
       console.log(`Inserted setting: ${s.key} = ${s.value}`);
     } else {
       console.log(`Setting ${s.key} already exists, skipping`);
+    }
+  }
+
+  // -----------------------------------------------------------------
+  // Seed default user guides
+  // -----------------------------------------------------------------
+  const defaultGuides = [
+    {
+      guideKey: "waste_intelligence",
+      title: "Getting Started with Waste Intelligence",
+      content: `# Getting Started with Waste Intelligence\n\n## Step 1: Log Your First Waste\nGo to the **Log Waste** tab and record what your kitchen threw away today.\n- Enter the ingredient name\n- Add the quantity and unit\n- Select a reason (overproduction, spoilage, trim, etc.)\n- Optionally add the estimated cost\n\n## Step 2: Review Your Dashboard\nAfter a few days of logging, the **Dashboard** tab shows:\n- Your total waste in weight and cost\n- Top 5 most wasted ingredients\n- Trends over time\n- Monthly cost projection\n\n## Step 3: Get AI Reuse Ideas\nThe **Reuse Ideas** tab suggests creative ways to use ingredients you're wasting.\nClick "Generate Suggestions" to get AI-powered reuse ideas.\n\n## Tips\n- Log waste at the end of every shift\n- Be honest — visibility is the first step to reduction\n- Industry average waste is 4-10% of food purchases\n- Use the "Quick Log" buttons for your most common items`,
+    },
+    {
+      guideKey: "kitchen_copilot",
+      title: "Getting Started with Kitchen Copilot",
+      content: `# Getting Started with Kitchen Copilot\n\n## Step 1: Enter Expected Covers\nTell the system how many guests you expect tonight.\nThis drives the quantity calculations for your prep list.\n\n## Step 2: Review Your Prep Plan\nThe system generates a prioritised task list based on your recipes:\n- **Start First** — high-impact ingredients used across many dishes\n- **Next Up** — medium priority prep tasks\n- **Can Wait** — lower priority items that can be prepped later\n\n## Step 3: Track Progress\nCheck off tasks as your team completes them.\nAssign tasks to team members by clicking "Assign".\n\n## Step 4: Check Cross-Usage\nThe **Cross-Usage** tab shows which ingredients appear in the most dishes.\nPrep these first — if they run out, multiple dishes are affected.\n\n## Step 5: End Your Session\nAt the end of service, enter actual covers served.\nThis data helps improve future prep planning.\n\n## Tips\n- Start your prep session first thing every morning\n- Use the High-Impact tab to identify your most complex dishes\n- Check the History tab to spot patterns over time`,
+    },
+    {
+      guideKey: "menu_intelligence",
+      title: "Getting Started with Menu Intelligence",
+      content: `# Getting Started with Menu Intelligence\n\n## Step 1: Add Your Menu Items\nGo to **Menu Items** and click "Add Menu Item".\nEnter each dish with its selling price and all ingredients with costs.\n\n## Step 2: Enter Ingredient Costs\nFor each menu item, add ingredients with:\n- Quantity and unit\n- Unit cost (what you pay per kg/L/each)\n- Yield percentage (to account for trim/waste)\n\nThe system automatically calculates food cost and contribution margin.\n\n## Step 3: Add Sales Data\nEnter units sold per item for the analysis period.\nYou can enter this manually or upload from your POS system.\n\n## Step 4: View the Engineering Matrix\nThe **Matrix** tab plots every dish by profitability vs popularity:\n- **Stars** — High profit, high sales. Protect these.\n- **Plowhorses** — Low profit, high sales. Optimise costs.\n- **Puzzles** — High profit, low sales. Promote them.\n- **Dogs** — Low profit, low sales. Replace them.\n\n## Step 5: Take Action\n- For **Dogs**: Click "Generate Replacement" to create a better recipe\n- For **Plowhorses**: Review ingredients to reduce food cost\n- For **Puzzles**: Improve descriptions and staff recommendations\n- Set food cost targets per category in **Category Settings**\n\n## Tips\n- Update sales data weekly for accurate classifications\n- A 1% food cost reduction across the menu can save thousands per year\n- Watch for items flagged with waste impact — they cost you twice`,
+    },
+  ];
+
+  for (const g of defaultGuides) {
+    const existing = await db.select().from(guide).where(eq(guide.guideKey, g.guideKey)).limit(1);
+    if (existing.length === 0) {
+      await db.insert(guide).values(g);
+      console.log(`  Seeded guide: ${g.guideKey}`);
+    } else {
+      console.log(`  Guide ${g.guideKey} already exists, skipping`);
     }
   }
 

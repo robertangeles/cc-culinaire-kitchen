@@ -101,6 +101,7 @@ app.use("/api/bench", benchRouter);
 app.use("/api/menu", menuIntelligenceRouter);
 app.use("/api/waste", wasteRouter);
 app.use("/api/prep", prepRouter);
+app.use("/api/guides", guidesRouter);
 
 // Database stats (admin only)
 import { authenticate, requireRole } from "./middleware/auth.js";
@@ -133,6 +134,7 @@ import { benchRouter } from "./routes/bench.js";
 import { menuIntelligenceRouter } from "./routes/menuIntelligence.js";
 import { wasteRouter } from "./routes/waste.js";
 import { prepRouter } from "./routes/prep.js";
+import { guidesRouter } from "./routes/guides.js";
 
 app.get("/kitchen-shelf/:slug", async (req, res, next) => {
   // Only handle HTML requests (not API calls or assets)

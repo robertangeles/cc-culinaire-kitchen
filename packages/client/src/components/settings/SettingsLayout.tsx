@@ -43,6 +43,7 @@ const tabs: TabItem[] = [
   { id: "models", label: "Models", icon: Bot, disabled: true },
   { id: "knowledge", label: "Knowledge Base", icon: BookOpen },
   { id: "bench", label: "The Bench", icon: MessagesSquare },
+  { id: "userGuide", label: "User Guide", icon: BookOpen },
 ];
 
 /** Props for {@link SettingsLayout}. */

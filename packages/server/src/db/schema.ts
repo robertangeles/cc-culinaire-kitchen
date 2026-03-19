@@ -828,6 +828,28 @@ export const prepTask = pgTable("prep_task", {
  * multiple dishes within a prep session. Helps identify batching
  * opportunities for common ingredients.
  */
+// ---------------------------------------------------------------------------
+// User Guide
+// ---------------------------------------------------------------------------
+
+/**
+ * The `guide` table stores admin-managed user guide content for each
+ * module (e.g. Waste Intelligence, Kitchen Copilot, Menu Intelligence).
+ *
+ * Each guide is identified by a unique `guide_key` slug and contains
+ * markdown content that is rendered on the frontend. Admins can edit
+ * guide content via the admin panel; all authenticated users can read.
+ */
+export const guide = pgTable("guide", {
+  guideId: serial("guide_id").primaryKey(),
+  guideKey: varchar("guide_key", { length: 50 }).unique().notNull(),
+  title: varchar("title", { length: 200 }).notNull(),
+  content: text("content").notNull().default(""),
+  updatedBy: integer("updated_by").references(() => user.userId),
+  createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
+  updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
+});
+
 export const ingredientCrossUsage = pgTable("ingredient_cross_usage", {
   crossUsageId: uuid("cross_usage_id").defaultRandom().primaryKey(),
   userId: integer("user_id").notNull().references(() => user.userId),
