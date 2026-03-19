@@ -15,7 +15,8 @@ import {
   recipe,
   menuItem,
 } from "../db/schema.js";
-import { eq, desc, sql, and } from "drizzle-orm";
+import { eq, desc, sql, and, inArray } from "drizzle-orm";
+import { getUserOrgContext } from "./orgContextService.js";
 
 const logger = pino({ name: "prepService" });
 
@@ -71,6 +72,7 @@ export interface HighImpactDish {
   ingredientCount: number;
   totalPrepMinutes: number;
   complexityScore: number;
+  classification: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -148,10 +150,14 @@ export async function createPrepSession(
   prepDate: string,
   expectedCovers?: number,
 ): Promise<{ session: PrepSessionRow; tasks: PrepTaskRow[] }> {
+  // Auto-set organisationId from user's org membership
+  const orgCtx = await getUserOrgContext(userId);
+
   const [row] = await db
     .insert(prepSession)
     .values({
       userId,
+      organisationId: orgCtx.primaryOrgId,
       prepDate,
       expectedCovers: expectedCovers ?? null,
     })
@@ -371,11 +377,23 @@ export async function calculatePrepTasks(
 export async function getPrepSession(
   sessionId: string,
   userId: number,
+  teamView?: boolean,
 ): Promise<{ session: PrepSessionRow; tasks: PrepTaskRow[] } | null> {
+  // Determine ownership filter based on teamView
+  let ownerFilter;
+  if (teamView) {
+    const orgCtx = await getUserOrgContext(userId);
+    ownerFilter = orgCtx.orgIds.length > 0
+      ? and(eq(prepSession.prepSessionId, sessionId), inArray(prepSession.userId, orgCtx.orgMemberUserIds))
+      : and(eq(prepSession.prepSessionId, sessionId), eq(prepSession.userId, userId));
+  } else {
+    ownerFilter = and(eq(prepSession.prepSessionId, sessionId), eq(prepSession.userId, userId));
+  }
+
   const [session] = await db
     .select()
     .from(prepSession)
-    .where(and(eq(prepSession.prepSessionId, sessionId), eq(prepSession.userId, userId)));
+    .where(ownerFilter);
 
   if (!session) return null;
 
@@ -394,25 +412,41 @@ export async function getPrepSession(
 
 export async function getTodaySession(
   userId: number,
+  teamView?: boolean,
 ): Promise<{ session: PrepSessionRow; tasks: PrepTaskRow[] }> {
   const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
 
-  const [existing] = await db
+  // Determine user filter based on teamView
+  let userFilter;
+  if (teamView) {
+    const orgCtx = await getUserOrgContext(userId);
+    userFilter = orgCtx.orgIds.length > 0
+      ? inArray(prepSession.userId, orgCtx.orgMemberUserIds)
+      : eq(prepSession.userId, userId);
+  } else {
+    userFilter = eq(prepSession.userId, userId);
+  }
+
+  const existing = await db
     .select()
     .from(prepSession)
-    .where(and(eq(prepSession.userId, userId), eq(prepSession.prepDate, today)));
+    .where(and(userFilter, eq(prepSession.prepDate, today)))
+    .orderBy(desc(prepSession.createdDttm));
 
-  if (existing) {
+  if (existing.length > 0) {
+    // In team view, aggregate tasks from all sessions for today
+    const sessionIds = existing.map((s) => s.prepSessionId);
     const tasks = await db
       .select()
       .from(prepTask)
-      .where(eq(prepTask.prepSessionId, existing.prepSessionId))
+      .where(inArray(prepTask.prepSessionId, sessionIds))
       .orderBy(desc(prepTask.priorityScore));
 
-    return { session: toSessionRow(existing), tasks: tasks.map(toTaskRow) };
+    // Return the first session as the primary, with all tasks
+    return { session: toSessionRow(existing[0]), tasks: tasks.map(toTaskRow) };
   }
 
-  // No session for today — create one
+  // No session for today — create one (only for the current user, not team)
   return createPrepSession(userId, today);
 }
 
@@ -476,11 +510,43 @@ export async function updateTaskStatus(
 
 export async function getIngredientCrossUsage(
   sessionId: string,
+  userId?: number,
+  teamView?: boolean,
 ): Promise<CrossUsageRow[]> {
+  // If teamView, get cross-usage from all org members' sessions for the same date
+  let sessionFilter;
+  if (teamView && userId) {
+    const orgCtx = await getUserOrgContext(userId);
+    if (orgCtx.orgIds.length > 0) {
+      // Get the date of the requested session to find all org sessions on that date
+      const [reqSession] = await db
+        .select({ prepDate: prepSession.prepDate })
+        .from(prepSession)
+        .where(eq(prepSession.prepSessionId, sessionId));
+      if (reqSession) {
+        const orgSessions = await db
+          .select({ prepSessionId: prepSession.prepSessionId })
+          .from(prepSession)
+          .where(and(
+            inArray(prepSession.userId, orgCtx.orgMemberUserIds),
+            eq(prepSession.prepDate, reqSession.prepDate),
+          ));
+        const orgSessionIds = orgSessions.map((s) => s.prepSessionId);
+        sessionFilter = inArray(ingredientCrossUsage.prepSessionId, orgSessionIds.length > 0 ? orgSessionIds : [sessionId]);
+      } else {
+        sessionFilter = eq(ingredientCrossUsage.prepSessionId, sessionId);
+      }
+    } else {
+      sessionFilter = eq(ingredientCrossUsage.prepSessionId, sessionId);
+    }
+  } else {
+    sessionFilter = eq(ingredientCrossUsage.prepSessionId, sessionId);
+  }
+
   const rows = await db
     .select()
     .from(ingredientCrossUsage)
-    .where(eq(ingredientCrossUsage.prepSessionId, sessionId))
+    .where(sessionFilter)
     .orderBy(desc(ingredientCrossUsage.dishCount));
 
   return rows.map((r) => ({
@@ -499,11 +565,35 @@ export async function getIngredientCrossUsage(
 
 export async function getHighImpactDishes(
   userId: number,
+  teamView?: boolean,
 ): Promise<HighImpactDish[]> {
+  // Determine user filter based on teamView
+  let userFilter;
+  if (teamView) {
+    const orgCtx = await getUserOrgContext(userId);
+    userFilter = orgCtx.orgIds.length > 0
+      ? and(inArray(recipe.userId, orgCtx.orgMemberUserIds), eq(recipe.archivedInd, false))
+      : and(eq(recipe.userId, userId), eq(recipe.archivedInd, false));
+  } else {
+    userFilter = and(eq(recipe.userId, userId), eq(recipe.archivedInd, false));
+  }
+
   const recipes = await db
     .select()
     .from(recipe)
-    .where(and(eq(recipe.userId, userId), eq(recipe.archivedInd, false)));
+    .where(userFilter);
+
+  // Load menu items for classification lookup
+  const userIdForMenu = userId; // always use requesting user's menu items
+  const menuItems = await db
+    .select()
+    .from(menuItem)
+    .where(eq(menuItem.userId, userIdForMenu));
+
+  const menuItemByName = new Map<string, typeof menuItem.$inferSelect>();
+  for (const mi of menuItems) {
+    menuItemByName.set(mi.name.toLowerCase(), mi);
+  }
 
   const dishes: HighImpactDish[] = [];
 
@@ -518,12 +608,19 @@ export async function getHighImpactDishes(
     // Complexity: ingredient count × total time (higher = more complex)
     const complexityScore = ingredientCount * (totalPrepMinutes / 10 + 1);
 
+    // Look up classification from matching menu item
+    const matchedMenuItem = menuItemByName.get(r.title.toLowerCase());
+    const classification = matchedMenuItem
+      ? matchedMenuItem.classification.charAt(0).toUpperCase() + matchedMenuItem.classification.slice(1)
+      : null;
+
     dishes.push({
       recipeId: r.recipeId,
       title: r.title,
       ingredientCount,
       totalPrepMinutes,
       complexityScore: Math.round(complexityScore * 100) / 100,
+      classification,
     });
   }
 
@@ -538,11 +635,23 @@ export async function getHighImpactDishes(
 export async function getSessionHistory(
   userId: number,
   limit: number = 20,
+  teamView?: boolean,
 ): Promise<PrepSessionRow[]> {
+  // Determine user filter based on teamView
+  let userFilter;
+  if (teamView) {
+    const orgCtx = await getUserOrgContext(userId);
+    userFilter = orgCtx.orgIds.length > 0
+      ? inArray(prepSession.userId, orgCtx.orgMemberUserIds)
+      : eq(prepSession.userId, userId);
+  } else {
+    userFilter = eq(prepSession.userId, userId);
+  }
+
   const rows = await db
     .select()
     .from(prepSession)
-    .where(eq(prepSession.userId, userId))
+    .where(userFilter)
     .orderBy(desc(prepSession.prepDate))
     .limit(limit);
 

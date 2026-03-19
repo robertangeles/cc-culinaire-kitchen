@@ -35,6 +35,7 @@ import { ensureEncryptionKey, ensurePiiKeys } from "./utils/crypto.js";
 import { cleanupStaleSessions } from "./services/guestService.js";
 import { purgeArchivedRecipes } from "./services/recipePersistenceService.js";
 import { getAllSettings } from "./services/settingsService.js";
+import { sendWeeklyWasteDigests } from "./services/wasteDigestService.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -283,11 +284,28 @@ hydrateEnvFromCredentials().then(() => {
       runRecipePurge();
       const purgeInterval = setInterval(runRecipePurge, 60 * 60 * 1000);
 
+      // Weekly waste digest — Sunday 8 PM (check every minute)
+      let lastWasteDigestRun = "";
+      const wasteDigestInterval = setInterval(async () => {
+        const now = new Date();
+        // Only fire on Sunday (0) at 20:00, and only once per minute window
+        const key = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}-${now.getHours()}`;
+        if (now.getDay() === 0 && now.getHours() === 20 && lastWasteDigestRun !== key) {
+          lastWasteDigestRun = key;
+          try {
+            await sendWeeklyWasteDigests();
+          } catch (err) {
+            log.error({ err }, "Weekly waste digest failed");
+          }
+        }
+      }, 60_000);
+
       // Graceful shutdown: close server and release port on termination signals
       function shutdown(signal: string) {
         log.info(`${signal} received — shutting down`);
         clearInterval(cleanupInterval);
         clearInterval(purgeInterval);
+        clearInterval(wasteDigestInterval);
         httpServer.close(() => {
           log.info("Server closed");
           process.exit(0);

@@ -30,7 +30,11 @@ interface HistorySession {
   tasksTotal: number;
 }
 
-export function PrepHistory() {
+interface Props {
+  teamView?: boolean;
+}
+
+export function PrepHistory({ teamView }: Props) {
   const [sessions, setSessions] = useState<HistorySession[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -40,7 +44,9 @@ export function PrepHistory() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/prep/history?limit=20", { credentials: "include" });
+      const params = new URLSearchParams({ limit: "20" });
+      if (teamView) params.set("teamView", "true");
+      const res = await fetch(`/api/prep/history?${params.toString()}`, { credentials: "include" });
       if (!res.ok) {
         const json = await res.json().catch(() => ({}));
         throw new Error((json as { error?: string }).error ?? `Failed (${res.status})`);
@@ -52,7 +58,7 @@ export function PrepHistory() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [teamView]);
 
   useEffect(() => {
     fetchHistory();

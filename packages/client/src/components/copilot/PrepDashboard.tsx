@@ -6,7 +6,7 @@
  * skipping tasks, and ending the session.
  */
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import {
   Loader2,
   Check,
@@ -17,6 +17,7 @@ import {
   MapPin,
   User,
   ClipboardList,
+  AlertTriangle,
 } from "lucide-react";
 
 interface PrepTask {
@@ -60,6 +61,7 @@ interface PrepSessionWithTasks {
 interface Props {
   sessionData: PrepSessionWithTasks | null;
   onSessionUpdate: (data: PrepSessionWithTasks | null) => void;
+  teamView?: boolean;
 }
 
 const TIER_CONFIG: {
@@ -73,7 +75,7 @@ const TIER_CONFIG: {
   { key: "can_wait", label: "Can Wait", borderClass: "border-l-[#2A2A2A]", icon: "" },
 ];
 
-export function PrepDashboard({ sessionData, onSessionUpdate }: Props) {
+export function PrepDashboard({ sessionData, onSessionUpdate, teamView }: Props) {
   const session = sessionData?.session ?? null;
   const tasks = sessionData?.tasks ?? [];
   const [expandedTiers, setExpandedTiers] = useState<Set<string>>(
@@ -86,6 +88,46 @@ export function PrepDashboard({ sessionData, onSessionUpdate }: Props) {
   const [showEndForm, setShowEndForm] = useState(false);
   const [actualCovers, setActualCovers] = useState("");
   const [error, setError] = useState<string | null>(null);
+
+  // Waste alert: check if today's prep ingredients overlap with top waste items
+  const [wasteAlertItems, setWasteAlertItems] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!sessionData || tasks.length === 0) return;
+
+    (async () => {
+      try {
+        // Fetch waste summary for last 30 days
+        const now = new Date();
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(now.getDate() - 30);
+        const params = new URLSearchParams({
+          startDate: thirtyDaysAgo.toISOString(),
+          endDate: now.toISOString(),
+        });
+        const res = await fetch(`/api/waste/summary?${params}`, { credentials: "include" });
+        if (!res.ok) return;
+        const summary = await res.json();
+        const topWasteNames: string[] = (summary.topByCost ?? [])
+          .slice(0, 5)
+          .map((w: { name: string }) => w.name.toLowerCase());
+
+        if (topWasteNames.length === 0) return;
+
+        // Find prep ingredients that are in the top waste list
+        const prepIngredients = tasks.map((t) => t.ingredientName.toLowerCase());
+        const overlaps = topWasteNames.filter((w) =>
+          prepIngredients.some((p) => p.includes(w) || w.includes(p)),
+        );
+
+        if (overlaps.length > 0) {
+          setWasteAlertItems(overlaps);
+        }
+      } catch {
+        // silent — supplementary data
+      }
+    })();
+  }, [sessionData, tasks]);
 
   const totalTasks = tasks.length;
   const doneTasks = tasks.filter((t) => t.status === "completed").length;
@@ -223,6 +265,22 @@ export function PrepDashboard({ sessionData, onSessionUpdate }: Props) {
       {error && (
         <div className="bg-red-900/50 border border-red-700 rounded-lg p-3 text-red-300 text-sm mb-4">
           {error}
+        </div>
+      )}
+
+      {/* Waste alert banner (Connection 4: Waste -> Copilot) */}
+      {wasteAlertItems.length > 0 && (
+        <div className="bg-[#D4A574]/10 border border-[#D4A574]/20 rounded-lg p-4 mb-4 flex items-start gap-3">
+          <AlertTriangle className="size-5 text-[#D4A574] shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-medium text-[#D4A574]">Watch your portions</p>
+            <p className="text-xs text-[#D4A574]/80 mt-0.5">
+              <span className="font-semibold">{wasteAlertItems.join(" and ")}</span>
+              {" "}
+              {wasteAlertItems.length === 1 ? "is" : "are"} among your top waste items this month.
+              Pay extra attention to portioning during prep.
+            </p>
+          </div>
         </div>
       )}
 

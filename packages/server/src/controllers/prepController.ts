@@ -38,6 +38,11 @@ const endSessionSchema = z.object({
 
 const historyQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).optional(),
+  teamView: z.enum(["true", "false"]).optional(),
+});
+
+const teamViewQuerySchema = z.object({
+  teamView: z.enum(["true", "false"]).optional(),
 });
 
 // ---------------------------------------------------------------------------
@@ -70,7 +75,10 @@ export async function handleGetTodaySession(req: Request, res: Response) {
     return;
   }
 
-  const result = await getTodaySession(userId);
+  const parsed = teamViewQuerySchema.safeParse(req.query);
+  const teamView = parsed.success && parsed.data.teamView === "true";
+
+  const result = await getTodaySession(userId, teamView);
   res.json(result);
 }
 
@@ -88,7 +96,10 @@ export async function handleGetSession(req: Request, res: Response) {
     return;
   }
 
-  const result = await getPrepSession(sessionId, userId);
+  const parsed = teamViewQuerySchema.safeParse(req.query);
+  const teamView = parsed.success && parsed.data.teamView === "true";
+
+  const result = await getPrepSession(sessionId, userId, teamView);
   if (!result) {
     res.status(404).json({ error: "Prep session not found or not yours" });
     return;
@@ -138,7 +149,10 @@ export async function handleGetCrossUsage(req: Request, res: Response) {
     return;
   }
 
-  const data = await getIngredientCrossUsage(sessionId);
+  const parsed = teamViewQuerySchema.safeParse(req.query);
+  const teamView = parsed.success && parsed.data.teamView === "true";
+
+  const data = await getIngredientCrossUsage(sessionId, userId, teamView);
   res.json(data);
 }
 
@@ -150,7 +164,10 @@ export async function handleGetHighImpact(req: Request, res: Response) {
     return;
   }
 
-  const dishes = await getHighImpactDishes(userId);
+  const parsed = teamViewQuerySchema.safeParse(req.query);
+  const teamView = parsed.success && parsed.data.teamView === "true";
+
+  const dishes = await getHighImpactDishes(userId, teamView);
   res.json(dishes);
 }
 
@@ -168,7 +185,7 @@ export async function handleGetHistory(req: Request, res: Response) {
     return;
   }
 
-  const sessions = await getSessionHistory(userId, parsed.data.limit);
+  const sessions = await getSessionHistory(userId, parsed.data.limit, parsed.data.teamView === "true");
   res.json(sessions);
 }
 

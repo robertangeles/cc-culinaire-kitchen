@@ -23,6 +23,7 @@ import {
   handleImportSales,
   handleGetRecommendations,
   handleGenerateReplacement,
+  handleGetWasteImpact,
 } from "../controllers/menuIntelligenceController.js";
 
 export const menuIntelligenceRouter = Router();
@@ -52,6 +53,9 @@ menuIntelligenceRouter.put("/categories/:name", handleUpdateCategory);
 // AI Recommendations
 menuIntelligenceRouter.get("/items/:id/recommendations", handleGetRecommendations);
 menuIntelligenceRouter.post("/items/:id/generate-replacement", handleGenerateReplacement);
+
+// Cross-module: Waste impact per menu item
+menuIntelligenceRouter.get("/waste-impact", handleGetWasteImpact);
 
 // CSV import
 menuIntelligenceRouter.post("/import-sales", upload.single("file"), handleImportSales);

@@ -29,13 +29,17 @@ const DIFFICULTY_COLORS: Record<string, string> = {
 };
 
 const CLASSIFICATION_STYLES: Record<string, string> = {
-  Star: "bg-yellow-600/80 text-yellow-100",
-  Plowhorse: "bg-blue-600/80 text-blue-100",
-  Puzzle: "bg-purple-600/80 text-purple-100",
-  Dog: "bg-[#2A2A2A]/80 text-[#E5E5E5]",
+  Star: "bg-[#D4A574]/15 text-[#D4A574]",
+  Plowhorse: "bg-blue-500/15 text-blue-400",
+  Puzzle: "bg-purple-500/15 text-purple-400",
+  Dog: "bg-[#2A2A2A] text-[#666666]",
 };
 
-export function HighImpactView() {
+interface Props {
+  teamView?: boolean;
+}
+
+export function HighImpactView({ teamView }: Props) {
   const [dishes, setDishes] = useState<HighImpactDish[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -44,7 +48,8 @@ export function HighImpactView() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/prep/high-impact", { credentials: "include" });
+      const params = teamView ? "?teamView=true" : "";
+      const res = await fetch(`/api/prep/high-impact${params}`, { credentials: "include" });
       if (!res.ok) {
         const json = await res.json().catch(() => ({}));
         throw new Error((json as { error?: string }).error ?? `Failed (${res.status})`);
@@ -56,7 +61,7 @@ export function HighImpactView() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [teamView]);
 
   useEffect(() => {
     fetchData();

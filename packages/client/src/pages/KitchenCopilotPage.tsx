@@ -9,13 +9,20 @@
  */
 
 import { useState, useEffect, useCallback } from "react";
-import { ClipboardList, LogIn, Loader2 } from "lucide-react";
+import { ClipboardList, LogIn, Loader2, Shield } from "lucide-react";
 import { Link } from "react-router";
 import { useAuth } from "../context/AuthContext.js";
 import { PrepDashboard } from "../components/copilot/PrepDashboard.js";
 import { CrossUsageView } from "../components/copilot/CrossUsageView.js";
 import { HighImpactView } from "../components/copilot/HighImpactView.js";
 import { PrepHistory } from "../components/copilot/PrepHistory.js";
+
+interface OrgContext {
+  hasOrg: boolean;
+  orgName: string | null;
+  isOrgAdmin: boolean;
+  memberCount: number;
+}
 
 type CopilotTab = "prep" | "cross-usage" | "high-impact" | "history";
 
@@ -88,13 +95,16 @@ export function KitchenCopilotPage() {
   const [error, setError] = useState<string | null>(null);
   const [coversInput, setCoversInput] = useState("");
   const [creating, setCreating] = useState(false);
+  const [orgContext, setOrgContext] = useState<OrgContext | null>(null);
+  const [teamView, setTeamView] = useState(false);
 
   /** Load today's existing prep session on mount. */
   const loadTodaySession = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/prep/sessions/today", { credentials: "include" });
+      const params = teamView ? "?teamView=true" : "";
+      const res = await fetch(`/api/prep/sessions/today${params}`, { credentials: "include" });
       if (res.status === 404) {
         setSessionData(null);
         return;
@@ -111,7 +121,26 @@ export function KitchenCopilotPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [teamView]);
+
+  // Fetch org context on mount
+  useEffect(() => {
+    if (isGuest || !user) return;
+
+    (async () => {
+      try {
+        const res = await fetch("/api/waste/org-context", { credentials: "include" });
+        if (res.ok) {
+          const data: OrgContext = await res.json();
+          setOrgContext(data);
+          // Default to team view if user has an org
+          if (data.hasOrg) setTeamView(true);
+        }
+      } catch {
+        // silent — personal view is the fallback
+      }
+    })();
+  }, [user, isGuest]);
 
   useEffect(() => {
     if (!isGuest && user) {
@@ -181,9 +210,43 @@ export function KitchenCopilotPage() {
           <ClipboardList className="size-10 mx-auto mb-3 text-[#D4A574]" />
           <h1 className="text-2xl md:text-3xl font-bold text-white">Kitchen Copilot</h1>
           <p className="text-[#999999] mt-2">
-            {getGreeting()}, Chef. Here&apos;s your prep plan for {getTodayDate()}.
+            {orgContext?.hasOrg && orgContext.orgName
+              ? `${orgContext.orgName} Kitchen`
+              : `${getGreeting()}, Chef. Here\u0027s your prep plan for ${getTodayDate()}.`}
           </p>
         </div>
+
+        {/* Data scope toggle — only visible if user has an org */}
+        {orgContext?.hasOrg && (
+          <div className="flex items-center justify-center gap-2 mb-6">
+            <button
+              onClick={() => setTeamView(false)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors min-h-[44px] ${
+                !teamView
+                  ? "bg-[#D4A574] text-white"
+                  : "bg-[#161616] text-[#999999] hover:text-white hover:bg-[#1E1E1E]"
+              }`}
+            >
+              My Data
+            </button>
+            <button
+              onClick={() => setTeamView(true)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors min-h-[44px] ${
+                teamView
+                  ? "bg-[#D4A574] text-white"
+                  : "bg-[#161616] text-[#999999] hover:text-white hover:bg-[#1E1E1E]"
+              }`}
+            >
+              Team Data{orgContext.memberCount > 0 ? ` (${orgContext.memberCount})` : ""}
+            </button>
+            {orgContext.isOrgAdmin && (
+              <span className="ml-1 inline-flex items-center gap-1 px-2 py-1 bg-[#D4A574]/20 border border-[#D4A574]/30 rounded text-xs text-[#D4A574] font-medium">
+                <Shield className="size-3" />
+                Admin
+              </span>
+            )}
+          </div>
+        )}
 
         {/* Covers input — show when no active session */}
         {!loading && !sessionData && (
@@ -249,13 +312,13 @@ export function KitchenCopilotPage() {
 
         {/* Tab content */}
         {activeTab === "prep" && (
-          <PrepDashboard sessionData={sessionData} onSessionUpdate={setSessionData} />
+          <PrepDashboard sessionData={sessionData} onSessionUpdate={setSessionData} teamView={teamView} />
         )}
         {activeTab === "cross-usage" && (
-          <CrossUsageView sessionId={sessionData?.session?.prepSessionId ?? null} />
+          <CrossUsageView sessionId={sessionData?.session?.prepSessionId ?? null} teamView={teamView} />
         )}
-        {activeTab === "high-impact" && <HighImpactView />}
-        {activeTab === "history" && <PrepHistory />}
+        {activeTab === "high-impact" && <HighImpactView teamView={teamView} />}
+        {activeTab === "history" && <PrepHistory teamView={teamView} />}
       </div>
     </div>
   );

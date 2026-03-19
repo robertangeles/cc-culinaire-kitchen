@@ -20,8 +20,8 @@
 
 import pino from "pino";
 import { db } from "../db/index.js";
-import { menuItem, menuItemIngredient, menuCategorySetting } from "../db/schema.js";
-import { eq, and, sql, desc } from "drizzle-orm";
+import { menuItem, menuItemIngredient, menuCategorySetting, wasteLog } from "../db/schema.js";
+import { eq, and, sql, desc, gte, ilike } from "drizzle-orm";
 
 const logger = pino({ name: "menuIntelligence" });
 
@@ -419,6 +419,83 @@ Provide recommendations appropriate for this item's classification. Be specific 
       }],
     };
   }
+}
+
+// ---------------------------------------------------------------------------
+// Waste Impact for Menu Items
+// ---------------------------------------------------------------------------
+
+export interface WasteImpactResult {
+  menuItemId: string;
+  wasteEstimate: number;
+}
+
+/**
+ * For each menu item, check if any of its ingredients appear in waste logs
+ * from the last 30 days. Returns aggregated waste cost per menu item.
+ */
+export async function getWasteImpactForMenuItems(userId: number): Promise<WasteImpactResult[]> {
+  const items = await getMenuItems(userId);
+  if (items.length === 0) return [];
+
+  // Get all ingredients for all menu items
+  const allItemIds = items.map((i) => i.menuItemId);
+  const allIngredients = await db.select().from(menuItemIngredient)
+    .where(sql`${menuItemIngredient.menuItemId} = ANY(${allItemIds})`);
+
+  if (allIngredients.length === 0) return [];
+
+  // Get unique ingredient names across all menu items
+  const ingredientNames = [...new Set(allIngredients.map((i) => i.ingredientName.toLowerCase()))];
+
+  // Query waste logs for matching ingredients in the last 30 days
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+  const wasteData = await db
+    .select({
+      ingredientName: sql<string>`LOWER(${wasteLog.ingredientName})`,
+      totalCost: sql<string>`coalesce(sum(${wasteLog.estimatedCost}), 0)`,
+    })
+    .from(wasteLog)
+    .where(
+      and(
+        eq(wasteLog.userId, userId),
+        gte(wasteLog.loggedAt, thirtyDaysAgo),
+      ),
+    )
+    .groupBy(sql`LOWER(${wasteLog.ingredientName})`);
+
+  // Build a cost map: lowercase ingredient name -> total waste cost
+  const wasteCostMap = new Map<string, number>();
+  for (const w of wasteData) {
+    wasteCostMap.set(w.ingredientName, Number(w.totalCost));
+  }
+
+  // For each menu item, sum up waste costs of its ingredients
+  const results: WasteImpactResult[] = [];
+
+  // Group ingredients by menu item
+  const ingredientsByItem = new Map<string, typeof allIngredients>();
+  for (const ing of allIngredients) {
+    const list = ingredientsByItem.get(ing.menuItemId) ?? [];
+    list.push(ing);
+    ingredientsByItem.set(ing.menuItemId, list);
+  }
+
+  for (const item of items) {
+    const itemIngs = ingredientsByItem.get(item.menuItemId) ?? [];
+    let wasteEstimate = 0;
+    for (const ing of itemIngs) {
+      const cost = wasteCostMap.get(ing.ingredientName.toLowerCase());
+      if (cost && cost > 0) wasteEstimate += cost;
+    }
+    if (wasteEstimate > 0) {
+      results.push({ menuItemId: item.menuItemId, wasteEstimate });
+    }
+  }
+
+  return results;
 }
 
 export function generateReplacementContext(item: {

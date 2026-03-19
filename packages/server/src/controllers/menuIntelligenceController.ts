@@ -23,6 +23,7 @@ import {
   importCsvSalesData,
   getItemRecommendations,
   generateReplacementContext,
+  getWasteImpactForMenuItems,
 } from "../services/menuIntelligenceService.js";
 
 const menuItemSchema = z.object({
@@ -165,6 +166,16 @@ export async function handleGetRecommendations(req: Request, res: Response, next
     const id = req.params.id as string;
     const recommendations = await getItemRecommendations(id, userId);
     res.json(recommendations);
+  } catch (err) { next(err); }
+}
+
+// ── Waste Impact ─────────────────────────────────────────
+
+export async function handleGetWasteImpact(req: Request, res: Response, next: NextFunction) {
+  try {
+    const userId = (req as any).user.sub;
+    const impacts = await getWasteImpactForMenuItems(userId);
+    res.json(impacts);
   } catch (err) { next(err); }
 }
 

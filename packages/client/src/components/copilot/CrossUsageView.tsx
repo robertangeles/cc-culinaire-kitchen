@@ -18,9 +18,10 @@ interface CrossUsageItem {
 
 interface Props {
   sessionId: string | null;
+  teamView?: boolean;
 }
 
-export function CrossUsageView({ sessionId }: Props) {
+export function CrossUsageView({ sessionId, teamView }: Props) {
   const [data, setData] = useState<CrossUsageItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -31,7 +32,8 @@ export function CrossUsageView({ sessionId }: Props) {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/prep/cross-usage/${sessionId}`, {
+      const params = teamView ? "?teamView=true" : "";
+      const res = await fetch(`/api/prep/cross-usage/${sessionId}${params}`, {
         credentials: "include",
       });
       if (!res.ok) {
@@ -45,7 +47,7 @@ export function CrossUsageView({ sessionId }: Props) {
     } finally {
       setLoading(false);
     }
-  }, [sessionId]);
+  }, [sessionId, teamView]);
 
   useEffect(() => {
     fetchData();

@@ -257,3 +257,18 @@ Format: Problem / Fix / Rule
 - **Problem**: Render PostgreSQL provides an internal URL (for services in the same region, no SSL) and an external URL (for outside access, SSL required). The web service was configured with the external URL, causing ECONNRESET because the main DB connection doesn't use SSL.
 - **Fix**: Changed `DATABASE_URL` in Render web service env vars to the internal URL. Local `.env` keeps the external URL (with SSL in ad-hoc connections).
 - **Rule**: ALWAYS explicitly verify the DATABASE_URL type during deployment setup. Internal URL for Render web services (same-region, no SSL, zero latency). External URL for local dev and admin tools (requires SSL). When debugging connection errors post-deploy, check the DATABASE_URL first — it's the most common misconfiguration.
+
+## 45. Every push to production needs a deployment checklist
+- **Problem**: New schema tables (recipe_version, prep_session, etc.) were added in code but not created in the production database. The app deployed but features broke silently because tables didn't exist.
+- **Fix**: Run table creation SQL immediately after every push that includes schema changes.
+- **Rule**: Before EVERY push to main, run through this checklist:
+  1. `tsc --noEmit` passes for both server and client
+  2. New schema tables? → Run CREATE TABLE SQL on production DB
+  3. New columns on existing tables? → Run ALTER TABLE SQL on production DB
+  4. New env vars needed? → Add to Render environment
+  5. New npm packages? → Verify they're in package.json (auto-installed on deploy)
+  6. CSP changes needed? → Update Helmet directives in index.ts
+  7. Cloudinary credentials needed? → Verify in Settings → Integrations
+  8. Frontend/backend API routes match? → Audit all fetch URLs
+  9. Test locally before pushing
+  The devil is in the details — every missed step is a production incident.
