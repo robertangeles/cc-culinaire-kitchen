@@ -7,8 +7,8 @@
 
 import pino from "pino";
 import { db } from "../db/index.js";
-import { recipe, recipeRating, user, kitchenProfile } from "../db/schema.js";
-import { eq, and, or, sql, desc } from "drizzle-orm";
+import { recipe, recipeRating, recipeVersion, user, kitchenProfile } from "../db/schema.js";
+import { eq, and, or, sql, desc, max } from "drizzle-orm";
 
 const logger = pino({ name: "recipePersistence" });
 
@@ -105,6 +105,21 @@ export async function saveRecipe(params: SaveRecipeParams): Promise<{ recipeId: 
       isPublicInd: isGuest,
     })
     .returning({ recipeId: recipe.recipeId, slug: recipe.slug });
+
+  // Create version 1 snapshot
+  try {
+    await db.insert(recipeVersion).values({
+      recipeId: saved.recipeId,
+      versionNumber: 1,
+      recipeData: params.recipeData,
+      editorialContent: params.editorialContent ?? null,
+      changeDescription: "Original AI generation",
+      changedBy: params.userId ?? null,
+      changeType: "original",
+    });
+  } catch (vErr) {
+    logger.warn({ recipeId: saved.recipeId, err: vErr }, "Failed to create initial recipe version");
+  }
 
   logger.info({ recipeId: saved.recipeId, slug: saved.slug, title: params.title }, "Recipe saved");
   return { recipeId: saved.recipeId, slug: saved.slug! };
@@ -369,6 +384,182 @@ export async function archiveRecipe(
     logger.info({ recipeId, isAdmin }, "Recipe archived");
   }
   return result.length > 0;
+}
+
+// ---------------------------------------------------------------------------
+// Recipe content update with versioning
+// ---------------------------------------------------------------------------
+
+/**
+ * Full recipe content update with automatic version snapshotting.
+ * Snapshots the current state, then applies the update.
+ * Only the recipe owner can update.
+ */
+export async function updateRecipeContent(
+  recipeId: string,
+  userId: number,
+  updates: {
+    recipeData?: Record<string, unknown>;
+    title?: string;
+    description?: string;
+    editorialContent?: string;
+    changeDescription?: string;
+    changeType?: string;
+  },
+): Promise<{ recipe: any; versionNumber: number } | null> {
+  // Verify ownership
+  const [existing] = await db
+    .select()
+    .from(recipe)
+    .where(and(eq(recipe.recipeId, recipeId), eq(recipe.userId, userId)))
+    .limit(1);
+
+  if (!existing) return null;
+
+  // Get current max version number
+  const [maxRow] = await db
+    .select({ maxVer: max(recipeVersion.versionNumber) })
+    .from(recipeVersion)
+    .where(eq(recipeVersion.recipeId, recipeId));
+
+  const currentMax = maxRow?.maxVer ?? 0;
+  const newVersionNumber = currentMax + 1;
+
+  // Snapshot current state into recipe_version
+  await db.insert(recipeVersion).values({
+    recipeId,
+    versionNumber: newVersionNumber,
+    recipeData: existing.recipeData as Record<string, unknown>,
+    editorialContent: existing.editorialContent ?? null,
+    changeDescription: updates.changeDescription ?? "Manual edit",
+    changedBy: userId,
+    changeType: updates.changeType ?? "manual",
+  });
+
+  // Build the update set
+  const updateSet: Record<string, unknown> = { updatedDttm: new Date() };
+  if (updates.recipeData) updateSet.recipeData = updates.recipeData;
+  if (updates.title) updateSet.title = updates.title;
+  if (updates.description !== undefined) updateSet.description = updates.description;
+  if (updates.editorialContent !== undefined) updateSet.editorialContent = updates.editorialContent;
+
+  // Update the recipe table
+  const [updated] = await db
+    .update(recipe)
+    .set(updateSet)
+    .where(eq(recipe.recipeId, recipeId))
+    .returning();
+
+  logger.info({ recipeId, versionNumber: newVersionNumber, changeType: updates.changeType ?? "manual" }, "Recipe content updated with version");
+
+  return { recipe: updated, versionNumber: newVersionNumber };
+}
+
+// ---------------------------------------------------------------------------
+// Version management
+// ---------------------------------------------------------------------------
+
+/**
+ * List all versions for a recipe. Only the owner can view versions.
+ */
+export async function getRecipeVersions(
+  recipeId: string,
+  userId: number,
+): Promise<any[] | null> {
+  // Verify ownership
+  const [existing] = await db
+    .select({ recipeId: recipe.recipeId })
+    .from(recipe)
+    .where(and(eq(recipe.recipeId, recipeId), eq(recipe.userId, userId)))
+    .limit(1);
+
+  if (!existing) return null;
+
+  const versions = await db
+    .select({
+      versionId: recipeVersion.versionId,
+      versionNumber: recipeVersion.versionNumber,
+      changeDescription: recipeVersion.changeDescription,
+      changeType: recipeVersion.changeType,
+      createdDttm: recipeVersion.createdDttm,
+    })
+    .from(recipeVersion)
+    .where(eq(recipeVersion.recipeId, recipeId))
+    .orderBy(desc(recipeVersion.versionNumber));
+
+  return versions;
+}
+
+/**
+ * Get a specific version's full recipe data. Only the owner can view.
+ */
+export async function getRecipeVersion(
+  recipeId: string,
+  versionId: string,
+  userId: number,
+): Promise<any | null> {
+  // Verify ownership
+  const [existing] = await db
+    .select({ recipeId: recipe.recipeId })
+    .from(recipe)
+    .where(and(eq(recipe.recipeId, recipeId), eq(recipe.userId, userId)))
+    .limit(1);
+
+  if (!existing) return null;
+
+  const [version] = await db
+    .select()
+    .from(recipeVersion)
+    .where(
+      and(
+        eq(recipeVersion.versionId, versionId),
+        eq(recipeVersion.recipeId, recipeId),
+      ),
+    )
+    .limit(1);
+
+  return version ?? null;
+}
+
+/**
+ * Revert a recipe to a previous version. Creates a new version snapshot
+ * with changeType "revert" before applying the old data.
+ */
+export async function revertToVersion(
+  recipeId: string,
+  versionId: string,
+  userId: number,
+): Promise<{ recipe: any; versionNumber: number } | null> {
+  // Verify ownership
+  const [existing] = await db
+    .select({ recipeId: recipe.recipeId })
+    .from(recipe)
+    .where(and(eq(recipe.recipeId, recipeId), eq(recipe.userId, userId)))
+    .limit(1);
+
+  if (!existing) return null;
+
+  // Get the target version
+  const [targetVersion] = await db
+    .select()
+    .from(recipeVersion)
+    .where(
+      and(
+        eq(recipeVersion.versionId, versionId),
+        eq(recipeVersion.recipeId, recipeId),
+      ),
+    )
+    .limit(1);
+
+  if (!targetVersion) return null;
+
+  // Use updateRecipeContent which handles snapshotting + updating
+  return updateRecipeContent(recipeId, userId, {
+    recipeData: targetVersion.recipeData as Record<string, unknown>,
+    editorialContent: targetVersion.editorialContent ?? undefined,
+    changeDescription: `Reverted to version ${targetVersion.versionNumber}`,
+    changeType: "revert",
+  });
 }
 
 /**

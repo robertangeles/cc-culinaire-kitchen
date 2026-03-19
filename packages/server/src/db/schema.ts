@@ -530,6 +530,26 @@ export const recipe = pgTable("recipe", {
 });
 
 /**
+ * The `recipe_version` table stores versioned snapshots of recipe content
+ * for the Recipe Editor. Each edit (manual, AI refinement, or revert)
+ * creates a new version row so users can browse history and roll back.
+ *
+ * `recipe_data` is a full JSONB snapshot of the recipe at that point in time.
+ * `change_type` categorises the edit: "original", "manual", "ai_refinement", "revert".
+ */
+export const recipeVersion = pgTable("recipe_version", {
+  versionId: uuid("version_id").defaultRandom().primaryKey(),
+  recipeId: uuid("recipe_id").notNull().references(() => recipe.recipeId),
+  versionNumber: integer("version_number").notNull(),
+  recipeData: jsonb("recipe_data").notNull(),
+  editorialContent: text("editorial_content"),
+  changeDescription: text("change_description"),
+  changedBy: integer("changed_by").references(() => user.userId),
+  changeType: varchar("change_type", { length: 20 }).notNull(), // "original" | "manual" | "ai_refinement" | "revert"
+  createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
+});
+
+/**
  * The `recipe_rating` table stores per-user star ratings (1-5) for recipes.
  * One rating per user per recipe (upsert on conflict).
  */

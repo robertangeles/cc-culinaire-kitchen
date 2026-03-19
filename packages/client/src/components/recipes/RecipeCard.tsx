@@ -6,12 +6,15 @@
  * stacked on mobile.
  */
 
-import { useState } from "react";
-import { Printer, Clock, Users, ChefHat, AlertTriangle, Thermometer, GlassWater, Flame, Wine, Hash, Sparkles, Share2, Copy, Check } from "lucide-react";
+import { useState, useCallback } from "react";
+import { Printer, Clock, Users, ChefHat, AlertTriangle, Thermometer, GlassWater, Flame, Wine, Hash, Sparkles, Share2, Copy, Check, Pencil, History } from "lucide-react";
 import type { RecipeDomain } from "./RecipeForm.js";
 import { RecipeShareBar } from "./RecipeShareBar.js";
 import RecipeRatings from "./RecipeRatings.js";
 import { CreatorCard, type CreatorInfo } from "./CreatorCard.js";
+import { RecipeEditor } from "./RecipeEditor.js";
+import { RecipeRefinePanel } from "./RecipeRefinePanel.js";
+import { RecipeVersionHistory } from "./RecipeVersionHistory.js";
 
 interface Ingredient {
   amount: string;
@@ -111,6 +114,10 @@ interface RecipeCardProps {
   isPublic?: boolean;
   /** Recipe creator info for "Added By" display */
   creator?: CreatorInfo | null;
+  /** Whether the current user owns this recipe */
+  isOwner?: boolean;
+  /** Callback when recipe is updated via editor or revert */
+  onRecipeUpdate?: (updatedData: RecipeData) => void;
 }
 
 const DIFFICULTY_COLORS: Record<string, string> = {
@@ -120,10 +127,46 @@ const DIFFICULTY_COLORS: Record<string, string> = {
   expert: "bg-[#1E1E1E] text-[#999999]",
 };
 
-export function RecipeCard({ recipe, domain, recipeId, slug, imageUrl, onTogglePublic, isPublic, creator }: RecipeCardProps) {
+export function RecipeCard({ recipe, domain, recipeId, slug, imageUrl, onTogglePublic, isPublic, creator, isOwner, onRecipeUpdate }: RecipeCardProps) {
   const [checkedIngredients, setCheckedIngredients] = useState<Set<number>>(new Set());
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
   const [copied, setCopied] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+  const [showRefine, setShowRefine] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+
+  const handleSave = useCallback(async (updatedData: RecipeData, changeDescription: string) => {
+    if (!recipeId) return;
+    const res = await fetch(`/api/recipes/${recipeId}/content`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        recipeData: updatedData,
+        title: updatedData.name,
+        description: updatedData.description,
+        changeDescription: changeDescription || undefined,
+      }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error((data as { error?: string }).error ?? `Save failed (${res.status})`);
+    }
+    onRecipeUpdate?.(updatedData);
+    setEditMode(false);
+  }, [recipeId, onRecipeUpdate]);
+
+  const handleRefineAccept = useCallback((refinedData: unknown) => {
+    onRecipeUpdate?.(refinedData as RecipeData);
+    setShowRefine(false);
+    setEditMode(false);
+  }, [onRecipeUpdate]);
+
+  const handleRevert = useCallback((revertedData: unknown) => {
+    onRecipeUpdate?.(revertedData as RecipeData);
+    setShowHistory(false);
+    setEditMode(false);
+  }, [onRecipeUpdate]);
 
   function toggleIngredient(index: number) {
     setCheckedIngredients((prev) => {
@@ -148,6 +191,29 @@ export function RecipeCard({ recipe, domain, recipeId, slug, imageUrl, onToggleP
   }
 
   const accentBorder = "border-[#D4A574]";
+
+  /* ── Edit mode: render editor instead of read-only card ── */
+  if (editMode && recipeId) {
+    return (
+      <>
+        <RecipeEditor
+          recipeData={recipe}
+          recipeId={recipeId}
+          onSave={handleSave}
+          onCancel={() => setEditMode(false)}
+          onOpenRefine={() => setShowRefine(true)}
+        />
+        {showRefine && (
+          <RecipeRefinePanel
+            recipeId={recipeId}
+            recipeData={recipe}
+            onAccept={handleRefineAccept}
+            onClose={() => setShowRefine(false)}
+          />
+        )}
+      </>
+    );
+  }
 
   return (
     <div className="bg-[#161616] border border-[#2A2A2A] rounded-2xl overflow-visible">
@@ -250,6 +316,33 @@ export function RecipeCard({ recipe, domain, recipeId, slug, imageUrl, onToggleP
                 )}
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Owner action buttons */}
+        {isOwner && recipeId && (
+          <div className="mt-4 flex items-center gap-3 pt-3 border-t border-[#2A2A2A]">
+            <button
+              onClick={() => setEditMode(true)}
+              className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-[#D4A574] border border-[#D4A574]/30 hover:border-[#D4A574]/60 hover:bg-[#D4A574]/10 rounded-xl transition-colors"
+            >
+              <Pencil className="size-4" />
+              Edit Recipe
+            </button>
+            <button
+              onClick={() => setShowHistory(true)}
+              className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-[#999999] hover:text-white border border-[#2A2A2A] hover:border-[#444444] rounded-xl transition-colors"
+            >
+              <History className="size-4" />
+              History
+            </button>
+            <button
+              onClick={() => setShowRefine(true)}
+              className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-purple-400 border border-purple-500/30 hover:border-purple-500/60 hover:bg-purple-500/10 rounded-xl transition-colors"
+            >
+              <Sparkles className="size-4" />
+              AI Refine
+            </button>
           </div>
         )}
       </div>
@@ -598,6 +691,23 @@ export function RecipeCard({ recipe, domain, recipeId, slug, imageUrl, onToggleP
           Always verify ingredient safety, cooking temperatures, and dietary suitability.
         </p>
       </div>
+
+      {/* Overlay panels */}
+      {showRefine && recipeId && (
+        <RecipeRefinePanel
+          recipeId={recipeId}
+          recipeData={recipe}
+          onAccept={handleRefineAccept}
+          onClose={() => setShowRefine(false)}
+        />
+      )}
+      {showHistory && recipeId && (
+        <RecipeVersionHistory
+          recipeId={recipeId}
+          onRevert={handleRevert}
+          onClose={() => setShowHistory(false)}
+        />
+      )}
     </div>
   );
 }

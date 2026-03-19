@@ -24,7 +24,12 @@ import {
   updateRecipe,
   deleteRecipe,
   archiveRecipe,
+  updateRecipeContent,
+  getRecipeVersions,
+  getRecipeVersion,
+  revertToVersion,
 } from "../services/recipePersistenceService.js";
+import { refineRecipe } from "../services/recipeRefinementService.js";
 import { sendRecipeEmail } from "../services/emailService.js";
 import { generateImage } from "../services/imageService.js";
 import { db } from "../db/index.js";
@@ -312,6 +317,244 @@ export async function handleArchiveRecipe(
 }
 
 // ---------------------------------------------------------------------------
+// Update recipe content (with versioning)
+// ---------------------------------------------------------------------------
+
+const UpdateContentSchema = z.object({
+  recipeData: z.record(z.unknown()).optional(),
+  title: z.string().min(1).max(300).optional(),
+  description: z.string().max(2000).optional(),
+  editorialContent: z.string().optional(),
+  changeDescription: z.string().max(500).optional(),
+});
+
+/** PATCH /api/recipes/:id/content — Full recipe content update with versioning. */
+export async function handleUpdateRecipeContent(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const userId = req.user?.sub;
+    if (!userId) {
+      res.status(401).json({ error: "Authentication required." });
+      return;
+    }
+
+    const parsed = UpdateContentSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({
+        error: "Invalid update data.",
+        details: parsed.error.flatten().fieldErrors,
+      });
+      return;
+    }
+
+    const id = req.params.id as string;
+    const result = await updateRecipeContent(id, userId, {
+      recipeData: parsed.data.recipeData as Record<string, unknown> | undefined,
+      title: parsed.data.title,
+      description: parsed.data.description,
+      editorialContent: parsed.data.editorialContent,
+      changeDescription: parsed.data.changeDescription,
+      changeType: "manual",
+    });
+
+    if (!result) {
+      res.status(404).json({ error: "Recipe not found or not owned by you." });
+      return;
+    }
+
+    res.json({ recipe: result.recipe, versionNumber: result.versionNumber });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Version management
+// ---------------------------------------------------------------------------
+
+/** GET /api/recipes/:id/versions — List version history. */
+export async function handleGetVersions(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const userId = req.user?.sub;
+    if (!userId) {
+      res.status(401).json({ error: "Authentication required." });
+      return;
+    }
+
+    const id = req.params.id as string;
+    const versions = await getRecipeVersions(id, userId);
+
+    if (versions === null) {
+      res.status(404).json({ error: "Recipe not found or not owned by you." });
+      return;
+    }
+
+    res.json({ versions });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/** GET /api/recipes/:id/versions/:versionId — Get a specific version. */
+export async function handleGetVersion(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const userId = req.user?.sub;
+    if (!userId) {
+      res.status(401).json({ error: "Authentication required." });
+      return;
+    }
+
+    const id = req.params.id as string;
+    const versionId = req.params.versionId as string;
+    const version = await getRecipeVersion(id, versionId, userId);
+
+    if (!version) {
+      res.status(404).json({ error: "Version not found." });
+      return;
+    }
+
+    res.json(version);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/** POST /api/recipes/:id/versions/:versionId/revert — Revert to a version. */
+export async function handleRevertVersion(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const userId = req.user?.sub;
+    if (!userId) {
+      res.status(401).json({ error: "Authentication required." });
+      return;
+    }
+
+    const id = req.params.id as string;
+    const versionId = req.params.versionId as string;
+    const result = await revertToVersion(id, versionId, userId);
+
+    if (!result) {
+      res.status(404).json({ error: "Recipe or version not found, or not owned by you." });
+      return;
+    }
+
+    res.json({ recipe: result.recipe, versionNumber: result.versionNumber });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// AI Recipe Refinement
+// ---------------------------------------------------------------------------
+
+const RefineSchema = z.object({
+  instruction: z.string().min(3).max(1000),
+});
+
+/** POST /api/recipes/:id/refine — AI-refine a recipe (preview, not saved). */
+export async function handleRefineRecipe(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const userId = req.user?.sub;
+    if (!userId) {
+      res.status(401).json({ error: "Authentication required." });
+      return;
+    }
+
+    const parsed = RefineSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({
+        error: "Invalid refinement request.",
+        details: parsed.error.flatten().fieldErrors,
+      });
+      return;
+    }
+
+    const id = req.params.id as string;
+    const rec = await getRecipe(id);
+    if (!rec || rec.userId !== userId) {
+      res.status(404).json({ error: "Recipe not found or not owned by you." });
+      return;
+    }
+
+    const currentRecipeData = rec.recipeData as Record<string, unknown>;
+    const kitchenContext = rec.kitchenContext ?? undefined;
+
+    const result = await refineRecipe(currentRecipeData, parsed.data.instruction, kitchenContext);
+
+    res.json({
+      refinedData: result.refinedData,
+      changeSummary: result.changeSummary,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+const AcceptRefinementSchema = z.object({
+  recipeData: z.record(z.unknown()),
+  changeSummary: z.string().max(1000),
+});
+
+/** POST /api/recipes/:id/accept-refinement — Save an AI refinement. */
+export async function handleAcceptRefinement(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const userId = req.user?.sub;
+    if (!userId) {
+      res.status(401).json({ error: "Authentication required." });
+      return;
+    }
+
+    const parsed = AcceptRefinementSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({
+        error: "Invalid refinement data.",
+        details: parsed.error.flatten().fieldErrors,
+      });
+      return;
+    }
+
+    const id = req.params.id as string;
+    const result = await updateRecipeContent(id, userId, {
+      recipeData: parsed.data.recipeData as Record<string, unknown>,
+      changeDescription: parsed.data.changeSummary,
+      changeType: "ai_refinement",
+    });
+
+    if (!result) {
+      res.status(404).json({ error: "Recipe not found or not owned by you." });
+      return;
+    }
+
+    res.json({ recipe: result.recipe, versionNumber: result.versionNumber });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Email recipe
 // ---------------------------------------------------------------------------
 
@@ -445,6 +688,58 @@ export async function handleRegenerateImages(
     }
 
     res.json({ total: recipes.length, success, failed, results });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/** POST /api/recipes/:id/regenerate-image — regenerate image for a single recipe (owner only) */
+export async function handleRegenerateImage(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const userId = (req as any).user?.sub;
+    const recipeId = req.params.id as string;
+
+    const [recipe] = await db
+      .select({
+        recipeId: recipeTable.recipeId,
+        userId: recipeTable.userId,
+        title: recipeTable.title,
+        imagePrompt: recipeTable.imagePrompt,
+      })
+      .from(recipeTable)
+      .where(eq(recipeTable.recipeId, recipeId))
+      .limit(1);
+
+    if (!recipe) {
+      res.status(404).json({ error: "Recipe not found" });
+      return;
+    }
+    if (recipe.userId !== userId) {
+      res.status(403).json({ error: "Only the recipe owner can regenerate the image" });
+      return;
+    }
+    if (!recipe.imagePrompt) {
+      res.status(400).json({ error: "No image prompt available for this recipe" });
+      return;
+    }
+
+    const generated = await generateImage(recipe.imagePrompt);
+    if (!generated?.url) {
+      res.status(500).json({ error: "Image generation failed — try again" });
+      return;
+    }
+
+    await db
+      .update(recipeTable)
+      .set({ imageUrl: generated.url })
+      .where(eq(recipeTable.recipeId, recipeId));
+
+    logger.info({ recipeId, title: recipe.title }, "Single recipe image regenerated");
+    res.json({ imageUrl: generated.url });
   } catch (err) {
     next(err);
   }

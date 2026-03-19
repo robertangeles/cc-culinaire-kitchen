@@ -19,11 +19,18 @@ import {
   handleMyRecipes,
   handleGetRecipe,
   handleUpdateRecipe,
+  handleUpdateRecipeContent,
   handleDeleteRecipe,
   handleArchiveRecipe,
   handleEmailRecipe,
   handleRegenerateImages,
   handleMigrateImages,
+  handleGetVersions,
+  handleGetVersion,
+  handleRevertVersion,
+  handleRefineRecipe,
+  handleAcceptRefinement,
+  handleRegenerateImage,
 } from "../controllers/recipeController.js";
 import {
   handleGetRatings,
@@ -88,6 +95,15 @@ recipesRouter.get("/gallery", handleGallery);
 
 // My Recipes (auth required)
 recipesRouter.get("/my", authenticate, handleMyRecipes);
+
+// Version management & AI refinement (auth required, before /:id catch-all)
+recipesRouter.get("/:id/versions", authenticate, handleGetVersions);
+recipesRouter.get("/:id/versions/:versionId", authenticate, handleGetVersion);
+recipesRouter.post("/:id/versions/:versionId/revert", authenticate, handleRevertVersion);
+recipesRouter.patch("/:id/content", authenticate, handleUpdateRecipeContent);
+recipesRouter.post("/:id/refine", authenticate, handleRefineRecipe);
+recipesRouter.post("/:id/accept-refinement", authenticate, handleAcceptRefinement);
+recipesRouter.post("/:id/regenerate-image", authenticate, handleRegenerateImage);
 
 // Single recipe (public recipes visible to all, private to owner only)
 recipesRouter.get("/:id", authenticateOrGuest, handleGetRecipe);
