@@ -6,8 +6,9 @@
  * The conversation list lives in {@link ConversationSidebar} on the right.
  */
 
+import { useState } from "react";
 import { Link, NavLink } from "react-router";
-import { ChefHat, Settings, UtensilsCrossed, Croissant, GlassWater, MessageSquare, LayoutGrid, BookMarked, MessagesSquare, BarChart3 } from "lucide-react";
+import { ChefHat, Settings, UtensilsCrossed, Croissant, GlassWater, MessageSquare, LayoutGrid, BookMarked, MessagesSquare, BarChart3, Leaf, ClipboardList, ChevronDown, ChevronRight } from "lucide-react";
 import { useSettings } from "../../context/SettingsContext.js";
 import { useAuth } from "../../context/AuthContext.js";
 import { UserMenu } from "./UserMenu.js";
@@ -19,6 +20,96 @@ const navLinkClass = ({ isActive }: { isActive: boolean }) =>
       ? "bg-stone-700 text-white"
       : "text-stone-400 hover:text-white hover:bg-stone-700/50"
   }`;
+
+/** Collapsible group header */
+function SidebarGroup({
+  label,
+  defaultOpen = true,
+  children,
+}: {
+  label: string;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="mb-1">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="flex items-center gap-1.5 w-full px-3 py-1.5 text-xs font-medium text-stone-500 uppercase tracking-wider hover:text-stone-300 transition-colors"
+      >
+        {open ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
+        {label}
+      </button>
+      {open && <div className="flex flex-col gap-0.5 mt-0.5">{children}</div>}
+    </div>
+  );
+}
+
+/** Grouped sidebar navigation */
+function SidebarNav({ isGuest, isAuthenticated }: { isGuest: boolean; isAuthenticated: boolean }) {
+  return (
+    <nav className="px-3 pt-4 flex flex-col gap-1 overflow-y-auto">
+      {/* Always visible */}
+      <NavLink to="/chat/new" className={navLinkClass}>
+        <MessageSquare className="size-4" />
+        Chat Assistant
+      </NavLink>
+
+      {/* Creative Labs */}
+      <SidebarGroup label="Creative Labs">
+        <NavLink to="/recipes" className={navLinkClass}>
+          <UtensilsCrossed className="size-4" />
+          Recipe Lab
+        </NavLink>
+        <NavLink to="/patisserie" className={navLinkClass}>
+          <Croissant className="size-4" />
+          Patisserie Lab
+        </NavLink>
+        <NavLink to="/spirits" className={navLinkClass}>
+          <GlassWater className="size-4" />
+          Spirits Lab
+        </NavLink>
+      </SidebarGroup>
+
+      {/* Kitchen Operations — auth required */}
+      {!isGuest && isAuthenticated && (
+        <SidebarGroup label="Kitchen Operations">
+          <NavLink to="/menu-intelligence" className={navLinkClass}>
+            <BarChart3 className="size-4" />
+            Menu Intelligence
+          </NavLink>
+          <NavLink to="/kitchen-copilot" className={navLinkClass}>
+            <ClipboardList className="size-4" />
+            Kitchen Copilot
+          </NavLink>
+          <NavLink to="/waste-intelligence" className={navLinkClass}>
+            <Leaf className="size-4" />
+            Waste Intelligence
+          </NavLink>
+        </SidebarGroup>
+      )}
+
+      {/* Community & Shelf */}
+      <SidebarGroup label="Community">
+        <NavLink to="/kitchen-shelf" className={navLinkClass}>
+          <LayoutGrid className="size-4" />
+          Kitchen Shelf
+        </NavLink>
+        {!isGuest && isAuthenticated && (
+          <NavLink to="/my-shelf" className={navLinkClass}>
+            <BookMarked className="size-4" />
+            My Shelf
+          </NavLink>
+        )}
+        <NavLink to="/bench" className={navLinkClass}>
+          <MessagesSquare className="size-4" />
+          The Bench
+        </NavLink>
+      </SidebarGroup>
+    </nav>
+  );
+}
 
 /**
  * Fixed left-hand sidebar providing brand identity and primary navigation.
@@ -59,45 +150,7 @@ export function Sidebar() {
       </Link>
 
       {/* Module navigation */}
-      <nav className="px-3 pt-4 flex flex-col gap-1">
-        <p className="px-3 text-xs font-medium text-stone-500 uppercase tracking-wider mb-1">Modules</p>
-        <NavLink to="/chat/new" className={navLinkClass}>
-          <MessageSquare className="size-4" />
-          Chat Assistant
-        </NavLink>
-        <NavLink to="/recipes" className={navLinkClass}>
-          <UtensilsCrossed className="size-4" />
-          Recipe Lab
-        </NavLink>
-        <NavLink to="/patisserie" className={navLinkClass}>
-          <Croissant className="size-4" />
-          Patisserie Lab
-        </NavLink>
-        <NavLink to="/spirits" className={navLinkClass}>
-          <GlassWater className="size-4" />
-          Spirits Lab
-        </NavLink>
-        {!isGuest && user && (
-          <NavLink to="/menu-intelligence" className={navLinkClass}>
-            <BarChart3 className="size-4" />
-            Menu Intelligence
-          </NavLink>
-        )}
-        {!isGuest && user && (
-          <NavLink to="/my-shelf" className={navLinkClass}>
-            <BookMarked className="size-4" />
-            My Shelf
-          </NavLink>
-        )}
-        <NavLink to="/kitchen-shelf" className={navLinkClass}>
-          <LayoutGrid className="size-4" />
-          Kitchen Shelf
-        </NavLink>
-        <NavLink to="/bench" className={navLinkClass}>
-          <MessagesSquare className="size-4" />
-          The Bench
-        </NavLink>
-      </nav>
+      <SidebarNav isGuest={isGuest} isAuthenticated={!!user} />
 
       {/* Spacer — pushes settings + user menu to the bottom */}
       <div className="flex-1" />

@@ -31,6 +31,8 @@ import { RecipeDetailPage } from "./pages/RecipeDetailPage.js";
 import { MyShelfPage } from "./pages/MyShelfPage.js";
 import { BenchPage } from "./pages/BenchPage.js";
 import { MenuIntelligencePage } from "./pages/MenuIntelligencePage.js";
+import { WasteIntelligencePage } from "./pages/WasteIntelligencePage.js";
+import { KitchenCopilotPage } from "./pages/KitchenCopilotPage.js";
 import { KitchenOnboarding } from "./components/onboarding/KitchenOnboarding.js";
 
 /**
@@ -123,6 +125,8 @@ export function App() {
                           <Route path="/spirits" element={<RecipeLabPage domain="spirits" />} />
                           <Route path="/my-shelf" element={<AuthenticatedOnly><MyShelfPage /></AuthenticatedOnly>} />
                           <Route path="/menu-intelligence" element={<AuthenticatedOnly><MenuIntelligencePage /></AuthenticatedOnly>} />
+                          <Route path="/waste-intelligence" element={<WasteIntelligencePage />} />
+                          <Route path="/kitchen-copilot" element={<AuthenticatedOnly><KitchenCopilotPage /></AuthenticatedOnly>} />
                           <Route path="/bench" element={<BenchPage />} />
                           <Route path="/kitchen-shelf" element={<RecipeGalleryPage />} />
                           <Route path="/kitchen-shelf/:id" element={<RecipeDetailPage />} />

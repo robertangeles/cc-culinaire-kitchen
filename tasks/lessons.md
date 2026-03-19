@@ -212,3 +212,48 @@ Format: Problem / Fix / Rule
 - **Problem**: Changes to `vite.config.ts` (e.g., adding `selfHandleResponse: true` to the proxy) are NOT picked up by HMR. The dev server must be fully restarted. Deferring this across sessions causes repeated "why do I have to restart?" friction.
 - **Fix**: Always restart the Vite dev server immediately after any `vite.config.ts` change, in the same session it was made. Never leave a `vite.config.ts` change pending.
 - **Rule**: Batch all `vite.config.ts` changes into a single edit and restart once. Express server (`tsx watch`) restarts automatically — never requires manual intervention.
+
+## 36. Always present deployment platform alternatives upfront
+- **Problem**: Defaulted to Railway because a `railway.toml` existed. Spent hours debugging Railway-specific issues (interactive drizzle-kit prompts, build failures, port mismatches) before discovering Render was simpler for this use case.
+- **Fix**: Migrated to Render — zero-config SSL, auto-deploy from GitHub, persistent disks, straightforward custom domains.
+- **Rule**: When deploying for the first time, present 2-3 platform options with pros/cons. Don't assume the existing config file means the platform is chosen.
+
+## 37. Local file storage is incompatible with cloud hosting
+- **Problem**: Images saved to `/uploads/` on local disk. In production (Render), files are ephemeral — lost on redeploy. Local dev and prod share the same DB but different filesystems, so image URLs break across environments.
+- **Fix**: Integrated Cloudinary for all image uploads. One URL works everywhere — local, staging, production.
+- **Rule**: Never use local disk storage for user-facing assets in a cloud-deployed app. Use cloud storage (Cloudinary, S3) from day one. If local storage exists, migrate to cloud before first production deploy.
+
+## 38. Helmet CSP blocks external assets by default
+- **Problem**: After integrating Cloudinary, images didn't load. `app.use(helmet())` with no config sets a strict Content Security Policy that only allows `'self'` sources.
+- **Fix**: Added explicit CSP directives to whitelist `https://res.cloudinary.com` for `img-src` and `connect-src`.
+- **Rule**: When adding any external service that serves assets (images, fonts, scripts), update the Helmet CSP directives immediately. Test in production — CSP violations are silent in dev if Helmet isn't configured.
+
+## 39. DB credentials vs env vars — know which services read from where
+- **Problem**: Cloudinary credentials were saved in the DB via Settings → Integrations, but `imageService.ts` read from `process.env`. The `hydrateEnvFromCredentials()` runs at startup, but credentials saved after startup weren't picked up.
+- **Fix**: Changed `getCloudinary()` to async, using `getCredentialValueWithFallback()` which reads DB first, falls back to env vars.
+- **Rule**: When a service reads API credentials, always use `getCredentialValueWithFallback()` — never `process.env` directly. This ensures admin-panel changes take effect without server restart.
+
+## 40. Railway is strict — interactive prompts break CI/CD
+- **Problem**: `drizzle-kit push` prompts for confirmation when adding constraints. Railway (and most CI/CD) can't respond to interactive prompts. Build hung indefinitely.
+- **Fix**: Used `--force` flag and piped input. Ultimately moved to Render which had different issues but was simpler overall.
+- **Rule**: All build/deploy commands must be non-interactive. Test the full build command locally before deploying. Use `--force`, `--yes`, or equivalent flags for every tool in the pipeline.
+
+## 41. pgvector index creation needs extra memory
+- **Problem**: `pg_restore` into Render PostgreSQL failed with "memory required is 59 MB, maintenance_work_mem is 16 MB" when creating the vector index.
+- **Fix**: `SET maintenance_work_mem = '256MB';` before running the import.
+- **Rule**: When migrating databases with pgvector, always increase `maintenance_work_mem` before import. Default 16MB is insufficient for vector indexes.
+
+## 42. Cloudinary cloud_name is the technical ID, not the display name
+- **Problem**: User entered "Culinaire Kitchen PROD" as the cloud name. Cloudinary returned "Invalid cloud_name". The actual cloud name is a short alphanumeric string like `dxyz123abc`.
+- **Fix**: Updated to the correct technical cloud name from the Cloudinary dashboard.
+- **Rule**: When integrating external services, validate credentials with a test API call immediately after configuration. Don't wait until the feature is used in production to discover misconfiguration.
+
+## 43. Render internal DB connections do NOT use SSL
+- **Problem**: Added SSL to the main postgres connection when the URL contains `render.com`. The internal Render database URL also contains `render.com` but internal connections reject SSL — caused `ECONNRESET` and took the entire site down.
+- **Fix**: Reverted SSL on the main DB connection (`db/index.ts`). Only apply SSL to ad-hoc connections using the external URL (like the admin query tool in `databaseController.ts`).
+- **Rule**: Render internal connections = no SSL. Render external connections = SSL required. Never apply SSL blanket-style based on URL hostname. The main app connection uses the internal URL; only admin/debug tools use the external URL.
+
+## 44. Render has TWO database URLs — always verify which one is used where
+- **Problem**: Render PostgreSQL provides an internal URL (for services in the same region, no SSL) and an external URL (for outside access, SSL required). The web service was configured with the external URL, causing ECONNRESET because the main DB connection doesn't use SSL.
+- **Fix**: Changed `DATABASE_URL` in Render web service env vars to the internal URL. Local `.env` keeps the external URL (with SSL in ad-hoc connections).
+- **Rule**: ALWAYS explicitly verify the DATABASE_URL type during deployment setup. Internal URL for Render web services (same-region, no SSL, zero latency). External URL for local dev and admin tools (requires SSL). When debugging connection errors post-deploy, check the DATABASE_URL first — it's the most common misconfiguration.

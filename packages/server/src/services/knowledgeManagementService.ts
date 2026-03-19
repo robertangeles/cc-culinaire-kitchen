@@ -60,12 +60,56 @@ interface IngestManualParams {
 // ---------------------------------------------------------------------------
 
 async function extractFromPdf(buffer: Buffer): Promise<string> {
-  // pdf-parse v1.1.1: default export is the parse function
+  // Try pdf-parse first (fast, works for text-based PDFs)
   // @ts-ignore
   const mod = await import("pdf-parse");
   const parse = (mod as any).default ?? mod;
   const data = await parse(buffer);
-  return data.text;
+  const text = (data.text ?? "").replace(/\x00/g, "").trim();
+
+  // If we got meaningful text, return it
+  if (text.length > 50) {
+    return text;
+  }
+
+  // Fallback: OCR for scanned/image-only PDFs
+  logger.info("No text layer found in PDF — falling back to Tesseract OCR");
+  return extractFromPdfWithOcr(buffer);
+}
+
+/** OCR fallback for scanned PDFs using Tesseract.js + pdf-to-img */
+async function extractFromPdfWithOcr(buffer: Buffer): Promise<string> {
+  const { createWorker } = await import("tesseract.js");
+  const { pdf } = await import("pdf-to-img");
+
+  const worker = await createWorker("eng");
+  const pages: string[] = [];
+  let pageNum = 0;
+
+  try {
+    const pdfDoc = await pdf(buffer, { scale: 2 });
+    for await (const pageImage of pdfDoc) {
+      pageNum++;
+      if (pageNum % 10 === 0 || pageNum === 1) {
+        logger.info({ page: pageNum }, "OCR processing page");
+      }
+      const { data } = await worker.recognize(pageImage);
+      const pageText = (data.text ?? "").replace(/\x00/g, "").trim();
+      if (pageText.length > 5) {
+        pages.push(pageText);
+      }
+    }
+  } finally {
+    await worker.terminate();
+  }
+
+  logger.info({ totalPages: pageNum, pagesWithText: pages.length }, "OCR extraction complete");
+
+  if (pages.length === 0) {
+    throw new Error("OCR could not extract text from this PDF. The document may contain only images or unsupported content.");
+  }
+
+  return pages.join("\n\n");
 }
 
 async function extractFromDocx(buffer: Buffer): Promise<string> {
@@ -472,11 +516,43 @@ async function processDocument(
       return;
     }
 
-    // Update hash
+    // Update hash + body
     await db
       .update(knowledgeDocument)
       .set({ contentHash: hash, body: cleaned })
       .where(eq(knowledgeDocument.documentId, documentId));
+
+    // Auto-generate tags from content (if none exist yet)
+    try {
+      const [doc] = await db
+        .select({ tags: knowledgeDocument.tags })
+        .from(knowledgeDocument)
+        .where(eq(knowledgeDocument.documentId, documentId));
+
+      if (!doc?.tags || doc.tags.length === 0) {
+        const { generateObject } = await import("ai");
+        const { getModel } = await import("./providerService.js");
+        const { z } = await import("zod");
+        const model = getModel();
+        const snippet = cleaned.slice(0, 3000);
+        const { object } = await generateObject({
+          model,
+          schema: z.object({
+            tags: z.array(z.string().max(30)).min(3).max(8),
+          }),
+          prompt: `Analyze this culinary/food-service document and generate 5-8 short, specific tags that describe its key topics. Tags should be lowercase, 1-3 words each. Focus on culinary techniques, ingredients, cuisine types, or food-service concepts.\n\nDocument excerpt:\n${snippet}`,
+        });
+        if (object.tags?.length > 0) {
+          await db
+            .update(knowledgeDocument)
+            .set({ tags: object.tags })
+            .where(eq(knowledgeDocument.documentId, documentId));
+          logger.info({ documentId, tags: object.tags }, "Auto-generated tags");
+        }
+      }
+    } catch (err) {
+      logger.warn({ documentId, err: (err as Error).message }, "Failed to auto-generate tags — continuing without");
+    }
 
     // Chunk
     const chunks = chunkText(cleaned);

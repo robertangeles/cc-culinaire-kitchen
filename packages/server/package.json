@@ -38,6 +38,7 @@
     "multer": "^2.1.1",
     "otplib": "^13.3.0",
     "pdf-parse": "1.1.1",
+    "pdf-to-img": "^5.0.0",
     "pino": "^9",
     "pino-pretty": "^13",
     "postgres": "^3",
@@ -45,6 +46,7 @@
     "resend": "^6.9.3",
     "socket.io": "^4.8.3",
     "stripe": "^20.4.1",
+    "tesseract.js": "^7.0.0",
     "zod": "^3.24"
   },
   "devDependencies": {

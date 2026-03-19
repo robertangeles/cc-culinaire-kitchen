@@ -66,7 +66,7 @@ app.use(cors({
   origin: process.env.CLIENT_URL ?? "http://localhost:5173",
   credentials: true,
 }));
-app.use(express.json());
+app.use(express.json({ limit: "10mb" }));
 app.use(cookieParser());
 app.use(
   rateLimit({
@@ -98,6 +98,8 @@ app.use("/api/admin", adminPersonalisationOptionsRouter);
 app.use("/api/knowledge", knowledgeRouter);
 app.use("/api/bench", benchRouter);
 app.use("/api/menu", menuIntelligenceRouter);
+app.use("/api/waste", wasteRouter);
+app.use("/api/prep", prepRouter);
 
 // Database stats (admin only)
 import { authenticate, requireRole } from "./middleware/auth.js";
@@ -128,6 +130,8 @@ import { getRatingsSummary } from "./services/ratingService.js";
 import { initBenchSocket } from "./services/benchSocketService.js";
 import { benchRouter } from "./routes/bench.js";
 import { menuIntelligenceRouter } from "./routes/menuIntelligence.js";
+import { wasteRouter } from "./routes/waste.js";
+import { prepRouter } from "./routes/prep.js";
 
 app.get("/kitchen-shelf/:slug", async (req, res, next) => {
   // Only handle HTML requests (not API calls or assets)

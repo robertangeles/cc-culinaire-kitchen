@@ -719,3 +719,100 @@ export const menuCategorySetting = pgTable(
     uniqueIndex("idx_menu_cat_user").on(table.userId, table.categoryName),
   ],
 );
+
+// ---------------------------------------------------------------------------
+// Waste Intelligence
+// ---------------------------------------------------------------------------
+
+/**
+ * The `waste_log` table tracks ingredient waste entries for kitchen
+ * waste analysis and AI-powered reuse suggestions.
+ *
+ * Each entry records what was wasted, how much, estimated cost, and the
+ * reason (e.g. spoilage, overproduction, trim). Aggregated via
+ * getWasteSummary() for dashboard metrics and trend analysis.
+ */
+export const wasteLog = pgTable("waste_log", {
+  wasteLogId: uuid("waste_log_id").defaultRandom().primaryKey(),
+  userId: integer("user_id").notNull().references(() => user.userId),
+  ingredientName: text("ingredient_name").notNull(),
+  quantity: numeric("quantity", { precision: 10, scale: 3 }).notNull(),
+  unit: varchar("unit", { length: 20 }).notNull(),
+  estimatedCost: numeric("estimated_cost", { precision: 10, scale: 2 }),
+  reason: varchar("reason", { length: 30 }),
+  notes: text("notes"),
+  shift: varchar("shift", { length: 20 }),
+  loggedAt: timestamp("logged_at", { withTimezone: true }).defaultNow().notNull(),
+  createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
+  updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
+});
+
+// ---------------------------------------------------------------------------
+// Kitchen Operations Copilot Lite
+// ---------------------------------------------------------------------------
+
+/**
+ * The `prep_session` table tracks daily prep planning sessions.
+ *
+ * Each session represents a day's prep plan with expected/actual covers
+ * and task completion counts. Tasks are generated from the user's recipe
+ * library and menu items, prioritised by cross-usage and classification.
+ */
+export const prepSession = pgTable("prep_session", {
+  prepSessionId: uuid("prep_session_id").defaultRandom().primaryKey(),
+  userId: integer("user_id").notNull().references(() => user.userId),
+  prepDate: date("prep_date").notNull(),
+  expectedCovers: integer("expected_covers"),
+  actualCovers: integer("actual_covers"),
+  tasksTotal: integer("tasks_total").default(0).notNull(),
+  tasksCompleted: integer("tasks_completed").default(0).notNull(),
+  tasksSkipped: integer("tasks_skipped").default(0).notNull(),
+  notes: text("notes"),
+  createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
+  updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
+});
+
+/**
+ * The `prep_task` table stores individual prep tasks within a session.
+ *
+ * Each task is an ingredient-level prep item derived from the user's
+ * recipes, with a calculated priority score based on cross-usage,
+ * prep time, and menu classification weight.
+ */
+export const prepTask = pgTable("prep_task", {
+  prepTaskId: uuid("prep_task_id").defaultRandom().primaryKey(),
+  prepSessionId: uuid("prep_session_id").notNull().references(() => prepSession.prepSessionId),
+  userId: integer("user_id").notNull().references(() => user.userId),
+  menuItemId: uuid("menu_item_id").references(() => menuItem.menuItemId),
+  recipeId: uuid("recipe_id").references(() => recipe.recipeId),
+  taskDescription: text("task_description").notNull(),
+  ingredientName: varchar("ingredient_name", { length: 200 }).notNull(),
+  quantityNeeded: numeric("quantity_needed", { precision: 10, scale: 3 }).notNull(),
+  unit: varchar("unit", { length: 20 }).notNull(),
+  prepTimeMinutes: integer("prep_time_minutes"),
+  priorityScore: numeric("priority_score", { precision: 8, scale: 2 }).notNull(),
+  priorityTier: varchar("priority_tier", { length: 20 }).notNull(),
+  station: varchar("station", { length: 50 }),
+  status: varchar("status", { length: 20 }).default("pending").notNull(),
+  assignedTo: varchar("assigned_to", { length: 100 }),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+  createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
+  updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
+});
+
+/**
+ * The `ingredient_cross_usage` table tracks ingredients used across
+ * multiple dishes within a prep session. Helps identify batching
+ * opportunities for common ingredients.
+ */
+export const ingredientCrossUsage = pgTable("ingredient_cross_usage", {
+  crossUsageId: uuid("cross_usage_id").defaultRandom().primaryKey(),
+  userId: integer("user_id").notNull().references(() => user.userId),
+  prepSessionId: uuid("prep_session_id").notNull().references(() => prepSession.prepSessionId),
+  ingredientName: varchar("ingredient_name", { length: 200 }).notNull(),
+  dishCount: integer("dish_count").notNull(),
+  totalQuantity: numeric("total_quantity", { precision: 10, scale: 3 }).notNull(),
+  unit: varchar("unit", { length: 20 }).notNull(),
+  dishNames: jsonb("dish_names").notNull(),
+  createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
+});

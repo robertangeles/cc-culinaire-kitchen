@@ -85,21 +85,27 @@ export function KitchenWizard({ onComplete, onSkip }: KitchenWizardProps) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
         {/* Header */}
-        <div className="bg-stone-800 px-6 py-5 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <ChefHat className="size-6 text-amber-400" />
-            <div>
-              <h2 className="text-white font-semibold text-lg">My Kitchen Setup</h2>
-              <p className="text-stone-400 text-xs">Step {step + 1} of {TOTAL_STEPS}</p>
+        <div className="bg-stone-800 px-6 py-5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <ChefHat className="size-6 text-amber-400" />
+              <div>
+                <h2 className="text-white font-semibold text-lg">My Kitchen Setup</h2>
+                <p className="text-stone-400 text-xs">Step {step + 1} of {TOTAL_STEPS}</p>
+              </div>
             </div>
+            <button
+              onClick={onSkip}
+              className="text-stone-400 hover:text-white transition-colors"
+              aria-label="Skip onboarding"
+            >
+              <X className="size-5" />
+            </button>
           </div>
-          <button
-            onClick={onSkip}
-            className="text-stone-400 hover:text-white transition-colors"
-            aria-label="Skip onboarding"
-          >
-            <X className="size-5" />
-          </button>
+          <p className="text-stone-400 text-xs mt-3 leading-relaxed">
+            These questions help CulinAIre personalise your experience — recipes, prep plans, and recommendations
+            are tailored to your skill level, cuisine style, and kitchen setup. You can update these anytime in your Profile.
+          </p>
         </div>
 
         {/* Progress bar */}
