@@ -14,6 +14,9 @@ import {
   handleGetOrganisation,
   handleGetMyOrganisation,
   handleRegenerateJoinKey,
+  handleGetMembers,
+  handleUpdateMemberRole,
+  handleRemoveMember,
 } from "../controllers/organisationController.js";
 
 const router = Router();
@@ -24,6 +27,12 @@ router.use(authenticate);
 router.get("/mine", handleGetMyOrganisation);
 router.post("/", handleCreateOrganisation);
 router.post("/join", handleJoinOrganisation);
+
+// Member management (before /:id to avoid param collision)
+router.get("/:id/members", handleGetMembers);
+router.patch("/:id/members/:userId", handleUpdateMemberRole);
+router.delete("/:id/members/:userId", handleRemoveMember);
+
 router.get("/:id", handleGetOrganisation);
 router.patch("/:id", handleUpdateOrganisation);
 router.delete("/:id/leave", handleLeaveOrganisation);

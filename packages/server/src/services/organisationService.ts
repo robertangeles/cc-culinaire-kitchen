@@ -8,8 +8,8 @@
 import crypto from "crypto";
 import { eq, and } from "drizzle-orm";
 import { db } from "../db/index.js";
-import { organisation, userOrganisation } from "../db/schema.js";
-import { encryptOrgPii, decryptOrgPii } from "./piiService.js";
+import { organisation, userOrganisation, user } from "../db/schema.js";
+import { encryptOrgPii, decryptOrgPii, decryptUserPii } from "./piiService.js";
 
 /** Generate a short random join key. */
 function generateJoinKey(): string {
@@ -239,6 +239,117 @@ export async function updateOrganisation(
     .returning();
 
   return updated;
+}
+
+/** Get all members of an organisation with decrypted display names. */
+export async function getOrganisationMembers(organisationId: number) {
+  const rows = await db
+    .select({
+      userId: user.userId,
+      userName: user.userName,
+      userPhotoPath: user.userPhotoPath,
+      userBio: user.userBio,
+      userEmail: user.userEmail,
+      // encrypted PII columns for decryption fallback
+      userNameEnc: user.userNameEnc,
+      userNameIv: user.userNameIv,
+      userNameTag: user.userNameTag,
+      userEmailEnc: user.userEmailEnc,
+      userEmailIv: user.userEmailIv,
+      userEmailTag: user.userEmailTag,
+      userBioEnc: user.userBioEnc,
+      userBioIv: user.userBioIv,
+      userBioTag: user.userBioTag,
+      role: userOrganisation.role,
+    })
+    .from(userOrganisation)
+    .innerJoin(user, eq(userOrganisation.userId, user.userId))
+    .where(eq(userOrganisation.organisationId, organisationId));
+
+  return rows.map((row) => {
+    const pii = decryptUserPii(row as unknown as Record<string, unknown>);
+    return {
+      userId: row.userId,
+      displayName: pii.userName || pii.userEmail,
+      photoPath: row.userPhotoPath,
+      bio: pii.userBio,
+      role: row.role,
+      joinedAt: null, // userOrganisation table has no timestamp column
+    };
+  });
+}
+
+/** Check whether a user is a member of an organisation, returning the membership row. */
+export async function getMembership(userId: number, organisationId: number) {
+  const rows = await db
+    .select()
+    .from(userOrganisation)
+    .where(
+      and(
+        eq(userOrganisation.userId, userId),
+        eq(userOrganisation.organisationId, organisationId),
+      ),
+    );
+  return rows[0] ?? null;
+}
+
+/** Update a member's role in an organisation. */
+export async function updateMemberRole(
+  organisationId: number,
+  targetUserId: number,
+  newRole: string,
+) {
+  // Prevent demoting the last admin
+  if (newRole !== "admin") {
+    const admins = await db
+      .select()
+      .from(userOrganisation)
+      .where(
+        and(
+          eq(userOrganisation.organisationId, organisationId),
+          eq(userOrganisation.role, "admin"),
+        ),
+      );
+
+    const isTargetAdmin = admins.some((a) => a.userId === targetUserId);
+    if (isTargetAdmin && admins.length <= 1) {
+      throw new Error("Cannot demote the last admin.");
+    }
+  }
+
+  const [updated] = await db
+    .update(userOrganisation)
+    .set({ role: newRole })
+    .where(
+      and(
+        eq(userOrganisation.userId, targetUserId),
+        eq(userOrganisation.organisationId, organisationId),
+      ),
+    )
+    .returning();
+
+  if (!updated) {
+    throw new Error("Member not found in this organisation.");
+  }
+
+  return updated;
+}
+
+/** Remove a member from an organisation. */
+export async function removeMember(organisationId: number, targetUserId: number) {
+  const [deleted] = await db
+    .delete(userOrganisation)
+    .where(
+      and(
+        eq(userOrganisation.userId, targetUserId),
+        eq(userOrganisation.organisationId, organisationId),
+      ),
+    )
+    .returning();
+
+  if (!deleted) {
+    throw new Error("Member not found in this organisation.");
+  }
 }
 
 /** Regenerate the join key for an organisation (owner only). */

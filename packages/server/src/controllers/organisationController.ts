@@ -14,6 +14,10 @@ import {
   getOrganisation,
   getUserOrganisation,
   regenerateJoinKey,
+  getOrganisationMembers,
+  getMembership,
+  updateMemberRole,
+  removeMember,
 } from "../services/organisationService.js";
 
 const socialMediaFields = {
@@ -144,6 +148,96 @@ export async function handleRegenerateJoinKey(req: Request, res: Response, next:
   try {
     const newKey = await regenerateJoinKey(req.user!.sub, parseInt(req.params.id as string));
     res.json({ joinKey: newKey });
+  } catch (err: unknown) {
+    if (err instanceof Error) {
+      res.status(400).json({ error: err.message });
+      return;
+    }
+    next(err);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Members endpoints
+// ---------------------------------------------------------------------------
+
+/** GET /api/organisations/:id/members — list all members. */
+export async function handleGetMembers(req: Request, res: Response, next: NextFunction) {
+  try {
+    const orgId = parseInt(req.params.id as string);
+    const userId = req.user!.sub;
+
+    // Security: verify requesting user is a member of this org
+    const membership = await getMembership(userId, orgId);
+    if (!membership) {
+      res.status(403).json({ error: "You are not a member of this organisation." });
+      return;
+    }
+
+    const members = await getOrganisationMembers(orgId);
+    res.json({ members });
+  } catch (err) {
+    next(err);
+  }
+}
+
+const UpdateMemberRoleSchema = z.object({
+  role: z.enum(["admin", "member"]),
+});
+
+/** PATCH /api/organisations/:id/members/:userId — update a member's role. */
+export async function handleUpdateMemberRole(req: Request, res: Response, next: NextFunction) {
+  try {
+    const orgId = parseInt(req.params.id as string);
+    const targetUserId = parseInt(req.params.userId as string);
+    const requestingUserId = req.user!.sub;
+
+    // Verify requesting user is org admin
+    const membership = await getMembership(requestingUserId, orgId);
+    if (!membership || membership.role !== "admin") {
+      res.status(403).json({ error: "Only admins can update member roles." });
+      return;
+    }
+
+    const parsed = UpdateMemberRoleSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.flatten() });
+      return;
+    }
+
+    const updated = await updateMemberRole(orgId, targetUserId, parsed.data.role);
+    res.json({ member: updated });
+  } catch (err: unknown) {
+    if (err instanceof Error) {
+      res.status(400).json({ error: err.message });
+      return;
+    }
+    next(err);
+  }
+}
+
+/** DELETE /api/organisations/:id/members/:userId — remove a member. */
+export async function handleRemoveMember(req: Request, res: Response, next: NextFunction) {
+  try {
+    const orgId = parseInt(req.params.id as string);
+    const targetUserId = parseInt(req.params.userId as string);
+    const requestingUserId = req.user!.sub;
+
+    // Cannot remove yourself — use "Leave Organisation" instead
+    if (targetUserId === requestingUserId) {
+      res.status(400).json({ error: "You cannot remove yourself. Use 'Leave Organisation' instead." });
+      return;
+    }
+
+    // Verify requesting user is org admin
+    const membership = await getMembership(requestingUserId, orgId);
+    if (!membership || membership.role !== "admin") {
+      res.status(403).json({ error: "Only admins can remove members." });
+      return;
+    }
+
+    await removeMember(orgId, targetUserId);
+    res.json({ success: true });
   } catch (err: unknown) {
     if (err instanceof Error) {
       res.status(400).json({ error: err.message });
