@@ -47,25 +47,25 @@ export function UserMenu({ compact = false }: { compact?: boolean }) {
     return (
       <div ref={menuRef} className="relative pb-2">
         {open && (
-          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 w-44 bg-stone-700 rounded-lg shadow-lg border border-stone-600 overflow-hidden z-50">
+          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 w-44 bg-[#1E1E1E] rounded-lg shadow-lg border border-[#2A2A2A] overflow-hidden z-50">
             <button
               onClick={() => { navigate("/profile"); setOpen(false); }}
-              className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-stone-200 hover:bg-stone-600 transition-colors"
+              className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-[#E5E5E5] hover:bg-[#2A2A2A] transition-colors"
             >
               <User className="size-4" />
               Profile
             </button>
             <button
               onClick={() => { navigate("/mfa-setup"); setOpen(false); }}
-              className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-stone-200 hover:bg-stone-600 transition-colors"
+              className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-[#E5E5E5] hover:bg-[#2A2A2A] transition-colors"
             >
               <ShieldCheck className="size-4" />
               MFA Settings
             </button>
-            <div className="border-t border-stone-600" />
+            <div className="border-t border-[#2A2A2A]" />
             <button
               onClick={handleLogout}
-              className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-red-400 hover:bg-stone-600 transition-colors"
+              className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-red-400 hover:bg-[#2A2A2A] transition-colors"
             >
               <LogOut className="size-4" />
               Sign Out
@@ -75,12 +75,12 @@ export function UserMenu({ compact = false }: { compact?: boolean }) {
         <button
           onClick={() => setOpen(!open)}
           title={user.userName}
-          className="flex items-center justify-center w-10 h-10 rounded-lg hover:bg-stone-700/50 transition-colors"
+          className="flex items-center justify-center w-10 h-10 rounded-lg hover:bg-[#1E1E1E]/50 transition-colors"
         >
           {user.userPhotoPath ? (
             <img src={user.userPhotoPath} alt={user.userName} className="size-8 rounded-full object-cover" />
           ) : (
-            <div className="size-8 rounded-full bg-amber-600 flex items-center justify-center text-xs font-semibold text-white">
+            <div className="size-8 rounded-full bg-[#D4A574] flex items-center justify-center text-xs font-semibold text-white">
               {initials}
             </div>
           )}
@@ -93,25 +93,25 @@ export function UserMenu({ compact = false }: { compact?: boolean }) {
     <div ref={menuRef} className="relative px-3 pb-2">
       {/* Dropdown menu — opens upward */}
       {open && (
-        <div className="absolute bottom-full left-3 right-3 mb-1 bg-stone-700 rounded-lg shadow-lg border border-stone-600 overflow-hidden z-50">
+        <div className="absolute bottom-full left-3 right-3 mb-1 bg-[#1E1E1E] rounded-lg shadow-lg border border-[#2A2A2A] overflow-hidden z-50">
           <button
             onClick={() => { navigate("/profile"); setOpen(false); }}
-            className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-stone-200 hover:bg-stone-600 transition-colors"
+            className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-[#E5E5E5] hover:bg-[#2A2A2A] transition-colors"
           >
             <User className="size-4" />
             Profile
           </button>
           <button
             onClick={() => { navigate("/mfa-setup"); setOpen(false); }}
-            className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-stone-200 hover:bg-stone-600 transition-colors"
+            className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-[#E5E5E5] hover:bg-[#2A2A2A] transition-colors"
           >
             <ShieldCheck className="size-4" />
             MFA Settings
           </button>
-          <div className="border-t border-stone-600" />
+          <div className="border-t border-[#2A2A2A]" />
           <button
             onClick={handleLogout}
-            className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-red-400 hover:bg-stone-600 transition-colors"
+            className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-red-400 hover:bg-[#2A2A2A] transition-colors"
           >
             <LogOut className="size-4" />
             Sign Out
@@ -122,7 +122,7 @@ export function UserMenu({ compact = false }: { compact?: boolean }) {
       {/* User button */}
       <button
         onClick={() => setOpen(!open)}
-        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left hover:bg-stone-700/50 transition-colors"
+        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left hover:bg-[#1E1E1E]/50 transition-colors"
       >
         {user.userPhotoPath ? (
           <img
@@ -131,15 +131,15 @@ export function UserMenu({ compact = false }: { compact?: boolean }) {
             className="size-8 rounded-full object-cover"
           />
         ) : (
-          <div className="size-8 rounded-full bg-amber-600 flex items-center justify-center text-xs font-semibold text-white">
+          <div className="size-8 rounded-full bg-[#D4A574] flex items-center justify-center text-xs font-semibold text-white">
             {initials}
           </div>
         )}
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium text-white truncate">{user.userName}</p>
-          <p className="text-xs text-stone-400 truncate">{primaryRole}</p>
+          <p className="text-xs text-[#999999] truncate">{primaryRole}</p>
         </div>
-        <ChevronUp className={`size-4 text-stone-400 transition-transform ${open ? "" : "rotate-180"}`} />
+        <ChevronUp className={`size-4 text-[#999999] transition-transform ${open ? "" : "rotate-180"}`} />
       </button>
     </div>
   );

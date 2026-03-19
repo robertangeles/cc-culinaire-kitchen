@@ -34,28 +34,28 @@ function MessageBubbleInner({ message }: MessageBubbleProps) {
     <div className={`flex gap-3 ${isUser ? "flex-row-reverse" : "flex-row"}`}>
       <div
         className={`flex-shrink-0 size-8 rounded-full flex items-center justify-center ${
-          isUser ? "bg-stone-700" : "bg-amber-700"
+          isUser ? "bg-[#2A2A2A]" : "bg-[#D4A574]/20"
         }`}
       >
         {isUser ? (
-          <User className="size-4 text-white" />
+          <User className="size-4 text-[#E5E5E5]" />
         ) : (
-          <ChefHat className="size-4 text-white" />
+          <ChefHat className="size-4 text-[#D4A574]" />
         )}
       </div>
 
       <div
         className={`rounded-2xl px-4 py-3 ${
           isUser
-            ? "bg-stone-700 text-white"
-            : "bg-white text-stone-800 shadow-sm border border-stone-200"
+            ? "bg-[#D4A574]/10 border border-[#D4A574]/20 text-[#E5E5E5]"
+            : "bg-[#161616] border border-[#2A2A2A] text-[#E5E5E5]"
         }`}
         style={{ maxWidth: bubbleMaxWidth }}
       >
         {isUser ? (
-          <p className="whitespace-pre-wrap">{textContent}</p>
+          <p className="whitespace-pre-wrap leading-relaxed">{textContent}</p>
         ) : (
-          <div className="prose prose-stone prose-sm max-w-none prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-headings:mt-3 prose-headings:mb-1">
+          <div className="prose prose-invert prose-sm max-w-none prose-p:my-1 prose-p:text-[#E5E5E5] prose-p:leading-relaxed prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-li:text-[#E5E5E5] prose-headings:mt-3 prose-headings:mb-1 prose-headings:text-[#FAFAFA] prose-strong:text-[#FAFAFA] prose-code:bg-[#0A0A0A] prose-code:border prose-code:border-[#2A2A2A] prose-code:rounded-md prose-code:px-1.5 prose-code:py-0.5 prose-code:text-[#D4A574] prose-pre:bg-[#0A0A0A] prose-pre:border prose-pre:border-[#2A2A2A] prose-pre:rounded-xl prose-a:text-[#D4A574] prose-a:no-underline hover:prose-a:underline">
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
               components={{

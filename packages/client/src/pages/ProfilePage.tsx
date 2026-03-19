@@ -136,26 +136,26 @@ function TeamMembersSection({ orgId, currentUserId }: { orgId: number; currentUs
   }
 
   return (
-    <div className="border-t border-stone-200 pt-4 mt-4">
+    <div className="border-t border-[#2A2A2A] pt-4 mt-4">
       <div className="flex items-center gap-2 mb-3">
-        <Users className="size-4 text-stone-600" />
-        <h3 className="text-sm font-semibold text-stone-700">
+        <Users className="size-4 text-[#999999]" />
+        <h3 className="text-sm font-semibold text-[#E5E5E5]">
           Team Members ({members.length})
         </h3>
       </div>
 
       {error && (
-        <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-3">
+        <div className="flex items-center gap-2 text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2 mb-3">
           <AlertCircle className="size-4 flex-shrink-0" /> {error}
         </div>
       )}
 
       {loading ? (
         <div className="flex justify-center py-4">
-          <Loader2 className="size-5 animate-spin text-stone-400" />
+          <Loader2 className="size-5 animate-spin text-[#666666]" />
         </div>
       ) : members.length === 0 ? (
-        <p className="text-sm text-stone-400 italic">No members found.</p>
+        <p className="text-sm text-[#666666] italic">No members found.</p>
       ) : (
         <div className="space-y-2">
           {members.map((m) => {
@@ -164,7 +164,7 @@ function TeamMembersSection({ orgId, currentUserId }: { orgId: number; currentUs
             return (
               <div
                 key={m.userId}
-                className="flex items-center gap-3 rounded-xl border border-stone-100 shadow-sm px-3 py-2.5"
+                className="flex items-center gap-3 rounded-xl border border-[#2A2A2A] bg-[#1E1E1E] px-3 py-2.5"
               >
                 {/* Avatar */}
                 {m.photoPath ? (
@@ -184,24 +184,24 @@ function TeamMembersSection({ orgId, currentUserId }: { orgId: number; currentUs
                 {/* Info */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-semibold text-stone-800 truncate">
+                    <span className="text-sm font-semibold text-[#FAFAFA] truncate">
                       {m.displayName}
                     </span>
                     {isSelf && (
-                      <span className="text-xs text-stone-400">(You)</span>
+                      <span className="text-xs text-[#666666]">(You)</span>
                     )}
                     <span
                       className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
                         m.role === "admin"
-                          ? "bg-amber-100 text-amber-700"
-                          : "bg-stone-100 text-stone-500"
+                          ? "bg-[#D4A574]/15 text-[#D4A574]"
+                          : "bg-[#1E1E1E] text-[#999999]"
                       }`}
                     >
                       {m.role === "admin" ? "Admin" : "Member"}
                     </span>
                   </div>
                   {m.bio && (
-                    <p className="text-xs text-stone-400 truncate mt-0.5">
+                    <p className="text-xs text-[#666666] truncate mt-0.5">
                       {m.bio.length > 100 ? `${m.bio.slice(0, 100)}...` : m.bio}
                     </p>
                   )}
@@ -213,14 +213,14 @@ function TeamMembersSection({ orgId, currentUserId }: { orgId: number; currentUs
                     <button
                       type="button"
                       onClick={() => handleToggleRole(m)}
-                      className="text-xs text-amber-600 hover:text-amber-700 font-medium transition-colors"
+                      className="text-xs text-[#D4A574] hover:text-[#C4956A] font-medium transition-colors"
                     >
                       {m.role === "admin" ? "Make Member" : "Make Admin"}
                     </button>
                     <button
                       type="button"
                       onClick={() => handleRemove(m)}
-                      className="text-xs text-red-500 hover:text-red-600 font-medium transition-colors"
+                      className="text-xs text-red-400 hover:text-red-300 font-medium transition-colors"
                     >
                       Remove
                     </button>
@@ -284,11 +284,11 @@ function OrgBenchBanner({ orgId }: { orgId: number }) {
   if (!loaded) return null;
 
   return (
-    <div className="border-t border-stone-100 pt-3 mt-3">
-      <label className="block text-sm font-medium text-stone-700 mb-1">
+    <div className="border-t border-[#2A2A2A] pt-3 mt-3">
+      <label className="block text-sm font-medium text-[#E5E5E5] mb-1">
         My Kitchen Banner
       </label>
-      <p className="text-xs text-stone-400 mb-2">
+      <p className="text-xs text-[#666666] mb-2">
         This message appears at the top of your organisation's chat channel in The Bench.
       </p>
       <textarea
@@ -297,19 +297,19 @@ function OrgBenchBanner({ orgId }: { orgId: number }) {
         rows={2}
         maxLength={500}
         placeholder="e.g., Team — menu tasting Friday 3pm. Bring your best seasonal dish idea."
-        className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm text-stone-800 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent resize-none"
+        className="w-full rounded-xl border border-[#2A2A2A] px-3 py-2 text-sm text-white bg-[#0A0A0A] placeholder-[#444444] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-transparent resize-none"
       />
       <div className="flex items-center justify-between mt-1">
-        <span className={`text-xs ${banner.length > 450 ? "text-amber-600" : "text-stone-400"}`}>
+        <span className={`text-xs ${banner.length > 450 ? "text-[#D4A574]" : "text-[#666666]"}`}>
           {banner.length}/500
         </span>
         <div className="flex items-center gap-2">
-          {saved && <span className="text-xs text-green-600">Saved</span>}
+          {saved && <span className="text-xs text-emerald-400">Saved</span>}
           <button
             type="button"
             onClick={handleSave}
             disabled={saving}
-            className="px-3 py-1 text-xs font-medium text-white bg-amber-600 rounded-lg hover:bg-amber-700 disabled:opacity-50 transition-colors"
+            className="px-3 py-1 text-xs font-medium text-[#0A0A0A] bg-[#D4A574] rounded-xl hover:bg-[#C4956A] disabled:opacity-50 transition-colors"
           >
             {saving ? "Saving..." : "Save Banner"}
           </button>
@@ -803,15 +803,15 @@ export function ProfilePage() {
   }
 
   const inputClass =
-    "w-full rounded-lg border border-stone-300 px-3 py-2 text-sm text-stone-800 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent";
+    "w-full rounded-xl border border-[#2A2A2A] px-3 py-2 text-sm text-white bg-[#0A0A0A] placeholder-[#444444] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-transparent";
 
   return (
-    <div className="flex-1 overflow-y-auto p-6">
+    <div className="flex-1 overflow-y-auto p-6 bg-[#0A0A0A]">
       <div className="max-w-2xl mx-auto space-y-6">
-        <h1 className="text-xl font-bold text-stone-800">Profile</h1>
+        <h1 className="text-xl font-bold text-[#FAFAFA]">Profile</h1>
 
         {/* Tab Bar */}
-        <div role="tablist" aria-label="Profile" className="flex gap-1 bg-stone-100 rounded-xl p-1">
+        <div role="tablist" aria-label="Profile" className="flex gap-1 bg-[#161616] rounded-xl p-1 border border-[#2A2A2A]">
           {tabs.map((tab) => (
             <button
               key={tab.id}
@@ -824,8 +824,8 @@ export function ProfilePage() {
               onKeyDown={handleProfileTabKeyDown}
               className={`flex items-center gap-2 flex-1 justify-center rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
                 activeTab === tab.id
-                  ? "bg-white text-stone-800 shadow-sm"
-                  : "text-stone-500 hover:text-stone-700"
+                  ? "bg-[#D4A574] text-[#0A0A0A]"
+                  : "text-[#999999] hover:text-[#E5E5E5]"
               }`}
             >
               <tab.Icon className="size-4" />
@@ -836,38 +836,38 @@ export function ProfilePage() {
 
         {/* Account Details Tab */}
         {activeTab === "account" && (
-          <form onSubmit={handleSaveProfile} role="tabpanel" id="profile-tabpanel-account" aria-labelledby="profile-tab-account" className="bg-white rounded-2xl shadow-sm border border-stone-200 p-6 space-y-4">
+          <form onSubmit={handleSaveProfile} role="tabpanel" id="profile-tabpanel-account" aria-labelledby="profile-tab-account" className="bg-[#161616] rounded-2xl border border-[#2A2A2A] p-6 space-y-4">
             {profileMsg && (
-              <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+              <div className="flex items-center gap-2 text-sm text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-2">
                 <CheckCircle2 className="size-4 flex-shrink-0" /> {profileMsg}
               </div>
             )}
             {profileError && (
-              <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+              <div className="flex items-center gap-2 text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
                 <AlertCircle className="size-4 flex-shrink-0" /> {profileError}
               </div>
             )}
 
-            <div className="flex items-center gap-4 mb-6 pb-6 border-b border-stone-200">
+            <div className="flex items-center gap-4 mb-6 pb-6 border-b border-[#2A2A2A]">
               <div className="relative">
-                <div className="size-24 rounded-full bg-stone-200 flex items-center justify-center overflow-hidden">
+                <div className="size-24 rounded-full bg-[#2A2A2A] flex items-center justify-center overflow-hidden">
                   {user?.userPhotoPath ? (
                     <img src={user.userPhotoPath} alt="Avatar" className="size-full object-cover" />
                   ) : (
-                    <span className="text-2xl font-bold text-stone-400">{user?.userName?.charAt(0)?.toUpperCase() ?? "?"}</span>
+                    <span className="text-2xl font-bold text-[#666666]">{user?.userName?.charAt(0)?.toUpperCase() ?? "?"}</span>
                   )}
                 </div>
                 <button
                   type="button"
                   onClick={() => avatarInputRef.current?.click()}
-                  className="absolute -bottom-1 -right-1 p-1.5 bg-amber-600 text-white rounded-full hover:bg-amber-700 transition-colors"
+                  className="absolute -bottom-1 -right-1 p-1.5 bg-[#D4A574] text-[#0A0A0A] rounded-full hover:bg-[#C4956A] transition-colors"
                 >
                   <Camera className="size-4" />
                 </button>
               </div>
               <div>
-                <p className="font-medium text-stone-800">{user?.userName}</p>
-                <p className="text-sm text-stone-500">{user?.userEmail}</p>
+                <p className="font-medium text-[#FAFAFA]">{user?.userName}</p>
+                <p className="text-sm text-[#999999]">{user?.userEmail}</p>
               </div>
               <input
                 ref={avatarInputRef}
@@ -878,23 +878,23 @@ export function ProfilePage() {
               />
             </div>
             {avatarError && (
-              <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+              <div className="flex items-center gap-2 text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
                 <AlertCircle className="size-4 flex-shrink-0" /> {avatarError}
               </div>
             )}
 
             <div>
-              <label className="block text-sm font-medium text-stone-700 mb-1">Email</label>
-              <input type="email" value={user?.userEmail ?? ""} disabled className={`${inputClass} bg-stone-50`} />
+              <label className="block text-sm font-medium text-[#E5E5E5] mb-1">Email</label>
+              <input type="email" value={user?.userEmail ?? ""} disabled className={`${inputClass} bg-[#1E1E1E] text-[#666666]`} />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-stone-700 mb-1">Name</label>
+              <label className="block text-sm font-medium text-[#E5E5E5] mb-1">Name</label>
               <input type="text" value={name} onChange={(e) => setName(e.target.value)} required className={inputClass} />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-stone-700 mb-1">Bio</label>
+              <label className="block text-sm font-medium text-[#E5E5E5] mb-1">Bio</label>
               <textarea
                 value={bio}
                 onChange={(e) => setBio(e.target.value.slice(0, 300))}
@@ -903,64 +903,64 @@ export function ProfilePage() {
                 placeholder="Tell us about yourself..."
                 className={`${inputClass} resize-none`}
               />
-              <p className="text-xs text-stone-400 mt-1">{bio.length}/300</p>
+              <p className="text-xs text-[#666666] mt-1">{bio.length}/300</p>
             </div>
 
-            <div className="border-t border-stone-200 pt-4 mt-2">
-              <h3 className="text-sm font-semibold text-stone-700 mb-3">Address</h3>
+            <div className="border-t border-[#2A2A2A] pt-4 mt-2">
+              <h3 className="text-sm font-semibold text-[#E5E5E5] mb-3">Address</h3>
               <div className="space-y-3">
                 <div>
-                  <label className="block text-xs text-stone-500 mb-1">Address Line 1</label>
+                  <label className="block text-xs text-[#999999] mb-1">Address Line 1</label>
                   <input type="text" value={addressLine1} onChange={(e) => setAddressLine1(e.target.value)} className={inputClass} />
                 </div>
                 <div>
-                  <label className="block text-xs text-stone-500 mb-1">Address Line 2</label>
+                  <label className="block text-xs text-[#999999] mb-1">Address Line 2</label>
                   <input type="text" value={addressLine2} onChange={(e) => setAddressLine2(e.target.value)} className={inputClass} />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs text-stone-500 mb-1">Suburb / City</label>
+                    <label className="block text-xs text-[#999999] mb-1">Suburb / City</label>
                     <input type="text" value={suburb} onChange={(e) => setSuburb(e.target.value)} className={inputClass} />
                   </div>
                   <div>
-                    <label className="block text-xs text-stone-500 mb-1">State / Province</label>
+                    <label className="block text-xs text-[#999999] mb-1">State / Province</label>
                     <input type="text" value={stateProv} onChange={(e) => setStateProv(e.target.value)} className={inputClass} />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs text-stone-500 mb-1">Country</label>
+                    <label className="block text-xs text-[#999999] mb-1">Country</label>
                     <input type="text" value={country} onChange={(e) => setCountry(e.target.value)} className={inputClass} />
                   </div>
                   <div>
-                    <label className="block text-xs text-stone-500 mb-1">Postcode</label>
+                    <label className="block text-xs text-[#999999] mb-1">Postcode</label>
                     <input type="text" value={postcode} onChange={(e) => setPostcode(e.target.value)} className={inputClass} />
                   </div>
                 </div>
               </div>
             </div>
 
-            <div className="border-t border-stone-200 pt-4 mt-2">
-              <h3 className="text-sm font-semibold text-stone-700 mb-3">Social Media Accounts</h3>
+            <div className="border-t border-[#2A2A2A] pt-4 mt-2">
+              <h3 className="text-sm font-semibold text-[#E5E5E5] mb-3">Social Media Accounts</h3>
               <div className="space-y-3">
                 <div>
-                  <label className="block text-xs text-stone-500 mb-1">Facebook</label>
+                  <label className="block text-xs text-[#999999] mb-1">Facebook</label>
                   <input type="url" value={facebook} onChange={(e) => setFacebook(e.target.value)} placeholder="https://facebook.com/yourpage" className={inputClass} />
                 </div>
                 <div>
-                  <label className="block text-xs text-stone-500 mb-1">Instagram</label>
+                  <label className="block text-xs text-[#999999] mb-1">Instagram</label>
                   <input type="url" value={instagram} onChange={(e) => setInstagram(e.target.value)} placeholder="https://instagram.com/yourhandle" className={inputClass} />
                 </div>
                 <div>
-                  <label className="block text-xs text-stone-500 mb-1">TikTok</label>
+                  <label className="block text-xs text-[#999999] mb-1">TikTok</label>
                   <input type="url" value={tiktok} onChange={(e) => setTiktok(e.target.value)} placeholder="https://tiktok.com/@yourhandle" className={inputClass} />
                 </div>
                 <div>
-                  <label className="block text-xs text-stone-500 mb-1">Pinterest</label>
+                  <label className="block text-xs text-[#999999] mb-1">Pinterest</label>
                   <input type="url" value={pinterest} onChange={(e) => setPinterest(e.target.value)} placeholder="https://pinterest.com/yourpage" className={inputClass} />
                 </div>
                 <div>
-                  <label className="block text-xs text-stone-500 mb-1">LinkedIn</label>
+                  <label className="block text-xs text-[#999999] mb-1">LinkedIn</label>
                   <input type="url" value={linkedin} onChange={(e) => setLinkedin(e.target.value)} placeholder="https://linkedin.com/in/yourprofile" className={inputClass} />
                 </div>
               </div>
@@ -970,7 +970,7 @@ export function ProfilePage() {
               <button
                 type="submit"
                 disabled={savingProfile}
-                className="px-4 py-2 text-sm font-medium text-white bg-amber-600 rounded-lg hover:bg-amber-700 disabled:opacity-50 transition-colors"
+                className="px-4 py-2 text-sm font-medium text-[#0A0A0A] bg-[#D4A574] rounded-xl hover:bg-[#C4956A] disabled:opacity-50 transition-colors"
               >
                 {savingProfile && <Loader2 className="size-4 animate-spin inline mr-1" />}
                 Save
@@ -979,7 +979,7 @@ export function ProfilePage() {
               <button
                 type="button"
                 onClick={() => navigate("/mfa-setup")}
-                className="px-4 py-2 text-sm font-medium text-amber-700 bg-amber-50 rounded-lg hover:bg-amber-100 transition-colors flex items-center gap-1"
+                className="px-4 py-2 text-sm font-medium text-[#D4A574] bg-[#D4A574]/10 border border-[#D4A574]/20 rounded-xl hover:bg-[#D4A574]/20 transition-colors flex items-center gap-1"
               >
                 <ShieldCheck className="size-4" />
                 {user?.mfaEnabled ? "Manage MFA" : "Enable MFA"}
@@ -990,32 +990,32 @@ export function ProfilePage() {
 
         {/* Change Password Tab */}
         {activeTab === "password" && (
-          <form onSubmit={handleChangePassword} role="tabpanel" id="profile-tabpanel-password" aria-labelledby="profile-tab-password" className="bg-white rounded-2xl shadow-sm border border-stone-200 p-6 space-y-4">
+          <form onSubmit={handleChangePassword} role="tabpanel" id="profile-tabpanel-password" aria-labelledby="profile-tab-password" className="bg-[#161616] rounded-2xl border border-[#2A2A2A] p-6 space-y-4">
             {passwordMsg && (
-              <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+              <div className="flex items-center gap-2 text-sm text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-2">
                 <CheckCircle2 className="size-4 flex-shrink-0" /> {passwordMsg}
               </div>
             )}
             {passwordError && (
-              <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+              <div className="flex items-center gap-2 text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
                 <AlertCircle className="size-4 flex-shrink-0" /> {passwordError}
               </div>
             )}
 
             <div>
-              <label className="block text-sm font-medium text-stone-700 mb-1">Current Password</label>
+              <label className="block text-sm font-medium text-[#E5E5E5] mb-1">Current Password</label>
               <input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} required className={inputClass} />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-stone-700 mb-1">New Password</label>
+              <label className="block text-sm font-medium text-[#E5E5E5] mb-1">New Password</label>
               <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required minLength={8} className={inputClass} placeholder="Min 8 chars" />
             </div>
 
             <button
               type="submit"
               disabled={savingPassword}
-              className="px-4 py-2 text-sm font-medium text-white bg-amber-600 rounded-lg hover:bg-amber-700 disabled:opacity-50 transition-colors"
+              className="px-4 py-2 text-sm font-medium text-[#0A0A0A] bg-[#D4A574] rounded-xl hover:bg-[#C4956A] disabled:opacity-50 transition-colors"
             >
               {savingPassword && <Loader2 className="size-4 animate-spin inline mr-1" />}
               Change Password
@@ -1025,88 +1025,88 @@ export function ProfilePage() {
 
         {/* Organisation Tab */}
         {activeTab === "organisation" && (
-          <div role="tabpanel" id="profile-tabpanel-organisation" aria-labelledby="profile-tab-organisation" className="bg-white rounded-2xl shadow-sm border border-stone-200 p-6 space-y-4">
+          <div role="tabpanel" id="profile-tabpanel-organisation" aria-labelledby="profile-tab-organisation" className="bg-[#161616] rounded-2xl border border-[#2A2A2A] p-6 space-y-4">
             {orgMsg && (
-              <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+              <div className="flex items-center gap-2 text-sm text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-2">
                 <CheckCircle2 className="size-4 flex-shrink-0" /> {orgMsg}
               </div>
             )}
             {orgError && (
-              <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+              <div className="flex items-center gap-2 text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
                 <AlertCircle className="size-4 flex-shrink-0" /> {orgError}
               </div>
             )}
 
             {orgLoading ? (
               <div className="flex justify-center py-4">
-                <Loader2 className="size-5 animate-spin text-stone-400" />
+                <Loader2 className="size-5 animate-spin text-[#666666]" />
               </div>
             ) : org ? (
               <div className="space-y-3">
                 {user && myOrgRole === "admin" && editingOrg ? (
                   <form onSubmit={handleUpdateOrg} className="space-y-3">
                     <div>
-                      <label className="block text-sm font-medium text-stone-700 mb-1">Organisation Name *</label>
+                      <label className="block text-sm font-medium text-[#E5E5E5] mb-1">Organisation Name *</label>
                       <input type="text" value={editOrgName} onChange={(e) => setEditOrgName(e.target.value)} required className={inputClass} />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-stone-700 mb-1">Address Line 1</label>
+                      <label className="block text-sm font-medium text-[#E5E5E5] mb-1">Address Line 1</label>
                       <input type="text" value={editOrgAddressLine1} onChange={(e) => setEditOrgAddressLine1(e.target.value)} className={inputClass} />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-stone-700 mb-1">Address Line 2</label>
+                      <label className="block text-sm font-medium text-[#E5E5E5] mb-1">Address Line 2</label>
                       <input type="text" value={editOrgAddressLine2} onChange={(e) => setEditOrgAddressLine2(e.target.value)} className={inputClass} />
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-xs text-stone-500 mb-1">Suburb / City</label>
+                        <label className="block text-xs text-[#999999] mb-1">Suburb / City</label>
                         <input type="text" value={editOrgSuburb} onChange={(e) => setEditOrgSuburb(e.target.value)} className={inputClass} />
                       </div>
                       <div>
-                        <label className="block text-xs text-stone-500 mb-1">State / Province</label>
+                        <label className="block text-xs text-[#999999] mb-1">State / Province</label>
                         <input type="text" value={editOrgStateProv} onChange={(e) => setEditOrgStateProv(e.target.value)} className={inputClass} />
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-xs text-stone-500 mb-1">Country</label>
+                        <label className="block text-xs text-[#999999] mb-1">Country</label>
                         <input type="text" value={editOrgCountry} onChange={(e) => setEditOrgCountry(e.target.value)} className={inputClass} />
                       </div>
                       <div>
-                        <label className="block text-xs text-stone-500 mb-1">Postcode</label>
+                        <label className="block text-xs text-[#999999] mb-1">Postcode</label>
                         <input type="text" value={editOrgPostcode} onChange={(e) => setEditOrgPostcode(e.target.value)} className={inputClass} />
                       </div>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-stone-700 mb-1">Website</label>
+                      <label className="block text-sm font-medium text-[#E5E5E5] mb-1">Website</label>
                       <input type="text" value={editOrgWebsite} onChange={(e) => setEditOrgWebsite(e.target.value)} className={inputClass} />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-stone-700 mb-1">Email</label>
+                      <label className="block text-sm font-medium text-[#E5E5E5] mb-1">Email</label>
                       <input type="email" value={editOrgEmail} onChange={(e) => setEditOrgEmail(e.target.value)} className={inputClass} />
                     </div>
 
-                    <div className="border-t border-stone-200 pt-3 mt-1">
-                      <h4 className="text-sm font-semibold text-stone-700 mb-3">Social Media Accounts</h4>
+                    <div className="border-t border-[#2A2A2A] pt-3 mt-1">
+                      <h4 className="text-sm font-semibold text-[#E5E5E5] mb-3">Social Media Accounts</h4>
                       <div className="space-y-3">
                         <div>
-                          <label className="block text-xs text-stone-500 mb-1">Facebook</label>
+                          <label className="block text-xs text-[#999999] mb-1">Facebook</label>
                           <input type="url" value={editOrgFacebook} onChange={(e) => setEditOrgFacebook(e.target.value)} placeholder="https://facebook.com/yourpage" className={inputClass} />
                         </div>
                         <div>
-                          <label className="block text-xs text-stone-500 mb-1">Instagram</label>
+                          <label className="block text-xs text-[#999999] mb-1">Instagram</label>
                           <input type="url" value={editOrgInstagram} onChange={(e) => setEditOrgInstagram(e.target.value)} placeholder="https://instagram.com/yourhandle" className={inputClass} />
                         </div>
                         <div>
-                          <label className="block text-xs text-stone-500 mb-1">TikTok</label>
+                          <label className="block text-xs text-[#999999] mb-1">TikTok</label>
                           <input type="url" value={editOrgTiktok} onChange={(e) => setEditOrgTiktok(e.target.value)} placeholder="https://tiktok.com/@yourhandle" className={inputClass} />
                         </div>
                         <div>
-                          <label className="block text-xs text-stone-500 mb-1">Pinterest</label>
+                          <label className="block text-xs text-[#999999] mb-1">Pinterest</label>
                           <input type="url" value={editOrgPinterest} onChange={(e) => setEditOrgPinterest(e.target.value)} placeholder="https://pinterest.com/yourpage" className={inputClass} />
                         </div>
                         <div>
-                          <label className="block text-xs text-stone-500 mb-1">LinkedIn</label>
+                          <label className="block text-xs text-[#999999] mb-1">LinkedIn</label>
                           <input type="url" value={editOrgLinkedin} onChange={(e) => setEditOrgLinkedin(e.target.value)} placeholder="https://linkedin.com/company/yourorg" className={inputClass} />
                         </div>
                       </div>
@@ -1116,7 +1116,7 @@ export function ProfilePage() {
                       <button
                         type="submit"
                         disabled={savingOrg}
-                        className="px-4 py-2 text-sm font-medium text-white bg-amber-600 rounded-lg hover:bg-amber-700 disabled:opacity-50 transition-colors"
+                        className="px-4 py-2 text-sm font-medium text-[#0A0A0A] bg-[#D4A574] rounded-xl hover:bg-[#C4956A] disabled:opacity-50 transition-colors"
                       >
                         {savingOrg && <Loader2 className="size-4 animate-spin inline mr-1" />}
                         Save Changes
@@ -1124,7 +1124,7 @@ export function ProfilePage() {
                       <button
                         type="button"
                         onClick={() => setEditingOrg(false)}
-                        className="px-4 py-2 text-sm font-medium text-stone-600 bg-stone-100 rounded-lg hover:bg-stone-200 transition-colors"
+                        className="px-4 py-2 text-sm font-medium text-[#E5E5E5] bg-[#1E1E1E] border border-[#2A2A2A] rounded-xl hover:bg-[#2A2A2A] transition-colors"
                       >
                         Cancel
                       </button>
@@ -1134,13 +1134,13 @@ export function ProfilePage() {
                   <>
                     <div className="grid grid-cols-2 gap-3 text-sm">
                       <div>
-                        <span className="text-stone-500">Name:</span>
-                        <p className="font-medium text-stone-800">{org.organisationName}</p>
+                        <span className="text-[#999999]">Name:</span>
+                        <p className="font-medium text-[#FAFAFA]">{org.organisationName}</p>
                       </div>
                       {org.organisationAddressLine1 && (
                         <div className="col-span-2">
-                          <span className="text-stone-500">Address:</span>
-                          <p className="font-medium text-stone-800">
+                          <span className="text-[#999999]">Address:</span>
+                          <p className="font-medium text-[#FAFAFA]">
                             {[org.organisationAddressLine1, org.organisationAddressLine2].filter(Boolean).join(", ")}
                             {org.organisationSuburb && <><br />{[org.organisationSuburb, org.organisationState, org.organisationPostcode].filter(Boolean).join(" ")}</>}
                             {org.organisationCountry && <><br />{org.organisationCountry}</>}
@@ -1149,27 +1149,27 @@ export function ProfilePage() {
                       )}
                       {org.organisationWebsite && (
                         <div>
-                          <span className="text-stone-500">Website:</span>
-                          <p className="font-medium text-stone-800">{org.organisationWebsite}</p>
+                          <span className="text-[#999999]">Website:</span>
+                          <p className="font-medium text-[#FAFAFA]">{org.organisationWebsite}</p>
                         </div>
                       )}
                       {org.organisationEmail && (
                         <div>
-                          <span className="text-stone-500">Email:</span>
-                          <p className="font-medium text-stone-800">{org.organisationEmail}</p>
+                          <span className="text-[#999999]">Email:</span>
+                          <p className="font-medium text-[#FAFAFA]">{org.organisationEmail}</p>
                         </div>
                       )}
                     </div>
 
                     {(org.organisationFacebook || org.organisationInstagram || org.organisationTiktok || org.organisationPinterest || org.organisationLinkedin) && (
-                      <div className="border-t border-stone-100 pt-3">
-                        <p className="text-xs text-stone-500 mb-2">Social Media</p>
+                      <div className="border-t border-[#2A2A2A] pt-3">
+                        <p className="text-xs text-[#999999] mb-2">Social Media</p>
                         <div className="flex flex-wrap gap-2 text-sm">
-                          {org.organisationFacebook && <a href={org.organisationFacebook} target="_blank" rel="noopener noreferrer" className="text-amber-600 hover:underline">Facebook</a>}
-                          {org.organisationInstagram && <a href={org.organisationInstagram} target="_blank" rel="noopener noreferrer" className="text-amber-600 hover:underline">Instagram</a>}
-                          {org.organisationTiktok && <a href={org.organisationTiktok} target="_blank" rel="noopener noreferrer" className="text-amber-600 hover:underline">TikTok</a>}
-                          {org.organisationPinterest && <a href={org.organisationPinterest} target="_blank" rel="noopener noreferrer" className="text-amber-600 hover:underline">Pinterest</a>}
-                          {org.organisationLinkedin && <a href={org.organisationLinkedin} target="_blank" rel="noopener noreferrer" className="text-amber-600 hover:underline">LinkedIn</a>}
+                          {org.organisationFacebook && <a href={org.organisationFacebook} target="_blank" rel="noopener noreferrer" className="text-[#D4A574] hover:text-[#C4956A] hover:underline">Facebook</a>}
+                          {org.organisationInstagram && <a href={org.organisationInstagram} target="_blank" rel="noopener noreferrer" className="text-[#D4A574] hover:text-[#C4956A] hover:underline">Instagram</a>}
+                          {org.organisationTiktok && <a href={org.organisationTiktok} target="_blank" rel="noopener noreferrer" className="text-[#D4A574] hover:text-[#C4956A] hover:underline">TikTok</a>}
+                          {org.organisationPinterest && <a href={org.organisationPinterest} target="_blank" rel="noopener noreferrer" className="text-[#D4A574] hover:text-[#C4956A] hover:underline">Pinterest</a>}
+                          {org.organisationLinkedin && <a href={org.organisationLinkedin} target="_blank" rel="noopener noreferrer" className="text-[#D4A574] hover:text-[#C4956A] hover:underline">LinkedIn</a>}
                         </div>
                       </div>
                     )}
@@ -1178,7 +1178,7 @@ export function ProfilePage() {
                       <button
                         type="button"
                         onClick={startEditingOrg}
-                        className="text-sm text-amber-600 hover:text-amber-700 transition-colors"
+                        className="text-sm text-[#D4A574] hover:text-[#C4956A] transition-colors"
                       >
                         Edit Organisation
                       </button>
@@ -1191,13 +1191,13 @@ export function ProfilePage() {
                   </>
                 )}
 
-                <div className="flex items-center gap-2 bg-stone-50 rounded-lg px-3 py-2">
-                  <span className="text-sm text-stone-500">Join Key:</span>
-                  <code className="text-sm font-mono font-medium text-stone-800">{org.joinKey}</code>
+                <div className="flex items-center gap-2 bg-[#0A0A0A] border border-[#2A2A2A] rounded-lg px-3 py-2">
+                  <span className="text-sm text-[#999999]">Join Key:</span>
+                  <code className="text-sm font-mono font-medium text-[#FAFAFA]">{org.joinKey}</code>
                   <button
                     type="button"
                     onClick={handleCopyKey}
-                    className="ml-auto text-stone-400 hover:text-stone-600 transition-colors"
+                    className="ml-auto text-[#666666] hover:text-[#E5E5E5] transition-colors"
                     title="Copy join key"
                   >
                     {copiedKey ? <CheckCircle2 className="size-4 text-green-500" /> : <Copy className="size-4" />}
@@ -1208,7 +1208,7 @@ export function ProfilePage() {
                   type="button"
                   onClick={handleLeaveOrg}
                   disabled={savingOrg}
-                  className="text-sm text-red-600 hover:text-red-700 transition-colors"
+                  className="text-sm text-red-400 hover:text-red-300 transition-colors"
                 >
                   Leave Organisation
                 </button>
@@ -1231,7 +1231,7 @@ export function ProfilePage() {
                     aria-controls="org-tabpanel-create"
                     id="org-tab-create"
                     onClick={() => setOrgTab("create")}
-                    className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${orgTab === "create" ? "bg-amber-600 text-white" : "bg-stone-100 text-stone-600 hover:bg-stone-200"}`}
+                    className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${orgTab === "create" ? "bg-[#D4A574] text-[#0A0A0A]" : "bg-[#1E1E1E] text-[#999999] hover:bg-[#2A2A2A]"}`}
                   >
                     Create
                   </button>
@@ -1242,7 +1242,7 @@ export function ProfilePage() {
                     aria-controls="org-tabpanel-join"
                     id="org-tab-join"
                     onClick={() => setOrgTab("join")}
-                    className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${orgTab === "join" ? "bg-amber-600 text-white" : "bg-stone-100 text-stone-600 hover:bg-stone-200"}`}
+                    className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${orgTab === "join" ? "bg-[#D4A574] text-[#0A0A0A]" : "bg-[#1E1E1E] text-[#999999] hover:bg-[#2A2A2A]"}`}
                   >
                     Join
                   </button>
@@ -1251,67 +1251,67 @@ export function ProfilePage() {
                 {orgTab === "create" ? (
                   <form onSubmit={handleCreateOrg} role="tabpanel" id="org-tabpanel-create" aria-labelledby="org-tab-create" className="space-y-3">
                     <div>
-                      <label className="block text-sm font-medium text-stone-700 mb-1">Organisation Name *</label>
+                      <label className="block text-sm font-medium text-[#E5E5E5] mb-1">Organisation Name *</label>
                       <input type="text" value={orgName} onChange={(e) => setOrgName(e.target.value)} required className={inputClass} />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-stone-700 mb-1">Address Line 1</label>
+                      <label className="block text-sm font-medium text-[#E5E5E5] mb-1">Address Line 1</label>
                       <input type="text" value={orgAddressLine1} onChange={(e) => setOrgAddressLine1(e.target.value)} className={inputClass} />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-stone-700 mb-1">Address Line 2</label>
+                      <label className="block text-sm font-medium text-[#E5E5E5] mb-1">Address Line 2</label>
                       <input type="text" value={orgAddressLine2} onChange={(e) => setOrgAddressLine2(e.target.value)} className={inputClass} />
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-xs text-stone-500 mb-1">Suburb / City</label>
+                        <label className="block text-xs text-[#999999] mb-1">Suburb / City</label>
                         <input type="text" value={orgSuburb} onChange={(e) => setOrgSuburb(e.target.value)} className={inputClass} />
                       </div>
                       <div>
-                        <label className="block text-xs text-stone-500 mb-1">State / Province</label>
+                        <label className="block text-xs text-[#999999] mb-1">State / Province</label>
                         <input type="text" value={orgStateProv} onChange={(e) => setOrgStateProv(e.target.value)} className={inputClass} />
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-xs text-stone-500 mb-1">Country</label>
+                        <label className="block text-xs text-[#999999] mb-1">Country</label>
                         <input type="text" value={orgCountry} onChange={(e) => setOrgCountry(e.target.value)} className={inputClass} />
                       </div>
                       <div>
-                        <label className="block text-xs text-stone-500 mb-1">Postcode</label>
+                        <label className="block text-xs text-[#999999] mb-1">Postcode</label>
                         <input type="text" value={orgPostcode} onChange={(e) => setOrgPostcode(e.target.value)} className={inputClass} />
                       </div>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-stone-700 mb-1">Website</label>
+                      <label className="block text-sm font-medium text-[#E5E5E5] mb-1">Website</label>
                       <input type="text" value={orgWebsite} onChange={(e) => setOrgWebsite(e.target.value)} className={inputClass} />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-stone-700 mb-1">Email</label>
+                      <label className="block text-sm font-medium text-[#E5E5E5] mb-1">Email</label>
                       <input type="email" value={orgEmail} onChange={(e) => setOrgEmail(e.target.value)} className={inputClass} />
                     </div>
 
-                    <div className="border-t border-stone-200 pt-3 mt-1">
-                      <h4 className="text-sm font-semibold text-stone-700 mb-3">Social Media Accounts</h4>
+                    <div className="border-t border-[#2A2A2A] pt-3 mt-1">
+                      <h4 className="text-sm font-semibold text-[#E5E5E5] mb-3">Social Media Accounts</h4>
                       <div className="space-y-3">
                         <div>
-                          <label className="block text-xs text-stone-500 mb-1">Facebook</label>
+                          <label className="block text-xs text-[#999999] mb-1">Facebook</label>
                           <input type="url" value={orgFacebook} onChange={(e) => setOrgFacebook(e.target.value)} placeholder="https://facebook.com/yourpage" className={inputClass} />
                         </div>
                         <div>
-                          <label className="block text-xs text-stone-500 mb-1">Instagram</label>
+                          <label className="block text-xs text-[#999999] mb-1">Instagram</label>
                           <input type="url" value={orgInstagram} onChange={(e) => setOrgInstagram(e.target.value)} placeholder="https://instagram.com/yourhandle" className={inputClass} />
                         </div>
                         <div>
-                          <label className="block text-xs text-stone-500 mb-1">TikTok</label>
+                          <label className="block text-xs text-[#999999] mb-1">TikTok</label>
                           <input type="url" value={orgTiktok} onChange={(e) => setOrgTiktok(e.target.value)} placeholder="https://tiktok.com/@yourhandle" className={inputClass} />
                         </div>
                         <div>
-                          <label className="block text-xs text-stone-500 mb-1">Pinterest</label>
+                          <label className="block text-xs text-[#999999] mb-1">Pinterest</label>
                           <input type="url" value={orgPinterest} onChange={(e) => setOrgPinterest(e.target.value)} placeholder="https://pinterest.com/yourpage" className={inputClass} />
                         </div>
                         <div>
-                          <label className="block text-xs text-stone-500 mb-1">LinkedIn</label>
+                          <label className="block text-xs text-[#999999] mb-1">LinkedIn</label>
                           <input type="url" value={orgLinkedin} onChange={(e) => setOrgLinkedin(e.target.value)} placeholder="https://linkedin.com/company/yourorg" className={inputClass} />
                         </div>
                       </div>
@@ -1320,7 +1320,7 @@ export function ProfilePage() {
                     <button
                       type="submit"
                       disabled={savingOrg}
-                      className="px-4 py-2 text-sm font-medium text-white bg-amber-600 rounded-lg hover:bg-amber-700 disabled:opacity-50 transition-colors"
+                      className="px-4 py-2 text-sm font-medium text-[#0A0A0A] bg-[#D4A574] rounded-xl hover:bg-[#C4956A] disabled:opacity-50 transition-colors"
                     >
                       {savingOrg && <Loader2 className="size-4 animate-spin inline mr-1" />}
                       Create Organisation
@@ -1329,7 +1329,7 @@ export function ProfilePage() {
                 ) : (
                   <form onSubmit={handleJoinOrg} role="tabpanel" id="org-tabpanel-join" aria-labelledby="org-tab-join" className="space-y-3">
                     <div>
-                      <label className="block text-sm font-medium text-stone-700 mb-1">Join Key</label>
+                      <label className="block text-sm font-medium text-[#E5E5E5] mb-1">Join Key</label>
                       <input
                         type="text"
                         value={joinKey}
@@ -1342,7 +1342,7 @@ export function ProfilePage() {
                     <button
                       type="submit"
                       disabled={savingOrg}
-                      className="px-4 py-2 text-sm font-medium text-white bg-amber-600 rounded-lg hover:bg-amber-700 disabled:opacity-50 transition-colors"
+                      className="px-4 py-2 text-sm font-medium text-[#0A0A0A] bg-[#D4A574] rounded-xl hover:bg-[#C4956A] disabled:opacity-50 transition-colors"
                     >
                       {savingOrg && <Loader2 className="size-4 animate-spin inline mr-1" />}
                       Join Organisation

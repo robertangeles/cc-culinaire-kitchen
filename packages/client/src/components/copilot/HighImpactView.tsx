@@ -23,7 +23,7 @@ interface HighImpactDish {
 
 const DIFFICULTY_COLORS: Record<string, string> = {
   beginner: "bg-green-600/80 text-green-100",
-  intermediate: "bg-amber-600/80 text-amber-100",
+  intermediate: "bg-[#D4A574]/80 text-amber-100",
   advanced: "bg-orange-600/80 text-orange-100",
   expert: "bg-red-600/80 text-red-100",
 };
@@ -32,7 +32,7 @@ const CLASSIFICATION_STYLES: Record<string, string> = {
   Star: "bg-yellow-600/80 text-yellow-100",
   Plowhorse: "bg-blue-600/80 text-blue-100",
   Puzzle: "bg-purple-600/80 text-purple-100",
-  Dog: "bg-gray-600/80 text-gray-200",
+  Dog: "bg-[#2A2A2A]/80 text-[#E5E5E5]",
 };
 
 export function HighImpactView() {
@@ -66,7 +66,7 @@ export function HighImpactView() {
   if (loading) {
     return (
       <div className="flex justify-center py-16">
-        <Loader2 className="size-8 animate-spin text-amber-500" />
+        <Loader2 className="size-8 animate-spin text-[#D4A574]" />
       </div>
     );
   }
@@ -84,15 +84,15 @@ export function HighImpactView() {
   if (dishes.length === 0) {
     return (
       <div className="text-center py-16">
-        <Flame className="size-10 mx-auto text-gray-600 mb-3" />
-        <p className="text-gray-400">Generate some recipes first to see high-impact dishes.</p>
+        <Flame className="size-10 mx-auto text-[#666666] mb-3" />
+        <p className="text-[#999999]">Generate some recipes first to see high-impact dishes.</p>
       </div>
     );
   }
 
   return (
     <div>
-      <p className="text-sm text-gray-500 mb-4">
+      <p className="text-sm text-[#666666] mb-4">
         Top 10 dishes ranked by complexity. Focus prep resources on these first.
       </p>
 
@@ -100,11 +100,11 @@ export function HighImpactView() {
         {dishes.map((dish, index) => (
           <div
             key={dish.id}
-            className="bg-gray-800 rounded-xl p-5 border border-gray-700 hover:border-gray-600 transition-colors"
+            className="bg-[#161616] rounded-xl p-5 border border-[#2A2A2A] hover:border-[#2A2A2A] transition-colors"
           >
             {/* Rank + Title */}
             <div className="flex items-start gap-3 mb-3">
-              <span className="text-2xl font-bold text-amber-500/60 shrink-0">
+              <span className="text-2xl font-bold text-[#D4A574]/60 shrink-0">
                 #{index + 1}
               </span>
               <div className="min-w-0">
@@ -119,7 +119,7 @@ export function HighImpactView() {
               {/* Difficulty */}
               <span
                 className={`text-xs font-medium px-2.5 py-1 rounded-full ${
-                  DIFFICULTY_COLORS[dish.difficulty] ?? "bg-gray-600 text-gray-200"
+                  DIFFICULTY_COLORS[dish.difficulty] ?? "bg-[#2A2A2A] text-[#E5E5E5]"
                 }`}
               >
                 {dish.difficulty}
@@ -129,7 +129,7 @@ export function HighImpactView() {
               {dish.classification && (
                 <span
                   className={`text-xs font-medium px-2.5 py-1 rounded-full ${
-                    CLASSIFICATION_STYLES[dish.classification] ?? "bg-gray-600 text-gray-200"
+                    CLASSIFICATION_STYLES[dish.classification] ?? "bg-[#2A2A2A] text-[#E5E5E5]"
                   }`}
                 >
                   {dish.classification}
@@ -140,23 +140,23 @@ export function HighImpactView() {
             {/* Stats */}
             <div className="grid grid-cols-2 gap-2">
               {dish.prepTime != null && (
-                <div className="flex items-center gap-2 text-sm text-gray-400">
-                  <Clock className="size-3.5 text-gray-500" />
+                <div className="flex items-center gap-2 text-sm text-[#999999]">
+                  <Clock className="size-3.5 text-[#666666]" />
                   <span>Prep: {dish.prepTime}m</span>
                 </div>
               )}
               {dish.cookTime != null && (
-                <div className="flex items-center gap-2 text-sm text-gray-400">
-                  <Clock className="size-3.5 text-gray-500" />
+                <div className="flex items-center gap-2 text-sm text-[#999999]">
+                  <Clock className="size-3.5 text-[#666666]" />
                   <span>Cook: {dish.cookTime}m</span>
                 </div>
               )}
-              <div className="flex items-center gap-2 text-sm text-gray-400">
-                <ShoppingBasket className="size-3.5 text-gray-500" />
+              <div className="flex items-center gap-2 text-sm text-[#999999]">
+                <ShoppingBasket className="size-3.5 text-[#666666]" />
                 <span>{dish.ingredientCount} ingredients</span>
               </div>
-              <div className="flex items-center gap-2 text-sm text-gray-400">
-                <ListChecks className="size-3.5 text-gray-500" />
+              <div className="flex items-center gap-2 text-sm text-[#999999]">
+                <ListChecks className="size-3.5 text-[#666666]" />
                 <span>{dish.stepCount} steps</span>
               </div>
             </div>

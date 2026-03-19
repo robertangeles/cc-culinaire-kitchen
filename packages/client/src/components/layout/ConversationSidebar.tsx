@@ -21,7 +21,7 @@ export function ConversationSidebar() {
       {/* Toggle button — always visible */}
       <button
         onClick={() => setCollapsed(!collapsed)}
-        className="flex items-start pt-3 px-1 bg-stone-800 border-l border-stone-700 text-stone-400 hover:text-white transition-colors"
+        className="flex items-start pt-3 px-1 bg-[#0A0A0A] border-l border-[#1E1E1E] text-[#666666] hover:text-white transition-colors"
         title={collapsed ? "Show conversations" : "Hide conversations"}
       >
         {collapsed ? <PanelRightOpen className="size-4" /> : <PanelRightClose className="size-4" />}
@@ -29,13 +29,13 @@ export function ConversationSidebar() {
 
       {/* Sidebar panel */}
       <aside
-        className={`flex flex-col bg-stone-800 text-white border-l border-stone-700 overflow-hidden transition-all duration-200 ${
+        className={`flex flex-col bg-[#0A0A0A] text-white border-l border-[#1E1E1E] overflow-hidden transition-all duration-200 ${
           collapsed ? "w-0" : "w-64"
         }`}
       >
         {/* Header */}
-        <div className="px-4 py-3 border-b border-stone-700 flex-shrink-0">
-          <h2 className="text-xs font-semibold text-stone-400 uppercase tracking-wider whitespace-nowrap">
+        <div className="px-4 py-3 border-b border-[#1E1E1E] flex-shrink-0">
+          <h2 className="text-xs font-semibold text-[#999999] uppercase tracking-wider whitespace-nowrap">
             Conversations
           </h2>
         </div>
@@ -47,26 +47,26 @@ export function ConversationSidebar() {
 
         {/* Session footer */}
         {isGuest && guestUsage ? (
-          <div className="px-4 py-3 border-t border-stone-700 text-xs flex-shrink-0">
-            <p className="text-stone-300">
-              <span className="text-amber-400 font-semibold">{guestUsage.sessionsRemaining}</span>{" "}
+          <div className="px-4 py-3 border-t border-[#1E1E1E] text-xs flex-shrink-0">
+            <p className="text-[#999999]">
+              <span className="text-[#D4A574] font-semibold">{guestUsage.sessionsRemaining}</span>{" "}
               of {guestUsage.sessionsLimit} guest session
               {guestUsage.sessionsRemaining !== 1 ? "s" : ""} remaining
             </p>
             <Link
               to="/register"
-              className="mt-1 inline-flex items-center gap-1 text-amber-400 hover:text-amber-300 font-medium transition-colors"
+              className="mt-1 inline-flex items-center gap-1 text-[#D4A574] hover:text-[#C4956A] font-medium transition-colors"
             >
               <UserPlus className="size-3" />
               Register for free
             </Link>
           </div>
         ) : user && user.subscriptionTier !== "paid" ? (
-          <div className="px-4 py-3 border-t border-stone-700 text-xs flex-shrink-0">
-            <p className="text-stone-300">
+          <div className="px-4 py-3 border-t border-[#1E1E1E] text-xs flex-shrink-0">
+            <p className="text-[#999999]">
               {user.freeSessions > 0 ? (
                 <>
-                  <span className="text-amber-400 font-semibold">{user.freeSessions}</span> free
+                  <span className="text-[#D4A574] font-semibold">{user.freeSessions}</span> free
                   session{user.freeSessions !== 1 ? "s" : ""} remaining
                 </>
               ) : (
@@ -76,7 +76,7 @@ export function ConversationSidebar() {
             {user.subscriptionStatus !== "active" && user.freeSessions <= 2 && (
               <button
                 onClick={() => (window.location.href = "/profile")}
-                className="mt-1 text-amber-400 hover:text-amber-300 font-medium transition-colors"
+                className="mt-1 text-[#D4A574] hover:text-[#C4956A] font-medium transition-colors"
               >
                 Upgrade now
               </button>

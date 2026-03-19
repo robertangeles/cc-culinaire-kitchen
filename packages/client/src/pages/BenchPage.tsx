@@ -152,16 +152,16 @@ function BenchContent() {
       <BenchNotificationToast notifications={notifications} onDismiss={dismissNotification} />
 
       {/* Header */}
-      <div className="bg-white border-b border-stone-200 px-4 py-3">
+      <div className="bg-[#161616] border-b border-[#2A2A2A] px-4 py-3">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-lg font-bold text-stone-800">The Bench</h1>
-            <p className="text-xs text-stone-500">Where the kitchen talks</p>
+            <h1 className="text-lg font-bold text-[#FAFAFA]">The Bench</h1>
+            <p className="text-xs text-[#999999]">Where the kitchen talks</p>
           </div>
           {!isReadOnly && (
             <div className="flex items-center gap-1">
-              <span className={`size-2 rounded-full ${connected ? "bg-green-500" : "bg-stone-300"}`} />
-              <span className="text-xs text-stone-400">
+              <span className={`size-2 rounded-full ${connected ? "bg-emerald-400" : "bg-[#666666]"}`} />
+              <span className="text-xs text-[#666666]">
                 {connected ? "Connected" : "Connecting..."}
               </span>
             </div>
@@ -174,8 +174,8 @@ function BenchContent() {
             onClick={() => setTab("everyone")}
             className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
               tab === "everyone"
-                ? "bg-amber-100 text-amber-800"
-                : "text-stone-500 hover:bg-stone-100"
+                ? "bg-[#D4A574] text-[#0A0A0A]"
+                : "text-[#999999] hover:bg-[#1E1E1E]"
             }`}
           >
             <Users className="size-4" />
@@ -186,8 +186,8 @@ function BenchContent() {
               onClick={() => setTab("my-kitchen")}
               className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                 tab === "my-kitchen"
-                  ? "bg-amber-100 text-amber-800"
-                  : "text-stone-500 hover:bg-stone-100"
+                  ? "bg-[#D4A574] text-[#0A0A0A]"
+                  : "text-[#999999] hover:bg-[#1E1E1E]"
               }`}
             >
               <Building2 className="size-4" />
@@ -199,8 +199,8 @@ function BenchContent() {
               onClick={() => setTab("messages")}
               className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                 tab === "messages"
-                  ? "bg-amber-100 text-amber-800"
-                  : "text-stone-500 hover:bg-stone-100"
+                  ? "bg-[#D4A574] text-[#0A0A0A]"
+                  : "text-[#999999] hover:bg-[#1E1E1E]"
               }`}
             >
               <MessageCircle className="size-4" />
@@ -265,11 +265,11 @@ function BenchContent() {
 
       {/* Input or registration prompt */}
       {isReadOnly ? (
-        <div className="border-t border-stone-200 bg-stone-50 px-4 py-4 text-center">
-          <p className="text-sm text-stone-500 mb-2">Sign in to join the conversation</p>
+        <div className="border-t border-[#2A2A2A] bg-[#161616] px-4 py-4 text-center">
+          <p className="text-sm text-[#999999] mb-2">Sign in to join the conversation</p>
           <Link
             to="/login"
-            className="inline-flex items-center gap-2 px-4 py-2 bg-amber-600 text-white text-sm font-medium rounded-lg hover:bg-amber-700 transition-colors"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-[#D4A574] text-[#0A0A0A] text-sm font-medium rounded-xl hover:bg-[#C4956A] transition-colors"
           >
             <LogIn className="size-4" />
             Sign In

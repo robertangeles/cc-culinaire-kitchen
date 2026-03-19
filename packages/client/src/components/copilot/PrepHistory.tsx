@@ -71,7 +71,7 @@ export function PrepHistory() {
   if (loading) {
     return (
       <div className="flex justify-center py-16">
-        <Loader2 className="size-8 animate-spin text-amber-500" />
+        <Loader2 className="size-8 animate-spin text-[#D4A574]" />
       </div>
     );
   }
@@ -89,9 +89,9 @@ export function PrepHistory() {
   if (sessions.length === 0) {
     return (
       <div className="text-center py-16">
-        <Calendar className="size-10 mx-auto text-gray-600 mb-3" />
-        <p className="text-gray-400">No prep sessions yet.</p>
-        <p className="text-sm text-gray-500 mt-1">Start your first one today!</p>
+        <Calendar className="size-10 mx-auto text-[#666666] mb-3" />
+        <p className="text-[#999999]">No prep sessions yet.</p>
+        <p className="text-sm text-[#666666] mt-1">Start your first one today!</p>
       </div>
     );
   }
@@ -114,23 +114,23 @@ export function PrepHistory() {
         return (
           <div
             key={session.id}
-            className="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden"
+            className="bg-[#161616] rounded-lg border border-[#2A2A2A] overflow-hidden"
           >
             {/* Summary row */}
             <button
               onClick={() => toggleExpand(session.id)}
-              className="w-full flex items-center gap-4 p-4 text-left hover:bg-gray-700/50 transition-colors min-h-[44px]"
+              className="w-full flex items-center gap-4 p-4 text-left hover:bg-[#1E1E1E]/50 transition-colors min-h-[44px]"
             >
               {isExpanded ? (
-                <ChevronDown className="size-4 text-gray-500 shrink-0" />
+                <ChevronDown className="size-4 text-[#666666] shrink-0" />
               ) : (
-                <ChevronRight className="size-4 text-gray-500 shrink-0" />
+                <ChevronRight className="size-4 text-[#666666] shrink-0" />
               )}
 
               {/* Date */}
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium text-white">{dateLabel}</p>
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-[#666666]">
                   {session.expectedCovers} expected
                   {session.actualCovers != null ? ` \u2192 ${session.actualCovers} actual` : ""}
                   {" covers"}
@@ -139,12 +139,12 @@ export function PrepHistory() {
 
               {/* Completion bar */}
               <div className="w-24 shrink-0">
-                <div className="flex items-center justify-between text-xs text-gray-400 mb-1">
+                <div className="flex items-center justify-between text-xs text-[#999999] mb-1">
                   <span>{completionPct}%</span>
                 </div>
-                <div className="w-full bg-gray-700 rounded-full h-2">
+                <div className="w-full bg-[#1E1E1E] rounded-full h-2">
                   <div
-                    className="h-2 rounded-full bg-amber-500 transition-all duration-500"
+                    className="h-2 rounded-full bg-[#D4A574]/100 transition-all duration-500"
                     style={{ width: `${completionPct}%` }}
                   />
                 </div>
@@ -152,12 +152,12 @@ export function PrepHistory() {
 
               {/* Task counts */}
               <div className="text-right shrink-0">
-                <p className="text-xs text-gray-400">
+                <p className="text-xs text-[#999999]">
                   <span className="text-green-400">{done}</span>
                   {" / "}
                   {total}
                   {skipped > 0 && (
-                    <span className="text-gray-500"> ({skipped} skipped)</span>
+                    <span className="text-[#666666]"> ({skipped} skipped)</span>
                   )}
                 </p>
               </div>
@@ -165,7 +165,7 @@ export function PrepHistory() {
 
             {/* Expanded task list */}
             {isExpanded && session.tasks?.length > 0 && (
-              <div className="border-t border-gray-700 px-4 py-3">
+              <div className="border-t border-[#2A2A2A] px-4 py-3">
                 <div className="space-y-2">
                   {session.tasks.map((task) => (
                     <div
@@ -180,24 +180,24 @@ export function PrepHistory() {
                       {task.status === "done" ? (
                         <Check className="size-4 text-green-500 shrink-0" />
                       ) : task.status === "skipped" ? (
-                        <X className="size-4 text-gray-500 shrink-0" />
+                        <X className="size-4 text-[#666666] shrink-0" />
                       ) : (
-                        <Minus className="size-4 text-gray-600 shrink-0" />
+                        <Minus className="size-4 text-[#666666] shrink-0" />
                       )}
 
                       <span
-                        className={`text-gray-300 ${
+                        className={`text-[#E5E5E5] ${
                           task.status === "done" ? "line-through" : ""
                         }`}
                       >
                         {task.dishName}
                       </span>
-                      <span className="text-gray-500">
+                      <span className="text-[#666666]">
                         {task.ingredientName} &mdash; {task.quantity} {task.unit}
                       </span>
 
                       {task.assignedTo && (
-                        <span className="text-xs text-amber-400 ml-auto">
+                        <span className="text-xs text-[#D4A574] ml-auto">
                           {task.assignedTo}
                         </span>
                       )}

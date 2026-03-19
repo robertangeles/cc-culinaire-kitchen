@@ -40,13 +40,13 @@ const PERIOD_OPTIONS: { value: Period; label: string }[] = [
 ];
 
 const REASON_COLORS: Record<string, string> = {
-  Overproduction: "bg-amber-500",
-  Spoilage: "bg-red-500",
-  "Trim/Peel": "bg-green-500",
+  Overproduction: "bg-[#D4A574]/100",
+  Spoilage: "bg-red-900/300",
+  "Trim/Peel": "bg-green-900/300",
   "Plate Waste": "bg-blue-500",
   Contamination: "bg-purple-500",
   Expired: "bg-orange-500",
-  Other: "bg-gray-500",
+  Other: "bg-[#2A2A2A]",
 };
 
 export function WasteDashboard({ onSwitchTab, teamView = false }: Props) {
@@ -147,7 +147,7 @@ export function WasteDashboard({ onSwitchTab, teamView = false }: Props) {
   }
 
   const TrendIcon = trendDirection === "up" ? TrendingUp : trendDirection === "down" ? TrendingDown : Minus;
-  const trendColor = trendDirection === "up" ? "text-red-400" : trendDirection === "down" ? "text-emerald-400" : "text-gray-400";
+  const trendColor = trendDirection === "up" ? "text-red-400" : trendDirection === "down" ? "text-emerald-400" : "text-[#999999]";
 
   // Monthly extrapolation
   const days = getDaysCount();
@@ -172,8 +172,8 @@ export function WasteDashboard({ onSwitchTab, teamView = false }: Props) {
             onClick={() => setPeriod(opt.value)}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors min-h-[44px] ${
               period === opt.value
-                ? "bg-amber-600 text-white"
-                : "bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700"
+                ? "bg-[#D4A574] text-white"
+                : "bg-[#161616] text-[#999999] hover:text-white hover:bg-[#1E1E1E]"
             }`}
           >
             {opt.label}
@@ -188,14 +188,14 @@ export function WasteDashboard({ onSwitchTab, teamView = false }: Props) {
             type="date"
             value={customStart}
             onChange={(e) => setCustomStart(e.target.value)}
-            className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:ring-2 focus:ring-amber-500 min-h-[44px]"
+            className="px-3 py-2 bg-[#161616] border border-[#2A2A2A] rounded-lg text-white text-sm focus:ring-2 focus:ring-[#D4A574]/50 min-h-[44px]"
           />
-          <span className="text-gray-500 self-center">to</span>
+          <span className="text-[#666666] self-center">to</span>
           <input
             type="date"
             value={customEnd}
             onChange={(e) => setCustomEnd(e.target.value)}
-            className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:ring-2 focus:ring-amber-500 min-h-[44px]"
+            className="px-3 py-2 bg-[#161616] border border-[#2A2A2A] rounded-lg text-white text-sm focus:ring-2 focus:ring-[#D4A574]/50 min-h-[44px]"
           />
         </div>
       )}
@@ -203,7 +203,7 @@ export function WasteDashboard({ onSwitchTab, teamView = false }: Props) {
       {/* Loading */}
       {loading && (
         <div className="flex justify-center py-16">
-          <Loader2 className="size-8 animate-spin text-amber-500" />
+          <Loader2 className="size-8 animate-spin text-[#D4A574]" />
         </div>
       )}
 
@@ -217,14 +217,14 @@ export function WasteDashboard({ onSwitchTab, teamView = false }: Props) {
       {/* Empty state */}
       {!loading && !error && (!data || (Number(data?.totalEntries ?? 0) === 0)) && (
         <div className="text-center py-16">
-          <Leaf className="size-16 mx-auto text-gray-600 mb-4" />
-          <h3 className="text-lg font-semibold text-gray-300 mb-2">Start logging waste to see your kitchen&apos;s impact</h3>
-          <p className="text-sm text-gray-500 mb-6 max-w-md mx-auto">
+          <Leaf className="size-16 mx-auto text-[#666666] mb-4" />
+          <h3 className="text-lg font-semibold text-[#E5E5E5] mb-2">Start logging waste to see your kitchen&apos;s impact</h3>
+          <p className="text-sm text-[#666666] mb-6 max-w-md mx-auto">
             Once you start tracking, you&apos;ll see exactly where your money goes and how to save it.
           </p>
           <button
             onClick={() => onSwitchTab("log")}
-            className="inline-flex items-center gap-2 px-6 py-3 bg-amber-600 hover:bg-amber-700 text-white font-medium rounded-lg transition-colors min-h-[44px]"
+            className="inline-flex items-center gap-2 px-6 py-3 bg-[#D4A574] hover:bg-[#C4956A] text-white font-medium rounded-lg transition-colors min-h-[44px]"
           >
             Go to Log Waste
           </button>
@@ -237,17 +237,17 @@ export function WasteDashboard({ onSwitchTab, teamView = false }: Props) {
           {/* Summary cards — 2x2 on mobile, 4 in a row on desktop */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             <SummaryCard
-              icon={<Scale className="size-5 text-amber-500" />}
+              icon={<Scale className="size-5 text-[#D4A574]" />}
               label="Total Waste"
               value={`${Number(data?.totalWeight ?? 0).toLocaleString(undefined, { maximumFractionDigits: 1 })} kg`}
             />
             <SummaryCard
-              icon={<DollarSign className="size-5 text-amber-500" />}
+              icon={<DollarSign className="size-5 text-[#D4A574]" />}
               label="Total Cost"
               value={`$${Number(data?.totalCost ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
             />
             <SummaryCard
-              icon={<ClipboardList className="size-5 text-amber-500" />}
+              icon={<ClipboardList className="size-5 text-[#D4A574]" />}
               label="Entries"
               value={String(data?.totalEntries ?? 0)}
             />
@@ -262,10 +262,10 @@ export function WasteDashboard({ onSwitchTab, teamView = false }: Props) {
 
           {/* Monthly extrapolation */}
           {monthlyEstimate > 0 && (
-            <div className="mb-8 bg-amber-900/20 border border-amber-700/30 rounded-xl p-4 text-center">
-              <p className="text-sm text-amber-300">
+            <div className="mb-8 bg-[#D4A574]/10 border border-[#D4A574]/20 rounded-xl p-4 text-center">
+              <p className="text-sm text-[#D4A574]">
                 At this rate, your kitchen wastes approximately{" "}
-                <span className="font-bold text-amber-400">
+                <span className="font-bold text-[#D4A574]">
                   ${monthlyEstimate.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                 </span>{" "}
                 per month
@@ -276,10 +276,10 @@ export function WasteDashboard({ onSwitchTab, teamView = false }: Props) {
           {/* Charts row */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
             {/* Top 5 by cost */}
-            <div className="bg-gray-800 rounded-xl p-6 border border-gray-700">
-              <h3 className="text-sm font-medium text-gray-400 uppercase tracking-wider mb-4">Top Ingredients by Cost</h3>
+            <div className="bg-[#161616] rounded-xl p-6 border border-[#2A2A2A]">
+              <h3 className="text-sm font-medium text-[#999999] uppercase tracking-wider mb-4">Top Ingredients by Cost</h3>
               {!data?.topByCost?.length ? (
-                <p className="text-gray-500 text-sm">No data yet</p>
+                <p className="text-[#666666] text-sm">No data yet</p>
               ) : (
                 <BarList
                   items={data.topByCost.map((i) => ({
@@ -287,16 +287,16 @@ export function WasteDashboard({ onSwitchTab, teamView = false }: Props) {
                     value: Number(i?.cost ?? 0),
                     display: `$${Number(i?.cost ?? 0).toFixed(2)}`,
                   }))}
-                  color="bg-amber-500"
+                  color="bg-[#D4A574]/100"
                 />
               )}
             </div>
 
             {/* Top 5 by weight */}
-            <div className="bg-gray-800 rounded-xl p-6 border border-gray-700">
-              <h3 className="text-sm font-medium text-gray-400 uppercase tracking-wider mb-4">Top Ingredients by Weight</h3>
+            <div className="bg-[#161616] rounded-xl p-6 border border-[#2A2A2A]">
+              <h3 className="text-sm font-medium text-[#999999] uppercase tracking-wider mb-4">Top Ingredients by Weight</h3>
               {!data?.topByWeight?.length ? (
-                <p className="text-gray-500 text-sm">No data yet</p>
+                <p className="text-[#666666] text-sm">No data yet</p>
               ) : (
                 <BarList
                   items={data.topByWeight.map((i) => ({
@@ -304,17 +304,17 @@ export function WasteDashboard({ onSwitchTab, teamView = false }: Props) {
                     value: Number(i?.weight ?? 0),
                     display: `${Number(i?.weight ?? 0).toLocaleString()} ${i?.unit ?? "kg"}`,
                   }))}
-                  color="bg-amber-500"
+                  color="bg-[#D4A574]/100"
                 />
               )}
             </div>
           </div>
 
           {/* Waste by reason */}
-          <div className="bg-gray-800 rounded-xl p-6 border border-gray-700 mb-8">
-            <h3 className="text-sm font-medium text-gray-400 uppercase tracking-wider mb-4">Waste by Reason</h3>
+          <div className="bg-[#161616] rounded-xl p-6 border border-[#2A2A2A] mb-8">
+            <h3 className="text-sm font-medium text-[#999999] uppercase tracking-wider mb-4">Waste by Reason</h3>
             {!data?.byReason?.length ? (
-              <p className="text-gray-500 text-sm">No data yet</p>
+              <p className="text-[#666666] text-sm">No data yet</p>
             ) : (
               <div className="space-y-3">
                 {data.byReason.map((r) => {
@@ -323,18 +323,18 @@ export function WasteDashboard({ onSwitchTab, teamView = false }: Props) {
                   const pct = reasonTotalCost > 0 ? Math.round((cost / reasonTotalCost) * 100) : 0;
                   const maxCost = Math.max(...(data?.byReason ?? []).map((x) => Number(x?.cost ?? 0)), 1);
                   const barWidth = Math.max((cost / maxCost) * 100, 2);
-                  const barColor = REASON_COLORS[r?.reason ?? ""] ?? "bg-gray-500";
+                  const barColor = REASON_COLORS[r?.reason ?? ""] ?? "bg-[#2A2A2A]";
 
                   return (
                     <div key={r?.reason ?? "unknown"}>
                       <div className="flex items-center justify-between text-sm mb-1">
-                        <span className="text-gray-300 truncate mr-2">{r?.reason || "Unspecified"}</span>
-                        <span className="text-gray-400 shrink-0">
+                        <span className="text-[#E5E5E5] truncate mr-2">{r?.reason || "Unspecified"}</span>
+                        <span className="text-[#999999] shrink-0">
                           {count} entries — ${cost.toFixed(2)}{" "}
-                          <span className="text-gray-500">({pct}%)</span>
+                          <span className="text-[#666666]">({pct}%)</span>
                         </span>
                       </div>
-                      <div className="w-full bg-gray-700 rounded-full h-2">
+                      <div className="w-full bg-[#1E1E1E] rounded-full h-2">
                         <div
                           className={`h-2 rounded-full transition-all duration-500 ${barColor}`}
                           style={{ width: `${barWidth}%` }}
@@ -348,10 +348,10 @@ export function WasteDashboard({ onSwitchTab, teamView = false }: Props) {
           </div>
 
           {/* Daily trend — horizontally scrollable on mobile */}
-          <div className="bg-gray-800 rounded-xl p-6 border border-gray-700 mb-8">
-            <h3 className="text-sm font-medium text-gray-400 uppercase tracking-wider mb-4">Daily Waste Trend</h3>
+          <div className="bg-[#161616] rounded-xl p-6 border border-[#2A2A2A] mb-8">
+            <h3 className="text-sm font-medium text-[#999999] uppercase tracking-wider mb-4">Daily Waste Trend</h3>
             {!data?.dailyTotals?.length ? (
-              <p className="text-gray-500 text-sm">No data yet</p>
+              <p className="text-[#666666] text-sm">No data yet</p>
             ) : (
               <div className="overflow-x-auto">
                 <div style={{ minWidth: `${Math.max((data?.dailyTotals?.length ?? 0) * 28, 300)}px` }}>
@@ -362,11 +362,11 @@ export function WasteDashboard({ onSwitchTab, teamView = false }: Props) {
           </div>
 
           {/* Industry benchmark */}
-          <div className="bg-gray-800/50 rounded-xl p-4 border border-gray-700 flex items-start gap-3">
-            <BarChart3 className="size-5 text-amber-500 shrink-0 mt-0.5" />
+          <div className="bg-[#161616]/50 rounded-xl p-4 border border-[#2A2A2A] flex items-start gap-3">
+            <BarChart3 className="size-5 text-[#D4A574] shrink-0 mt-0.5" />
             <div>
-              <p className="text-sm text-gray-300 font-medium">Industry Benchmark</p>
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-sm text-[#E5E5E5] font-medium">Industry Benchmark</p>
+              <p className="text-xs text-[#666666] mt-1">
                 Industry average waste: 4-10% of food purchases. Track your purchases to see where you stand.
               </p>
             </div>
@@ -395,13 +395,13 @@ function SummaryCard({
   sublabel?: string;
 }) {
   return (
-    <div className="bg-gray-800 rounded-xl p-4 border border-gray-700">
+    <div className="bg-[#161616] rounded-xl p-4 border border-[#2A2A2A]">
       <div className="flex items-center gap-2 mb-2">
         {icon}
-        <span className="text-xs text-gray-400 font-medium uppercase tracking-wider">{label}</span>
+        <span className="text-xs text-[#999999] font-medium uppercase tracking-wider">{label}</span>
       </div>
       <p className={`text-xl font-bold ${valueClass}`}>{value}</p>
-      {sublabel && <p className="text-xs text-gray-500 mt-1">{sublabel}</p>}
+      {sublabel && <p className="text-xs text-[#666666] mt-1">{sublabel}</p>}
     </div>
   );
 }
@@ -420,12 +420,12 @@ function BarList({
       {items.map((item) => (
         <div key={item?.label ?? "unknown"}>
           <div className="flex items-center justify-between text-sm mb-1">
-            <span className="text-gray-300 truncate mr-2">{item?.label}</span>
-            <span className="text-gray-400 shrink-0">{item?.display}</span>
+            <span className="text-[#E5E5E5] truncate mr-2">{item?.label}</span>
+            <span className="text-[#999999] shrink-0">{item?.display}</span>
           </div>
-          <div className="w-full bg-gray-700 rounded-full h-2">
+          <div className="w-full bg-[#1E1E1E] rounded-full h-2">
             <div
-              className={`h-2 rounded-full transition-all duration-500 ${item?.color || color || "bg-amber-500"}`}
+              className={`h-2 rounded-full transition-all duration-500 ${item?.color || color || "bg-[#D4A574]/100"}`}
               style={{ width: `${Math.max(((item?.value ?? 0) / max) * 100, 2)}%` }}
             />
           </div>
@@ -448,14 +448,14 @@ function DailyBarChart({ data }: { data: { date: string; weight: number; cost: n
         return (
           <div key={d?.date} className="flex flex-col items-center flex-1 min-w-[24px] group relative">
             {/* Tooltip */}
-            <div className="hidden group-hover:block absolute bottom-full mb-1 bg-gray-700 text-xs text-white px-2 py-1 rounded shadow-lg whitespace-nowrap z-10">
+            <div className="hidden group-hover:block absolute bottom-full mb-1 bg-[#1E1E1E] text-xs text-white px-2 py-1 rounded shadow-lg whitespace-nowrap z-10">
               {dateLabel}: {weight} kg — ${cost.toFixed(2)}
             </div>
             <div
-              className="w-full bg-amber-500 rounded-t transition-all duration-300 hover:bg-amber-400"
+              className="w-full bg-[#D4A574]/100 rounded-t transition-all duration-300 hover:bg-[#C4956A]"
               style={{ height: `${heightPct}%` }}
             />
-            <span className="text-[9px] text-gray-500 mt-1 truncate w-full text-center">
+            <span className="text-[9px] text-[#666666] mt-1 truncate w-full text-center">
               {new Date(d?.date).getDate()}
             </span>
           </div>

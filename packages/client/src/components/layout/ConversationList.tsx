@@ -46,15 +46,15 @@ function ConversationItem({
   return (
     <button
       onClick={onSelect}
-      className={`group w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left text-sm transition-colors ${
+      className={`group w-full flex items-center gap-2 px-3 py-2 rounded-xl text-left text-sm transition-colors ${
         isActive
-          ? "bg-stone-700 text-white"
-          : "text-stone-400 hover:text-white hover:bg-stone-700/50"
+          ? "bg-[#1E1E1E] text-white"
+          : "text-[#999999] hover:text-white hover:bg-[#161616]"
       }`}
     >
       <div className="flex-1 min-w-0">
         <p className="truncate">{conv.conversationTitle}</p>
-        <p className="text-[10px] text-stone-500 mt-0.5">
+        <p className="text-[10px] text-[#666666] mt-0.5">
           {formatShortDate(conv.updatedDttm)}
         </p>
       </div>
@@ -63,7 +63,7 @@ function ConversationItem({
           e.stopPropagation();
           onDelete();
         }}
-        className="hidden group-hover:flex items-center p-1 text-stone-500 hover:text-red-400 transition-colors"
+        className="hidden group-hover:flex items-center p-1 text-[#666666] hover:text-red-400 transition-colors"
       >
         <Trash2 className="size-3.5" />
       </span>
@@ -87,7 +87,7 @@ export function ConversationList() {
       <div className="px-3 pt-2 pb-1">
         <button
           onClick={() => { incrementChatKey(); navigate("/chat/new"); }}
-          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-stone-400 hover:text-white hover:bg-stone-700/50 transition-colors"
+          className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-sm text-[#999999] hover:text-white hover:bg-[#161616] transition-colors"
         >
           <Plus className="size-4" />
           New Chat
@@ -98,7 +98,7 @@ export function ConversationList() {
       <div className="flex-1 overflow-y-auto px-3 py-1 space-y-0.5">
         {isLoading && (
           <div className="flex justify-center py-4">
-            <Loader2 className="size-4 animate-spin text-stone-500" />
+            <Loader2 className="size-4 animate-spin text-[#666666]" />
           </div>
         )}
         {!isLoading &&

@@ -42,25 +42,25 @@ function ToastItem({ notification, onDismiss }: { notification: BenchNotificatio
         notification.onClick?.();
         onDismiss(notification.id);
       }}
-      className="bg-white rounded-xl shadow-lg border border-stone-200 p-3 flex items-start gap-3 cursor-pointer hover:bg-stone-50 transition-colors animate-slide-in"
+      className="bg-[#1E1E1E] rounded-xl shadow-lg border border-[#2A2A2A] p-3 flex items-start gap-3 cursor-pointer hover:bg-[#2A2A2A] transition-colors animate-slide-in"
     >
       {notification.userPhotoPath ? (
         <img src={notification.userPhotoPath} alt={notification.userName} className="size-9 rounded-full object-cover flex-shrink-0" />
       ) : (
-        <div className="size-9 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
-          <span className="text-sm font-semibold text-amber-700">{notification.userName.charAt(0).toUpperCase()}</span>
+        <div className="size-9 rounded-full bg-[#D4A574]/15 flex items-center justify-center flex-shrink-0">
+          <span className="text-sm font-semibold text-[#D4A574]">{notification.userName.charAt(0).toUpperCase()}</span>
         </div>
       )}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1">
-          <MessageCircle className="size-3 text-amber-600" />
-          <span className="text-xs font-semibold text-stone-800">{notification.userName}</span>
+          <MessageCircle className="size-3 text-[#D4A574]" />
+          <span className="text-xs font-semibold text-[#FAFAFA]">{notification.userName}</span>
         </div>
-        <p className="text-xs text-stone-600 truncate">{notification.message}</p>
+        <p className="text-xs text-[#999999] truncate">{notification.message}</p>
       </div>
       <button
         onClick={(e) => { e.stopPropagation(); onDismiss(notification.id); }}
-        className="p-0.5 rounded hover:bg-stone-200 text-stone-400 flex-shrink-0"
+        className="p-0.5 rounded hover:bg-[#2A2A2A] text-[#666666] flex-shrink-0"
       >
         <X className="size-3" />
       </button>

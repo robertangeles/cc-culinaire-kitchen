@@ -203,7 +203,7 @@ export function PersonalisationTab() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full text-stone-400">
+      <div className="flex items-center justify-center h-full text-[#999999]">
         <Loader2 className="size-5 animate-spin mr-2" />
         Loading…
       </div>
@@ -213,9 +213,9 @@ export function PersonalisationTab() {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="px-8 py-6 border-b border-stone-200">
-        <h1 className="text-xl font-semibold text-stone-900">Personalisation</h1>
-        <p className="mt-1 text-sm text-stone-500">
+      <div className="px-8 py-6 border-b border-[#2A2A2A]">
+        <h1 className="text-xl font-semibold text-[#FAFAFA]">Personalisation</h1>
+        <p className="mt-1 text-sm text-[#999999]">
           Manage the selectable options shown to users in the Kitchen Profile wizard and settings.
           Changes take effect immediately — no redeploy required.
         </p>
@@ -223,7 +223,7 @@ export function PersonalisationTab() {
 
       {/* Error banner */}
       {error && (
-        <div className="mx-8 mt-4 flex items-center gap-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-4 py-3">
+        <div className="mx-8 mt-4 flex items-center gap-2 text-sm text-red-400 bg-red-900/30 border border-red-700/40 rounded-lg px-4 py-3">
           <AlertCircle className="size-4 flex-shrink-0" />
           {error}
           <button onClick={() => setError("")} className="ml-auto">
@@ -240,25 +240,25 @@ export function PersonalisationTab() {
           const isAdding = adding[key];
 
           return (
-            <div key={key} className="border border-stone-200 rounded-xl overflow-hidden">
+            <div key={key} className="border border-[#2A2A2A] rounded-xl overflow-hidden">
               {/* Section header */}
               <button
                 type="button"
                 onClick={() => toggleExpand(key)}
-                className="w-full flex items-center justify-between px-5 py-4 bg-stone-50 hover:bg-stone-100 transition-colors"
+                className="w-full flex items-center justify-between px-5 py-4 bg-[#0A0A0A] hover:bg-[#1E1E1E] transition-colors"
               >
-                <span className="text-sm font-semibold text-stone-800">
+                <span className="text-sm font-semibold text-[#FAFAFA]">
                   {label}
-                  <span className="ml-2 text-xs font-normal text-stone-400">
+                  <span className="ml-2 text-xs font-normal text-[#999999]">
                     {items.filter((o) => o.activeInd).length} active
                     {items.some((o) => !o.activeInd) ? `, ${items.filter((o) => !o.activeInd).length} inactive` : ""}
                   </span>
                 </span>
-                {isExpanded ? <ChevronUp className="size-4 text-stone-400" /> : <ChevronDown className="size-4 text-stone-400" />}
+                {isExpanded ? <ChevronUp className="size-4 text-[#999999]" /> : <ChevronDown className="size-4 text-[#999999]" />}
               </button>
 
               {isExpanded && (
-                <div className="divide-y divide-stone-100">
+                <div className="divide-y divide-[#2A2A2A]">
                   {/* Option rows */}
                   {items.map((opt) => (
                     <div
@@ -272,7 +272,7 @@ export function PersonalisationTab() {
                             type="text"
                             value={editForm.label}
                             onChange={(e) => setEditForm((p) => ({ ...p, label: e.target.value }))}
-                            className="w-full rounded-lg border border-stone-300 px-3 py-1.5 text-sm text-stone-800 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                            className="w-full rounded-lg border border-[#2A2A2A] px-3 py-1.5 text-sm text-[#FAFAFA] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50"
                             placeholder="Label"
                             autoFocus
                           />
@@ -281,7 +281,7 @@ export function PersonalisationTab() {
                               type="text"
                               value={editForm.description}
                               onChange={(e) => setEditForm((p) => ({ ...p, description: e.target.value }))}
-                              className="w-full rounded-lg border border-stone-300 px-3 py-1.5 text-sm text-stone-500 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                              className="w-full rounded-lg border border-[#2A2A2A] px-3 py-1.5 text-sm text-[#999999] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50"
                               placeholder="Description (optional)"
                             />
                           )}
@@ -289,14 +289,14 @@ export function PersonalisationTab() {
                             <button
                               onClick={() => handleSaveEdit(opt.optionId)}
                               disabled={editSaving || !editForm.label.trim()}
-                              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-amber-600 rounded-lg hover:bg-amber-700 disabled:opacity-50"
+                              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-[#D4A574] rounded-lg hover:bg-[#C4956A] disabled:opacity-50"
                             >
                               {editSaving ? <Loader2 className="size-3 animate-spin" /> : <Check className="size-3" />}
                               Save
                             </button>
                             <button
                               onClick={() => setEditingId(null)}
-                              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-stone-600 bg-stone-100 rounded-lg hover:bg-stone-200"
+                              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[#E5E5E5] bg-[#1E1E1E] rounded-lg hover:bg-[#2A2A2A]"
                             >
                               <X className="size-3" /> Cancel
                             </button>
@@ -305,7 +305,7 @@ export function PersonalisationTab() {
                       ) : deletingId === opt.optionId ? (
                         /* Delete confirm */
                         <div className="flex items-center gap-3">
-                          <span className="text-sm text-stone-700 flex-1">
+                          <span className="text-sm text-[#E5E5E5] flex-1">
                             Delete <strong>{opt.optionLabel}</strong>? This cannot be undone.
                           </span>
                           <button
@@ -318,7 +318,7 @@ export function PersonalisationTab() {
                           </button>
                           <button
                             onClick={() => setDeletingId(null)}
-                            className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-stone-600 bg-stone-100 rounded-lg hover:bg-stone-200"
+                            className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-[#E5E5E5] bg-[#1E1E1E] rounded-lg hover:bg-[#2A2A2A]"
                           >
                             <X className="size-3" /> Cancel
                           </button>
@@ -327,24 +327,24 @@ export function PersonalisationTab() {
                         /* Normal row */
                         <div className="flex items-center gap-3">
                           <div className="flex-1 min-w-0">
-                            <span className="text-sm font-medium text-stone-800">{opt.optionLabel}</span>
+                            <span className="text-sm font-medium text-[#FAFAFA]">{opt.optionLabel}</span>
                             {opt.optionDescription && (
-                              <span className="text-xs text-stone-400 ml-2">{opt.optionDescription}</span>
+                              <span className="text-xs text-[#999999] ml-2">{opt.optionDescription}</span>
                             )}
                             {!opt.activeInd && (
-                              <span className="ml-2 text-xs text-stone-400 bg-stone-100 px-1.5 py-0.5 rounded">inactive</span>
+                              <span className="ml-2 text-xs text-[#999999] bg-[#1E1E1E] px-1.5 py-0.5 rounded">inactive</span>
                             )}
                           </div>
                           <button
                             onClick={() => startEdit(opt)}
-                            className="p-1.5 rounded-lg text-stone-400 hover:text-stone-700 hover:bg-stone-100 transition-colors"
+                            className="p-1.5 rounded-lg text-[#999999] hover:text-[#E5E5E5] hover:bg-[#1E1E1E] transition-colors"
                             title="Edit"
                           >
                             <Pencil className="size-3.5" />
                           </button>
                           <button
                             onClick={() => { setDeletingId(opt.optionId); setEditingId(null); }}
-                            className="p-1.5 rounded-lg text-stone-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                            className="p-1.5 rounded-lg text-[#999999] hover:text-red-400 hover:bg-red-900/30 transition-colors"
                             title="Delete"
                           >
                             <Trash2 className="size-3.5" />
@@ -355,19 +355,19 @@ export function PersonalisationTab() {
                   ))}
 
                   {items.length === 0 && (
-                    <div className="px-5 py-4 text-sm text-stone-400 italic">
+                    <div className="px-5 py-4 text-sm text-[#999999] italic">
                       No options yet. Add one below.
                     </div>
                   )}
 
                   {/* Add form */}
                   {isAdding ? (
-                    <div className="px-5 py-4 bg-amber-50 space-y-2">
+                    <div className="px-5 py-4 bg-[#D4A574]/10 space-y-2">
                       <input
                         type="text"
                         value={addForm[key].label}
                         onChange={(e) => setAddForm((p) => ({ ...p, [key]: { ...p[key], label: e.target.value } }))}
-                        className="w-full rounded-lg border border-stone-300 px-3 py-1.5 text-sm text-stone-800 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                        className="w-full rounded-lg border border-[#2A2A2A] px-3 py-1.5 text-sm text-[#FAFAFA] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50"
                         placeholder="Label (e.g. Nordic / New Nordic)"
                         autoFocus
                       />
@@ -376,7 +376,7 @@ export function PersonalisationTab() {
                           type="text"
                           value={addForm[key].description}
                           onChange={(e) => setAddForm((p) => ({ ...p, [key]: { ...p[key], description: e.target.value } }))}
-                          className="w-full rounded-lg border border-stone-300 px-3 py-1.5 text-sm text-stone-500 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                          className="w-full rounded-lg border border-[#2A2A2A] px-3 py-1.5 text-sm text-[#999999] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50"
                           placeholder="Description (optional)"
                         />
                       )}
@@ -384,14 +384,14 @@ export function PersonalisationTab() {
                         <button
                           onClick={() => handleAdd(key)}
                           disabled={addSaving[key] || !addForm[key].label.trim()}
-                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-amber-600 rounded-lg hover:bg-amber-700 disabled:opacity-50"
+                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-[#D4A574] rounded-lg hover:bg-[#C4956A] disabled:opacity-50"
                         >
                           {addSaving[key] ? <Loader2 className="size-3 animate-spin" /> : <Check className="size-3" />}
                           Add
                         </button>
                         <button
                           onClick={() => toggleAdd(key)}
-                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-stone-600 bg-stone-100 rounded-lg hover:bg-stone-200"
+                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[#E5E5E5] bg-[#1E1E1E] rounded-lg hover:bg-[#2A2A2A]"
                         >
                           <X className="size-3" /> Cancel
                         </button>
@@ -401,7 +401,7 @@ export function PersonalisationTab() {
                     <div className="px-5 py-3">
                       <button
                         onClick={() => toggleAdd(key)}
-                        className="flex items-center gap-2 text-sm text-amber-700 hover:text-amber-900 font-medium"
+                        className="flex items-center gap-2 text-sm text-[#D4A574] hover:text-[#D4A574] font-medium"
                       >
                         <Plus className="size-4" /> Add {label.slice(0, -1)}
                       </button>

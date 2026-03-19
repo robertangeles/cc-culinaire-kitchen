@@ -154,16 +154,16 @@ export function KitchenCopilotPage() {
   // Guest users see sign-up prompt
   if (isGuest || !user) {
     return (
-      <div className="flex-1 overflow-y-auto bg-gray-900">
+      <div className="flex-1 overflow-y-auto bg-[#0A0A0A]">
         <div className="min-h-full flex flex-col items-center justify-center p-6 md:p-10">
-          <ClipboardList className="size-12 mx-auto mb-4 text-amber-500" />
+          <ClipboardList className="size-12 mx-auto mb-4 text-[#D4A574]" />
           <h1 className="text-2xl md:text-3xl font-bold text-white mb-2">Kitchen Copilot</h1>
-          <p className="text-gray-400 mb-6 text-center max-w-md">
+          <p className="text-[#999999] mb-6 text-center max-w-md">
             Sign up to plan your kitchen prep, track cross-usage, and identify high-impact dishes.
           </p>
           <Link
             to="/register"
-            className="inline-flex items-center gap-2 px-6 py-3 bg-amber-600 hover:bg-amber-700 text-white font-medium rounded-lg transition-colors"
+            className="inline-flex items-center gap-2 px-6 py-3 bg-[#D4A574] hover:bg-[#C4956A] text-white font-medium rounded-lg transition-colors"
           >
             <LogIn className="size-4" />
             Sign Up to Plan Your Kitchen Prep
@@ -174,21 +174,21 @@ export function KitchenCopilotPage() {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto bg-gray-900">
+    <div className="flex-1 overflow-y-auto bg-[#0A0A0A]">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="text-center mb-8">
-          <ClipboardList className="size-10 mx-auto mb-3 text-amber-500" />
+          <ClipboardList className="size-10 mx-auto mb-3 text-[#D4A574]" />
           <h1 className="text-2xl md:text-3xl font-bold text-white">Kitchen Copilot</h1>
-          <p className="text-gray-400 mt-2">
+          <p className="text-[#999999] mt-2">
             {getGreeting()}, Chef. Here&apos;s your prep plan for {getTodayDate()}.
           </p>
         </div>
 
         {/* Covers input — show when no active session */}
         {!loading && !sessionData && (
-          <div className="bg-gray-800 rounded-xl p-6 border border-gray-700 mb-8 max-w-md mx-auto">
-            <label htmlFor="covers-input" className="block text-sm font-medium text-gray-300 mb-2">
+          <div className="bg-[#161616] rounded-xl p-6 border border-[#2A2A2A] mb-8 max-w-md mx-auto">
+            <label htmlFor="covers-input" className="block text-sm font-medium text-[#E5E5E5] mb-2">
               How many covers tonight?
             </label>
             <div className="flex gap-3">
@@ -200,12 +200,12 @@ export function KitchenCopilotPage() {
                 value={coversInput}
                 onChange={(e) => setCoversInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") createSession(); }}
-                className="flex-1 px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white text-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent placeholder-gray-500 min-h-[44px]"
+                className="flex-1 px-4 py-3 bg-[#1E1E1E] border border-[#2A2A2A] rounded-lg text-white text-lg focus:ring-2 focus:ring-[#D4A574]/50 focus:border-transparent placeholder-[#666666] min-h-[44px]"
               />
               <button
                 onClick={createSession}
                 disabled={creating || !coversInput || Number(coversInput) < 1}
-                className="px-6 py-3 bg-amber-600 hover:bg-amber-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors min-h-[44px]"
+                className="px-6 py-3 bg-[#D4A574] hover:bg-[#C4956A] disabled:bg-[#2A2A2A] disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors min-h-[44px]"
               >
                 {creating ? <Loader2 className="size-5 animate-spin" /> : "Start Prep"}
               </button>
@@ -219,7 +219,7 @@ export function KitchenCopilotPage() {
         {/* Loading */}
         {loading && (
           <div className="flex justify-center py-16">
-            <Loader2 className="size-8 animate-spin text-amber-500" />
+            <Loader2 className="size-8 animate-spin text-[#D4A574]" />
           </div>
         )}
 
@@ -238,8 +238,8 @@ export function KitchenCopilotPage() {
               onClick={() => setActiveTab(tab.key)}
               className={`px-5 py-2.5 rounded-full text-sm font-medium transition-colors min-h-[44px] ${
                 activeTab === tab.key
-                  ? "bg-amber-600 text-white"
-                  : "bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700"
+                  ? "bg-[#D4A574] text-white"
+                  : "bg-[#161616] text-[#999999] hover:text-white hover:bg-[#1E1E1E]"
               }`}
             >
               {tab.label}

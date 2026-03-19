@@ -12,32 +12,32 @@ export function MessageSkeleton() {
       <div className="max-w-3xl mx-auto flex flex-col gap-6">
         {/* User message skeleton */}
         <div className="flex justify-end">
-          <div className="h-9 w-48 rounded-2xl bg-stone-200" />
+          <div className="h-9 w-48 rounded-2xl bg-[#1E1E1E]" />
         </div>
 
         {/* Assistant message skeleton — multi-line */}
         <div className="flex gap-3">
-          <div className="size-8 rounded-full bg-stone-200 shrink-0 mt-1" />
+          <div className="size-8 rounded-full bg-[#1E1E1E] shrink-0 mt-1" />
           <div className="flex flex-col gap-2 flex-1 max-w-lg">
-            <div className="h-4 w-3/4 rounded bg-stone-200" />
-            <div className="h-4 w-full rounded bg-stone-200" />
-            <div className="h-4 w-5/6 rounded bg-stone-200" />
-            <div className="h-4 w-2/3 rounded bg-stone-200" />
+            <div className="h-4 w-3/4 rounded bg-[#1E1E1E]" />
+            <div className="h-4 w-full rounded bg-[#1E1E1E]" />
+            <div className="h-4 w-5/6 rounded bg-[#1E1E1E]" />
+            <div className="h-4 w-2/3 rounded bg-[#1E1E1E]" />
           </div>
         </div>
 
         {/* Second user message skeleton */}
         <div className="flex justify-end">
-          <div className="h-9 w-36 rounded-2xl bg-stone-200" />
+          <div className="h-9 w-36 rounded-2xl bg-[#1E1E1E]" />
         </div>
 
         {/* Second assistant message skeleton */}
         <div className="flex gap-3">
-          <div className="size-8 rounded-full bg-stone-200 shrink-0 mt-1" />
+          <div className="size-8 rounded-full bg-[#1E1E1E] shrink-0 mt-1" />
           <div className="flex flex-col gap-2 flex-1 max-w-md">
-            <div className="h-4 w-full rounded bg-stone-200" />
-            <div className="h-4 w-4/5 rounded bg-stone-200" />
-            <div className="h-4 w-3/5 rounded bg-stone-200" />
+            <div className="h-4 w-full rounded bg-[#1E1E1E]" />
+            <div className="h-4 w-4/5 rounded bg-[#1E1E1E]" />
+            <div className="h-4 w-3/5 rounded bg-[#1E1E1E]" />
           </div>
         </div>
       </div>

@@ -66,11 +66,11 @@ function InfoBlock({
 }) {
   return (
     <div className="flex flex-col gap-0.5">
-      <div className="flex items-center gap-1.5 text-xs text-stone-400 uppercase tracking-wider">
+      <div className="flex items-center gap-1.5 text-xs text-[#666666] uppercase tracking-wider">
         <Icon className="size-3.5" />
         {label}
       </div>
-      <p className="text-sm text-stone-700 pl-5">{value}</p>
+      <p className="text-sm text-[#E5E5E5] pl-5">{value}</p>
     </div>
   );
 }
@@ -143,10 +143,10 @@ export function ConversationInfoPanel({
   }
 
   return (
-    <aside className="w-72 flex-shrink-0 border-l border-stone-200 bg-stone-50 flex flex-col overflow-y-auto">
+    <aside className="w-72 flex-shrink-0 border-l border-[#2A2A2A] bg-[#0A0A0A] flex flex-col overflow-y-auto">
       {/* Header */}
-      <div className="px-4 py-3 border-b border-stone-200">
-        <h2 className="text-xs font-semibold text-stone-500 uppercase tracking-wider">
+      <div className="px-4 py-3 border-b border-[#2A2A2A]">
+        <h2 className="text-xs font-semibold text-[#999999] uppercase tracking-wider">
           Conversation Info
         </h2>
       </div>
@@ -156,7 +156,7 @@ export function ConversationInfoPanel({
         {/* Title */}
         <div>
           <div className="flex items-center justify-between mb-1">
-            <span className="text-xs text-stone-400 uppercase tracking-wider">Title</span>
+            <span className="text-xs text-[#666666] uppercase tracking-wider">Title</span>
             {!editing && (
               <button
                 onClick={() => {
@@ -164,7 +164,7 @@ export function ConversationInfoPanel({
                   setSaveError("");
                   setEditing(true);
                 }}
-                className="p-0.5 text-stone-400 hover:text-amber-600 transition-colors"
+                className="p-0.5 text-[#666666] hover:text-[#D4A574] transition-colors"
                 title="Edit title"
               >
                 <Pencil className="size-3.5" />
@@ -179,7 +179,7 @@ export function ConversationInfoPanel({
                 value={editTitle}
                 onChange={(e) => setEditTitle(e.target.value)}
                 autoFocus
-                className="w-full rounded-lg border border-stone-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                className="w-full rounded-lg border border-[#2A2A2A] bg-[#161616] px-2 py-1.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50"
               />
               {saveError && (
                 <div className="flex items-center gap-1 text-xs text-red-600">
@@ -190,7 +190,7 @@ export function ConversationInfoPanel({
                 <button
                   type="submit"
                   disabled={saving}
-                  className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-white bg-amber-600 rounded-lg hover:bg-amber-700 disabled:opacity-50 transition-colors"
+                  className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-[#0A0A0A] bg-[#D4A574] rounded-lg hover:bg-[#C4956A] disabled:opacity-50 transition-colors"
                 >
                   {saving ? <Loader2 className="size-3 animate-spin" /> : <Check className="size-3" />}
                   Save
@@ -198,14 +198,14 @@ export function ConversationInfoPanel({
                 <button
                   type="button"
                   onClick={() => { setEditing(false); setSaveError(""); }}
-                  className="px-2.5 py-1 text-xs text-stone-500 hover:text-stone-700 transition-colors"
+                  className="px-2.5 py-1 text-xs text-[#666666] hover:text-[#999999] transition-colors"
                 >
                   Cancel
                 </button>
               </div>
             </form>
           ) : (
-            <p className="text-sm text-stone-700 leading-snug break-words">{title}</p>
+            <p className="text-sm text-[#E5E5E5] leading-snug break-words">{title}</p>
           )}
         </div>
 
@@ -228,7 +228,7 @@ export function ConversationInfoPanel({
       </div>
 
       {/* Footer — delete */}
-      <div className="px-4 py-4 border-t border-stone-200">
+      <div className="px-4 py-4 border-t border-[#2A2A2A]">
         {showDeleteConfirm ? (
           <div className="space-y-2">
             <p className="text-xs text-red-600">Delete this conversation?</p>
@@ -243,7 +243,7 @@ export function ConversationInfoPanel({
               </button>
               <button
                 onClick={() => setShowDeleteConfirm(false)}
-                className="px-3 py-1.5 text-xs text-stone-500 hover:text-stone-700 transition-colors"
+                className="px-3 py-1.5 text-xs text-[#666666] hover:text-[#999999] transition-colors"
               >
                 Cancel
               </button>

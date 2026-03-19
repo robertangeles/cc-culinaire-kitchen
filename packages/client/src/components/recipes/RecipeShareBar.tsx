@@ -113,14 +113,14 @@ export function RecipeShareBar({
     showToast("link");
   }
 
-  const btnClass = "p-2 rounded-lg hover:bg-stone-100 transition-colors group relative";
+  const btnClass = "p-2 rounded-lg bg-[#1E1E1E] hover:bg-[#2A2A2A] text-[#999999] hover:text-white transition-colors group relative";
   const iconClass = "size-5";
 
   return (
     <div className="flex items-center gap-1 flex-wrap">
       {/* Native Share — primary button on mobile (opens share sheet with Instagram, WhatsApp, etc.) */}
       {typeof navigator !== "undefined" && typeof navigator.share === "function" && (
-        <button onClick={handleNativeShare} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-600 text-white text-xs font-medium hover:bg-amber-700 transition-colors" title="Share to any app">
+        <button onClick={handleNativeShare} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#D4A574] text-[#0A0A0A] text-xs font-medium hover:bg-[#C4956A] transition-colors" title="Share to any app">
           <Share2 className="size-4" />
           Share
         </button>
@@ -170,7 +170,7 @@ export function RecipeShareBar({
           <path fill="url(#ig-grad)" d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/>
         </svg>
         {false && (
-          <span className="absolute -top-8 left-1/2 -translate-x-1/2 px-2 py-1 text-xs text-white bg-stone-800 rounded whitespace-nowrap">
+          <span className="absolute -top-8 left-1/2 -translate-x-1/2 px-2 py-1 text-xs text-white bg-[#1E1E1E] rounded whitespace-nowrap">
             Caption copied!
           </span>
         )}
@@ -179,7 +179,7 @@ export function RecipeShareBar({
 
       {/* Email */}
       <button onClick={() => setEmailOpen(true)} className={btnClass} title="Email recipe">
-        <Mail className={`${iconClass} text-stone-500`} />
+        <Mail className={`${iconClass} text-[#999999]`} />
       </button>
 
       {/* Copy Link */}
@@ -187,10 +187,10 @@ export function RecipeShareBar({
         {copied === "link" ? (
           <Check className={`${iconClass} text-green-600`} />
         ) : (
-          <Link2 className={`${iconClass} text-stone-500`} />
+          <Link2 className={`${iconClass} text-[#999999]`} />
         )}
         {copied === "link" && (
-          <span className="absolute -top-8 left-1/2 -translate-x-1/2 px-2 py-1 text-xs text-white bg-stone-800 rounded whitespace-nowrap">
+          <span className="absolute -top-8 left-1/2 -translate-x-1/2 px-2 py-1 text-xs text-white bg-[#1E1E1E] rounded whitespace-nowrap">
             Link copied!
           </span>
         )}
@@ -199,24 +199,24 @@ export function RecipeShareBar({
       {/* Instagram dialog */}
       {igOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setIgOpen(false)}>
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm mx-4 p-5" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-[#161616] border border-[#2A2A2A] rounded-xl shadow-xl w-full max-w-sm mx-4 p-5" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold text-stone-900">Share on Instagram</h3>
-              <button onClick={() => setIgOpen(false)} className="p-1 rounded hover:bg-stone-100">
-                <XIcon className="size-4 text-stone-400" />
+              <h3 className="text-sm font-semibold text-[#FAFAFA]">Share on Instagram</h3>
+              <button onClick={() => setIgOpen(false)} className="p-1 rounded hover:bg-[#2A2A2A]">
+                <XIcon className="size-4 text-[#999999]" />
               </button>
             </div>
-            <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-4">
-              <p className="text-sm text-green-800 font-medium">Caption & hashtags copied!</p>
+            <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-3 mb-4">
+              <p className="text-sm text-green-400 font-medium">Caption & hashtags copied!</p>
             </div>
-            <ol className="text-sm text-stone-600 space-y-2 mb-4">
+            <ol className="text-sm text-[#E5E5E5] space-y-2 mb-4">
               <li><strong>1.</strong> Save the recipe photo from above (right-click → Save Image)</li>
               <li><strong>2.</strong> Open Instagram and create a new post</li>
               <li><strong>3.</strong> Upload the saved photo</li>
               <li><strong>4.</strong> Paste the caption (already in your clipboard)</li>
             </ol>
             <div className="flex gap-2">
-              <button onClick={() => setIgOpen(false)} className="flex-1 py-2 text-sm font-medium text-stone-600 bg-stone-100 rounded-lg hover:bg-stone-200 transition-colors">
+              <button onClick={() => setIgOpen(false)} className="flex-1 py-2 text-sm font-medium text-[#999999] bg-[#1E1E1E] rounded-lg hover:bg-[#2A2A2A] transition-colors">
                 Done
               </button>
               <a
@@ -235,11 +235,11 @@ export function RecipeShareBar({
       {/* Email dialog */}
       {emailOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setEmailOpen(false)}>
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm mx-4 p-5" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-[#161616] border border-[#2A2A2A] rounded-xl shadow-xl w-full max-w-sm mx-4 p-5" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-semibold text-stone-900">Email this recipe</h3>
-              <button onClick={() => setEmailOpen(false)} className="p-1 rounded hover:bg-stone-100">
-                <XIcon className="size-4 text-stone-400" />
+              <h3 className="text-sm font-semibold text-[#FAFAFA]">Email this recipe</h3>
+              <button onClick={() => setEmailOpen(false)} className="p-1 rounded hover:bg-[#2A2A2A]">
+                <XIcon className="size-4 text-[#999999]" />
               </button>
             </div>
             <input
@@ -247,24 +247,24 @@ export function RecipeShareBar({
               value={emailTo}
               onChange={(e) => setEmailTo(e.target.value)}
               placeholder="recipient@email.com"
-              className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500 mb-3"
+              className="w-full px-4 py-3 border border-[#2A2A2A] bg-[#0A0A0A] rounded-xl text-sm text-white placeholder-[#444444] focus:ring-2 focus:ring-[#D4A574]/50 focus:border-[#D4A574] mb-3"
               onKeyDown={(e) => e.key === "Enter" && handleEmailSend()}
               autoFocus
             />
             {emailResult && emailResult !== "sent" && (
-              <p className="text-xs text-red-600 mb-2">{emailResult}</p>
+              <p className="text-xs text-red-400 mb-2">{emailResult}</p>
             )}
             {emailResult === "sent" && (
-              <p className="text-xs text-green-600 mb-2">Recipe sent!</p>
+              <p className="text-xs text-green-400 mb-2">Recipe sent!</p>
             )}
             <div className="flex gap-2">
-              <button onClick={() => setEmailOpen(false)} className="flex-1 py-2 text-sm font-medium text-stone-600 bg-stone-100 rounded-lg hover:bg-stone-200 transition-colors">
+              <button onClick={() => setEmailOpen(false)} className="flex-1 py-2 text-sm font-medium text-[#999999] bg-[#1E1E1E] rounded-lg hover:bg-[#2A2A2A] transition-colors">
                 Cancel
               </button>
               <button
                 onClick={handleEmailSend}
                 disabled={emailSending || !emailTo.trim()}
-                className="flex-1 flex items-center justify-center gap-2 py-2 text-sm font-medium text-white bg-amber-600 rounded-lg hover:bg-amber-700 disabled:opacity-50 transition-colors"
+                className="flex-1 flex items-center justify-center gap-2 py-2 text-sm font-medium text-[#0A0A0A] bg-[#D4A574] rounded-lg hover:bg-[#C4956A] disabled:opacity-50 transition-colors"
               >
                 {emailSending ? <Loader2 className="size-4 animate-spin" /> : <Mail className="size-4" />}
                 {emailSending ? "Sending..." : "Send"}

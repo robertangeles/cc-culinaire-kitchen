@@ -68,9 +68,9 @@ const TIER_CONFIG: {
   borderClass: string;
   icon: string;
 }[] = [
-  { key: "start_first", label: "Start With These", borderClass: "border-l-amber-500", icon: "\uD83D\uDD25" },
-  { key: "then_these", label: "Next Up", borderClass: "border-l-gray-500", icon: "" },
-  { key: "can_wait", label: "Can Wait", borderClass: "border-l-gray-700", icon: "" },
+  { key: "start_first", label: "Start With These", borderClass: "border-l-[#D4A574]", icon: "\uD83D\uDD25" },
+  { key: "then_these", label: "Next Up", borderClass: "border-l-[#999999]", icon: "" },
+  { key: "can_wait", label: "Can Wait", borderClass: "border-l-[#2A2A2A]", icon: "" },
 ];
 
 export function PrepDashboard({ sessionData, onSessionUpdate }: Props) {
@@ -195,9 +195,9 @@ export function PrepDashboard({ sessionData, onSessionUpdate }: Props) {
   if (!sessionData) {
     return (
       <div className="text-center py-16">
-        <ClipboardList className="size-10 mx-auto text-gray-600 mb-3" />
-        <p className="text-gray-400">No prep session for today yet.</p>
-        <p className="text-sm text-gray-500 mt-1">Enter your expected covers above to get started.</p>
+        <ClipboardList className="size-10 mx-auto text-[#666666] mb-3" />
+        <p className="text-[#999999]">No prep session for today yet.</p>
+        <p className="text-sm text-[#666666] mt-1">Enter your expected covers above to get started.</p>
       </div>
     );
   }
@@ -207,12 +207,12 @@ export function PrepDashboard({ sessionData, onSessionUpdate }: Props) {
     return (
       <div className="text-center py-16">
         <Check className="size-10 mx-auto text-green-500 mb-3" />
-        <p className="text-gray-300 font-medium">Today&apos;s session is complete.</p>
-        <p className="text-sm text-gray-500 mt-1">
+        <p className="text-[#E5E5E5] font-medium">Today&apos;s session is complete.</p>
+        <p className="text-sm text-[#666666] mt-1">
           {doneTasks} of {totalTasks} tasks completed &middot;{" "}
           {session?.expectedCovers} expected &rarr; {session?.actualCovers ?? "?"} actual covers
         </p>
-        <p className="text-xs text-gray-600 mt-3">Check the History tab for full details.</p>
+        <p className="text-xs text-[#666666] mt-3">Check the History tab for full details.</p>
       </div>
     );
   }
@@ -227,20 +227,20 @@ export function PrepDashboard({ sessionData, onSessionUpdate }: Props) {
       )}
 
       {/* Progress bar */}
-      <div className="bg-gray-800 rounded-xl p-5 border border-gray-700 mb-6">
+      <div className="bg-[#161616] rounded-xl p-5 border border-[#2A2A2A] mb-6">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-sm font-medium text-gray-300">
+          <span className="text-sm font-medium text-[#E5E5E5]">
             {doneTasks} of {totalTasks} tasks complete
           </span>
-          <span className="text-sm font-bold text-amber-500">{progressPct}%</span>
+          <span className="text-sm font-bold text-[#D4A574]">{progressPct}%</span>
         </div>
-        <div className="w-full bg-gray-700 rounded-full h-3">
+        <div className="w-full bg-[#1E1E1E] rounded-full h-3">
           <div
-            className="h-3 rounded-full bg-amber-500 transition-all duration-500"
+            className="h-3 rounded-full bg-[#D4A574]/100 transition-all duration-500"
             style={{ width: `${progressPct}%` }}
           />
         </div>
-        <p className="text-xs text-gray-500 mt-2">
+        <p className="text-xs text-[#666666] mt-2">
           Expected covers: {session?.expectedCovers ?? "—"}
         </p>
       </div>
@@ -261,14 +261,14 @@ export function PrepDashboard({ sessionData, onSessionUpdate }: Props) {
               className="flex items-center gap-2 w-full text-left mb-3 group"
             >
               {isExpanded ? (
-                <ChevronDown className="size-4 text-gray-500" />
+                <ChevronDown className="size-4 text-[#666666]" />
               ) : (
-                <ChevronRight className="size-4 text-gray-500" />
+                <ChevronRight className="size-4 text-[#666666]" />
               )}
-              <span className="text-sm font-semibold text-gray-300 group-hover:text-white transition-colors">
+              <span className="text-sm font-semibold text-[#E5E5E5] group-hover:text-white transition-colors">
                 {tier.icon ? `${tier.icon} ` : ""}{tier.label}
               </span>
-              <span className="text-xs text-gray-500">
+              <span className="text-xs text-[#666666]">
                 ({tierDone}/{tierTasks.length})
               </span>
             </button>
@@ -284,7 +284,7 @@ export function PrepDashboard({ sessionData, onSessionUpdate }: Props) {
                   return (
                     <div
                       key={task.prepTaskId}
-                      className={`bg-gray-800 rounded-lg p-4 border border-gray-700 border-l-4 ${tier.borderClass} flex items-start gap-3 transition-opacity ${
+                      className={`bg-[#161616] rounded-lg p-4 border border-[#2A2A2A] border-l-4 ${tier.borderClass} flex items-start gap-3 transition-opacity ${
                         dimmed ? "opacity-50" : ""
                       }`}
                     >
@@ -296,8 +296,8 @@ export function PrepDashboard({ sessionData, onSessionUpdate }: Props) {
                         disabled={updatingTask === task.prepTaskId}
                         className={`mt-0.5 shrink-0 size-6 rounded border-2 flex items-center justify-center transition-colors min-h-[44px] min-w-[44px] ${
                           isDone
-                            ? "bg-amber-600 border-amber-600 text-white"
-                            : "border-gray-600 hover:border-amber-500"
+                            ? "bg-[#D4A574] border-[#D4A574] text-white"
+                            : "border-[#2A2A2A] hover:border-[#D4A574]"
                         }`}
                         aria-label={isDone ? "Mark as pending" : "Mark as done"}
                       >
@@ -313,26 +313,26 @@ export function PrepDashboard({ sessionData, onSessionUpdate }: Props) {
                         <p className={`font-semibold text-white ${isDone ? "line-through" : ""}`}>
                           {task.taskDescription}
                         </p>
-                        <p className={`text-sm text-gray-400 ${isDone ? "line-through" : ""}`}>
+                        <p className={`text-sm text-[#999999] ${isDone ? "line-through" : ""}`}>
                           {task.ingredientName} &mdash; {task.quantityNeeded} {task.unit}
                         </p>
 
                         {/* Badges */}
                         <div className="flex flex-wrap gap-2 mt-2">
                           {task.prepTimeMinutes != null && (
-                            <span className="inline-flex items-center gap-1 text-xs bg-gray-700 text-gray-300 px-2 py-1 rounded-full">
+                            <span className="inline-flex items-center gap-1 text-xs bg-[#1E1E1E] text-[#E5E5E5] px-2 py-1 rounded-full">
                               <Clock className="size-3" />
                               ~{task.prepTimeMinutes} min
                             </span>
                           )}
                           {task.station && (
-                            <span className="inline-flex items-center gap-1 text-xs bg-gray-700 text-gray-300 px-2 py-1 rounded-full">
+                            <span className="inline-flex items-center gap-1 text-xs bg-[#1E1E1E] text-[#E5E5E5] px-2 py-1 rounded-full">
                               <MapPin className="size-3" />
                               {task.station}
                             </span>
                           )}
                           {task.assignedTo && (
-                            <span className="inline-flex items-center gap-1 text-xs bg-amber-900/50 text-amber-300 px-2 py-1 rounded-full">
+                            <span className="inline-flex items-center gap-1 text-xs bg-[#D4A574]/20 text-[#D4A574] px-2 py-1 rounded-full">
                               <User className="size-3" />
                               {task.assignedTo}
                             </span>
@@ -351,18 +351,18 @@ export function PrepDashboard({ sessionData, onSessionUpdate }: Props) {
                                 if (e.key === "Enter") assignTask(task.prepTaskId, assignName);
                                 if (e.key === "Escape") { setAssigningTask(null); setAssignName(""); }
                               }}
-                              className="flex-1 px-3 py-1.5 bg-gray-700 border border-gray-600 rounded text-sm text-white focus:ring-2 focus:ring-amber-500 min-h-[44px]"
+                              className="flex-1 px-3 py-1.5 bg-[#1E1E1E] border border-[#2A2A2A] rounded text-sm text-white focus:ring-2 focus:ring-[#D4A574]/50 min-h-[44px]"
                               autoFocus
                             />
                             <button
                               onClick={() => assignTask(task.prepTaskId, assignName)}
-                              className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-sm rounded min-h-[44px]"
+                              className="px-3 py-1.5 bg-[#D4A574] hover:bg-[#C4956A] text-white text-sm rounded min-h-[44px]"
                             >
                               Save
                             </button>
                             <button
                               onClick={() => { setAssigningTask(null); setAssignName(""); }}
-                              className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm rounded min-h-[44px]"
+                              className="px-3 py-1.5 bg-[#1E1E1E] hover:bg-[#2A2A2A] text-[#E5E5E5] text-sm rounded min-h-[44px]"
                             >
                               Cancel
                             </button>
@@ -375,7 +375,7 @@ export function PrepDashboard({ sessionData, onSessionUpdate }: Props) {
                         {!isDone && !isSkipped && assigningTask !== task.prepTaskId && (
                           <button
                             onClick={() => { setAssigningTask(task.prepTaskId); setAssignName(task.assignedTo ?? ""); }}
-                            className="text-xs text-gray-500 hover:text-amber-500 transition-colors px-2 py-1 min-h-[44px]"
+                            className="text-xs text-[#666666] hover:text-[#D4A574] transition-colors px-2 py-1 min-h-[44px]"
                           >
                             Assign
                           </button>
@@ -384,7 +384,7 @@ export function PrepDashboard({ sessionData, onSessionUpdate }: Props) {
                           <button
                             onClick={() => updateTaskStatus(task.prepTaskId, "skipped")}
                             disabled={updatingTask === task.prepTaskId}
-                            className="text-xs text-gray-500 hover:text-red-400 transition-colors px-2 py-1 min-h-[44px]"
+                            className="text-xs text-[#666666] hover:text-red-400 transition-colors px-2 py-1 min-h-[44px]"
                           >
                             Skip
                           </button>
@@ -393,7 +393,7 @@ export function PrepDashboard({ sessionData, onSessionUpdate }: Props) {
                           <button
                             onClick={() => updateTaskStatus(task.prepTaskId, "pending")}
                             disabled={updatingTask === task.prepTaskId}
-                            className="text-xs text-gray-500 hover:text-amber-500 transition-colors px-2 py-1 min-h-[44px]"
+                            className="text-xs text-[#666666] hover:text-[#D4A574] transition-colors px-2 py-1 min-h-[44px]"
                           >
                             Undo
                           </button>
@@ -409,18 +409,18 @@ export function PrepDashboard({ sessionData, onSessionUpdate }: Props) {
       })}
 
       {/* End session */}
-      <div className="mt-8 border-t border-gray-700 pt-6">
+      <div className="mt-8 border-t border-[#2A2A2A] pt-6">
         {!showEndForm ? (
           <button
             onClick={() => setShowEndForm(true)}
-            className="flex items-center gap-2 px-5 py-3 bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white border border-gray-700 rounded-lg transition-colors min-h-[44px]"
+            className="flex items-center gap-2 px-5 py-3 bg-[#161616] hover:bg-[#1E1E1E] text-[#E5E5E5] hover:text-white border border-[#2A2A2A] rounded-lg transition-colors min-h-[44px]"
           >
             <X className="size-4" />
             End Session
           </button>
         ) : (
-          <div className="bg-gray-800 rounded-xl p-5 border border-gray-700 max-w-md">
-            <p className="text-sm font-medium text-gray-300 mb-3">
+          <div className="bg-[#161616] rounded-xl p-5 border border-[#2A2A2A] max-w-md">
+            <p className="text-sm font-medium text-[#E5E5E5] mb-3">
               How many covers did you actually serve?
             </p>
             <div className="flex gap-3">
@@ -431,18 +431,18 @@ export function PrepDashboard({ sessionData, onSessionUpdate }: Props) {
                 value={actualCovers}
                 onChange={(e) => setActualCovers(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") endSession(); }}
-                className="flex-1 px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-amber-500 min-h-[44px]"
+                className="flex-1 px-4 py-3 bg-[#1E1E1E] border border-[#2A2A2A] rounded-lg text-white focus:ring-2 focus:ring-[#D4A574]/50 min-h-[44px]"
               />
               <button
                 onClick={endSession}
                 disabled={endingSession || !actualCovers}
-                className="px-5 py-3 bg-amber-600 hover:bg-amber-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors min-h-[44px]"
+                className="px-5 py-3 bg-[#D4A574] hover:bg-[#C4956A] disabled:bg-[#2A2A2A] disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors min-h-[44px]"
               >
                 {endingSession ? <Loader2 className="size-5 animate-spin" /> : "End"}
               </button>
               <button
                 onClick={() => setShowEndForm(false)}
-                className="px-4 py-3 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg transition-colors min-h-[44px]"
+                className="px-4 py-3 bg-[#1E1E1E] hover:bg-[#2A2A2A] text-[#E5E5E5] rounded-lg transition-colors min-h-[44px]"
               >
                 Cancel
               </button>

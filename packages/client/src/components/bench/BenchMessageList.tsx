@@ -95,17 +95,17 @@ export function BenchMessageList({
     >
       {/* Channel info banner */}
       {channelBanner && (
-        <div className="mx-4 mt-4 mb-2 px-4 py-3 bg-amber-50 border border-amber-200 rounded-lg">
-          <p className="text-xs text-amber-800">{channelBanner}</p>
+        <div className="mx-4 mt-4 mb-2 px-4 py-3 bg-[#D4A574]/10 border border-[#D4A574]/20 rounded-lg">
+          <p className="text-xs text-[#D4A574]">{channelBanner}</p>
         </div>
       )}
 
       {loading && messages.length === 0 ? (
         <div className="flex items-center justify-center h-full">
-          <Loader2 className="size-6 animate-spin text-amber-600" />
+          <Loader2 className="size-6 animate-spin text-[#D4A574]" />
         </div>
       ) : messages.length === 0 ? (
-        <div className="flex items-center justify-center h-full text-stone-400 text-sm">
+        <div className="flex items-center justify-center h-full text-[#666666] text-sm">
           No messages yet. Be the first to say something!
         </div>
       ) : (
@@ -114,7 +114,7 @@ export function BenchMessageList({
             <div className="text-center py-2">
               <button
                 onClick={onLoadMore}
-                className="text-xs text-amber-600 hover:text-amber-700"
+                className="text-xs text-[#D4A574] hover:text-[#C4956A]"
               >
                 Load older messages
               </button>
@@ -131,11 +131,11 @@ export function BenchMessageList({
               <div key={msg.messageId}>
                 {showSeparator && (
                   <div className="flex items-center gap-3 px-4 py-3">
-                    <div className="flex-1 h-px bg-stone-200" />
-                    <span className="text-xs text-stone-400 font-medium">
+                    <div className="flex-1 h-px bg-[#2A2A2A]" />
+                    <span className="text-xs text-[#666666] font-medium">
                       {formatDateSeparator(msg.createdDttm)}
                     </span>
-                    <div className="flex-1 h-px bg-stone-200" />
+                    <div className="flex-1 h-px bg-[#2A2A2A]" />
                   </div>
                 )}
                 <BenchMessageItem

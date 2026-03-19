@@ -37,21 +37,21 @@ export function MenuIntelligencePage() {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto">
+    <div className="flex-1 overflow-y-auto bg-[#0A0A0A]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
-            <BarChart3 className="size-7 text-amber-600" />
+            <BarChart3 className="size-7 text-[#D4A574]" />
             <div>
-              <h1 className="text-2xl font-bold text-stone-800">Menu Intelligence</h1>
-              <p className="text-sm text-stone-500">Analyse your menu performance and optimise profitability</p>
+              <h1 className="text-2xl font-bold text-[#FAFAFA]">Menu Intelligence</h1>
+              <p className="text-sm text-[#999999]">Analyse your menu performance and optimise profitability</p>
             </div>
           </div>
           <button
             onClick={recalculate}
             disabled={loading}
-            className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-amber-700 bg-amber-50 rounded-lg hover:bg-amber-100 disabled:opacity-50 transition-colors"
+            className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-[#D4A574] bg-[#D4A574]/10 rounded-xl border border-[#D4A574]/20 hover:bg-[#D4A574]/20 disabled:opacity-50 transition-colors"
           >
             <RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} />
             Recalculate
@@ -59,11 +59,11 @@ export function MenuIntelligencePage() {
         </div>
 
         {/* Category filter */}
-        <div className="flex gap-1 bg-stone-100 rounded-lg p-1 mb-6 w-fit">
+        <div className="flex gap-1 bg-[#161616] rounded-lg p-1 mb-6 w-fit border border-[#2A2A2A]">
           <button
             onClick={() => setCategoryFilter("")}
             className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-              !categoryFilter ? "bg-white text-stone-800 shadow-sm" : "text-stone-500 hover:text-stone-700"
+              !categoryFilter ? "bg-[#D4A574] text-[#0A0A0A]" : "text-[#999999] hover:text-[#E5E5E5]"
             }`}
           >
             All Categories
@@ -73,7 +73,7 @@ export function MenuIntelligencePage() {
               key={cat}
               onClick={() => setCategoryFilter(cat)}
               className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                categoryFilter === cat ? "bg-white text-stone-800 shadow-sm" : "text-stone-500 hover:text-stone-700"
+                categoryFilter === cat ? "bg-[#D4A574] text-[#0A0A0A]" : "text-[#999999] hover:text-[#E5E5E5]"
               }`}
             >
               {cat}
@@ -83,7 +83,7 @@ export function MenuIntelligencePage() {
 
         {loading && !analysis ? (
           <div className="flex items-center justify-center py-20">
-            <Loader2 className="size-6 animate-spin text-amber-600" />
+            <Loader2 className="size-6 animate-spin text-[#D4A574]" />
           </div>
         ) : (
           <div className="space-y-6">

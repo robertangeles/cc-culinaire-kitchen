@@ -28,7 +28,7 @@ export function PasswordRequirements({ password }: PasswordRequirementsProps) {
           <li
             key={rule.label}
             className={`flex items-center gap-1.5 text-xs ${
-              passed ? "text-green-600" : "text-stone-400"
+              passed ? "text-emerald-400" : "text-[#666666]"
             }`}
           >
             {passed ? (

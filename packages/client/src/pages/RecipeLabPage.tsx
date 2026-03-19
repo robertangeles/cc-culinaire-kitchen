@@ -40,24 +40,24 @@ const DOMAIN_CONFIG: Record<RecipeDomain, DomainConfig> = {
     label: "CulinAIre Recipe",
     tagline: "AI-powered recipes across every cuisine and technique",
     icon: ChefHat,
-    accent: "text-amber-600",
-    bg: "bg-amber-50",
+    accent: "text-[#D4A574]",
+    bg: "bg-[#0A0A0A]",
     apiEndpoint: "/api/recipes/generate",
   },
   patisserie: {
     label: "CulinAIre Patisserie",
     tagline: "Precision pastry recipes from a world-class AI pastry chef",
     icon: Croissant,
-    accent: "text-pink-500",
-    bg: "bg-pink-50",
+    accent: "text-[#D4A574]",
+    bg: "bg-[#0A0A0A]",
     apiEndpoint: "/api/recipes/patisserie",
   },
   spirits: {
     label: "CulinAIre Spirits",
     tagline: "Cocktails and mocktails crafted by an AI bar director",
     icon: GlassWater,
-    accent: "text-amber-800",
-    bg: "bg-amber-100",
+    accent: "text-[#D4A574]",
+    bg: "bg-[#0A0A0A]",
     apiEndpoint: "/api/recipes/spirits",
   },
 };
@@ -179,20 +179,20 @@ export function RecipeLabPage({ domain }: RecipeLabPageProps) {
 
   // Form panel (shared between initial and split-screen states)
   const formPanel = (
-    <div className={`${generated ? "" : "w-full max-w-xl"} bg-white rounded-2xl shadow-sm border border-stone-200 p-6 md:p-8`}>
+    <div className={`${generated ? "" : "w-full max-w-xl"} bg-[#161616] rounded-2xl border border-[#2A2A2A] p-6 md:p-8`}>
       {error && (
-        <div className="mb-4 flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg p-3">
-          <AlertCircle className="size-4 text-red-500 shrink-0 mt-0.5" />
-          <p className="text-sm text-red-700">{error}</p>
+        <div className="mb-4 flex items-start gap-2 bg-red-500/10 border border-red-500/20 rounded-lg p-3">
+          <AlertCircle className="size-4 text-red-400 shrink-0 mt-0.5" />
+          <p className="text-sm text-red-300">{error}</p>
         </div>
       )}
       {proseResponse && (
-        <div className="mb-4 bg-amber-50 border border-amber-200 rounded-lg p-4">
+        <div className="mb-4 bg-[#D4A574]/10 border border-[#D4A574]/20 rounded-lg p-4">
           <div className="flex items-center gap-2 mb-2">
-            <AlertCircle className="size-4 text-amber-600" />
-            <h3 className="text-sm font-semibold text-amber-800">Suggestions</h3>
+            <AlertCircle className="size-4 text-[#D4A574]" />
+            <h3 className="text-sm font-semibold text-[#D4A574]">Suggestions</h3>
           </div>
-          <p className="text-sm text-amber-700 whitespace-pre-line">{proseResponse}</p>
+          <p className="text-sm text-[#E5E5E5] whitespace-pre-line">{proseResponse}</p>
         </div>
       )}
       <RecipeForm domain={domain} onSubmit={handleGenerate} loading={loading} />
@@ -206,8 +206,8 @@ export function RecipeLabPage({ domain }: RecipeLabPageProps) {
         <div className="min-h-full flex flex-col items-center justify-center p-6 md:p-10">
           <div className="text-center mb-8">
             <DomainIcon className={`size-12 mx-auto mb-3 ${config.accent}`} />
-            <h1 className="text-2xl md:text-3xl font-bold text-stone-800">{config.label}</h1>
-            <p className="text-stone-500 mt-2 text-sm md:text-base">{config.tagline}</p>
+            <h1 className="text-2xl md:text-3xl font-bold text-[#FAFAFA] tracking-tight">{config.label}</h1>
+            <p className="text-[#999999] mt-2 text-sm md:text-base">{config.tagline}</p>
           </div>
           {formPanel}
         </div>
@@ -219,17 +219,17 @@ export function RecipeLabPage({ domain }: RecipeLabPageProps) {
   return (
     <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
       {/* Left: form panel (sticky, scrollable) */}
-      <div className="md:w-[380px] lg:w-[420px] md:flex-shrink-0 md:border-r border-stone-200 bg-stone-50 overflow-y-auto p-6">
+      <div className="md:w-[380px] lg:w-[420px] md:flex-shrink-0 md:border-r border-[#2A2A2A] bg-[#161616] overflow-y-auto p-6">
         <div className="mb-4">
           <DomainIcon className={`size-8 mb-2 ${config.accent}`} />
-          <h2 className="text-lg font-bold text-stone-800">{config.label}</h2>
-          <p className="text-xs text-stone-500">{config.tagline}</p>
+          <h2 className="text-lg font-bold text-[#FAFAFA] tracking-tight">{config.label}</h2>
+          <p className="text-xs text-[#999999]">{config.tagline}</p>
         </div>
         {formPanel}
       </div>
 
       {/* Right: recipe output (scrollable) */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto bg-[#0A0A0A]">
         <RecipeHero
           imageUrl={generated.imageUrl}
           recipeName={generated.recipe.name}

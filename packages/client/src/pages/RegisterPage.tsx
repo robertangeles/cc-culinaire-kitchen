@@ -65,46 +65,46 @@ export function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-stone-50 px-4">
-      <div className="w-full max-w-md">
+    <div className="min-h-screen flex items-center justify-center bg-[#0A0A0A] px-4 py-8">
+      <div className="w-full max-w-md animate-fade-in-up">
         {/* Branding */}
         <div className="text-center mb-8">
           <div
-            className="inline-flex items-center justify-center rounded-2xl mb-4 overflow-hidden"
-            style={{ width: 80, height: 80 }}
+            className="inline-flex items-center justify-center rounded-2xl mb-4 overflow-hidden drop-shadow-[0_0_30px_rgba(212,165,116,0.15)]"
+            style={{ width: 120, height: 120 }}
           >
             {settingsLoading ? (
-              <div className="size-full bg-stone-200 animate-pulse rounded-2xl" />
+              <div className="size-full bg-[#1E1E1E] animate-pulse rounded-2xl" />
             ) : logoPath ? (
               <img src={logoPath} alt={pageTitle} className="size-full object-contain" />
             ) : (
-              <div className="size-full bg-amber-700 flex items-center justify-center">
-                <ChefHat className="size-10 text-white" />
+              <div className="size-full bg-[#D4A574] flex items-center justify-center">
+                <ChefHat className="size-14 text-[#0A0A0A]" />
               </div>
             )}
           </div>
-          <h1 className="text-2xl font-bold text-stone-800">{pageTitle}</h1>
-          <p className="text-stone-500 mt-1">Create your account</p>
+          <h1 className="text-2xl font-semibold tracking-tight text-[#FAFAFA]">{pageTitle}</h1>
+          <p className="text-[#666666] text-sm mt-1">Create your account</p>
         </div>
 
         {/* Registration Form */}
-        <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-sm border border-stone-200 p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="bg-[#161616] rounded-2xl shadow-2xl shadow-black/50 border border-[#2A2A2A] p-8 space-y-5">
           {error && (
-            <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+            <div className="flex items-center gap-2 text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">
               <AlertCircle className="size-4 flex-shrink-0" />
               {error}
             </div>
           )}
 
           {success && (
-            <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+            <div className="flex items-center gap-2 text-sm text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-4 py-3">
               <CheckCircle2 className="size-4 flex-shrink-0" />
               {success}
             </div>
           )}
 
           <div>
-            <label htmlFor="name" className="block text-sm font-medium text-stone-700 mb-1">
+            <label htmlFor="name" className="block text-sm font-medium text-[#999999] mb-2">
               Name
             </label>
             <input
@@ -114,13 +114,13 @@ export function RegisterPage() {
               onChange={(e) => setName(e.target.value)}
               required
               autoComplete="name"
-              className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm text-stone-800 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+              className="w-full rounded-xl border border-[#2A2A2A] bg-[#0A0A0A] px-4 py-3 text-white placeholder-[#444444] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-[#D4A574] transition-colors"
               placeholder="Your full name"
             />
           </div>
 
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-stone-700 mb-1">
+            <label htmlFor="email" className="block text-sm font-medium text-[#999999] mb-2">
               Email
             </label>
             <input
@@ -130,13 +130,13 @@ export function RegisterPage() {
               onChange={(e) => setEmail(e.target.value)}
               required
               autoComplete="email"
-              className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm text-stone-800 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+              className="w-full rounded-xl border border-[#2A2A2A] bg-[#0A0A0A] px-4 py-3 text-white placeholder-[#444444] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-[#D4A574] transition-colors"
               placeholder="you@example.com"
             />
           </div>
 
           <div>
-            <label htmlFor="password" className="block text-sm font-medium text-stone-700 mb-1">
+            <label htmlFor="password" className="block text-sm font-medium text-[#999999] mb-2">
               Password
             </label>
             <div className="relative">
@@ -147,13 +147,13 @@ export function RegisterPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 autoComplete="new-password"
-                className="w-full rounded-lg border border-stone-300 px-3 py-2 pr-10 text-sm text-stone-800 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                className="w-full rounded-xl border border-[#2A2A2A] bg-[#0A0A0A] px-4 py-3 pr-11 text-white placeholder-[#444444] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-[#D4A574] transition-colors"
                 placeholder="Enter a strong password"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword((v) => !v)}
-                className="absolute inset-y-0 right-0 flex items-center px-3 text-stone-400 hover:text-stone-600"
+                className="absolute inset-y-0 right-0 flex items-center px-3 text-[#666666] hover:text-[#999999]"
                 tabIndex={-1}
                 aria-label={showPassword ? "Hide password" : "Show password"}
               >
@@ -164,7 +164,7 @@ export function RegisterPage() {
           </div>
 
           <div>
-            <label htmlFor="confirmPassword" className="block text-sm font-medium text-stone-700 mb-1">
+            <label htmlFor="confirmPassword" className="block text-sm font-medium text-[#999999] mb-2">
               Confirm Password
             </label>
             <div className="relative">
@@ -175,13 +175,13 @@ export function RegisterPage() {
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
                 autoComplete="new-password"
-                className="w-full rounded-lg border border-stone-300 px-3 py-2 pr-10 text-sm text-stone-800 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                className="w-full rounded-xl border border-[#2A2A2A] bg-[#0A0A0A] px-4 py-3 pr-11 text-white placeholder-[#444444] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-[#D4A574] transition-colors"
                 placeholder="Re-enter your password"
               />
               <button
                 type="button"
                 onClick={() => setShowConfirmPassword((v) => !v)}
-                className="absolute inset-y-0 right-0 flex items-center px-3 text-stone-400 hover:text-stone-600"
+                className="absolute inset-y-0 right-0 flex items-center px-3 text-[#666666] hover:text-[#999999]"
                 tabIndex={-1}
                 aria-label={showConfirmPassword ? "Hide password" : "Show password"}
               >
@@ -189,13 +189,13 @@ export function RegisterPage() {
               </button>
             </div>
             {confirmPassword && password !== confirmPassword && (
-              <p className="mt-1.5 text-xs text-red-500 flex items-center gap-1.5">
+              <p className="mt-2 text-xs text-red-400 flex items-center gap-1.5">
                 <AlertCircle className="size-3 flex-shrink-0" />
                 Passwords do not match
               </p>
             )}
             {confirmPassword && password === confirmPassword && (
-              <p className="mt-1.5 text-xs text-green-600 flex items-center gap-1.5">
+              <p className="mt-2 text-xs text-emerald-400 flex items-center gap-1.5">
                 <CheckCircle2 className="size-3 flex-shrink-0" />
                 Passwords match
               </p>
@@ -210,7 +210,7 @@ export function RegisterPage() {
               !isPasswordValid(password) ||
               password !== confirmPassword
             }
-            className="w-full flex items-center justify-center gap-2 py-2.5 text-sm font-medium text-white bg-amber-600 rounded-lg hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="w-full flex items-center justify-center gap-2 py-3 text-base font-semibold text-[#0A0A0A] bg-[#D4A574] rounded-xl hover:bg-[#C4956A] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {isSubmitting && <Loader2 className="size-4 animate-spin" />}
             Create Account
@@ -219,9 +219,9 @@ export function RegisterPage() {
           <OAuthButtons />
         </form>
 
-        <p className="text-center text-sm text-stone-500 mt-4">
+        <p className="text-center text-sm text-[#666666] mt-6">
           Already have an account?{" "}
-          <Link to="/login" className="text-amber-600 hover:text-amber-700 font-medium">
+          <Link to="/login" className="text-[#D4A574] hover:text-[#C4956A] font-medium transition-colors">
             Sign in
           </Link>
         </p>

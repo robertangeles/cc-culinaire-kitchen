@@ -21,7 +21,7 @@ interface ReuseSuggestion {
 }
 
 const TYPE_BADGE_STYLES: Record<string, string> = {
-  recipe: "bg-amber-600/20 text-amber-400 border-amber-600/30",
+  recipe: "bg-[#D4A574]/20 text-[#D4A574] border-[#D4A574]/30",
   stock: "bg-blue-600/20 text-blue-400 border-blue-600/30",
   special: "bg-purple-600/20 text-purple-400 border-purple-600/30",
   "staff meal": "bg-emerald-600/20 text-emerald-400 border-emerald-600/30",
@@ -111,7 +111,7 @@ export function WasteReuseSuggestions() {
         <button
           onClick={handleGenerate}
           disabled={loading}
-          className="inline-flex items-center gap-2 px-6 py-3 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors min-h-[48px]"
+          className="inline-flex items-center gap-2 px-6 py-3 bg-[#D4A574] hover:bg-[#C4956A] disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors min-h-[48px]"
         >
           {loading ? (
             <>
@@ -125,7 +125,7 @@ export function WasteReuseSuggestions() {
             </>
           )}
         </button>
-        <p className="text-xs text-gray-500 mt-2">
+        <p className="text-xs text-[#666666] mt-2">
           AI analyzes your recent waste logs and suggests ways to reuse ingredients.
         </p>
       </div>
@@ -133,9 +133,9 @@ export function WasteReuseSuggestions() {
       {/* Loading state */}
       {loading && (
         <div className="text-center py-12">
-          <Loader2 className="size-10 mx-auto text-amber-500 animate-spin mb-4" />
-          <p className="text-gray-300 font-medium">Our AI chef is thinking of ways to reduce your waste...</p>
-          <p className="text-xs text-gray-500 mt-1">This usually takes a few seconds.</p>
+          <Loader2 className="size-10 mx-auto text-[#D4A574] animate-spin mb-4" />
+          <p className="text-[#E5E5E5] font-medium">Our AI chef is thinking of ways to reduce your waste...</p>
+          <p className="text-xs text-[#666666] mt-1">This usually takes a few seconds.</p>
         </div>
       )}
 
@@ -149,9 +149,9 @@ export function WasteReuseSuggestions() {
       {/* Empty state — generated but nothing */}
       {hasGenerated && !loading && suggestions.length === 0 && (
         <div className="text-center py-12">
-          <Trash2 className="size-10 mx-auto text-gray-600 mb-3" />
-          <p className="text-gray-400 font-medium">No suggestions yet</p>
-          <p className="text-sm text-gray-500 mt-1">
+          <Trash2 className="size-10 mx-auto text-[#666666] mb-3" />
+          <p className="text-[#999999] font-medium">No suggestions yet</p>
+          <p className="text-sm text-[#666666] mt-1">
             Log some waste first, then we&apos;ll suggest creative ways to reuse ingredients and save money.
           </p>
         </div>
@@ -160,9 +160,9 @@ export function WasteReuseSuggestions() {
       {/* Initial empty state */}
       {!hasGenerated && !loading && (
         <div className="text-center py-12">
-          <Lightbulb className="size-10 mx-auto text-gray-600 mb-3" />
-          <p className="text-gray-400 font-medium">Ready for suggestions?</p>
-          <p className="text-sm text-gray-500 mt-1">
+          <Lightbulb className="size-10 mx-auto text-[#666666] mb-3" />
+          <p className="text-[#999999] font-medium">Ready for suggestions?</p>
+          <p className="text-sm text-[#666666] mt-1">
             Click the button above to get AI-powered reuse ideas based on your waste logs.
           </p>
         </div>
@@ -176,14 +176,14 @@ export function WasteReuseSuggestions() {
             return (
               <div
                 key={s?.id}
-                className="bg-gray-800 rounded-xl p-5 border border-gray-700"
+                className="bg-[#161616] rounded-xl p-5 border border-[#2A2A2A]"
               >
                 {/* Header row */}
                 <div className="flex items-start justify-between gap-3 mb-3">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <h3 className="text-white font-medium">{s?.ingredientName ?? "Unknown"}</h3>
-                      <span className="text-xs text-gray-400">
+                      <span className="text-xs text-[#999999]">
                         {Number(s?.quantityWasted ?? 0).toLocaleString(undefined, { maximumFractionDigits: 1 })} kg wasted this week
                       </span>
                       <span
@@ -196,13 +196,13 @@ export function WasteReuseSuggestions() {
                 </div>
 
                 {/* Suggestion text */}
-                <p className="text-sm text-gray-300 leading-relaxed mb-4">{s?.suggestion}</p>
+                <p className="text-sm text-[#E5E5E5] leading-relaxed mb-4">{s?.suggestion}</p>
 
                 {/* Actions */}
                 <div className="flex flex-wrap gap-2">
                   <button
                     onClick={() => handleGenerateRecipe(s?.ingredientName ?? "")}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-amber-600/20 hover:bg-amber-600/30 text-amber-400 text-sm font-medium rounded-lg transition-colors border border-amber-600/30 min-h-[44px]"
+                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#D4A574]/20 hover:bg-[#D4A574]/30 text-[#D4A574] text-sm font-medium rounded-lg transition-colors border border-[#D4A574]/30 min-h-[44px]"
                   >
                     <ChefHat className="size-4" />
                     Generate Recipe
@@ -212,7 +212,7 @@ export function WasteReuseSuggestions() {
                     className={`inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg transition-colors border min-h-[44px] ${
                       isSaved
                         ? "bg-emerald-600/20 text-emerald-400 border-emerald-600/30 hover:bg-emerald-600/30"
-                        : "bg-gray-700/50 text-gray-400 border-gray-600 hover:bg-gray-700 hover:text-gray-300"
+                        : "bg-[#1E1E1E]/50 text-[#999999] border-[#2A2A2A] hover:bg-[#1E1E1E] hover:text-[#E5E5E5]"
                     }`}
                   >
                     {isSaved ? <BookmarkCheck className="size-4" /> : <Bookmark className="size-4" />}
@@ -220,7 +220,7 @@ export function WasteReuseSuggestions() {
                   </button>
                   <button
                     onClick={() => handleDismiss(s?.id)}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-gray-700/50 hover:bg-gray-700 text-gray-500 hover:text-gray-300 text-sm font-medium rounded-lg transition-colors border border-gray-600 min-h-[44px]"
+                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#1E1E1E]/50 hover:bg-[#1E1E1E] text-[#666666] hover:text-[#E5E5E5] text-sm font-medium rounded-lg transition-colors border border-[#2A2A2A] min-h-[44px]"
                   >
                     Dismiss
                   </button>

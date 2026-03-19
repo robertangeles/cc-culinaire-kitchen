@@ -80,10 +80,10 @@ export function SettingsLayout({
   }
 
   return (
-    <div className="flex h-full">
+    <div className="flex h-full bg-[#0A0A0A]">
       {/* Tab navigation */}
-      <div className="w-56 border-r border-stone-200 bg-stone-50 px-3 py-6">
-        <h2 className="px-3 mb-4 text-sm font-semibold text-stone-500 uppercase tracking-wider">
+      <div className="w-56 border-r border-[#2A2A2A] bg-[#0A0A0A] px-3 py-6">
+        <h2 className="px-3 mb-4 text-sm font-semibold text-[#666666] uppercase tracking-wider">
           Settings
         </h2>
         <nav role="tablist" aria-label="Settings" aria-orientation="vertical" className="space-y-1">
@@ -100,16 +100,16 @@ export function SettingsLayout({
               disabled={disabled}
               className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
                 activeTab === id
-                  ? "bg-white text-stone-900 shadow-sm"
+                  ? "bg-[#1E1E1E] text-[#FAFAFA] shadow-sm"
                   : disabled
-                    ? "text-stone-300 cursor-not-allowed"
-                    : "text-stone-600 hover:bg-white/60 hover:text-stone-900"
+                    ? "text-[#666666] cursor-not-allowed"
+                    : "text-[#999999] hover:bg-[#1E1E1E]/60 hover:text-[#FAFAFA]"
               }`}
             >
               <Icon className="size-4" />
               {label}
               {disabled && (
-                <span className="ml-auto text-[10px] text-stone-300 uppercase">
+                <span className="ml-auto text-[10px] text-[#666666] uppercase">
                   Soon
                 </span>
               )}
@@ -123,7 +123,7 @@ export function SettingsLayout({
         role="tabpanel"
         id={`settings-tabpanel-${activeTab}`}
         aria-labelledby={`settings-tab-${activeTab}`}
-        className="flex-1 overflow-y-auto"
+        className="flex-1 overflow-y-auto bg-[#0A0A0A]"
       >
         {children}
       </div>

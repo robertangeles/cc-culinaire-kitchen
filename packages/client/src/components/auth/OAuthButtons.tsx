@@ -7,19 +7,19 @@
 
 export function OAuthButtons() {
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <div className="relative">
         <div className="absolute inset-0 flex items-center">
-          <div className="w-full border-t border-stone-200" />
+          <div className="w-full border-t border-[#2A2A2A]" />
         </div>
         <div className="relative flex justify-center text-xs">
-          <span className="bg-white px-3 text-stone-400">Or continue with</span>
+          <span className="bg-[#161616] px-3 text-[#666666]">Or continue with</span>
         </div>
       </div>
 
       <a
         href="/api/auth/google"
-        className="flex items-center justify-center gap-2 rounded-lg border border-stone-300 bg-white px-4 py-2.5 text-sm font-medium text-stone-700 hover:bg-stone-50 transition-colors w-full"
+        className="flex items-center justify-center gap-2 rounded-xl border border-[#2A2A2A] bg-[#1E1E1E] px-4 py-3 text-sm font-medium text-[#E5E5E5] hover:bg-[#252525] transition-colors w-full"
       >
         <svg className="size-4" viewBox="0 0 24 24">
           <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" />

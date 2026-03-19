@@ -101,18 +101,18 @@ export function VersionHistory({
       />
 
       {/* Panel */}
-      <div className="relative w-full max-w-md bg-white shadow-xl flex flex-col">
+      <div className="relative w-full max-w-md bg-[#161616] shadow-2xl shadow-black/40 flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-stone-200">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[#2A2A2A]">
           <div className="flex items-center gap-2">
-            <History className="size-5 text-stone-600" />
-            <h2 className="text-lg font-semibold text-stone-900">
+            <History className="size-5 text-[#E5E5E5]" />
+            <h2 className="text-lg font-semibold text-[#FAFAFA]">
               Version History
             </h2>
           </div>
           <button
             onClick={onClose}
-            className="p-1 text-stone-400 hover:text-stone-600 transition-colors"
+            className="p-1 text-[#999999] hover:text-[#E5E5E5] transition-colors"
           >
             <X className="size-5" />
           </button>
@@ -121,21 +121,21 @@ export function VersionHistory({
         {/* Content */}
         <div className="flex-1 overflow-y-auto px-6 py-4">
           {isLoading && (
-            <div className="flex items-center justify-center py-12 text-stone-400">
+            <div className="flex items-center justify-center py-12 text-[#999999]">
               <Loader2 className="size-5 animate-spin mr-2" />
               Loading versions...
             </div>
           )}
 
           {error && (
-            <div className="flex items-center gap-2 text-sm text-red-600 py-4">
+            <div className="flex items-center gap-2 text-sm text-red-400 py-4">
               <AlertCircle className="size-4" />
               {error}
             </div>
           )}
 
           {!isLoading && !error && versions.length === 0 && (
-            <p className="text-sm text-stone-400 py-12 text-center">
+            <p className="text-sm text-[#999999] py-12 text-center">
               No version history yet. Versions are created each time you
               save the prompt.
             </p>
@@ -146,23 +146,23 @@ export function VersionHistory({
               {versions.map((version) => (
                 <div
                   key={version.versionId}
-                  className="border border-stone-200 rounded-lg p-4 hover:border-stone-300 transition-colors"
+                  className="border border-[#2A2A2A] rounded-lg p-4 hover:border-[#2A2A2A] transition-colors"
                 >
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-stone-700">
+                    <span className="text-sm font-medium text-[#E5E5E5]">
                       Version {version.versionNumber}
                     </span>
-                    <span className="text-xs text-stone-400">
+                    <span className="text-xs text-[#999999]">
                       {formatDate(version.createdDttm)}
                     </span>
                   </div>
-                  <p className="text-xs text-stone-500 line-clamp-3 font-mono mb-3">
+                  <p className="text-xs text-[#999999] line-clamp-3 font-mono mb-3">
                     {version.promptBody}
                   </p>
                   <button
                     onClick={() => handleRollback(version)}
                     disabled={isRollingBack}
-                    className="flex items-center gap-1.5 text-xs text-amber-700 hover:text-amber-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    className="flex items-center gap-1.5 text-xs text-[#D4A574] hover:text-[#D4A574] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     {isRollingBack ? (
                       <Loader2 className="size-3 animate-spin" />

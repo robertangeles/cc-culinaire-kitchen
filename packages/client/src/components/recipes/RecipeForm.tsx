@@ -193,26 +193,18 @@ export function RecipeForm({ domain, onSubmit, loading }: RecipeFormProps) {
     });
   }
 
-  const accentClass = {
-    recipe: "focus:border-amber-500 focus:ring-amber-500",
-    patisserie: "focus:border-pink-400 focus:ring-pink-400",
-    spirits: "focus:border-amber-700 focus:ring-amber-700",
-  }[domain];
+  const accentClass = "focus:border-[#D4A574] focus:ring-[#D4A574]/50";
 
-  const btnClass = {
-    recipe: "bg-amber-600 hover:bg-amber-700",
-    patisserie: "bg-pink-500 hover:bg-pink-600",
-    spirits: "bg-amber-800 hover:bg-amber-900",
-  }[domain];
+  const btnClass = "bg-[#D4A574] hover:bg-[#C4956A]";
 
-  const selectClass = `w-full rounded-lg border border-stone-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 ${accentClass}`;
+  const selectClass = `w-full rounded-xl border border-[#2A2A2A] bg-[#0A0A0A] px-4 py-3 text-sm text-white focus:outline-none focus:ring-2 ${accentClass}`;
   const inputClass = selectClass;
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       {/* Main request */}
       <div>
-        <label className="block text-sm font-medium text-stone-700 mb-1">
+        <label className="block text-sm font-medium text-[#999999] mb-2">
           {domain === "spirits" ? "What drink would you like to create?" : "What would you like to create?"}
         </label>
         <textarea
@@ -220,7 +212,7 @@ export function RecipeForm({ domain, onSubmit, loading }: RecipeFormProps) {
           onChange={(e) => setRequest(e.target.value)}
           placeholder={PLACEHOLDERS[domain]}
           rows={2}
-          className={`w-full rounded-lg border border-stone-300 px-3 py-2 text-sm text-stone-800 placeholder:text-stone-400 resize-none focus:outline-none focus:ring-1 ${accentClass}`}
+          className={`w-full rounded-xl border border-[#2A2A2A] bg-[#0A0A0A] px-4 py-3 text-sm text-white placeholder-[#444444] resize-none focus:outline-none focus:ring-2 ${accentClass}`}
           required
         />
       </div>
@@ -229,12 +221,12 @@ export function RecipeForm({ domain, onSubmit, loading }: RecipeFormProps) {
       {domain === "recipe" && (
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-xs font-medium text-stone-600 mb-1">Cuisine style</label>
+            <label className="block text-xs font-medium text-[#999999] mb-2">Cuisine style</label>
             <input type="text" value={cuisine} onChange={(e) => setCuisine(e.target.value)}
               placeholder="e.g. French, Japanese" className={inputClass} />
           </div>
           <div>
-            <label className="block text-xs font-medium text-stone-600 mb-1">Key ingredients</label>
+            <label className="block text-xs font-medium text-[#999999] mb-2">Key ingredients</label>
             <input type="text" value={mainIngredients} onChange={(e) => setMainIngredients(e.target.value)}
               placeholder="e.g. chicken, cider, shallots" className={inputClass} />
           </div>
@@ -246,14 +238,14 @@ export function RecipeForm({ domain, onSubmit, loading }: RecipeFormProps) {
         <div className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-stone-600 mb-1">Pastry style</label>
+              <label className="block text-xs font-medium text-[#999999] mb-2">Pastry style</label>
               <select value={pastryStyle} onChange={(e) => setPastryStyle(e.target.value)} className={selectClass}>
                 <option value="">Any style</option>
                 {PASTRY_STYLE_OPTIONS.map((o) => <option key={o}>{o}</option>)}
               </select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-stone-600 mb-1">Pastry type</label>
+              <label className="block text-xs font-medium text-[#999999] mb-2">Pastry type</label>
               <select value={pastryType} onChange={(e) => setPastryType(e.target.value)} className={selectClass}>
                 <option value="">Any type</option>
                 {PASTRY_TYPE_OPTIONS.map((o) => <option key={o}>{o}</option>)}
@@ -262,12 +254,12 @@ export function RecipeForm({ domain, onSubmit, loading }: RecipeFormProps) {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-stone-600 mb-1">Key technique</label>
+              <label className="block text-xs font-medium text-[#999999] mb-2">Key technique</label>
               <input type="text" value={keyTechnique} onChange={(e) => setKeyTechnique(e.target.value)}
                 placeholder="e.g. lamination, tempering" className={inputClass} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-stone-600 mb-1">Time commitment</label>
+              <label className="block text-xs font-medium text-[#999999] mb-2">Time commitment</label>
               <select value={componentCount} onChange={(e) => setComponentCount(e.target.value)} className={selectClass}>
                 <option value="">Any</option>
                 <option value="quick">Quick (under 2 hours active)</option>
@@ -285,14 +277,14 @@ export function RecipeForm({ domain, onSubmit, loading }: RecipeFormProps) {
         <div className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-stone-600 mb-1">Venue type</label>
+              <label className="block text-xs font-medium text-[#999999] mb-2">Venue type</label>
               <select value={venueType} onChange={(e) => setVenueType(e.target.value)} className={selectClass}>
                 <option value="">Any venue</option>
                 {VENUE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-stone-600 mb-1">Spirit base</label>
+              <label className="block text-xs font-medium text-[#999999] mb-2">Spirit base</label>
               <select value={spiritBase} onChange={(e) => setSpiritBase(e.target.value)} className={selectClass}>
                 <option value="">Any spirit</option>
                 {SPIRIT_OPTIONS.map((o) => <option key={o}>{o}</option>)}
@@ -301,14 +293,14 @@ export function RecipeForm({ domain, onSubmit, loading }: RecipeFormProps) {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-stone-600 mb-1">Drink family</label>
+              <label className="block text-xs font-medium text-[#999999] mb-2">Drink family</label>
               <select value={drinkStyle} onChange={(e) => setDrinkStyle(e.target.value)} className={selectClass}>
                 <option value="">Any style</option>
                 {DRINK_STYLE_OPTIONS.map((o) => <option key={o}>{o}</option>)}
               </select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-stone-600 mb-1">Season</label>
+              <label className="block text-xs font-medium text-[#999999] mb-2">Season</label>
               <select value={season} onChange={(e) => setSeason(e.target.value)} className={selectClass}>
                 <option value="">Any season</option>
                 {SEASON_OPTIONS.map((o) => <option key={o}>{o}</option>)}
@@ -316,14 +308,14 @@ export function RecipeForm({ domain, onSubmit, loading }: RecipeFormProps) {
             </div>
           </div>
           <div>
-            <label className="block text-xs font-medium text-stone-600 mb-1">Drink type</label>
+            <label className="block text-xs font-medium text-[#999999] mb-2">Drink type</label>
             <div className="flex gap-4">
-              <label className="flex items-center gap-2 text-sm cursor-pointer">
-                <input type="radio" name="alcoholic" checked={alcoholic} onChange={() => setAlcoholic(true)} className="accent-amber-700" />
+              <label className="flex items-center gap-2 text-sm text-[#E5E5E5] cursor-pointer">
+                <input type="radio" name="alcoholic" checked={alcoholic} onChange={() => setAlcoholic(true)} className="accent-[#D4A574]" />
                 Full Strength
               </label>
-              <label className="flex items-center gap-2 text-sm cursor-pointer">
-                <input type="radio" name="alcoholic" checked={!alcoholic} onChange={() => setAlcoholic(false)} className="accent-amber-700" />
+              <label className="flex items-center gap-2 text-sm text-[#E5E5E5] cursor-pointer">
+                <input type="radio" name="alcoholic" checked={!alcoholic} onChange={() => setAlcoholic(false)} className="accent-[#D4A574]" />
                 Non-Alcoholic / Mocktail
               </label>
             </div>
@@ -334,14 +326,14 @@ export function RecipeForm({ domain, onSubmit, loading }: RecipeFormProps) {
       {/* ===== Shared fields ===== */}
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-xs font-medium text-stone-600 mb-1">
+          <label className="block text-xs font-medium text-[#999999] mb-2">
             {domain === "spirits" ? "Yield" : "Servings"}
           </label>
           <input type="number" value={servings} onChange={(e) => setServings(e.target.value)}
             min={1} max={100} className={inputClass} />
         </div>
         <div>
-          <label className="block text-xs font-medium text-stone-600 mb-1">Difficulty</label>
+          <label className="block text-xs font-medium text-[#999999] mb-2">Difficulty</label>
           <select value={difficulty} onChange={(e) => setDifficulty(e.target.value)} className={selectClass}>
             <option value="">Any</option>
             {DIFFICULTY_OPTIONS[domain].map((opt) => (
@@ -353,21 +345,21 @@ export function RecipeForm({ domain, onSubmit, loading }: RecipeFormProps) {
 
       {/* Occasion */}
       <div>
-        <label className="block text-xs font-medium text-stone-600 mb-1">Occasion (optional)</label>
+        <label className="block text-xs font-medium text-[#999999] mb-2">Occasion (optional)</label>
         <input type="text" value={occasion} onChange={(e) => setOccasion(e.target.value)}
           placeholder="e.g. dinner party, weeknight, holiday" className={inputClass} />
       </div>
 
       {/* Dietary */}
       <div>
-        <label className="block text-xs font-medium text-stone-600 mb-2">Dietary restrictions</label>
+        <label className="block text-xs font-medium text-[#999999] mb-2">Dietary restrictions</label>
         <div className="flex flex-wrap gap-2">
           {DIETARY_OPTIONS.map((opt) => (
             <button key={opt} type="button" onClick={() => toggleDietary(opt)}
               className={`px-3 py-1 rounded-full text-xs border transition-colors ${
                 dietary.includes(opt)
-                  ? "bg-stone-700 border-stone-700 text-white"
-                  : "bg-white border-stone-300 text-stone-600 hover:border-stone-400"
+                  ? "bg-[#D4A574] border-[#D4A574] text-[#0A0A0A]"
+                  : "bg-[#1E1E1E] border-[#2A2A2A] text-[#999999] hover:border-[#3A3A3A]"
               }`}
             >
               {opt}
@@ -378,7 +370,7 @@ export function RecipeForm({ domain, onSubmit, loading }: RecipeFormProps) {
 
       {/* Submit */}
       <button type="submit" disabled={loading || !request.trim()}
-        className={`w-full flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-white font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${btnClass}`}
+        className={`w-full flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-[#0A0A0A] font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${btnClass}`}
       >
         {loading ? (
           <><Loader2 className="size-4 animate-spin" /> Generating...</>

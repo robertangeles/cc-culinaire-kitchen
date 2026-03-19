@@ -75,7 +75,7 @@ export function ChatInput({
     : "Ask about techniques, troubleshooting, ingredients...";
 
   return (
-    <div className="border-t border-stone-200 bg-white px-4 py-3">
+    <div className="border-t border-[#2A2A2A] bg-[#161616] px-4 py-3">
       <form
         onSubmit={onSubmit}
         className="mx-auto flex items-end gap-2"
@@ -88,8 +88,8 @@ export function ChatInput({
             onClick={onToggleWebSearch}
             className={`flex-shrink-0 size-11 rounded-xl flex items-center justify-center transition-colors ${
               webSearchEnabled
-                ? "bg-amber-100 text-amber-700 hover:bg-amber-200"
-                : "bg-stone-100 text-stone-400 hover:bg-stone-200 hover:text-stone-500"
+                ? "bg-[#D4A574]/20 text-[#D4A574] hover:bg-[#D4A574]/30"
+                : "bg-[#1E1E1E] text-[#666666] hover:bg-[#2A2A2A] hover:text-[#999999]"
             }`}
             title={webSearchEnabled ? "Web search enabled" : "Web search disabled"}
           >
@@ -104,8 +104,8 @@ export function ChatInput({
             onClick={onToggleImageMode}
             className={`flex-shrink-0 size-11 rounded-xl flex items-center justify-center transition-colors ${
               isImageMode
-                ? "bg-violet-100 text-violet-700 hover:bg-violet-200"
-                : "bg-stone-100 text-stone-400 hover:bg-stone-200 hover:text-stone-500"
+                ? "bg-violet-500/20 text-violet-400 hover:bg-violet-500/30"
+                : "bg-[#1E1E1E] text-[#666666] hover:bg-[#2A2A2A] hover:text-[#999999]"
             }`}
             title={isImageMode ? "Image generation mode" : "Switch to image generation"}
           >
@@ -119,10 +119,10 @@ export function ChatInput({
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
           rows={1}
-          className={`flex-1 resize-none rounded-xl border px-4 py-3 text-stone-800 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:border-transparent ${
+          className={`flex-1 resize-none rounded-xl border px-4 py-3 text-white placeholder-[#444444] focus:outline-none focus:ring-2 focus:border-transparent ${
             isImageMode
-              ? "border-violet-300 bg-violet-50 focus:ring-violet-500"
-              : "border-stone-300 bg-stone-50 focus:ring-amber-600"
+              ? "border-violet-500/30 bg-[#0A0A0A] focus:ring-violet-500/50"
+              : "border-[#2A2A2A] bg-[#0A0A0A] focus:ring-[#D4A574]/50"
           }`}
           style={textareaHeight ? { height: `${textareaHeight}px` } : undefined}
           disabled={isStreaming}
@@ -131,7 +131,7 @@ export function ChatInput({
           <button
             type="button"
             onClick={onStop}
-            className="flex-shrink-0 size-11 rounded-xl bg-red-600 text-white flex items-center justify-center hover:bg-red-700 transition-colors"
+            className="flex-shrink-0 size-11 rounded-xl bg-red-600 text-white flex items-center justify-center hover:bg-red-700 transition-colors opacity-90"
           >
             <Square className="size-4" />
           </button>
@@ -139,10 +139,10 @@ export function ChatInput({
           <button
             type="submit"
             disabled={!input.trim()}
-            className={`flex-shrink-0 size-11 rounded-xl text-white flex items-center justify-center transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+            className={`flex-shrink-0 size-11 rounded-xl flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
               isImageMode
-                ? "bg-violet-600 hover:bg-violet-700"
-                : "bg-amber-700 hover:bg-amber-800"
+                ? "bg-violet-600 hover:bg-violet-700 text-white"
+                : "bg-[#D4A574] hover:bg-[#C4956A] text-[#0A0A0A]"
             }`}
           >
             {isImageMode ? (

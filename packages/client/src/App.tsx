@@ -120,9 +120,9 @@ export function App() {
                           <Route path="/settings" element={<AuthenticatedOnly><SettingsPage /></AuthenticatedOnly>} />
                           <Route path="/profile" element={<AuthenticatedOnly><ProfilePage /></AuthenticatedOnly>} />
                           <Route path="/mfa-setup" element={<AuthenticatedOnly><MfaSetupPage /></AuthenticatedOnly>} />
-                          <Route path="/recipes" element={<RecipeLabPage domain="recipe" />} />
-                          <Route path="/patisserie" element={<RecipeLabPage domain="patisserie" />} />
-                          <Route path="/spirits" element={<RecipeLabPage domain="spirits" />} />
+                          <Route path="/recipes" element={<RecipeLabPage key="recipe" domain="recipe" />} />
+                          <Route path="/patisserie" element={<RecipeLabPage key="patisserie" domain="patisserie" />} />
+                          <Route path="/spirits" element={<RecipeLabPage key="spirits" domain="spirits" />} />
                           <Route path="/my-shelf" element={<AuthenticatedOnly><MyShelfPage /></AuthenticatedOnly>} />
                           <Route path="/menu-intelligence" element={<AuthenticatedOnly><MenuIntelligencePage /></AuthenticatedOnly>} />
                           <Route path="/waste-intelligence" element={<WasteIntelligencePage />} />

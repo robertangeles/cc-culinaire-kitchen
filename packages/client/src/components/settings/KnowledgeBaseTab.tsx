@@ -50,23 +50,23 @@ const SOURCE_ICONS: Record<string, typeof FileText> = {
 function StatusBadge({ doc }: { doc: KnowledgeDocument }) {
   if (doc.status === "processing") {
     return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium text-amber-700 bg-amber-50 rounded-full">
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium text-[#D4A574] bg-[#D4A574]/10 rounded-full">
         <Loader2 className="size-3 animate-spin" /> Processing
       </span>
     );
   }
   if (doc.status === "ready") {
     return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium text-green-700 bg-green-50 rounded-full">
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium text-green-400 bg-green-900/30 rounded-full">
         <CheckCircle2 className="size-3" /> Ready
       </span>
     );
   }
   return (
-    <span className="group relative inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium text-red-700 bg-red-50 rounded-full cursor-help">
+    <span className="group relative inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium text-red-400 bg-red-900/30 rounded-full cursor-help">
       <XCircle className="size-3" /> Failed
       {doc.errorMessage && (
-        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 text-xs text-white bg-stone-800 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap max-w-xs truncate z-10">
+        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 text-xs text-white bg-[#0A0A0A] rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap max-w-xs truncate z-10">
           {doc.errorMessage}
         </span>
       )}
@@ -89,57 +89,57 @@ function DocumentTable({
 }) {
   if (documents.length === 0) {
     return (
-      <div className="text-center py-12 bg-stone-50 rounded-xl border border-stone-200">
-        <FileText className="size-8 mx-auto text-stone-300 mb-2" />
-        <p className="text-sm text-stone-500">No documents in this category yet.</p>
+      <div className="text-center py-12 bg-[#0A0A0A] rounded-xl border border-[#2A2A2A]">
+        <FileText className="size-8 mx-auto text-[#666666] mb-2" />
+        <p className="text-sm text-[#999999]">No documents in this category yet.</p>
       </div>
     );
   }
 
   return (
-    <div className="border border-stone-200 rounded-xl overflow-hidden">
+    <div className="border border-[#2A2A2A] rounded-xl overflow-hidden">
       <table className="w-full text-sm">
         <thead>
-          <tr className="bg-stone-50 border-b border-stone-200">
-            <th className="text-left px-4 py-3 font-medium text-stone-600">Document</th>
-            <th className="text-left px-4 py-3 font-medium text-stone-600">Category</th>
-            <th className="text-center px-4 py-3 font-medium text-stone-600">Chunks</th>
-            <th className="text-left px-4 py-3 font-medium text-stone-600">Status</th>
-            <th className="text-right px-4 py-3 font-medium text-stone-600">Actions</th>
+          <tr className="bg-[#0A0A0A] border-b border-[#2A2A2A]">
+            <th className="text-left px-4 py-3 font-medium text-[#E5E5E5]">Document</th>
+            <th className="text-left px-4 py-3 font-medium text-[#E5E5E5]">Category</th>
+            <th className="text-center px-4 py-3 font-medium text-[#E5E5E5]">Chunks</th>
+            <th className="text-left px-4 py-3 font-medium text-[#E5E5E5]">Status</th>
+            <th className="text-right px-4 py-3 font-medium text-[#E5E5E5]">Actions</th>
           </tr>
         </thead>
         <tbody>
           {documents.map((doc) => {
             const Icon = SOURCE_ICONS[doc.sourceType] || FileText;
             return (
-              <tr key={doc.documentId} className="border-b border-stone-100 last:border-b-0 hover:bg-stone-50">
+              <tr key={doc.documentId} className="border-b border-[#2A2A2A] last:border-b-0 hover:bg-[#0A0A0A]">
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-2">
-                    <Icon className="size-4 text-stone-400 flex-shrink-0" />
+                    <Icon className="size-4 text-[#999999] flex-shrink-0" />
                     <div className="min-w-0">
-                      <p className="font-medium text-stone-900 truncate">{doc.title}</p>
+                      <p className="font-medium text-[#FAFAFA] truncate">{doc.title}</p>
                       {doc.originalFilename && (
-                        <p className="text-xs text-stone-400 truncate">{doc.originalFilename}</p>
+                        <p className="text-xs text-[#999999] truncate">{doc.originalFilename}</p>
                       )}
                       {doc.sourceUrl && (
-                        <p className="text-xs text-stone-400 truncate">{doc.sourceUrl}</p>
+                        <p className="text-xs text-[#999999] truncate">{doc.sourceUrl}</p>
                       )}
                     </div>
                   </div>
                 </td>
                 <td className="px-4 py-3">
-                  <span className="inline-block px-2 py-0.5 text-xs font-medium text-stone-600 bg-stone-100 rounded">
+                  <span className="inline-block px-2 py-0.5 text-xs font-medium text-[#E5E5E5] bg-[#1E1E1E] rounded">
                     {doc.category}
                   </span>
                 </td>
-                <td className="px-4 py-3 text-center text-stone-600">{doc.chunkCount}</td>
+                <td className="px-4 py-3 text-center text-[#E5E5E5]">{doc.chunkCount}</td>
                 <td className="px-4 py-3"><StatusBadge doc={doc} /></td>
                 <td className="px-4 py-3">
                   <div className="flex items-center justify-end gap-1">
                     <button
                       onClick={() => onReEmbed(doc.documentId)}
                       disabled={doc.status === "processing"}
-                      className="p-1.5 rounded hover:bg-stone-100 text-stone-500 hover:text-amber-600 disabled:opacity-30 transition-colors"
+                      className="p-1.5 rounded hover:bg-[#1E1E1E] text-[#999999] hover:text-[#D4A574] disabled:opacity-30 transition-colors"
                       title="Re-embed"
                     >
                       <RefreshCw className="size-4" />
@@ -154,7 +154,7 @@ function DocumentTable({
                         </button>
                         <button
                           onClick={() => setDeleteConfirm(null)}
-                          className="px-2 py-1 text-xs font-medium text-stone-600 bg-stone-100 rounded hover:bg-stone-200"
+                          className="px-2 py-1 text-xs font-medium text-[#E5E5E5] bg-[#1E1E1E] rounded hover:bg-[#2A2A2A]"
                         >
                           Cancel
                         </button>
@@ -162,7 +162,7 @@ function DocumentTable({
                     ) : (
                       <button
                         onClick={() => setDeleteConfirm(doc.documentId)}
-                        className="p-1.5 rounded hover:bg-stone-100 text-stone-500 hover:text-red-600 transition-colors"
+                        className="p-1.5 rounded hover:bg-[#1E1E1E] text-[#999999] hover:text-red-400 transition-colors"
                         title="Delete"
                       >
                         <Trash2 className="size-4" />
@@ -233,7 +233,7 @@ export default function KnowledgeBaseTab() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <Loader2 className="size-6 animate-spin text-amber-600" />
+        <Loader2 className="size-6 animate-spin text-[#D4A574]" />
       </div>
     );
   }
@@ -243,21 +243,21 @@ export default function KnowledgeBaseTab() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-stone-900">Knowledge Base</h2>
-          <p className="text-sm text-stone-500 mt-1">
+          <h2 className="text-lg font-semibold text-[#FAFAFA]">Knowledge Base</h2>
+          <p className="text-sm text-[#999999] mt-1">
             {total} document{total !== 1 ? "s" : ""} indexed
           </p>
         </div>
         <button
           onClick={() => setDialog(btn.dialog)}
-          className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-amber-600 rounded-lg hover:bg-amber-700 transition-colors"
+          className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-[#D4A574] rounded-lg hover:bg-[#C4956A] transition-colors"
         >
           <btn.icon className="size-4" /> {btn.label}
         </button>
       </div>
 
       {/* Sub-tabs */}
-      <div className="flex gap-1 border-b border-stone-200">
+      <div className="flex gap-1 border-b border-[#2A2A2A]">
         {SUB_TABS.map((tab) => {
           const TabIcon = tab.icon;
           const count = documents.filter((d) => tab.sourceTypes.includes(d.sourceType)).length;
@@ -267,15 +267,15 @@ export default function KnowledgeBaseTab() {
               onClick={() => { setSubTab(tab.id); setDeleteConfirm(null); }}
               className={`inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
                 subTab === tab.id
-                  ? "border-amber-600 text-amber-700"
-                  : "border-transparent text-stone-500 hover:text-stone-700 hover:border-stone-300"
+                  ? "border-[#D4A574] text-[#D4A574]"
+                  : "border-transparent text-[#999999] hover:text-[#E5E5E5] hover:border-[#2A2A2A]"
               }`}
             >
               <TabIcon className="size-4" />
               {tab.label}
               {count > 0 && (
                 <span className={`ml-1 px-1.5 py-0.5 text-xs rounded-full ${
-                  subTab === tab.id ? "bg-amber-100 text-amber-700" : "bg-stone-100 text-stone-500"
+                  subTab === tab.id ? "bg-[#D4A574]/15 text-[#D4A574]" : "bg-[#1E1E1E] text-[#999999]"
                 }`}>
                   {count}
                 </span>
@@ -287,7 +287,7 @@ export default function KnowledgeBaseTab() {
 
       {/* Error banner */}
       {(error || actionError) && (
-        <div className="flex items-center gap-2 px-4 py-3 text-sm text-red-700 bg-red-50 rounded-lg">
+        <div className="flex items-center gap-2 px-4 py-3 text-sm text-red-400 bg-red-900/30 rounded-lg">
           <AlertCircle className="size-4 flex-shrink-0" />
           {error || actionError}
         </div>
@@ -305,21 +305,21 @@ export default function KnowledgeBaseTab() {
       {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between">
-          <p className="text-sm text-stone-500">
+          <p className="text-sm text-[#999999]">
             Page {page} of {totalPages}
           </p>
           <div className="flex gap-2">
             <button
               onClick={() => setPage(page - 1)}
               disabled={page <= 1}
-              className="inline-flex items-center gap-1 px-3 py-1.5 text-sm text-stone-600 bg-stone-100 rounded-lg hover:bg-stone-200 disabled:opacity-30 transition-colors"
+              className="inline-flex items-center gap-1 px-3 py-1.5 text-sm text-[#E5E5E5] bg-[#1E1E1E] rounded-lg hover:bg-[#2A2A2A] disabled:opacity-30 transition-colors"
             >
               <ChevronLeft className="size-4" /> Previous
             </button>
             <button
               onClick={() => setPage(page + 1)}
               disabled={page >= totalPages}
-              className="inline-flex items-center gap-1 px-3 py-1.5 text-sm text-stone-600 bg-stone-100 rounded-lg hover:bg-stone-200 disabled:opacity-30 transition-colors"
+              className="inline-flex items-center gap-1 px-3 py-1.5 text-sm text-[#E5E5E5] bg-[#1E1E1E] rounded-lg hover:bg-[#2A2A2A] disabled:opacity-30 transition-colors"
             >
               Next <ChevronRight className="size-4" />
             </button>

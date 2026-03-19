@@ -77,7 +77,7 @@ export function AppearanceTab() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-full text-stone-400">
+      <div className="flex items-center justify-center h-full text-[#999999]">
         <Loader2 className="size-5 animate-spin mr-2" />
         Loading settings...
       </div>
@@ -87,9 +87,9 @@ export function AppearanceTab() {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="px-8 py-6 border-b border-stone-200">
-        <h1 className="text-xl font-semibold text-stone-900">Appearance</h1>
-        <p className="mt-1 text-sm text-stone-500">
+      <div className="px-8 py-6 border-b border-[#2A2A2A]">
+        <h1 className="text-xl font-semibold text-[#FAFAFA]">Appearance</h1>
+        <p className="mt-1 text-sm text-[#999999]">
           Customize how the chat interface looks and feels.
         </p>
       </div>
@@ -98,10 +98,10 @@ export function AppearanceTab() {
       <div className="flex-1 overflow-y-auto px-8 py-6 space-y-6">
         {/* Width */}
         <div>
-          <label className="block text-sm font-medium text-stone-700 mb-1.5">
+          <label className="block text-sm font-medium text-[#E5E5E5] mb-1.5">
             Chat Window Width (px)
           </label>
-          <p className="text-xs text-stone-400 mb-2">
+          <p className="text-xs text-[#999999] mb-2">
             Controls the maximum width of the message area and input bar.
             Default is {DEFAULT_CHAT_WIDTH}px.
           </p>
@@ -113,18 +113,18 @@ export function AppearanceTab() {
               min={400}
               max={1600}
               step={8}
-              className="w-40 rounded-lg border border-stone-300 px-3 py-2 text-sm text-stone-800 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+              className="w-40 rounded-lg border border-[#2A2A2A] bg-[#1E1E1E] px-3 py-2 text-sm text-[#E5E5E5] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-transparent"
             />
-            <span className="text-xs text-stone-400">px (400–1600)</span>
+            <span className="text-xs text-[#999999]">px (400–1600)</span>
           </div>
         </div>
 
         {/* Height */}
         <div>
-          <label className="block text-sm font-medium text-stone-700 mb-1.5">
+          <label className="block text-sm font-medium text-[#E5E5E5] mb-1.5">
             Chat Window Height (px)
           </label>
-          <p className="text-xs text-stone-400 mb-2">
+          <p className="text-xs text-[#999999] mb-2">
             Controls the maximum height of the message area.
             Default is {DEFAULT_CHAT_HEIGHT}px.
           </p>
@@ -136,18 +136,18 @@ export function AppearanceTab() {
               min={300}
               max={1200}
               step={8}
-              className="w-40 rounded-lg border border-stone-300 px-3 py-2 text-sm text-stone-800 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+              className="w-40 rounded-lg border border-[#2A2A2A] bg-[#1E1E1E] px-3 py-2 text-sm text-[#E5E5E5] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-transparent"
             />
-            <span className="text-xs text-stone-400">px (300–1200)</span>
+            <span className="text-xs text-[#999999]">px (300–1200)</span>
           </div>
         </div>
 
         {/* Chat Output Width */}
         <div>
-          <label className="block text-sm font-medium text-stone-700 mb-1.5">
+          <label className="block text-sm font-medium text-[#E5E5E5] mb-1.5">
             Chat Output Width (%)
           </label>
-          <p className="text-xs text-stone-400 mb-2">
+          <p className="text-xs text-[#999999] mb-2">
             Controls the maximum width of each message bubble as a percentage of the chat area.
             Default is {DEFAULT_OUTPUT_WIDTH}%.
           </p>
@@ -159,18 +159,18 @@ export function AppearanceTab() {
               min={30}
               max={100}
               step={5}
-              className="w-40 rounded-lg border border-stone-300 px-3 py-2 text-sm text-stone-800 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+              className="w-40 rounded-lg border border-[#2A2A2A] bg-[#1E1E1E] px-3 py-2 text-sm text-[#E5E5E5] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-transparent"
             />
-            <span className="text-xs text-stone-400">% (30–100)</span>
+            <span className="text-xs text-[#999999]">% (30–100)</span>
           </div>
         </div>
 
         {/* Sidebar Background */}
         <div>
-          <label className="block text-sm font-medium text-stone-700 mb-1.5">
+          <label className="block text-sm font-medium text-[#E5E5E5] mb-1.5">
             Sidebar Background Color
           </label>
-          <p className="text-xs text-stone-400 mb-2">
+          <p className="text-xs text-[#999999] mb-2">
             Hex color code for the sidebar background. Default is {DEFAULT_SIDEBAR_BG} (stone-800).
           </p>
           <div className="flex items-center gap-3">
@@ -178,7 +178,7 @@ export function AppearanceTab() {
               type="color"
               value={sidebarBg}
               onChange={(e) => setSidebarBg(e.target.value)}
-              className="size-10 rounded-lg border border-stone-300 cursor-pointer p-0.5"
+              className="size-10 rounded-lg border border-[#2A2A2A] cursor-pointer p-0.5"
             />
             <input
               type="text"
@@ -186,10 +186,10 @@ export function AppearanceTab() {
               onChange={(e) => setSidebarBg(e.target.value)}
               placeholder="#292524"
               maxLength={7}
-              className="w-28 rounded-lg border border-stone-300 px-3 py-2 text-sm text-stone-800 font-mono focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+              className="w-28 rounded-lg border border-[#2A2A2A] px-3 py-2 text-sm text-[#E5E5E5] font-mono bg-[#1E1E1E] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-transparent"
             />
             <div
-              className="size-10 rounded-lg border border-stone-200"
+              className="size-10 rounded-lg border border-[#2A2A2A]"
               style={{ backgroundColor: sidebarBg }}
             />
           </div>
@@ -197,12 +197,12 @@ export function AppearanceTab() {
 
         {/* Live preview */}
         <div>
-          <label className="block text-sm font-medium text-stone-700 mb-1.5">
+          <label className="block text-sm font-medium text-[#E5E5E5] mb-1.5">
             Preview
           </label>
-          <div className="border border-stone-200 rounded-lg p-4 bg-stone-50">
+          <div className="border border-[#2A2A2A] rounded-lg p-4 bg-[#161616]">
             <div
-              className="mx-auto bg-amber-100 border border-amber-300 rounded flex items-center justify-center text-xs text-amber-700 transition-all"
+              className="mx-auto bg-[#D4A574]/15 border border-[#D4A574]/30 rounded flex items-center justify-center text-xs text-[#D4A574] transition-all"
               style={{
                 maxWidth: `${chatWidth}px`,
                 height: `${Math.min(chatHeight / 3, 120)}px`,
@@ -215,7 +215,7 @@ export function AppearanceTab() {
       </div>
 
       {/* Bottom bar */}
-      <div className="px-8 py-4 border-t border-stone-200 bg-stone-50 flex items-center justify-end gap-3">
+      <div className="px-8 py-4 border-t border-[#2A2A2A] bg-[#0A0A0A] flex items-center justify-end gap-3">
         {error && (
           <span className="flex items-center gap-1.5 text-sm text-red-600">
             <AlertCircle className="size-4" />
@@ -231,7 +231,7 @@ export function AppearanceTab() {
         <button
           onClick={handleSave}
           disabled={isSaving}
-          className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-white bg-amber-600 rounded-lg hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-white bg-[#D4A574] rounded-lg hover:bg-[#C4956A] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           {isSaving ? (
             <Loader2 className="size-4 animate-spin" />

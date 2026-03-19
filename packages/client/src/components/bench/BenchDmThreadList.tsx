@@ -15,17 +15,17 @@ export function BenchDmThreadList({ threads, loading, onSelect }: BenchDmThreadL
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <Loader2 className="size-5 animate-spin text-amber-600" />
+        <Loader2 className="size-5 animate-spin text-[#D4A574]" />
       </div>
     );
   }
 
   if (threads.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-12 text-stone-400">
-        <MessageCircle className="size-10 mb-3 text-stone-300" />
+      <div className="flex flex-col items-center justify-center py-12 text-[#666666]">
+        <MessageCircle className="size-10 mb-3 text-[#666666]" />
         <p className="text-sm">No conversations yet</p>
-        <p className="text-xs mt-1">Click on a chef's name in the chat to start a direct message</p>
+        <p className="text-xs mt-1 text-[#666666]">Click on a chef's name in the chat to start a direct message</p>
       </div>
     );
   }
@@ -41,12 +41,12 @@ export function BenchDmThreadList({ threads, loading, onSelect }: BenchDmThreadL
   }
 
   return (
-    <div className="divide-y divide-stone-100">
+    <div className="divide-y divide-[#2A2A2A]">
       {threads.map((t) => (
         <button
           key={t.dmThreadId}
           onClick={() => onSelect(t.dmThreadId)}
-          className="w-full flex items-center gap-3 px-4 py-3 hover:bg-stone-50 transition-colors text-left"
+          className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[#1E1E1E] transition-colors text-left"
         >
           {t.otherUserPhotoPath ? (
             <img
@@ -55,19 +55,19 @@ export function BenchDmThreadList({ threads, loading, onSelect }: BenchDmThreadL
               className="size-10 rounded-full object-cover flex-shrink-0"
             />
           ) : (
-            <div className="size-10 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
-              <span className="text-sm font-semibold text-amber-700">
+            <div className="size-10 rounded-full bg-[#D4A574]/15 flex items-center justify-center flex-shrink-0">
+              <span className="text-sm font-semibold text-[#D4A574]">
                 {t.otherUserName.charAt(0).toUpperCase()}
               </span>
             </div>
           )}
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between">
-              <span className="text-sm font-semibold text-stone-800 truncate">{t.otherUserName}</span>
-              <span className="text-xs text-stone-400 flex-shrink-0">{timeAgo(t.lastMessageAt)}</span>
+              <span className="text-sm font-semibold text-[#FAFAFA] truncate">{t.otherUserName}</span>
+              <span className="text-xs text-[#666666] flex-shrink-0">{timeAgo(t.lastMessageAt)}</span>
             </div>
             {t.lastMessage && (
-              <p className="text-xs text-stone-500 truncate">{t.lastMessage}</p>
+              <p className="text-xs text-[#999999] truncate">{t.lastMessage}</p>
             )}
           </div>
         </button>

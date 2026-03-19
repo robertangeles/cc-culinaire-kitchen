@@ -116,7 +116,7 @@ export function SiteSettingsTab() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-full text-stone-400">
+      <div className="flex items-center justify-center h-full text-[#999999]">
         <Loader2 className="size-5 animate-spin mr-2" />
         Loading settings...
       </div>
@@ -126,9 +126,9 @@ export function SiteSettingsTab() {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="px-8 py-6 border-b border-stone-200">
-        <h1 className="text-xl font-semibold text-stone-900">Site Settings</h1>
-        <p className="mt-1 text-sm text-stone-500">
+      <div className="px-8 py-6 border-b border-[#2A2A2A]">
+        <h1 className="text-xl font-semibold text-[#FAFAFA]">Site Settings</h1>
+        <p className="mt-1 text-sm text-[#999999]">
           Configure page metadata, branding assets, and footer content.
         </p>
       </div>
@@ -137,7 +137,7 @@ export function SiteSettingsTab() {
       <div className="flex-1 overflow-y-auto px-8 py-6 space-y-6">
         {/* Page Title */}
         <div>
-          <label className="block text-sm font-medium text-stone-700 mb-1.5">
+          <label className="block text-sm font-medium text-[#E5E5E5] mb-1.5">
             Page Title
           </label>
           <input
@@ -145,16 +145,16 @@ export function SiteSettingsTab() {
             value={form.page_title}
             onChange={(e) => updateField("page_title", e.target.value)}
             placeholder="CulinAIre Kitchen"
-            className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm text-stone-800 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+            className="w-full rounded-lg border border-[#2A2A2A] px-3 py-2 text-sm text-[#FAFAFA] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-transparent"
           />
         </div>
 
         {/* Title Separator */}
         <div>
-          <label className="block text-sm font-medium text-stone-700 mb-1.5">
+          <label className="block text-sm font-medium text-[#E5E5E5] mb-1.5">
             Title Separator
           </label>
-          <p className="text-xs text-stone-400 mb-2">
+          <p className="text-xs text-[#999999] mb-2">
             Character(s) between the page title and tagline in the browser tab.
           </p>
           <input
@@ -162,13 +162,13 @@ export function SiteSettingsTab() {
             value={form.title_separator}
             onChange={(e) => updateField("title_separator", e.target.value)}
             placeholder="|"
-            className="w-24 rounded-lg border border-stone-300 px-3 py-2 text-sm text-stone-800 text-center focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+            className="w-24 rounded-lg border border-[#2A2A2A] px-3 py-2 text-sm text-[#FAFAFA] text-center focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-transparent"
           />
         </div>
 
         {/* Tagline */}
         <div>
-          <label className="block text-sm font-medium text-stone-700 mb-1.5">
+          <label className="block text-sm font-medium text-[#E5E5E5] mb-1.5">
             Tagline
           </label>
           <input
@@ -176,17 +176,17 @@ export function SiteSettingsTab() {
             value={form.tagline}
             onChange={(e) => updateField("tagline", e.target.value)}
             placeholder="Your AI Culinary Knowledge Engine"
-            className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm text-stone-800 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+            className="w-full rounded-lg border border-[#2A2A2A] px-3 py-2 text-sm text-[#FAFAFA] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-transparent"
           />
         </div>
 
         {/* Title Preview */}
         {(form.page_title || form.tagline) && (
-          <div className="rounded-lg border border-stone-200 bg-stone-50 px-4 py-3">
-            <span className="text-xs font-medium text-stone-500 block mb-1">
+          <div className="rounded-lg border border-[#2A2A2A] bg-[#0A0A0A] px-4 py-3">
+            <span className="text-xs font-medium text-[#999999] block mb-1">
               Browser Tab Preview
             </span>
-            <span className="text-sm text-stone-800">
+            <span className="text-sm text-[#FAFAFA]">
               {[form.page_title, form.tagline]
                 .filter(Boolean)
                 .join(` ${form.title_separator || "|"} `)}
@@ -196,7 +196,7 @@ export function SiteSettingsTab() {
 
         {/* Meta Description */}
         <div>
-          <label className="block text-sm font-medium text-stone-700 mb-1.5">
+          <label className="block text-sm font-medium text-[#E5E5E5] mb-1.5">
             Meta Description
           </label>
           <textarea
@@ -204,19 +204,19 @@ export function SiteSettingsTab() {
             onChange={(e) => updateField("meta_description", e.target.value)}
             placeholder="AI-powered culinary knowledge engine for chefs and food professionals."
             rows={2}
-            className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm text-stone-800 resize-none focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+            className="w-full rounded-lg border border-[#2A2A2A] px-3 py-2 text-sm text-[#FAFAFA] resize-none focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-transparent"
           />
         </div>
 
         {/* Robots Meta */}
         <div>
-          <label className="block text-sm font-medium text-stone-700 mb-1.5">
+          <label className="block text-sm font-medium text-[#E5E5E5] mb-1.5">
             Robots Meta
           </label>
           <select
             value={form.robots_meta}
             onChange={(e) => updateField("robots_meta", e.target.value)}
-            className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm text-stone-800 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+            className="w-full rounded-lg border border-[#2A2A2A] px-3 py-2 text-sm text-[#FAFAFA] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-transparent"
           >
             {ROBOTS_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>
@@ -244,7 +244,7 @@ export function SiteSettingsTab() {
 
         {/* Footer Text */}
         <div>
-          <label className="block text-sm font-medium text-stone-700 mb-1.5">
+          <label className="block text-sm font-medium text-[#E5E5E5] mb-1.5">
             Footer Text
           </label>
           <input
@@ -252,23 +252,23 @@ export function SiteSettingsTab() {
             value={form.footer_text}
             onChange={(e) => updateField("footer_text", e.target.value)}
             placeholder="© 2026 CulinAIre Kitchen"
-            className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm text-stone-800 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+            className="w-full rounded-lg border border-[#2A2A2A] px-3 py-2 text-sm text-[#FAFAFA] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-transparent"
           />
         </div>
 
         {/* AI Features */}
-        <div className="border-t border-stone-200 pt-6">
-          <h2 className="text-sm font-semibold text-stone-800 uppercase tracking-wider mb-4">
+        <div className="border-t border-[#2A2A2A] pt-6">
+          <h2 className="text-sm font-semibold text-[#FAFAFA] uppercase tracking-wider mb-4">
             AI Features
           </h2>
 
           {/* Web Search Toggle */}
-          <div className="flex items-center justify-between rounded-lg border border-stone-200 bg-white px-4 py-3">
+          <div className="flex items-center justify-between rounded-lg border border-[#2A2A2A] bg-[#161616] px-4 py-3">
             <div>
-              <div className="text-sm font-medium text-stone-800">
+              <div className="text-sm font-medium text-[#FAFAFA]">
                 Enable Web Search
               </div>
-              <p className="text-xs text-stone-500 mt-0.5">
+              <p className="text-xs text-[#999999] mt-0.5">
                 Allow the AI assistant to search the web for current information
                 beyond the curated knowledge base. Requires the Anthropic provider.
               </p>
@@ -283,14 +283,14 @@ export function SiteSettingsTab() {
                   form.web_search_enabled === "true" ? "false" : "true"
                 )
               }
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 ${
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:ring-offset-[#161616] ${
                 form.web_search_enabled === "true"
-                  ? "bg-amber-600"
-                  : "bg-stone-300"
+                  ? "bg-[#D4A574]"
+                  : "bg-[#2A2A2A]"
               }`}
             >
               <span
-                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                className={`inline-block h-4 w-4 transform rounded-full bg-[#161616] transition-transform ${
                   form.web_search_enabled === "true"
                     ? "translate-x-6"
                     : "translate-x-1"
@@ -300,12 +300,12 @@ export function SiteSettingsTab() {
           </div>
 
           {/* Image Generation Toggle */}
-          <div className="flex items-center justify-between rounded-lg border border-stone-200 bg-white px-4 py-3 mt-3">
+          <div className="flex items-center justify-between rounded-lg border border-[#2A2A2A] bg-[#161616] px-4 py-3 mt-3">
             <div>
-              <div className="text-sm font-medium text-stone-800">
+              <div className="text-sm font-medium text-[#FAFAFA]">
                 Enable Image Generation
               </div>
-              <p className="text-xs text-stone-500 mt-0.5">
+              <p className="text-xs text-[#999999] mt-0.5">
                 Allow users to generate images using the Nano Banana model
                 (Google Gemini API). Requires GEMINI_API_KEY to be configured.
               </p>
@@ -320,14 +320,14 @@ export function SiteSettingsTab() {
                   form.image_generation_enabled === "true" ? "false" : "true"
                 )
               }
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 ${
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:ring-offset-[#161616] ${
                 form.image_generation_enabled === "true"
-                  ? "bg-amber-600"
-                  : "bg-stone-300"
+                  ? "bg-[#D4A574]"
+                  : "bg-[#2A2A2A]"
               }`}
             >
               <span
-                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                className={`inline-block h-4 w-4 transform rounded-full bg-[#161616] transition-transform ${
                   form.image_generation_enabled === "true"
                     ? "translate-x-6"
                     : "translate-x-1"
@@ -338,11 +338,11 @@ export function SiteSettingsTab() {
 
           {/* Image Generation Model Selector */}
           {form.image_generation_enabled === "true" && (
-            <div className="rounded-lg border border-stone-200 bg-white px-4 py-3 mt-3">
-              <label className="block text-sm font-medium text-stone-800 mb-1">
+            <div className="rounded-lg border border-[#2A2A2A] bg-[#161616] px-4 py-3 mt-3">
+              <label className="block text-sm font-medium text-[#FAFAFA] mb-1">
                 Image Generation Model
               </label>
-              <p className="text-xs text-stone-500 mb-2">
+              <p className="text-xs text-[#999999] mb-2">
                 Select the Gemini model used for image generation.
               </p>
               <select
@@ -350,7 +350,7 @@ export function SiteSettingsTab() {
                 onChange={(e) =>
                   updateField("image_generation_model", e.target.value)
                 }
-                className="w-full rounded-lg border border-stone-300 bg-stone-50 px-3 py-2 text-sm text-stone-800 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                className="w-full rounded-lg border border-[#2A2A2A] bg-[#0A0A0A] px-3 py-2 text-sm text-[#FAFAFA] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-transparent"
               >
                 {IMAGE_MODEL_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>
@@ -361,12 +361,12 @@ export function SiteSettingsTab() {
             </div>
           )}
           {/* Vector Search Toggle */}
-          <div className="flex items-center justify-between rounded-lg border border-stone-200 bg-white px-4 py-3 mt-3">
+          <div className="flex items-center justify-between rounded-lg border border-[#2A2A2A] bg-[#161616] px-4 py-3 mt-3">
             <div>
-              <div className="text-sm font-medium text-stone-800">
+              <div className="text-sm font-medium text-[#FAFAFA]">
                 Enable Semantic Vector Search
               </div>
-              <p className="text-xs text-stone-500 mt-0.5">
+              <p className="text-xs text-[#999999] mt-0.5">
                 Use AI embeddings for semantic knowledge search instead of keyword matching.
                 Requires pgvector on your PostgreSQL instance and an OpenAI API key.
                 Falls back to keyword search when disabled.
@@ -382,14 +382,14 @@ export function SiteSettingsTab() {
                   form.vector_search_enabled === "true" ? "false" : "true"
                 )
               }
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 ${
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:ring-offset-[#161616] ${
                 form.vector_search_enabled === "true"
-                  ? "bg-amber-600"
-                  : "bg-stone-300"
+                  ? "bg-[#D4A574]"
+                  : "bg-[#2A2A2A]"
               }`}
             >
               <span
-                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                className={`inline-block h-4 w-4 transform rounded-full bg-[#161616] transition-transform ${
                   form.vector_search_enabled === "true"
                     ? "translate-x-6"
                     : "translate-x-1"
@@ -401,17 +401,17 @@ export function SiteSettingsTab() {
 
         {/* ── Guest Sessions ─────────────────────────────── */}
         <div className="space-y-3">
-          <h2 className="text-sm font-semibold text-stone-700 uppercase tracking-wide">
+          <h2 className="text-sm font-semibold text-[#E5E5E5] uppercase tracking-wide">
             Sessions &amp; Limits
           </h2>
 
           {/* Default free sessions for guest users */}
-          <div className="flex items-center justify-between rounded-lg border border-stone-200 bg-white px-4 py-3">
+          <div className="flex items-center justify-between rounded-lg border border-[#2A2A2A] bg-[#161616] px-4 py-3">
             <div>
-              <div className="text-sm font-medium text-stone-800">
+              <div className="text-sm font-medium text-[#FAFAFA]">
                 Default Guest Sessions
               </div>
-              <p className="text-xs text-stone-500 mt-0.5">
+              <p className="text-xs text-[#999999] mt-0.5">
                 Number of free chat sessions available to unauthenticated guest users.
               </p>
             </div>
@@ -421,17 +421,17 @@ export function SiteSettingsTab() {
               max="1000"
               value={form.default_guest_sessions}
               onChange={(e) => updateField("default_guest_sessions", e.target.value)}
-              className="w-20 rounded-lg border border-stone-300 bg-stone-50 px-3 py-1.5 text-sm text-stone-800 text-right focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+              className="w-20 rounded-lg border border-[#2A2A2A] bg-[#0A0A0A] px-3 py-1.5 text-sm text-[#FAFAFA] text-right focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-transparent"
             />
           </div>
 
           {/* Default free sessions for registered users */}
-          <div className="flex items-center justify-between rounded-lg border border-stone-200 bg-white px-4 py-3">
+          <div className="flex items-center justify-between rounded-lg border border-[#2A2A2A] bg-[#161616] px-4 py-3">
             <div>
-              <div className="text-sm font-medium text-stone-800">
+              <div className="text-sm font-medium text-[#FAFAFA]">
                 Default Registered User Sessions
               </div>
-              <p className="text-xs text-stone-500 mt-0.5">
+              <p className="text-xs text-[#999999] mt-0.5">
                 Number of free chat sessions granted to newly registered users.
               </p>
             </div>
@@ -441,17 +441,17 @@ export function SiteSettingsTab() {
               max="1000"
               value={form.default_registered_sessions}
               onChange={(e) => updateField("default_registered_sessions", e.target.value)}
-              className="w-20 rounded-lg border border-stone-300 bg-stone-50 px-3 py-1.5 text-sm text-stone-800 text-right focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+              className="w-20 rounded-lg border border-[#2A2A2A] bg-[#0A0A0A] px-3 py-1.5 text-sm text-[#FAFAFA] text-right focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-transparent"
             />
           </div>
 
           {/* Idle session cleanup hours */}
-          <div className="flex items-center justify-between rounded-lg border border-stone-200 bg-white px-4 py-3">
+          <div className="flex items-center justify-between rounded-lg border border-[#2A2A2A] bg-[#161616] px-4 py-3">
             <div>
-              <div className="text-sm font-medium text-stone-800">
+              <div className="text-sm font-medium text-[#FAFAFA]">
                 Guest Session Idle Timeout (hours)
               </div>
-              <p className="text-xs text-stone-500 mt-0.5">
+              <p className="text-xs text-[#999999] mt-0.5">
                 Guest sessions inactive for longer than this are automatically
                 deleted, freeing up the per-IP session limit.
               </p>
@@ -464,22 +464,22 @@ export function SiteSettingsTab() {
               onChange={(e) =>
                 updateField("guest_session_idle_hours", e.target.value)
               }
-              className="w-20 rounded-lg border border-stone-300 bg-stone-50 px-3 py-1.5 text-sm text-stone-800 text-right focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+              className="w-20 rounded-lg border border-[#2A2A2A] bg-[#0A0A0A] px-3 py-1.5 text-sm text-[#FAFAFA] text-right focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-transparent"
             />
           </div>
         </div>
       </div>
 
       {/* Bottom bar */}
-      <div className="px-8 py-4 border-t border-stone-200 bg-stone-50 flex items-center justify-end gap-3">
+      <div className="px-8 py-4 border-t border-[#2A2A2A] bg-[#0A0A0A] flex items-center justify-end gap-3">
         {error && (
-          <span className="flex items-center gap-1.5 text-sm text-red-600">
+          <span className="flex items-center gap-1.5 text-sm text-red-400">
             <AlertCircle className="size-4" />
             {error}
           </span>
         )}
         {success && (
-          <span className="flex items-center gap-1.5 text-sm text-green-600">
+          <span className="flex items-center gap-1.5 text-sm text-green-400">
             <Check className="size-4" />
             {success}
           </span>
@@ -487,7 +487,7 @@ export function SiteSettingsTab() {
         <button
           onClick={handleSave}
           disabled={isSaving}
-          className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-white bg-amber-600 rounded-lg hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-white bg-[#D4A574] rounded-lg hover:bg-[#C4956A] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           {isSaving ? (
             <Loader2 className="size-4 animate-spin" />
@@ -519,12 +519,12 @@ function FileUploadField({
 
   return (
     <div>
-      <label className="block text-sm font-medium text-stone-700 mb-1.5">
+      <label className="block text-sm font-medium text-[#E5E5E5] mb-1.5">
         {label}
       </label>
       <div className="flex items-center gap-4">
         {/* Preview */}
-        <div className="size-12 rounded-lg border border-stone-200 bg-stone-50 flex items-center justify-center overflow-hidden">
+        <div className="size-12 rounded-lg border border-[#2A2A2A] bg-[#0A0A0A] flex items-center justify-center overflow-hidden">
           {currentPath ? (
             <img
               src={currentPath}
@@ -532,7 +532,7 @@ function FileUploadField({
               className="size-full object-contain"
             />
           ) : (
-            <Image className="size-5 text-stone-300" />
+            <Image className="size-5 text-[#666666]" />
           )}
         </div>
 
@@ -540,14 +540,14 @@ function FileUploadField({
         <button
           type="button"
           onClick={() => inputRef.current?.click()}
-          className="flex items-center gap-2 px-3 py-2 text-sm text-stone-600 bg-white border border-stone-300 rounded-lg hover:bg-stone-50 transition-colors"
+          className="flex items-center gap-2 px-3 py-2 text-sm text-[#E5E5E5] bg-[#161616] border border-[#2A2A2A] rounded-lg hover:bg-[#0A0A0A] transition-colors"
         >
           <Upload className="size-4" />
           Upload
         </button>
 
         {currentPath && (
-          <span className="text-xs text-stone-400 truncate max-w-48">
+          <span className="text-xs text-[#999999] truncate max-w-48">
             {currentPath}
           </span>
         )}

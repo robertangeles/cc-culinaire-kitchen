@@ -20,11 +20,11 @@ export function BenchTypingIndicator({ typingUsers }: BenchTypingIndicatorProps)
   }
 
   return (
-    <div className="px-4 py-1.5 text-xs text-stone-400 italic flex items-center gap-2">
+    <div className="px-4 py-1.5 text-xs text-[#666666] italic flex items-center gap-2">
       <span className="flex gap-0.5">
-        <span className="size-1.5 bg-stone-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
-        <span className="size-1.5 bg-stone-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
-        <span className="size-1.5 bg-stone-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+        <span className="size-1.5 bg-[#D4A574] rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+        <span className="size-1.5 bg-[#D4A574] rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+        <span className="size-1.5 bg-[#D4A574] rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
       </span>
       {text}
     </div>

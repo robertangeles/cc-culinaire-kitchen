@@ -15,10 +15,10 @@ import { UserMenu } from "./UserMenu.js";
 
 /** Shared Tailwind class builder for sidebar nav links. */
 const navLinkClass = ({ isActive }: { isActive: boolean }) =>
-  `flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
+  `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-colors ${
     isActive
-      ? "bg-stone-700 text-white"
-      : "text-stone-400 hover:text-white hover:bg-stone-700/50"
+      ? "bg-[#1E1E1E] text-white"
+      : "text-[#999999] hover:text-[#FAFAFA] hover:bg-[#161616]"
   }`;
 
 /** Collapsible group header */
@@ -36,12 +36,17 @@ function SidebarGroup({
     <div className="mb-1">
       <button
         onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-1.5 w-full px-3 py-1.5 text-xs font-medium text-stone-500 uppercase tracking-wider hover:text-stone-300 transition-colors"
+        className="flex items-center gap-1.5 w-full px-3 py-1.5 text-xs font-medium text-[#666666] uppercase tracking-wider hover:text-[#999999] transition-colors"
       >
-        {open ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
+        {open ? <ChevronDown className="size-3 text-[#666666]" /> : <ChevronRight className="size-3 text-[#666666]" />}
         {label}
       </button>
-      {open && <div className="flex flex-col gap-0.5 mt-0.5">{children}</div>}
+      <div
+        className="flex flex-col gap-0.5 mt-0.5 overflow-hidden transition-all duration-200"
+        style={{ maxHeight: open ? "500px" : "0px", opacity: open ? 1 : 0 }}
+      >
+        {children}
+      </div>
     </div>
   );
 }
@@ -125,13 +130,13 @@ export function Sidebar() {
 
   return (
     <aside
-      className="hidden md:flex w-64 h-full flex-col bg-stone-800 text-white"
+      className="hidden md:flex w-64 h-full flex-col bg-[#0A0A0A] border-r border-[#1E1E1E] text-white"
       style={sidebarBg ? { backgroundColor: sidebarBg } : undefined}
     >
       {/* Branding — logo on top, title below, clickable to home */}
       <Link
         to="/chat/new"
-        className="flex flex-col items-center gap-2 px-4 py-5 border-b border-stone-700 hover:bg-stone-700/50 transition-colors"
+        className="flex flex-col items-center gap-2 px-4 py-5 border-b border-[#1E1E1E] hover:bg-[#161616] transition-colors"
       >
         {logoPath ? (
           <img
@@ -141,10 +146,10 @@ export function Sidebar() {
             style={{ width: 100, height: 100 }}
           />
         ) : (
-          <ChefHat className="size-12 text-amber-500" />
+          <ChefHat className="size-12 text-[#D4A574]" />
         )}
-        <span className="font-semibold text-lg truncate text-center w-full">{pageTitle}</span>
-        <span className="text-[10px] font-medium text-amber-600 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full">
+        <span className="font-semibold text-lg truncate text-center w-full text-[#FAFAFA] tracking-tight">{pageTitle}</span>
+        <span className="text-[10px] font-medium text-[#D4A574] bg-[#D4A574]/15 border border-[#D4A574]/20 px-1.5 py-0.5 rounded-full">
           Open Beta
         </span>
       </Link>
@@ -170,7 +175,7 @@ export function Sidebar() {
         <div className="px-3 pb-2">
           <Link
             to="/login"
-            className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium bg-amber-600 text-white hover:bg-amber-700 transition-colors"
+            className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium bg-[#D4A574] text-[#0A0A0A] hover:bg-[#C4956A] transition-colors"
           >
             Sign In
           </Link>
@@ -180,7 +185,7 @@ export function Sidebar() {
       )}
 
       {/* Footer */}
-      <div className="px-4 py-3 border-t border-stone-700 text-xs text-stone-500">
+      <div className="px-4 py-3 border-t border-[#1E1E1E] text-xs text-[#666666]">
         CulinAIre Kitchen v{__APP_VERSION__}
       </div>
     </aside>

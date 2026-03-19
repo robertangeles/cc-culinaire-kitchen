@@ -17,19 +17,19 @@ interface RecipeHeroProps {
 
 const PLACEHOLDER_CONFIG = {
   recipe: {
-    bg: "from-amber-900 to-stone-900",
+    bg: "from-[#1E1E1E] to-[#0A0A0A]",
     Icon: ChefHat,
-    iconColor: "text-amber-400",
+    iconColor: "text-[#D4A574]",
   },
   patisserie: {
-    bg: "from-pink-900 to-stone-900",
+    bg: "from-[#1E1E1E] to-[#0A0A0A]",
     Icon: Croissant,
-    iconColor: "text-pink-300",
+    iconColor: "text-[#D4A574]",
   },
   spirits: {
-    bg: "from-amber-950 to-stone-900",
+    bg: "from-[#1E1E1E] to-[#0A0A0A]",
     Icon: GlassWater,
-    iconColor: "text-amber-300",
+    iconColor: "text-[#D4A574]",
   },
 };
 

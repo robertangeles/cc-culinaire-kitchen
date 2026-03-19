@@ -328,16 +328,16 @@ export function ChatContainer({
   return (
     <div className="flex flex-col h-full">
       {error && (
-        <div className="bg-red-50 border-b border-red-200 px-4 py-2 text-sm text-red-700">
+        <div className="bg-red-900/30 border-b border-red-800/50 px-4 py-2 text-sm text-red-300">
           {error.message?.includes("403") || error.message?.includes("free sessions") || error.message?.includes("upgrade") || error.message?.includes("register") ? (
             <div className="flex items-center justify-between">
               <span>You've used all your free sessions.</span>
               {isGuest ? (
-                <Link to="/register" className="ml-2 font-medium text-amber-600 hover:text-amber-700 underline">
+                <Link to="/register" className="ml-2 font-medium text-[#D4A574] hover:text-[#C4956A] underline">
                   Register for free to continue
                 </Link>
               ) : (
-                <Link to="/profile" className="ml-2 font-medium text-amber-600 hover:text-amber-700 underline">
+                <Link to="/profile" className="ml-2 font-medium text-[#D4A574] hover:text-[#C4956A] underline">
                   Upgrade to continue
                 </Link>
               )}
@@ -347,7 +347,7 @@ export function ChatContainer({
               <span>Your session expired.</span>
               <button
                 onClick={() => window.location.reload()}
-                className="ml-2 font-medium text-amber-600 hover:text-amber-700 underline"
+                className="ml-2 font-medium text-[#D4A574] hover:text-[#C4956A] underline"
               >
                 Refresh to continue
               </button>

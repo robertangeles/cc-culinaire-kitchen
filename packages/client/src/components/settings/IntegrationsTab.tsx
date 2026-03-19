@@ -69,7 +69,7 @@ const CATEGORY_ICONS: Record<string, typeof KeyRound> = {
 function SourceBadge({ source }: { source: "db" | "env" | "none" }) {
   if (source === "db") {
     return (
-      <span className="inline-flex items-center gap-1 text-[10px] font-medium text-green-700 bg-green-50 px-1.5 py-0.5 rounded">
+      <span className="inline-flex items-center gap-1 text-[10px] font-medium text-green-400 bg-green-900/30 px-1.5 py-0.5 rounded">
         <Database className="size-2.5" />
         DB
       </span>
@@ -77,14 +77,14 @@ function SourceBadge({ source }: { source: "db" | "env" | "none" }) {
   }
   if (source === "env") {
     return (
-      <span className="inline-flex items-center gap-1 text-[10px] font-medium text-stone-500 bg-stone-100 px-1.5 py-0.5 rounded">
+      <span className="inline-flex items-center gap-1 text-[10px] font-medium text-[#999999] bg-[#1E1E1E] px-1.5 py-0.5 rounded">
         <Server className="size-2.5" />
         .env
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center gap-1 text-[10px] font-medium text-red-600 bg-red-50 px-1.5 py-0.5 rounded">
+    <span className="inline-flex items-center gap-1 text-[10px] font-medium text-red-400 bg-red-900/30 px-1.5 py-0.5 rounded">
       <CircleAlert className="size-2.5" />
       Not set
     </span>
@@ -241,7 +241,7 @@ export function IntegrationsTab() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-full text-stone-400">
+      <div className="flex items-center justify-center h-full text-[#999999]">
         <Loader2 className="size-5 animate-spin mr-2" />
         Loading credentials...
       </div>
@@ -258,11 +258,11 @@ export function IntegrationsTab() {
     return (
       <div
         key={cred.key}
-        className="flex items-start gap-4 p-4 rounded-lg border border-stone-200 bg-white"
+        className="flex items-start gap-4 p-4 rounded-lg border border-[#2A2A2A] bg-[#161616]"
       >
         {/* Label + source */}
         <div className="flex-shrink-0 w-48">
-          <div className="text-sm font-medium text-stone-800">
+          <div className="text-sm font-medium text-[#FAFAFA]">
             {cred.label}
           </div>
           <div className="flex items-center gap-2 mt-1">
@@ -284,7 +284,7 @@ export function IntegrationsTab() {
                   }))
                 }
                 placeholder={`Enter ${cred.label}`}
-                className="flex-1 rounded-lg border border-stone-300 px-3 py-1.5 text-sm text-stone-800 font-mono focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                className="flex-1 rounded-lg border border-[#2A2A2A] px-3 py-1.5 text-sm text-[#FAFAFA] font-mono focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-transparent"
                 autoFocus
               />
               <button
@@ -292,7 +292,7 @@ export function IntegrationsTab() {
                 disabled={
                   savingKey === cred.key || !editValues[cred.key]
                 }
-                className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-white bg-amber-600 rounded-lg hover:bg-amber-700 disabled:opacity-50 transition-colors"
+                className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-white bg-[#D4A574] rounded-lg hover:bg-[#C4956A] disabled:opacity-50 transition-colors"
               >
                 {savingKey === cred.key ? (
                   <Loader2 className="size-3.5 animate-spin" />
@@ -303,7 +303,7 @@ export function IntegrationsTab() {
               </button>
               <button
                 onClick={() => cancelEditing(cred.key)}
-                className="px-3 py-1.5 text-sm text-stone-500 hover:text-stone-700 transition-colors"
+                className="px-3 py-1.5 text-sm text-[#999999] hover:text-[#E5E5E5] transition-colors"
               >
                 Cancel
               </button>
@@ -311,11 +311,11 @@ export function IntegrationsTab() {
           ) : (
             <div className="flex items-center gap-2">
               {cred.hasValue ? (
-                <code className="text-sm text-stone-600 font-mono bg-stone-50 px-2 py-1 rounded">
+                <code className="text-sm text-[#E5E5E5] font-mono bg-[#0A0A0A] px-2 py-1 rounded">
                   {isRevealed && revealedValues[cred.key] ? revealedValues[cred.key] : cred.value}
                 </code>
               ) : (
-                <span className="text-sm text-stone-400 italic">
+                <span className="text-sm text-[#999999] italic">
                   Not configured
                 </span>
               )}
@@ -323,7 +323,7 @@ export function IntegrationsTab() {
                 <button
                   onClick={() => toggleReveal(cred.key)}
                   disabled={revealingKey === cred.key}
-                  className="p-1 text-stone-400 hover:text-stone-600 disabled:opacity-50 transition-colors"
+                  className="p-1 text-[#999999] hover:text-[#E5E5E5] disabled:opacity-50 transition-colors"
                   title={isRevealed ? "Hide" : "Show"}
                 >
                   {revealingKey === cred.key ? (
@@ -344,7 +344,7 @@ export function IntegrationsTab() {
           <div className="flex items-center gap-1 flex-shrink-0">
             <button
               onClick={() => startEditing(cred.key)}
-              className="px-3 py-1.5 text-sm text-stone-600 bg-white border border-stone-300 rounded-lg hover:bg-stone-50 transition-colors"
+              className="px-3 py-1.5 text-sm text-[#E5E5E5] bg-[#161616] border border-[#2A2A2A] rounded-lg hover:bg-[#0A0A0A] transition-colors"
             >
               {cred.hasValue ? "Update" : "Set"}
             </button>
@@ -352,7 +352,7 @@ export function IntegrationsTab() {
               <button
                 onClick={() => handleDelete(cred.key)}
                 disabled={deletingKey === cred.key}
-                className="p-1.5 text-stone-400 hover:text-red-600 transition-colors"
+                className="p-1.5 text-[#999999] hover:text-red-400 transition-colors"
                 title="Remove from database (revert to .env)"
               >
                 {deletingKey === cred.key ? (
@@ -371,16 +371,16 @@ export function IntegrationsTab() {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="px-8 py-6 border-b border-stone-200">
-        <h1 className="text-xl font-semibold text-stone-900">Integrations</h1>
-        <p className="mt-1 text-sm text-stone-500">
+      <div className="px-8 py-6 border-b border-[#2A2A2A]">
+        <h1 className="text-xl font-semibold text-[#FAFAFA]">Integrations</h1>
+        <p className="mt-1 text-sm text-[#999999]">
           Manage API keys, OAuth credentials, and integration settings.
           Values are encrypted at rest in the database.
         </p>
       </div>
 
       {/* Category sub-tabs */}
-      <div className="px-8 pt-4 border-b border-stone-200">
+      <div className="px-8 pt-4 border-b border-[#2A2A2A]">
         <div role="tablist" aria-label="Integration categories" className="flex gap-1">
           {categories.map((cat) => {
             const Icon = CATEGORY_ICONS[cat.id] ?? KeyRound;
@@ -397,14 +397,14 @@ export function IntegrationsTab() {
                 onClick={() => setActiveTab(cat.id)}
                 className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-t-lg transition-colors border-b-2 -mb-px ${
                   isActive
-                    ? "text-amber-700 border-amber-600 bg-amber-50/50"
-                    : "text-stone-500 border-transparent hover:text-stone-700 hover:bg-stone-50"
+                    ? "text-[#D4A574] border-[#D4A574] bg-[#D4A574]/10/50"
+                    : "text-[#999999] border-transparent hover:text-[#E5E5E5] hover:bg-[#0A0A0A]"
                 }`}
               >
                 <Icon className="size-3.5" />
                 {cat.label}
                 <span className={`text-xs px-1.5 py-0.5 rounded-full ${
-                  isActive ? "bg-amber-100 text-amber-700" : "bg-stone-100 text-stone-400"
+                  isActive ? "bg-[#D4A574]/15 text-[#D4A574]" : "bg-[#1E1E1E] text-[#999999]"
                 }`}>
                   {catCount}
                 </span>
@@ -422,19 +422,19 @@ export function IntegrationsTab() {
         className="flex-1 overflow-y-auto px-8 py-6 space-y-3"
       >
         {activeCredentials.length === 0 ? (
-          <p className="text-sm text-stone-400 text-center py-8">
+          <p className="text-sm text-[#999999] text-center py-8">
             No credentials in this category.
           </p>
         ) : activeTab === "oauth" ? (
           <>
             {/* Google subsection */}
-            <h3 className="text-sm font-semibold text-stone-700 uppercase tracking-wider mb-3">Google</h3>
+            <h3 className="text-sm font-semibold text-[#E5E5E5] uppercase tracking-wider mb-3">Google</h3>
             {activeCredentials
               .filter((c) => c.key.toLowerCase().includes("google"))
               .map((cred) => renderCredentialCard(cred))}
 
             {/* Microsoft subsection */}
-            <h3 className="text-sm font-semibold text-stone-700 uppercase tracking-wider mt-6 mb-3">Microsoft</h3>
+            <h3 className="text-sm font-semibold text-[#E5E5E5] uppercase tracking-wider mt-6 mb-3">Microsoft</h3>
             {activeCredentials
               .filter((c) => c.key.toLowerCase().includes("microsoft"))
               .map((cred) => renderCredentialCard(cred))}
@@ -448,15 +448,15 @@ export function IntegrationsTab() {
       </div>
 
       {/* Bottom bar */}
-      <div className="px-8 py-4 border-t border-stone-200 bg-stone-50 flex items-center justify-end gap-3">
+      <div className="px-8 py-4 border-t border-[#2A2A2A] bg-[#0A0A0A] flex items-center justify-end gap-3">
         {error && (
-          <span className="flex items-center gap-1.5 text-sm text-red-600">
+          <span className="flex items-center gap-1.5 text-sm text-red-400">
             <AlertCircle className="size-4" />
             {error}
           </span>
         )}
         {success && (
-          <span className="flex items-center gap-1.5 text-sm text-green-600">
+          <span className="flex items-center gap-1.5 text-sm text-green-400">
             <Check className="size-4" />
             {success}
           </span>
@@ -539,30 +539,30 @@ function DatabaseStorageViewer() {
   const maxBytes = stats?.tables?.[0]?.totalBytes ?? 1;
 
   return (
-    <div className="mt-6 border-t border-stone-200 pt-6 space-y-6">
+    <div className="mt-6 border-t border-[#2A2A2A] pt-6 space-y-6">
       {/* ─── Storage Overview (collapsible) ─────────────────── */}
       <div>
         <button
           onClick={() => { setStorageOpen(!storageOpen); if (!stats) fetchStats(); }}
           className="w-full flex items-center justify-between"
         >
-          <h3 className="text-sm font-semibold text-stone-700 flex items-center gap-2">
-            <Server className="size-4 text-stone-400" />
+          <h3 className="text-sm font-semibold text-[#E5E5E5] flex items-center gap-2">
+            <Server className="size-4 text-[#999999]" />
             Storage Overview
           </h3>
-          {storageOpen ? <ChevronUp className="size-4 text-stone-400" /> : <ChevronDown className="size-4 text-stone-400" />}
+          {storageOpen ? <ChevronUp className="size-4 text-[#999999]" /> : <ChevronDown className="size-4 text-[#999999]" />}
         </button>
 
         {storageOpen && (
           <div className="mt-3">
             <div className="flex justify-end mb-2">
-              <button onClick={fetchStats} disabled={loading} className="text-xs text-amber-600 hover:text-amber-700 font-medium disabled:opacity-50">
+              <button onClick={fetchStats} disabled={loading} className="text-xs text-[#D4A574] hover:text-[#D4A574] font-medium disabled:opacity-50">
                 {loading ? "Loading..." : "Refresh"}
               </button>
             </div>
 
             {error && (
-              <div className="flex items-center gap-2 text-sm text-red-600 mb-4">
+              <div className="flex items-center gap-2 text-sm text-red-400 mb-4">
                 <CircleAlert className="size-4" /> {error}
               </div>
             )}
@@ -570,43 +570,43 @@ function DatabaseStorageViewer() {
             {stats && (
               <>
                 <div className="grid grid-cols-3 gap-3 mb-5">
-                  <div className="bg-stone-50 rounded-lg p-3 text-center">
-                    <p className="text-xs text-stone-500">Total Size</p>
-                    <p className="text-lg font-bold text-stone-800">{stats.totalSize}</p>
+                  <div className="bg-[#0A0A0A] rounded-lg p-3 text-center">
+                    <p className="text-xs text-[#999999]">Total Size</p>
+                    <p className="text-lg font-bold text-[#FAFAFA]">{stats.totalSize}</p>
                   </div>
-                  <div className="bg-stone-50 rounded-lg p-3 text-center">
-                    <p className="text-xs text-stone-500">Tables</p>
-                    <p className="text-lg font-bold text-stone-800">{stats.tables.length}</p>
+                  <div className="bg-[#0A0A0A] rounded-lg p-3 text-center">
+                    <p className="text-xs text-[#999999]">Tables</p>
+                    <p className="text-lg font-bold text-[#FAFAFA]">{stats.tables.length}</p>
                   </div>
-                  <div className="bg-stone-50 rounded-lg p-3 text-center">
-                    <p className="text-xs text-stone-500">Embeddings</p>
-                    <p className="text-lg font-bold text-stone-800">{stats.embeddingCount.toLocaleString()}</p>
+                  <div className="bg-[#0A0A0A] rounded-lg p-3 text-center">
+                    <p className="text-xs text-[#999999]">Embeddings</p>
+                    <p className="text-lg font-bold text-[#FAFAFA]">{stats.embeddingCount.toLocaleString()}</p>
                   </div>
                 </div>
 
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-stone-200 text-left">
-                        <th className="py-2 pr-3 font-medium text-stone-600">Table</th>
-                        <th className="py-2 pr-3 font-medium text-stone-600 text-right">Rows</th>
-                        <th className="py-2 pr-3 font-medium text-stone-600 text-right">Size</th>
-                        <th className="py-2 pr-3 font-medium text-stone-600 text-right">Data</th>
-                        <th className="py-2 pr-3 font-medium text-stone-600 text-right">Indexes</th>
-                        <th className="py-2 font-medium text-stone-600" style={{ width: "120px" }}></th>
+                      <tr className="border-b border-[#2A2A2A] text-left">
+                        <th className="py-2 pr-3 font-medium text-[#E5E5E5]">Table</th>
+                        <th className="py-2 pr-3 font-medium text-[#E5E5E5] text-right">Rows</th>
+                        <th className="py-2 pr-3 font-medium text-[#E5E5E5] text-right">Size</th>
+                        <th className="py-2 pr-3 font-medium text-[#E5E5E5] text-right">Data</th>
+                        <th className="py-2 pr-3 font-medium text-[#E5E5E5] text-right">Indexes</th>
+                        <th className="py-2 font-medium text-[#E5E5E5]" style={{ width: "120px" }}></th>
                       </tr>
                     </thead>
                     <tbody>
                       {stats.tables.map((t) => (
-                        <tr key={t.tableName} className="border-b border-stone-100">
-                          <td className="py-2 pr-3 text-stone-800 font-mono text-xs">{t.tableName}</td>
-                          <td className="py-2 pr-3 text-stone-600 text-right">{t.rowCount.toLocaleString()}</td>
-                          <td className="py-2 pr-3 text-stone-600 text-right">{t.totalSize}</td>
-                          <td className="py-2 pr-3 text-stone-400 text-right">{t.dataSize}</td>
-                          <td className="py-2 pr-3 text-stone-400 text-right">{t.indexSize}</td>
+                        <tr key={t.tableName} className="border-b border-[#2A2A2A]">
+                          <td className="py-2 pr-3 text-[#FAFAFA] font-mono text-xs">{t.tableName}</td>
+                          <td className="py-2 pr-3 text-[#E5E5E5] text-right">{t.rowCount.toLocaleString()}</td>
+                          <td className="py-2 pr-3 text-[#E5E5E5] text-right">{t.totalSize}</td>
+                          <td className="py-2 pr-3 text-[#999999] text-right">{t.dataSize}</td>
+                          <td className="py-2 pr-3 text-[#999999] text-right">{t.indexSize}</td>
                           <td className="py-2">
-                            <div className="w-full bg-stone-100 rounded-full h-2">
-                              <div className="bg-amber-500 h-2 rounded-full" style={{ width: `${Math.max(2, (t.totalBytes / maxBytes) * 100)}%` }} />
+                            <div className="w-full bg-[#1E1E1E] rounded-full h-2">
+                              <div className="bg-[#D4A574]/100 h-2 rounded-full" style={{ width: `${Math.max(2, (t.totalBytes / maxBytes) * 100)}%` }} />
                             </div>
                           </td>
                         </tr>
@@ -619,7 +619,7 @@ function DatabaseStorageViewer() {
 
             {loading && !stats && (
               <div className="flex items-center justify-center py-8">
-                <Loader2 className="size-5 animate-spin text-amber-600" />
+                <Loader2 className="size-5 animate-spin text-[#D4A574]" />
               </div>
             )}
           </div>
@@ -628,14 +628,14 @@ function DatabaseStorageViewer() {
 
       {/* ─── SQL Query Tool ──────────────────────────────────── */}
       <div>
-        <h3 className="text-sm font-semibold text-stone-700 flex items-center gap-2 mb-3">
-          <Terminal className="size-4 text-stone-400" />
+        <h3 className="text-sm font-semibold text-[#E5E5E5] flex items-center gap-2 mb-3">
+          <Terminal className="size-4 text-[#999999]" />
           Query Tool
         </h3>
 
-        <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3 flex items-center gap-2">
-          <AlertTriangle className="size-4 text-amber-600 flex-shrink-0" />
-          <p className="text-xs text-amber-800">Direct database access. Use with caution.</p>
+        <div className="bg-[#D4A574]/10 border border-[#D4A574]/20 rounded-lg px-3 py-2 mb-3 flex items-center gap-2">
+          <AlertTriangle className="size-4 text-[#D4A574] flex-shrink-0" />
+          <p className="text-xs text-[#D4A574]">Direct database access. Use with caution.</p>
         </div>
 
         <textarea
@@ -643,16 +643,16 @@ function DatabaseStorageViewer() {
           onChange={(e) => setQuery(e.target.value)}
           placeholder="SELECT * FROM recipe LIMIT 10;"
           rows={4}
-          className="w-full px-3 py-2 text-sm font-mono border border-stone-200 rounded-lg bg-stone-50 focus:outline-none focus:ring-2 focus:ring-amber-400/50 focus:bg-white resize-none"
+          className="w-full px-3 py-2 text-sm font-mono border border-[#2A2A2A] rounded-lg bg-[#0A0A0A] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:bg-[#161616] resize-none"
           onKeyDown={(e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) executeQuery(); }}
         />
 
         <div className="flex items-center justify-between mt-2">
-          <span className="text-xs text-stone-400">Ctrl+Enter to execute</span>
+          <span className="text-xs text-[#999999]">Ctrl+Enter to execute</span>
           <button
             onClick={executeQuery}
             disabled={querying || !query.trim()}
-            className="flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium text-white bg-amber-600 rounded-lg hover:bg-amber-700 disabled:opacity-50 transition-colors"
+            className="flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium text-white bg-[#D4A574] rounded-lg hover:bg-[#C4956A] disabled:opacity-50 transition-colors"
           >
             {querying ? <Loader2 className="size-3 animate-spin" /> : <Play className="size-3" />}
             Execute
@@ -660,34 +660,34 @@ function DatabaseStorageViewer() {
         </div>
 
         {queryError && (
-          <div className="mt-3 flex items-center gap-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+          <div className="mt-3 flex items-center gap-2 text-sm text-red-400 bg-red-900/30 border border-red-700/40 rounded-lg px-3 py-2">
             <CircleAlert className="size-4 flex-shrink-0" /> {queryError}
           </div>
         )}
 
         {queryResult && (
           <div className="mt-3">
-            <div className="flex items-center gap-3 text-xs text-stone-500 mb-2">
+            <div className="flex items-center gap-3 text-xs text-[#999999] mb-2">
               <span>{queryResult.rowCount} row{queryResult.rowCount !== 1 ? "s" : ""}</span>
               <span className="flex items-center gap-1"><Clock className="size-3" /> {queryResult.duration}ms</span>
             </div>
 
             {queryResult.columns.length > 0 ? (
-              <div className="overflow-x-auto border border-stone-200 rounded-lg max-h-80 overflow-y-auto">
+              <div className="overflow-x-auto border border-[#2A2A2A] rounded-lg max-h-80 overflow-y-auto">
                 <table className="w-full text-xs">
-                  <thead className="sticky top-0 bg-stone-100">
+                  <thead className="sticky top-0 bg-[#1E1E1E]">
                     <tr>
                       {queryResult.columns.map((col) => (
-                        <th key={col} className="px-3 py-2 text-left font-medium text-stone-600 border-b border-stone-200 whitespace-nowrap">{col}</th>
+                        <th key={col} className="px-3 py-2 text-left font-medium text-[#E5E5E5] border-b border-[#2A2A2A] whitespace-nowrap">{col}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody className="font-mono">
                     {queryResult.rows.map((row, i) => (
-                      <tr key={i} className="border-b border-stone-100 hover:bg-stone-50">
+                      <tr key={i} className="border-b border-[#2A2A2A] hover:bg-[#0A0A0A]">
                         {row.map((cell, j) => (
-                          <td key={j} className="px-3 py-1.5 text-stone-700 whitespace-nowrap max-w-xs truncate">
-                            {cell === null ? <span className="text-stone-300 italic">NULL</span> : String(cell)}
+                          <td key={j} className="px-3 py-1.5 text-[#E5E5E5] whitespace-nowrap max-w-xs truncate">
+                            {cell === null ? <span className="text-[#666666] italic">NULL</span> : String(cell)}
                           </td>
                         ))}
                       </tr>
@@ -696,7 +696,7 @@ function DatabaseStorageViewer() {
                 </table>
               </div>
             ) : (
-              <p className="text-sm text-stone-500">Query executed successfully. No rows returned.</p>
+              <p className="text-sm text-[#999999]">Query executed successfully. No rows returned.</p>
             )}
           </div>
         )}

@@ -68,28 +68,28 @@ export function BenchDmConversation({ thread, messages, loading, onSend, onBack 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-stone-200 bg-white">
-        <button onClick={onBack} className="p-1 rounded hover:bg-stone-100 text-stone-500">
+      <div className="flex items-center gap-3 px-4 py-3 border-b border-[#2A2A2A] bg-[#161616]">
+        <button onClick={onBack} className="p-1 rounded hover:bg-[#2A2A2A] text-[#999999]">
           <ArrowLeft className="size-5" />
         </button>
         {thread.otherUserPhotoPath ? (
           <img src={thread.otherUserPhotoPath} alt={thread.otherUserName} className="size-8 rounded-full object-cover" />
         ) : (
-          <div className="size-8 rounded-full bg-amber-100 flex items-center justify-center">
-            <span className="text-sm font-semibold text-amber-700">{thread.otherUserName.charAt(0).toUpperCase()}</span>
+          <div className="size-8 rounded-full bg-[#D4A574]/15 flex items-center justify-center">
+            <span className="text-sm font-semibold text-[#D4A574]">{thread.otherUserName.charAt(0).toUpperCase()}</span>
           </div>
         )}
-        <span className="text-sm font-semibold text-stone-800">{thread.otherUserName}</span>
+        <span className="text-sm font-semibold text-[#FAFAFA]">{thread.otherUserName}</span>
       </div>
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto">
         {loading ? (
           <div className="flex items-center justify-center h-full">
-            <Loader2 className="size-5 animate-spin text-amber-600" />
+            <Loader2 className="size-5 animate-spin text-[#D4A574]" />
           </div>
         ) : messages.length === 0 ? (
-          <div className="flex items-center justify-center h-full text-stone-400 text-sm">
+          <div className="flex items-center justify-center h-full text-[#666666] text-sm">
             Start the conversation — say hello!
           </div>
         ) : (

@@ -351,9 +351,9 @@ export function UserDetailPanel({ user, availableRoles, onClose, onRefresh }: Us
   }
 
   const statusColors: Record<string, string> = {
-    active: "bg-green-100 text-green-700",
-    suspended: "bg-yellow-100 text-yellow-700",
-    cancelled: "bg-red-100 text-red-700",
+    active: "bg-green-900/40 text-green-400",
+    suspended: "bg-yellow-900/40 text-yellow-400",
+    cancelled: "bg-red-900/40 text-red-400",
   };
 
   const initials = user.userName
@@ -417,25 +417,25 @@ export function UserDetailPanel({ user, availableRoles, onClose, onRefresh }: Us
       <div className="absolute inset-0 bg-black/20" onClick={onClose} />
 
       {/* Panel */}
-      <div className="relative w-full max-w-lg bg-white shadow-xl flex flex-col">
+      <div className="relative w-full max-w-lg bg-[#161616] shadow-2xl shadow-black/40 flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-stone-200">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[#2A2A2A]">
           <div className="flex items-center gap-3">
             {user.userPhotoPath ? (
               <img src={user.userPhotoPath} alt="" className="size-10 rounded-full object-cover" />
             ) : (
-              <div className="size-10 rounded-full bg-amber-100 flex items-center justify-center text-sm font-semibold text-amber-700">
+              <div className="size-10 rounded-full bg-[#D4A574]/15 flex items-center justify-center text-sm font-semibold text-[#D4A574]">
                 {initials}
               </div>
             )}
             <div>
-              <h2 className="text-lg font-semibold text-stone-900">{user.userName}</h2>
-              <p className="text-sm text-stone-500">{user.userEmail}</p>
+              <h2 className="text-lg font-semibold text-[#FAFAFA]">{user.userName}</h2>
+              <p className="text-sm text-[#999999]">{user.userEmail}</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1 text-stone-400 hover:text-stone-600 transition-colors"
+            className="p-1 text-[#999999] hover:text-[#E5E5E5] transition-colors"
           >
             <X className="size-5" />
           </button>
@@ -446,8 +446,8 @@ export function UserDetailPanel({ user, availableRoles, onClose, onRefresh }: Us
           {/* Account Info */}
           <div>
             <div className="flex items-center gap-2 mb-2">
-              <User className="size-4 text-stone-400" />
-              <h3 className="text-sm font-semibold text-stone-700 uppercase tracking-wider">Account</h3>
+              <User className="size-4 text-[#999999]" />
+              <h3 className="text-sm font-semibold text-[#E5E5E5] uppercase tracking-wider">Account</h3>
               {!editing && (
                 <button
                   onClick={() => {
@@ -457,7 +457,7 @@ export function UserDetailPanel({ user, availableRoles, onClose, onRefresh }: Us
                     setSaveError("");
                     setEditing(true);
                   }}
-                  className="ml-auto p-1 text-stone-400 hover:text-amber-600 transition-colors"
+                  className="ml-auto p-1 text-[#999999] hover:text-[#D4A574] transition-colors"
                   title="Edit account details"
                 >
                   <Pencil className="size-3.5" />
@@ -466,7 +466,7 @@ export function UserDetailPanel({ user, availableRoles, onClose, onRefresh }: Us
             </div>
             <div className="pl-6 space-y-1.5">
               {saveError && (
-                <div className="flex items-center gap-2 text-sm text-red-600 mb-1">
+                <div className="flex items-center gap-2 text-sm text-red-400 mb-1">
                   <AlertCircle className="size-4" /> {saveError}
                 </div>
               )}
@@ -474,29 +474,29 @@ export function UserDetailPanel({ user, availableRoles, onClose, onRefresh }: Us
               {editing ? (
                 <>
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-stone-500">Name</span>
+                    <span className="text-sm text-[#999999]">Name</span>
                     <input
                       type="text"
                       value={editName}
                       onChange={(e) => setEditName(e.target.value)}
-                      className="w-48 rounded-lg border border-stone-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      className="w-48 rounded-lg border border-[#2A2A2A] px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50"
                     />
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-stone-500">Email</span>
+                    <span className="text-sm text-[#999999]">Email</span>
                     <input
                       type="email"
                       value={editEmail}
                       onChange={(e) => setEditEmail(e.target.value)}
-                      className="w-48 rounded-lg border border-stone-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      className="w-48 rounded-lg border border-[#2A2A2A] px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50"
                     />
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-stone-500">Status</span>
+                    <span className="text-sm text-[#999999]">Status</span>
                     <select
                       value={editStatus}
                       onChange={(e) => setEditStatus(e.target.value)}
-                      className="w-48 rounded-lg border border-stone-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      className="w-48 rounded-lg border border-[#2A2A2A] px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50"
                     >
                       <option value="active">active</option>
                       <option value="suspended">suspended</option>
@@ -507,7 +507,7 @@ export function UserDetailPanel({ user, availableRoles, onClose, onRefresh }: Us
                     <button
                       onClick={handleSave}
                       disabled={saving}
-                      className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-amber-600 rounded-lg hover:bg-amber-700 disabled:opacity-50 transition-colors"
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-[#D4A574] rounded-lg hover:bg-[#C4956A] disabled:opacity-50 transition-colors"
                     >
                       {saving ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
                       Save
@@ -517,7 +517,7 @@ export function UserDetailPanel({ user, availableRoles, onClose, onRefresh }: Us
                         setEditing(false);
                         setSaveError("");
                       }}
-                      className="px-3 py-1.5 text-sm text-stone-600 hover:text-stone-800 transition-colors"
+                      className="px-3 py-1.5 text-sm text-[#E5E5E5] hover:text-[#FAFAFA] transition-colors"
                     >
                       Cancel
                     </button>
@@ -526,13 +526,13 @@ export function UserDetailPanel({ user, availableRoles, onClose, onRefresh }: Us
               ) : (
                 <>
                   <InfoRow label="Status">
-                    <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${statusColors[user.userStatus] ?? "bg-stone-100 text-stone-600"}`}>
+                    <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${statusColors[user.userStatus] ?? "bg-[#1E1E1E] text-[#E5E5E5]"}`}>
                       {user.userStatus}
                     </span>
                   </InfoRow>
                   <InfoRow label="Email Verified">
                     {user.emailVerifiedInd ? (
-                      <span className="flex items-center gap-1 text-sm text-green-600">
+                      <span className="flex items-center gap-1 text-sm text-green-400">
                         <CheckCircle2 className="size-3.5" /> Verified
                       </span>
                     ) : (
@@ -549,7 +549,7 @@ export function UserDetailPanel({ user, availableRoles, onClose, onRefresh }: Us
 
           {/* Profile (bio + address + social) — loaded async */}
           {profileLoading ? (
-            <div className="flex items-center gap-2 text-sm text-stone-400">
+            <div className="flex items-center gap-2 text-sm text-[#999999]">
               <Loader2 className="size-4 animate-spin" /> Loading profile…
             </div>
           ) : fullProfile && (
@@ -557,14 +557,14 @@ export function UserDetailPanel({ user, availableRoles, onClose, onRefresh }: Us
               {/* Bio */}
               {fullProfile.userBio && (
                 <Section icon={FileText} title="Bio">
-                  <p className="text-sm text-stone-600 leading-relaxed">{fullProfile.userBio}</p>
+                  <p className="text-sm text-[#E5E5E5] leading-relaxed">{fullProfile.userBio}</p>
                 </Section>
               )}
 
               {/* Address */}
               {(fullProfile.userAddressLine1 || fullProfile.userSuburb || fullProfile.userCountry) && (
                 <Section icon={MapPin} title="Address">
-                  <p className="text-sm text-stone-600">{formatAddress(fullProfile)}</p>
+                  <p className="text-sm text-[#E5E5E5]">{formatAddress(fullProfile)}</p>
                 </Section>
               )}
 
@@ -579,7 +579,7 @@ export function UserDetailPanel({ user, availableRoles, onClose, onRefresh }: Us
                           href={fullProfile[key] as string}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-sm text-amber-600 hover:underline truncate max-w-[200px] block"
+                          className="text-sm text-[#D4A574] hover:underline truncate max-w-[200px] block"
                         >
                           {fullProfile[key] as string}
                         </a>
@@ -597,7 +597,7 @@ export function UserDetailPanel({ user, availableRoles, onClose, onRefresh }: Us
                 user.roles.map((r) => (
                   <span
                     key={r}
-                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200 cursor-pointer hover:bg-red-100 hover:text-red-600 hover:border-red-200 transition-colors"
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-[#D4A574]/10 text-[#D4A574] border border-[#D4A574]/20 cursor-pointer hover:bg-red-900/40 hover:text-red-400 hover:border-red-700/40 transition-colors"
                     title={`Click to remove ${r}`}
                     onClick={() => handleRemoveRole(r)}
                   >
@@ -606,11 +606,11 @@ export function UserDetailPanel({ user, availableRoles, onClose, onRefresh }: Us
                   </span>
                 ))
               ) : (
-                <span className="text-sm text-stone-400 italic">No roles assigned</span>
+                <span className="text-sm text-[#999999] italic">No roles assigned</span>
               )}
               {unassignedRoles.length > 0 && (
                 <select
-                  className="text-xs border border-stone-200 rounded px-1.5 py-0.5 text-stone-500"
+                  className="text-xs border border-[#2A2A2A] rounded px-1.5 py-0.5 text-[#999999]"
                   value=""
                   onChange={(e) => {
                     if (e.target.value) handleAssignRole(parseInt(e.target.value));
@@ -632,11 +632,11 @@ export function UserDetailPanel({ user, availableRoles, onClose, onRefresh }: Us
             {user.organisation ? (
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <p className="text-sm font-medium text-stone-700">{user.organisation}</p>
+                  <p className="text-sm font-medium text-[#E5E5E5]">{user.organisation}</p>
                   <button
                     onClick={handleRemoveOrg}
                     disabled={removingOrg}
-                    className="flex items-center gap-1 text-xs text-red-500 hover:text-red-600 transition-colors"
+                    className="flex items-center gap-1 text-xs text-red-500 hover:text-red-400 transition-colors"
                     title="Remove from organisation"
                   >
                     {removingOrg ? (
@@ -658,7 +658,7 @@ export function UserDetailPanel({ user, availableRoles, onClose, onRefresh }: Us
                           href={orgDetails.organisationWebsite}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-amber-600 hover:underline text-sm truncate max-w-[200px] block"
+                          className="text-[#D4A574] hover:underline text-sm truncate max-w-[200px] block"
                         >
                           {orgDetails.organisationWebsite}
                         </a>
@@ -666,7 +666,7 @@ export function UserDetailPanel({ user, availableRoles, onClose, onRefresh }: Us
                     )}
                     {(orgDetails.organisationAddressLine1 || orgDetails.organisationSuburb) && (
                       <InfoRow label="Address">
-                        <span className="text-sm text-stone-600">{formatOrgAddress(orgDetails)}</span>
+                        <span className="text-sm text-[#E5E5E5]">{formatOrgAddress(orgDetails)}</span>
                       </InfoRow>
                     )}
                     {orgSocialLabels.some(({ key }) => orgDetails[key]) && (
@@ -679,7 +679,7 @@ export function UserDetailPanel({ user, availableRoles, onClose, onRefresh }: Us
                                 href={orgDetails[key] as string}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="text-sm text-amber-600 hover:underline truncate max-w-[200px] block"
+                                className="text-sm text-[#D4A574] hover:underline truncate max-w-[200px] block"
                               >
                                 {orgDetails[key] as string}
                               </a>
@@ -691,15 +691,15 @@ export function UserDetailPanel({ user, availableRoles, onClose, onRefresh }: Us
                 )}
               </div>
             ) : (
-              <p className="text-sm text-stone-400 italic">Not a member of any organisation</p>
+              <p className="text-sm text-[#999999] italic">Not a member of any organisation</p>
             )}
           </Section>
 
           {/* Subscription — editable */}
           <div>
             <div className="flex items-center gap-2 mb-2">
-              <CreditCard className="size-4 text-stone-400" />
-              <h3 className="text-sm font-semibold text-stone-700 uppercase tracking-wider">Subscription</h3>
+              <CreditCard className="size-4 text-[#999999]" />
+              <h3 className="text-sm font-semibold text-[#E5E5E5] uppercase tracking-wider">Subscription</h3>
               {!editingSub && (
                 <button
                   onClick={() => {
@@ -709,7 +709,7 @@ export function UserDetailPanel({ user, availableRoles, onClose, onRefresh }: Us
                     setSubError("");
                     setEditingSub(true);
                   }}
-                  className="ml-auto p-1 text-stone-400 hover:text-amber-600 transition-colors"
+                  className="ml-auto p-1 text-[#999999] hover:text-[#D4A574] transition-colors"
                   title="Edit subscription"
                 >
                   <Pencil className="size-3.5" />
@@ -718,7 +718,7 @@ export function UserDetailPanel({ user, availableRoles, onClose, onRefresh }: Us
             </div>
             <div className="pl-6 space-y-1.5">
               {subError && (
-                <div className="flex items-center gap-2 text-sm text-red-600 mb-1">
+                <div className="flex items-center gap-2 text-sm text-red-400 mb-1">
                   <AlertCircle className="size-4" /> {subError}
                 </div>
               )}
@@ -726,11 +726,11 @@ export function UserDetailPanel({ user, availableRoles, onClose, onRefresh }: Us
               {editingSub ? (
                 <>
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-stone-500">Tier</span>
+                    <span className="text-sm text-[#999999]">Tier</span>
                     <select
                       value={editTier}
                       onChange={(e) => setEditTier(e.target.value)}
-                      className="w-48 rounded-lg border border-stone-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      className="w-48 rounded-lg border border-[#2A2A2A] px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50"
                     >
                       <option value="free">free</option>
                       <option value="starter">starter</option>
@@ -739,11 +739,11 @@ export function UserDetailPanel({ user, availableRoles, onClose, onRefresh }: Us
                     </select>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-stone-500">Status</span>
+                    <span className="text-sm text-[#999999]">Status</span>
                     <select
                       value={editSubStatus}
                       onChange={(e) => setEditSubStatus(e.target.value)}
-                      className="w-48 rounded-lg border border-stone-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      className="w-48 rounded-lg border border-[#2A2A2A] px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50"
                     >
                       <option value="active">active</option>
                       <option value="cancelled">cancelled</option>
@@ -753,20 +753,20 @@ export function UserDetailPanel({ user, availableRoles, onClose, onRefresh }: Us
                     </select>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-stone-500">Free Sessions</span>
+                    <span className="text-sm text-[#999999]">Free Sessions</span>
                     <input
                       type="number"
                       min={0}
                       value={editFreeSessions}
                       onChange={(e) => setEditFreeSessions(parseInt(e.target.value) || 0)}
-                      className="w-48 rounded-lg border border-stone-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      className="w-48 rounded-lg border border-[#2A2A2A] px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50"
                     />
                   </div>
                   <div className="flex items-center gap-2 pt-2">
                     <button
                       onClick={handleSaveSub}
                       disabled={savingSub}
-                      className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-amber-600 rounded-lg hover:bg-amber-700 disabled:opacity-50 transition-colors"
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-[#D4A574] rounded-lg hover:bg-[#C4956A] disabled:opacity-50 transition-colors"
                     >
                       {savingSub ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
                       Save
@@ -776,7 +776,7 @@ export function UserDetailPanel({ user, availableRoles, onClose, onRefresh }: Us
                         setEditingSub(false);
                         setSubError("");
                       }}
-                      className="px-3 py-1.5 text-sm text-stone-600 hover:text-stone-800 transition-colors"
+                      className="px-3 py-1.5 text-sm text-[#E5E5E5] hover:text-[#FAFAFA] transition-colors"
                     >
                       Cancel
                     </button>
@@ -795,13 +795,13 @@ export function UserDetailPanel({ user, availableRoles, onClose, onRefresh }: Us
           {/* Send Email */}
           <Section icon={Mail} title="Send Email">
             {emailSuccess && (
-              <div className="flex items-center gap-2 text-sm text-green-600 mb-2">
+              <div className="flex items-center gap-2 text-sm text-green-400 mb-2">
                 <Check className="size-4" /> {emailSuccess}
               </div>
             )}
             <button
               onClick={() => setShowEmailForm(!showEmailForm)}
-              className="flex items-center gap-1.5 text-sm text-amber-600 hover:text-amber-700 font-medium transition-colors"
+              className="flex items-center gap-1.5 text-sm text-[#D4A574] hover:text-[#D4A574] font-medium transition-colors"
             >
               {showEmailForm ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
               {showEmailForm ? "Hide" : "Compose Email"}
@@ -810,7 +810,7 @@ export function UserDetailPanel({ user, availableRoles, onClose, onRefresh }: Us
             {showEmailForm && (
               <form onSubmit={handleSendEmail} className="mt-3 space-y-3">
                 {emailError && (
-                  <div className="flex items-center gap-2 text-sm text-red-600">
+                  <div className="flex items-center gap-2 text-sm text-red-400">
                     <AlertCircle className="size-4" /> {emailError}
                   </div>
                 )}
@@ -820,7 +820,7 @@ export function UserDetailPanel({ user, availableRoles, onClose, onRefresh }: Us
                   onChange={(e) => setEmailSubject(e.target.value)}
                   placeholder="Subject"
                   required
-                  className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  className="w-full rounded-lg border border-[#2A2A2A] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50"
                 />
                 <textarea
                   value={emailBody}
@@ -828,12 +828,12 @@ export function UserDetailPanel({ user, availableRoles, onClose, onRefresh }: Us
                   placeholder="Email body (HTML supported)"
                   required
                   rows={4}
-                  className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  className="w-full rounded-lg border border-[#2A2A2A] px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50"
                 />
                 <button
                   type="submit"
                   disabled={sendingEmail}
-                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-amber-600 rounded-lg hover:bg-amber-700 disabled:opacity-50 transition-colors"
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-[#D4A574] rounded-lg hover:bg-[#C4956A] disabled:opacity-50 transition-colors"
                 >
                   {sendingEmail ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
                   Send Email
@@ -843,19 +843,19 @@ export function UserDetailPanel({ user, availableRoles, onClose, onRefresh }: Us
           </Section>
 
           {/* Delete User */}
-          <div className="border-t border-stone-200 pt-4">
+          <div className="border-t border-[#2A2A2A] pt-4">
             {deleteError && (
-              <div className="flex items-center gap-2 text-sm text-red-600 mb-3">
+              <div className="flex items-center gap-2 text-sm text-red-400 mb-3">
                 <AlertCircle className="size-4" /> {deleteError}
               </div>
             )}
 
             {showDeleteConfirm ? (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4 space-y-3">
-                <p className="text-sm text-red-700 font-medium">
+              <div className="bg-red-900/30 border border-red-700/40 rounded-lg p-4 space-y-3">
+                <p className="text-sm text-red-400 font-medium">
                   Permanently delete {user.userName}?
                 </p>
-                <p className="text-xs text-red-600">
+                <p className="text-xs text-red-400">
                   This will remove all messages, conversations, roles, and associated data. This action cannot be undone.
                 </p>
                 <div className="flex gap-2">
@@ -869,7 +869,7 @@ export function UserDetailPanel({ user, availableRoles, onClose, onRefresh }: Us
                   </button>
                   <button
                     onClick={() => setShowDeleteConfirm(false)}
-                    className="px-4 py-2 text-sm text-stone-600 hover:text-stone-800 transition-colors"
+                    className="px-4 py-2 text-sm text-[#E5E5E5] hover:text-[#FAFAFA] transition-colors"
                   >
                     Cancel
                   </button>
@@ -878,7 +878,7 @@ export function UserDetailPanel({ user, availableRoles, onClose, onRefresh }: Us
             ) : (
               <button
                 onClick={() => setShowDeleteConfirm(true)}
-                className="flex items-center gap-2 text-sm text-red-500 hover:text-red-600 font-medium transition-colors"
+                className="flex items-center gap-2 text-sm text-red-500 hover:text-red-400 font-medium transition-colors"
               >
                 <Trash2 className="size-4" />
                 Delete User
@@ -904,8 +904,8 @@ function Section({ icon: Icon, title, children }: {
   return (
     <div>
       <div className="flex items-center gap-2 mb-2">
-        <Icon className="size-4 text-stone-400" />
-        <h3 className="text-sm font-semibold text-stone-700 uppercase tracking-wider">{title}</h3>
+        <Icon className="size-4 text-[#999999]" />
+        <h3 className="text-sm font-semibold text-[#E5E5E5] uppercase tracking-wider">{title}</h3>
       </div>
       <div className="pl-6 space-y-1.5">{children}</div>
     </div>
@@ -916,8 +916,8 @@ function Section({ icon: Icon, title, children }: {
 function InfoRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex items-center justify-between">
-      <span className="text-sm text-stone-500">{label}</span>
-      <span className="text-sm text-stone-800">{children}</span>
+      <span className="text-sm text-[#999999]">{label}</span>
+      <span className="text-sm text-[#FAFAFA]">{children}</span>
     </div>
   );
 }

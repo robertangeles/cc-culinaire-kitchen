@@ -71,7 +71,7 @@ export function TheBenchTab() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12 text-stone-400">
+      <div className="flex items-center justify-center py-12 text-[#999999]">
         <Loader2 className="size-5 animate-spin mr-2" />
         Loading bench settings...
       </div>
@@ -81,30 +81,30 @@ export function TheBenchTab() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-base font-semibold text-stone-800">The Bench Settings</h2>
-        <p className="text-sm text-stone-500 mt-1">
+        <h2 className="text-base font-semibold text-[#FAFAFA]">The Bench Settings</h2>
+        <p className="text-sm text-[#999999] mt-1">
           Manage announcements and banner messages for the community chat.
         </p>
       </div>
 
       {/* Status messages */}
       {successMsg && (
-        <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+        <div className="flex items-center gap-2 text-sm text-green-400 bg-green-900/30 border border-green-700/40 rounded-lg px-3 py-2">
           <CheckCircle2 className="size-4 flex-shrink-0" /> {successMsg}
         </div>
       )}
       {errorMsg && (
-        <div className="flex items-center gap-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+        <div className="flex items-center gap-2 text-sm text-red-400 bg-red-900/30 border border-red-700/40 rounded-lg px-3 py-2">
           <AlertCircle className="size-4 flex-shrink-0" /> {errorMsg}
         </div>
       )}
 
       {/* Public channel banner */}
       <div>
-        <label className="block text-sm font-medium text-stone-700 mb-1">
+        <label className="block text-sm font-medium text-[#E5E5E5] mb-1">
           Public Channel Banner
         </label>
-        <p className="text-xs text-stone-400 mb-2">
+        <p className="text-xs text-[#999999] mb-2">
           This message appears at the top of the "Everyone" channel. Use it for announcements, guidelines, or community updates.
         </p>
         <textarea
@@ -112,11 +112,11 @@ export function TheBenchTab() {
           onChange={(e) => setPublicBanner(e.target.value)}
           rows={3}
           maxLength={500}
-          className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm text-stone-800 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent resize-none"
+          className="w-full rounded-lg border border-[#2A2A2A] px-3 py-2 text-sm text-[#FAFAFA] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-transparent resize-none"
           placeholder="e.g., Welcome to The Bench! Share techniques, ask questions, and support your fellow chefs."
         />
         <div className="flex justify-end mt-1">
-          <span className={`text-xs ${publicBanner.length > 450 ? "text-amber-600" : "text-stone-400"}`}>
+          <span className={`text-xs ${publicBanner.length > 450 ? "text-[#D4A574]" : "text-[#999999]"}`}>
             {publicBanner.length}/500
           </span>
         </div>
@@ -124,10 +124,10 @@ export function TheBenchTab() {
 
       {/* Organisation channel banner */}
       <div>
-        <label className="block text-sm font-medium text-stone-700 mb-1">
+        <label className="block text-sm font-medium text-[#E5E5E5] mb-1">
           Organisation Channel Banner
         </label>
-        <p className="text-xs text-stone-400 mb-2">
+        <p className="text-xs text-[#999999] mb-2">
           This message appears at the top of every organisation's "My Kitchen" channel.
         </p>
         <textarea
@@ -135,23 +135,23 @@ export function TheBenchTab() {
           onChange={(e) => setOrgBanner(e.target.value)}
           rows={3}
           maxLength={500}
-          className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm text-stone-800 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent resize-none"
+          className="w-full rounded-lg border border-[#2A2A2A] px-3 py-2 text-sm text-[#FAFAFA] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-transparent resize-none"
           placeholder="e.g., This is your team's private space. Coordinate service, share recipes, and plan menus."
         />
         <div className="flex justify-end mt-1">
-          <span className={`text-xs ${orgBanner.length > 450 ? "text-amber-600" : "text-stone-400"}`}>
+          <span className={`text-xs ${orgBanner.length > 450 ? "text-[#D4A574]" : "text-[#999999]"}`}>
             {orgBanner.length}/500
           </span>
         </div>
       </div>
 
       {/* Save button */}
-      <div className="flex justify-end pt-2 border-t border-stone-100">
+      <div className="flex justify-end pt-2 border-t border-[#2A2A2A]">
         <button
           type="button"
           onClick={handleSave}
           disabled={saving}
-          className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-white bg-amber-600 rounded-lg hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-white bg-[#D4A574] rounded-lg hover:bg-[#C4956A] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           {saving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
           Save Bench Settings

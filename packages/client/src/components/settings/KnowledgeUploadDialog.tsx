@@ -46,11 +46,11 @@ export default function KnowledgeUploadDialog({ onSubmit, onClose }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-stone-200">
-          <h3 className="text-lg font-semibold text-stone-900">Upload Document</h3>
-          <button onClick={onClose} className="p-1 rounded hover:bg-stone-100">
-            <X className="size-5 text-stone-500" />
+      <div className="bg-[#161616] rounded-xl shadow-2xl shadow-black/40 w-full max-w-md mx-4">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[#2A2A2A]">
+          <h3 className="text-lg font-semibold text-[#FAFAFA]">Upload Document</h3>
+          <button onClick={onClose} className="p-1 rounded hover:bg-[#1E1E1E]">
+            <X className="size-5 text-[#999999]" />
           </button>
         </div>
 
@@ -58,13 +58,13 @@ export default function KnowledgeUploadDialog({ onSubmit, onClose }: Props) {
           {/* File dropzone */}
           <div
             onClick={() => fileRef.current?.click()}
-            className="border-2 border-dashed border-stone-300 rounded-lg p-6 text-center cursor-pointer hover:border-amber-400 transition-colors"
+            className="border-2 border-dashed border-[#2A2A2A] rounded-lg p-6 text-center cursor-pointer hover:border-[#D4A574]/40 transition-colors"
           >
-            <Upload className="size-8 mx-auto text-stone-400 mb-2" />
+            <Upload className="size-8 mx-auto text-[#999999] mb-2" />
             {file ? (
-              <p className="text-sm text-stone-700 font-medium">{file.name} ({(file.size / 1024 / 1024).toFixed(1)} MB)</p>
+              <p className="text-sm text-[#E5E5E5] font-medium">{file.name} ({(file.size / 1024 / 1024).toFixed(1)} MB)</p>
             ) : (
-              <p className="text-sm text-stone-500">Click to select PDF, DOCX, TXT, or MD file (max 100MB)</p>
+              <p className="text-sm text-[#999999]">Click to select PDF, DOCX, TXT, or MD file (max 100MB)</p>
             )}
             <input
               ref={fileRef}
@@ -76,22 +76,22 @@ export default function KnowledgeUploadDialog({ onSubmit, onClose }: Props) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-stone-700 mb-1">Title</label>
+            <label className="block text-sm font-medium text-[#E5E5E5] mb-1">Title</label>
             <input
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+              className="w-full px-3 py-2 border border-[#2A2A2A] rounded-lg text-sm focus:ring-2 focus:ring-[#D4A574]/50 focus:border-[#D4A574]"
               placeholder="Document title"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-stone-700 mb-1">Category</label>
+            <label className="block text-sm font-medium text-[#E5E5E5] mb-1">Category</label>
             <select
               value={category}
               onChange={(e) => setCategory(e.target.value)}
-              className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+              className="w-full px-3 py-2 border border-[#2A2A2A] rounded-lg text-sm focus:ring-2 focus:ring-[#D4A574]/50 focus:border-[#D4A574]"
             >
               {CATEGORIES.map((c) => (
                 <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
@@ -100,23 +100,23 @@ export default function KnowledgeUploadDialog({ onSubmit, onClose }: Props) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-stone-700 mb-1">Tags (comma-separated)</label>
+            <label className="block text-sm font-medium text-[#E5E5E5] mb-1">Tags (comma-separated)</label>
             <input
               type="text"
               value={tagsInput}
               onChange={(e) => setTagsInput(e.target.value)}
-              className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+              className="w-full px-3 py-2 border border-[#2A2A2A] rounded-lg text-sm focus:ring-2 focus:ring-[#D4A574]/50 focus:border-[#D4A574]"
               placeholder="e.g. heat, maillard, protein"
             />
           </div>
 
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && <p className="text-sm text-red-400">{error}</p>}
 
           <div className="flex gap-3 pt-2">
-            <button type="button" onClick={onClose} className="flex-1 py-2 text-sm font-medium text-stone-600 bg-stone-100 rounded-lg hover:bg-stone-200 transition-colors">
+            <button type="button" onClick={onClose} className="flex-1 py-2 text-sm font-medium text-[#E5E5E5] bg-[#1E1E1E] rounded-lg hover:bg-[#2A2A2A] transition-colors">
               Cancel
             </button>
-            <button type="submit" disabled={isSubmitting} className="flex-1 flex items-center justify-center gap-2 py-2 text-sm font-medium text-white bg-amber-600 rounded-lg hover:bg-amber-700 disabled:opacity-50 transition-colors">
+            <button type="submit" disabled={isSubmitting} className="flex-1 flex items-center justify-center gap-2 py-2 text-sm font-medium text-white bg-[#D4A574] rounded-lg hover:bg-[#C4956A] disabled:opacity-50 transition-colors">
               {isSubmitting && <Loader2 className="size-4 animate-spin" />}
               Upload
             </button>

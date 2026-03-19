@@ -51,14 +51,14 @@ export function RecipeGalleryPage() {
   const totalPages = Math.ceil(total / 20);
 
   return (
-    <div className="flex-1 overflow-y-auto">
+    <div className="flex-1 overflow-y-auto bg-[#0A0A0A]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="text-center mb-8">
-          <ChefHat className="size-10 mx-auto mb-3 text-amber-600" />
-          <h1 className="text-2xl md:text-3xl font-bold text-stone-800">The Kitchen Shelf</h1>
-          <p className="text-stone-500 mt-2">AI Recipes for Inspiration. Season to your own Judgment.</p>
-          <p className="text-xs text-stone-400 max-w-2xl mx-auto mt-3 leading-relaxed">
+          <ChefHat className="size-10 mx-auto mb-3 text-[#D4A574]" />
+          <h1 className="text-2xl md:text-3xl font-bold text-[#FAFAFA]">The Kitchen Shelf</h1>
+          <p className="text-[#999999] mt-2">AI Recipes for Inspiration. Season to your own Judgment.</p>
+          <p className="text-xs text-[#666666] max-w-2xl mx-auto mt-3 leading-relaxed">
             All recipes are AI-generated and should be reviewed by a qualified professional before use.
             CulinAIre Kitchen does not guarantee outcomes, nutritional accuracy, or allergen completeness.
             Always verify ingredient safety, cooking temperatures, and dietary suitability.
@@ -73,8 +73,8 @@ export function RecipeGalleryPage() {
               onClick={() => { setDomainFilter(f.value); setPage(1); }}
               className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
                 domainFilter === f.value
-                  ? "bg-amber-600 text-white"
-                  : "bg-stone-100 text-stone-600 hover:bg-stone-200"
+                  ? "bg-[#D4A574] text-[#0A0A0A]"
+                  : "bg-[#1E1E1E] text-[#999999] hover:bg-[#2A2A2A]"
               }`}
             >
               {f.label}
@@ -85,13 +85,13 @@ export function RecipeGalleryPage() {
         {/* Search bar */}
         <div className="max-w-md mx-auto mb-8">
           <div className="relative">
-            <Search className="absolute left-3 top-2.5 size-4 text-stone-400" />
+            <Search className="absolute left-3 top-2.5 size-4 text-[#666666]" />
             <input
               type="text"
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               placeholder="Search recipes by name, ingredient, cuisine..."
-              className="w-full pl-10 pr-4 py-2.5 border border-stone-300 rounded-full text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500 bg-white"
+              className="w-full pl-10 pr-4 py-2.5 border border-[#2A2A2A] rounded-full text-sm text-white placeholder-[#444444] focus:ring-2 focus:ring-[#D4A574]/50 focus:border-[#D4A574]/50 bg-[#0A0A0A]"
             />
           </div>
         </div>
@@ -99,16 +99,16 @@ export function RecipeGalleryPage() {
         {/* Loading */}
         {isLoading && (
           <div className="flex justify-center py-20">
-            <Loader2 className="size-8 animate-spin text-amber-600" />
+            <Loader2 className="size-8 animate-spin text-[#D4A574]" />
           </div>
         )}
 
         {/* Empty state */}
         {!isLoading && recipes.length === 0 && (
           <div className="text-center py-20">
-            <ChefHat className="size-12 mx-auto text-stone-300 mb-3" />
-            <p className="text-stone-500 font-medium">No recipes in the gallery yet</p>
-            <p className="text-sm text-stone-400 mt-1">Generate a recipe and make it public to see it here.</p>
+            <ChefHat className="size-12 mx-auto text-[#666666] mb-3" />
+            <p className="text-[#999999] font-medium">No recipes in the gallery yet</p>
+            <p className="text-sm text-[#666666] mt-1">Generate a recipe and make it public to see it here.</p>
           </div>
         )}
 
@@ -129,17 +129,17 @@ export function RecipeGalleryPage() {
             <button
               onClick={() => setPage(page - 1)}
               disabled={page <= 1}
-              className="flex items-center gap-1 px-4 py-2 text-sm text-stone-600 bg-stone-100 rounded-lg hover:bg-stone-200 disabled:opacity-30 transition-colors"
+              className="flex items-center gap-1 px-4 py-2 text-sm text-[#E5E5E5] bg-[#1E1E1E] border border-[#2A2A2A] rounded-xl hover:bg-[#2A2A2A] disabled:opacity-30 transition-colors"
             >
               <ChevronLeft className="size-4" /> Previous
             </button>
-            <span className="text-sm text-stone-500">
+            <span className="text-sm text-[#999999]">
               Page {page} of {totalPages}
             </span>
             <button
               onClick={() => setPage(page + 1)}
               disabled={page >= totalPages}
-              className="flex items-center gap-1 px-4 py-2 text-sm text-stone-600 bg-stone-100 rounded-lg hover:bg-stone-200 disabled:opacity-30 transition-colors"
+              className="flex items-center gap-1 px-4 py-2 text-sm text-[#E5E5E5] bg-[#1E1E1E] border border-[#2A2A2A] rounded-xl hover:bg-[#2A2A2A] disabled:opacity-30 transition-colors"
             >
               Next <ChevronRight className="size-4" />
             </button>

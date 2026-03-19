@@ -19,7 +19,7 @@ export function Footer() {
   if (!footerText) return null;
 
   return (
-    <footer className="border-t border-stone-200 bg-stone-50 px-4 py-3 text-center text-xs text-stone-400">
+    <footer className="border-t border-[#2A2A2A] bg-[#0A0A0A] px-4 py-3 text-center text-xs text-[#999999]">
       {footerText}
     </footer>
   );

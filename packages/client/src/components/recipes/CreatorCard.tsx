@@ -65,20 +65,20 @@ export function CreatorCard({ creator }: CreatorCardProps) {
       onMouseEnter={hasPopoverContent ? handleMouseEnter : undefined}
       onMouseLeave={hasPopoverContent ? handleMouseLeave : undefined}
     >
-      <span className="text-xs text-stone-400">Added by</span>
-      <span className={`text-xs font-medium text-stone-600 ${hasPopoverContent ? "cursor-pointer hover:text-amber-700 transition-colors" : ""}`}>
+      <span className="text-xs text-[#666666]">Added by</span>
+      <span className={`text-xs font-medium text-[#999999] ${hasPopoverContent ? "cursor-pointer hover:text-[#D4A574] transition-colors" : ""}`}>
         {displayName}
       </span>
 
       {/* Hover popover */}
       {showPopover && hasPopoverContent && (
         <div
-          className="absolute bottom-full left-0 mb-2 w-64 bg-white rounded-xl shadow-lg border border-stone-200 p-4 z-50"
+          className="absolute bottom-full left-0 mb-2 w-64 bg-[#161616] rounded-xl shadow-lg border border-[#2A2A2A] p-4 z-50"
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
         >
           {/* Arrow */}
-          <div className="absolute -bottom-1.5 left-6 w-3 h-3 bg-white border-r border-b border-stone-200 rotate-45" />
+          <div className="absolute -bottom-1.5 left-6 w-3 h-3 bg-[#161616] border-r border-b border-[#2A2A2A] rotate-45" />
 
           <div className="flex items-start gap-3">
             {/* Photo */}
@@ -89,29 +89,29 @@ export function CreatorCard({ creator }: CreatorCardProps) {
                 className="size-12 rounded-full object-cover flex-shrink-0"
               />
             ) : (
-              <div className="size-12 rounded-full bg-stone-100 flex items-center justify-center flex-shrink-0">
-                <User className="size-6 text-stone-400" />
+              <div className="size-12 rounded-full bg-[#1E1E1E] flex items-center justify-center flex-shrink-0">
+                <User className="size-6 text-[#999999]" />
               </div>
             )}
 
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold text-stone-800 truncate">{creator.userName}</p>
+              <p className="text-sm font-semibold text-[#FAFAFA] truncate">{creator.userName}</p>
               {creator.restaurantName && (
-                <p className="text-xs text-amber-700 truncate">{creator.restaurantName}</p>
+                <p className="text-xs text-[#D4A574] truncate">{creator.restaurantName}</p>
               )}
             </div>
           </div>
 
           {/* Bio */}
           {creator.userBio && (
-            <p className="text-xs text-stone-500 mt-2 line-clamp-3 leading-relaxed">
+            <p className="text-xs text-[#999999] mt-2 line-clamp-3 leading-relaxed">
               {creator.userBio}
             </p>
           )}
 
           {/* Social links */}
           {socials.length > 0 && (
-            <div className="flex items-center gap-2 mt-3 pt-2 border-t border-stone-100">
+            <div className="flex items-center gap-2 mt-3 pt-2 border-t border-[#2A2A2A]">
               {socials.map(({ key, url }) => {
                 const social = SOCIAL_ICONS[key];
                 if (!social) return null;
@@ -121,7 +121,7 @@ export function CreatorCard({ creator }: CreatorCardProps) {
                     href={url.startsWith("http") ? url : `https://${url}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className={`text-stone-400 ${social.color} transition-colors`}
+                    className={`text-[#666666] ${social.color} transition-colors`}
                     title={social.label}
                     onClick={(e) => e.stopPropagation()}
                   >

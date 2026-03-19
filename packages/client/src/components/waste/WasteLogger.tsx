@@ -325,15 +325,15 @@ export function WasteLogger({ onSwitchTab, teamView = false, isOrgAdmin = false 
     <div>
       {/* Daily total banner */}
       {dailyTotal && (dailyTotal.weight > 0 || dailyTotal.cost > 0) && (
-        <div className="mb-4 flex items-center gap-4 bg-gray-800 border border-gray-700 rounded-xl p-4">
+        <div className="mb-4 flex items-center gap-4 bg-[#161616] border border-[#2A2A2A] rounded-xl p-4">
           <div className="flex items-center gap-2">
-            <Scale className="size-4 text-amber-500" />
-            <span className="text-sm text-gray-300">{teamView ? "Team today:" : "Today\u0027s waste:"}</span>
+            <Scale className="size-4 text-[#D4A574]" />
+            <span className="text-sm text-[#E5E5E5]">{teamView ? "Team today:" : "Today\u0027s waste:"}</span>
           </div>
           <span className="text-white font-semibold">{dailyTotal.weight.toLocaleString(undefined, { maximumFractionDigits: 1 })} kg</span>
-          <span className="text-gray-600">|</span>
+          <span className="text-[#666666]">|</span>
           <div className="flex items-center gap-1">
-            <DollarSign className="size-3.5 text-amber-500" />
+            <DollarSign className="size-3.5 text-[#D4A574]" />
             <span className="text-white font-semibold">{dailyTotal.cost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
           </div>
         </div>
@@ -354,13 +354,13 @@ export function WasteLogger({ onSwitchTab, teamView = false, isOrgAdmin = false 
         <div className="mb-4 flex gap-3">
           <button
             onClick={clearForm}
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-800 hover:bg-gray-700 text-white font-medium rounded-lg transition-colors border border-gray-700 min-h-[44px] text-sm"
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-[#161616] hover:bg-[#1E1E1E] text-white font-medium rounded-lg transition-colors border border-[#2A2A2A] min-h-[44px] text-sm"
           >
             Log Another
           </button>
           <button
             onClick={() => onSwitchTab("dashboard")}
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-amber-600/20 hover:bg-amber-600/30 text-amber-400 font-medium rounded-lg transition-colors border border-amber-600/30 min-h-[44px] text-sm"
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-[#D4A574]/20 hover:bg-[#D4A574]/30 text-[#D4A574] font-medium rounded-lg transition-colors border border-[#D4A574]/30 min-h-[44px] text-sm"
           >
             <BarChart3 className="size-4" />
             View Dashboard
@@ -377,13 +377,13 @@ export function WasteLogger({ onSwitchTab, teamView = false, isOrgAdmin = false 
       )}
 
       {/* Form */}
-      <form onSubmit={handleSubmit} className="bg-gray-800 rounded-xl p-6 border border-gray-700">
+      <form onSubmit={handleSubmit} className="bg-[#161616] rounded-xl p-6 border border-[#2A2A2A]">
         <h2 className="text-lg font-semibold text-white mb-4">Log Waste</h2>
 
         {/* Ingredient name with autocomplete */}
         <div className="mb-4 relative">
-          <label className="block text-sm font-medium text-gray-300 mb-1">
-            What did you throw away? <span className="text-amber-500">*</span>
+          <label className="block text-sm font-medium text-[#E5E5E5] mb-1">
+            What did you throw away? <span className="text-[#D4A574]">*</span>
           </label>
           <input
             ref={inputRef}
@@ -393,17 +393,17 @@ export function WasteLogger({ onSwitchTab, teamView = false, isOrgAdmin = false 
             onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
             onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
             placeholder="e.g., chicken trim, leftover risotto, wilted herbs"
-            className="w-full px-3 py-2.5 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-sm"
+            className="w-full px-3 py-2.5 bg-[#1E1E1E] border border-[#2A2A2A] rounded-lg text-white placeholder-[#666666] focus:ring-2 focus:ring-[#D4A574]/50 focus:border-[#D4A574] text-sm"
             required
           />
           {showSuggestions && suggestions.length > 0 && (
-            <ul className="absolute z-10 w-full mt-1 bg-gray-700 border border-gray-600 rounded-lg shadow-lg max-h-40 overflow-y-auto">
+            <ul className="absolute z-10 w-full mt-1 bg-[#1E1E1E] border border-[#2A2A2A] rounded-lg shadow-lg max-h-40 overflow-y-auto">
               {suggestions.map((s) => (
                 <li key={s}>
                   <button
                     type="button"
                     onMouseDown={() => selectSuggestion(s)}
-                    className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-gray-600 transition-colors"
+                    className="w-full text-left px-3 py-2 text-sm text-[#E5E5E5] hover:bg-[#2A2A2A] transition-colors"
                   >
                     {s}
                   </button>
@@ -416,14 +416,14 @@ export function WasteLogger({ onSwitchTab, teamView = false, isOrgAdmin = false 
         {/* Quick-log buttons */}
         {quickLogItems.length > 0 && (
           <div className="mb-4">
-            <p className="text-xs text-gray-500 mb-2">Quick log — your most common items:</p>
+            <p className="text-xs text-[#666666] mb-2">Quick log — your most common items:</p>
             <div className="flex flex-wrap gap-2">
               {quickLogItems.map((item) => (
                 <button
                   key={item}
                   type="button"
                   onClick={() => setIngredientName(item)}
-                  className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-300 text-xs rounded-full border border-gray-600 transition-colors min-h-[36px]"
+                  className="px-3 py-1.5 bg-[#1E1E1E] hover:bg-[#2A2A2A] text-[#E5E5E5] text-xs rounded-full border border-[#2A2A2A] transition-colors min-h-[36px]"
                 >
                   {item}
                 </button>
@@ -435,8 +435,8 @@ export function WasteLogger({ onSwitchTab, teamView = false, isOrgAdmin = false 
         {/* Quantity + Unit row */}
         <div className="grid grid-cols-2 gap-3 mb-4">
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">
-              How much? <span className="text-amber-500">*</span>
+            <label className="block text-sm font-medium text-[#E5E5E5] mb-1">
+              How much? <span className="text-[#D4A574]">*</span>
             </label>
             <input
               type="number"
@@ -445,16 +445,16 @@ export function WasteLogger({ onSwitchTab, teamView = false, isOrgAdmin = false 
               placeholder="0"
               min="0"
               step="any"
-              className="w-full px-3 py-2.5 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-sm"
+              className="w-full px-3 py-2.5 bg-[#1E1E1E] border border-[#2A2A2A] rounded-lg text-white placeholder-[#666666] focus:ring-2 focus:ring-[#D4A574]/50 focus:border-[#D4A574] text-sm"
               required
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">Unit</label>
+            <label className="block text-sm font-medium text-[#E5E5E5] mb-1">Unit</label>
             <select
               value={unit}
               onChange={(e) => setUnit(e.target.value)}
-              className="w-full px-3 py-2.5 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-sm"
+              className="w-full px-3 py-2.5 bg-[#1E1E1E] border border-[#2A2A2A] rounded-lg text-white focus:ring-2 focus:ring-[#D4A574]/50 focus:border-[#D4A574] text-sm"
             >
               {UNITS.map((u) => (
                 <option key={u} value={u}>{u}</option>
@@ -466,11 +466,11 @@ export function WasteLogger({ onSwitchTab, teamView = false, isOrgAdmin = false 
         {/* Reason + Shift row */}
         <div className="grid grid-cols-2 gap-3 mb-4">
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">Why was it wasted?</label>
+            <label className="block text-sm font-medium text-[#E5E5E5] mb-1">Why was it wasted?</label>
             <select
               value={reason}
               onChange={(e) => setReason(e.target.value)}
-              className="w-full px-3 py-2.5 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-sm"
+              className="w-full px-3 py-2.5 bg-[#1E1E1E] border border-[#2A2A2A] rounded-lg text-white focus:ring-2 focus:ring-[#D4A574]/50 focus:border-[#D4A574] text-sm"
             >
               {REASONS.map((r) => (
                 <option key={r} value={r}>{r || "-- Select --"}</option>
@@ -478,11 +478,11 @@ export function WasteLogger({ onSwitchTab, teamView = false, isOrgAdmin = false 
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">Which shift?</label>
+            <label className="block text-sm font-medium text-[#E5E5E5] mb-1">Which shift?</label>
             <select
               value={shift}
               onChange={(e) => setShift(e.target.value)}
-              className="w-full px-3 py-2.5 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-sm"
+              className="w-full px-3 py-2.5 bg-[#1E1E1E] border border-[#2A2A2A] rounded-lg text-white focus:ring-2 focus:ring-[#D4A574]/50 focus:border-[#D4A574] text-sm"
             >
               {SHIFTS.map((s) => (
                 <option key={s} value={s}>{s || "-- Select --"}</option>
@@ -493,7 +493,7 @@ export function WasteLogger({ onSwitchTab, teamView = false, isOrgAdmin = false 
 
         {/* Estimated cost */}
         <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-300 mb-1">Estimated Cost ($)</label>
+          <label className="block text-sm font-medium text-[#E5E5E5] mb-1">Estimated Cost ($)</label>
           <input
             type="number"
             value={estimatedCost}
@@ -501,19 +501,19 @@ export function WasteLogger({ onSwitchTab, teamView = false, isOrgAdmin = false 
             placeholder="0.00"
             min="0"
             step="0.01"
-            className="w-full px-3 py-2.5 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-sm"
+            className="w-full px-3 py-2.5 bg-[#1E1E1E] border border-[#2A2A2A] rounded-lg text-white placeholder-[#666666] focus:ring-2 focus:ring-[#D4A574]/50 focus:border-[#D4A574] text-sm"
           />
         </div>
 
         {/* Notes */}
         <div className="mb-6">
-          <label className="block text-sm font-medium text-gray-300 mb-1">Notes</label>
+          <label className="block text-sm font-medium text-[#E5E5E5] mb-1">Notes</label>
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             placeholder="Any additional details..."
             rows={2}
-            className="w-full px-3 py-2.5 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-sm resize-none"
+            className="w-full px-3 py-2.5 bg-[#1E1E1E] border border-[#2A2A2A] rounded-lg text-white placeholder-[#666666] focus:ring-2 focus:ring-[#D4A574]/50 focus:border-[#D4A574] text-sm resize-none"
           />
         </div>
 
@@ -521,7 +521,7 @@ export function WasteLogger({ onSwitchTab, teamView = false, isOrgAdmin = false 
         <button
           type="submit"
           disabled={submitting || !ingredientName.trim() || !quantity}
-          className="w-full flex items-center justify-center gap-2 px-6 py-3.5 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-colors text-base min-h-[48px]"
+          className="w-full flex items-center justify-center gap-2 px-6 py-3.5 bg-[#D4A574] hover:bg-[#C4956A] disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-colors text-base min-h-[48px]"
         >
           {submitting ? (
             <Loader2 className="size-5 animate-spin" />
@@ -536,18 +536,18 @@ export function WasteLogger({ onSwitchTab, teamView = false, isOrgAdmin = false 
 
       {/* Recent logs */}
       <div className="mt-8">
-        <h3 className="text-sm font-medium text-gray-400 uppercase tracking-wider mb-3">Recent Logs</h3>
+        <h3 className="text-sm font-medium text-[#999999] uppercase tracking-wider mb-3">Recent Logs</h3>
 
         {loadingLogs && (
           <div className="flex justify-center py-8">
-            <Loader2 className="size-6 animate-spin text-amber-500" />
+            <Loader2 className="size-6 animate-spin text-[#D4A574]" />
           </div>
         )}
 
         {!loadingLogs && recentLogs.length === 0 && (
           <div className="text-center py-8">
-            <Trash2 className="size-8 mx-auto text-gray-600 mb-2" />
-            <p className="text-gray-500 text-sm">No waste logged yet. Start tracking above!</p>
+            <Trash2 className="size-8 mx-auto text-[#666666] mb-2" />
+            <p className="text-[#666666] text-sm">No waste logged yet. Start tracking above!</p>
           </div>
         )}
 
@@ -560,7 +560,7 @@ export function WasteLogger({ onSwitchTab, teamView = false, isOrgAdmin = false 
               return (
               <div
                 key={log.wasteLogId}
-                className={`bg-gray-800 rounded-lg px-4 py-3 border border-gray-700 ${
+                className={`bg-[#161616] rounded-lg px-4 py-3 border border-[#2A2A2A] ${
                   teamView && !isOwnEntry ? "border-l-2 border-l-blue-500/60" : ""
                 }`}
               >
@@ -572,7 +572,7 @@ export function WasteLogger({ onSwitchTab, teamView = false, isOrgAdmin = false 
                         type="text"
                         value={editFields.ingredientName ?? ""}
                         onChange={(e) => setEditFields({ ...editFields, ingredientName: e.target.value })}
-                        className="px-2 py-1.5 bg-gray-700 border border-gray-600 rounded text-white text-sm"
+                        className="px-2 py-1.5 bg-[#1E1E1E] border border-[#2A2A2A] rounded text-white text-sm"
                         placeholder="Ingredient"
                       />
                       <div className="flex gap-2">
@@ -580,7 +580,7 @@ export function WasteLogger({ onSwitchTab, teamView = false, isOrgAdmin = false 
                           type="number"
                           value={editFields.quantity ?? ""}
                           onChange={(e) => setEditFields({ ...editFields, quantity: Number(e.target.value) })}
-                          className="w-20 px-2 py-1.5 bg-gray-700 border border-gray-600 rounded text-white text-sm"
+                          className="w-20 px-2 py-1.5 bg-[#1E1E1E] border border-[#2A2A2A] rounded text-white text-sm"
                           placeholder="Qty"
                           min="0"
                           step="any"
@@ -588,7 +588,7 @@ export function WasteLogger({ onSwitchTab, teamView = false, isOrgAdmin = false 
                         <select
                           value={editFields.unit ?? "kg"}
                           onChange={(e) => setEditFields({ ...editFields, unit: e.target.value })}
-                          className="px-2 py-1.5 bg-gray-700 border border-gray-600 rounded text-white text-sm flex-1"
+                          className="px-2 py-1.5 bg-[#1E1E1E] border border-[#2A2A2A] rounded text-white text-sm flex-1"
                         >
                           {UNITS.map((u) => (
                             <option key={u} value={u}>{u}</option>
@@ -600,7 +600,7 @@ export function WasteLogger({ onSwitchTab, teamView = false, isOrgAdmin = false 
                       <select
                         value={editFields.reason ?? ""}
                         onChange={(e) => setEditFields({ ...editFields, reason: e.target.value })}
-                        className="px-2 py-1.5 bg-gray-700 border border-gray-600 rounded text-white text-sm"
+                        className="px-2 py-1.5 bg-[#1E1E1E] border border-[#2A2A2A] rounded text-white text-sm"
                       >
                         {REASONS.map((r) => (
                           <option key={r} value={r}>{r || "-- Reason --"}</option>
@@ -610,7 +610,7 @@ export function WasteLogger({ onSwitchTab, teamView = false, isOrgAdmin = false 
                         type="number"
                         value={editFields.estimatedCost ?? ""}
                         onChange={(e) => setEditFields({ ...editFields, estimatedCost: Number(e.target.value) })}
-                        className="px-2 py-1.5 bg-gray-700 border border-gray-600 rounded text-white text-sm"
+                        className="px-2 py-1.5 bg-[#1E1E1E] border border-[#2A2A2A] rounded text-white text-sm"
                         placeholder="Cost ($)"
                         min="0"
                         step="0.01"
@@ -619,14 +619,14 @@ export function WasteLogger({ onSwitchTab, teamView = false, isOrgAdmin = false 
                     <div className="flex gap-2 justify-end">
                       <button
                         onClick={cancelEdit}
-                        className="px-3 py-1.5 text-sm text-gray-400 hover:text-white bg-gray-700 hover:bg-gray-600 rounded transition-colors min-h-[36px]"
+                        className="px-3 py-1.5 text-sm text-[#999999] hover:text-white bg-[#1E1E1E] hover:bg-[#2A2A2A] rounded transition-colors min-h-[36px]"
                       >
                         Cancel
                       </button>
                       <button
                         onClick={() => saveEdit(log.wasteLogId)}
                         disabled={savingEdit}
-                        className="px-3 py-1.5 text-sm text-white bg-amber-600 hover:bg-amber-700 rounded transition-colors min-h-[36px] disabled:opacity-50 flex items-center gap-1"
+                        className="px-3 py-1.5 text-sm text-white bg-[#D4A574] hover:bg-[#C4956A] rounded transition-colors min-h-[36px] disabled:opacity-50 flex items-center gap-1"
                       >
                         {savingEdit ? <Loader2 className="size-3 animate-spin" /> : <Check className="size-3" />}
                         Save
@@ -639,7 +639,7 @@ export function WasteLogger({ onSwitchTab, teamView = false, isOrgAdmin = false 
                     <div className="min-w-0 flex-1">
                       <p className="text-white text-sm font-medium truncate">
                         {log.ingredientName}{" "}
-                        <span className="text-gray-400 font-normal">
+                        <span className="text-[#999999] font-normal">
                           — {log.quantity} {log.unit}
                         </span>
                       </p>
@@ -648,7 +648,7 @@ export function WasteLogger({ onSwitchTab, teamView = false, isOrgAdmin = false 
                           Logged by {log.loggedBy}
                         </p>
                       )}
-                      <p className="text-xs text-gray-500 mt-0.5">
+                      <p className="text-xs text-[#666666] mt-0.5">
                         {log.reason && <span className="mr-3">{log.reason}</span>}
                         {log.shift && <span className="mr-3">{log.shift}</span>}
                         {log.estimatedCost != null && (
@@ -661,14 +661,14 @@ export function WasteLogger({ onSwitchTab, teamView = false, isOrgAdmin = false 
                       <div className="flex items-center gap-1 ml-2">
                         <button
                           onClick={() => startEdit(log)}
-                          className="p-2 text-gray-500 hover:text-amber-400 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
+                          className="p-2 text-[#666666] hover:text-[#D4A574] transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
                           title="Edit log"
                         >
                           <Pencil className="size-4" />
                         </button>
                         <button
                           onClick={() => handleDelete(log.wasteLogId)}
-                          className="p-2 text-gray-500 hover:text-red-400 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
+                          className="p-2 text-[#666666] hover:text-red-400 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
                           title="Delete log"
                         >
                           <Trash2 className="size-4" />

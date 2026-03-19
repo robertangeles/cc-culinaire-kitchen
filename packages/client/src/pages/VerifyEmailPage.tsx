@@ -43,23 +43,23 @@ export function VerifyEmailPage() {
   }, [token]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-stone-50 px-4">
+    <div className="min-h-screen flex items-center justify-center bg-[#0A0A0A] px-4">
       <div className="w-full max-w-md text-center">
         {status === "loading" && (
           <div className="space-y-4">
-            <Loader2 className="size-12 animate-spin text-amber-600 mx-auto" />
-            <p className="text-stone-600">Verifying your email...</p>
+            <Loader2 className="size-12 animate-spin text-[#D4A574] mx-auto" />
+            <p className="text-[#E5E5E5]">Verifying your email...</p>
           </div>
         )}
 
         {status === "success" && (
-          <div className="bg-white rounded-2xl shadow-sm border border-stone-200 p-8 space-y-4">
-            <CheckCircle2 className="size-12 text-green-600 mx-auto" />
-            <h2 className="text-xl font-bold text-stone-800">Email Verified</h2>
-            <p className="text-stone-600">{message}</p>
+          <div className="bg-[#161616] rounded-2xl shadow-lg shadow-black/20 border border-[#2A2A2A] p-8 space-y-4">
+            <CheckCircle2 className="size-12 text-green-400 mx-auto" />
+            <h2 className="text-xl font-bold text-[#FAFAFA]">Email Verified</h2>
+            <p className="text-[#E5E5E5]">{message}</p>
             <Link
               to="/login"
-              className="inline-block mt-4 px-6 py-2.5 text-sm font-medium text-white bg-amber-600 rounded-lg hover:bg-amber-700 transition-colors"
+              className="inline-block mt-4 px-6 py-2.5 text-sm font-medium text-white bg-[#D4A574] rounded-lg hover:bg-[#C4956A] transition-colors"
             >
               Go to Login
             </Link>
@@ -67,13 +67,13 @@ export function VerifyEmailPage() {
         )}
 
         {status === "error" && (
-          <div className="bg-white rounded-2xl shadow-sm border border-stone-200 p-8 space-y-4">
+          <div className="bg-[#161616] rounded-2xl shadow-lg shadow-black/20 border border-[#2A2A2A] p-8 space-y-4">
             <AlertCircle className="size-12 text-red-500 mx-auto" />
-            <h2 className="text-xl font-bold text-stone-800">Verification Failed</h2>
-            <p className="text-stone-600">{message}</p>
+            <h2 className="text-xl font-bold text-[#FAFAFA]">Verification Failed</h2>
+            <p className="text-[#E5E5E5]">{message}</p>
             <Link
               to="/login"
-              className="inline-block mt-4 px-6 py-2.5 text-sm font-medium text-white bg-amber-600 rounded-lg hover:bg-amber-700 transition-colors"
+              className="inline-block mt-4 px-6 py-2.5 text-sm font-medium text-white bg-[#D4A574] rounded-lg hover:bg-[#C4956A] transition-colors"
             >
               Go to Login
             </Link>

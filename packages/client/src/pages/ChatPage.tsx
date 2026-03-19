@@ -122,7 +122,7 @@ export function ChatPage() {
   const isLoadingHistory = initialMessages === null && !isNew;
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+    <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-[#0A0A0A]">
       <ChatContainer
         key={isLoadingHistory ? `${id}-loading` : (id ?? "new")}
         conversationId={isNew ? undefined : id}
