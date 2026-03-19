@@ -8,15 +8,22 @@
  * Guest users see a sign-up prompt instead of content.
  */
 
-import { useState } from "react";
-import { Leaf, LogIn } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Leaf, LogIn, Shield } from "lucide-react";
 import { Link } from "react-router";
 import { useAuth } from "../context/AuthContext.js";
 import { WasteLogger } from "../components/waste/WasteLogger.js";
 import { WasteDashboard } from "../components/waste/WasteDashboard.js";
 import { WasteReuseSuggestions } from "../components/waste/WasteReuseSuggestions.js";
 
-type WasteTab = "log" | "dashboard" | "reuse";
+export type WasteTab = "log" | "dashboard" | "reuse";
+
+export interface OrgContext {
+  hasOrg: boolean;
+  orgName: string | null;
+  isOrgAdmin: boolean;
+  memberCount: number;
+}
 
 const TABS: { key: WasteTab; label: string }[] = [
   { key: "log", label: "Log Waste" },
@@ -27,6 +34,27 @@ const TABS: { key: WasteTab; label: string }[] = [
 export function WasteIntelligencePage() {
   const { user, isGuest } = useAuth();
   const [activeTab, setActiveTab] = useState<WasteTab>("log");
+  const [orgContext, setOrgContext] = useState<OrgContext | null>(null);
+  const [teamView, setTeamView] = useState(false);
+
+  // Fetch org context on mount
+  useEffect(() => {
+    if (isGuest || !user) return;
+
+    (async () => {
+      try {
+        const res = await fetch("/api/waste/org-context", { credentials: "include" });
+        if (res.ok) {
+          const data: OrgContext = await res.json();
+          setOrgContext(data);
+          // Default to team view if user has an org
+          if (data.hasOrg) setTeamView(true);
+        }
+      } catch {
+        // silent — personal view is the fallback
+      }
+    })();
+  }, [user, isGuest]);
 
   // Guest users see sign-up prompt
   if (isGuest || !user) {
@@ -57,8 +85,44 @@ export function WasteIntelligencePage() {
         <div className="text-center mb-8">
           <Leaf className="size-10 mx-auto mb-3 text-amber-500" />
           <h1 className="text-2xl md:text-3xl font-bold text-white">Waste Intelligence</h1>
-          <p className="text-gray-400 mt-2">Track waste. Cut costs. Reuse smarter.</p>
+          <p className="text-gray-400 mt-2">
+            {orgContext?.hasOrg && orgContext.orgName
+              ? `${orgContext.orgName} Kitchen`
+              : "Track waste. Cut costs. Reuse smarter."}
+          </p>
         </div>
+
+        {/* Data scope toggle — only visible if user has an org */}
+        {orgContext?.hasOrg && (
+          <div className="flex items-center justify-center gap-2 mb-6">
+            <button
+              onClick={() => setTeamView(false)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors min-h-[44px] ${
+                !teamView
+                  ? "bg-amber-600 text-white"
+                  : "bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700"
+              }`}
+            >
+              My Data
+            </button>
+            <button
+              onClick={() => setTeamView(true)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors min-h-[44px] ${
+                teamView
+                  ? "bg-amber-600 text-white"
+                  : "bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700"
+              }`}
+            >
+              Team Data{orgContext.memberCount > 0 ? ` (${orgContext.memberCount})` : ""}
+            </button>
+            {orgContext.isOrgAdmin && (
+              <span className="ml-1 inline-flex items-center gap-1 px-2 py-1 bg-amber-900/40 border border-amber-700/40 rounded text-xs text-amber-400 font-medium">
+                <Shield className="size-3" />
+                Admin
+              </span>
+            )}
+          </div>
+        )}
 
         {/* Tab navigation */}
         <div className="flex justify-center gap-2 mb-8">
@@ -66,7 +130,7 @@ export function WasteIntelligencePage() {
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
-              className={`px-5 py-2.5 rounded-full text-sm font-medium transition-colors ${
+              className={`px-5 py-2.5 rounded-full text-sm font-medium transition-colors min-h-[44px] ${
                 activeTab === tab.key
                   ? "bg-amber-600 text-white"
                   : "bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700"
@@ -78,8 +142,19 @@ export function WasteIntelligencePage() {
         </div>
 
         {/* Tab content */}
-        {activeTab === "log" && <WasteLogger />}
-        {activeTab === "dashboard" && <WasteDashboard />}
+        {activeTab === "log" && (
+          <WasteLogger
+            onSwitchTab={setActiveTab}
+            teamView={teamView}
+            isOrgAdmin={orgContext?.isOrgAdmin ?? false}
+          />
+        )}
+        {activeTab === "dashboard" && (
+          <WasteDashboard
+            onSwitchTab={setActiveTab}
+            teamView={teamView}
+          />
+        )}
         {activeTab === "reuse" && <WasteReuseSuggestions />}
       </div>
     </div>

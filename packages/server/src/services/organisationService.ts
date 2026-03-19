@@ -73,10 +73,11 @@ export async function createOrganisation(
     })
     .returning();
 
-  // Add creator as member
+  // Add creator as admin member
   await db.insert(userOrganisation).values({
     userId,
     organisationId: org.organisationId,
+    role: "admin",
   });
 
   return org;

@@ -283,6 +283,7 @@ export const userOrganisation = pgTable("user_organisation", {
   userOrganisationId: serial("user_organisation_id").primaryKey(),
   userId: integer("user_id").notNull(),
   organisationId: integer("organisation_id").notNull(),
+  role: varchar("role", { length: 20 }).default("member").notNull(),
 });
 
 /**
@@ -735,6 +736,7 @@ export const menuCategorySetting = pgTable(
 export const wasteLog = pgTable("waste_log", {
   wasteLogId: uuid("waste_log_id").defaultRandom().primaryKey(),
   userId: integer("user_id").notNull().references(() => user.userId),
+  organisationId: integer("organisation_id").references(() => organisation.organisationId),
   ingredientName: text("ingredient_name").notNull(),
   quantity: numeric("quantity", { precision: 10, scale: 3 }).notNull(),
   unit: varchar("unit", { length: 20 }).notNull(),
@@ -761,6 +763,7 @@ export const wasteLog = pgTable("waste_log", {
 export const prepSession = pgTable("prep_session", {
   prepSessionId: uuid("prep_session_id").defaultRandom().primaryKey(),
   userId: integer("user_id").notNull().references(() => user.userId),
+  organisationId: integer("organisation_id").references(() => organisation.organisationId),
   prepDate: date("prep_date").notNull(),
   expectedCovers: integer("expected_covers"),
   actualCovers: integer("actual_covers"),

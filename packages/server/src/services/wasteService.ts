@@ -6,13 +6,15 @@
  * auto-complete, and AI-powered reuse suggestions.
  */
 
+import crypto from "node:crypto";
 import { generateObject } from "ai";
 import { z } from "zod";
 import pino from "pino";
 import { db } from "../db/index.js";
-import { wasteLog } from "../db/schema.js";
+import { wasteLog, user } from "../db/schema.js";
 import { recipe } from "../db/schema.js";
-import { eq, desc, sql, and, gte, lte, ilike } from "drizzle-orm";
+import { eq, desc, sql, and, gte, lte, ilike, inArray } from "drizzle-orm";
+import { getUserOrgContext, type OrgContext } from "./orgContextService.js";
 import { getModel } from "./providerService.js";
 
 const logger = pino({ name: "wasteService" });
@@ -34,6 +36,7 @@ export interface WasteLogInput {
 
 export interface WasteLogRow {
   wasteLogId: string;
+  userId: number;
   ingredientName: string;
   quantity: number;
   unit: string;
@@ -43,24 +46,25 @@ export interface WasteLogRow {
   shift: string | null;
   loggedAt: string;
   createdDttm: string;
+  loggedBy?: string | null;
 }
 
 export interface WasteSummary {
   totalWeight: number;
   totalCost: number;
   totalEntries: number;
-  topItemsByCost: { ingredientName: string; totalCost: number }[];
-  topItemsByWeight: { ingredientName: string; totalWeight: number }[];
-  byReason: { reason: string; count: number; totalCost: number }[];
-  dailyTrend: { date: string; entries: number; totalCost: number; totalWeight: number }[];
+  topByCost: { name: string; cost: number }[];
+  topByWeight: { name: string; weight: number; unit: string }[];
+  byReason: { reason: string; count: number; cost: number }[];
+  dailyTotals: { date: string; weight: number; cost: number }[];
 }
 
 export interface ReuseSuggestion {
-  ingredient: string;
-  wastedQuantity: string;
+  id: string;
+  ingredientName: string;
+  quantityWasted: number;
   suggestion: string;
-  potentialDish: string;
-  estimatedSavings: string;
+  type: "recipe" | "stock" | "special" | "staff_meal";
 }
 
 // ---------------------------------------------------------------------------
@@ -71,10 +75,14 @@ export async function logWaste(
   userId: number,
   data: WasteLogInput,
 ): Promise<WasteLogRow> {
+  // Auto-set organisationId from user's org membership
+  const orgCtx = await getUserOrgContext(userId);
+
   const [row] = await db
     .insert(wasteLog)
     .values({
       userId,
+      organisationId: orgCtx.primaryOrgId,
       ingredientName: data.ingredientName.trim(),
       quantity: String(data.quantity),
       unit: data.unit.trim(),
@@ -100,12 +108,22 @@ export async function logWaste(
 
 export async function getWasteLogs(
   userId: number,
-  opts: { limit?: number; offset?: number; startDate?: string; endDate?: string } = {},
+  opts: { limit?: number; offset?: number; startDate?: string; endDate?: string; teamView?: boolean } = {},
 ): Promise<{ data: WasteLogRow[]; total: number }> {
   const limit = opts.limit ?? 50;
   const offset = opts.offset ?? 0;
 
-  const conditions = [eq(wasteLog.userId, userId)];
+  let orgCtx: OrgContext | null = null;
+  if (opts.teamView) {
+    orgCtx = await getUserOrgContext(userId);
+  }
+
+  // If teamView and user has an org, filter by all org member userIds
+  const userFilter = opts.teamView && orgCtx && orgCtx.orgIds.length > 0
+    ? inArray(wasteLog.userId, orgCtx.orgMemberUserIds)
+    : eq(wasteLog.userId, userId);
+
+  const conditions = [userFilter];
   if (opts.startDate) conditions.push(gte(wasteLog.loggedAt, new Date(opts.startDate)));
   if (opts.endDate) conditions.push(lte(wasteLog.loggedAt, new Date(opts.endDate)));
 
@@ -113,8 +131,23 @@ export async function getWasteLogs(
 
   const [rows, countResult] = await Promise.all([
     db
-      .select()
+      .select({
+        wasteLogId: wasteLog.wasteLogId,
+        userId: wasteLog.userId,
+        ingredientName: wasteLog.ingredientName,
+        quantity: wasteLog.quantity,
+        unit: wasteLog.unit,
+        estimatedCost: wasteLog.estimatedCost,
+        reason: wasteLog.reason,
+        notes: wasteLog.notes,
+        shift: wasteLog.shift,
+        loggedAt: wasteLog.loggedAt,
+        createdDttm: wasteLog.createdDttm,
+        updatedDttm: wasteLog.updatedDttm,
+        loggedBy: user.userName,
+      })
       .from(wasteLog)
+      .leftJoin(user, eq(wasteLog.userId, user.userId))
       .where(where)
       .orderBy(desc(wasteLog.loggedAt))
       .limit(limit)
@@ -126,7 +159,20 @@ export async function getWasteLogs(
   ]);
 
   return {
-    data: rows.map(toRow),
+    data: rows.map((r) => ({
+      wasteLogId: r.wasteLogId,
+      userId: r.userId,
+      ingredientName: r.ingredientName,
+      quantity: Number(r.quantity),
+      unit: r.unit,
+      estimatedCost: r.estimatedCost != null ? Number(r.estimatedCost) : null,
+      reason: r.reason,
+      notes: r.notes,
+      shift: r.shift,
+      loggedAt: r.loggedAt.toISOString(),
+      createdDttm: r.createdDttm.toISOString(),
+      loggedBy: r.loggedBy ?? null,
+    })),
     total: Number(countResult[0]?.count ?? 0),
   };
 }
@@ -138,7 +184,28 @@ export async function getWasteLogs(
 export async function deleteWasteLog(
   wasteLogId: string,
   userId: number,
+  orgCtx?: OrgContext,
 ): Promise<boolean> {
+  // If org admin, allow deleting any entry from their org members
+  if (orgCtx?.isOrgAdmin && orgCtx.orgIds.length > 0) {
+    const result = await db
+      .delete(wasteLog)
+      .where(
+        and(
+          eq(wasteLog.wasteLogId, wasteLogId),
+          inArray(wasteLog.userId, orgCtx.orgMemberUserIds),
+        ),
+      )
+      .returning({ id: wasteLog.wasteLogId });
+
+    const deleted = result.length > 0;
+    if (deleted) {
+      logger.info({ wasteLogId, userId, orgAdmin: true }, "Waste entry deleted by org admin");
+    }
+    return deleted;
+  }
+
+  // Regular member: only own entries
   const result = await db
     .delete(wasteLog)
     .where(and(eq(wasteLog.wasteLogId, wasteLogId), eq(wasteLog.userId, userId)))
@@ -159,9 +226,20 @@ export async function getWasteSummary(
   userId: number,
   startDate: string,
   endDate: string,
+  teamView?: boolean,
 ): Promise<WasteSummary> {
+  let userFilter;
+  if (teamView) {
+    const orgCtx = await getUserOrgContext(userId);
+    userFilter = orgCtx.orgIds.length > 0
+      ? inArray(wasteLog.userId, orgCtx.orgMemberUserIds)
+      : eq(wasteLog.userId, userId);
+  } else {
+    userFilter = eq(wasteLog.userId, userId);
+  }
+
   const conditions = and(
-    eq(wasteLog.userId, userId),
+    userFilter,
     gte(wasteLog.loggedAt, new Date(startDate)),
     lte(wasteLog.loggedAt, new Date(endDate)),
   );
@@ -195,6 +273,7 @@ export async function getWasteSummary(
       .select({
         ingredientName: wasteLog.ingredientName,
         totalWeight: sql<string>`coalesce(sum(${wasteLog.quantity}), 0)`,
+        unit: sql<string>`mode() within group (order by ${wasteLog.unit})`,
       })
       .from(wasteLog)
       .where(conditions)
@@ -234,24 +313,24 @@ export async function getWasteSummary(
     totalWeight: Number(t?.totalWeight ?? 0),
     totalCost: Number(t?.totalCost ?? 0),
     totalEntries: Number(t?.totalEntries ?? 0),
-    topItemsByCost: topByCost.map((r) => ({
-      ingredientName: r.ingredientName,
-      totalCost: Number(r.totalCost),
+    topByCost: topByCost.map((r) => ({
+      name: r.ingredientName,
+      cost: Number(r.totalCost),
     })),
-    topItemsByWeight: topByWeight.map((r) => ({
-      ingredientName: r.ingredientName,
-      totalWeight: Number(r.totalWeight),
+    topByWeight: topByWeight.map((r) => ({
+      name: r.ingredientName,
+      weight: Number(r.totalWeight),
+      unit: r.unit,
     })),
     byReason: byReason.map((r) => ({
       reason: r.reason,
       count: Number(r.count),
-      totalCost: Number(r.totalCost),
+      cost: Number(r.totalCost),
     })),
-    dailyTrend: dailyTrend.map((r) => ({
+    dailyTotals: dailyTrend.map((r) => ({
       date: r.date,
-      entries: Number(r.entries),
-      totalCost: Number(r.totalCost),
-      totalWeight: Number(r.totalWeight),
+      weight: Number(r.totalWeight),
+      cost: Number(r.totalCost),
     })),
   };
 }
@@ -266,11 +345,17 @@ export async function getIngredientSuggestions(
 ): Promise<string[]> {
   const pattern = `%${query.trim()}%`;
 
+  // If user has an org, search across all org members' logs
+  const orgCtx = await getUserOrgContext(userId);
+  const wasteUserFilter = orgCtx.orgIds.length > 0
+    ? inArray(wasteLog.userId, orgCtx.orgMemberUserIds)
+    : eq(wasteLog.userId, userId);
+
   // Search waste_log ingredient names (recent, distinct)
   const wasteNames = db
     .selectDistinct({ name: wasteLog.ingredientName })
     .from(wasteLog)
-    .where(and(eq(wasteLog.userId, userId), ilike(wasteLog.ingredientName, pattern)))
+    .where(and(wasteUserFilter, ilike(wasteLog.ingredientName, pattern)))
     .orderBy(desc(wasteLog.loggedAt))
     .limit(10);
 
@@ -313,11 +398,10 @@ export async function getIngredientSuggestions(
 const ReuseSuggestionSchema = z.object({
   suggestions: z.array(
     z.object({
-      ingredient: z.string(),
-      wastedQuantity: z.string(),
+      ingredientName: z.string(),
+      quantityWasted: z.number(),
       suggestion: z.string(),
-      potentialDish: z.string(),
-      estimatedSavings: z.string(),
+      type: z.enum(["recipe", "stock", "special", "staff_meal"]),
     }),
   ),
 });
@@ -381,12 +465,79 @@ export async function generateReuseSuggestions(
       "AI reuse suggestions generated",
     );
 
-    return object.suggestions;
+    return object.suggestions.map((s) => ({
+      id: crypto.randomUUID(),
+      ingredientName: s.ingredientName,
+      quantityWasted: Number(s.quantityWasted),
+      suggestion: s.suggestion,
+      type: s.type,
+    }));
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     logger.error({ userId, error: msg }, "Failed to generate reuse suggestions");
     throw new Error("Failed to generate reuse suggestions. Please try again.");
   }
+}
+
+// ---------------------------------------------------------------------------
+// editWasteLog
+// ---------------------------------------------------------------------------
+
+export interface WasteLogUpdate {
+  ingredientName?: string;
+  quantity?: number;
+  unit?: string;
+  estimatedCost?: number | null;
+  reason?: string | null;
+  notes?: string | null;
+  shift?: string | null;
+}
+
+export async function editWasteLog(
+  wasteLogId: string,
+  userId: number,
+  data: WasteLogUpdate,
+  orgCtx?: OrgContext,
+): Promise<WasteLogRow | null> {
+  // Build partial update object — only include provided fields
+  const updates: Record<string, unknown> = {};
+  if (data.ingredientName !== undefined) updates.ingredientName = data.ingredientName.trim();
+  if (data.quantity !== undefined) updates.quantity = String(data.quantity);
+  if (data.unit !== undefined) updates.unit = data.unit.trim();
+  if (data.estimatedCost !== undefined)
+    updates.estimatedCost = data.estimatedCost != null ? String(data.estimatedCost) : null;
+  if (data.reason !== undefined) updates.reason = data.reason;
+  if (data.notes !== undefined) updates.notes = data.notes;
+  if (data.shift !== undefined) updates.shift = data.shift;
+
+  // Determine ownership filter: org admin can edit any org member's entries
+  const ownerFilter = orgCtx?.isOrgAdmin && orgCtx.orgIds.length > 0
+    ? and(eq(wasteLog.wasteLogId, wasteLogId), inArray(wasteLog.userId, orgCtx.orgMemberUserIds))
+    : and(eq(wasteLog.wasteLogId, wasteLogId), eq(wasteLog.userId, userId));
+
+  if (Object.keys(updates).length === 0) {
+    // Nothing to update — just return the existing row
+    const [existing] = await db
+      .select()
+      .from(wasteLog)
+      .where(ownerFilter);
+    return existing ? toRow(existing) : null;
+  }
+
+  updates.updatedDttm = new Date();
+
+  const result = await db
+    .update(wasteLog)
+    .set(updates)
+    .where(ownerFilter)
+    .returning();
+
+  if (result.length === 0) {
+    return null;
+  }
+
+  logger.info({ wasteLogId, userId, orgAdmin: orgCtx?.isOrgAdmin }, "Waste entry updated");
+  return toRow(result[0]);
 }
 
 // ---------------------------------------------------------------------------
@@ -396,6 +547,7 @@ export async function generateReuseSuggestions(
 function toRow(r: typeof wasteLog.$inferSelect): WasteLogRow {
   return {
     wasteLogId: r.wasteLogId,
+    userId: r.userId,
     ingredientName: r.ingredientName,
     quantity: Number(r.quantity),
     unit: r.unit,
