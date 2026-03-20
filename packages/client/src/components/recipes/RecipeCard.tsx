@@ -7,7 +7,7 @@
  */
 
 import { useState, useCallback } from "react";
-import { Printer, Clock, Users, ChefHat, AlertTriangle, Thermometer, GlassWater, Flame, Wine, Hash, Sparkles, Share2, Copy, Check, Pencil, History } from "lucide-react";
+import { Printer, Clock, Users, ChefHat, AlertTriangle, Thermometer, GlassWater, Flame, Wine, Hash, Sparkles, Share2, Copy, Check, Pencil, History, ImagePlus, Loader2 } from "lucide-react";
 import type { RecipeDomain } from "./RecipeForm.js";
 import { RecipeShareBar } from "./RecipeShareBar.js";
 import RecipeRatings from "./RecipeRatings.js";
@@ -118,6 +118,8 @@ interface RecipeCardProps {
   isOwner?: boolean;
   /** Callback when recipe is updated via editor or revert */
   onRecipeUpdate?: (updatedData: RecipeData) => void;
+  /** Callback when hero image is regenerated */
+  onImageUpdate?: (imageUrl: string) => void;
 }
 
 const DIFFICULTY_COLORS: Record<string, string> = {
@@ -127,11 +129,12 @@ const DIFFICULTY_COLORS: Record<string, string> = {
   expert: "bg-[#1E1E1E] text-[#999999]",
 };
 
-export function RecipeCard({ recipe, domain, recipeId, slug, imageUrl, onTogglePublic, isPublic, creator, isOwner, onRecipeUpdate }: RecipeCardProps) {
+export function RecipeCard({ recipe, domain, recipeId, slug, imageUrl, onTogglePublic, isPublic, creator, isOwner, onRecipeUpdate, onImageUpdate }: RecipeCardProps) {
   const [checkedIngredients, setCheckedIngredients] = useState<Set<number>>(new Set());
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
   const [copied, setCopied] = useState(false);
   const [editMode, setEditMode] = useState(false);
+  const [regeneratingImage, setRegeneratingImage] = useState(false);
   const [showRefine, setShowRefine] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
 
@@ -202,6 +205,7 @@ export function RecipeCard({ recipe, domain, recipeId, slug, imageUrl, onToggleP
           onSave={handleSave}
           onCancel={() => setEditMode(false)}
           onOpenRefine={() => setShowRefine(true)}
+          onImageUpdate={onImageUpdate}
         />
         {showRefine && (
           <RecipeRefinePanel
@@ -342,6 +346,25 @@ export function RecipeCard({ recipe, domain, recipeId, slug, imageUrl, onToggleP
             >
               <Sparkles className="size-4" />
               AI Refine
+            </button>
+            <button
+              onClick={async () => {
+                setRegeneratingImage(true);
+                try {
+                  const res = await fetch(`/api/recipes/${recipeId}/regenerate-image`, { method: "POST", credentials: "include" });
+                  if (res.ok) {
+                    const data = await res.json();
+                    if (data.imageUrl) onImageUpdate?.(data.imageUrl);
+                  }
+                } catch { /* silent */ } finally {
+                  setRegeneratingImage(false);
+                }
+              }}
+              disabled={regeneratingImage}
+              className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-[#999999] hover:text-white border border-[#2A2A2A] hover:border-[#444444] rounded-xl transition-colors disabled:opacity-50"
+            >
+              {regeneratingImage ? <Loader2 className="size-4 animate-spin" /> : <ImagePlus className="size-4" />}
+              {regeneratingImage ? "Generating..." : "New Image"}
             </button>
           </div>
         )}

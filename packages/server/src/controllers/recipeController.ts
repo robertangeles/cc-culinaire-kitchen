@@ -709,6 +709,7 @@ export async function handleRegenerateImage(
         userId: recipeTable.userId,
         title: recipeTable.title,
         imagePrompt: recipeTable.imagePrompt,
+        recipeData: recipeTable.recipeData,
       })
       .from(recipeTable)
       .where(eq(recipeTable.recipeId, recipeId))
@@ -722,12 +723,22 @@ export async function handleRegenerateImage(
       res.status(403).json({ error: "Only the recipe owner can regenerate the image" });
       return;
     }
-    if (!recipe.imagePrompt) {
+
+    // Prefer imagePrompt from recipeData JSONB (updated by AI Refine), fallback to table column
+    const recipeDataObj = recipe.recipeData as Record<string, unknown> | null;
+    const prompt = (recipeDataObj?.imagePrompt as string) || recipe.imagePrompt;
+
+    if (!prompt) {
       res.status(400).json({ error: "No image prompt available for this recipe" });
       return;
     }
 
-    const generated = await generateImage(recipe.imagePrompt);
+    // Also update the table column so future regenerations use the latest prompt
+    if (recipeDataObj?.imagePrompt && recipeDataObj.imagePrompt !== recipe.imagePrompt) {
+      await db.update(recipeTable).set({ imagePrompt: prompt }).where(eq(recipeTable.recipeId, recipeId));
+    }
+
+    const generated = await generateImage(prompt);
     if (!generated?.url) {
       res.status(500).json({ error: "Image generation failed — try again" });
       return;

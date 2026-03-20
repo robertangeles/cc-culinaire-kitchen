@@ -94,6 +94,7 @@ async function seed() {
     { name: "recipePrompt", key: "recipe-prompt", file: "recipePromptV2.md" },
     { name: "patisseriePrompt", key: "patisserie-prompt", file: "patisseriePrompt.md" },
     { name: "spiritsPrompt", key: "spirits-prompt", file: "spiritsPrompt.md" },
+    { name: "recipeRefinementPrompt", key: "recipe-refinement-prompt", file: "recipeRefinementPrompt.md" },
   ];
 
   for (const rp of recipePrompts) {

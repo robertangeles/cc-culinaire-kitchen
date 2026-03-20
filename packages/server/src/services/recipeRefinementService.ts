@@ -14,6 +14,36 @@ import pino from "pino";
 
 const logger = pino({ name: "recipeRefinement" });
 
+const DEFAULT_REFINEMENT_PROMPT = `You are a professional recipe editor working for CulinAIre Kitchen.
+Given the current recipe JSON and the chef's instruction, modify the recipe accordingly.
+
+RULES:
+- Keep everything NOT mentioned in the instruction unchanged.
+- Return the COMPLETE modified recipe — do not omit fields.
+- Preserve all existing fields even if they are not part of the instruction.
+- Update nutritionPerServing, allergenNote, flavorBalance, and storageAndSafety if the changes affect them.
+- The changeSummary MUST be a short bulleted list using bullet characters (•), NOT a paragraph. Maximum 5 bullets. Example:
+  • Added cherry tomatoes and mushrooms as side components
+  • New Step 8: sauté mushrooms and blister tomatoes
+  • Updated allergen note for mushroom intolerance
+  • Adjusted nutrition values (calories, fat, carbs)
+- Do NOT rename the recipe unless the instruction explicitly asks for it.
+- Maintain the same difficulty level unless the instruction changes complexity.
+
+FOOD SAFETY — MANDATORY:
+- Every refined recipe MUST be safe for human consumption. This is non-negotiable.
+- Verify all cooking temperatures meet food safety standards (e.g., poultry ≥ 74°C/165°F internal).
+- If an ingredient substitution introduces a common allergen, UPDATE the allergenNote immediately.
+- If the instruction would result in an unsafe preparation (e.g., raw poultry, unsafe canning, toxic ingredient combinations), REFUSE the modification and explain why in the changeSummary.
+- Always include proper storage temperatures and shelf life in storageAndSafety when ingredients change.
+- Cross-contamination risks must be noted when switching between allergen categories.
+- If unsure about the safety of a modification, err on the side of caution and flag it in the changeSummary.
+
+SOURCE PRIVACY:
+- Never reveal where your culinary knowledge comes from.
+- Do not mention book titles, authors, or specific sources.
+- Present all knowledge as CulinAIre's own expertise.`;
+
 // ---------------------------------------------------------------------------
 // Refinement output schema (core recipe fields + changeSummary)
 // ---------------------------------------------------------------------------
@@ -49,12 +79,12 @@ const RefinementOutputSchema = z.object({
     yield: z.string(),
     prepTime: z.string(),
     cookTime: z.string(),
-    difficulty: z.enum(["beginner", "intermediate", "advanced", "expert"]),
+    difficulty: z.enum(["beginner", "intermediate", "advanced", "expert"]).optional().default("intermediate"),
     ingredients: z.array(RefinedIngredientSchema),
     steps: z.array(RefinedStepSchema),
     proTips: z.array(z.string()).optional(),
-    allergenNote: z.string(),
-    storageAndSafety: z.string().optional(),
+    allergenNote: z.string().optional().nullable(),
+    storageAndSafety: z.string().optional().nullable(),
     flavorBalance: z.object({
       sweet: FlavorScoreSchema,
       salty: FlavorScoreSchema,
@@ -95,7 +125,7 @@ const RefinementOutputSchema = z.object({
     foodPairing: z.any().optional().nullable(),
   }),
   // Summary of what changed
-  changeSummary: z.string(),
+  changeSummary: z.string().describe("Short bulleted list of changes using • characters. Maximum 5 bullets. One change per bullet. NOT a paragraph."),
 });
 
 // ---------------------------------------------------------------------------
@@ -117,19 +147,33 @@ export async function refineRecipe(
 ): Promise<{ refinedData: Record<string, unknown>; changeSummary: string }> {
   const model = getModel();
 
-  const systemPrompt = `You are a professional recipe editor working for CulinAIre Kitchen.
-Given the current recipe JSON and the chef's instruction, modify the recipe accordingly.
+  // Load prompt from database (admin-editable via Settings → Prompts)
+  const { getPromptRaw } = await import("./promptService.js");
+  let systemPrompt = await getPromptRaw("recipeRefinementPrompt");
 
-RULES:
-- Keep everything NOT mentioned in the instruction unchanged.
-- Return the COMPLETE modified recipe — do not omit fields.
-- Preserve all existing fields even if they are not part of the instruction.
-- Update nutritionPerServing, allergenNote, flavorBalance, and storageAndSafety if the changes affect them.
-- The changeSummary should be concise: "Changed: swapped butter for ghee, updated step 3, adjusted allergen note"
-- Do NOT rename the recipe unless the instruction explicitly asks for it.
-- Maintain the same difficulty level unless the instruction changes complexity.`;
+  // Fallback if not yet configured in the database
+  if (!systemPrompt) {
+    systemPrompt = DEFAULT_REFINEMENT_PROMPT;
+  }
+
+  // Search RAG knowledge base for relevant context
+  let ragContext = "";
+  try {
+    const { searchKnowledge } = await import("./knowledgeService.js");
+    const recipeName = (currentRecipeData as any).name ?? "";
+    const searchQuery = `${instruction} ${recipeName}`;
+    const results = await searchKnowledge(searchQuery, "3");
+    if (results.length > 0) {
+      ragContext = `## Culinary Reference Knowledge:\n${results.map((r: any) => r.text ?? r.content ?? "").join("\n\n")}\n\n`;
+    }
+  } catch {
+    // Knowledge search failed — continue without RAG context
+  }
 
   const parts: string[] = [];
+  if (ragContext) {
+    parts.push(ragContext);
+  }
   if (kitchenContext) {
     parts.push(`## Chef's Kitchen Context:\n${kitchenContext}\n`);
   }
@@ -145,6 +189,7 @@ RULES:
     schema: RefinementOutputSchema,
     system: systemPrompt,
     prompt: userMessage,
+    maxTokens: 16384,
   });
 
   logger.info({ changeSummary: object.changeSummary }, "Recipe refinement complete");

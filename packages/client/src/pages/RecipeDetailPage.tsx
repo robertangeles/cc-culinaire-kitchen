@@ -243,6 +243,9 @@ export function RecipeDetailPage() {
           onRecipeUpdate={(updatedData) => {
             setRecipe((prev) => prev ? { ...prev, recipeData: updatedData } : prev);
           }}
+          onImageUpdate={(url) => {
+            setRecipe((prev) => prev ? { ...prev, imageUrl: url } : prev);
+          }}
           onTogglePublic={isOwner ? async (pub) => {
             try {
               await fetch(`/api/recipes/${recipe.recipeId}`, {

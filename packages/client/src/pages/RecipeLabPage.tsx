@@ -243,6 +243,9 @@ export function RecipeLabPage({ domain }: RecipeLabPageProps) {
             slug={generated.slug ?? undefined}
             imageUrl={generated.imageUrl}
             isPublic={isPublic}
+            isOwner={!!user && !isGuest}
+            onRecipeUpdate={(updatedData) => setGenerated(prev => prev ? { ...prev, recipe: updatedData } : prev)}
+            onImageUpdate={(url) => setGenerated(prev => prev ? { ...prev, imageUrl: url } : prev)}
             creator={user ? {
               userName: user.userName,
               userPhotoPath: user.userPhotoPath,

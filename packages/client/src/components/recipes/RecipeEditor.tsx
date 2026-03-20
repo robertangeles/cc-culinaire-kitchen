@@ -26,6 +26,7 @@ interface RecipeEditorProps {
   onSave: (updatedData: RecipeData, changeDescription: string) => void;
   onCancel: () => void;
   onOpenRefine: () => void;
+  onImageUpdate?: (imageUrl: string) => void;
 }
 
 const INPUT_CLS =
@@ -45,6 +46,7 @@ export function RecipeEditor({
   onSave,
   onCancel,
   onOpenRefine,
+  onImageUpdate,
 }: RecipeEditorProps) {
   const [data, setData] = useState<RecipeData>(() => ({
     ...recipeData,
@@ -452,6 +454,7 @@ export function RecipeEditor({
                 });
                 if (res.ok) {
                   const data = await res.json();
+                  if (data.imageUrl) onImageUpdate?.(data.imageUrl);
                   setImageRegenerated(true);
                   setTimeout(() => setImageRegenerated(false), 3000);
                 }

@@ -93,7 +93,7 @@ export const RecipeOutputSchema = z.object({
   steps: z.array(StepSchema),
   proTips: z.array(z.string()).optional(),
   allergenNote: z.string(),
-  imagePrompt: z.string(),
+  imagePrompt: z.string().describe("Editorial food photography prompt. ALWAYS depict a SINGLE beautifully plated serving — one portion only, never the full yield. Include surface, lighting, garnish details. Aspect ratio 1:1."),
   confidenceNote: z.string(),
 
   // Domain-specific (optional)
