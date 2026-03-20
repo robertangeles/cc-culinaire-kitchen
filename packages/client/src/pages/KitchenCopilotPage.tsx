@@ -126,8 +126,16 @@ export function KitchenCopilotPage() {
         throw new Error((json as { error?: string }).error ?? `Failed (${res.status})`);
       }
 
-      const data: PrepSessionWithTasks = await res.json();
-      setSessionData(data);
+      const data = await res.json();
+
+      // Backend may return null or empty object when no session exists
+      if (!data || !data.session) {
+        setSessionData(null);
+        setCopilotState("no-session");
+        return;
+      }
+
+      setSessionData(data as PrepSessionWithTasks);
 
       // Decide state: if session has tasks -> prepping, else -> selecting
       if (data.tasks && data.tasks.length > 0) {
