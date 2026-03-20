@@ -269,18 +269,258 @@ async function seed() {
   const defaultGuides = [
     {
       guideKey: "waste_intelligence",
-      title: "Getting Started with Waste Intelligence",
-      content: `# Getting Started with Waste Intelligence\n\n## Step 1: Log Your First Waste\nGo to the **Log Waste** tab and record what your kitchen threw away today.\n- Enter the ingredient name\n- Add the quantity and unit\n- Select a reason (overproduction, spoilage, trim, etc.)\n- Optionally add the estimated cost\n\n## Step 2: Review Your Dashboard\nAfter a few days of logging, the **Dashboard** tab shows:\n- Your total waste in weight and cost\n- Top 5 most wasted ingredients\n- Trends over time\n- Monthly cost projection\n\n## Step 3: Get AI Reuse Ideas\nThe **Reuse Ideas** tab suggests creative ways to use ingredients you're wasting.\nClick "Generate Suggestions" to get AI-powered reuse ideas.\n\n## Tips\n- Log waste at the end of every shift\n- Be honest — visibility is the first step to reduction\n- Industry average waste is 4-10% of food purchases\n- Use the "Quick Log" buttons for your most common items`,
+      title: "Waste Intelligence — Your Guide",
+      content: `# Waste Intelligence
+
+**Track it. See it. Reduce it.**
+
+Waste Intelligence helps you understand exactly where your kitchen's money goes — and how to keep more of it. The average restaurant wastes 4–10% of purchased food. Most kitchens don't track it at all. You're about to change that.
+
+---
+
+## Your first 5 minutes
+
+### 1. Open the Log Waste tab
+This is where everything starts. Tap the ingredient name, enter how much was thrown away, and hit **Log Waste**. That's it — three taps.
+
+**Pro tip:** After your first few entries, you'll see **Quick Log** buttons appear for your most common items. One tap to log them next time.
+
+### 2. Add a reason (optional but powerful)
+Was it overproduction? Spoilage? Trim? Plate waste? Selecting a reason helps the dashboard show you *why* your kitchen wastes — not just *what*.
+
+### 3. Add a cost estimate (optional)
+If you know what the ingredient costs per kg, add it. The dashboard will calculate your waste in dollars, not just kilograms. This is what gets attention in budget meetings.
+
+---
+
+## After a few days of logging
+
+### 4. Check your Dashboard
+Switch to the **Dashboard** tab. You'll see:
+
+- **Total waste** this period — in weight and cost
+- **Top 5 ingredients** you waste most (by cost and by weight)
+- **Trend line** — are you getting better or worse?
+- **Monthly projection** — "At this rate, your kitchen wastes ~$X per month"
+
+The industry benchmark is 4–10% of food purchases. Where do you sit?
+
+### 5. Explore Reuse Ideas
+The **Reuse Ideas** tab uses AI to suggest practical ways to repurpose what you're wasting:
+
+- Mushroom trim → rich stock for risotto base
+- Overripe tomatoes → roasted tomato sauce
+- Herb stems → compound butter or infused oil
+
+Click **Generate Recipe** on any suggestion to create a full recipe in the Recipe Lab.
+
+---
+
+## Making it a habit
+
+The single most important thing: **log waste at the end of every shift.** The act of logging alone reduces waste by 10–15%. Your team becomes conscious of what they're throwing away.
+
+### For teams
+If you're part of an organisation, switch to **Team Data** to see waste across your whole kitchen — not just your own entries. Organisation admins can view and manage all team members' logs.
+
+### Weekly digest
+Every Sunday evening, you'll receive an email summary of your week's waste — total cost, top items, and trend compared to last week. No action needed — it arrives automatically.
+
+---
+
+## Quick reference
+
+| Tab | What it does |
+|-----|-------------|
+| **Log Waste** | Record what was thrown away |
+| **Dashboard** | See trends, costs, and top waste items |
+| **Reuse Ideas** | AI suggestions to repurpose waste ingredients |`,
     },
     {
       guideKey: "kitchen_copilot",
-      title: "Getting Started with Kitchen Copilot",
-      content: `# Getting Started with Kitchen Copilot\n\n## Step 1: Enter Expected Covers\nTell the system how many guests you expect tonight.\nThis drives the quantity calculations for your prep list.\n\n## Step 2: Review Your Prep Plan\nThe system generates a prioritised task list based on your recipes:\n- **Start First** — high-impact ingredients used across many dishes\n- **Next Up** — medium priority prep tasks\n- **Can Wait** — lower priority items that can be prepped later\n\n## Step 3: Track Progress\nCheck off tasks as your team completes them.\nAssign tasks to team members by clicking "Assign".\n\n## Step 4: Check Cross-Usage\nThe **Cross-Usage** tab shows which ingredients appear in the most dishes.\nPrep these first — if they run out, multiple dishes are affected.\n\n## Step 5: End Your Session\nAt the end of service, enter actual covers served.\nThis data helps improve future prep planning.\n\n## Tips\n- Start your prep session first thing every morning\n- Use the High-Impact tab to identify your most complex dishes\n- Check the History tab to spot patterns over time`,
+      title: "Kitchen Copilot — Your Guide",
+      content: `# Kitchen Copilot
+
+**Your morning prep plan. Prioritised. Sequenced. Tracked.**
+
+Kitchen Copilot takes your recipe library and turns it into a daily prep plan — prioritised by what matters most. No more guessing what to prep first. No more running out mid-service.
+
+---
+
+## Starting your day
+
+### 1. Enter expected covers
+When you arrive in the morning, tell the Copilot how many guests you're expecting tonight. This number drives the quantity calculations for everything.
+
+Don't overthink it — your best estimate is fine. You can always adjust.
+
+### 2. Review your prep plan
+The Copilot generates a prioritised task list in three tiers:
+
+- **Start With These** — High-impact ingredients that appear across many dishes. If these run out, multiple dishes go down.
+- **Next Up** — Important but less critical. Prep these once the high-priority work is done.
+- **Can Wait** — Lower priority items. Prep these if time allows, or defer to tomorrow.
+
+Each task shows the ingredient, quantity needed, and estimated prep time.
+
+### 3. Assign and track
+Click **Assign** on any task to assign it to a team member by name. As your team works through the list, check off completed tasks. The progress bar updates in real time.
+
+---
+
+## Understanding your kitchen better
+
+### 4. Check Cross-Usage
+The **Cross-Usage** tab reveals which ingredients appear in the most dishes on your menu. This is gold:
+
+- **Shallots** appear in 7 dishes? Prep all your shallot work in one batch.
+- **Chicken stock** feeds 5 dishes? Make it first — everything else depends on it.
+
+Ingredients shared across 3+ dishes are highlighted. These are your highest-leverage prep tasks.
+
+### 5. Identify high-impact dishes
+The **High-Impact** tab ranks your dishes by prep complexity — ingredient count, step count, and technique difficulty.
+
+Dishes with a Menu Intelligence classification badge (Star, Plowhorse, Puzzle, Dog) show their profitability ranking too. Your Stars deserve the most prep attention.
+
+### 6. End your session
+At the end of service, click **End Session** and enter actual covers served. Over time, this data helps you spot patterns — do you consistently over-prep on Tuesdays? Under-prep on Fridays?
+
+---
+
+## For teams
+
+Switch to **Team Data** to see prep activity across your whole kitchen. Organisation admins can view all team members' sessions and task completion rates.
+
+---
+
+## Quick reference
+
+| Tab | What it does |
+|-----|-------------|
+| **Today's Prep** | Prioritised task list with progress tracking |
+| **Cross-Usage** | Ingredients ranked by how many dishes use them |
+| **High-Impact** | Your most complex dishes ranked |
+| **History** | Past prep sessions with completion stats |
+
+---
+
+## Tips from the pass
+
+- Start your session **before** you open the cool room. Let the plan guide your morning, not your habits.
+- Prep shared ingredients **first, together** — don't let each station prep independently.
+- If you skip a task, mark it as **Skipped** — this data matters for future planning.
+- Check the **waste alert banner** at the top of your prep plan. It flags ingredients you've been wasting recently.`,
     },
     {
       guideKey: "menu_intelligence",
-      title: "Getting Started with Menu Intelligence",
-      content: `# Getting Started with Menu Intelligence\n\n## Step 1: Add Your Menu Items\nGo to **Menu Items** and click "Add Menu Item".\nEnter each dish with its selling price and all ingredients with costs.\n\n## Step 2: Enter Ingredient Costs\nFor each menu item, add ingredients with:\n- Quantity and unit\n- Unit cost (what you pay per kg/L/each)\n- Yield percentage (to account for trim/waste)\n\nThe system automatically calculates food cost and contribution margin.\n\n## Step 3: Add Sales Data\nEnter units sold per item for the analysis period.\nYou can enter this manually or upload from your POS system.\n\n## Step 4: View the Engineering Matrix\nThe **Matrix** tab plots every dish by profitability vs popularity:\n- **Stars** — High profit, high sales. Protect these.\n- **Plowhorses** — Low profit, high sales. Optimise costs.\n- **Puzzles** — High profit, low sales. Promote them.\n- **Dogs** — Low profit, low sales. Replace them.\n\n## Step 5: Take Action\n- For **Dogs**: Click "Generate Replacement" to create a better recipe\n- For **Plowhorses**: Review ingredients to reduce food cost\n- For **Puzzles**: Improve descriptions and staff recommendations\n- Set food cost targets per category in **Category Settings**\n\n## Tips\n- Update sales data weekly for accurate classifications\n- A 1% food cost reduction across the menu can save thousands per year\n- Watch for items flagged with waste impact — they cost you twice`,
+      title: "Menu Intelligence — Your Guide",
+      content: `# Menu Intelligence
+
+**Know your Stars. Fix your Dogs. Protect your margin.**
+
+Menu Intelligence applies the industry-standard menu engineering framework to your menu. Every dish gets classified by two dimensions: how profitable it is and how popular it is. The result tells you exactly where to focus.
+
+---
+
+## Building your menu
+
+### 1. Add your menu items
+Go to the **Menu Items** tab and click **Add Menu Item**. For each dish, enter:
+
+- **Name** and **category** (starters, mains, desserts, etc.)
+- **Selling price** — what the guest pays
+
+### 2. Add ingredient costs
+This is where the magic happens. For each menu item, add every ingredient with:
+
+- **Quantity** and **unit** (200g, 500ml, 2 each)
+- **Unit cost** — what you pay your supplier per kg, litre, or unit
+- **Yield %** — accounts for trim and waste (e.g., whole fish at 45% yield)
+
+The system calculates your **food cost**, **food cost percentage**, and **contribution margin** automatically. No spreadsheets needed.
+
+### 3. Enter sales data
+Add **units sold** per item for your analysis period. This is your popularity data. You can enter it:
+
+- **Manually** — from your POS reports or till readings
+- **Via CSV upload** — export from your POS system
+
+---
+
+## Reading the matrix
+
+### 4. View the Engineering Matrix
+The **Matrix** tab is the heart of Menu Intelligence. Every dish is plotted on a scatter chart:
+
+- **X axis** — Popularity (menu mix percentage)
+- **Y axis** — Profitability (contribution margin)
+
+This creates four quadrants:
+
+**Stars** ⭐ — *Top right.* High profit, high popularity. These are your best dishes. Protect them. Feature them. Never let them run out during service.
+
+**Plowhorses** 🐴 — *Bottom right.* Guests love them but they don't make you money. The fix: swap an expensive ingredient for a cheaper one, reduce portion slightly, or raise the price by $2.
+
+**Puzzles** 🧩 — *Top left.* Great margins but nobody orders them. The fix: rename the dish, rewrite the description, move it to a more visible menu position, or have staff recommend it.
+
+**Dogs** 🐕 — *Bottom left.* Low profit, low popularity. Candidates for removal. Click **Generate Replacement** to create a recipe targeting the Star quadrant.
+
+### 5. Review your dashboard
+The **Dashboard** tab gives you the big picture at a glance:
+
+- Total items analysed
+- Average food cost % across your menu
+- Count per quadrant
+- Highest and lowest margin items
+- Items flagged with waste impact
+
+---
+
+## Taking action
+
+### 6. Set category targets
+In **Category Settings**, set your target food cost percentage per category. Items exceeding the target are flagged in red on the menu list.
+
+Common benchmarks:
+- **Starters:** 25–30%
+- **Mains:** 28–35%
+- **Desserts:** 20–28%
+- **Beverages:** 15–22%
+
+### 7. Replace your Dogs
+When you identify a Dog, click **Generate Replacement**. CulinAIre creates a new recipe that:
+
+- Targets your category's food cost percentage
+- Matches your cuisine identity and brand voice
+- Uses ingredients you already stock
+- Aims for Star classification from day one
+
+---
+
+## The bottom line
+
+A 1% reduction in food cost across your entire menu can save thousands per year. Menu Intelligence shows you exactly where that 1% is hiding.
+
+---
+
+## Quick reference
+
+| Tab | What it does |
+|-----|-------------|
+| **Dashboard** | Overview of menu performance |
+| **Menu Items** | Add, edit, and cost your dishes |
+| **Matrix** | Visual engineering analysis |
+| **Category Settings** | Set food cost targets per category |
+
+---
+
+## Tips from the pass
+
+- Update sales data **weekly** for the most accurate classifications.
+- Watch for dishes flagged with both **Dog** and **high waste** — they cost you twice.
+- Don't remove a Puzzle without trying to promote it first. Rename it, reposition it on the menu, or train your team to recommend it.
+- Your Stars are non-negotiable. If a Star ingredient's price spikes, absorb the cost — don't remove the dish.`,
     },
   ];
 

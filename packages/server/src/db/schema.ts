@@ -850,6 +850,23 @@ export const guide = pgTable("guide", {
   updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
 });
 
+/**
+ * The `prep_menu_selection` table stores the chef's selected dishes
+ * for a prep session. This is the menu-driven approach: instead of
+ * auto-generating tasks from all recipes, the chef picks which dishes
+ * they're prepping for today.
+ */
+export const prepMenuSelection = pgTable("prep_menu_selection", {
+  selectionId: uuid("selection_id").defaultRandom().primaryKey(),
+  prepSessionId: uuid("prep_session_id").notNull().references(() => prepSession.prepSessionId),
+  recipeId: uuid("recipe_id").references(() => recipe.recipeId),
+  menuItemId: uuid("menu_item_id").references(() => menuItem.menuItemId),
+  dishName: varchar("dish_name", { length: 200 }).notNull(),
+  expectedPortions: integer("expected_portions").notNull(),
+  category: varchar("category", { length: 50 }),
+  createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
+});
+
 export const ingredientCrossUsage = pgTable("ingredient_cross_usage", {
   crossUsageId: uuid("cross_usage_id").defaultRandom().primaryKey(),
   userId: integer("user_id").notNull().references(() => user.userId),

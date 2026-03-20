@@ -16,6 +16,11 @@ import {
   getHighImpactDishes,
   getSessionHistory,
   endSession,
+  getMenuForSelection,
+  saveMenuSelections,
+  generateTasksFromSelections,
+  getSelections,
+  getPreviousSelections,
 } from "../services/prepService.js";
 
 // ---------------------------------------------------------------------------
@@ -43,6 +48,18 @@ const historyQuerySchema = z.object({
 
 const teamViewQuerySchema = z.object({
   teamView: z.enum(["true", "false"]).optional(),
+});
+
+const selectionItemSchema = z.object({
+  recipeId: z.string().uuid().optional(),
+  menuItemId: z.string().uuid().optional(),
+  dishName: z.string().min(1, "dishName is required").max(200),
+  expectedPortions: z.number().int().min(1, "expectedPortions must be at least 1"),
+  category: z.string().max(50).optional(),
+});
+
+const saveSelectionsSchema = z.object({
+  selections: z.array(selectionItemSchema).min(1, "At least one selection is required"),
 });
 
 // ---------------------------------------------------------------------------
@@ -215,4 +232,117 @@ export async function handleEndSession(req: Request, res: Response) {
     return;
   }
   res.json(result);
+}
+
+// ---------------------------------------------------------------------------
+// New menu-driven handlers
+// ---------------------------------------------------------------------------
+
+/** GET /api/prep/menu — dishes available for selection */
+export async function handleGetMenuForSelection(req: Request, res: Response) {
+  const userId = (req as any).user?.sub;
+  if (!userId) {
+    res.status(401).json({ error: "Sign in to view the menu" });
+    return;
+  }
+
+  const parsed = teamViewQuerySchema.safeParse(req.query);
+  const teamView = parsed.success && parsed.data.teamView === "true";
+
+  const data = await getMenuForSelection(userId, teamView);
+  res.json(data);
+}
+
+/** POST /api/prep/sessions/:id/selections — save dish selections */
+export async function handleSaveSelections(req: Request, res: Response) {
+  const userId = (req as any).user?.sub;
+  if (!userId) {
+    res.status(401).json({ error: "Sign in to save selections" });
+    return;
+  }
+
+  const sessionId = req.params.id as string;
+  if (!sessionId) {
+    res.status(400).json({ error: "Invalid session ID" });
+    return;
+  }
+
+  const parsed = saveSelectionsSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.issues[0].message });
+    return;
+  }
+
+  try {
+    const selections = await saveMenuSelections(sessionId, userId, parsed.data.selections);
+    res.status(201).json(selections);
+  } catch (err: any) {
+    if (err.message === "Prep session not found or not yours") {
+      res.status(404).json({ error: err.message });
+      return;
+    }
+    throw err;
+  }
+}
+
+/** POST /api/prep/sessions/:id/generate — generate tasks from selections */
+export async function handleGenerateFromSelections(req: Request, res: Response) {
+  const userId = (req as any).user?.sub;
+  if (!userId) {
+    res.status(401).json({ error: "Sign in to generate prep tasks" });
+    return;
+  }
+
+  const sessionId = req.params.id as string;
+  if (!sessionId) {
+    res.status(400).json({ error: "Invalid session ID" });
+    return;
+  }
+
+  try {
+    const tasks = await generateTasksFromSelections(sessionId, userId);
+    res.status(201).json(tasks);
+  } catch (err: any) {
+    if (err.message === "Prep session not found or not yours") {
+      res.status(404).json({ error: err.message });
+      return;
+    }
+    throw err;
+  }
+}
+
+/** GET /api/prep/sessions/:id/selections — get selections for a session */
+export async function handleGetSelections(req: Request, res: Response) {
+  const userId = (req as any).user?.sub;
+  if (!userId) {
+    res.status(401).json({ error: "Sign in to view selections" });
+    return;
+  }
+
+  const sessionId = req.params.id as string;
+  if (!sessionId) {
+    res.status(400).json({ error: "Invalid session ID" });
+    return;
+  }
+
+  const parsed = teamViewQuerySchema.safeParse(req.query);
+  const teamView = parsed.success && parsed.data.teamView === "true";
+
+  const selections = await getSelections(sessionId, userId, teamView);
+  res.json(selections);
+}
+
+/** GET /api/prep/previous-selections — get most recent session's selections */
+export async function handleGetPreviousSelections(req: Request, res: Response) {
+  const userId = (req as any).user?.sub;
+  if (!userId) {
+    res.status(401).json({ error: "Sign in to view previous selections" });
+    return;
+  }
+
+  const parsed = teamViewQuerySchema.safeParse(req.query);
+  const teamView = parsed.success && parsed.data.teamView === "true";
+
+  const selections = await getPreviousSelections(userId, teamView);
+  res.json(selections);
 }
