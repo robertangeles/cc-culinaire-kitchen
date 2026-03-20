@@ -3,13 +3,15 @@
  *
  * Personal recipe shelf — shows all recipes saved by the authenticated user.
  * Recipes are private by default; users can toggle visibility to share
- * on The Kitchen Shelf (public gallery).
+ * on The Kitchen Shelf (public gallery). Uses "Load More" pagination
+ * with page size driven by the `recipes_per_page` site setting.
  */
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { BookMarked, Loader2, Search } from "lucide-react";
 import { useMyRecipes } from "../hooks/useMyRecipes.js";
 import { RecipeGalleryCard } from "../components/recipes/RecipeGalleryCard.js";
+import { useSettings } from "../context/SettingsContext.js";
 import type { GalleryRecipe } from "../hooks/useRecipeGallery.js";
 
 const DOMAIN_TABS = [
@@ -20,17 +22,40 @@ const DOMAIN_TABS = [
 ];
 
 export function MyShelfPage() {
+  const { settings } = useSettings();
+  const pageSize = Number(settings.recipes_per_page) || 20;
+
   const [domainFilter, setDomainFilter] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const { recipes, total, isLoading, toggleVisibility, archiveRecipe, refresh } = useMyRecipes({
+  // Debounce search input
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+    }, 400);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [searchQuery]);
+
+  const {
+    recipes,
+    total,
+    isLoading,
+    isLoadingMore,
+    loadMore,
+    toggleVisibility,
+    archiveRecipe,
+  } = useMyRecipes({
     domain: domainFilter || undefined,
+    limit: pageSize,
   });
 
-  // Client-side search filter
-  const filteredRecipes = searchQuery.trim()
+  // Client-side search filter (applied on top of paginated results)
+  const filteredRecipes = debouncedSearch.trim()
     ? recipes.filter((r) => {
-        const q = searchQuery.toLowerCase();
+        const q = debouncedSearch.toLowerCase();
         return (
           r.title.toLowerCase().includes(q) ||
           (r.description?.toLowerCase().includes(q))
@@ -71,6 +96,8 @@ export function MyShelfPage() {
       // silent
     }
   }
+
+  const hasMore = recipes.length < total;
 
   return (
     <div className="flex-1 overflow-y-auto bg-[#0A0A0A]">
@@ -122,7 +149,7 @@ export function MyShelfPage() {
         <div className="mb-4">
           <span className="text-xs text-[#666666]">
             {filteredRecipes.length} {filteredRecipes.length === 1 ? "recipe" : "recipes"}
-            {searchQuery && ` matching "${searchQuery}"`}
+            {debouncedSearch && ` matching "${debouncedSearch}"`}
           </span>
         </div>
 
@@ -135,10 +162,10 @@ export function MyShelfPage() {
           <div className="text-center py-20">
             <BookMarked className="size-12 text-[#666666] mx-auto mb-4" />
             <h3 className="text-lg font-medium text-[#999999] mb-2">
-              {searchQuery ? "No matching recipes" : "No recipes yet"}
+              {debouncedSearch ? "No matching recipes" : "No recipes yet"}
             </h3>
             <p className="text-sm text-[#666666] max-w-sm mx-auto">
-              {searchQuery
+              {debouncedSearch
                 ? "Try a different search term."
                 : "Head to a Recipe Lab to create your first recipe. Every recipe you generate is automatically saved here."}
             </p>
@@ -146,15 +173,43 @@ export function MyShelfPage() {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {filteredRecipes.map((recipe) => (
-              <RecipeGalleryCard
-                key={recipe.recipeId}
-                recipe={toGalleryRecipe(recipe)}
-                isOwner
-                onToggleVisibility={handleToggleVisibility}
-                onArchive={handleArchive}
-              />
+              <div key={recipe.recipeId} className="animate-fade-in">
+                <RecipeGalleryCard
+                  recipe={toGalleryRecipe(recipe)}
+                  isOwner
+                  onToggleVisibility={handleToggleVisibility}
+                  onArchive={handleArchive}
+                />
+              </div>
             ))}
           </div>
+        )}
+
+        {/* Load More */}
+        {!isLoading && hasMore && !debouncedSearch && (
+          <div className="mt-6">
+            <button
+              onClick={loadMore}
+              disabled={isLoadingMore}
+              className="w-full py-3 bg-[#1E1E1E] hover:bg-[#2A2A2A] text-[#E5E5E5] rounded-xl transition-colors text-sm font-medium disabled:opacity-50"
+            >
+              {isLoadingMore ? (
+                <span className="flex items-center justify-center gap-2">
+                  <Loader2 className="size-4 animate-spin" />
+                  Loading...
+                </span>
+              ) : (
+                "Load More"
+              )}
+            </button>
+          </div>
+        )}
+
+        {/* Showing X of Y */}
+        {!isLoading && recipes.length > 0 && (
+          <p className="text-center text-sm text-[#666666] mt-3">
+            Showing {recipes.length} of {total} recipes
+          </p>
         )}
       </div>
     </div>

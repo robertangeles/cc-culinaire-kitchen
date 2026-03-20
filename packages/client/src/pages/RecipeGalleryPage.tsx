@@ -2,13 +2,15 @@
  * @module RecipeGalleryPage
  *
  * Public gallery page showing recipes in a masonry-style grid.
- * No authentication required to view.
+ * No authentication required to view. Uses "Load More" pagination
+ * with page size driven by the `recipes_per_page` site setting.
  */
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Loader2, ChefHat, ChevronLeft, ChevronRight, Search } from "lucide-react";
+import { Loader2, ChefHat, Search } from "lucide-react";
 import { useRecipeGallery } from "../hooks/useRecipeGallery.js";
 import { RecipeGalleryCard } from "../components/recipes/RecipeGalleryCard.js";
+import { useSettings } from "../context/SettingsContext.js";
 
 const DOMAIN_FILTERS = [
   { value: "", label: "All Recipes" },
@@ -18,6 +20,9 @@ const DOMAIN_FILTERS = [
 ];
 
 export function RecipeGalleryPage() {
+  const { settings } = useSettings();
+  const pageSize = Number(settings.recipes_per_page) || 20;
+
   const [domainFilter, setDomainFilter] = useState("");
   const [searchInput, setSearchInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
@@ -28,14 +33,14 @@ export function RecipeGalleryPage() {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       setSearchQuery(searchInput);
-      setPage(1);
     }, 400);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, [searchInput]);
 
-  const { recipes, total, page, setPage, isLoading, refresh } = useRecipeGallery({
+  const { recipes, total, isLoading, isLoadingMore, loadMore, refresh } = useRecipeGallery({
     domain: domainFilter || undefined,
     search: searchQuery || undefined,
+    limit: pageSize,
   });
 
   const handleArchive = useCallback(async (recipeId: string) => {
@@ -48,7 +53,7 @@ export function RecipeGalleryPage() {
     } catch { /* silent */ }
   }, [refresh]);
 
-  const totalPages = Math.ceil(total / 20);
+  const hasMore = recipes.length < total;
 
   return (
     <div className="flex-1 overflow-y-auto bg-[#0A0A0A]">
@@ -70,7 +75,7 @@ export function RecipeGalleryPage() {
           {DOMAIN_FILTERS.map((f) => (
             <button
               key={f.value}
-              onClick={() => { setDomainFilter(f.value); setPage(1); }}
+              onClick={() => setDomainFilter(f.value)}
               className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
                 domainFilter === f.value
                   ? "bg-[#D4A574] text-[#0A0A0A]"
@@ -116,34 +121,38 @@ export function RecipeGalleryPage() {
         {!isLoading && recipes.length > 0 && (
           <div className="columns-1 sm:columns-2 lg:columns-3 xl:columns-4 gap-4 space-y-4">
             {recipes.map((recipe) => (
-              <div key={recipe.recipeId} className="break-inside-avoid">
+              <div key={recipe.recipeId} className="break-inside-avoid animate-fade-in">
                 <RecipeGalleryCard recipe={recipe} onArchive={handleArchive} />
               </div>
             ))}
           </div>
         )}
 
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-center gap-4 mt-8">
+        {/* Load More */}
+        {!isLoading && hasMore && (
+          <div className="mt-6">
             <button
-              onClick={() => setPage(page - 1)}
-              disabled={page <= 1}
-              className="flex items-center gap-1 px-4 py-2 text-sm text-[#E5E5E5] bg-[#1E1E1E] border border-[#2A2A2A] rounded-xl hover:bg-[#2A2A2A] disabled:opacity-30 transition-colors"
+              onClick={loadMore}
+              disabled={isLoadingMore}
+              className="w-full py-3 bg-[#1E1E1E] hover:bg-[#2A2A2A] text-[#E5E5E5] rounded-xl transition-colors text-sm font-medium disabled:opacity-50"
             >
-              <ChevronLeft className="size-4" /> Previous
-            </button>
-            <span className="text-sm text-[#999999]">
-              Page {page} of {totalPages}
-            </span>
-            <button
-              onClick={() => setPage(page + 1)}
-              disabled={page >= totalPages}
-              className="flex items-center gap-1 px-4 py-2 text-sm text-[#E5E5E5] bg-[#1E1E1E] border border-[#2A2A2A] rounded-xl hover:bg-[#2A2A2A] disabled:opacity-30 transition-colors"
-            >
-              Next <ChevronRight className="size-4" />
+              {isLoadingMore ? (
+                <span className="flex items-center justify-center gap-2">
+                  <Loader2 className="size-4 animate-spin" />
+                  Loading...
+                </span>
+              ) : (
+                "Load More"
+              )}
             </button>
           </div>
+        )}
+
+        {/* Showing X of Y */}
+        {!isLoading && recipes.length > 0 && (
+          <p className="text-center text-sm text-[#666666] mt-3">
+            Showing {recipes.length} of {total} recipes
+          </p>
         )}
       </div>
     </div>

@@ -65,6 +65,7 @@ export function SiteSettingsTab() {
     guest_session_idle_hours: "24",
     default_guest_sessions: "10",
     default_registered_sessions: "10",
+    recipes_per_page: "20",
   });
 
   /** Track whether the form has been initialized from settings. */
@@ -88,6 +89,7 @@ export function SiteSettingsTab() {
         guest_session_idle_hours: settings.guest_session_idle_hours ?? "24",
         default_guest_sessions: settings.default_guest_sessions ?? "10",
         default_registered_sessions: settings.default_registered_sessions ?? "10",
+        recipes_per_page: settings.recipes_per_page ?? "20",
       });
       initialized.current = true;
     }
@@ -464,6 +466,26 @@ export function SiteSettingsTab() {
               onChange={(e) =>
                 updateField("guest_session_idle_hours", e.target.value)
               }
+              className="w-20 rounded-lg border border-[#2A2A2A] bg-[#0A0A0A] px-3 py-1.5 text-sm text-[#FAFAFA] text-right focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-transparent"
+            />
+          </div>
+
+          {/* Recipes per page */}
+          <div className="flex items-center justify-between rounded-lg border border-[#2A2A2A] bg-[#161616] px-4 py-3">
+            <div>
+              <div className="text-sm font-medium text-[#FAFAFA]">
+                Recipes Per Page
+              </div>
+              <p className="text-xs text-[#999999] mt-0.5">
+                Number of recipe cards shown before &ldquo;Load More&rdquo; on Kitchen Shelf and My Shelf.
+              </p>
+            </div>
+            <input
+              type="number"
+              min="5"
+              max="100"
+              value={form.recipes_per_page}
+              onChange={(e) => updateField("recipes_per_page", e.target.value)}
               className="w-20 rounded-lg border border-[#2A2A2A] bg-[#0A0A0A] px-3 py-1.5 text-sm text-[#FAFAFA] text-right focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-transparent"
             />
           </div>

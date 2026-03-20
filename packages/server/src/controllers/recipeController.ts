@@ -158,7 +158,8 @@ export async function handleMyRecipes(
     }
 
     const page = Math.max(1, parseInt(req.query.page as string, 10) || 1);
-    const result = await listUserRecipes(userId, page);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string, 10) || 20));
+    const result = await listUserRecipes(userId, page, limit);
     res.json(result);
   } catch (err) {
     next(err);
@@ -177,10 +178,11 @@ export async function handleGallery(
 ): Promise<void> {
   try {
     const page = Math.max(1, parseInt(req.query.page as string, 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string, 10) || 20));
     const domain = req.query.domain as string | undefined;
     const difficulty = req.query.difficulty as string | undefined;
     const search = req.query.search as string | undefined;
-    const result = await listGalleryRecipes(page, 20, { domain, difficulty, search });
+    const result = await listGalleryRecipes(page, limit, { domain, difficulty, search });
     res.json(result);
   } catch (err) {
     next(err);

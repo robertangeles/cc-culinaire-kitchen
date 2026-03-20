@@ -2,10 +2,10 @@
  * @module hooks/useMyRecipes
  *
  * React hook for fetching the authenticated user's saved recipes
- * with pagination, domain filtering, and visibility filtering.
+ * with "Load More" pagination, domain filtering, and visibility filtering.
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 
 export interface MyRecipe {
   recipeId: string;
@@ -26,17 +26,31 @@ const API = import.meta.env.VITE_API_URL ?? "";
 export function useMyRecipes(filters?: {
   domain?: string;
   visibility?: "all" | "public" | "private";
+  limit?: number;
 }) {
   const [recipes, setRecipes] = useState<MyRecipe[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
 
-  const fetchRecipes = useCallback(
-    async (p = page) => {
-      setIsLoading(true);
+  /** Track the current filter fingerprint to detect resets. */
+  const filterKey = `${filters?.domain ?? ""}|${filters?.visibility ?? "all"}|${filters?.limit ?? 20}`;
+  const prevFilterKey = useRef(filterKey);
+
+  const fetchPage = useCallback(
+    async (targetPage: number, append: boolean) => {
+      if (append) {
+        setIsLoadingMore(true);
+      } else {
+        setIsLoading(true);
+      }
       try {
-        const params = new URLSearchParams({ page: String(p) });
+        const limit = filters?.limit ?? 20;
+        const params = new URLSearchParams({
+          page: String(targetPage),
+          limit: String(limit),
+        });
         if (filters?.domain) params.set("domain", filters.domain);
         const res = await fetch(`${API}/api/recipes/my?${params}`, {
           credentials: "include",
@@ -52,21 +66,45 @@ export function useMyRecipes(filters?: {
           filtered = filtered.filter((r) => !r.isPublicInd);
         }
 
-        setRecipes(filtered);
+        if (append) {
+          setRecipes((prev) => [...prev, ...filtered]);
+        } else {
+          setRecipes(filtered);
+        }
         setTotal(data.total);
         setPage(data.page);
       } catch {
-        setRecipes([]);
+        if (!append) setRecipes([]);
       } finally {
         setIsLoading(false);
+        setIsLoadingMore(false);
       }
     },
-    [page, filters?.domain, filters?.visibility],
+    [filters?.domain, filters?.visibility, filters?.limit],
   );
 
+  // Reset when filters change
   useEffect(() => {
-    fetchRecipes();
-  }, [fetchRecipes]);
+    if (prevFilterKey.current !== filterKey) {
+      prevFilterKey.current = filterKey;
+      setPage(1);
+      setRecipes([]);
+    }
+    fetchPage(1, false);
+  }, [filterKey, fetchPage]);
+
+  /** Load the next page and append results. */
+  const loadMore = useCallback(() => {
+    const nextPage = page + 1;
+    fetchPage(nextPage, true);
+  }, [page, fetchPage]);
+
+  /** Full refresh (reset to page 1). */
+  const refresh = useCallback(() => {
+    setPage(1);
+    setRecipes([]);
+    fetchPage(1, false);
+  }, [fetchPage]);
 
   const toggleVisibility = useCallback(
     async (recipeId: string, isPublic: boolean) => {
@@ -104,10 +142,10 @@ export function useMyRecipes(filters?: {
   return {
     recipes,
     total,
-    page,
-    setPage,
     isLoading,
-    refresh: fetchRecipes,
+    isLoadingMore,
+    loadMore,
+    refresh,
     toggleVisibility,
     archiveRecipe,
   };

@@ -247,6 +247,7 @@ async function seed() {
     { key: "default_guest_sessions", value: "10" },
     { key: "default_registered_sessions", value: "10" },
     { key: "recipe_archive_retention_days", value: "30" },
+    { key: "recipes_per_page", value: "20" },
   ];
 
   for (const s of defaultSettings) {
