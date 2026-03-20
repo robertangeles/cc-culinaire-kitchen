@@ -31,6 +31,7 @@ import {
   handleRefineRecipe,
   handleAcceptRefinement,
   handleRegenerateImage,
+  handleGetRecipesForImport,
 } from "../controllers/recipeController.js";
 import {
   handleGetRatings,
@@ -89,6 +90,9 @@ recipesRouter.post("/spirits", authenticateOrGuest, ...withUsageTracking("spirit
 // Bulk regenerate images (admin only)
 recipesRouter.post("/regenerate-images", authenticate, handleRegenerateImages);
 recipesRouter.post("/migrate-images", authenticate, handleMigrateImages);
+
+// Lightweight recipe list for menu-item import
+recipesRouter.get("/for-import", authenticate, handleGetRecipesForImport);
 
 // Gallery (public — no auth required)
 recipesRouter.get("/gallery", handleGallery);

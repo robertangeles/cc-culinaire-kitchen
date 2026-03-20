@@ -86,6 +86,7 @@ const SPIRIT_OPTIONS = [
 ];
 
 const VENUE_OPTIONS = [
+  { value: "home", label: "Home Bar / Entertaining" },
   { value: "high-volume", label: "High-Volume Casual" },
   { value: "craft", label: "Craft Cocktail Bar" },
   { value: "hotel", label: "Hotel / Fine Dining" },

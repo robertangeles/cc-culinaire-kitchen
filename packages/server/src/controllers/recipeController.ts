@@ -33,8 +33,9 @@ import { refineRecipe } from "../services/recipeRefinementService.js";
 import { sendRecipeEmail } from "../services/emailService.js";
 import { generateImage } from "../services/imageService.js";
 import { db } from "../db/index.js";
-import { recipe as recipeTable } from "../db/schema.js";
-import { eq, and, isNull, isNotNull, sql } from "drizzle-orm";
+import { recipe as recipeTable, user as userTable } from "../db/schema.js";
+import { eq, and, isNull, isNotNull, sql, inArray } from "drizzle-orm";
+import { getUserOrgContext } from "../services/orgContextService.js";
 
 const logger = pino({ name: "recipeController" });
 
@@ -844,6 +845,99 @@ export async function handleMigrateImages(
     }
 
     res.json({ total: recipes.length + (users as any[]).length + (settings as any[]).length, success, failed, results });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Recipes for menu-item import (lightweight)
+// ---------------------------------------------------------------------------
+
+interface ImportIngredient {
+  name: string;
+  amount: string;
+  unit: string;
+  note?: string;
+}
+
+interface ImportRecipeRow {
+  recipeId: string;
+  title: string;
+  domain: string;
+  ownerName?: string;
+  ingredients: ImportIngredient[];
+}
+
+/** GET /api/recipes/for-import — lightweight recipe list for menu item import */
+export async function handleGetRecipesForImport(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const userId = req.user?.sub;
+    if (!userId) {
+      res.status(401).json({ error: "Authentication required." });
+      return;
+    }
+
+    // Determine which user IDs to include (own + org members)
+    let userIds = [userId];
+    let orgContext: Awaited<ReturnType<typeof getUserOrgContext>> | null = null;
+    try {
+      orgContext = await getUserOrgContext(userId);
+      if (orgContext.orgMemberUserIds.length > 0) {
+        userIds = [...new Set([...userIds, ...orgContext.orgMemberUserIds])];
+      }
+    } catch {
+      // If org lookup fails, just use own recipes
+    }
+
+    // Fetch recipes (non-archived) for all relevant users
+    const recipes = await db
+      .select({
+        recipeId: recipeTable.recipeId,
+        title: recipeTable.title,
+        domain: recipeTable.domain,
+        recipeData: recipeTable.recipeData,
+        recipeUserId: recipeTable.userId,
+        ownerName: userTable.userName,
+      })
+      .from(recipeTable)
+      .leftJoin(userTable, eq(recipeTable.userId, userTable.userId))
+      .where(
+        and(
+          inArray(recipeTable.userId, userIds),
+          eq(recipeTable.archivedInd, false),
+        ),
+      )
+      .orderBy(recipeTable.domain, recipeTable.title);
+
+    // Map to lightweight response — extract only ingredients from recipeData
+    const result: ImportRecipeRow[] = recipes.map((r) => {
+      const data = r.recipeData as Record<string, unknown> | null;
+      const rawIngredients = (data?.ingredients as any[]) ?? [];
+
+      const ingredients: ImportIngredient[] = rawIngredients.map((ing: any) => ({
+        name: typeof ing.name === "string" ? ing.name : (ing.ingredient ?? ""),
+        amount: String(ing.amount ?? ing.quantity ?? ""),
+        unit: typeof ing.unit === "string" ? ing.unit : "each",
+        ...(ing.note ? { note: String(ing.note) } : {}),
+      }));
+
+      return {
+        recipeId: r.recipeId,
+        title: r.title,
+        domain: r.domain,
+        ...(r.recipeUserId !== userId && r.ownerName
+          ? { ownerName: r.ownerName }
+          : {}),
+        ingredients,
+      };
+    });
+
+    res.json({ recipes: result });
   } catch (err) {
     next(err);
   }
