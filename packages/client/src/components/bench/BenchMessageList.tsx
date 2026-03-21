@@ -91,11 +91,11 @@ export function BenchMessageList({
     <div
       ref={containerRef}
       onScroll={handleScroll}
-      className="flex-1 overflow-y-auto"
+      className="flex-1 overflow-y-auto bg-[#0A0A0A]"
     >
       {/* Channel info banner */}
       {channelBanner && (
-        <div className="mx-4 mt-4 mb-2 px-4 py-3 bg-[#D4A574]/10 border border-[#D4A574]/20 rounded-lg">
+        <div className="mx-4 mt-4 mb-2 px-4 py-3 bg-[#161616] border border-[#2A2A2A] rounded-xl">
           <p className="text-xs text-[#D4A574]">{channelBanner}</p>
         </div>
       )}

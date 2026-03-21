@@ -147,7 +147,7 @@ function BenchContent() {
   const isReadOnly = !user || isGuest;
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
+    <div className="flex-1 flex flex-col overflow-hidden bg-[#0A0A0A]">
       {/* DM notification toasts */}
       <BenchNotificationToast notifications={notifications} onDismiss={dismissNotification} />
 
@@ -221,7 +221,7 @@ function BenchContent() {
             onBack={dm.closeThread}
           />
         ) : (
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto bg-[#0A0A0A]">
             <BenchDmThreadList
               threads={dm.threads}
               loading={dm.loadingThreads}

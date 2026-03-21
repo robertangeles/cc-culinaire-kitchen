@@ -83,7 +83,7 @@ export function BenchDmConversation({ thread, messages, loading, onSend, onBack 
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto bg-[#0A0A0A]">
         {loading ? (
           <div className="flex items-center justify-center h-full">
             <Loader2 className="size-5 animate-spin text-[#D4A574]" />
