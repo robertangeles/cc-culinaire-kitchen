@@ -96,6 +96,10 @@ export async function handleGetTodaySession(req: Request, res: Response) {
   const teamView = parsed.success && parsed.data.teamView === "true";
 
   const result = await getTodaySession(userId, teamView);
+  if (!result) {
+    res.status(404).json({ error: "No prep session for today" });
+    return;
+  }
   res.json(result);
 }
 
