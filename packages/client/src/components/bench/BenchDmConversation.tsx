@@ -73,13 +73,13 @@ export function BenchDmConversation({ thread, messages, loading, onSend, onBack 
           <ArrowLeft className="size-5" />
         </button>
         {thread.otherUserPhotoPath ? (
-          <img src={thread.otherUserPhotoPath} alt={thread.otherUserName} className="size-8 rounded-full object-cover" />
+          <img src={thread.otherUserPhotoPath} alt={thread.otherUserName} className="size-9 rounded-full object-cover" />
         ) : (
-          <div className="size-8 rounded-full bg-[#D4A574]/15 flex items-center justify-center">
-            <span className="text-sm font-semibold text-[#D4A574]">{thread.otherUserName.charAt(0).toUpperCase()}</span>
+          <div className="size-9 rounded-full bg-[#D4A574]/15 flex items-center justify-center">
+            <span className="text-base font-semibold text-[#D4A574]">{thread.otherUserName.charAt(0).toUpperCase()}</span>
           </div>
         )}
-        <span className="text-sm font-semibold text-[#FAFAFA]">{thread.otherUserName}</span>
+        <span className="text-[15px] font-semibold text-[#FAFAFA]">{thread.otherUserName}</span>
       </div>
 
       {/* Messages */}
@@ -89,8 +89,9 @@ export function BenchDmConversation({ thread, messages, loading, onSend, onBack 
             <Loader2 className="size-5 animate-spin text-[#D4A574]" />
           </div>
         ) : messages.length === 0 ? (
-          <div className="flex items-center justify-center h-full text-[#666666] text-sm">
-            Start the conversation — say hello!
+          <div className="flex flex-col items-center justify-center h-full text-center px-4">
+            <p className="text-base text-[#999999] font-medium mb-1">Start the conversation</p>
+            <p className="text-sm text-[#666666]">Say hello to {thread.otherUserName}!</p>
           </div>
         ) : (
           <div className="py-4">

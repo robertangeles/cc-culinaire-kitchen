@@ -22,10 +22,10 @@ export function BenchDmThreadList({ threads, loading, onSelect }: BenchDmThreadL
 
   if (threads.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-12 text-[#666666]">
-        <MessageCircle className="size-10 mb-3 text-[#666666]" />
-        <p className="text-sm">No conversations yet</p>
-        <p className="text-xs mt-1 text-[#666666]">Click on a chef's name in the chat to start a direct message</p>
+      <div className="flex flex-col items-center justify-center py-16 text-center px-4">
+        <MessageCircle className="size-12 mb-4 text-[#D4A574]/40" />
+        <p className="text-base text-[#999999] font-medium mb-1">No conversations yet</p>
+        <p className="text-sm text-[#666666]">Click on a chef&apos;s name in the chat to start a direct message</p>
       </div>
     );
   }
@@ -46,7 +46,7 @@ export function BenchDmThreadList({ threads, loading, onSelect }: BenchDmThreadL
         <button
           key={t.dmThreadId}
           onClick={() => onSelect(t.dmThreadId)}
-          className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[#1E1E1E] transition-colors text-left"
+          className="w-full flex items-center gap-3.5 px-4 py-3.5 hover:bg-[#1E1E1E] transition-colors text-left"
         >
           {t.otherUserPhotoPath ? (
             <img
@@ -63,11 +63,11 @@ export function BenchDmThreadList({ threads, loading, onSelect }: BenchDmThreadL
           )}
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between">
-              <span className="text-sm font-semibold text-[#FAFAFA] truncate">{t.otherUserName}</span>
-              <span className="text-xs text-[#666666] flex-shrink-0">{timeAgo(t.lastMessageAt)}</span>
+              <span className="text-[15px] font-semibold text-[#FAFAFA] truncate">{t.otherUserName}</span>
+              <span className="text-xs text-[#666666] flex-shrink-0 ml-2">{timeAgo(t.lastMessageAt)}</span>
             </div>
             {t.lastMessage && (
-              <p className="text-xs text-[#999999] truncate">{t.lastMessage}</p>
+              <p className="text-sm text-[#999999] truncate mt-0.5">{t.lastMessage}</p>
             )}
           </div>
         </button>

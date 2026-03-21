@@ -105,11 +105,12 @@ export function BenchMessageList({
           <Loader2 className="size-6 animate-spin text-[#D4A574]" />
         </div>
       ) : messages.length === 0 ? (
-        <div className="flex items-center justify-center h-full text-[#666666] text-sm">
-          No messages yet. Be the first to say something!
+        <div className="flex flex-col items-center justify-center h-full text-center px-4">
+          <p className="text-[#999999] text-base font-medium mb-1">Start the conversation</p>
+          <p className="text-[#666666] text-sm">Be the first to share something with the team.</p>
         </div>
       ) : (
-        <div className="py-4">
+        <div className="py-4 flex flex-col gap-1">
           {hasMore && (
             <div className="text-center py-2">
               <button

@@ -172,10 +172,10 @@ function BenchContent() {
         <div className="flex gap-1 mt-3">
           <button
             onClick={() => setTab("everyone")}
-            className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors ${
               tab === "everyone"
                 ? "bg-[#D4A574] text-[#0A0A0A]"
-                : "text-[#999999] hover:bg-[#1E1E1E]"
+                : "text-[#999999] hover:bg-[#1E1E1E] hover:text-[#E5E5E5]"
             }`}
           >
             <Users className="size-4" />
@@ -184,10 +184,10 @@ function BenchContent() {
           {hasOrg && (
             <button
               onClick={() => setTab("my-kitchen")}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors ${
                 tab === "my-kitchen"
                   ? "bg-[#D4A574] text-[#0A0A0A]"
-                  : "text-[#999999] hover:bg-[#1E1E1E]"
+                  : "text-[#999999] hover:bg-[#1E1E1E] hover:text-[#E5E5E5]"
               }`}
             >
               <Building2 className="size-4" />
@@ -197,10 +197,10 @@ function BenchContent() {
           {!isReadOnly && (
             <button
               onClick={() => setTab("messages")}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors ${
                 tab === "messages"
                   ? "bg-[#D4A574] text-[#0A0A0A]"
-                  : "text-[#999999] hover:bg-[#1E1E1E]"
+                  : "text-[#999999] hover:bg-[#1E1E1E] hover:text-[#E5E5E5]"
               }`}
             >
               <MessageCircle className="size-4" />

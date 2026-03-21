@@ -16,7 +16,7 @@ export function BenchPresenceBar({ users, onStartDm }: BenchPresenceBarProps) {
   const overflow = users.length - MAX_AVATARS;
 
   return (
-    <div className="flex items-center gap-3 px-4 py-2 border-b border-[#2A2A2A] bg-[#161616]">
+    <div className="flex items-center gap-3 px-4 py-2.5 border-b border-[#2A2A2A] bg-[#161616]">
       <div className="flex -space-x-2">
         {visible.map((u) => (
           <button
@@ -29,10 +29,10 @@ export function BenchPresenceBar({ users, onStartDm }: BenchPresenceBarProps) {
               <img
                 src={u.userPhotoPath}
                 alt={u.userName}
-                className="size-7 rounded-full border-2 border-[#161616] object-cover cursor-pointer"
+                className="size-8 rounded-full border-2 border-[#161616] object-cover cursor-pointer"
               />
             ) : (
-              <div className="size-7 rounded-full border-2 border-[#161616] bg-[#D4A574]/15 flex items-center justify-center cursor-pointer">
+              <div className="size-8 rounded-full border-2 border-[#161616] bg-[#D4A574]/15 flex items-center justify-center cursor-pointer">
                 <span className="text-xs font-semibold text-[#D4A574]">
                   {u.userName.charAt(0).toUpperCase()}
                 </span>
@@ -41,12 +41,12 @@ export function BenchPresenceBar({ users, onStartDm }: BenchPresenceBarProps) {
           </button>
         ))}
         {overflow > 0 && (
-          <div className="size-7 rounded-full border-2 border-[#161616] bg-[#2A2A2A] flex items-center justify-center">
+          <div className="size-8 rounded-full border-2 border-[#161616] bg-[#2A2A2A] flex items-center justify-center">
             <span className="text-xs font-medium text-[#999999]">+{overflow}</span>
           </div>
         )}
       </div>
-      <span className="text-xs text-[#999999]">
+      <span className="text-sm text-[#E5E5E5]">
         {users.length === 0
           ? "No one on the pass"
           : `${users.length} ${users.length === 1 ? "chef" : "chefs"} on the pass`}

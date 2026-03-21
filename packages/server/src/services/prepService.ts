@@ -70,11 +70,17 @@ export interface CrossUsageRow {
 
 export interface HighImpactDish {
   recipeId: string;
+  menuItemId: string | null;
   title: string;
   ingredientCount: number;
   totalPrepMinutes: number;
   complexityScore: number;
   classification: string | null;
+}
+
+export interface HighImpactResult {
+  dishes: HighImpactDish[];
+  hasMenuItems: boolean;
 }
 
 export interface MenuSelectionInput {
@@ -837,31 +843,82 @@ export async function getIngredientCrossUsage(
 export async function getHighImpactDishes(
   userId: number,
   teamView?: boolean,
-): Promise<HighImpactDish[]> {
-  let userFilter;
+): Promise<HighImpactResult> {
+  // Determine user scope
+  let userIds: number[];
   if (teamView) {
     const orgCtx = await getUserOrgContext(userId);
-    userFilter = orgCtx.orgIds.length > 0
-      ? and(inArray(recipe.userId, orgCtx.orgMemberUserIds), eq(recipe.archivedInd, false))
-      : and(eq(recipe.userId, userId), eq(recipe.archivedInd, false));
+    userIds = orgCtx.orgIds.length > 0 ? orgCtx.orgMemberUserIds : [userId];
   } else {
-    userFilter = and(eq(recipe.userId, userId), eq(recipe.archivedInd, false));
+    userIds = [userId];
   }
+
+  // Check if user has menu items in Menu Intelligence
+  const menuItems = await db
+    .select()
+    .from(menuItem)
+    .where(inArray(menuItem.userId, userIds));
+
+  const hasMenuItems = menuItems.length > 0;
+
+  if (hasMenuItems) {
+    // ---- Menu Intelligence path: rank menu items by complexity ----
+    // Load ingredient counts per menu item
+    const menuItemIds = menuItems.map((mi) => mi.menuItemId);
+    const ingredientRows = await db
+      .select({
+        menuItemId: menuItemIngredient.menuItemId,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(menuItemIngredient)
+      .where(inArray(menuItemIngredient.menuItemId, menuItemIds))
+      .groupBy(menuItemIngredient.menuItemId);
+
+    const ingredientCountMap = new Map<string, number>();
+    for (const row of ingredientRows) {
+      ingredientCountMap.set(row.menuItemId, Number(row.count));
+    }
+
+    // Classification weights for complexity scoring
+    const classificationWeights: Record<string, number> = {
+      star: 4,
+      plowhorse: 3,
+      puzzle: 2,
+      dog: 1,
+      unclassified: 2,
+    };
+
+    const dishes: HighImpactDish[] = menuItems.map((mi) => {
+      const ingCount = ingredientCountMap.get(mi.menuItemId) ?? 0;
+      const classWeight = classificationWeights[mi.classification] ?? 2;
+      // Complexity = ingredient count * classification weight
+      const complexityScore = ingCount * classWeight;
+      const classLabel = mi.classification.charAt(0).toUpperCase() + mi.classification.slice(1);
+
+      return {
+        recipeId: "",
+        menuItemId: mi.menuItemId,
+        title: mi.name,
+        ingredientCount: ingCount,
+        totalPrepMinutes: 0,
+        complexityScore: Math.round(complexityScore * 100) / 100,
+        classification: classLabel,
+      };
+    });
+
+    dishes.sort((a, b) => b.complexityScore - a.complexityScore);
+    return { dishes: dishes.slice(0, 10), hasMenuItems: true };
+  }
+
+  // ---- Recipe fallback path (current behavior) ----
+  const userFilter = teamView
+    ? and(inArray(recipe.userId, userIds), eq(recipe.archivedInd, false))
+    : and(eq(recipe.userId, userId), eq(recipe.archivedInd, false));
 
   const recipes = await db
     .select()
     .from(recipe)
     .where(userFilter);
-
-  const menuItems = await db
-    .select()
-    .from(menuItem)
-    .where(eq(menuItem.userId, userId));
-
-  const menuItemByName = new Map<string, typeof menuItem.$inferSelect>();
-  for (const mi of menuItems) {
-    menuItemByName.set(mi.name.toLowerCase(), mi);
-  }
 
   const dishes: HighImpactDish[] = [];
 
@@ -875,23 +932,19 @@ export async function getHighImpactDishes(
 
     const complexityScore = ingredientCount * (totalPrepMinutes / 10 + 1);
 
-    const matchedMenuItem = menuItemByName.get(r.title.toLowerCase());
-    const classification = matchedMenuItem
-      ? matchedMenuItem.classification.charAt(0).toUpperCase() + matchedMenuItem.classification.slice(1)
-      : null;
-
     dishes.push({
       recipeId: r.recipeId,
+      menuItemId: null,
       title: r.title,
       ingredientCount,
       totalPrepMinutes,
       complexityScore: Math.round(complexityScore * 100) / 100,
-      classification,
+      classification: null,
     });
   }
 
   dishes.sort((a, b) => b.complexityScore - a.complexityScore);
-  return dishes.slice(0, 10);
+  return { dishes: dishes.slice(0, 10), hasMenuItems: false };
 }
 
 // ---------------------------------------------------------------------------

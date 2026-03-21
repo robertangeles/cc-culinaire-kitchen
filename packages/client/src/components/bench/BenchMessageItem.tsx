@@ -81,17 +81,17 @@ export function BenchMessageItem({ message, onDelete, onEdit, onReaction, onRemo
   }
 
   return (
-    <div className="group relative flex gap-3 px-4 py-2 hover:bg-[#1E1E1E] transition-colors">
+    <div className="group relative flex gap-3.5 px-4 py-3 hover:bg-[#1E1E1E]/80 transition-colors">
       {/* Avatar */}
       {message.userPhotoPath ? (
         <img
           src={message.userPhotoPath}
           alt={message.userName}
-          className="size-9 rounded-full object-cover flex-shrink-0 mt-0.5"
+          className="size-10 rounded-full object-cover flex-shrink-0 mt-0.5"
         />
       ) : (
-        <div className="size-9 rounded-full bg-[#D4A574]/15 flex items-center justify-center flex-shrink-0 mt-0.5">
-          <span className="text-sm font-semibold text-[#D4A574]">
+        <div className="size-10 rounded-full bg-[#D4A574]/15 flex items-center justify-center flex-shrink-0 mt-0.5">
+          <span className="text-base font-semibold text-[#D4A574]">
             {message.userName.charAt(0).toUpperCase()}
           </span>
         </div>
@@ -103,15 +103,15 @@ export function BenchMessageItem({ message, onDelete, onEdit, onReaction, onRemo
           {!isOwn && onStartDm ? (
             <button
               onClick={() => onStartDm(message.userId)}
-              className="text-sm font-semibold text-[#FAFAFA] hover:text-[#D4A574] transition-colors"
+              className="text-[15px] font-semibold text-[#FAFAFA] hover:text-[#D4A574] transition-colors"
               title={`Message ${message.userName}`}
             >
               {message.userName}
             </button>
           ) : (
-            <span className="text-sm font-semibold text-[#FAFAFA]">{message.userName}</span>
+            <span className="text-[15px] font-semibold text-[#FAFAFA]">{message.userName}</span>
           )}
-          <span className="text-xs text-[#666666]">{formatTime(message.createdDttm)}</span>
+          <span className="text-xs text-[#666666] ml-1">{formatTime(message.createdDttm)}</span>
           {message.editedInd && <span className="text-xs text-[#666666] italic">(edited)</span>}
         </div>
 
@@ -158,7 +158,7 @@ export function BenchMessageItem({ message, onDelete, onEdit, onReaction, onRemo
             </div>
           </Link>
         ) : (
-          <p className="text-sm text-[#E5E5E5] whitespace-pre-wrap break-words">{message.messageBody}</p>
+          <p className="text-base text-[#E5E5E5] leading-relaxed whitespace-pre-wrap break-words mt-0.5">{message.messageBody}</p>
         )}
 
         {/* Reactions */}

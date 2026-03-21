@@ -188,8 +188,8 @@ export async function handleGetHighImpact(req: Request, res: Response) {
   const parsed = teamViewQuerySchema.safeParse(req.query);
   const teamView = parsed.success && parsed.data.teamView === "true";
 
-  const dishes = await getHighImpactDishes(userId, teamView);
-  res.json(dishes);
+  const result = await getHighImpactDishes(userId, teamView);
+  res.json(result);
 }
 
 /** GET /api/prep/history */

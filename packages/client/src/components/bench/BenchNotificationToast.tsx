@@ -42,7 +42,7 @@ function ToastItem({ notification, onDismiss }: { notification: BenchNotificatio
         notification.onClick?.();
         onDismiss(notification.id);
       }}
-      className="bg-[#1E1E1E] rounded-xl shadow-lg border border-[#2A2A2A] p-3 flex items-start gap-3 cursor-pointer hover:bg-[#2A2A2A] transition-colors animate-slide-in"
+      className="bg-[#1E1E1E] rounded-xl shadow-xl shadow-black/40 border border-[#D4A574]/20 p-4 flex items-start gap-3 cursor-pointer hover:bg-[#2A2A2A] transition-colors animate-slide-in"
     >
       {notification.userPhotoPath ? (
         <img src={notification.userPhotoPath} alt={notification.userName} className="size-9 rounded-full object-cover flex-shrink-0" />
@@ -54,9 +54,9 @@ function ToastItem({ notification, onDismiss }: { notification: BenchNotificatio
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1">
           <MessageCircle className="size-3 text-[#D4A574]" />
-          <span className="text-xs font-semibold text-[#FAFAFA]">{notification.userName}</span>
+          <span className="text-sm font-semibold text-[#FAFAFA]">{notification.userName}</span>
         </div>
-        <p className="text-xs text-[#999999] truncate">{notification.message}</p>
+        <p className="text-sm text-[#E5E5E5] truncate mt-0.5">{notification.message}</p>
       </div>
       <button
         onClick={(e) => { e.stopPropagation(); onDismiss(notification.id); }}

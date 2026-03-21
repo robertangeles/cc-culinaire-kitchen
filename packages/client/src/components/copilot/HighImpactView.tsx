@@ -7,32 +7,23 @@
  */
 
 import { useState, useEffect, useCallback } from "react";
-import { Loader2, Flame, Clock, ListChecks, ShoppingBasket } from "lucide-react";
+import { Loader2, Flame, Clock, ShoppingBasket, Info } from "lucide-react";
 
 interface HighImpactDish {
-  id: number;
+  recipeId: string;
+  menuItemId: string | null;
   title: string;
-  difficulty: "beginner" | "intermediate" | "advanced" | "expert";
-  prepTime: number | null;
-  cookTime: number | null;
   ingredientCount: number;
-  stepCount: number;
+  totalPrepMinutes: number;
   complexityScore: number;
   classification: string | null;
 }
 
-const DIFFICULTY_COLORS: Record<string, string> = {
-  beginner: "bg-green-600/80 text-green-100",
-  intermediate: "bg-[#D4A574]/80 text-amber-100",
-  advanced: "bg-orange-600/80 text-orange-100",
-  expert: "bg-red-600/80 text-red-100",
-};
-
 const CLASSIFICATION_STYLES: Record<string, string> = {
-  Star: "bg-[#D4A574]/15 text-[#D4A574]",
-  Plowhorse: "bg-blue-500/15 text-blue-400",
-  Puzzle: "bg-purple-500/15 text-purple-400",
-  Dog: "bg-[#2A2A2A] text-[#666666]",
+  Star: "bg-[#D4A574]/15 text-[#D4A574] border border-[#D4A574]/30",
+  Plowhorse: "bg-blue-500/15 text-blue-400 border border-blue-500/30",
+  Puzzle: "bg-purple-500/15 text-purple-400 border border-purple-500/30",
+  Dog: "bg-[#2A2A2A] text-[#666666] border border-[#2A2A2A]",
 };
 
 interface Props {
@@ -41,6 +32,7 @@ interface Props {
 
 export function HighImpactView({ teamView }: Props) {
   const [dishes, setDishes] = useState<HighImpactDish[]>([]);
+  const [hasMenuItems, setHasMenuItems] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -55,7 +47,14 @@ export function HighImpactView({ teamView }: Props) {
         throw new Error((json as { error?: string }).error ?? `Failed (${res.status})`);
       }
       const json = await res.json();
-      setDishes(Array.isArray(json) ? json : json.dishes ?? []);
+      if (Array.isArray(json)) {
+        // Legacy array response
+        setDishes(json);
+        setHasMenuItems(false);
+      } else {
+        setDishes(json.dishes ?? []);
+        setHasMenuItems(json.hasMenuItems ?? false);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load high-impact dishes");
     } finally {
@@ -97,15 +96,27 @@ export function HighImpactView({ teamView }: Props) {
 
   return (
     <div>
+      {/* Banner when no menu items */}
+      {!hasMenuItems && (
+        <div className="flex items-start gap-3 bg-[#D4A574]/10 border border-[#D4A574]/20 rounded-lg px-4 py-3 mb-4">
+          <Info className="size-4 text-[#D4A574] mt-0.5 flex-shrink-0" />
+          <p className="text-sm text-[#D4A574]">
+            Set up your menu in Menu Intelligence for richer insights. Showing recipe library analysis.
+          </p>
+        </div>
+      )}
+
       <p className="text-sm text-[#666666] mb-4">
-        Top 10 dishes ranked by complexity. Focus prep resources on these first.
+        {hasMenuItems
+          ? "Top 10 menu items ranked by complexity. Focus prep resources on these first."
+          : "Top 10 dishes ranked by complexity. Focus prep resources on these first."}
       </p>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {dishes.map((dish, index) => (
           <div
-            key={dish.id}
-            className="bg-[#161616] rounded-xl p-5 border border-[#2A2A2A] hover:border-[#2A2A2A] transition-colors"
+            key={dish.menuItemId ?? dish.recipeId ?? index}
+            className="bg-[#161616] rounded-xl p-5 border border-[#2A2A2A] hover:border-[#3A3A3A] transition-colors"
           >
             {/* Rank + Title */}
             <div className="flex items-start gap-3 mb-3">
@@ -119,19 +130,9 @@ export function HighImpactView({ teamView }: Props) {
               </div>
             </div>
 
-            {/* Badges */}
-            <div className="flex flex-wrap gap-2 mb-3">
-              {/* Difficulty */}
-              <span
-                className={`text-xs font-medium px-2.5 py-1 rounded-full ${
-                  DIFFICULTY_COLORS[dish.difficulty] ?? "bg-[#2A2A2A] text-[#E5E5E5]"
-                }`}
-              >
-                {dish.difficulty}
-              </span>
-
-              {/* Classification */}
-              {dish.classification && (
+            {/* Classification badges */}
+            {dish.classification && (
+              <div className="flex flex-wrap gap-2 mb-3">
                 <span
                   className={`text-xs font-medium px-2.5 py-1 rounded-full ${
                     CLASSIFICATION_STYLES[dish.classification] ?? "bg-[#2A2A2A] text-[#E5E5E5]"
@@ -139,21 +140,15 @@ export function HighImpactView({ teamView }: Props) {
                 >
                   {dish.classification}
                 </span>
-              )}
-            </div>
+              </div>
+            )}
 
             {/* Stats */}
             <div className="grid grid-cols-2 gap-2">
-              {dish.prepTime != null && (
+              {dish.totalPrepMinutes > 0 && (
                 <div className="flex items-center gap-2 text-sm text-[#999999]">
                   <Clock className="size-3.5 text-[#666666]" />
-                  <span>Prep: {dish.prepTime}m</span>
-                </div>
-              )}
-              {dish.cookTime != null && (
-                <div className="flex items-center gap-2 text-sm text-[#999999]">
-                  <Clock className="size-3.5 text-[#666666]" />
-                  <span>Cook: {dish.cookTime}m</span>
+                  <span>{dish.totalPrepMinutes}m total</span>
                 </div>
               )}
               <div className="flex items-center gap-2 text-sm text-[#999999]">
@@ -161,8 +156,8 @@ export function HighImpactView({ teamView }: Props) {
                 <span>{dish.ingredientCount} ingredients</span>
               </div>
               <div className="flex items-center gap-2 text-sm text-[#999999]">
-                <ListChecks className="size-3.5 text-[#666666]" />
-                <span>{dish.stepCount} steps</span>
+                <Flame className="size-3.5 text-[#666666]" />
+                <span>Score: {dish.complexityScore}</span>
               </div>
             </div>
           </div>

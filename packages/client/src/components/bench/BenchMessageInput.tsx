@@ -103,7 +103,7 @@ export function BenchMessageInput({ onSend, onTyping, disabled, placeholder, onl
   }
 
   return (
-    <form onSubmit={handleSubmit} className="border-t border-[#2A2A2A] bg-[#161616] px-4 py-3 relative">
+    <form onSubmit={handleSubmit} className="border-t border-[#2A2A2A] bg-[#161616] px-4 py-4 relative">
       {/* @mention autocomplete dropdown */}
       {mentionResults.length > 0 && mentionQuery !== null && (
         <div className="absolute bottom-full left-4 right-4 mb-1 bg-[#1E1E1E] rounded-lg shadow-lg border border-[#2A2A2A] py-1 z-20 max-h-48 overflow-y-auto">
@@ -129,7 +129,7 @@ export function BenchMessageInput({ onSend, onTyping, disabled, placeholder, onl
         </div>
       )}
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-3">
         <input
           ref={inputRef}
           type="text"
@@ -138,15 +138,15 @@ export function BenchMessageInput({ onSend, onTyping, disabled, placeholder, onl
           onKeyDown={handleKeyDown}
           disabled={disabled}
           placeholder={placeholder ?? "Type a message... Use @ to mention someone"}
-          className="flex-1 px-4 py-2.5 text-sm border border-[#2A2A2A] rounded-xl bg-[#0A0A0A] text-white placeholder-[#444444] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-[#D4A574]/50 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex-1 px-4 py-3.5 text-base border border-[#2A2A2A] rounded-xl bg-[#0A0A0A] text-white placeholder-[#555555] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-[#D4A574]/50 disabled:opacity-50 disabled:cursor-not-allowed"
           autoComplete="off"
         />
         <button
           type="submit"
           disabled={!text.trim() || disabled}
-          className="p-2.5 rounded-xl bg-[#D4A574] text-[#0A0A0A] hover:bg-[#C4956A] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          className="p-3 rounded-xl bg-[#D4A574] text-[#0A0A0A] hover:bg-[#C4956A] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
-          <Send className="size-4" />
+          <Send className="size-5" />
         </button>
       </div>
     </form>
