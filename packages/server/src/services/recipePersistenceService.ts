@@ -224,7 +224,7 @@ export async function listUserRecipes(userId: number, page = 1, limit = 20) {
       ratingCount: sql<number>`COALESCE((SELECT COUNT(*)::int FROM recipe_rating WHERE recipe_id = ${recipe.recipeId}), 0)`.as("rating_count"),
     })
     .from(recipe)
-    .where(eq(recipe.userId, userId))
+    .where(and(eq(recipe.userId, userId), eq(recipe.archivedInd, false)))
     .orderBy(desc(recipe.createdDttm))
     .limit(limit)
     .offset(offset);
@@ -232,7 +232,7 @@ export async function listUserRecipes(userId: number, page = 1, limit = 20) {
   const [{ count }] = await db
     .select({ count: sql<number>`count(*)::int` })
     .from(recipe)
-    .where(eq(recipe.userId, userId));
+    .where(and(eq(recipe.userId, userId), eq(recipe.archivedInd, false)));
 
   return { recipes, total: count, page, limit };
 }
