@@ -12,6 +12,7 @@ export interface PromptVersion {
   versionId: number;
   promptId: number;
   promptBody: string;
+  modelId: string | null;
   versionNumber: number;
   createdDttm: string;
 }

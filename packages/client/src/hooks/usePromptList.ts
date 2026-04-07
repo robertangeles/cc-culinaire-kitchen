@@ -13,6 +13,7 @@ export interface PromptSummary {
   promptId: number;
   promptName: string;
   promptKey: string | null;
+  modelId: string | null;
   updatedDttm: string;
   createdDttm: string;
 }
@@ -28,7 +29,7 @@ interface UsePromptListReturn {
   /** Re-fetch the prompt list from the server. */
   refresh: () => Promise<void>;
   /** Create a new prompt and refresh the list. */
-  create: (name: string, content: string) => Promise<PromptSummary>;
+  create: (name: string, content: string, modelId?: string | null) => Promise<PromptSummary>;
 }
 
 /**
@@ -62,12 +63,12 @@ export function usePromptList(): UsePromptListReturn {
   }, [refresh]);
 
   const create = useCallback(
-    async (name: string, content: string): Promise<PromptSummary> => {
+    async (name: string, content: string, modelId?: string | null): Promise<PromptSummary> => {
       const res = await fetch("/api/prompts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ name, content }),
+        body: JSON.stringify({ name, content, modelId: modelId ?? null }),
       });
 
       if (!res.ok) {

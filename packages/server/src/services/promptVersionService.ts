@@ -31,10 +31,12 @@ const MAX_VERSIONS = 7;
  *
  * @param promptId - The `prompt_id` FK of the active prompt row.
  * @param body     - The prompt content to snapshot.
+ * @param modelId  - Optional model override at time of snapshot.
  */
 export async function createVersion(
   promptId: number,
-  body: string
+  body: string,
+  modelId?: string | null
 ): Promise<void> {
   // Determine next version number
   const latest = await db
@@ -50,6 +52,7 @@ export async function createVersion(
   await db.insert(promptVersion).values({
     promptId,
     promptBody: body,
+    modelId: modelId ?? null,
     versionNumber: nextVersion,
   });
 
@@ -118,6 +121,6 @@ export async function rollbackToVersion(versionId: number): Promise<string> {
     throw new Error(`Prompt ${version.promptId} not found`);
   }
 
-  await savePrompt(promptRows[0].promptName, version.promptBody);
+  await savePrompt(promptRows[0].promptName, version.promptBody, version.modelId);
   return version.promptBody;
 }

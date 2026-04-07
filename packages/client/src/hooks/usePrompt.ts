@@ -14,6 +14,10 @@ interface UsePromptReturn {
   content: string;
   /** Update the in-memory prompt content without persisting. */
   setContent: (content: string) => void;
+  /** Current model override (null = use global default). */
+  modelId: string | null;
+  /** Update the in-memory model selection without persisting. */
+  setModelId: (modelId: string | null) => void;
   /** True while the prompt is being fetched from the server. */
   isLoading: boolean;
   /** True while a save or reset request is in flight. */
@@ -40,12 +44,14 @@ interface UsePromptReturn {
 export function usePrompt(name: string): UsePromptReturn {
   const [content, setContent] = useState("");
   const [savedContent, setSavedContent] = useState("");
+  const [modelId, setModelId] = useState<string | null>(null);
+  const [savedModelId, setSavedModelId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  const isDirty = content !== savedContent;
+  const isDirty = content !== savedContent || modelId !== savedModelId;
 
   useEffect(() => {
     setIsLoading(true);
@@ -58,6 +64,8 @@ export function usePrompt(name: string): UsePromptReturn {
       .then((data) => {
         setContent(data.content);
         setSavedContent(data.content);
+        setModelId(data.modelId ?? null);
+        setSavedModelId(data.modelId ?? null);
       })
       .catch((err) => setError(err.message))
       .finally(() => setIsLoading(false));
@@ -72,10 +80,11 @@ export function usePrompt(name: string): UsePromptReturn {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ content }),
+        body: JSON.stringify({ content, modelId }),
       });
       if (!res.ok) throw new Error("Failed to save prompt");
       setSavedContent(content);
+      setSavedModelId(modelId);
       setSuccess("Prompt saved successfully");
       setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
@@ -83,7 +92,7 @@ export function usePrompt(name: string): UsePromptReturn {
     } finally {
       setIsSaving(false);
     }
-  }, [name, content]);
+  }, [name, content, modelId]);
 
   const reset = useCallback(async () => {
     setIsSaving(true);
@@ -98,6 +107,8 @@ export function usePrompt(name: string): UsePromptReturn {
       const data = await res.json();
       setContent(data.content);
       setSavedContent(data.content);
+      setModelId(data.modelId ?? null);
+      setSavedModelId(data.modelId ?? null);
       setSuccess("Prompt reset to default");
       setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
@@ -110,6 +121,8 @@ export function usePrompt(name: string): UsePromptReturn {
   return {
     content,
     setContent,
+    modelId,
+    setModelId,
     isLoading,
     isSaving,
     isDirty,

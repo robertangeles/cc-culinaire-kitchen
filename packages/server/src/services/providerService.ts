@@ -67,8 +67,8 @@ function normalizeModelId(id: string): string {
   return id.includes("/") ? id : `anthropic/${id}`;
 }
 
-export function getModel() {
-  const modelId = normalizeModelId(process.env.AI_MODEL ?? DEFAULT_MODEL);
+export function getModel(overrideModelId?: string) {
+  const modelId = normalizeModelId(overrideModelId ?? process.env.AI_MODEL ?? DEFAULT_MODEL);
   return getOpenRouterProvider()(modelId);
 }
 

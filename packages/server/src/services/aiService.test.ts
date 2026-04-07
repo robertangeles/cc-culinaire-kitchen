@@ -10,7 +10,7 @@ vi.mock("./providerService.js", () => ({
 
 // Mock promptService
 vi.mock("./promptService.js", () => ({
-  getSystemPrompt: vi.fn(async () => "You are a culinary assistant. {{KITCHEN_CONTEXT}}"),
+  getSystemPrompt: vi.fn(async () => ({ body: "You are a culinary assistant. {{KITCHEN_CONTEXT}}", modelId: null })),
 }));
 
 // Mock knowledgeService
@@ -93,7 +93,7 @@ describe("aiService — streamChat", () => {
       getWebSearchModel: vi.fn(() => mockWebSearchModel),
     }));
     vi.doMock("./promptService.js", () => ({
-      getSystemPrompt: vi.fn(async () => "You are a culinary assistant. {{KITCHEN_CONTEXT}}"),
+      getSystemPrompt: vi.fn(async () => ({ body: "You are a culinary assistant. {{KITCHEN_CONTEXT}}", modelId: null })),
     }));
     vi.doMock("./knowledgeService.js", () => ({
       searchKnowledge: vi.fn(async () => []),

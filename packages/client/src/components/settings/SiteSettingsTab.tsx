@@ -26,13 +26,6 @@ const ROBOTS_OPTIONS = [
   { value: "noindex, nofollow", label: "No Index, No Follow" },
 ];
 
-/** Available Gemini image generation models. */
-const IMAGE_MODEL_OPTIONS = [
-  { value: "google/gemini-2.5-flash-image", label: "Gemini 2.5 Flash Image (Nano Banana)" },
-  { value: "google/gemini-3.1-flash-image-preview", label: "Gemini 3.1 Flash Image (Nano Banana 2)" },
-  { value: "openai/gpt-5-image", label: "GPT-5 Image (OpenAI)" },
-];
-
 /**
  * Renders the site-settings editor within the Settings page.
  * Provides form fields for SEO metadata, file uploads for favicon/logo,
@@ -58,11 +51,6 @@ export function SiteSettingsTab() {
     favicon_path: "",
     logo_path: "",
     footer_text: "",
-    web_search_enabled: "false",
-    web_search_model: "perplexity/sonar-pro",
-    image_generation_enabled: "false",
-    image_generation_model: "google/gemini-2.5-flash-image",
-    vector_search_enabled: "false",
     guest_session_idle_hours: "24",
     default_guest_sessions: "10",
     default_registered_sessions: "10",
@@ -83,11 +71,6 @@ export function SiteSettingsTab() {
         favicon_path: settings.favicon_path ?? "",
         logo_path: settings.logo_path ?? "",
         footer_text: settings.footer_text ?? "",
-        web_search_enabled: settings.web_search_enabled ?? "false",
-        web_search_model: settings.web_search_model ?? "perplexity/sonar-pro",
-        image_generation_enabled: settings.image_generation_enabled ?? "false",
-        image_generation_model: settings.image_generation_model ?? "google/gemini-2.5-flash-image",
-        vector_search_enabled: settings.vector_search_enabled ?? "false",
         guest_session_idle_hours: settings.guest_session_idle_hours ?? "24",
         default_guest_sessions: settings.default_guest_sessions ?? "10",
         default_registered_sessions: settings.default_registered_sessions ?? "10",
@@ -258,170 +241,6 @@ export function SiteSettingsTab() {
             placeholder="© 2026 CulinAIre Kitchen"
             className="w-full rounded-lg border border-[#2A2A2A] px-3 py-2 text-sm text-[#FAFAFA] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-transparent"
           />
-        </div>
-
-        {/* AI Features */}
-        <div className="border-t border-[#2A2A2A] pt-6">
-          <h2 className="text-sm font-semibold text-[#FAFAFA] uppercase tracking-wider mb-4">
-            AI Features
-          </h2>
-
-          {/* Web Search Toggle */}
-          <div className="flex items-center justify-between rounded-lg border border-[#2A2A2A] bg-[#161616] px-4 py-3">
-            <div>
-              <div className="text-sm font-medium text-[#FAFAFA]">
-                Enable Web Search
-              </div>
-              <p className="text-xs text-[#999999] mt-0.5">
-                Allow the AI assistant to search the web for current information
-                beyond the curated knowledge base. Uses a web-search-capable model via OpenRouter.
-              </p>
-            </div>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={form.web_search_enabled === "true"}
-              onClick={() =>
-                updateField(
-                  "web_search_enabled",
-                  form.web_search_enabled === "true" ? "false" : "true"
-                )
-              }
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:ring-offset-[#161616] ${
-                form.web_search_enabled === "true"
-                  ? "bg-[#D4A574]"
-                  : "bg-[#2A2A2A]"
-              }`}
-            >
-              <span
-                className={`inline-block h-4 w-4 transform rounded-full bg-[#161616] transition-transform ${
-                  form.web_search_enabled === "true"
-                    ? "translate-x-6"
-                    : "translate-x-1"
-                }`}
-              />
-            </button>
-          </div>
-
-          {/* Web Search Model Selector */}
-          {form.web_search_enabled === "true" && (
-            <div className="rounded-lg border border-[#2A2A2A] bg-[#161616] px-4 py-3 mt-3">
-              <label className="block text-sm font-medium text-[#FAFAFA] mb-1">
-                Web Search Model
-              </label>
-              <p className="text-xs text-[#999999] mb-2">
-                The model used for web search requests (OpenRouter format, e.g. perplexity/sonar-pro).
-              </p>
-              <input
-                type="text"
-                value={form.web_search_model}
-                onChange={(e) =>
-                  updateField("web_search_model", e.target.value)
-                }
-                placeholder="perplexity/sonar-pro"
-                className="w-full rounded-lg border border-[#2A2A2A] bg-[#0A0A0A] px-3 py-2 text-sm text-[#FAFAFA] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-transparent"
-              />
-            </div>
-          )}
-
-          {/* Image Generation Toggle */}
-          <div className="flex items-center justify-between rounded-lg border border-[#2A2A2A] bg-[#161616] px-4 py-3 mt-3">
-            <div>
-              <div className="text-sm font-medium text-[#FAFAFA]">
-                Enable Image Generation
-              </div>
-              <p className="text-xs text-[#999999] mt-0.5">
-                Allow users to generate images using AI models via OpenRouter.
-                Requires OPENROUTER_API_KEY to be configured.
-              </p>
-            </div>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={form.image_generation_enabled === "true"}
-              onClick={() =>
-                updateField(
-                  "image_generation_enabled",
-                  form.image_generation_enabled === "true" ? "false" : "true"
-                )
-              }
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:ring-offset-[#161616] ${
-                form.image_generation_enabled === "true"
-                  ? "bg-[#D4A574]"
-                  : "bg-[#2A2A2A]"
-              }`}
-            >
-              <span
-                className={`inline-block h-4 w-4 transform rounded-full bg-[#161616] transition-transform ${
-                  form.image_generation_enabled === "true"
-                    ? "translate-x-6"
-                    : "translate-x-1"
-                }`}
-              />
-            </button>
-          </div>
-
-          {/* Image Generation Model Selector */}
-          {form.image_generation_enabled === "true" && (
-            <div className="rounded-lg border border-[#2A2A2A] bg-[#161616] px-4 py-3 mt-3">
-              <label className="block text-sm font-medium text-[#FAFAFA] mb-1">
-                Image Generation Model
-              </label>
-              <p className="text-xs text-[#999999] mb-2">
-                Select the model used for image generation (OpenRouter format).
-              </p>
-              <select
-                value={form.image_generation_model}
-                onChange={(e) =>
-                  updateField("image_generation_model", e.target.value)
-                }
-                className="w-full rounded-lg border border-[#2A2A2A] bg-[#0A0A0A] px-3 py-2 text-sm text-[#FAFAFA] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-transparent"
-              >
-                {IMAGE_MODEL_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-          {/* Vector Search Toggle */}
-          <div className="flex items-center justify-between rounded-lg border border-[#2A2A2A] bg-[#161616] px-4 py-3 mt-3">
-            <div>
-              <div className="text-sm font-medium text-[#FAFAFA]">
-                Enable Semantic Vector Search
-              </div>
-              <p className="text-xs text-[#999999] mt-0.5">
-                Use AI embeddings for semantic knowledge search instead of keyword matching.
-                Requires pgvector on your PostgreSQL instance and an OpenRouter API key.
-                Falls back to keyword search when disabled.
-              </p>
-            </div>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={form.vector_search_enabled === "true"}
-              onClick={() =>
-                updateField(
-                  "vector_search_enabled",
-                  form.vector_search_enabled === "true" ? "false" : "true"
-                )
-              }
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:ring-offset-[#161616] ${
-                form.vector_search_enabled === "true"
-                  ? "bg-[#D4A574]"
-                  : "bg-[#2A2A2A]"
-              }`}
-            >
-              <span
-                className={`inline-block h-4 w-4 transform rounded-full bg-[#161616] transition-transform ${
-                  form.vector_search_enabled === "true"
-                    ? "translate-x-6"
-                    : "translate-x-1"
-                }`}
-              />
-            </button>
-          </div>
         </div>
 
         {/* ── Guest Sessions ─────────────────────────────── */}

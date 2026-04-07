@@ -149,7 +149,8 @@ export async function refineRecipe(
 
   // Load prompt from database (admin-editable via Settings → Prompts)
   const { getPromptRaw } = await import("./promptService.js");
-  let systemPrompt = await getPromptRaw("recipeRefinementPrompt");
+  const promptResult = await getPromptRaw("recipeRefinementPrompt");
+  let systemPrompt = promptResult.content;
 
   // Fallback if not yet configured in the database
   if (!systemPrompt) {

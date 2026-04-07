@@ -28,12 +28,14 @@ const log = pino({ transport: { target: "pino-pretty" } });
 /** Zod schema for validating the PUT request body. */
 const UpdateSchema = z.object({
   content: z.string().min(1, "Prompt content cannot be empty"),
+  modelId: z.string().max(150).nullable().optional(),
 });
 
 /** Zod schema for validating the POST (create) request body. */
 const CreateSchema = z.object({
   name: z.string().min(1, "Prompt name is required").max(100),
   content: z.string().min(1, "Prompt content cannot be empty"),
+  modelId: z.string().max(150).nullable().optional(),
 });
 
 /**
@@ -77,7 +79,7 @@ export async function handleCreatePrompt(
       return;
     }
 
-    const result = await createPrompt(parsed.data.name, parsed.data.content);
+    const result = await createPrompt(parsed.data.name, parsed.data.content, parsed.data.modelId);
     log.info({ promptName: result.promptName, promptKey: result.promptKey }, "Prompt created");
     res.status(201).json({ prompt: result });
   } catch (err) {
@@ -102,9 +104,9 @@ export async function getPrompt(
 ): Promise<void> {
   try {
     const name = req.params.name as string;
-    const content = await getPromptRaw(name);
+    const { content, modelId } = await getPromptRaw(name);
     log.info({ name }, "Prompt retrieved");
-    res.json({ name, content });
+    res.json({ name, content, modelId });
   } catch (err) {
     log.error(err, "Failed to get prompt");
     next(err);
@@ -133,7 +135,7 @@ export async function updatePrompt(
       return;
     }
 
-    await savePrompt(name, parsed.data.content);
+    await savePrompt(name, parsed.data.content, parsed.data.modelId);
     log.info({ name }, "Prompt updated");
     res.json({ success: true, name });
   } catch (err) {
@@ -156,7 +158,7 @@ export async function handleResetPrompt(
     const name = req.params.name as string;
     const content = await resetPrompt(name);
     log.info({ name }, "Prompt reset to default");
-    res.json({ name, content });
+    res.json({ name, content, modelId: null });
   } catch (err) {
     log.error(err, "Failed to reset prompt");
     next(err);

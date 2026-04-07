@@ -19,6 +19,7 @@ import {
   Loader2,
   AlertCircle,
   RotateCcw,
+  Bot,
 } from "lucide-react";
 
 /** Props for {@link VersionHistory}. */
@@ -156,6 +157,12 @@ export function VersionHistory({
                       {formatDate(version.createdDttm)}
                     </span>
                   </div>
+                  {version.modelId && (
+                    <div className="flex items-center gap-1 text-[10px] text-[#D4A574] mb-1.5">
+                      <Bot className="size-3" />
+                      {version.modelId}
+                    </div>
+                  )}
                   <p className="text-xs text-[#999999] line-clamp-3 font-mono mb-3">
                     {version.promptBody}
                   </p>

@@ -202,7 +202,8 @@ const PROMPT_NAMES: Record<RecipeDomain, string> = {
 
 /** Load a domain-specific recipe prompt from the database (via promptService). */
 async function loadDomainPrompt(domain: RecipeDomain): Promise<string> {
-  return getPromptRaw(PROMPT_NAMES[domain]);
+  const result = await getPromptRaw(PROMPT_NAMES[domain]);
+  return result.content;
 }
 
 // ---------------------------------------------------------------------------

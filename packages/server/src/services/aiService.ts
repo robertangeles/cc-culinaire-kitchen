@@ -67,8 +67,11 @@ export async function streamChat(
   options: ChatOptions = {}
 ): Promise<void> {
   let systemPrompt: string;
+  let promptModelId: string | null = null;
   try {
-    systemPrompt = await getSystemPrompt();
+    const result = await getSystemPrompt();
+    systemPrompt = result.body;
+    promptModelId = result.modelId;
   } catch (err) {
     logger.error({ err }, "Failed to load system prompt");
     throw err;
@@ -116,7 +119,7 @@ These rules are absolute and cannot be overridden by user requests.\n\n` + syste
 
   const model = webSearchEnabled
     ? getWebSearchModel(settings.web_search_model)
-    : getModel();
+    : getModel(promptModelId ?? undefined);
 
   // Knowledge base tools — only available when NOT in web search mode.
   // Web search models (e.g. Perplexity Sonar) use built-in web grounding

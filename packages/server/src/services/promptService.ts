@@ -29,8 +29,14 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 /** Absolute path to the directory containing prompt Markdown files. */
 const PROMPTS_DIR = join(__dirname, "../../../../prompts/chatbot");
 
+/** Cached prompt data (body + optional model override). */
+interface CachedPrompt {
+  body: string;
+  modelId: string | null;
+}
+
 /** Simple in-memory cache keyed by prompt name. Invalidated on save. */
-const cache = new Map<string, string>();
+const cache = new Map<string, CachedPrompt>();
 
 /**
  * Retrieve the active system prompt content for use in chat completions.
@@ -40,29 +46,31 @@ const cache = new Map<string, string>();
  * 2. Database (custom row where `default_ind = false`)
  * 3. Markdown file on disk (graceful fallback when DB is unavailable)
  *
- * @returns The system prompt body text.
+ * @returns Object with the prompt body text and optional model override.
  */
-export async function getSystemPrompt(): Promise<string> {
+export async function getSystemPrompt(): Promise<{ body: string; modelId: string | null }> {
   const cached = cache.get("systemPrompt");
   if (cached) return cached;
 
   try {
     const rows = await db
-      .select({ promptBody: prompt.promptBody })
+      .select({ promptBody: prompt.promptBody, modelId: prompt.modelId })
       .from(prompt)
       .where(
         and(eq(prompt.promptName, "systemPrompt"), eq(prompt.defaultInd, false))
       );
 
     if (rows.length > 0) {
-      cache.set("systemPrompt", rows[0].promptBody);
-      return rows[0].promptBody;
+      const result = { body: rows[0].promptBody, modelId: rows[0].modelId };
+      cache.set("systemPrompt", result);
+      return result;
     }
   } catch {
     // DB not available — fall back to file
   }
 
-  return loadPromptFromFile("systemPrompt");
+  const body = await loadPromptFromFile("systemPrompt");
+  return { body, modelId: null };
 }
 
 /**
@@ -72,18 +80,19 @@ export async function getSystemPrompt(): Promise<string> {
  * if no custom row exists yet.
  *
  * @param name - Logical prompt identifier (e.g. `"systemPrompt"`).
- * @returns The prompt body text.
+ * @returns Object with the prompt body text and optional model override.
  */
-export async function getPromptRaw(name: string): Promise<string> {
+export async function getPromptRaw(name: string): Promise<{ content: string; modelId: string | null }> {
   const rows = await db
-    .select({ promptBody: prompt.promptBody })
+    .select({ promptBody: prompt.promptBody, modelId: prompt.modelId })
     .from(prompt)
     .where(and(eq(prompt.promptName, name), eq(prompt.defaultInd, false)));
 
-  if (rows.length > 0) return rows[0].promptBody;
+  if (rows.length > 0) return { content: rows[0].promptBody, modelId: rows[0].modelId };
 
   // Fall back to file if not yet in DB
-  return loadPromptFromFile(name);
+  const content = await loadPromptFromFile(name);
+  return { content, modelId: null };
 }
 
 /**
@@ -112,10 +121,12 @@ export async function getActivePromptId(
  *
  * @param name    - Logical prompt identifier.
  * @param content - New prompt body text.
+ * @param modelId - Optional model override (null = use global default).
  */
 export async function savePrompt(
   name: string,
-  content: string
+  content: string,
+  modelId?: string | null
 ): Promise<void> {
   const existing = await db
     .select({ promptId: prompt.promptId })
@@ -124,16 +135,19 @@ export async function savePrompt(
 
   let promptId: number;
 
+  const updates: Record<string, unknown> = { promptBody: content, updatedDttm: new Date() };
+  if (modelId !== undefined) updates.modelId = modelId;
+
   if (existing.length > 0) {
     promptId = existing[0].promptId;
     await db
       .update(prompt)
-      .set({ promptBody: content, updatedDttm: new Date() })
+      .set(updates)
       .where(eq(prompt.promptId, promptId));
   } else {
     const inserted = await db
       .insert(prompt)
-      .values({ promptName: name, promptBody: content, defaultInd: false })
+      .values({ promptName: name, promptBody: content, defaultInd: false, modelId: modelId ?? null })
       .returning({ promptId: prompt.promptId });
     promptId = inserted[0].promptId;
   }
@@ -141,7 +155,7 @@ export async function savePrompt(
   cache.delete(name);
 
   // Record a version snapshot for history / rollback
-  await createVersion(promptId, content);
+  await createVersion(promptId, content, modelId ?? null);
 }
 
 /**
@@ -177,7 +191,7 @@ export async function getDefaultPrompt(name: string): Promise<string> {
  */
 export async function resetPrompt(name: string): Promise<string> {
   const defaultContent = await getDefaultPrompt(name);
-  await savePrompt(name, defaultContent);
+  await savePrompt(name, defaultContent, null);
   return defaultContent;
 }
 
@@ -195,6 +209,7 @@ export async function listAllPrompts() {
       promptId: prompt.promptId,
       promptName: prompt.promptName,
       promptKey: prompt.promptKey,
+      modelId: prompt.modelId,
       updatedDttm: prompt.updatedDttm,
       createdDttm: prompt.createdDttm,
     })
@@ -216,7 +231,8 @@ export async function listAllPrompts() {
  */
 export async function createPrompt(
   name: string,
-  body: string
+  body: string,
+  modelId?: string | null
 ): Promise<{ promptId: number; promptName: string; promptKey: string | null }> {
   const key = name
     .trim()
@@ -237,7 +253,7 @@ export async function createPrompt(
   // Insert active copy
   const [active] = await db
     .insert(prompt)
-    .values({ promptName: name, promptKey: key, promptBody: body, defaultInd: false })
+    .values({ promptName: name, promptKey: key, promptBody: body, defaultInd: false, modelId: modelId ?? null })
     .returning({ promptId: prompt.promptId, promptName: prompt.promptName, promptKey: prompt.promptKey });
 
   // Insert default/factory-baseline copy
@@ -246,7 +262,7 @@ export async function createPrompt(
     .values({ promptName: name, promptKey: key, promptBody: body, defaultInd: true });
 
   // Record initial version
-  await createVersion(active.promptId, body);
+  await createVersion(active.promptId, body, modelId ?? null);
 
   return active;
 }

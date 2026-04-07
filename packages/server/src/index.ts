@@ -29,6 +29,7 @@ import { personalisationOptionsRouter, adminPersonalisationOptionsRouter } from 
 import { handleWebhook } from "./controllers/stripeController.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { knowledgeRouter } from "./routes/knowledge.js";
+import { modelOptionsRouter } from "./routes/modelOptions.js";
 import { recoverStaleDocuments } from "./services/knowledgeManagementService.js";
 import { hydrateEnvFromCredentials } from "./services/credentialService.js";
 import { ensureEncryptionKey, ensurePiiKeys } from "./utils/crypto.js";
@@ -97,6 +98,7 @@ app.use("/api/recipes", recipesRouter);
 app.use("/api", personalisationOptionsRouter);
 app.use("/api/admin", adminPersonalisationOptionsRouter);
 app.use("/api/knowledge", knowledgeRouter);
+app.use("/api/model-options", modelOptionsRouter);
 app.use("/api/bench", benchRouter);
 app.use("/api/menu", menuIntelligenceRouter);
 app.use("/api/waste", wasteRouter);

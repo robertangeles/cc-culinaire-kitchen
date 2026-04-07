@@ -67,6 +67,7 @@ export const prompt = pgTable("prompt", {
   promptKey: varchar("prompt_key", { length: 100 }),
   promptBody: text("prompt_body").notNull(),
   defaultInd: boolean("default_ind").notNull().default(false),
+  modelId: varchar("model_id", { length: 150 }),
   createdDttm: timestamp("created_dttm").notNull().defaultNow(),
   updatedDttm: timestamp("updated_dttm").notNull().defaultNow(),
 });
@@ -85,6 +86,7 @@ export const promptVersion = pgTable("prompt_version", {
   versionId: serial("version_id").primaryKey(),
   promptId: integer("prompt_id").notNull(),
   promptBody: text("prompt_body").notNull(),
+  modelId: varchar("model_id", { length: 150 }),
   versionNumber: integer("version_number").notNull(),
   createdDttm: timestamp("created_dttm").notNull().defaultNow(),
 });
@@ -355,6 +357,36 @@ export const credential = pgTable("credential", {
   credentialCategory: varchar("credential_category", { length: 30 }).notNull(),
   keyVersion: integer("key_version").notNull().default(1),
   updatedBy: integer("updated_by"),
+  createdDttm: timestamp("created_dttm").notNull().defaultNow(),
+  updatedDttm: timestamp("updated_dttm").notNull().defaultNow(),
+});
+
+/**
+ * The `model_option` table stores the admin-curated list of AI models
+ * available for selection in prompt configurations.
+ *
+ * Models are sourced from OpenRouter's catalog and selectively enabled
+ * by the admin via the AI Configuration → Model Registry tab. Only rows
+ * with `enabled_ind = true` appear in the per-prompt model dropdown.
+ *
+ * Pricing fields (`input_cost_per_m`, `output_cost_per_m`) are stored as
+ * NUMERIC to preserve decimal precision and represent USD cost per 1 million
+ * tokens. These are synced from OpenRouter's `/models` endpoint.
+ *
+ * OLTP table, 2NF — every non-key column depends solely on the PK.
+ * Every FK (none currently) would have an index.
+ */
+export const modelOption = pgTable("model_option", {
+  modelOptionId: serial("model_option_id").primaryKey(),
+  modelId: varchar("model_id", { length: 150 }).notNull().unique(),
+  displayName: varchar("display_name", { length: 200 }).notNull(),
+  provider: varchar("provider", { length: 80 }).notNull(),
+  category: varchar("category", { length: 30 }).notNull().default("chat"),
+  contextLength: integer("context_length"),
+  inputCostPerM: numeric("input_cost_per_m", { precision: 10, scale: 4 }),
+  outputCostPerM: numeric("output_cost_per_m", { precision: 10, scale: 4 }),
+  sortOrder: integer("sort_order").notNull().default(0),
+  enabledInd: boolean("enabled_ind").notNull().default(true),
   createdDttm: timestamp("created_dttm").notNull().defaultNow(),
   updatedDttm: timestamp("updated_dttm").notNull().defaultNow(),
 });

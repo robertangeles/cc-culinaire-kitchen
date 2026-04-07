@@ -11,6 +11,8 @@ import { useState, type FormEvent } from "react";
 import { usePromptList, type PromptSummary } from "../../hooks/usePromptList.js";
 import { usePrompt } from "../../hooks/usePrompt.js";
 import { VersionHistory } from "./VersionHistory.js";
+import { useModelOptions } from "../../hooks/useModelOptions.js";
+import { ModelSelector } from "./ModelSelector.js";
 import {
   Save,
   RotateCcw,
@@ -21,6 +23,7 @@ import {
   Plus,
   FileText,
   X,
+  Bot,
 } from "lucide-react";
 
 /**
@@ -138,6 +141,12 @@ function PromptListItem({ prompt, isActive, onClick }: PromptListItemProps) {
       {prompt.promptKey && (
         <span className="block text-xs text-[#999999] truncate">{prompt.promptKey}</span>
       )}
+      {prompt.modelId && (
+        <span className="flex items-center gap-1 text-[10px] text-[#D4A574] mt-0.5">
+          <Bot className="size-3" />
+          {prompt.modelId.split("/")[1] ?? prompt.modelId}
+        </span>
+      )}
     </button>
   );
 }
@@ -160,6 +169,8 @@ function PromptEditor({ name }: PromptEditorProps) {
   const {
     content,
     setContent,
+    modelId,
+    setModelId,
     isLoading,
     isSaving,
     isDirty,
@@ -169,6 +180,7 @@ function PromptEditor({ name }: PromptEditorProps) {
     reset,
   } = usePrompt(name);
 
+  const { models: availableModels } = useModelOptions();
   const [showVersions, setShowVersions] = useState(false);
 
   /** Called when a version is restored from the VersionHistory panel. */
@@ -194,6 +206,22 @@ function PromptEditor({ name }: PromptEditorProps) {
         <p className="mt-1 text-sm text-[#999999]">
           Edit the prompt content below. Changes are saved with version history.
         </p>
+      </div>
+
+      {/* Model selector */}
+      <div className="px-8 py-3 border-b border-[#2A2A2A]">
+        <label className="block text-sm font-medium text-[#E5E5E5] mb-1">
+          AI Model
+        </label>
+        <p className="text-xs text-[#999999] mb-2">
+          Override which model this prompt uses. &ldquo;Global Default&rdquo; uses the system-wide model.
+        </p>
+        <ModelSelector
+          value={modelId}
+          onChange={setModelId}
+          models={availableModels}
+          className="max-w-md"
+        />
       </div>
 
       {/* Editor */}
@@ -282,7 +310,7 @@ function PromptEditor({ name }: PromptEditorProps) {
 interface CreatePromptFormProps {
   onCreated: (name: string) => void;
   onCancel: () => void;
-  create: (name: string, content: string) => Promise<PromptSummary>;
+  create: (name: string, content: string, modelId?: string | null) => Promise<PromptSummary>;
 }
 
 /**
@@ -292,6 +320,8 @@ interface CreatePromptFormProps {
 function CreatePromptForm({ onCreated, onCancel, create }: CreatePromptFormProps) {
   const [name, setName] = useState("");
   const [content, setContent] = useState("");
+  const [newModelId, setNewModelId] = useState<string | null>(null);
+  const { models: availableModels } = useModelOptions();
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState("");
 
@@ -307,7 +337,7 @@ function CreatePromptForm({ onCreated, onCancel, create }: CreatePromptFormProps
     setIsCreating(true);
     setError("");
     try {
-      await create(name.trim(), content);
+      await create(name.trim(), content, newModelId);
       onCreated(name.trim());
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create prompt");
@@ -360,6 +390,19 @@ function CreatePromptForm({ onCreated, onCancel, create }: CreatePromptFormProps
                 Key: <code className="bg-[#1E1E1E] px-1 rounded">{previewKey}</code>
               </p>
             )}
+          </div>
+
+          {/* Model selector */}
+          <div>
+            <label className="block text-sm font-medium text-[#E5E5E5] mb-1">
+              AI Model <span className="text-[#999999] font-normal">(optional)</span>
+            </label>
+            <ModelSelector
+              value={newModelId}
+              onChange={setNewModelId}
+              models={availableModels}
+              className="max-w-md"
+            />
           </div>
         </div>
 

@@ -11,6 +11,7 @@
 
 import { useState, useEffect } from "react";
 import { useSettings } from "../../context/SettingsContext.js";
+import { AIFeaturesPanel, ModelRegistryPanel } from "./AIConfigTab.js";
 import {
   Save,
   Loader2,
@@ -34,6 +35,8 @@ import {
   AlertTriangle,
   Clock,
   Cloud,
+  Zap,
+  Layers,
 } from "lucide-react";
 
 /** Shape of a single credential returned by the API. */
@@ -109,6 +112,7 @@ export function IntegrationsTab() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [activeTab, setActiveTab] = useState<string>("");
+  const [aiInnerTab, setAiInnerTab] = useState<"credentials" | "features" | "registry">("credentials");
 
   /** Fetch all credentials and categories from the API. */
   async function fetchCredentials() {
@@ -414,38 +418,64 @@ export function IntegrationsTab() {
         </div>
       </div>
 
-      {/* Credential list for active category */}
-      <div
-        role="tabpanel"
-        id={`integrations-tabpanel-${activeTab}`}
-        aria-labelledby={`integrations-tab-${activeTab}`}
-        className="flex-1 overflow-y-auto px-8 py-6 space-y-3"
-      >
-        {activeCredentials.length === 0 ? (
-          <p className="text-sm text-[#999999] text-center py-8">
-            No credentials in this category.
-          </p>
-        ) : activeTab === "oauth" ? (
-          <>
-            {/* Google subsection */}
-            <h3 className="text-sm font-semibold text-[#E5E5E5] uppercase tracking-wider mb-3">Google</h3>
-            {activeCredentials
-              .filter((c) => c.key.toLowerCase().includes("google"))
-              .map((cred) => renderCredentialCard(cred))}
+      {/* AI inner tabs (shown only when AI Configuration category is active) */}
+      {activeTab === "ai" && (
+        <div className="px-8 pt-3 border-b border-[#2A2A2A]">
+          <div className="flex gap-1 bg-[#161616] rounded-lg p-1 w-fit">
+            {([
+              { id: "credentials" as const, label: "Credentials", icon: KeyRound },
+              { id: "features" as const, label: "AI Features", icon: Zap },
+              { id: "registry" as const, label: "Model Registry", icon: Layers },
+            ]).map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setAiInnerTab(tab.id)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                  aiInnerTab === tab.id
+                    ? "bg-[#2A2A2A] text-[#FAFAFA] shadow-sm"
+                    : "text-[#999999] hover:text-[#E5E5E5]"
+                }`}
+              >
+                <tab.icon className="size-3.5" />
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
-            {/* Microsoft subsection */}
-            <h3 className="text-sm font-semibold text-[#E5E5E5] uppercase tracking-wider mt-6 mb-3">Microsoft</h3>
-            {activeCredentials
-              .filter((c) => c.key.toLowerCase().includes("microsoft"))
-              .map((cred) => renderCredentialCard(cred))}
-          </>
-        ) : (
-          activeCredentials.map((cred) => renderCredentialCard(cred))
-        )}
+      {/* Content area */}
+      {activeTab === "ai" && aiInnerTab === "features" ? (
+        <AIFeaturesPanel />
+      ) : activeTab === "ai" && aiInnerTab === "registry" ? (
+        <ModelRegistryPanel />
+      ) : (
+        <div
+          role="tabpanel"
+          id={`integrations-tabpanel-${activeTab}`}
+          aria-labelledby={`integrations-tab-${activeTab}`}
+          className="flex-1 overflow-y-auto px-8 py-6 space-y-3"
+        >
+          {activeCredentials.length === 0 ? (
+            <p className="text-sm text-[#999999] text-center py-8">
+              No credentials in this category.
+            </p>
+          ) : activeTab === "oauth" ? (
+            <>
+              {/* Google subsection */}
+              <h3 className="text-sm font-semibold text-[#E5E5E5] uppercase tracking-wider mb-3">Google</h3>
+              {activeCredentials
+                .filter((c) => c.key.toLowerCase().includes("google"))
+                .map((cred) => renderCredentialCard(cred))}
+            </>
+          ) : (
+            activeCredentials.map((cred) => renderCredentialCard(cred))
+          )}
 
-        {/* Database storage viewer */}
-        {activeTab === "database" && <DatabaseStorageViewer />}
-      </div>
+          {/* Database storage viewer */}
+          {activeTab === "database" && <DatabaseStorageViewer />}
+        </div>
+      )}
 
       {/* Bottom bar */}
       <div className="px-8 py-4 border-t border-[#2A2A2A] bg-[#0A0A0A] flex items-center justify-end gap-3">
