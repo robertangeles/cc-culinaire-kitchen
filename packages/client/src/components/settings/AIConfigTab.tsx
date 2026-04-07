@@ -1,12 +1,12 @@
 /**
- * @module AIConfigTab
+ * @module AIConfigPanels
  *
- * Settings tab for AI configuration. Contains two sub-tabs:
+ * Exported panel components used by IntegrationsTab → AI Configuration:
  *
- * 1. **AI Features** — toggles for web search, image generation, and
- *    vector search (migrated from SiteSettingsTab).
- * 2. **Model Registry** — browse, enable, disable, and reorder AI models
- *    sourced from OpenRouter, with token pricing.
+ * - **AIFeaturesPanel** — toggles for web search, image generation, and
+ *   vector search (migrated from SiteSettingsTab).
+ * - **ModelRegistryPanel** — browse, enable, disable, and reorder AI models
+ *   sourced from OpenRouter, with token pricing.
  */
 
 import { useState, useEffect, useRef } from "react";
@@ -19,8 +19,6 @@ import {
 } from "../../hooks/useModelOptions.js";
 import { ModelSelector } from "./ModelSelector.js";
 import {
-  Bot,
-  Zap,
   Save,
   Loader2,
   AlertCircle,
@@ -35,59 +33,8 @@ import {
   Database,
 } from "lucide-react";
 
-type SubTab = "features" | "registry";
-
 // ---------------------------------------------------------------------------
-// Main component
-// ---------------------------------------------------------------------------
-
-export function AIConfigTab() {
-  const [subTab, setSubTab] = useState<SubTab>("features");
-
-  return (
-    <div className="flex flex-col h-full">
-      {/* Header with sub-tab navigation */}
-      <div className="px-8 py-6 border-b border-[#2A2A2A]">
-        <h1 className="text-xl font-semibold text-[#FAFAFA]">AI Configuration</h1>
-        <p className="mt-1 text-sm text-[#999999]">
-          Manage AI features and the model registry.
-        </p>
-
-        {/* Sub-tabs */}
-        <div className="flex gap-1 mt-4 bg-[#161616] rounded-lg p-1 w-fit">
-          <button
-            onClick={() => setSubTab("features")}
-            className={`flex items-center gap-2 px-4 py-2 text-sm rounded-md transition-colors ${
-              subTab === "features"
-                ? "bg-[#2A2A2A] text-[#FAFAFA] shadow-sm"
-                : "text-[#999999] hover:text-[#E5E5E5]"
-            }`}
-          >
-            <Zap className="size-4" />
-            AI Features
-          </button>
-          <button
-            onClick={() => setSubTab("registry")}
-            className={`flex items-center gap-2 px-4 py-2 text-sm rounded-md transition-colors ${
-              subTab === "registry"
-                ? "bg-[#2A2A2A] text-[#FAFAFA] shadow-sm"
-                : "text-[#999999] hover:text-[#E5E5E5]"
-            }`}
-          >
-            <Bot className="size-4" />
-            Model Registry
-          </button>
-        </div>
-      </div>
-
-      {/* Sub-tab content */}
-      {subTab === "features" ? <AIFeaturesPanel /> : <ModelRegistryPanel />}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Sub-tab 1: AI Features (migrated from SiteSettingsTab)
+// AI Features panel (used by IntegrationsTab → AI Configuration → AI Features)
 // ---------------------------------------------------------------------------
 
 export function AIFeaturesPanel() {
