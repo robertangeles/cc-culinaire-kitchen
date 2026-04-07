@@ -1,301 +1,95 @@
-import { anthropic, createAnthropic } from "@ai-sdk/anthropic";
-import { openai } from "@ai-sdk/openai";
-
-const defaults: Record<string, string> = {
-  anthropic: "claude-sonnet-4-20250514",
-  openai: "gpt-4o",
-};
-
-type Provider = "anthropic" | "openai";
-
-export interface ModelOptions {
-  /** When true and using Anthropic, inject the web_search_20250305 tool. */
-  webSearch?: boolean;
-}
-
 /**
- * Return the current AI provider name (e.g. "anthropic" or "openai").
- */
-export function getProviderName(): Provider {
-  return (process.env.AI_PROVIDER ?? "anthropic") as Provider;
-}
-
-/**
- * Format web_search_tool_result content blocks into readable markdown text.
- * Called when the response stream contains search results that need to be
- * converted to text blocks the SDK can handle.
- */
-function formatSearchResults(block: Record<string, unknown>): string {
-  const content = block.content;
-  if (!content || !Array.isArray(content)) {
-    return "\n[Web search completed]\n";
-  }
-  const results = content
-    .filter((item: Record<string, unknown>) => item.type === "web_search_result")
-    .map(
-      (item: Record<string, unknown>) =>
-        `- [${item.title}](${item.url})${item.snippet ? `: ${item.snippet}` : ""}`,
-    )
-    .join("\n");
-  return results ? `\n**Sources:**\n${results}\n` : "\n[Web search completed]\n";
-}
-
-/**
- * Build and return the configured LLM model instance.
+ * @module providerService
  *
- * When `options.webSearch` is true and the provider is Anthropic, the
- * model is configured with a custom `fetch` wrapper that:
- * 1. Injects the `web_search_20250305` server tool into the request body
- * 2. Transforms the response stream to filter out `server_tool_use` events
- *    and convert `web_search_tool_result` blocks to text — because the
- *    @ai-sdk/anthropic SDK doesn't handle server tool content block types
+ * AI provider abstraction layer — routes all LLM and embedding traffic
+ * through OpenRouter (https://openrouter.ai), a unified AI gateway with
+ * an OpenAI-compatible API.
+ *
+ * Architecture:
+ *
+ *   ┌─────────────┐     ┌──────────────────┐     ┌─────────────────┐
+ *   │  aiService   │────▶│ providerService  │────▶│   OpenRouter    │
+ *   │              │     │  getModel()      │     │  (unified API)  │
+ *   │              │     │  getWebSearch()  │     │ ─▶ Claude       │
+ *   │              │     │  getEmbedding()  │     │ ─▶ GPT-4o       │
+ *   └─────────────┘     └──────────────────┘     │ ─▶ Sonar        │
+ *   ┌─────────────────┐          │               │ ─▶ Embeddings   │
+ *   │knowledgeService │──────────┘               └─────────────────┘
+ *   └─────────────────┘
+ *
+ * Model IDs use OpenRouter format: "provider/model-name"
+ * (e.g. "anthropic/claude-sonnet-4-20250514", "openai/gpt-4o").
+ *
+ * A fresh provider instance is created on every call so that credential
+ * changes via the Integrations panel take effect immediately without
+ * requiring a server restart or cache invalidation.
  */
-export function getModel(options: ModelOptions = {}) {
-  const provider = getProviderName();
-  const model = process.env.AI_MODEL ?? defaults[provider];
 
-  if (provider !== "anthropic" && provider !== "openai") {
-    throw new Error(`Unknown AI provider: ${provider}. Use "anthropic" or "openai".`);
-  }
+import { createOpenAI } from "@ai-sdk/openai";
 
-  if (provider === "anthropic" && options.webSearch) {
-    const webSearchProvider = createAnthropic({
-      fetch: async (url, init) => {
-        // Inject web_search tool into request body
-        if (init?.body && typeof init.body === "string") {
-          try {
-            const body = JSON.parse(init.body);
-            body.tools = body.tools || [];
-            body.tools.push({
-              type: "web_search_20250305",
-              name: "web_search",
-            });
-            init = { ...init, body: JSON.stringify(body) };
-          } catch {
-            // If body parsing fails, proceed without modification.
-          }
-        }
+/** Default chat model (OpenRouter format). */
+const DEFAULT_MODEL = "anthropic/claude-sonnet-4-20250514";
 
-        const response = await globalThis.fetch(url, init);
+/** Default web-search-capable model. */
+const DEFAULT_WEB_SEARCH_MODEL = "perplexity/sonar-pro";
 
-        // Only transform streaming SSE responses
-        if (
-          !response.body ||
-          !response.headers.get("content-type")?.includes("text/event-stream")
-        ) {
-          return response;
-        }
+/** Embedding model — hardcoded because changing it requires re-embedding
+ *  all knowledge chunks (dimension mismatch with existing pgvector data). */
+const EMBEDDING_MODEL = "openai/text-embedding-3-small";
 
-        // Transform the SSE stream: filter out server_tool_use events and
-        // convert web_search_tool_result blocks to text blocks.
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        const encoder = new TextEncoder();
-        // Indices of blocks to fully suppress (server_tool_use — skip start, delta, stop)
-        const serverToolIndices = new Set<number>();
-        // Indices of converted blocks (web_search_tool_result → text — skip deltas only)
-        const convertedIndices = new Set<number>();
-        // Maps original block index → remapped index (closing gaps from removed blocks)
-        const indexMap = new Map<number, number>();
-        let nextMappedIndex = 0;
-        // Tracks whether the previous line was an `event:` line that should be skipped
-        let pendingEventLine: string | null = null;
-        // Buffer for incomplete data: lines split across chunks
-        let pendingDataLine = "";
+/**
+ * Create a fresh OpenRouter-backed provider instance.
+ * Reads OPENROUTER_API_KEY from process.env (hydrated from DB at startup
+ * via {@link module:credentialService.hydrateEnvFromCredentials}).
+ */
+function getOpenRouterProvider() {
+  return createOpenAI({
+    baseURL: "https://openrouter.ai/api/v1",
+    apiKey: process.env.OPENROUTER_API_KEY ?? "",
+    headers: {
+      "HTTP-Referer": process.env.CLIENT_URL ?? "http://localhost:5179",
+      "X-Title": "CulinAIre Kitchen",
+    },
+  });
+}
 
-        const transformedStream = new ReadableStream({
-          async pull(controller) {
-            const { done, value } = await reader.read();
-            if (done) {
-              if (pendingDataLine) {
-                controller.enqueue(encoder.encode(pendingDataLine));
-              }
-              controller.close();
-              return;
-            }
+/**
+ * Build and return the configured LLM model instance via OpenRouter.
+ * Model ID comes from AI_MODEL env/credential, defaulting to Claude Sonnet.
+ */
+/**
+ * Ensure a model ID is in OpenRouter format (provider/model).
+ * If no slash is present, assumes Anthropic (e.g. "claude-sonnet-4-6"
+ * becomes "anthropic/claude-sonnet-4-6"). This handles legacy DB values
+ * that were stored before the OpenRouter migration.
+ */
+function normalizeModelId(id: string): string {
+  return id.includes("/") ? id : `anthropic/${id}`;
+}
 
-            const raw = decoder.decode(value, { stream: true });
-            // Prepend any buffered partial line from previous chunk
-            const text = pendingDataLine + raw;
-            pendingDataLine = "";
-            const lines = text.split("\n");
-            // If text doesn't end with \n, the last element is incomplete
-            if (!text.endsWith("\n") && lines.length > 0) {
-              pendingDataLine = lines.pop()!;
-            }
-            const outputLines: string[] = [];
+export function getModel() {
+  const modelId = normalizeModelId(process.env.AI_MODEL ?? DEFAULT_MODEL);
+  return getOpenRouterProvider()(modelId);
+}
 
-            for (const line of lines) {
-              // SSE format: `event: <type>\ndata: <json>\n\n`
-              // Buffer `event:` lines — only emit them if their paired `data:` line is kept
-              if (line.startsWith("event: ")) {
-                // Flush any previous pending event line that had no data pair
-                if (pendingEventLine !== null) {
-                  outputLines.push(pendingEventLine);
-                }
-                pendingEventLine = line;
-                continue;
-              }
+/**
+ * Return a web-search-capable model (e.g., Perplexity Sonar) via OpenRouter.
+ *
+ * When web search is enabled, aiService swaps to this model instead of
+ * the default chat model. Knowledge base tools are stripped — the web
+ * search model uses only its built-in web grounding.
+ *
+ * @param modelId - Optional override from site settings (web_search_model).
+ */
+export function getWebSearchModel(modelId?: string) {
+  const id = modelId ?? process.env.WEB_SEARCH_MODEL ?? DEFAULT_WEB_SEARCH_MODEL;
+  return getOpenRouterProvider()(id);
+}
 
-              if (!line.startsWith("data: ")) {
-                // Blank lines or other non-data lines — flush pending event first
-                if (pendingEventLine !== null) {
-                  outputLines.push(pendingEventLine);
-                  pendingEventLine = null;
-                }
-                outputLines.push(line);
-                continue;
-              }
-
-              const jsonStr = line.slice(6).trim();
-              if (!jsonStr || jsonStr === "[DONE]") {
-                if (pendingEventLine !== null) {
-                  outputLines.push(pendingEventLine);
-                  pendingEventLine = null;
-                }
-                outputLines.push(line);
-                continue;
-              }
-
-              try {
-                const event = JSON.parse(jsonStr);
-
-                // Handle content_block_start for server tool types
-                if (event.type === "content_block_start") {
-                  const block = event.content_block;
-
-                  if (block?.type === "server_tool_use") {
-                    // Track and skip entirely — drop both event: and data: lines
-                    serverToolIndices.add(event.index);
-                    pendingEventLine = null;
-                    continue;
-                  }
-                  if (block?.type === "web_search_tool_result") {
-                    // Convert search results to a text block the SDK can render.
-                    // Track as converted — skip original deltas but keep stop event.
-                    convertedIndices.add(event.index);
-                    const mappedIndex = nextMappedIndex++;
-                    indexMap.set(event.index, mappedIndex);
-                    const searchText = formatSearchResults(block);
-                    // Emit content_block_start with empty text (SDK expects this)
-                    event.index = mappedIndex;
-                    event.content_block = { type: "text", text: "" };
-                    if (pendingEventLine !== null) {
-                      outputLines.push(pendingEventLine);
-                      pendingEventLine = null;
-                    }
-                    outputLines.push("data: " + JSON.stringify(event));
-                    // Blank line to close the SSE event before emitting the delta
-                    outputLines.push("");
-                    // Emit the search results as a separate SSE text delta event
-                    outputLines.push("event: content_block_delta");
-                    outputLines.push(
-                      "data: " +
-                        JSON.stringify({
-                          type: "content_block_delta",
-                          index: mappedIndex,
-                          delta: { type: "text_delta", text: searchText },
-                        }),
-                    );
-                    continue;
-                  }
-
-                  // Non-server-tool block — assign a mapped index and
-                  // strip `citations` field (SDK doesn't handle it)
-                  const mappedIndex = nextMappedIndex++;
-                  indexMap.set(event.index, mappedIndex);
-                  event.index = mappedIndex;
-                  if (block && "citations" in block) {
-                    delete block.citations;
-                  }
-                  if (pendingEventLine !== null) {
-                    outputLines.push(pendingEventLine);
-                    pendingEventLine = null;
-                  }
-                  outputLines.push("data: " + JSON.stringify(event));
-                  continue;
-                }
-
-                // Skip deltas and stops for fully suppressed server tool blocks
-                if (
-                  (event.type === "content_block_delta" ||
-                    event.type === "content_block_stop") &&
-                  serverToolIndices.has(event.index)
-                ) {
-                  pendingEventLine = null;
-                  continue;
-                }
-
-                // Skip deltas for converted blocks (content already emitted in start)
-                // but let stop events pass through (SDK needs matching stop for every start)
-                if (
-                  event.type === "content_block_delta" &&
-                  convertedIndices.has(event.index)
-                ) {
-                  pendingEventLine = null;
-                  continue;
-                }
-
-                // Skip citations_delta events — SDK can't handle them
-                if (
-                  event.type === "content_block_delta" &&
-                  event.delta?.type === "citations_delta"
-                ) {
-                  pendingEventLine = null;
-                  continue;
-                }
-
-                // Remap indices for delta and stop events
-                if (
-                  event.type === "content_block_delta" ||
-                  event.type === "content_block_stop"
-                ) {
-                  const mapped = indexMap.get(event.index);
-                  if (mapped !== undefined) {
-                    event.index = mapped;
-                  }
-                  if (pendingEventLine !== null) {
-                    outputLines.push(pendingEventLine);
-                    pendingEventLine = null;
-                  }
-                  outputLines.push("data: " + JSON.stringify(event));
-                  continue;
-                }
-
-                // Pass through everything else unchanged
-                if (pendingEventLine !== null) {
-                  outputLines.push(pendingEventLine);
-                  pendingEventLine = null;
-                }
-                outputLines.push(line);
-              } catch {
-                // JSON parse failed — pass through (shouldn't happen with
-                // trailing-line buffering, but safe fallback)
-                if (pendingEventLine !== null) {
-                  outputLines.push(pendingEventLine);
-                  pendingEventLine = null;
-                }
-                outputLines.push(line);
-              }
-            }
-
-            controller.enqueue(encoder.encode(outputLines.join("\n")));
-          },
-        });
-
-        return new Response(transformedStream, {
-          status: response.status,
-          statusText: response.statusText,
-          headers: response.headers,
-        });
-      },
-    });
-    return webSearchProvider(model);
-  }
-
-  if (provider === "anthropic") {
-    return anthropic(model);
-  }
-
-  return openai(model);
+/**
+ * Return an embedding model instance via OpenRouter.
+ * Used by knowledgeService for vector embeddings (1536 dimensions).
+ */
+export function getEmbeddingModel() {
+  return getOpenRouterProvider().embedding(EMBEDDING_MODEL);
 }

@@ -15,7 +15,6 @@ import { eq } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { credential } from "../db/schema.js";
 import { encrypt, decrypt, maskSecret } from "../utils/crypto.js";
-import { resetClient as resetImageClient } from "./imageService.js";
 
 // ---------------------------------------------------------------------------
 // Credential registry — defines all known credential keys
@@ -32,14 +31,8 @@ export const CREDENTIAL_REGISTRY: Record<string, CredentialMeta> = {
   GOOGLE_CLIENT_ID:        { category: "oauth",    label: "Google Client ID",        sensitive: true },
   GOOGLE_CLIENT_SECRET:    { category: "oauth",    label: "Google Client Secret",    sensitive: true },
   GOOGLE_CALLBACK_URL:     { category: "oauth",    label: "Google Callback URL",     sensitive: true },
-  MICROSOFT_CLIENT_ID:     { category: "oauth",    label: "Microsoft Client ID",     sensitive: true },
-  MICROSOFT_CLIENT_SECRET: { category: "oauth",    label: "Microsoft Client Secret", sensitive: true },
-  MICROSOFT_CALLBACK_URL:  { category: "oauth",    label: "Microsoft Callback URL",  sensitive: true },
-  AI_PROVIDER:             { category: "ai",       label: "AI Provider",             sensitive: false },
-  AI_MODEL:                { category: "ai",       label: "AI Model",                sensitive: false },
-  ANTHROPIC_API_KEY:       { category: "ai",       label: "Anthropic API Key",       sensitive: true },
-  OPENAI_API_KEY:          { category: "ai",       label: "OpenAI API Key",          sensitive: true },
-  GEMINI_API_KEY:          { category: "ai",       label: "Gemini API Key",          sensitive: true },
+  OPENROUTER_API_KEY:      { category: "ai",       label: "OpenRouter API Key",      sensitive: true },
+  AI_MODEL:                { category: "ai",       label: "Chat Model (OpenRouter format)", sensitive: false },
   RESEND_API_KEY:          { category: "email",    label: "Resend API Key",          sensitive: true },
   RESEND_FROM_EMAIL:       { category: "email",    label: "Resend From Email",       sensitive: false },
   STRIPE_SECRET_KEY:       { category: "payments", label: "Stripe Secret Key",       sensitive: true },
@@ -222,9 +215,6 @@ export async function upsertCredential(
   // Update process.env so changes take effect immediately
   process.env[key] = plaintext;
 
-  // Reset lazy-initialized clients that cache their API key
-  if (key === "GEMINI_API_KEY") resetImageClient();
-
   invalidateCache();
 }
 
@@ -234,9 +224,6 @@ export async function upsertCredential(
  */
 export async function deleteCredential(key: string): Promise<void> {
   await db.delete(credential).where(eq(credential.credentialKey, key));
-
-  // Reset lazy-initialized clients that cache their API key
-  if (key === "GEMINI_API_KEY") resetImageClient();
 
   // Remove the DB-sourced value; the original env var (if any) remains
   // since we only set process.env in upsertCredential

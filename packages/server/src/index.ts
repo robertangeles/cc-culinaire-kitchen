@@ -5,10 +5,10 @@ import helmet from "helmet";
 import cookieParser from "cookie-parser";
 import { rateLimit } from "express-rate-limit";
 import { pino } from "pino";
-import { join, dirname } from "path";
+import { join, dirname, resolve } from "path";
 import { fileURLToPath } from "url";
 import { config } from "dotenv";
-config({ path: "../../.env" });
+config({ path: resolve(dirname(fileURLToPath(import.meta.url)), "../../../.env") });
 
 import { healthRouter } from "./routes/health.js";
 import { chatRouter } from "./routes/chat.js";
@@ -42,7 +42,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const log = pino({ transport: { target: "pino-pretty" } });
 
 const app = express();
-const port = process.env.PORT ?? 3001;
+const port = process.env.PORT ?? 3009;
 
 // Stripe webhook needs raw body — must be before express.json()
 app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), handleWebhook);
@@ -258,7 +258,7 @@ hydrateEnvFromCredentials().then(() => {
     initBenchSocket(httpServer);
     httpServer.listen(port, () => {
       log.info(`CulinAIre Kitchen server running on http://localhost:${port}`);
-      log.info(`AI Provider: ${process.env.AI_PROVIDER ?? "anthropic"}`);
+      log.info(`AI Model: ${process.env.AI_MODEL ?? "anthropic/claude-sonnet-4-20250514"} (via OpenRouter)`);
 
       // Periodic guest session cleanup (runs once on start, then every hour)
       async function runGuestCleanup() {

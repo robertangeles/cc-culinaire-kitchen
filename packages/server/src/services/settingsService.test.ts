@@ -46,10 +46,13 @@ describe("settingsService", () => {
     const { getAllSettings } = await import("./settingsService.js");
     const result = await getAllSettings();
 
-    expect(result).toEqual({
+    // DB values override defaults; defaults fill in the rest
+    expect(result).toMatchObject({
       page_title: "Test Kitchen",
       logo_path: "/uploads/logo.png",
     });
+    // Verify defaults are merged in
+    expect(result.web_search_model).toBe("perplexity/sonar-pro");
     expect(mockFrom).toHaveBeenCalledTimes(1);
   });
 
