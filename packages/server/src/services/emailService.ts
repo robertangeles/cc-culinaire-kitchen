@@ -320,7 +320,7 @@ export async function sendRecipeEmail(
         attachments.push({ path: imageUrl, filename: "recipe-hero.jpg", contentId: "hero_image" });
       } else {
         // Local/relative URL — fetch from our own server and embed as base64
-        const fullUrl = `http://localhost:${process.env.PORT ?? 3001}${imageUrl}`;
+        const fullUrl = `http://localhost:${process.env.PORT ?? 3009}${imageUrl}`;
         const imgRes = await fetch(fullUrl);
         if (imgRes.ok) {
           const buffer = Buffer.from(await imgRes.arrayBuffer());

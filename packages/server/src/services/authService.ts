@@ -528,11 +528,7 @@ export async function resetPassword(
 // time rather than module-load time (when they may not yet be set).
 function getGoogleClientId() { return process.env.GOOGLE_CLIENT_ID ?? ""; }
 function getGoogleClientSecret() { return process.env.GOOGLE_CLIENT_SECRET ?? ""; }
-function getGoogleCallbackUrl() { return process.env.GOOGLE_CALLBACK_URL ?? "http://localhost:3001/api/auth/google/callback"; }
-function getMsClientId() { return process.env.MICROSOFT_CLIENT_ID ?? ""; }
-function getMsClientSecret() { return process.env.MICROSOFT_CLIENT_SECRET ?? ""; }
-function getMsCallbackUrl() { return process.env.MICROSOFT_CALLBACK_URL ?? "http://localhost:3001/api/auth/microsoft/callback"; }
-
+function getGoogleCallbackUrl() { return process.env.GOOGLE_CALLBACK_URL ?? "http://localhost:3009/api/auth/google/callback"; }
 /** Builds the Google OAuth consent URL. */
 export function getGoogleAuthUrl(): string {
   const params = new URLSearchParams({
@@ -544,17 +540,6 @@ export function getGoogleAuthUrl(): string {
     prompt: "consent",
   });
   return `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
-}
-
-/** Builds the Microsoft OAuth authorization URL. */
-export function getMicrosoftAuthUrl(): string {
-  const params = new URLSearchParams({
-    client_id: getMsClientId(),
-    redirect_uri: getMsCallbackUrl(),
-    response_type: "code",
-    scope: "openid email profile User.Read",
-  });
-  return `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?${params}`;
 }
 
 interface OAuthUserInfo {
@@ -598,48 +583,14 @@ async function getGoogleUserInfo(code: string): Promise<OAuthUserInfo> {
 }
 
 /**
- * Exchanges a Microsoft OAuth code for user info.
- */
-async function getMicrosoftUserInfo(code: string): Promise<OAuthUserInfo> {
-  // Exchange code for tokens
-  const tokenRes = await fetch("https://login.microsoftonline.com/common/oauth2/v2.0/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      code,
-      client_id: getMsClientId(),
-      client_secret: getMsClientSecret(),
-      redirect_uri: getMsCallbackUrl(),
-      grant_type: "authorization_code",
-    }),
-  });
-  const tokens = await tokenRes.json();
-  if (!tokens.access_token) throw new Error("OAUTH_TOKEN_FAILED");
-
-  // Fetch user profile
-  const profileRes = await fetch("https://graph.microsoft.com/v1.0/me", {
-    headers: { Authorization: `Bearer ${tokens.access_token}` },
-  });
-  const profile = await profileRes.json();
-
-  return {
-    providerId: profile.id,
-    email: profile.mail ?? profile.userPrincipalName,
-    name: profile.displayName ?? profile.mail,
-  };
-}
-
-/**
  * Handles OAuth callback: finds or creates the user, links the OAuth
  * provider, and returns the AuthUser for token generation.
  */
 export async function handleOAuthCallback(
-  provider: "google" | "microsoft",
+  provider: "google",
   code: string,
 ): Promise<AuthUser> {
-  const info = provider === "google"
-    ? await getGoogleUserInfo(code)
-    : await getMicrosoftUserInfo(code);
+  const info = await getGoogleUserInfo(code);
 
   // Check if OAuth account already linked
   const [existingOAuth] = await db

@@ -24,12 +24,12 @@ export default defineConfig({
     __APP_VERSION__: JSON.stringify(version),
   },
   server: {
-    port: 5173,
+    port: 5179,
     strictPort: true,
     proxy: {
       // Streaming chat endpoint — bypass http-proxy buffering with manual pipe
       "/api/chat": {
-        target: "http://localhost:3001",
+        target: "http://localhost:3009",
         changeOrigin: true,
         selfHandleResponse: true,
         proxyTimeout: 120000,
@@ -61,7 +61,7 @@ export default defineConfig({
       },
       // All other API routes — standard proxy
       "/api": {
-        target: "http://localhost:3001",
+        target: "http://localhost:3009",
         changeOrigin: true,
         configure: (proxy) => {
           // Suppress ECONNREFUSED noise while the server is starting up
@@ -69,7 +69,7 @@ export default defineConfig({
         },
       },
       "/uploads": {
-        target: "http://localhost:3001",
+        target: "http://localhost:3009",
         changeOrigin: true,
         configure: (proxy) => {
           proxy.on("error", () => {});
@@ -77,7 +77,7 @@ export default defineConfig({
       },
       // Socket.io — proxy WebSocket upgrade + polling fallback
       "/socket.io": {
-        target: "http://localhost:3001",
+        target: "http://localhost:3009",
         changeOrigin: true,
         ws: true,
         configure: (proxy) => {

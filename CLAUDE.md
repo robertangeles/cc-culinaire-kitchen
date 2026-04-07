@@ -72,6 +72,26 @@ Rules:
 -   Test the unhappy path: invalid input, missing auth, rate limits,
     edge cases
 
+### Regression Testing Protocol
+
+After every new feature, before marking work complete:
+
+1. Run the full test suite: `pnpm test`
+2. Run integration tests: `pnpm test:integration`
+3. Check for TypeScript errors: `pnpm tsc`
+4. If any DB schema changes were made, run `drizzle-kit push` (from `packages/server/`) to sync the remote database
+5. **MANDATORY: Test every new/updated API route via curl or ctx_execute fetch:**
+   - List every route the feature touches
+   - Verify 200 + correct response shape for happy path
+   - Verify 401 without token
+   - Verify 404/400 for invalid params
+   - Only wire the frontend AFTER backend routes are verified
+6. Smoke test all affected routes and list them in your task summary
+7. Confirm no existing tests were broken, modified, or deleted without justification
+8. Report pass/fail results before closing the task
+
+Never consider a feature done until all existing tests pass, the database schema is in sync, and all API routes are verified via curl.
+
 ## 8. Enterprise Code Quality
 
 Every change must meet production-grade standards:
@@ -88,6 +108,28 @@ Every change must meet production-grade standards:
     work
 -   When integrating any external API, make a real test call during
     implementation to verify the endpoint/model/key works
+
+## 9. Debugging Protocol
+
+Follow this sequence strictly. Do not skip steps.
+
+1. Read the error output exactly as written. Do not interpret.
+2. Identify the exact file, line, and function where the error originates.
+3. State only what the error message confirms. Label anything else [Inference].
+4. Do not suggest a fix until root cause is confirmed by evidence in the code or logs.
+5. If root cause cannot be determined from available information, state: "I need more information." Then list exactly what information is needed.
+6. Never guess. Never patch. Never suggest multiple fixes hoping one works.
+7. One confirmed problem. One evidence-based fix. One test to verify.
+
+### Investigation Format
+
+Every debugging response must follow this structure:
+
+- Confirmed: [what the error proves]
+- Evidence: [exact file, line, log output]
+- Root cause: [only if confirmed by evidence]
+- Fix: [only after root cause is confirmed]
+- Verify with: [exact command or test]
 
 ------------------------------------------------------------------------
 
@@ -128,13 +170,89 @@ The system must follow:
 Frontend, backend, AI services, prompts, and knowledge content must
 remain separated.
 
+## Database Design — Mandatory Standards
+
+Apply these rules to ALL database work in this project, including migrations,
+schema files, Drizzle ORM definitions, and any ad-hoc SQL.
+
+---
+
+### 1. Normalization (2NF)
+
+- Every table must be in Second Normal Form before review.
+- No transitive dependencies. Each non-key column depends only on the primary key.
+- Repeating groups, comma-separated values, and JSON blobs used as relational
+  columns are not allowed.
+- Exception: pgvector `embedding` columns and JSONB audit/metadata columns
+  are permitted where explicitly noted in a comment.
+
+---
+
+### 2. Star Schema (Analytics Layer)
+
+- Separate OLTP tables (normalized, transactional) from OLAP tables
+  (denormalized, reporting).
+- Analytics tables follow strict star schema:
+  - One central fact table per analytical domain (e.g. `fact_usage`)
+  - Dimension tables prefixed with `dim_` (e.g. `dim_user`, `dim_role`)
+  - Fact tables hold foreign keys to dimensions and numeric measures only.
+  - No dimension data lives inside a fact table.
+- Do not mix OLTP and OLAP concerns in the same table.
+
+---
+
+### 3. Naming Conventions
+
+| Object           | Pattern                          | Example                     |
+| ---------------- | -------------------------------- | --------------------------- |
+| Tables           | `snake_case`, plural noun        | `recipe_versions`           |
+| Fact tables      | `fact_` prefix                   | `fact_recipe_usage`         |
+| Dimension tables | `dim_` prefix                    | `dim_ingredient`            |
+| Primary key      | `id` (UUID preferred)            | `id uuid primary key`       |
+| Foreign keys     | `{referenced_table_singular}_id` | `user_id`, `recipe_id`      |
+| Timestamps       | `created_at`, `updated_at`       | standard on every table     |
+| Boolean cols     | `is_` or `has_` prefix           | `is_published`, `has_image` |
+| Junction tables  | both entity names, alphabetical  | `ingredient_recipe`         |
+
+- No abbreviations unless universally understood (e.g. `id`, `url`).
+- No camelCase in SQL or schema files.
+
+---
+
+### 4. Index Strategy
+
+- Every foreign key column gets an index. No exceptions.
+- Add a composite index when two or more columns are consistently queried together.
+- Unique constraints replace unique indexes wherever the constraint is semantic
+  (e.g. `unique(user_id, recipe_id)` on a junction table).
+- pgvector columns use `ivfflat` index with `lists` tuned to dataset size.
+- Do not add indexes speculatively. Every index must have a stated query it serves,
+  written as a comment directly above the index definition.
+- Partial indexes are preferred over full indexes for low-selectivity boolean
+  columns (e.g. `WHERE is_published = true`).
+
+---
+
+### Enforcement
+
+Before generating or reviewing any schema:
+
+1. State which normal form the table satisfies.
+2. Confirm every FK has an index.
+3. Flag any column that violates naming conventions.
+4. Identify whether the table is OLTP or OLAP and confirm it follows the
+   correct design pattern for that layer.
+
+If a design decision deviates from any rule above, state the deviation
+explicitly and provide a justification before proceeding.
+
 ------------------------------------------------------------------------
 
 # Project Folder Structure
 
 This is a **pnpm monorepo**. All application code lives under `packages/`.
 
-    culinaire-kitchen/
+    cc-culinaire-kitchen/
 
     packages/
       client/
@@ -416,6 +534,33 @@ Structure:
 
 ------------------------------------------------------------------------
 
+# MANDATORY: Infection Virus Design Standard
+
+Every UI element must make the user want to touch it. This is not optional polish — it is a core design requirement for every page, component, and interaction in the application.
+
+## Principles
+
+- **Glass morphism**: Use `backdrop-blur`, semi-transparent backgrounds (`bg-surface-2/50`), and `border-white/5` to create depth layers
+- **Subtle amber glows**: Selected, active, and focused elements get soft glow shadows (`shadow-[0_0_12px_rgba(255,214,10,0.15)]`)
+- **Gradient accents**: Buttons, borders, and highlights use gradients (`bg-gradient-to-r from-accent to-amber-600`) instead of flat colors
+- **Depth that pulls you in**: Radial gradient backgrounds, inner shadows on inputs, cards that lift on hover (`hover:-translate-y-1 hover:shadow-dark-lg`)
+- **Micro-animations that respond**: Spring easing (`ease-spring`), scale-in on selection, slide-up on mount, shimmer during loading, pulse on idle CTAs
+- **Per-platform identity**: Each social platform gets its own accent color for chips, tabs, and preview cards — never generic gray
+- **No flat surfaces**: Every card, panel, and section should have visible depth through gradients, borders, or shadows
+- **Keyboard-first power user flow**: Every major action has a keyboard shortcut with visible hints
+
+## When Building New UI
+
+1. Apply glass morphism to cards and panels
+2. Add hover lift effects to interactive cards
+3. Use platform-specific colors where applicable
+4. Add stagger animations on list/grid mounts
+5. Ensure focus states have accent glow rings
+6. Progress bars and counters use color gradients (green → amber → red)
+7. Empty states must be inspiring, not clinical — use hero icons with glow, gradient text, and quick-start cards
+
+---
+
 # When Generating Code
 
 Claude must:
@@ -499,29 +644,51 @@ If a feature introduces security risk, Claude must:
 
 ------------------------------------------------------------------------
 
-# Git Workflow
+# Git Workflow — Trunk-Based Development
 
-Solo developer. `main` is the production branch — Railway auto-deploys on every push to it.
+`main` is the trunk. Every push auto-deploys via Render. CI must pass.
+
+References:
+
+- https://www.atlassian.com/continuous-delivery/continuous-integration/trunk-based-development
+- https://trunkbaseddevelopment.com/
 
 ## Rules
 
-- Work in a **feature branch** for anything beyond a 2-file change
-- Merge to `main` with `--no-ff` when the feature is tested and ready to deploy
-- For small bug fixes or config changes, commit directly to `main`
-- For production hotfixes, use a `hotfix/` branch
+- **MANDATORY**: CI pipeline (GitHub Actions) must pass before merging. Never bypass.
+- **MANDATORY**: Always ask for explicit user confirmation before running `git push`. Never push automatically.
+- Small changes (< 3 files, config, docs): commit directly to `main`
+- Non-trivial changes: short-lived feature branch (max 2 days)
+- Merge to `main` with `--no-ff` when CI passes
+- For incomplete features touching shared code: use feature flags
+- Pre-commit hooks (Husky + lint-staged) run lint + format on staged files
 
 ## Branch Naming
 
-    feature/recipe-dev-lab
+    feature/translation-layer-editor
     fix/guest-session-timeout
     hotfix/stripe-webhook-failure
+
+## CI Pipeline (GitHub Actions)
+
+Every push and PR to `main` runs:
+
+    1. pnpm install --frozen-lockfile
+    2. Lint (eslint)
+    3. TypeScript check (tsc --noEmit for shared, server, client)
+    4. Unit tests (vitest)
+    5. Build (pnpm build)
+
+All steps must pass. No exceptions.
 
 ## Merge Flow
 
     git checkout -b feature/my-feature
-    # ... work and commit ...
+    # ... work and commit (keep branch < 2 days) ...
+    # Push branch, CI runs automatically
     git checkout main
     git merge feature/my-feature --no-ff
+    # Confirm with user before pushing
     git push origin main
     git branch -d feature/my-feature
 
@@ -530,12 +697,23 @@ Solo developer. `main` is the production branch — Railway auto-deploys on ever
     <verb> <area>: <detail>
 
     Examples:
-    Add recipe parsing endpoint
+    Add content parsing endpoint
     Fix streaming burst mode: selfHandleResponse in Vite proxy
     Update usage middleware: replace console.log with pino logger
 
 ## Never
 
+- Push to any remote without explicit user confirmation
 - Push broken code to `main`
 - Commit `.env` files or secrets
-- Use PRs for solo work (unnecessary overhead)
+- Skip pre-commit hooks (--no-verify)
+- Let a feature branch live longer than 2 days
+
+# Local Development Ports
+
+This project runs on non-default ports to avoid conflicts with other local projects.
+
+- Frontend (Vite): 5179
+- Backend (Express): 3009
+
+Never change these ports without explicit confirmation. Do not default to 3000, 5173

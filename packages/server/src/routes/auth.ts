@@ -17,8 +17,6 @@ import {
   handleResendVerification,
   handleGoogleRedirect,
   handleGoogleCallback,
-  handleMicrosoftRedirect,
-  handleMicrosoftCallback,
   handleMfaSetup,
   handleMfaEnable,
   handleMfaDisable,
@@ -43,8 +41,6 @@ router.post("/reset-password", handleResetPassword);
 // OAuth
 router.get("/google", handleGoogleRedirect);
 router.get("/google/callback", handleGoogleCallback);
-router.get("/microsoft", handleMicrosoftRedirect);
-router.get("/microsoft/callback", handleMicrosoftCallback);
 
 // MFA
 router.post("/mfa/setup", authenticate, handleMfaSetup);

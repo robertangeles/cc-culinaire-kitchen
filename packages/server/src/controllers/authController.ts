@@ -18,7 +18,6 @@ import {
   verifyEmail,
   resendVerification,
   getGoogleAuthUrl,
-  getMicrosoftAuthUrl,
   handleOAuthCallback,
   generateMfaSecret,
   enableMfa,
@@ -442,40 +441,6 @@ export async function handleGoogleCallback(
     res.redirect(`${CLIENT_URL}/chat/new`);
   } catch (err) {
     logger.error(err, "Google OAuth callback failed");
-    res.redirect(`${CLIENT_URL}/login?error=oauth_failed`);
-  }
-}
-
-/** GET /api/auth/microsoft — Redirects to Microsoft OAuth authorization. */
-export function handleMicrosoftRedirect(_req: Request, res: Response) {
-  if (!process.env.MICROSOFT_CLIENT_ID) {
-    res.redirect(`${CLIENT_URL}/login?error=oauth_not_configured`);
-    return;
-  }
-  res.redirect(getMicrosoftAuthUrl());
-}
-
-/** GET /api/auth/microsoft/callback — Handles Microsoft OAuth callback. */
-export async function handleMicrosoftCallback(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-) {
-  try {
-    const code = req.query.code;
-    if (!code || typeof code !== "string") {
-      res.redirect(`${CLIENT_URL}/login?error=oauth_failed`);
-      return;
-    }
-
-    const authUser = await handleOAuthCallback("microsoft", code);
-    const tokens = await generateTokens(authUser);
-    setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
-
-    logger.info({ userId: authUser.userId }, "User logged in via Microsoft");
-    res.redirect(`${CLIENT_URL}/chat/new`);
-  } catch (err) {
-    logger.error(err, "Microsoft OAuth callback failed");
     res.redirect(`${CLIENT_URL}/login?error=oauth_failed`);
   }
 }

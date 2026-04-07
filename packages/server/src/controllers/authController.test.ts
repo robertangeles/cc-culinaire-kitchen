@@ -12,7 +12,6 @@ vi.mock("../services/authService.js", () => ({
   verifyEmail: vi.fn(),
   resendVerification: vi.fn(),
   getGoogleAuthUrl: vi.fn(() => "https://accounts.google.com/oauth"),
-  getMicrosoftAuthUrl: vi.fn(() => "https://login.microsoftonline.com/oauth"),
   handleOAuthCallback: vi.fn(),
   generateMfaSecret: vi.fn(),
   enableMfa: vi.fn(),
@@ -24,7 +23,6 @@ import {
   handleRegister,
   handleLogin,
   handleGoogleRedirect,
-  handleMicrosoftRedirect,
 } from "./authController.js";
 import { registerUser, loginUser, generateTokens } from "../services/authService.js";
 
@@ -209,26 +207,4 @@ describe("OAuth redirect guards", () => {
     expect(res.redirect).toHaveBeenCalledWith("https://accounts.google.com/oauth");
   });
 
-  it("redirects to error when MICROSOFT_CLIENT_ID is missing", () => {
-    const req = mockReq();
-    const res = mockRes();
-
-    handleMicrosoftRedirect(req, res);
-
-    expect(res.redirect).toHaveBeenCalledWith(
-      expect.stringContaining("oauth_not_configured"),
-    );
-  });
-
-  it("redirects to Microsoft when MICROSOFT_CLIENT_ID is set", () => {
-    process.env.MICROSOFT_CLIENT_ID = "test-ms-id";
-    const req = mockReq();
-    const res = mockRes();
-
-    handleMicrosoftRedirect(req, res);
-
-    expect(res.redirect).toHaveBeenCalledWith(
-      "https://login.microsoftonline.com/oauth",
-    );
-  });
 });
