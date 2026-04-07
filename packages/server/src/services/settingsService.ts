@@ -23,11 +23,12 @@ let cache: Map<string, string> | null = null;
  */
 const SETTING_DEFAULTS: Record<string, string> = {
   web_search_enabled: "true",
+  web_search_model: "perplexity/sonar-pro",
   image_generation_enabled: "true",
-  image_generation_model: "gemini-2.0-flash-exp-image-generation",
+  image_generation_model: "google/gemini-2.5-flash-image",
   guest_session_idle_hours: "24",
   // Vector search is off by default; enable after confirming pgvector extension
-  // is installed on Railway PostgreSQL and OPENAI_API_KEY is configured.
+  // is installed on the PostgreSQL instance and OPENROUTER_API_KEY is configured.
   vector_search_enabled: "false",
 };
 

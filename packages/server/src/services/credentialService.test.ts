@@ -63,9 +63,19 @@ describe("credentialService", () => {
   it("CREDENTIAL_REGISTRY marks secrets as sensitive", async () => {
     const { CREDENTIAL_REGISTRY } = await import("./credentialService.js");
     expect(CREDENTIAL_REGISTRY.GOOGLE_CLIENT_SECRET.sensitive).toBe(true);
-    expect(CREDENTIAL_REGISTRY.GOOGLE_CLIENT_ID.sensitive).toBe(false);
-    expect(CREDENTIAL_REGISTRY.ANTHROPIC_API_KEY.sensitive).toBe(true);
-    expect(CREDENTIAL_REGISTRY.AI_PROVIDER.sensitive).toBe(false);
+    expect(CREDENTIAL_REGISTRY.OPENROUTER_API_KEY.sensitive).toBe(true);
+    expect(CREDENTIAL_REGISTRY.AI_MODEL.sensitive).toBe(false);
+    expect(CREDENTIAL_REGISTRY.STRIPE_PUBLISHABLE_KEY.sensitive).toBe(false);
+  });
+
+  it("CREDENTIAL_REGISTRY includes OpenRouter key and excludes legacy keys", async () => {
+    const { CREDENTIAL_REGISTRY } = await import("./credentialService.js");
+    expect(CREDENTIAL_REGISTRY.OPENROUTER_API_KEY).toBeDefined();
+    expect(CREDENTIAL_REGISTRY.OPENROUTER_API_KEY.category).toBe("ai");
+    expect(CREDENTIAL_REGISTRY.ANTHROPIC_API_KEY).toBeUndefined();
+    expect(CREDENTIAL_REGISTRY.OPENAI_API_KEY).toBeUndefined();
+    expect(CREDENTIAL_REGISTRY.AI_PROVIDER).toBeUndefined();
+    expect(CREDENTIAL_REGISTRY.GEMINI_API_KEY).toBeUndefined();
   });
 
   it("maskSecret works correctly via crypto util", async () => {

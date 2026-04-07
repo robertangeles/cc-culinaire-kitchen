@@ -22,7 +22,7 @@
 
 import { sql } from "drizzle-orm";
 import { embed } from "ai";
-import { openai } from "@ai-sdk/openai";
+import { getEmbeddingModel } from "./providerService.js";
 import pino from "pino";
 import { db } from "../db/index.js";
 import { knowledgeDocument, knowledgeChunk } from "../db/schema.js";
@@ -56,7 +56,7 @@ export interface SearchResult {
 export async function embedText(text: string): Promise<number[] | null> {
   try {
     const { embedding } = await embed({
-      model: openai.embedding("text-embedding-3-small"),
+      model: getEmbeddingModel(),
       value: text,
     });
     return embedding;

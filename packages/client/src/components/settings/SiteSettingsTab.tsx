@@ -28,9 +28,9 @@ const ROBOTS_OPTIONS = [
 
 /** Available Gemini image generation models. */
 const IMAGE_MODEL_OPTIONS = [
-  { value: "gemini-2.0-flash-exp-image-generation", label: "Gemini 2.0 Flash (Experimental)" },
-  { value: "gemini-2.5-flash-image", label: "Gemini 2.5 Flash Image (Nano Banana)" },
-  { value: "gemini-3.1-flash-image-preview", label: "Gemini 3.1 Flash Image (Nano Banana 2)" },
+  { value: "google/gemini-2.5-flash-image", label: "Gemini 2.5 Flash Image (Nano Banana)" },
+  { value: "google/gemini-3.1-flash-image-preview", label: "Gemini 3.1 Flash Image (Nano Banana 2)" },
+  { value: "openai/gpt-5-image", label: "GPT-5 Image (OpenAI)" },
 ];
 
 /**
@@ -59,8 +59,9 @@ export function SiteSettingsTab() {
     logo_path: "",
     footer_text: "",
     web_search_enabled: "false",
+    web_search_model: "perplexity/sonar-pro",
     image_generation_enabled: "false",
-    image_generation_model: "gemini-2.0-flash-exp-image-generation",
+    image_generation_model: "google/gemini-2.5-flash-image",
     vector_search_enabled: "false",
     guest_session_idle_hours: "24",
     default_guest_sessions: "10",
@@ -83,8 +84,9 @@ export function SiteSettingsTab() {
         logo_path: settings.logo_path ?? "",
         footer_text: settings.footer_text ?? "",
         web_search_enabled: settings.web_search_enabled ?? "false",
+        web_search_model: settings.web_search_model ?? "perplexity/sonar-pro",
         image_generation_enabled: settings.image_generation_enabled ?? "false",
-        image_generation_model: settings.image_generation_model ?? "gemini-2.0-flash-exp-image-generation",
+        image_generation_model: settings.image_generation_model ?? "google/gemini-2.5-flash-image",
         vector_search_enabled: settings.vector_search_enabled ?? "false",
         guest_session_idle_hours: settings.guest_session_idle_hours ?? "24",
         default_guest_sessions: settings.default_guest_sessions ?? "10",
@@ -272,7 +274,7 @@ export function SiteSettingsTab() {
               </div>
               <p className="text-xs text-[#999999] mt-0.5">
                 Allow the AI assistant to search the web for current information
-                beyond the curated knowledge base. Requires the Anthropic provider.
+                beyond the curated knowledge base. Uses a web-search-capable model via OpenRouter.
               </p>
             </div>
             <button
@@ -301,6 +303,27 @@ export function SiteSettingsTab() {
             </button>
           </div>
 
+          {/* Web Search Model Selector */}
+          {form.web_search_enabled === "true" && (
+            <div className="rounded-lg border border-[#2A2A2A] bg-[#161616] px-4 py-3 mt-3">
+              <label className="block text-sm font-medium text-[#FAFAFA] mb-1">
+                Web Search Model
+              </label>
+              <p className="text-xs text-[#999999] mb-2">
+                The model used for web search requests (OpenRouter format, e.g. perplexity/sonar-pro).
+              </p>
+              <input
+                type="text"
+                value={form.web_search_model}
+                onChange={(e) =>
+                  updateField("web_search_model", e.target.value)
+                }
+                placeholder="perplexity/sonar-pro"
+                className="w-full rounded-lg border border-[#2A2A2A] bg-[#0A0A0A] px-3 py-2 text-sm text-[#FAFAFA] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-transparent"
+              />
+            </div>
+          )}
+
           {/* Image Generation Toggle */}
           <div className="flex items-center justify-between rounded-lg border border-[#2A2A2A] bg-[#161616] px-4 py-3 mt-3">
             <div>
@@ -308,8 +331,8 @@ export function SiteSettingsTab() {
                 Enable Image Generation
               </div>
               <p className="text-xs text-[#999999] mt-0.5">
-                Allow users to generate images using the Nano Banana model
-                (Google Gemini API). Requires GEMINI_API_KEY to be configured.
+                Allow users to generate images using AI models via OpenRouter.
+                Requires OPENROUTER_API_KEY to be configured.
               </p>
             </div>
             <button
@@ -345,7 +368,7 @@ export function SiteSettingsTab() {
                 Image Generation Model
               </label>
               <p className="text-xs text-[#999999] mb-2">
-                Select the Gemini model used for image generation.
+                Select the model used for image generation (OpenRouter format).
               </p>
               <select
                 value={form.image_generation_model}
@@ -370,7 +393,7 @@ export function SiteSettingsTab() {
               </div>
               <p className="text-xs text-[#999999] mt-0.5">
                 Use AI embeddings for semantic knowledge search instead of keyword matching.
-                Requires pgvector on your PostgreSQL instance and an OpenAI API key.
+                Requires pgvector on your PostgreSQL instance and an OpenRouter API key.
                 Falls back to keyword search when disabled.
               </p>
             </div>
