@@ -21,12 +21,14 @@ import {
   timestamp,
   customType,
   uniqueIndex,
+  index,
   jsonb,
   uuid,
   smallint,
   numeric,
   date,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 /**
  * pgvector column type (1536 dimensions — OpenAI text-embedding-3-small).
@@ -194,6 +196,8 @@ export const user = pgTable("user", {
   userPinterest: varchar("user_pinterest", { length: 500 }),
   userLinkedin: varchar("user_linkedin", { length: 500 }),
   userStatus: varchar("user_status", { length: 20 }).notNull().default("active"),
+  // Active store location selection (persisted for cross-device consistency)
+  selectedLocationId: uuid("selected_location_id"),
   createdDttm: timestamp("created_dttm").notNull().defaultNow(),
   updatedDttm: timestamp("updated_dttm").notNull().defaultNow(),
 });
@@ -723,6 +727,7 @@ export const benchDmThread = pgTable(
 export const menuItem = pgTable("menu_item", {
   menuItemId: uuid("menu_item_id").defaultRandom().primaryKey(),
   userId: integer("user_id").notNull(),
+  storeLocationId: uuid("store_location_id"),
   name: varchar("name", { length: 200 }).notNull(),
   category: varchar("category", { length: 100 }).notNull(),
   sellingPrice: numeric("selling_price", { precision: 10, scale: 2 }).notNull(),
@@ -789,6 +794,7 @@ export const wasteLog = pgTable("waste_log", {
   wasteLogId: uuid("waste_log_id").defaultRandom().primaryKey(),
   userId: integer("user_id").notNull().references(() => user.userId),
   organisationId: integer("organisation_id").references(() => organisation.organisationId),
+  storeLocationId: uuid("store_location_id"),
   ingredientName: text("ingredient_name").notNull(),
   quantity: numeric("quantity", { precision: 10, scale: 3 }).notNull(),
   unit: varchar("unit", { length: 20 }).notNull(),
@@ -816,6 +822,7 @@ export const prepSession = pgTable("prep_session", {
   prepSessionId: uuid("prep_session_id").defaultRandom().primaryKey(),
   userId: integer("user_id").notNull().references(() => user.userId),
   organisationId: integer("organisation_id").references(() => organisation.organisationId),
+  storeLocationId: uuid("store_location_id"),
   prepDate: date("prep_date").notNull(),
   expectedCovers: integer("expected_covers"),
   actualCovers: integer("actual_covers"),
@@ -910,3 +917,153 @@ export const ingredientCrossUsage = pgTable("ingredient_cross_usage", {
   dishNames: jsonb("dish_names").notNull(),
   createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
 });
+
+// ---------------------------------------------------------------------------
+// Store Locations — Multi-Location Support
+// ---------------------------------------------------------------------------
+
+/**
+ * The `store_location` table represents a physical kitchen location
+ * within an organisation. Each org has at least one location (the HQ),
+ * and can have multiple branches, commissaries, or satellite kitchens.
+ *
+ * Classifications:
+ *   hq         — one per org, admin default landing. Partial unique enforced.
+ *   branch     — standard operating location.
+ *   commissary — production kitchen supplying other locations.
+ *   satellite  — temporary/pop-up location.
+ *
+ * Address fields follow the same PII encryption pattern as organisation.
+ * The `store_key` is the location-level join key (prefix: KITCHEN-).
+ *
+ * OLTP table, 2NF — every non-key column depends solely on the PK.
+ */
+export const storeLocation = pgTable(
+  "store_location",
+  {
+    storeLocationId: uuid("store_location_id").defaultRandom().primaryKey(),
+    organisationId: integer("organisation_id").notNull().references(() => organisation.organisationId),
+    locationName: varchar("location_name", { length: 200 }).notNull(),
+    classification: varchar("classification", { length: 20 }).notNull().default("branch"),
+    // Physical address
+    addressLine1: varchar("address_line_1", { length: 200 }),
+    addressLine2: varchar("address_line_2", { length: 200 }),
+    suburb: varchar("suburb", { length: 100 }),
+    state: varchar("state", { length: 100 }),
+    country: varchar("country", { length: 100 }),
+    postcode: varchar("postcode", { length: 20 }),
+    // PII encryption for address (combined JSON blob)
+    locationAddressEnc: text("location_address_enc"),
+    locationAddressIv: varchar("location_address_iv", { length: 24 }),
+    locationAddressTag: varchar("location_address_tag", { length: 32 }),
+    // PII encryption for location name
+    locationNameEnc: text("location_name_enc"),
+    locationNameIv: varchar("location_name_iv", { length: 24 }),
+    locationNameTag: varchar("location_name_tag", { length: 32 }),
+    // Identity & branding
+    storeKey: varchar("store_key", { length: 25 }).notNull().unique(),
+    colorAccent: varchar("color_accent", { length: 7 }),
+    photoPath: varchar("photo_path", { length: 500 }),
+    isActiveInd: boolean("is_active_ind").notNull().default(true),
+    createdBy: integer("created_by").notNull().references(() => user.userId),
+    createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
+    updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // FK index: "get all locations for an org"
+    index("idx_store_location_org").on(table.organisationId),
+    // Composite index: "get active locations for an org"
+    index("idx_store_location_org_active").on(table.organisationId, table.isActiveInd),
+    // Partial unique: enforce exactly one HQ per org
+    uniqueIndex("idx_store_location_hq_unique")
+      .on(table.organisationId)
+      .where(sql`classification = 'hq'`),
+  ],
+);
+
+/**
+ * The `user_store_location` join table assigns staff to store locations.
+ *
+ * Staff can be assigned to one or more locations. `assigned_by` is NULL
+ * for self-serve joins (via store key) and populated for admin-led
+ * assignments, providing an audit trail.
+ *
+ * Org Admins are NOT inserted here for every location — their access
+ * is resolved dynamically by locationContextService.
+ *
+ * OLTP table, 2NF — join table with audit metadata.
+ */
+export const userStoreLocation = pgTable(
+  "user_store_location",
+  {
+    userStoreLocationId: uuid("user_store_location_id").defaultRandom().primaryKey(),
+    userId: integer("user_id").notNull().references(() => user.userId),
+    storeLocationId: uuid("store_location_id").notNull().references(() => storeLocation.storeLocationId),
+    assignedBy: integer("assigned_by").references(() => user.userId),
+    assignedAtDttm: timestamp("assigned_at_dttm", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // One assignment per user per location
+    uniqueIndex("idx_user_store_location_unique").on(table.userId, table.storeLocationId),
+    // FK index: "get all staff at a location"
+    index("idx_user_store_location_loc").on(table.storeLocationId),
+    // FK index: "get all locations for a user"
+    index("idx_user_store_location_user").on(table.userId),
+  ],
+);
+
+/**
+ * The `store_location_hour` table stores operating hours per day
+ * for each store location.
+ *
+ * day_of_week: 0 = Sunday, 6 = Saturday.
+ * Times stored as "HH:MM" strings (24-hour format).
+ * is_closed_ind overrides open/close times for that day.
+ *
+ * OLTP table, 2NF — every non-key column depends on (store_location_id, day_of_week).
+ */
+export const storeLocationHour = pgTable(
+  "store_location_hour",
+  {
+    storeLocationHourId: uuid("store_location_hour_id").defaultRandom().primaryKey(),
+    storeLocationId: uuid("store_location_id").notNull().references(() => storeLocation.storeLocationId),
+    dayOfWeek: smallint("day_of_week").notNull(),
+    openTime: varchar("open_time", { length: 5 }).notNull(),
+    closeTime: varchar("close_time", { length: 5 }).notNull(),
+    isClosedInd: boolean("is_closed_ind").notNull().default(false),
+  },
+  (table) => [
+    // One entry per location per day
+    uniqueIndex("idx_store_location_hour_unique").on(table.storeLocationId, table.dayOfWeek),
+    // FK index: "get all hours for a location"
+    index("idx_store_location_hour_loc").on(table.storeLocationId),
+  ],
+);
+
+/**
+ * The `user_location_preference` table stores per-module location memory.
+ *
+ * Tracks the last-used location for each Kitchen Ops module per user,
+ * so switching to Waste Intelligence auto-selects the location the user
+ * was last working in for that module.
+ *
+ * module_key values: 'waste-intelligence', 'kitchen-copilot', 'menu-intelligence'
+ *
+ * OLTP table, 2NF — every non-key column depends on (user_id, module_key).
+ */
+export const userLocationPreference = pgTable(
+  "user_location_preference",
+  {
+    userLocationPreferenceId: uuid("user_location_preference_id").defaultRandom().primaryKey(),
+    userId: integer("user_id").notNull().references(() => user.userId),
+    moduleKey: varchar("module_key", { length: 50 }).notNull(),
+    storeLocationId: uuid("store_location_id").notNull().references(() => storeLocation.storeLocationId),
+    updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // One preference per user per module
+    uniqueIndex("idx_user_location_pref_unique").on(table.userId, table.moduleKey),
+    // FK index: "get all preferences for a user"
+    index("idx_user_location_pref_user").on(table.userId),
+  ],
+);

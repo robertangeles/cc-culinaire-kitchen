@@ -35,6 +35,9 @@ import { MenuIntelligencePage } from "./pages/MenuIntelligencePage.js";
 import { WasteIntelligencePage } from "./pages/WasteIntelligencePage.js";
 import { KitchenCopilotPage } from "./pages/KitchenCopilotPage.js";
 import { KitchenOnboarding } from "./components/onboarding/KitchenOnboarding.js";
+import { LocationProvider } from "./context/LocationContext.js";
+import { LocationSwitcher } from "./components/location/LocationSwitcher.js";
+import { LocationGate } from "./components/location/LocationGate.js";
 
 /**
  * Context that lets any component force a fresh ChatPage remount on "/chat/new".
@@ -102,6 +105,7 @@ export function App() {
       <BrowserRouter>
         <SettingsProvider>
           <AuthProvider>
+            <LocationProvider>
             <Routes>
               {/* Public auth routes (no sidebar) */}
               <Route path="/login" element={<LoginPage />} />
@@ -120,6 +124,8 @@ export function App() {
                     <div className="flex h-screen overflow-hidden bg-stone-50">
                       {/* Kitchen onboarding wizard — shown once to new users */}
                       <KitchenOnboarding />
+                      {/* Ctrl+L location switcher overlay */}
+                      <LocationSwitcher />
                       {/* Slim icon rail — branding, new chat, settings, user */}
                       <Sidebar />
                       {/* Main content area */}
@@ -136,9 +142,9 @@ export function App() {
                           <Route path="/patisserie" element={<RecipeLabPage key="patisserie" domain="patisserie" />} />
                           <Route path="/spirits" element={<RecipeLabPage key="spirits" domain="spirits" />} />
                           <Route path="/my-shelf" element={<AuthenticatedOnly><MyShelfPage /></AuthenticatedOnly>} />
-                          <Route path="/menu-intelligence" element={<AuthenticatedOnly><MenuIntelligencePage /></AuthenticatedOnly>} />
-                          <Route path="/waste-intelligence" element={<WasteIntelligencePage />} />
-                          <Route path="/kitchen-copilot" element={<AuthenticatedOnly><KitchenCopilotPage /></AuthenticatedOnly>} />
+                          <Route path="/menu-intelligence" element={<AuthenticatedOnly><LocationGate><MenuIntelligencePage /></LocationGate></AuthenticatedOnly>} />
+                          <Route path="/waste-intelligence" element={<AuthenticatedOnly><LocationGate><WasteIntelligencePage /></LocationGate></AuthenticatedOnly>} />
+                          <Route path="/kitchen-copilot" element={<AuthenticatedOnly><LocationGate><KitchenCopilotPage /></LocationGate></AuthenticatedOnly>} />
                           <Route path="/bench" element={<BenchPage />} />
                           <Route path="/kitchen-shelf" element={<RecipeGalleryPage />} />
                           <Route path="/kitchen-shelf/:id" element={<RecipeDetailPage />} />
@@ -156,6 +162,7 @@ export function App() {
                 }
               />
             </Routes>
+          </LocationProvider>
           </AuthProvider>
         </SettingsProvider>
       </BrowserRouter>

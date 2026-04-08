@@ -13,6 +13,7 @@
  */
 
 import { Server as HttpServer } from "http";
+import { CLIENT_URL } from "../utils/env.js";
 import { Server, Socket } from "socket.io";
 import pino from "pino";
 /** Parse cookie header string into key-value pairs */
@@ -100,7 +101,7 @@ function broadcastPresence(channelKey: string) {
 export function initBenchSocket(httpServer: HttpServer): void {
   io = new Server(httpServer, {
     cors: {
-      origin: process.env.CLIENT_URL ?? "http://localhost:5173",
+      origin: CLIENT_URL,
       credentials: true,
     },
     path: "/socket.io",

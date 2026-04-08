@@ -30,12 +30,6 @@ const socialMediaFields = {
 
 const CreateOrgSchema = z.object({
   name: z.string().min(1).max(200),
-  addressLine1: z.string().max(200).optional(),
-  addressLine2: z.string().max(200).optional(),
-  suburb: z.string().max(100).optional(),
-  state: z.string().max(100).optional(),
-  country: z.string().max(100).optional(),
-  postcode: z.string().max(20).optional(),
   website: z.string().max(500).optional(),
   email: z.string().email().optional(),
   ...socialMediaFields,
@@ -58,12 +52,6 @@ export async function handleCreateOrganisation(req: Request, res: Response, next
 
 const UpdateOrgSchema = z.object({
   name: z.string().min(1).max(200),
-  addressLine1: z.string().max(200).optional(),
-  addressLine2: z.string().max(200).optional(),
-  suburb: z.string().max(100).optional(),
-  state: z.string().max(100).optional(),
-  country: z.string().max(100).optional(),
-  postcode: z.string().max(20).optional(),
   website: z.string().max(500).optional(),
   email: z.string().email().optional().or(z.literal("")),
   ...socialMediaFields,

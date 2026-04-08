@@ -21,12 +21,6 @@ export async function createOrganisation(
   userId: number,
   data: {
     name: string;
-    addressLine1?: string;
-    addressLine2?: string;
-    suburb?: string;
-    state?: string;
-    country?: string;
-    postcode?: string;
     website?: string;
     email?: string;
     facebook?: string;
@@ -42,24 +36,18 @@ export async function createOrganisation(
   const orgPii = encryptOrgPii({
     organisationName: data.name,
     organisationEmail: data.email ?? null,
-    organisationAddressLine1: data.addressLine1 ?? null,
-    organisationAddressLine2: data.addressLine2 ?? null,
-    organisationSuburb: data.suburb ?? null,
-    organisationState: data.state ?? null,
-    organisationCountry: data.country ?? null,
-    organisationPostcode: data.postcode ?? null,
+    organisationAddressLine1: null,
+    organisationAddressLine2: null,
+    organisationSuburb: null,
+    organisationState: null,
+    organisationCountry: null,
+    organisationPostcode: null,
   });
 
   const [org] = await db
     .insert(organisation)
     .values({
       organisationName: data.name,
-      organisationAddressLine1: data.addressLine1 ?? null,
-      organisationAddressLine2: data.addressLine2 ?? null,
-      organisationSuburb: data.suburb ?? null,
-      organisationState: data.state ?? null,
-      organisationCountry: data.country ?? null,
-      organisationPostcode: data.postcode ?? null,
       organisationWebsite: data.website ?? null,
       organisationEmail: data.email ?? null,
       organisationFacebook: data.facebook ?? null,
@@ -185,12 +173,6 @@ export async function updateOrganisation(
   organisationId: number,
   data: {
     name: string;
-    addressLine1?: string;
-    addressLine2?: string;
-    suburb?: string;
-    state?: string;
-    country?: string;
-    postcode?: string;
     website?: string;
     email?: string;
     facebook?: string;
@@ -207,24 +189,18 @@ export async function updateOrganisation(
   const orgPii = encryptOrgPii({
     organisationName: data.name,
     organisationEmail: data.email ?? null,
-    organisationAddressLine1: data.addressLine1 ?? null,
-    organisationAddressLine2: data.addressLine2 ?? null,
-    organisationSuburb: data.suburb ?? null,
-    organisationState: data.state ?? null,
-    organisationCountry: data.country ?? null,
-    organisationPostcode: data.postcode ?? null,
+    organisationAddressLine1: null,
+    organisationAddressLine2: null,
+    organisationSuburb: null,
+    organisationState: null,
+    organisationCountry: null,
+    organisationPostcode: null,
   });
 
   const [updated] = await db
     .update(organisation)
     .set({
       organisationName: data.name,
-      organisationAddressLine1: data.addressLine1 ?? null,
-      organisationAddressLine2: data.addressLine2 ?? null,
-      organisationSuburb: data.suburb ?? null,
-      organisationState: data.state ?? null,
-      organisationCountry: data.country ?? null,
-      organisationPostcode: data.postcode ?? null,
       organisationWebsite: data.website ?? null,
       organisationEmail: data.email ?? null,
       organisationFacebook: data.facebook ?? null,

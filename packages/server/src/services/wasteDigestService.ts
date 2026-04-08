@@ -20,7 +20,7 @@ import { decryptUserPii } from "./piiService.js";
 const logger = pino({ name: "wasteDigest" });
 
 const FROM_EMAIL = process.env.RESEND_FROM_EMAIL ?? "noreply@culinaire.kitchen";
-const CLIENT_URL = process.env.CLIENT_URL ?? "http://localhost:5173";
+import { CLIENT_URL } from "../utils/env.js";
 
 // ---------------------------------------------------------------------------
 // Main entry point

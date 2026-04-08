@@ -44,10 +44,12 @@ const endSessionSchema = z.object({
 const historyQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).optional(),
   teamView: z.enum(["true", "false"]).optional(),
+  storeLocationId: z.string().uuid().optional(),
 });
 
 const teamViewQuerySchema = z.object({
   teamView: z.enum(["true", "false"]).optional(),
+  storeLocationId: z.string().uuid().optional(),
 });
 
 const selectionItemSchema = z.object({
@@ -94,8 +96,9 @@ export async function handleGetTodaySession(req: Request, res: Response) {
 
   const parsed = teamViewQuerySchema.safeParse(req.query);
   const teamView = parsed.success && parsed.data.teamView === "true";
+  const storeLocationId = parsed.success ? parsed.data.storeLocationId : undefined;
 
-  const result = await getTodaySession(userId, teamView);
+  const result = await getTodaySession(userId, teamView, storeLocationId);
   if (!result) {
     res.status(404).json({ error: "No prep session for today" });
     return;
@@ -206,7 +209,7 @@ export async function handleGetHistory(req: Request, res: Response) {
     return;
   }
 
-  const sessions = await getSessionHistory(userId, parsed.data.limit, parsed.data.teamView === "true");
+  const sessions = await getSessionHistory(userId, parsed.data.limit, parsed.data.teamView === "true", parsed.data.storeLocationId);
   res.json(sessions);
 }
 

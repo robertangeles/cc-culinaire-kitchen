@@ -409,7 +409,7 @@ export async function handleResetPassword(
 // OAuth handlers
 // ---------------------------------------------------------------------------
 
-const CLIENT_URL = process.env.CLIENT_URL ?? "http://localhost:5173";
+import { CLIENT_URL } from "../utils/env.js";
 
 /** GET /api/auth/google — Redirects to Google OAuth consent screen. */
 export function handleGoogleRedirect(_req: Request, res: Response) {

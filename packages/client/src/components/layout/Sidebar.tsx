@@ -12,6 +12,7 @@ import { ChefHat, Settings, UtensilsCrossed, Croissant, GlassWater, MessageSquar
 import { useSettings } from "../../context/SettingsContext.js";
 import { useAuth } from "../../context/AuthContext.js";
 import { UserMenu } from "./UserMenu.js";
+import { LocationSelector } from "../location/LocationSelector.js";
 
 /** Shared Tailwind class builder for sidebar nav links. */
 const navLinkClass = ({ isActive }: { isActive: boolean }) =>
@@ -80,6 +81,10 @@ function SidebarNav({ isGuest, isAuthenticated }: { isGuest: boolean; isAuthenti
       {/* Kitchen Operations — auth required */}
       {!isGuest && isAuthenticated && (
         <SidebarGroup label="Kitchen Operations">
+          {/* Location selector — shown when user has 2+ locations */}
+          <div className="px-1 mb-1">
+            <LocationSelector />
+          </div>
           <NavLink to="/menu-intelligence" className={navLinkClass}>
             <BarChart3 className="size-4" />
             Menu Intelligence

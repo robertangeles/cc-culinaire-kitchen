@@ -17,7 +17,7 @@ function getStripe(): Stripe {
   return _stripe;
 }
 
-const CLIENT_URL = process.env.CLIENT_URL ?? "http://localhost:5173";
+import { CLIENT_URL } from "../utils/env.js";
 
 /** Create a Stripe checkout session for a subscription. */
 export async function createCheckoutSession(
