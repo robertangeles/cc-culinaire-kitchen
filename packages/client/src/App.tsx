@@ -34,6 +34,7 @@ import { BenchPage } from "./pages/BenchPage.js";
 import { MenuIntelligencePage } from "./pages/MenuIntelligencePage.js";
 import { WasteIntelligencePage } from "./pages/WasteIntelligencePage.js";
 import { KitchenCopilotPage } from "./pages/KitchenCopilotPage.js";
+import { InventoryPage } from "./pages/InventoryPage.js";
 import { KitchenOnboarding } from "./components/onboarding/KitchenOnboarding.js";
 import { LocationProvider } from "./context/LocationContext.js";
 import { LocationSwitcher } from "./components/location/LocationSwitcher.js";
@@ -145,6 +146,7 @@ export function App() {
                           <Route path="/menu-intelligence" element={<AuthenticatedOnly><LocationGate><MenuIntelligencePage /></LocationGate></AuthenticatedOnly>} />
                           <Route path="/waste-intelligence" element={<AuthenticatedOnly><LocationGate><WasteIntelligencePage /></LocationGate></AuthenticatedOnly>} />
                           <Route path="/kitchen-copilot" element={<AuthenticatedOnly><LocationGate><KitchenCopilotPage /></LocationGate></AuthenticatedOnly>} />
+                          <Route path="/inventory" element={<AuthenticatedOnly><LocationGate><InventoryPage /></LocationGate></AuthenticatedOnly>} />
                           <Route path="/bench" element={<BenchPage />} />
                           <Route path="/kitchen-shelf" element={<RecipeGalleryPage />} />
                           <Route path="/kitchen-shelf/:id" element={<RecipeDetailPage />} />

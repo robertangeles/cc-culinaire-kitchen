@@ -1067,3 +1067,256 @@ export const userLocationPreference = pgTable(
     index("idx_user_location_pref_user").on(table.userId),
   ],
 );
+
+// ═══════════════════════════════════════════════════════════════════════
+//  INVENTORY SYSTEM — Phase 1
+// ═══════════════════════════════════════════════════════════════════════
+
+/**
+ * The `ingredient` table is the org-wide canonical ingredient catalog.
+ *
+ * Every ingredient exists once per organisation. Locations customise via
+ * the `location_ingredient` junction table (par levels, unit overrides).
+ *
+ * ingredient_category values: 'proteins', 'produce', 'dairy', 'dry_goods',
+ *   'beverages', 'spirits', 'frozen', 'bakery', 'condiments', 'other'
+ *
+ * base_unit is the smallest meaningful unit for this ingredient — all
+ * stock levels, transfers, and variance calculations use this unit.
+ *
+ * OLTP table, 2NF — every non-key column depends only on ingredient_id.
+ */
+export const ingredient = pgTable(
+  "ingredient",
+  {
+    ingredientId: uuid("ingredient_id").defaultRandom().primaryKey(),
+    organisationId: integer("organisation_id").notNull().references(() => organisation.organisationId),
+    ingredientName: text("ingredient_name").notNull(),
+    ingredientCategory: varchar("ingredient_category", { length: 50 }).notNull(),
+    baseUnit: varchar("base_unit", { length: 20 }).notNull(),
+    createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
+    updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // One ingredient name per org
+    uniqueIndex("idx_ingredient_org_name").on(table.organisationId, table.ingredientName),
+    // FK index: "get all ingredients for an org"
+    index("idx_ingredient_org").on(table.organisationId),
+  ],
+);
+
+/**
+ * The `location_ingredient` table stores per-location configuration
+ * for an ingredient — par levels, reorder quantities, unit overrides,
+ * and whether the ingredient is active at that location.
+ *
+ * HQ sets org-wide defaults on the `ingredient` table; locations
+ * override here. Nullable fields inherit from the parent ingredient.
+ *
+ * OLTP table, 2NF — every non-key column depends on
+ * the composite (ingredient_id, store_location_id).
+ */
+export const locationIngredient = pgTable(
+  "location_ingredient",
+  {
+    locationIngredientId: uuid("location_ingredient_id").defaultRandom().primaryKey(),
+    ingredientId: uuid("ingredient_id").notNull().references(() => ingredient.ingredientId),
+    storeLocationId: uuid("store_location_id").notNull().references(() => storeLocation.storeLocationId),
+    parLevel: numeric("par_level"),
+    reorderQty: numeric("reorder_qty"),
+    unitOverride: varchar("unit_override", { length: 20 }),
+    categoryOverride: varchar("category_override", { length: 50 }),
+    activeInd: boolean("active_ind").notNull().default(true),
+    createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
+    updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // One config per ingredient per location
+    uniqueIndex("idx_loc_ingredient_unique").on(table.ingredientId, table.storeLocationId),
+    // FK index: "get all ingredients at a location"
+    index("idx_loc_ingredient_location").on(table.storeLocationId),
+    // FK index: "get all locations for an ingredient"
+    index("idx_loc_ingredient_ingredient").on(table.ingredientId),
+  ],
+);
+
+/**
+ * The `unit_conversion` table maps alternative counting units to an
+ * ingredient's canonical base unit.
+ *
+ * Example: if base_unit is 'each' and from_unit is 'case',
+ * to_base_factor = 12.0 means 1 case = 12 each.
+ *
+ * Staff count in any unit; the system converts to base on save.
+ *
+ * OLTP table, 2NF — every non-key column depends on
+ * the composite (ingredient_id, from_unit).
+ */
+export const unitConversion = pgTable(
+  "unit_conversion",
+  {
+    conversionId: uuid("conversion_id").defaultRandom().primaryKey(),
+    ingredientId: uuid("ingredient_id").notNull().references(() => ingredient.ingredientId),
+    fromUnit: varchar("from_unit", { length: 20 }).notNull(),
+    toBaseFactor: numeric("to_base_factor").notNull(),
+    createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // One conversion per ingredient per unit
+    uniqueIndex("idx_unit_conversion_unique").on(table.ingredientId, table.fromUnit),
+    // FK index: "get all conversions for an ingredient"
+    index("idx_unit_conversion_ingredient").on(table.ingredientId),
+  ],
+);
+
+/**
+ * The `stock_take_session` table represents a single counting event
+ * at a location. Sessions are opened by a Location Admin, worked on
+ * by staff (via stock_take_category), and reviewed by HQ.
+ *
+ * State machine:
+ *   OPEN → PENDING_REVIEW → APPROVED | FLAGGED
+ *   FLAGGED → OPEN (reopened for recount) → PENDING_REVIEW
+ *   APPROVED → ARCHIVED (after retention period)
+ *
+ * Only one OPEN session per location is allowed at a time.
+ *
+ * OLTP table, 2NF — every non-key column depends only on session_id.
+ */
+export const stockTakeSession = pgTable(
+  "stock_take_session",
+  {
+    sessionId: uuid("session_id").defaultRandom().primaryKey(),
+    storeLocationId: uuid("store_location_id").notNull().references(() => storeLocation.storeLocationId),
+    organisationId: integer("organisation_id").notNull().references(() => organisation.organisationId),
+    sessionStatus: varchar("session_status", { length: 20 }).notNull().default("OPEN"),
+    openedByUserId: integer("opened_by_user_id").notNull().references(() => user.userId),
+    approvedByUserId: integer("approved_by_user_id").references(() => user.userId),
+    flagReason: text("flag_reason"),
+    openedDttm: timestamp("opened_dttm", { withTimezone: true }).defaultNow().notNull(),
+    submittedDttm: timestamp("submitted_dttm", { withTimezone: true }),
+    closedDttm: timestamp("closed_dttm", { withTimezone: true }),
+    createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
+    updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // FK index: "get sessions for a location"
+    index("idx_stock_take_session_location").on(table.storeLocationId),
+    // FK index: "get sessions for an org"
+    index("idx_stock_take_session_org").on(table.organisationId),
+    // Composite: "get active (non-archived) sessions at a location"
+    index("idx_stock_take_session_active").on(table.storeLocationId, table.sessionStatus),
+  ],
+);
+
+/**
+ * The `stock_take_category` table represents one ingredient category
+ * within a stock take session. Multiple staff can work in parallel —
+ * each claims a different category.
+ *
+ * State machine:
+ *   NOT_STARTED → IN_PROGRESS → SUBMITTED → APPROVED | FLAGGED
+ *   FLAGGED → IN_PROGRESS (recount)
+ *
+ * Session auto-advances to PENDING_REVIEW when all categories are SUBMITTED.
+ * HQ can approve or flag individual categories.
+ *
+ * OLTP table, 2NF — every non-key column depends on category_id.
+ */
+export const stockTakeCategory = pgTable(
+  "stock_take_category",
+  {
+    categoryId: uuid("category_id").defaultRandom().primaryKey(),
+    sessionId: uuid("session_id").notNull().references(() => stockTakeSession.sessionId),
+    categoryName: varchar("category_name", { length: 50 }).notNull(),
+    categoryStatus: varchar("category_status", { length: 20 }).notNull().default("NOT_STARTED"),
+    claimedByUserId: integer("claimed_by_user_id").references(() => user.userId),
+    flagReason: text("flag_reason"),
+    submittedDttm: timestamp("submitted_dttm", { withTimezone: true }),
+    createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
+    updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // One category per session
+    uniqueIndex("idx_stock_take_category_unique").on(table.sessionId, table.categoryName),
+    // FK index: "get all categories for a session"
+    index("idx_stock_take_category_session").on(table.sessionId),
+  ],
+);
+
+/**
+ * The `stock_take_line` table stores individual ingredient counts
+ * within a stock take category.
+ *
+ * raw_qty + counted_unit = what the staff entered.
+ * counted_qty = raw_qty converted to the ingredient's base unit.
+ * expected_qty = previous count + recorded usage (for variance calc).
+ * variance_qty = counted_qty - expected_qty.
+ * variance_pct = (variance_qty / expected_qty) * 100.
+ *
+ * OLTP table, 2NF — every non-key column depends on line_id.
+ */
+export const stockTakeLine = pgTable(
+  "stock_take_line",
+  {
+    lineId: uuid("line_id").defaultRandom().primaryKey(),
+    categoryId: uuid("category_id").notNull().references(() => stockTakeCategory.categoryId),
+    ingredientId: uuid("ingredient_id").notNull().references(() => ingredient.ingredientId),
+    countedQty: numeric("counted_qty").notNull(),
+    countedUnit: varchar("counted_unit", { length: 20 }).notNull(),
+    rawQty: numeric("raw_qty").notNull(),
+    expectedQty: numeric("expected_qty"),
+    varianceQty: numeric("variance_qty"),
+    variancePct: numeric("variance_pct"),
+    countedByUserId: integer("counted_by_user_id").notNull().references(() => user.userId),
+    countedDttm: timestamp("counted_dttm", { withTimezone: true }).defaultNow().notNull(),
+    createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
+    updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // One count per ingredient per category
+    uniqueIndex("idx_stock_take_line_unique").on(table.categoryId, table.ingredientId),
+    // FK index: "get all lines for a category"
+    index("idx_stock_take_line_category").on(table.categoryId),
+    // FK index: "get all counts for an ingredient (history)"
+    index("idx_stock_take_line_ingredient").on(table.ingredientId),
+    // FK index: "get all counts by a user"
+    index("idx_stock_take_line_user").on(table.countedByUserId),
+  ],
+);
+
+/**
+ * The `stock_level` table is the materialized current stock position
+ * for each ingredient at each location. Updated on:
+ *   - Stock take approval (set to counted_qty)
+ *   - Transfer confirmation (deduct from source, add to destination)
+ *   - Waste log entry (deduct)
+ *
+ * Uses optimistic locking via the `version` column to prevent
+ * concurrent transfer deductions from creating negative stock.
+ *
+ * OLTP table, 2NF — every non-key column depends on
+ * the composite (store_location_id, ingredient_id).
+ */
+export const stockLevel = pgTable(
+  "stock_level",
+  {
+    stockLevelId: uuid("stock_level_id").defaultRandom().primaryKey(),
+    storeLocationId: uuid("store_location_id").notNull().references(() => storeLocation.storeLocationId),
+    ingredientId: uuid("ingredient_id").notNull().references(() => ingredient.ingredientId),
+    currentQty: numeric("current_qty").notNull().default("0"),
+    lastCountedDttm: timestamp("last_counted_dttm", { withTimezone: true }),
+    lastCountedByUserId: integer("last_counted_by_user_id").references(() => user.userId),
+    version: integer("version").notNull().default(0),
+    createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
+    updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // One stock level per ingredient per location
+    uniqueIndex("idx_stock_level_unique").on(table.storeLocationId, table.ingredientId),
+    // FK index: "get all stock levels at a location"
+    index("idx_stock_level_location").on(table.storeLocationId),
+    // FK index: "get stock level for an ingredient across locations"
+    index("idx_stock_level_ingredient").on(table.ingredientId),
+  ],
+);

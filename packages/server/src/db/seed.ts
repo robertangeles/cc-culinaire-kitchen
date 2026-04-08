@@ -177,6 +177,11 @@ async function seed() {
     { permissionKey: "chat:unlimited", permissionDescription: "Unlimited chat sessions without usage limits" },
     { permissionKey: "org:create-organisation", permissionDescription: "Create new organisations" },
     { permissionKey: "org:manage-organisation", permissionDescription: "Manage organisation settings and members" },
+    // Inventory system permissions
+    { permissionKey: "inventory:count", permissionDescription: "Count items during stock take sessions at assigned location" },
+    { permissionKey: "inventory:manage", permissionDescription: "Open stock take sessions, set par levels, manage ingredient catalog" },
+    { permissionKey: "inventory:transfer", permissionDescription: "Initiate and confirm inventory transfers between locations" },
+    { permissionKey: "inventory:hq", permissionDescription: "HQ dashboard, approve/flag stock takes, cross-location oversight" },
   ];
 
   for (const p of defaultPermissions) {
@@ -199,9 +204,13 @@ async function seed() {
     Administrator: [
       "admin:dashboard", "admin:manage-users", "admin:manage-roles", "admin:manage-settings",
       "chat:access", "chat:unlimited", "org:create-organisation", "org:manage-organisation",
+      "inventory:count", "inventory:manage", "inventory:transfer", "inventory:hq",
     ],
-    Subscriber: ["chat:access", "org:create-organisation"],
-    "Paid Subscriber": ["chat:access", "chat:unlimited", "org:create-organisation", "org:manage-organisation"],
+    Subscriber: ["chat:access", "org:create-organisation", "inventory:count"],
+    "Paid Subscriber": [
+      "chat:access", "chat:unlimited", "org:create-organisation", "org:manage-organisation",
+      "inventory:count", "inventory:manage", "inventory:transfer",
+    ],
   };
 
   const allRoles = await db.select().from(role);
