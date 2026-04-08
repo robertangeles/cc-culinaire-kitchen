@@ -267,18 +267,24 @@ export async function submitCategory(sessionId: string, categoryName: string) {
   return updated;
 }
 
-/** Check if all categories are SUBMITTED and advance session to PENDING_REVIEW. */
+/**
+ * Check if all CLAIMED categories are submitted and advance session to PENDING_REVIEW.
+ * NOT_STARTED categories are excluded — supports partial/cycle counts where
+ * only some categories are counted per session.
+ * At least one category must be submitted for the session to advance.
+ */
 async function checkAndAdvanceSession(sessionId: string) {
   const categories = await db
     .select()
     .from(stockTakeCategory)
     .where(eq(stockTakeCategory.sessionId, sessionId));
 
-  const allSubmittedOrApproved = categories.every(
+  const claimed = categories.filter((c) => c.categoryStatus !== "NOT_STARTED");
+  const allClaimedDone = claimed.length > 0 && claimed.every(
     (c) => c.categoryStatus === "SUBMITTED" || c.categoryStatus === "APPROVED",
   );
 
-  if (allSubmittedOrApproved) {
+  if (allClaimedDone) {
     await db
       .update(stockTakeSession)
       .set({
