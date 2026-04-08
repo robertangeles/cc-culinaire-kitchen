@@ -15,11 +15,22 @@ import {
   Clock, Loader2, ChevronRight, Lock, ShieldCheck, Flag,
 } from "lucide-react";
 
-const CATEGORY_LABELS: Record<string, string> = {
-  proteins: "Proteins", produce: "Produce", dairy: "Dairy",
-  dry_goods: "Dry Goods", beverages: "Beverages", spirits: "Spirits",
-  frozen: "Frozen", bakery: "Bakery", condiments: "Condiments", other: "Other",
-};
+const ALL_CATEGORIES = [
+  { key: "proteins", label: "Proteins" },
+  { key: "produce", label: "Produce" },
+  { key: "dairy", label: "Dairy" },
+  { key: "dry_goods", label: "Dry Goods" },
+  { key: "beverages", label: "Beverages" },
+  { key: "spirits", label: "Spirits" },
+  { key: "frozen", label: "Frozen" },
+  { key: "bakery", label: "Bakery" },
+  { key: "condiments", label: "Condiments" },
+  { key: "other", label: "Other" },
+];
+
+const CATEGORY_LABELS: Record<string, string> = Object.fromEntries(
+  ALL_CATEGORIES.map((c) => [c.key, c.label]),
+);
 
 const STATUS_CONFIG: Record<string, { color: string; bg: string; border: string; icon: typeof CheckCircle2 }> = {
   NOT_STARTED: { color: "text-[#666]", bg: "bg-[#1E1E1E]", border: "border-[#2A2A2A]", icon: Clock },
@@ -41,6 +52,8 @@ export function StockTakeSession() {
   const [flagReason, setFlagReason] = useState("");
   const [flaggedCats, setFlaggedCats] = useState<Set<string>>(new Set());
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showCategoryPicker, setShowCategoryPicker] = useState(false);
+  const [selectedNewCats, setSelectedNewCats] = useState<Set<string>>(new Set(ALL_CATEGORIES.map(c => c.key)));
 
   if (isLoading) {
     return (
@@ -59,25 +72,81 @@ export function StockTakeSession() {
         </div>
         <h3 className="text-xl font-semibold text-white mb-2">Ready for Stock Take</h3>
         <p className="text-sm text-[#999] max-w-md mx-auto mb-8">
-          Open a new session to start counting. Multiple staff can work on different
-          categories simultaneously.
+          Select which categories to count — cycle count (weekly) or full inventory (monthly).
         </p>
         {error && (
           <p className="text-sm text-red-400 mb-4">{error}</p>
         )}
-        <button
-          onClick={async () => {
-            try {
-              setError(null);
-              await openSession();
-            } catch (err: any) {
-              setError(err.message);
-            }
-          }}
-          className="px-6 py-3 rounded-xl bg-gradient-to-r from-[#D4A574] to-[#C4956A] text-[#0A0A0A] font-semibold text-sm hover:shadow-[0_0_16px_rgba(212,165,116,0.3)] transition-all active:scale-[0.98]"
-        >
-          Open Stock Take Session
-        </button>
+
+        {!showCategoryPicker ? (
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+            <button
+              onClick={() => setShowCategoryPicker(true)}
+              className="px-6 py-3 rounded-xl bg-gradient-to-r from-[#D4A574] to-[#C4956A] text-[#0A0A0A] font-semibold text-sm hover:shadow-[0_0_16px_rgba(212,165,116,0.3)] transition-all active:scale-[0.98]"
+            >
+              Cycle Count
+            </button>
+            <button
+              onClick={async () => {
+                try {
+                  setError(null);
+                  await openSession(); // all categories
+                } catch (err: any) {
+                  setError(err.message);
+                }
+              }}
+              className="px-6 py-3 rounded-xl bg-[#1E1E1E] border border-[#2A2A2A] text-white font-semibold text-sm hover:bg-[#2A2A2A] transition-all active:scale-[0.98]"
+            >
+              Full Inventory
+            </button>
+          </div>
+        ) : (
+          <div className="max-w-sm mx-auto animate-[scaleIn_200ms_ease-out]">
+            <p className="text-xs text-[#999] mb-3 text-left">Select categories to count:</p>
+            <div className="space-y-1.5 mb-4">
+              {ALL_CATEGORIES.map((cat) => (
+                <label key={cat.key} className="flex items-center gap-3 p-2.5 rounded-lg bg-[#161616] border border-[#2A2A2A] hover:border-[#3A3A3A] cursor-pointer transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={selectedNewCats.has(cat.key)}
+                    onChange={(e) => {
+                      const next = new Set(selectedNewCats);
+                      if (e.target.checked) next.add(cat.key);
+                      else next.delete(cat.key);
+                      setSelectedNewCats(next);
+                    }}
+                    className="rounded border-[#3A3A3A] bg-[#0A0A0A] text-[#D4A574] focus:ring-[#D4A574]/50"
+                  />
+                  <span className="text-sm text-white">{cat.label}</span>
+                </label>
+              ))}
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowCategoryPicker(false)}
+                className="flex-1 px-4 py-2.5 rounded-xl text-sm text-[#999] hover:text-white border border-[#2A2A2A] transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  if (selectedNewCats.size === 0) return;
+                  try {
+                    setError(null);
+                    await openSession([...selectedNewCats]);
+                    setShowCategoryPicker(false);
+                  } catch (err: any) {
+                    setError(err.message);
+                  }
+                }}
+                disabled={selectedNewCats.size === 0}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#D4A574] to-[#C4956A] text-[#0A0A0A] font-semibold text-sm disabled:opacity-50 active:scale-[0.98] transition-all"
+              >
+                Start ({selectedNewCats.size})
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     );
   }

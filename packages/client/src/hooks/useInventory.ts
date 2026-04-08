@@ -198,8 +198,11 @@ export function useStockTake() {
     }
   }, []);
 
-  const openSession = useCallback(async () => {
-    const res = await fetch(`${API}/stock-takes`, { ...jsonOpts, method: "POST" });
+  const openSession = useCallback(async (categories?: string[]) => {
+    const res = await fetch(`${API}/stock-takes`, {
+      ...jsonOpts, method: "POST",
+      body: JSON.stringify(categories ? { categories } : {}),
+    });
     if (!res.ok) {
       const err = await res.json();
       throw new Error(err.error || "Failed to open session");

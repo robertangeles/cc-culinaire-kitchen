@@ -84,7 +84,8 @@ export async function handleOpenSession(
       return;
     }
 
-    const session = await openSession(ctx.selectedLocationId, ctx.orgId, req.user!.sub);
+    const categories = Array.isArray(req.body?.categories) ? req.body.categories : undefined;
+    const session = await openSession(ctx.selectedLocationId, ctx.orgId, req.user!.sub, categories);
 
     logger.info(
       { sessionId: session.sessionId, locationId: ctx.selectedLocationId, userId: req.user!.sub },

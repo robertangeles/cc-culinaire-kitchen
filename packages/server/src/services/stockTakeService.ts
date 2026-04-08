@@ -63,10 +63,16 @@ const CATEGORY_TRANSITIONS: Record<string, string[]> = {
  * Open a new stock take session at a location.
  * Fails if there's already an active (non-ARCHIVED) session.
  */
+/**
+ * Open a new stock take session at a location.
+ * @param categories - which categories to count. If empty/omitted, defaults to all.
+ *   Supports cycle counts (e.g., ["proteins", "dairy"]) and full counts.
+ */
 export async function openSession(
   storeLocationId: string,
   organisationId: number,
   userId: number,
+  categories?: string[],
 ) {
   // Check for existing active session
   const existing = await db
@@ -95,8 +101,12 @@ export async function openSession(
     })
     .returning();
 
-  // Create category rows for each default category
-  const categoryValues = DEFAULT_CATEGORIES.map((name) => ({
+  // Create category rows — selected categories or all defaults
+  const selectedCategories = categories && categories.length > 0
+    ? categories.filter((c) => DEFAULT_CATEGORIES.includes(c))
+    : DEFAULT_CATEGORIES;
+
+  const categoryValues = selectedCategories.map((name) => ({
     sessionId: session.sessionId,
     categoryName: name,
     categoryStatus: "NOT_STARTED" as const,
