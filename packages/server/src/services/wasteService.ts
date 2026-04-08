@@ -108,7 +108,7 @@ export async function logWaste(
 
 export async function getWasteLogs(
   userId: number,
-  opts: { limit?: number; offset?: number; startDate?: string; endDate?: string; teamView?: boolean } = {},
+  opts: { limit?: number; offset?: number; startDate?: string; endDate?: string; teamView?: boolean; storeLocationId?: string } = {},
 ): Promise<{ data: WasteLogRow[]; total: number }> {
   const limit = opts.limit ?? 50;
   const offset = opts.offset ?? 0;
@@ -124,6 +124,7 @@ export async function getWasteLogs(
     : eq(wasteLog.userId, userId);
 
   const conditions = [userFilter];
+  if (opts.storeLocationId) conditions.push(eq(wasteLog.storeLocationId, opts.storeLocationId));
   if (opts.startDate) conditions.push(gte(wasteLog.loggedAt, new Date(opts.startDate)));
   if (opts.endDate) conditions.push(lte(wasteLog.loggedAt, new Date(opts.endDate)));
 

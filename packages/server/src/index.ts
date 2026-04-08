@@ -28,6 +28,7 @@ import { recipesRouter } from "./routes/recipes.js";
 import { personalisationOptionsRouter, adminPersonalisationOptionsRouter } from "./routes/personalisationOptions.js";
 import { handleWebhook } from "./controllers/stripeController.js";
 import { errorHandler } from "./middleware/errorHandler.js";
+import { CLIENT_URL } from "./utils/env.js";
 import { knowledgeRouter } from "./routes/knowledge.js";
 import { modelOptionsRouter } from "./routes/modelOptions.js";
 import { recoverStaleDocuments } from "./services/knowledgeManagementService.js";
@@ -65,7 +66,7 @@ app.use(helmet({
   },
 }));
 app.use(cors({
-  origin: process.env.CLIENT_URL ?? "http://localhost:5173",
+  origin: CLIENT_URL,
   credentials: true,
 }));
 app.use(express.json({ limit: "10mb" }));
@@ -104,6 +105,17 @@ app.use("/api/menu", menuIntelligenceRouter);
 app.use("/api/waste", wasteRouter);
 app.use("/api/prep", prepRouter);
 app.use("/api/guides", guidesRouter);
+app.use("/api/store-locations", storeLocationsRouter);
+
+// Location context routes (mounted under /api/users)
+import {
+  handleGetLocationContext,
+  handleSwitchLocation,
+  handleUpdateModulePreference,
+} from "./controllers/storeLocationController.js";
+app.get("/api/users/location-context", authenticate, handleGetLocationContext);
+app.patch("/api/users/selected-location", authenticate, handleSwitchLocation);
+app.patch("/api/users/location-preferences", authenticate, handleUpdateModulePreference);
 
 // Database stats (admin only)
 import { authenticate, requireRole } from "./middleware/auth.js";
@@ -137,6 +149,7 @@ import { menuIntelligenceRouter } from "./routes/menuIntelligence.js";
 import { wasteRouter } from "./routes/waste.js";
 import { prepRouter } from "./routes/prep.js";
 import { guidesRouter } from "./routes/guides.js";
+import storeLocationsRouter from "./routes/storeLocations.js";
 
 app.get("/kitchen-shelf/:slug", async (req, res, next) => {
   // Only handle HTML requests (not API calls or assets)

@@ -39,6 +39,7 @@ const getLogsQuerySchema = z.object({
   startDate: z.string().optional(),
   endDate: z.string().optional(),
   teamView: z.enum(["true", "false"]).optional(),
+  storeLocationId: z.string().uuid().optional(),
 });
 
 const summaryQuerySchema = z.object({
@@ -97,8 +98,8 @@ export async function handleGetWasteLogs(req: Request, res: Response) {
     return;
   }
 
-  const { teamView, ...rest } = parsed.data;
-  const result = await getWasteLogs(userId, { ...rest, teamView: teamView === "true" });
+  const { teamView, storeLocationId, ...rest } = parsed.data;
+  const result = await getWasteLogs(userId, { ...rest, teamView: teamView === "true", storeLocationId });
   res.json(result);
 }
 

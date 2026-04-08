@@ -2,7 +2,7 @@
  * @module components/profile/MyKitchenTab
  *
  * Inline settings form for the user's kitchen profile.
- * Shown in Profile → My Kitchen tab.
+ * Shown in Profile → Profile tab (kitchen profile section).
  *
  * Fetches the current kitchen_profile on mount and lets users
  * edit all fields at once (vs the step-by-step KitchenWizard modal).
@@ -75,10 +75,10 @@ function ChipSelect({
             disabled={!!atMax}
             className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${
               isSelected
-                ? "bg-amber-600 text-white border-amber-600"
+                ? "bg-[#D4A574] text-[#0A0A0A] border-[#D4A574]"
                 : atMax
-                  ? "bg-stone-100 text-stone-400 border-stone-200 cursor-not-allowed"
-                  : "bg-white text-stone-600 border-stone-300 hover:border-amber-400"
+                  ? "bg-[#2A2A2A] text-[#666666] border-[#2A2A2A] cursor-not-allowed"
+                  : "bg-[#1E1E1E] text-[#999999] border-[#2A2A2A] hover:border-[#D4A574]"
             }`}
           >
             {opt.label}
@@ -108,8 +108,8 @@ function RadioSelect({
           onClick={() => onSelect(selected === opt.value ? "" : opt.value)}
           className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${
             selected === opt.value
-              ? "bg-amber-600 text-white border-amber-600"
-              : "bg-white text-stone-600 border-stone-300 hover:border-amber-400"
+              ? "bg-[#D4A574] text-[#0A0A0A] border-[#D4A574]"
+              : "bg-[#1E1E1E] text-[#999999] border-[#2A2A2A] hover:border-[#D4A574]"
           }`}
         >
           {opt.label}
@@ -140,11 +140,11 @@ function TextInputWithCounter({
         value={value}
         onChange={(e) => onChange(e.target.value.slice(0, maxLength))}
         placeholder={placeholder}
-        className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm text-stone-800 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+        className="w-full rounded-lg border border-[#2A2A2A] bg-[#1E1E1E] px-3 py-2 text-sm text-[#E5E5E5] placeholder:text-[#666666] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-transparent"
       />
       <div className="flex justify-between mt-1">
-        {helperText && <p className="text-xs text-stone-400 italic">{helperText}</p>}
-        <span className={`text-xs ml-auto ${value.length > maxLength * 0.9 ? "text-amber-600" : "text-stone-400"}`}>
+        {helperText && <p className="text-xs text-[#666666] italic">{helperText}</p>}
+        <span className={`text-xs ml-auto ${value.length > maxLength * 0.9 ? "text-[#D4A574]" : "text-[#666666]"}`}>
           {value.length}/{maxLength}
         </span>
       </div>
@@ -156,7 +156,7 @@ function TextInputWithCounter({
 // Component
 // ---------------------------------------------------------------------------
 
-export function MyKitchenTab() {
+export function MyKitchenTab({ isOrgAdmin = false }: { isOrgAdmin?: boolean }) {
   const { options, loading: optionsLoading } = usePersonalisationOptions();
 
   const skillLevels   = options?.skill_level ?? [];
@@ -322,7 +322,7 @@ export function MyKitchenTab() {
 
   if (loading || optionsLoading) {
     return (
-      <div className="flex items-center justify-center py-12 text-stone-400">
+      <div className="flex items-center justify-center py-12 text-[#666666]">
         <Loader2 className="size-5 animate-spin mr-2" />
         Loading kitchen profile…
       </div>
@@ -330,29 +330,29 @@ export function MyKitchenTab() {
   }
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-stone-200 p-6 space-y-6">
+    <div className="bg-[#161616] rounded-2xl border border-[#2A2A2A] p-6 space-y-6">
       <div>
-        <h2 className="text-base font-semibold text-stone-800">My Kitchen</h2>
-        <p className="text-sm text-stone-500 mt-1">
+        <h2 className="text-base font-semibold text-[#E5E5E5]">Kitchen Profile</h2>
+        <p className="text-sm text-[#999999] mt-1">
           Personalise your AI culinary assistant. These preferences are injected into every conversation.
         </p>
       </div>
 
       {/* Status messages */}
       {successMsg && (
-        <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+        <div className="flex items-center gap-2 text-sm text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-2">
           <CheckCircle2 className="size-4 flex-shrink-0" /> {successMsg}
         </div>
       )}
       {errorMsg && (
-        <div className="flex items-center gap-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+        <div className="flex items-center gap-2 text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
           <AlertCircle className="size-4 flex-shrink-0" /> {errorMsg}
         </div>
       )}
 
       {/* Skill Level */}
       <div>
-        <label className="block text-sm font-medium text-stone-700 mb-2">Skill Level</label>
+        <label className="block text-sm font-medium text-[#E5E5E5] mb-2">Skill Level</label>
         <div className="space-y-2">
           {skillLevels.map((level) => (
             <button
@@ -361,21 +361,21 @@ export function MyKitchenTab() {
               onClick={() => setForm((prev) => ({ ...prev, skillLevel: level.optionValue }))}
               className={`w-full flex items-start gap-3 rounded-lg border px-4 py-3 text-left transition-colors ${
                 form.skillLevel === level.optionValue
-                  ? "border-amber-500 bg-amber-50"
-                  : "border-stone-200 bg-white hover:bg-stone-50"
+                  ? "border-[#D4A574] bg-[#D4A574]/10"
+                  : "border-[#2A2A2A] bg-[#1E1E1E] hover:bg-[#2A2A2A]"
               }`}
             >
               <span className={`mt-0.5 size-4 flex-shrink-0 rounded-full border-2 flex items-center justify-center ${
-                form.skillLevel === level.optionValue ? "border-amber-500" : "border-stone-300"
+                form.skillLevel === level.optionValue ? "border-[#D4A574]" : "border-[#3A3A3A]"
               }`}>
                 {form.skillLevel === level.optionValue && (
-                  <span className="size-2 rounded-full bg-amber-500" />
+                  <span className="size-2 rounded-full bg-[#D4A574]" />
                 )}
               </span>
               <span>
-                <span className="text-sm font-medium text-stone-800">{level.optionLabel}</span>
+                <span className="text-sm font-medium text-[#E5E5E5]">{level.optionLabel}</span>
                 {level.optionDescription && (
-                  <span className="text-xs text-stone-500 block">{level.optionDescription}</span>
+                  <span className="text-xs text-[#999999] block">{level.optionDescription}</span>
                 )}
               </span>
             </button>
@@ -383,11 +383,14 @@ export function MyKitchenTab() {
         </div>
       </div>
 
+      {/* ─── Admin-only sections ─────────────────────────────── */}
+      {isOrgAdmin && <>
+
       {/* Cuisine Preferences */}
       <div>
-        <label className="block text-sm font-medium text-stone-700 mb-2">
+        <label className="block text-sm font-medium text-[#E5E5E5] mb-2">
           Cuisine Preferences
-          <span className="text-stone-400 font-normal ml-1">(select all that apply)</span>
+          <span className="text-[#666666] font-normal ml-1">(select all that apply)</span>
         </label>
         <div className="flex flex-wrap gap-2">
           {cuisineOpts.map((opt) => (
@@ -397,8 +400,8 @@ export function MyKitchenTab() {
               onClick={() => toggleChip("cuisinePreferences", opt.optionLabel)}
               className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${
                 form.cuisinePreferences.includes(opt.optionLabel)
-                  ? "bg-amber-600 text-white border-amber-600"
-                  : "bg-white text-stone-600 border-stone-300 hover:border-amber-400"
+                  ? "bg-[#D4A574] text-[#0A0A0A] border-[#D4A574]"
+                  : "bg-[#1E1E1E] text-[#999999] border-[#2A2A2A] hover:border-[#D4A574]"
               }`}
             >
               {opt.optionLabel}
@@ -409,9 +412,9 @@ export function MyKitchenTab() {
 
       {/* Dietary Restrictions */}
       <div>
-        <label className="block text-sm font-medium text-stone-700 mb-2">
+        <label className="block text-sm font-medium text-[#E5E5E5] mb-2">
           Dietary Restrictions
-          <span className="text-stone-400 font-normal ml-1">(always respect in responses)</span>
+          <span className="text-[#666666] font-normal ml-1">(always respect in responses)</span>
         </label>
         <div className="flex flex-wrap gap-2">
           {dietaryOpts.map((opt) => (
@@ -421,8 +424,8 @@ export function MyKitchenTab() {
               onClick={() => toggleChip("dietaryRestrictions", opt.optionLabel)}
               className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${
                 form.dietaryRestrictions.includes(opt.optionLabel)
-                  ? "bg-amber-600 text-white border-amber-600"
-                  : "bg-white text-stone-600 border-stone-300 hover:border-amber-400"
+                  ? "bg-[#D4A574] text-[#0A0A0A] border-[#D4A574]"
+                  : "bg-[#1E1E1E] text-[#999999] border-[#2A2A2A] hover:border-[#D4A574]"
               }`}
             >
               {opt.optionLabel}
@@ -433,9 +436,9 @@ export function MyKitchenTab() {
 
       {/* Kitchen Equipment */}
       <div>
-        <label className="block text-sm font-medium text-stone-700 mb-2">
+        <label className="block text-sm font-medium text-[#E5E5E5] mb-2">
           Kitchen Equipment
-          <span className="text-stone-400 font-normal ml-1">(what you have available)</span>
+          <span className="text-[#666666] font-normal ml-1">(what you have available)</span>
         </label>
         <div className="flex flex-wrap gap-2">
           {equipmentOpts.map((opt) => (
@@ -445,8 +448,8 @@ export function MyKitchenTab() {
               onClick={() => toggleChip("kitchenEquipment", opt.optionLabel)}
               className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${
                 form.kitchenEquipment.includes(opt.optionLabel)
-                  ? "bg-amber-600 text-white border-amber-600"
-                  : "bg-white text-stone-600 border-stone-300 hover:border-amber-400"
+                  ? "bg-[#D4A574] text-[#0A0A0A] border-[#D4A574]"
+                  : "bg-[#1E1E1E] text-[#999999] border-[#2A2A2A] hover:border-[#D4A574]"
               }`}
             >
               {opt.optionLabel}
@@ -457,35 +460,35 @@ export function MyKitchenTab() {
 
       {/* Default Servings */}
       <div>
-        <label className="block text-sm font-medium text-stone-700 mb-1">Default Servings</label>
-        <p className="text-xs text-stone-400 mb-2">How many portions should recipes default to?</p>
+        <label className="block text-sm font-medium text-[#E5E5E5] mb-1">Default Servings</label>
+        <p className="text-xs text-[#666666] mb-2">How many portions should recipes default to?</p>
         <input
           type="number"
           min={1}
           max={100}
           value={form.servingsDefault}
           onChange={(e) => setForm((prev) => ({ ...prev, servingsDefault: Math.max(1, Math.min(100, parseInt(e.target.value) || 1)) }))}
-          className="w-24 rounded-lg border border-stone-300 px-3 py-2 text-sm text-stone-800 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+          className="w-24 rounded-lg border border-[#2A2A2A] bg-[#1E1E1E] px-3 py-2 text-sm text-[#E5E5E5] placeholder:text-[#666666] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-transparent"
         />
       </div>
 
       {/* ─── Restaurant / Business Profile ─────────────────────── */}
-      <div className="border-t border-stone-200 pt-4">
+      <div className="border-t border-[#2A2A2A] pt-4">
         <button
           type="button"
           onClick={() => setRestaurantOpen(!restaurantOpen)}
           className="w-full flex items-center justify-between text-left"
         >
           <div>
-            <h3 className="text-base font-semibold text-stone-800">Restaurant / Business Profile</h3>
-            <p className="text-xs text-stone-500 mt-0.5">
+            <h3 className="text-base font-semibold text-[#E5E5E5]">Restaurant / Business Profile</h3>
+            <p className="text-xs text-[#999999] mt-0.5">
               These details shape how CulinAIre generates recipes for your kitchen — from ingredient choices and plating style to the tone of descriptions and menu copy.
             </p>
           </div>
           {restaurantOpen ? (
-            <ChevronUp className="size-5 text-stone-400 flex-shrink-0 ml-2" />
+            <ChevronUp className="size-5 text-[#666666] flex-shrink-0 ml-2" />
           ) : (
-            <ChevronDown className="size-5 text-stone-400 flex-shrink-0 ml-2" />
+            <ChevronDown className="size-5 text-[#666666] flex-shrink-0 ml-2" />
           )}
         </button>
 
@@ -493,7 +496,7 @@ export function MyKitchenTab() {
           <div className="mt-4 space-y-5">
             {/* Restaurant Name */}
             <div>
-              <label className="block text-sm font-medium text-stone-700 mb-1">
+              <label className="block text-sm font-medium text-[#E5E5E5] mb-1">
                 Restaurant or Business Name
               </label>
               <TextInputWithCounter
@@ -507,7 +510,7 @@ export function MyKitchenTab() {
 
             {/* Establishment Type */}
             <div>
-              <label className="block text-sm font-medium text-stone-700 mb-2">
+              <label className="block text-sm font-medium text-[#E5E5E5] mb-2">
                 Type of Establishment
               </label>
               <RadioSelect
@@ -521,17 +524,17 @@ export function MyKitchenTab() {
                   value={form.establishmentTypeOther}
                   onChange={(e) => setForm((prev) => ({ ...prev, establishmentTypeOther: e.target.value.slice(0, 50) }))}
                   placeholder="Describe your establishment type"
-                  className="mt-2 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm text-stone-800 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                  className="mt-2 w-full rounded-lg border border-[#2A2A2A] bg-[#1E1E1E] px-3 py-2 text-sm text-[#E5E5E5] placeholder:text-[#666666] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-transparent"
                 />
               )}
             </div>
 
             {/* Cuisine Identity */}
             <div>
-              <label className="block text-sm font-medium text-stone-700 mb-1">
+              <label className="block text-sm font-medium text-[#E5E5E5] mb-1">
                 Cuisine Identity of Your Menu
               </label>
-              <p className="text-xs text-stone-400 mb-2">
+              <p className="text-xs text-[#666666] mb-2">
                 Not your personal preference — this is how your menu is positioned.
               </p>
               <TextInputWithCounter
@@ -544,7 +547,7 @@ export function MyKitchenTab() {
 
             {/* Target Diner */}
             <div>
-              <label className="block text-sm font-medium text-stone-700 mb-1">
+              <label className="block text-sm font-medium text-[#E5E5E5] mb-1">
                 Who is Your Target Diner?
               </label>
               <TextInputWithCounter
@@ -557,7 +560,7 @@ export function MyKitchenTab() {
 
             {/* Price Point */}
             <div>
-              <label className="block text-sm font-medium text-stone-700 mb-2">
+              <label className="block text-sm font-medium text-[#E5E5E5] mb-2">
                 Average Price Point Per Main Course
               </label>
               <RadioSelect
@@ -569,10 +572,10 @@ export function MyKitchenTab() {
 
             {/* Restaurant Voice */}
             <div>
-              <label className="block text-sm font-medium text-stone-700 mb-1">
+              <label className="block text-sm font-medium text-[#E5E5E5] mb-1">
                 Your Restaurant's Voice or Personality
               </label>
-              <p className="text-xs text-stone-400 mb-2">
+              <p className="text-xs text-[#666666] mb-2">
                 This shapes the tone of recipe descriptions and menu copy we generate.
               </p>
               <TextInputWithCounter
@@ -585,9 +588,9 @@ export function MyKitchenTab() {
 
             {/* Sourcing Values */}
             <div>
-              <label className="block text-sm font-medium text-stone-700 mb-2">
+              <label className="block text-sm font-medium text-[#E5E5E5] mb-2">
                 Sourcing Values
-                <span className="text-stone-400 font-normal ml-1">(optional)</span>
+                <span className="text-[#666666] font-normal ml-1">(optional)</span>
               </label>
               <ChipSelect
                 options={SOURCING_VALUES.filter((o) => o.value !== "other")}
@@ -599,13 +602,13 @@ export function MyKitchenTab() {
                 value={form.sourcingOther}
                 onChange={(e) => setForm((prev) => ({ ...prev, sourcingOther: e.target.value }))}
                 placeholder="Other sourcing values (optional)"
-                className="mt-2 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm text-stone-800 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                className="mt-2 w-full rounded-lg border border-[#2A2A2A] bg-[#1E1E1E] px-3 py-2 text-sm text-[#E5E5E5] placeholder:text-[#666666] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-transparent"
               />
             </div>
 
             {/* Plating Style */}
             <div>
-              <label className="block text-sm font-medium text-stone-700 mb-2">
+              <label className="block text-sm font-medium text-[#E5E5E5] mb-2">
                 Plating Style That Fits Your Menu
               </label>
               <RadioSelect
@@ -617,9 +620,9 @@ export function MyKitchenTab() {
 
             {/* Kitchen Constraints */}
             <div>
-              <label className="block text-sm font-medium text-stone-700 mb-2">
+              <label className="block text-sm font-medium text-[#E5E5E5] mb-2">
                 Kitchen Constraints
-                <span className="text-stone-400 font-normal ml-1">(optional)</span>
+                <span className="text-[#666666] font-normal ml-1">(optional)</span>
               </label>
               <ChipSelect
                 options={KITCHEN_CONSTRAINTS_OPTIONS}
@@ -630,11 +633,11 @@ export function MyKitchenTab() {
 
             {/* Menu Needs */}
             <div>
-              <label className="block text-sm font-medium text-stone-700 mb-2">
+              <label className="block text-sm font-medium text-[#E5E5E5] mb-2">
                 What Does Your Menu Need Right Now?
-                <span className="text-stone-400 font-normal ml-1">(pick up to 3)</span>
+                <span className="text-[#666666] font-normal ml-1">(pick up to 3)</span>
               </label>
-              <p className="text-xs text-stone-400 mb-2">
+              <p className="text-xs text-[#666666] mb-2">
                 This helps us prioritise the kinds of recipes we generate for you.
               </p>
               <ChipSelect
@@ -648,13 +651,15 @@ export function MyKitchenTab() {
         )}
       </div>
 
+      </>}
+
       {/* Save button */}
-      <div className="flex justify-end pt-2 border-t border-stone-100">
+      <div className="flex justify-end pt-2 border-t border-[#2A2A2A]">
         <button
           type="button"
           onClick={handleSave}
           disabled={saving}
-          className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-white bg-amber-600 rounded-lg hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-[#0A0A0A] bg-[#D4A574] rounded-lg hover:bg-[#C4956A] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           {saving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
           Save Kitchen Profile

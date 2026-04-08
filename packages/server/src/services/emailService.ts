@@ -24,7 +24,7 @@ function getResend(): Resend | null {
 }
 
 const FROM_EMAIL = process.env.RESEND_FROM_EMAIL ?? "noreply@culinaire.kitchen";
-const CLIENT_URL = process.env.CLIENT_URL ?? "http://localhost:5173";
+import { CLIENT_URL } from "../utils/env.js";
 
 /**
  * Sends an email verification link to a newly registered user.

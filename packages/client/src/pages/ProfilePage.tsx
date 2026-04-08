@@ -19,16 +19,18 @@ import {
   ShieldCheck,
   Camera,
   UtensilsCrossed,
+  MapPin,
+  Info,
 } from "lucide-react";
 import { MyKitchenTab } from "../components/profile/MyKitchenTab.js";
 import { useAuth } from "../context/AuthContext.js";
 import { ImageCropModal } from "../components/ui/ImageCropModal.js";
+import { StoreLocationsSection } from "../components/location/StoreLocationsSection.js";
 
-const tabs: { id: "account" | "password" | "organisation" | "kitchen"; label: string; Icon: ElementType }[] = [
+const tabs: { id: "account" | "password" | "kitchen"; label: string; Icon: ElementType }[] = [
   { id: "account", label: "Account Details", Icon: User },
   { id: "password", label: "Change Password", Icon: Key },
-  { id: "organisation", label: "Organisation", Icon: Building2 },
-  { id: "kitchen", label: "My Kitchen", Icon: UtensilsCrossed },
+  { id: "kitchen", label: "Profile", Icon: UtensilsCrossed },
 ];
 
 interface Organisation {
@@ -324,7 +326,7 @@ export function ProfilePage() {
   const navigate = useNavigate();
 
   // Tabs
-  const [activeTab, setActiveTab] = useState<"account" | "password" | "organisation" | "kitchen">("account");
+  const [activeTab, setActiveTab] = useState<"account" | "password" | "kitchen">("account");
 
   // Profile
   const [name, setName] = useState(user?.userName ?? "");
@@ -356,6 +358,7 @@ export function ProfilePage() {
   const [orgLoading, setOrgLoading] = useState(true);
   const [myOrgRole, setMyOrgRole] = useState<string>("member");
   const [orgTab, setOrgTab] = useState<"create" | "join">("create");
+  const [orgSubTab, setOrgSubTab] = useState<"overview" | "team" | "locations">("overview");
   const [orgName, setOrgName] = useState("");
   const [orgAddressLine1, setOrgAddressLine1] = useState("");
   const [orgAddressLine2, setOrgAddressLine2] = useState("");
@@ -1024,8 +1027,8 @@ export function ProfilePage() {
         )}
 
         {/* Organisation Tab */}
-        {activeTab === "organisation" && (
-          <div role="tabpanel" id="profile-tabpanel-organisation" aria-labelledby="profile-tab-organisation" className="bg-[#161616] rounded-2xl border border-[#2A2A2A] p-6 space-y-4">
+        {activeTab === "kitchen" && (
+          <div role="tabpanel" id="profile-tabpanel-kitchen" aria-labelledby="profile-tab-kitchen" className="bg-[#161616] rounded-2xl border border-[#2A2A2A] p-6 space-y-4">
             {orgMsg && (
               <div className="flex items-center gap-2 text-sm text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-2">
                 <CheckCircle2 className="size-4 flex-shrink-0" /> {orgMsg}
@@ -1042,183 +1045,163 @@ export function ProfilePage() {
                 <Loader2 className="size-5 animate-spin text-[#666666]" />
               </div>
             ) : org ? (
-              <div className="space-y-3">
-                {user && myOrgRole === "admin" && editingOrg ? (
-                  <form onSubmit={handleUpdateOrg} className="space-y-3">
-                    <div>
-                      <label className="block text-sm font-medium text-[#E5E5E5] mb-1">Organisation Name *</label>
-                      <input type="text" value={editOrgName} onChange={(e) => setEditOrgName(e.target.value)} required className={inputClass} />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-[#E5E5E5] mb-1">Address Line 1</label>
-                      <input type="text" value={editOrgAddressLine1} onChange={(e) => setEditOrgAddressLine1(e.target.value)} className={inputClass} />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-[#E5E5E5] mb-1">Address Line 2</label>
-                      <input type="text" value={editOrgAddressLine2} onChange={(e) => setEditOrgAddressLine2(e.target.value)} className={inputClass} />
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-xs text-[#999999] mb-1">Suburb / City</label>
-                        <input type="text" value={editOrgSuburb} onChange={(e) => setEditOrgSuburb(e.target.value)} className={inputClass} />
-                      </div>
-                      <div>
-                        <label className="block text-xs text-[#999999] mb-1">State / Province</label>
-                        <input type="text" value={editOrgStateProv} onChange={(e) => setEditOrgStateProv(e.target.value)} className={inputClass} />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-xs text-[#999999] mb-1">Country</label>
-                        <input type="text" value={editOrgCountry} onChange={(e) => setEditOrgCountry(e.target.value)} className={inputClass} />
-                      </div>
-                      <div>
-                        <label className="block text-xs text-[#999999] mb-1">Postcode</label>
-                        <input type="text" value={editOrgPostcode} onChange={(e) => setEditOrgPostcode(e.target.value)} className={inputClass} />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-[#E5E5E5] mb-1">Website</label>
-                      <input type="text" value={editOrgWebsite} onChange={(e) => setEditOrgWebsite(e.target.value)} className={inputClass} />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-[#E5E5E5] mb-1">Email</label>
-                      <input type="email" value={editOrgEmail} onChange={(e) => setEditOrgEmail(e.target.value)} className={inputClass} />
-                    </div>
-
-                    <div className="border-t border-[#2A2A2A] pt-3 mt-1">
-                      <h4 className="text-sm font-semibold text-[#E5E5E5] mb-3">Social Media Accounts</h4>
-                      <div className="space-y-3">
-                        <div>
-                          <label className="block text-xs text-[#999999] mb-1">Facebook</label>
-                          <input type="url" value={editOrgFacebook} onChange={(e) => setEditOrgFacebook(e.target.value)} placeholder="https://facebook.com/yourpage" className={inputClass} />
-                        </div>
-                        <div>
-                          <label className="block text-xs text-[#999999] mb-1">Instagram</label>
-                          <input type="url" value={editOrgInstagram} onChange={(e) => setEditOrgInstagram(e.target.value)} placeholder="https://instagram.com/yourhandle" className={inputClass} />
-                        </div>
-                        <div>
-                          <label className="block text-xs text-[#999999] mb-1">TikTok</label>
-                          <input type="url" value={editOrgTiktok} onChange={(e) => setEditOrgTiktok(e.target.value)} placeholder="https://tiktok.com/@yourhandle" className={inputClass} />
-                        </div>
-                        <div>
-                          <label className="block text-xs text-[#999999] mb-1">Pinterest</label>
-                          <input type="url" value={editOrgPinterest} onChange={(e) => setEditOrgPinterest(e.target.value)} placeholder="https://pinterest.com/yourpage" className={inputClass} />
-                        </div>
-                        <div>
-                          <label className="block text-xs text-[#999999] mb-1">LinkedIn</label>
-                          <input type="url" value={editOrgLinkedin} onChange={(e) => setEditOrgLinkedin(e.target.value)} placeholder="https://linkedin.com/company/yourorg" className={inputClass} />
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex gap-2">
-                      <button
-                        type="submit"
-                        disabled={savingOrg}
-                        className="px-4 py-2 text-sm font-medium text-[#0A0A0A] bg-[#D4A574] rounded-xl hover:bg-[#C4956A] disabled:opacity-50 transition-colors"
-                      >
-                        {savingOrg && <Loader2 className="size-4 animate-spin inline mr-1" />}
-                        Save Changes
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setEditingOrg(false)}
-                        className="px-4 py-2 text-sm font-medium text-[#E5E5E5] bg-[#1E1E1E] border border-[#2A2A2A] rounded-xl hover:bg-[#2A2A2A] transition-colors"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </form>
-                ) : (
-                  <>
-                    <div className="grid grid-cols-2 gap-3 text-sm">
-                      <div>
-                        <span className="text-[#999999]">Name:</span>
-                        <p className="font-medium text-[#FAFAFA]">{org.organisationName}</p>
-                      </div>
-                      {org.organisationAddressLine1 && (
-                        <div className="col-span-2">
-                          <span className="text-[#999999]">Address:</span>
-                          <p className="font-medium text-[#FAFAFA]">
-                            {[org.organisationAddressLine1, org.organisationAddressLine2].filter(Boolean).join(", ")}
-                            {org.organisationSuburb && <><br />{[org.organisationSuburb, org.organisationState, org.organisationPostcode].filter(Boolean).join(" ")}</>}
-                            {org.organisationCountry && <><br />{org.organisationCountry}</>}
-                          </p>
-                        </div>
-                      )}
-                      {org.organisationWebsite && (
-                        <div>
-                          <span className="text-[#999999]">Website:</span>
-                          <p className="font-medium text-[#FAFAFA]">{org.organisationWebsite}</p>
-                        </div>
-                      )}
-                      {org.organisationEmail && (
-                        <div>
-                          <span className="text-[#999999]">Email:</span>
-                          <p className="font-medium text-[#FAFAFA]">{org.organisationEmail}</p>
-                        </div>
-                      )}
-                    </div>
-
-                    {(org.organisationFacebook || org.organisationInstagram || org.organisationTiktok || org.organisationPinterest || org.organisationLinkedin) && (
-                      <div className="border-t border-[#2A2A2A] pt-3">
-                        <p className="text-xs text-[#999999] mb-2">Social Media</p>
-                        <div className="flex flex-wrap gap-2 text-sm">
-                          {org.organisationFacebook && <a href={org.organisationFacebook} target="_blank" rel="noopener noreferrer" className="text-[#D4A574] hover:text-[#C4956A] hover:underline">Facebook</a>}
-                          {org.organisationInstagram && <a href={org.organisationInstagram} target="_blank" rel="noopener noreferrer" className="text-[#D4A574] hover:text-[#C4956A] hover:underline">Instagram</a>}
-                          {org.organisationTiktok && <a href={org.organisationTiktok} target="_blank" rel="noopener noreferrer" className="text-[#D4A574] hover:text-[#C4956A] hover:underline">TikTok</a>}
-                          {org.organisationPinterest && <a href={org.organisationPinterest} target="_blank" rel="noopener noreferrer" className="text-[#D4A574] hover:text-[#C4956A] hover:underline">Pinterest</a>}
-                          {org.organisationLinkedin && <a href={org.organisationLinkedin} target="_blank" rel="noopener noreferrer" className="text-[#D4A574] hover:text-[#C4956A] hover:underline">LinkedIn</a>}
-                        </div>
-                      </div>
-                    )}
-
-                    {user && myOrgRole === "admin" && (
-                      <button
-                        type="button"
-                        onClick={startEditingOrg}
-                        className="text-sm text-[#D4A574] hover:text-[#C4956A] transition-colors"
-                      >
-                        Edit Organisation
-                      </button>
-                    )}
-
-                    {/* My Kitchen banner — org owner only */}
-                    {user && myOrgRole === "admin" && (
-                      <OrgBenchBanner orgId={org.organisationId} />
-                    )}
-                  </>
-                )}
-
-                <div className="flex items-center gap-2 bg-[#0A0A0A] border border-[#2A2A2A] rounded-lg px-3 py-2">
-                  <span className="text-sm text-[#999999]">Join Key:</span>
-                  <code className="text-sm font-mono font-medium text-[#FAFAFA]">{org.joinKey}</code>
-                  <button
-                    type="button"
-                    onClick={handleCopyKey}
-                    className="ml-auto text-[#666666] hover:text-[#E5E5E5] transition-colors"
-                    title="Copy join key"
-                  >
-                    {copiedKey ? <CheckCircle2 className="size-4 text-green-500" /> : <Copy className="size-4" />}
-                  </button>
+              <div>
+                {/* Sub-tab navigation */}
+                <div className="flex gap-1 mb-4">
+                  {([
+                    { id: "overview" as const, label: "Overview", Icon: Info },
+                    { id: "team" as const, label: "Team", Icon: Users },
+                    { id: "locations" as const, label: "Locations", Icon: MapPin },
+                  ]).map(({ id, label, Icon }) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => setOrgSubTab(id)}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg transition-colors ${
+                        orgSubTab === id
+                          ? "bg-[#D4A574] text-[#0A0A0A] font-medium"
+                          : "bg-[#1E1E1E] text-[#999999] hover:bg-[#2A2A2A]"
+                      }`}
+                    >
+                      <Icon className="size-3.5" />
+                      {label}
+                    </button>
+                  ))}
                 </div>
 
-                <button
-                  type="button"
-                  onClick={handleLeaveOrg}
-                  disabled={savingOrg}
-                  className="text-sm text-red-400 hover:text-red-300 transition-colors"
-                >
-                  Leave Organisation
-                </button>
+                {/* ── Overview sub-tab ─────────────────────────────── */}
+                {orgSubTab === "overview" && (
+                  <div className="space-y-4">
+                    {user && myOrgRole === "admin" && editingOrg ? (
+                      <form onSubmit={handleUpdateOrg} className="space-y-3">
+                        <div>
+                          <label className="block text-sm font-medium text-[#E5E5E5] mb-1">Organisation Name *</label>
+                          <input type="text" value={editOrgName} onChange={(e) => setEditOrgName(e.target.value)} required className={inputClass} />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-[#E5E5E5] mb-1">Website</label>
+                          <input type="text" value={editOrgWebsite} onChange={(e) => setEditOrgWebsite(e.target.value)} className={inputClass} />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-[#E5E5E5] mb-1">Email</label>
+                          <input type="email" value={editOrgEmail} onChange={(e) => setEditOrgEmail(e.target.value)} className={inputClass} />
+                        </div>
+                        <div className="border-t border-[#2A2A2A] pt-3 mt-1">
+                          <h4 className="text-sm font-semibold text-[#E5E5E5] mb-3">Social Media Accounts</h4>
+                          <div className="space-y-3">
+                            <div>
+                              <label className="block text-xs text-[#999999] mb-1">Facebook</label>
+                              <input type="url" value={editOrgFacebook} onChange={(e) => setEditOrgFacebook(e.target.value)} placeholder="https://facebook.com/yourpage" className={inputClass} />
+                            </div>
+                            <div>
+                              <label className="block text-xs text-[#999999] mb-1">Instagram</label>
+                              <input type="url" value={editOrgInstagram} onChange={(e) => setEditOrgInstagram(e.target.value)} placeholder="https://instagram.com/yourhandle" className={inputClass} />
+                            </div>
+                            <div>
+                              <label className="block text-xs text-[#999999] mb-1">TikTok</label>
+                              <input type="url" value={editOrgTiktok} onChange={(e) => setEditOrgTiktok(e.target.value)} placeholder="https://tiktok.com/@yourhandle" className={inputClass} />
+                            </div>
+                            <div>
+                              <label className="block text-xs text-[#999999] mb-1">Pinterest</label>
+                              <input type="url" value={editOrgPinterest} onChange={(e) => setEditOrgPinterest(e.target.value)} placeholder="https://pinterest.com/yourpage" className={inputClass} />
+                            </div>
+                            <div>
+                              <label className="block text-xs text-[#999999] mb-1">LinkedIn</label>
+                              <input type="url" value={editOrgLinkedin} onChange={(e) => setEditOrgLinkedin(e.target.value)} placeholder="https://linkedin.com/company/yourorg" className={inputClass} />
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <button type="submit" disabled={savingOrg} className="px-4 py-2 text-sm font-medium text-[#0A0A0A] bg-[#D4A574] rounded-xl hover:bg-[#C4956A] disabled:opacity-50 transition-colors">
+                            {savingOrg && <Loader2 className="size-4 animate-spin inline mr-1" />}
+                            Save Changes
+                          </button>
+                          <button type="button" onClick={() => setEditingOrg(false)} className="px-4 py-2 text-sm font-medium text-[#E5E5E5] bg-[#1E1E1E] border border-[#2A2A2A] rounded-xl hover:bg-[#2A2A2A] transition-colors">
+                            Cancel
+                          </button>
+                        </div>
+                      </form>
+                    ) : (
+                      <>
+                        <div className="grid grid-cols-2 gap-3 text-sm">
+                          <div>
+                            <span className="text-[#999999]">Name:</span>
+                            <p className="font-medium text-[#FAFAFA]">{org.organisationName}</p>
+                          </div>
+                          {org.organisationWebsite && (
+                            <div>
+                              <span className="text-[#999999]">Website:</span>
+                              <p className="font-medium text-[#FAFAFA]">{org.organisationWebsite}</p>
+                            </div>
+                          )}
+                          {org.organisationEmail && (
+                            <div>
+                              <span className="text-[#999999]">Email:</span>
+                              <p className="font-medium text-[#FAFAFA]">{org.organisationEmail}</p>
+                            </div>
+                          )}
+                        </div>
 
-                {/* Team Members */}
-                {user && (
+                        {(org.organisationFacebook || org.organisationInstagram || org.organisationTiktok || org.organisationPinterest || org.organisationLinkedin) && (
+                          <div className="border-t border-[#2A2A2A] pt-3">
+                            <p className="text-xs text-[#999999] mb-2">Social Media</p>
+                            <div className="flex flex-wrap gap-2 text-sm">
+                              {org.organisationFacebook && <a href={org.organisationFacebook} target="_blank" rel="noopener noreferrer" className="text-[#D4A574] hover:text-[#C4956A] hover:underline">Facebook</a>}
+                              {org.organisationInstagram && <a href={org.organisationInstagram} target="_blank" rel="noopener noreferrer" className="text-[#D4A574] hover:text-[#C4956A] hover:underline">Instagram</a>}
+                              {org.organisationTiktok && <a href={org.organisationTiktok} target="_blank" rel="noopener noreferrer" className="text-[#D4A574] hover:text-[#C4956A] hover:underline">TikTok</a>}
+                              {org.organisationPinterest && <a href={org.organisationPinterest} target="_blank" rel="noopener noreferrer" className="text-[#D4A574] hover:text-[#C4956A] hover:underline">Pinterest</a>}
+                              {org.organisationLinkedin && <a href={org.organisationLinkedin} target="_blank" rel="noopener noreferrer" className="text-[#D4A574] hover:text-[#C4956A] hover:underline">LinkedIn</a>}
+                            </div>
+                          </div>
+                        )}
+
+                        {user && myOrgRole === "admin" && (
+                          <button type="button" onClick={startEditingOrg} className="text-sm text-[#D4A574] hover:text-[#C4956A] transition-colors">
+                            Edit Organisation
+                          </button>
+                        )}
+
+                        {user && myOrgRole === "admin" && (
+                          <OrgBenchBanner orgId={org.organisationId} />
+                        )}
+                      </>
+                    )}
+
+                    {/* Join Key + Leave */}
+                    <div className="border-t border-[#2A2A2A] pt-3 space-y-3">
+                      <div className="flex items-center gap-2 bg-[#0A0A0A] border border-[#2A2A2A] rounded-lg px-3 py-2">
+                        <span className="text-sm text-[#999999]">Org Join Key:</span>
+                        <code className="text-sm font-mono font-medium text-[#FAFAFA]">{org.joinKey}</code>
+                        <button type="button" onClick={handleCopyKey} className="ml-auto text-[#666666] hover:text-[#E5E5E5] transition-colors" title="Copy join key">
+                          {copiedKey ? <CheckCircle2 className="size-4 text-green-500" /> : <Copy className="size-4" />}
+                        </button>
+                      </div>
+                      <button type="button" onClick={handleLeaveOrg} disabled={savingOrg} className="text-sm text-red-400 hover:text-red-300 transition-colors">
+                        Leave Organisation
+                      </button>
+                    </div>
+
+                    {/* ── Kitchen Profile ──────────────────────────── */}
+                    <div className="border-t border-[#2A2A2A] pt-4 mt-4">
+                      <MyKitchenTab isOrgAdmin={myOrgRole === "admin"} />
+                    </div>
+                  </div>
+                )}
+
+                {/* ── Team sub-tab ────────────────────────────────── */}
+                {orgSubTab === "team" && user && (
                   <TeamMembersSection
                     orgId={org.organisationId}
                     currentUserId={user.userId}
                   />
+                )}
+
+                {/* ── Locations sub-tab ───────────────────────────── */}
+                {orgSubTab === "locations" && user && myOrgRole === "admin" && (
+                  <StoreLocationsSection orgId={org.organisationId} />
+                )}
+                {orgSubTab === "locations" && myOrgRole !== "admin" && (
+                  <p className="text-sm text-[#666666] py-4">Only organisation admins can manage store locations.</p>
                 )}
               </div>
             ) : (
@@ -1253,34 +1236,6 @@ export function ProfilePage() {
                     <div>
                       <label className="block text-sm font-medium text-[#E5E5E5] mb-1">Organisation Name *</label>
                       <input type="text" value={orgName} onChange={(e) => setOrgName(e.target.value)} required className={inputClass} />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-[#E5E5E5] mb-1">Address Line 1</label>
-                      <input type="text" value={orgAddressLine1} onChange={(e) => setOrgAddressLine1(e.target.value)} className={inputClass} />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-[#E5E5E5] mb-1">Address Line 2</label>
-                      <input type="text" value={orgAddressLine2} onChange={(e) => setOrgAddressLine2(e.target.value)} className={inputClass} />
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-xs text-[#999999] mb-1">Suburb / City</label>
-                        <input type="text" value={orgSuburb} onChange={(e) => setOrgSuburb(e.target.value)} className={inputClass} />
-                      </div>
-                      <div>
-                        <label className="block text-xs text-[#999999] mb-1">State / Province</label>
-                        <input type="text" value={orgStateProv} onChange={(e) => setOrgStateProv(e.target.value)} className={inputClass} />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-xs text-[#999999] mb-1">Country</label>
-                        <input type="text" value={orgCountry} onChange={(e) => setOrgCountry(e.target.value)} className={inputClass} />
-                      </div>
-                      <div>
-                        <label className="block text-xs text-[#999999] mb-1">Postcode</label>
-                        <input type="text" value={orgPostcode} onChange={(e) => setOrgPostcode(e.target.value)} className={inputClass} />
-                      </div>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-[#E5E5E5] mb-1">Website</label>
@@ -1354,12 +1309,6 @@ export function ProfilePage() {
           </div>
         )}
 
-        {/* My Kitchen Tab */}
-        {activeTab === "kitchen" && (
-          <div role="tabpanel" id="profile-tabpanel-kitchen" aria-labelledby="profile-tab-kitchen">
-            <MyKitchenTab />
-          </div>
-        )}
       </div>
 
       {cropImageSrc && (

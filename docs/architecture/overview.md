@@ -40,6 +40,8 @@ React App  ──────>  Express API Server  ──────>  AI Prov
 - **Subscription Billing** — Free tier (5 sessions) with Stripe-powered paid upgrades
 - **Authentication** — Email/password, Google OAuth, Microsoft OAuth, multi-factor authentication (TOTP)
 - **Email Verification** — Users must verify their email before logging in
+- **Store Locations** — Multi-location support for restaurant groups. Organisations hold multiple store locations (HQ, Branch, Commissary, Satellite). Staff are assigned to locations, and all Kitchen Ops data is scoped by location. See [store-locations.md](store-locations.md) for full architecture.
+- **Kitchen Operations** — Menu Intelligence, Kitchen Copilot, and Waste Intelligence modules, all location-aware
 
 ## System Components
 

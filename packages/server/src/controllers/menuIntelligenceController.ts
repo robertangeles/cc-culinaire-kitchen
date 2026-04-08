@@ -46,7 +46,8 @@ export async function handleListMenuItems(req: Request, res: Response, next: Nex
   try {
     const userId = (req as any).user.sub;
     const category = req.query.category as string | undefined;
-    const items = await getMenuItems(userId, category);
+    const storeLocationId = req.query.storeLocationId as string | undefined;
+    const items = await getMenuItems(userId, category, storeLocationId);
     res.json(items);
   } catch (err) { next(err); }
 }

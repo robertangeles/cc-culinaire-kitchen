@@ -43,9 +43,10 @@ export async function createMenuItem(userId: number, data: {
   return item;
 }
 
-export async function getMenuItems(userId: number, category?: string) {
+export async function getMenuItems(userId: number, category?: string, storeLocationId?: string) {
   const conditions = [eq(menuItem.userId, userId)];
   if (category) conditions.push(eq(menuItem.category, category));
+  if (storeLocationId) conditions.push(eq(menuItem.storeLocationId, storeLocationId));
 
   return db.select().from(menuItem)
     .where(and(...conditions))

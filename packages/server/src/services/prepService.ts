@@ -662,6 +662,7 @@ export async function getPreviousSelections(
 export async function getTodaySession(
   userId: number,
   teamView?: boolean,
+  storeLocationId?: string,
 ): Promise<{ session: PrepSessionRow; tasks: PrepTaskRow[] } | null> {
   const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
 
@@ -675,10 +676,13 @@ export async function getTodaySession(
     userFilter = eq(prepSession.userId, userId);
   }
 
+  const conditions = [userFilter, eq(prepSession.prepDate, today)];
+  if (storeLocationId) conditions.push(eq(prepSession.storeLocationId, storeLocationId));
+
   const existing = await db
     .select()
     .from(prepSession)
-    .where(and(userFilter, eq(prepSession.prepDate, today)))
+    .where(and(...conditions))
     .orderBy(desc(prepSession.createdDttm));
 
   if (existing.length === 0) return null;
@@ -955,6 +959,7 @@ export async function getSessionHistory(
   userId: number,
   limit: number = 20,
   teamView?: boolean,
+  storeLocationId?: string,
 ): Promise<PrepSessionRow[]> {
   let userFilter;
   if (teamView) {
@@ -966,10 +971,13 @@ export async function getSessionHistory(
     userFilter = eq(prepSession.userId, userId);
   }
 
+  const conditions = [userFilter];
+  if (storeLocationId) conditions.push(eq(prepSession.storeLocationId, storeLocationId));
+
   const rows = await db
     .select()
     .from(prepSession)
-    .where(userFilter)
+    .where(and(...conditions))
     .orderBy(desc(prepSession.prepDate))
     .limit(limit);
 
