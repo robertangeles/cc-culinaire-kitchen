@@ -5,7 +5,7 @@
  * per-location ingredient configuration (par levels, unit overrides).
  */
 
-import { eq, and, ilike, ne } from "drizzle-orm";
+import { eq, and, ilike, ne, sql, count } from "drizzle-orm";
 import { db } from "../db/index.js";
 import {
   ingredient,
@@ -13,6 +13,8 @@ import {
   unitConversion,
   stockLevel,
   supplier,
+  supplierLocation,
+  ingredientSupplier,
   storeLocation,
 } from "../db/schema.js";
 
@@ -319,6 +321,11 @@ export async function createSupplier(
   organisationId: number,
   data: {
     supplierName: string;
+    supplierCategory?: string;
+    paymentTerms?: string;
+    orderingMethod?: string;
+    deliveryDays?: string;
+    currency?: string;
     contactName?: string;
     contactEmail?: string;
     contactPhone?: string;
@@ -332,6 +339,11 @@ export async function createSupplier(
     .values({
       organisationId,
       supplierName: data.supplierName.trim(),
+      supplierCategory: data.supplierCategory ?? null,
+      paymentTerms: data.paymentTerms ?? null,
+      orderingMethod: data.orderingMethod ?? null,
+      deliveryDays: data.deliveryDays ?? null,
+      currency: data.currency ?? "AUD",
       contactName: data.contactName ?? null,
       contactEmail: data.contactEmail ?? null,
       contactPhone: data.contactPhone ?? null,
@@ -362,6 +374,11 @@ export async function updateSupplier(
   organisationId: number,
   data: Partial<{
     supplierName: string;
+    supplierCategory: string | null;
+    paymentTerms: string | null;
+    orderingMethod: string | null;
+    deliveryDays: string | null;
+    currency: string;
     contactName: string | null;
     contactEmail: string | null;
     contactPhone: string | null;
@@ -372,6 +389,11 @@ export async function updateSupplier(
 ) {
   const updates: Record<string, unknown> = { updatedDttm: new Date() };
   if (data.supplierName !== undefined) updates.supplierName = data.supplierName.trim();
+  if (data.supplierCategory !== undefined) updates.supplierCategory = data.supplierCategory;
+  if (data.paymentTerms !== undefined) updates.paymentTerms = data.paymentTerms;
+  if (data.orderingMethod !== undefined) updates.orderingMethod = data.orderingMethod;
+  if (data.deliveryDays !== undefined) updates.deliveryDays = data.deliveryDays;
+  if (data.currency !== undefined) updates.currency = data.currency;
   if (data.contactName !== undefined) updates.contactName = data.contactName;
   if (data.contactEmail !== undefined) updates.contactEmail = data.contactEmail;
   if (data.contactPhone !== undefined) updates.contactPhone = data.contactPhone;
@@ -407,6 +429,58 @@ export async function deleteSupplier(supplierId: string, organisationId: number)
   return row ?? null;
 }
 
+// ─── Supplier-Location assignments ───────────────────────────────
+
+/** Get which locations a supplier serves. */
+export async function getSupplierLocations(supplierId: string) {
+  return db
+    .select({
+      supplierLocationId: supplierLocation.supplierLocationId,
+      storeLocationId: supplierLocation.storeLocationId,
+      locationName: storeLocation.locationName,
+      activeInd: supplierLocation.activeInd,
+    })
+    .from(supplierLocation)
+    .innerJoin(storeLocation, eq(storeLocation.storeLocationId, supplierLocation.storeLocationId))
+    .where(eq(supplierLocation.supplierId, supplierId));
+}
+
+/** Set which locations a supplier serves (replace all). */
+export async function setSupplierLocations(
+  supplierId: string,
+  locationIds: string[],
+) {
+  // Deactivate all existing
+  await db
+    .update(supplierLocation)
+    .set({ activeInd: false })
+    .where(eq(supplierLocation.supplierId, supplierId));
+
+  // Insert/reactivate selected
+  for (const locId of locationIds) {
+    const existing = await db
+      .select()
+      .from(supplierLocation)
+      .where(
+        and(
+          eq(supplierLocation.supplierId, supplierId),
+          eq(supplierLocation.storeLocationId, locId),
+        ),
+      );
+
+    if (existing.length > 0) {
+      await db
+        .update(supplierLocation)
+        .set({ activeInd: true })
+        .where(eq(supplierLocation.supplierLocationId, existing[0].supplierLocationId));
+    } else {
+      await db
+        .insert(supplierLocation)
+        .values({ supplierId, storeLocationId: locId });
+    }
+  }
+}
+
 // ─── Cross-location stock queries ────────────────────────────────
 
 /** Get stock levels for a single ingredient across ALL locations in the org. */
@@ -440,4 +514,149 @@ export async function getIngredientStockAcrossLocations(
       ),
     )
     .where(eq(storeLocation.organisationId, organisationId));
+}
+
+// ─── Ingredient-Supplier assignments ─────────────────────────────
+
+/** Assign a supplier to an ingredient with cost/SKU. */
+export async function assignSupplierToIngredient(
+  ingredientId: string,
+  supplierId: string,
+  data: {
+    costPerUnit?: string;
+    supplierItemCode?: string;
+    leadTimeDays?: number;
+    minimumOrderQty?: string;
+    preferredInd?: boolean;
+  },
+) {
+  // If marking as preferred, unset any existing preferred for this ingredient
+  if (data.preferredInd) {
+    await db
+      .update(ingredientSupplier)
+      .set({ preferredInd: false, updatedDttm: new Date() })
+      .where(
+        and(
+          eq(ingredientSupplier.ingredientId, ingredientId),
+          eq(ingredientSupplier.preferredInd, true),
+        ),
+      );
+  }
+
+  const [row] = await db
+    .insert(ingredientSupplier)
+    .values({
+      ingredientId,
+      supplierId,
+      costPerUnit: data.costPerUnit ?? null,
+      supplierItemCode: data.supplierItemCode ?? null,
+      leadTimeDays: data.leadTimeDays ?? null,
+      minimumOrderQty: data.minimumOrderQty ?? null,
+      preferredInd: data.preferredInd ?? false,
+    })
+    .returning();
+  return row;
+}
+
+/** List all suppliers for an ingredient with cost/SKU info. */
+export async function listIngredientSuppliers(ingredientId: string) {
+  return db
+    .select({
+      ingredientSupplierId: ingredientSupplier.ingredientSupplierId,
+      supplierId: ingredientSupplier.supplierId,
+      supplierName: supplier.supplierName,
+      contactName: supplier.contactName,
+      costPerUnit: ingredientSupplier.costPerUnit,
+      supplierItemCode: ingredientSupplier.supplierItemCode,
+      leadTimeDays: ingredientSupplier.leadTimeDays,
+      minimumOrderQty: ingredientSupplier.minimumOrderQty,
+      preferredInd: ingredientSupplier.preferredInd,
+      activeInd: ingredientSupplier.activeInd,
+    })
+    .from(ingredientSupplier)
+    .innerJoin(supplier, eq(supplier.supplierId, ingredientSupplier.supplierId))
+    .where(
+      and(
+        eq(ingredientSupplier.ingredientId, ingredientId),
+        eq(ingredientSupplier.activeInd, true),
+      ),
+    );
+}
+
+/** Update a supplier-ingredient assignment (cost, SKU, preferred). */
+export async function updateIngredientSupplier(
+  ingredientId: string,
+  supplierId: string,
+  data: Partial<{
+    costPerUnit: string | null;
+    supplierItemCode: string | null;
+    leadTimeDays: number | null;
+    minimumOrderQty: string | null;
+    preferredInd: boolean;
+  }>,
+) {
+  // If marking as preferred, unset others
+  if (data.preferredInd) {
+    await db
+      .update(ingredientSupplier)
+      .set({ preferredInd: false, updatedDttm: new Date() })
+      .where(
+        and(
+          eq(ingredientSupplier.ingredientId, ingredientId),
+          eq(ingredientSupplier.preferredInd, true),
+        ),
+      );
+  }
+
+  const updates: Record<string, unknown> = { updatedDttm: new Date() };
+  if (data.costPerUnit !== undefined) updates.costPerUnit = data.costPerUnit;
+  if (data.supplierItemCode !== undefined) updates.supplierItemCode = data.supplierItemCode;
+  if (data.leadTimeDays !== undefined) updates.leadTimeDays = data.leadTimeDays;
+  if (data.minimumOrderQty !== undefined) updates.minimumOrderQty = data.minimumOrderQty;
+  if (data.preferredInd !== undefined) updates.preferredInd = data.preferredInd;
+
+  const [row] = await db
+    .update(ingredientSupplier)
+    .set(updates)
+    .where(
+      and(
+        eq(ingredientSupplier.ingredientId, ingredientId),
+        eq(ingredientSupplier.supplierId, supplierId),
+      ),
+    )
+    .returning();
+  return row ?? null;
+}
+
+/** Remove a supplier from an ingredient (soft-delete). */
+export async function removeIngredientSupplier(ingredientId: string, supplierId: string) {
+  const [row] = await db
+    .update(ingredientSupplier)
+    .set({ activeInd: false, updatedDttm: new Date() })
+    .where(
+      and(
+        eq(ingredientSupplier.ingredientId, ingredientId),
+        eq(ingredientSupplier.supplierId, supplierId),
+      ),
+    )
+    .returning();
+  return row ?? null;
+}
+
+/** Count how many active ingredients each supplier is assigned to. */
+export async function getSupplierItemCounts(organisationId: number) {
+  return db
+    .select({
+      supplierId: ingredientSupplier.supplierId,
+      itemCount: count(ingredientSupplier.ingredientSupplierId),
+    })
+    .from(ingredientSupplier)
+    .innerJoin(supplier, eq(supplier.supplierId, ingredientSupplier.supplierId))
+    .where(
+      and(
+        eq(supplier.organisationId, organisationId),
+        eq(ingredientSupplier.activeInd, true),
+      ),
+    )
+    .groupBy(ingredientSupplier.supplierId);
 }

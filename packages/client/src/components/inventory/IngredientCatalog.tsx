@@ -12,15 +12,18 @@ import {
   useSuppliers,
   useLocationIngredients,
   useIngredientStock,
+  useIngredientSuppliers,
   type Ingredient,
   type LocationIngredient,
   type IngredientStockLevel,
+  type IngredientSupplierLink,
+  type Supplier,
 } from "../../hooks/useInventory.js";
 import { useLocation } from "../../context/LocationContext.js";
 import {
   Plus, Search, Loader2, Utensils, X, Check,
   DollarSign, ChevronDown, ChevronRight, Package, Truck,
-  AlertTriangle,
+  AlertTriangle, Star, Trash2,
 } from "lucide-react";
 
 const CATEGORIES = [
@@ -362,6 +365,12 @@ function EditIngredientModal({
   onClose: () => void;
 }) {
   const { levels } = useIngredientStock(ingredient.ingredientId);
+  const { suppliers: ingSuppliers, assign, updateLink, removeLink } = useIngredientSuppliers(ingredient.ingredientId);
+  const { suppliers: allSuppliers } = useSuppliers();
+  const [showAddSupplier, setShowAddSupplier] = useState(false);
+  const [newSupId, setNewSupId] = useState("");
+  const [newSupCost, setNewSupCost] = useState("");
+  const [newSupSku, setNewSupSku] = useState("");
   const [name, setName] = useState(ingredient.ingredientName);
   const [cat, setCat] = useState(ingredient.ingredientCategory);
   const [unit, setUnit] = useState(ingredient.baseUnit);
@@ -443,6 +452,102 @@ function EditIngredientModal({
                 </button>
               ))}
             </div>
+          </div>
+
+          {/* Suppliers */}
+          <div>
+            <p className="text-[10px] text-[#666] uppercase tracking-wider mb-1.5">Suppliers</p>
+            {ingSuppliers.length > 0 ? (
+              <div className="rounded-lg border border-[#2A2A2A] divide-y divide-[#2A2A2A]/30">
+                {ingSuppliers.map((s) => (
+                  <div key={s.supplierId} className="flex items-center justify-between px-3 py-2 text-xs">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <button
+                        onClick={() => updateLink(s.supplierId, { preferredInd: !s.preferredInd })}
+                        title={s.preferredInd ? "Preferred supplier" : "Set as preferred"}
+                        className="shrink-0"
+                      >
+                        <Star className={`size-3.5 ${s.preferredInd ? "text-[#D4A574] fill-[#D4A574]" : "text-[#666]"}`} />
+                      </button>
+                      <span className="text-white truncate">{s.supplierName}</span>
+                      {s.supplierItemCode && (
+                        <span className="text-[#666] shrink-0">SKU: {s.supplierItemCode}</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0 ml-2">
+                      {s.costPerUnit && (
+                        <span className="text-emerald-400 tabular-nums">${Number(s.costPerUnit).toFixed(2)}</span>
+                      )}
+                      <button
+                        onClick={() => removeLink(s.supplierId)}
+                        className="p-0.5 rounded hover:bg-red-500/10 text-[#666] hover:text-red-400 transition-colors"
+                      >
+                        <Trash2 className="size-3" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-[#666]">No suppliers assigned</p>
+            )}
+
+            {/* Add supplier inline */}
+            {!showAddSupplier ? (
+              <button
+                onClick={() => setShowAddSupplier(true)}
+                className="mt-2 flex items-center gap-1 text-xs text-[#D4A574] hover:text-white transition-colors"
+              >
+                <Plus className="size-3" /> Add Supplier
+              </button>
+            ) : (
+              <div className="mt-2 flex flex-wrap gap-2 items-end">
+                <select
+                  value={newSupId}
+                  onChange={(e) => setNewSupId(e.target.value)}
+                  className="flex-1 min-w-[120px] px-2 py-1.5 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-xs text-white focus:outline-none"
+                >
+                  <option value="">Select supplier...</option>
+                  {allSuppliers
+                    .filter((s) => !ingSuppliers.some((is) => is.supplierId === s.supplierId))
+                    .map((s) => <option key={s.supplierId} value={s.supplierId}>{s.supplierName}</option>)
+                  }
+                </select>
+                <input
+                  type="text" value={newSupCost} onChange={(e) => setNewSupCost(e.target.value)}
+                  placeholder="Cost"
+                  className="w-20 px-2 py-1.5 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-xs text-white placeholder-[#666] focus:outline-none"
+                />
+                <input
+                  type="text" value={newSupSku} onChange={(e) => setNewSupSku(e.target.value)}
+                  placeholder="SKU"
+                  className="w-20 px-2 py-1.5 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-xs text-white placeholder-[#666] focus:outline-none"
+                />
+                <button
+                  onClick={async () => {
+                    if (!newSupId) return;
+                    await assign({
+                      supplierId: newSupId,
+                      costPerUnit: newSupCost || undefined,
+                      supplierItemCode: newSupSku || undefined,
+                      preferredInd: ingSuppliers.length === 0,
+                    });
+                    setNewSupId(""); setNewSupCost(""); setNewSupSku("");
+                    setShowAddSupplier(false);
+                  }}
+                  disabled={!newSupId}
+                  className="px-2 py-1.5 rounded-lg bg-[#D4A574]/20 text-[#D4A574] text-xs font-medium disabled:opacity-50 hover:bg-[#D4A574]/30 transition-colors"
+                >
+                  Add
+                </button>
+                <button
+                  onClick={() => { setShowAddSupplier(false); setNewSupId(""); setNewSupCost(""); setNewSupSku(""); }}
+                  className="px-2 py-1.5 text-xs text-[#666] hover:text-white transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Cross-location stock (read-only) */}

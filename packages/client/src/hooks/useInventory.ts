@@ -69,6 +69,11 @@ export interface Supplier {
   supplierId: string;
   organisationId: number;
   supplierName: string;
+  supplierCategory: string | null;
+  paymentTerms: string | null;
+  orderingMethod: string | null;
+  deliveryDays: string | null;
+  currency: string;
   contactName: string | null;
   contactEmail: string | null;
   contactPhone: string | null;
@@ -271,6 +276,89 @@ export function useOrgDashboard() {
   useEffect(() => { refresh(); }, [refresh]);
 
   return { locations, isLoading, refresh };
+}
+
+// ─── useIngredientSuppliers ────────────────────────────────────────
+
+export interface IngredientSupplierLink {
+  ingredientSupplierId: string;
+  supplierId: string;
+  supplierName: string;
+  contactName: string | null;
+  costPerUnit: string | null;
+  supplierItemCode: string | null;
+  leadTimeDays: number | null;
+  minimumOrderQty: string | null;
+  preferredInd: boolean;
+  activeInd: boolean;
+}
+
+export function useIngredientSuppliers(ingredientId: string | null) {
+  const [suppliers, setSuppliers] = useState<IngredientSupplierLink[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const refresh = useCallback(async () => {
+    if (!ingredientId) return;
+    setIsLoading(true);
+    try {
+      const res = await fetch(`${API}/ingredients/${ingredientId}/suppliers`, opts);
+      if (res.ok) setSuppliers(await res.json());
+    } finally {
+      setIsLoading(false);
+    }
+  }, [ingredientId]);
+
+  const assign = useCallback(async (data: {
+    supplierId: string;
+    costPerUnit?: string;
+    supplierItemCode?: string;
+    leadTimeDays?: number;
+    minimumOrderQty?: string;
+    preferredInd?: boolean;
+  }) => {
+    if (!ingredientId) return;
+    const res = await fetch(`${API}/ingredients/${ingredientId}/suppliers`, {
+      ...jsonOpts, method: "POST", body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || "Failed to assign supplier");
+    }
+    await refresh();
+    return res.json();
+  }, [ingredientId, refresh]);
+
+  const updateLink = useCallback(async (supplierId: string, data: {
+    costPerUnit?: string | null;
+    supplierItemCode?: string | null;
+    preferredInd?: boolean;
+  }) => {
+    if (!ingredientId) return;
+    const res = await fetch(`${API}/ingredients/${ingredientId}/suppliers/${supplierId}`, {
+      ...jsonOpts, method: "PATCH", body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || "Failed to update");
+    }
+    await refresh();
+  }, [ingredientId, refresh]);
+
+  const removeLink = useCallback(async (supplierId: string) => {
+    if (!ingredientId) return;
+    const res = await fetch(`${API}/ingredients/${ingredientId}/suppliers/${supplierId}`, {
+      ...jsonOpts, method: "DELETE",
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || "Failed to remove");
+    }
+    await refresh();
+  }, [ingredientId, refresh]);
+
+  useEffect(() => { refresh(); }, [refresh]);
+
+  return { suppliers, isLoading, refresh, assign, updateLink, removeLink };
 }
 
 // ─── useIngredientStock ───────────────────────────────────────────

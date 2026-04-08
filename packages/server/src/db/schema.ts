@@ -1130,6 +1130,11 @@ export const supplier = pgTable(
     contactName: varchar("contact_name", { length: 200 }),
     contactEmail: varchar("contact_email", { length: 255 }),
     contactPhone: varchar("contact_phone", { length: 50 }),
+    supplierCategory: varchar("supplier_category", { length: 50 }),
+    paymentTerms: varchar("payment_terms", { length: 50 }),
+    orderingMethod: varchar("ordering_method", { length: 50 }),
+    deliveryDays: varchar("delivery_days", { length: 100 }),
+    currency: varchar("currency", { length: 3 }).notNull().default("AUD"),
     leadTimeDays: integer("lead_time_days"),
     minimumOrderValue: numeric("minimum_order_value"),
     notes: text("notes"),
@@ -1141,6 +1146,67 @@ export const supplier = pgTable(
     uniqueIndex("idx_supplier_org_name").on(table.organisationId, table.supplierName),
     // FK index: "get all suppliers for an org"
     index("idx_supplier_org").on(table.organisationId),
+  ],
+);
+
+/**
+ * The `supplier_location` table controls which locations a supplier
+ * serves. An org-wide supplier has rows for all locations. A local
+ * supplier has a row for just their location. If no rows exist for
+ * a supplier, it is treated as available everywhere (backward compat).
+ *
+ * OLTP table, 2NF — every non-key column depends on
+ * the composite (supplier_id, store_location_id).
+ */
+export const supplierLocation = pgTable(
+  "supplier_location",
+  {
+    supplierLocationId: uuid("supplier_location_id").defaultRandom().primaryKey(),
+    supplierId: uuid("supplier_id").notNull().references(() => supplier.supplierId),
+    storeLocationId: uuid("store_location_id").notNull().references(() => storeLocation.storeLocationId),
+    activeInd: boolean("active_ind").notNull().default(true),
+    createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("idx_supplier_location_unique").on(table.supplierId, table.storeLocationId),
+    // FK index: "get all locations for a supplier"
+    index("idx_supplier_location_supplier").on(table.supplierId),
+    // FK index: "get all suppliers at a location"
+    index("idx_supplier_location_store").on(table.storeLocationId),
+  ],
+);
+
+/**
+ * The `ingredient_supplier` junction table links ingredients to their
+ * suppliers with per-supplier pricing, SKU codes, and lead times.
+ * One ingredient can have multiple suppliers. One supplier can supply
+ * multiple ingredients. The `preferredInd` flag marks the primary supplier.
+ *
+ * OLTP table, 2NF — every non-key column depends on
+ * the composite (ingredient_id, supplier_id).
+ */
+export const ingredientSupplier = pgTable(
+  "ingredient_supplier",
+  {
+    ingredientSupplierId: uuid("ingredient_supplier_id").defaultRandom().primaryKey(),
+    ingredientId: uuid("ingredient_id").notNull().references(() => ingredient.ingredientId),
+    supplierId: uuid("supplier_id").notNull().references(() => supplier.supplierId),
+    costPerUnit: numeric("cost_per_unit"),
+    supplierItemCode: varchar("supplier_item_code", { length: 100 }),
+    leadTimeDays: integer("lead_time_days"),
+    minimumOrderQty: numeric("minimum_order_qty"),
+    preferredInd: boolean("preferred_ind").notNull().default(false),
+    activeInd: boolean("active_ind").notNull().default(true),
+    createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
+    updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // One supplier per ingredient (no duplicates)
+    uniqueIndex("idx_ingredient_supplier_unique").on(table.ingredientId, table.supplierId),
+    // FK index: "get all suppliers for an ingredient"
+    index("idx_ingredient_supplier_ingredient").on(table.ingredientId),
+    // FK index: "get all ingredients from a supplier"
+    index("idx_ingredient_supplier_supplier").on(table.supplierId),
   ],
 );
 

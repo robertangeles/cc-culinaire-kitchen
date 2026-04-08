@@ -13,9 +13,10 @@ import { LocationDashboard } from "../components/inventory/LocationDashboard.js"
 import { StockTakeSession } from "../components/inventory/StockTakeSession.js";
 import { IngredientCatalog } from "../components/inventory/IngredientCatalog.js";
 import { StockTakeReviewQueue } from "../components/inventory/StockTakeReviewQueue.js";
-import { Package, ClipboardCheck, Utensils, ShieldCheck } from "lucide-react";
+import { SupplierManager } from "../components/inventory/SupplierManager.js";
+import { Package, ClipboardCheck, Utensils, ShieldCheck, Truck } from "lucide-react";
 
-type InventoryTab = "dashboard" | "stock-take" | "review" | "ingredients";
+type InventoryTab = "dashboard" | "stock-take" | "review" | "ingredients" | "suppliers";
 
 export function InventoryPage() {
   const { user, isGuest } = useAuth();
@@ -31,6 +32,7 @@ export function InventoryPage() {
     if (isOrgAdmin) {
       t.push({ key: "review", label: "Review", icon: ShieldCheck });
       t.push({ key: "ingredients", label: "Catalog", icon: Utensils });
+      t.push({ key: "suppliers", label: "Suppliers", icon: Truck });
     }
     return t;
   }, [isOrgAdmin]);
@@ -115,6 +117,9 @@ export function InventoryPage() {
           )}
           {activeTab === "ingredients" && (
             <IngredientCatalog />
+          )}
+          {activeTab === "suppliers" && (
+            <SupplierManager />
           )}
         </div>
       </div>

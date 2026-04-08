@@ -23,10 +23,15 @@ import {
   handleListLocationIngredients,
   handleUpdateLocationIngredient,
   handleGetIngredientStockLevels,
+  handleAssignSupplier,
+  handleListIngredientSuppliers,
+  handleUpdateIngredientSupplier,
+  handleRemoveIngredientSupplier,
   handleCreateSupplier,
   handleListSuppliers,
   handleUpdateSupplier,
   handleDeleteSupplier,
+  handleGetSupplierLocations,
 } from "../controllers/ingredientController.js";
 import {
   handleOpenSession,
@@ -60,6 +65,10 @@ router.post("/ingredients/:id/conversions", requirePermission("inventory:manage"
 router.get("/ingredients/:id/conversions", requirePermission("inventory:count"), handleListConversions);
 router.delete("/ingredients/:id/conversions/:conversionId", requirePermission("inventory:manage"), handleDeleteConversion);
 router.get("/ingredients/:id/stock-levels", requirePermission("inventory:manage"), handleGetIngredientStockLevels);
+router.post("/ingredients/:id/suppliers", requirePermission("inventory:manage"), handleAssignSupplier);
+router.get("/ingredients/:id/suppliers", requirePermission("inventory:count"), handleListIngredientSuppliers);
+router.patch("/ingredients/:id/suppliers/:supId", requirePermission("inventory:manage"), handleUpdateIngredientSupplier);
+router.delete("/ingredients/:id/suppliers/:supId", requirePermission("inventory:manage"), handleRemoveIngredientSupplier);
 
 // ─── Suppliers (org-wide) ─────────────────────────────────────────
 
@@ -67,6 +76,7 @@ router.post("/suppliers", requirePermission("inventory:manage"), handleCreateSup
 router.get("/suppliers", requirePermission("inventory:manage"), handleListSuppliers);
 router.patch("/suppliers/:id", requirePermission("inventory:manage"), handleUpdateSupplier);
 router.delete("/suppliers/:id", requirePermission("inventory:manage"), handleDeleteSupplier);
+router.get("/suppliers/:id/locations", requirePermission("inventory:manage"), handleGetSupplierLocations);
 
 // ─── Location ingredient config ───────────────────────────────────
 
