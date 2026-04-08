@@ -30,7 +30,7 @@ export function InventoryPage() {
     ];
     if (isOrgAdmin) {
       t.push({ key: "review", label: "Review", icon: ShieldCheck });
-      t.push({ key: "ingredients", label: "Ingredients", icon: Utensils });
+      t.push({ key: "ingredients", label: "Catalog", icon: Utensils });
     }
     return t;
   }, [isOrgAdmin]);

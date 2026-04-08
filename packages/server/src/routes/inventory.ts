@@ -22,6 +22,7 @@ import {
   handleDeleteConversion,
   handleListLocationIngredients,
   handleUpdateLocationIngredient,
+  handleGetIngredientStockLevels,
   handleCreateSupplier,
   handleListSuppliers,
   handleUpdateSupplier,
@@ -40,6 +41,7 @@ import {
   handleFlagSession,
   handleGetPreviousLines,
   handleGetPendingReviews,
+  handleGetOrgDashboard,
   handleGetLocationDashboard,
 } from "../controllers/stockTakeController.js";
 
@@ -57,6 +59,7 @@ router.patch("/ingredients/:id", requirePermission("inventory:manage"), handleUp
 router.post("/ingredients/:id/conversions", requirePermission("inventory:manage"), handleAddConversion);
 router.get("/ingredients/:id/conversions", requirePermission("inventory:count"), handleListConversions);
 router.delete("/ingredients/:id/conversions/:conversionId", requirePermission("inventory:manage"), handleDeleteConversion);
+router.get("/ingredients/:id/stock-levels", requirePermission("inventory:manage"), handleGetIngredientStockLevels);
 
 // ─── Suppliers (org-wide) ─────────────────────────────────────────
 
@@ -92,8 +95,9 @@ router.post("/stock-takes/:id/categories/:cat/submit", requirePermission("invent
 // Copy Last Count pre-fill
 router.get("/stock-takes/:id/previous-lines/:cat", requirePermission("inventory:count"), handleGetPreviousLines);
 
-// ─── Location dashboard ──────────────────────────────────────────
+// ─── Dashboards ──────────────────────────────────────────────────
 
+router.get("/dashboard/org-summary", requirePermission("inventory:hq"), handleGetOrgDashboard);
 router.get("/locations/:locId/dashboard", requirePermission("inventory:count"), handleGetLocationDashboard);
 
 export default router;

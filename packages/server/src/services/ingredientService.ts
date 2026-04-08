@@ -13,6 +13,7 @@ import {
   unitConversion,
   stockLevel,
   supplier,
+  storeLocation,
 } from "../db/schema.js";
 
 // ─── Org-wide ingredient catalog ──────────────────────────────────
@@ -404,4 +405,39 @@ export async function deleteSupplier(supplierId: string, organisationId: number)
     )
     .returning();
   return row ?? null;
+}
+
+// ─── Cross-location stock queries ────────────────────────────────
+
+/** Get stock levels for a single ingredient across ALL locations in the org. */
+export async function getIngredientStockAcrossLocations(
+  ingredientId: string,
+  organisationId: number,
+) {
+  return db
+    .select({
+      storeLocationId: storeLocation.storeLocationId,
+      locationName: storeLocation.locationName,
+      currentQty: stockLevel.currentQty,
+      lastCountedDttm: stockLevel.lastCountedDttm,
+      parLevel: locationIngredient.parLevel,
+      reorderQty: locationIngredient.reorderQty,
+      unitCost: locationIngredient.unitCost,
+    })
+    .from(storeLocation)
+    .leftJoin(
+      stockLevel,
+      and(
+        eq(stockLevel.storeLocationId, storeLocation.storeLocationId),
+        eq(stockLevel.ingredientId, ingredientId),
+      ),
+    )
+    .leftJoin(
+      locationIngredient,
+      and(
+        eq(locationIngredient.storeLocationId, storeLocation.storeLocationId),
+        eq(locationIngredient.ingredientId, ingredientId),
+      ),
+    )
+    .where(eq(storeLocation.organisationId, organisationId));
 }

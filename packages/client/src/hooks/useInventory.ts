@@ -242,6 +242,69 @@ export function useLocationIngredients(locationId: string | null) {
   return { items, isLoading, refresh, updateConfig };
 }
 
+// ─── useOrgDashboard ──────────────────────────────────────────────
+
+export interface OrgLocationSummary {
+  storeLocationId: string;
+  locationName: string;
+  totalItems: number;
+  lowStock: number;
+  critical: number;
+  inventoryValue: number;
+  lastCountDttm: string | null;
+}
+
+export function useOrgDashboard() {
+  const [locations, setLocations] = useState<OrgLocationSummary[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const refresh = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const res = await fetch(`${API}/dashboard/org-summary`, opts);
+      if (res.ok) setLocations(await res.json());
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { refresh(); }, [refresh]);
+
+  return { locations, isLoading, refresh };
+}
+
+// ─── useIngredientStock ───────────────────────────────────────────
+
+export interface IngredientStockLevel {
+  storeLocationId: string;
+  locationName: string;
+  currentQty: string | null;
+  parLevel: string | null;
+  reorderQty: string | null;
+  lastCountedDttm: string | null;
+  unitCost: string | null;
+}
+
+export function useIngredientStock(ingredientId: string | null) {
+  const [levels, setLevels] = useState<IngredientStockLevel[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const refresh = useCallback(async () => {
+    if (!ingredientId) return;
+    setIsLoading(true);
+    try {
+      const res = await fetch(`${API}/ingredients/${ingredientId}/stock-levels`, opts);
+      if (res.ok) setLevels(await res.json());
+    } finally {
+      setIsLoading(false);
+    }
+  }, [ingredientId]);
+
+  useEffect(() => { refresh(); }, [refresh]);
+
+  return { levels, isLoading, refresh };
+}
+
 // ─── useSuppliers ─────────────────────────────────────────────────
 
 export function useSuppliers() {

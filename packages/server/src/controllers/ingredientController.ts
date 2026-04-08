@@ -23,6 +23,7 @@ import {
   listSuppliers,
   updateSupplier,
   deleteSupplier,
+  getIngredientStockAcrossLocations,
 } from "../services/ingredientService.js";
 import { invalidateConversionCache } from "../services/unitConversionService.js";
 
@@ -309,6 +310,22 @@ export async function handleUpdateLocationIngredient(
       "Location ingredient config updated",
     );
     res.json(row);
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ─── Cross-location stock ────────────────────────────────────────
+
+export async function handleGetIngredientStockLevels(
+  req: Request, res: Response, next: NextFunction,
+): Promise<void> {
+  try {
+    const orgId = await resolveOrgId(req, res);
+    if (orgId === null) return;
+
+    const rows = await getIngredientStockAcrossLocations(req.params.id as string, orgId);
+    res.json(rows);
   } catch (err) {
     next(err);
   }

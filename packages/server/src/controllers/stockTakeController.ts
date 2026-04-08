@@ -23,6 +23,7 @@ import {
   getPreviousCountLines,
   getPendingReviewSessions,
   getLocationDashboard,
+  getOrgDashboardSummary,
   ConflictError,
   InvalidStateError,
   NotFoundError,
@@ -320,6 +321,22 @@ export async function handleGetPreviousLines(
 
     const lines = await getPreviousCountLines(ctx.selectedLocationId, req.params.cat as string);
     res.json(lines);
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ─── Org-wide dashboard ─────────────────────────────────────────
+
+export async function handleGetOrgDashboard(
+  req: Request, res: Response, next: NextFunction,
+): Promise<void> {
+  try {
+    const ctx = await resolveContext(req, res);
+    if (!ctx) return;
+
+    const summary = await getOrgDashboardSummary(ctx.orgId);
+    res.json(summary);
   } catch (err) {
     next(err);
   }

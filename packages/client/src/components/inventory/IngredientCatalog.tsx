@@ -1,9 +1,9 @@
 /**
  * @module components/inventory/IngredientCatalog
  *
- * Org-wide ingredient catalog with rich cards showing description, cost,
- * allergen tags, stock badges, and supplier info. Supports allergen
- * filtering and expanded add/edit forms.
+ * Compact table-based ingredient catalog. Click a row to expand
+ * inline detail with cross-location stock. Edit opens a modal
+ * dialog with all fields + read-only cross-location stock table.
  */
 
 import { useState } from "react";
@@ -11,13 +11,16 @@ import {
   useIngredients,
   useSuppliers,
   useLocationIngredients,
+  useIngredientStock,
   type Ingredient,
   type LocationIngredient,
+  type IngredientStockLevel,
 } from "../../hooks/useInventory.js";
 import { useLocation } from "../../context/LocationContext.js";
 import {
-  Plus, Search, Edit3, Loader2, Utensils, X, Check,
-  DollarSign, AlertTriangle, Package, Truck,
+  Plus, Search, Loader2, Utensils, X, Check,
+  DollarSign, ChevronDown, ChevronRight, Package, Truck,
+  AlertTriangle,
 } from "lucide-react";
 
 const CATEGORIES = [
@@ -35,425 +38,18 @@ const CATEGORIES = [
 
 const UNITS = ["kg", "g", "L", "mL", "each", "case", "dozen", "bunch", "bottle", "can", "bag", "box"];
 
-const ALLERGEN_FILTERS = [
-  { key: "containsDairyInd", label: "Dairy", color: "bg-blue-500/20 text-blue-400 border-blue-500/30" },
-  { key: "containsGlutenInd", label: "Gluten", color: "bg-amber-500/20 text-amber-400 border-amber-500/30" },
-  { key: "containsNutsInd", label: "Nuts", color: "bg-orange-500/20 text-orange-400 border-orange-500/30" },
-  { key: "containsShellfishInd", label: "Shellfish", color: "bg-red-500/20 text-red-400 border-red-500/30" },
-  { key: "containsEggsInd", label: "Eggs", color: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30" },
-  { key: "isVegetarianInd", label: "Vegetarian", color: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" },
-] as const;
+const ALLERGEN_DEFS = [
+  { key: "containsDairyInd" as const, label: "Dairy", color: "bg-blue-500/20 text-blue-400 border-blue-500/30" },
+  { key: "containsGlutenInd" as const, label: "Gluten", color: "bg-amber-500/20 text-amber-400 border-amber-500/30" },
+  { key: "containsNutsInd" as const, label: "Nuts", color: "bg-orange-500/20 text-orange-400 border-orange-500/30" },
+  { key: "containsShellfishInd" as const, label: "Shellfish", color: "bg-red-500/20 text-red-400 border-red-500/30" },
+  { key: "containsEggsInd" as const, label: "Eggs", color: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30" },
+  { key: "isVegetarianInd" as const, label: "Veg", color: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" },
+];
 
-type AllergenKey = typeof ALLERGEN_FILTERS[number]["key"];
+type AllergenKey = typeof ALLERGEN_DEFS[number]["key"];
 
-export function IngredientCatalog() {
-  const { ingredients, isLoading, create, update } = useIngredients();
-  const { selectedLocationId } = useLocation();
-  const { items: locItems } = useLocationIngredients(selectedLocationId);
-  const [search, setSearch] = useState("");
-  const [filterCat, setFilterCat] = useState<string | null>(null);
-  const [allergenFilters, setAllergenFilters] = useState<Set<AllergenKey>>(new Set());
-  const [showAdd, setShowAdd] = useState(false);
-  const [editId, setEditId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  // Build a lookup from ingredientId → location data (stock, par, supplier)
-  const locMap = new Map<string, LocationIngredient>();
-  for (const item of locItems) {
-    locMap.set(item.ingredientId, item);
-  }
-
-  // Filter ingredients
-  const filtered = ingredients.filter((i) => {
-    if (filterCat && i.ingredientCategory !== filterCat) return false;
-    if (search && !i.ingredientName.toLowerCase().includes(search.toLowerCase())) return false;
-    // Allergen filters: show only ingredients that HAVE the selected allergens
-    for (const key of allergenFilters) {
-      if (!i[key]) return false;
-    }
-    return true;
-  });
-
-  // Group by category
-  const grouped = new Map<string, Ingredient[]>();
-  for (const ing of filtered) {
-    if (!grouped.has(ing.ingredientCategory)) grouped.set(ing.ingredientCategory, []);
-    grouped.get(ing.ingredientCategory)!.push(ing);
-  }
-
-  const toggleAllergen = (key: AllergenKey) => {
-    const next = new Set(allergenFilters);
-    if (next.has(key)) next.delete(key);
-    else next.add(key);
-    setAllergenFilters(next);
-  };
-
-  return (
-    <div className="space-y-5 animate-[fadeInUp_200ms_ease-out]">
-      {/* Toolbar */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-[#666]" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search ingredients..."
-            className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-[#161616] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none focus:border-[#D4A574]/50 focus:shadow-[0_0_0_2px_rgba(212,165,116,0.15)] transition-all"
-          />
-        </div>
-        <div className="flex gap-2">
-          <select
-            value={filterCat || ""}
-            onChange={(e) => setFilterCat(e.target.value || null)}
-            className="px-3 py-2.5 rounded-xl bg-[#161616] border border-[#2A2A2A] text-sm text-white appearance-none cursor-pointer focus:outline-none focus:border-[#D4A574]/50"
-          >
-            <option value="">All Categories</option>
-            {CATEGORIES.map((c) => (
-              <option key={c.key} value={c.key}>{c.label}</option>
-            ))}
-          </select>
-          <button
-            onClick={() => { setShowAdd(true); setError(null); }}
-            className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#D4A574] to-[#C4956A] text-[#0A0A0A] text-sm font-semibold hover:shadow-[0_0_12px_rgba(212,165,116,0.2)] transition-all active:scale-[0.98]"
-          >
-            <Plus className="size-4" />
-            Add
-          </button>
-        </div>
-      </div>
-
-      {/* Allergen filter chips */}
-      <div className="flex flex-wrap gap-2">
-        {ALLERGEN_FILTERS.map((af) => (
-          <button
-            key={af.key}
-            onClick={() => toggleAllergen(af.key)}
-            className={`px-3 py-1 rounded-full text-xs font-medium border transition-all ${
-              allergenFilters.has(af.key)
-                ? af.color
-                : "bg-[#161616] text-[#666] border-[#2A2A2A] hover:border-[#3A3A3A]"
-            }`}
-          >
-            {af.label}
-          </button>
-        ))}
-        {allergenFilters.size > 0 && (
-          <button
-            onClick={() => setAllergenFilters(new Set())}
-            className="px-3 py-1 rounded-full text-xs text-[#999] hover:text-white transition-colors"
-          >
-            Clear
-          </button>
-        )}
-      </div>
-
-      {error && <p className="text-sm text-red-400 px-1">{error}</p>}
-
-      {/* Add ingredient form */}
-      {showAdd && (
-        <AddIngredientForm
-          onSave={async (data) => {
-            try {
-              setError(null);
-              await create(data);
-              setShowAdd(false);
-            } catch (err: any) {
-              setError(err.message);
-            }
-          }}
-          onCancel={() => setShowAdd(false)}
-        />
-      )}
-
-      {/* Loading */}
-      {isLoading && (
-        <div className="flex items-center justify-center py-16">
-          <Loader2 className="size-6 text-[#D4A574] animate-spin" />
-        </div>
-      )}
-
-      {/* Empty state */}
-      {!isLoading && filtered.length === 0 && (
-        <div className="text-center py-16 rounded-xl bg-[#161616] border border-[#2A2A2A]">
-          <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-[#1E1E1E] flex items-center justify-center shadow-[0_0_12px_rgba(212,165,116,0.1)]">
-            <Utensils className="size-8 text-[#D4A574]" />
-          </div>
-          <h3 className="text-lg font-semibold text-white mb-2">
-            {search || allergenFilters.size > 0 ? "No matching ingredients" : "No ingredients yet"}
-          </h3>
-          <p className="text-sm text-[#999] max-w-sm mx-auto">
-            {search ? "Try a different search term." : "Add your first ingredient to start building your catalog."}
-          </p>
-        </div>
-      )}
-
-      {/* Grouped ingredient cards */}
-      {!isLoading && Array.from(grouped.entries()).map(([cat, items]) => (
-        <div key={cat}>
-          <h4 className="text-xs font-semibold text-[#999] uppercase tracking-wider mb-3 px-1">
-            {CATEGORIES.find((c) => c.key === cat)?.label || cat}
-            <span className="text-[#666] ml-2">{items.length}</span>
-          </h4>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {items.map((ing) => (
-              <IngredientCard
-                key={ing.ingredientId}
-                ingredient={ing}
-                locData={locMap.get(ing.ingredientId)}
-                isEditing={editId === ing.ingredientId}
-                onEdit={() => setEditId(ing.ingredientId)}
-                onSave={async (data) => {
-                  try {
-                    setError(null);
-                    await update(ing.ingredientId, data);
-                    setEditId(null);
-                  } catch (err: any) {
-                    setError(err.message);
-                  }
-                }}
-                onCancel={() => setEditId(null)}
-              />
-            ))}
-          </div>
-        </div>
-      ))}
-
-      <p className="text-xs text-[#666] text-center">
-        {filtered.length} ingredient{filtered.length !== 1 ? "s" : ""}
-        {filterCat ? ` in ${CATEGORIES.find((c) => c.key === filterCat)?.label}` : ""}
-      </p>
-    </div>
-  );
-}
-
-// ─── Ingredient Card ─────────────────────────────────────────────
-
-function IngredientCard({
-  ingredient, locData, isEditing, onEdit, onSave, onCancel,
-}: {
-  ingredient: Ingredient;
-  locData?: LocationIngredient;
-  isEditing: boolean;
-  onEdit: () => void;
-  onSave: (data: Partial<Ingredient>) => Promise<void>;
-  onCancel: () => void;
-}) {
-  const [editName, setEditName] = useState(ingredient.ingredientName);
-  const [editCat, setEditCat] = useState(ingredient.ingredientCategory);
-  const [editUnit, setEditUnit] = useState(ingredient.baseUnit);
-  const [editDesc, setEditDesc] = useState(ingredient.description || "");
-  const [editCost, setEditCost] = useState(ingredient.unitCost || "");
-  const [editPar, setEditPar] = useState(ingredient.parLevel || "");
-  const [editReorder, setEditReorder] = useState(ingredient.reorderQty || "");
-  const [saving, setSaving] = useState(false);
-
-  // Stock status
-  const stockStatus = getStockStatus(locData);
-  const effectiveCost = locData?.locationUnitCost || ingredient.unitCost;
-
-  // Allergen tags to show
-  const allergens = getAllergenTags(ingredient);
-
-  if (isEditing) {
-    return (
-      <div className="p-4 rounded-xl bg-[#161616] border border-[#D4A574]/20 animate-[scaleIn_150ms_ease-out] space-y-3">
-        <input
-          type="text"
-          value={editName}
-          onChange={(e) => setEditName(e.target.value)}
-          autoFocus
-          placeholder="Ingredient name"
-          className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white focus:outline-none focus:border-[#D4A574]/50"
-        />
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-          <select
-            value={editCat}
-            onChange={(e) => setEditCat(e.target.value)}
-            className="px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white focus:outline-none focus:border-[#D4A574]/50"
-          >
-            {CATEGORIES.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
-          </select>
-          <select
-            value={editUnit}
-            onChange={(e) => setEditUnit(e.target.value)}
-            className="px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white focus:outline-none focus:border-[#D4A574]/50"
-          >
-            {UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
-          </select>
-          <div className="relative">
-            <DollarSign className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-[#666]" />
-            <input
-              type="text"
-              value={editCost}
-              onChange={(e) => setEditCost(e.target.value)}
-              placeholder="Cost/unit"
-              className="w-full pl-8 pr-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none focus:border-[#D4A574]/50"
-            />
-          </div>
-          <input
-            type="text"
-            value={editPar}
-            onChange={(e) => setEditPar(e.target.value)}
-            placeholder="Min stock (par)"
-            className="px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none focus:border-[#D4A574]/50"
-          />
-          <input
-            type="text"
-            value={editReorder}
-            onChange={(e) => setEditReorder(e.target.value)}
-            placeholder="Reorder qty"
-            className="px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none focus:border-[#D4A574]/50"
-          />
-        </div>
-        <textarea
-          value={editDesc}
-          onChange={(e) => setEditDesc(e.target.value)}
-          placeholder="Description (optional)"
-          rows={2}
-          className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none focus:border-[#D4A574]/50 resize-none"
-        />
-        {/* Allergen toggles */}
-        <div className="flex flex-wrap gap-1.5">
-          {ALLERGEN_FILTERS.map((af) => {
-            const val = ingredient[af.key];
-            return (
-              <button
-                key={af.key}
-                type="button"
-                className={`px-2 py-0.5 rounded-full text-[10px] font-medium border transition-all ${
-                  val ? af.color : "bg-[#0A0A0A] text-[#666] border-[#2A2A2A]"
-                }`}
-                // Allergen editing — toggle on click during edit
-              >
-                {af.label}
-              </button>
-            );
-          })}
-        </div>
-        <div className="flex justify-end gap-2 pt-1">
-          <button onClick={onCancel} className="px-3 py-1.5 rounded-lg text-sm text-[#999] hover:text-white transition-colors">
-            Cancel
-          </button>
-          <button
-            onClick={async () => {
-              if (!editName.trim()) return;
-              setSaving(true);
-              await onSave({
-                ingredientName: editName,
-                ingredientCategory: editCat,
-                baseUnit: editUnit,
-                description: editDesc || null,
-                unitCost: editCost || null,
-                parLevel: editPar || null,
-                reorderQty: editReorder || null,
-              } as any);
-              setSaving(false);
-            }}
-            disabled={!editName.trim() || saving}
-            className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-[#D4A574] text-[#0A0A0A] text-sm font-medium disabled:opacity-50 active:scale-[0.98] transition-all"
-          >
-            {saving ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
-            Save
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="p-4 rounded-xl bg-[#161616] border border-[#2A2A2A] hover:-translate-y-0.5 hover:shadow-lg transition-all group">
-      {/* Row 1: Name + stock badge */}
-      <div className="flex items-start justify-between mb-1">
-        <h4 className="text-sm font-medium text-white">{ingredient.ingredientName}</h4>
-        <div className="flex items-center gap-2 shrink-0 ml-2">
-          <StockBadge status={stockStatus} />
-          <button
-            onClick={onEdit}
-            className="p-1 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-[#2A2A2A] text-[#999] hover:text-white transition-all"
-          >
-            <Edit3 className="size-3" />
-          </button>
-        </div>
-      </div>
-
-      {/* Description */}
-      {ingredient.description && (
-        <p className="text-xs text-[#999] mb-2 line-clamp-2">{ingredient.description}</p>
-      )}
-
-      {/* Row 2: Category, unit, cost */}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[#666] mb-2">
-        <span>{CATEGORIES.find((c) => c.key === ingredient.ingredientCategory)?.label} · {ingredient.baseUnit}</span>
-        {effectiveCost && (
-          <span className="flex items-center gap-0.5 text-emerald-400">
-            <DollarSign className="size-3" />
-            {Number(effectiveCost).toFixed(2)}/{ingredient.baseUnit}
-          </span>
-        )}
-      </div>
-
-      {/* Row 3: Stock level, par, reorder, supplier */}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[#666] mb-2">
-        {locData?.currentQty ? (
-          <span className="flex items-center gap-1 text-white font-medium">
-            <Package className="size-3 text-[#D4A574]" />
-            {Number(locData.currentQty).toFixed(1)} {ingredient.baseUnit}
-          </span>
-        ) : (
-          <span className="flex items-center gap-1">
-            <Package className="size-3" />
-            No stock data
-          </span>
-        )}
-        {(locData?.parLevel || ingredient.parLevel) && (
-          <span>Par: {Number(locData?.parLevel || ingredient.parLevel).toFixed(0)}</span>
-        )}
-        {(locData?.reorderQty || ingredient.reorderQty) && (
-          <span>Reorder: {Number(locData?.reorderQty || ingredient.reorderQty).toFixed(0)}</span>
-        )}
-        {locData?.supplierName && (
-          <span className="flex items-center gap-1">
-            <Truck className="size-3" />
-            {locData.supplierName}
-          </span>
-        )}
-      </div>
-
-      {/* Allergen tags */}
-      {allergens.length > 0 && (
-        <div className="flex flex-wrap gap-1">
-          {allergens.map((a) => (
-            <span key={a.key} className={`px-1.5 py-0.5 rounded text-[10px] font-medium border ${a.color}`}>
-              {a.label}
-            </span>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Stock Badge ─────────────────────────────────────────────────
-
-type StockStatusType = "healthy" | "low" | "critical" | "none";
-
-function StockBadge({ status }: { status: StockStatusType }) {
-  const config = {
-    healthy: { label: "In Stock", className: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" },
-    low: { label: "Low", className: "bg-amber-500/10 text-amber-400 border-amber-500/20" },
-    critical: { label: "Critical", className: "bg-red-500/10 text-red-400 border-red-500/20" },
-    none: { label: "No Data", className: "bg-[#1E1E1E] text-[#666] border-[#2A2A2A]" },
-  }[status];
-
-  return (
-    <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium border ${config.className}`}>
-      {config.label}
-    </span>
-  );
-}
-
-function getStockStatus(locData?: LocationIngredient): StockStatusType {
+function getStockStatus(locData?: LocationIngredient): "healthy" | "low" | "critical" | "none" {
   if (!locData?.currentQty || !locData?.parLevel) return "none";
   const ratio = Number(locData.currentQty) / Number(locData.parLevel);
   if (ratio <= 0.25) return "critical";
@@ -461,15 +57,452 @@ function getStockStatus(locData?: LocationIngredient): StockStatusType {
   return "healthy";
 }
 
-function getAllergenTags(ing: Ingredient) {
-  const tags: { key: string; label: string; color: string }[] = [];
-  if (ing.containsDairyInd) tags.push({ key: "dairy", label: "Dairy", color: "bg-blue-500/20 text-blue-400 border-blue-500/30" });
-  if (ing.containsGlutenInd) tags.push({ key: "gluten", label: "Gluten", color: "bg-amber-500/20 text-amber-400 border-amber-500/30" });
-  if (ing.containsNutsInd) tags.push({ key: "nuts", label: "Nuts", color: "bg-orange-500/20 text-orange-400 border-orange-500/30" });
-  if (ing.containsShellfishInd) tags.push({ key: "shellfish", label: "Shellfish", color: "bg-red-500/20 text-red-400 border-red-500/30" });
-  if (ing.containsEggsInd) tags.push({ key: "eggs", label: "Eggs", color: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30" });
-  if (ing.isVegetarianInd) tags.push({ key: "veg", label: "Vegetarian", color: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" });
-  return tags;
+const STATUS_LABEL: Record<string, { text: string; className: string }> = {
+  healthy: { text: "OK", className: "text-emerald-400" },
+  low: { text: "Low", className: "text-amber-400" },
+  critical: { text: "Crit", className: "text-red-400" },
+  none: { text: "—", className: "text-[#666]" },
+};
+
+export function IngredientCatalog() {
+  const { ingredients, isLoading, create, update } = useIngredients();
+  const { selectedLocationId } = useLocation();
+  const { items: locItems } = useLocationIngredients(selectedLocationId);
+  const [search, setSearch] = useState("");
+  const [filterCat, setFilterCat] = useState<string | null>(null);
+  const [allergenFilter, setAllergenFilter] = useState<AllergenKey | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [editIngredient, setEditIngredient] = useState<Ingredient | null>(null);
+  const [showAdd, setShowAdd] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const locMap = new Map<string, LocationIngredient>();
+  for (const item of locItems) locMap.set(item.ingredientId, item);
+
+  const filtered = ingredients.filter((i) => {
+    if (filterCat && i.ingredientCategory !== filterCat) return false;
+    if (search && !i.ingredientName.toLowerCase().includes(search.toLowerCase())) return false;
+    if (allergenFilter && !i[allergenFilter]) return false;
+    return true;
+  });
+
+  const grouped = new Map<string, Ingredient[]>();
+  for (const ing of filtered) {
+    if (!grouped.has(ing.ingredientCategory)) grouped.set(ing.ingredientCategory, []);
+    grouped.get(ing.ingredientCategory)!.push(ing);
+  }
+
+  return (
+    <div className="space-y-4 animate-[fadeInUp_200ms_ease-out]">
+      {/* Toolbar */}
+      <div className="flex flex-col sm:flex-row gap-2">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-[#666]" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search ingredients..."
+            className="w-full pl-10 pr-4 py-2 rounded-xl bg-[#161616] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none focus:border-[#D4A574]/50 transition-all"
+          />
+        </div>
+        <select
+          value={filterCat || ""}
+          onChange={(e) => setFilterCat(e.target.value || null)}
+          className="px-3 py-2 rounded-xl bg-[#161616] border border-[#2A2A2A] text-sm text-white appearance-none cursor-pointer focus:outline-none"
+        >
+          <option value="">All Categories</option>
+          {CATEGORIES.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
+        </select>
+        <select
+          value={allergenFilter || ""}
+          onChange={(e) => setAllergenFilter((e.target.value || null) as AllergenKey | null)}
+          className="px-3 py-2 rounded-xl bg-[#161616] border border-[#2A2A2A] text-sm text-white appearance-none cursor-pointer focus:outline-none"
+        >
+          <option value="">Allergens</option>
+          {ALLERGEN_DEFS.map((a) => <option key={a.key} value={a.key}>{a.label}</option>)}
+        </select>
+        <button
+          onClick={() => { setShowAdd(true); setError(null); }}
+          className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-[#D4A574] to-[#C4956A] text-[#0A0A0A] text-sm font-semibold hover:shadow-[0_0_12px_rgba(212,165,116,0.2)] transition-all active:scale-[0.98]"
+        >
+          <Plus className="size-4" />
+          Add
+        </button>
+      </div>
+
+      {error && <p className="text-sm text-red-400">{error}</p>}
+
+      {showAdd && (
+        <AddIngredientForm
+          onSave={async (data) => {
+            try { setError(null); await create(data); setShowAdd(false); }
+            catch (err: any) { setError(err.message); }
+          }}
+          onCancel={() => setShowAdd(false)}
+        />
+      )}
+
+      {isLoading && (
+        <div className="flex items-center justify-center py-16">
+          <Loader2 className="size-6 text-[#D4A574] animate-spin" />
+        </div>
+      )}
+
+      {!isLoading && filtered.length === 0 && (
+        <div className="text-center py-12 rounded-xl bg-[#161616] border border-[#2A2A2A]">
+          <Utensils className="size-8 mx-auto text-[#D4A574] mb-3" />
+          <p className="text-sm text-white font-medium mb-1">
+            {search ? "No matching ingredients" : "No ingredients yet"}
+          </p>
+          <p className="text-xs text-[#999]">
+            {search ? "Try a different search." : "Add your first ingredient."}
+          </p>
+        </div>
+      )}
+
+      {/* Grouped tables */}
+      {!isLoading && Array.from(grouped.entries()).map(([cat, items]) => (
+        <div key={cat} className="rounded-xl border border-[#2A2A2A] overflow-hidden">
+          {/* Category header */}
+          <div className="px-4 py-2 bg-[#161616] border-b border-[#2A2A2A]">
+            <span className="text-[10px] font-semibold text-[#999] uppercase tracking-wider">
+              {CATEGORIES.find((c) => c.key === cat)?.label || cat}
+            </span>
+            <span className="text-[10px] text-[#666] ml-2">{items.length}</span>
+          </div>
+
+          {/* Table header */}
+          <div className="hidden sm:grid grid-cols-12 gap-1 px-4 py-1.5 text-[10px] text-[#666] uppercase tracking-wider border-b border-[#2A2A2A]/50">
+            <div className="col-span-4">Name</div>
+            <div className="col-span-1">UOM</div>
+            <div className="col-span-2 text-right">Cost</div>
+            <div className="col-span-2 text-right">Stock</div>
+            <div className="col-span-1 text-right">Par</div>
+            <div className="col-span-2 text-right">Status</div>
+          </div>
+
+          {/* Rows */}
+          {items.map((ing) => {
+            const loc = locMap.get(ing.ingredientId);
+            const status = getStockStatus(loc);
+            const sl = STATUS_LABEL[status];
+            const isExpanded = expandedId === ing.ingredientId;
+            const cost = loc?.locationUnitCost || ing.unitCost;
+
+            return (
+              <div key={ing.ingredientId}>
+                {/* Compact row */}
+                <button
+                  onClick={() => setExpandedId(isExpanded ? null : ing.ingredientId)}
+                  className="w-full grid grid-cols-12 gap-1 px-4 py-2 text-sm hover:bg-[#1E1E1E]/50 transition-colors text-left items-center"
+                >
+                  <div className="col-span-4 sm:col-span-4 flex items-center gap-1.5 truncate">
+                    {isExpanded
+                      ? <ChevronDown className="size-3 text-[#666] shrink-0" />
+                      : <ChevronRight className="size-3 text-[#666] shrink-0" />
+                    }
+                    <span className="text-white truncate">{ing.ingredientName}</span>
+                  </div>
+                  <div className="col-span-1 text-[#666] hidden sm:block">{ing.baseUnit}</div>
+                  <div className="col-span-2 text-right text-[#999] tabular-nums hidden sm:block">
+                    {cost ? `$${Number(cost).toFixed(2)}` : "—"}
+                  </div>
+                  <div className="col-span-2 text-right text-white font-medium tabular-nums">
+                    {loc?.currentQty ? Number(loc.currentQty).toFixed(1) : "—"}
+                  </div>
+                  <div className="col-span-1 text-right text-[#666] tabular-nums hidden sm:block">
+                    {loc?.parLevel ? Number(loc.parLevel).toFixed(0) : ing.parLevel ? Number(ing.parLevel).toFixed(0) : "—"}
+                  </div>
+                  <div className={`col-span-2 text-right text-xs font-medium ${sl.className}`}>
+                    {sl.text}
+                  </div>
+                </button>
+
+                {/* Expanded detail */}
+                {isExpanded && (
+                  <ExpandedDetail
+                    ingredient={ing}
+                    locData={loc}
+                    onEdit={() => setEditIngredient(ing)}
+                    onClose={() => setExpandedId(null)}
+                  />
+                )}
+              </div>
+            );
+          })}
+        </div>
+      ))}
+
+      <p className="text-xs text-[#666] text-center">{filtered.length} ingredients</p>
+
+      {/* Edit modal */}
+      {editIngredient && (
+        <EditIngredientModal
+          ingredient={editIngredient}
+          onSave={async (data) => {
+            try {
+              setError(null);
+              await update(editIngredient.ingredientId, data);
+              setEditIngredient(null);
+            } catch (err: any) {
+              setError(err.message);
+            }
+          }}
+          onClose={() => setEditIngredient(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── Expanded Detail ─────────────────────────────────────────────
+
+function ExpandedDetail({
+  ingredient, locData, onEdit, onClose,
+}: {
+  ingredient: Ingredient;
+  locData?: LocationIngredient;
+  onEdit: () => void;
+  onClose: () => void;
+}) {
+  const { levels, isLoading } = useIngredientStock(ingredient.ingredientId);
+  const allergens = ALLERGEN_DEFS.filter((a) => ingredient[a.key]);
+
+  return (
+    <div className="px-4 py-3 bg-[#0A0A0A]/50 border-t border-[#2A2A2A]/30 animate-[fadeIn_150ms_ease-out]">
+      {/* Description + allergens */}
+      <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
+        <div className="min-w-0">
+          {ingredient.description && (
+            <p className="text-xs text-[#999] mb-1.5">{ingredient.description}</p>
+          )}
+          {allergens.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {allergens.map((a) => (
+                <span key={a.key} className={`px-1.5 py-0.5 rounded text-[10px] font-medium border ${a.color}`}>
+                  {a.label}
+                </span>
+              ))}
+            </div>
+          )}
+          {locData?.supplierName && (
+            <div className="flex items-center gap-1 text-xs text-[#666] mt-1.5">
+              <Truck className="size-3" />
+              {locData.supplierName}
+            </div>
+          )}
+        </div>
+        <div className="flex gap-2 shrink-0">
+          <button
+            onClick={onEdit}
+            className="px-3 py-1 rounded-lg bg-[#D4A574]/10 text-[#D4A574] text-xs font-medium hover:bg-[#D4A574]/20 transition-colors"
+          >
+            Edit
+          </button>
+        </div>
+      </div>
+
+      {/* Cross-location stock table */}
+      <div className="rounded-lg border border-[#2A2A2A] overflow-hidden">
+        <div className="px-3 py-1.5 bg-[#161616] text-[10px] text-[#999] uppercase tracking-wider font-semibold">
+          Stock Across Locations
+        </div>
+        {isLoading ? (
+          <div className="flex justify-center py-4">
+            <Loader2 className="size-4 text-[#D4A574] animate-spin" />
+          </div>
+        ) : (
+          <div className="divide-y divide-[#2A2A2A]/30">
+            <div className="hidden sm:grid grid-cols-5 gap-1 px-3 py-1 text-[10px] text-[#666] uppercase tracking-wider">
+              <div className="col-span-2">Location</div>
+              <div className="text-right">Stock</div>
+              <div className="text-right">Par</div>
+              <div className="text-right">Status</div>
+            </div>
+            {levels.map((l) => {
+              const qty = Number(l.currentQty || 0);
+              const par = Number(l.parLevel || 0);
+              let status: "healthy" | "low" | "critical" | "none" = "none";
+              if (l.currentQty && l.parLevel) {
+                const ratio = qty / par;
+                status = ratio <= 0.25 ? "critical" : ratio <= 0.75 ? "low" : "healthy";
+              }
+              const sl = STATUS_LABEL[status];
+              return (
+                <div key={l.storeLocationId} className="grid grid-cols-5 gap-1 px-3 py-1.5 text-xs">
+                  <div className="col-span-2 text-white truncate">{l.locationName}</div>
+                  <div className="text-right text-white tabular-nums">
+                    {l.currentQty ? `${qty.toFixed(1)}` : "—"}
+                  </div>
+                  <div className="text-right text-[#666] tabular-nums">
+                    {par > 0 ? par.toFixed(0) : "—"}
+                  </div>
+                  <div className={`text-right font-medium ${sl.className}`}>{sl.text}</div>
+                </div>
+              );
+            })}
+            {levels.length === 0 && (
+              <p className="text-xs text-[#666] text-center py-3">No stock data</p>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Edit Modal ──────────────────────────────────────────────────
+
+function EditIngredientModal({
+  ingredient, onSave, onClose,
+}: {
+  ingredient: Ingredient;
+  onSave: (data: Partial<Ingredient>) => Promise<void>;
+  onClose: () => void;
+}) {
+  const { levels } = useIngredientStock(ingredient.ingredientId);
+  const [name, setName] = useState(ingredient.ingredientName);
+  const [cat, setCat] = useState(ingredient.ingredientCategory);
+  const [unit, setUnit] = useState(ingredient.baseUnit);
+  const [desc, setDesc] = useState(ingredient.description || "");
+  const [cost, setCost] = useState(ingredient.unitCost || "");
+  const [par, setPar] = useState(ingredient.parLevel || "");
+  const [reorder, setReorder] = useState(ingredient.reorderQty || "");
+  const [allergens, setAllergens] = useState<Set<AllergenKey>>(
+    new Set(ALLERGEN_DEFS.filter((a) => ingredient[a.key]).map((a) => a.key)),
+  );
+  const [saving, setSaving] = useState(false);
+
+  const toggleAllergen = (key: AllergenKey) => {
+    const next = new Set(allergens);
+    if (next.has(key)) next.delete(key); else next.add(key);
+    setAllergens(next);
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-[fadeIn_150ms_ease-out]"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-lg max-h-[90vh] overflow-y-auto p-6 rounded-2xl bg-[#161616] border border-[#2A2A2A] shadow-2xl animate-[scaleIn_200ms_ease-out]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-base font-semibold text-white">Edit Ingredient</h3>
+          <button onClick={onClose} className="p-1 rounded-lg hover:bg-[#2A2A2A] text-[#999] hover:text-white transition-all">
+            <X className="size-4" />
+          </button>
+        </div>
+
+        <div className="space-y-3">
+          <input
+            type="text" value={name} onChange={(e) => setName(e.target.value)}
+            placeholder="Ingredient name" autoFocus
+            className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white focus:outline-none focus:border-[#D4A574]/50"
+          />
+          <div className="grid grid-cols-3 gap-2">
+            <select value={cat} onChange={(e) => setCat(e.target.value)}
+              className="px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white focus:outline-none">
+              {CATEGORIES.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
+            </select>
+            <select value={unit} onChange={(e) => setUnit(e.target.value)}
+              className="px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white focus:outline-none">
+              {UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
+            </select>
+            <div className="relative">
+              <DollarSign className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-[#666]" />
+              <input type="text" value={cost} onChange={(e) => setCost(e.target.value)}
+                placeholder="Cost/unit"
+                className="w-full pl-8 pr-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <input type="text" value={par} onChange={(e) => setPar(e.target.value)}
+              placeholder="Min stock (par level)"
+              className="px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none" />
+            <input type="text" value={reorder} onChange={(e) => setReorder(e.target.value)}
+              placeholder="Reorder qty"
+              className="px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none" />
+          </div>
+          <textarea value={desc} onChange={(e) => setDesc(e.target.value)}
+            placeholder="Description" rows={2}
+            className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none resize-none" />
+
+          {/* Allergen toggles */}
+          <div>
+            <p className="text-[10px] text-[#666] uppercase tracking-wider mb-1.5">Allergens</p>
+            <div className="flex flex-wrap gap-1.5">
+              {ALLERGEN_DEFS.map((a) => (
+                <button key={a.key} type="button" onClick={() => toggleAllergen(a.key)}
+                  className={`px-2 py-0.5 rounded-full text-[10px] font-medium border transition-all ${
+                    allergens.has(a.key) ? a.color : "bg-[#0A0A0A] text-[#666] border-[#2A2A2A]"
+                  }`}>
+                  {a.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Cross-location stock (read-only) */}
+          {levels.length > 0 && (
+            <div>
+              <p className="text-[10px] text-[#666] uppercase tracking-wider mb-1.5">Stock Across Locations</p>
+              <div className="rounded-lg border border-[#2A2A2A] divide-y divide-[#2A2A2A]/30">
+                {levels.map((l) => {
+                  const qty = Number(l.currentQty || 0);
+                  return (
+                    <div key={l.storeLocationId} className="flex items-center justify-between px-3 py-1.5 text-xs">
+                      <span className="text-white">{l.locationName}</span>
+                      <span className="text-[#999] tabular-nums">
+                        {l.currentQty ? `${qty.toFixed(1)} ${unit}` : "No data"}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Actions */}
+        <div className="flex justify-end gap-2 mt-5 pt-4 border-t border-[#2A2A2A]">
+          <button onClick={onClose}
+            className="px-4 py-2 rounded-xl text-sm text-[#999] hover:text-white transition-colors">
+            Cancel
+          </button>
+          <button
+            onClick={async () => {
+              if (!name.trim()) return;
+              setSaving(true);
+              await onSave({
+                ingredientName: name,
+                ingredientCategory: cat,
+                baseUnit: unit,
+                description: desc || null,
+                unitCost: cost || null,
+                parLevel: par || null,
+                reorderQty: reorder || null,
+                containsDairyInd: allergens.has("containsDairyInd"),
+                containsGlutenInd: allergens.has("containsGlutenInd"),
+                containsNutsInd: allergens.has("containsNutsInd"),
+                containsShellfishInd: allergens.has("containsShellfishInd"),
+                containsEggsInd: allergens.has("containsEggsInd"),
+                isVegetarianInd: allergens.has("isVegetarianInd"),
+              } as any);
+              setSaving(false);
+            }}
+            disabled={!name.trim() || saving}
+            className="flex items-center gap-1.5 px-5 py-2 rounded-xl bg-gradient-to-r from-[#D4A574] to-[#C4956A] text-[#0A0A0A] text-sm font-semibold disabled:opacity-50 active:scale-[0.98] transition-all"
+          >
+            {saving ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
+            Save
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // ─── Add Form ────────────────────────────────────────────────────
@@ -493,99 +526,57 @@ function AddIngredientForm({
 
   const toggleAllergen = (key: AllergenKey) => {
     const next = new Set(allergens);
-    if (next.has(key)) next.delete(key);
-    else next.add(key);
+    if (next.has(key)) next.delete(key); else next.add(key);
     setAllergens(next);
   };
 
   return (
     <div className="p-5 rounded-xl bg-[#161616] border border-[#D4A574]/20 animate-[scaleIn_200ms_ease-out]">
-      <h4 className="text-sm font-semibold text-white mb-4">New Ingredient</h4>
-
-      {/* Row 1: Name */}
-      <input
-        type="text"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        placeholder="Ingredient name"
-        autoFocus
-        className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none focus:border-[#D4A574]/50 mb-3"
-      />
-
-      {/* Row 2: Category, Unit, Cost, Par, Reorder */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-3">
-        <select
-          value={category}
-          onChange={(e) => setCategory(e.target.value)}
-          className="px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white focus:outline-none focus:border-[#D4A574]/50"
-        >
-          {CATEGORIES.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
-        </select>
-        <select
-          value={unit}
-          onChange={(e) => setUnit(e.target.value)}
-          className="px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white focus:outline-none focus:border-[#D4A574]/50"
-        >
-          {UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
-        </select>
-        <div className="relative">
-          <DollarSign className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-[#666]" />
-          <input
-            type="text"
-            value={cost}
-            onChange={(e) => setCost(e.target.value)}
-            placeholder="Cost per unit"
-            className="w-full pl-8 pr-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none focus:border-[#D4A574]/50"
-          />
+      <h4 className="text-sm font-semibold text-white mb-3">New Ingredient</h4>
+      <div className="space-y-3">
+        <input type="text" value={name} onChange={(e) => setName(e.target.value)}
+          placeholder="Ingredient name" autoFocus
+          className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none focus:border-[#D4A574]/50" />
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          <select value={category} onChange={(e) => setCategory(e.target.value)}
+            className="px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white focus:outline-none">
+            {CATEGORIES.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
+          </select>
+          <select value={unit} onChange={(e) => setUnit(e.target.value)}
+            className="px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white focus:outline-none">
+            {UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
+          </select>
+          <div className="relative">
+            <DollarSign className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-[#666]" />
+            <input type="text" value={cost} onChange={(e) => setCost(e.target.value)}
+              placeholder="Cost/unit"
+              className="w-full pl-8 pr-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none" />
+          </div>
+          <input type="text" value={par} onChange={(e) => setPar(e.target.value)}
+            placeholder="Min stock (par)"
+            className="px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none" />
+          <input type="text" value={reorder} onChange={(e) => setReorder(e.target.value)}
+            placeholder="Reorder qty"
+            className="px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none" />
         </div>
-        <input
-          type="text"
-          value={par}
-          onChange={(e) => setPar(e.target.value)}
-          placeholder="Min stock (par level)"
-          className="px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none focus:border-[#D4A574]/50"
-        />
-        <input
-          type="text"
-          value={reorder}
-          onChange={(e) => setReorder(e.target.value)}
-          placeholder="Reorder qty"
-          className="px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none focus:border-[#D4A574]/50"
-        />
-      </div>
-
-      {/* Row 3: Description */}
-      <textarea
-        value={description}
-        onChange={(e) => setDescription(e.target.value)}
-        placeholder="Description (e.g., Fresh Atlantic salmon, skin-on, pin-boned)"
-        rows={2}
-        className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none focus:border-[#D4A574]/50 resize-none mb-3"
-      />
-
-      {/* Allergen toggles */}
-      <div className="mb-4">
-        <p className="text-[10px] text-[#666] uppercase tracking-wider mb-2">Allergens</p>
-        <div className="flex flex-wrap gap-1.5">
-          {ALLERGEN_FILTERS.map((af) => (
-            <button
-              key={af.key}
-              type="button"
-              onClick={() => toggleAllergen(af.key)}
-              className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${
-                allergens.has(af.key)
-                  ? af.color
-                  : "bg-[#0A0A0A] text-[#666] border-[#2A2A2A] hover:border-[#3A3A3A]"
-              }`}
-            >
-              {af.label}
-            </button>
-          ))}
+        <textarea value={description} onChange={(e) => setDescription(e.target.value)}
+          placeholder="Description (optional)" rows={2}
+          className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none resize-none" />
+        <div>
+          <p className="text-[10px] text-[#666] uppercase tracking-wider mb-1.5">Allergens</p>
+          <div className="flex flex-wrap gap-1.5">
+            {ALLERGEN_DEFS.map((a) => (
+              <button key={a.key} type="button" onClick={() => toggleAllergen(a.key)}
+                className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${
+                  allergens.has(a.key) ? a.color : "bg-[#0A0A0A] text-[#666] border-[#2A2A2A] hover:border-[#3A3A3A]"
+                }`}>
+                {a.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
-
-      {/* Actions */}
-      <div className="flex justify-end gap-2">
+      <div className="flex justify-end gap-2 mt-4">
         <button onClick={onCancel} className="px-3 py-1.5 rounded-lg text-sm text-[#999] hover:text-white transition-colors">
           Cancel
         </button>
@@ -594,13 +585,9 @@ function AddIngredientForm({
             if (!name.trim()) return;
             setSaving(true);
             await onSave({
-              ingredientName: name,
-              ingredientCategory: category,
-              baseUnit: unit,
-              description: description || undefined,
-              unitCost: cost || undefined,
-              parLevel: par || undefined,
-              reorderQty: reorder || undefined,
+              ingredientName: name, ingredientCategory: category, baseUnit: unit,
+              description: description || undefined, unitCost: cost || undefined,
+              parLevel: par || undefined, reorderQty: reorder || undefined,
               containsDairyInd: allergens.has("containsDairyInd"),
               containsGlutenInd: allergens.has("containsGlutenInd"),
               containsNutsInd: allergens.has("containsNutsInd"),
@@ -614,7 +601,7 @@ function AddIngredientForm({
           className="flex items-center gap-1.5 px-5 py-1.5 rounded-lg bg-gradient-to-r from-[#D4A574] to-[#C4956A] text-[#0A0A0A] text-sm font-semibold disabled:opacity-50 active:scale-[0.98] transition-all"
         >
           {saving ? <Loader2 className="size-3.5 animate-spin" /> : <Plus className="size-3.5" />}
-          Add Ingredient
+          Add
         </button>
       </div>
     </div>

@@ -820,6 +820,85 @@ export async function getLocationDashboard(
   };
 }
 
+/** Get org-wide dashboard summary — one row per location with stock counts + value. */
+export async function getOrgDashboardSummary(organisationId: number) {
+  // Get all locations in org
+  const locations = await db
+    .select({
+      storeLocationId: storeLocation.storeLocationId,
+      locationName: storeLocation.locationName,
+    })
+    .from(storeLocation)
+    .where(eq(storeLocation.organisationId, organisationId));
+
+  return Promise.all(
+    locations.map(async (loc) => {
+      // Get stock levels + par for this location
+      const levels = await db
+        .select({
+          currentQty: stockLevel.currentQty,
+          parLevel: locationIngredient.parLevel,
+          unitCost: locationIngredient.unitCost,
+          orgUnitCost: ingredient.unitCost,
+        })
+        .from(stockLevel)
+        .innerJoin(ingredient, eq(ingredient.ingredientId, stockLevel.ingredientId))
+        .leftJoin(
+          locationIngredient,
+          and(
+            eq(locationIngredient.ingredientId, stockLevel.ingredientId),
+            eq(locationIngredient.storeLocationId, loc.storeLocationId),
+          ),
+        )
+        .where(
+          and(
+            eq(stockLevel.storeLocationId, loc.storeLocationId),
+            eq(ingredient.organisationId, organisationId),
+          ),
+        );
+
+      let totalItems = levels.length;
+      let lowStock = 0;
+      let critical = 0;
+      let inventoryValue = 0;
+
+      for (const l of levels) {
+        const qty = Number(l.currentQty || 0);
+        const par = Number(l.parLevel || 0);
+        const cost = Number(l.unitCost || l.orgUnitCost || 0);
+        inventoryValue += qty * cost;
+        if (par > 0) {
+          const ratio = qty / par;
+          if (ratio <= 0.25) critical++;
+          else if (ratio <= 0.75) lowStock++;
+        }
+      }
+
+      // Last count
+      const [lastSession] = await db
+        .select({ closedDttm: stockTakeSession.closedDttm })
+        .from(stockTakeSession)
+        .where(
+          and(
+            eq(stockTakeSession.storeLocationId, loc.storeLocationId),
+            eq(stockTakeSession.sessionStatus, "APPROVED"),
+          ),
+        )
+        .orderBy(desc(stockTakeSession.closedDttm))
+        .limit(1);
+
+      return {
+        ...loc,
+        totalItems,
+        lowStock,
+        critical,
+        inventoryValue,
+        lastCountDttm: lastSession?.closedDttm ?? null,
+      };
+    }),
+  );
+}
+
 // ─── Shared helpers ──────────────────────────────────────────────
 
 /** Enrich categories with claimedByUserName via LEFT JOIN. */
