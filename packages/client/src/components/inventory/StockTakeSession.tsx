@@ -8,10 +8,11 @@
 
 import { useState } from "react";
 import { useStockTake, type StockTakeCategory } from "../../hooks/useInventory.js";
+import { useLocation } from "../../context/LocationContext.js";
 import { CategoryCounter } from "./CategoryCounter.js";
 import {
   ClipboardCheck, Play, CheckCircle2, AlertTriangle,
-  Clock, Loader2, ChevronRight, Lock,
+  Clock, Loader2, ChevronRight, Lock, ShieldCheck, Flag,
 } from "lucide-react";
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -31,10 +32,15 @@ const STATUS_CONFIG: Record<string, { color: string; bg: string; border: string;
 export function StockTakeSession() {
   const {
     session, isLoading, openSession, claimCategory,
-    submitCategory, getDetail,
+    submitCategory, getDetail, approveSession, flagSession,
   } = useStockTake();
+  const { isOrgAdmin } = useLocation();
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [flagModalOpen, setFlagModalOpen] = useState(false);
+  const [flagReason, setFlagReason] = useState("");
+  const [flaggedCats, setFlaggedCats] = useState<Set<string>>(new Set());
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   if (isLoading) {
     return (
@@ -114,6 +120,131 @@ export function StockTakeSession() {
           <div>
             <p className="text-sm font-medium text-red-400">HQ flagged this session</p>
             <p className="text-xs text-[#999] mt-1">{session.flagReason}</p>
+          </div>
+        </div>
+      )}
+
+      {/* HQ Review Panel — visible to org admins when session is PENDING_REVIEW */}
+      {isOrgAdmin && session.sessionStatus === "PENDING_REVIEW" && (
+        <div className="p-5 rounded-xl bg-[#161616] border border-[#D4A574]/20 space-y-4">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="size-5 text-[#D4A574]" />
+            <h4 className="text-sm font-semibold text-white">HQ Review</h4>
+          </div>
+          <p className="text-xs text-[#999]">
+            All categories have been submitted. Review the counts and approve or flag specific categories for recount.
+          </p>
+          <div className="flex gap-3">
+            <button
+              onClick={async () => {
+                try {
+                  setIsSubmitting(true);
+                  setError(null);
+                  await approveSession(session.sessionId);
+                } catch (err: any) {
+                  setError(err.message);
+                } finally {
+                  setIsSubmitting(false);
+                }
+              }}
+              disabled={isSubmitting}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 text-white font-medium text-sm hover:shadow-[0_0_12px_rgba(52,211,153,0.3)] transition-all active:scale-[0.98] disabled:opacity-50"
+            >
+              {isSubmitting ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}
+              Approve All
+            </button>
+            <button
+              onClick={() => setFlagModalOpen(true)}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 font-medium text-sm hover:bg-red-500/20 transition-all active:scale-[0.98]"
+            >
+              <Flag className="size-4" />
+              Flag for Recount
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Flag modal */}
+      {flagModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-[fadeIn_150ms_ease-out]"
+          onClick={() => setFlagModalOpen(false)}
+        >
+          <div className="w-full max-w-md p-6 rounded-2xl bg-[#161616] border border-[#2A2A2A] shadow-2xl animate-[scaleIn_200ms_ease-out]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h4 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+              <Flag className="size-5 text-red-400" />
+              Flag Categories for Recount
+            </h4>
+
+            <p className="text-xs text-[#999] mb-4">Select which categories need to be recounted and provide a reason.</p>
+
+            {/* Category checkboxes */}
+            <div className="space-y-2 mb-4">
+              {session.categories
+                .filter((c) => c.categoryStatus === "SUBMITTED")
+                .map((cat) => (
+                <label key={cat.categoryId} className="flex items-center gap-3 p-2 rounded-lg hover:bg-[#1E1E1E] cursor-pointer transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={flaggedCats.has(cat.categoryName)}
+                    onChange={(e) => {
+                      const next = new Set(flaggedCats);
+                      if (e.target.checked) next.add(cat.categoryName);
+                      else next.delete(cat.categoryName);
+                      setFlaggedCats(next);
+                    }}
+                    className="rounded border-[#3A3A3A] bg-[#0A0A0A] text-[#D4A574] focus:ring-[#D4A574]/50"
+                  />
+                  <span className="text-sm text-white">
+                    {CATEGORY_LABELS[cat.categoryName] || cat.categoryName}
+                  </span>
+                  {cat.lineCount !== undefined && (
+                    <span className="text-xs text-[#666] ml-auto">{cat.lineCount} items</span>
+                  )}
+                </label>
+              ))}
+            </div>
+
+            {/* Reason */}
+            <textarea
+              value={flagReason}
+              onChange={(e) => setFlagReason(e.target.value)}
+              placeholder="Reason for flagging (required)..."
+              rows={3}
+              className="w-full px-3 py-2 rounded-xl bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none focus:border-red-500/50 resize-none mb-4"
+            />
+
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => { setFlagModalOpen(false); setFlaggedCats(new Set()); setFlagReason(""); }}
+                className="px-4 py-2 rounded-xl text-sm text-[#999] hover:text-white transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  if (flaggedCats.size === 0 || !flagReason.trim()) return;
+                  try {
+                    setIsSubmitting(true);
+                    setError(null);
+                    await flagSession(session.sessionId, [...flaggedCats], flagReason.trim());
+                    setFlagModalOpen(false);
+                    setFlaggedCats(new Set());
+                    setFlagReason("");
+                  } catch (err: any) {
+                    setError(err.message);
+                  } finally {
+                    setIsSubmitting(false);
+                  }
+                }}
+                disabled={flaggedCats.size === 0 || !flagReason.trim() || isSubmitting}
+                className="flex items-center gap-2 px-5 py-2 rounded-xl bg-red-500 text-white text-sm font-medium disabled:opacity-50 active:scale-[0.98] transition-all"
+              >
+                {isSubmitting ? <Loader2 className="size-4 animate-spin" /> : <Flag className="size-4" />}
+                Flag {flaggedCats.size} Categor{flaggedCats.size === 1 ? "y" : "ies"}
+              </button>
+            </div>
           </div>
         </div>
       )}
