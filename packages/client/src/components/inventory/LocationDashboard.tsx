@@ -5,8 +5,8 @@
  * active stock take session info, and last count date.
  */
 
-import { useDashboard, type LocationIngredient } from "../../hooks/useInventory.js";
-import { Package, Clock, AlertTriangle, CheckCircle2, Loader2 } from "lucide-react";
+import { useDashboard, useLocationIngredients, type LocationIngredient } from "../../hooks/useInventory.js";
+import { Package, Clock, AlertTriangle, CheckCircle2, Loader2, DollarSign } from "lucide-react";
 
 const CATEGORY_LABELS: Record<string, string> = {
   proteins: "Proteins",
@@ -41,6 +41,7 @@ const STATUS_STYLES = {
 
 export function LocationDashboard({ locationId }: { locationId: string | null }) {
   const { data, isLoading } = useDashboard(locationId);
+  const { items: locItems } = useLocationIngredients(locationId);
 
   if (!locationId) {
     return (
@@ -101,6 +102,9 @@ export function LocationDashboard({ locationId }: { locationId: string | null })
           accent="text-red-400"
         />
       </div>
+
+      {/* Inventory value card */}
+      <InventoryValueCard items={locItems} />
 
       {/* Active session banner */}
       {data.activeSession && (
@@ -184,6 +188,72 @@ function SummaryCard({
         <span className="text-xs text-[#999]">{label}</span>
       </div>
       <p className="text-2xl font-bold text-white">{value}</p>
+    </div>
+  );
+}
+
+interface LocItemWithCost {
+  ingredientCategory: string;
+  currentQty: string | null;
+  orgUnitCost: string | null;
+  locationUnitCost: string | null;
+}
+
+function InventoryValueCard({ items }: { items: LocItemWithCost[] }) {
+  // Calculate total value and per-category breakdown
+  const byCat = new Map<string, number>();
+  let total = 0;
+
+  for (const item of items) {
+    const qty = item.currentQty ? Number(item.currentQty) : 0;
+    const cost = Number(item.locationUnitCost || item.orgUnitCost || 0);
+    const value = qty * cost;
+    if (value <= 0) continue;
+    total += value;
+    const cat = item.ingredientCategory;
+    byCat.set(cat, (byCat.get(cat) || 0) + value);
+  }
+
+  if (total === 0) return null;
+
+  // Sort by value descending
+  const sorted = Array.from(byCat.entries()).sort((a, b) => b[1] - a[1]);
+  const maxVal = sorted[0]?.[1] || 1;
+
+  return (
+    <div className="p-5 rounded-xl bg-[#161616] border border-[#2A2A2A]">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <DollarSign className="size-4 text-emerald-400" />
+          <span className="text-xs text-[#999]">Inventory Value</span>
+        </div>
+        <span className="text-xl font-bold text-white">
+          ${total.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+        </span>
+      </div>
+      <div className="space-y-2">
+        {sorted.slice(0, 5).map(([cat, val]) => {
+          const pct = (val / total) * 100;
+          const barWidth = (val / maxVal) * 100;
+          return (
+            <div key={cat} className="flex items-center gap-3">
+              <span className="text-xs text-[#999] w-20 truncate">
+                {CATEGORY_LABELS[cat] || cat}
+              </span>
+              <div className="flex-1 h-2 rounded-full bg-[#2A2A2A] overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-emerald-400 transition-all duration-500"
+                  style={{ width: `${barWidth}%` }}
+                />
+              </div>
+              <span className="text-xs text-[#666] w-20 text-right tabular-nums">
+                ${val.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                <span className="text-[#555] ml-1">({pct.toFixed(0)}%)</span>
+              </span>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

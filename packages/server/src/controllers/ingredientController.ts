@@ -19,6 +19,10 @@ import {
   addUnitConversion,
   listUnitConversions,
   deleteUnitConversion,
+  createSupplier,
+  listSuppliers,
+  updateSupplier,
+  deleteSupplier,
 } from "../services/ingredientService.js";
 import { invalidateConversionCache } from "../services/unitConversionService.js";
 
@@ -33,12 +37,44 @@ const CreateIngredientSchema = z.object({
   ingredientName: z.string().min(1).max(200),
   ingredientCategory: z.enum(VALID_CATEGORIES),
   baseUnit: z.string().min(1).max(20),
+  description: z.string().max(2000).optional(),
+  unitCost: z.string().refine(
+    (v) => !isNaN(Number(v)) && Number(v) >= 0, "Must be a non-negative number",
+  ).optional(),
+  parLevel: z.string().refine(
+    (v) => !isNaN(Number(v)) && Number(v) >= 0, "Must be a non-negative number",
+  ).optional(),
+  reorderQty: z.string().refine(
+    (v) => !isNaN(Number(v)) && Number(v) >= 0, "Must be a non-negative number",
+  ).optional(),
+  containsDairyInd: z.boolean().optional(),
+  containsGlutenInd: z.boolean().optional(),
+  containsNutsInd: z.boolean().optional(),
+  containsShellfishInd: z.boolean().optional(),
+  containsEggsInd: z.boolean().optional(),
+  isVegetarianInd: z.boolean().optional(),
 });
 
 const UpdateIngredientSchema = z.object({
   ingredientName: z.string().min(1).max(200).optional(),
   ingredientCategory: z.enum(VALID_CATEGORIES).optional(),
   baseUnit: z.string().min(1).max(20).optional(),
+  description: z.string().max(2000).nullable().optional(),
+  unitCost: z.string().refine(
+    (v) => !isNaN(Number(v)) && Number(v) >= 0, "Must be a non-negative number",
+  ).nullable().optional(),
+  parLevel: z.string().refine(
+    (v) => !isNaN(Number(v)) && Number(v) >= 0, "Must be a non-negative number",
+  ).nullable().optional(),
+  reorderQty: z.string().refine(
+    (v) => !isNaN(Number(v)) && Number(v) >= 0, "Must be a non-negative number",
+  ).nullable().optional(),
+  containsDairyInd: z.boolean().optional(),
+  containsGlutenInd: z.boolean().optional(),
+  containsNutsInd: z.boolean().optional(),
+  containsShellfishInd: z.boolean().optional(),
+  containsEggsInd: z.boolean().optional(),
+  isVegetarianInd: z.boolean().optional(),
 });
 
 const AddConversionSchema = z.object({
@@ -58,9 +94,38 @@ const UpdateLocationIngredientSchema = z.object({
     (v) => !isNaN(Number(v)) && Number(v) >= 0,
     "Must be a non-negative number",
   ).optional(),
+  unitCost: z.string().refine(
+    (v) => !isNaN(Number(v)) && Number(v) >= 0,
+    "Must be a non-negative number",
+  ).nullable().optional(),
+  supplierId: z.string().uuid().nullable().optional(),
   unitOverride: z.string().max(20).nullable().optional(),
   categoryOverride: z.enum(VALID_CATEGORIES).nullable().optional(),
   activeInd: z.boolean().optional(),
+});
+
+const CreateSupplierSchema = z.object({
+  supplierName: z.string().min(1).max(200),
+  contactName: z.string().max(200).optional(),
+  contactEmail: z.string().email().max(255).optional(),
+  contactPhone: z.string().max(50).optional(),
+  leadTimeDays: z.number().int().min(0).max(365).optional(),
+  minimumOrderValue: z.string().refine(
+    (v) => !isNaN(Number(v)) && Number(v) >= 0, "Must be a non-negative number",
+  ).optional(),
+  notes: z.string().max(2000).optional(),
+});
+
+const UpdateSupplierSchema = z.object({
+  supplierName: z.string().min(1).max(200).optional(),
+  contactName: z.string().max(200).nullable().optional(),
+  contactEmail: z.string().email().max(255).nullable().optional(),
+  contactPhone: z.string().max(50).nullable().optional(),
+  leadTimeDays: z.number().int().min(0).max(365).nullable().optional(),
+  minimumOrderValue: z.string().refine(
+    (v) => !isNaN(Number(v)) && Number(v) >= 0, "Must be a non-negative number",
+  ).nullable().optional(),
+  notes: z.string().max(2000).nullable().optional(),
 });
 
 /** Resolve the user's org ID from their location context. */
@@ -244,6 +309,91 @@ export async function handleUpdateLocationIngredient(
       "Location ingredient config updated",
     );
     res.json(row);
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ─── Supplier CRUD ───────────────────────────────────────────────
+
+export async function handleCreateSupplier(
+  req: Request, res: Response, next: NextFunction,
+): Promise<void> {
+  try {
+    const orgId = await resolveOrgId(req, res);
+    if (orgId === null) return;
+
+    const parsed = CreateSupplierSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "Validation failed", details: parsed.error.flatten() });
+      return;
+    }
+
+    const row = await createSupplier(orgId, parsed.data);
+    logger.info({ supplierId: row.supplierId, userId: req.user!.sub }, "Supplier created");
+    res.status(201).json(row);
+  } catch (err: any) {
+    if (err.code === "23505") {
+      res.status(409).json({ error: "A supplier with this name already exists" });
+      return;
+    }
+    next(err);
+  }
+}
+
+export async function handleListSuppliers(
+  req: Request, res: Response, next: NextFunction,
+): Promise<void> {
+  try {
+    const orgId = await resolveOrgId(req, res);
+    if (orgId === null) return;
+
+    const rows = await listSuppliers(orgId);
+    res.json(rows);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function handleUpdateSupplier(
+  req: Request, res: Response, next: NextFunction,
+): Promise<void> {
+  try {
+    const orgId = await resolveOrgId(req, res);
+    if (orgId === null) return;
+
+    const parsed = UpdateSupplierSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "Validation failed", details: parsed.error.flatten() });
+      return;
+    }
+
+    const row = await updateSupplier(req.params.id as string, orgId, parsed.data);
+    if (!row) { res.status(404).json({ error: "Supplier not found" }); return; }
+
+    logger.info({ supplierId: row.supplierId, userId: req.user!.sub }, "Supplier updated");
+    res.json(row);
+  } catch (err: any) {
+    if (err.code === "23505") {
+      res.status(409).json({ error: "A supplier with this name already exists" });
+      return;
+    }
+    next(err);
+  }
+}
+
+export async function handleDeleteSupplier(
+  req: Request, res: Response, next: NextFunction,
+): Promise<void> {
+  try {
+    const orgId = await resolveOrgId(req, res);
+    if (orgId === null) return;
+
+    const row = await deleteSupplier(req.params.id as string, orgId);
+    if (!row) { res.status(404).json({ error: "Supplier not found" }); return; }
+
+    logger.info({ supplierId: row.supplierId, userId: req.user!.sub }, "Supplier soft-deleted");
+    res.json({ deleted: true });
   } catch (err) {
     next(err);
   }

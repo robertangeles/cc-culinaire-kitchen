@@ -1094,6 +1094,16 @@ export const ingredient = pgTable(
     ingredientName: text("ingredient_name").notNull(),
     ingredientCategory: varchar("ingredient_category", { length: 50 }).notNull(),
     baseUnit: varchar("base_unit", { length: 20 }).notNull(),
+    description: text("description"),
+    unitCost: numeric("unit_cost"),
+    parLevel: numeric("par_level"),
+    reorderQty: numeric("reorder_qty"),
+    containsDairyInd: boolean("contains_dairy_ind").notNull().default(false),
+    containsGlutenInd: boolean("contains_gluten_ind").notNull().default(false),
+    containsNutsInd: boolean("contains_nuts_ind").notNull().default(false),
+    containsShellfishInd: boolean("contains_shellfish_ind").notNull().default(false),
+    containsEggsInd: boolean("contains_eggs_ind").notNull().default(false),
+    isVegetarianInd: boolean("is_vegetarian_ind").notNull().default(false),
     createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
     updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
   },
@@ -1102,6 +1112,35 @@ export const ingredient = pgTable(
     uniqueIndex("idx_ingredient_org_name").on(table.organisationId, table.ingredientName),
     // FK index: "get all ingredients for an org"
     index("idx_ingredient_org").on(table.organisationId),
+  ],
+);
+
+/**
+ * The `supplier` table stores vendor/supplier information at the org level.
+ * Locations link to suppliers via location_ingredient.supplier_id.
+ *
+ * OLTP table, 2NF — every non-key column depends only on supplier_id.
+ */
+export const supplier = pgTable(
+  "supplier",
+  {
+    supplierId: uuid("supplier_id").defaultRandom().primaryKey(),
+    organisationId: integer("organisation_id").notNull().references(() => organisation.organisationId),
+    supplierName: varchar("supplier_name", { length: 200 }).notNull(),
+    contactName: varchar("contact_name", { length: 200 }),
+    contactEmail: varchar("contact_email", { length: 255 }),
+    contactPhone: varchar("contact_phone", { length: 50 }),
+    leadTimeDays: integer("lead_time_days"),
+    minimumOrderValue: numeric("minimum_order_value"),
+    notes: text("notes"),
+    activeInd: boolean("active_ind").notNull().default(true),
+    createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
+    updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("idx_supplier_org_name").on(table.organisationId, table.supplierName),
+    // FK index: "get all suppliers for an org"
+    index("idx_supplier_org").on(table.organisationId),
   ],
 );
 
@@ -1124,6 +1163,8 @@ export const locationIngredient = pgTable(
     storeLocationId: uuid("store_location_id").notNull().references(() => storeLocation.storeLocationId),
     parLevel: numeric("par_level"),
     reorderQty: numeric("reorder_qty"),
+    unitCost: numeric("unit_cost"),
+    supplierId: uuid("supplier_id").references(() => supplier.supplierId),
     unitOverride: varchar("unit_override", { length: 20 }),
     categoryOverride: varchar("category_override", { length: 50 }),
     activeInd: boolean("active_ind").notNull().default(true),
@@ -1137,6 +1178,8 @@ export const locationIngredient = pgTable(
     index("idx_loc_ingredient_location").on(table.storeLocationId),
     // FK index: "get all locations for an ingredient"
     index("idx_loc_ingredient_ingredient").on(table.ingredientId),
+    // FK index: "get all ingredients from a supplier"
+    index("idx_loc_ingredient_supplier").on(table.supplierId),
   ],
 );
 

@@ -19,6 +19,16 @@ export interface Ingredient {
   ingredientName: string;
   ingredientCategory: string;
   baseUnit: string;
+  description: string | null;
+  unitCost: string | null;
+  parLevel: string | null;
+  reorderQty: string | null;
+  containsDairyInd: boolean;
+  containsGlutenInd: boolean;
+  containsNutsInd: boolean;
+  containsShellfishInd: boolean;
+  containsEggsInd: boolean;
+  isVegetarianInd: boolean;
   createdDttm: string;
   updatedDttm: string;
 }
@@ -28,14 +38,46 @@ export interface LocationIngredient {
   ingredientName: string;
   ingredientCategory: string;
   baseUnit: string;
+  description: string | null;
+  orgUnitCost: string | null;
+  orgParLevel: string | null;
+  orgReorderQty: string | null;
+  // Allergens
+  containsDairyInd: boolean;
+  containsGlutenInd: boolean;
+  containsNutsInd: boolean;
+  containsShellfishInd: boolean;
+  containsEggsInd: boolean;
+  isVegetarianInd: boolean;
+  // Location overrides
   locationIngredientId: string | null;
   parLevel: string | null;
   reorderQty: string | null;
+  locationUnitCost: string | null;
   unitOverride: string | null;
   categoryOverride: string | null;
   activeInd: boolean | null;
+  // Supplier
+  supplierId: string | null;
+  supplierName: string | null;
+  // Stock
   currentQty: string | null;
   lastCountedDttm: string | null;
+}
+
+export interface Supplier {
+  supplierId: string;
+  organisationId: number;
+  supplierName: string;
+  contactName: string | null;
+  contactEmail: string | null;
+  contactPhone: string | null;
+  leadTimeDays: number | null;
+  minimumOrderValue: string | null;
+  notes: string | null;
+  activeInd: boolean;
+  createdDttm: string;
+  updatedDttm: string;
 }
 
 export interface UnitConversion {
@@ -123,6 +165,16 @@ export function useIngredients() {
     ingredientName: string;
     ingredientCategory: string;
     baseUnit: string;
+    description?: string;
+    unitCost?: string;
+    parLevel?: string;
+    reorderQty?: string;
+    containsDairyInd?: boolean;
+    containsGlutenInd?: boolean;
+    containsNutsInd?: boolean;
+    containsShellfishInd?: boolean;
+    containsEggsInd?: boolean;
+    isVegetarianInd?: boolean;
   }) => {
     const res = await fetch(`${API}/ingredients`, {
       ...jsonOpts, method: "POST", body: JSON.stringify(data),
@@ -188,6 +240,71 @@ export function useLocationIngredients(locationId: string | null) {
   useEffect(() => { refresh(); }, [refresh]);
 
   return { items, isLoading, refresh, updateConfig };
+}
+
+// ─── useSuppliers ─────────────────────────────────────────────────
+
+export function useSuppliers() {
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const refresh = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const res = await fetch(`${API}/suppliers`, opts);
+      if (res.ok) setSuppliers(await res.json());
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const create = useCallback(async (data: {
+    supplierName: string;
+    contactName?: string;
+    contactEmail?: string;
+    contactPhone?: string;
+    leadTimeDays?: number;
+    minimumOrderValue?: string;
+    notes?: string;
+  }) => {
+    const res = await fetch(`${API}/suppliers`, {
+      ...jsonOpts, method: "POST", body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || "Failed to create supplier");
+    }
+    const created = await res.json();
+    await refresh();
+    return created as Supplier;
+  }, [refresh]);
+
+  const update = useCallback(async (id: string, data: Partial<Supplier>) => {
+    const res = await fetch(`${API}/suppliers/${id}`, {
+      ...jsonOpts, method: "PATCH", body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || "Failed to update supplier");
+    }
+    await refresh();
+    return res.json();
+  }, [refresh]);
+
+  const remove = useCallback(async (id: string) => {
+    const res = await fetch(`${API}/suppliers/${id}`, {
+      ...jsonOpts, method: "DELETE",
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || "Failed to delete supplier");
+    }
+    await refresh();
+  }, [refresh]);
+
+  useEffect(() => { refresh(); }, [refresh]);
+
+  return { suppliers, isLoading, refresh, create, update, remove };
 }
 
 // ─── useStockTake ─────────────────────────────────────────────────

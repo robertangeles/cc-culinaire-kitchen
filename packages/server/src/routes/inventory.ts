@@ -22,6 +22,10 @@ import {
   handleDeleteConversion,
   handleListLocationIngredients,
   handleUpdateLocationIngredient,
+  handleCreateSupplier,
+  handleListSuppliers,
+  handleUpdateSupplier,
+  handleDeleteSupplier,
 } from "../controllers/ingredientController.js";
 import {
   handleOpenSession,
@@ -53,6 +57,13 @@ router.patch("/ingredients/:id", requirePermission("inventory:manage"), handleUp
 router.post("/ingredients/:id/conversions", requirePermission("inventory:manage"), handleAddConversion);
 router.get("/ingredients/:id/conversions", requirePermission("inventory:count"), handleListConversions);
 router.delete("/ingredients/:id/conversions/:conversionId", requirePermission("inventory:manage"), handleDeleteConversion);
+
+// ─── Suppliers (org-wide) ─────────────────────────────────────────
+
+router.post("/suppliers", requirePermission("inventory:manage"), handleCreateSupplier);
+router.get("/suppliers", requirePermission("inventory:manage"), handleListSuppliers);
+router.patch("/suppliers/:id", requirePermission("inventory:manage"), handleUpdateSupplier);
+router.delete("/suppliers/:id", requirePermission("inventory:manage"), handleDeleteSupplier);
 
 // ─── Location ingredient config ───────────────────────────────────
 
