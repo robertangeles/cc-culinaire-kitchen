@@ -14,8 +14,9 @@ import {
   type StockTakeCategory, type StockTakeLine, type LocationIngredient,
 } from "../../hooks/useInventory.js";
 import { useLocation } from "../../context/LocationContext.js";
+import { useOfflineSync } from "../../hooks/useOfflineSync.js";
 import { SmartKeypad } from "./SmartKeypad.js";
-import { ArrowLeft, Check, User, Copy, Loader2 } from "lucide-react";
+import { ArrowLeft, Check, User, Copy, Loader2, WifiOff, RefreshCw } from "lucide-react";
 
 interface Props {
   sessionId: string;
@@ -27,6 +28,7 @@ export function CategoryCounter({ sessionId, category, onBack }: Props) {
   const { selectedLocationId } = useLocation();
   const { saveLine, getLines, getPreviousLines } = useStockTake();
   const { items: locationIngredients } = useLocationIngredients(selectedLocationId);
+  const { isOnline, queueSize, isSyncing, saveWithOfflineFallback, syncQueue } = useOfflineSync();
 
   const [lines, setLines] = useState<StockTakeLine[]>([]);
   const [activeIngredient, setActiveIngredient] = useState<string | null>(null);
@@ -76,14 +78,17 @@ export function CategoryCounter({ sessionId, category, onBack }: Props) {
     }
   }, [sessionId, category.categoryName, getPreviousLines, saveLine, loadLines]);
 
-  // Save a count
+  // Save a count — with offline fallback
   const handleSave = useCallback(async (ingredientId: string, qty: number, unit: string) => {
     setIsSaving(true);
     setError(null);
     try {
-      await saveLine(sessionId, category.categoryName, {
+      const result = await saveWithOfflineFallback(sessionId, category.categoryName, {
         ingredientId, rawQty: qty, countedUnit: unit,
       });
+      if (result.saved === "offline") {
+        setError("Saved offline — will sync when connected");
+      }
       await loadLines();
       // Move to next uncounted ingredient
       const currentIdx = categoryIngredients.findIndex((i) => i.ingredientId === ingredientId);
@@ -173,6 +178,30 @@ export function CategoryCounter({ sessionId, category, onBack }: Props) {
           Copy Last Count
         </button>
       </div>
+
+      {/* Offline banner */}
+      {(!isOnline || queueSize > 0) && (
+        <div className="flex items-center justify-between p-3 mb-4 rounded-xl bg-amber-500/10 border border-amber-500/20">
+          <div className="flex items-center gap-2">
+            <WifiOff className="size-4 text-amber-400" />
+            <span className="text-xs text-amber-400">
+              {!isOnline
+                ? "Offline — counts will sync when connected"
+                : `${queueSize} item${queueSize !== 1 ? "s" : ""} waiting to sync`}
+            </span>
+          </div>
+          {isOnline && queueSize > 0 && (
+            <button
+              onClick={() => syncQueue()}
+              disabled={isSyncing}
+              className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs text-amber-400 hover:bg-amber-500/10 transition-colors"
+            >
+              <RefreshCw className={`size-3 ${isSyncing ? "animate-spin" : ""}`} />
+              Sync
+            </button>
+          )}
+        </div>
+      )}
 
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-semibold text-white">
