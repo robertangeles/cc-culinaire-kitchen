@@ -267,6 +267,17 @@ export function useStockTake() {
     return res.json();
   }, [getDetail]);
 
+  const submitForReview = useCallback(async (sessionId: string) => {
+    const res = await fetch(`${API}/stock-takes/${sessionId}/submit-for-review`, {
+      ...jsonOpts, method: "POST",
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || "Failed to submit for review");
+    }
+    await getDetail(sessionId);
+  }, [getDetail]);
+
   const approveSession = useCallback(async (sessionId: string) => {
     const res = await fetch(`${API}/stock-takes/${sessionId}/approve`, {
       ...jsonOpts, method: "POST",
@@ -304,7 +315,7 @@ export function useStockTake() {
 
   return {
     session, isLoading, refreshActive, openSession, getDetail,
-    claimCategory, saveLine, getLines, submitCategory,
+    claimCategory, saveLine, getLines, submitCategory, submitForReview,
     approveSession, flagSession, getPreviousLines,
   };
 }

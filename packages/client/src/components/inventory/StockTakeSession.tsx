@@ -43,7 +43,7 @@ const STATUS_CONFIG: Record<string, { color: string; bg: string; border: string;
 export function StockTakeSession() {
   const {
     session, isLoading, openSession, claimCategory,
-    submitCategory, getDetail, approveSession, flagSession,
+    submitCategory, getDetail, approveSession, flagSession, submitForReview,
   } = useStockTake();
   const { isOrgAdmin } = useLocation();
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
@@ -346,6 +346,32 @@ export function StockTakeSession() {
           />
         ))}
       </div>
+
+      {/* Submit for Review button — visible when at least one category is submitted and session is OPEN */}
+      {session.sessionStatus === "OPEN" &&
+        session.categories.some((c) => c.categoryStatus === "SUBMITTED") &&
+        !session.categories.some((c) => c.categoryStatus === "IN_PROGRESS") && (
+        <div className="flex justify-center pt-2">
+          <button
+            onClick={async () => {
+              try {
+                setIsSubmitting(true);
+                setError(null);
+                await submitForReview(session.sessionId);
+              } catch (err: any) {
+                setError(err.message);
+              } finally {
+                setIsSubmitting(false);
+              }
+            }}
+            disabled={isSubmitting}
+            className="flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-[#D4A574] to-[#C4956A] text-[#0A0A0A] font-semibold text-sm hover:shadow-[0_0_16px_rgba(212,165,116,0.3)] transition-all active:scale-[0.98] disabled:opacity-50"
+          >
+            {isSubmitting ? <Loader2 className="size-4 animate-spin" /> : <ShieldCheck className="size-4" />}
+            Submit for Review
+          </button>
+        </div>
+      )}
 
       {error && (
         <p className="text-sm text-red-400 text-center">{error}</p>

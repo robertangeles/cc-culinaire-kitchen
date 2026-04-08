@@ -15,6 +15,7 @@ import {
   getSessionDetail,
   claimCategory,
   submitCategory,
+  submitSessionForReview,
   approveSession,
   flagSession,
   saveLineItem,
@@ -220,6 +221,23 @@ export async function handleSubmitCategory(
       "Category submitted",
     );
     res.json(cat);
+  } catch (err) {
+    handleServiceError(err, res, next);
+  }
+}
+
+// ─── Submit for review ────────────────────────────────────────────
+
+export async function handleSubmitForReview(
+  req: Request, res: Response, next: NextFunction,
+): Promise<void> {
+  try {
+    const session = await submitSessionForReview(req.params.id as string);
+    logger.info(
+      { sessionId: req.params.id as string, userId: req.user!.sub },
+      "Stock take session submitted for review",
+    );
+    res.json(session);
   } catch (err) {
     handleServiceError(err, res, next);
   }

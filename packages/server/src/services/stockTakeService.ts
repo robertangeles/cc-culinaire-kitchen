@@ -268,11 +268,58 @@ export async function submitCategory(sessionId: string, categoryName: string) {
 }
 
 /**
- * Check if all CLAIMED categories are submitted and advance session to PENDING_REVIEW.
- * NOT_STARTED categories are excluded — supports partial/cycle counts where
- * only some categories are counted per session.
- * At least one category must be submitted for the session to advance.
+ * Manually submit a session for HQ review.
+ * Requires at least one category to be SUBMITTED. Unclaimed (NOT_STARTED)
+ * categories are left as-is — this supports partial/cycle counts.
  */
+export async function submitSessionForReview(sessionId: string) {
+  const [session] = await db
+    .select()
+    .from(stockTakeSession)
+    .where(eq(stockTakeSession.sessionId, sessionId));
+
+  if (!session) throw new NotFoundError("Session not found");
+  if (session.sessionStatus !== "OPEN" && session.sessionStatus !== "FLAGGED") {
+    throw new InvalidStateError(
+      `Cannot submit for review: session is ${session.sessionStatus}`,
+    );
+  }
+
+  const categories = await db
+    .select()
+    .from(stockTakeCategory)
+    .where(eq(stockTakeCategory.sessionId, sessionId));
+
+  // Must have at least one submitted category
+  const submitted = categories.filter(
+    (c) => c.categoryStatus === "SUBMITTED" || c.categoryStatus === "APPROVED",
+  );
+  if (submitted.length === 0) {
+    throw new ValidationError("At least one category must be submitted before sending for review");
+  }
+
+  // Check no categories are still IN_PROGRESS (must submit or abandon)
+  const inProgress = categories.filter((c) => c.categoryStatus === "IN_PROGRESS");
+  if (inProgress.length > 0) {
+    throw new ValidationError(
+      `${inProgress.length} categor${inProgress.length === 1 ? "y is" : "ies are"} still in progress. Submit or abandon them first.`,
+    );
+  }
+
+  const [updated] = await db
+    .update(stockTakeSession)
+    .set({
+      sessionStatus: "PENDING_REVIEW",
+      submittedDttm: new Date(),
+      updatedDttm: new Date(),
+    })
+    .where(eq(stockTakeSession.sessionId, sessionId))
+    .returning();
+
+  return updated;
+}
+
+/** Auto-check (kept for future use if needed). */
 async function checkAndAdvanceSession(sessionId: string) {
   const categories = await db
     .select()

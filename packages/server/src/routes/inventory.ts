@@ -31,6 +31,7 @@ import {
   handleSaveLineItem,
   handleGetCategoryLines,
   handleSubmitCategory,
+  handleSubmitForReview,
   handleApproveSession,
   handleFlagSession,
   handleGetPreviousLines,
@@ -65,6 +66,7 @@ router.get("/stock-takes/active", requirePermission("inventory:count"), handleGe
 
 // Parameterized session routes
 router.get("/stock-takes/:id", requirePermission("inventory:count"), handleGetSessionDetail);
+router.post("/stock-takes/:id/submit-for-review", requirePermission("inventory:count"), handleSubmitForReview);
 router.post("/stock-takes/:id/approve", requirePermission("inventory:hq"), handleApproveSession);
 router.post("/stock-takes/:id/flag", requirePermission("inventory:hq"), handleFlagSession);
 
