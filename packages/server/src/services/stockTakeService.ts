@@ -115,12 +115,12 @@ export async function openSession(
   await db.insert(stockTakeCategory).values(categoryValues);
 
   // Return session with categories
-  const categories = await db
+  const createdCategories = await db
     .select()
     .from(stockTakeCategory)
     .where(eq(stockTakeCategory.sessionId, session.sessionId));
 
-  return { ...session, categories };
+  return { ...session, categories: createdCategories };
 }
 
 /** Get the active session for a location (non-ARCHIVED, non-APPROVED). */
