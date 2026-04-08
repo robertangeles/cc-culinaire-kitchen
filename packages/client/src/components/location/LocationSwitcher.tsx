@@ -37,9 +37,6 @@ export function LocationSwitcher() {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const searchRef = useRef<HTMLInputElement>(null);
 
-  // Don't render if no locations
-  if (!hasLocationAccess) return null;
-
   const filteredLocations = locations.filter((loc) =>
     loc.locationName.toLowerCase().includes(search.toLowerCase())
   );
@@ -94,6 +91,8 @@ export function LocationSwitcher() {
     setSearch("");
   };
 
+  // Early returns AFTER all hooks (Rules of Hooks compliance)
+  if (!hasLocationAccess) return null;
   if (!isOpen) return null;
 
   return (

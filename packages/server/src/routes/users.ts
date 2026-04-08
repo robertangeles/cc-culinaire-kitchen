@@ -28,11 +28,21 @@ import {
   handleRemoveUserOrganisation,
 } from "../controllers/userController.js";
 import { handleGetKitchenProfile, handleUpsertKitchenProfile } from "../controllers/kitchenProfileController.js";
+import {
+  handleGetLocationContext,
+  handleSwitchLocation,
+  handleUpdateModulePreference,
+} from "../controllers/storeLocationController.js";
 
 const router = Router();
 
 // All user routes require authentication
 router.use(authenticate);
+
+// Location context — MUST be before /:id param routes (Lesson 11)
+router.get("/location-context", handleGetLocationContext);
+router.patch("/selected-location", handleSwitchLocation);
+router.patch("/location-preferences", handleUpdateModulePreference);
 
 // Profile (self)
 router.get("/profile", handleGetProfile);
