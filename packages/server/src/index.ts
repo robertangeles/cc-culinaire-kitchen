@@ -108,15 +108,7 @@ app.use("/api/guides", guidesRouter);
 app.use("/api/store-locations", storeLocationsRouter);
 app.use("/api/inventory", inventoryRouter);
 
-// Location context routes (mounted under /api/users)
-import {
-  handleGetLocationContext,
-  handleSwitchLocation,
-  handleUpdateModulePreference,
-} from "./controllers/storeLocationController.js";
-app.get("/api/users/location-context", authenticate, handleGetLocationContext);
-app.patch("/api/users/selected-location", authenticate, handleSwitchLocation);
-app.patch("/api/users/location-preferences", authenticate, handleUpdateModulePreference);
+// Location context routes are now inside usersRouter (before /:id params)
 
 // Database stats (admin only)
 import { authenticate, requireRole } from "./middleware/auth.js";

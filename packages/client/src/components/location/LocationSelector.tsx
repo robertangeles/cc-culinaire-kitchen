@@ -44,9 +44,6 @@ export function LocationSelector() {
   const dropdownRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
-  // Hide if only 1 location and not admin
-  if (locations.length <= 1 && !isOrgAdmin) return null;
-
   const filteredLocations = locations.filter((loc) =>
     loc.locationName.toLowerCase().includes(search.toLowerCase())
   );
@@ -81,6 +78,9 @@ export function LocationSelector() {
       searchRef.current.focus();
     }
   }, [isOpen]);
+
+  // Early return AFTER all hooks (Rules of Hooks compliance)
+  if (locations.length <= 1 && !isOrgAdmin) return null;
 
   return (
     <div ref={dropdownRef} className="relative">
