@@ -58,6 +58,10 @@ export interface StockTakeSession {
   submittedDttm: string | null;
   closedDttm: string | null;
   categories: StockTakeCategory[];
+  // Enriched fields (from JOINs)
+  openedByUserName?: string;
+  approvedByUserName?: string | null;
+  locationName?: string;
 }
 
 export interface StockTakeCategory {
@@ -70,6 +74,8 @@ export interface StockTakeCategory {
   submittedDttm: string | null;
   lineCount?: number;
   lines?: StockTakeLine[];
+  // Enriched
+  claimedByUserName?: string | null;
 }
 
 export interface StockTakeLine {
@@ -84,6 +90,11 @@ export interface StockTakeLine {
   variancePct: string | null;
   countedByUserId: number;
   countedDttm: string;
+  // Enriched
+  ingredientName?: string;
+  ingredientCategory?: string;
+  baseUnit?: string;
+  countedByUserName?: string;
 }
 
 export interface DashboardData {
@@ -318,6 +329,42 @@ export function useStockTake() {
     claimCategory, saveLine, getLines, submitCategory, submitForReview,
     approveSession, flagSession, getPreviousLines,
   };
+}
+
+// ─── usePendingReviews ────────────────────────────────────────────
+
+export interface PendingReviewSession {
+  sessionId: string;
+  storeLocationId: string;
+  locationName: string;
+  sessionStatus: string;
+  openedByUserId: number;
+  openedByUserName: string;
+  openedDttm: string;
+  submittedDttm: string | null;
+  flagReason: string | null;
+  categoryCount: number;
+  submittedCount: number;
+  categories: StockTakeCategory[];
+}
+
+export function usePendingReviews() {
+  const [sessions, setSessions] = useState<PendingReviewSession[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const refresh = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const res = await fetch(`${API}/stock-takes/pending-reviews`, opts);
+      if (res.ok) setSessions(await res.json());
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { refresh(); }, [refresh]);
+
+  return { sessions, isLoading, refresh };
 }
 
 // ─── useDashboard ─────────────────────────────────────────────────

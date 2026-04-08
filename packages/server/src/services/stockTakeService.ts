@@ -14,7 +14,8 @@
  *   FLAGGED → IN_PROGRESS (recount)
  */
 
-import { eq, and, ne, sql, desc } from "drizzle-orm";
+import { eq, and, ne, sql, desc, inArray, getTableColumns } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { db } from "../db/index.js";
 import {
   stockTakeSession,
@@ -23,8 +24,13 @@ import {
   stockLevel,
   ingredient,
   locationIngredient,
+  user,
+  storeLocation,
 } from "../db/schema.js";
 import { convertToBase } from "./unitConversionService.js";
+
+/** Aliased user table for secondary JOINs (e.g. approver vs opener). */
+const approverUser = alias(user, "approver");
 
 // ─── Constants ────────────────────────────────────────────────────
 
@@ -114,11 +120,8 @@ export async function openSession(
 
   await db.insert(stockTakeCategory).values(categoryValues);
 
-  // Return session with categories
-  const createdCategories = await db
-    .select()
-    .from(stockTakeCategory)
-    .where(eq(stockTakeCategory.sessionId, session.sessionId));
+  // Return session with categories (enriched with user names)
+  const createdCategories = await enrichCategoriesWithUserNames(session.sessionId);
 
   return { ...session, categories: createdCategories };
 }
@@ -126,8 +129,16 @@ export async function openSession(
 /** Get the active session for a location (non-ARCHIVED, non-APPROVED). */
 export async function getActiveSession(storeLocationId: string) {
   const rows = await db
-    .select()
+    .select({
+      ...getTableColumns(stockTakeSession),
+      openedByUserName: user.userName,
+      approvedByUserName: approverUser.userName,
+      locationName: storeLocation.locationName,
+    })
     .from(stockTakeSession)
+    .innerJoin(user, eq(user.userId, stockTakeSession.openedByUserId))
+    .innerJoin(storeLocation, eq(storeLocation.storeLocationId, stockTakeSession.storeLocationId))
+    .leftJoin(approverUser, eq(approverUser.userId, stockTakeSession.approvedByUserId))
     .where(
       and(
         eq(stockTakeSession.storeLocationId, storeLocationId),
@@ -139,10 +150,7 @@ export async function getActiveSession(storeLocationId: string) {
   if (rows.length === 0) return null;
 
   const session = rows[0];
-  const categories = await db
-    .select()
-    .from(stockTakeCategory)
-    .where(eq(stockTakeCategory.sessionId, session.sessionId));
+  const categories = await enrichCategoriesWithUserNames(session.sessionId);
 
   return { ...session, categories };
 }
@@ -150,8 +158,16 @@ export async function getActiveSession(storeLocationId: string) {
 /** Get session detail by ID with categories and line counts. */
 export async function getSessionDetail(sessionId: string, organisationId: number) {
   const [session] = await db
-    .select()
+    .select({
+      ...getTableColumns(stockTakeSession),
+      openedByUserName: user.userName,
+      approvedByUserName: approverUser.userName,
+      locationName: storeLocation.locationName,
+    })
     .from(stockTakeSession)
+    .innerJoin(user, eq(user.userId, stockTakeSession.openedByUserId))
+    .innerJoin(storeLocation, eq(storeLocation.storeLocationId, stockTakeSession.storeLocationId))
+    .leftJoin(approverUser, eq(approverUser.userId, stockTakeSession.approvedByUserId))
     .where(
       and(
         eq(stockTakeSession.sessionId, sessionId),
@@ -161,18 +177,12 @@ export async function getSessionDetail(sessionId: string, organisationId: number
 
   if (!session) return null;
 
-  const categories = await db
-    .select()
-    .from(stockTakeCategory)
-    .where(eq(stockTakeCategory.sessionId, sessionId));
+  const categories = await enrichCategoriesWithUserNames(sessionId);
 
   // Get line counts per category
   const categoriesWithCounts = await Promise.all(
     categories.map(async (cat) => {
-      const lines = await db
-        .select()
-        .from(stockTakeLine)
-        .where(eq(stockTakeLine.categoryId, cat.categoryId));
+      const lines = await getCategoryLines(cat.categoryId);
       return { ...cat, lineCount: lines.length, lines };
     }),
   );
@@ -535,11 +545,19 @@ export async function saveLineItem(
   return row;
 }
 
-/** Get line items for a category. */
+/** Get line items for a category — enriched with ingredient + user names. */
 export async function getCategoryLines(categoryId: string) {
   return db
-    .select()
+    .select({
+      ...getTableColumns(stockTakeLine),
+      ingredientName: ingredient.ingredientName,
+      ingredientCategory: ingredient.ingredientCategory,
+      baseUnit: ingredient.baseUnit,
+      countedByUserName: user.userName,
+    })
     .from(stockTakeLine)
+    .innerJoin(ingredient, eq(ingredient.ingredientId, stockTakeLine.ingredientId))
+    .innerJoin(user, eq(user.userId, stockTakeLine.countedByUserId))
     .where(eq(stockTakeLine.categoryId, categoryId));
 }
 
@@ -640,10 +658,18 @@ export async function getPreviousCountLines(
 
   if (!prevCat) return [];
 
-  // Return all lines
+  // Return all lines — enriched with ingredient + user names
   return db
-    .select()
+    .select({
+      ...getTableColumns(stockTakeLine),
+      ingredientName: ingredient.ingredientName,
+      ingredientCategory: ingredient.ingredientCategory,
+      baseUnit: ingredient.baseUnit,
+      countedByUserName: user.userName,
+    })
     .from(stockTakeLine)
+    .innerJoin(ingredient, eq(ingredient.ingredientId, stockTakeLine.ingredientId))
+    .innerJoin(user, eq(user.userId, stockTakeLine.countedByUserId))
     .where(eq(stockTakeLine.categoryId, prevCat.categoryId));
 }
 
@@ -792,6 +818,71 @@ export async function getLocationDashboard(
     activeSession,
     lastCompletedSession: lastCompleted ?? null,
   };
+}
+
+// ─── Shared helpers ──────────────────────────────────────────────
+
+/** Enrich categories with claimedByUserName via LEFT JOIN. */
+async function enrichCategoriesWithUserNames(sessionId: string) {
+  return db
+    .select({
+      ...getTableColumns(stockTakeCategory),
+      claimedByUserName: user.userName,
+    })
+    .from(stockTakeCategory)
+    .leftJoin(user, eq(user.userId, stockTakeCategory.claimedByUserId))
+    .where(eq(stockTakeCategory.sessionId, sessionId));
+}
+
+// ─── Cross-location review queries ──────────────────────────────
+
+/**
+ * Get all sessions pending HQ review across an org.
+ * Returns compact summaries with location + opener names.
+ */
+export async function getPendingReviewSessions(organisationId: number) {
+  const sessions = await db
+    .select({
+      sessionId: stockTakeSession.sessionId,
+      storeLocationId: stockTakeSession.storeLocationId,
+      locationName: storeLocation.locationName,
+      sessionStatus: stockTakeSession.sessionStatus,
+      openedByUserId: stockTakeSession.openedByUserId,
+      openedByUserName: user.userName,
+      openedDttm: stockTakeSession.openedDttm,
+      submittedDttm: stockTakeSession.submittedDttm,
+      flagReason: stockTakeSession.flagReason,
+    })
+    .from(stockTakeSession)
+    .innerJoin(storeLocation, eq(storeLocation.storeLocationId, stockTakeSession.storeLocationId))
+    .innerJoin(user, eq(user.userId, stockTakeSession.openedByUserId))
+    .where(
+      and(
+        eq(stockTakeSession.organisationId, organisationId),
+        inArray(stockTakeSession.sessionStatus, ["PENDING_REVIEW", "FLAGGED"]),
+      ),
+    )
+    .orderBy(desc(stockTakeSession.submittedDttm));
+
+  // Attach category summaries
+  return Promise.all(
+    sessions.map(async (s) => {
+      const cats = await enrichCategoriesWithUserNames(s.sessionId);
+      const submittedCount = cats.filter(
+        (c) => c.categoryStatus === "SUBMITTED" || c.categoryStatus === "APPROVED",
+      ).length;
+      const totalLineCount = cats.reduce(
+        (sum, c) => sum + (typeof (c as any).lineCount === "number" ? (c as any).lineCount : 0),
+        0,
+      );
+      return {
+        ...s,
+        categoryCount: cats.length,
+        submittedCount,
+        categories: cats,
+      };
+    }),
+  );
 }
 
 // ─── Error classes ────────────────────────────────────────────────

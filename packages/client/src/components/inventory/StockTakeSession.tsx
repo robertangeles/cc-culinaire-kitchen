@@ -8,9 +8,7 @@
 
 import { useState } from "react";
 import { useStockTake, type StockTakeCategory } from "../../hooks/useInventory.js";
-import { useLocation } from "../../context/LocationContext.js";
 import { CategoryCounter } from "./CategoryCounter.js";
-import { StockTakeReview } from "./StockTakeReview.js";
 import {
   ClipboardCheck, Play, CheckCircle2, AlertTriangle,
   Clock, Loader2, ChevronRight, Lock, ShieldCheck, Flag,
@@ -46,7 +44,6 @@ export function StockTakeSession() {
     session, isLoading, openSession, claimCategory,
     submitCategory, getDetail, approveSession, flagSession, submitForReview,
   } = useStockTake();
-  const { isOrgAdmin } = useLocation();
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [flagModalOpen, setFlagModalOpen] = useState(false);
@@ -194,12 +191,15 @@ export function StockTakeSession() {
         </div>
       )}
 
-      {/* HQ Review — full detail view when session is PENDING_REVIEW */}
-      {isOrgAdmin && session.sessionStatus === "PENDING_REVIEW" && (
-        <StockTakeReview
-          session={session}
-          onActionComplete={() => getDetail(session.sessionId)}
-        />
+      {/* Status banner for PENDING_REVIEW */}
+      {session.sessionStatus === "PENDING_REVIEW" && (
+        <div className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center gap-3">
+          <ShieldCheck className="size-5 text-blue-400 shrink-0" />
+          <div>
+            <p className="text-sm font-medium text-blue-400">Submitted for Review</p>
+            <p className="text-xs text-[#999] mt-0.5">This stock take is awaiting HQ approval. Check the Review tab for details.</p>
+          </div>
+        </div>
       )}
 
       {/* Category cards */}

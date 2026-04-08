@@ -8,7 +8,7 @@
  * - Approve all or flag specific categories with reason
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
 import {
   useStockTake,
   type StockTakeSession,
@@ -75,12 +75,7 @@ export function StockTakeReview({ session, onActionComplete }: Props) {
     setExpandedCats(next);
   };
 
-  // Auto-expand all submitted categories on mount
-  useEffect(() => {
-    const names = submittedCats.map((c) => c.categoryName);
-    setExpandedCats(new Set(names));
-    names.forEach((n) => loadCatLines(n));
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // Categories start collapsed — click to expand (no scrolling)
 
   return (
     <div className="space-y-6 animate-[fadeInUp_200ms_ease-out]">
@@ -108,7 +103,7 @@ export function StockTakeReview({ session, onActionComplete }: Props) {
             <User className="size-4 text-[#D4A574]" />
             <div>
               <p className="text-xs text-[#666]">Opened by</p>
-              <p className="text-white font-medium">User #{session.openedByUserId}</p>
+              <p className="text-white font-medium">{session.openedByUserName ?? `User #${session.openedByUserId}`}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -306,7 +301,7 @@ function CategoryReviewCard({
         {category.claimedByUserId && (
           <span className="text-xs text-[#666] flex items-center gap-1">
             <User className="size-3" />
-            Counted by #{category.claimedByUserId}
+            {category.claimedByUserName ?? `#${category.claimedByUserId}`}
           </span>
         )}
       </button>
@@ -347,39 +342,61 @@ function LineItemRow({ line }: { line: StockTakeLine }) {
   const isHigh = variancePct !== null && Math.abs(variancePct) > 10;
 
   return (
-    <div className={`grid grid-cols-12 gap-2 px-4 py-2.5 text-sm ${
+    <div className={`px-4 py-2.5 text-sm ${
       isHigh ? "bg-amber-500/5" : "hover:bg-[#1E1E1E]/30"
     } transition-colors`}>
-      <div className="col-span-4 text-white truncate">
-        {line.ingredientId.slice(0, 8)}...
-        <span className="text-[10px] text-[#666] ml-1">{line.countedUnit}</span>
+      {/* Desktop: grid layout */}
+      <div className="hidden sm:grid grid-cols-12 gap-2">
+        <div className="col-span-4 text-white truncate">
+          {line.ingredientName ?? line.ingredientId.slice(0, 8)}
+          <span className="text-[10px] text-[#666] ml-1">{line.countedUnit}</span>
+        </div>
+        <div className="col-span-2 text-right text-white font-medium tabular-nums">
+          {Number(line.countedQty).toFixed(1)}
+        </div>
+        <div className="col-span-2 text-right text-[#999] tabular-nums">
+          {line.expectedQty ? Number(line.expectedQty).toFixed(1) : "—"}
+        </div>
+        <div className={`col-span-2 text-right tabular-nums flex items-center justify-end gap-1 ${
+          variance === null ? "text-[#666]"
+            : variance > 0 ? "text-emerald-400"
+            : variance < 0 ? "text-red-400"
+            : "text-[#999]"
+        }`}>
+          {variance !== null ? (
+            <>
+              {variance > 0 ? <TrendingUp className="size-3" /> : variance < 0 ? <TrendingDown className="size-3" /> : null}
+              {variance > 0 ? "+" : ""}{variance.toFixed(1)}
+              {variancePct !== null && (
+                <span className="text-[10px]">({variancePct.toFixed(0)}%)</span>
+              )}
+            </>
+          ) : "—"}
+        </div>
+        <div className="col-span-2 text-right text-[10px] text-[#666]">
+          {line.countedByUserName ?? `#${line.countedByUserId}`}
+          <br />
+          {new Date(line.countedDttm).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+        </div>
       </div>
-      <div className="col-span-2 text-right text-white font-medium tabular-nums">
-        {Number(line.countedQty).toFixed(1)}
-      </div>
-      <div className="col-span-2 text-right text-[#999] tabular-nums">
-        {line.expectedQty ? Number(line.expectedQty).toFixed(1) : "—"}
-      </div>
-      <div className={`col-span-2 text-right tabular-nums flex items-center justify-end gap-1 ${
-        variance === null ? "text-[#666]"
-          : variance > 0 ? "text-emerald-400"
-          : variance < 0 ? "text-red-400"
-          : "text-[#999]"
-      }`}>
-        {variance !== null ? (
-          <>
-            {variance > 0 ? <TrendingUp className="size-3" /> : variance < 0 ? <TrendingDown className="size-3" /> : null}
-            {variance > 0 ? "+" : ""}{variance.toFixed(1)}
-            {variancePct !== null && (
-              <span className="text-[10px]">({variancePct.toFixed(0)}%)</span>
-            )}
-          </>
-        ) : "—"}
-      </div>
-      <div className="col-span-2 text-right text-[10px] text-[#666]">
-        #{line.countedByUserId}
-        <br />
-        {new Date(line.countedDttm).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+      {/* Mobile: stacked layout */}
+      <div className="sm:hidden flex flex-col gap-1">
+        <div className="flex justify-between items-baseline">
+          <span className="text-white font-medium truncate">
+            {line.ingredientName ?? line.ingredientId.slice(0, 8)}
+          </span>
+          <span className="text-white font-medium tabular-nums ml-2 shrink-0">
+            {Number(line.countedQty).toFixed(1)} {line.countedUnit}
+          </span>
+        </div>
+        <div className="flex justify-between text-[10px] text-[#666]">
+          <span>{line.countedByUserName ?? `#${line.countedByUserId}`} · {new Date(line.countedDttm).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+          {variance !== null && (
+            <span className={variance > 0 ? "text-emerald-400" : variance < 0 ? "text-red-400" : "text-[#999]"}>
+              {variance > 0 ? "+" : ""}{variance.toFixed(1)} ({variancePct?.toFixed(0)}%)
+            </span>
+          )}
+        </div>
       </div>
     </div>
   );

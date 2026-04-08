@@ -35,6 +35,7 @@ import {
   handleApproveSession,
   handleFlagSession,
   handleGetPreviousLines,
+  handleGetPendingReviews,
   handleGetLocationDashboard,
 } from "../controllers/stockTakeController.js";
 
@@ -60,9 +61,10 @@ router.patch("/locations/:locId/ingredients/:id", requirePermission("inventory:m
 
 // ─── Stock take sessions ──────────────────────────────────────────
 
-// Collection routes first
+// Collection routes first (BEFORE /:id params)
 router.post("/stock-takes", requirePermission("inventory:manage"), handleOpenSession);
 router.get("/stock-takes/active", requirePermission("inventory:count"), handleGetActiveSession);
+router.get("/stock-takes/pending-reviews", requirePermission("inventory:hq"), handleGetPendingReviews);
 
 // Parameterized session routes
 router.get("/stock-takes/:id", requirePermission("inventory:count"), handleGetSessionDetail);

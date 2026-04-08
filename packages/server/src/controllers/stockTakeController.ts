@@ -21,6 +21,7 @@ import {
   saveLineItem,
   getCategoryLines,
   getPreviousCountLines,
+  getPendingReviewSessions,
   getLocationDashboard,
   ConflictError,
   InvalidStateError,
@@ -284,6 +285,22 @@ export async function handleFlagSession(
     res.json(session);
   } catch (err) {
     handleServiceError(err, res, next);
+  }
+}
+
+// ─── Pending reviews (cross-location) ────────────────────────────
+
+export async function handleGetPendingReviews(
+  req: Request, res: Response, next: NextFunction,
+): Promise<void> {
+  try {
+    const ctx = await resolveContext(req, res);
+    if (!ctx) return;
+
+    const sessions = await getPendingReviewSessions(ctx.orgId);
+    res.json(sessions);
+  } catch (err) {
+    next(err);
   }
 }
 

@@ -5,26 +5,35 @@
  * Location-scoped — shows data for the user's selected location.
  */
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useAuth } from "../context/AuthContext.js";
 import { useLocation } from "../context/LocationContext.js";
+import { usePendingReviews } from "../hooks/useInventory.js";
 import { LocationDashboard } from "../components/inventory/LocationDashboard.js";
 import { StockTakeSession } from "../components/inventory/StockTakeSession.js";
 import { IngredientCatalog } from "../components/inventory/IngredientCatalog.js";
-import { Package, ClipboardCheck, Utensils } from "lucide-react";
+import { StockTakeReviewQueue } from "../components/inventory/StockTakeReviewQueue.js";
+import { Package, ClipboardCheck, Utensils, ShieldCheck } from "lucide-react";
 
-type InventoryTab = "dashboard" | "stock-take" | "ingredients";
-
-const TABS: { key: InventoryTab; label: string; icon: typeof Package }[] = [
-  { key: "dashboard", label: "Dashboard", icon: Package },
-  { key: "stock-take", label: "Stock Take", icon: ClipboardCheck },
-  { key: "ingredients", label: "Ingredients", icon: Utensils },
-];
+type InventoryTab = "dashboard" | "stock-take" | "review" | "ingredients";
 
 export function InventoryPage() {
   const { user, isGuest } = useAuth();
-  const { selectedLocationId, locations } = useLocation();
+  const { selectedLocationId, locations, isOrgAdmin } = useLocation();
+  const { sessions: pendingReviews, refresh: refreshReviews } = usePendingReviews();
   const [activeTab, setActiveTab] = useState<InventoryTab>("dashboard");
+
+  const tabs = useMemo(() => {
+    const t: { key: InventoryTab; label: string; icon: typeof Package }[] = [
+      { key: "dashboard", label: "Dashboard", icon: Package },
+      { key: "stock-take", label: "Stock Take", icon: ClipboardCheck },
+    ];
+    if (isOrgAdmin) {
+      t.push({ key: "review", label: "Review", icon: ShieldCheck });
+      t.push({ key: "ingredients", label: "Ingredients", icon: Utensils });
+    }
+    return t;
+  }, [isOrgAdmin]);
 
   if (isGuest || !user) {
     return (
@@ -65,9 +74,10 @@ export function InventoryPage() {
           className="flex gap-1 p-1 mb-8 rounded-xl bg-[#161616] border border-[#2A2A2A] w-fit"
           role="tablist"
         >
-          {TABS.map((tab) => {
+          {tabs.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.key;
+            const pendingCount = tab.key === "review" ? pendingReviews.length : 0;
             return (
               <button
                 key={tab.key}
@@ -82,6 +92,11 @@ export function InventoryPage() {
               >
                 <Icon className="size-4" />
                 {tab.label}
+                {pendingCount > 0 && (
+                  <span className="ml-1 px-1.5 py-0.5 rounded-full bg-red-500 text-white text-[10px] font-bold min-w-[18px] text-center leading-none">
+                    {pendingCount}
+                  </span>
+                )}
               </button>
             );
           })}
@@ -94,6 +109,9 @@ export function InventoryPage() {
           )}
           {activeTab === "stock-take" && (
             <StockTakeSession />
+          )}
+          {activeTab === "review" && (
+            <StockTakeReviewQueue sessions={pendingReviews} refresh={refreshReviews} />
           )}
           {activeTab === "ingredients" && (
             <IngredientCatalog />
