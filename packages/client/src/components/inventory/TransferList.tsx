@@ -7,7 +7,7 @@
 
 import { useState, useCallback } from "react";
 import { useLocation } from "../../context/LocationContext.js";
-import { useTransfers, useLocationIngredients, type Transfer } from "../../hooks/useInventory.js";
+import { useTransfers, useLocationIngredients, type Transfer, type LocationIngredient } from "../../hooks/useInventory.js";
 import {
   ArrowRightLeft,
   Plus,
@@ -62,6 +62,7 @@ function TransferRow({
   onCancel,
   onEdit,
   sending,
+  locationItems,
 }: {
   transfer: Transfer;
   isIncoming: boolean;
@@ -70,6 +71,7 @@ function TransferRow({
   onCancel: (id: string) => void;
   onEdit: (transfer: Transfer) => void;
   sending: string | null;
+  locationItems: LocationIngredient[];
 }) {
   const [expanded, setExpanded] = useState(false);
   const [detail, setDetail] = useState<any>(null);
@@ -78,8 +80,6 @@ function TransferRow({
   const [addingItems, setAddingItems] = useState(false);
   const [addSearchQuery, setAddSearchQuery] = useState("");
   const [addActiveCat, setAddActiveCat] = useState<string | null>(null);
-  const { selectedLocationId } = useLocation();
-  const { items: locationItems } = useLocationIngredients(selectedLocationId);
   const isBusy = sending === transfer.transferId;
   const isEditable = transfer.status === "INITIATED" && !isIncoming;
 
@@ -356,6 +356,7 @@ export default function TransferList() {
     cancel,
     refresh,
   } = useTransfers(selectedLocationId);
+  const { items: locationItems } = useLocationIngredients(selectedLocationId);
 
   const [showForm, setShowForm] = useState(false);
   const [editingTransfer, setEditingTransfer] = useState<{ id: string; data: any } | null>(null);
@@ -489,6 +490,7 @@ export default function TransferList() {
                     onCancel={handleCancel}
                     onEdit={handleEdit}
                     sending={sending}
+                    locationItems={locationItems}
                   />
                 ))}
               </div>
@@ -515,6 +517,7 @@ export default function TransferList() {
                     onCancel={handleCancel}
                     onEdit={handleEdit}
                     sending={sending}
+                    locationItems={locationItems}
                   />
                 ))}
               </div>
@@ -541,6 +544,7 @@ export default function TransferList() {
                     onCancel={handleCancel}
                     onEdit={handleEdit}
                     sending={sending}
+                    locationItems={locationItems}
                   />
                 ))}
               </div>
