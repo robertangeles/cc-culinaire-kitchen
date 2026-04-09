@@ -5,7 +5,7 @@
  * per-location ingredient configuration (par levels, unit overrides).
  */
 
-import { eq, and, ilike, ne, sql, count, inArray } from "drizzle-orm";
+import { eq, and, ilike, ne, sql, count, inArray, gte } from "drizzle-orm";
 import { db } from "../db/index.js";
 import {
   ingredient,
@@ -17,6 +17,11 @@ import {
   ingredientSupplier,
   storeLocation,
   pendingCatalogRequest,
+  stockTakeLine,
+  stockTakeCategory,
+  stockTakeSession,
+  consumptionLog,
+  user,
 } from "../db/schema.js";
 
 // ─── Org-wide ingredient catalog ──────────────────────────────────
@@ -857,4 +862,136 @@ export async function getActivationStatus(
     activated: activeItems.length,
     byType,
   };
+}
+
+// ─── Transaction history ─────────────────────────────────────────
+
+/** Get unified transaction history for an ingredient in a given month */
+export async function getIngredientTransactions(
+  ingredientId: string,
+  organisationId: number,
+  month: string, // "2026-04" format
+) {
+  // Parse month to date range
+  const [year, mon] = month.split("-").map(Number);
+  const startDate = new Date(year, mon - 1, 1);
+  const endDate = new Date(year, mon, 1); // first day of next month
+
+  // 1. Stock take lines for this ingredient in this month
+  // Join: stockTakeLine -> stockTakeCategory -> stockTakeSession (for org filter)
+  const stockTakeRows = await db
+    .select({
+      id: stockTakeLine.lineId,
+      quantity: stockTakeLine.countedQty,
+      unit: stockTakeLine.countedUnit,
+      occurredAt: stockTakeLine.countedDttm,
+      userId: stockTakeLine.countedByUserId,
+      userName: user.userName,
+    })
+    .from(stockTakeLine)
+    .innerJoin(stockTakeCategory, eq(stockTakeCategory.categoryId, stockTakeLine.categoryId))
+    .innerJoin(stockTakeSession, eq(stockTakeSession.sessionId, stockTakeCategory.sessionId))
+    .innerJoin(user, eq(user.userId, stockTakeLine.countedByUserId))
+    .where(
+      and(
+        eq(stockTakeLine.ingredientId, ingredientId),
+        eq(stockTakeSession.organisationId, organisationId),
+        gte(stockTakeLine.countedDttm, startDate),
+        sql`${stockTakeLine.countedDttm} < ${endDate}`,
+      ),
+    );
+
+  // 2. Consumption log entries
+  const consumptionRows = await db
+    .select({
+      id: consumptionLog.consumptionLogId,
+      quantity: consumptionLog.quantity,
+      unit: consumptionLog.unit,
+      reason: consumptionLog.reason,
+      shift: consumptionLog.shift,
+      occurredAt: consumptionLog.loggedAt,
+      userId: consumptionLog.userId,
+      userName: user.userName,
+    })
+    .from(consumptionLog)
+    .innerJoin(user, eq(user.userId, consumptionLog.userId))
+    .where(
+      and(
+        eq(consumptionLog.ingredientId, ingredientId),
+        eq(consumptionLog.organisationId, organisationId),
+        gte(consumptionLog.loggedAt, startDate),
+        sql`${consumptionLog.loggedAt} < ${endDate}`,
+      ),
+    );
+
+  // 3. Waste log entries — waste_log uses ingredient_name (text), not ingredient_id (FK)
+  // First get the ingredient name to match
+  const [ing] = await db
+    .select({ name: ingredient.ingredientName })
+    .from(ingredient)
+    .where(eq(ingredient.ingredientId, ingredientId));
+
+  let wasteRows: any[] = [];
+  if (ing) {
+    try {
+      const wasteResult = await db.execute(sql`
+        SELECT
+          wl.waste_log_id as id,
+          wl.quantity,
+          wl.unit,
+          wl.reason,
+          wl.logged_at as occurred_at,
+          wl.user_id,
+          u.user_name as user_name
+        FROM waste_log wl
+        INNER JOIN "user" u ON u.user_id = wl.user_id
+        WHERE wl.ingredient_name = ${ing.name}
+          AND wl.organisation_id = ${organisationId}
+          AND wl.logged_at >= ${startDate.toISOString()}
+          AND wl.logged_at < ${endDate.toISOString()}
+      `);
+      wasteRows = (wasteResult as any[]) || [];
+    } catch {
+      // waste_log table might not exist or have different schema — gracefully skip
+      wasteRows = [];
+    }
+  }
+
+  // Merge all into unified TransactionEvent[]
+  const transactions = [
+    ...stockTakeRows.map((r) => ({
+      id: r.id,
+      type: "stock_take" as const,
+      quantity: String(r.quantity),
+      unit: r.unit,
+      reason: null,
+      userName: r.userName || "Unknown",
+      occurredAt: r.occurredAt instanceof Date ? r.occurredAt.toISOString() : String(r.occurredAt),
+    })),
+    ...consumptionRows.map((r) => ({
+      id: r.id,
+      type: "transfer" as const,
+      quantity: String(r.quantity),
+      unit: r.unit,
+      reason: r.reason,
+      userName: r.userName || "Unknown",
+      occurredAt: r.occurredAt instanceof Date ? r.occurredAt.toISOString() : String(r.occurredAt),
+    })),
+    ...wasteRows.map((r: any) => ({
+      id: r.id || r.waste_log_id,
+      type: "waste" as const,
+      quantity: String(r.quantity),
+      unit: r.unit,
+      reason: r.reason,
+      userName: r.user_name || r.userName || "Unknown",
+      occurredAt: typeof r.occurred_at === "string" ? r.occurred_at : r.occurred_at?.toISOString?.() || "",
+    })),
+  ].sort((a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime());
+
+  // Extract unique dates for calendar dots
+  const transactionDates = [...new Set(
+    transactions.map((t) => t.occurredAt.slice(0, 10)),
+  )];
+
+  return { transactions, transactionDates };
 }

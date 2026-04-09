@@ -1470,3 +1470,37 @@ export const pendingCatalogRequest = pgTable(
     index("idx_pending_request_location").on(table.storeLocationId),
   ],
 );
+
+/**
+ * The `consumption_log` table records stock consumed outside of
+ * recipes, prep sessions, or stock takes. Entries deduct stock
+ * immediately — no approval workflow. HQ reviews via daily digest.
+ *
+ * OLTP table, 2NF — every non-key column depends on consumption_log_id.
+ */
+export const consumptionLog = pgTable(
+  "consumption_log",
+  {
+    consumptionLogId: uuid("consumption_log_id").defaultRandom().primaryKey(),
+    organisationId: integer("organisation_id").notNull().references(() => organisation.organisationId),
+    storeLocationId: uuid("store_location_id").notNull().references(() => storeLocation.storeLocationId),
+    ingredientId: uuid("ingredient_id").notNull().references(() => ingredient.ingredientId),
+    userId: integer("user_id").notNull().references(() => user.userId),
+    quantity: numeric("quantity", { precision: 10, scale: 3 }).notNull(),
+    unit: varchar("unit", { length: 20 }).notNull(),
+    reason: varchar("reason", { length: 30 }).notNull(),
+    notes: text("notes"),
+    shift: varchar("shift", { length: 20 }),
+    loggedAt: timestamp("logged_at", { withTimezone: true }).defaultNow().notNull(),
+    createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
+    updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // Location history: "get all consumption at a location, newest first"
+    index("idx_consumption_log_location").on(table.storeLocationId, table.loggedAt),
+    // HQ digest: "get all consumption for an org, newest first"
+    index("idx_consumption_log_org").on(table.organisationId, table.loggedAt),
+    // Per-item history: "get consumption for a specific ingredient"
+    index("idx_consumption_log_ingredient").on(table.ingredientId),
+  ],
+);

@@ -19,10 +19,11 @@ import { SupplierManager } from "../components/inventory/SupplierManager.js";
 import { ActivationWizard } from "../components/inventory/ActivationWizard.js";
 import { OpeningInventory } from "../components/inventory/OpeningInventory.js";
 import { CatalogRequestQueue } from "../components/inventory/CatalogRequestQueue.js";
+import ConsumptionLogger from "../components/inventory/ConsumptionLogger.js";
 import { Tooltip } from "../components/ui/Tooltip.js";
-import { Package, ClipboardCheck, Utensils, ShieldCheck, Truck, Settings, FileQuestion } from "lucide-react";
+import { Package, ClipboardCheck, Utensils, ShieldCheck, Truck, Settings, FileQuestion, FileEdit } from "lucide-react";
 
-type InventoryTab = "dashboard" | "setup" | "stock-take" | "review" | "ingredients" | "suppliers" | "requests";
+type InventoryTab = "dashboard" | "setup" | "stock-take" | "log" | "review" | "ingredients" | "suppliers" | "requests";
 
 export function InventoryPage() {
   const { user, isGuest } = useAuth();
@@ -43,6 +44,7 @@ export function InventoryPage() {
       { key: "dashboard", label: "Dashboard", icon: Package },
       { key: "setup", label: "Setup", icon: Settings },
       { key: "stock-take", label: "Stock Take", icon: ClipboardCheck },
+      { key: "log", label: "Stock Transfer", icon: FileEdit },
     ];
     if (isOrgAdmin) {
       t.push({ key: "review", label: "Review", icon: ShieldCheck });
@@ -141,6 +143,9 @@ export function InventoryPage() {
           )}
           {activeTab === "stock-take" && (
             <StockTakeSession />
+          )}
+          {activeTab === "log" && (
+            <ConsumptionLogger />
           )}
           {activeTab === "review" && (
             <StockTakeReviewQueue sessions={pendingReviews} refresh={refreshReviews} />

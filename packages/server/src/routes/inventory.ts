@@ -36,6 +36,7 @@ import {
   handleBulkDeactivate,
   handleCopyActivation,
   handleGetActivationStatus,
+  handleGetIngredientTransactions,
 } from "../controllers/ingredientController.js";
 import {
   handleOpenSession,
@@ -60,6 +61,7 @@ import {
   handleApproveRequest,
   handleRejectRequest,
 } from "../controllers/catalogRequestController.js";
+import * as consumptionLogController from "../controllers/consumptionLogController.js";
 
 const router = Router();
 router.use(authenticate);
@@ -80,6 +82,7 @@ router.post("/ingredients/:id/suppliers", requirePermission("inventory:manage"),
 router.get("/ingredients/:id/suppliers", requirePermission("inventory:count"), handleListIngredientSuppliers);
 router.patch("/ingredients/:id/suppliers/:supId", requirePermission("inventory:manage"), handleUpdateIngredientSupplier);
 router.delete("/ingredients/:id/suppliers/:supId", requirePermission("inventory:manage"), handleRemoveIngredientSupplier);
+router.get("/ingredients/:id/transactions", requirePermission("inventory:count"), handleGetIngredientTransactions);
 
 // ─── Suppliers (org-wide) ─────────────────────────────────────────
 
@@ -138,5 +141,13 @@ router.post("/catalog-requests", requirePermission("inventory:count"), handleReq
 router.get("/catalog-requests/pending", requirePermission("inventory:hq"), handleListPendingRequests);
 router.post("/catalog-requests/:id/approve", requirePermission("inventory:hq"), handleApproveRequest);
 router.post("/catalog-requests/:id/reject", requirePermission("inventory:hq"), handleRejectRequest);
+
+// ─── Consumption Log ─────────────────────────────────────────
+
+router.post("/consumption-logs", requirePermission("inventory:count"), consumptionLogController.handleLogConsumption);
+router.get("/consumption-logs/summary", requirePermission("inventory:hq"), consumptionLogController.handleGetSummary);
+router.get("/consumption-logs", requirePermission("inventory:count"), consumptionLogController.handleListLogs);
+router.patch("/consumption-logs/:id", requirePermission("inventory:count"), consumptionLogController.handleEditLog);
+router.delete("/consumption-logs/:id", requirePermission("inventory:count"), consumptionLogController.handleDeleteLog);
 
 export default router;

@@ -163,6 +163,21 @@ export interface DashboardData {
   setupProgress?: SetupProgress;
 }
 
+export interface ConsumptionLogEntry {
+  consumptionLogId: string;
+  ingredientId: string;
+  ingredientName: string;
+  ingredientCategory: string;
+  baseUnit: string;
+  quantity: string;
+  unit: string;
+  reason: string;
+  notes: string | null;
+  shift: string | null;
+  loggedAt: string;
+  userName?: string;
+}
+
 // ─── useIngredients ───────────────────────────────────────────────
 
 export function useIngredients() {
@@ -670,4 +685,131 @@ export function useDashboard(locationId: string | null) {
   useEffect(() => { refresh(); }, [refresh]);
 
   return { data, isLoading, refresh };
+}
+
+// ─── useConsumptionLog ───────────────────────────────────────────
+
+export function useConsumptionLog(locationId: string | null) {
+  const [logs, setLogs] = useState<ConsumptionLogEntry[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const refresh = useCallback(async () => {
+    if (!locationId) return;
+    setIsLoading(true);
+    try {
+      const res = await fetch(`${API}/consumption-logs?storeLocationId=${locationId}`, opts);
+      if (res.ok) setLogs(await res.json());
+    } finally {
+      setIsLoading(false);
+    }
+  }, [locationId]);
+
+  useEffect(() => { refresh(); }, [refresh]);
+
+  const logConsumption = useCallback(async (data: {
+    ingredientId: string;
+    quantity: number;
+    unit: string;
+    reason: string;
+    notes?: string;
+    shift?: string;
+    storeLocationId: string;
+  }) => {
+    const res = await fetch(`${API}/consumption-logs`, {
+      ...jsonOpts, method: "POST", body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || "Failed to log consumption");
+    }
+    await refresh();
+    return res.json();
+  }, [refresh]);
+
+  const editLog = useCallback(async (id: string, data: Record<string, unknown>) => {
+    const res = await fetch(`${API}/consumption-logs/${id}`, {
+      ...jsonOpts, method: "PATCH", body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || "Failed to edit log");
+    }
+    await refresh();
+  }, [refresh]);
+
+  const deleteLog = useCallback(async (id: string) => {
+    const res = await fetch(`${API}/consumption-logs/${id}`, {
+      ...jsonOpts, method: "DELETE",
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || "Failed to delete log");
+    }
+    await refresh();
+  }, [refresh]);
+
+  return { logs, isLoading, logConsumption, editLog, deleteLog, refresh };
+}
+
+// ─── useConsumptionSummary ───────────────────────────────────────
+
+// ─── useIngredientTransactions ──────────────────────────────────
+
+export interface TransactionEvent {
+  id: string;
+  type: "stock_take" | "transfer" | "waste";
+  quantity: string;
+  unit: string;
+  reason: string | null;
+  userName: string;
+  occurredAt: string;
+}
+
+export function useIngredientTransactions(ingredientId: string | null, month: string) {
+  const [transactions, setTransactions] = useState<TransactionEvent[]>([]);
+  const [transactionDates, setTransactionDates] = useState<Set<string>>(new Set());
+  const [isLoading, setIsLoading] = useState(false);
+
+  const refresh = useCallback(async () => {
+    if (!ingredientId) return;
+    setIsLoading(true);
+    try {
+      const res = await fetch(`${API}/ingredients/${ingredientId}/transactions?month=${month}`, opts);
+      if (res.ok) {
+        const data = await res.json();
+        setTransactions(data.transactions || []);
+        setTransactionDates(new Set(data.transactionDates || []));
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  }, [ingredientId, month]);
+
+  useEffect(() => { refresh(); }, [refresh]);
+
+  return { transactions, transactionDates, isLoading };
+}
+
+// ─── useConsumptionSummary ───────────────────────────────────────
+
+export function useConsumptionSummary() {
+  const [summary, setSummary] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const refresh = useCallback(async (startDate?: string, endDate?: string) => {
+    setIsLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (startDate) params.set("startDate", startDate);
+      if (endDate) params.set("endDate", endDate);
+      const res = await fetch(`${API}/consumption-logs/summary?${params}`, opts);
+      if (res.ok) setSummary(await res.json());
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { refresh(); }, [refresh]);
+
+  return { summary, isLoading, refresh };
 }

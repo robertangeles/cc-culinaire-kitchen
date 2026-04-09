@@ -73,6 +73,27 @@ export const INVENTORY_TAB_GUIDES: Record<string, TabGuide> = {
     ],
   },
 
+  log: {
+    key: "log",
+    tooltip: "Log stock used outside of recipes or prep — soft drinks, cleaning supplies, staff meals",
+    title: "Consumption Log Guide",
+    why: "Not all stock leaves through recipes. A FOH staff member pours soft drinks during a shift. A kitchen hand uses olive oil for a staff meal. A manager replaces a POS roll. Without logging these, your stock counts will always show unexplained variance. The Consumption Log captures everyday depletions so your inventory stays accurate.",
+    steps: [
+      "Search for the item you consumed — type the name and select from the dropdown.",
+      "Enter the quantity you used (e.g., 2.5 kg, 6 cans).",
+      "Pick a reason — Kitchen, FOH, Staff, Cleaning, Admin, Breakage, or Other.",
+      "Optionally select the shift and add notes.",
+      "Tap 'Log Consumption' — stock deducts instantly and the entry appears in your recent list.",
+      "Repeat for the next item — the form clears automatically.",
+    ],
+    tips: [
+      "Stock deducts immediately — no approval needed. This is designed for speed, not paperwork.",
+      "You can edit or delete your own entries within 24 hours if you made a mistake.",
+      "HQ reviews a daily digest of all consumption — they can flag anything suspicious after the fact.",
+      "Log as you go during your shift, not at the end. It's faster and more accurate when it's fresh.",
+    ],
+  },
+
   review: {
     key: "review",
     tooltip: "HQ review queue — approve, flag, or return stock take sessions from your locations",

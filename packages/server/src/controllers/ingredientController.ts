@@ -34,6 +34,7 @@ import {
   bulkDeactivateItems,
   copyActivationFromLocation,
   getActivationStatus,
+  getIngredientTransactions,
 } from "../services/ingredientService.js";
 import { invalidateConversionCache } from "../services/unitConversionService.js";
 
@@ -638,6 +639,24 @@ export async function handleGetActivationStatus(
     if (orgId === null) return;
 
     const result = await getActivationStatus(req.params.locId as string, orgId);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/** GET /ingredients/:id/transactions */
+export async function handleGetIngredientTransactions(
+  req: Request, res: Response, next: NextFunction,
+): Promise<void> {
+  try {
+    const orgId = await resolveOrgId(req, res);
+    if (orgId === null) return;
+
+    const ingredientId = req.params.id as string;
+    const month = (req.query.month as string) || new Date().toISOString().slice(0, 7);
+
+    const result = await getIngredientTransactions(ingredientId, orgId, month);
     res.json(result);
   } catch (err) {
     next(err);

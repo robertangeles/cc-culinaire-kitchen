@@ -24,6 +24,7 @@ import {
   DollarSign, ChevronDown, ChevronRight, Package, Truck,
   AlertTriangle, Star, Trash2,
 } from "lucide-react";
+import { TransactionHistory } from "./TransactionHistory.js";
 import { CATEGORIES, CATEGORY_LABELS, ITEM_TYPES, ITEM_TYPE_KEYS, FIFO_MODES, FIFO_DEFAULTS, getItemTypeStyle, getCategoriesForType, type ItemTypeKey, type FifoModeKey } from "@culinaire/shared";
 
 const UNITS = ["kg", "g", "L", "mL", "each", "case", "dozen", "bunch", "bottle", "can", "bag", "box"];
@@ -593,6 +594,9 @@ function EditIngredientModal({
               </div>
             </div>
           )}
+
+          {/* Transaction History */}
+          <TransactionHistory ingredientId={ingredient.ingredientId} />
         </div>
 
         {/* Actions */}
