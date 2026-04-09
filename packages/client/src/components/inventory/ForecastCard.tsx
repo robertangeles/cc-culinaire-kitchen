@@ -192,7 +192,7 @@ export default function ForecastCard() {
             </div>
             <p className="text-xs text-zinc-500">
               {hasData
-                ? `${recommendations.length} recommendation${recommendations.length !== 1 ? "s" : ""}`
+                ? `${recommendations.length} recommendation${recommendations.length !== 1 ? "s" : ""} \u00b7 based on your last 30 days of usage`
                 : "Based on 30-day consumption"}
             </p>
           </div>
@@ -224,10 +224,10 @@ export default function ForecastCard() {
               <PackageSearch size={28} className="text-zinc-500" />
             </div>
             <p className="text-sm text-zinc-400 font-medium">
-              Insufficient usage history
+              Not enough usage data yet
             </p>
-            <p className="text-xs text-zinc-500 mt-1 max-w-[240px]">
-              Forecasts activate after 2 stock take cycles with consumption data recorded.
+            <p className="text-xs text-zinc-500 mt-1 max-w-[280px] leading-relaxed">
+              We look at your last 30 days of logged usage to estimate how fast each item is being consumed, then flag anything likely to run out within a few days. Keep logging usage and the forecasts will appear automatically.
             </p>
             <button
               onClick={handleGenerate}
