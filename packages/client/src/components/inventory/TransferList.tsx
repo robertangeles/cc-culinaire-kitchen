@@ -5,9 +5,9 @@
  * with status badges, action buttons, and drill-down to detail.
  */
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useLocation } from "../../context/LocationContext.js";
-import { useTransfers, type Transfer } from "../../hooks/useInventory.js";
+import { useTransfers, useLocationIngredients, type Transfer } from "../../hooks/useInventory.js";
 import {
   ArrowRightLeft,
   Plus,
@@ -60,6 +60,7 @@ function TransferRow({
   onSend,
   onReceive,
   onCancel,
+  onEdit,
   sending,
 }: {
   transfer: Transfer;
@@ -67,15 +68,27 @@ function TransferRow({
   onSend: (id: string) => void;
   onReceive: (id: string) => void;
   onCancel: (id: string) => void;
+  onEdit: (transfer: Transfer) => void;
   sending: string | null;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [detail, setDetail] = useState<any>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
+  const [showAddItems, setShowAddItems] = useState(false);
+  const [addingItems, setAddingItems] = useState(false);
+  const [addSearchQuery, setAddSearchQuery] = useState("");
+  const [addActiveCat, setAddActiveCat] = useState<string | null>(null);
+  const { selectedLocationId } = useLocation();
+  const { items: locationItems } = useLocationIngredients(selectedLocationId);
   const isBusy = sending === transfer.transferId;
   const isEditable = transfer.status === "INITIATED" && !isIncoming;
 
   async function toggleExpand() {
+    // INITIATED outgoing → open full edit form
+    if (isEditable) {
+      onEdit(transfer);
+      return;
+    }
     if (expanded) {
       setExpanded(false);
       return;
@@ -140,17 +153,153 @@ function TransferRow({
                 {(detail.lines as any[]).map((line: any) => (
                   <div key={line.lineId} className="flex items-center justify-between px-3 py-2">
                     <span className="text-sm text-[#ccc]">{line.ingredientName || line.ingredientId}</span>
-                    <span className="text-sm text-white tabular-nums">
-                      {Number(line.sentQty).toFixed(1)} {line.sentUnit}
-                    </span>
+                    {isEditable ? (
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="number"
+                          defaultValue={Number(line.sentQty)}
+                          min="0.01"
+                          step="0.01"
+                          onChange={(e) => { line.sentQty = e.target.value; }}
+                          className="w-20 px-2 py-1 rounded-md bg-[#161616] border border-[#2A2A2A] text-white text-sm text-right focus:outline-none focus:border-[#D4A574]/40 transition-colors"
+                        />
+                        <span className="text-xs text-[#888]">{line.sentUnit}</span>
+                      </div>
+                    ) : (
+                      <span className="text-sm text-white tabular-nums">
+                        {Number(line.sentQty).toFixed(1)} {line.sentUnit}
+                      </span>
+                    )}
                   </div>
                 ))}
               </div>
 
-              {/* Notes */}
-              {detail.notes && (
-                <p className="text-xs text-[#888] italic">Note: {detail.notes}</p>
+              {/* Add more items — INITIATED only */}
+              {isEditable && (
+                <div>
+                  {!showAddItems ? (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setShowAddItems(true); }}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#D4A574]/10 text-[#D4A574] text-xs font-medium hover:bg-[#D4A574]/20 transition-colors border border-[#D4A574]/20"
+                    >
+                      <Plus size={14} />
+                      Add More Items
+                    </button>
+                  ) : (
+                    <div className="space-y-2" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-[#888]">Select items to add</span>
+                        <button
+                          onClick={() => { setShowAddItems(false); setAddSearchQuery(""); setAddActiveCat(null); }}
+                          className="text-xs text-[#888] hover:text-white"
+                        >Done</button>
+                      </div>
+
+                      {/* Filter */}
+                      <input
+                        type="text"
+                        value={addSearchQuery}
+                        onChange={(e) => setAddSearchQuery(e.target.value)}
+                        placeholder="Filter items..."
+                        className="w-full px-3 py-1.5 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-white text-sm focus:outline-none focus:border-[#D4A574]/30 placeholder:text-[#555]"
+                      />
+
+                      {/* Category tabs */}
+                      <div className="flex flex-wrap gap-1">
+                        <button onClick={() => setAddActiveCat(null)}
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-medium border transition-colors ${!addActiveCat ? "bg-[#D4A574]/15 text-[#D4A574] border-[#D4A574]/30" : "bg-white/[0.03] text-[#888] border-white/5 hover:text-[#ccc]"}`}
+                        >All</button>
+                        {(() => {
+                          const available = locationItems.filter((i) => i.activeInd !== false && Number(i.currentQty || 0) > 0 && !(detail.lines as any[]).some((l: any) => l.ingredientId === i.ingredientId));
+                          const cats = [...new Set(available.map(i => i.ingredientCategory))].sort();
+                          return cats.map(cat => {
+                            const label = cat.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+                            const count = available.filter(i => i.ingredientCategory === cat).length;
+                            return (
+                              <button key={cat} onClick={() => setAddActiveCat(addActiveCat === cat ? null : cat)}
+                                className={`px-2 py-0.5 rounded-full text-[10px] font-medium border transition-colors ${addActiveCat === cat ? "bg-[#D4A574]/15 text-[#D4A574] border-[#D4A574]/30" : "bg-white/[0.03] text-[#888] border-white/5 hover:text-[#ccc]"}`}
+                              >{label} ({count})</button>
+                            );
+                          });
+                        })()}
+                      </div>
+
+                      {/* Item list grouped by category */}
+                      <div className="max-h-48 overflow-y-auto rounded-lg border border-[#1E1E1E]">
+                        <div className="flex items-center justify-between px-3 py-1 bg-white/[0.02] border-b border-[#1E1E1E]">
+                          <span className="text-[9px] text-[#666] uppercase tracking-wider">Item</span>
+                          <span className="text-[9px] text-[#666] uppercase tracking-wider">Current Stock</span>
+                        </div>
+                        {(() => {
+                          const available = locationItems
+                            .filter((i) => i.activeInd !== false && Number(i.currentQty || 0) > 0)
+                            .filter((i) => !(detail.lines as any[]).some((l: any) => l.ingredientId === i.ingredientId))
+                            .filter((i) => !addSearchQuery || i.ingredientName.toLowerCase().includes(addSearchQuery.toLowerCase()))
+                            .filter((i) => !addActiveCat || i.ingredientCategory === addActiveCat);
+                          const grouped = new Map<string, typeof available>();
+                          for (const item of available) {
+                            const cat = item.ingredientCategory;
+                            if (!grouped.has(cat)) grouped.set(cat, []);
+                            grouped.get(cat)!.push(item);
+                          }
+                          if (grouped.size === 0) return <p className="px-3 py-3 text-xs text-[#666] text-center">No items available</p>;
+                          return [...grouped.entries()].map(([cat, items]) => {
+                            const catLabel = cat.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+                            return (
+                              <div key={cat}>
+                                <div className="px-3 py-1 bg-white/[0.02] text-[9px] text-[#666] uppercase tracking-wider font-medium border-t border-[#1E1E1E]">{catLabel}</div>
+                                {items.map(item => {
+                                  const stock = Number(item.currentQty || 0);
+                                  return (
+                                    <button
+                                      key={item.ingredientId}
+                                      onClick={async () => {
+                                        setAddingItems(true);
+                                        try {
+                                          await fetch(`/api/inventory/transfers/${transfer.transferId}/lines`, {
+                                            method: "POST",
+                                            headers: { "Content-Type": "application/json" },
+                                            credentials: "include",
+                                            body: JSON.stringify({ lines: [{ ingredientId: item.ingredientId, sentQty: 1, sentUnit: item.baseUnit }] }),
+                                          });
+                                          const res = await fetch(`/api/inventory/transfers/${transfer.transferId}`, { credentials: "include" });
+                                          if (res.ok) setDetail(await res.json());
+                                        } finally { setAddingItems(false); }
+                                      }}
+                                      disabled={addingItems}
+                                      className="w-full flex items-center justify-between px-3 py-1.5 text-sm text-[#ccc] hover:bg-[#D4A574]/5 transition-colors"
+                                    >
+                                      <span>{item.ingredientName}</span>
+                                      <span className="text-[10px] text-[#888] tabular-nums">{stock.toFixed(1)} {item.baseUnit}</span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            );
+                          });
+                        })()}
+                      </div>
+                    </div>
+                  )}
+                </div>
               )}
+
+              {/* Notes — editable when INITIATED */}
+              {isEditable ? (
+                <div>
+                  <label className="text-[10px] text-[#666] uppercase tracking-wider">Notes</label>
+                  <input
+                    type="text"
+                    defaultValue={detail.notes || ""}
+                    onChange={(e) => { detail.notes = e.target.value; }}
+                    placeholder="Add a note..."
+                    onClick={(e) => e.stopPropagation()}
+                    className="w-full mt-1 px-3 py-1.5 rounded-lg bg-[#161616] border border-[#2A2A2A] text-white text-sm focus:outline-none focus:border-[#D4A574]/40 transition-colors placeholder:text-[#555]"
+                  />
+                </div>
+              ) : detail.notes ? (
+                <p className="text-xs text-[#888] italic">Note: {detail.notes}</p>
+              ) : null}
 
               {/* Actions for INITIATED transfers */}
               {isEditable && (
@@ -209,6 +358,7 @@ export default function TransferList() {
   } = useTransfers(selectedLocationId);
 
   const [showForm, setShowForm] = useState(false);
+  const [editingTransfer, setEditingTransfer] = useState<{ id: string; data: any } | null>(null);
   const [receivingId, setReceivingId] = useState<string | null>(null);
   const [sending, setSending] = useState<string | null>(null);
 
@@ -241,13 +391,40 @@ export default function TransferList() {
     }
   }
 
-  if (showForm) {
+  async function handleEdit(transfer: Transfer) {
+    // Fetch detail to get lines
+    try {
+      const res = await fetch(`/api/inventory/transfers/${transfer.transferId}`, { credentials: "include" });
+      if (res.ok) {
+        const det = await res.json();
+        setEditingTransfer({
+          id: transfer.transferId,
+          data: {
+            toLocationId: transfer.toLocationId,
+            toLocationName: transfer.toLocationName,
+            notes: det.notes || "",
+            lines: (det.lines || []).map((l: any) => ({
+              ingredientId: l.ingredientId,
+              ingredientName: l.ingredientName || l.ingredientId,
+              sentQty: String(l.sentQty),
+              sentUnit: l.sentUnit,
+            })),
+          },
+        });
+      }
+    } catch { /* ignore */ }
+  }
+
+  if (showForm || editingTransfer) {
     return (
       <TransferForm
         onClose={() => {
           setShowForm(false);
+          setEditingTransfer(null);
           refresh();
         }}
+        editTransferId={editingTransfer?.id}
+        editData={editingTransfer?.data}
       />
     );
   }
@@ -310,6 +487,7 @@ export default function TransferList() {
                     onSend={handleSend}
                     onReceive={(id) => setReceivingId(id)}
                     onCancel={handleCancel}
+                    onEdit={handleEdit}
                     sending={sending}
                   />
                 ))}
@@ -335,6 +513,7 @@ export default function TransferList() {
                     onSend={handleSend}
                     onReceive={(id) => setReceivingId(id)}
                     onCancel={handleCancel}
+                    onEdit={handleEdit}
                     sending={sending}
                   />
                 ))}
@@ -360,6 +539,7 @@ export default function TransferList() {
                     onSend={handleSend}
                     onReceive={(id) => setReceivingId(id)}
                     onCancel={handleCancel}
+                    onEdit={handleEdit}
                     sending={sending}
                   />
                 ))}

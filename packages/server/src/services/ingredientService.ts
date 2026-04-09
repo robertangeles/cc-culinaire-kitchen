@@ -945,6 +945,29 @@ export async function getIngredientTransactions(
     }
   } catch { wasteRows = []; }
 
+  // 4. Inter-location transfers (sent or received for this ingredient)
+  let transferRows: any[] = [];
+  try {
+    const trResult = await db.execute(sql`
+      SELECT tl.line_id as id, tl.sent_qty as quantity, tl.sent_unit as unit,
+             t.status as reason, t.sent_dttm as "occurredAt",
+             u.user_name as "userName",
+             sl_from.location_name as "fromLocation",
+             sl_to.location_name as "toLocation",
+             t.from_location_id, t.to_location_id
+      FROM inventory_transfer_line tl
+      INNER JOIN inventory_transfer t ON t.transfer_id = tl.transfer_id
+      INNER JOIN "user" u ON u.user_id = t.initiated_by_user_id
+      INNER JOIN store_location sl_from ON sl_from.store_location_id = t.from_location_id
+      INNER JOIN store_location sl_to ON sl_to.store_location_id = t.to_location_id
+      WHERE tl.ingredient_id = ${ingredientId}
+        AND t.organisation_id = ${organisationId}
+        AND t.created_dttm >= ${startDate}::timestamptz
+        AND t.created_dttm < ${endDate}::timestamptz
+    `);
+    transferRows = (trResult as any).rows ?? trResult ?? [];
+  } catch { transferRows = []; }
+
   // Merge all into unified TransactionEvent[]
   const transactions = [
     ...stockTakeRows.map((r: any) => ({
@@ -973,6 +996,15 @@ export async function getIngredientTransactions(
       reason: r.reason,
       userName: r.user_name || r.userName || "Unknown",
       occurredAt: typeof r.occurred_at === "string" ? r.occurred_at : r.occurred_at?.toISOString?.() || "",
+    })),
+    ...transferRows.map((r: any) => ({
+      id: r.id,
+      type: "transfer_loc" as const,
+      quantity: String(r.quantity),
+      unit: r.unit,
+      reason: `${r.fromLocation} → ${r.toLocation}`,
+      userName: r.userName || "Unknown",
+      occurredAt: r.occurredAt instanceof Date ? r.occurredAt.toISOString() : String(r.occurredAt || r.created_dttm || ""),
     })),
   ].sort((a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime());
 

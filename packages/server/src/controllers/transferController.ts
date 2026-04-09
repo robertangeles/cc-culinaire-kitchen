@@ -240,3 +240,63 @@ export async function handleListPending(
     next(err);
   }
 }
+
+/** PUT /transfers/:id — update lines + notes on an INITIATED transfer */
+export async function handleUpdateTransfer(
+  req: Request, res: Response, next: NextFunction,
+): Promise<void> {
+  try {
+    const orgId = await resolveOrgId(req, res);
+    if (orgId === null) return;
+
+    const id = req.params.id as string;
+    const { lines, notes } = req.body;
+
+    if (!Array.isArray(lines) || lines.length === 0) {
+      res.status(400).json({ error: "lines array is required" });
+      return;
+    }
+
+    const result = await transferService.updateTransfer(id, orgId, { lines, notes });
+    res.json(result);
+  } catch (err: any) {
+    if (err.message === "not found") {
+      res.status(404).json({ error: "Transfer not found" });
+    } else if (err.message?.includes("no longer editable")) {
+      res.status(409).json({ error: err.message });
+    } else {
+      logger.error(err, "handleUpdateTransfer failed");
+      next(err);
+    }
+  }
+}
+
+/** POST /transfers/:id/lines — add items to an INITIATED transfer */
+export async function handleAddLines(
+  req: Request, res: Response, next: NextFunction,
+): Promise<void> {
+  try {
+    const orgId = await resolveOrgId(req, res);
+    if (orgId === null) return;
+
+    const id = req.params.id as string;
+    const { lines } = req.body;
+
+    if (!Array.isArray(lines) || lines.length === 0) {
+      res.status(400).json({ error: "lines array is required" });
+      return;
+    }
+
+    const result = await transferService.addLinesToTransfer(id, orgId, lines);
+    res.json(result);
+  } catch (err: any) {
+    if (err.message === "not found") {
+      res.status(404).json({ error: "Transfer not found" });
+    } else if (err.message?.includes("no longer editable")) {
+      res.status(409).json({ error: err.message });
+    } else {
+      logger.error(err, "handleAddLines failed");
+      next(err);
+    }
+  }
+}

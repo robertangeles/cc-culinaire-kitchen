@@ -173,6 +173,8 @@ router.get("/transfers/:id", requirePermission("inventory:count"), transferContr
 router.post("/transfers/:id/send", requirePermission("inventory:manage"), transferController.handleConfirmSent);
 router.post("/transfers/:id/receive", requirePermission("inventory:count"), transferController.handleConfirmReceived);
 router.post("/transfers/:id/cancel", requirePermission("inventory:manage"), transferController.handleCancelTransfer);
+router.put("/transfers/:id", requirePermission("inventory:manage"), transferController.handleUpdateTransfer);
+router.post("/transfers/:id/lines", requirePermission("inventory:manage"), transferController.handleAddLines);
 
 // ─── AI Forecasting (Wave 5) ────────────────────────────────────
 

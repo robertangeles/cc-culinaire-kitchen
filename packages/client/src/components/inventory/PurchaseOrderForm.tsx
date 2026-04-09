@@ -67,6 +67,8 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
   }, [search, ingredients, addedIds]);
 
   const addLine = useCallback((ing: LocationIngredient) => {
+    // Duplicate guard
+    if (lines.some((l) => l.ingredientId === ing.ingredientId)) return;
     setLines((prev) => [
       ...prev,
       {

@@ -568,3 +568,105 @@ export async function listPendingTransfers(locationId: string) {
 
   return rows;
 }
+
+// ---------------------------------------------------------------------------
+// 8. updateTransfer — replace lines + notes on an INITIATED transfer
+// ---------------------------------------------------------------------------
+
+export async function updateTransfer(
+  transferId: string,
+  orgId: number,
+  data: {
+    lines: Array<{ ingredientId: string; sentQty: number; sentUnit: string }>;
+    notes?: string;
+  },
+) {
+  const [transfer] = await db
+    .select()
+    .from(inventoryTransfer)
+    .where(
+      and(
+        eq(inventoryTransfer.transferId, transferId),
+        eq(inventoryTransfer.organisationId, orgId),
+      ),
+    );
+
+  if (!transfer) throw new Error("not found");
+  if (transfer.status !== "INITIATED") throw new Error("Transfer is no longer editable");
+
+  // Delete existing lines and replace with new ones
+  await db
+    .delete(inventoryTransferLine)
+    .where(eq(inventoryTransferLine.transferId, transferId));
+
+  for (const line of data.lines) {
+    await db
+      .insert(inventoryTransferLine)
+      .values({
+        transferId,
+        ingredientId: line.ingredientId,
+        sentQty: String(line.sentQty),
+        sentUnit: line.sentUnit,
+        lineStatus: "PENDING",
+      });
+  }
+
+  // Update notes
+  await db
+    .update(inventoryTransfer)
+    .set({
+      notes: data.notes ?? null,
+      updatedDttm: new Date(),
+    })
+    .where(eq(inventoryTransfer.transferId, transferId));
+
+  return { updated: true, lineCount: data.lines.length };
+}
+
+// ---------------------------------------------------------------------------
+// 9. addLinesToTransfer — add items to an INITIATED transfer
+// ---------------------------------------------------------------------------
+
+export async function addLinesToTransfer(
+  transferId: string,
+  orgId: number,
+  lines: Array<{ ingredientId: string; sentQty: number; sentUnit: string }>,
+) {
+  const [transfer] = await db
+    .select()
+    .from(inventoryTransfer)
+    .where(
+      and(
+        eq(inventoryTransfer.transferId, transferId),
+        eq(inventoryTransfer.organisationId, orgId),
+      ),
+    );
+
+  if (!transfer) throw new Error("not found");
+  if (transfer.status !== "INITIATED") throw new Error("Transfer is no longer editable");
+
+  // Duplicate check — reject items already in this transfer
+  const existingLines = await db
+    .select({ ingredientId: inventoryTransferLine.ingredientId })
+    .from(inventoryTransferLine)
+    .where(eq(inventoryTransferLine.transferId, transferId));
+  const existingIds = new Set(existingLines.map((l) => l.ingredientId));
+  const duplicates = lines.filter((l) => existingIds.has(l.ingredientId));
+  if (duplicates.length > 0) {
+    throw new Error("Item already exists in this transfer");
+  }
+
+  for (const line of lines) {
+    await db
+      .insert(inventoryTransferLine)
+      .values({
+        transferId,
+        ingredientId: line.ingredientId,
+        sentQty: String(line.sentQty),
+        sentUnit: line.sentUnit,
+        lineStatus: "PENDING",
+      });
+  }
+
+  return { added: lines.length };
+}
