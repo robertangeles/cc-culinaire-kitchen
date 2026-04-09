@@ -21,6 +21,7 @@ const REASONS = [
   { key: "admin", label: "Admin" },
   { key: "breakage", label: "Breakage" },
   { key: "other", label: "Other" },
+  { key: "return_to_stock", label: "Return" },
 ] as const;
 
 const SHIFTS = [
@@ -225,6 +226,34 @@ export default function ConsumptionLogger() {
 
       {/* ── Entry card ─────────────────────────────────────────── */}
       <div className="bg-[#111]/80 backdrop-blur-md border border-white/5 rounded-xl p-5 space-y-4">
+        {/* Reason selector — pick reason FIRST so we know if 0-stock items should be enabled */}
+        {!selectedItem && (
+          <div>
+            <label className="text-xs text-[#888] font-medium mb-1.5 block">What are you doing?</label>
+            <div className="flex flex-wrap gap-1.5">
+              {REASONS.map((r) => {
+                const isReturn = r.key === "return_to_stock";
+                const isActive = reason === r.key;
+                return (
+                  <button
+                    key={r.key}
+                    onClick={() => setReason(isActive ? "" : r.key)}
+                    className={`px-3 py-1.5 rounded-full text-xs border transition-all ${
+                      isActive
+                        ? isReturn
+                          ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+                          : "bg-[#D4A574]/20 text-[#D4A574] border-[#D4A574]/30"
+                        : "bg-[#161616] text-[#888] border-[#2A2A2A] hover:border-[#444]"
+                    }`}
+                  >
+                    {r.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Item picker — category browse */}
         {!selectedItem && (
           <div className="space-y-2">
@@ -309,7 +338,8 @@ export default function ConsumptionLogger() {
                       </div>
                       {items.map((item) => {
                         const stock = Number(item.currentQty || 0);
-                        const outOfStock = stock <= 0;
+                        const isReturn = reason === "return_to_stock";
+                        const outOfStock = stock <= 0 && !isReturn;
                         return (
                           <button
                             key={item.ingredientId}
