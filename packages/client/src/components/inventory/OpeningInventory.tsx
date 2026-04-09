@@ -233,7 +233,7 @@ export function OpeningInventory() {
 
         <button
           onClick={startOpeningCount}
-          className="px-6 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-[#0A0A0A] font-semibold text-sm hover:shadow-[0_0_16px_rgba(251,191,36,0.3)] transition-all active:scale-[0.98]"
+          className="px-6 py-3 rounded-xl bg-gradient-to-r from-[#D4A574] to-[#C4956A] text-[#0A0A0A] font-semibold text-sm hover:shadow-[0_0_12px_rgba(212,165,116,0.2)] transition-all active:scale-[0.98]"
         >
           <Play className="inline-block mr-2 size-4" />
           Start Opening Inventory

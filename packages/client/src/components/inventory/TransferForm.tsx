@@ -278,7 +278,7 @@ export default function TransferForm({ onClose }: { onClose: () => void }) {
       <button
         onClick={handleSubmit}
         disabled={saving}
-        className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gradient-to-r from-accent to-amber-600 text-zinc-950 font-semibold hover:shadow-[0_0_16px_rgba(255,214,10,0.3)] hover:-translate-y-0.5 transition-all duration-200 disabled:opacity-50 disabled:hover:translate-y-0"
+        className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gradient-to-r from-[#D4A574] to-[#C4956A] text-[#0A0A0A] font-semibold hover:shadow-[0_0_12px_rgba(212,165,116,0.2)] active:scale-[0.98] transition-all disabled:opacity-50"
       >
         {saving ? (
           <Loader2 size={18} className="animate-spin" />

@@ -214,7 +214,7 @@ export default function TransferList() {
         </div>
         <button
           onClick={() => setShowForm(true)}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-accent to-amber-600 text-zinc-950 text-sm font-semibold hover:shadow-[0_0_12px_rgba(255,214,10,0.25)] hover:-translate-y-0.5 transition-all duration-200"
+          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-[#D4A574] to-[#C4956A] text-[#0A0A0A] text-sm font-semibold hover:shadow-[0_0_12px_rgba(212,165,116,0.2)] active:scale-[0.98] transition-all"
         >
           <Plus size={16} />
           New Transfer

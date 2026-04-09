@@ -334,9 +334,9 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
           onClick={() => handleSave(true)}
           disabled={isSaving}
           className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium
-            bg-gradient-to-r from-amber-500 to-amber-600 text-[#0A0A0A]
-            hover:shadow-[0_0_16px_rgba(245,158,11,0.3)]
-            disabled:opacity-50 transition-all hover:-translate-y-0.5"
+            bg-gradient-to-r from-[#D4A574] to-[#C4956A] text-[#0A0A0A]
+            hover:shadow-[0_0_12px_rgba(212,165,116,0.2)]
+            disabled:opacity-50 transition-all active:scale-[0.98]"
         >
           {isSaving ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
           Save & Submit
