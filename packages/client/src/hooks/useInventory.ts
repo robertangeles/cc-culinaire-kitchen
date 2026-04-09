@@ -1039,8 +1039,10 @@ export function useTransfers(locationId: string | null) {
       ...jsonOpts, method: "POST",
     });
     if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error || "Failed to confirm send");
+      const text = await res.text();
+      let msg = "Failed to confirm send";
+      try { msg = JSON.parse(text).error || msg; } catch { msg = text || msg; }
+      throw new Error(msg);
     }
     await refresh();
     return res.json();
@@ -1054,8 +1056,10 @@ export function useTransfers(locationId: string | null) {
       ...jsonOpts, method: "POST", body: JSON.stringify({ receivedLines }),
     });
     if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error || "Failed to confirm receipt");
+      const text = await res.text();
+      let msg = "Failed to confirm receipt";
+      try { msg = JSON.parse(text).error || msg; } catch { msg = text || msg; }
+      throw new Error(msg);
     }
     await refresh();
     return res.json();
@@ -1066,8 +1070,10 @@ export function useTransfers(locationId: string | null) {
       ...jsonOpts, method: "POST",
     });
     if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error || "Failed to cancel transfer");
+      const text = await res.text();
+      let msg = "Failed to cancel transfer";
+      try { msg = JSON.parse(text).error || msg; } catch { msg = text || msg; }
+      throw new Error(msg);
     }
     await refresh();
   }, [refresh]);

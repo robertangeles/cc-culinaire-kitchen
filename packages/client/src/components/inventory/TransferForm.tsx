@@ -23,6 +23,8 @@ import {
   MapPin,
   ChevronDown,
   Package,
+  Send,
+  XCircle,
 } from "lucide-react";
 
 /* ── Types ────────────────────────────────────────────────────── */
@@ -37,16 +39,50 @@ interface TransferLineEntry {
 
 /* ── Component ────────────────────────────────────────────────── */
 
-export default function TransferForm({ onClose }: { onClose: () => void }) {
-  const { selectedLocationId, locations, selectedLocation } = useLocation();
-  const { items: locationItems } = useLocationIngredients(selectedLocationId);
-  const { initiate } = useTransfers(selectedLocationId);
+interface TransferFormProps {
+  onClose: () => void;
+  editTransferId?: string;       // if set, we're editing an existing INITIATED transfer
+  editData?: {                   // pre-populated data for edit mode
+    toLocationId: string;
+    toLocationName: string;
+    notes: string;
+    lines: Array<{ ingredientId: string; ingredientName: string; sentQty: string; sentUnit: string }>;
+  };
+}
 
-  const [toLocationId, setToLocationId] = useState("");
-  const [lines, setLines] = useState<TransferLineEntry[]>([]);
-  const [notes, setNotes] = useState("");
+export default function TransferForm({ onClose, editTransferId, editData }: TransferFormProps) {
+  const { selectedLocationId, locations, selectedLocation } = useLocation();
+  const { items: locationItems, isLoading: itemsLoading } = useLocationIngredients(selectedLocationId);
+  const { initiate, confirmSent, cancel } = useTransfers(selectedLocationId);
+  const isEditMode = !!editTransferId;
+
+  const [toLocationId, setToLocationId] = useState(editData?.toLocationId || "");
+  const [lines, setLines] = useState<TransferLineEntry[]>(
+    editData?.lines.map(l => ({
+      ingredientId: l.ingredientId,
+      ingredientName: l.ingredientName,
+      sentQty: l.sentQty,
+      sentUnit: l.sentUnit,
+      sourceStock: 0,
+    })) || [],
+  );
+  const [notes, setNotes] = useState(editData?.notes || "");
   const [searchQuery, setSearchQuery] = useState("");
   const [showSearch, setShowSearch] = useState(false);
+  const [stockPopulated, setStockPopulated] = useState(false);
+
+  // Update source stock once location items load (edit mode starts with 0)
+  useEffect(() => {
+    if (isEditMode && locationItems.length > 0 && !stockPopulated) {
+      setLines((prev) =>
+        prev.map((l) => {
+          const found = locationItems.find((i) => i.ingredientId === l.ingredientId);
+          return found ? { ...l, sourceStock: Number(found.currentQty || 0) } : l;
+        }),
+      );
+      setStockPopulated(true);
+    }
+  }, [isEditMode, locationItems, stockPopulated]);
   const [activeCat, setActiveCat] = useState<string | null>(null);
   const [showLocDropdown, setShowLocDropdown] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -92,6 +128,12 @@ export default function TransferForm({ onClose }: { onClose: () => void }) {
   }, [showLocDropdown]);
 
   function addItem(item: LocationIngredient) {
+    // Duplicate check
+    if (lines.some((l) => l.ingredientId === item.ingredientId)) {
+      setError(`${item.ingredientName} is already in this transfer`);
+      return;
+    }
+    setError(null);
     const sourceStock = Number(item.currentQty || 0);
     const newIdx = lines.length;
     setLines((prev) => [
@@ -147,19 +189,36 @@ export default function TransferForm({ onClose }: { onClose: () => void }) {
 
     setSaving(true);
     try {
-      await initiate({
-        fromLocationId: selectedLocationId!,
-        toLocationId,
-        lines: lines.map((l) => ({
-          ingredientId: l.ingredientId,
-          sentQty: Number(l.sentQty),
-          sentUnit: l.sentUnit,
-        })),
-        notes: notes || undefined,
-      });
+      const lineData = lines.map((l) => ({
+        ingredientId: l.ingredientId,
+        sentQty: Number(l.sentQty),
+        sentUnit: l.sentUnit,
+      }));
+
+      if (isEditMode) {
+        // Update existing transfer
+        const res = await fetch(`/api/inventory/transfers/${editTransferId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ lines: lineData, notes: notes || null }),
+        });
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.error || "Failed to update transfer");
+        }
+      } else {
+        // Create new transfer
+        await initiate({
+          fromLocationId: selectedLocationId!,
+          toLocationId,
+          lines: lineData,
+          notes: notes || undefined,
+        });
+      }
       onClose();
     } catch (err: any) {
-      setError(err.message || "Failed to create transfer");
+      setError(err.message || "Failed to save transfer");
     } finally {
       setSaving(false);
     }
@@ -179,7 +238,7 @@ export default function TransferForm({ onClose }: { onClose: () => void }) {
           <ArrowRightLeft size={20} className="text-[#D4A574]" />
         </div>
         <div>
-          <h2 className="text-lg font-semibold text-white">New Transfer</h2>
+          <h2 className="text-lg font-semibold text-white">{isEditMode ? "Edit Transfer" : "New Transfer"}</h2>
           <p className="text-xs text-[#888]">
             From <span className="text-[#D4A574]">{selectedLocation?.locationName || "Current Location"}</span>
           </p>
@@ -472,19 +531,54 @@ export default function TransferForm({ onClose }: { onClose: () => void }) {
         </div>
       )}
 
-      {/* Submit */}
-      <button
-        onClick={handleSubmit}
-        disabled={saving}
-        className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gradient-to-r from-[#D4A574] to-[#C4956A] text-[#0A0A0A] font-semibold hover:shadow-[0_0_12px_rgba(212,165,116,0.2)] active:scale-[0.98] transition-all disabled:opacity-50"
-      >
-        {saving ? (
-          <Loader2 size={18} className="animate-spin" />
-        ) : (
-          <ArrowRightLeft size={18} />
-        )}
-        Initiate Transfer
-      </button>
+      {/* Actions */}
+      {isEditMode ? (
+        <div className="flex gap-2">
+          <button
+            onClick={handleSubmit}
+            disabled={saving}
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-[#1E1E1E] border border-[#2A2A2A] text-white font-semibold hover:bg-[#252525] active:scale-[0.98] transition-all disabled:opacity-50"
+          >
+            {saving ? <Loader2 size={16} className="animate-spin" /> : <ArrowRightLeft size={16} />}
+            Save Draft
+          </button>
+          <button
+            onClick={async () => {
+              await handleSubmit();
+              if (!error) {
+                setSaving(true);
+                try { await confirmSent(editTransferId!); onClose(); } catch { }
+                setSaving(false);
+              }
+            }}
+            disabled={saving}
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gradient-to-r from-[#D4A574] to-[#C4956A] text-[#0A0A0A] font-semibold hover:shadow-[0_0_12px_rgba(212,165,116,0.2)] active:scale-[0.98] transition-all disabled:opacity-50"
+          >
+            <Send size={16} />
+            Confirm Send
+          </button>
+          <button
+            onClick={async () => {
+              setSaving(true);
+              try { await cancel(editTransferId!); onClose(); } catch { }
+              setSaving(false);
+            }}
+            disabled={saving}
+            className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 font-semibold hover:bg-red-500/20 active:scale-[0.98] transition-all disabled:opacity-50"
+          >
+            <XCircle size={16} />
+          </button>
+        </div>
+      ) : (
+        <button
+          onClick={handleSubmit}
+          disabled={saving}
+          className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gradient-to-r from-[#D4A574] to-[#C4956A] text-[#0A0A0A] font-semibold hover:shadow-[0_0_12px_rgba(212,165,116,0.2)] active:scale-[0.98] transition-all disabled:opacity-50"
+        >
+          {saving ? <Loader2 size={18} className="animate-spin" /> : <ArrowRightLeft size={18} />}
+          Initiate Transfer
+        </button>
+      )}
     </div>
   );
 }

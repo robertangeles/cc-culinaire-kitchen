@@ -10,6 +10,7 @@
  */
 
 import { eq, and, desc, sql, inArray } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { db } from "../db/index.js";
 import {
   inventoryTransfer,
@@ -404,21 +405,8 @@ export async function cancelTransfer(
 // ---------------------------------------------------------------------------
 
 export async function listTransfers(orgId: number, opts?: ListOpts) {
-  const fromLoc = db
-    .select({
-      storeLocationId: storeLocation.storeLocationId,
-      locationName: storeLocation.locationName,
-    })
-    .from(storeLocation)
-    .as("from_loc");
-
-  const toLoc = db
-    .select({
-      storeLocationId: storeLocation.storeLocationId,
-      locationName: storeLocation.locationName,
-    })
-    .from(storeLocation)
-    .as("to_loc");
+  const fromLoc = alias(storeLocation, "from_loc");
+  const toLoc = alias(storeLocation, "to_loc");
 
   const conditions = [eq(inventoryTransfer.organisationId, orgId)];
 
@@ -463,21 +451,8 @@ export async function listTransfers(orgId: number, opts?: ListOpts) {
 // ---------------------------------------------------------------------------
 
 export async function getTransferDetail(transferId: string, orgId: number) {
-  const fromLoc = db
-    .select({
-      storeLocationId: storeLocation.storeLocationId,
-      locationName: storeLocation.locationName,
-    })
-    .from(storeLocation)
-    .as("from_loc");
-
-  const toLoc = db
-    .select({
-      storeLocationId: storeLocation.storeLocationId,
-      locationName: storeLocation.locationName,
-    })
-    .from(storeLocation)
-    .as("to_loc");
+  const fromLoc = alias(storeLocation, "from_loc");
+  const toLoc = alias(storeLocation, "to_loc");
 
   const [transfer] = await db
     .select({
@@ -534,13 +509,8 @@ export async function getTransferDetail(transferId: string, orgId: number) {
 // ---------------------------------------------------------------------------
 
 export async function listPendingTransfers(locationId: string) {
-  const fromLoc = db
-    .select({
-      storeLocationId: storeLocation.storeLocationId,
-      locationName: storeLocation.locationName,
-    })
-    .from(storeLocation)
-    .as("from_loc");
+  const fromLoc = alias(storeLocation, "from_loc");
+  const toLoc = alias(storeLocation, "to_loc");
 
   const rows = await db
     .select({
@@ -552,11 +522,13 @@ export async function listPendingTransfers(locationId: string) {
       sentDttm: inventoryTransfer.sentDttm,
       createdDttm: inventoryTransfer.createdDttm,
       fromLocationName: fromLoc.locationName,
+      toLocationName: toLoc.locationName,
       initiatorName: user.userName,
       lineCount: sql<number>`(SELECT count(*) FROM inventory_transfer_line WHERE transfer_id = ${inventoryTransfer.transferId})::int`,
     })
     .from(inventoryTransfer)
     .leftJoin(fromLoc, eq(inventoryTransfer.fromLocationId, fromLoc.storeLocationId))
+    .leftJoin(toLoc, eq(inventoryTransfer.toLocationId, toLoc.storeLocationId))
     .leftJoin(user, eq(inventoryTransfer.initiatedByUserId, user.userId))
     .where(
       and(
@@ -567,4 +539,106 @@ export async function listPendingTransfers(locationId: string) {
     .orderBy(desc(inventoryTransfer.sentDttm));
 
   return rows;
+}
+
+// ---------------------------------------------------------------------------
+// 8. updateTransfer — replace lines + notes on an INITIATED transfer
+// ---------------------------------------------------------------------------
+
+export async function updateTransfer(
+  transferId: string,
+  orgId: number,
+  data: {
+    lines: Array<{ ingredientId: string; sentQty: number; sentUnit: string }>;
+    notes?: string;
+  },
+) {
+  const [transfer] = await db
+    .select()
+    .from(inventoryTransfer)
+    .where(
+      and(
+        eq(inventoryTransfer.transferId, transferId),
+        eq(inventoryTransfer.organisationId, orgId),
+      ),
+    );
+
+  if (!transfer) throw new Error("not found");
+  if (transfer.status !== "INITIATED") throw new Error("Transfer is no longer editable");
+
+  // Delete existing lines and replace with new ones
+  await db
+    .delete(inventoryTransferLine)
+    .where(eq(inventoryTransferLine.transferId, transferId));
+
+  for (const line of data.lines) {
+    await db
+      .insert(inventoryTransferLine)
+      .values({
+        transferId,
+        ingredientId: line.ingredientId,
+        sentQty: String(line.sentQty),
+        sentUnit: line.sentUnit,
+        lineStatus: "PENDING",
+      });
+  }
+
+  // Update notes
+  await db
+    .update(inventoryTransfer)
+    .set({
+      notes: data.notes ?? null,
+      updatedDttm: new Date(),
+    })
+    .where(eq(inventoryTransfer.transferId, transferId));
+
+  return { updated: true, lineCount: data.lines.length };
+}
+
+// ---------------------------------------------------------------------------
+// 9. addLinesToTransfer — add items to an INITIATED transfer
+// ---------------------------------------------------------------------------
+
+export async function addLinesToTransfer(
+  transferId: string,
+  orgId: number,
+  lines: Array<{ ingredientId: string; sentQty: number; sentUnit: string }>,
+) {
+  const [transfer] = await db
+    .select()
+    .from(inventoryTransfer)
+    .where(
+      and(
+        eq(inventoryTransfer.transferId, transferId),
+        eq(inventoryTransfer.organisationId, orgId),
+      ),
+    );
+
+  if (!transfer) throw new Error("not found");
+  if (transfer.status !== "INITIATED") throw new Error("Transfer is no longer editable");
+
+  // Duplicate check — reject items already in this transfer
+  const existingLines = await db
+    .select({ ingredientId: inventoryTransferLine.ingredientId })
+    .from(inventoryTransferLine)
+    .where(eq(inventoryTransferLine.transferId, transferId));
+  const existingIds = new Set(existingLines.map((l) => l.ingredientId));
+  const duplicates = lines.filter((l) => existingIds.has(l.ingredientId));
+  if (duplicates.length > 0) {
+    throw new Error("Item already exists in this transfer");
+  }
+
+  for (const line of lines) {
+    await db
+      .insert(inventoryTransferLine)
+      .values({
+        transferId,
+        ingredientId: line.ingredientId,
+        sentQty: String(line.sentQty),
+        sentUnit: line.sentUnit,
+        lineStatus: "PENDING",
+      });
+  }
+
+  return { added: lines.length };
 }

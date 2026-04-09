@@ -9,7 +9,7 @@ import { ClipboardCheck, ArrowRightLeft, Trash2, Loader2, CalendarOff } from "lu
 
 export interface TransactionEvent {
   id: string;
-  type: "stock_take" | "transfer" | "waste";
+  type: "stock_take" | "transfer" | "transfer_loc" | "waste";
   quantity: string;
   unit: string;
   reason: string | null;
@@ -17,11 +17,12 @@ export interface TransactionEvent {
   occurredAt: string;
 }
 
-const TYPE_CONFIG = {
-  stock_take: { label: "Counted", icon: ClipboardCheck, color: "text-emerald-400", bg: "bg-emerald-500/10", border: "border-emerald-500/20" },
-  transfer:   { label: "Transfer", icon: ArrowRightLeft, color: "text-[#D4A574]", bg: "bg-[#D4A574]/10", border: "border-[#D4A574]/20" },
-  waste:      { label: "Waste", icon: Trash2, color: "text-red-400", bg: "bg-red-500/10", border: "border-red-500/20" },
-} as const;
+const TYPE_CONFIG: Record<string, { label: string; icon: typeof ClipboardCheck; color: string; bg: string; border: string }> = {
+  stock_take:   { label: "Counted", icon: ClipboardCheck, color: "text-emerald-400", bg: "bg-emerald-500/10", border: "border-emerald-500/20" },
+  transfer:     { label: "Usage", icon: ArrowRightLeft, color: "text-[#D4A574]", bg: "bg-[#D4A574]/10", border: "border-[#D4A574]/20" },
+  transfer_loc: { label: "Location Transfer", icon: ArrowRightLeft, color: "text-sky-400", bg: "bg-sky-500/10", border: "border-sky-500/20" },
+  waste:        { label: "Waste", icon: Trash2, color: "text-red-400", bg: "bg-red-500/10", border: "border-red-500/20" },
+};
 
 const REASON_LABELS: Record<string, string> = {
   kitchen_operations: "Kitchen",
@@ -79,28 +80,25 @@ export function TransactionDayList({ transactions, selectedDate, isLoading }: Tr
           {transactions.map((t) => {
             const cfg = TYPE_CONFIG[t.type] || TYPE_CONFIG.stock_take;
             const Icon = cfg.icon;
+            const reasonLabel = t.reason ? (REASON_LABELS[t.reason] || t.reason) : null;
             return (
               <div
                 key={t.id}
-                className="bg-[#111]/60 border border-white/5 rounded-lg px-3 py-2 flex items-center gap-3"
+                className="bg-[#111]/60 border border-white/5 rounded-lg px-3 py-2"
               >
-                <div className={`shrink-0 p-1.5 rounded-md ${cfg.bg} border ${cfg.border}`}>
-                  <Icon className={`size-3.5 ${cfg.color}`} />
+                {/* Line 1: type + quantity */}
+                <div className="flex items-center gap-2">
+                  <Icon className={`size-3 ${cfg.color} shrink-0`} />
+                  <span className={`text-xs font-medium ${cfg.color}`}>{cfg.label}</span>
+                  <span className="text-xs text-white tabular-nums">{Number(t.quantity).toFixed(1)} {t.unit}</span>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className={`text-xs font-medium ${cfg.color}`}>{cfg.label}</span>
-                    <span className="text-xs text-white tabular-nums">
-                      {Number(t.quantity).toFixed(1)} {t.unit}
-                    </span>
-                    {t.reason && (
-                      <span className="text-[10px] text-[#666] truncate">{REASON_LABELS[t.reason] || t.reason}</span>
-                    )}
-                  </div>
-                </div>
-                <div className="shrink-0 text-right">
-                  <p className="text-[10px] text-[#666]">{t.userName}</p>
-                  <p className="text-[10px] text-[#555] tabular-nums">{formatTime(t.occurredAt)}</p>
+                {/* Line 2: reason + user + time */}
+                <div className="flex items-center gap-1.5 mt-1 text-[10px] text-[#777]">
+                  {reasonLabel && <span>{reasonLabel}</span>}
+                  {reasonLabel && <span className="text-[#444]">·</span>}
+                  <span>{t.userName}</span>
+                  <span className="text-[#444]">·</span>
+                  <span className="tabular-nums">{formatTime(t.occurredAt)}</span>
                 </div>
               </div>
             );
