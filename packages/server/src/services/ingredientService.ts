@@ -872,94 +872,82 @@ export async function getIngredientTransactions(
   organisationId: number,
   month: string, // "2026-04" format
 ) {
-  // Parse month to date range
-  const [year, mon] = month.split("-").map(Number);
-  const startDate = new Date(year, mon - 1, 1);
-  const endDate = new Date(year, mon, 1); // first day of next month
+  // Parse month to UTC date range
+  const startDate = `${month}-01T00:00:00.000Z`;
+  const nextMonth = Number(month.split("-")[1]) === 12
+    ? `${Number(month.split("-")[0]) + 1}-01`
+    : `${month.split("-")[0]}-${String(Number(month.split("-")[1]) + 1).padStart(2, "0")}`;
+  const endDate = `${nextMonth}-01T00:00:00.000Z`;
 
   // 1. Stock take lines for this ingredient in this month
-  // Join: stockTakeLine -> stockTakeCategory -> stockTakeSession (for org filter)
-  const stockTakeRows = await db
-    .select({
-      id: stockTakeLine.lineId,
-      quantity: stockTakeLine.countedQty,
-      unit: stockTakeLine.countedUnit,
-      occurredAt: stockTakeLine.countedDttm,
-      userId: stockTakeLine.countedByUserId,
-      userName: user.userName,
-    })
-    .from(stockTakeLine)
-    .innerJoin(stockTakeCategory, eq(stockTakeCategory.categoryId, stockTakeLine.categoryId))
-    .innerJoin(stockTakeSession, eq(stockTakeSession.sessionId, stockTakeCategory.sessionId))
-    .innerJoin(user, eq(user.userId, stockTakeLine.countedByUserId))
-    .where(
-      and(
-        eq(stockTakeLine.ingredientId, ingredientId),
-        eq(stockTakeSession.organisationId, organisationId),
-        gte(stockTakeLine.countedDttm, startDate),
-        sql`${stockTakeLine.countedDttm} < ${endDate}`,
-      ),
-    );
+  let stockTakeRows: any[] = [];
+  try {
+    const stResult = await db.execute(sql`
+      SELECT stl.line_id as id, stl.counted_qty as quantity, stl.counted_unit as unit,
+             stl.counted_dttm as "occurredAt", u.user_name as "userName"
+      FROM stock_take_line stl
+      INNER JOIN stock_take_category stc ON stc.category_id = stl.category_id
+      INNER JOIN stock_take_session sts ON sts.session_id = stc.session_id
+      INNER JOIN "user" u ON u.user_id = stl.counted_by_user_id
+      WHERE stl.ingredient_id = ${ingredientId}
+        AND sts.organisation_id = ${organisationId}
+        AND stl.counted_dttm >= ${startDate}::timestamptz
+        AND stl.counted_dttm < ${endDate}::timestamptz
+    `);
+    stockTakeRows = (stResult as any).rows ?? stResult ?? [];
+  } catch { stockTakeRows = []; }
 
-  // 2. Consumption log entries
-  const consumptionRows = await db
-    .select({
-      id: consumptionLog.consumptionLogId,
-      quantity: consumptionLog.quantity,
-      unit: consumptionLog.unit,
-      reason: consumptionLog.reason,
-      shift: consumptionLog.shift,
-      occurredAt: consumptionLog.loggedAt,
-      userId: consumptionLog.userId,
-      userName: user.userName,
-    })
-    .from(consumptionLog)
-    .innerJoin(user, eq(user.userId, consumptionLog.userId))
-    .where(
-      and(
-        eq(consumptionLog.ingredientId, ingredientId),
-        eq(consumptionLog.organisationId, organisationId),
-        gte(consumptionLog.loggedAt, startDate),
-        sql`${consumptionLog.loggedAt} < ${endDate}`,
-      ),
-    );
+  // 2. Consumption log entries (using Drizzle ORM)
+  let consumptionRows: { id: string; quantity: string; unit: string; reason: string; shift: string | null; occurredAt: Date; userName: string }[] = [];
+  try {
+    consumptionRows = await db
+      .select({
+        id: consumptionLog.consumptionLogId,
+        quantity: consumptionLog.quantity,
+        unit: consumptionLog.unit,
+        reason: consumptionLog.reason,
+        shift: consumptionLog.shift,
+        occurredAt: consumptionLog.loggedAt,
+        userName: user.userName,
+      })
+      .from(consumptionLog)
+      .innerJoin(user, eq(user.userId, consumptionLog.userId))
+      .where(
+        and(
+          eq(consumptionLog.ingredientId, ingredientId),
+          eq(consumptionLog.organisationId, organisationId),
+          sql`${consumptionLog.loggedAt} >= ${startDate}::timestamptz`,
+          sql`${consumptionLog.loggedAt} < ${endDate}::timestamptz`,
+        ),
+      );
+  } catch { consumptionRows = []; }
 
-  // 3. Waste log entries — waste_log uses ingredient_name (text), not ingredient_id (FK)
-  // First get the ingredient name to match
-  const [ing] = await db
-    .select({ name: ingredient.ingredientName })
-    .from(ingredient)
-    .where(eq(ingredient.ingredientId, ingredientId));
-
+  // 3. Waste log entries — uses ingredient_name (text), not ingredient_id (FK)
   let wasteRows: any[] = [];
-  if (ing) {
-    try {
-      const wasteResult = await db.execute(sql`
-        SELECT
-          wl.waste_log_id as id,
-          wl.quantity,
-          wl.unit,
-          wl.reason,
-          wl.logged_at as occurred_at,
-          wl.user_id,
-          u.user_name as user_name
+  try {
+    const [ing] = await db
+      .select({ name: ingredient.ingredientName })
+      .from(ingredient)
+      .where(eq(ingredient.ingredientId, ingredientId));
+
+    if (ing) {
+      const wResult = await db.execute(sql`
+        SELECT waste_log_id as id, quantity, unit, reason,
+               logged_at as "occurredAt", u.user_name as "userName"
         FROM waste_log wl
         INNER JOIN "user" u ON u.user_id = wl.user_id
         WHERE wl.ingredient_name = ${ing.name}
           AND wl.organisation_id = ${organisationId}
-          AND wl.logged_at >= ${startDate.toISOString()}
-          AND wl.logged_at < ${endDate.toISOString()}
+          AND wl.logged_at >= ${startDate}::timestamptz
+          AND wl.logged_at < ${endDate}::timestamptz
       `);
-      wasteRows = (wasteResult as any[]) || [];
-    } catch {
-      // waste_log table might not exist or have different schema — gracefully skip
-      wasteRows = [];
+      wasteRows = (wResult as any).rows ?? wResult ?? [];
     }
-  }
+  } catch { wasteRows = []; }
 
   // Merge all into unified TransactionEvent[]
   const transactions = [
-    ...stockTakeRows.map((r) => ({
+    ...stockTakeRows.map((r: any) => ({
       id: r.id,
       type: "stock_take" as const,
       quantity: String(r.quantity),
@@ -968,7 +956,7 @@ export async function getIngredientTransactions(
       userName: r.userName || "Unknown",
       occurredAt: r.occurredAt instanceof Date ? r.occurredAt.toISOString() : String(r.occurredAt),
     })),
-    ...consumptionRows.map((r) => ({
+    ...consumptionRows.map((r: any) => ({
       id: r.id,
       type: "transfer" as const,
       quantity: String(r.quantity),
