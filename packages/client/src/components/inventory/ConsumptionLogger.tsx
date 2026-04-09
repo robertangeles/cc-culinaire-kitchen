@@ -62,6 +62,7 @@ export default function ConsumptionLogger() {
 
   /* --- form state --- */
   const [searchQuery, setSearchQuery] = useState("");
+  const [activeCat, setActiveCat] = useState<string | null>(null);
   const [selectedItem, setSelectedItem] = useState<typeof locationItems[number] | null>(null);
   const [quantity, setQuantity] = useState("");
   const [reason, setReason] = useState("");
@@ -224,59 +225,108 @@ export default function ConsumptionLogger() {
 
       {/* ── Entry card ─────────────────────────────────────────── */}
       <div className="bg-[#111]/80 backdrop-blur-md border border-white/5 rounded-xl p-5 space-y-4">
-        {/* Search */}
+        {/* Item picker — category browse */}
         {!selectedItem && (
-          <div className="relative">
+          <div className="space-y-2">
+            {/* Filter input */}
             <div className="relative">
-              <Search
-                size={16}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-[#666]"
-              />
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#555]" />
               <input
                 ref={searchRef}
                 type="text"
-                placeholder="Search items..."
+                placeholder="Filter items..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-[#0A0A0A] border border-[#2A2A2A] rounded-xl pl-10 pr-4 py-2.5 text-sm text-[#E0E0E0] placeholder-[#555] focus:outline-none focus:border-[#D4A574]/40 focus:shadow-[0_0_12px_rgba(212,165,116,0.08)] transition-all"
+                className="w-full bg-[#0A0A0A] border border-[#2A2A2A] rounded-lg pl-9 pr-4 py-2 text-sm text-white placeholder-[#555] focus:outline-none focus:border-[#D4A574]/30 transition-all"
                 autoFocus
               />
             </div>
 
-            {/* Dropdown */}
-            {searchResults.length > 0 && (
-              <div className="absolute z-30 mt-1.5 w-full bg-[#161616]/95 backdrop-blur-xl border border-[#D4A574]/15 rounded-xl shadow-lg shadow-black/40 overflow-hidden">
-                {searchResults.map((item) => (
-                  <button
-                    key={item.ingredientId}
-                    onClick={() => handleSelectItem(item)}
-                    className="w-full flex items-center justify-between px-4 py-2.5 text-left hover:bg-[#D4A574]/8 transition-colors group"
-                  >
-                    <div className="flex flex-col">
-                      <span className="text-sm text-[#E0E0E0] group-hover:text-white transition-colors">
-                        {item.ingredientName}
-                      </span>
-                      <span className="text-xs text-[#666]">
-                        {CATEGORY_LABELS[item.ingredientCategory as keyof typeof CATEGORY_LABELS] ?? item.ingredientCategory}
-                      </span>
-                    </div>
-                    <div className="text-right">
-                      <span className="text-xs text-[#888]">
-                        {item.currentQty != null
-                          ? `${Number(item.currentQty).toFixed(1)} ${item.unitOverride || item.baseUnit}`
-                          : `— ${item.unitOverride || item.baseUnit}`}
-                      </span>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
+            {/* Category tabs — clickable filter */}
+            <div className="flex flex-wrap gap-1.5">
+              <button
+                onClick={() => setActiveCat(null)}
+                className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors ${
+                  activeCat === null
+                    ? "bg-[#D4A574]/15 text-[#D4A574] border-[#D4A574]/30"
+                    : "bg-white/[0.03] text-[#888] border-white/5 hover:border-[#D4A574]/20 hover:text-[#ccc]"
+                }`}
+              >
+                All
+              </button>
+              {(() => {
+                const activeItems = locationItems.filter((i) => i.activeInd !== false);
+                const cats = [...new Set(activeItems.map((i) => i.ingredientCategory))].sort();
+                return cats.map((cat) => {
+                  const catLabel = cat.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+                  const count = activeItems.filter((i) => i.ingredientCategory === cat).length;
+                  return (
+                    <button
+                      key={cat}
+                      onClick={() => setActiveCat(activeCat === cat ? null : cat)}
+                      className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors ${
+                        activeCat === cat
+                          ? "bg-[#D4A574]/15 text-[#D4A574] border-[#D4A574]/30"
+                          : "bg-white/[0.03] text-[#888] border-white/5 hover:border-[#D4A574]/20 hover:text-[#ccc]"
+                      }`}
+                    >
+                      {catLabel} ({count})
+                    </button>
+                  );
+                });
+              })()}
+            </div>
 
-            {searchQuery.trim().length > 0 && searchResults.length === 0 && !itemsLoading && (
-              <div className="absolute z-30 mt-1.5 w-full bg-[#161616]/95 backdrop-blur-xl border border-[#2A2A2A] rounded-xl p-4 text-center text-sm text-[#666]">
-                No items found
+            {/* Item list grouped by category */}
+            <div className="max-h-60 overflow-y-auto rounded-lg border border-[#1E1E1E]">
+              {/* Column header */}
+              <div className="flex items-center justify-between px-3 py-1.5 bg-white/[0.02] border-b border-[#1E1E1E]">
+                <span className="text-[10px] text-[#666] uppercase tracking-wider">Item</span>
+                <span className="text-[10px] text-[#666] uppercase tracking-wider">Current Stock</span>
               </div>
-            )}
+              {(() => {
+                const activeItems = locationItems.filter((i) => i.activeInd !== false);
+                const visible = activeItems.filter((i) => {
+                  if (activeCat && i.ingredientCategory !== activeCat) return false;
+                  if (searchQuery && !i.ingredientName.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+                  return true;
+                });
+                const grouped = new Map<string, typeof activeItems>();
+                for (const item of visible) {
+                  const cat = item.ingredientCategory;
+                  if (!grouped.has(cat)) grouped.set(cat, []);
+                  grouped.get(cat)!.push(item);
+                }
+                if (grouped.size === 0) {
+                  return <p className="px-3 py-4 text-xs text-[#666] text-center">No items match</p>;
+                }
+                return [...grouped.entries()].map(([cat, items]) => {
+                  const catLabel = cat.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+                  return (
+                    <div key={cat}>
+                      <div className="px-3 py-1.5 bg-white/[0.02] text-[10px] text-[#666] uppercase tracking-wider font-medium border-t border-[#1E1E1E] first:border-t-0">
+                        {catLabel}
+                      </div>
+                      {items.map((item) => {
+                        const stock = Number(item.currentQty || 0);
+                        return (
+                          <button
+                            key={item.ingredientId}
+                            onClick={() => handleSelectItem(item)}
+                            className="w-full flex items-center justify-between px-3 py-2 text-sm text-[#ccc] hover:bg-[#D4A574]/5 transition-colors cursor-pointer"
+                          >
+                            <span>{item.ingredientName}</span>
+                            <span className="text-[10px] text-[#888] tabular-nums">
+                              {stock.toFixed(1)} {item.baseUnit}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  );
+                });
+              })()}
+            </div>
           </div>
         )}
 

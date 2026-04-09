@@ -47,6 +47,7 @@ export default function TransferForm({ onClose }: { onClose: () => void }) {
   const [notes, setNotes] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [showSearch, setShowSearch] = useState(false);
+  const [activeCat, setActiveCat] = useState<string | null>(null);
   const [showLocDropdown, setShowLocDropdown] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -294,28 +295,51 @@ export default function TransferForm({ onClose }: { onClose: () => void }) {
               />
             </div>
 
-            {/* Category tabs */}
-            <div className="flex flex-wrap gap-1">
+            {/* Category tabs — clickable filter */}
+            <div className="flex flex-wrap gap-1.5">
+              <button
+                onClick={() => setActiveCat(null)}
+                className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors ${
+                  activeCat === null
+                    ? "bg-[#D4A574]/15 text-[#D4A574] border-[#D4A574]/30"
+                    : "bg-white/[0.03] text-[#888] border-white/5 hover:border-[#D4A574]/20 hover:text-[#ccc]"
+                }`}
+              >
+                All
+              </button>
               {(() => {
                 const cats = [...new Set(filteredItems.map(i => i.ingredientCategory))].sort();
                 return cats.map(cat => {
                   const catLabel = cat.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
                   const count = filteredItems.filter(i => i.ingredientCategory === cat).length;
-                  const isActive = !searchQuery; // show all when no filter
                   return (
-                    <span key={cat} className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-white/[0.04] text-[#888] border border-white/5">
+                    <button
+                      key={cat}
+                      onClick={() => setActiveCat(activeCat === cat ? null : cat)}
+                      className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors ${
+                        activeCat === cat
+                          ? "bg-[#D4A574]/15 text-[#D4A574] border-[#D4A574]/30"
+                          : "bg-white/[0.03] text-[#888] border-white/5 hover:border-[#D4A574]/20 hover:text-[#ccc]"
+                      }`}
+                    >
                       {catLabel} ({count})
-                    </span>
+                    </button>
                   );
                 });
               })()}
             </div>
 
             {/* Item list grouped by category */}
-            <div className="max-h-60 overflow-y-auto rounded-lg border border-[#1E1E1E] divide-y divide-[#1E1E1E]">
+            <div className="max-h-60 overflow-y-auto rounded-lg border border-[#1E1E1E]">
+              {/* Column header */}
+              <div className="flex items-center justify-between px-3 py-1.5 bg-white/[0.02] border-b border-[#1E1E1E]">
+                <span className="text-[10px] text-[#666] uppercase tracking-wider">Item</span>
+                <span className="text-[10px] text-[#666] uppercase tracking-wider">Current Stock</span>
+              </div>
               {(() => {
+                const visibleItems = activeCat ? filteredItems.filter(i => i.ingredientCategory === activeCat) : filteredItems;
                 const grouped = new Map<string, LocationIngredient[]>();
-                for (const item of filteredItems) {
+                for (const item of visibleItems) {
                   const cat = item.ingredientCategory;
                   if (!grouped.has(cat)) grouped.set(cat, []);
                   grouped.get(cat)!.push(item);
