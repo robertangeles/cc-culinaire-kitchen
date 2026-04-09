@@ -309,15 +309,21 @@ export default function ConsumptionLogger() {
                       </div>
                       {items.map((item) => {
                         const stock = Number(item.currentQty || 0);
+                        const outOfStock = stock <= 0;
                         return (
                           <button
                             key={item.ingredientId}
-                            onClick={() => handleSelectItem(item)}
-                            className="w-full flex items-center justify-between px-3 py-2 text-sm text-[#ccc] hover:bg-[#D4A574]/5 transition-colors cursor-pointer"
+                            onClick={() => !outOfStock && handleSelectItem(item)}
+                            disabled={outOfStock}
+                            className={`w-full flex items-center justify-between px-3 py-2 text-sm transition-colors ${
+                              outOfStock
+                                ? "text-[#444] cursor-not-allowed"
+                                : "text-[#ccc] hover:bg-[#D4A574]/5 cursor-pointer"
+                            }`}
                           >
-                            <span>{item.ingredientName}</span>
-                            <span className="text-[10px] text-[#888] tabular-nums">
-                              {stock.toFixed(1)} {item.baseUnit}
+                            <span className={outOfStock ? "line-through" : ""}>{item.ingredientName}</span>
+                            <span className={`text-[10px] tabular-nums ${outOfStock ? "text-red-400/60" : "text-[#888]"}`}>
+                              {outOfStock ? "Out of stock" : `${stock.toFixed(1)} ${item.baseUnit}`}
                             </span>
                           </button>
                         );
@@ -567,22 +573,7 @@ export default function ConsumptionLogger() {
                 <span className="text-xs text-[#666] min-w-[4.5rem] text-right">
                   {formatTime(entry.loggedAt)}
                 </span>
-                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button
-                    onClick={() => handleStartEdit(entry)}
-                    className="p-1 rounded-md hover:bg-white/5 text-[#666] hover:text-[#D4A574] transition-colors"
-                    title="Edit"
-                  >
-                    <Pencil size={13} />
-                  </button>
-                  <button
-                    onClick={() => handleDelete(entry.consumptionLogId)}
-                    className="p-1 rounded-md hover:bg-white/5 text-[#666] hover:text-red-400 transition-colors"
-                    title="Delete"
-                  >
-                    <Trash2 size={13} />
-                  </button>
-                </div>
+                {/* Entries are final — no edits */}
               </div>
             ),
           )}
