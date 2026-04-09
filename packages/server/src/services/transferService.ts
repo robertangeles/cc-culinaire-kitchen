@@ -10,6 +10,7 @@
  */
 
 import { eq, and, desc, sql, inArray } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { db } from "../db/index.js";
 import {
   inventoryTransfer,
@@ -404,21 +405,8 @@ export async function cancelTransfer(
 // ---------------------------------------------------------------------------
 
 export async function listTransfers(orgId: number, opts?: ListOpts) {
-  const fromLoc = db
-    .select({
-      storeLocationId: storeLocation.storeLocationId,
-      locationName: storeLocation.locationName,
-    })
-    .from(storeLocation)
-    .as("from_loc");
-
-  const toLoc = db
-    .select({
-      storeLocationId: storeLocation.storeLocationId,
-      locationName: storeLocation.locationName,
-    })
-    .from(storeLocation)
-    .as("to_loc");
+  const fromLoc = alias(storeLocation, "from_loc");
+  const toLoc = alias(storeLocation, "to_loc");
 
   const conditions = [eq(inventoryTransfer.organisationId, orgId)];
 
@@ -463,21 +451,8 @@ export async function listTransfers(orgId: number, opts?: ListOpts) {
 // ---------------------------------------------------------------------------
 
 export async function getTransferDetail(transferId: string, orgId: number) {
-  const fromLoc = db
-    .select({
-      storeLocationId: storeLocation.storeLocationId,
-      locationName: storeLocation.locationName,
-    })
-    .from(storeLocation)
-    .as("from_loc");
-
-  const toLoc = db
-    .select({
-      storeLocationId: storeLocation.storeLocationId,
-      locationName: storeLocation.locationName,
-    })
-    .from(storeLocation)
-    .as("to_loc");
+  const fromLoc = alias(storeLocation, "from_loc");
+  const toLoc = alias(storeLocation, "to_loc");
 
   const [transfer] = await db
     .select({
@@ -534,13 +509,8 @@ export async function getTransferDetail(transferId: string, orgId: number) {
 // ---------------------------------------------------------------------------
 
 export async function listPendingTransfers(locationId: string) {
-  const fromLoc = db
-    .select({
-      storeLocationId: storeLocation.storeLocationId,
-      locationName: storeLocation.locationName,
-    })
-    .from(storeLocation)
-    .as("from_loc");
+  const fromLoc = alias(storeLocation, "from_loc");
+  const toLoc = alias(storeLocation, "to_loc");
 
   const rows = await db
     .select({
@@ -552,11 +522,13 @@ export async function listPendingTransfers(locationId: string) {
       sentDttm: inventoryTransfer.sentDttm,
       createdDttm: inventoryTransfer.createdDttm,
       fromLocationName: fromLoc.locationName,
+      toLocationName: toLoc.locationName,
       initiatorName: user.userName,
       lineCount: sql<number>`(SELECT count(*) FROM inventory_transfer_line WHERE transfer_id = ${inventoryTransfer.transferId})::int`,
     })
     .from(inventoryTransfer)
     .leftJoin(fromLoc, eq(inventoryTransfer.fromLocationId, fromLoc.storeLocationId))
+    .leftJoin(toLoc, eq(inventoryTransfer.toLocationId, toLoc.storeLocationId))
     .leftJoin(user, eq(inventoryTransfer.initiatedByUserId, user.userId))
     .where(
       and(

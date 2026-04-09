@@ -78,6 +78,7 @@ app.use(
     standardHeaders: "draft-8",
     legacyHeaders: false,
     skip: (req) => req.path.startsWith("/api/auth/"),
+    message: { error: "Too many requests, please try again later." },
   })
 );
 
