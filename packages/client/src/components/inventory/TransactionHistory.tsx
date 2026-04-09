@@ -13,10 +13,11 @@ import { useIngredientTransactions } from "../../hooks/useInventory.js";
 
 interface TransactionHistoryProps {
   ingredientId: string;
+  defaultExpanded?: boolean;
 }
 
-export function TransactionHistory({ ingredientId }: TransactionHistoryProps) {
-  const [expanded, setExpanded] = useState(false);
+export function TransactionHistory({ ingredientId, defaultExpanded = false }: TransactionHistoryProps) {
+  const [expanded, setExpanded] = useState(defaultExpanded);
   const [selectedDate, setSelectedDate] = useState(
     () => new Date().toISOString().slice(0, 10),
   );

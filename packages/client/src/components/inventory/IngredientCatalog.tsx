@@ -379,9 +379,11 @@ function EditIngredientModal({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-lg max-h-[90vh] overflow-y-auto p-6 rounded-2xl bg-[#161616] border border-[#2A2A2A] shadow-2xl animate-[scaleIn_200ms_ease-out]"
+        className="w-full max-w-4xl max-h-[90vh] overflow-hidden flex rounded-2xl bg-[#161616] border border-[#2A2A2A] shadow-2xl animate-[scaleIn_200ms_ease-out]"
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Left panel — edit form */}
+        <div className="flex-1 min-w-0 overflow-y-auto p-6">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-base font-semibold text-white">Edit Ingredient</h3>
           <button onClick={onClose} className="p-1 rounded-lg hover:bg-[#2A2A2A] text-[#999] hover:text-white transition-all">
@@ -595,8 +597,6 @@ function EditIngredientModal({
             </div>
           )}
 
-          {/* Transaction History */}
-          <TransactionHistory ingredientId={ingredient.ingredientId} />
         </div>
 
         {/* Actions */}
@@ -634,6 +634,14 @@ function EditIngredientModal({
             {saving ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
             Save
           </button>
+        </div>
+      </div>
+
+        {/* Right panel — transaction history */}
+        <div className="w-80 flex-shrink-0 border-l border-[#2A2A2A] overflow-y-auto"
+          style={{ background: "linear-gradient(180deg, rgba(20,23,28,0.99), rgba(14,16,20,0.99))" }}
+        >
+          <TransactionHistory ingredientId={ingredient.ingredientId} defaultExpanded />
         </div>
       </div>
     </div>

@@ -23,6 +23,19 @@ const TYPE_CONFIG = {
   waste:      { label: "Waste", icon: Trash2, color: "text-red-400", bg: "bg-red-500/10", border: "border-red-500/20" },
 } as const;
 
+const REASON_LABELS: Record<string, string> = {
+  kitchen_operations: "Kitchen",
+  foh_operations: "FOH",
+  staff_consumption: "Staff",
+  cleaning: "Cleaning",
+  admin: "Admin",
+  breakage: "Breakage",
+  spoilage: "Spoilage",
+  overproduction: "Overproduction",
+  trim: "Prep Trim",
+  other: "Other",
+};
+
 interface TransactionDayListProps {
   transactions: TransactionEvent[];
   selectedDate: string;
@@ -80,7 +93,7 @@ export function TransactionDayList({ transactions, selectedDate, isLoading }: Tr
                       {Number(t.quantity).toFixed(1)} {t.unit}
                     </span>
                     {t.reason && (
-                      <span className="text-[10px] text-[#666] truncate">{t.reason}</span>
+                      <span className="text-[10px] text-[#666] truncate">{REASON_LABELS[t.reason] || t.reason}</span>
                     )}
                   </div>
                 </div>
