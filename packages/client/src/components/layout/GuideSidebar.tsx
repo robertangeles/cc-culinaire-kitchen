@@ -11,14 +11,16 @@ import { useLocation } from "react-router";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { BookOpen, X, Loader2 } from "lucide-react";
+import { useGuide } from "../../context/GuideContext.js";
 
 const API = import.meta.env.VITE_API_URL ?? "";
 
-/** Maps route pathname to guide key. */
+/** Maps route pathname to guide key. Returns null for non-guide routes. */
 function guideKeyFromPath(pathname: string): string | null {
   if (pathname.startsWith("/waste-intelligence")) return "waste_intelligence";
   if (pathname.startsWith("/kitchen-copilot")) return "kitchen_copilot";
   if (pathname.startsWith("/menu-intelligence")) return "menu_intelligence";
+  if (pathname.startsWith("/inventory")) return "inventory_dashboard"; // default; overridden by context
   return null;
 }
 
@@ -77,7 +79,9 @@ const mdComponents: Components = {
 
 export function GuideSidebar() {
   const { pathname } = useLocation();
-  const guideKey = guideKeyFromPath(pathname);
+  const { guideKeyOverride } = useGuide();
+  const routeKey = guideKeyFromPath(pathname);
+  const guideKey = guideKeyOverride ?? routeKey;
 
   const [collapsed, setCollapsed] = useState(getInitialCollapsed);
   const [content, setContent] = useState("");
@@ -131,39 +135,74 @@ export function GuideSidebar() {
     };
   }, [guideKey]);
 
-  // Don't render on non-intelligence routes
-  if (!guideKey) return null;
+  // Don't render on routes that don't have guides
+  if (!guideKey && !routeKey) return null;
 
   return (
     <div className="hidden md:flex h-full flex-shrink-0">
       {/* Toggle button — attached to right edge */}
       <button
         onClick={() => setCollapsed(!collapsed)}
-        className="flex items-start pt-3 px-1 bg-[#161616] border-l border-[#2A2A2A] rounded-l-xl transition-colors"
+        className="relative flex items-start pt-3 px-1.5 transition-colors group"
+        style={{
+          background: collapsed ? "#131518" : "linear-gradient(180deg, #181B20 0%, #131518 100%)",
+          borderLeft: `1px solid ${collapsed ? "rgba(100,130,180,0.1)" : "rgba(100,130,180,0.15)"}`,
+        }}
         title={collapsed ? "Show guide" : "Hide guide"}
       >
+        {/* Pulse ring — only when collapsed to hint "click me" */}
+        {collapsed && (
+          <span className="absolute top-2.5 left-1 w-5 h-5 rounded-full animate-ping opacity-[0.15]"
+            style={{ backgroundColor: "#8BA4C4" }}
+          />
+        )}
+        {/* Glow dot — persistent soft beacon when collapsed */}
+        {collapsed && (
+          <span className="absolute top-[7px] right-0.5 w-1.5 h-1.5 rounded-full"
+            style={{
+              backgroundColor: "#8BA4C4",
+              boxShadow: "0 0 6px rgba(139,164,196,0.5)",
+              animation: "pulse 2s ease-in-out infinite",
+            }}
+          />
+        )}
         <BookOpen
-          className={`size-4 transition-colors ${collapsed ? "text-[#666666] hover:text-[#999999]" : "text-[#D4A574]"}`}
+          className={`size-4 transition-colors relative z-10 ${
+            collapsed
+              ? "text-[#8BA4C4] group-hover:text-white group-hover:scale-110 transition-transform"
+              : "text-[#8BA4C4]"
+          }`}
         />
       </button>
 
       {/* Sidebar panel */}
       <aside
-        className={`flex flex-col bg-[#0A0A0A] border-l border-[#1E1E1E] overflow-hidden transition-all duration-200 ${
+        className={`flex flex-col overflow-hidden transition-all duration-200 ${
           collapsed ? "w-0" : "w-72"
         }`}
+        style={{
+          background: "linear-gradient(180deg, rgba(20,23,28,0.99) 0%, rgba(14,16,20,0.99) 100%)",
+          borderLeft: "1px solid rgba(100,130,180,0.12)",
+          boxShadow: "inset 1px 0 0 rgba(100,130,180,0.05), -4px 0 16px rgba(0,0,0,0.3)",
+        }}
       >
         {/* Header */}
-        <div className="px-4 py-3 border-b border-[#1E1E1E] flex-shrink-0 flex items-center justify-between">
+        <div
+          className="px-4 py-3 flex-shrink-0 flex items-center justify-between"
+          style={{
+            borderBottom: "1px solid rgba(100,130,180,0.1)",
+            background: "linear-gradient(180deg, rgba(25,28,35,0.8) 0%, transparent 100%)",
+          }}
+        >
           <div className="flex items-center gap-2">
-            <BookOpen className="size-4 text-[#D4A574]" />
-            <h2 className="text-xs font-semibold text-[#999999] uppercase tracking-wider whitespace-nowrap">
+            <BookOpen className="size-4 text-[#8BA4C4]" />
+            <h2 className="text-xs font-semibold text-[#8BA4C4] uppercase tracking-wider whitespace-nowrap">
               {title}
             </h2>
           </div>
           <button
             onClick={() => setCollapsed(true)}
-            className="text-[#666666] hover:text-white transition-colors"
+            className="text-[#555] hover:text-[#8BA4C4] transition-colors"
             title="Close guide"
           >
             <X className="size-4" />

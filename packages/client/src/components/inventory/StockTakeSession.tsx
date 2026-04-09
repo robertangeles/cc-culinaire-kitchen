@@ -13,23 +13,9 @@ import {
   ClipboardCheck, Play, CheckCircle2, AlertTriangle,
   Clock, Loader2, ChevronRight, Lock, ShieldCheck, Flag,
 } from "lucide-react";
+import { CATEGORIES, CATEGORY_LABELS } from "@culinaire/shared";
 
-const ALL_CATEGORIES = [
-  { key: "proteins", label: "Proteins" },
-  { key: "produce", label: "Produce" },
-  { key: "dairy", label: "Dairy" },
-  { key: "dry_goods", label: "Dry Goods" },
-  { key: "beverages", label: "Beverages" },
-  { key: "spirits", label: "Spirits" },
-  { key: "frozen", label: "Frozen" },
-  { key: "bakery", label: "Bakery" },
-  { key: "condiments", label: "Condiments" },
-  { key: "other", label: "Other" },
-];
-
-const CATEGORY_LABELS: Record<string, string> = Object.fromEntries(
-  ALL_CATEGORIES.map((c) => [c.key, c.label]),
-);
+const ALL_CATEGORIES = CATEGORIES;
 
 const STATUS_CONFIG: Record<string, { color: string; bg: string; border: string; icon: typeof CheckCircle2 }> = {
   NOT_STARTED: { color: "text-[#666]", bg: "bg-[#1E1E1E]", border: "border-[#2A2A2A]", icon: Clock },

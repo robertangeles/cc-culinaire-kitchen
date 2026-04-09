@@ -965,6 +965,7 @@ export const storeLocation = pgTable(
     colorAccent: varchar("color_accent", { length: 7 }),
     photoPath: varchar("photo_path", { length: 500 }),
     isActiveInd: boolean("is_active_ind").notNull().default(true),
+    inventoryActive: boolean("inventory_active").notNull().default(false),
     createdBy: integer("created_by").notNull().references(() => user.userId),
     createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
     updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
@@ -1093,6 +1094,8 @@ export const ingredient = pgTable(
     organisationId: integer("organisation_id").notNull().references(() => organisation.organisationId),
     ingredientName: text("ingredient_name").notNull(),
     ingredientCategory: varchar("ingredient_category", { length: 50 }).notNull(),
+    itemType: varchar("item_type", { length: 20 }).notNull().default("KITCHEN_INGREDIENT"),
+    fifoApplicable: varchar("fifo_applicable", { length: 20 }).notNull().default("ALWAYS"),
     baseUnit: varchar("base_unit", { length: 20 }).notNull(),
     description: text("description"),
     unitCost: numeric("unit_cost"),
@@ -1112,6 +1115,8 @@ export const ingredient = pgTable(
     uniqueIndex("idx_ingredient_org_name").on(table.organisationId, table.ingredientName),
     // FK index: "get all ingredients for an org"
     index("idx_ingredient_org").on(table.organisationId),
+    // Filter by item type within an org
+    index("idx_ingredient_item_type").on(table.organisationId, table.itemType),
   ],
 );
 
@@ -1299,6 +1304,7 @@ export const stockTakeSession = pgTable(
     storeLocationId: uuid("store_location_id").notNull().references(() => storeLocation.storeLocationId),
     organisationId: integer("organisation_id").notNull().references(() => organisation.organisationId),
     sessionStatus: varchar("session_status", { length: 20 }).notNull().default("OPEN"),
+    sessionType: varchar("session_type", { length: 20 }).notNull().default("REGULAR"),
     openedByUserId: integer("opened_by_user_id").notNull().references(() => user.userId),
     approvedByUserId: integer("approved_by_user_id").references(() => user.userId),
     flagReason: text("flag_reason"),
@@ -1427,5 +1433,40 @@ export const stockLevel = pgTable(
     index("idx_stock_level_location").on(table.storeLocationId),
     // FK index: "get stock level for an ingredient across locations"
     index("idx_stock_level_ingredient").on(table.ingredientId),
+  ],
+);
+
+/**
+ * The `pending_catalog_request` table stores items that staff add
+ * during a stock take that don't exist in the master catalogue.
+ * HQ reviews and approves/rejects. On approval, a real ingredient
+ * is created and linked via created_ingredient_id.
+ *
+ * OLTP table, 2NF — every non-key column depends on request_id.
+ */
+export const pendingCatalogRequest = pgTable(
+  "pending_catalog_request",
+  {
+    requestId: uuid("request_id").defaultRandom().primaryKey(),
+    organisationId: integer("organisation_id").notNull().references(() => organisation.organisationId),
+    storeLocationId: uuid("store_location_id").notNull().references(() => storeLocation.storeLocationId),
+    requestedByUserId: integer("requested_by_user_id").notNull().references(() => user.userId),
+    itemName: text("item_name").notNull(),
+    itemType: varchar("item_type", { length: 20 }).notNull().default("KITCHEN_INGREDIENT"),
+    category: varchar("category", { length: 50 }),
+    baseUnit: varchar("base_unit", { length: 20 }),
+    countedQty: numeric("counted_qty"),
+    status: varchar("status", { length: 20 }).notNull().default("PENDING"),
+    reviewedByUserId: integer("reviewed_by_user_id").references(() => user.userId),
+    reviewNotes: text("review_notes"),
+    createdIngredientId: uuid("created_ingredient_id").references(() => ingredient.ingredientId),
+    createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
+    updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // HQ pending list: "get all pending requests for an org"
+    index("idx_pending_request_org").on(table.organisationId, table.status),
+    // Location view: "get requests from this location"
+    index("idx_pending_request_location").on(table.storeLocationId),
   ],
 );

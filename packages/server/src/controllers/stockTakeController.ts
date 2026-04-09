@@ -24,6 +24,7 @@ import {
   getPendingReviewSessions,
   getLocationDashboard,
   getOrgDashboardSummary,
+  openOpeningCount,
   ConflictError,
   InvalidStateError,
   NotFoundError,
@@ -355,5 +356,27 @@ export async function handleGetLocationDashboard(
     res.json(dashboard);
   } catch (err) {
     next(err);
+  }
+}
+
+// ─── Opening inventory count ────────────────────────────────────
+
+/** POST /locations/:locId/opening-count */
+export async function handleOpenOpeningCount(
+  req: Request, res: Response, next: NextFunction,
+): Promise<void> {
+  try {
+    const ctx = await resolveContext(req, res);
+    if (!ctx) return;
+
+    const result = await openOpeningCount(req.params.locId as string, ctx.orgId, req.user!.sub);
+
+    logger.info(
+      { locationId: req.params.locId, userId: req.user!.sub },
+      "Opening count session created",
+    );
+    res.status(201).json(result);
+  } catch (err) {
+    handleServiceError(err, res, next);
   }
 }

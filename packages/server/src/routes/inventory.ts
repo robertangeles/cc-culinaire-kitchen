@@ -32,6 +32,10 @@ import {
   handleUpdateSupplier,
   handleDeleteSupplier,
   handleGetSupplierLocations,
+  handleBulkActivate,
+  handleBulkDeactivate,
+  handleCopyActivation,
+  handleGetActivationStatus,
 } from "../controllers/ingredientController.js";
 import {
   handleOpenSession,
@@ -48,7 +52,14 @@ import {
   handleGetPendingReviews,
   handleGetOrgDashboard,
   handleGetLocationDashboard,
+  handleOpenOpeningCount,
 } from "../controllers/stockTakeController.js";
+import {
+  handleRequestNewItem,
+  handleListPendingRequests,
+  handleApproveRequest,
+  handleRejectRequest,
+} from "../controllers/catalogRequestController.js";
 
 const router = Router();
 router.use(authenticate);
@@ -109,5 +120,23 @@ router.get("/stock-takes/:id/previous-lines/:cat", requirePermission("inventory:
 
 router.get("/dashboard/org-summary", requirePermission("inventory:hq"), handleGetOrgDashboard);
 router.get("/locations/:locId/dashboard", requirePermission("inventory:count"), handleGetLocationDashboard);
+
+// ─── Location activation ────────────────────────────────────────
+
+router.post("/locations/:locId/activate-items", requirePermission("inventory:manage"), handleBulkActivate);
+router.post("/locations/:locId/deactivate-items", requirePermission("inventory:manage"), handleBulkDeactivate);
+router.post("/locations/:locId/copy-activation", requirePermission("inventory:manage"), handleCopyActivation);
+router.get("/locations/:locId/activation-status", requirePermission("inventory:count"), handleGetActivationStatus);
+
+// ─── Opening inventory ─────────────────────────────────────────
+
+router.post("/locations/:locId/opening-count", requirePermission("inventory:manage"), handleOpenOpeningCount);
+
+// ─── Catalog requests ──────────────────────────────────────────
+
+router.post("/catalog-requests", requirePermission("inventory:count"), handleRequestNewItem);
+router.get("/catalog-requests/pending", requirePermission("inventory:hq"), handleListPendingRequests);
+router.post("/catalog-requests/:id/approve", requirePermission("inventory:hq"), handleApproveRequest);
+router.post("/catalog-requests/:id/reject", requirePermission("inventory:hq"), handleRejectRequest);
 
 export default router;

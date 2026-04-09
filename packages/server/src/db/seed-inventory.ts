@@ -64,6 +64,7 @@ console.log(`Found ${locations.length} location(s): ${locations.map((l) => l.loc
 console.log("\nClearing existing inventory data...");
 
 // Use raw SQL to truncate in FK-safe order (scoped to this org's data)
+await db.execute(sql`DELETE FROM pending_catalog_request WHERE organisation_id = ${orgId}`);
 await db.execute(sql`DELETE FROM ingredient_supplier WHERE ingredient_id IN (SELECT ingredient_id FROM ingredient WHERE organisation_id = ${orgId})`);
 await db.execute(sql`DELETE FROM supplier_location WHERE supplier_id IN (SELECT supplier_id FROM supplier WHERE organisation_id = ${orgId})`);
 await db.execute(sql`DELETE FROM stock_take_line WHERE category_id IN (SELECT category_id FROM stock_take_category WHERE session_id IN (SELECT session_id FROM stock_take_session WHERE store_location_id IN (SELECT store_location_id FROM store_location WHERE organisation_id = ${orgId})))`);
@@ -191,6 +192,8 @@ interface CatalogItem {
   unitCost: string;
   parLevel: string;
   reorderQty: string;
+  itemType?: string;        // defaults to KITCHEN_INGREDIENT
+  fifoApplicable?: string;  // defaults to ALWAYS
   containsDairyInd?: boolean;
   containsGlutenInd?: boolean;
   containsNutsInd?: boolean;
@@ -588,11 +591,12 @@ const catalogItems: CatalogItem[] = [
     stockFractions: [0.85, 0.65],
   },
 
-  // ── Packaging & Supplies ──
+  // ── FOH Consumables — Packaging ──
   {
     ingredientName: "Takeaway Container (750ml)",
     ingredientCategory: "packaging",
     baseUnit: "each",
+    itemType: "FOH_CONSUMABLE", fifoApplicable: "NEVER",
     description: "Compostable sugarcane takeaway container, 750ml. Lid included.",
     unitCost: "0.35", parLevel: "200", reorderQty: "100",
     suppliers: [
@@ -604,23 +608,187 @@ const catalogItems: CatalogItem[] = [
     ingredientName: "Paper Bags (large)",
     ingredientCategory: "packaging",
     baseUnit: "each",
+    itemType: "FOH_CONSUMABLE", fifoApplicable: "NEVER",
     description: "Kraft paper bags, large (380x150x100mm). Branded with Comfort Spoon logo.",
     unitCost: "0.18", parLevel: "300", reorderQty: "150",
     suppliers: [
       { supplierName: "Ecopack Australia", costPerUnit: "0.18", supplierItemCode: "EP-PB100", preferred: true },
     ],
-    stockFractions: [0.55, 0.40], // low at both
+    stockFractions: [0.55, 0.40],
   },
   {
     ingredientName: "Compostable Napkins (pack 500)",
     ingredientCategory: "packaging",
     baseUnit: "each",
+    itemType: "FOH_CONSUMABLE", fifoApplicable: "NEVER",
     description: "Unbleached compostable napkins, 1-ply. Pack of 500.",
     unitCost: "12.00", parLevel: "4", reorderQty: "2",
     suppliers: [
       { supplierName: "Ecopack Australia", costPerUnit: "12.00", supplierItemCode: "EP-CN500", preferred: true },
     ],
     stockFractions: [0.75, 0.50],
+  },
+
+  // ── FOH Consumables — Beverages ──
+  {
+    ingredientName: "Coca-Cola (330ml can)",
+    ingredientCategory: "beverages",
+    baseUnit: "each",
+    itemType: "FOH_CONSUMABLE", fifoApplicable: "PERISHABLE_ONLY",
+    description: "Coca-Cola Classic, 330ml cans. Sold FOH, not for cooking.",
+    unitCost: "1.20", parLevel: "48", reorderQty: "24",
+    suppliers: [
+      { supplierName: "Bidfood Melbourne", costPerUnit: "1.20", supplierItemCode: "BF-60300", preferred: true },
+    ],
+    stockFractions: [0.85, 0.70],
+  },
+  {
+    ingredientName: "Lemonade (330ml can)",
+    ingredientCategory: "beverages",
+    baseUnit: "each",
+    itemType: "FOH_CONSUMABLE", fifoApplicable: "PERISHABLE_ONLY",
+    description: "Schweppes Lemonade, 330ml cans.",
+    unitCost: "1.10", parLevel: "36", reorderQty: "18",
+    suppliers: [
+      { supplierName: "Bidfood Melbourne", costPerUnit: "1.10", supplierItemCode: "BF-60310", preferred: true },
+    ],
+    stockFractions: [0.90, 0.80],
+  },
+  {
+    ingredientName: "Orange Juice (fresh, 2L)",
+    ingredientCategory: "beverages",
+    baseUnit: "each",
+    itemType: "FOH_CONSUMABLE", fifoApplicable: "PERISHABLE_ONLY",
+    description: "Nudie Nothing But Oranges, 2L bottle. Refrigerated.",
+    unitCost: "8.50", parLevel: "6", reorderQty: "3",
+    suppliers: [
+      { supplierName: "Bidfood Melbourne", costPerUnit: "8.50", supplierItemCode: "BF-60320", preferred: true },
+    ],
+    stockFractions: [0.65, 0.50],
+  },
+
+  // ── FOH Consumables — More Packaging ──
+  {
+    ingredientName: "Plastic Cutlery Set (wrapped)",
+    ingredientCategory: "packaging",
+    baseUnit: "each",
+    itemType: "FOH_CONSUMABLE", fifoApplicable: "NEVER",
+    description: "Fork, knife, napkin set. Individually wrapped. Compostable PLA.",
+    unitCost: "0.25", parLevel: "200", reorderQty: "100",
+    suppliers: [
+      { supplierName: "Ecopack Australia", costPerUnit: "0.25", supplierItemCode: "EP-CS100", preferred: true },
+    ],
+    stockFractions: [0.70, 0.60],
+  },
+  {
+    ingredientName: "Coffee Cup (8oz, double wall)",
+    ingredientCategory: "packaging",
+    baseUnit: "each",
+    itemType: "FOH_CONSUMABLE", fifoApplicable: "NEVER",
+    description: "Double-wall takeaway coffee cup, 8oz. Branded. Lids sold separately.",
+    unitCost: "0.15", parLevel: "300", reorderQty: "150",
+    suppliers: [
+      { supplierName: "Ecopack Australia", costPerUnit: "0.15", supplierItemCode: "EP-CC800", preferred: true },
+    ],
+    stockFractions: [0.45, 0.35],
+  },
+  {
+    ingredientName: "Coffee Cup Lids (8oz)",
+    ingredientCategory: "packaging",
+    baseUnit: "each",
+    itemType: "FOH_CONSUMABLE", fifoApplicable: "NEVER",
+    description: "Sip-through lids for 8oz cups. Compostable.",
+    unitCost: "0.05", parLevel: "300", reorderQty: "150",
+    suppliers: [
+      { supplierName: "Ecopack Australia", costPerUnit: "0.05", supplierItemCode: "EP-CL800", preferred: true },
+    ],
+    stockFractions: [0.50, 0.40],
+  },
+  {
+    ingredientName: "Paper Straws (pack 250)",
+    ingredientCategory: "packaging",
+    baseUnit: "each",
+    itemType: "FOH_CONSUMABLE", fifoApplicable: "NEVER",
+    description: "Plain white paper straws, 6mm x 200mm. Pack of 250.",
+    unitCost: "5.50", parLevel: "4", reorderQty: "2",
+    suppliers: [
+      { supplierName: "Ecopack Australia", costPerUnit: "5.50", supplierItemCode: "EP-PS250", preferred: true },
+    ],
+    stockFractions: [0.75, 0.60],
+  },
+
+  // ── Operational Supplies ──
+  {
+    ingredientName: "All-Purpose Cleaner (5L)",
+    ingredientCategory: "cleaning",
+    baseUnit: "each",
+    itemType: "OPERATIONAL_SUPPLY", fifoApplicable: "NEVER",
+    description: "Ecostore multi-surface cleaner, 5L refill. Commercial grade.",
+    unitCost: "18.00", parLevel: "3", reorderQty: "2",
+    suppliers: [
+      { supplierName: "Ecopack Australia", costPerUnit: "18.00", supplierItemCode: "EP-CL100", preferred: true },
+    ],
+    stockFractions: [0.65, 0.80],
+  },
+  {
+    ingredientName: "Commercial Dish Soap (5L)",
+    ingredientCategory: "cleaning",
+    baseUnit: "each",
+    itemType: "OPERATIONAL_SUPPLY", fifoApplicable: "NEVER",
+    description: "Sunlight commercial dishwashing liquid, 5L. Concentrated.",
+    unitCost: "14.50", parLevel: "3", reorderQty: "2",
+    suppliers: [
+      { supplierName: "Ecopack Australia", costPerUnit: "14.50", supplierItemCode: "EP-DS500", preferred: true },
+    ],
+    stockFractions: [0.70, 0.55],
+  },
+  {
+    ingredientName: "Hand Sanitiser (500ml pump)",
+    ingredientCategory: "cleaning",
+    baseUnit: "each",
+    itemType: "OPERATIONAL_SUPPLY", fifoApplicable: "NEVER",
+    description: "Dettol Pro Solutions hand sanitiser, 500ml pump bottle.",
+    unitCost: "8.50", parLevel: "6", reorderQty: "3",
+    suppliers: [
+      { supplierName: "Ecopack Australia", costPerUnit: "8.50", supplierItemCode: "EP-HS500", preferred: true },
+    ],
+    stockFractions: [0.80, 0.75],
+  },
+  {
+    ingredientName: "Bin Liners (80L, roll of 50)",
+    ingredientCategory: "cleaning",
+    baseUnit: "each",
+    itemType: "OPERATIONAL_SUPPLY", fifoApplicable: "NEVER",
+    description: "Heavy-duty 80L bin liners, black. Roll of 50.",
+    unitCost: "12.00", parLevel: "4", reorderQty: "2",
+    suppliers: [
+      { supplierName: "Ecopack Australia", costPerUnit: "12.00", supplierItemCode: "EP-BL800", preferred: true },
+    ],
+    stockFractions: [0.50, 0.35],
+  },
+  {
+    ingredientName: "POS Thermal Rolls (pack 10)",
+    ingredientCategory: "admin",
+    baseUnit: "each",
+    itemType: "OPERATIONAL_SUPPLY", fifoApplicable: "NEVER",
+    description: "80mm x 80m thermal receipt rolls. Compatible with Epson TM-T88. Pack of 10.",
+    unitCost: "22.00", parLevel: "2", reorderQty: "1",
+    suppliers: [
+      { supplierName: "Ecopack Australia", costPerUnit: "22.00", supplierItemCode: "EP-TR100", preferred: true },
+    ],
+    stockFractions: [0.50, 0.50],
+  },
+  {
+    ingredientName: "Printer Paper A4 (ream 500)",
+    ingredientCategory: "admin",
+    baseUnit: "each",
+    itemType: "OPERATIONAL_SUPPLY", fifoApplicable: "NEVER",
+    description: "Reflex Ultra White A4, 80gsm. Ream of 500 sheets.",
+    unitCost: "7.50", parLevel: "3", reorderQty: "2",
+    suppliers: [
+      { supplierName: "Ecopack Australia", costPerUnit: "7.50", supplierItemCode: "EP-PP500", preferred: true },
+    ],
+    stockFractions: [0.65, 0.70],
   },
 ];
 
@@ -640,6 +808,8 @@ for (const item of catalogItems) {
       unitCost: item.unitCost,
       parLevel: item.parLevel,
       reorderQty: item.reorderQty,
+      itemType: item.itemType ?? "KITCHEN_INGREDIENT",
+      fifoApplicable: item.fifoApplicable ?? "ALWAYS",
       containsDairyInd: item.containsDairyInd ?? false,
       containsGlutenInd: item.containsGlutenInd ?? false,
       containsNutsInd: item.containsNutsInd ?? false,

@@ -1,12 +1,11 @@
 /**
  * @module components/inventory/IngredientCatalog
  *
- * Compact table-based ingredient catalog. Click a row to expand
- * inline detail with cross-location stock. Edit opens a modal
- * dialog with all fields + read-only cross-location stock table.
+ * Category sidebar + item table layout. Select a category on the left,
+ * view items on the right. Click a row to open the edit modal.
  */
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
   useIngredients,
   useSuppliers,
@@ -25,19 +24,7 @@ import {
   DollarSign, ChevronDown, ChevronRight, Package, Truck,
   AlertTriangle, Star, Trash2,
 } from "lucide-react";
-
-const CATEGORIES = [
-  { key: "proteins", label: "Proteins" },
-  { key: "produce", label: "Produce" },
-  { key: "dairy", label: "Dairy" },
-  { key: "dry_goods", label: "Dry Goods" },
-  { key: "beverages", label: "Beverages" },
-  { key: "spirits", label: "Spirits" },
-  { key: "frozen", label: "Frozen" },
-  { key: "bakery", label: "Bakery" },
-  { key: "condiments", label: "Condiments" },
-  { key: "other", label: "Other" },
-];
+import { CATEGORIES, CATEGORY_LABELS, ITEM_TYPES, ITEM_TYPE_KEYS, FIFO_MODES, FIFO_DEFAULTS, getItemTypeStyle, getCategoriesForType, type ItemTypeKey, type FifoModeKey } from "@culinaire/shared";
 
 const UNITS = ["kg", "g", "L", "mL", "each", "case", "dozen", "bunch", "bottle", "can", "bag", "box"];
 
@@ -72,9 +59,10 @@ export function IngredientCatalog() {
   const { selectedLocationId } = useLocation();
   const { items: locItems } = useLocationIngredients(selectedLocationId);
   const [search, setSearch] = useState("");
-  const [filterCat, setFilterCat] = useState<string | null>(null);
+  const [typeFilter, setTypeFilter] = useState<string>("all");
   const [allergenFilter, setAllergenFilter] = useState<AllergenKey | null>(null);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<string>("");
+  const [selectedCategory, setSelectedCategory] = useState<string>("proteins");
   const [editIngredient, setEditIngredient] = useState<Ingredient | null>(null);
   const [showAdd, setShowAdd] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -82,52 +70,108 @@ export function IngredientCatalog() {
   const locMap = new Map<string, LocationIngredient>();
   for (const item of locItems) locMap.set(item.ingredientId, item);
 
-  const filtered = ingredients.filter((i) => {
-    if (filterCat && i.ingredientCategory !== filterCat) return false;
-    if (search && !i.ingredientName.toLowerCase().includes(search.toLowerCase())) return false;
-    if (allergenFilter && !i[allergenFilter]) return false;
-    return true;
-  });
+  const availableCategories = typeFilter !== "all"
+    ? getCategoriesForType(typeFilter as ItemTypeKey)
+    : [...CATEGORIES];
 
-  const grouped = new Map<string, Ingredient[]>();
-  for (const ing of filtered) {
-    if (!grouped.has(ing.ingredientCategory)) grouped.set(ing.ingredientCategory, []);
-    grouped.get(ing.ingredientCategory)!.push(ing);
-  }
+  // Items filtered by type + search + allergen + status (but NOT category)
+  const typeFiltered = useMemo(() => {
+    return (ingredients || []).filter((i) => {
+      if (typeFilter !== "all" && i.itemType !== typeFilter) return false;
+      if (allergenFilter && !i[allergenFilter]) return false;
+      if (search && !i.ingredientName.toLowerCase().includes(search.toLowerCase())) return false;
+      if (statusFilter) {
+        const loc = locMap.get(i.ingredientId);
+        const qty = Number(loc?.currentQty || 0);
+        const par = Number(loc?.parLevel || i.parLevel || 0);
+        const ratio = par > 0 ? qty / par : 1;
+        if (statusFilter === "low" && ratio > 0.75) return false;
+        if (statusFilter === "critical" && ratio > 0.25) return false;
+      }
+      return true;
+    });
+  }, [ingredients, typeFilter, allergenFilter, search, statusFilter, locMap]);
+
+  // Count items per category (respecting type filter but not category)
+  const categoryCounts = useMemo(() => {
+    const counts: Record<string, { total: number; low: number; critical: number }> = {};
+    for (const item of typeFiltered) {
+      const cat = item.ingredientCategory;
+      if (!counts[cat]) counts[cat] = { total: 0, low: 0, critical: 0 };
+      counts[cat].total++;
+      const loc = locMap.get(item.ingredientId);
+      const qty = Number(loc?.currentQty || 0);
+      const par = Number(loc?.parLevel || item.parLevel || 0);
+      if (par > 0) {
+        const ratio = qty / par;
+        if (ratio <= 0.25) counts[cat].critical++;
+        else if (ratio <= 0.75) counts[cat].low++;
+      }
+    }
+    return counts;
+  }, [typeFiltered, locMap]);
+
+  // Items filtered by everything including selected category
+  const filtered = useMemo(() => {
+    return typeFiltered.filter((i) => {
+      if (selectedCategory && i.ingredientCategory !== selectedCategory) return false;
+      return true;
+    });
+  }, [typeFiltered, selectedCategory]);
+
+  // Auto-select first available category when type filter changes
+  const handleTypeFilterChange = (newType: string) => {
+    setTypeFilter(newType);
+    const cats = newType !== "all" ? getCategoriesForType(newType as ItemTypeKey) : [...CATEGORIES];
+    if (cats.length > 0 && !cats.some((c) => c.key === selectedCategory)) {
+      setSelectedCategory(cats[0].key);
+    }
+  };
 
   return (
-    <div className="space-y-4 animate-[fadeInUp_200ms_ease-out]">
+    <div className="space-y-3 animate-[fadeInUp_200ms_ease-out]">
       {/* Toolbar */}
-      <div className="flex flex-col sm:flex-row gap-2">
-        <div className="relative flex-1">
+      <div className="flex items-center gap-3">
+        <div className="relative flex-1 max-w-xs">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-[#666]" />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search ingredients..."
-            className="w-full pl-10 pr-4 py-2 rounded-xl bg-[#161616] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none focus:border-[#D4A574]/50 transition-all"
+            placeholder="Search items..."
+            className="w-full pl-10 pr-4 py-1.5 rounded-lg bg-[#161616] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none focus:border-[#D4A574]/50 transition-all"
           />
         </div>
         <select
-          value={filterCat || ""}
-          onChange={(e) => setFilterCat(e.target.value || null)}
-          className="px-3 py-2 rounded-xl bg-[#161616] border border-[#2A2A2A] text-sm text-white appearance-none cursor-pointer focus:outline-none"
+          value={typeFilter}
+          onChange={(e) => handleTypeFilterChange(e.target.value)}
+          className="px-3 py-1.5 rounded-lg bg-[#161616] border border-[#2A2A2A] text-sm text-white appearance-none cursor-pointer focus:outline-none"
         >
-          <option value="">All Categories</option>
-          {CATEGORIES.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
+          <option value="all">All Types</option>
+          <option value="KITCHEN_INGREDIENT">Kitchen</option>
+          <option value="FOH_CONSUMABLE">FOH</option>
+          <option value="OPERATIONAL_SUPPLY">Operational</option>
+        </select>
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          className="px-3 py-1.5 rounded-lg bg-[#161616] border border-[#2A2A2A] text-sm text-white appearance-none cursor-pointer focus:outline-none"
+        >
+          <option value="">All Status</option>
+          <option value="low">Low</option>
+          <option value="critical">Critical</option>
         </select>
         <select
           value={allergenFilter || ""}
           onChange={(e) => setAllergenFilter((e.target.value || null) as AllergenKey | null)}
-          className="px-3 py-2 rounded-xl bg-[#161616] border border-[#2A2A2A] text-sm text-white appearance-none cursor-pointer focus:outline-none"
+          className="px-3 py-1.5 rounded-lg bg-[#161616] border border-[#2A2A2A] text-sm text-white appearance-none cursor-pointer focus:outline-none"
         >
           <option value="">Allergens</option>
           {ALLERGEN_DEFS.map((a) => <option key={a.key} value={a.key}>{a.label}</option>)}
         </select>
         <button
           onClick={() => { setShowAdd(true); setError(null); }}
-          className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-[#D4A574] to-[#C4956A] text-[#0A0A0A] text-sm font-semibold hover:shadow-[0_0_12px_rgba(212,165,116,0.2)] transition-all active:scale-[0.98]"
+          className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-gradient-to-r from-[#D4A574] to-[#C4956A] text-[#0A0A0A] text-sm font-semibold hover:shadow-[0_0_12px_rgba(212,165,116,0.2)] transition-all active:scale-[0.98]"
         >
           <Plus className="size-4" />
           Add
@@ -152,92 +196,103 @@ export function IngredientCatalog() {
         </div>
       )}
 
-      {!isLoading && filtered.length === 0 && (
-        <div className="text-center py-12 rounded-xl bg-[#161616] border border-[#2A2A2A]">
-          <Utensils className="size-8 mx-auto text-[#D4A574] mb-3" />
-          <p className="text-sm text-white font-medium mb-1">
-            {search ? "No matching ingredients" : "No ingredients yet"}
-          </p>
-          <p className="text-xs text-[#999]">
-            {search ? "Try a different search." : "Add your first ingredient."}
-          </p>
-        </div>
-      )}
+      {/* Two-column layout: sidebar + table */}
+      {!isLoading && (
+        <div className="flex rounded-xl border border-[#1E1E1E] overflow-hidden max-h-[calc(100vh-280px)]">
+          {/* Category sidebar */}
+          <div className="flex-shrink-0 w-52 bg-[#0A0A0A] border-r border-[#1E1E1E] overflow-y-auto">
+            {availableCategories.map((cat) => {
+              const counts = categoryCounts[cat.key];
+              const total = counts?.total || 0;
+              const hasCritical = (counts?.critical || 0) > 0;
+              const hasLow = (counts?.low || 0) > 0;
+              const isActive = selectedCategory === cat.key;
 
-      {/* Grouped tables */}
-      {!isLoading && Array.from(grouped.entries()).map(([cat, items]) => (
-        <div key={cat} className="rounded-xl border border-[#2A2A2A] overflow-hidden">
-          {/* Category header */}
-          <div className="px-4 py-2 bg-[#161616] border-b border-[#2A2A2A]">
-            <span className="text-[10px] font-semibold text-[#999] uppercase tracking-wider">
-              {CATEGORIES.find((c) => c.key === cat)?.label || cat}
-            </span>
-            <span className="text-[10px] text-[#666] ml-2">{items.length}</span>
-          </div>
-
-          {/* Table header */}
-          <div className="hidden sm:grid grid-cols-12 gap-1 px-4 py-1.5 text-[10px] text-[#666] uppercase tracking-wider border-b border-[#2A2A2A]/50">
-            <div className="col-span-4">Name</div>
-            <div className="col-span-1">UOM</div>
-            <div className="col-span-2 text-right">Cost</div>
-            <div className="col-span-2 text-right">Stock</div>
-            <div className="col-span-1 text-right">Par</div>
-            <div className="col-span-2 text-right">Status</div>
-          </div>
-
-          {/* Rows */}
-          {items.map((ing) => {
-            const loc = locMap.get(ing.ingredientId);
-            const status = getStockStatus(loc);
-            const sl = STATUS_LABEL[status];
-            const isExpanded = expandedId === ing.ingredientId;
-            const cost = loc?.locationUnitCost || ing.unitCost;
-
-            return (
-              <div key={ing.ingredientId}>
-                {/* Compact row */}
+              return (
                 <button
-                  onClick={() => setExpandedId(isExpanded ? null : ing.ingredientId)}
-                  className="w-full grid grid-cols-12 gap-1 px-4 py-2 text-sm hover:bg-[#1E1E1E]/50 transition-colors text-left items-center"
+                  key={cat.key}
+                  onClick={() => setSelectedCategory(cat.key)}
+                  className={`w-full flex items-center justify-between px-3 py-2 text-left text-sm transition-colors ${
+                    isActive
+                      ? "bg-[#1E1E1E] text-white border-l-2 border-[#D4A574]"
+                      : "text-[#888] hover:text-white hover:bg-[#161616] border-l-2 border-transparent"
+                  }`}
                 >
-                  <div className="col-span-4 sm:col-span-4 flex items-center gap-1.5 truncate">
-                    {isExpanded
-                      ? <ChevronDown className="size-3 text-[#666] shrink-0" />
-                      : <ChevronRight className="size-3 text-[#666] shrink-0" />
-                    }
-                    <span className="text-white truncate">{ing.ingredientName}</span>
-                  </div>
-                  <div className="col-span-1 text-[#666] hidden sm:block">{ing.baseUnit}</div>
-                  <div className="col-span-2 text-right text-[#999] tabular-nums hidden sm:block">
+                  <span className="truncate">{cat.label}</span>
+                  <span className="flex items-center gap-1.5 shrink-0 ml-2">
+                    {hasCritical && <span className="size-1.5 rounded-full bg-red-400" />}
+                    {!hasCritical && hasLow && <span className="size-1.5 rounded-full bg-amber-400" />}
+                    <span className={`text-xs tabular-nums ${isActive ? "text-[#999]" : "text-[#555]"}`}>
+                      {total}
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Item table */}
+          <div className="flex-1 min-w-0 bg-[#111] overflow-y-auto">
+            {/* Table header */}
+            <div className="sticky top-0 z-10 grid grid-cols-12 gap-1 px-4 py-1.5 text-[10px] text-[#666] uppercase tracking-wider border-b border-[#1E1E1E] bg-[#111]">
+              <div className="col-span-4">Name</div>
+              <div className="col-span-1">UOM</div>
+              <div className="col-span-2 text-right">Cost</div>
+              <div className="col-span-2 text-right">Stock</div>
+              <div className="col-span-1 text-right">Par</div>
+              <div className="col-span-2 text-right">Status</div>
+            </div>
+
+            {filtered.length === 0 && (
+              <div className="text-center py-12">
+                <Utensils className="size-8 mx-auto text-[#D4A574] mb-3" />
+                <p className="text-sm text-white font-medium mb-1">
+                  {search ? "No matching items" : "No items in this category"}
+                </p>
+                <p className="text-xs text-[#999]">
+                  {search ? "Try a different search." : "Add your first item."}
+                </p>
+              </div>
+            )}
+
+            {/* Rows */}
+            {filtered.map((ing) => {
+              const loc = locMap.get(ing.ingredientId);
+              const status = getStockStatus(loc);
+              const sl = STATUS_LABEL[status];
+              const cost = loc?.locationUnitCost || ing.unitCost;
+              const qty = loc?.currentQty ? Number(loc.currentQty) : null;
+              const par = loc?.parLevel ? Number(loc.parLevel) : ing.parLevel ? Number(ing.parLevel) : null;
+              const isLowStock = qty !== null && par !== null && par > 0 && qty / par <= 0.75;
+
+              return (
+                <button
+                  key={ing.ingredientId}
+                  onClick={() => setEditIngredient(ing)}
+                  className="w-full grid grid-cols-12 gap-1 px-4 py-1.5 text-sm hover:bg-[#1A1A1A] cursor-pointer transition-colors text-left items-center"
+                >
+                  <div className="col-span-4 text-white truncate">{ing.ingredientName}</div>
+                  <div className="col-span-1 text-[#666]">{ing.baseUnit}</div>
+                  <div className="col-span-2 text-right text-[#999] tabular-nums">
                     {cost ? `$${Number(cost).toFixed(2)}` : "—"}
                   </div>
-                  <div className="col-span-2 text-right text-white font-medium tabular-nums">
-                    {loc?.currentQty ? Number(loc.currentQty).toFixed(1) : "—"}
+                  <div className={`col-span-2 text-right font-medium tabular-nums ${isLowStock ? "text-amber-400" : "text-white"}`}>
+                    {qty !== null ? qty.toFixed(1) : "—"}
                   </div>
-                  <div className="col-span-1 text-right text-[#666] tabular-nums hidden sm:block">
-                    {loc?.parLevel ? Number(loc.parLevel).toFixed(0) : ing.parLevel ? Number(ing.parLevel).toFixed(0) : "—"}
+                  <div className="col-span-1 text-right text-[#666] tabular-nums">
+                    {par !== null ? par.toFixed(0) : "—"}
                   </div>
                   <div className={`col-span-2 text-right text-xs font-medium ${sl.className}`}>
                     {sl.text}
                   </div>
                 </button>
-
-                {/* Expanded detail */}
-                {isExpanded && (
-                  <ExpandedDetail
-                    ingredient={ing}
-                    locData={loc}
-                    onEdit={() => setEditIngredient(ing)}
-                    onClose={() => setExpandedId(null)}
-                  />
-                )}
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
-      ))}
+      )}
 
-      <p className="text-xs text-[#666] text-center">{filtered.length} ingredients</p>
+      <p className="text-xs text-[#666] text-center">{filtered.length} items</p>
 
       {/* Edit modal */}
       {editIngredient && (
@@ -259,102 +314,6 @@ export function IngredientCatalog() {
   );
 }
 
-// ─── Expanded Detail ─────────────────────────────────────────────
-
-function ExpandedDetail({
-  ingredient, locData, onEdit, onClose,
-}: {
-  ingredient: Ingredient;
-  locData?: LocationIngredient;
-  onEdit: () => void;
-  onClose: () => void;
-}) {
-  const { levels, isLoading } = useIngredientStock(ingredient.ingredientId);
-  const allergens = ALLERGEN_DEFS.filter((a) => ingredient[a.key]);
-
-  return (
-    <div className="px-4 py-3 bg-[#0A0A0A]/50 border-t border-[#2A2A2A]/30 animate-[fadeIn_150ms_ease-out]">
-      {/* Description + allergens */}
-      <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
-        <div className="min-w-0">
-          {ingredient.description && (
-            <p className="text-xs text-[#999] mb-1.5">{ingredient.description}</p>
-          )}
-          {allergens.length > 0 && (
-            <div className="flex flex-wrap gap-1">
-              {allergens.map((a) => (
-                <span key={a.key} className={`px-1.5 py-0.5 rounded text-[10px] font-medium border ${a.color}`}>
-                  {a.label}
-                </span>
-              ))}
-            </div>
-          )}
-          {locData?.supplierName && (
-            <div className="flex items-center gap-1 text-xs text-[#666] mt-1.5">
-              <Truck className="size-3" />
-              {locData.supplierName}
-            </div>
-          )}
-        </div>
-        <div className="flex gap-2 shrink-0">
-          <button
-            onClick={onEdit}
-            className="px-3 py-1 rounded-lg bg-[#D4A574]/10 text-[#D4A574] text-xs font-medium hover:bg-[#D4A574]/20 transition-colors"
-          >
-            Edit
-          </button>
-        </div>
-      </div>
-
-      {/* Cross-location stock table */}
-      <div className="rounded-lg border border-[#2A2A2A] overflow-hidden">
-        <div className="px-3 py-1.5 bg-[#161616] text-[10px] text-[#999] uppercase tracking-wider font-semibold">
-          Stock Across Locations
-        </div>
-        {isLoading ? (
-          <div className="flex justify-center py-4">
-            <Loader2 className="size-4 text-[#D4A574] animate-spin" />
-          </div>
-        ) : (
-          <div className="divide-y divide-[#2A2A2A]/30">
-            <div className="hidden sm:grid grid-cols-5 gap-1 px-3 py-1 text-[10px] text-[#666] uppercase tracking-wider">
-              <div className="col-span-2">Location</div>
-              <div className="text-right">Stock</div>
-              <div className="text-right">Par</div>
-              <div className="text-right">Status</div>
-            </div>
-            {levels.map((l) => {
-              const qty = Number(l.currentQty || 0);
-              const par = Number(l.parLevel || 0);
-              let status: "healthy" | "low" | "critical" | "none" = "none";
-              if (l.currentQty && l.parLevel) {
-                const ratio = qty / par;
-                status = ratio <= 0.25 ? "critical" : ratio <= 0.75 ? "low" : "healthy";
-              }
-              const sl = STATUS_LABEL[status];
-              return (
-                <div key={l.storeLocationId} className="grid grid-cols-5 gap-1 px-3 py-1.5 text-xs">
-                  <div className="col-span-2 text-white truncate">{l.locationName}</div>
-                  <div className="text-right text-white tabular-nums">
-                    {l.currentQty ? `${qty.toFixed(1)}` : "—"}
-                  </div>
-                  <div className="text-right text-[#666] tabular-nums">
-                    {par > 0 ? par.toFixed(0) : "—"}
-                  </div>
-                  <div className={`text-right font-medium ${sl.className}`}>{sl.text}</div>
-                </div>
-              );
-            })}
-            {levels.length === 0 && (
-              <p className="text-xs text-[#666] text-center py-3">No stock data</p>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
 // ─── Edit Modal ──────────────────────────────────────────────────
 
 function EditIngredientModal({
@@ -372,12 +331,15 @@ function EditIngredientModal({
   const [newSupCost, setNewSupCost] = useState("");
   const [newSupSku, setNewSupSku] = useState("");
   const [name, setName] = useState(ingredient.ingredientName);
+  const [editItemType, setEditItemType] = useState<ItemTypeKey>((ingredient.itemType as ItemTypeKey) || "KITCHEN_INGREDIENT");
+  const [editFifo, setEditFifo] = useState<FifoModeKey>((ingredient.fifoApplicable as FifoModeKey) || FIFO_DEFAULTS[(ingredient.itemType as ItemTypeKey) || "KITCHEN_INGREDIENT"]);
   const [cat, setCat] = useState(ingredient.ingredientCategory);
   const [unit, setUnit] = useState(ingredient.baseUnit);
   const [desc, setDesc] = useState(ingredient.description || "");
   const [cost, setCost] = useState(ingredient.unitCost || "");
   const [par, setPar] = useState(ingredient.parLevel || "");
   const [reorder, setReorder] = useState(ingredient.reorderQty || "");
+  const editModalCategories = getCategoriesForType(editItemType);
   const [allergens, setAllergens] = useState<Set<AllergenKey>>(
     new Set(ALLERGEN_DEFS.filter((a) => ingredient[a.key]).map((a) => a.key)),
   );
@@ -408,13 +370,54 @@ function EditIngredientModal({
         <div className="space-y-3">
           <input
             type="text" value={name} onChange={(e) => setName(e.target.value)}
-            placeholder="Ingredient name" autoFocus
+            placeholder="Item name" autoFocus
             className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white focus:outline-none focus:border-[#D4A574]/50"
           />
+
+          {/* Item type selector */}
+          <div>
+            <p className="text-[10px] text-[#666] uppercase tracking-wider mb-1.5">Item Type</p>
+            <div className="flex gap-2">
+              {ITEM_TYPE_KEYS.map((tk) => {
+                const its = ITEM_TYPES[tk];
+                return (
+                  <button key={tk} type="button"
+                    onClick={() => {
+                      setEditItemType(tk);
+                      setEditFifo(FIFO_DEFAULTS[tk]);
+                      const validCats = getCategoriesForType(tk);
+                      if (!validCats.some((c) => c.key === cat)) {
+                        setCat(validCats[0]?.key || "other");
+                      }
+                    }}
+                    className={`flex-1 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+                      editItemType === tk
+                        ? `${its.bgClass} ${its.textClass} ${its.borderClass}`
+                        : "bg-[#0A0A0A] text-[#666] border-[#2A2A2A] hover:border-[#3A3A3A]"
+                    }`}
+                  >
+                    {its.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* FIFO mode */}
+          <div>
+            <p className="text-[10px] text-[#666] uppercase tracking-wider mb-1.5">FIFO Mode</p>
+            <select value={editFifo} onChange={(e) => setEditFifo(e.target.value as FifoModeKey)}
+              className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white focus:outline-none">
+              {(Object.keys(FIFO_MODES) as FifoModeKey[]).map((fk) => (
+                <option key={fk} value={fk}>{FIFO_MODES[fk].label} — {FIFO_MODES[fk].description}</option>
+              ))}
+            </select>
+          </div>
+
           <div className="grid grid-cols-3 gap-2">
             <select value={cat} onChange={(e) => setCat(e.target.value)}
               className="px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white focus:outline-none">
-              {CATEGORIES.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
+              {editModalCategories.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
             </select>
             <select value={unit} onChange={(e) => setUnit(e.target.value)}
               className="px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white focus:outline-none">
@@ -589,6 +592,8 @@ function EditIngredientModal({
                 unitCost: cost || null,
                 parLevel: par || null,
                 reorderQty: reorder || null,
+                itemType: editItemType,
+                fifoApplicable: editFifo,
                 containsDairyInd: allergens.has("containsDairyInd"),
                 containsGlutenInd: allergens.has("containsGlutenInd"),
                 containsNutsInd: allergens.has("containsNutsInd"),
@@ -620,6 +625,8 @@ function AddIngredientForm({
   onCancel: () => void;
 }) {
   const [name, setName] = useState("");
+  const [itemType, setItemType] = useState<ItemTypeKey>("KITCHEN_INGREDIENT");
+  const [fifo, setFifo] = useState<FifoModeKey>(FIFO_DEFAULTS.KITCHEN_INGREDIENT);
   const [category, setCategory] = useState("proteins");
   const [unit, setUnit] = useState("kg");
   const [description, setDescription] = useState("");
@@ -628,6 +635,8 @@ function AddIngredientForm({
   const [reorder, setReorder] = useState("");
   const [allergens, setAllergens] = useState<Set<AllergenKey>>(new Set());
   const [saving, setSaving] = useState(false);
+
+  const addFormCategories = getCategoriesForType(itemType);
 
   const toggleAllergen = (key: AllergenKey) => {
     const next = new Set(allergens);
@@ -640,12 +649,53 @@ function AddIngredientForm({
       <h4 className="text-sm font-semibold text-white mb-3">New Ingredient</h4>
       <div className="space-y-3">
         <input type="text" value={name} onChange={(e) => setName(e.target.value)}
-          placeholder="Ingredient name" autoFocus
+          placeholder="Item name" autoFocus
           className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none focus:border-[#D4A574]/50" />
+
+        {/* Item type selector */}
+        <div>
+          <p className="text-[10px] text-[#666] uppercase tracking-wider mb-1.5">Item Type</p>
+          <div className="flex gap-2">
+            {ITEM_TYPE_KEYS.map((tk) => {
+              const its = ITEM_TYPES[tk];
+              return (
+                <button key={tk} type="button"
+                  onClick={() => {
+                    setItemType(tk);
+                    setFifo(FIFO_DEFAULTS[tk]);
+                    const validCats = getCategoriesForType(tk);
+                    if (!validCats.some((c) => c.key === category)) {
+                      setCategory(validCats[0]?.key || "other");
+                    }
+                  }}
+                  className={`flex-1 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+                    itemType === tk
+                      ? `${its.bgClass} ${its.textClass} ${its.borderClass}`
+                      : "bg-[#0A0A0A] text-[#666] border-[#2A2A2A] hover:border-[#3A3A3A]"
+                  }`}
+                >
+                  {its.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* FIFO mode */}
+        <div>
+          <p className="text-[10px] text-[#666] uppercase tracking-wider mb-1.5">FIFO Mode</p>
+          <select value={fifo} onChange={(e) => setFifo(e.target.value as FifoModeKey)}
+            className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white focus:outline-none">
+            {(Object.keys(FIFO_MODES) as FifoModeKey[]).map((fk) => (
+              <option key={fk} value={fk}>{FIFO_MODES[fk].label} — {FIFO_MODES[fk].description}</option>
+            ))}
+          </select>
+        </div>
+
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
           <select value={category} onChange={(e) => setCategory(e.target.value)}
             className="px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white focus:outline-none">
-            {CATEGORIES.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
+            {addFormCategories.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
           </select>
           <select value={unit} onChange={(e) => setUnit(e.target.value)}
             className="px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white focus:outline-none">
@@ -693,6 +743,7 @@ function AddIngredientForm({
               ingredientName: name, ingredientCategory: category, baseUnit: unit,
               description: description || undefined, unitCost: cost || undefined,
               parLevel: par || undefined, reorderQty: reorder || undefined,
+              itemType: itemType, fifoApplicable: fifo,
               containsDairyInd: allergens.has("containsDairyInd"),
               containsGlutenInd: allergens.has("containsGlutenInd"),
               containsNutsInd: allergens.has("containsNutsInd"),

@@ -30,6 +30,10 @@ import {
   listIngredientSuppliers,
   updateIngredientSupplier,
   removeIngredientSupplier,
+  bulkActivateItems,
+  bulkDeactivateItems,
+  copyActivationFromLocation,
+  getActivationStatus,
 } from "../services/ingredientService.js";
 import { invalidateConversionCache } from "../services/unitConversionService.js";
 
@@ -197,8 +201,9 @@ export async function handleListIngredients(
 
     const category = req.query.category as string | undefined;
     const search = req.query.search as string | undefined;
+    const itemType = req.query.itemType as string | undefined;
 
-    const rows = await listIngredients(orgId, { category, search });
+    const rows = await listIngredients(orgId, { category, search, itemType });
     res.json(rows);
   } catch (err) {
     next(err);
@@ -546,6 +551,94 @@ export async function handleGetSupplierLocations(
   try {
     const rows = await getSupplierLocations(req.params.id as string);
     res.json(rows);
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ─── Location activation (bulk) ─────────────────────────────────
+
+/** POST /locations/:locId/activate-items */
+export async function handleBulkActivate(
+  req: Request, res: Response, next: NextFunction,
+): Promise<void> {
+  try {
+    const orgId = await resolveOrgId(req, res);
+    if (orgId === null) return;
+
+    const { ingredientIds } = req.body;
+    if (!Array.isArray(ingredientIds) || !ingredientIds.length) {
+      res.status(400).json({ error: "ingredientIds array is required" });
+      return;
+    }
+
+    const result = await bulkActivateItems(req.params.locId as string, ingredientIds, orgId);
+    res.json(result);
+  } catch (err: any) {
+    if (err.message?.includes("not found in organisation")) {
+      res.status(400).json({ error: err.message });
+      return;
+    }
+    next(err);
+  }
+}
+
+/** POST /locations/:locId/deactivate-items */
+export async function handleBulkDeactivate(
+  req: Request, res: Response, next: NextFunction,
+): Promise<void> {
+  try {
+    const orgId = await resolveOrgId(req, res);
+    if (orgId === null) return;
+
+    const { ingredientIds } = req.body;
+    if (!Array.isArray(ingredientIds) || !ingredientIds.length) {
+      res.status(400).json({ error: "ingredientIds array is required" });
+      return;
+    }
+
+    const result = await bulkDeactivateItems(req.params.locId as string, ingredientIds, orgId);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/** POST /locations/:locId/copy-activation */
+export async function handleCopyActivation(
+  req: Request, res: Response, next: NextFunction,
+): Promise<void> {
+  try {
+    const orgId = await resolveOrgId(req, res);
+    if (orgId === null) return;
+
+    const { sourceLocationId } = req.body;
+    if (!sourceLocationId) {
+      res.status(400).json({ error: "sourceLocationId is required" });
+      return;
+    }
+
+    const result = await copyActivationFromLocation(sourceLocationId, req.params.locId as string, orgId);
+    res.json(result);
+  } catch (err: any) {
+    if (err.message?.includes("no activated items")) {
+      res.status(400).json({ error: err.message });
+      return;
+    }
+    next(err);
+  }
+}
+
+/** GET /locations/:locId/activation-status */
+export async function handleGetActivationStatus(
+  req: Request, res: Response, next: NextFunction,
+): Promise<void> {
+  try {
+    const orgId = await resolveOrgId(req, res);
+    if (orgId === null) return;
+
+    const result = await getActivationStatus(req.params.locId as string, orgId);
+    res.json(result);
   } catch (err) {
     next(err);
   }

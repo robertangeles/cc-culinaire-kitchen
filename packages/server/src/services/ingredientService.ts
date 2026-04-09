@@ -5,7 +5,7 @@
  * per-location ingredient configuration (par levels, unit overrides).
  */
 
-import { eq, and, ilike, ne, sql, count } from "drizzle-orm";
+import { eq, and, ilike, ne, sql, count, inArray } from "drizzle-orm";
 import { db } from "../db/index.js";
 import {
   ingredient,
@@ -16,6 +16,7 @@ import {
   supplierLocation,
   ingredientSupplier,
   storeLocation,
+  pendingCatalogRequest,
 } from "../db/schema.js";
 
 // ─── Org-wide ingredient catalog ──────────────────────────────────
@@ -64,7 +65,7 @@ export async function createIngredient(
 /** List all ingredients for an organisation, optionally filtered by category. */
 export async function listIngredients(
   organisationId: number,
-  opts?: { category?: string; search?: string },
+  opts?: { category?: string; search?: string; itemType?: string },
 ) {
   let query = db
     .select()
@@ -86,6 +87,15 @@ export async function listIngredients(
       and(
         eq(ingredient.organisationId, organisationId),
         ilike(ingredient.ingredientName, `%${opts.search}%`),
+      ),
+    );
+  }
+
+  if (opts?.itemType) {
+    query = query.where(
+      and(
+        eq(ingredient.organisationId, organisationId),
+        eq(ingredient.itemType, opts.itemType),
       ),
     );
   }
@@ -185,13 +195,24 @@ export async function getOrCreateLocationIngredient(
 export async function listLocationIngredients(
   storeLocationId: string,
   organisationId: number,
+  opts?: { itemType?: string; activeOnly?: boolean },
 ) {
   // Left join: all org ingredients + location overrides + stock + supplier
+  const conditions = [eq(ingredient.organisationId, organisationId)];
+  if (opts?.activeOnly !== false) {
+    conditions.push(eq(locationIngredient.activeInd, true));
+  }
+  if (opts?.itemType) {
+    conditions.push(eq(ingredient.itemType, opts.itemType));
+  }
+
   const rows = await db
     .select({
       ingredientId: ingredient.ingredientId,
       ingredientName: ingredient.ingredientName,
       ingredientCategory: ingredient.ingredientCategory,
+      itemType: ingredient.itemType,
+      fifoApplicable: ingredient.fifoApplicable,
       baseUnit: ingredient.baseUnit,
       description: ingredient.description,
       orgUnitCost: ingredient.unitCost,
@@ -238,7 +259,7 @@ export async function listLocationIngredients(
         eq(stockLevel.storeLocationId, storeLocationId),
       ),
     )
-    .where(eq(ingredient.organisationId, organisationId));
+    .where(and(...conditions));
 
   return rows;
 }
@@ -659,4 +680,181 @@ export async function getSupplierItemCounts(organisationId: number) {
       ),
     )
     .groupBy(ingredientSupplier.supplierId);
+}
+
+// ─── Wave 1: Bulk activation & location management ──────────────
+
+/** Bulk-activate items at a location (upsert location_ingredient rows) */
+export async function bulkActivateItems(
+  storeLocationId: string,
+  ingredientIds: string[],
+  organisationId: number,
+) {
+  if (!ingredientIds.length) return { activated: 0 };
+
+  // Validate all ingredients belong to this org
+  const valid = await db
+    .select({ ingredientId: ingredient.ingredientId })
+    .from(ingredient)
+    .where(
+      and(
+        eq(ingredient.organisationId, organisationId),
+        inArray(ingredient.ingredientId, ingredientIds),
+      ),
+    );
+
+  const validIds = new Set(valid.map((r) => r.ingredientId));
+  const invalidIds = ingredientIds.filter((id) => !validIds.has(id));
+  if (invalidIds.length) {
+    throw new Error(`Ingredients not found in organisation: ${invalidIds.join(", ")}`);
+  }
+
+  // Upsert location_ingredient rows — set active_ind = true
+  const values = ingredientIds.map((id) => ({
+    ingredientId: id,
+    storeLocationId,
+    activeInd: true,
+    updatedDttm: new Date(),
+  }));
+
+  for (const val of values) {
+    await db
+      .insert(locationIngredient)
+      .values(val)
+      .onConflictDoUpdate({
+        target: [locationIngredient.ingredientId, locationIngredient.storeLocationId],
+        set: { activeInd: true, updatedDttm: new Date() },
+      });
+  }
+
+  return { activated: ingredientIds.length };
+}
+
+/** Bulk-deactivate items at a location */
+export async function bulkDeactivateItems(
+  storeLocationId: string,
+  ingredientIds: string[],
+  organisationId: number,
+) {
+  if (!ingredientIds.length) return { deactivated: 0 };
+
+  // Validate all ingredients belong to this org
+  const valid = await db
+    .select({ ingredientId: ingredient.ingredientId })
+    .from(ingredient)
+    .where(
+      and(
+        eq(ingredient.organisationId, organisationId),
+        inArray(ingredient.ingredientId, ingredientIds),
+      ),
+    );
+
+  const validIds = new Set(valid.map((r) => r.ingredientId));
+  const invalidIds = ingredientIds.filter((id) => !validIds.has(id));
+  if (invalidIds.length) {
+    throw new Error(`Ingredients not found in organisation: ${invalidIds.join(", ")}`);
+  }
+
+  await db
+    .update(locationIngredient)
+    .set({ activeInd: false, updatedDttm: new Date() })
+    .where(
+      and(
+        eq(locationIngredient.storeLocationId, storeLocationId),
+        inArray(locationIngredient.ingredientId, ingredientIds),
+      ),
+    );
+
+  return { deactivated: ingredientIds.length };
+}
+
+/** Copy activation from one location to another (merge — don't overwrite existing) */
+export async function copyActivationFromLocation(
+  sourceLocationId: string,
+  targetLocationId: string,
+  organisationId: number,
+) {
+  // Get all active items at source
+  const sourceItems = await db
+    .select({
+      ingredientId: locationIngredient.ingredientId,
+      parLevel: locationIngredient.parLevel,
+      reorderQty: locationIngredient.reorderQty,
+    })
+    .from(locationIngredient)
+    .innerJoin(ingredient, eq(ingredient.ingredientId, locationIngredient.ingredientId))
+    .where(
+      and(
+        eq(locationIngredient.storeLocationId, sourceLocationId),
+        eq(locationIngredient.activeInd, true),
+        eq(ingredient.organisationId, organisationId),
+      ),
+    );
+
+  if (!sourceItems.length) {
+    throw new Error("Source location has no activated items");
+  }
+
+  let copied = 0;
+  for (const item of sourceItems) {
+    await db
+      .insert(locationIngredient)
+      .values({
+        ingredientId: item.ingredientId,
+        storeLocationId: targetLocationId,
+        parLevel: item.parLevel,
+        reorderQty: item.reorderQty,
+        activeInd: true,
+        updatedDttm: new Date(),
+      })
+      .onConflictDoUpdate({
+        target: [locationIngredient.ingredientId, locationIngredient.storeLocationId],
+        set: { activeInd: true, updatedDttm: new Date() },
+      });
+    copied++;
+  }
+
+  return { copied };
+}
+
+/** Get activation status for a location (counts by item type) */
+export async function getActivationStatus(
+  storeLocationId: string,
+  organisationId: number,
+) {
+  const allItems = await db
+    .select({
+      ingredientId: ingredient.ingredientId,
+      itemType: ingredient.itemType,
+    })
+    .from(ingredient)
+    .where(eq(ingredient.organisationId, organisationId));
+
+  const activeItems = await db
+    .select({
+      ingredientId: locationIngredient.ingredientId,
+      itemType: ingredient.itemType,
+    })
+    .from(locationIngredient)
+    .innerJoin(ingredient, eq(ingredient.ingredientId, locationIngredient.ingredientId))
+    .where(
+      and(
+        eq(locationIngredient.storeLocationId, storeLocationId),
+        eq(locationIngredient.activeInd, true),
+        eq(ingredient.organisationId, organisationId),
+      ),
+    );
+
+  const byType = { KITCHEN_INGREDIENT: 0, FOH_CONSUMABLE: 0, OPERATIONAL_SUPPLY: 0 };
+  for (const item of activeItems) {
+    if (item.itemType in byType) {
+      byType[item.itemType as keyof typeof byType]++;
+    }
+  }
+
+  return {
+    total: allItems.length,
+    activated: activeItems.length,
+    byType,
+  };
 }

@@ -16,6 +16,8 @@ import { BackgroundStreamBanner } from "./components/chat/BackgroundStreamBanner
 import { Sidebar } from "./components/layout/Sidebar.js";
 import { ConversationSidebar } from "./components/layout/ConversationSidebar.js";
 import { GuideSidebar } from "./components/layout/GuideSidebar.js";
+import { GuideProvider } from "./context/GuideContext.js";
+import { KitchenOpsLayout } from "./components/layout/KitchenOpsLayout.js";
 import { Footer } from "./components/layout/Footer.js";
 import { ChatPage } from "./pages/ChatPage.js";
 import { SettingsPage } from "./pages/SettingsPage.js";
@@ -86,14 +88,15 @@ function ChatOnlySidebar() {
   return <ConversationSidebar />;
 }
 
-/** Shows GuideSidebar only on Intelligence routes. */
+/** Shows GuideSidebar on Intelligence + Inventory routes. */
 function IntelligenceGuideSidebar() {
   const { pathname } = useLocation();
-  const isIntelligence =
+  const hasGuide =
     pathname.startsWith("/waste-intelligence") ||
     pathname.startsWith("/kitchen-copilot") ||
-    pathname.startsWith("/menu-intelligence");
-  if (!isIntelligence) return null;
+    pathname.startsWith("/menu-intelligence") ||
+    pathname.startsWith("/inventory");
+  if (!hasGuide) return null;
   return <GuideSidebar />;
 }
 
@@ -122,6 +125,7 @@ export function App() {
                   <ProtectedRoute>
                     <ChatStreamProvider>
                     <ConversationProvider>
+                    <GuideProvider>
                     <div className="flex h-screen overflow-hidden bg-stone-50">
                       {/* Kitchen onboarding wizard — shown once to new users */}
                       <KitchenOnboarding />
@@ -143,10 +147,10 @@ export function App() {
                           <Route path="/patisserie" element={<RecipeLabPage key="patisserie" domain="patisserie" />} />
                           <Route path="/spirits" element={<RecipeLabPage key="spirits" domain="spirits" />} />
                           <Route path="/my-shelf" element={<AuthenticatedOnly><MyShelfPage /></AuthenticatedOnly>} />
-                          <Route path="/menu-intelligence" element={<AuthenticatedOnly><LocationGate><MenuIntelligencePage /></LocationGate></AuthenticatedOnly>} />
-                          <Route path="/waste-intelligence" element={<AuthenticatedOnly><LocationGate><WasteIntelligencePage /></LocationGate></AuthenticatedOnly>} />
-                          <Route path="/kitchen-copilot" element={<AuthenticatedOnly><LocationGate><KitchenCopilotPage /></LocationGate></AuthenticatedOnly>} />
-                          <Route path="/inventory" element={<AuthenticatedOnly><LocationGate><InventoryPage /></LocationGate></AuthenticatedOnly>} />
+                          <Route path="/menu-intelligence" element={<AuthenticatedOnly><LocationGate><KitchenOpsLayout><MenuIntelligencePage /></KitchenOpsLayout></LocationGate></AuthenticatedOnly>} />
+                          <Route path="/waste-intelligence" element={<AuthenticatedOnly><LocationGate><KitchenOpsLayout><WasteIntelligencePage /></KitchenOpsLayout></LocationGate></AuthenticatedOnly>} />
+                          <Route path="/kitchen-copilot" element={<AuthenticatedOnly><LocationGate><KitchenOpsLayout><KitchenCopilotPage /></KitchenOpsLayout></LocationGate></AuthenticatedOnly>} />
+                          <Route path="/inventory" element={<AuthenticatedOnly><LocationGate><KitchenOpsLayout><InventoryPage /></KitchenOpsLayout></LocationGate></AuthenticatedOnly>} />
                           <Route path="/bench" element={<BenchPage />} />
                           <Route path="/kitchen-shelf" element={<RecipeGalleryPage />} />
                           <Route path="/kitchen-shelf/:id" element={<RecipeDetailPage />} />
@@ -158,6 +162,7 @@ export function App() {
                       {/* Right sidebar — guide content (Intelligence pages only) */}
                       <IntelligenceGuideSidebar />
                     </div>
+                    </GuideProvider>
                     </ConversationProvider>
                     </ChatStreamProvider>
                   </ProtectedRoute>

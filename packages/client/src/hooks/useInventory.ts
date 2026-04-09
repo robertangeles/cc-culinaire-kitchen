@@ -29,6 +29,8 @@ export interface Ingredient {
   containsShellfishInd: boolean;
   containsEggsInd: boolean;
   isVegetarianInd: boolean;
+  itemType: string;
+  fifoApplicable: string;
   createdDttm: string;
   updatedDttm: string;
 }
@@ -144,10 +146,21 @@ export interface StockTakeLine {
   countedByUserName?: string;
 }
 
+export interface SetupProgress {
+  locationCreated: boolean;
+  itemsActivated: boolean;
+  itemsActivatedCount: number;
+  parLevelsSet: boolean;
+  parLevelsCount: number;
+  openingCountCompleted: boolean;
+  inventoryActive: boolean;
+}
+
 export interface DashboardData {
   stockLevels: LocationIngredient[];
   activeSession: StockTakeSession | null;
   lastCompletedSession: StockTakeSession | null;
+  setupProgress?: SetupProgress;
 }
 
 // ─── useIngredients ───────────────────────────────────────────────
@@ -180,6 +193,8 @@ export function useIngredients() {
     containsShellfishInd?: boolean;
     containsEggsInd?: boolean;
     isVegetarianInd?: boolean;
+    itemType?: string;
+    fifoApplicable?: string;
   }) => {
     const res = await fetch(`${API}/ingredients`, {
       ...jsonOpts, method: "POST", body: JSON.stringify(data),

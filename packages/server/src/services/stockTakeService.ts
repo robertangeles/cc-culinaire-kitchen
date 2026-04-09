@@ -26,6 +26,7 @@ import {
   locationIngredient,
   user,
   storeLocation,
+  pendingCatalogRequest,
 } from "../db/schema.js";
 import { convertToBase } from "./unitConversionService.js";
 
@@ -96,6 +97,18 @@ export async function openSession(
     throw new ConflictError("A stock take session is already active at this location");
   }
 
+  // Guard: require opening inventory before regular stock takes
+  const [loc] = await db
+    .select({ inventoryActive: storeLocation.inventoryActive })
+    .from(storeLocation)
+    .where(eq(storeLocation.storeLocationId, storeLocationId));
+
+  if (loc && !loc.inventoryActive) {
+    throw new ValidationError(
+      "Complete opening inventory before starting a regular stock take. Go to Setup to begin your opening count.",
+    );
+  }
+
   // Create session
   const [session] = await db
     .insert(stockTakeSession)
@@ -124,6 +137,98 @@ export async function openSession(
   const createdCategories = await enrichCategoriesWithUserNames(session.sessionId);
 
   return { ...session, categories: createdCategories };
+}
+
+/** Open a dedicated Opening Inventory session — auto-approves on completion */
+export async function openOpeningCount(
+  storeLocationId: string,
+  organisationId: number,
+  userId: number,
+) {
+  // Guard: no prior OPENING session (completed or in-progress)
+  const existing = await db
+    .select({ sessionId: stockTakeSession.sessionId, sessionStatus: stockTakeSession.sessionStatus })
+    .from(stockTakeSession)
+    .where(
+      and(
+        eq(stockTakeSession.storeLocationId, storeLocationId),
+        eq(stockTakeSession.sessionType, "OPENING"),
+      ),
+    );
+
+  const completed = existing.find((s) => s.sessionStatus === "APPROVED");
+  if (completed) {
+    throw new ConflictError("Opening inventory has already been completed for this location.");
+  }
+
+  const inProgress = existing.find((s) => s.sessionStatus === "OPEN" || s.sessionStatus === "PENDING_REVIEW");
+  if (inProgress) {
+    throw new ConflictError("An opening inventory session is already in progress.");
+  }
+
+  // Guard: location must have activated items
+  const activeItems = await db
+    .select({ ingredientId: locationIngredient.ingredientId, category: ingredient.ingredientCategory })
+    .from(locationIngredient)
+    .innerJoin(ingredient, eq(ingredient.ingredientId, locationIngredient.ingredientId))
+    .where(
+      and(
+        eq(locationIngredient.storeLocationId, storeLocationId),
+        eq(locationIngredient.activeInd, true),
+        eq(ingredient.organisationId, organisationId),
+      ),
+    );
+
+  if (!activeItems.length) {
+    throw new ValidationError("Activate items from the catalogue before starting an opening count.");
+  }
+
+  // Guard: no active regular session
+  const activeRegular = await db
+    .select({ sessionId: stockTakeSession.sessionId })
+    .from(stockTakeSession)
+    .where(
+      and(
+        eq(stockTakeSession.storeLocationId, storeLocationId),
+        eq(stockTakeSession.sessionStatus, "OPEN"),
+      ),
+    );
+
+  if (activeRegular.length) {
+    throw new ConflictError("Close the active stock take session before starting an opening count.");
+  }
+
+  // Create OPENING session
+  const [session] = await db
+    .insert(stockTakeSession)
+    .values({
+      storeLocationId,
+      organisationId,
+      sessionStatus: "OPEN",
+      sessionType: "OPENING",
+      openedByUserId: userId,
+    })
+    .returning();
+
+  // Create category rows for all categories that have activated items
+  const categorySet = new Set(activeItems.map((i) => i.category));
+  const categoryRows = Array.from(categorySet).map((cat) => ({
+    sessionId: session.sessionId,
+    categoryName: cat,
+    categoryStatus: "NOT_STARTED",
+  }));
+
+  if (categoryRows.length) {
+    await db.insert(stockTakeCategory).values(categoryRows);
+  }
+
+  // Fetch enriched session
+  const categories = await db
+    .select()
+    .from(stockTakeCategory)
+    .where(eq(stockTakeCategory.sessionId, session.sessionId));
+
+  return { ...session, categories };
 }
 
 /** Get the active session for a location (non-ARCHIVED, non-APPROVED). */
@@ -326,7 +431,80 @@ export async function submitSessionForReview(sessionId: string) {
     .where(eq(stockTakeSession.sessionId, sessionId))
     .returning();
 
+  // Auto-approve opening inventory sessions
+  if (session.sessionType === "OPENING") {
+    await autoApproveOpeningSession(sessionId, session.storeLocationId);
+    const [approved] = await db
+      .select()
+      .from(stockTakeSession)
+      .where(eq(stockTakeSession.sessionId, sessionId));
+    return approved;
+  }
+
   return updated;
+}
+
+/** Auto-approve an opening session: create stock levels + mark location active */
+async function autoApproveOpeningSession(sessionId: string, storeLocationId: string) {
+  // 1. Approve all SUBMITTED categories
+  await db
+    .update(stockTakeCategory)
+    .set({ categoryStatus: "APPROVED", updatedDttm: new Date() })
+    .where(
+      and(
+        eq(stockTakeCategory.sessionId, sessionId),
+        eq(stockTakeCategory.categoryStatus, "SUBMITTED"),
+      ),
+    );
+
+  // 2. Update session to APPROVED
+  await db
+    .update(stockTakeSession)
+    .set({
+      sessionStatus: "APPROVED",
+      closedDttm: new Date(),
+      updatedDttm: new Date(),
+    })
+    .where(eq(stockTakeSession.sessionId, sessionId));
+
+  // 3. Create/update stock levels from counted lines
+  const lines = await db
+    .select({
+      ingredientId: stockTakeLine.ingredientId,
+      countedQty: stockTakeLine.countedQty,
+      countedByUserId: stockTakeLine.countedByUserId,
+    })
+    .from(stockTakeLine)
+    .innerJoin(stockTakeCategory, eq(stockTakeCategory.categoryId, stockTakeLine.categoryId))
+    .where(eq(stockTakeCategory.sessionId, sessionId));
+
+  for (const line of lines) {
+    await db
+      .insert(stockLevel)
+      .values({
+        storeLocationId,
+        ingredientId: line.ingredientId,
+        currentQty: line.countedQty,
+        lastCountedDttm: new Date(),
+        lastCountedByUserId: line.countedByUserId,
+        version: 0,
+      })
+      .onConflictDoUpdate({
+        target: [stockLevel.storeLocationId, stockLevel.ingredientId],
+        set: {
+          currentQty: line.countedQty,
+          lastCountedDttm: new Date(),
+          lastCountedByUserId: line.countedByUserId,
+          updatedDttm: new Date(),
+        },
+      });
+  }
+
+  // 4. Mark location as inventory-active
+  await db
+    .update(storeLocation)
+    .set({ inventoryActive: true, updatedDttm: new Date() })
+    .where(eq(storeLocation.storeLocationId, storeLocationId));
 }
 
 /** Auto-check (kept for future use if needed). */
@@ -813,10 +991,51 @@ export async function getLocationDashboard(
     .orderBy(desc(stockTakeSession.closedDttm))
     .limit(1);
 
+  // Setup progress for onboarding checklist
+  const [locationInfo] = await db
+    .select({
+      inventoryActive: storeLocation.inventoryActive,
+      classification: storeLocation.classification,
+    })
+    .from(storeLocation)
+    .where(eq(storeLocation.storeLocationId, storeLocationId));
+
+  const activationCount = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(locationIngredient)
+    .where(
+      and(
+        eq(locationIngredient.storeLocationId, storeLocationId),
+        eq(locationIngredient.activeInd, true),
+      ),
+    );
+
+  const hasParLevels = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(locationIngredient)
+    .where(
+      and(
+        eq(locationIngredient.storeLocationId, storeLocationId),
+        eq(locationIngredient.activeInd, true),
+        sql`par_level IS NOT NULL AND par_level > 0`,
+      ),
+    );
+
+  const setupProgress = {
+    locationCreated: true,
+    itemsActivated: (activationCount[0]?.count ?? 0) > 0,
+    itemsActivatedCount: activationCount[0]?.count ?? 0,
+    parLevelsSet: (hasParLevels[0]?.count ?? 0) > 0,
+    parLevelsCount: hasParLevels[0]?.count ?? 0,
+    openingCountCompleted: locationInfo?.inventoryActive ?? false,
+    inventoryActive: locationInfo?.inventoryActive ?? false,
+  };
+
   return {
     stockLevels: levels,
     activeSession,
     lastCompletedSession: lastCompleted ?? null,
+    setupProgress,
   };
 }
 
@@ -827,6 +1046,7 @@ export async function getOrgDashboardSummary(organisationId: number) {
     .select({
       storeLocationId: storeLocation.storeLocationId,
       locationName: storeLocation.locationName,
+      inventoryActive: storeLocation.inventoryActive,
     })
     .from(storeLocation)
     .where(eq(storeLocation.organisationId, organisationId));
@@ -889,6 +1109,7 @@ export async function getOrgDashboardSummary(organisationId: number) {
 
       return {
         ...loc,
+        inventoryActive: loc.inventoryActive,
         totalItems,
         lowStock,
         critical,

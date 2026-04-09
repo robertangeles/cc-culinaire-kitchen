@@ -15,16 +15,12 @@ import {
   type OrgLocationSummary,
 } from "../../hooks/useInventory.js";
 import { useLocation } from "../../context/LocationContext.js";
+import { SetupProgress } from "./SetupProgress.js";
 import {
   Package, Clock, AlertTriangle, CheckCircle2, Loader2,
-  DollarSign, MapPin,
+  MapPin, ChevronDown, ChevronUp,
 } from "lucide-react";
-
-const CATEGORY_LABELS: Record<string, string> = {
-  proteins: "Proteins", produce: "Produce", dairy: "Dairy",
-  dry_goods: "Dry Goods", beverages: "Beverages", spirits: "Spirits",
-  frozen: "Frozen", bakery: "Bakery", condiments: "Condiments", other: "Other",
-};
+import { CATEGORY_LABELS } from "@culinaire/shared";
 
 function getStockStatus(item: LocationIngredient): "healthy" | "low" | "critical" | "unknown" {
   if (!item.currentQty || !item.parLevel) return "unknown";
@@ -37,13 +33,21 @@ function getStockStatus(item: LocationIngredient): "healthy" | "low" | "critical
   return "healthy";
 }
 
-export function LocationDashboard({ locationId }: { locationId: string | null }) {
+export function LocationDashboard({
+  locationId,
+  onTabChange,
+}: {
+  locationId: string | null;
+  onTabChange?: (tab: string) => void;
+}) {
   const { data, isLoading } = useDashboard(locationId);
   const { isOrgAdmin, locations: allLocations } = useLocation();
   const { locations: orgLocations, isLoading: orgLoading } = useOrgDashboard();
   const { items: locItems } = useLocationIngredients(locationId);
   const [drillLocationId, setDrillLocationId] = useState<string | null>(null);
   const { items: drillItems } = useLocationIngredients(drillLocationId);
+  const [showCritical, setShowCritical] = useState(false);
+  const [showLow, setShowLow] = useState(false);
 
   if (!locationId) {
     return (
@@ -99,7 +103,23 @@ export function LocationDashboard({ locationId }: { locationId: string | null })
   }
 
   return (
-    <div className="space-y-5 animate-[fadeInUp_200ms_ease-out]">
+    <div className="space-y-3 animate-[fadeInUp_200ms_ease-out]">
+      {/* Setup progress — shown when inventory not yet activated */}
+      {data.setupProgress && !data.setupProgress.inventoryActive && (
+        <SetupProgress
+          setupProgress={data.setupProgress}
+          onNavigate={(step) => {
+            if (onTabChange) {
+              if (step === "catalog" || step === "suppliers") {
+                onTabChange(step === "catalog" ? "ingredients" : "suppliers");
+              } else {
+                onTabChange("setup");
+              }
+            }
+          }}
+        />
+      )}
+
       {/* Org-wide summary table — admin only, clickable rows */}
       {isOrgAdmin && orgLocations.length > 1 && (
         <OrgSummaryTable
@@ -119,26 +139,67 @@ export function LocationDashboard({ locationId }: { locationId: string | null })
         />
       )}
 
-      {/* Critical items — immediate attention */}
-      {criticalItems.length > 0 && (
-        <StockAlertSection
-          title="Critical — Reorder Now"
-          items={criticalItems}
-          borderColor="border-red-500/20"
-          bgColor="bg-red-500/5"
-          textColor="text-red-400"
-        />
-      )}
+      {/* Stock Health + Value side-by-side */}
+      {(criticalItems.length > 0 || lowItems.length > 0 || totalValue > 0) && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Stock Health column */}
+          {(criticalItems.length > 0 || lowItems.length > 0) && (
+            <div className="space-y-2">
+              {/* Critical items — collapsible */}
+              {criticalItems.length > 0 && (
+                <div className={`rounded-xl border border-red-500/20 bg-red-500/5 overflow-hidden`}>
+                  <button
+                    onClick={() => setShowCritical((v) => !v)}
+                    className="w-full px-4 py-2.5 flex items-center justify-between hover:bg-red-500/10 transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle className="size-3.5 text-red-400" />
+                      <span className="text-xs font-semibold text-red-400">Critical — Reorder Now</span>
+                      <span className="text-[10px] text-[#666]">{criticalItems.length} items</span>
+                    </div>
+                    {showCritical ? (
+                      <ChevronUp className="size-3.5 text-[#666]" />
+                    ) : (
+                      <ChevronDown className="size-3.5 text-[#666]" />
+                    )}
+                  </button>
+                  {showCritical && (
+                    <StockAlertList items={criticalItems} />
+                  )}
+                </div>
+              )}
 
-      {/* Low stock items */}
-      {lowItems.length > 0 && (
-        <StockAlertSection
-          title="Low Stock — Monitor"
-          items={lowItems}
-          borderColor="border-amber-500/20"
-          bgColor="bg-amber-500/5"
-          textColor="text-amber-400"
-        />
+              {/* Low stock items — collapsible */}
+              {lowItems.length > 0 && (
+                <div className={`rounded-xl border border-amber-500/20 bg-amber-500/5 overflow-hidden`}>
+                  <button
+                    onClick={() => setShowLow((v) => !v)}
+                    className="w-full px-4 py-2.5 flex items-center justify-between hover:bg-amber-500/10 transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle className="size-3.5 text-amber-400" />
+                      <span className="text-xs font-semibold text-amber-400">Low Stock — Monitor</span>
+                      <span className="text-[10px] text-[#666]">{lowItems.length} items</span>
+                    </div>
+                    {showLow ? (
+                      <ChevronUp className="size-3.5 text-[#666]" />
+                    ) : (
+                      <ChevronDown className="size-3.5 text-[#666]" />
+                    )}
+                  </button>
+                  {showLow && (
+                    <StockAlertList items={lowItems} />
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Value breakdown column */}
+          {totalValue > 0 && (
+            <ValueBreakdown valueByCat={valueByCat} total={totalValue} />
+          )}
+        </div>
       )}
 
       {/* Active session + last count — compact */}
@@ -177,11 +238,6 @@ export function LocationDashboard({ locationId }: { locationId: string | null })
             );
           })}
         </div>
-      )}
-
-      {/* Value breakdown */}
-      {totalValue > 0 && (
-        <ValueBreakdown valueByCat={valueByCat} total={totalValue} />
       )}
 
       {/* Empty state */}
@@ -379,47 +435,32 @@ function DrillDownView({
   );
 }
 
-// ─── Stock Alert Section ─────────────────────────────────────────
+// ─── Stock Alert List (expanded items) ──────────────────────────
 
-function StockAlertSection({
-  title, items, borderColor, bgColor, textColor,
-}: {
-  title: string;
-  items: LocationIngredient[];
-  borderColor: string;
-  bgColor: string;
-  textColor: string;
-}) {
+function StockAlertList({ items }: { items: LocationIngredient[] }) {
   return (
-    <div className={`rounded-xl border ${borderColor} ${bgColor} overflow-hidden`}>
-      <div className="px-4 py-2.5 flex items-center gap-2">
-        <AlertTriangle className={`size-3.5 ${textColor}`} />
-        <span className={`text-xs font-semibold ${textColor}`}>{title}</span>
-        <span className="text-[10px] text-[#666]">{items.length} items</span>
-      </div>
-      <div className="divide-y divide-[#2A2A2A]/30">
-        {items.map((item) => {
-          const qty = Number(item.currentQty || 0);
-          const par = Number(item.parLevel || 0);
-          const cost = Number(item.locationUnitCost || item.orgUnitCost || 0);
-          const atRisk = par > 0 ? (par - qty) * cost : 0;
-          return (
-            <div key={item.ingredientId} className="flex items-center justify-between px-4 py-2 text-sm">
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="text-white truncate">{item.ingredientName}</span>
-                <span className="text-[10px] text-[#666] shrink-0">
-                  {qty.toFixed(1)} {item.baseUnit} / par {par}
-                </span>
-              </div>
-              {atRisk > 0 && (
-                <span className="text-xs text-[#999] shrink-0 ml-2">
-                  ${atRisk.toFixed(0)} at risk
-                </span>
-              )}
+    <div className="divide-y divide-[#2A2A2A]/30">
+      {items.map((item) => {
+        const qty = Number(item.currentQty || 0);
+        const par = Number(item.parLevel || 0);
+        const cost = Number(item.locationUnitCost || item.orgUnitCost || 0);
+        const atRisk = par > 0 ? (par - qty) * cost : 0;
+        return (
+          <div key={item.ingredientId} className="flex items-center justify-between px-4 py-1.5 text-xs">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-white truncate">{item.ingredientName}</span>
+              <span className="text-[10px] text-[#666] shrink-0">
+                {qty.toFixed(1)} {item.baseUnit} / par {par}
+              </span>
             </div>
-          );
-        })}
-      </div>
+            {atRisk > 0 && (
+              <span className="text-[10px] text-[#999] shrink-0 ml-2">
+                ${atRisk.toFixed(0)} at risk
+              </span>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
