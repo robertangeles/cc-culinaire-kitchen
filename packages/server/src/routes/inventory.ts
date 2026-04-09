@@ -62,6 +62,17 @@ import {
   handleRejectRequest,
 } from "../controllers/catalogRequestController.js";
 import * as consumptionLogController from "../controllers/consumptionLogController.js";
+import * as transferController from "../controllers/transferController.js";
+import * as forecastController from "../controllers/forecastController.js";
+import {
+  handleCreatePO,
+  handleListPOs,
+  handleGetPODetail,
+  handleSubmitPO,
+  handleReceiveLine,
+  handleCancelPO,
+  handleGetSuggestions,
+} from "../controllers/purchaseOrderController.js";
 
 const router = Router();
 router.use(authenticate);
@@ -149,5 +160,38 @@ router.get("/consumption-logs/summary", requirePermission("inventory:hq"), consu
 router.get("/consumption-logs", requirePermission("inventory:count"), consumptionLogController.handleListLogs);
 router.patch("/consumption-logs/:id", requirePermission("inventory:count"), consumptionLogController.handleEditLog);
 router.delete("/consumption-logs/:id", requirePermission("inventory:count"), consumptionLogController.handleDeleteLog);
+
+// ─── Inter-location Transfers (Wave 4) ──────────────────────────
+
+// Collection routes first (BEFORE /:id params)
+router.post("/transfers", requirePermission("inventory:manage"), transferController.handleInitiateTransfer);
+router.get("/transfers", requirePermission("inventory:count"), transferController.handleListTransfers);
+router.get("/transfers/pending", requirePermission("inventory:count"), transferController.handleListPending);
+
+// Parameterized transfer routes
+router.get("/transfers/:id", requirePermission("inventory:count"), transferController.handleGetTransferDetail);
+router.post("/transfers/:id/send", requirePermission("inventory:manage"), transferController.handleConfirmSent);
+router.post("/transfers/:id/receive", requirePermission("inventory:count"), transferController.handleConfirmReceived);
+router.post("/transfers/:id/cancel", requirePermission("inventory:manage"), transferController.handleCancelTransfer);
+
+// ─── AI Forecasting (Wave 5) ────────────────────────────────────
+
+router.get("/forecasts", requirePermission("inventory:manage"), forecastController.handleListRecommendations);
+router.post("/forecasts/generate", requirePermission("inventory:hq"), forecastController.handleGenerateForecasts);
+router.post("/forecasts/:id/dismiss", requirePermission("inventory:manage"), forecastController.handleDismiss);
+router.post("/forecasts/:id/ordered", requirePermission("inventory:manage"), forecastController.handleMarkOrdered);
+
+// ─── Purchase Orders (Wave 3) ─────────────────────────────────────
+
+// Collection routes first (BEFORE /:id params)
+router.post("/purchase-orders", requirePermission("inventory:manage"), handleCreatePO);
+router.get("/purchase-orders", requirePermission("inventory:count"), handleListPOs);
+router.get("/purchase-orders/suggestions", requirePermission("inventory:manage"), handleGetSuggestions);
+
+// Parameterized PO routes
+router.get("/purchase-orders/:id", requirePermission("inventory:count"), handleGetPODetail);
+router.post("/purchase-orders/:id/submit", requirePermission("inventory:manage"), handleSubmitPO);
+router.post("/purchase-orders/:id/cancel", requirePermission("inventory:manage"), handleCancelPO);
+router.post("/purchase-orders/:id/lines/:lineId/receive", requirePermission("inventory:count"), handleReceiveLine);
 
 export default router;

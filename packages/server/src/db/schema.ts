@@ -1504,3 +1504,150 @@ export const consumptionLog = pgTable(
     index("idx_consumption_log_ingredient").on(table.ingredientId),
   ],
 );
+
+// ---------------------------------------------------------------------------
+// Wave 3: Purchase Orders + FIFO Batches
+// ---------------------------------------------------------------------------
+
+export const purchaseOrder = pgTable(
+  "purchase_order",
+  {
+    poId: uuid("po_id").defaultRandom().primaryKey(),
+    organisationId: integer("organisation_id").notNull().references(() => organisation.organisationId),
+    storeLocationId: uuid("store_location_id").notNull().references(() => storeLocation.storeLocationId),
+    supplierId: uuid("supplier_id").notNull().references(() => supplier.supplierId),
+    poNumber: varchar("po_number", { length: 50 }).notNull(),
+    status: varchar("status", { length: 20 }).notNull().default("DRAFT"),
+    createdByUserId: integer("created_by_user_id").notNull().references(() => user.userId),
+    approvedByUserId: integer("approved_by_user_id").references(() => user.userId),
+    notes: text("notes"),
+    expectedDeliveryDate: timestamp("expected_delivery_date", { withTimezone: true }),
+    createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
+    updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("idx_po_org_status").on(table.organisationId, table.status),
+    index("idx_po_location").on(table.storeLocationId),
+    index("idx_po_supplier").on(table.supplierId),
+  ],
+);
+
+export const purchaseOrderLine = pgTable(
+  "purchase_order_line",
+  {
+    lineId: uuid("line_id").defaultRandom().primaryKey(),
+    poId: uuid("po_id").notNull().references(() => purchaseOrder.poId),
+    ingredientId: uuid("ingredient_id").notNull().references(() => ingredient.ingredientId),
+    orderedQty: numeric("ordered_qty").notNull(),
+    orderedUnit: varchar("ordered_unit", { length: 20 }).notNull(),
+    receivedQty: numeric("received_qty"),
+    receivedUnit: varchar("received_unit", { length: 20 }),
+    unitCost: numeric("unit_cost"),
+    lineStatus: varchar("line_status", { length: 20 }).notNull().default("PENDING"),
+    receivedByUserId: integer("received_by_user_id").references(() => user.userId),
+    receivedDttm: timestamp("received_dttm", { withTimezone: true }),
+    createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
+    updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("idx_po_line_po").on(table.poId),
+    index("idx_po_line_ingredient").on(table.ingredientId),
+  ],
+);
+
+export const fifoBatch = pgTable(
+  "fifo_batch",
+  {
+    batchId: uuid("batch_id").defaultRandom().primaryKey(),
+    storeLocationId: uuid("store_location_id").notNull().references(() => storeLocation.storeLocationId),
+    ingredientId: uuid("ingredient_id").notNull().references(() => ingredient.ingredientId),
+    arrivalDate: timestamp("arrival_date", { withTimezone: true }).notNull(),
+    quantityRemaining: numeric("quantity_remaining").notNull(),
+    originalQuantity: numeric("original_quantity").notNull(),
+    unitCost: numeric("unit_cost"),
+    sourcePoLineId: uuid("source_po_line_id").references(() => purchaseOrderLine.lineId),
+    sourceTransferId: uuid("source_transfer_id"),
+    expiryDate: timestamp("expiry_date", { withTimezone: true }),
+    isDepleted: boolean("is_depleted").notNull().default(false),
+    createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
+    updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("idx_fifo_batch_location_item").on(table.storeLocationId, table.ingredientId, table.isDepleted),
+    index("idx_fifo_batch_po_line").on(table.sourcePoLineId),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// Wave 4: Inter-location Transfers
+// ---------------------------------------------------------------------------
+
+export const inventoryTransfer = pgTable(
+  "inventory_transfer",
+  {
+    transferId: uuid("transfer_id").defaultRandom().primaryKey(),
+    organisationId: integer("organisation_id").notNull().references(() => organisation.organisationId),
+    fromLocationId: uuid("from_location_id").notNull().references(() => storeLocation.storeLocationId),
+    toLocationId: uuid("to_location_id").notNull().references(() => storeLocation.storeLocationId),
+    status: varchar("status", { length: 20 }).notNull().default("INITIATED"),
+    initiatedByUserId: integer("initiated_by_user_id").notNull().references(() => user.userId),
+    sentByUserId: integer("sent_by_user_id").references(() => user.userId),
+    receivedByUserId: integer("received_by_user_id").references(() => user.userId),
+    notes: text("notes"),
+    sentDttm: timestamp("sent_dttm", { withTimezone: true }),
+    receivedDttm: timestamp("received_dttm", { withTimezone: true }),
+    createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
+    updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("idx_transfer_org_status").on(table.organisationId, table.status),
+    index("idx_transfer_from").on(table.fromLocationId),
+    index("idx_transfer_to").on(table.toLocationId),
+  ],
+);
+
+export const inventoryTransferLine = pgTable(
+  "inventory_transfer_line",
+  {
+    lineId: uuid("line_id").defaultRandom().primaryKey(),
+    transferId: uuid("transfer_id").notNull().references(() => inventoryTransfer.transferId),
+    ingredientId: uuid("ingredient_id").notNull().references(() => ingredient.ingredientId),
+    sentQty: numeric("sent_qty").notNull(),
+    sentUnit: varchar("sent_unit", { length: 20 }).notNull(),
+    receivedQty: numeric("received_qty"),
+    fifoBatchId: uuid("fifo_batch_id").references(() => fifoBatch.batchId),
+    lineStatus: varchar("line_status", { length: 20 }).notNull().default("PENDING"),
+    createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
+    updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("idx_transfer_line_transfer").on(table.transferId),
+    index("idx_transfer_line_ingredient").on(table.ingredientId),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// Wave 5: AI Forecasting
+// ---------------------------------------------------------------------------
+
+export const forecastRecommendation = pgTable(
+  "forecast_recommendation",
+  {
+    recommendationId: uuid("recommendation_id").defaultRandom().primaryKey(),
+    organisationId: integer("organisation_id").notNull().references(() => organisation.organisationId),
+    storeLocationId: uuid("store_location_id").notNull().references(() => storeLocation.storeLocationId),
+    ingredientId: uuid("ingredient_id").notNull().references(() => ingredient.ingredientId),
+    predictedDepletionDate: timestamp("predicted_depletion_date", { withTimezone: true }),
+    daysRemaining: integer("days_remaining"),
+    suggestedOrderQty: numeric("suggested_order_qty"),
+    confidence: numeric("confidence"),
+    basedOnDays: integer("based_on_days"),
+    status: varchar("status", { length: 20 }).notNull().default("ACTIVE"),
+    createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
+    updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("idx_forecast_location_status").on(table.storeLocationId, table.status),
+    index("idx_forecast_ingredient").on(table.ingredientId),
+  ],
+);

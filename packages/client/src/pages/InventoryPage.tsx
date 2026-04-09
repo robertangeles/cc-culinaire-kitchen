@@ -20,16 +20,21 @@ import { ActivationWizard } from "../components/inventory/ActivationWizard.js";
 import { OpeningInventory } from "../components/inventory/OpeningInventory.js";
 import { CatalogRequestQueue } from "../components/inventory/CatalogRequestQueue.js";
 import ConsumptionLogger from "../components/inventory/ConsumptionLogger.js";
+import PurchaseOrderList from "../components/inventory/PurchaseOrderList.js";
+import TransferList from "../components/inventory/TransferList.js";
 import { Tooltip } from "../components/ui/Tooltip.js";
-import { Package, ClipboardCheck, Utensils, ShieldCheck, Truck, Settings, FileQuestion, FileEdit } from "lucide-react";
+import { Package, ClipboardCheck, Utensils, ShieldCheck, Truck, Settings, FileQuestion, FileEdit, ShoppingCart, ArrowRightLeft } from "lucide-react";
 
-type InventoryTab = "dashboard" | "setup" | "stock-take" | "log" | "review" | "ingredients" | "suppliers" | "requests";
+type TransferSubView = "usage" | "transfers";
+
+type InventoryTab = "dashboard" | "setup" | "stock-take" | "log" | "purchase-orders" | "review" | "ingredients" | "suppliers" | "requests";
 
 export function InventoryPage() {
   const { user, isGuest } = useAuth();
   const { selectedLocationId, locations, isOrgAdmin } = useLocation();
   const { sessions: pendingReviews, refresh: refreshReviews } = usePendingReviews();
   const [activeTab, setActiveTab] = useState<InventoryTab>("dashboard");
+  const [transferView, setTransferView] = useState<TransferSubView>("usage");
   const { setGuideKeyOverride } = useGuide();
 
   // Sync active tab to GuideSidebar guide key
@@ -45,6 +50,7 @@ export function InventoryPage() {
       { key: "setup", label: "Setup", icon: Settings },
       { key: "stock-take", label: "Stock Take", icon: ClipboardCheck },
       { key: "log", label: "Stock Transfer", icon: FileEdit },
+      { key: "purchase-orders", label: "Orders", icon: ShoppingCart },
     ];
     if (isOrgAdmin) {
       t.push({ key: "review", label: "Review", icon: ShieldCheck });
@@ -145,7 +151,37 @@ export function InventoryPage() {
             <StockTakeSession />
           )}
           {activeTab === "log" && (
-            <ConsumptionLogger />
+            <div className="space-y-4">
+              {/* Sub-view toggle */}
+              <div className="flex gap-1 p-1 rounded-lg bg-[#161616] border border-[#2A2A2A] w-fit">
+                <button
+                  onClick={() => setTransferView("usage")}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                    transferView === "usage"
+                      ? "bg-[#1E1E1E] text-white shadow-[0_0_6px_rgba(212,165,116,0.1)]"
+                      : "text-[#888] hover:text-white"
+                  }`}
+                >
+                  <FileEdit className="size-3" />
+                  Internal Usage
+                </button>
+                <button
+                  onClick={() => setTransferView("transfers")}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                    transferView === "transfers"
+                      ? "bg-[#1E1E1E] text-white shadow-[0_0_6px_rgba(212,165,116,0.1)]"
+                      : "text-[#888] hover:text-white"
+                  }`}
+                >
+                  <ArrowRightLeft className="size-3" />
+                  Location Transfer
+                </button>
+              </div>
+              {transferView === "usage" ? <ConsumptionLogger /> : <TransferList />}
+            </div>
+          )}
+          {activeTab === "purchase-orders" && (
+            <PurchaseOrderList />
           )}
           {activeTab === "review" && (
             <StockTakeReviewQueue sessions={pendingReviews} refresh={refreshReviews} />

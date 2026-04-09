@@ -16,6 +16,7 @@ import {
 } from "../../hooks/useInventory.js";
 import { useLocation } from "../../context/LocationContext.js";
 import { SetupProgress } from "./SetupProgress.js";
+import ForecastCard from "./ForecastCard.js";
 import {
   Package, Clock, AlertTriangle, CheckCircle2, Loader2,
   MapPin, ChevronDown, ChevronUp,
@@ -201,6 +202,9 @@ export function LocationDashboard({
           )}
         </div>
       )}
+
+      {/* AI Forecast Recommendations */}
+      {locationId && <ForecastCard />}
 
       {/* Active session + last count — compact */}
       <div className="flex flex-wrap gap-3">

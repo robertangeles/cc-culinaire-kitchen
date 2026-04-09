@@ -790,6 +790,148 @@ export function useIngredientTransactions(ingredientId: string | null, month: st
   return { transactions, transactionDates, isLoading };
 }
 
+// ─── usePurchaseOrders ──────────────────────────────────────────
+
+export interface PurchaseOrder {
+  poId: string;
+  poNumber: string;
+  status: string;
+  notes: string | null;
+  expectedDeliveryDate: string | null;
+  createdDttm: string;
+  updatedDttm: string;
+  storeLocationId: string;
+  supplierId: string;
+  createdByUserId: number;
+  supplierName: string | null;
+  locationName: string | null;
+  createdByUserName: string | null;
+  lineCount: number;
+  lines?: PurchaseOrderLine[];
+}
+
+export interface PurchaseOrderLine {
+  lineId: string;
+  poId: string;
+  ingredientId: string;
+  orderedQty: string;
+  orderedUnit: string;
+  receivedQty: string | null;
+  receivedUnit: string | null;
+  unitCost: string | null;
+  lineStatus: string;
+  receivedByUserId: number | null;
+  receivedDttm: string | null;
+  createdDttm: string;
+  ingredientName: string | null;
+  baseUnit: string | null;
+  ingredientCategory: string | null;
+}
+
+export interface POSuggestionGroup {
+  supplierId: string | null;
+  supplierName: string | null;
+  items: {
+    ingredientId: string;
+    ingredientName: string;
+    ingredientCategory: string;
+    baseUnit: string;
+    parLevel: string | null;
+    reorderQty: string | null;
+    currentQty: string | null;
+  }[];
+}
+
+export function usePurchaseOrders(locationId: string | null) {
+  const [pos, setPOs] = useState<PurchaseOrder[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const refresh = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const params = locationId ? `?storeLocationId=${locationId}` : "";
+      const res = await fetch(`${API}/purchase-orders${params}`, opts);
+      if (res.ok) setPOs(await res.json());
+    } finally {
+      setIsLoading(false);
+    }
+  }, [locationId]);
+
+  useEffect(() => { refresh(); }, [refresh]);
+
+  const getDetail = useCallback(async (poId: string) => {
+    const res = await fetch(`${API}/purchase-orders/${poId}`, opts);
+    if (res.ok) return res.json() as Promise<PurchaseOrder>;
+    return null;
+  }, []);
+
+  const createPO = useCallback(async (data: {
+    storeLocationId: string;
+    supplierId: string;
+    lines: { ingredientId: string; orderedQty: string; orderedUnit: string; unitCost?: string }[];
+    notes?: string;
+    expectedDeliveryDate?: string;
+  }) => {
+    const res = await fetch(`${API}/purchase-orders`, {
+      ...jsonOpts, method: "POST", body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || "Failed to create purchase order");
+    }
+    const created = await res.json();
+    await refresh();
+    return created as PurchaseOrder;
+  }, [refresh]);
+
+  const submitPO = useCallback(async (poId: string) => {
+    const res = await fetch(`${API}/purchase-orders/${poId}/submit`, {
+      ...jsonOpts, method: "POST",
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || "Failed to submit purchase order");
+    }
+    await refresh();
+    return res.json();
+  }, [refresh]);
+
+  const cancelPO = useCallback(async (poId: string) => {
+    const res = await fetch(`${API}/purchase-orders/${poId}/cancel`, {
+      ...jsonOpts, method: "POST",
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || "Failed to cancel purchase order");
+    }
+    await refresh();
+  }, [refresh]);
+
+  const receiveLine = useCallback(async (
+    poId: string,
+    lineId: string,
+    data: { receivedQty: string; receivedUnit: string; unitCost?: string | null },
+  ) => {
+    const res = await fetch(`${API}/purchase-orders/${poId}/lines/${lineId}/receive`, {
+      ...jsonOpts, method: "POST", body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || "Failed to receive line");
+    }
+    await refresh();
+    return res.json();
+  }, [refresh]);
+
+  const getSuggestions = useCallback(async (locId: string) => {
+    const res = await fetch(`${API}/purchase-orders/suggestions?storeLocationId=${locId}`, opts);
+    if (res.ok) return res.json() as Promise<POSuggestionGroup[]>;
+    return [];
+  }, []);
+
+  return { pos, isLoading, refresh, getDetail, createPO, submitPO, cancelPO, receiveLine, getSuggestions };
+}
+
 // ─── useConsumptionSummary ───────────────────────────────────────
 
 export function useConsumptionSummary() {
@@ -812,4 +954,197 @@ export function useConsumptionSummary() {
   useEffect(() => { refresh(); }, [refresh]);
 
   return { summary, isLoading, refresh };
+}
+
+// ─── useTransfers (Wave 4) ──────────────────────────────────────
+
+export interface Transfer {
+  transferId: string;
+  organisationId: number;
+  fromLocationId: string;
+  toLocationId: string;
+  status: string;
+  notes: string | null;
+  sentDttm: string | null;
+  receivedDttm: string | null;
+  createdDttm: string;
+  fromLocationName: string | null;
+  toLocationName: string | null;
+  initiatorName: string | null;
+  lineCount: number;
+}
+
+export interface TransferDetail extends Transfer {
+  updatedDttm: string;
+  initiatedByUserId: number;
+  sentByUserId: number | null;
+  receivedByUserId: number | null;
+  lines: TransferLineDetail[];
+}
+
+export interface TransferLineDetail {
+  lineId: string;
+  ingredientId: string;
+  sentQty: string;
+  sentUnit: string;
+  receivedQty: string | null;
+  lineStatus: string;
+  fifoBatchId: string | null;
+  ingredientName: string;
+  ingredientCategory: string;
+  baseUnit: string;
+}
+
+export function useTransfers(locationId: string | null) {
+  const [transfers, setTransfers] = useState<Transfer[]>([]);
+  const [pendingIncoming, setPendingIncoming] = useState<Transfer[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const refresh = useCallback(async () => {
+    if (!locationId) return;
+    setIsLoading(true);
+    try {
+      const [allRes, pendingRes] = await Promise.all([
+        fetch(`${API}/transfers?storeLocationId=${locationId}`, opts),
+        fetch(`${API}/transfers/pending?storeLocationId=${locationId}`, opts),
+      ]);
+      if (allRes.ok) setTransfers(await allRes.json());
+      if (pendingRes.ok) setPendingIncoming(await pendingRes.json());
+    } finally {
+      setIsLoading(false);
+    }
+  }, [locationId]);
+
+  useEffect(() => { refresh(); }, [refresh]);
+
+  const initiate = useCallback(async (data: {
+    fromLocationId: string;
+    toLocationId: string;
+    lines: { ingredientId: string; sentQty: number; sentUnit: string }[];
+    notes?: string;
+  }) => {
+    const res = await fetch(`${API}/transfers`, {
+      ...jsonOpts, method: "POST", body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || "Failed to initiate transfer");
+    }
+    await refresh();
+    return res.json();
+  }, [refresh]);
+
+  const confirmSent = useCallback(async (transferId: string) => {
+    const res = await fetch(`${API}/transfers/${transferId}/send`, {
+      ...jsonOpts, method: "POST",
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || "Failed to confirm send");
+    }
+    await refresh();
+    return res.json();
+  }, [refresh]);
+
+  const confirmReceived = useCallback(async (
+    transferId: string,
+    receivedLines: { lineId: string; receivedQty: number }[],
+  ) => {
+    const res = await fetch(`${API}/transfers/${transferId}/receive`, {
+      ...jsonOpts, method: "POST", body: JSON.stringify({ receivedLines }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || "Failed to confirm receipt");
+    }
+    await refresh();
+    return res.json();
+  }, [refresh]);
+
+  const cancel = useCallback(async (transferId: string) => {
+    const res = await fetch(`${API}/transfers/${transferId}/cancel`, {
+      ...jsonOpts, method: "POST",
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || "Failed to cancel transfer");
+    }
+    await refresh();
+  }, [refresh]);
+
+  return { transfers, pendingIncoming, isLoading, initiate, confirmSent, confirmReceived, cancel, refresh };
+}
+
+// ─── useForecasts (Wave 5) ──────────────────────────────────────
+
+export interface ForecastRecommendation {
+  recommendationId: string;
+  ingredientId: string;
+  predictedDepletionDate: string | null;
+  daysRemaining: number | null;
+  suggestedOrderQty: string | null;
+  confidence: string | null;
+  basedOnDays: number | null;
+  status: string;
+  createdDttm: string;
+  ingredientName: string;
+  ingredientCategory: string;
+  baseUnit: string;
+  currentQty: string | null;
+}
+
+export function useForecasts(locationId: string | null) {
+  const [recommendations, setRecommendations] = useState<ForecastRecommendation[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const refresh = useCallback(async () => {
+    if (!locationId) return;
+    setIsLoading(true);
+    try {
+      const res = await fetch(`${API}/forecasts?storeLocationId=${locationId}`, opts);
+      if (res.ok) setRecommendations(await res.json());
+    } finally {
+      setIsLoading(false);
+    }
+  }, [locationId]);
+
+  useEffect(() => { refresh(); }, [refresh]);
+
+  const generate = useCallback(async () => {
+    if (!locationId) return;
+    const res = await fetch(`${API}/forecasts/generate`, {
+      ...jsonOpts, method: "POST", body: JSON.stringify({ storeLocationId: locationId }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || "Failed to generate forecasts");
+    }
+    const result = await res.json();
+    await refresh();
+    return result;
+  }, [locationId, refresh]);
+
+  const dismiss = useCallback(async (recId: string) => {
+    const res = await fetch(`${API}/forecasts/${recId}/dismiss`, {
+      ...jsonOpts, method: "POST",
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || "Failed to dismiss");
+    }
+    await refresh();
+  }, [refresh]);
+
+  const markOrdered = useCallback(async (recId: string, poId?: string) => {
+    const res = await fetch(`${API}/forecasts/${recId}/ordered`, {
+      ...jsonOpts, method: "POST", body: JSON.stringify({ poId }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || "Failed to mark ordered");
+    }
+    await refresh();
+  }, [refresh]);
+
+  return { recommendations, isLoading, generate, dismiss, markOrdered, refresh };
 }

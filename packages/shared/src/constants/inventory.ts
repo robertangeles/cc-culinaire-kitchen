@@ -186,3 +186,37 @@ export const CATALOG_REQUEST_STATUS = {
 } as const;
 
 export type CatalogRequestStatusKey = keyof typeof CATALOG_REQUEST_STATUS;
+
+// ── Purchase Order Statuses ─────────────────────────────────
+
+export const PO_STATUS = {
+  DRAFT: { key: "DRAFT", label: "Draft", color: "text-[#888]", bg: "bg-[#888]/10", border: "border-[#888]/20" },
+  SUBMITTED: { key: "SUBMITTED", label: "Submitted", color: "text-amber-400", bg: "bg-amber-500/10", border: "border-amber-500/20" },
+  PARTIALLY_RECEIVED: { key: "PARTIALLY_RECEIVED", label: "Partial", color: "text-sky-400", bg: "bg-sky-500/10", border: "border-sky-500/20" },
+  RECEIVED: { key: "RECEIVED", label: "Received", color: "text-emerald-400", bg: "bg-emerald-500/10", border: "border-emerald-500/20" },
+  CANCELLED: { key: "CANCELLED", label: "Cancelled", color: "text-red-400", bg: "bg-red-500/10", border: "border-red-500/20" },
+} as const;
+
+export type POStatusKey = keyof typeof PO_STATUS;
+
+// ── Transfer Statuses ───────────────────────────────────────
+
+export const TRANSFER_STATUS = {
+  INITIATED: { key: "INITIATED", label: "Initiated", color: "text-[#888]", bg: "bg-[#888]/10", border: "border-[#888]/20" },
+  SENT: { key: "SENT", label: "Sent", color: "text-amber-400", bg: "bg-amber-500/10", border: "border-amber-500/20" },
+  RECEIVED: { key: "RECEIVED", label: "Received", color: "text-emerald-400", bg: "bg-emerald-500/10", border: "border-emerald-500/20" },
+  DISCREPANCY: { key: "DISCREPANCY", label: "Discrepancy", color: "text-red-400", bg: "bg-red-500/10", border: "border-red-500/20" },
+  CANCELLED: { key: "CANCELLED", label: "Cancelled", color: "text-zinc-500", bg: "bg-zinc-500/10", border: "border-zinc-500/20" },
+} as const;
+
+export type TransferStatusKey = keyof typeof TRANSFER_STATUS;
+
+// ── Forecast Statuses ───────────────────────────────────────
+
+export const FORECAST_STATUS = {
+  ACTIVE: "ACTIVE",
+  DISMISSED: "DISMISSED",
+  ORDERED: "ORDERED",
+} as const;
+
+export type ForecastStatusKey = keyof typeof FORECAST_STATUS;
