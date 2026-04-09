@@ -21,6 +21,7 @@ const REASONS = [
   { key: "admin", label: "Admin" },
   { key: "breakage", label: "Breakage" },
   { key: "other", label: "Other" },
+  { key: "return_to_stock", label: "Return to Stockroom" },
 ] as const;
 
 const SHIFTS = [
@@ -55,7 +56,7 @@ function isToday(iso: string): boolean {
 
 export default function ConsumptionLogger() {
   const { selectedLocationId } = useLocation();
-  const { items: locationItems, isLoading: itemsLoading } =
+  const { items: locationItems, isLoading: itemsLoading, refresh: refreshItems } =
     useLocationIngredients(selectedLocationId);
   const { logs, isLoading: logsLoading, logConsumption, editLog, deleteLog } =
     useConsumptionLog(selectedLocationId);
@@ -137,13 +138,14 @@ export default function ConsumptionLogger() {
       });
       setShowSuccess(true);
       handleClearItem();
+      refreshItems(); // reload stock levels after deduction/return
       setTimeout(() => setShowSuccess(false), 1500);
     } catch (err: any) {
       setError(err.message || "Failed to log consumption");
     } finally {
       setSaving(false);
     }
-  }, [selectedItem, quantity, reason, shift, notes, selectedLocationId, logConsumption, handleClearItem]);
+  }, [selectedItem, quantity, reason, shift, notes, selectedLocationId, logConsumption, handleClearItem, refreshItems]);
 
   const handleStartEdit = useCallback((entry: ConsumptionLogEntry) => {
     setEditingId(entry.consumptionLogId);
@@ -225,6 +227,34 @@ export default function ConsumptionLogger() {
 
       {/* ── Entry card ─────────────────────────────────────────── */}
       <div className="bg-[#111]/80 backdrop-blur-md border border-white/5 rounded-xl p-5 space-y-4">
+        {/* Reason selector — pick reason FIRST so we know if 0-stock items should be enabled */}
+        {!selectedItem && (
+          <div>
+            <label className="text-xs text-[#888] font-medium mb-1.5 block">What are you doing?</label>
+            <div className="flex flex-wrap gap-1.5">
+              {REASONS.map((r) => {
+                const isReturn = r.key === "return_to_stock";
+                const isActive = reason === r.key;
+                return (
+                  <button
+                    key={r.key}
+                    onClick={() => setReason(isActive ? "" : r.key)}
+                    className={`px-3 py-1.5 rounded-full text-xs border transition-all ${
+                      isActive
+                        ? isReturn
+                          ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+                          : "bg-[#D4A574]/20 text-[#D4A574] border-[#D4A574]/30"
+                        : "bg-[#161616] text-[#888] border-[#2A2A2A] hover:border-[#444]"
+                    }`}
+                  >
+                    {r.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Item picker — category browse */}
         {!selectedItem && (
           <div className="space-y-2">
@@ -309,15 +339,22 @@ export default function ConsumptionLogger() {
                       </div>
                       {items.map((item) => {
                         const stock = Number(item.currentQty || 0);
+                        const isReturn = reason === "return_to_stock";
+                        const outOfStock = stock <= 0 && !isReturn;
                         return (
                           <button
                             key={item.ingredientId}
-                            onClick={() => handleSelectItem(item)}
-                            className="w-full flex items-center justify-between px-3 py-2 text-sm text-[#ccc] hover:bg-[#D4A574]/5 transition-colors cursor-pointer"
+                            onClick={() => !outOfStock && handleSelectItem(item)}
+                            disabled={outOfStock}
+                            className={`w-full flex items-center justify-between px-3 py-2 text-sm transition-colors ${
+                              outOfStock
+                                ? "text-[#444] cursor-not-allowed"
+                                : "text-[#ccc] hover:bg-[#D4A574]/5 cursor-pointer"
+                            }`}
                           >
-                            <span>{item.ingredientName}</span>
-                            <span className="text-[10px] text-[#888] tabular-nums">
-                              {stock.toFixed(1)} {item.baseUnit}
+                            <span className={outOfStock ? "line-through" : ""}>{item.ingredientName}</span>
+                            <span className={`text-[10px] tabular-nums ${outOfStock ? "text-red-400/60" : "text-[#888]"}`}>
+                              {outOfStock ? "Out of stock" : `${stock.toFixed(1)} ${item.baseUnit}`}
                             </span>
                           </button>
                         );
@@ -567,22 +604,7 @@ export default function ConsumptionLogger() {
                 <span className="text-xs text-[#666] min-w-[4.5rem] text-right">
                   {formatTime(entry.loggedAt)}
                 </span>
-                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button
-                    onClick={() => handleStartEdit(entry)}
-                    className="p-1 rounded-md hover:bg-white/5 text-[#666] hover:text-[#D4A574] transition-colors"
-                    title="Edit"
-                  >
-                    <Pencil size={13} />
-                  </button>
-                  <button
-                    onClick={() => handleDelete(entry.consumptionLogId)}
-                    className="p-1 rounded-md hover:bg-white/5 text-[#666] hover:text-red-400 transition-colors"
-                    title="Delete"
-                  >
-                    <Trash2 size={13} />
-                  </button>
-                </div>
+                {/* Entries are final — no edits */}
               </div>
             ),
           )}

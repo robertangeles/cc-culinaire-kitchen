@@ -201,8 +201,12 @@ export async function logConsumption(
     })
     .returning();
 
-  // Deduct from stock level immediately
-  await deductStockLevel(locationId, data.ingredientId, data.quantity);
+  // Adjust stock level — deduct for usage, add back for returns
+  if (data.reason === "return_to_stock") {
+    await restoreStockLevel(locationId, data.ingredientId, data.quantity);
+  } else {
+    await deductStockLevel(locationId, data.ingredientId, data.quantity);
+  }
 
   return entry;
 }

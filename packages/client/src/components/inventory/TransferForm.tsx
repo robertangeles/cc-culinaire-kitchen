@@ -357,14 +357,18 @@ export default function TransferForm({ onClose }: { onClose: () => void }) {
                       {items.map(item => {
                         const stock = Number(item.currentQty || 0);
                         const alreadyAdded = lines.some(l => l.ingredientId === item.ingredientId);
+                        const outOfStock = stock <= 0;
+                        const disabled = alreadyAdded || outOfStock;
                         return (
                           <button
                             key={item.ingredientId}
-                            onClick={() => !alreadyAdded && addItem(item)}
-                            disabled={alreadyAdded}
+                            onClick={() => !disabled && addItem(item)}
+                            disabled={disabled}
                             className={`w-full flex items-center justify-between px-3 py-2 text-sm transition-colors ${
                               alreadyAdded
                                 ? "text-[#555] bg-[#0A0A0A] cursor-default"
+                                : outOfStock
+                                ? "text-[#444] cursor-not-allowed"
                                 : "text-[#ccc] hover:bg-[#D4A574]/5 cursor-pointer"
                             }`}
                           >
@@ -374,10 +378,10 @@ export default function TransferForm({ onClose }: { onClose: () => void }) {
                               ) : (
                                 <span className="w-4 h-4 rounded border border-[#2A2A2A]" />
                               )}
-                              <span className={alreadyAdded ? "line-through" : ""}>{item.ingredientName}</span>
+                              <span className={alreadyAdded || outOfStock ? "line-through" : ""}>{item.ingredientName}</span>
                             </div>
-                            <span className="text-[10px] text-[#888] tabular-nums">
-                              {stock.toFixed(1)} {item.baseUnit}
+                            <span className={`text-[10px] tabular-nums ${outOfStock ? "text-red-400/60" : "text-[#888]"}`}>
+                              {outOfStock ? "Out of stock" : `${stock.toFixed(1)} ${item.baseUnit}`}
                             </span>
                           </button>
                         );
