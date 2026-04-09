@@ -178,6 +178,27 @@ export function IngredientCatalog() {
         </button>
       </div>
 
+      {/* Legend */}
+      <div className="flex items-center gap-4 text-[10px] text-[#777]">
+        <span className="uppercase tracking-wider text-[#555]">Legend:</span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+          <span>OK — stock above 75% of par</span>
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+          <span>Low — stock between 25–75% of par</span>
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
+          <span>Critical — stock below 25% of par</span>
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-1.5 h-1.5 rounded-full bg-[#555]" />
+          <span>No par level set</span>
+        </span>
+      </div>
+
       {error && <p className="text-sm text-red-400">{error}</p>}
 
       {showAdd && (
