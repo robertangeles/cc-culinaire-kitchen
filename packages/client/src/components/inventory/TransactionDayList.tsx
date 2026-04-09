@@ -33,6 +33,7 @@ const REASON_LABELS: Record<string, string> = {
   spoilage: "Spoilage",
   overproduction: "Overproduction",
   trim: "Prep Trim",
+  return_to_stock: "Return to Stockroom",
   other: "Other",
 };
 

@@ -21,7 +21,7 @@ const REASONS = [
   { key: "admin", label: "Admin" },
   { key: "breakage", label: "Breakage" },
   { key: "other", label: "Other" },
-  { key: "return_to_stock", label: "Return" },
+  { key: "return_to_stock", label: "Return to Stockroom" },
 ] as const;
 
 const SHIFTS = [
@@ -56,7 +56,7 @@ function isToday(iso: string): boolean {
 
 export default function ConsumptionLogger() {
   const { selectedLocationId } = useLocation();
-  const { items: locationItems, isLoading: itemsLoading } =
+  const { items: locationItems, isLoading: itemsLoading, refresh: refreshItems } =
     useLocationIngredients(selectedLocationId);
   const { logs, isLoading: logsLoading, logConsumption, editLog, deleteLog } =
     useConsumptionLog(selectedLocationId);
@@ -138,13 +138,14 @@ export default function ConsumptionLogger() {
       });
       setShowSuccess(true);
       handleClearItem();
+      refreshItems(); // reload stock levels after deduction/return
       setTimeout(() => setShowSuccess(false), 1500);
     } catch (err: any) {
       setError(err.message || "Failed to log consumption");
     } finally {
       setSaving(false);
     }
-  }, [selectedItem, quantity, reason, shift, notes, selectedLocationId, logConsumption, handleClearItem]);
+  }, [selectedItem, quantity, reason, shift, notes, selectedLocationId, logConsumption, handleClearItem, refreshItems]);
 
   const handleStartEdit = useCallback((entry: ConsumptionLogEntry) => {
     setEditingId(entry.consumptionLogId);
