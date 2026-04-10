@@ -21,7 +21,7 @@ import {
   clonePO,
 } from "../services/purchaseOrderService.js";
 import * as thresholdService from "../services/thresholdService.js";
-import * as pdfService from "../services/pdfService.jsx";
+import * as pdfService from "../services/pdfService.js";
 
 const logger = pino({ name: "purchaseOrderController" });
 
