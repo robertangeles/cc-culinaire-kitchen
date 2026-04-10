@@ -80,6 +80,18 @@ function SidebarNav({ isGuest, isAuthenticated }: { isGuest: boolean; isAuthenti
       {/* Kitchen Operations — auth required */}
       {!isGuest && isAuthenticated && (
         <SidebarGroup label="Kitchen Operations">
+          <NavLink to="/my-shelf" className={navLinkClass}>
+            <BookMarked className="size-4" />
+            My Recipe Book
+          </NavLink>
+          <NavLink to="/inventory" className={navLinkClass}>
+            <Package className="size-4" />
+            Stock Room
+          </NavLink>
+          <NavLink to="/purchasing" className={navLinkClass}>
+            <ShoppingCart className="size-4" />
+            Purchasing
+          </NavLink>
           <NavLink to="/menu-intelligence" className={navLinkClass}>
             <BarChart3 className="size-4" />
             Menu Intelligence
@@ -92,29 +104,15 @@ function SidebarNav({ isGuest, isAuthenticated }: { isGuest: boolean; isAuthenti
             <Leaf className="size-4" />
             Waste Intelligence
           </NavLink>
-          <NavLink to="/inventory" className={navLinkClass}>
-            <Package className="size-4" />
-            Stock Room
-          </NavLink>
-          <NavLink to="/purchasing" className={navLinkClass}>
-            <ShoppingCart className="size-4" />
-            Purchasing
-          </NavLink>
         </SidebarGroup>
       )}
 
-      {/* Community & Shelf */}
+      {/* Community */}
       <SidebarGroup label="Community">
         <NavLink to="/kitchen-shelf" className={navLinkClass}>
           <LayoutGrid className="size-4" />
-          Kitchen Shelf
+          CulinAIre Recipe Book
         </NavLink>
-        {!isGuest && isAuthenticated && (
-          <NavLink to="/my-shelf" className={navLinkClass}>
-            <BookMarked className="size-4" />
-            My Shelf
-          </NavLink>
-        )}
         <NavLink to="/bench" className={navLinkClass}>
           <MessagesSquare className="size-4" />
           The Bench
