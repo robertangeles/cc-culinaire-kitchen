@@ -123,7 +123,7 @@ app.use("/sitemap.xml", sitemapRouter);
 
 // Static file serving for uploaded images (favicon, logo)
 // Ensure uploads directory exists (Render has ephemeral filesystem)
-import { mkdirSync } from "fs";
+import { mkdirSync, readFileSync } from "fs";
 const uploadsDir = join(__dirname, "../../../uploads");
 try { mkdirSync(uploadsDir, { recursive: true }); } catch { /* already exists */ }
 app.use("/uploads", express.static(uploadsDir));
@@ -235,6 +235,67 @@ app.get("/kitchen-shelf/:slug", async (req, res, next) => {
 
     res.send(html);
   } catch (err) {
+    next();
+  }
+});
+
+// Landing page SEO meta injection
+app.get("/", (req, res, next) => {
+  if (!req.headers.accept?.includes("text/html")) return next();
+  try {
+    const indexPath = join(CLIENT_DIST, "index.html");
+    let html = readFileSync(indexPath, "utf-8");
+
+    // Inject landing-page-specific meta tags
+    html = html.replace(
+      /<title>.*?<\/title>/,
+      "<title>CulinAIre Kitchen — The AI-Powered Brain for Your Kitchen</title>",
+    );
+    html = html.replace(
+      /property="og:title" content="[^"]*"/,
+      'property="og:title" content="CulinAIre Kitchen — The AI-Powered Brain for Your Kitchen"',
+    );
+    html = html.replace(
+      /property="og:description" content="[^"]*"/,
+      'property="og:description" content="Every tool your kitchen needs. AI culinary assistant, inventory, purchasing, menu intelligence, waste tracking — one platform, $97/mo."',
+    );
+    html = html.replace(
+      /name="twitter:title" content="[^"]*"/,
+      'name="twitter:title" content="CulinAIre Kitchen — The AI-Powered Brain for Your Kitchen"',
+    );
+    html = html.replace(
+      /name="twitter:description" content="[^"]*"/,
+      'name="twitter:description" content="Every tool your kitchen needs. AI culinary assistant, inventory, purchasing, menu intelligence, waste tracking — one platform, $97/mo."',
+    );
+    html = html.replace(
+      /name="description" content="[^"]*"/,
+      'name="description" content="Every tool your kitchen needs. AI culinary assistant, inventory, purchasing, menu intelligence, waste tracking — one platform, $97/mo."',
+    );
+
+    // Replace Organization JSON-LD with SoftwareApplication
+    const landingLd = JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      name: "CulinAIre Kitchen",
+      url: "https://culinaire.kitchen",
+      description:
+        "AI-powered kitchen operations platform for chefs, restaurateurs, and culinary professionals. Inventory, purchasing, menu intelligence, waste tracking, and AI culinary assistant.",
+      applicationCategory: "BusinessApplication",
+      operatingSystem: "Web",
+      offers: {
+        "@type": "Offer",
+        price: "97.00",
+        priceCurrency: "USD",
+        priceValidUntil: "2027-12-31",
+      },
+    });
+    html = html.replace(
+      /<script type="application\/ld\+json">[\s\S]*?<\/script>/,
+      `<script type="application/ld+json">${landingLd}</script>`,
+    );
+
+    res.send(html);
+  } catch {
     next();
   }
 });

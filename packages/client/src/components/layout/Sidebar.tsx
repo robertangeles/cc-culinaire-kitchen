@@ -8,7 +8,7 @@
 
 import { useState } from "react";
 import { Link, NavLink } from "react-router";
-import { ChefHat, Settings, UtensilsCrossed, Croissant, GlassWater, MessageSquare, LayoutGrid, BookMarked, MessagesSquare, BarChart3, Leaf, ClipboardList, ChevronDown, ChevronRight, Package, ShoppingCart } from "lucide-react";
+import { ChefHat, UtensilsCrossed, Croissant, GlassWater, MessageSquare, LayoutGrid, BookMarked, MessagesSquare, BarChart3, Leaf, ClipboardList, ChevronDown, ChevronRight, Package, ShoppingCart } from "lucide-react";
 import { useSettings } from "../../context/SettingsContext.js";
 import { useAuth } from "../../context/AuthContext.js";
 import { UserMenu } from "./UserMenu.js";
@@ -134,7 +134,6 @@ export function Sidebar() {
   const pageTitle = settings.page_title || "CulinAIre";
   const logoPath = settings.logo_path;
   const sidebarBg = settings.sidebar_bg || undefined;
-  const isAdmin = user?.roles.includes("Administrator") ?? false;
 
   return (
     <aside
@@ -167,16 +166,6 @@ export function Sidebar() {
 
       {/* Spacer — pushes settings + user menu to the bottom */}
       <div className="flex-1" />
-
-      {/* Settings — admin only */}
-      {isAdmin && (
-        <div className="px-3 pb-2">
-          <NavLink to="/settings" className={navLinkClass}>
-            <Settings className="size-4" />
-            Settings
-          </NavLink>
-        </div>
-      )}
 
       {/* User menu or guest sign-in prompt */}
       {isGuest ? (

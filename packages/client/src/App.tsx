@@ -6,7 +6,7 @@
  */
 
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router";
-import { createContext, useContext, useState } from "react";
+import { createContext, useContext, useState, lazy, Suspense } from "react";
 import { SettingsProvider } from "./context/SettingsContext.js";
 import { AuthProvider, useAuth } from "./context/AuthContext.js";
 import { ConversationProvider } from "./context/ConversationContext.js";
@@ -42,6 +42,8 @@ import { KitchenOnboarding } from "./components/onboarding/KitchenOnboarding.js"
 import { LocationProvider } from "./context/LocationContext.js";
 import { LocationSwitcher } from "./components/location/LocationSwitcher.js";
 import { LocationGate } from "./components/location/LocationGate.js";
+
+const LandingPage = lazy(() => import("./pages/LandingPage.js"));
 
 /**
  * Context that lets any component force a fresh ChatPage remount on "/chat/new".
@@ -112,7 +114,8 @@ export function App() {
           <AuthProvider>
             <LocationProvider>
             <Routes>
-              {/* Public auth routes (no sidebar) */}
+              {/* Public routes (no sidebar) */}
+              <Route path="/" element={<Suspense fallback={<div className="min-h-screen bg-dark" />}><LandingPage /></Suspense>} />
               <Route path="/login" element={<LoginPage />} />
               <Route path="/register" element={<RegisterPage />} />
               <Route path="/verify-email" element={<VerifyEmailPage />} />
@@ -138,7 +141,6 @@ export function App() {
                       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
                         <BackgroundStreamBanner />
                         <Routes>
-                          <Route path="/" element={<Navigate to="/chat/new" replace />} />
                           <Route path="/chat/new" element={<NewChatPage />} />
                           <Route path="/chat/:id" element={<ChatPage />} />
                           <Route path="/settings" element={<AuthenticatedOnly><SettingsPage /></AuthenticatedOnly>} />
