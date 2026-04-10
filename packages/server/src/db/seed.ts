@@ -182,6 +182,12 @@ async function seed() {
     { permissionKey: "inventory:manage", permissionDescription: "Open stock take sessions, set par levels, manage ingredient catalog" },
     { permissionKey: "inventory:transfer", permissionDescription: "Initiate and confirm inventory transfers between locations" },
     { permissionKey: "inventory:hq", permissionDescription: "HQ dashboard, approve/flag stock takes, cross-location oversight" },
+    // Purchasing & Receiving permissions
+    { permissionKey: "purchasing:draft", permissionDescription: "Create and edit draft purchase orders" },
+    { permissionKey: "purchasing:submit", permissionDescription: "Submit POs for approval or send directly to supplier" },
+    { permissionKey: "purchasing:approve", permissionDescription: "Approve or reject purchase orders above spend threshold (HQ only)" },
+    { permissionKey: "purchasing:receive", permissionDescription: "Start receiving sessions and confirm delivery receipt" },
+    { permissionKey: "purchasing:credit", permissionDescription: "Log credit notes against delivery discrepancies" },
   ];
 
   for (const p of defaultPermissions) {
@@ -205,11 +211,13 @@ async function seed() {
       "admin:dashboard", "admin:manage-users", "admin:manage-roles", "admin:manage-settings",
       "chat:access", "chat:unlimited", "org:create-organisation", "org:manage-organisation",
       "inventory:count", "inventory:manage", "inventory:transfer", "inventory:hq",
+      "purchasing:draft", "purchasing:submit", "purchasing:approve", "purchasing:receive", "purchasing:credit",
     ],
-    Subscriber: ["chat:access", "org:create-organisation", "inventory:count"],
+    Subscriber: ["chat:access", "org:create-organisation", "inventory:count", "purchasing:draft", "purchasing:receive"],
     "Paid Subscriber": [
       "chat:access", "chat:unlimited", "org:create-organisation", "org:manage-organisation",
       "inventory:count", "inventory:manage", "inventory:transfer",
+      "purchasing:draft", "purchasing:submit", "purchasing:receive", "purchasing:credit",
     ],
   };
 

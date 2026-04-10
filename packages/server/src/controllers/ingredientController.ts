@@ -30,6 +30,7 @@ import {
   listIngredientSuppliers,
   updateIngredientSupplier,
   removeIngredientSupplier,
+  listSupplierIngredientIds,
   bulkActivateItems,
   bulkDeactivateItems,
   copyActivationFromLocation,
@@ -658,6 +659,17 @@ export async function handleGetIngredientTransactions(
 
     const result = await getIngredientTransactions(ingredientId, orgId, month);
     res.json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function handleGetSupplierIngredientIds(
+  req: Request, res: Response, next: NextFunction,
+): Promise<void> {
+  try {
+    const ids = await listSupplierIngredientIds(req.params.supplierId as string);
+    res.json(ids);
   } catch (err) {
     next(err);
   }

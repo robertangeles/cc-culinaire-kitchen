@@ -19,6 +19,7 @@
   "dependencies": {
     "@ai-sdk/openai": "^1",
     "@culinaire/shared": "workspace:*",
+    "@react-pdf/renderer": "^4.4.0",
     "ai": "^4",
     "bcrypt": "^6.0.0",
     "cheerio": "^1.2.0",

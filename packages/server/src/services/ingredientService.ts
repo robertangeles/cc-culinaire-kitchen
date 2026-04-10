@@ -609,6 +609,23 @@ export async function listIngredientSuppliers(ingredientId: string) {
     );
 }
 
+/**
+ * Get all ingredient IDs linked to a specific supplier.
+ * Used by the PO form to filter the item picker by selected supplier.
+ */
+export async function listSupplierIngredientIds(supplierId: string): Promise<string[]> {
+  const rows = await db
+    .select({ ingredientId: ingredientSupplier.ingredientId })
+    .from(ingredientSupplier)
+    .where(
+      and(
+        eq(ingredientSupplier.supplierId, supplierId),
+        eq(ingredientSupplier.activeInd, true),
+      ),
+    );
+  return rows.map((r) => r.ingredientId);
+}
+
 /** Update a supplier-ingredient assignment (cost, SKU, preferred). */
 export async function updateIngredientSupplier(
   ingredientId: string,

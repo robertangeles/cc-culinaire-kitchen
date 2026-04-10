@@ -16,7 +16,12 @@ import {
   receiveLine,
   cancelPO,
   getSuggestions,
+  approvePO,
+  rejectPO,
+  clonePO,
 } from "../services/purchaseOrderService.js";
+import * as thresholdService from "../services/thresholdService.js";
+import * as pdfService from "../services/pdfService.jsx";
 
 const logger = pino({ name: "purchaseOrderController" });
 
@@ -232,6 +237,205 @@ export async function handleGetSuggestions(
     const result = await getSuggestions(storeLocationId, orgId);
     res.json(result);
   } catch (err) {
+    next(err);
+  }
+}
+
+// ─── Approve PO (HQ) ────────────────────────────────────────────
+
+export async function handleApprovePO(
+  req: Request, res: Response, next: NextFunction,
+): Promise<void> {
+  try {
+    const orgId = await resolveOrgId(req, res);
+    if (orgId === null) return;
+
+    const poId = req.params.id as string;
+    const userId = req.user!.sub;
+
+    const result = await approvePO(poId, orgId, userId);
+    logger.info({ poId, userId }, "Purchase order approved");
+    res.json(result);
+  } catch (err: any) {
+    if (err.message?.includes("Cannot") || err.message?.includes("not found")) {
+      res.status(400).json({ error: err.message });
+      return;
+    }
+    next(err);
+  }
+}
+
+// ─── Reject PO (HQ) ─────────────────────────────────────────────
+
+const RejectPOSchema = z.object({
+  reason: z.string().min(1, "Rejection reason is required").max(2000),
+});
+
+export async function handleRejectPO(
+  req: Request, res: Response, next: NextFunction,
+): Promise<void> {
+  try {
+    const orgId = await resolveOrgId(req, res);
+    if (orgId === null) return;
+
+    const poId = req.params.id as string;
+    const userId = req.user!.sub;
+
+    const parsed = RejectPOSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "Validation failed", details: parsed.error.flatten() });
+      return;
+    }
+
+    const result = await rejectPO(poId, orgId, userId, parsed.data.reason);
+    logger.info({ poId, userId }, "Purchase order rejected");
+    res.json(result);
+  } catch (err: any) {
+    if (err.message?.includes("Cannot") || err.message?.includes("not found") || err.message?.includes("required")) {
+      res.status(400).json({ error: err.message });
+      return;
+    }
+    next(err);
+  }
+}
+
+// ─── Clone PO ────────────────────────────────────────────────────
+
+const ClonePOSchema = z.object({
+  storeLocationId: z.string().uuid(),
+});
+
+export async function handleClonePO(
+  req: Request, res: Response, next: NextFunction,
+): Promise<void> {
+  try {
+    const orgId = await resolveOrgId(req, res);
+    if (orgId === null) return;
+
+    const sourcePOId = req.params.id as string;
+    const userId = req.user!.sub;
+
+    const parsed = ClonePOSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "Validation failed", details: parsed.error.flatten() });
+      return;
+    }
+
+    const result = await clonePO(sourcePOId, orgId, parsed.data.storeLocationId, userId);
+    logger.info({ sourcePOId, newPOId: result.poId, userId }, "Purchase order cloned");
+    res.status(201).json(result);
+  } catch (err: any) {
+    if (err.message?.includes("not found") || err.message?.includes("inactive") || err.message?.includes("No items")) {
+      res.status(400).json({ error: err.message });
+      return;
+    }
+    next(err);
+  }
+}
+
+// ─── Threshold settings ──────────────────────────────────────────
+
+export async function handleGetThresholds(
+  req: Request, res: Response, next: NextFunction,
+): Promise<void> {
+  try {
+    const orgId = await resolveOrgId(req, res);
+    if (orgId === null) return;
+
+    const result = await thresholdService.getOrgThresholds(orgId);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+const SetOrgThresholdSchema = z.object({
+  amount: z.number().positive("Threshold must be a positive number"),
+});
+
+export async function handleSetOrgThreshold(
+  req: Request, res: Response, next: NextFunction,
+): Promise<void> {
+  try {
+    const orgId = await resolveOrgId(req, res);
+    if (orgId === null) return;
+
+    const parsed = SetOrgThresholdSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "Validation failed", details: parsed.error.flatten() });
+      return;
+    }
+
+    await thresholdService.setOrgDefault(orgId, parsed.data.amount);
+    res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+}
+
+const SetLocationThresholdSchema = z.object({
+  storeLocationId: z.string().uuid(),
+  amount: z.number().positive("Threshold must be a positive number"),
+});
+
+export async function handleSetLocationThreshold(
+  req: Request, res: Response, next: NextFunction,
+): Promise<void> {
+  try {
+    const orgId = await resolveOrgId(req, res);
+    if (orgId === null) return;
+
+    const userId = req.user!.sub;
+
+    const parsed = SetLocationThresholdSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "Validation failed", details: parsed.error.flatten() });
+      return;
+    }
+
+    await thresholdService.setLocationOverride(orgId, parsed.data.storeLocationId, parsed.data.amount, userId);
+    res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function handleRemoveLocationThreshold(
+  req: Request, res: Response, next: NextFunction,
+): Promise<void> {
+  try {
+    const orgId = await resolveOrgId(req, res);
+    if (orgId === null) return;
+
+    const locationId = req.params.locationId as string;
+    await thresholdService.removeLocationOverride(orgId, locationId);
+    res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ─── PDF Download ────────────────────────────────────────────────
+
+export async function handleDownloadPOPdf(
+  req: Request, res: Response, next: NextFunction,
+): Promise<void> {
+  try {
+    const poId = req.params.id as string;
+    const buffer = await pdfService.generatePOPdf(poId);
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="PO-${poId.slice(0, 8)}.pdf"`);
+    res.send(buffer);
+  } catch (err: any) {
+    if (err.message?.includes("not found")) {
+      res.status(404).json({ error: err.message });
+      return;
+    }
+    if (err.message?.includes("timed out")) {
+      res.status(500).json({ error: "PDF generation timed out — please try again" });
+      return;
+    }
     next(err);
   }
 }

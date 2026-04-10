@@ -10,6 +10,7 @@ import { useState, useRef, useEffect } from "react";
 import { useLocation as useRouterLocation } from "react-router";
 import { MapPin, ChevronDown, Search, Building2 } from "lucide-react";
 import { useLocation } from "../../context/LocationContext.js";
+import NotificationBell from "./NotificationBell.js";
 
 const CLASSIFICATION_BADGE: Record<string, { bg: string; label: string }> = {
   hq: { bg: "bg-amber-500/20 text-amber-400 border-amber-500/30", label: "HQ" },
@@ -19,7 +20,8 @@ const CLASSIFICATION_BADGE: Record<string, { bg: string; label: string }> = {
 };
 
 const MODULE_MAP: Record<string, string> = {
-  "/inventory": "Inventory",
+  "/inventory": "Stock Room",
+  "/purchasing": "Purchasing",
   "/menu-intelligence": "Menu Intelligence",
   "/kitchen-copilot": "Kitchen Copilot",
   "/waste-intelligence": "Waste Intelligence",
@@ -238,10 +240,10 @@ export function KitchenOpsToolbar() {
       {/* Module name */}
       <span className="text-xs text-[#666] font-medium tracking-wide">{moduleName}</span>
 
-      {/* Right side — future extensibility */}
+      {/* Right side */}
       <div className="flex-1" />
       <div className="flex items-center gap-2">
-        {/* Future: shift selector, quick actions, notification bell */}
+        <NotificationBell />
       </div>
     </div>
   );

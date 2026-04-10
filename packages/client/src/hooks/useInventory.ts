@@ -797,7 +797,12 @@ export interface PurchaseOrder {
   poNumber: string;
   status: string;
   notes: string | null;
+  rejectedReason: string | null;
+  totalValue: string | null;
   expectedDeliveryDate: string | null;
+  submittedAt: string | null;
+  approvedAt: string | null;
+  sentAt: string | null;
   createdDttm: string;
   updatedDttm: string;
   storeLocationId: string;
@@ -929,7 +934,58 @@ export function usePurchaseOrders(locationId: string | null) {
     return [];
   }, []);
 
-  return { pos, isLoading, refresh, getDetail, createPO, submitPO, cancelPO, receiveLine, getSuggestions };
+  const approvePO = useCallback(async (poId: string) => {
+    const res = await fetch(`${API}/purchase-orders/${poId}/approve`, {
+      ...jsonOpts, method: "POST",
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || "Failed to approve purchase order");
+    }
+    await refresh();
+    return res.json();
+  }, [refresh]);
+
+  const rejectPO = useCallback(async (poId: string, reason: string) => {
+    const res = await fetch(`${API}/purchase-orders/${poId}/reject`, {
+      ...jsonOpts, method: "POST", body: JSON.stringify({ reason }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || "Failed to reject purchase order");
+    }
+    await refresh();
+    return res.json();
+  }, [refresh]);
+
+  const clonePO = useCallback(async (sourcePOId: string, storeLocationId: string) => {
+    const res = await fetch(`${API}/purchase-orders/${sourcePOId}/clone`, {
+      ...jsonOpts, method: "POST", body: JSON.stringify({ storeLocationId }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || "Failed to clone purchase order");
+    }
+    await refresh();
+    return res.json() as Promise<PurchaseOrder & { skippedItems: string[] }>;
+  }, [refresh]);
+
+  const downloadPdf = useCallback(async (poId: string) => {
+    const res = await fetch(`${API}/purchase-orders/${poId}/pdf`, opts);
+    if (!res.ok) throw new Error("Failed to download PDF");
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `PO-${poId.slice(0, 8)}.pdf`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, []);
+
+  return {
+    pos, isLoading, refresh, getDetail, createPO, submitPO, cancelPO,
+    receiveLine, getSuggestions, approvePO, rejectPO, clonePO, downloadPdf,
+  };
 }
 
 // ─── useConsumptionSummary ───────────────────────────────────────

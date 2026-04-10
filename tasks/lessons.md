@@ -272,3 +272,9 @@ Format: Problem / Fix / Rule
   8. Frontend/backend API routes match? → Audit all fetch URLs
   9. Test locally before pushing
   The devil is in the details — every missed step is a production incident.
+
+---
+
+- **Problem**: `drizzle-kit push` fails on Neon PostgreSQL with `cannot drop view pg_stat_statements_info` and `column "user_organisation_id" is in a primary key`. Neon creates explicit NOT NULL constraints on PK columns that drizzle-kit tries to reconcile, and pg_stat_statements is a Neon-managed extension.
+- **Fix**: Created an idempotent migration script (`src/db/migrate-purchasing.ts`) using raw SQL with `IF NOT EXISTS` checks. Bypasses drizzle-kit's full-schema diff entirely.
+- **Rule**: Do NOT use `drizzle-kit push` for schema changes on Neon. Write idempotent migration scripts with `addColumnIfNotExists` and `CREATE TABLE IF NOT EXISTS`. This avoids interactive prompts, Neon extension conflicts, and PK constraint drift. Keep `drizzle-kit` for local dev only.

@@ -277,6 +277,9 @@ export const organisation = pgTable("organisation", {
   organisationPinterest: varchar("organisation_pinterest", { length: 500 }),
   organisationLinkedin: varchar("organisation_linkedin", { length: 500 }),
   joinKey: varchar("join_key", { length: 25 }).notNull().unique(),
+  // Purchasing module feature flag + org-level spend threshold
+  purchasingEnabledInd: boolean("purchasing_enabled_ind").notNull().default(false),
+  defaultSpendThreshold: numeric("default_spend_threshold"),
   createdBy: integer("created_by").notNull(),
   createdDttm: timestamp("created_dttm").notNull().defaultNow(),
   updatedDttm: timestamp("updated_dttm").notNull().defaultNow(),
@@ -1143,6 +1146,9 @@ export const supplier = pgTable(
     leadTimeDays: integer("lead_time_days"),
     minimumOrderValue: numeric("minimum_order_value"),
     notes: text("notes"),
+    // Expected delivery time window (e.g. "06:00" – "08:00")
+    deliveryWindowStart: varchar("delivery_window_start", { length: 5 }),
+    deliveryWindowEnd: varchar("delivery_window_end", { length: 5 }),
     activeInd: boolean("active_ind").notNull().default(true),
     createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
     updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
@@ -1521,7 +1527,14 @@ export const purchaseOrder = pgTable(
     createdByUserId: integer("created_by_user_id").notNull().references(() => user.userId),
     approvedByUserId: integer("approved_by_user_id").references(() => user.userId),
     notes: text("notes"),
+    rejectedReason: text("rejected_reason"),
+    // Server-calculated total: SUM(orderedQty * unitCost) from DB prices
+    totalValue: numeric("total_value"),
+    pdfUrl: varchar("pdf_url", { length: 500 }),
     expectedDeliveryDate: timestamp("expected_delivery_date", { withTimezone: true }),
+    submittedAt: timestamp("submitted_at", { withTimezone: true }),
+    approvedAt: timestamp("approved_at", { withTimezone: true }),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
     createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
     updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
   },
@@ -1529,6 +1542,8 @@ export const purchaseOrder = pgTable(
     index("idx_po_org_status").on(table.organisationId, table.status),
     index("idx_po_location").on(table.storeLocationId),
     index("idx_po_supplier").on(table.supplierId),
+    // Overdue delivery checker: "get SENT POs past expected delivery"
+    index("idx_po_status_delivery").on(table.status, table.expectedDeliveryDate),
   ],
 );
 
@@ -1543,6 +1558,8 @@ export const purchaseOrderLine = pgTable(
     receivedQty: numeric("received_qty"),
     receivedUnit: varchar("received_unit", { length: 20 }),
     unitCost: numeric("unit_cost"),
+    actualUnitCost: numeric("actual_unit_cost"),
+    substitutedIngredientId: uuid("substituted_ingredient_id").references(() => ingredient.ingredientId),
     lineStatus: varchar("line_status", { length: 20 }).notNull().default("PENDING"),
     receivedByUserId: integer("received_by_user_id").references(() => user.userId),
     receivedDttm: timestamp("received_dttm", { withTimezone: true }),
@@ -1623,6 +1640,255 @@ export const inventoryTransferLine = pgTable(
   (table) => [
     index("idx_transfer_line_transfer").on(table.transferId),
     index("idx_transfer_line_ingredient").on(table.ingredientId),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// Wave 5: AI Forecasting
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Wave 6: Purchasing & Receiving System
+// ---------------------------------------------------------------------------
+
+/**
+ * The `receiving_session` table tracks a single delivery receiving event
+ * against a purchase order. Only one ACTIVE session per PO is allowed.
+ *
+ * State machine:
+ *   ACTIVE → COMPLETED | CANCELLED
+ *
+ * On COMPLETED, FIFO batches are created and stock levels updated
+ * within a single DB transaction (all-or-nothing).
+ *
+ * OLTP table, 2NF — every non-key column depends only on session_id.
+ */
+export const receivingSession = pgTable(
+  "receiving_session",
+  {
+    sessionId: uuid("session_id").defaultRandom().primaryKey(),
+    poId: uuid("po_id").notNull().references(() => purchaseOrder.poId),
+    storeLocationId: uuid("store_location_id").notNull().references(() => storeLocation.storeLocationId),
+    receivedByUserId: integer("received_by_user_id").notNull().references(() => user.userId),
+    status: varchar("status", { length: 20 }).notNull().default("ACTIVE"),
+    startedAt: timestamp("started_at", { withTimezone: true }).defaultNow().notNull(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    notes: text("notes"),
+    createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
+    updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // FK index: "get receiving sessions for a PO"
+    index("idx_receiving_session_po").on(table.poId),
+    // FK index: "get sessions at a location"
+    index("idx_receiving_session_location").on(table.storeLocationId),
+    // Active session guard: "is there already an active session for this PO?"
+    index("idx_receiving_session_active").on(table.poId, table.status),
+  ],
+);
+
+/**
+ * The `receiving_line` table stores the per-item receiving state within
+ * a receiving session. Pre-populated from PO lines when session starts.
+ *
+ * Default state is RECEIVED with received_qty = ordered_qty. Staff only
+ * act on exceptions (short, reject, price variance, substitution).
+ *
+ * OLTP table, 2NF — every non-key column depends on receiving_line_id.
+ */
+export const receivingLine = pgTable(
+  "receiving_line",
+  {
+    receivingLineId: uuid("receiving_line_id").defaultRandom().primaryKey(),
+    sessionId: uuid("session_id").notNull().references(() => receivingSession.sessionId),
+    poLineId: uuid("po_line_id").notNull().references(() => purchaseOrderLine.lineId),
+    ingredientId: uuid("ingredient_id").notNull().references(() => ingredient.ingredientId),
+    orderedQty: numeric("ordered_qty").notNull(),
+    orderedUnit: varchar("ordered_unit", { length: 20 }).notNull(),
+    receivedQty: numeric("received_qty").notNull(),
+    actualUnitCost: numeric("actual_unit_cost"),
+    status: varchar("status", { length: 20 }).notNull().default("RECEIVED"),
+    createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
+    updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // FK index: "get all lines for a session"
+    index("idx_receiving_line_session").on(table.sessionId),
+    // FK index: "link back to original PO line"
+    index("idx_receiving_line_po_line").on(table.poLineId),
+  ],
+);
+
+/**
+ * The `receiving_discrepancy` table logs delivery issues permanently.
+ * Never deleted — visible on PO record, supplier record, and HQ dashboard.
+ *
+ * Four types:
+ *   SHORT — partial delivery, shortage logged
+ *   REJECTED — item refused (quality, damage, temperature, expired, other)
+ *   PRICE_VARIANCE — invoice price differs from PO price
+ *   SUBSTITUTION — different item delivered than ordered
+ *
+ * OLTP table, 2NF — every non-key column depends on discrepancy_id.
+ */
+export const receivingDiscrepancy = pgTable(
+  "receiving_discrepancy",
+  {
+    discrepancyId: uuid("discrepancy_id").defaultRandom().primaryKey(),
+    receivingLineId: uuid("receiving_line_id").notNull().references(() => receivingLine.receivingLineId),
+    sessionId: uuid("session_id").notNull().references(() => receivingSession.sessionId),
+    supplierId: uuid("supplier_id").notNull().references(() => supplier.supplierId),
+    type: varchar("type", { length: 20 }).notNull(),
+    // SHORT fields
+    shortageQty: numeric("shortage_qty"),
+    // REJECTED fields
+    rejectionReason: varchar("rejection_reason", { length: 30 }),
+    rejectionNote: text("rejection_note"),
+    // PRICE_VARIANCE fields
+    poUnitCost: numeric("po_unit_cost"),
+    actualUnitCost: numeric("actual_unit_cost"),
+    varianceAmount: numeric("variance_amount"),
+    variancePct: numeric("variance_pct"),
+    // SUBSTITUTION fields
+    substitutedIngredientId: uuid("substituted_ingredient_id").references(() => ingredient.ingredientId),
+    // Resolution tracking (for credit notes)
+    isResolved: boolean("is_resolved").notNull().default(false),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // FK index: "get discrepancies for a session"
+    index("idx_discrepancy_session").on(table.sessionId),
+    // Supplier performance: "get all discrepancies for a supplier"
+    index("idx_discrepancy_supplier").on(table.supplierId),
+    // Dashboard filter: "get discrepancies by type"
+    index("idx_discrepancy_type").on(table.type),
+    // Unresolved: "get outstanding discrepancies for an org"
+    index("idx_discrepancy_resolved").on(table.isResolved),
+  ],
+);
+
+/**
+ * The `discrepancy_photo` table stores Cloudinary photo evidence
+ * attached to delivery discrepancies (damaged goods, wrong temperature, etc.).
+ *
+ * Photos are uploaded via the existing Cloudinary integration to the
+ * `culinaire/discrepancies` folder. Undisputable evidence for supplier disputes.
+ *
+ * OLTP table, 2NF — every non-key column depends on photo_id.
+ */
+export const discrepancyPhoto = pgTable(
+  "discrepancy_photo",
+  {
+    photoId: uuid("photo_id").defaultRandom().primaryKey(),
+    discrepancyId: uuid("discrepancy_id").notNull().references(() => receivingDiscrepancy.discrepancyId),
+    cloudinaryUrl: varchar("cloudinary_url", { length: 500 }).notNull(),
+    cloudinaryPublicId: varchar("cloudinary_public_id", { length: 200 }).notNull(),
+    uploadedByUserId: integer("uploaded_by_user_id").notNull().references(() => user.userId),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // FK index: "get all photos for a discrepancy"
+    index("idx_photo_discrepancy").on(table.discrepancyId),
+  ],
+);
+
+/**
+ * The `credit_note` table logs supplier credits issued against discrepancies.
+ * Closing the loop: discrepancy → credit note → resolved.
+ *
+ * Not AP integration — just a record the location admin can reference
+ * when contacting the supplier.
+ *
+ * OLTP table, 2NF — every non-key column depends on credit_note_id.
+ */
+export const creditNote = pgTable(
+  "credit_note",
+  {
+    creditNoteId: uuid("credit_note_id").defaultRandom().primaryKey(),
+    discrepancyId: uuid("discrepancy_id").notNull().references(() => receivingDiscrepancy.discrepancyId),
+    supplierId: uuid("supplier_id").notNull().references(() => supplier.supplierId),
+    organisationId: integer("organisation_id").notNull().references(() => organisation.organisationId),
+    creditAmount: numeric("credit_amount").notNull(),
+    creditReference: varchar("credit_reference", { length: 100 }),
+    notes: text("notes"),
+    createdByUserId: integer("created_by_user_id").notNull().references(() => user.userId),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // FK index: "get credits for a supplier"
+    index("idx_credit_supplier").on(table.supplierId),
+    // FK index: "get credits for an org"
+    index("idx_credit_org").on(table.organisationId),
+    // FK index: "get credit for a discrepancy"
+    index("idx_credit_discrepancy").on(table.discrepancyId),
+  ],
+);
+
+/**
+ * The `spend_threshold` table stores per-location overrides for the
+ * org-wide spend threshold. When null store_location_id, it represents
+ * the org default (also on organisation.default_spend_threshold for
+ * fast access). Location-specific overrides take precedence.
+ *
+ * Below threshold → PO sent directly to supplier.
+ * Above threshold → PO routed to HQ for approval.
+ *
+ * OLTP table, 2NF — every non-key column depends on threshold_id.
+ */
+export const spendThreshold = pgTable(
+  "spend_threshold",
+  {
+    thresholdId: uuid("threshold_id").defaultRandom().primaryKey(),
+    organisationId: integer("organisation_id").notNull().references(() => organisation.organisationId),
+    storeLocationId: uuid("store_location_id").references(() => storeLocation.storeLocationId),
+    thresholdAmount: numeric("threshold_amount").notNull(),
+    createdByUserId: integer("created_by_user_id").notNull().references(() => user.userId),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // One threshold per org per location (null location = org default)
+    uniqueIndex("idx_spend_threshold_unique").on(table.organisationId, table.storeLocationId),
+    // FK index: "get thresholds for an org"
+    index("idx_spend_threshold_org").on(table.organisationId),
+  ],
+);
+
+/**
+ * The `notification` table stores transactional notifications for
+ * all modules (purchasing approvals, discrepancy alerts, overdue deliveries, etc.).
+ *
+ * Polymorphic design: `type` discriminator + JSONB `payload` for type-specific data.
+ * JSONB justified here per schema standards — it's metadata, not relational data.
+ *
+ * Channels: IN_APP (displayed in notification bell), EMAIL (sent via Resend).
+ * Status flow: PENDING → SENT → READ → DISMISSED (or FAILED).
+ *
+ * OLTP table, 2NF — every non-key column depends on notification_id.
+ */
+export const notification = pgTable(
+  "notification",
+  {
+    notificationId: uuid("notification_id").defaultRandom().primaryKey(),
+    organisationId: integer("organisation_id").notNull().references(() => organisation.organisationId),
+    recipientUserId: integer("recipient_user_id").notNull().references(() => user.userId),
+    type: varchar("type", { length: 30 }).notNull(),
+    channel: varchar("channel", { length: 10 }).notNull().default("IN_APP"),
+    status: varchar("status", { length: 20 }).notNull().default("PENDING"),
+    payload: jsonb("payload").notNull().default({}),
+    relatedEntityType: varchar("related_entity_type", { length: 30 }),
+    relatedEntityId: uuid("related_entity_id"),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+    readAt: timestamp("read_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // Notification bell: "get unread in-app notifications for a user"
+    index("idx_notification_recipient_status").on(table.recipientUserId, table.status),
+    // HQ dashboard: "get notifications for an org by type"
+    index("idx_notification_org_type").on(table.organisationId, table.type),
+    // Dedup/throttle: "was this entity already notified recently?"
+    index("idx_notification_entity").on(table.relatedEntityType, table.relatedEntityId),
   ],
 );
 

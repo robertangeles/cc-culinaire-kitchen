@@ -37,6 +37,7 @@ import {
   handleCopyActivation,
   handleGetActivationStatus,
   handleGetIngredientTransactions,
+  handleGetSupplierIngredientIds,
 } from "../controllers/ingredientController.js";
 import {
   handleOpenSession,
@@ -72,7 +73,17 @@ import {
   handleReceiveLine,
   handleCancelPO,
   handleGetSuggestions,
+  handleApprovePO,
+  handleRejectPO,
+  handleClonePO,
+  handleGetThresholds,
+  handleSetOrgThreshold,
+  handleSetLocationThreshold,
+  handleRemoveLocationThreshold,
+  handleDownloadPOPdf,
 } from "../controllers/purchaseOrderController.js";
+import * as receivingController from "../controllers/receivingController.js";
+import * as notificationController from "../controllers/notificationController.js";
 
 const router = Router();
 router.use(authenticate);
@@ -102,6 +113,7 @@ router.get("/suppliers", requirePermission("inventory:manage"), handleListSuppli
 router.patch("/suppliers/:id", requirePermission("inventory:manage"), handleUpdateSupplier);
 router.delete("/suppliers/:id", requirePermission("inventory:manage"), handleDeleteSupplier);
 router.get("/suppliers/:id/locations", requirePermission("inventory:manage"), handleGetSupplierLocations);
+router.get("/suppliers/:supplierId/ingredient-ids", requirePermission("inventory:count"), handleGetSupplierIngredientIds);
 
 // ─── Location ingredient config ───────────────────────────────────
 
@@ -192,8 +204,39 @@ router.get("/purchase-orders/suggestions", requirePermission("inventory:manage")
 
 // Parameterized PO routes
 router.get("/purchase-orders/:id", requirePermission("inventory:count"), handleGetPODetail);
-router.post("/purchase-orders/:id/submit", requirePermission("inventory:manage"), handleSubmitPO);
+router.post("/purchase-orders/:id/submit", requirePermission("purchasing:submit"), handleSubmitPO);
+router.post("/purchase-orders/:id/approve", requirePermission("purchasing:approve"), handleApprovePO);
+router.post("/purchase-orders/:id/reject", requirePermission("purchasing:approve"), handleRejectPO);
+router.post("/purchase-orders/:id/clone", requirePermission("purchasing:draft"), handleClonePO);
+router.get("/purchase-orders/:id/pdf", requirePermission("purchasing:submit"), handleDownloadPOPdf);
 router.post("/purchase-orders/:id/cancel", requirePermission("inventory:manage"), handleCancelPO);
 router.post("/purchase-orders/:id/lines/:lineId/receive", requirePermission("inventory:count"), handleReceiveLine);
+
+// ─── Spend Thresholds ────────────────────────────────────────────
+
+router.get("/thresholds", requirePermission("purchasing:approve"), handleGetThresholds);
+router.put("/thresholds/org", requirePermission("purchasing:approve"), handleSetOrgThreshold);
+router.put("/thresholds/location", requirePermission("purchasing:approve"), handleSetLocationThreshold);
+router.delete("/thresholds/location/:locationId", requirePermission("purchasing:approve"), handleRemoveLocationThreshold);
+
+// ─── Delivery Receiving ──────────────────────────────────────────
+
+router.post("/receiving/sessions", requirePermission("purchasing:receive"), receivingController.handleStartSession);
+router.get("/receiving/sessions/:sessionId", requirePermission("purchasing:receive"), receivingController.handleGetSession);
+router.post("/receiving/sessions/:sessionId/lines/:lineId", requirePermission("purchasing:receive"), receivingController.handleActionLine);
+router.post("/receiving/sessions/:sessionId/confirm", requirePermission("purchasing:receive"), receivingController.handleConfirmReceipt);
+router.post("/receiving/sessions/:sessionId/cancel", requirePermission("purchasing:receive"), receivingController.handleCancelSession);
+
+// ─── Credit Notes ────────────────────────────────────────────────
+
+router.post("/credit-notes", requirePermission("purchasing:credit"), receivingController.handleCreateCreditNote);
+router.get("/credit-notes", requirePermission("purchasing:credit"), receivingController.handleGetCreditNotes);
+
+// ─── Notifications ───────────────────────────────────────────────
+
+router.get("/notifications", notificationController.handleGetUnread);
+router.get("/notifications/count", notificationController.handleGetUnreadCount);
+router.patch("/notifications/:id/read", notificationController.handleMarkAsRead);
+router.patch("/notifications/:id/dismiss", notificationController.handleDismiss);
 
 export default router;

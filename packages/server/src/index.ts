@@ -108,6 +108,7 @@ app.use("/api/prep", prepRouter);
 app.use("/api/guides", guidesRouter);
 app.use("/api/store-locations", storeLocationsRouter);
 app.use("/api/inventory", inventoryRouter);
+app.use("/api/internal", internalRouter);
 
 // Location context routes are now inside usersRouter (before /:id params)
 
@@ -145,6 +146,7 @@ import { prepRouter } from "./routes/prep.js";
 import { guidesRouter } from "./routes/guides.js";
 import storeLocationsRouter from "./routes/storeLocations.js";
 import inventoryRouter from "./routes/inventory.js";
+import internalRouter from "./routes/internal.js";
 
 app.get("/kitchen-shelf/:slug", async (req, res, next) => {
   // Only handle HTML requests (not API calls or assets)

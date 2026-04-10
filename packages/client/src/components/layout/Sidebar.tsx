@@ -8,7 +8,7 @@
 
 import { useState } from "react";
 import { Link, NavLink } from "react-router";
-import { ChefHat, Settings, UtensilsCrossed, Croissant, GlassWater, MessageSquare, LayoutGrid, BookMarked, MessagesSquare, BarChart3, Leaf, ClipboardList, ChevronDown, ChevronRight, Package } from "lucide-react";
+import { ChefHat, Settings, UtensilsCrossed, Croissant, GlassWater, MessageSquare, LayoutGrid, BookMarked, MessagesSquare, BarChart3, Leaf, ClipboardList, ChevronDown, ChevronRight, Package, ShoppingCart } from "lucide-react";
 import { useSettings } from "../../context/SettingsContext.js";
 import { useAuth } from "../../context/AuthContext.js";
 import { UserMenu } from "./UserMenu.js";
@@ -94,7 +94,11 @@ function SidebarNav({ isGuest, isAuthenticated }: { isGuest: boolean; isAuthenti
           </NavLink>
           <NavLink to="/inventory" className={navLinkClass}>
             <Package className="size-4" />
-            Inventory
+            Stock Room
+          </NavLink>
+          <NavLink to="/purchasing" className={navLinkClass}>
+            <ShoppingCart className="size-4" />
+            Purchasing
           </NavLink>
         </SidebarGroup>
       )}

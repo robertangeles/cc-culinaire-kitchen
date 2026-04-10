@@ -15,19 +15,17 @@ import { LocationDashboard } from "../components/inventory/LocationDashboard.js"
 import { StockTakeSession } from "../components/inventory/StockTakeSession.js";
 import { IngredientCatalog } from "../components/inventory/IngredientCatalog.js";
 import { StockTakeReviewQueue } from "../components/inventory/StockTakeReviewQueue.js";
-import { SupplierManager } from "../components/inventory/SupplierManager.js";
 import { ActivationWizard } from "../components/inventory/ActivationWizard.js";
 import { OpeningInventory } from "../components/inventory/OpeningInventory.js";
 import { CatalogRequestQueue } from "../components/inventory/CatalogRequestQueue.js";
 import ConsumptionLogger from "../components/inventory/ConsumptionLogger.js";
-import PurchaseOrderList from "../components/inventory/PurchaseOrderList.js";
 import TransferList from "../components/inventory/TransferList.js";
 import { Tooltip } from "../components/ui/Tooltip.js";
-import { Package, ClipboardCheck, Utensils, ShieldCheck, Truck, Settings, FileQuestion, FileEdit, ShoppingCart, ArrowRightLeft } from "lucide-react";
+import { Package, ClipboardCheck, Utensils, ShieldCheck, Settings, FileQuestion, FileEdit, ArrowRightLeft } from "lucide-react";
 
 type TransferSubView = "usage" | "transfers";
 
-type InventoryTab = "dashboard" | "setup" | "stock-take" | "log" | "purchase-orders" | "review" | "ingredients" | "suppliers" | "requests";
+type InventoryTab = "dashboard" | "setup" | "stock-take" | "log" | "review" | "ingredients" | "requests";
 
 export function InventoryPage() {
   const { user, isGuest } = useAuth();
@@ -49,14 +47,12 @@ export function InventoryPage() {
       { key: "dashboard", label: "Dashboard", icon: Package },
       { key: "setup", label: "Setup", icon: Settings },
       { key: "stock-take", label: "Stock Take", icon: ClipboardCheck },
-      { key: "log", label: "Stock Transfer", icon: FileEdit },
-      { key: "purchase-orders", label: "Orders", icon: ShoppingCart },
+      { key: "log", label: "Transfers", icon: FileEdit },
     ];
     if (isOrgAdmin) {
       t.push({ key: "review", label: "Review", icon: ShieldCheck });
       t.push({ key: "requests", label: "Requests", icon: FileQuestion });
       t.push({ key: "ingredients", label: "Catalog", icon: Utensils });
-      t.push({ key: "suppliers", label: "Suppliers", icon: Truck });
     }
     return t;
   }, [isOrgAdmin]);
@@ -88,7 +84,7 @@ export function InventoryPage() {
               <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#D4A574] to-[#C4956A] flex items-center justify-center shadow-[0_0_12px_rgba(212,165,116,0.2)]">
                 <Package className="size-5 text-[#0A0A0A]" />
               </div>
-              Inventory
+              Stock Room
             </h1>
           </div>
 
@@ -180,17 +176,11 @@ export function InventoryPage() {
               {transferView === "usage" ? <ConsumptionLogger /> : <TransferList />}
             </div>
           )}
-          {activeTab === "purchase-orders" && (
-            <PurchaseOrderList />
-          )}
           {activeTab === "review" && (
             <StockTakeReviewQueue sessions={pendingReviews} refresh={refreshReviews} />
           )}
           {activeTab === "ingredients" && (
             <IngredientCatalog />
-          )}
-          {activeTab === "suppliers" && (
-            <SupplierManager />
           )}
           {activeTab === "requests" && isOrgAdmin && <CatalogRequestQueue />}
         </div>

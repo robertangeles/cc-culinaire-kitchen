@@ -439,28 +439,43 @@ function EditIngredientModal({
           </div>
 
           <div className="grid grid-cols-3 gap-2">
-            <select value={cat} onChange={(e) => setCat(e.target.value)}
-              className="px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white focus:outline-none">
-              {editModalCategories.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
-            </select>
-            <select value={unit} onChange={(e) => setUnit(e.target.value)}
-              className="px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white focus:outline-none">
-              {UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
-            </select>
-            <div className="relative">
-              <DollarSign className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-[#666]" />
-              <input type="text" value={cost} onChange={(e) => setCost(e.target.value)}
-                placeholder="Cost/unit"
-                className="w-full pl-8 pr-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none" />
+            <div>
+              <label className="block text-[10px] uppercase tracking-wider text-[#666] mb-1">Category</label>
+              <select value={cat} onChange={(e) => setCat(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white focus:outline-none">
+                {editModalCategories.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] uppercase tracking-wider text-[#666] mb-1">UOM</label>
+              <select value={unit} onChange={(e) => setUnit(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white focus:outline-none">
+                {UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] uppercase tracking-wider text-[#666] mb-1">Cost / Unit</label>
+              <div className="relative">
+                <DollarSign className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-[#666]" />
+                <input type="text" value={cost} onChange={(e) => setCost(e.target.value)}
+                  placeholder="0.00"
+                  className="w-full pl-8 pr-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none" />
+              </div>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <input type="text" value={par} onChange={(e) => setPar(e.target.value)}
-              placeholder="Min stock (par level)"
-              className="px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none" />
-            <input type="text" value={reorder} onChange={(e) => setReorder(e.target.value)}
-              placeholder="Reorder qty"
-              className="px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none" />
+            <div>
+              <label className="block text-[10px] uppercase tracking-wider text-[#666] mb-1">Par Level (min stock)</label>
+              <input type="text" value={par} onChange={(e) => setPar(e.target.value)}
+                placeholder="0"
+                className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none" />
+            </div>
+            <div>
+              <label className="block text-[10px] uppercase tracking-wider text-[#666] mb-1">Reorder Qty</label>
+              <input type="text" value={reorder} onChange={(e) => setReorder(e.target.value)}
+                placeholder="0"
+                className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none" />
+            </div>
           </div>
           <textarea value={desc} onChange={(e) => setDesc(e.target.value)}
             placeholder="Description" rows={2}
