@@ -34,6 +34,17 @@ coverage/
 
 # Local tooling state
 .claude/
+.gstack/
 
 # User uploads
 uploads/
+
+# E2E test artifacts
+packages/client/e2e-screenshots/
+packages/client/tests/e2e/_artifacts/
+packages/client/tests/e2e/__snapshots__/
+packages/client/playwright-report/
+packages/client/test-results/
+
+# E2E credentials
+packages/client/.env.test
