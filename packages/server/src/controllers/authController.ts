@@ -162,7 +162,12 @@ export async function handleLogin(
     setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
 
     logger.info({ userId: result.user.userId }, "User logged in");
-    res.json({ user: result.user });
+    // `tokens` is included for native clients (mobile) that don't use cookies.
+    // The web client ignores this field and continues to read auth from cookies.
+    res.json({
+      user: result.user,
+      tokens: { accessToken: tokens.accessToken, refreshToken: tokens.refreshToken },
+    });
   } catch (err: unknown) {
     if (err instanceof Error) {
       switch (err.message) {
@@ -196,7 +201,8 @@ export async function handleLogout(
   next: NextFunction,
 ) {
   try {
-    const rawRefreshToken = req.cookies?.refresh_token;
+    // Web sends the refresh token via cookie; native mobile sends it in the body.
+    const rawRefreshToken = req.cookies?.refresh_token ?? req.body?.refreshToken;
     if (rawRefreshToken) {
       await revokeRefreshToken(rawRefreshToken);
     }
@@ -218,7 +224,8 @@ export async function handleRefresh(
   next: NextFunction,
 ) {
   try {
-    const rawRefreshToken = req.cookies?.refresh_token;
+    // Web sends the refresh token via cookie; native mobile sends it in the body.
+    const rawRefreshToken = req.cookies?.refresh_token ?? req.body?.refreshToken;
     if (!rawRefreshToken) {
       res.status(401).json({ error: "No refresh token provided." });
       return;
@@ -228,7 +235,12 @@ export async function handleRefresh(
 
     setAuthCookies(res, accessToken, rawRefreshToken);
 
-    res.json({ user: authUser });
+    // `tokens.accessToken` is included for native clients that don't use cookies.
+    // Web ignores it.
+    res.json({
+      user: authUser,
+      tokens: { accessToken, refreshToken: rawRefreshToken },
+    });
   } catch (err: unknown) {
     if (err instanceof Error) {
       if (
@@ -528,7 +540,11 @@ export async function handleMfaVerify(
     setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
 
     logger.info({ userId: authUser.userId }, "User completed MFA login");
-    res.json({ user: authUser });
+    // `tokens` for native clients; web ignores.
+    res.json({
+      user: authUser,
+      tokens: { accessToken: tokens.accessToken, refreshToken: tokens.refreshToken },
+    });
   } catch (err: unknown) {
     if (err instanceof Error) {
       if (err.message === "INVALID_MFA_SESSION") {

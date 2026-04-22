@@ -18,11 +18,25 @@ declare global {
 }
 
 /**
- * Verifies the JWT access token from cookies and attaches the decoded
- * payload to `req.user`. Returns 401 if no valid token is present.
+ * Extracts the access token from either the `Authorization: Bearer <token>`
+ * header (preferred for native mobile clients) or the `access_token` cookie
+ * (used by the web client). Returns null if neither is present.
+ */
+function extractAccessToken(req: Request): string | null {
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith("Bearer ")) {
+    const headerToken = authHeader.slice(7).trim();
+    if (headerToken) return headerToken;
+  }
+  return req.cookies?.access_token ?? null;
+}
+
+/**
+ * Verifies the JWT access token (from Bearer header or cookie) and attaches
+ * the decoded payload to `req.user`. Returns 401 if no valid token is present.
  */
 export function authenticate(req: Request, res: Response, next: NextFunction) {
-  const token = req.cookies?.access_token;
+  const token = extractAccessToken(req);
 
   if (!token) {
     res.status(401).json({ error: "Authentication required." });

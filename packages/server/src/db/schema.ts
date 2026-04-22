@@ -1917,3 +1917,37 @@ export const forecastRecommendation = pgTable(
     index("idx_forecast_ingredient").on(table.ingredientId),
   ],
 );
+
+// ---------------------------------------------------------------------------
+// Mobile client support
+// ---------------------------------------------------------------------------
+
+/**
+ * The `device_token` table stores push notification tokens registered by the
+ * mobile client (packages/mobile). One user can have multiple devices; each
+ * device registers its FCM (Android) or APNs (iOS, later) token here.
+ *
+ * Tokens rotate periodically on both platforms — the mobile client is expected
+ * to re-register on each token refresh. Uniqueness is enforced on `token_value`
+ * to dedupe, not on (user_id, platform).
+ *
+ * OLTP table, 2NF — every non-key column depends on device_token_id.
+ */
+export const deviceToken = pgTable(
+  "device_token",
+  {
+    deviceTokenId: uuid("device_token_id").defaultRandom().primaryKey(),
+    userId: integer("user_id").notNull().references(() => user.userId),
+    tokenValue: varchar("token_value", { length: 500 }).notNull().unique(),
+    platform: varchar("platform", { length: 10 }).notNull(),
+    lastUsedDttm: timestamp("last_used_dttm", { withTimezone: true }),
+    createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
+    updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // FK index: "get all device tokens for a user" — used when fanning out a push.
+    index("idx_device_token_user").on(table.userId),
+    // Housekeeping: "find tokens not used in N days for pruning."
+    index("idx_device_token_last_used").on(table.lastUsedDttm),
+  ],
+);

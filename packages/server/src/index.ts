@@ -65,8 +65,23 @@ app.use(helmet({
     },
   },
 }));
+// Allow the web client (CLIENT_URL) and the native mobile build's webview origins.
+// Capacitor 5+ on Android uses `https://localhost`; the legacy scheme is `capacitor://localhost`.
+// iOS (deferred) uses `capacitor://localhost` too. Requests with no Origin header (e.g. curl,
+// server-to-server) are allowed through — CORS only matters for browser-originated requests.
+const ALLOWED_ORIGINS = new Set<string>([
+  CLIENT_URL,
+  "https://localhost",
+  "capacitor://localhost",
+]);
 app.use(cors({
-  origin: CLIENT_URL,
+  origin: (origin, callback) => {
+    if (!origin || ALLOWED_ORIGINS.has(origin)) {
+      callback(null, true);
+      return;
+    }
+    callback(new Error(`Origin not allowed by CORS: ${origin}`));
+  },
   credentials: true,
 }));
 app.use(express.json({ limit: "10mb" }));
@@ -109,6 +124,7 @@ app.use("/api/guides", guidesRouter);
 app.use("/api/store-locations", storeLocationsRouter);
 app.use("/api/inventory", inventoryRouter);
 app.use("/api/internal", internalRouter);
+app.use("/api/notifications", notificationsRouter);
 
 // Location context routes are now inside usersRouter (before /:id params)
 
@@ -147,6 +163,7 @@ import { guidesRouter } from "./routes/guides.js";
 import storeLocationsRouter from "./routes/storeLocations.js";
 import inventoryRouter from "./routes/inventory.js";
 import internalRouter from "./routes/internal.js";
+import notificationsRouter from "./routes/notifications.js";
 
 app.get("/kitchen-shelf/:slug", async (req, res, next) => {
   // Only handle HTML requests (not API calls or assets)
