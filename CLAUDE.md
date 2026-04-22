@@ -1,5 +1,22 @@
 # CLAUDE.md
 
+# Project Overview
+
+CulinAIre Kitchen is a multi-module operating system for working culinary professionals — the line cook trying to fix a broken hollandaise at midnight, the restaurateur approving POs across two locations, the patissier iterating on a new dough. It's not a recipe site and it's not a spreadsheet replacement. It's an AI-grounded workbench that sits next to the actual cooking and the actual running of a kitchen.
+
+The product clusters into roughly four lobes today, all reachable from a single sidebar:
+
+-   **Chat Assistant** — the founding module. A culinary knowledge chatbot grounded in curated content for technique, pastry, spirits, and ingredients. The "ask anything, get a real answer" door.
+-   **Creative Labs** — Recipe Lab, Patisserie Lab, Spirits Lab. R&D space for developing new dishes, pastries, and cocktails.
+-   **Kitchen Operations** — the running-a-kitchen toolkit: Recipe Book, Stock Room (inventory), Purchasing (POs, approvals, receiving with photo evidence and credit notes), Menu Intelligence, Kitchen Copilot, Waste Intelligence. This is the area you've been pushing hardest lately — the Purchasing v1 work in the recent commits is here.
+-   **Community** — a shared CulinAIre Recipe Book + The Bench (real-time chat for the operator/chef community).
+
+The audience is operators, not engineers, so copy is plain English, key info stays above the fold, no jarring loading flashes during normal flows, no scrolling for the things they look at most.
+
+In short: knowledge access + creative R&D + day-to-day kitchen ops + community, wrapped in an AI workbench that feels like it was built by someone who's actually stood on the line.
+
+------------------------------------------------------------------------
+
 Project Rules for Claude Code Project: CulinAIre Kitchen
 
 ------------------------------------------------------------------------
@@ -130,30 +147,6 @@ Every debugging response must follow this structure:
 - Root cause: [only if confirmed by evidence]
 - Fix: [only after root cause is confirmed]
 - Verify with: [exact command or test]
-
-------------------------------------------------------------------------
-
-# Project Overview
-
-CulinAIre Kitchen is an AI-powered platform for chefs, restaurateurs,
-and culinary professionals.
-
-The first module is the **Culinary Knowledge Chatbot**, which provides
-conversational assistance for:
-
--   cooking techniques
--   culinary troubleshooting
--   ingredient knowledge
--   pastry and spirits fundamentals
-
-Future modules may include:
-
--   Recipe Development Lab
--   Culinary Ratio Engine
--   Menu Intelligence
--   Kitchen Operations Copilot
-
-The system must be modular and extensible.
 
 ------------------------------------------------------------------------
 
