@@ -1,144 +1,148 @@
 # CulinAIre Kitchen — TODO
 
+_Last updated: 2026-04-22. Reflects actual codebase state, not aspirational._
+
+---
+
 ## Completed
 
 ### Phase 1 — Core Chat
-- [x] Project scaffolding and initial setup (pnpm monorepo, Turborepo)
-- [x] Implement Culinary Knowledge Chatbot UI (React 19 + Vite)
-- [x] Wire up AI service with Vercel AI SDK (streamText, useChat)
-- [x] Create knowledge base content (techniques, pastry, spirits, ingredients)
-- [x] Write system and technique prompt templates
-- [x] Set up database with Drizzle ORM (PostgreSQL on Railway)
+- [x] Project scaffolding (pnpm monorepo, Turborepo)
+- [x] Culinary Knowledge Chatbot UI (React 19 + Vite)
+- [x] AI service with Vercel AI SDK (streamText, useChat)
+- [x] Knowledge base content (techniques, pastry, spirits, ingredients)
+- [x] System and technique prompt templates
+- [x] Database with Drizzle ORM (PostgreSQL on Render)
 
 ### Phase 2 — Settings, History, Appearance
-- [x] Sidebar: Settings at bottom, version footer
 - [x] Prompt versioning (7 max, rollback, version history UI)
-- [x] Chat/Conversation history (persist, sidebar list, continue where left off)
+- [x] Chat/Conversation history (persist, sidebar list, continue)
 - [x] Site Settings tab (page title, meta, favicon/logo upload, footer text)
 - [x] Appearance tab (chat window width + height)
-- [x] Push all schemas to DB
-- [x] Dynamic sidebar branding (page_title + logo_path, clickable to home)
-- [x] Footer text from settings (center-justified)
+- [x] Dynamic sidebar branding (logo + page_title, clickable to home)
 - [x] Upload image preview fix (Vite proxy for /uploads)
 
 ### Phase 3 — Auth, Roles, Profile
-- [x] Add authentication with Better Auth (JWT + httpOnly cookies)
+- [x] Authentication with Better Auth (JWT + httpOnly cookies)
 - [x] RBAC: Roles (Administrator, User, Chef) + granular permissions
-- [x] Profile page with tabs (Account, Password, Organisation)
-- [x] Avatar upload (POST /api/users/profile/avatar)
+- [x] Profile page (Account, Password, Organisation tabs)
+- [x] Avatar upload + crop/resize (react-easy-crop, canvas blob upload)
 - [x] Organisation create/join with CULINAIRE-prefixed keys
-- [x] Rename "Admin" → "Administrator" + permission key renames
 - [x] Encrypted credentials management (Integrations tab)
 - [x] Stripe integration (subscription tiers, webhooks)
 - [x] MFA with TOTP (otplib)
 - [x] OAuth (Google) login
 
-### Phase 4 — Multi-Prompt, User Management, Polish
+### Phase 4 — User Management + Polish
 - [x] Multi-prompt management (dynamic prompts, auto-generated keys)
-- [x] Integrations tab reorganization (sub-tabs by category)
-- [x] User management table with search, pagination, role assignment
-- [x] User detail slide-over panel (account info, email, delete)
-- [x] User deletion with cascade (messages, conversations, roles, tokens)
+- [x] Integrations tab (sub-tabs by category, per-prompt model selector)
+- [x] User management table (search, pagination, role assignment)
+- [x] User detail slide-over (account info, email, delete, auto-save)
+- [x] User deletion with cascade
 - [x] Direct email to users via Resend
-- [x] Email verification badges in UsersTab
-- [x] ARIA attributes on all tabbed interfaces (Settings, Profile, Integrations, Prompts)
-- [x] Keyboard navigation (arrow keys) for tab bars
-- [x] Focus trapping + Escape close on slide-over panels (UserDetailPanel, VersionHistory)
-- [x] JSDoc standardization across all controllers and services
+- [x] ARIA attributes + keyboard navigation across all tabbed interfaces
+- [x] JSDoc standardization across controllers and services
 
-### Phase 5A — Bug Fixes + Rate Limiting
-- [x] Fix sidebar not extending to bottom edge of viewport
-- [x] Profile photo upload error feedback (inline error near avatar)
-- [x] Compose email error handling (Resend SDK `{ data, error }` checking)
-- [x] Chat-specific rate limiting (20 req/min per user, `express-rate-limit`)
+### Phase 5 — Auth Hardening + Infrastructure
+- [x] Chat-specific rate limiting (express-rate-limit)
+- [x] Forgot password flow (1hr token, one-time use)
+- [x] Profile address fields + bio
+- [x] PII encryption (separate keys, dual-write migration, hash-for-lookup)
+- [x] SEO (sitemap.xml, robots.txt, Open Graph, JSON-LD, canonical URLs)
+- [x] Guest mode (sessions, usage limits, guest-to-user conversion)
+- [x] Web search toggle (Anthropic web_search tool via SSE transformer)
+- [x] IP-based anti-abuse (3 sessions/IP, server-side token generation)
+- [x] Token refresh hardening (12min interval, retry logic, sameSite: lax)
+- [x] Credential reveal endpoint (GET /api/credentials/:key/reveal, audit logged)
 
-### Phase 5B — Schema Changes + Forgot Password
-- [x] Migration: address fields + bio + password_reset table
-- [x] Forgot password flow (request + reset endpoints, 1hr token, one-time use)
-- [x] Profile address fields + bio UI (6-field address form, 300-char bio)
-- [x] Organisation address fields UI (structured address)
+### Phase 6 — Knowledge Expansion + Creative Labs
+- [x] pgvector knowledge store (knowledge_document + IVFFlat index)
+- [x] Knowledge sync on startup (SHA-256 hash check + embedding)
+- [x] Vector search with keyword fallback (text-embedding-3-small)
+- [x] Kitchen profile (4-step onboarding wizard, injected into AI system prompt)
+- [x] Recipe Lab — recipe generation with hero image (recipes domain)
+- [x] Patisserie Lab (patisserie domain)
+- [x] Spirits Lab (spirits domain)
+- [x] Recipe persistence, versioning, ratings, reviews
+- [x] My Shelf + Kitchen Shelf (public gallery) + recipe detail page
+- [x] Recipe edit, refine, image regeneration end-to-end
+- [x] Load More pagination for My Shelf + Kitchen Shelf
 
-### Phase 5C — PII Encryption
-- [x] Crypto utility extension (encryptPii, decryptPii, hashForLookup with separate keys)
-- [x] Schema: encryption columns (_enc, _iv, _tag, _hash for email)
-- [x] PII service layer (encryptUserPii, decryptUserPii, encryptOrgPii, decryptOrgPii)
-- [x] Dual-write/dual-read in auth, user, and org services
-- [x] Login via email hash lookup (transition-safe with OR clause)
+### Phase 7 — Store Locations + Multi-Location
+- [x] Store Locations (CRUD, hours, settings per location)
+- [x] Multi-location staff assignment (userStoreLocation)
+- [x] Location context — AI and ops modules scoped to active location
+- [x] Location-gated routes (Inventory, Purchasing, Kitchen Ops, Waste, Menu)
 
-### Phase 5D — User Management + UX
-- [x] Editable UserDetailPanel (PATCH /api/users/:id for name, email, status)
-- [x] Auto-save on tab change (dirty tracking via ref comparison)
-- [x] Chat sidebar auto-refresh (ConversationContext with shared refresh)
-- [x] OAuth provider separation in Integrations tab
+### Phase 8 — OpenRouter + AI Configuration
+- [x] Migrate all AI providers to OpenRouter unified gateway
+- [x] Per-prompt model selector in admin Integrations tab
+- [x] AI Configuration panel (model options, provider routing)
 
-### Phase 5E — Profile Enhancements
-- [x] Profile photo crop/resize (react-easy-crop modal, canvas blob upload)
+### Phase 9 — Intelligence Suite
+- [x] Menu Intelligence — menu item management, analysis, recommendations
+- [x] Import recipes into Menu Intelligence
+- [x] Kitchen Copilot — menu-driven prep workflow with prep sessions and tasks
+- [x] Waste Intelligence — waste logging, analytics, digest
+- [x] User Guide system — contextual help sidebar for Intelligence Suite
+- [x] Weekly digest for waste
 
-### Phase 5F — SEO + Sitemap
-- [x] Sitemap.xml generation (dynamic route at /sitemap.xml)
-- [x] robots.txt (allow /, block protected routes)
-- [x] Open Graph + Twitter Card meta tags
-- [x] JSON-LD structured data (Organization schema)
-- [x] Canonical URLs + per-route meta via usePageMeta
+### Phase 10 — The Bench (Community)
+- [x] Bench channels, messages, reactions, mentions, pins
+- [x] Direct message threads
+- [x] Real-time WebSocket (benchSocketService)
+- [x] Full dark UI
 
-### Phase 5G — Guest Mode
-- [x] Guest session backend (guest_session table, guestService, guestAuth middleware)
-- [x] Guest usage limit (10 conversations, 403 with registrationRequired)
-- [x] Guest conversation persistence (guestSessionToken on conversation table)
-- [x] Guest-to-user conversion (link conversations on registration)
-- [x] Guest frontend (AuthContext, ChatContainer, Sidebar, LoginPage)
+### Phase 11 — Inventory System (Waves 1–5)
+- [x] Ingredient catalog (types, suppliers, allergens, par levels, cost)
+- [x] Multi-supplier per item, supplier operational fields
+- [x] Stock take — location dashboard, opening count, cycle count vs full
+- [x] HQ review (approve / flag stock take sessions)
+- [x] Offline sync + unit tests
+- [x] Wave 2: Stock transfers + item transaction history (calendar view)
+- [x] Wave 3–5: Purchase Orders, inter-location transfers, AI forecasting
+- [x] Transfer UX — expandable rows, category pickers, return to stock
+- [x] FIFO batch tracking, consumption logs, spend thresholds, forecast recommendations
 
-### Phase 5H — Web Search for AI
-- [x] Web search toggle in admin Site Settings (web_search_enabled)
-- [x] Conditional Anthropic web_search_20250305 tool in aiService
-- [x] MaxSteps increases from 3 to 5 when web search is enabled
+### Phase 12 — Purchasing & Receiving
+- [x] Purchase Orders (create, approve, multi-location)
+- [x] Receiving sessions — line-by-line receiving against POs
+- [x] Discrepancies with photo evidence
+- [x] Credit notes
+- [x] Sidebar nav restructure for Kitchen Operations
+- [x] Playwright E2E suite for Purchasing & Receiving harness
 
-### Phase 5I — Default Landing + Anti-Abuse
-- [x] Auto-initialize guest session on first visit (ProtectedRoute + AuthContext)
-- [x] Remove "Continue as Guest" button from LoginPage
-- [x] IP-based anti-abuse tracking (ip_address column, 3 sessions/IP limit)
-- [x] Server-side guest token generation (moved from client to server)
-- [x] Trust proxy configuration for Railway deployment
-- [x] Guest limit reached → redirect to login page
+### Phase 13 — Landing + Admin UX
+- [x] Public landing page
+- [x] Kitchen profile accordion in admin settings
+- [x] Admin settings UX overhaul
 
-### Phase 6 — Knowledge Expansion + Recipe Labs
-- [x] Create feature branch: `feature/knowledge-expansion-recipe-lab`
-- [x] DB migration: `add-knowledge-vector.ts` (knowledge_document table + pgvector + IVFFlat index)
-- [x] DB migration: `add-kitchen-profile.ts` (kitchen_profile table + user_id index)
-- [x] Schema: added `knowledgeDocument` + `kitchenProfile` Drizzle table definitions
-- [x] Settings: added `vector_search_enabled: "false"` default (safe rollout flag)
-- [x] Upgraded `knowledgeService.ts`: `syncDocuments()` startup sync (SHA-256 hash check + pgvector embed), `vectorSearch()` via `@ai-sdk/openai` text-embedding-3-small, keyword fallback on failure
-- [x] Wrote `userContextService.ts`: `getProfile()`, `upsertProfile()`, `buildContextString()` (kitchen context injected into AI system prompt)
-- [x] Updated `systemPrompt.md`: allergen guardrail (non-negotiable), confidence language tiers, `{{KITCHEN_CONTEXT}}` placeholder
-- [x] Updated `aiService.ts`: kitchen context injection replacing `{{KITCHEN_CONTEXT}}` placeholder
-- [x] Wrote three recipe prompt files: `prompts/recipe/recipePrompt.md`, `patisseriePrompt.md`, `spiritsPrompt.md` (domain-specific AI personas)
-- [x] Wrote `recipeService.ts`: `generateRecipe()` with shared Zod schema, retry + prose fallback, hero image via imageService
-- [x] Wrote `recipeController.ts`: input validation + domain routing
-- [x] Wrote `recipes.ts` route: POST /api/recipes/generate, /patisserie, /spirits
-- [x] Wrote `kitchenProfileController.ts`: GET/PUT /api/users/kitchen-profile
-- [x] Updated `users.ts` route: added kitchen-profile endpoints
-- [x] Updated `index.ts`: syncDocuments() replaces buildIndex(), recipesRouter mounted
-- [x] Wrote `KitchenWizard.tsx`: 4-step onboarding modal
-- [x] Wrote `KitchenOnboarding.tsx`: top-level onboarding orchestrator
-- [x] Wrote `RecipeForm.tsx`: domain-aware recipe generation form
-- [x] Wrote `RecipeHero.tsx`: full-width hero image component
-- [x] Wrote `RecipeCard.tsx`: two-column ingredients/method layout with interactive checkboxes
-- [x] Wrote `RecipeLabPage.tsx`: domain-aware page (recipe/patisserie/spirits)
-- [x] Updated `Sidebar.tsx`: added Recipe Lab / Patisserie Lab / Spirits Lab nav links
-- [x] Updated `App.tsx`: added /recipes, /patisserie, /spirits routes + KitchenOnboarding overlay
-- [x] Wrote eval suite: `knowledge-search.eval.ts` (20 cases), `recipe-output.eval.ts` (15 cases), `allergen-guardrail.eval.ts` (10 cases)
+### Phase 14 — Mobile + Notifications
+- [x] Mobile client authentication (device token support)
+- [x] Notification service + push notifications
+- [x] Device token table
+
+---
 
 ## Up Next
-- [ ] Run DB migrations on Railway: `add-knowledge-vector.ts` + `add-kitchen-profile.ts`
-- [ ] Enable pgvector extension in Railway PostgreSQL dashboard
-- [ ] Add `OPENAI_API_KEY` credential via Integrations panel (for embeddings)
-- [ ] Flip `vector_search_enabled = true` in Site Settings once pgvector is confirmed
-- [ ] Rotate exposed Anthropic API key
-- [ ] Deploy to Railway
-- [ ] Merge feature branch to main (`--no-ff`)
 
-## Future Modules
-- [ ] Recipe Development Lab
+_Nothing confirmed outstanding. New work to be defined._
+
+### Candidates (not started)
+- [ ] Purchasing v2 — supplier invoice reconciliation against credit notes
+- [ ] Waste Intelligence v2 — AI root cause suggestions, cost impact per item
+- [ ] Menu Intelligence v2 — margin analysis, engineering matrix (star/plow/puzzle/dog)
+- [ ] Recipe Lab social sharing (share to Bench, community reactions)
+- [ ] Mobile app (React Native or PWA shell wrapping existing web)
+- [ ] Analytics dashboard (fact_usage star schema — defined in DB standards, not yet built)
+- [ ] Onboarding improvements (guided first-run for new orgs)
+- [ ] Drizzle-kit migration strategy for Neon (idempotent scripts established in lessons.md #45)
+
+---
+
+## Future Modules (Backlog)
 - [ ] Culinary Ratio Engine
-- [ ] Menu Intelligence
-- [ ] Kitchen Operations Copilot
+- [ ] Food Cost Calculator (per dish, per menu)
+- [ ] Supplier portal (external supplier access to POs)
+- [ ] Compliance / HACCP logging
+- [ ] Rostering / Staff scheduling
