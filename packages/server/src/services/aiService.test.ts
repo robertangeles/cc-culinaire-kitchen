@@ -32,14 +32,29 @@ vi.mock("./userContextService.js", () => ({
 
 // Capture streamText calls
 let capturedStreamTextArgs: any = null;
-const mockPipeDataStream = vi.fn(async () => {});
+
+/** Build a fresh mock streamText result that exposes the surface streamChat now uses. */
+function makeStreamTextResult() {
+  return {
+    toDataStream: vi.fn(() => {
+      // Empty stream — closes immediately. Triggers the fallback path in streamChat.
+      return new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.close();
+        },
+      });
+    }),
+    finishReason: Promise.resolve("stop"),
+  };
+}
+
 vi.mock("ai", async () => {
   const actual = await vi.importActual<typeof import("ai")>("ai");
   return {
     ...actual,
     streamText: vi.fn((args: any) => {
       capturedStreamTextArgs = args;
-      return { pipeDataStreamToResponse: mockPipeDataStream };
+      return makeStreamTextResult();
     }),
   };
 });
@@ -48,6 +63,8 @@ vi.mock("ai", async () => {
 function createMockResponse() {
   return {
     setHeader: vi.fn(),
+    write: vi.fn(),
+    end: vi.fn(),
   } as any;
 }
 
@@ -108,7 +125,7 @@ describe("aiService — streamChat", () => {
     vi.doMock("ai", () => ({
       streamText: vi.fn((args: any) => {
         capturedStreamTextArgs = args;
-        return { pipeDataStreamToResponse: mockPipeDataStream };
+        return makeStreamTextResult();
       }),
       tool: vi.fn((config: any) => config),
     }));
@@ -148,13 +165,32 @@ describe("aiService — streamChat", () => {
     expect(Object.keys(capturedStreamTextArgs.tools).length).toBeGreaterThan(0);
   });
 
-  it("sets maxSteps to 8 for web search and 5 for normal", async () => {
-    // Normal mode
+  it("sets maxSteps to 12 in normal mode (raised from 5 to give the model room to call tools and still produce text)", async () => {
     const { streamChat } = await import("./aiService.js");
     await streamChat(
       [{ role: "user", content: "Hello" }],
       createMockResponse(),
     );
-    expect(capturedStreamTextArgs.maxSteps).toBe(5);
+    expect(capturedStreamTextArgs.maxSteps).toBe(12);
+  });
+
+  it("emits a fallback text chunk when the model produces no visible text", async () => {
+    const { streamChat } = await import("./aiService.js");
+    const res = createMockResponse();
+
+    await streamChat(
+      [{ role: "user", content: "Generate 100 examples" }],
+      res,
+    );
+
+    // res.write should have been called with a text-delta chunk (prefix `0:`)
+    // containing the fallback message.
+    const writeCalls = (res.write as any).mock.calls.map((c: any[]) => c[0]);
+    const fallbackChunk = writeCalls.find(
+      (chunk: string) => typeof chunk === "string" && chunk.startsWith("0:"),
+    );
+    expect(fallbackChunk).toBeDefined();
+    expect(fallbackChunk).toContain("stuck");
+    expect(res.end).toHaveBeenCalled();
   });
 });
