@@ -19,6 +19,8 @@ import {
   resendVerification,
   getGoogleAuthUrl,
   handleOAuthCallback,
+  verifyGoogleIdToken,
+  findOrCreateOAuthUser,
   generateMfaSecret,
   enableMfa,
   disableMfa,
@@ -430,6 +432,65 @@ export function handleGoogleRedirect(_req: Request, res: Response) {
     return;
   }
   res.redirect(getGoogleAuthUrl());
+}
+
+/**
+ * POST /api/auth/google/idtoken — Mobile native Google Sign-In flow.
+ *
+ * The Android/iOS Google Sign-In SDK returns an ID token directly. Mobile
+ * POSTs that token here; we verify it server-side (no Google secret needed
+ * client-side) and issue our app's JWT pair.
+ *
+ * Request: { idToken: string }
+ * Response: { user, tokens: { accessToken, refreshToken } } — matches the
+ * `/api/auth/login` response shape so mobile shares the type.
+ */
+const GoogleIdTokenSchema = z.object({
+  idToken: z.string().min(1, "idToken is required"),
+});
+
+export async function handleGoogleIdToken(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const parsed = GoogleIdTokenSchema.safeParse(req.body);
+    if (!parsed.success) {
+      const messages = parsed.error.errors.map((e) => e.message).join(". ");
+      res.status(400).json({ error: messages });
+      return;
+    }
+
+    const info = await verifyGoogleIdToken(parsed.data.idToken);
+    const authUser = await findOrCreateOAuthUser("google", info);
+    const tokens = await generateTokens(authUser);
+
+    setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
+
+    logger.info({ userId: authUser.userId }, "User logged in via Google ID token");
+    // `tokens` for native clients; web ignores cookies path here.
+    res.json({
+      user: authUser,
+      tokens: { accessToken: tokens.accessToken, refreshToken: tokens.refreshToken },
+    });
+  } catch (err: unknown) {
+    if (err instanceof Error) {
+      switch (err.message) {
+        case "OAUTH_NOT_CONFIGURED":
+          res.status(500).json({ error: "Google sign-in is not configured on this server." });
+          return;
+        case "INVALID_ID_TOKEN":
+          res.status(401).json({ error: "Invalid Google ID token." });
+          return;
+        case "EMAIL_NOT_VERIFIED_BY_GOOGLE":
+          res.status(401).json({ error: "Google account email is not verified." });
+          return;
+      }
+    }
+    logger.error(err, "Google ID token sign-in failed");
+    next(err);
+  }
 }
 
 /** GET /api/auth/google/callback — Handles Google OAuth callback. */

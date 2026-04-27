@@ -17,6 +17,7 @@ import {
   handleResendVerification,
   handleGoogleRedirect,
   handleGoogleCallback,
+  handleGoogleIdToken,
   handleMfaSetup,
   handleMfaEnable,
   handleMfaDisable,
@@ -41,6 +42,9 @@ router.post("/reset-password", handleResetPassword);
 // OAuth
 router.get("/google", handleGoogleRedirect);
 router.get("/google/callback", handleGoogleCallback);
+// Mobile native Google Sign-In: accepts an ID token from
+// @react-native-google-signin/google-signin and issues our JWTs.
+router.post("/google/idtoken", handleGoogleIdToken);
 
 // MFA
 router.post("/mfa/setup", authenticate, handleMfaSetup);
