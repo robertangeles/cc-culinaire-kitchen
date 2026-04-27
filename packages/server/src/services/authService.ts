@@ -703,10 +703,22 @@ export async function findOrCreateOAuthUser(
 // Google native ID token verification (mobile sign-in flow)
 // ---------------------------------------------------------------------------
 
-const GOOGLE_ANDROID_CLIENT_ID = process.env.GOOGLE_ANDROID_CLIENT_ID;
+// Audience values for Google ID token verification.
+//
+// Android: tokens from `@react-native-google-signin/google-signin` carry
+//   aud = the WEB client ID (when configured with `webClientId` in
+//   `GoogleSignin.configure()`). The Android-type OAuth client ID exists
+//   in Google Cloud Console only — it authorises the app to call Google
+//   Play Services, but is NEVER the audience of any ID token. So we do
+//   not include `GOOGLE_ANDROID_CLIENT_ID` here.
+//
+// iOS: tokens carry aud = the iOS client ID when `iosClientId` is
+//   configured. So `GOOGLE_IOS_CLIENT_ID` IS a valid audience.
+//
+// Web: the existing browser OAuth code-exchange flow continues to use
+//   `GOOGLE_CLIENT_ID` (the same value as the audience for Android
+//   tokens above).
 const GOOGLE_IOS_CLIENT_ID = process.env.GOOGLE_IOS_CLIENT_ID;
-// The web client ID is used as the "audience" the Android SDK receives
-// when configured with `webClientId` in `GoogleSignin.configure()`.
 const GOOGLE_WEB_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 
 const googleIdTokenClient = new OAuth2Client();
@@ -716,11 +728,6 @@ const googleIdTokenClient = new OAuth2Client();
  * and returns the user profile in the same shape `findOrCreateOAuthUser`
  * expects.
  *
- * The audience is checked against any configured Google client IDs:
- * Android, iOS, or the web client ID (the latter is what
- * `@react-native-google-signin/google-signin` typically returns when
- * configured with `webClientId`).
- *
  * @throws Error("OAUTH_NOT_CONFIGURED") if no Google client IDs are set
  * @throws Error("INVALID_ID_TOKEN") if the token fails verification
  * @throws Error("EMAIL_NOT_VERIFIED_BY_GOOGLE") if Google reports the
@@ -728,9 +735,8 @@ const googleIdTokenClient = new OAuth2Client();
  */
 export async function verifyGoogleIdToken(idToken: string): Promise<OAuthUserInfo> {
   const audience = [
-    GOOGLE_ANDROID_CLIENT_ID,
-    GOOGLE_IOS_CLIENT_ID,
-    GOOGLE_WEB_CLIENT_ID,
+    GOOGLE_WEB_CLIENT_ID, // Android tokens use this as their aud
+    GOOGLE_IOS_CLIENT_ID, // iOS tokens use this as their aud
   ].filter((x): x is string => Boolean(x));
 
   if (audience.length === 0) {
