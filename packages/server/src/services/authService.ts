@@ -8,6 +8,7 @@
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
+import { OAuth2Client } from "google-auth-library";
 import { generateSecret as otpGenerateSecret, generateURI, verify as otpVerify } from "otplib";
 import QRCode from "qrcode";
 import { eq, and, or } from "drizzle-orm";
@@ -585,13 +586,34 @@ async function getGoogleUserInfo(code: string): Promise<OAuthUserInfo> {
 /**
  * Handles OAuth callback: finds or creates the user, links the OAuth
  * provider, and returns the AuthUser for token generation.
+ *
+ * Web flow only — accepts the OAuth `code` from the browser redirect,
+ * exchanges it for a profile via {@link getGoogleUserInfo}, then delegates
+ * to {@link findOrCreateOAuthUser} (shared with the mobile ID token flow).
  */
 export async function handleOAuthCallback(
   provider: "google",
   code: string,
 ): Promise<AuthUser> {
   const info = await getGoogleUserInfo(code);
+  return findOrCreateOAuthUser(provider, info);
+}
 
+/**
+ * Finds an existing OAuth-linked user (by provider+providerId or email)
+ * or creates a new one with the OAuth account linked. Used by both the
+ * web OAuth code-exchange flow ({@link handleOAuthCallback}) and the
+ * mobile native ID token flow ({@link verifyGoogleIdToken} +
+ * `handleGoogleIdToken` controller).
+ *
+ * @param provider OAuth provider identifier (currently only "google")
+ * @param info Profile info already verified by the caller
+ * @returns The full AuthUser ready for token generation
+ */
+export async function findOrCreateOAuthUser(
+  provider: "google",
+  info: OAuthUserInfo,
+): Promise<AuthUser> {
   // Check if OAuth account already linked
   const [existingOAuth] = await db
     .select()
@@ -675,6 +697,73 @@ export async function handleOAuthCallback(
   });
 
   return getUserWithRolesAndPermissions(userId);
+}
+
+// ---------------------------------------------------------------------------
+// Google native ID token verification (mobile sign-in flow)
+// ---------------------------------------------------------------------------
+
+// Audience values for Google ID token verification.
+//
+// Android: tokens from `@react-native-google-signin/google-signin` carry
+//   aud = the WEB client ID (when configured with `webClientId` in
+//   `GoogleSignin.configure()`). The Android-type OAuth client ID exists
+//   in Google Cloud Console only — it authorises the app to call Google
+//   Play Services, but is NEVER the audience of any ID token. So we do
+//   not include `GOOGLE_ANDROID_CLIENT_ID` here.
+//
+// iOS: tokens carry aud = the iOS client ID when `iosClientId` is
+//   configured. So `GOOGLE_IOS_CLIENT_ID` IS a valid audience.
+//
+// Web: the existing browser OAuth code-exchange flow continues to use
+//   `GOOGLE_CLIENT_ID` (the same value as the audience for Android
+//   tokens above).
+const GOOGLE_IOS_CLIENT_ID = process.env.GOOGLE_IOS_CLIENT_ID;
+const GOOGLE_WEB_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
+
+const googleIdTokenClient = new OAuth2Client();
+
+/**
+ * Verifies a Google ID token (from a native mobile Google Sign-In SDK)
+ * and returns the user profile in the same shape `findOrCreateOAuthUser`
+ * expects.
+ *
+ * @throws Error("OAUTH_NOT_CONFIGURED") if no Google client IDs are set
+ * @throws Error("INVALID_ID_TOKEN") if the token fails verification
+ * @throws Error("EMAIL_NOT_VERIFIED_BY_GOOGLE") if Google reports the
+ *   account email is not verified
+ */
+export async function verifyGoogleIdToken(idToken: string): Promise<OAuthUserInfo> {
+  const audience = [
+    GOOGLE_WEB_CLIENT_ID, // Android tokens use this as their aud
+    GOOGLE_IOS_CLIENT_ID, // iOS tokens use this as their aud
+  ].filter((x): x is string => Boolean(x));
+
+  if (audience.length === 0) {
+    throw new Error("OAUTH_NOT_CONFIGURED");
+  }
+
+  let ticket;
+  try {
+    ticket = await googleIdTokenClient.verifyIdToken({ idToken, audience });
+  } catch {
+    throw new Error("INVALID_ID_TOKEN");
+  }
+
+  const payload = ticket.getPayload();
+  if (!payload || !payload.sub || !payload.email) {
+    throw new Error("INVALID_ID_TOKEN");
+  }
+  if (payload.email_verified === false) {
+    throw new Error("EMAIL_NOT_VERIFIED_BY_GOOGLE");
+  }
+
+  return {
+    providerId: payload.sub,
+    email: payload.email,
+    name: payload.name ?? payload.email,
+    photo: payload.picture,
+  };
 }
 
 // ---------------------------------------------------------------------------
