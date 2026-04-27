@@ -28,9 +28,13 @@ interface CredentialMeta {
 
 /** Registry of known credential keys with display metadata. */
 export const CREDENTIAL_REGISTRY: Record<string, CredentialMeta> = {
-  GOOGLE_CLIENT_ID:        { category: "oauth",    label: "Google Client ID",        sensitive: true },
-  GOOGLE_CLIENT_SECRET:    { category: "oauth",    label: "Google Client Secret",    sensitive: true },
-  GOOGLE_CALLBACK_URL:     { category: "oauth",    label: "Google Callback URL",     sensitive: true },
+  GOOGLE_CLIENT_ID:         { category: "oauth",    label: "Google Client ID (Web)",                  sensitive: true },
+  GOOGLE_CLIENT_SECRET:     { category: "oauth",    label: "Google Client Secret (Web)",              sensitive: true },
+  GOOGLE_CALLBACK_URL:      { category: "oauth",    label: "Google Callback URL (Web)",               sensitive: true },
+  // Mobile native Google Sign-In (used by /api/auth/google/idtoken).
+  // Client IDs are public — they ship inside the mobile app binary.
+  GOOGLE_ANDROID_CLIENT_ID: { category: "oauth",    label: "Google Client ID (Android — native sign-in)", sensitive: false },
+  GOOGLE_IOS_CLIENT_ID:     { category: "oauth",    label: "Google Client ID (iOS — native sign-in)",     sensitive: false },
   OPENROUTER_API_KEY:      { category: "ai",       label: "OpenRouter API Key",      sensitive: true },
   AI_MODEL:                { category: "ai",       label: "Chat Model (OpenRouter format)", sensitive: false },
   RESEND_API_KEY:          { category: "email",    label: "Resend API Key",          sensitive: true },

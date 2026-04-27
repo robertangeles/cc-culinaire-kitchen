@@ -32,6 +32,11 @@ coverage/
 # Misc
 *.tsbuildinfo
 
+# Throwaway local inspection scripts (e.g. _inspect.mjs at repo root)
+/_*.mjs
+/_*.ts
+/_*.js
+
 # Local tooling state
 .claude/
 .gstack/
