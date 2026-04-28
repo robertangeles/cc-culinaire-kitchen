@@ -718,8 +718,15 @@ export async function findOrCreateOAuthUser(
 // Web: the existing browser OAuth code-exchange flow continues to use
 //   `GOOGLE_CLIENT_ID` (the same value as the audience for Android
 //   tokens above).
-const GOOGLE_IOS_CLIENT_ID = process.env.GOOGLE_IOS_CLIENT_ID;
-const GOOGLE_WEB_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
+//
+// IMPORTANT: read these via getter functions, not module-level consts.
+// `hydrateEnvFromCredentials()` (called from index.ts at startup) populates
+// `process.env` from the encrypted DB AFTER all imports have resolved. A
+// const captured at module-load time would be `undefined` forever, even
+// after env is later populated. The existing `getGoogleClientId()` helper
+// at the top of this file uses the same pattern for the same reason.
+function getGoogleWebClientId() { return process.env.GOOGLE_CLIENT_ID; }
+function getGoogleIosClientId() { return process.env.GOOGLE_IOS_CLIENT_ID; }
 
 const googleIdTokenClient = new OAuth2Client();
 
@@ -735,8 +742,8 @@ const googleIdTokenClient = new OAuth2Client();
  */
 export async function verifyGoogleIdToken(idToken: string): Promise<OAuthUserInfo> {
   const audience = [
-    GOOGLE_WEB_CLIENT_ID, // Android tokens use this as their aud
-    GOOGLE_IOS_CLIENT_ID, // iOS tokens use this as their aud
+    getGoogleWebClientId(), // Android tokens use this as their aud
+    getGoogleIosClientId(), // iOS tokens use this as their aud
   ].filter((x): x is string => Boolean(x));
 
   if (audience.length === 0) {
