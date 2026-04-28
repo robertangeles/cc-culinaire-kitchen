@@ -23,6 +23,7 @@ import { eq, and } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { prompt } from "../db/schema.js";
 import { createVersion } from "./promptVersionService.js";
+import { PromptIsDeviceOnlyError } from "../errors/promptErrors.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -54,18 +55,31 @@ export async function getSystemPrompt(): Promise<{ body: string; modelId: string
 
   try {
     const rows = await db
-      .select({ promptBody: prompt.promptBody, modelId: prompt.modelId })
+      .select({
+        promptBody: prompt.promptBody,
+        modelId: prompt.modelId,
+        runtime: prompt.runtime,
+        promptKey: prompt.promptKey,
+      })
       .from(prompt)
       .where(
         and(eq(prompt.promptName, "systemPrompt"), eq(prompt.defaultInd, false))
       );
 
     if (rows.length > 0) {
+      // Guard: refuse to invoke device-only prompts server-side. Throw before
+      // caching so the cache never holds a body the server can't legally use.
+      if (rows[0].runtime === "device") {
+        throw new PromptIsDeviceOnlyError(rows[0].promptKey ?? "systemPrompt");
+      }
       const result = { body: rows[0].promptBody, modelId: rows[0].modelId };
       cache.set("systemPrompt", result);
       return result;
     }
-  } catch {
+  } catch (err) {
+    // Re-throw the typed device-only error so it surfaces through the error
+    // handler. Other DB errors fall through to the file fallback.
+    if (err instanceof PromptIsDeviceOnlyError) throw err;
     // DB not available — fall back to file
   }
 
@@ -84,15 +98,71 @@ export async function getSystemPrompt(): Promise<{ body: string; modelId: string
  */
 export async function getPromptRaw(name: string): Promise<{ content: string; modelId: string | null }> {
   const rows = await db
-    .select({ promptBody: prompt.promptBody, modelId: prompt.modelId })
+    .select({
+      promptBody: prompt.promptBody,
+      modelId: prompt.modelId,
+      runtime: prompt.runtime,
+      promptKey: prompt.promptKey,
+    })
     .from(prompt)
     .where(and(eq(prompt.promptName, name), eq(prompt.defaultInd, false)));
 
-  if (rows.length > 0) return { content: rows[0].promptBody, modelId: rows[0].modelId };
+  if (rows.length > 0) {
+    // Guard: refuse to hand a device-only prompt to a server-side caller.
+    if (rows[0].runtime === "device") {
+      throw new PromptIsDeviceOnlyError(rows[0].promptKey ?? name);
+    }
+    return { content: rows[0].promptBody, modelId: rows[0].modelId };
+  }
 
   // Fall back to file if not yet in DB
   const content = await loadPromptFromFile(name);
   return { content, modelId: null };
+}
+
+/**
+ * Admin-display variant of {@link getPromptRaw}: returns the prompt body
+ * regardless of runtime, plus the runtime field itself so the admin UI can
+ * render a different shell for on-device prompts (e.g. hide the model
+ * dropdown, show a "this runs on the user's device" banner).
+ *
+ * Use this ONLY for admin-facing read paths (`GET /api/prompts/:name`).
+ * Server-side prompt invocation must continue to use {@link getPromptRaw},
+ * which guards against accidentally calling a device-only prompt.
+ *
+ * @param name - Logical prompt identifier (e.g. `"Antoine System Prompt"`).
+ * @returns Prompt body, model override, runtime, and slug for admin rendering.
+ */
+export async function getPromptRawForAdmin(name: string): Promise<{
+  content: string;
+  modelId: string | null;
+  runtime: "server" | "device";
+  promptKey: string | null;
+}> {
+  const rows = await db
+    .select({
+      promptBody: prompt.promptBody,
+      modelId: prompt.modelId,
+      runtime: prompt.runtime,
+      promptKey: prompt.promptKey,
+    })
+    .from(prompt)
+    .where(and(eq(prompt.promptName, name), eq(prompt.defaultInd, false)));
+
+  if (rows.length > 0) {
+    return {
+      content: rows[0].promptBody,
+      modelId: rows[0].modelId,
+      runtime: (rows[0].runtime === "device" ? "device" : "server"),
+      promptKey: rows[0].promptKey,
+    };
+  }
+
+  // Fall back to file if not yet in DB. File-backed prompts have no runtime
+  // metadata; default to "server" since the file fallback only ever existed
+  // for server-runtime prompts.
+  const content = await loadPromptFromFile(name);
+  return { content, modelId: null, runtime: "server", promptKey: null };
 }
 
 /**

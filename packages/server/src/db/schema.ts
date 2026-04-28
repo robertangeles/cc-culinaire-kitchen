@@ -70,6 +70,11 @@ export const prompt = pgTable("prompt", {
   promptBody: text("prompt_body").notNull(),
   defaultInd: boolean("default_ind").notNull().default(false),
   modelId: varchar("model_id", { length: 150 }),
+  // 'server' = invoked by this server via OpenRouter (the default for all
+  // existing prompts). 'device' = consumed by the mobile companion app's
+  // on-device model (Gemma 3n E4B); the server must never call a model for it.
+  // Enforced at the DB level by a CHECK constraint added in the migration.
+  runtime: varchar("runtime", { length: 20 }).notNull().default("server"),
   createdDttm: timestamp("created_dttm").notNull().defaultNow(),
   updatedDttm: timestamp("updated_dttm").notNull().defaultNow(),
 });

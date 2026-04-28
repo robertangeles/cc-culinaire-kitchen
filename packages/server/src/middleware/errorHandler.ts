@@ -17,6 +17,7 @@
 import type { Request, Response, NextFunction } from "express";
 import { pino } from "pino";
 import { ZodError } from "zod";
+import { PromptIsDeviceOnlyError } from "../errors/promptErrors.js";
 
 const log = pino({ transport: { target: "pino-pretty" } });
 
@@ -53,6 +54,23 @@ export function errorHandler(
 
   if (err instanceof ZodError) {
     res.status(400).json({ error: "Validation error", details: err.flatten() });
+    return;
+  }
+
+  // Foot-gun catch: a server code path tried to invoke a device-only prompt.
+  // Log a structured admin alert so monitoring can page on this — it means a
+  // prompt's runtime is misconfigured or a server caller is referencing a
+  // device prompt by mistake.
+  if (err instanceof PromptIsDeviceOnlyError) {
+    log.error(
+      { promptKey: err.promptKey, alert: "prompt.runtime_guard.tripped" },
+      "Server attempted to invoke a device-only prompt — refusing",
+    );
+    res.status(502).json({
+      error:
+        "Prompt is configured for on-device runtime and cannot be invoked server-side.",
+      promptKey: err.promptKey,
+    });
     return;
   }
 

@@ -12,6 +12,7 @@ import { z } from "zod";
 import { pino } from "pino";
 import {
   getPromptRaw,
+  getPromptRawForAdmin,
   savePrompt,
   resetPrompt,
   getActivePromptId,
@@ -104,9 +105,12 @@ export async function getPrompt(
 ): Promise<void> {
   try {
     const name = req.params.name as string;
-    const { content, modelId } = await getPromptRaw(name);
-    log.info({ name }, "Prompt retrieved");
-    res.json({ name, content, modelId });
+    // Admin display path: use the variant that returns even device-only
+    // prompt bodies (so admins can edit them) and exposes the runtime so
+    // the UI can render the correct shell.
+    const { content, modelId, runtime, promptKey } = await getPromptRawForAdmin(name);
+    log.info({ name, runtime }, "Prompt retrieved");
+    res.json({ name, content, modelId, runtime, promptKey });
   } catch (err) {
     log.error(err, "Failed to get prompt");
     next(err);
