@@ -330,7 +330,7 @@ export function MenuItemFormModal({
 
       // Save ingredients if we have any
       const validIngredients = ingredients.filter(
-        (r) => r.ingredientName.trim() && r.quantity && r.unitCost
+        (r) => r.ingredientName.trim() && r.quantity
       );
       if (validIngredients.length > 0) {
         const itemId = editItem?.menuItemId ?? (result as string);
@@ -341,7 +341,7 @@ export function MenuItemFormModal({
               ingredientName: r.ingredientName.trim(),
               quantity: r.quantity,
               unit: r.unit,
-              unitCost: r.unitCost,
+              unitCost: r.unitCost || "0",
               yieldPct: r.yieldPct || "100",
             }))
           );
