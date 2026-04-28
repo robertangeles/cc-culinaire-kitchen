@@ -720,9 +720,9 @@ References:
 
 ## Branch Naming
 
-    feature/translation-layer-editor
-    fix/guest-session-timeout
-    hotfix/stripe-webhook-failure
+    feature/ck-web/translation-layer-editor
+    fix/ck-web/guest-session-timeout
+    hotfix/ck-web/stripe-webhook-failure
 
 ## CI Pipeline (GitHub Actions)
 
