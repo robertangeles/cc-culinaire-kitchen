@@ -6,6 +6,17 @@ dist/
 build/
 .turbo/
 
+# Loose TypeScript build artifacts anywhere in packages/ (shadow .tsx/.ts twins,
+# break Vite import-analysis, and pollute git status). tsc with no outDir set
+# emits next to source — these patterns catch the spillage everywhere it lands
+# (src/, tests/, package roots for *.config.ts, etc.).
+packages/**/*.js
+packages/**/*.js.map
+packages/**/*.d.ts
+packages/**/*.d.ts.map
+# Keep hand-written declaration shims:
+!packages/client/src/vite-env.d.ts
+
 # Environment
 .env
 .env.local
