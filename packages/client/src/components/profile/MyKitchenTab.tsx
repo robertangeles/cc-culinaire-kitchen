@@ -206,22 +206,38 @@ function TextInputWithCounter({
   maxLength,
   placeholder,
   helperText,
+  multiline = false,
+  rows = 3,
 }: {
   value: string;
   onChange: (val: string) => void;
   maxLength: number;
   placeholder?: string;
   helperText?: string;
+  multiline?: boolean;
+  rows?: number;
 }) {
+  const fieldClass =
+    "w-full rounded-xl border border-[#2A2A2A] bg-[#0A0A0A] px-3 py-2 text-sm text-[#E5E5E5] placeholder:text-[#444444] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-transparent transition-shadow";
   return (
     <div>
-      <input
-        type="text"
-        value={value}
-        onChange={(e) => onChange(e.target.value.slice(0, maxLength))}
-        placeholder={placeholder}
-        className="w-full rounded-xl border border-[#2A2A2A] bg-[#0A0A0A] px-3 py-2 text-sm text-[#E5E5E5] placeholder:text-[#444444] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-transparent transition-shadow"
-      />
+      {multiline ? (
+        <textarea
+          value={value}
+          onChange={(e) => onChange(e.target.value.slice(0, maxLength))}
+          placeholder={placeholder}
+          rows={rows}
+          className={`${fieldClass} resize-y min-h-[5rem] leading-relaxed`}
+        />
+      ) : (
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value.slice(0, maxLength))}
+          placeholder={placeholder}
+          className={fieldClass}
+        />
+      )}
       <div className="flex justify-between mt-1">
         {helperText && <p className="text-[10px] text-[#666666] italic">{helperText}</p>}
         <span
@@ -707,6 +723,7 @@ export function MyKitchenTab({ isOrgAdmin = false }: { isOrgAdmin?: boolean }) {
               maxLength={200}
               placeholder="e.g., Modern Australian with Japanese influence"
               helperText="How your menu is positioned, not personal preference"
+              multiline
             />
           </div>
 
@@ -720,6 +737,7 @@ export function MyKitchenTab({ isOrgAdmin = false }: { isOrgAdmin?: boolean }) {
               onChange={(v) => setForm((prev) => ({ ...prev, targetDiner: v }))}
               maxLength={200}
               placeholder="e.g., Inner-city professionals aged 28-45"
+              multiline
             />
           </div>
 
@@ -746,6 +764,7 @@ export function MyKitchenTab({ isOrgAdmin = false }: { isOrgAdmin?: boolean }) {
               maxLength={200}
               placeholder="e.g., Relaxed but precise. Nothing on the plate that doesn't earn its place."
               helperText="Shapes the tone of AI-generated menu copy"
+              multiline
             />
           </div>
         </AccordionSection>
