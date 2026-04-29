@@ -18,6 +18,18 @@ interface UsePromptReturn {
   modelId: string | null;
   /** Update the in-memory model selection without persisting. */
   setModelId: (modelId: string | null) => void;
+  /**
+   * Where this prompt runs. `"server"` = invoked by this server via
+   * OpenRouter. `"device"` = consumed by the mobile companion app's
+   * on-device model. Use {@link UsePromptReturn.changeRuntime} to flip
+   * between the two; the UI is responsible for confirming consequences
+   * (server callers will refuse server-runtime prompts that flipped to
+   * device; mobile clients will see 404 for device prompts that flipped
+   * to server until they refresh their cache).
+   */
+  runtime: "server" | "device";
+  /** Switch the prompt's runtime. Idempotent. */
+  changeRuntime: (next: "server" | "device") => Promise<void>;
   /** True while the prompt is being fetched from the server. */
   isLoading: boolean;
   /** True while a save or reset request is in flight. */
@@ -46,6 +58,7 @@ export function usePrompt(name: string): UsePromptReturn {
   const [savedContent, setSavedContent] = useState("");
   const [modelId, setModelId] = useState<string | null>(null);
   const [savedModelId, setSavedModelId] = useState<string | null>(null);
+  const [runtime, setRuntime] = useState<"server" | "device">("server");
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -66,6 +79,10 @@ export function usePrompt(name: string): UsePromptReturn {
         setSavedContent(data.content);
         setModelId(data.modelId ?? null);
         setSavedModelId(data.modelId ?? null);
+        // GET /api/prompts/:name now returns runtime alongside the body
+        // (added in the on-device prompt support work). Default to 'server'
+        // for backward compat in case the response shape is older.
+        setRuntime(data.runtime === "device" ? "device" : "server");
       })
       .catch((err) => setError(err.message))
       .finally(() => setIsLoading(false));
@@ -118,11 +135,46 @@ export function usePrompt(name: string): UsePromptReturn {
     }
   }, [name]);
 
+  const changeRuntime = useCallback(
+    async (next: "server" | "device") => {
+      setIsSaving(true);
+      setError(null);
+      setSuccess(null);
+      try {
+        const res = await fetch(`/api/prompts/${name}/runtime`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ runtime: next }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error ?? "Failed to change runtime");
+        }
+        setRuntime(next);
+        // Server clears modelId when switching to device; mirror locally.
+        if (next === "device") {
+          setModelId(null);
+          setSavedModelId(null);
+        }
+        setSuccess(`Runtime changed to ${next}.`);
+        setTimeout(() => setSuccess(null), 3000);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to change runtime");
+      } finally {
+        setIsSaving(false);
+      }
+    },
+    [name],
+  );
+
   return {
     content,
     setContent,
     modelId,
     setModelId,
+    runtime,
+    changeRuntime,
     isLoading,
     isSaving,
     isDirty,

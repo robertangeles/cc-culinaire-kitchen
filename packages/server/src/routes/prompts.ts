@@ -8,6 +8,7 @@
  *  - `POST   /`                              -- Create a new prompt.
  *  - `GET    /:name`                         -- Retrieve the active prompt content.
  *  - `PUT    /:name`                         -- Update a prompt with new content.
+ *  - `PATCH  /:name/runtime`                 -- Switch runtime (server <-> device).
  *  - `POST   /:name/reset`                   -- Reset a prompt to its factory default.
  *  - `GET    /:name/versions`                -- List version history.
  *  - `POST   /:name/versions/:versionId/rollback` -- Rollback to a version.
@@ -23,6 +24,7 @@ import {
   getPrompt,
   updatePrompt,
   handleResetPrompt,
+  handleSetPromptRuntime,
   listVersions,
   handleRollback,
 } from "../controllers/promptsController.js";
@@ -39,6 +41,7 @@ promptsRouter.post("/", handleCreatePrompt);
 // Individual prompt routes
 promptsRouter.get("/:name", getPrompt);
 promptsRouter.put("/:name", updatePrompt);
+promptsRouter.patch("/:name/runtime", handleSetPromptRuntime);
 promptsRouter.post("/:name/reset", handleResetPrompt);
 promptsRouter.get("/:name/versions", listVersions);
 promptsRouter.post("/:name/versions/:versionId/rollback", handleRollback);

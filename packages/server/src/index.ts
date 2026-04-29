@@ -13,6 +13,7 @@ config({ path: resolve(dirname(fileURLToPath(import.meta.url)), "../../../.env")
 import { healthRouter } from "./routes/health.js";
 import { chatRouter } from "./routes/chat.js";
 import { promptsRouter } from "./routes/prompts.js";
+import { mobilePromptsRouter } from "./routes/mobilePrompts.js";
 import { conversationsRouter } from "./routes/conversations.js";
 import { settingsRouter } from "./routes/settings.js";
 import authRouter from "./routes/auth.js";
@@ -102,6 +103,7 @@ app.use("/api/health", healthRouter);
 app.use("/api/auth", authRouter);
 app.use("/api/chat", chatRouter);
 app.use("/api/prompts", promptsRouter);
+app.use("/api/mobile/prompts", mobilePromptsRouter);
 app.use("/api/conversations", conversationsRouter);
 app.use("/api/settings", settingsRouter);
 app.use("/api/users", usersRouter);

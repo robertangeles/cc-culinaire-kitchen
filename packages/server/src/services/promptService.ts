@@ -19,10 +19,15 @@ import { readFile } from "fs/promises";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import matter from "gray-matter";
-import { eq, and } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 import { db } from "../db/index.js";
-import { prompt } from "../db/schema.js";
+import { prompt, promptVersion } from "../db/schema.js";
 import { createVersion } from "./promptVersionService.js";
+import {
+  PromptIsDeviceOnlyError,
+  PromptNotFoundError,
+  PromptNotDeviceRuntimeError,
+} from "../errors/promptErrors.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -54,18 +59,31 @@ export async function getSystemPrompt(): Promise<{ body: string; modelId: string
 
   try {
     const rows = await db
-      .select({ promptBody: prompt.promptBody, modelId: prompt.modelId })
+      .select({
+        promptBody: prompt.promptBody,
+        modelId: prompt.modelId,
+        runtime: prompt.runtime,
+        promptKey: prompt.promptKey,
+      })
       .from(prompt)
       .where(
         and(eq(prompt.promptName, "systemPrompt"), eq(prompt.defaultInd, false))
       );
 
     if (rows.length > 0) {
+      // Guard: refuse to invoke device-only prompts server-side. Throw before
+      // caching so the cache never holds a body the server can't legally use.
+      if (rows[0].runtime === "device") {
+        throw new PromptIsDeviceOnlyError(rows[0].promptKey ?? "systemPrompt");
+      }
       const result = { body: rows[0].promptBody, modelId: rows[0].modelId };
       cache.set("systemPrompt", result);
       return result;
     }
-  } catch {
+  } catch (err) {
+    // Re-throw the typed device-only error so it surfaces through the error
+    // handler. Other DB errors fall through to the file fallback.
+    if (err instanceof PromptIsDeviceOnlyError) throw err;
     // DB not available — fall back to file
   }
 
@@ -84,15 +102,199 @@ export async function getSystemPrompt(): Promise<{ body: string; modelId: string
  */
 export async function getPromptRaw(name: string): Promise<{ content: string; modelId: string | null }> {
   const rows = await db
-    .select({ promptBody: prompt.promptBody, modelId: prompt.modelId })
+    .select({
+      promptBody: prompt.promptBody,
+      modelId: prompt.modelId,
+      runtime: prompt.runtime,
+      promptKey: prompt.promptKey,
+    })
     .from(prompt)
     .where(and(eq(prompt.promptName, name), eq(prompt.defaultInd, false)));
 
-  if (rows.length > 0) return { content: rows[0].promptBody, modelId: rows[0].modelId };
+  if (rows.length > 0) {
+    // Guard: refuse to hand a device-only prompt to a server-side caller.
+    if (rows[0].runtime === "device") {
+      throw new PromptIsDeviceOnlyError(rows[0].promptKey ?? name);
+    }
+    return { content: rows[0].promptBody, modelId: rows[0].modelId };
+  }
 
   // Fall back to file if not yet in DB
   const content = await loadPromptFromFile(name);
   return { content, modelId: null };
+}
+
+/**
+ * Admin-display variant of {@link getPromptRaw}: returns the prompt body
+ * regardless of runtime, plus the runtime field itself so the admin UI can
+ * render a different shell for on-device prompts (e.g. hide the model
+ * dropdown, show a "this runs on the user's device" banner).
+ *
+ * Use this ONLY for admin-facing read paths (`GET /api/prompts/:name`).
+ * Server-side prompt invocation must continue to use {@link getPromptRaw},
+ * which guards against accidentally calling a device-only prompt.
+ *
+ * @param name - Logical prompt identifier (e.g. `"Antoine System Prompt"`).
+ * @returns Prompt body, model override, runtime, and slug for admin rendering.
+ */
+export async function getPromptRawForAdmin(name: string): Promise<{
+  content: string;
+  modelId: string | null;
+  runtime: "server" | "device";
+  promptKey: string | null;
+}> {
+  const rows = await db
+    .select({
+      promptBody: prompt.promptBody,
+      modelId: prompt.modelId,
+      runtime: prompt.runtime,
+      promptKey: prompt.promptKey,
+    })
+    .from(prompt)
+    .where(and(eq(prompt.promptName, name), eq(prompt.defaultInd, false)));
+
+  if (rows.length > 0) {
+    return {
+      content: rows[0].promptBody,
+      modelId: rows[0].modelId,
+      runtime: (rows[0].runtime === "device" ? "device" : "server"),
+      promptKey: rows[0].promptKey,
+    };
+  }
+
+  // Fall back to file if not yet in DB. File-backed prompts have no runtime
+  // metadata; default to "server" since the file fallback only ever existed
+  // for server-runtime prompts.
+  const content = await loadPromptFromFile(name);
+  return { content, modelId: null, runtime: "server", promptKey: null };
+}
+
+/**
+ * Mobile prompt-fetch path: look up an on-device prompt by its slug
+ * (`prompt_key`) and return everything the mobile client needs to run
+ * inference locally and cache by version.
+ *
+ * Behavior:
+ * - Resolves the **active** row only (`default_ind = false`) — the factory
+ *   baseline is never exposed to mobile.
+ * - Throws {@link PromptNotFoundError} if no row matches the slug.
+ * - Throws {@link PromptNotDeviceRuntimeError} if the slug matches but its
+ *   runtime is `'server'` — mobile clients must never receive server-runtime
+ *   prompt bodies. The mapping to 404 (in the controller) deliberately does
+ *   NOT reveal that the prompt exists, limiting reconnaissance.
+ * - Joins `prompt_version` to surface the latest `version_number`. Mobile
+ *   clients cache by version; when their cached version is older than the
+ *   one returned here, they refetch.
+ *
+ * @param slug - The `prompt_key` value (e.g. `"antoine-system-prompt"`).
+ * @returns The body, runtime, model id, version, slug, and last-updated timestamp.
+ */
+export async function getDevicePromptForMobile(slug: string): Promise<{
+  promptKey: string;
+  promptBody: string;
+  runtime: "device";
+  modelId: string | null;
+  version: number;
+  updatedAtDttm: Date;
+}> {
+  const rows = await db
+    .select({
+      promptId: prompt.promptId,
+      promptKey: prompt.promptKey,
+      promptBody: prompt.promptBody,
+      modelId: prompt.modelId,
+      runtime: prompt.runtime,
+      updatedDttm: prompt.updatedDttm,
+    })
+    .from(prompt)
+    .where(and(eq(prompt.promptKey, slug), eq(prompt.defaultInd, false)))
+    .limit(1);
+
+  if (rows.length === 0) {
+    throw new PromptNotFoundError(slug);
+  }
+
+  const row = rows[0];
+  if (row.runtime !== "device") {
+    throw new PromptNotDeviceRuntimeError(slug);
+  }
+
+  // Latest version number — used by mobile clients to cache and decide
+  // when to refetch. Falls back to 0 for prompts that somehow have no
+  // version history (defensive; createPrompt always inserts version 1).
+  const versions = await db
+    .select({ versionNumber: promptVersion.versionNumber })
+    .from(promptVersion)
+    .where(eq(promptVersion.promptId, row.promptId))
+    .orderBy(desc(promptVersion.versionNumber))
+    .limit(1);
+
+  const version = versions.length > 0 ? versions[0].versionNumber : 0;
+
+  return {
+    promptKey: row.promptKey ?? slug,
+    promptBody: row.promptBody,
+    runtime: "device",
+    modelId: row.modelId,
+    version,
+    updatedAtDttm: row.updatedDttm,
+  };
+}
+
+/**
+ * Switch a prompt's runtime in place. Updates BOTH the active row
+ * (`default_ind=false`) and the factory baseline (`default_ind=true`) in a
+ * single transaction so they cannot drift out of sync — the factory row is
+ * what "Reset to Default" restores, and a runtime mismatch there would
+ * resurface the foot-gun this guard exists to prevent.
+ *
+ * Side effects:
+ * - When switching TO `'device'`, `modelId` is force-cleared to `null` on
+ *   both rows. A device-runtime prompt has no server-side model binding;
+ *   keeping a stale `modelId` would mislead future readers.
+ * - The in-memory prompt cache is invalidated for the prompt name.
+ * - **Not done here:** notifying mobile clients that their cached body for
+ *   a now-server-runtime slug will start returning 404. That's an inherent
+ *   property of the toggle; document in the UI confirmation flow.
+ *
+ * @param name    - Prompt name (e.g. `"Antoine System Prompt"`).
+ * @param runtime - New runtime. `'server'` or `'device'`.
+ * @throws {Error} If no active row exists for the name.
+ */
+export async function setPromptRuntime(
+  name: string,
+  runtime: "server" | "device"
+): Promise<void> {
+  // Confirm a row exists before doing the dual-update so we can throw a
+  // clear "not found" rather than silently update zero rows.
+  const existing = await db
+    .select({ promptId: prompt.promptId })
+    .from(prompt)
+    .where(and(eq(prompt.promptName, name), eq(prompt.defaultInd, false)))
+    .limit(1);
+
+  if (existing.length === 0) {
+    throw new Error(`No active prompt found with name "${name}"`);
+  }
+
+  const updates: Record<string, unknown> = {
+    runtime,
+    updatedDttm: new Date(),
+  };
+  // Switching to device runtime: clear any leftover modelId on both rows.
+  if (runtime === "device") {
+    updates.modelId = null;
+  }
+
+  // Update both copies (active + factory) to keep them in sync. The
+  // factory row's body never changes here — only its runtime/modelId.
+  await db.update(prompt).set(updates).where(eq(prompt.promptName, name));
+
+  // Invalidate the in-memory cache. The cache is keyed by name and only
+  // populated by getSystemPrompt for "systemPrompt" — but invalidating
+  // by name is harmless for any other prompt and future-proofs against
+  // additional cache entries.
+  cache.delete(name);
 }
 
 /**
@@ -232,7 +434,8 @@ export async function listAllPrompts() {
 export async function createPrompt(
   name: string,
   body: string,
-  modelId?: string | null
+  modelId?: string | null,
+  runtime: "server" | "device" = "server"
 ): Promise<{ promptId: number; promptName: string; promptKey: string | null }> {
   const key = name
     .trim()
@@ -250,19 +453,33 @@ export async function createPrompt(
     throw new Error(`A prompt with key "${key}" already exists`);
   }
 
+  // Device-runtime prompts are consumed by an on-device model; storing a
+  // server-side modelId for them is meaningless and would mislead future
+  // resolution code. Force null when runtime='device'.
+  const persistedModelId = runtime === "device" ? null : (modelId ?? null);
+
   // Insert active copy
   const [active] = await db
     .insert(prompt)
-    .values({ promptName: name, promptKey: key, promptBody: body, defaultInd: false, modelId: modelId ?? null })
+    .values({
+      promptName: name,
+      promptKey: key,
+      promptBody: body,
+      defaultInd: false,
+      modelId: persistedModelId,
+      runtime,
+    })
     .returning({ promptId: prompt.promptId, promptName: prompt.promptName, promptKey: prompt.promptKey });
 
-  // Insert default/factory-baseline copy
+  // Insert default/factory-baseline copy. Runtime stays in sync with the
+  // active row — both rows always agree on runtime so the "Reset to Default"
+  // flow can never produce a runtime mismatch.
   await db
     .insert(prompt)
-    .values({ promptName: name, promptKey: key, promptBody: body, defaultInd: true });
+    .values({ promptName: name, promptKey: key, promptBody: body, defaultInd: true, runtime });
 
   // Record initial version
-  await createVersion(active.promptId, body, modelId ?? null);
+  await createVersion(active.promptId, body, persistedModelId);
 
   return active;
 }
