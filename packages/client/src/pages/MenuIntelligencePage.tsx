@@ -160,13 +160,12 @@ export function MenuIntelligencePage() {
         });
         return editItem.menuItemId;
       } else {
-        await createItem({
+        const created = await createItem({
           name: data.name,
           category: data.category,
           sellingPrice: data.sellingPrice,
         });
-        // After create, the hook refreshes; we need the new item's ID.
-        // For now, return void — ingredients can be added via the edit flow.
+        return created.menuItemId;
       }
     },
     [editItem, createItem, updateItem]

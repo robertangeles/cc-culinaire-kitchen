@@ -63,15 +63,24 @@ export function useMenuItems(category?: string) {
 
   useEffect(() => { fetchItems(); }, [fetchItems]);
 
-  const createItem = useCallback(async (data: { name: string; category: string; sellingPrice: string }) => {
+  const createItem = useCallback(async (data: { name: string; category: string; sellingPrice: string }): Promise<MenuItem> => {
     const res = await fetch(`${API}/api/menu/items`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
       body: JSON.stringify(data),
     });
-    if (!res.ok) throw new Error("Failed to create item");
+    if (!res.ok) {
+      let msg = `Failed to create item (${res.status})`;
+      try {
+        const body = await res.json();
+        if (body?.error) msg = body.error;
+      } catch { /* not JSON */ }
+      throw new Error(msg);
+    }
+    const created = await res.json();
     await fetchItems();
+    return created as MenuItem;
   }, [fetchItems]);
 
   const updateItem = useCallback(async (id: string, data: Record<string, unknown>) => {
@@ -99,16 +108,21 @@ export function useMenuItems(category?: string) {
       credentials: "include",
       body: JSON.stringify(data),
     });
-    if (!res.ok) throw new Error("Failed to add ingredient");
-    await fetchItems();
-  }, [fetchItems]);
+    if (!res.ok) {
+      let msg = `Failed to add ingredient (${res.status})`;
+      try {
+        const body = await res.json();
+        if (body?.error) msg = `${body.error} — "${data.ingredientName}"`;
+      } catch { /* not JSON */ }
+      throw new Error(msg);
+    }
+  }, []);
 
   const removeIngredient = useCallback(async (itemId: string, ingredientId: number) => {
     await fetch(`${API}/api/menu/items/${itemId}/ingredients/${ingredientId}`, {
       method: "DELETE", credentials: "include",
     });
-    await fetchItems();
-  }, [fetchItems]);
+  }, []);
 
   const getIngredients = useCallback(async (itemId: string): Promise<MenuIngredient[]> => {
     const res = await fetch(`${API}/api/menu/items/${itemId}/ingredients`, { credentials: "include" });

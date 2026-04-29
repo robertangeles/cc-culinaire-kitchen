@@ -48,6 +48,14 @@ const UNIT_MAP: Record<string, string> = {
   bunch: "each",
 };
 
+/* ---- Quantity sanitizer ----
+   Server expects /^\d+(\.\d{1,3})?$/. Recipe amounts can be "1/2", "to taste",
+   "" — coerce to a numeric string, defaulting to "0" when no number is found. */
+function sanitizeQuantity(raw: string): string {
+  const m = String(raw ?? "").match(/(\d+(?:\.\d{1,3})?)/);
+  return m ? m[1] : "0";
+}
+
 /* ---- Domain → category mapping ---- */
 
 const DOMAIN_CATEGORY_MAP: Record<string, string> = {
@@ -258,7 +266,7 @@ export function MenuItemFormModal({
       return {
         tempId: nextTempId++,
         ingredientName,
-        quantity: ing.amount,
+        quantity: sanitizeQuantity(ing.amount),
         unit: mappedUnit,
         unitCost: "",
         yieldPct: "100",
