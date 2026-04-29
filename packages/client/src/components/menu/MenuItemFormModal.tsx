@@ -9,6 +9,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { X, Plus, Trash2, Loader2, DollarSign, Search, BookOpen, PenTool } from "lucide-react";
 import type { MenuItem, MenuIngredient } from "../../hooks/useMenuItems.js";
+import { IngredientPickerInline } from "../inventory/IngredientPickerInline.js";
 
 const API = import.meta.env.VITE_API_URL ?? "";
 
@@ -94,7 +95,11 @@ interface ImportRecipe {
 interface IngredientRow {
   tempId: number;
   existingId?: number;
+  /** Catalog FK — Phase 1 catalog spine. Null for legacy / not-yet-linked rows. */
+  ingredientId?: string | null;
   ingredientName: string;
+  /** Narrative from a recipe import or chef notes. NEVER concatenate into ingredientName. */
+  note?: string | null;
   quantity: string;
   unit: string;
   unitCost: string;
@@ -124,7 +129,9 @@ interface MenuItemFormModalProps {
   onSaveIngredients: (
     itemId: string,
     ingredients: {
+      ingredientId?: string | null;
       ingredientName: string;
+      note?: string | null;
       quantity: string;
       unit: string;
       unitCost: string;
@@ -183,7 +190,9 @@ export function MenuItemFormModal({
         existingIngredients.map((ing) => ({
           tempId: nextTempId++,
           existingId: ing.id,
+          ingredientId: ing.ingredientId ?? null,
           ingredientName: ing.ingredientName,
+          note: ing.note ?? null,
           quantity: ing.quantity,
           unit: ing.unit,
           unitCost: ing.unitCost,
@@ -250,22 +259,28 @@ export function MenuItemFormModal({
     return sorted;
   }, [filteredRecipes]);
 
-  // Handle recipe selection for import
-  function handleSelectRecipe(recipe: ImportRecipe) {
+  // Handle recipe selection for import.
+  //
+  // Catalog-spine Phase 1: ingredient_name and note stay SEPARATE (the bug
+  // the user reported was the old concatenation `${name}, ${note}`). After
+  // the rows are mapped, fire a bulk match against the Catalog so any
+  // unambiguous match auto-links the row to a canonical ingredientId. Rows
+  // that don't match cleanly stay unlinked — the chef resolves via the
+  // IngredientPicker on the row.
+  async function handleSelectRecipe(recipe: ImportRecipe) {
     setName(recipe.title);
     setCategory(DOMAIN_CATEGORY_MAP[recipe.domain] ?? "");
     setSellingPrice("");
 
-    // Map ingredients
+    // Map ingredients — note kept separate.
     const mapped: IngredientRow[] = recipe.ingredients.map((ing) => {
-      const ingredientName = ing.note
-        ? `${ing.name}, ${ing.note}`
-        : ing.name;
       const mappedUnit = UNIT_MAP[ing.unit.toLowerCase()] ?? UNIT_MAP[ing.unit] ?? "each";
 
       return {
         tempId: nextTempId++,
-        ingredientName,
+        ingredientId: null,
+        ingredientName: ing.name, // canonical name only
+        note: ing.note ?? null,    // narrative preserved separately
         quantity: sanitizeQuantity(ing.amount),
         unit: mappedUnit,
         unitCost: "",
@@ -276,6 +291,42 @@ export function MenuItemFormModal({
     setIngredients(mapped);
     setImportedFromRecipe(true);
     setMode("scratch"); // Switch to form view with pre-filled data
+
+    // Best-effort auto-link via bulk-match. Failure is non-blocking — rows
+    // just stay unlinked and the chef picks manually.
+    try {
+      const queries = mapped.map((r) => r.ingredientName);
+      const res = await fetch(`${API}/api/inventory/ingredient-aliases/match-bulk`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ queries }),
+      });
+      if (!res.ok) return;
+      const body = (await res.json()) as {
+        results: Array<{
+          query: string;
+          inputIndex: number;
+          status: "matched" | "ambiguous" | "unmatched";
+          candidates: Array<{ ingredientId: string; ingredientName: string }>;
+        }>;
+      };
+      setIngredients((prev) =>
+        prev.map((row) => {
+          const r = body.results.find((x) => x.inputIndex === mapped.findIndex((m) => m.tempId === row.tempId));
+          if (r && r.status === "matched" && r.candidates[0]) {
+            return {
+              ...row,
+              ingredientId: r.candidates[0].ingredientId,
+              ingredientName: r.candidates[0].ingredientName,
+            };
+          }
+          return row;
+        }),
+      );
+    } catch {
+      // ignore — rows stay unlinked
+    }
   }
 
   // Auto-calculated totals
@@ -293,7 +344,9 @@ export function MenuItemFormModal({
       ...prev,
       {
         tempId: nextTempId++,
+        ingredientId: null,
         ingredientName: "",
+        note: null,
         quantity: "",
         unit: "kg",
         unitCost: "",
@@ -346,7 +399,9 @@ export function MenuItemFormModal({
           await onSaveIngredients(
             itemId,
             validIngredients.map((r) => ({
+              ingredientId: r.ingredientId ?? null,
               ingredientName: r.ingredientName.trim(),
+              note: r.note ?? null,
               quantity: r.quantity,
               unit: r.unit,
               unitCost: r.unitCost || "0",
@@ -639,21 +694,44 @@ export function MenuItemFormModal({
                       return (
                         <div
                           key={row.tempId}
-                          className="grid grid-cols-12 gap-2 items-center"
+                          className="grid grid-cols-12 gap-2 items-start"
                         >
-                          <input
-                            type="text"
-                            value={row.ingredientName}
-                            onChange={(e) =>
-                              updateIngredient(
-                                row.tempId,
-                                "ingredientName",
-                                e.target.value
-                              )
-                            }
-                            placeholder="Ingredient"
-                            className="col-span-3 px-3 py-2 text-xs bg-[#0A0A0A] border border-[#2A2A2A] rounded-lg text-[#FAFAFA] placeholder-[#666666] focus:outline-none focus:ring-1 focus:ring-[#D4A574]/50 min-h-[36px]"
-                          />
+                          <div className="col-span-3">
+                            <IngredientPickerInline
+                              linkedId={row.ingredientId}
+                              displayName={row.ingredientName}
+                              onPick={(picked) => {
+                                setIngredients((prev) =>
+                                  prev.map((r) =>
+                                    r.tempId === row.tempId
+                                      ? {
+                                          ...r,
+                                          ingredientId: picked.ingredientId,
+                                          ingredientName: picked.ingredientName,
+                                          // unit defaults to base unit on pick;
+                                          // chef can switch to a compatible unit after.
+                                          unit: picked.baseUnit || r.unit,
+                                          // cost defaults to preferred-supplier;
+                                          // chef can override per dish.
+                                          unitCost:
+                                            picked.preferredUnitCost && !r.unitCost
+                                              ? picked.preferredUnitCost
+                                              : r.unitCost,
+                                        }
+                                      : r,
+                                  ),
+                                );
+                              }}
+                              onTextChange={(text) =>
+                                updateIngredient(row.tempId, "ingredientName", text)
+                              }
+                            />
+                            {row.note && (
+                              <div className="mt-1 px-2 py-1 text-[10px] text-[#999] italic truncate" title={row.note}>
+                                {row.note}
+                              </div>
+                            )}
+                          </div>
                           <input
                             type="number"
                             step="0.001"
