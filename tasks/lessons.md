@@ -278,3 +278,38 @@ Format: Problem / Fix / Rule
 - **Problem**: `drizzle-kit push` fails on Neon PostgreSQL with `cannot drop view pg_stat_statements_info` and `column "user_organisation_id" is in a primary key`. Neon creates explicit NOT NULL constraints on PK columns that drizzle-kit tries to reconcile, and pg_stat_statements is a Neon-managed extension.
 - **Fix**: Created an idempotent migration script (`src/db/migrate-purchasing.ts`) using raw SQL with `IF NOT EXISTS` checks. Bypasses drizzle-kit's full-schema diff entirely.
 - **Rule**: Do NOT use `drizzle-kit push` for schema changes on Neon. Write idempotent migration scripts with `addColumnIfNotExists` and `CREATE TABLE IF NOT EXISTS`. This avoids interactive prompts, Neon extension conflicts, and PK constraint drift. Keep `drizzle-kit` for local dev only.
+
+---
+
+## 46. Return the created entity from `createX` hooks; never discard a POST response that contains an id
+- **Problem**: `useMenuItems.createItem` discarded the POST `/api/menu/items` response (which includes the new `menuItemId`). Downstream, `MenuItemFormModal` needed that id to save ingredients via the follow-up endpoint. With no id available, the modal silently skipped the ingredient-save step (`if (itemId) { ... }`). Items created via "Import from Recipe" persisted with zero ingredients — the UI looked correct while the modal was open (ingredients lived in React state) but came back empty on reopen because they were never written.
+- **Fix**: `createItem` now returns the parsed JSON as `MenuItem`; `handleSaveItem` returns `created.menuItemId` on the create branch so the modal can target the new row.
+- **Rule**: Any client `createX` helper whose backend returns the new row MUST return that row to the caller. Silent `void` returns that throw away the id are a foot-gun whenever a follow-up call (ingredients, attachments, child rows) needs it. Also: never gate a critical save step behind a truthy id check without surfacing a fallback error — the silent skip masked the bug for an entire feature flow.
+
+---
+
+## 47. Per-call `fetchItems()` inside CRUD hooks causes UI thrashing on batched operations
+- **Problem**: `useMenuItems.addIngredient` and `removeIngredient` each called `await fetchItems()` after their HTTP request. When `handleSaveIngredients` looped over 5 ingredients, the items list refetched 5 times mid-save — each refetch toggled `loading: true` and the page visibly blinked.
+- **Fix**: Removed `fetchItems()` from inside `addIngredient`/`removeIngredient`. The single refresh in `handleCloseForm` covers it. `MenuItemDetail` already manages its own ingredient state, so it wasn't relying on the side-effect.
+- **Rule**: CRUD hooks should not refetch list state as a side-effect of single-row mutations. Let the caller batch and refresh once at the end. If a caller genuinely needs immediate refresh (e.g. inline edit with no surrounding flow), it can call `refresh()` explicitly.
+
+---
+
+## 48. Generic `throw new Error("Failed to X")` in fetch helpers hides the actual reason
+- **Problem**: Bug-hunting "Failed to add ingredient" took an extra round-trip because the hook discarded the server's `{ error: "Invalid quantity" }` body and threw a static string. The user couldn't see *which* ingredient failed or *why* until I instrumented the hook to surface the response body.
+- **Fix**: All client fetch helpers in `useMenuItems` now read the JSON error body when `!res.ok`, fall back to status code, and (for ingredient ops) include the failing row's name in the message.
+- **Rule**: Whenever a client helper calls a route that returns structured `{ error }` on failure, surface that body in the thrown message. Static error strings are debugging dead-weight. Pattern:
+  ```ts
+  if (!res.ok) {
+    let msg = `Failed to X (${res.status})`;
+    try { const body = await res.json(); if (body?.error) msg = body.error; } catch {}
+    throw new Error(msg);
+  }
+  ```
+
+---
+
+## 49. Sanitize free-text quantities before sending to a numeric-regex endpoint
+- **Problem**: Recipe ingredients can carry amounts like `"to taste"`, `"1/2"`, `"about 2 tbsp"`, or `""`. `MenuItemFormModal.handleSelectRecipe` passed these straight through. The server's Zod schema rejects anything that doesn't match `/^\d+(\.\d{1,3})?$/`, so the import flow blew up on the first non-numeric row (e.g. flaky sea salt).
+- **Fix**: Added `sanitizeQuantity(raw)` in the import path — extracts the first `\d+(\.\d{1,3})?` token via regex, defaults to `"0"` when no number is present.
+- **Rule**: When a free-text field from one bounded context (recipes — narrative) crosses into a stricter context (menu costing — numeric), translate at the boundary. Don't push the burden of validation onto the receiving endpoint and don't drop ingredients silently — surface them with a `0` and let the user correct.
