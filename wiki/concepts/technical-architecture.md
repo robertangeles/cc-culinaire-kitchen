@@ -3,7 +3,7 @@ title: Technical Architecture
 category: concept
 created: 2026-04-29
 updated: 2026-04-29
-related: [[data-flow-architecture]], [[culinaire-kitchen-platform]]
+related: [[data-flow-architecture]], [[culinaire-kitchen-platform]], [[mobile-api-contract]]
 ---
 
 Tech stack, monorepo layout, and server startup order for the CulinAIre Kitchen web app.
@@ -60,3 +60,4 @@ See [[data-flow-architecture]] for the diagrammatic version.
 ## Related
 - [[data-flow-architecture]]
 - [[openrouter-migration]] — AI provider routing decision
+- [[mobile-api-contract]] — cross-repo API surface for the separate mobile repo

@@ -3,7 +3,7 @@ title: Prompt System
 category: entity
 created: 2026-04-29
 updated: 2026-04-29
-related: [[culinaire-kitchen-platform]], [[duplicate-recipe-refinement-prompt]]
+related: [[culinaire-kitchen-platform]], [[duplicate-recipe-refinement-prompt]], [[mobile-api-contract]]
 ---
 
 The prompt registry, runtime guard, and versioning system that holds every system prompt the platform ships — chatbot persona, Patisserie Lab, Spirits Lab, and recipe refinement.
@@ -30,3 +30,4 @@ Per CLAUDE.md §"Prompt Management": prompts must never be hardcoded inside appl
 ## Related
 - [[culinaire-kitchen-platform]]
 - [[duplicate-recipe-refinement-prompt]] — known duplicate file
+- [[mobile-api-contract]] — `GET /api/mobile/prompts/:slug` exposes prompts to mobile

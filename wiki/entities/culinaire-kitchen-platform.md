@@ -3,7 +3,7 @@ title: CulinAIre Kitchen Platform
 category: entity
 created: 2026-04-29
 updated: 2026-04-29
-related: [[store-locations-system]], [[prompt-system]], [[technical-architecture]], [[data-flow-architecture]]
+related: [[store-locations-system]], [[prompt-system]], [[technical-architecture]], [[data-flow-architecture]], [[mobile-api-contract]]
 ---
 
 The product as a whole — an AI-grounded operating system for working culinary professionals, spanning chat, creative R&D, kitchen ops, and community.
@@ -34,3 +34,4 @@ Operators, not engineers. Plain English copy. No jarring loading flashes. Mobile
 - [[prompt-system]] — prompt registry, runtime guard, versioning
 - [[technical-architecture]] — tech stack and monorepo layout
 - [[data-flow-architecture]] — system + request flow diagrams
+- [[mobile-api-contract]] — cross-repo contract with the separate mobile repo

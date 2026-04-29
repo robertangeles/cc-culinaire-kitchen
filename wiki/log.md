@@ -4,6 +4,33 @@ Append-only. Newest entry on top.
 
 ---
 
+## 2026-04-29 — Mobile API contract documented
+
+**What was done**
+Wrote [wiki/concepts/mobile-api-contract.md](concepts/mobile-api-contract.md) — the first cross-cutting concept page filling a gap surfaced in the original audit. Documents the contract between this web monorepo (API only, port 3009) and the separate CulinAIre mobile repo (React Native, on-device Gemma 3n E4B).
+
+**Coverage**
+- Auth transport split — Bearer header (mobile) vs httpOnly cookie (web), unified by one `authenticate` middleware
+- Mobile-specific entry point — `POST /api/auth/google/idtoken` returns `tokens` in body for keychain storage
+- The single `/api/mobile/*` route — `GET /api/mobile/prompts/:slug` (commit `128a119`), with rate-limit (30/min/user), slug regex validation, and the deliberate 404-unification that prevents server-runtime prompt enumeration
+- Device tokens — `device_token` table is wired and registration works; FCM/APNs dispatch is **not yet implemented**
+- Notification types defined for the kitchen-ops events that mobile will eventually listen on
+- Test coverage points that lock the contract
+- Three known gaps for the backlog: push dispatch, mobile token rotation, sparse `/api/mobile/*` namespace
+
+**Bidirectional links added**
+Updated `related:` frontmatter on `culinaire-kitchen-platform`, `prompt-system`, `technical-architecture` to link back to the new page. Hook auto-rebuilt the graph: 11 → 12 nodes, 23 → 26 edges → final state after this turn includes 6+ edges into `mobile-api-contract`.
+
+**Why this page first**
+Highest-leverage gap from the audit: there's a parallel mobile repo whose Claude session needs this contract written down. API drift between repos is the highest-risk class of cross-repo work.
+
+**Validation**
+- PostToolUse hook fired on the Write — graph rebuilt automatically.
+- `node scripts/wiki-graph.mjs neighbors mobile-api-contract` confirms wiring.
+- All file:line citations in the page were sourced from the live codebase via an Explore subagent — verifiable.
+
+---
+
 ## 2026-04-29 — Claude Code hooks for wiki workflow
 
 **What was done**
