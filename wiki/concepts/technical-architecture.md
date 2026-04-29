@@ -61,3 +61,4 @@ See [[data-flow-architecture]] for the diagrammatic version.
 - [[data-flow-architecture]]
 - [[openrouter-migration]] — AI provider routing decision
 - [[mobile-api-contract]] — cross-repo API surface for the separate mobile repo
+- [[ci-pipeline]] — install → lint → typecheck → test → build on every PR

@@ -130,6 +130,8 @@ _Nothing confirmed outstanding. New work to be defined._
 
 ### Cleanup
 - [ ] Remove duplicate prompt file `prompts/recipe/recipeRefinementPrompt.md` (canonical lives at `prompts/chatbot/recipeRefinementPrompt.md`). Verify no code references the dead path before deletion. See `wiki/decisions/duplicate-recipe-refinement-prompt.md`.
+- [ ] Install eslint + flat config + per-package overrides (server: Node, client: React, shared: pure TS), then re-add the `Lint` step to `.github/workflows/ci.yml`. Currently every package has a broken `"lint": "eslint src/"` stub that errors with "eslint is not recognized". CLAUDE.md describes lint as part of CI but the prerequisite was never installed. See `wiki/decisions/ci-pipeline.md` § Known gap: lint.
+- [ ] Configure GitHub branch protection on `main`: require the CI check (`Typecheck, test, build`) to pass before merge. Repo Settings → Branches → Add rule. Code-side wire-up is done; this is the policy switch.
 
 ### Candidates (not started)
 - [ ] Purchasing v2 — supplier invoice reconciliation against credit notes

@@ -52,6 +52,7 @@ Categories: **entity** (named things) · **concept** (patterns) · **decision** 
 |---|---|---|
 | [OpenRouter Migration](decisions/openrouter-migration.md) | Replaced direct AI provider keys with one OpenRouter gateway for chat/embeddings/web-search/image-gen | 2026-04-29 |
 | [Duplicate recipeRefinementPrompt.md — pending cleanup](decisions/duplicate-recipe-refinement-prompt.md) | Two byte-identical copies; canonical = `prompts/chatbot/`, the `prompts/recipe/` copy is dead | 2026-04-29 |
+| [CI Pipeline (GitHub Actions)](decisions/ci-pipeline.md) | Wire up the install→lint→typecheck→test→build pipeline CLAUDE.md described but had never existed on disk; triggered by 2026-04-29 Render deploy failure | 2026-04-29 |
 
 ## Synthesis
 | Page | Summary | Created |

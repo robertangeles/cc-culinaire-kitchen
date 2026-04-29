@@ -4,6 +4,29 @@ Append-only. Newest entry on top.
 
 ---
 
+## 2026-04-29 — CI pipeline wired up (post-mortem on Render deploy failure)
+
+**What happened**
+A Render deploy failed on `tsc` with TS2493 in `packages/server/src/middleware/rateLimiter.test.ts:116` — a vitest mock-call tuple typing weakness compiled into production output because the server tsconfig had no `*.test.ts` exclude. The test file landed via PR #6 (`7d876d4`) and survived two intermediate commits before our docs push triggered a rebuild that exposed it.
+
+**What was done**
+1. Fix (commit `ec0e422`): excluded `**/*.test.ts` from `packages/server/tsconfig.json`. Render redeployed cleanly.
+2. Investigation: confirmed there is **no** `.github/workflows/`, no Husky, no lint-staged. CLAUDE.md describes a CI pipeline that was never wired up. PR #6 had no automated check whatsoever.
+3. Wire-up (this work, on `feature/ck-web/wire-up-ci`):
+   - `.github/workflows/ci.yml` — single job, 5 steps mapped 1:1 to CLAUDE.md (install / lint / tsc:check / test / build), Node 22, pnpm 10.31.0 pinned to `packageManager`, ubuntu-latest, 15-min cap, concurrency cancellation per ref.
+   - Added `tsc:check` script to each package + a turbo task. `pnpm tsc:check` runs all three packages in ~6.5s locally.
+   - Wrote [wiki/decisions/ci-pipeline.md](decisions/ci-pipeline.md) with the full failure-mode mapping and trade-offs considered.
+
+**Why a feature branch this time**
+Per CLAUDE.md, changes >3 files normally branch. More importantly: the very first run of the new workflow needs to happen on the PR, not on main, so we can see green/red before it gates anything else. If we'd committed to main directly, the first CI run would have been on main — and a broken CI on main would block subsequent PRs too.
+
+**Follow-ups not done in this branch**
+- Branch protection rule on `main` requiring this check before merge (must be configured in GitHub Settings → Branches; not in code).
+- Husky + lint-staged for pre-push fast feedback (CLAUDE.md describes this; it doesn't exist either). Optional after CI is green.
+- E2E (Playwright) tests in CI — needs a separate workflow with services. Deferred.
+
+---
+
 ## 2026-04-29 — Mobile API contract documented
 
 **What was done**
