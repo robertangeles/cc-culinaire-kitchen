@@ -33,10 +33,16 @@ const menuItemSchema = z.object({
 });
 
 const ingredientSchema = z.object({
+  /** Catalog FK — Phase 1 catalog spine. Null/undefined for legacy free-text rows. */
+  ingredientId: z.string().uuid().nullable().optional(),
   ingredientName: z.string().min(1).max(200),
+  /** Narrative carried over from a recipe import or chef notes. Stored separately. */
+  note: z.string().max(500).nullable().optional(),
   quantity: z.string().regex(/^\d+(\.\d{1,3})?$/, "Invalid quantity"),
   unit: z.string().min(1).max(20),
-  unitCost: z.string().regex(/^\d+(\.\d{1,2})?$/, "Invalid cost"),
+  /** Optional manual override per dish. When omitted, cost flows from the linked
+   *  ingredient's preferred_unit_cost (or org default if unlinked). */
+  unitCost: z.string().regex(/^\d+(\.\d{1,2})?$/, "Invalid cost").optional(),
   yieldPct: z.string().regex(/^\d+(\.\d{1,2})?$/).optional(),
 });
 
