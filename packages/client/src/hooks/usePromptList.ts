@@ -28,8 +28,20 @@ interface UsePromptListReturn {
   error: string | null;
   /** Re-fetch the prompt list from the server. */
   refresh: () => Promise<void>;
-  /** Create a new prompt and refresh the list. */
-  create: (name: string, content: string, modelId?: string | null) => Promise<PromptSummary>;
+  /**
+   * Create a new prompt and refresh the list.
+   *
+   * @param runtime - `"server"` (default) for OpenRouter-invoked prompts,
+   *                  `"device"` for prompts consumed by the mobile companion
+   *                  app's on-device model. The server will null out
+   *                  `modelId` when runtime is `"device"`.
+   */
+  create: (
+    name: string,
+    content: string,
+    modelId?: string | null,
+    runtime?: "server" | "device",
+  ) => Promise<PromptSummary>;
 }
 
 /**
@@ -63,12 +75,22 @@ export function usePromptList(): UsePromptListReturn {
   }, [refresh]);
 
   const create = useCallback(
-    async (name: string, content: string, modelId?: string | null): Promise<PromptSummary> => {
+    async (
+      name: string,
+      content: string,
+      modelId?: string | null,
+      runtime: "server" | "device" = "server",
+    ): Promise<PromptSummary> => {
       const res = await fetch("/api/prompts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ name, content, modelId: modelId ?? null }),
+        body: JSON.stringify({
+          name,
+          content,
+          modelId: runtime === "device" ? null : (modelId ?? null),
+          runtime,
+        }),
       });
 
       if (!res.ok) {

@@ -18,6 +18,7 @@ import {
   getActivePromptId,
   listAllPrompts,
   createPrompt,
+  setPromptRuntime,
 } from "../services/promptService.js";
 import {
   getVersions,
@@ -37,6 +38,12 @@ const CreateSchema = z.object({
   name: z.string().min(1, "Prompt name is required").max(100),
   content: z.string().min(1, "Prompt content cannot be empty"),
   modelId: z.string().max(150).nullable().optional(),
+  runtime: z.enum(["server", "device"]).optional(),
+});
+
+/** Zod schema for validating the PATCH /:name/runtime request body. */
+const RuntimeSchema = z.object({
+  runtime: z.enum(["server", "device"]),
 });
 
 /**
@@ -80,8 +87,16 @@ export async function handleCreatePrompt(
       return;
     }
 
-    const result = await createPrompt(parsed.data.name, parsed.data.content, parsed.data.modelId);
-    log.info({ promptName: result.promptName, promptKey: result.promptKey }, "Prompt created");
+    const result = await createPrompt(
+      parsed.data.name,
+      parsed.data.content,
+      parsed.data.modelId,
+      parsed.data.runtime ?? "server",
+    );
+    log.info(
+      { promptName: result.promptName, promptKey: result.promptKey, runtime: parsed.data.runtime ?? "server" },
+      "Prompt created",
+    );
     res.status(201).json({ prompt: result });
   } catch (err) {
     if (err instanceof Error && err.message.includes("already exists")) {
@@ -144,6 +159,42 @@ export async function updatePrompt(
     res.json({ success: true, name });
   } catch (err) {
     log.error(err, "Failed to update prompt");
+    next(err);
+  }
+}
+
+/**
+ * **PATCH /:name/runtime** -- Switch a prompt's runtime between 'server'
+ * and 'device'. Confirmation of consequences (server callers will refuse
+ * the prompt; mobile clients will see 404) is the UI's responsibility —
+ * this endpoint just performs the flip atomically.
+ *
+ * @returns 200 `{ name, runtime }` on success.
+ * @returns 400 if the request body fails validation.
+ * @returns 404 if no active prompt exists for the given name.
+ */
+export async function handleSetPromptRuntime(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const name = req.params.name as string;
+    const parsed = RuntimeSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.flatten() });
+      return;
+    }
+
+    await setPromptRuntime(name, parsed.data.runtime);
+    log.info({ name, runtime: parsed.data.runtime, alert: "prompt.runtime_changed" }, "Prompt runtime changed");
+    res.json({ name, runtime: parsed.data.runtime });
+  } catch (err) {
+    if (err instanceof Error && err.message.includes("No active prompt found")) {
+      res.status(404).json({ error: err.message });
+      return;
+    }
+    log.error(err, "Failed to change prompt runtime");
     next(err);
   }
 }

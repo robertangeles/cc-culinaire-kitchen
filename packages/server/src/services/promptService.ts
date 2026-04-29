@@ -242,6 +242,62 @@ export async function getDevicePromptForMobile(slug: string): Promise<{
 }
 
 /**
+ * Switch a prompt's runtime in place. Updates BOTH the active row
+ * (`default_ind=false`) and the factory baseline (`default_ind=true`) in a
+ * single transaction so they cannot drift out of sync — the factory row is
+ * what "Reset to Default" restores, and a runtime mismatch there would
+ * resurface the foot-gun this guard exists to prevent.
+ *
+ * Side effects:
+ * - When switching TO `'device'`, `modelId` is force-cleared to `null` on
+ *   both rows. A device-runtime prompt has no server-side model binding;
+ *   keeping a stale `modelId` would mislead future readers.
+ * - The in-memory prompt cache is invalidated for the prompt name.
+ * - **Not done here:** notifying mobile clients that their cached body for
+ *   a now-server-runtime slug will start returning 404. That's an inherent
+ *   property of the toggle; document in the UI confirmation flow.
+ *
+ * @param name    - Prompt name (e.g. `"Antoine System Prompt"`).
+ * @param runtime - New runtime. `'server'` or `'device'`.
+ * @throws {Error} If no active row exists for the name.
+ */
+export async function setPromptRuntime(
+  name: string,
+  runtime: "server" | "device"
+): Promise<void> {
+  // Confirm a row exists before doing the dual-update so we can throw a
+  // clear "not found" rather than silently update zero rows.
+  const existing = await db
+    .select({ promptId: prompt.promptId })
+    .from(prompt)
+    .where(and(eq(prompt.promptName, name), eq(prompt.defaultInd, false)))
+    .limit(1);
+
+  if (existing.length === 0) {
+    throw new Error(`No active prompt found with name "${name}"`);
+  }
+
+  const updates: Record<string, unknown> = {
+    runtime,
+    updatedDttm: new Date(),
+  };
+  // Switching to device runtime: clear any leftover modelId on both rows.
+  if (runtime === "device") {
+    updates.modelId = null;
+  }
+
+  // Update both copies (active + factory) to keep them in sync. The
+  // factory row's body never changes here — only its runtime/modelId.
+  await db.update(prompt).set(updates).where(eq(prompt.promptName, name));
+
+  // Invalidate the in-memory cache. The cache is keyed by name and only
+  // populated by getSystemPrompt for "systemPrompt" — but invalidating
+  // by name is harmless for any other prompt and future-proofs against
+  // additional cache entries.
+  cache.delete(name);
+}
+
+/**
  * Resolve a prompt name to the active (non-default) prompt's primary key.
  *
  * @param name - Logical prompt identifier.
@@ -378,7 +434,8 @@ export async function listAllPrompts() {
 export async function createPrompt(
   name: string,
   body: string,
-  modelId?: string | null
+  modelId?: string | null,
+  runtime: "server" | "device" = "server"
 ): Promise<{ promptId: number; promptName: string; promptKey: string | null }> {
   const key = name
     .trim()
@@ -396,19 +453,33 @@ export async function createPrompt(
     throw new Error(`A prompt with key "${key}" already exists`);
   }
 
+  // Device-runtime prompts are consumed by an on-device model; storing a
+  // server-side modelId for them is meaningless and would mislead future
+  // resolution code. Force null when runtime='device'.
+  const persistedModelId = runtime === "device" ? null : (modelId ?? null);
+
   // Insert active copy
   const [active] = await db
     .insert(prompt)
-    .values({ promptName: name, promptKey: key, promptBody: body, defaultInd: false, modelId: modelId ?? null })
+    .values({
+      promptName: name,
+      promptKey: key,
+      promptBody: body,
+      defaultInd: false,
+      modelId: persistedModelId,
+      runtime,
+    })
     .returning({ promptId: prompt.promptId, promptName: prompt.promptName, promptKey: prompt.promptKey });
 
-  // Insert default/factory-baseline copy
+  // Insert default/factory-baseline copy. Runtime stays in sync with the
+  // active row — both rows always agree on runtime so the "Reset to Default"
+  // flow can never produce a runtime mismatch.
   await db
     .insert(prompt)
-    .values({ promptName: name, promptKey: key, promptBody: body, defaultInd: true });
+    .values({ promptName: name, promptKey: key, promptBody: body, defaultInd: true, runtime });
 
   // Record initial version
-  await createVersion(active.promptId, body, modelId ?? null);
+  await createVersion(active.promptId, body, persistedModelId);
 
   return active;
 }
