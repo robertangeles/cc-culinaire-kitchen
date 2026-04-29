@@ -4,6 +4,26 @@ Append-only. Newest entry on top.
 
 ---
 
+## 2026-04-29 — UI ways of working: Dev server + Playwright as a default
+
+**What was established**
+User formalised a working norm: every UI change in this project must be rendered in the live dev server and inspected via Playwright before being reported as done. No "should work" without a screenshot. Backend-only changes still follow the curl-based regression protocol from CLAUDE.md.
+
+**Why now**
+Established at the kickoff of Phase 0 of the catalog-spine initiative, before any UI work lands. Scoping the rule before Phase 1 ships keeps the IngredientPicker variants, Unlinked badge, allergen rollups, variance pills, and mise en place sheet from accumulating round-trips on visual defects.
+
+**What was done**
+- Wrote [wiki/concepts/dev-server-plus-playwright-verification.md](concepts/dev-server-plus-playwright-verification.md) — workflow, port reminders (Vite 5179 / Express 3009), backend-vs-frontend distinction, tool selection (`webapp-testing` / `browse`).
+- Indexed in `wiki/index.md`.
+- Also saved as a feedback memory in the user's auto-memory store so future Claude sessions on different machines pick it up.
+
+**How this composes with existing rules**
+- CLAUDE.md "Verification Before Done" — that section already mandated end-to-end verification; this concretises *how* for UI.
+- CLAUDE.md "Local Development Ports" — same ports referenced (5179 / 3009).
+- CLAUDE.md "Regression Testing Protocol" — Playwright is additive for UI; curl coverage of API routes still required separately.
+
+---
+
 ## 2026-04-29 — CI pipeline wired up (post-mortem on Render deploy failure)
 
 **What happened**

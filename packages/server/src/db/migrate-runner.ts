@@ -100,6 +100,56 @@ for (const m of seedModels) {
   );
 }
 
+// --- 2026-04-29: audit_log table (Phase 0 of catalog-spine initiative) ---
+
+await run(
+  "Create audit_log table",
+  `CREATE TABLE IF NOT EXISTS audit_log (
+    audit_log_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    entity_type VARCHAR(50) NOT NULL,
+    entity_id VARCHAR(100) NOT NULL,
+    action VARCHAR(30) NOT NULL,
+    actor_user_id INTEGER REFERENCES "user"(user_id),
+    organisation_id INTEGER REFERENCES organisation(organisation_id),
+    before_value JSONB,
+    after_value JSONB,
+    metadata JSONB,
+    created_dttm TIMESTAMPTZ NOT NULL DEFAULT now()
+  )`
+);
+
+await run(
+  "Index audit_log by entity",
+  `CREATE INDEX IF NOT EXISTS idx_audit_log_entity ON audit_log(entity_type, entity_id)`
+);
+
+await run(
+  "Index audit_log by org + created",
+  `CREATE INDEX IF NOT EXISTS idx_audit_log_org_created ON audit_log(organisation_id, created_dttm DESC)`
+);
+
+await run(
+  "Index audit_log by actor",
+  `CREATE INDEX IF NOT EXISTS idx_audit_log_actor ON audit_log(actor_user_id)`
+);
+
+// --- 2026-04-29: ingredient soft-delete columns (Phase 0 of catalog-spine) ---
+
+await run(
+  "Add deleted_at to ingredient",
+  `ALTER TABLE ingredient ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ`
+);
+
+await run(
+  "Add deleted_by to ingredient",
+  `ALTER TABLE ingredient ADD COLUMN IF NOT EXISTS deleted_by INTEGER REFERENCES "user"(user_id)`
+);
+
+await run(
+  "Partial index on active ingredients",
+  `CREATE INDEX IF NOT EXISTS idx_ingredient_active ON ingredient(organisation_id) WHERE deleted_at IS NULL`
+);
+
 // ---------------------------------------------------------------------------
 // Done
 // ---------------------------------------------------------------------------

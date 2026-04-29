@@ -1,0 +1,1517 @@
+{
+  "summary": {
+    "capturedAt": "2026-04-29T11:32:52.290Z",
+    "sampleSize": 23,
+    "totalIngredients": 419,
+    "metrics": {
+      "pctNameHasComma": 0.5,
+      "pctNameHasNarrativeKeyword": 0,
+      "pctNotePresent": 83.8,
+      "avgNameLength": 15
+    },
+    "byDomain": {
+      "recipe": {
+        "recipes": 11,
+        "ingredients": 234,
+        "pctNarrative": 0
+      },
+      "patisserie": {
+        "recipes": 8,
+        "ingredients": 159,
+        "pctNarrative": 0
+      },
+      "spirits": {
+        "recipes": 4,
+        "ingredients": 26,
+        "pctNarrative": 0
+      }
+    }
+  },
+  "samples": [
+    {
+      "recipeId": "cbeb3803-4ba5-4e00-83bf-30fb847c0434",
+      "domain": "recipe",
+      "title": "Beef Bulgogi",
+      "ingredient": {
+        "name": "beef ribeye or sirloin",
+        "amount": "700",
+        "unit": "g",
+        "note": "sliced 2–3mm thin against the grain; partially freeze 45 minutes for cleaner cuts",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 22,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "cbeb3803-4ba5-4e00-83bf-30fb847c0434",
+      "domain": "recipe",
+      "title": "Beef Bulgogi",
+      "ingredient": {
+        "name": "fresh shiitake mushrooms",
+        "amount": "200",
+        "unit": "g",
+        "note": "stems removed, caps sliced 4–5mm thick",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 24,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "cbeb3803-4ba5-4e00-83bf-30fb847c0434",
+      "domain": "recipe",
+      "title": "Beef Bulgogi",
+      "ingredient": {
+        "name": "toasted sesame oil",
+        "amount": "2",
+        "unit": "tbsp",
+        "note": "for finishing the marinade",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 18,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "cbeb3803-4ba5-4e00-83bf-30fb847c0434",
+      "domain": "recipe",
+      "title": "Beef Bulgogi",
+      "ingredient": {
+        "name": "neutral oil",
+        "amount": "2",
+        "unit": "tbsp",
+        "note": "grapeseed or canola, for searing",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 11,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "cbeb3803-4ba5-4e00-83bf-30fb847c0434",
+      "domain": "recipe",
+      "title": "Beef Bulgogi",
+      "ingredient": {
+        "name": "free-range eggs",
+        "amount": "4",
+        "unit": "large",
+        "note": "one per portion, fried to order",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 15,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "cbeb3803-4ba5-4e00-83bf-30fb847c0434",
+      "domain": "recipe",
+      "title": "Beef Bulgogi",
+      "ingredient": {
+        "name": "cooked short-grain white rice",
+        "amount": "800",
+        "unit": "g",
+        "note": "freshly steamed and kept warm; approximately 200g cooked per portion",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 29,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "cbeb3803-4ba5-4e00-83bf-30fb847c0434",
+      "domain": "recipe",
+      "title": "Beef Bulgogi",
+      "ingredient": {
+        "name": "soy sauce",
+        "amount": "80",
+        "unit": "ml",
+        "note": "regular sodium; use tamari for gluten-free",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 9,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "cbeb3803-4ba5-4e00-83bf-30fb847c0434",
+      "domain": "recipe",
+      "title": "Beef Bulgogi",
+      "ingredient": {
+        "name": "mirin",
+        "amount": "40",
+        "unit": "ml",
+        "note": "or dry sherry as substitute",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 5,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "cbeb3803-4ba5-4e00-83bf-30fb847c0434",
+      "domain": "recipe",
+      "title": "Beef Bulgogi",
+      "ingredient": {
+        "name": "white sugar",
+        "amount": "30",
+        "unit": "g",
+        "note": "or brown sugar for deeper molasses note",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 11,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "cbeb3803-4ba5-4e00-83bf-30fb847c0434",
+      "domain": "recipe",
+      "title": "Beef Bulgogi",
+      "ingredient": {
+        "name": "Asian pear",
+        "amount": "1",
+        "unit": "medium",
+        "note": "approximately 120g, grated on a box grater; substitute with kiwi or Bosc pear",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 10,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "cbeb3803-4ba5-4e00-83bf-30fb847c0434",
+      "domain": "recipe",
+      "title": "Beef Bulgogi",
+      "ingredient": {
+        "name": "garlic",
+        "amount": "6",
+        "unit": "cloves",
+        "note": "finely grated on a microplane",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 6,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "cbeb3803-4ba5-4e00-83bf-30fb847c0434",
+      "domain": "recipe",
+      "title": "Beef Bulgogi",
+      "ingredient": {
+        "name": "fresh ginger",
+        "amount": "15",
+        "unit": "g",
+        "note": "finely grated on a microplane",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 12,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "cbeb3803-4ba5-4e00-83bf-30fb847c0434",
+      "domain": "recipe",
+      "title": "Beef Bulgogi",
+      "ingredient": {
+        "name": "gochujang",
+        "amount": "1",
+        "unit": "tbsp",
+        "note": "Korean fermented chili paste; adjust to heat preference",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 9,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "cbeb3803-4ba5-4e00-83bf-30fb847c0434",
+      "domain": "recipe",
+      "title": "Beef Bulgogi",
+      "ingredient": {
+        "name": "freshly ground black pepper",
+        "amount": "1",
+        "unit": "tsp",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 27,
+        "notePresent": false
+      }
+    },
+    {
+      "recipeId": "cbeb3803-4ba5-4e00-83bf-30fb847c0434",
+      "domain": "recipe",
+      "title": "Beef Bulgogi",
+      "ingredient": {
+        "name": "yellow onions",
+        "amount": "2",
+        "unit": "medium",
+        "note": "one thinly sliced for the marinade, one for quick pickling",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 13,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "cbeb3803-4ba5-4e00-83bf-30fb847c0434",
+      "domain": "recipe",
+      "title": "Beef Bulgogi",
+      "ingredient": {
+        "name": "rice wine vinegar",
+        "amount": "60",
+        "unit": "ml",
+        "note": "for the quick pickle",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 17,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "cbeb3803-4ba5-4e00-83bf-30fb847c0434",
+      "domain": "recipe",
+      "title": "Beef Bulgogi",
+      "ingredient": {
+        "name": "sugar",
+        "amount": "1",
+        "unit": "tsp",
+        "note": "for the quick pickle brine",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 5,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "cbeb3803-4ba5-4e00-83bf-30fb847c0434",
+      "domain": "recipe",
+      "title": "Beef Bulgogi",
+      "ingredient": {
+        "name": "fine sea salt",
+        "amount": "1",
+        "unit": "tsp",
+        "note": "for the quick pickle brine",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 13,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "cbeb3803-4ba5-4e00-83bf-30fb847c0434",
+      "domain": "recipe",
+      "title": "Beef Bulgogi",
+      "ingredient": {
+        "name": "spring onions (scallions)",
+        "amount": "3",
+        "unit": "stalks",
+        "note": "thinly sliced on the bias, for garnish",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 25,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "cbeb3803-4ba5-4e00-83bf-30fb847c0434",
+      "domain": "recipe",
+      "title": "Beef Bulgogi",
+      "ingredient": {
+        "name": "toasted sesame seeds",
+        "amount": "1",
+        "unit": "tbsp",
+        "note": "for garnish",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 20,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "cbeb3803-4ba5-4e00-83bf-30fb847c0434",
+      "domain": "recipe",
+      "title": "Beef Bulgogi",
+      "ingredient": {
+        "name": "fine sea salt",
+        "amount": "1",
+        "unit": "tsp",
+        "note": "for seasoning throughout",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 13,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "5ffe9b3d-b4d5-43fb-8a06-9bb0d2512dcf",
+      "domain": "patisserie",
+      "title": "Brioche Bun",
+      "ingredient": {
+        "name": "bread flour",
+        "amount": "300",
+        "unit": "g",
+        "note": "plus extra for dusting; bread flour gives more gluten structure than all-purpose, supporting the butter load",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 11,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "5ffe9b3d-b4d5-43fb-8a06-9bb0d2512dcf",
+      "domain": "patisserie",
+      "title": "Brioche Bun",
+      "ingredient": {
+        "name": "instant dry yeast",
+        "amount": "7",
+        "unit": "g",
+        "note": "one standard sachet",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 17,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "5ffe9b3d-b4d5-43fb-8a06-9bb0d2512dcf",
+      "domain": "patisserie",
+      "title": "Brioche Bun",
+      "ingredient": {
+        "name": "caster sugar",
+        "amount": "30",
+        "unit": "g",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 12,
+        "notePresent": false
+      }
+    },
+    {
+      "recipeId": "5ffe9b3d-b4d5-43fb-8a06-9bb0d2512dcf",
+      "domain": "patisserie",
+      "title": "Brioche Bun",
+      "ingredient": {
+        "name": "fine sea salt",
+        "amount": "1",
+        "unit": "tsp",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 13,
+        "notePresent": false
+      }
+    },
+    {
+      "recipeId": "5ffe9b3d-b4d5-43fb-8a06-9bb0d2512dcf",
+      "domain": "patisserie",
+      "title": "Brioche Bun",
+      "ingredient": {
+        "name": "eggs",
+        "amount": "3",
+        "unit": "whole",
+        "note": "room temperature, approximately 150g total; 2 for the dough, 1 reserved for egg wash",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 4,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "5ffe9b3d-b4d5-43fb-8a06-9bb0d2512dcf",
+      "domain": "patisserie",
+      "title": "Brioche Bun",
+      "ingredient": {
+        "name": "whole milk",
+        "amount": "60",
+        "unit": "g",
+        "note": "warm, 35–38°C (95–100°F) — not hot, which kills yeast",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 10,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "5ffe9b3d-b4d5-43fb-8a06-9bb0d2512dcf",
+      "domain": "patisserie",
+      "title": "Brioche Bun",
+      "ingredient": {
+        "name": "raw honey",
+        "amount": "15",
+        "unit": "g",
+        "note": "adds subtle floral sweetness and promotes deep crust colour via Maillard reaction",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 9,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "5ffe9b3d-b4d5-43fb-8a06-9bb0d2512dcf",
+      "domain": "patisserie",
+      "title": "Brioche Bun",
+      "ingredient": {
+        "name": "unsalted butter",
+        "amount": "120",
+        "unit": "g",
+        "note": "soft, cut into 1cm cubes, room temperature — cold butter will not incorporate and will tear the gluten network",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 15,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "5ffe9b3d-b4d5-43fb-8a06-9bb0d2512dcf",
+      "domain": "patisserie",
+      "title": "Brioche Bun",
+      "ingredient": {
+        "name": "fleur de sel",
+        "amount": "1",
+        "unit": "pinch",
+        "note": "for finishing, optional but recommended",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 12,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "3a6d39ed-c20c-488b-bc72-10dfe4d8497d",
+      "domain": "spirits",
+      "title": "Ember & Dusk",
+      "ingredient": {
+        "name": "aged dark rum",
+        "amount": "60",
+        "unit": "ml",
+        "note": "2 oz — Barbadian or Jamaican preferred; Appleton 12 or equivalent",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 13,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "3a6d39ed-c20c-488b-bc72-10dfe4d8497d",
+      "domain": "spirits",
+      "title": "Ember & Dusk",
+      "ingredient": {
+        "name": "amaro Montenegro",
+        "amount": "15",
+        "unit": "ml",
+        "note": "0.5 oz — adds bitter orange and dried herb complexity",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 16,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "3a6d39ed-c20c-488b-bc72-10dfe4d8497d",
+      "domain": "spirits",
+      "title": "Ember & Dusk",
+      "ingredient": {
+        "name": "burnt cinnamon syrup",
+        "amount": "22.5",
+        "unit": "ml",
+        "note": "0.75 oz — house-made, recipe in steps",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 20,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "3a6d39ed-c20c-488b-bc72-10dfe4d8497d",
+      "domain": "spirits",
+      "title": "Ember & Dusk",
+      "ingredient": {
+        "name": "cold-brew black tea concentrate",
+        "amount": "15",
+        "unit": "ml",
+        "note": "0.5 oz — Assam or Ceylon, brewed 8 hrs cold, strained",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 31,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "3a6d39ed-c20c-488b-bc72-10dfe4d8497d",
+      "domain": "spirits",
+      "title": "Ember & Dusk",
+      "ingredient": {
+        "name": "Angostura bitters",
+        "amount": "2",
+        "unit": "dashes",
+        "note": "Classic aromatic bitters",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 17,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "3a6d39ed-c20c-488b-bc72-10dfe4d8497d",
+      "domain": "spirits",
+      "title": "Ember & Dusk",
+      "ingredient": {
+        "name": "saline solution",
+        "amount": "1",
+        "unit": "dash",
+        "note": "20% salt-to-water by weight — 3 drops lifts everything",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 15,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "3a6d39ed-c20c-488b-bc72-10dfe4d8497d",
+      "domain": "spirits",
+      "title": "Ember & Dusk",
+      "ingredient": {
+        "name": "spiced coconut cream float",
+        "amount": "30",
+        "unit": "ml",
+        "note": "1 oz — full-fat coconut cream, lightly whipped with a pinch of ground star anise and white pepper",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 26,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "e26469b4-d968-4221-98c1-0f7436de777f",
+      "domain": "patisserie",
+      "title": "Sans Rival",
+      "ingredient": {
+        "name": "raw whole cashews",
+        "amount": "150",
+        "unit": "g",
+        "note": "for dacquoise — toasted at 325°F (163°C) for 10 min, cooled completely",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 17,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "e26469b4-d968-4221-98c1-0f7436de777f",
+      "domain": "patisserie",
+      "title": "Sans Rival",
+      "ingredient": {
+        "name": "all-purpose flour",
+        "amount": "30",
+        "unit": "g",
+        "note": "sifted",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 17,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "e26469b4-d968-4221-98c1-0f7436de777f",
+      "domain": "patisserie",
+      "title": "Sans Rival",
+      "ingredient": {
+        "name": "icing sugar",
+        "amount": "180",
+        "unit": "g",
+        "note": "sifted, divided: 150g for nut flour, 30g for meringue",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 11,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "e26469b4-d968-4221-98c1-0f7436de777f",
+      "domain": "patisserie",
+      "title": "Sans Rival",
+      "ingredient": {
+        "name": "egg whites",
+        "amount": "180",
+        "unit": "g",
+        "note": "aged 24 hours uncovered in fridge, room temperature — approx. 5 large eggs",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 10,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "e26469b4-d968-4221-98c1-0f7436de777f",
+      "domain": "patisserie",
+      "title": "Sans Rival",
+      "ingredient": {
+        "name": "cream of tartar",
+        "amount": "1",
+        "unit": "tsp",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 15,
+        "notePresent": false
+      }
+    },
+    {
+      "recipeId": "e26469b4-d968-4221-98c1-0f7436de777f",
+      "domain": "patisserie",
+      "title": "Sans Rival",
+      "ingredient": {
+        "name": "raw whole cashews",
+        "amount": "120",
+        "unit": "g",
+        "note": "for praline — toasted separately",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 17,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "e26469b4-d968-4221-98c1-0f7436de777f",
+      "domain": "patisserie",
+      "title": "Sans Rival",
+      "ingredient": {
+        "name": "caster sugar",
+        "amount": "150",
+        "unit": "g",
+        "note": "for dry caramel praline",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 12,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "e26469b4-d968-4221-98c1-0f7436de777f",
+      "domain": "patisserie",
+      "title": "Sans Rival",
+      "ingredient": {
+        "name": "water",
+        "amount": "30",
+        "unit": "g",
+        "note": "for praline caramel",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 5,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "e26469b4-d968-4221-98c1-0f7436de777f",
+      "domain": "patisserie",
+      "title": "Sans Rival",
+      "ingredient": {
+        "name": "fleur de sel",
+        "amount": "2",
+        "unit": "g",
+        "note": "for praline",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 12,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "e26469b4-d968-4221-98c1-0f7436de777f",
+      "domain": "patisserie",
+      "title": "Sans Rival",
+      "ingredient": {
+        "name": "unsalted butter",
+        "amount": "200",
+        "unit": "g",
+        "note": "for French buttercream — 82% fat, room temperature, cubed",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 15,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "e26469b4-d968-4221-98c1-0f7436de777f",
+      "domain": "patisserie",
+      "title": "Sans Rival",
+      "ingredient": {
+        "name": "caster sugar",
+        "amount": "120",
+        "unit": "g",
+        "note": "for Italian meringue base of buttercream",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 12,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "e26469b4-d968-4221-98c1-0f7436de777f",
+      "domain": "patisserie",
+      "title": "Sans Rival",
+      "ingredient": {
+        "name": "water",
+        "amount": "40",
+        "unit": "g",
+        "note": "for buttercream syrup",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 5,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "e26469b4-d968-4221-98c1-0f7436de777f",
+      "domain": "patisserie",
+      "title": "Sans Rival",
+      "ingredient": {
+        "name": "egg whites",
+        "amount": "80",
+        "unit": "g",
+        "note": "for Italian meringue — room temperature, approx. 2–3 large eggs",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 10,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "e26469b4-d968-4221-98c1-0f7436de777f",
+      "domain": "patisserie",
+      "title": "Sans Rival",
+      "ingredient": {
+        "name": "pandan extract",
+        "amount": "25",
+        "unit": "g",
+        "note": "fresh or bottled — if fresh, blend 6 pandan leaves with 30g water, strain through muslin",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 14,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "e26469b4-d968-4221-98c1-0f7436de777f",
+      "domain": "patisserie",
+      "title": "Sans Rival",
+      "ingredient": {
+        "name": "pure vanilla extract",
+        "amount": "1",
+        "unit": "tsp",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 20,
+        "notePresent": false
+      }
+    },
+    {
+      "recipeId": "e26469b4-d968-4221-98c1-0f7436de777f",
+      "domain": "patisserie",
+      "title": "Sans Rival",
+      "ingredient": {
+        "name": "unsalted butter",
+        "amount": "40",
+        "unit": "g",
+        "note": "for tuile — melted and cooled",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 15,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "e26469b4-d968-4221-98c1-0f7436de777f",
+      "domain": "patisserie",
+      "title": "Sans Rival",
+      "ingredient": {
+        "name": "icing sugar",
+        "amount": "40",
+        "unit": "g",
+        "note": "for tuile — sifted",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 11,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "e26469b4-d968-4221-98c1-0f7436de777f",
+      "domain": "patisserie",
+      "title": "Sans Rival",
+      "ingredient": {
+        "name": "egg whites",
+        "amount": "40",
+        "unit": "g",
+        "note": "for tuile — room temperature, approx. 1 large egg white",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 10,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "e26469b4-d968-4221-98c1-0f7436de777f",
+      "domain": "patisserie",
+      "title": "Sans Rival",
+      "ingredient": {
+        "name": "all-purpose flour",
+        "amount": "35",
+        "unit": "g",
+        "note": "for tuile — sifted",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 17,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "e26469b4-d968-4221-98c1-0f7436de777f",
+      "domain": "patisserie",
+      "title": "Sans Rival",
+      "ingredient": {
+        "name": "freeze-dried mango powder",
+        "amount": "15",
+        "unit": "g",
+        "note": "for finishing — blitz freeze-dried mango slices in spice grinder if powder unavailable",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 25,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "e26469b4-d968-4221-98c1-0f7436de777f",
+      "domain": "patisserie",
+      "title": "Sans Rival",
+      "ingredient": {
+        "name": "toasted cashew halves",
+        "amount": "20",
+        "unit": "g",
+        "note": "for garnish — lightly salted",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 21,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "e26469b4-d968-4221-98c1-0f7436de777f",
+      "domain": "patisserie",
+      "title": "Sans Rival",
+      "ingredient": {
+        "name": "edible gold leaf or gold dust",
+        "amount": "4",
+        "unit": "g",
+        "note": "optional — for plating elegance",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 29,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "7c784220-c8c0-4091-a9a5-7c953812bc74",
+      "domain": "recipe",
+      "title": "Crispy Skin Salmon — Butternut Sweet Potato Mash with Garden Greens",
+      "ingredient": {
+        "name": "skin-on salmon fillet",
+        "amount": "4",
+        "unit": "portions",
+        "note": "180–200g each, pin-boned, scaled, free-range or sustainably sourced",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 21,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "7c784220-c8c0-4091-a9a5-7c953812bc74",
+      "domain": "recipe",
+      "title": "Crispy Skin Salmon — Butternut Sweet Potato Mash with Garden Greens",
+      "ingredient": {
+        "name": "fleur de sel",
+        "amount": "10",
+        "unit": "g",
+        "note": "for seasoning skin and flesh",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 12,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "7c784220-c8c0-4091-a9a5-7c953812bc74",
+      "domain": "recipe",
+      "title": "Crispy Skin Salmon — Butternut Sweet Potato Mash with Garden Greens",
+      "ingredient": {
+        "name": "neutral oil",
+        "amount": "2",
+        "unit": "tbsp",
+        "note": "grapeseed or sunflower — high smoke point",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 11,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "7c784220-c8c0-4091-a9a5-7c953812bc74",
+      "domain": "recipe",
+      "title": "Crispy Skin Salmon — Butternut Sweet Potato Mash with Garden Greens",
+      "ingredient": {
+        "name": "unsalted butter",
+        "amount": "30",
+        "unit": "g",
+        "note": "for basting",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 15,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "7c784220-c8c0-4091-a9a5-7c953812bc74",
+      "domain": "recipe",
+      "title": "Crispy Skin Salmon — Butternut Sweet Potato Mash with Garden Greens",
+      "ingredient": {
+        "name": "fresh thyme",
+        "amount": "2",
+        "unit": "sprigs",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 11,
+        "notePresent": false
+      }
+    },
+    {
+      "recipeId": "7c784220-c8c0-4091-a9a5-7c953812bc74",
+      "domain": "recipe",
+      "title": "Crispy Skin Salmon — Butternut Sweet Potato Mash with Garden Greens",
+      "ingredient": {
+        "name": "garlic",
+        "amount": "1",
+        "unit": "clove",
+        "note": "lightly crushed, skin on",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 6,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "7c784220-c8c0-4091-a9a5-7c953812bc74",
+      "domain": "recipe",
+      "title": "Crispy Skin Salmon — Butternut Sweet Potato Mash with Garden Greens",
+      "ingredient": {
+        "name": "orange sweet potato (kamote)",
+        "amount": "600",
+        "unit": "g",
+        "note": "peeled, cut into 3cm chunks",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 28,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "7c784220-c8c0-4091-a9a5-7c953812bc74",
+      "domain": "recipe",
+      "title": "Crispy Skin Salmon — Butternut Sweet Potato Mash with Garden Greens",
+      "ingredient": {
+        "name": "butternut squash",
+        "amount": "300",
+        "unit": "g",
+        "note": "peeled, seeded, cut into 3cm chunks",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 16,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "7c784220-c8c0-4091-a9a5-7c953812bc74",
+      "domain": "recipe",
+      "title": "Crispy Skin Salmon — Butternut Sweet Potato Mash with Garden Greens",
+      "ingredient": {
+        "name": "unsalted butter",
+        "amount": "60",
+        "unit": "g",
+        "note": "cold, cubed — for mash",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 15,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "7c784220-c8c0-4091-a9a5-7c953812bc74",
+      "domain": "recipe",
+      "title": "Crispy Skin Salmon — Butternut Sweet Potato Mash with Garden Greens",
+      "ingredient": {
+        "name": "heavy cream",
+        "amount": "80",
+        "unit": "ml",
+        "note": "warmed",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 11,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "7c784220-c8c0-4091-a9a5-7c953812bc74",
+      "domain": "recipe",
+      "title": "Crispy Skin Salmon — Butternut Sweet Potato Mash with Garden Greens",
+      "ingredient": {
+        "name": "freshly grated nutmeg",
+        "amount": "1",
+        "unit": "pinch",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 21,
+        "notePresent": false
+      }
+    },
+    {
+      "recipeId": "7c784220-c8c0-4091-a9a5-7c953812bc74",
+      "domain": "recipe",
+      "title": "Crispy Skin Salmon — Butternut Sweet Potato Mash with Garden Greens",
+      "ingredient": {
+        "name": "fine sea salt",
+        "amount": "5",
+        "unit": "g",
+        "note": "for mash seasoning",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 13,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "7c784220-c8c0-4091-a9a5-7c953812bc74",
+      "domain": "recipe",
+      "title": "Crispy Skin Salmon — Butternut Sweet Potato Mash with Garden Greens",
+      "ingredient": {
+        "name": "white pepper",
+        "amount": "1",
+        "unit": "pinch",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 12,
+        "notePresent": false
+      }
+    },
+    {
+      "recipeId": "7c784220-c8c0-4091-a9a5-7c953812bc74",
+      "domain": "recipe",
+      "title": "Crispy Skin Salmon — Butternut Sweet Potato Mash with Garden Greens",
+      "ingredient": {
+        "name": "baby spinach",
+        "amount": "150",
+        "unit": "g",
+        "note": "washed, stems removed",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 12,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "7c784220-c8c0-4091-a9a5-7c953812bc74",
+      "domain": "recipe",
+      "title": "Crispy Skin Salmon — Butternut Sweet Potato Mash with Garden Greens",
+      "ingredient": {
+        "name": "watercress",
+        "amount": "100",
+        "unit": "g",
+        "note": "thick stems removed",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 10,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "7c784220-c8c0-4091-a9a5-7c953812bc74",
+      "domain": "recipe",
+      "title": "Crispy Skin Salmon — Butternut Sweet Potato Mash with Garden Greens",
+      "ingredient": {
+        "name": "flat-leaf parsley",
+        "amount": "80",
+        "unit": "g",
+        "note": "leaves only, loosely packed",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 17,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "7c784220-c8c0-4091-a9a5-7c953812bc74",
+      "domain": "recipe",
+      "title": "Crispy Skin Salmon — Butternut Sweet Potato Mash with Garden Greens",
+      "ingredient": {
+        "name": "fresh chives",
+        "amount": "30",
+        "unit": "g",
+        "note": "roughly chopped",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 12,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "7c784220-c8c0-4091-a9a5-7c953812bc74",
+      "domain": "recipe",
+      "title": "Crispy Skin Salmon — Butternut Sweet Potato Mash with Garden Greens",
+      "ingredient": {
+        "name": "dry white wine",
+        "amount": "200",
+        "unit": "ml",
+        "note": "Sauvignon Blanc or Muscadet",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 14,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "7c784220-c8c0-4091-a9a5-7c953812bc74",
+      "domain": "recipe",
+      "title": "Crispy Skin Salmon — Butternut Sweet Potato Mash with Garden Greens",
+      "ingredient": {
+        "name": "fish stock",
+        "amount": "100",
+        "unit": "ml",
+        "note": "or light chicken stock",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 10,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "7c784220-c8c0-4091-a9a5-7c953812bc74",
+      "domain": "recipe",
+      "title": "Crispy Skin Salmon — Butternut Sweet Potato Mash with Garden Greens",
+      "ingredient": {
+        "name": "shallot",
+        "amount": "1",
+        "unit": "medium",
+        "note": "finely brunoise",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 7,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "7c784220-c8c0-4091-a9a5-7c953812bc74",
+      "domain": "recipe",
+      "title": "Crispy Skin Salmon — Butternut Sweet Potato Mash with Garden Greens",
+      "ingredient": {
+        "name": "cold unsalted butter",
+        "amount": "80",
+        "unit": "g",
+        "note": "cubed — for beurre monté in herb sauce",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 20,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "7c784220-c8c0-4091-a9a5-7c953812bc74",
+      "domain": "recipe",
+      "title": "Crispy Skin Salmon — Butternut Sweet Potato Mash with Garden Greens",
+      "ingredient": {
+        "name": "fresh lemon juice",
+        "amount": "1",
+        "unit": "tbsp",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 17,
+        "notePresent": false
+      }
+    },
+    {
+      "recipeId": "7c784220-c8c0-4091-a9a5-7c953812bc74",
+      "domain": "recipe",
+      "title": "Crispy Skin Salmon — Butternut Sweet Potato Mash with Garden Greens",
+      "ingredient": {
+        "name": "broccolini",
+        "amount": "150",
+        "unit": "g",
+        "note": "trimmed, halved lengthwise",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 10,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "7c784220-c8c0-4091-a9a5-7c953812bc74",
+      "domain": "recipe",
+      "title": "Crispy Skin Salmon — Butternut Sweet Potato Mash with Garden Greens",
+      "ingredient": {
+        "name": "sugar snap peas",
+        "amount": "100",
+        "unit": "g",
+        "note": "strings removed",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 15,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "7c784220-c8c0-4091-a9a5-7c953812bc74",
+      "domain": "recipe",
+      "title": "Crispy Skin Salmon — Butternut Sweet Potato Mash with Garden Greens",
+      "ingredient": {
+        "name": "unsalted butter",
+        "amount": "15",
+        "unit": "g",
+        "note": "for finishing greens",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 15,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "7c784220-c8c0-4091-a9a5-7c953812bc74",
+      "domain": "recipe",
+      "title": "Crispy Skin Salmon — Butternut Sweet Potato Mash with Garden Greens",
+      "ingredient": {
+        "name": "fleur de sel",
+        "amount": "1",
+        "unit": "pinch",
+        "note": "for finishing greens",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 12,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "785a8f21-b477-4ca5-a011-02dcc43d7744",
+      "domain": "patisserie",
+      "title": "Ube Mud Cake",
+      "ingredient": {
+        "name": "— FOR THE UBE MUD CAKE —",
+        "amount": "0",
+        "unit": "",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 24,
+        "notePresent": false
+      }
+    },
+    {
+      "recipeId": "785a8f21-b477-4ca5-a011-02dcc43d7744",
+      "domain": "patisserie",
+      "title": "Ube Mud Cake",
+      "ingredient": {
+        "name": "dark chocolate (70% cacao)",
+        "amount": "200",
+        "unit": "g",
+        "note": "chopped — use a quality couverture or baking bar",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 26,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "785a8f21-b477-4ca5-a011-02dcc43d7744",
+      "domain": "patisserie",
+      "title": "Ube Mud Cake",
+      "ingredient": {
+        "name": "unsalted butter",
+        "amount": "180",
+        "unit": "g",
+        "note": "cubed, room temperature",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 15,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "785a8f21-b477-4ca5-a011-02dcc43d7744",
+      "domain": "patisserie",
+      "title": "Ube Mud Cake",
+      "ingredient": {
+        "name": "ube halaya (purple yam jam)",
+        "amount": "180",
+        "unit": "g",
+        "note": "store-bought or homemade; smooth, not chunky",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 27,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "785a8f21-b477-4ca5-a011-02dcc43d7744",
+      "domain": "patisserie",
+      "title": "Ube Mud Cake",
+      "ingredient": {
+        "name": "caster sugar",
+        "amount": "200",
+        "unit": "g",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 12,
+        "notePresent": false
+      }
+    },
+    {
+      "recipeId": "785a8f21-b477-4ca5-a011-02dcc43d7744",
+      "domain": "patisserie",
+      "title": "Ube Mud Cake",
+      "ingredient": {
+        "name": "free-range eggs",
+        "amount": "3",
+        "unit": "",
+        "note": "room temperature, lightly beaten",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 15,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "785a8f21-b477-4ca5-a011-02dcc43d7744",
+      "domain": "patisserie",
+      "title": "Ube Mud Cake",
+      "ingredient": {
+        "name": "pure vanilla extract",
+        "amount": "1",
+        "unit": "tsp",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 20,
+        "notePresent": false
+      }
+    },
+    {
+      "recipeId": "785a8f21-b477-4ca5-a011-02dcc43d7744",
+      "domain": "patisserie",
+      "title": "Ube Mud Cake",
+      "ingredient": {
+        "name": "ube extract",
+        "amount": "1",
+        "unit": "tsp",
+        "note": "optional — deepens color and floral aroma",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 11,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "785a8f21-b477-4ca5-a011-02dcc43d7744",
+      "domain": "patisserie",
+      "title": "Ube Mud Cake",
+      "ingredient": {
+        "name": "all-purpose flour",
+        "amount": "120",
+        "unit": "g",
+        "note": "sifted",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 17,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "785a8f21-b477-4ca5-a011-02dcc43d7744",
+      "domain": "patisserie",
+      "title": "Ube Mud Cake",
+      "ingredient": {
+        "name": "Dutch-process cocoa powder",
+        "amount": "30",
+        "unit": "g",
+        "note": "sifted",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 26,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "785a8f21-b477-4ca5-a011-02dcc43d7744",
+      "domain": "patisserie",
+      "title": "Ube Mud Cake",
+      "ingredient": {
+        "name": "baking powder",
+        "amount": "1",
+        "unit": "tsp",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 13,
+        "notePresent": false
+      }
+    },
+    {
+      "recipeId": "785a8f21-b477-4ca5-a011-02dcc43d7744",
+      "domain": "patisserie",
+      "title": "Ube Mud Cake",
+      "ingredient": {
+        "name": "fine sea salt",
+        "amount": "½",
+        "unit": "tsp",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 13,
+        "notePresent": false
+      }
+    },
+    {
+      "recipeId": "785a8f21-b477-4ca5-a011-02dcc43d7744",
+      "domain": "patisserie",
+      "title": "Ube Mud Cake",
+      "ingredient": {
+        "name": "full-fat coconut milk",
+        "amount": "60",
+        "unit": "ml",
+        "note": "room temperature",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 21,
+        "notePresent": true
+      }
+    },
+    {
+      "recipeId": "785a8f21-b477-4ca5-a011-02dcc43d7744",
+      "domain": "patisserie",
+      "title": "Ube Mud Cake",
+      "ingredient": {
+        "name": "— FOR THE COCONUT GANACHE —",
+        "amount": "0",
+        "unit": "",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 27,
+        "notePresent": false
+      }
+    },
+    {
+      "recipeId": "785a8f21-b477-4ca5-a011-02dcc43d7744",
+      "domain": "patisserie",
+      "title": "Ube Mud Cake",
+      "ingredient": {
+        "name": "dark chocolate (64–70% cacao)",
+        "amount": "160",
+        "unit": "g",
+        "note": "finely chopped",
+        "nameHasComma": false,
+        "nameHasNarrativeKeyword": false,
+        "nameLen": 29,
+        "notePresent": true
+      }
+    }
+  ]
+}
