@@ -138,7 +138,12 @@ describe("handleLogin", () => {
     await handleLogin(req, res, next);
 
     expect(res.cookie).toHaveBeenCalledTimes(2);
-    expect(res.json).toHaveBeenCalledWith({ user: fakeUser });
+    expect(res.json).toHaveBeenCalledWith({
+      user: fakeUser,
+      // Native mobile clients read tokens from the response body since they
+      // don't use the auth cookies. The web client ignores this field.
+      tokens: { accessToken: "at", refreshToken: "rt" },
+    });
   });
 
   it("returns 401 for invalid credentials", async () => {

@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import type { Request, Response, NextFunction } from "express";
 import { ZodError } from "zod";
 import { errorHandler } from "./errorHandler.js";
+import { PromptIsDeviceOnlyError } from "../errors/promptErrors.js";
 
 /** Creates a mock Express response. */
 function mockRes(overrides: Partial<Response> = {}): Response {
@@ -46,6 +47,30 @@ describe("errorHandler", () => {
     expect(res.status).toHaveBeenCalledWith(502);
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({ error: expect.stringContaining("AI provider") }),
+    );
+  });
+
+  it("returns 502 for PromptIsDeviceOnlyError (foot-gun catch)", () => {
+    // The runtime guard throws this when a server code path tries to invoke
+    // a device-only prompt. The error handler must map it to 502 (not 500)
+    // so monitoring can distinguish the misconfiguration from a generic
+    // crash, and the response body must surface the offending promptKey so
+    // an admin can find which prompt is mis-flagged without trawling logs.
+    const res = mockRes();
+
+    errorHandler(
+      new PromptIsDeviceOnlyError("antoine-system-prompt"),
+      mockReq,
+      res,
+      mockNext,
+    );
+
+    expect(res.status).toHaveBeenCalledWith(502);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error: expect.stringContaining("on-device runtime"),
+        promptKey: "antoine-system-prompt",
+      }),
     );
   });
 
