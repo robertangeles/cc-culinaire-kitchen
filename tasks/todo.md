@@ -128,6 +128,9 @@ _Last updated: 2026-04-22. Reflects actual codebase state, not aspirational._
 
 _Nothing confirmed outstanding. New work to be defined._
 
+### Cleanup
+- [ ] Remove duplicate prompt file `prompts/recipe/recipeRefinementPrompt.md` (canonical lives at `prompts/chatbot/recipeRefinementPrompt.md`). Verify no code references the dead path before deletion. See `wiki/decisions/duplicate-recipe-refinement-prompt.md`.
+
 ### Candidates (not started)
 - [ ] Purchasing v2 — supplier invoice reconciliation against credit notes
 - [ ] Waste Intelligence v2 — AI root cause suggestions, cost impact per item

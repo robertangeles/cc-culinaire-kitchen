@@ -772,3 +772,71 @@ This project runs on non-default ports to avoid conflicts with other local proje
 - Backend (Express): 3009
 
 Never change these ports without explicit confirmation. Do not default to 3000, 5173
+
+------------------------------------------------------------------------
+
+# LLM Wiki
+
+This project maintains a living knowledge wiki in `wiki/`.
+
+## At the start of every session
+Read `wiki/index.md` to understand what is already known before doing any work.
+
+## During the session
+When you make a significant decision, discover a non-obvious pattern, or implement
+something architecturally important — write it to the appropriate wiki folder.
+
+## At the end of every session
+Update `wiki/log.md` with a summary of what was done and decided today.
+
+## Wiki rules
+- `wiki/entities/` — named things: Antoine, Sparq, RAG pipeline, subscription system, store locations, prompt system
+- `wiki/concepts/` — patterns and ideas: technical architecture, data flow, fine-tuning approach, RAG architecture, voice persona design
+- `wiki/decisions/` — architectural decisions with date and rationale
+- `wiki/synthesis/` — cross-cutting analysis, lessons, open questions
+- `wiki/raw-index/` — pointer pages to immutable source content that lives elsewhere (`knowledge-base/`, `prompts/`, briefs). The wiki documents these without owning or relocating them.
+- `raw/` is conceptual — there is no literal `raw/` folder. Files like `knowledge-base/*` and `prompts/*` are immutable source content but stay where they are because code reads them at runtime.
+- Always update `wiki/index.md` when creating a new wiki page
+- Always append to `wiki/log.md` when modifying the wiki
+- Never modify content under `knowledge-base/` or `prompts/` without understanding the runtime sync path (SHA-256 embedding sync, prompt loader). Treat both as immutable source.
+
+## Wiki page format
+Every wiki page must start with:
+
+```
+---
+title: [page title]
+category: [entity | concept | decision | synthesis | raw-index]
+created: [YYYY-MM-DD]
+updated: [YYYY-MM-DD]
+related: [[page-name]], [[page-name]]
+---
+
+[one sentence summary]
+
+[content]
+```
+
+## Wiki tooling (use BEFORE reading full pages)
+
+The wiki ships with two small Node scripts. Reach for them whenever the wiki has more than a handful of pages — they keep token use down by narrowing what you have to `Read` in full.
+
+**Level 2 — local search (`scripts/wiki-search.mjs`)**
+```
+node scripts/wiki-search.mjs <query>            # list matching wiki page paths
+node scripts/wiki-search.mjs -c <query>         # show 2 lines of context per match
+```
+
+**Level 4 — graph relationships (`scripts/wiki-graph.mjs`)**
+```
+node scripts/wiki-graph.mjs build               # rebuild wiki/.graph.json from frontmatter + [[refs]]
+node scripts/wiki-graph.mjs stats               # node/edge counts, category breakdown
+node scripts/wiki-graph.mjs neighbors <slug>    # outgoing + incoming edges for a page
+node scripts/wiki-graph.mjs orphans             # pages with no edges (likely under-linked)
+node scripts/wiki-graph.mjs category <name>     # all pages in a category
+node scripts/wiki-graph.mjs broken              # [[slug]] refs that point to missing pages
+```
+
+The graph is rebuilt on demand. After adding or editing a wiki page's `related:` frontmatter or any `[[slug]]` body reference, run `build` again. `wiki/.graph.json` is gitignored — it is a regenerable artefact.
+
+When the graph crosses ~1000 nodes, swap the JSON store for SQLite via Node's built-in `node:sqlite` (Node 22+, no new deps). The `nodes` and `edges` arrays map cleanly to two tables.
