@@ -30,3 +30,37 @@ export class PromptIsDeviceOnlyError extends Error {
     this.promptKey = promptKey;
   }
 }
+
+/**
+ * Thrown by the mobile prompt-fetch path when no prompt matches the requested
+ * slug at all. Maps to a generic 404 — the mobile client treats this as
+ * "prompt does not exist" and should fall back to its cached body.
+ */
+export class PromptNotFoundError extends Error {
+  public readonly promptKey: string;
+
+  constructor(promptKey: string) {
+    super(`No prompt found with key "${promptKey}".`);
+    this.name = "PromptNotFoundError";
+    this.promptKey = promptKey;
+  }
+}
+
+/**
+ * Thrown by the mobile prompt-fetch path when a slug matches an existing
+ * prompt but its runtime is `'server'`. Mobile clients should never see
+ * server-runtime prompt bodies — the mapping to 404 (not 403) deliberately
+ * does not reveal "this prompt exists but is server-only," limiting what an
+ * authenticated-but-curious caller can learn about other prompts.
+ */
+export class PromptNotDeviceRuntimeError extends Error {
+  public readonly promptKey: string;
+
+  constructor(promptKey: string) {
+    super(
+      `Prompt "${promptKey}" exists but is not configured for on-device runtime.`,
+    );
+    this.name = "PromptNotDeviceRuntimeError";
+    this.promptKey = promptKey;
+  }
+}

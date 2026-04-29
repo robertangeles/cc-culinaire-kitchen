@@ -19,11 +19,15 @@ import { readFile } from "fs/promises";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import matter from "gray-matter";
-import { eq, and } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 import { db } from "../db/index.js";
-import { prompt } from "../db/schema.js";
+import { prompt, promptVersion } from "../db/schema.js";
 import { createVersion } from "./promptVersionService.js";
-import { PromptIsDeviceOnlyError } from "../errors/promptErrors.js";
+import {
+  PromptIsDeviceOnlyError,
+  PromptNotFoundError,
+  PromptNotDeviceRuntimeError,
+} from "../errors/promptErrors.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -163,6 +167,78 @@ export async function getPromptRawForAdmin(name: string): Promise<{
   // for server-runtime prompts.
   const content = await loadPromptFromFile(name);
   return { content, modelId: null, runtime: "server", promptKey: null };
+}
+
+/**
+ * Mobile prompt-fetch path: look up an on-device prompt by its slug
+ * (`prompt_key`) and return everything the mobile client needs to run
+ * inference locally and cache by version.
+ *
+ * Behavior:
+ * - Resolves the **active** row only (`default_ind = false`) — the factory
+ *   baseline is never exposed to mobile.
+ * - Throws {@link PromptNotFoundError} if no row matches the slug.
+ * - Throws {@link PromptNotDeviceRuntimeError} if the slug matches but its
+ *   runtime is `'server'` — mobile clients must never receive server-runtime
+ *   prompt bodies. The mapping to 404 (in the controller) deliberately does
+ *   NOT reveal that the prompt exists, limiting reconnaissance.
+ * - Joins `prompt_version` to surface the latest `version_number`. Mobile
+ *   clients cache by version; when their cached version is older than the
+ *   one returned here, they refetch.
+ *
+ * @param slug - The `prompt_key` value (e.g. `"antoine-system-prompt"`).
+ * @returns The body, runtime, model id, version, slug, and last-updated timestamp.
+ */
+export async function getDevicePromptForMobile(slug: string): Promise<{
+  promptKey: string;
+  promptBody: string;
+  runtime: "device";
+  modelId: string | null;
+  version: number;
+  updatedAtDttm: Date;
+}> {
+  const rows = await db
+    .select({
+      promptId: prompt.promptId,
+      promptKey: prompt.promptKey,
+      promptBody: prompt.promptBody,
+      modelId: prompt.modelId,
+      runtime: prompt.runtime,
+      updatedDttm: prompt.updatedDttm,
+    })
+    .from(prompt)
+    .where(and(eq(prompt.promptKey, slug), eq(prompt.defaultInd, false)))
+    .limit(1);
+
+  if (rows.length === 0) {
+    throw new PromptNotFoundError(slug);
+  }
+
+  const row = rows[0];
+  if (row.runtime !== "device") {
+    throw new PromptNotDeviceRuntimeError(slug);
+  }
+
+  // Latest version number — used by mobile clients to cache and decide
+  // when to refetch. Falls back to 0 for prompts that somehow have no
+  // version history (defensive; createPrompt always inserts version 1).
+  const versions = await db
+    .select({ versionNumber: promptVersion.versionNumber })
+    .from(promptVersion)
+    .where(eq(promptVersion.promptId, row.promptId))
+    .orderBy(desc(promptVersion.versionNumber))
+    .limit(1);
+
+  const version = versions.length > 0 ? versions[0].versionNumber : 0;
+
+  return {
+    promptKey: row.promptKey ?? slug,
+    promptBody: row.promptBody,
+    runtime: "device",
+    modelId: row.modelId,
+    version,
+    updatedAtDttm: row.updatedDttm,
+  };
 }
 
 /**
