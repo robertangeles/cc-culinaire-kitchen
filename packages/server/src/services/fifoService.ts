@@ -7,6 +7,7 @@
  */
 
 import { db } from "../db/index.js";
+import type { DbOrTx } from "./auditService.js";
 import { fifoBatch } from "../db/schema.js";
 
 export interface CreateBatchParams {
@@ -27,8 +28,11 @@ export interface CreateBatchParams {
 /**
  * Create a FIFO batch for received goods.
  * Returns the created batch row.
+ *
+ * Pass `tx` from a surrounding `db.transaction()` so the batch insert
+ * commits atomically with the receiving event that created it.
  */
-export async function createBatch(params: CreateBatchParams) {
+export async function createBatch(params: CreateBatchParams, tx: DbOrTx = db) {
   const {
     storeLocationId,
     ingredientId,
@@ -42,7 +46,7 @@ export async function createBatch(params: CreateBatchParams) {
 
   const costValue = unitCost != null ? String(unitCost) : undefined;
 
-  const [batch] = await db
+  const [batch] = await tx
     .insert(fifoBatch)
     .values({
       storeLocationId,

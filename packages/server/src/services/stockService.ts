@@ -8,6 +8,7 @@
 
 import { eq, and } from "drizzle-orm";
 import { db } from "../db/index.js";
+import type { DbOrTx } from "./auditService.js";
 import { stockLevel } from "../db/schema.js";
 
 const MAX_RETRIES = 2;
@@ -15,14 +16,18 @@ const MAX_RETRIES = 2;
 /**
  * Add quantity to a stock level using optimistic locking.
  * Retries up to MAX_RETRIES times on version conflict.
+ *
+ * Pass `tx` from a surrounding `db.transaction()` to make the read+update
+ * atomic with other operations in the same logical event (e.g. receiving).
  */
 export async function addStock(
   storeLocationId: string,
   ingredientId: string,
   addQty: number,
+  tx: DbOrTx = db,
   retryCount = 0,
 ): Promise<void> {
-  const [current] = await db
+  const [current] = await tx
     .select()
     .from(stockLevel)
     .where(
@@ -34,7 +39,7 @@ export async function addStock(
 
   if (!current) {
     // No stock level row yet — create one
-    await db.insert(stockLevel).values({
+    await tx.insert(stockLevel).values({
       storeLocationId,
       ingredientId,
       currentQty: String(addQty),
@@ -46,7 +51,7 @@ export async function addStock(
   const currentQty = Number(current.currentQty);
   const newQty = currentQty + addQty;
 
-  const result = await db
+  const result = await tx
     .update(stockLevel)
     .set({
       currentQty: String(newQty),
@@ -62,7 +67,7 @@ export async function addStock(
     .returning();
 
   if (result.length === 0 && retryCount < MAX_RETRIES) {
-    await addStock(storeLocationId, ingredientId, addQty, retryCount + 1);
+    await addStock(storeLocationId, ingredientId, addQty, tx, retryCount + 1);
   } else if (result.length === 0) {
     throw new Error(
       `Stock level update conflict after ${MAX_RETRIES} retries for ingredient ${ingredientId} at location ${storeLocationId}`,
@@ -73,14 +78,18 @@ export async function addStock(
 /**
  * Deduct quantity from a stock level using optimistic locking.
  * Retries up to MAX_RETRIES times on version conflict.
+ *
+ * Pass `tx` from a surrounding `db.transaction()` to make the read+update
+ * atomic with other operations in the same logical event.
  */
 export async function deductStock(
   storeLocationId: string,
   ingredientId: string,
   deductQty: number,
+  tx: DbOrTx = db,
   retryCount = 0,
 ): Promise<void> {
-  const [current] = await db
+  const [current] = await tx
     .select()
     .from(stockLevel)
     .where(
@@ -99,7 +108,7 @@ export async function deductStock(
   const currentQty = Number(current.currentQty);
   const newQty = currentQty - deductQty;
 
-  const result = await db
+  const result = await tx
     .update(stockLevel)
     .set({
       currentQty: String(newQty),
@@ -115,7 +124,7 @@ export async function deductStock(
     .returning();
 
   if (result.length === 0 && retryCount < MAX_RETRIES) {
-    await deductStock(storeLocationId, ingredientId, deductQty, retryCount + 1);
+    await deductStock(storeLocationId, ingredientId, deductQty, tx, retryCount + 1);
   } else if (result.length === 0) {
     throw new Error(
       `Stock level update conflict after ${MAX_RETRIES} retries for ingredient ${ingredientId} at location ${storeLocationId}`,
