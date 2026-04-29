@@ -1115,6 +1115,15 @@ export const ingredient = pgTable(
     containsShellfishInd: boolean("contains_shellfish_ind").notNull().default(false),
     containsEggsInd: boolean("contains_eggs_ind").notNull().default(false),
     isVegetarianInd: boolean("is_vegetarian_ind").notNull().default(false),
+    /**
+     * Soft-delete timestamp. NULL = active. Non-null = removed from picker
+     * results but FK references from menu_item_ingredient and recipe payloads
+     * still resolve, preserving allergen + cost lineage. Hard delete is BANNED
+     * by the service guard — see `softDeleteIngredient` in ingredientService.
+     */
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    /** User who soft-deleted the row. Null when the row is active. */
+    deletedBy: integer("deleted_by").references(() => user.userId),
     createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
     updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
   },
@@ -1125,6 +1134,9 @@ export const ingredient = pgTable(
     index("idx_ingredient_org").on(table.organisationId),
     // Filter by item type within an org
     index("idx_ingredient_item_type").on(table.organisationId, table.itemType),
+    // "give me all active ingredients in an org" — partial index serves the
+    // hot path because soft-deleted rows are rare and skipped by every picker.
+    index("idx_ingredient_active").on(table.organisationId).where(sql`deleted_at IS NULL`),
   ],
 );
 
@@ -1954,5 +1966,53 @@ export const deviceToken = pgTable(
     index("idx_device_token_user").on(table.userId),
     // Housekeeping: "find tokens not used in N days for pruning."
     index("idx_device_token_last_used").on(table.lastUsedDttm),
+  ],
+);
+
+/**
+ * The `audit_log` table is the project-wide audit trail. Every state-changing
+ * operation that needs reconstructable history (receiving events, soft-deletes,
+ * catalog merges, WAC recomputes, manual cost overrides) writes a row here.
+ *
+ * Generic by design: `entity_type` + `entity_id` identify the row affected,
+ * `before_value` / `after_value` capture the change shape (when relevant),
+ * `metadata` holds context the row itself doesn't carry (e.g. a void reason,
+ * a WAC recompute trigger, an admin's confirmation note).
+ *
+ * Append-only. Never updated, never deleted.
+ *
+ * OLTP table, 2NF — every non-key column depends on audit_log_id. JSONB on
+ * before_value/after_value/metadata is permitted as audit metadata per CLAUDE.md
+ * DB design rule (#1 normalisation exception).
+ */
+export const auditLog = pgTable(
+  "audit_log",
+  {
+    auditLogId: uuid("audit_log_id").defaultRandom().primaryKey(),
+    /** The kind of thing affected: 'receiving_session', 'ingredient', etc. */
+    entityType: varchar("entity_type", { length: 50 }).notNull(),
+    /** The id of the affected row. Stored as text to handle integer PKs too. */
+    entityId: varchar("entity_id", { length: 100 }).notNull(),
+    /** Verb: 'create' | 'update' | 'cancel' | 'soft_delete' | 'restore' | 'merge' | 'wac_recompute' | etc. */
+    action: varchar("action", { length: 30 }).notNull(),
+    /** User who performed the action. Null for system-triggered events (cron, triggers). */
+    actorUserId: integer("actor_user_id").references(() => user.userId),
+    /** Org scope for multi-tenant filtering. Required so we never leak audit rows across orgs. */
+    organisationId: integer("organisation_id").references(() => organisation.organisationId),
+    /** Pre-change row shape (jsonb). Null for create. */
+    beforeValue: jsonb("before_value"),
+    /** Post-change row shape (jsonb). Null for delete. */
+    afterValue: jsonb("after_value"),
+    /** Context that doesn't belong on the row itself (reason, trigger source, etc.). */
+    metadata: jsonb("metadata"),
+    createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // "give me the audit trail for this specific row"
+    index("idx_audit_log_entity").on(table.entityType, table.entityId),
+    // "show me recent activity for this org" — DESC because reads are recency-first.
+    index("idx_audit_log_org_created").on(table.organisationId, table.createdDttm),
+    // "what did this user do" — supports security investigations.
+    index("idx_audit_log_actor").on(table.actorUserId),
   ],
 );
