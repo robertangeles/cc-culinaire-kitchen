@@ -84,6 +84,12 @@ import {
 } from "../controllers/purchaseOrderController.js";
 import * as receivingController from "../controllers/receivingController.js";
 import * as notificationController from "../controllers/notificationController.js";
+import {
+  handleMatchBulk,
+  handleListAliases,
+  handleCreateAlias,
+  handleDeleteAlias,
+} from "../controllers/ingredientAliasController.js";
 
 const router = Router();
 router.use(authenticate);
@@ -105,6 +111,12 @@ router.get("/ingredients/:id/suppliers", requirePermission("inventory:count"), h
 router.patch("/ingredients/:id/suppliers/:supId", requirePermission("inventory:manage"), handleUpdateIngredientSupplier);
 router.delete("/ingredients/:id/suppliers/:supId", requirePermission("inventory:manage"), handleRemoveIngredientSupplier);
 router.get("/ingredients/:id/transactions", requirePermission("inventory:count"), handleGetIngredientTransactions);
+
+// Catalog-spine Phase 1: ingredient aliases
+router.get("/ingredients/:id/aliases", requirePermission("inventory:count"), handleListAliases);
+router.post("/ingredients/:id/aliases", requirePermission("inventory:manage"), handleCreateAlias);
+router.delete("/ingredient-aliases/:aliasId", requirePermission("inventory:manage"), handleDeleteAlias);
+router.post("/ingredient-aliases/match-bulk", requirePermission("inventory:count"), handleMatchBulk);
 
 // ─── Suppliers (org-wide) ─────────────────────────────────────────
 
