@@ -14,7 +14,8 @@
     "db:studio": "drizzle-kit studio",
     "clean": "rm -rf dist",
     "lint": "eslint src/",
-    "test": "vitest run"
+    "test": "vitest run",
+    "tsc:check": "tsc --noEmit"
   },
   "dependencies": {
     "@ai-sdk/openai": "^1",

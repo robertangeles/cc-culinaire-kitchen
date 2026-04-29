@@ -1,0 +1,58 @@
+name: CI
+
+# Implements 4 of the 5 steps declared in CLAUDE.md:
+#   1. pnpm install --frozen-lockfile
+#   2. Lint                         <-- DEFERRED: eslint is not installed in this repo;
+#                                       the per-package "lint" scripts are broken stubs.
+#                                       Track in tasks/todo.md cleanup section. Add this
+#                                       step back once eslint + flat config are wired up.
+#   3. TypeScript check (tsc --noEmit)
+#   4. Unit tests (vitest)
+#   5. Build (pnpm build)
+#
+# All steps must pass before merge. See wiki/decisions/ci-pipeline.md
+# for why each step exists and what failure mode it protects against.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel in-progress runs for the same ref when a new commit lands.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    name: Typecheck, test, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.31.0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm tsc:check
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
