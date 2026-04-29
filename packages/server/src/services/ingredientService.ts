@@ -3,9 +3,17 @@
  *
  * CRUD operations for the org-wide ingredient catalog and
  * per-location ingredient configuration (par levels, unit overrides).
+ *
+ * **Hard delete is BANNED on the catalog `ingredient` table.** Use
+ * {@link softDeleteIngredient}. Hard-deleting a row would silently sever the
+ * FK lineage from menu_item_ingredient + recipe.recipeData and erase allergen
+ * data from every dish that referenced it. The soft-delete pattern hides the
+ * row from picker results while preserving cost + allergen reads on
+ * already-linked dishes. This rule is enforced by code review and the absence
+ * of any `deleteIngredient` export here — do NOT add one.
  */
 
-import { eq, and, ilike, ne, sql, count, inArray, gte } from "drizzle-orm";
+import { eq, and, ilike, ne, sql, count, inArray, gte, isNull } from "drizzle-orm";
 import { db } from "../db/index.js";
 import {
   ingredient,
@@ -23,6 +31,7 @@ import {
   consumptionLog,
   user,
 } from "../db/schema.js";
+import * as auditService from "./auditService.js";
 
 // ─── Org-wide ingredient catalog ──────────────────────────────────
 
@@ -67,16 +76,26 @@ export async function createIngredient(
   return row;
 }
 
-/** List all ingredients for an organisation, optionally filtered by category. */
+/**
+ * List all ingredients for an organisation, optionally filtered by category.
+ *
+ * Soft-deleted rows are excluded by default. Pass `includeSoftDeleted: true`
+ * for admin views that need to surface soft-deleted entries (e.g. an "all
+ * ingredients" report or restoration UI).
+ */
 export async function listIngredients(
   organisationId: number,
-  opts?: { category?: string; search?: string; itemType?: string },
+  opts?: { category?: string; search?: string; itemType?: string; includeSoftDeleted?: boolean },
 ) {
   let query = db
     .select()
     .from(ingredient)
     .where(eq(ingredient.organisationId, organisationId))
     .$dynamic();
+
+  if (!opts?.includeSoftDeleted) {
+    query = query.where(isNull(ingredient.deletedAt));
+  }
 
   if (opts?.category) {
     query = query.where(
@@ -108,7 +127,13 @@ export async function listIngredients(
   return query;
 }
 
-/** Get a single ingredient by ID (with org guard). */
+/**
+ * Get a single ingredient by ID (with org guard).
+ *
+ * Returns soft-deleted rows so menu_item_ingredient FK reads still resolve
+ * the canonical row for cost/allergen lookup. Callers that present picker
+ * results should filter via {@link listIngredients} instead.
+ */
 export async function getIngredient(ingredientId: string, organisationId: number) {
   const rows = await db
     .select()
@@ -120,6 +145,117 @@ export async function getIngredient(ingredientId: string, organisationId: number
       ),
     );
   return rows[0] ?? null;
+}
+
+/**
+ * Soft-delete an ingredient. Sets deleted_at + deleted_by; the row stays in
+ * the table so menu_item_ingredient FK lineage and allergen reads continue
+ * to resolve. Picker queries skip soft-deleted rows by default.
+ *
+ * Audit row written under the same transaction so the trail commits with
+ * the soft-delete itself.
+ *
+ * Throws if the ingredient is not found in this org or is already deleted.
+ *
+ * **There is no hard-delete counterpart.** See module docstring.
+ */
+export async function softDeleteIngredient(
+  ingredientId: string,
+  organisationId: number,
+  actorUserId: number,
+) {
+  return db.transaction(async (tx) => {
+    const [existing] = await tx
+      .select()
+      .from(ingredient)
+      .where(
+        and(
+          eq(ingredient.ingredientId, ingredientId),
+          eq(ingredient.organisationId, organisationId),
+        ),
+      );
+
+    if (!existing) {
+      throw new Error("Ingredient not found in this organisation");
+    }
+    if (existing.deletedAt) {
+      throw new Error("Ingredient is already soft-deleted");
+    }
+
+    const now = new Date();
+    const [updated] = await tx
+      .update(ingredient)
+      .set({ deletedAt: now, deletedBy: actorUserId, updatedDttm: now })
+      .where(eq(ingredient.ingredientId, ingredientId))
+      .returning();
+
+    await auditService.log(
+      {
+        entityType: "ingredient",
+        entityId: ingredientId,
+        action: "soft_delete",
+        actorUserId,
+        organisationId,
+        beforeValue: { deletedAt: null, deletedBy: null },
+        afterValue: { deletedAt: now.toISOString(), deletedBy: actorUserId },
+        metadata: { ingredientName: existing.ingredientName, ingredientCategory: existing.ingredientCategory },
+      },
+      tx,
+    );
+
+    return updated;
+  });
+}
+
+/**
+ * Restore a previously soft-deleted ingredient. Clears deleted_at + deleted_by
+ * and writes a `restore` audit row.
+ */
+export async function restoreIngredient(
+  ingredientId: string,
+  organisationId: number,
+  actorUserId: number,
+) {
+  return db.transaction(async (tx) => {
+    const [existing] = await tx
+      .select()
+      .from(ingredient)
+      .where(
+        and(
+          eq(ingredient.ingredientId, ingredientId),
+          eq(ingredient.organisationId, organisationId),
+        ),
+      );
+
+    if (!existing) {
+      throw new Error("Ingredient not found in this organisation");
+    }
+    if (!existing.deletedAt) {
+      throw new Error("Ingredient is not soft-deleted");
+    }
+
+    const [updated] = await tx
+      .update(ingredient)
+      .set({ deletedAt: null, deletedBy: null, updatedDttm: new Date() })
+      .where(eq(ingredient.ingredientId, ingredientId))
+      .returning();
+
+    await auditService.log(
+      {
+        entityType: "ingredient",
+        entityId: ingredientId,
+        action: "restore",
+        actorUserId,
+        organisationId,
+        beforeValue: { deletedAt: existing.deletedAt, deletedBy: existing.deletedBy },
+        afterValue: { deletedAt: null, deletedBy: null },
+        metadata: { ingredientName: existing.ingredientName },
+      },
+      tx,
+    );
+
+    return updated;
+  });
 }
 
 /** Update an ingredient's fields. */
