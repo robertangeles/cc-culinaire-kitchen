@@ -845,7 +845,7 @@ When the graph crosses ~1000 nodes, swap the JSON store for SQLite via Node's bu
 
 # Shared Context
 
-Location: ../cc-shared-context/
+Location: ../cc-culinaire-shared-context/
 
 Read at the start of every session involving cross-project work.
 
