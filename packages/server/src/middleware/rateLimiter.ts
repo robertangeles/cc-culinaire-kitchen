@@ -45,3 +45,25 @@ export const mobilePromptRateLimit = rateLimit({
   },
   message: { error: "Too many prompt-fetch requests — please wait a moment before trying again." },
 });
+
+/**
+ * Rate limiter for the mobile RAG retrieval endpoint.
+ * 60 requests per minute, keyed by authenticated user ID (falls back to IP).
+ *
+ * RAG fires on every chat message — the cap needs headroom above the prompt
+ * fetch limit (30/min) since users send messages much faster than they
+ * relaunch the app. 60/min is one query per second sustained, which is
+ * comfortably more than any human typing pace; bursting beyond is a retry
+ * loop or scraper, throttle.
+ */
+export const mobileRagRateLimit = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 60,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  keyGenerator: (req: Request) => {
+    if (req.user?.sub) return `user-${req.user.sub}`;
+    return req.ip ?? "unknown";
+  },
+  message: { error: "Too many retrieval requests — please slow down before trying again." },
+});
