@@ -747,6 +747,24 @@ export const menuItem = pgTable("menu_item", {
   classification: varchar("classification", { length: 20 }).notNull().default("unclassified"),
   periodStart: date("period_start"),
   periodEnd: date("period_end"),
+  /**
+   * Catalog-spine Phase 3: denormalised allergen rollup.
+   *
+   * Computed as the boolean OR across every linked Catalog ingredient's
+   * `contains_*_ind`. `is_vegetarian_ind` is rolled up as AND (a dish is
+   * vegetarian only if ALL ingredients are). Maintained by a Postgres
+   * trigger on `menu_item_ingredient` insert/update/delete; service hooks
+   * never touch these columns directly.
+   *
+   * Rolling up at WRITE time keeps the daily Menu Intelligence list render
+   * cheap — no per-row JOIN to ingredient + GROUP BY.
+   */
+  containsDairyInd: boolean("contains_dairy_ind").notNull().default(false),
+  containsGlutenInd: boolean("contains_gluten_ind").notNull().default(false),
+  containsNutsInd: boolean("contains_nuts_ind").notNull().default(false),
+  containsShellfishInd: boolean("contains_shellfish_ind").notNull().default(false),
+  containsEggsInd: boolean("contains_eggs_ind").notNull().default(false),
+  isVegetarianInd: boolean("is_vegetarian_ind").notNull().default(false),
   createdDttm: timestamp("created_dttm").notNull().defaultNow(),
   updatedDttm: timestamp("updated_dttm").notNull().defaultNow(),
 });
@@ -778,6 +796,19 @@ export const menuItemIngredient = pgTable(
     unitCost: numeric("unit_cost", { precision: 10, scale: 2 }).notNull(),
     yieldPct: numeric("yield_pct", { precision: 5, scale: 2 }).notNull().default("100"),
     lineCost: numeric("line_cost", { precision: 10, scale: 2 }),
+    /**
+     * Catalog-spine Phase 3: stale-cost flag.
+     *
+     * Set TRUE by a Postgres trigger when the linked Catalog ingredient's
+     * `preferred_unit_cost` changes. Cleared back to FALSE when the chef
+     * clicks "Refresh cost" (which re-pulls the current preferred_unit_cost
+     * into menu_item_ingredient.unit_cost) or when they manually edit the
+     * cost. NULL on legacy free-text rows (`ingredient_id IS NULL`) — there
+     * is no Catalog cost to drift away from.
+     */
+    costStaleInd: boolean("cost_stale_ind").notNull().default(false),
+    /** When the cost was last marked stale. Null when not stale. */
+    costStaleAt: timestamp("cost_stale_at", { withTimezone: true }),
     createdDttm: timestamp("created_dttm").notNull().defaultNow(),
   },
   (table) => [
