@@ -5,6 +5,8 @@
 import { useState } from "react";
 import { Trash2, ChevronUp, ChevronDown, Star, TrendingDown, HelpCircle, XCircle } from "lucide-react";
 import type { MenuItem } from "../../hooks/useMenuItems.js";
+import { useYieldVariance } from "../../hooks/useYieldVariance.js";
+import { VariancePill } from "./VariancePill.js";
 
 const CLASS_BADGES: Record<string, { label: string; color: string; icon: typeof Star }> = {
   star: { label: "Star", color: "bg-amber-100 text-amber-700", icon: Star },
@@ -26,6 +28,7 @@ interface MenuItemsTableProps {
 export function MenuItemsTable({ items, onSelect, onDelete, onUpdateSales }: MenuItemsTableProps) {
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const { byId: varianceById } = useYieldVariance();
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) setSortDir((d) => d === "asc" ? "desc" : "asc");
@@ -68,6 +71,7 @@ export function MenuItemsTable({ items, onSelect, onDelete, onUpdateSales }: Men
                   <span className="flex items-center gap-1">{label} <SortIcon col={key} /></span>
                 </th>
               ))}
+              <th className="px-3 py-2 text-left text-xs font-medium text-stone-500 uppercase select-none">Variance</th>
               <th className="px-3 py-2 w-10" />
             </tr>
           </thead>
@@ -108,6 +112,9 @@ export function MenuItemsTable({ items, onSelect, onDelete, onUpdateSales }: Men
                     </span>
                   </td>
                   <td className="px-3 py-2.5">
+                    <VariancePill variance={varianceById.get(item.menuItemId)} />
+                  </td>
+                  <td className="px-3 py-2.5">
                     <button
                       onClick={(e) => { e.stopPropagation(); onDelete(item.menuItemId); }}
                       className="p-1 rounded hover:bg-stone-200 text-stone-400 hover:text-red-500 transition-colors"
@@ -119,7 +126,7 @@ export function MenuItemsTable({ items, onSelect, onDelete, onUpdateSales }: Men
               );
             })}
             {sorted.length === 0 && (
-              <tr><td colSpan={9} className="px-3 py-8 text-center text-stone-400">No menu items yet. Add your first item above.</td></tr>
+              <tr><td colSpan={10} className="px-3 py-8 text-center text-stone-400">No menu items yet. Add your first item above.</td></tr>
             )}
           </tbody>
         </table>

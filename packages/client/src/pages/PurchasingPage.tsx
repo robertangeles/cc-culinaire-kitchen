@@ -15,10 +15,11 @@ import { SupplierManager } from "../components/inventory/SupplierManager.js";
 import ReceiveQueue from "../components/purchasing/ReceiveQueue.js";
 import ApprovalQueue from "../components/purchasing/ApprovalQueue.js";
 import SpendThresholdSettings from "../components/purchasing/SpendThresholdSettings.js";
+import { AutoPoSuggestionsTable } from "../components/purchasing/AutoPoSuggestionsTable.js";
 import { Tooltip } from "../components/ui/Tooltip.js";
-import { ShoppingCart, Package, Truck, ClipboardCheck, Settings, FileText } from "lucide-react";
+import { ShoppingCart, Package, Truck, ClipboardCheck, Settings, FileText, Sparkles } from "lucide-react";
 
-type PurchasingTab = "orders" | "receive" | "suppliers" | "approvals" | "settings";
+type PurchasingTab = "orders" | "suggestions" | "receive" | "suppliers" | "approvals" | "settings";
 
 export function PurchasingPage() {
   const { user, isGuest } = useAuth();
@@ -47,6 +48,7 @@ export function PurchasingPage() {
   const tabs = useMemo(() => {
     const t: { key: PurchasingTab; label: string; icon: typeof ShoppingCart; badge?: number }[] = [
       { key: "orders", label: "Orders", icon: FileText },
+      { key: "suggestions", label: "Suggestions", icon: Sparkles },
       { key: "receive", label: "Receive", icon: Package, badge: awaitingReceiptCount },
       { key: "suppliers", label: "Suppliers", icon: Truck },
     ];
@@ -127,6 +129,7 @@ export function PurchasingPage() {
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 animate-[fadeIn_150ms_ease-out]">
           {activeTab === "orders" && <PurchaseOrderList />}
+          {activeTab === "suggestions" && <AutoPoSuggestionsTable />}
           {activeTab === "receive" && <ReceiveQueue />}
           {activeTab === "suppliers" && <SupplierManager />}
           {activeTab === "approvals" && <ApprovalQueue />}

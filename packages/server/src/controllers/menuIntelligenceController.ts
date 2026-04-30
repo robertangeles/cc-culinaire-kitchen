@@ -27,6 +27,11 @@ import {
   generateReplacementContext,
   getWasteImpactForMenuItems,
 } from "../services/menuIntelligenceService.js";
+import {
+  getYieldVariance,
+  listYieldVariance,
+} from "../services/yieldVarianceService.js";
+import { getMiseEnPlace } from "../services/misePlaceService.js";
 
 const menuItemSchema = z.object({
   name: z.string().min(1).max(200),
@@ -239,5 +244,72 @@ export async function handleGenerateReplacement(req: Request, res: Response, nex
     if (!item) { res.status(404).json({ error: "Item not found" }); return; }
     const context = generateReplacementContext(item);
     res.json(context);
+  } catch (err) { next(err); }
+}
+
+// ── Phase 4a: Yield Variance ─────────────────────────────
+
+/**
+ * GET /api/menu/items/:id/yield-variance — theoretical vs actual food cost
+ * for a single dish over its sales-import period.
+ */
+export async function handleGetYieldVariance(req: Request, res: Response, next: NextFunction) {
+  try {
+    const userId = (req as any).user.sub;
+    const id = req.params.id as string;
+    const item = await getMenuItem(id, userId);
+    if (!item) { res.status(404).json({ error: "Item not found" }); return; }
+    const result = await getYieldVariance(id);
+    res.json(result);
+  } catch (err: any) {
+    if (err.message === "Menu item not found") {
+      res.status(404).json({ error: err.message });
+      return;
+    }
+    next(err);
+  }
+}
+
+/**
+ * GET /api/menu/yield-variance — bulk variance for every menu item the
+ * caller owns. Used by the Menu Intelligence list view.
+ */
+export async function handleListYieldVariance(req: Request, res: Response, next: NextFunction) {
+  try {
+    const userId = (req as any).user.sub;
+    const results = await listYieldVariance(userId);
+    res.json(results);
+  } catch (err) { next(err); }
+}
+
+// ── Phase 4b: Mise en Place Rollup ────────────────────────
+
+const miseQuerySchema = z.object({
+  serviceDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "serviceDate must be YYYY-MM-DD"),
+  coversForecast: z.coerce.number().int().min(1).max(100000),
+  storeLocationId: z.string().uuid().optional(),
+});
+
+/**
+ * GET /api/menu/mise-en-place?serviceDate=YYYY-MM-DD&coversForecast=N[&storeLocationId=...]
+ *
+ * Returns a station-grouped prep sheet scaled to the forecast.
+ */
+export async function handleGetMiseEnPlace(req: Request, res: Response, next: NextFunction) {
+  try {
+    const userId = (req as any).user.sub;
+    const parsed = miseQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.issues[0].message });
+      return;
+    }
+    const { serviceDate, coversForecast, storeLocationId } = parsed.data;
+    const result = await getMiseEnPlace(
+      userId,
+      storeLocationId ?? null,
+      serviceDate,
+      coversForecast,
+    );
+    res.json(result);
   } catch (err) { next(err); }
 }

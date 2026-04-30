@@ -90,6 +90,7 @@ import {
   handleCreateAlias,
   handleDeleteAlias,
 } from "../controllers/ingredientAliasController.js";
+import { handleGetAutoPoSuggestions } from "../controllers/autoPoController.js";
 
 const router = Router();
 router.use(authenticate);
@@ -243,6 +244,10 @@ router.post("/receiving/sessions/:sessionId/cancel", requirePermission("purchasi
 
 router.post("/credit-notes", requirePermission("purchasing:credit"), receivingController.handleCreateCreditNote);
 router.get("/credit-notes", requirePermission("purchasing:credit"), receivingController.handleGetCreditNotes);
+
+// ─── Phase 4c: Auto-PO Suggestions ────────────────────────────────
+
+router.get("/auto-po-suggestions", requirePermission("inventory:manage"), handleGetAutoPoSuggestions);
 
 // ─── Notifications ───────────────────────────────────────────────
 
