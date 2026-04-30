@@ -708,6 +708,8 @@ export function useConsumptionLog(locationId: string | null) {
 
   const logConsumption = useCallback(async (data: {
     ingredientId: string;
+    /** Phase 4 (B1): optional dish attribution. Powers per-dish yield variance. */
+    menuItemId?: string | null;
     quantity: number;
     unit: string;
     reason: string;

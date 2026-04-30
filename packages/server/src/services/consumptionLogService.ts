@@ -21,6 +21,15 @@ import {
 
 interface LogConsumptionData {
   ingredientId: string;
+  /**
+   * Catalog-spine Phase 4 (B1): optional link to the menu item that drove
+   * this consumption event. Populated when the chef logs from the
+   * ConsumptionLogger with the dish dropdown selected. Powers per-dish
+   * yield variance — actual food cost = SUM(quantity × WAC) WHERE
+   * menu_item_id = thisDish. Null is fine for free-form logs (waste,
+   * staff meals, R&D) that aren't dish-attributable.
+   */
+  menuItemId?: string | null;
   quantity: number;
   unit: string;
   reason: string;
@@ -192,6 +201,7 @@ export async function logConsumption(
       organisationId: orgId,
       storeLocationId: locationId,
       ingredientId: data.ingredientId,
+      menuItemId: data.menuItemId ?? null,
       userId,
       quantity: String(data.quantity),
       unit: data.unit,

@@ -33,7 +33,7 @@ export async function handleLogConsumption(
     if (orgId === null) return;
 
     const userId = req.user!.sub;
-    const { ingredientId, quantity, unit, reason, notes, shift, storeLocationId } = req.body;
+    const { ingredientId, menuItemId, quantity, unit, reason, notes, shift, storeLocationId } = req.body;
 
     if (!ingredientId) {
       res.status(400).json({ error: "ingredientId is required" });
@@ -51,9 +51,16 @@ export async function handleLogConsumption(
       res.status(400).json({ error: "storeLocationId is required" });
       return;
     }
+    // menuItemId is optional. When provided, must be a non-empty string —
+    // skipping a UUID regex here because the FK validates at insert time.
+    if (menuItemId !== undefined && menuItemId !== null && typeof menuItemId !== "string") {
+      res.status(400).json({ error: "menuItemId must be a string when provided" });
+      return;
+    }
 
     const entry = await consumptionLogService.logConsumption(orgId, storeLocationId, userId, {
       ingredientId,
+      menuItemId: menuItemId || null,
       quantity: Number(quantity),
       unit,
       reason,
