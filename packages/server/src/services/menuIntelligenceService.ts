@@ -21,7 +21,7 @@
 import pino from "pino";
 import { db } from "../db/index.js";
 import { menuItem, menuItemIngredient, menuCategorySetting, wasteLog, ingredient } from "../db/schema.js";
-import { eq, and, sql, desc, gte, ilike } from "drizzle-orm";
+import { eq, and, sql, desc, gte, ilike, inArray } from "drizzle-orm";
 import { convertToBaseUnit, normalizeUnit, type BaseUnit, IncompatibleUnitsError } from "@culinaire/shared";
 
 const logger = pino({ name: "menuIntelligence" });
@@ -529,10 +529,13 @@ export async function getWasteImpactForMenuItems(userId: number): Promise<WasteI
   const items = await getMenuItems(userId);
   if (items.length === 0) return [];
 
-  // Get all ingredients for all menu items
+  // Get all ingredients for all menu items.
+  // Use Drizzle's `inArray` rather than raw `= ANY(${jsArray})` — the raw
+  // form serialises a single-element JS array as just the inner string,
+  // which Postgres reads as a malformed uuid[] literal and 500s.
   const allItemIds = items.map((i) => i.menuItemId);
   const allIngredients = await db.select().from(menuItemIngredient)
-    .where(sql`${menuItemIngredient.menuItemId} = ANY(${allItemIds})`);
+    .where(inArray(menuItemIngredient.menuItemId, allItemIds));
 
   if (allIngredients.length === 0) return [];
 
