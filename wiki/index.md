@@ -47,6 +47,7 @@ Categories: **entity** (named things) · **concept** (patterns) · **decision** 
 | [Data Flow Architecture](concepts/data-flow-architecture.md) | System + request flow diagrams, startup sequence | 2026-04-29 |
 | [Mobile API Contract](concepts/mobile-api-contract.md) | Cross-repo contract with the separate mobile repo: auth transport, `/api/mobile/*`, device tokens, push readiness | 2026-04-29 |
 | [Dev server + Playwright verification](concepts/dev-server-plus-playwright-verification.md) | UI ways of working: every UI change gets rendered + screenshotted via Playwright before being reported done | 2026-04-29 |
+| [PR description template](concepts/pr-description-template.md) | Every PR includes a structured description (summary / why / what / out-of-scope / test plan / risk / depends-on) | 2026-04-30 |
 
 ## Decisions
 | Page | Summary | Created |

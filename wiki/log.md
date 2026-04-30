@@ -4,6 +4,27 @@ Append-only. Newest entry on top.
 
 ---
 
+## 2026-04-30 — Ways of working: every PR ships with a structured description
+
+**What was established**
+User formalised a norm after PR #9: every pull request opened against this repo must include a structured description body covering Summary / Why / What ships / Out of scope / Test plan / Risk / Depends on. Default `gh`-generated bodies and one-liners are not acceptable. PR #9's description is the canonical example.
+
+**Why now**
+PR #9 (catalog-spine Phase 1) was the first PR to include this kind of structured overview. The user explicitly asked for it on every subsequent PR so reviewers (and future Claude sessions) can understand the PR without reading every commit. Without "Out of scope" + "Test plan" sections, every review re-surfaces scope-creep questions that should have been answered upfront.
+
+**What was done**
+- Wrote [wiki/concepts/pr-description-template.md](concepts/pr-description-template.md) — the seven required sections, the `--body-file` pattern (write to `C:/tmp/pr<N>-body.md` first), what NOT to do.
+- Indexed in `wiki/index.md`.
+- Saved as a feedback memory in the user's auto-memory store so the norm persists across machines + sessions.
+- PR #9's description was retroactively written in the new format and is referenced as the canonical example.
+
+**How this composes with existing rules**
+- CLAUDE.md "Git Workflow — Trunk-Based Development" — covers commits + branching but not PR descriptions specifically. This concretises that gap.
+- Existing commit message format ("verb area: detail") still applies per CLAUDE.md.
+- The Dev-server + Playwright norm (2026-04-29) feeds directly into the "Test plan" section of the PR body.
+
+---
+
 ## 2026-04-29 — UI ways of working: Dev server + Playwright as a default
 
 **What was established**
