@@ -20,7 +20,7 @@
 
 import pino from "pino";
 import { db } from "../db/index.js";
-import { menuItem, menuItemIngredient, menuCategorySetting, wasteLog, ingredient } from "../db/schema.js";
+import { menuItem, menuItemIngredient, menuCategorySetting, wasteLog, ingredient, locationIngredient } from "../db/schema.js";
 import { eq, and, sql, desc, gte, ilike, inArray } from "drizzle-orm";
 import { convertToBaseUnit, normalizeUnit, type BaseUnit, IncompatibleUnitsError } from "@culinaire/shared";
 
@@ -216,6 +216,126 @@ export async function deleteIngredient(ingredientId: number, menuItemId: string)
   await db.delete(menuItemIngredient)
     .where(and(eq(menuItemIngredient.id, ingredientId), eq(menuItemIngredient.menuItemId, menuItemId)));
   await recalculateItemCosts(menuItemId);
+}
+
+/**
+ * Catalog-spine Phase 3: refresh a menu_item_ingredient row's cost from the
+ * linked Catalog ingredient's current preferred_unit_cost. Clears the
+ * stale-cost flag set by the DB trigger.
+ *
+ * Throws if the row is unlinked (legacy free-text) — there's no Catalog
+ * cost to refresh from.
+ */
+export async function refreshIngredientCost(rowId: number, menuItemId: string) {
+  const [row] = await db.select().from(menuItemIngredient)
+    .where(and(eq(menuItemIngredient.id, rowId), eq(menuItemIngredient.menuItemId, menuItemId)));
+  if (!row) throw new Error("Menu item ingredient not found");
+  if (!row.ingredientId) {
+    throw new Error("Cannot refresh cost on an unlinked row — link to a Catalog ingredient first");
+  }
+
+  const [ing] = await db.select({
+    preferred: ingredient.preferredUnitCost,
+    orgDefault: ingredient.unitCost,
+    baseUnit: ingredient.baseUnit,
+  }).from(ingredient).where(eq(ingredient.ingredientId, row.ingredientId));
+
+  if (!ing) throw new Error("Linked Catalog ingredient not found");
+  const fresh = ing.preferred ?? ing.orgDefault ?? "0";
+
+  const lineCost = await computeLineCost(
+    row.quantity,
+    row.unit,
+    fresh,
+    row.yieldPct,
+    row.ingredientId,
+  );
+
+  const [updated] = await db.update(menuItemIngredient)
+    .set({
+      unitCost: fresh,
+      lineCost,
+      costStaleInd: false,
+      costStaleAt: null,
+    })
+    .where(eq(menuItemIngredient.id, rowId))
+    .returning();
+
+  await recalculateItemCosts(menuItemId);
+  return updated;
+}
+
+/**
+ * Catalog-spine Phase 3: P&L view food cost computed from per-location WAC
+ * instead of preferred-supplier cost. Used by Menu Intelligence reporting,
+ * not the daily editor.
+ *
+ * For each linked menu_item_ingredient row:
+ *   - Look up location_ingredient.weighted_average_cost for the menu item's
+ *     store_location_id.
+ *   - If WAC is null (no receiving history at that location), fall back to
+ *     the row's stored unit_cost (the daily-display value).
+ *   - Convert quantity to base unit, apply yield_pct, sum across rows.
+ *
+ * Returns the total P&L food cost. Daily food cost on `menu_item.food_cost`
+ * is unaffected.
+ */
+export async function getPandLFoodCost(menuItemId: string): Promise<number> {
+  const [item] = await db.select({
+    storeLocationId: menuItem.storeLocationId,
+  }).from(menuItem).where(eq(menuItem.menuItemId, menuItemId));
+  if (!item) throw new Error("Menu item not found");
+  if (!item.storeLocationId) {
+    // No location → no per-location WAC → fall back to daily food_cost.
+    const [m] = await db.select({ foodCost: menuItem.foodCost })
+      .from(menuItem).where(eq(menuItem.menuItemId, menuItemId));
+    return Number(m?.foodCost ?? 0);
+  }
+
+  const ingredients = await db.select({
+    quantity: menuItemIngredient.quantity,
+    unit: menuItemIngredient.unit,
+    unitCost: menuItemIngredient.unitCost,
+    yieldPct: menuItemIngredient.yieldPct,
+    ingredientId: menuItemIngredient.ingredientId,
+  }).from(menuItemIngredient)
+    .where(eq(menuItemIngredient.menuItemId, menuItemId));
+
+  let total = 0;
+  for (const r of ingredients) {
+    if (!r.ingredientId) {
+      // Unlinked row — use the stored unit_cost (chef's manual value).
+      total += await lineCostFor(r.quantity, r.unit, r.unitCost, r.yieldPct, null);
+      continue;
+    }
+
+    // Look up location WAC for this (location, ingredient) pair.
+    const [li] = await db.select({
+      wac: locationIngredient.weightedAverageCost,
+    }).from(locationIngredient)
+      .where(
+        and(
+          eq(locationIngredient.storeLocationId, item.storeLocationId),
+          eq(locationIngredient.ingredientId, r.ingredientId),
+        ),
+      );
+
+    const cost = li?.wac ?? r.unitCost;
+    total += await lineCostFor(r.quantity, r.unit, cost, r.yieldPct, r.ingredientId);
+  }
+  return Number(total.toFixed(2));
+}
+
+/** Internal helper: compute a single line cost as a number (vs. computeLineCost which returns string). */
+async function lineCostFor(
+  quantity: string,
+  unit: string,
+  unitCost: string,
+  yieldPct: string,
+  ingredientId: string | null,
+): Promise<number> {
+  const s = await computeLineCost(quantity, unit, unitCost, yieldPct, ingredientId);
+  return parseFloat(s);
 }
 
 // ---------------------------------------------------------------------------

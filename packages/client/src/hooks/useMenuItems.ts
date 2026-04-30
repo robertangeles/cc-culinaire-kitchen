@@ -22,6 +22,13 @@ export interface MenuItem {
   classification: string;
   periodStart: string | null;
   periodEnd: string | null;
+  /** Phase 3: denormalised allergen rollup from linked Catalog ingredients. */
+  containsDairyInd?: boolean;
+  containsGlutenInd?: boolean;
+  containsNutsInd?: boolean;
+  containsShellfishInd?: boolean;
+  containsEggsInd?: boolean;
+  isVegetarianInd?: boolean;
 }
 
 export interface MenuIngredient {
@@ -37,6 +44,10 @@ export interface MenuIngredient {
   unitCost: string;
   yieldPct: string;
   lineCost: string;
+  /** Phase 3: TRUE when the linked Catalog cost has changed since last refresh. */
+  costStaleInd?: boolean;
+  /** Phase 3: when the cost was marked stale. ISO string. */
+  costStaleAt?: string | null;
 }
 
 export function useMenuItems(category?: string) {
@@ -134,11 +145,35 @@ export function useMenuItems(category?: string) {
     });
   }, []);
 
+  /**
+   * Phase 3: refresh the cost on a Catalog-linked ingredient row from the
+   * current Catalog preferred_unit_cost. Clears the stale-cost flag.
+   */
+  const refreshIngredientCost = useCallback(async (itemId: string, ingredientId: number) => {
+    const res = await fetch(
+      `${API}/api/menu/items/${itemId}/ingredients/${ingredientId}/refresh-cost`,
+      { method: "POST", credentials: "include" },
+    );
+    if (!res.ok) {
+      let msg = `Failed to refresh cost (${res.status})`;
+      try {
+        const body = await res.json();
+        if (body?.error) msg = body.error;
+      } catch { /* not JSON */ }
+      throw new Error(msg);
+    }
+    return (await res.json()) as MenuIngredient;
+  }, []);
+
   const getIngredients = useCallback(async (itemId: string): Promise<MenuIngredient[]> => {
     const res = await fetch(`${API}/api/menu/items/${itemId}/ingredients`, { credentials: "include" });
     if (!res.ok) return [];
     return res.json();
   }, []);
 
-  return { items, loading, refresh: fetchItems, createItem, updateItem, deleteItem, addIngredient, removeIngredient, getIngredients };
+  return {
+    items, loading, refresh: fetchItems,
+    createItem, updateItem, deleteItem,
+    addIngredient, removeIngredient, refreshIngredientCost, getIngredients,
+  };
 }

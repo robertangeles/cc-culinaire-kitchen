@@ -51,6 +51,7 @@ export function MenuIntelligencePage() {
     deleteItem,
     addIngredient,
     removeIngredient,
+    refreshIngredientCost,
     getIngredients,
   } = useMenuItems();
   const {
@@ -339,6 +340,7 @@ export function MenuIntelligencePage() {
           categories={categories}
           onSave={handleSaveItem}
           onSaveIngredients={handleSaveIngredients}
+          onRefreshIngredientCost={refreshIngredientCost}
           onClose={handleCloseForm}
         />
       )}

@@ -16,6 +16,8 @@ import {
   addIngredient,
   getIngredients,
   deleteIngredient,
+  refreshIngredientCost,
+  getPandLFoodCost,
   getMenuAnalysis,
   recalculateMenu,
   getCategorySettings,
@@ -109,6 +111,49 @@ export async function handleDeleteIngredient(req: Request, res: Response, next: 
     await deleteIngredient(parseInt(req.params.ingredientId as string, 10), req.params.id as string);
     res.json({ ok: true });
   } catch (err) { next(err); }
+}
+
+/**
+ * Catalog-spine Phase 3: refresh a menu_item_ingredient row's cost from the
+ * Catalog. Clears the stale-cost flag.
+ *
+ * POST /api/menu/items/:id/ingredients/:ingredientId/refresh-cost
+ */
+export async function handleRefreshCost(req: Request, res: Response, next: NextFunction) {
+  try {
+    const rowId = parseInt(req.params.ingredientId as string, 10);
+    const updated = await refreshIngredientCost(rowId, req.params.id as string);
+    res.json(updated);
+  } catch (err: any) {
+    if (err.message?.includes("not found")) {
+      res.status(404).json({ error: err.message });
+      return;
+    }
+    if (err.message?.includes("unlinked")) {
+      res.status(400).json({ error: err.message });
+      return;
+    }
+    next(err);
+  }
+}
+
+/**
+ * Catalog-spine Phase 3: P&L view food cost for a menu item — uses
+ * per-location WAC instead of the daily preferred-supplier cost.
+ *
+ * GET /api/menu/items/:id/pandl-cost
+ */
+export async function handleGetPandLCost(req: Request, res: Response, next: NextFunction) {
+  try {
+    const total = await getPandLFoodCost(req.params.id as string);
+    res.json({ menuItemId: req.params.id, foodCost: total });
+  } catch (err: any) {
+    if (err.message?.includes("not found")) {
+      res.status(404).json({ error: err.message });
+      return;
+    }
+    next(err);
+  }
 }
 
 // ── Analysis ─────────────────────────────────────────────

@@ -16,6 +16,8 @@ import {
   handleAddIngredient,
   handleListIngredients,
   handleDeleteIngredient,
+  handleRefreshCost,
+  handleGetPandLCost,
   handleGetAnalysis,
   handleRecalculate,
   handleGetCategories,
@@ -41,6 +43,10 @@ menuIntelligenceRouter.delete("/items/:id", handleDeleteMenuItem);
 menuIntelligenceRouter.get("/items/:id/ingredients", handleListIngredients);
 menuIntelligenceRouter.post("/items/:id/ingredients", handleAddIngredient);
 menuIntelligenceRouter.delete("/items/:id/ingredients/:ingredientId", handleDeleteIngredient);
+
+// Catalog-spine Phase 3: refresh stale cost from Catalog + per-location P&L cost
+menuIntelligenceRouter.post("/items/:id/ingredients/:ingredientId/refresh-cost", handleRefreshCost);
+menuIntelligenceRouter.get("/items/:id/pandl-cost", handleGetPandLCost);
 
 // Analysis
 menuIntelligenceRouter.get("/analysis", handleGetAnalysis);

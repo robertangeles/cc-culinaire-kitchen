@@ -104,6 +104,8 @@ interface IngredientRow {
   unit: string;
   unitCost: string;
   yieldPct: string;
+  /** Phase 3: stale-cost flag carried over from server load. */
+  costStaleInd?: boolean;
 }
 
 function calcLineCost(row: IngredientRow): number {
@@ -138,6 +140,11 @@ interface MenuItemFormModalProps {
       yieldPct: string;
     }[]
   ) => Promise<void>;
+  /**
+   * Phase 3: refresh a Catalog-linked row's cost from the Catalog. Optional;
+   * the chip's Refresh affordance only renders when this is provided.
+   */
+  onRefreshIngredientCost?: (itemId: string, rowId: number) => Promise<MenuIngredient>;
   onClose: () => void;
 }
 
@@ -149,6 +156,7 @@ export function MenuItemFormModal({
   categories,
   onSave,
   onSaveIngredients,
+  onRefreshIngredientCost,
   onClose,
 }: MenuItemFormModalProps) {
   const isEdit = !!editItem;
@@ -197,6 +205,7 @@ export function MenuItemFormModal({
           unit: ing.unit,
           unitCost: ing.unitCost,
           yieldPct: ing.yieldPct || "100",
+          costStaleInd: ing.costStaleInd ?? false,
         }))
       );
     }
@@ -700,6 +709,36 @@ export function MenuItemFormModal({
                             <IngredientPickerInline
                               linkedId={row.ingredientId}
                               displayName={row.ingredientName}
+                              costStale={row.costStaleInd}
+                              onRefresh={
+                                row.existingId && onRefreshIngredientCost && editItem
+                                  ? async () => {
+                                      try {
+                                        const updated = await onRefreshIngredientCost(
+                                          editItem.menuItemId,
+                                          row.existingId!,
+                                        );
+                                        setIngredients((prev) =>
+                                          prev.map((r) =>
+                                            r.tempId === row.tempId
+                                              ? {
+                                                  ...r,
+                                                  unitCost: updated.unitCost,
+                                                  costStaleInd: false,
+                                                }
+                                              : r,
+                                          ),
+                                        );
+                                      } catch (e) {
+                                        setError(
+                                          e instanceof Error
+                                            ? e.message
+                                            : "Failed to refresh cost",
+                                        );
+                                      }
+                                    }
+                                  : undefined
+                              }
                               onPick={(picked) => {
                                 setIngredients((prev) =>
                                   prev.map((r) =>
@@ -717,6 +756,8 @@ export function MenuItemFormModal({
                                             picked.preferredUnitCost && !r.unitCost
                                               ? picked.preferredUnitCost
                                               : r.unitCost,
+                                          // Picking a fresh row clears stale flag.
+                                          costStaleInd: false,
                                         }
                                       : r,
                                   ),

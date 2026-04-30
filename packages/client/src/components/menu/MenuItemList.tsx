@@ -23,6 +23,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import type { MenuItem } from "../../hooks/useMenuItems.js";
+import { AllergenBadges } from "./AllergenBadges.js";
 
 /* ---- Classification badge config ---- */
 
@@ -332,7 +333,8 @@ export function MenuItemList({
                     className="hover:bg-[#1E1E1E] cursor-pointer transition-colors"
                   >
                     <td className="px-4 py-3 font-medium text-[#FAFAFA]">
-                      {item.name}
+                      <div>{item.name}</div>
+                      <AllergenBadges item={item} className="mt-1 flex flex-wrap items-center gap-1" />
                     </td>
                     <td className="px-4 py-3 text-[#999999]">
                       {item.category}
