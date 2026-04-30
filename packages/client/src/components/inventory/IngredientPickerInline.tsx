@@ -123,10 +123,10 @@ export function IngredientPickerInline({
     return () => document.removeEventListener("mousedown", handler);
   }, [isOpen]);
 
-  // Keep parent's free-text in sync for legacy callers that still rely on it.
-  useEffect(() => {
-    if (onTextChange && isOpen) onTextChange(query);
-  }, [query, isOpen, onTextChange]);
+  // Note: parent's free-text sync happens directly inside the input's onChange
+  // below — using a useEffect here would loop because parent passes a fresh
+  // arrow function for onTextChange on every render, which retriggers the
+  // effect, which triggers the parent setState, which re-renders, etc.
 
   const exactMatchExists = useMemo(() => {
     const t = query.trim().toLowerCase();
@@ -233,7 +233,13 @@ export function IngredientPickerInline({
           type="text"
           autoFocus
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => {
+            const v = e.target.value;
+            setQuery(v);
+            // Sync to parent's free-text mirror (legacy compat) — direct call,
+            // not useEffect, to avoid render-loop with parent's arrow function.
+            if (onTextChange) onTextChange(v);
+          }}
           onKeyDown={handleKey}
           placeholder="Search Catalog..."
           disabled={disabled}
