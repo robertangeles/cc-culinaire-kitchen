@@ -30,6 +30,7 @@ import * as fifoService from "./fifoService.js";
 import * as stockService from "./stockService.js";
 import * as notificationService from "./notificationService.js";
 import * as auditService from "./auditService.js";
+import * as wacService from "./wacService.js";
 import { validateTransition, RECEIVING_SESSION_TRANSITIONS } from "../utils/stateTransition.js";
 import pino from "pino";
 
@@ -405,6 +406,10 @@ export async function confirmReceipt(sessionId: string) {
     if (!po) throw new Error("Purchase order not found");
 
     const processedLines: string[] = [];
+    // Track (location, ingredient) pairs whose WAC needs recomputing once
+    // FIFO batches are seated. Use a Map keyed by ingredient_id since the
+    // location is constant for the session.
+    const wacPairs = new Map<string, { storeLocationId: string; ingredientId: string }>();
 
     for (const line of lines) {
       const receivedQty = Number(line.receivedQty);
@@ -441,6 +446,11 @@ export async function confirmReceipt(sessionId: string) {
           tx,
         );
 
+        wacPairs.set(batchIngredientId, {
+          storeLocationId: session.storeLocationId,
+          ingredientId: batchIngredientId,
+        });
+
         processedLines.push(line.receivingLineId);
       }
 
@@ -475,6 +485,22 @@ export async function confirmReceipt(sessionId: string) {
       .set({ status: poStatus, updatedDttm: new Date() })
       .where(eq(purchaseOrder.poId, session.poId));
 
+    // Recompute WAC for every (location, ingredient) pair touched by this
+    // receipt. Bulk SQL UPDATE inside the same tx with SELECT FOR UPDATE
+    // serialises concurrent receivings on overlapping pairs.
+    if (wacPairs.size > 0) {
+      await wacService.recompute(
+        {
+          pairs: Array.from(wacPairs.values()),
+          actorUserId: session.receivedByUserId,
+          organisationId: po.organisationId,
+          trigger: "receiving",
+          triggerEntityId: sessionId,
+        },
+        tx,
+      );
+    }
+
     await auditService.log(
       {
         entityType: "receiving_session",
@@ -489,6 +515,7 @@ export async function confirmReceipt(sessionId: string) {
           poNumber: po.poNumber,
           poStatus,
           linesProcessed: processedLines.length,
+          wacPairsRecomputed: wacPairs.size,
           discrepancyCount: discrepancies.length,
         },
       },

@@ -20,8 +20,9 @@
 
 import pino from "pino";
 import { db } from "../db/index.js";
-import { menuItem, menuItemIngredient, menuCategorySetting, wasteLog } from "../db/schema.js";
-import { eq, and, sql, desc, gte, ilike } from "drizzle-orm";
+import { menuItem, menuItemIngredient, menuCategorySetting, wasteLog, ingredient } from "../db/schema.js";
+import { eq, and, sql, desc, gte, ilike, inArray } from "drizzle-orm";
+import { convertToBaseUnit, normalizeUnit, type BaseUnit, IncompatibleUnitsError } from "@culinaire/shared";
 
 const logger = pino({ name: "menuIntelligence" });
 
@@ -89,25 +90,114 @@ export async function deleteMenuItem(menuItemId: string, userId: number) {
 // Ingredient CRUD
 // ---------------------------------------------------------------------------
 
+/**
+ * Resolve the unit cost for a menu_item_ingredient row.
+ *
+ * Cost driver hierarchy (catalog-spine Phase 1, post outside-voice):
+ *   1. caller-supplied `unitCost` (manual override per dish — wins)
+ *   2. ingredient.preferred_unit_cost (the daily-display cost)
+ *   3. ingredient.unit_cost (org-level default)
+ *   4. null  → caller decides what to surface (today: stored as "0")
+ *
+ * The per-location WAC stored on `location_ingredient.weighted_average_cost`
+ * is NOT used here — it's reserved for the Menu Intelligence P&L view, not
+ * the daily editor. The hybrid was the eng-review tension #1 resolution.
+ */
+async function resolveUnitCost(
+  callerUnitCost: string | null | undefined,
+  ingredientId: string | null | undefined,
+): Promise<string> {
+  if (callerUnitCost !== undefined && callerUnitCost !== null && callerUnitCost !== "") {
+    return callerUnitCost;
+  }
+  if (!ingredientId) return "0";
+  const [ing] = await db
+    .select({
+      preferred: ingredient.preferredUnitCost,
+      orgDefault: ingredient.unitCost,
+    })
+    .from(ingredient)
+    .where(eq(ingredient.ingredientId, ingredientId));
+  if (!ing) return "0";
+  return ing.preferred ?? ing.orgDefault ?? "0";
+}
+
+/**
+ * Compute the line cost for a row.
+ *
+ * line_cost = (qtyInBaseUnit × unitCost) / (yieldPct / 100)
+ *
+ * Quantity is converted to the ingredient's base unit before multiplication.
+ * If `ingredientId` is null (legacy free-text row) or no unit conversion is
+ * possible, qty is used as-is and we trust the caller's unit/cost.
+ */
+async function computeLineCost(
+  quantity: string,
+  unit: string,
+  unitCost: string,
+  yieldPct: string,
+  ingredientId: string | null | undefined,
+): Promise<string> {
+  const qty = parseFloat(quantity);
+  const cost = parseFloat(unitCost);
+  const yld = parseFloat(yieldPct);
+  if (!Number.isFinite(qty) || !Number.isFinite(cost) || !Number.isFinite(yld) || yld === 0) {
+    return "0.00";
+  }
+
+  let qtyInBase = qty;
+  if (ingredientId) {
+    const [ing] = await db
+      .select({ baseUnit: ingredient.baseUnit })
+      .from(ingredient)
+      .where(eq(ingredient.ingredientId, ingredientId));
+    const fromUnit = normalizeUnit(unit);
+    const toUnit = ing?.baseUnit ? normalizeUnit(ing.baseUnit) : null;
+    if (fromUnit && toUnit) {
+      try {
+        qtyInBase = convertToBaseUnit(qty, fromUnit as BaseUnit, toUnit as BaseUnit);
+      } catch (err) {
+        if (err instanceof IncompatibleUnitsError) {
+          // Surface the error: cost would be silently wrong otherwise.
+          logger.warn({ ingredientId, fromUnit, toUnit, err: err.message }, "Unit conversion failed in computeLineCost");
+          throw err;
+        }
+        throw err;
+      }
+    }
+  }
+
+  return ((qtyInBase * cost) / (yld / 100)).toFixed(2);
+}
+
 export async function addIngredient(menuItemId: string, data: {
+  ingredientId?: string | null;
   ingredientName: string;
+  note?: string | null;
   quantity: string;
   unit: string;
-  unitCost: string;
+  unitCost?: string;
   yieldPct?: string;
 }) {
-  const qty = parseFloat(data.quantity);
-  const cost = parseFloat(data.unitCost);
-  const yld = parseFloat(data.yieldPct ?? "100");
-  const lineCost = ((qty * cost) / (yld / 100)).toFixed(2);
+  const yieldPct = data.yieldPct ?? "100";
+  const resolvedCost = await resolveUnitCost(data.unitCost, data.ingredientId);
+  const lineCost = await computeLineCost(
+    data.quantity,
+    data.unit,
+    resolvedCost,
+    yieldPct,
+    data.ingredientId,
+  );
 
   const [ing] = await db.insert(menuItemIngredient).values({
     menuItemId,
+    ingredientId: data.ingredientId ?? null,
     ingredientName: data.ingredientName,
+    note: data.note ?? null,
     quantity: data.quantity,
     unit: data.unit,
-    unitCost: data.unitCost,
-    yieldPct: data.yieldPct ?? "100",
+    unitCost: resolvedCost,
+    yieldPct,
     lineCost,
   }).returning();
 
@@ -439,10 +529,13 @@ export async function getWasteImpactForMenuItems(userId: number): Promise<WasteI
   const items = await getMenuItems(userId);
   if (items.length === 0) return [];
 
-  // Get all ingredients for all menu items
+  // Get all ingredients for all menu items.
+  // Use Drizzle's `inArray` rather than raw `= ANY(${jsArray})` — the raw
+  // form serialises a single-element JS array as just the inner string,
+  // which Postgres reads as a malformed uuid[] literal and 500s.
   const allItemIds = items.map((i) => i.menuItemId);
   const allIngredients = await db.select().from(menuItemIngredient)
-    .where(sql`${menuItemIngredient.menuItemId} = ANY(${allItemIds})`);
+    .where(inArray(menuItemIngredient.menuItemId, allItemIds));
 
   if (allIngredients.length === 0) return [];
 

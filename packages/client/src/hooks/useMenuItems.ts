@@ -27,7 +27,11 @@ export interface MenuItem {
 export interface MenuIngredient {
   id: number;
   menuItemId: string;
+  /** Catalog FK — Phase 1 catalog spine. Null for legacy free-text rows. */
+  ingredientId?: string | null;
   ingredientName: string;
+  /** Narrative carried over from a recipe import or chef notes. */
+  note?: string | null;
   quantity: string;
   unit: string;
   unitCost: string;
@@ -100,7 +104,13 @@ export function useMenuItems(category?: string) {
   }, [fetchItems]);
 
   const addIngredient = useCallback(async (itemId: string, data: {
-    ingredientName: string; quantity: string; unit: string; unitCost: string; yieldPct?: string;
+    ingredientId?: string | null;
+    ingredientName: string;
+    note?: string | null;
+    quantity: string;
+    unit: string;
+    unitCost?: string;
+    yieldPct?: string;
   }) => {
     const res = await fetch(`${API}/api/menu/items/${itemId}/ingredients`, {
       method: "POST",

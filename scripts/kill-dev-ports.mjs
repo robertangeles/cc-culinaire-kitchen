@@ -1,14 +1,17 @@
 /**
- * Kill any processes occupying the dev server ports (5173, 3001).
+ * Kill any processes occupying the dev server ports (5179, 3009).
  * Runs automatically before `pnpm dev` to prevent port conflicts
  * from orphaned Node processes on Windows.
+ *
+ * Per CLAUDE.md Local Development Ports — Vite on 5179, Express on 3009
+ * to avoid colliding with other local projects.
  *
  * Uses Node.js + child_process so it works on Windows without bash/WSL.
  */
 
 import { execSync } from "child_process";
 
-const PORTS = [5173, 3001];
+const PORTS = [5179, 3009];
 
 for (const port of PORTS) {
   try {

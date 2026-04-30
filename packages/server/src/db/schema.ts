@@ -754,18 +754,38 @@ export const menuItem = pgTable("menu_item", {
 /**
  * The `menu_item_ingredient` table stores ingredients and their costs
  * for each menu item. Line cost = (quantity × unit_cost) / (yield_pct / 100).
+ *
+ * Catalog-spine Phase 1 additions:
+ *   - `ingredient_id` (nullable FK → ingredient.ingredient_id, ON DELETE SET NULL).
+ *     When linked, cost + allergens flow from the canonical Catalog row.
+ *     Nullable because legacy rows pre-spine were free-text only.
+ *   - `note` — narrative carried over from a recipe import (e.g.
+ *     "Calabrian or Aleppo preferred"). Kept SEPARATE from ingredient_name
+ *     so the picker shows the canonical name; chefs see context on hover.
  */
-export const menuItemIngredient = pgTable("menu_item_ingredient", {
-  id: serial("id").primaryKey(),
-  menuItemId: uuid("menu_item_id").notNull(),
-  ingredientName: varchar("ingredient_name", { length: 200 }).notNull(),
-  quantity: numeric("quantity", { precision: 10, scale: 3 }).notNull(),
-  unit: varchar("unit", { length: 20 }).notNull(),
-  unitCost: numeric("unit_cost", { precision: 10, scale: 2 }).notNull(),
-  yieldPct: numeric("yield_pct", { precision: 5, scale: 2 }).notNull().default("100"),
-  lineCost: numeric("line_cost", { precision: 10, scale: 2 }),
-  createdDttm: timestamp("created_dttm").notNull().defaultNow(),
-});
+export const menuItemIngredient = pgTable(
+  "menu_item_ingredient",
+  {
+    id: serial("id").primaryKey(),
+    menuItemId: uuid("menu_item_id").notNull(),
+    /** FK to the canonical Catalog ingredient. Null = legacy free-text row. */
+    ingredientId: uuid("ingredient_id").references(() => ingredient.ingredientId, { onDelete: "set null" }),
+    ingredientName: varchar("ingredient_name", { length: 200 }).notNull(),
+    /** Narrative from the recipe import or chef notes. Not used for matching. */
+    note: text("note"),
+    quantity: numeric("quantity", { precision: 10, scale: 3 }).notNull(),
+    unit: varchar("unit", { length: 20 }).notNull(),
+    unitCost: numeric("unit_cost", { precision: 10, scale: 2 }).notNull(),
+    yieldPct: numeric("yield_pct", { precision: 5, scale: 2 }).notNull().default("100"),
+    lineCost: numeric("line_cost", { precision: 10, scale: 2 }),
+    createdDttm: timestamp("created_dttm").notNull().defaultNow(),
+  },
+  (table) => [
+    // FK index: "get all rows linked to this catalog ingredient" — used by
+    // stale-cost indicator + soft-delete cascade reads.
+    index("idx_menu_item_ingredient_ingredient").on(table.ingredientId),
+  ],
+);
 
 /**
  * The `menu_category_setting` table stores configurable target
@@ -1124,6 +1144,19 @@ export const ingredient = pgTable(
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
     /** User who soft-deleted the row. Null when the row is active. */
     deletedBy: integer("deleted_by").references(() => user.userId),
+    /**
+     * Catalog-spine Phase 1: denormalised preferred-supplier cost.
+     * Maintained by a Postgres trigger on insert/update/delete of
+     * ingredient_supplier rows. Represents the cost users see in the daily
+     * Menu Item editor (operator-friendly: stable, doesn't bounce per
+     * receiving event the way WAC does).
+     *
+     * NEVER write to these columns from app code — the trigger owns them.
+     * A startup reconciliation check in serverIndex flags drift caused by
+     * direct SQL surgery between deploys.
+     */
+    preferredUnitCost: numeric("preferred_unit_cost", { precision: 10, scale: 2 }),
+    preferredSupplierId: uuid("preferred_supplier_id").references(() => supplier.supplierId),
     createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
     updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
   },
@@ -1262,6 +1295,16 @@ export const locationIngredient = pgTable(
     unitOverride: varchar("unit_override", { length: 20 }),
     categoryOverride: varchar("category_override", { length: 50 }),
     activeInd: boolean("active_ind").notNull().default(true),
+    /**
+     * Catalog-spine Phase 1: per-location Weighted Average Cost.
+     * Recomputed eagerly by `wacService.recompute` inside the receiving
+     * transaction (with SELECT FOR UPDATE on this row to serialise
+     * concurrent receivings). Used by Menu Intelligence P&L view; the
+     * daily editor uses ingredient.preferred_unit_cost instead.
+     */
+    weightedAverageCost: numeric("weighted_average_cost", { precision: 10, scale: 4 }),
+    /** When the WAC was last recomputed. NULL until the first receiving. */
+    wacLastRecomputedAt: timestamp("wac_last_recomputed_at", { withTimezone: true }),
     createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
     updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
   },
@@ -1508,6 +1551,13 @@ export const consumptionLog = pgTable(
     organisationId: integer("organisation_id").notNull().references(() => organisation.organisationId),
     storeLocationId: uuid("store_location_id").notNull().references(() => storeLocation.storeLocationId),
     ingredientId: uuid("ingredient_id").notNull().references(() => ingredient.ingredientId),
+    /**
+     * Catalog-spine Phase 1 (Phase 4 prep): optional link to the menu item
+     * that drove this consumption. NULL for free-form / wastage / staff-meal
+     * logs that aren't dish-attributable. Phase 4 yield variance reads this
+     * to compute per-dish theoretical-vs-actual cost.
+     */
+    menuItemId: uuid("menu_item_id").references(() => menuItem.menuItemId, { onDelete: "set null" }),
     userId: integer("user_id").notNull().references(() => user.userId),
     quantity: numeric("quantity", { precision: 10, scale: 3 }).notNull(),
     unit: varchar("unit", { length: 20 }).notNull(),
@@ -1525,6 +1575,8 @@ export const consumptionLog = pgTable(
     index("idx_consumption_log_org").on(table.organisationId, table.loggedAt),
     // Per-item history: "get consumption for a specific ingredient"
     index("idx_consumption_log_ingredient").on(table.ingredientId),
+    // Phase 4 yield variance: "consumption rolled up per menu item per period"
+    index("idx_consumption_log_menu_item").on(table.menuItemId, table.loggedAt),
   ],
 );
 
@@ -2014,5 +2066,52 @@ export const auditLog = pgTable(
     index("idx_audit_log_org_created").on(table.organisationId, table.createdDttm),
     // "what did this user do" — supports security investigations.
     index("idx_audit_log_actor").on(table.actorUserId),
+  ],
+);
+
+/**
+ * The `ingredient_alias` table holds synonyms for catalog ingredients so
+ * recipe import can match "chilli flakes", "Calabrian chilli flakes", and
+ * "red pepper flakes" to the same canonical row without forcing the chef
+ * to dedup manually.
+ *
+ * Match order during recipe import:
+ *   1. exact name on `ingredient.ingredient_name`
+ *   2. case-insensitive `lower(ingredient_name) = lower(query)`
+ *   3. case-insensitive alias hit on this table
+ *   4. substring match on `ingredient_name`
+ *
+ * Alias text uses Postgres `citext` so case-insensitive uniqueness is
+ * locale-aware (avoids Turkish-i / German-ß false negatives that plain
+ * `lower()` would cause).
+ *
+ * Org-scoped uniqueness — two orgs can have the same alias pointing to
+ * different ingredients without colliding.
+ *
+ * OLTP table, 2NF — every non-key column depends on alias_id.
+ */
+export const ingredientAlias = pgTable(
+  "ingredient_alias",
+  {
+    aliasId: uuid("alias_id").defaultRandom().primaryKey(),
+    organisationId: integer("organisation_id").notNull().references(() => organisation.organisationId),
+    ingredientId: uuid("ingredient_id").notNull().references(() => ingredient.ingredientId, { onDelete: "cascade" }),
+    /**
+     * The synonym. Stored as text but the migration applies a citext
+     * collation; the unique index is case-insensitive locale-aware.
+     */
+    aliasText: text("alias_text").notNull(),
+    /** User who added the alias. Required so admin audit can trace authorship. */
+    createdByUserId: integer("created_by_user_id").notNull().references(() => user.userId),
+    createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // Org-scoped uniqueness on the alias text. Postgres citext makes the
+    // comparison case-insensitive without us calling lower() everywhere.
+    uniqueIndex("idx_ingredient_alias_org_text").on(table.organisationId, table.aliasText),
+    // FK index: "list aliases for this canonical ingredient"
+    index("idx_ingredient_alias_ingredient").on(table.ingredientId),
+    // Recipe import hot path: "match this alias text in this org"
+    index("idx_ingredient_alias_org").on(table.organisationId),
   ],
 );
