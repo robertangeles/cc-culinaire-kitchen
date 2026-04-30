@@ -26,6 +26,9 @@ import {
   handleGetRecommendations,
   handleGenerateReplacement,
   handleGetWasteImpact,
+  handleGetYieldVariance,
+  handleListYieldVariance,
+  handleGetMiseEnPlace,
 } from "../controllers/menuIntelligenceController.js";
 
 export const menuIntelligenceRouter = Router();
@@ -65,3 +68,10 @@ menuIntelligenceRouter.get("/waste-impact", handleGetWasteImpact);
 
 // CSV import
 menuIntelligenceRouter.post("/import-sales", upload.single("file"), handleImportSales);
+
+// Phase 4a — Yield variance
+menuIntelligenceRouter.get("/yield-variance", handleListYieldVariance);
+menuIntelligenceRouter.get("/items/:id/yield-variance", handleGetYieldVariance);
+
+// Phase 4b — Mise en place rollup
+menuIntelligenceRouter.get("/mise-en-place", handleGetMiseEnPlace);

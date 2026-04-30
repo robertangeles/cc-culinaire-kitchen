@@ -8,6 +8,7 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useLocation } from "../../context/LocationContext.js";
 import { useLocationIngredients, useConsumptionLog, type ConsumptionLogEntry } from "../../hooks/useInventory.js";
+import { useMenuItems } from "../../hooks/useMenuItems.js";
 import { Search, Check, Pencil, Trash2, Loader2, ClipboardEdit, Clock, X } from "lucide-react";
 import { CATEGORY_LABELS } from "@culinaire/shared";
 
@@ -60,6 +61,9 @@ export default function ConsumptionLogger() {
     useLocationIngredients(selectedLocationId);
   const { logs, isLoading: logsLoading, logConsumption, editLog, deleteLog } =
     useConsumptionLog(selectedLocationId);
+  // Phase 4 (B1): menu items list for the optional dish-attribution dropdown.
+  // Only shown when reason === "kitchen_operations" (the dish-attributable reason).
+  const { items: menuItems } = useMenuItems();
 
   /* --- form state --- */
   const [searchQuery, setSearchQuery] = useState("");
@@ -67,6 +71,7 @@ export default function ConsumptionLogger() {
   const [selectedItem, setSelectedItem] = useState<typeof locationItems[number] | null>(null);
   const [quantity, setQuantity] = useState("");
   const [reason, setReason] = useState("");
+  const [menuItemId, setMenuItemId] = useState<string>("");
   const [shift, setShift] = useState<string | null>(null);
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
@@ -111,6 +116,7 @@ export default function ConsumptionLogger() {
     setSelectedItem(null);
     setQuantity("");
     setReason("");
+    setMenuItemId("");
     setShift(null);
     setNotes("");
     setError(null);
@@ -129,6 +135,9 @@ export default function ConsumptionLogger() {
     try {
       await logConsumption({
         ingredientId: selectedItem.ingredientId,
+        // Only attach menuItemId when reason is dish-attributable. Other
+        // reasons (FOH, staff, cleaning, etc.) shouldn't carry a dish FK.
+        menuItemId: reason === "kitchen_operations" && menuItemId ? menuItemId : null,
         quantity: qty,
         unit: selectedItem.unitOverride || selectedItem.baseUnit,
         reason,
@@ -145,7 +154,7 @@ export default function ConsumptionLogger() {
     } finally {
       setSaving(false);
     }
-  }, [selectedItem, quantity, reason, shift, notes, selectedLocationId, logConsumption, handleClearItem, refreshItems]);
+  }, [selectedItem, quantity, reason, menuItemId, shift, notes, selectedLocationId, logConsumption, handleClearItem, refreshItems]);
 
   const handleStartEdit = useCallback((entry: ConsumptionLogEntry) => {
     setEditingId(entry.consumptionLogId);
@@ -432,6 +441,29 @@ export default function ConsumptionLogger() {
                 </div>
               </div>
             </div>
+
+            {/* Phase 4 (B1): optional dish attribution. Only renders for the
+                "Kitchen" reason — other reasons (FOH, staff, cleaning, etc.)
+                aren't dish-attributable so the dropdown would be noise. */}
+            {reason === "kitchen_operations" && menuItems.length > 0 && (
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-[#888] font-medium">
+                  Dish <span className="text-[#555]">(optional — for yield variance)</span>
+                </label>
+                <select
+                  value={menuItemId}
+                  onChange={(e) => setMenuItemId(e.target.value)}
+                  className="bg-[#0A0A0A] border border-[#2A2A2A] rounded-lg px-3 py-2 text-sm text-[#E0E0E0] focus:outline-none focus:border-[#D4A574]/40 transition-all"
+                >
+                  <option value="">— No specific dish —</option>
+                  {menuItems.map((m) => (
+                    <option key={m.menuItemId} value={m.menuItemId}>
+                      {m.name} <span className="text-[#666]">({m.category})</span>
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             {/* Shift + Notes row */}
             <div className="flex flex-wrap gap-3 items-end">

@@ -21,15 +21,17 @@ import { MenuEngineeringMatrix } from "../components/menu/MenuEngineeringMatrix.
 import { CategorySettings } from "../components/menu/CategorySettings.js";
 import { MenuItemDetail } from "../components/menu/MenuItemDetail.js";
 import { MenuCsvUpload } from "../components/menu/MenuCsvUpload.js";
+import { MiseEnPlaceSheet } from "../components/menu/MiseEnPlaceSheet.js";
 
 /* ---- Tab config ---- */
 
-type MenuTab = "dashboard" | "items" | "matrix" | "categories";
+type MenuTab = "dashboard" | "items" | "matrix" | "mise" | "categories";
 
 const TABS: { key: MenuTab; label: string }[] = [
   { key: "dashboard", label: "Dashboard" },
   { key: "items", label: "Menu Items" },
   { key: "matrix", label: "Engineering Matrix" },
+  { key: "mise", label: "Mise en Place" },
   { key: "categories", label: "Category Settings" },
 ];
 
@@ -325,6 +327,10 @@ export function MenuIntelligencePage() {
             loading={analysisLoading}
             onSelect={setSelectedItem}
           />
+        )}
+
+        {activeTab === "mise" && (
+          <MiseEnPlaceSheet />
         )}
 
         {activeTab === "categories" && (
