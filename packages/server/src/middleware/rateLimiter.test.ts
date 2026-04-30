@@ -35,9 +35,10 @@ describe("rateLimiter — chatRateLimit config", () => {
   it("constructs with 20 requests per 60 seconds", async () => {
     await import("./rateLimiter.js");
 
-    // Two limiters are constructed: chat + mobile prompt. Assert call count
-    // first so we catch any future limiter being added or removed silently.
-    expect(mockRateLimit).toHaveBeenCalledTimes(2);
+    // Three limiters are constructed: chat + mobile prompt + mobile RAG.
+    // Assert call count first so we catch any future limiter being added
+    // or removed silently.
+    expect(mockRateLimit).toHaveBeenCalledTimes(3);
 
     const chatConfig = mockRateLimit.mock.calls[0][0] as Record<string, unknown>;
     expect(chatConfig.limit).toBe(20);
@@ -116,5 +117,45 @@ describe("rateLimiter — mobilePromptRateLimit config", () => {
     const mobileConfig = mockRateLimit.mock.calls[1][0] as Record<string, unknown>;
     expect(mobileConfig.standardHeaders).toBe("draft-8");
     expect(mobileConfig.legacyHeaders).toBe(false);
+  });
+});
+
+describe("rateLimiter — mobileRagRateLimit config", () => {
+  beforeEach(() => {
+    mockRateLimit.mockClear();
+    vi.resetModules();
+  });
+
+  it("constructs with 60 requests per 60 seconds", async () => {
+    // Locks the per-route override: mobile RAG retrieval is looser than
+    // both chat (20/min) and the prompt-fetch route (30/min). RAG fires
+    // on every chat message in the mobile app, so 60/min = 1 query per
+    // second sustained — comfortably above any human typing pace.
+    await import("./rateLimiter.js");
+
+    const ragConfig = mockRateLimit.mock.calls[2][0] as Record<string, unknown>;
+    expect(ragConfig.limit).toBe(60);
+    expect(ragConfig.windowMs).toBe(60 * 1000);
+  });
+
+  it("uses a per-user keyGenerator with IP fallback", async () => {
+    await import("./rateLimiter.js");
+
+    const ragConfig = mockRateLimit.mock.calls[2][0] as {
+      keyGenerator: (req: unknown) => string;
+    };
+    expect(
+      ragConfig.keyGenerator({ user: { sub: 99 }, ip: "1.2.3.4" }),
+    ).toBe("user-99");
+    expect(ragConfig.keyGenerator({ ip: "1.2.3.4" })).toBe("1.2.3.4");
+    expect(ragConfig.keyGenerator({})).toBe("unknown");
+  });
+
+  it("returns standardised draft-8 rate limit headers", async () => {
+    await import("./rateLimiter.js");
+
+    const ragConfig = mockRateLimit.mock.calls[2][0] as Record<string, unknown>;
+    expect(ragConfig.standardHeaders).toBe("draft-8");
+    expect(ragConfig.legacyHeaders).toBe(false);
   });
 });
