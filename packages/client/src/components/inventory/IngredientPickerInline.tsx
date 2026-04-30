@@ -20,7 +20,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Search, Plus, Link2, Pencil, AlertTriangle } from "lucide-react";
+import { Search, Plus, Link2, Pencil, AlertTriangle, RefreshCw } from "lucide-react";
 
 const API = import.meta.env.VITE_API_URL ?? "";
 
@@ -54,6 +54,14 @@ interface IngredientPickerInlineProps {
   showUnlinkedBadge?: boolean;
   /** Disable input — useful while parent is saving. */
   disabled?: boolean;
+  /**
+   * Phase 3: when true, render a small amber dot + Refresh icon on the chip
+   * indicating the linked Catalog cost has changed since this row was last
+   * priced. Calls onRefresh when the chef clicks the icon.
+   */
+  costStale?: boolean;
+  /** Phase 3: handler invoked when chef clicks the Refresh affordance. */
+  onRefresh?: () => void;
 }
 
 export function IngredientPickerInline({
@@ -64,6 +72,8 @@ export function IngredientPickerInline({
   onCreateRequest,
   showUnlinkedBadge = true,
   disabled,
+  costStale = false,
+  onRefresh,
 }: IngredientPickerInlineProps) {
   // Picker is open (search + dropdown visible) vs. collapsed chip view.
   const [isOpen, setIsOpen] = useState(!linkedId && !displayName);
@@ -172,7 +182,28 @@ export function IngredientPickerInline({
         <div className="flex-1 flex items-center gap-2 px-3 py-2 bg-[#1E1E1E] border border-[#2A2A2A] rounded-lg text-[#FAFAFA] text-sm">
           <Link2 className="size-3.5 text-emerald-400 shrink-0" aria-hidden />
           <span className="truncate">{displayName || "(unnamed)"}</span>
+          {costStale && (
+            <span
+              className="size-1.5 rounded-full bg-amber-400 shrink-0 ml-1"
+              aria-label="Catalog cost has changed since this row was last priced"
+              title="Catalog cost changed since last priced. Click Refresh to pull the new cost."
+              data-testid="cost-stale-dot"
+            />
+          )}
         </div>
+        {costStale && onRefresh && (
+          <button
+            type="button"
+            onClick={onRefresh}
+            disabled={disabled}
+            className="p-2 rounded-lg bg-amber-500/15 text-amber-300 border border-amber-500/30 hover:bg-amber-500/25 transition-colors min-h-[36px] min-w-[36px] flex items-center justify-center"
+            aria-label="Refresh cost from Catalog"
+            title="Refresh cost from Catalog"
+            data-testid="cost-refresh-btn"
+          >
+            <RefreshCw className="size-3.5" />
+          </button>
+        )}
         <button
           type="button"
           onClick={() => {
