@@ -840,3 +840,25 @@ node scripts/wiki-graph.mjs broken              # [[slug]] refs that point to mi
 The graph is rebuilt on demand. After adding or editing a wiki page's `related:` frontmatter or any `[[slug]]` body reference, run `build` again. `wiki/.graph.json` is gitignored — it is a regenerable artefact.
 
 When the graph crosses ~1000 nodes, swap the JSON store for SQLite via Node's built-in `node:sqlite` (Node 22+, no new deps). The `nodes` and `edges` arrays map cleanly to two tables.
+
+------------------------------------------------------------------------
+
+# Shared Context
+
+Location: ../cc-shared-context/
+
+Read at the start of every session involving cross-project work.
+
+## File ownership for this project
+
+- You OWN: api-contracts.md, db-schema.md, web-needs.md
+- Update immediately when routes, schema, or needs change
+- READ ONLY: mobile-needs.md, model-config.md
+- Check mobile-needs.md at session start for any mobile requests
+
+## Cross-project workflow
+
+1. If you need something from the mobile project — write to web-needs.md
+2. If you see a pending need in mobile-needs.md — fulfill it and mark complete
+3. Significant cross-project decisions go in decisions.md with today's date
+4. Never guess at mobile requirements — read mobile-needs.md first
