@@ -17,6 +17,8 @@ import { mobilePromptsRouter } from "./routes/mobilePrompts.js";
 import { mobileRagRouter } from "./routes/mobileRag.js";
 import { conversationsRouter } from "./routes/conversations.js";
 import { settingsRouter } from "./routes/settings.js";
+import { publicSitePagesRouter, adminSitePagesRouter } from "./routes/sitePages.js";
+import { ensureSeededPages } from "./services/sitePageService.js";
 import authRouter from "./routes/auth.js";
 import usersRouter from "./routes/users.js";
 import organisationsRouter from "./routes/organisations.js";
@@ -108,6 +110,8 @@ app.use("/api/mobile/prompts", mobilePromptsRouter);
 app.use("/api/mobile/rag", mobileRagRouter);
 app.use("/api/conversations", conversationsRouter);
 app.use("/api/settings", settingsRouter);
+app.use("/api/site-pages", publicSitePagesRouter);
+app.use("/api/admin/site-pages", adminSitePagesRouter);
 app.use("/api/users", usersRouter);
 app.use("/api/organisations", organisationsRouter);
 app.use("/api/roles", rolesRouter);
@@ -353,6 +357,11 @@ hydrateEnvFromCredentials().then(() => {
     httpServer.listen(port, () => {
       log.info(`CulinAIre Kitchen server running on http://localhost:${port}`);
       log.info(`AI Model: ${process.env.AI_MODEL ?? "anthropic/claude-sonnet-4-20250514"} (via OpenRouter)`);
+
+      // Idempotent seed for the two reserved site_page slugs (terms + privacy).
+      ensureSeededPages().catch((err) => {
+        log.warn({ err }, "site_page seed failed (non-fatal)");
+      });
 
       // Periodic guest session cleanup (runs once on start, then every hour)
       async function runGuestCleanup() {

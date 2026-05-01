@@ -147,6 +147,28 @@ export const siteSetting = pgTable("site_setting", {
   updatedDttm: timestamp("updated_dttm").notNull().defaultNow(),
 });
 
+/**
+ * The `site_page` table stores admin-editable static content (Terms of
+ * Service, Privacy Policy, About, etc.) keyed by URL slug. The body is
+ * stored as markdown; rendering happens client-side via react-markdown.
+ *
+ * `published_ind` gates public visibility — drafts return 404 to anyone
+ * but Administrators. The two seeded slugs ('terms', 'privacy') are
+ * load-bearing for the landing footer; the service layer refuses to
+ * delete them.
+ *
+ * OLTP table, 2NF — every non-key column depends only on page_id.
+ */
+export const sitePage = pgTable("site_page", {
+  pageId: uuid("page_id").defaultRandom().primaryKey(),
+  slug: varchar("slug", { length: 80 }).notNull().unique(),
+  title: varchar("title", { length: 200 }).notNull(),
+  bodyMd: text("body_md").notNull().default(""),
+  publishedInd: boolean("published_ind").notNull().default(false),
+  createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
+  updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
+});
+
 // ---------------------------------------------------------------------------
 // Auth & User Management Tables
 // ---------------------------------------------------------------------------

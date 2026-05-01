@@ -17,6 +17,7 @@ import {
   Shield,
   Plug,
   MessagesSquare,
+  FileText,
   type LucideIcon,
 } from "lucide-react";
 
@@ -36,6 +37,7 @@ interface TabItem {
 const tabs: TabItem[] = [
   { id: "prompts", label: "Prompts", icon: ScrollText },
   { id: "siteSettings", label: "Site Settings", icon: Globe },
+  { id: "pages", label: "Pages", icon: FileText },
   { id: "appearance", label: "Appearance", icon: Palette },
   { id: "users", label: "Users", icon: Users },
   { id: "roles", label: "Roles", icon: Shield },
