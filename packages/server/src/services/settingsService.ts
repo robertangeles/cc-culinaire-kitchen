@@ -30,6 +30,12 @@ const SETTING_DEFAULTS: Record<string, string> = {
   // Vector search is off by default; enable after confirming pgvector extension
   // is installed on the PostgreSQL instance and OPENROUTER_API_KEY is configured.
   vector_search_enabled: "false",
+  // i18n v1.2: which languages the mobile picker may surface. Stored as a
+  // JSON-encoded string array so the existing varchar settingValue column
+  // doesn't need a schema change. Default `["en"]` until each new locale
+  // has an authored prompt slug, reviewer signoff, and an eval pass per
+  // shared-context/mobile-needs.md.
+  mobile_languages_enabled: '["en"]',
 };
 
 /**
