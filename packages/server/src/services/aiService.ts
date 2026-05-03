@@ -5,8 +5,10 @@
  *
  * This service is the core orchestration layer between the chat API and the
  * language model. It constructs prompts, configures tool-use capabilities
- * (knowledge-base search and document retrieval), and streams LLM responses
- * back to the client over an HTTP response.
+ * (knowledge document search and retrieval, served from the
+ * `knowledge_document` + `knowledge_document_chunk` Postgres tables via
+ * pgvector), and streams LLM responses back to the client over an HTTP
+ * response.
  *
  * The service deliberately keeps all LLM interaction behind a single entry
  * point (`streamChat`) so that routes and controllers never call LLM APIs
@@ -33,10 +35,11 @@ const logger = pino({ name: "aiService" });
  * the Express response. The model is given two tools it may invoke
  * autonomously during generation:
  *
- * - **searchKnowledge** — searches the curated knowledge base for relevant
- *   culinary reference material (techniques, ingredients, pastry, spirits).
+ * - **searchKnowledge** — vector-searches the `knowledge_document_chunk`
+ *   table for relevant culinary reference material. Documents are managed
+ *   by admins through Settings → Knowledge Base.
  * - **readKnowledgeDocument** — reads the full content of a specific
- *   knowledge-base document identified by a prior search result.
+ *   knowledge document identified by a prior search result.
  * - **web_search** (optional) — When enabled, the model is swapped to a
  *   web-search-capable model (e.g., Perplexity Sonar via OpenRouter) that
  *   can search the web for current information beyond the local knowledge

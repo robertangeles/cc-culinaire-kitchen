@@ -412,6 +412,7 @@ export async function listAllPrompts() {
       promptName: prompt.promptName,
       promptKey: prompt.promptKey,
       modelId: prompt.modelId,
+      runtime: prompt.runtime,
       updatedDttm: prompt.updatedDttm,
       createdDttm: prompt.createdDttm,
     })

@@ -19,10 +19,19 @@ import { useState, useEffect, useMemo } from "react";
 import { Loader2, Plus, Save, Trash2, FileText, AlertTriangle, CheckCircle2 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { usePagesAdmin, type SitePage } from "../../hooks/useSitePages.js";
+import { usePagesAdmin, type SitePage, type Surface } from "../../hooks/useSitePages.js";
 
 const RESERVED_SLUGS = new Set(["terms", "privacy"]);
 const SLUG_RE = /^[a-z][a-z0-9-]{1,79}$/;
+
+interface PagesTabProps {
+  /**
+   * Which app surface this editor scopes to. Each surface keeps its own
+   * row per slug, so editing 'web' terms here does NOT change 'mobile'
+   * terms (and vice versa). Defaults to `'web'` for the Web Pages tab.
+   */
+  surface?: Surface;
+}
 
 interface DraftState {
   slug: string;
@@ -51,8 +60,8 @@ const NEW_DRAFT: DraftState = {
   isNew: true,
 };
 
-export function PagesTab() {
-  const { pages, loading, error, upsert, remove, refresh } = usePagesAdmin();
+export function PagesTab({ surface = "web" }: PagesTabProps = {}) {
+  const { pages, loading, error, upsert, remove, refresh } = usePagesAdmin(surface);
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
   const [draft, setDraft] = useState<DraftState | null>(null);
   const [saving, setSaving] = useState(false);
@@ -264,7 +273,11 @@ export function PagesTab() {
                   <span className="text-xs text-red-400">{slugError}</span>
                 )}
                 {draft.isNew && !slugError && draft.slug && (
-                  <span className="text-xs text-[#666]">Public URL: <code>/pages/{draft.slug}</code></span>
+                  surface === "mobile" ? (
+                    <span className="text-xs text-[#666]">Mobile slug: <code>{draft.slug}</code> (fetched by the app)</span>
+                  ) : (
+                    <span className="text-xs text-[#666]">Public URL: <code>/pages/{draft.slug}</code></span>
+                  )
                 )}
               </label>
             </div>
@@ -276,7 +289,11 @@ export function PagesTab() {
                 onChange={(e) => setDraft({ ...draft, publishedInd: e.target.checked })}
                 className="size-4 rounded border-[#2A2A2A] bg-[#161616] text-[#D4A574] focus:ring-[#D4A574]/40"
               />
-              Published — visible to the public at <code>/{draft.slug || "your-slug"}</code>
+              {surface === "mobile" ? (
+                <>Published — served to the mobile app for slug <code>{draft.slug || "your-slug"}</code></>
+              ) : (
+                <>Published — visible to the public at <code>/{draft.slug || "your-slug"}</code></>
+              )}
             </label>
 
             {/* Editor + preview */}

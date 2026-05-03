@@ -34,8 +34,7 @@ packages/
 ├── client/          React SPA (@culinaire/client)
 ├── server/          Express API (@culinaire/server)
 └── shared/          Zod schemas & types (@culinaire/shared)
-knowledge-base/      Curated markdown documents (synced into pgvector)
-prompts/             System prompt templates
+prompts/             System prompt templates (read at runtime)
 docs/architecture/   Living architecture docs
 tasks/               todo.md, lessons.md
 uploads/             Static files (logos, favicons)

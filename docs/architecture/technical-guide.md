@@ -26,7 +26,6 @@ culinaire-kitchen/
 │   ├── client/          React SPA (@culinaire/client)
 │   ├── server/          Express API (@culinaire/server)
 │   └── shared/          Zod schemas & types (@culinaire/shared)
-├── knowledge-base/      Curated markdown documents
 ├── prompts/chatbot/     System prompt templates
 ├── docs/architecture/   This documentation
 ├── tasks/               todo.md, lessons.md
@@ -54,11 +53,11 @@ culinaire-kitchen/
 5. Mount error handler                       Must be after routes
 6. ensureEncryptionKey()                     Generate or load AES key
 7. hydrateEnvFromCredentials()               Decrypt DB credentials → process.env
-8. buildIndex()                              Scan knowledge-base/, build search index
+8. ensureSeededPages()                       Idempotent seed for site_page reserved slugs
 9. app.listen(port)                          Start accepting requests
 ```
 
-Steps 6–8 ensure that by the time the server accepts requests, all credentials are available in `process.env` and the knowledge base is searchable.
+Steps 6–8 ensure that by the time the server accepts requests, credentials are available in `process.env` and the load-bearing site pages exist on every surface. Knowledge documents are stored in Postgres (`knowledge_document` + `knowledge_document_chunk` with pgvector); they are managed through the admin UI, not synced from disk on startup.
 
 ---
 
@@ -176,7 +175,7 @@ async function streamChat(messages, res) {
     system: systemPrompt,
     messages,
     tools: {
-      searchKnowledge,        // search indexed knowledge-base
+      searchKnowledge,        // pgvector search over knowledge_document_chunk
       readKnowledgeDocument   // fetch full document content
     },
     maxSteps: 3               // max tool call iterations
@@ -246,33 +245,24 @@ Run `pnpm --filter @culinaire/server db:seed` to insert:
 
 ## Knowledge Base
 
-### File Format
+### Storage
 
-Each document uses YAML frontmatter parsed by `gray-matter`:
+Knowledge content lives in Postgres. There is no on-disk corpus, no boot-time indexing, and no in-memory array.
 
-```markdown
----
-title: "Searing Technique"
-category: "techniques"
-tags: ["maillard", "high-heat", "proteins"]
----
+- `knowledge_document` — one row per document (title, source, metadata).
+- `knowledge_document_chunk` — chunked text + pgvector embeddings (cosine distance via ivfflat).
 
-# Content here...
-```
+### Authoring
 
-### Directory Structure
+Admins manage documents through **Settings → Knowledge Base** in the web client (`packages/client/src/components/settings/KnowledgeBaseTab.tsx`). The tab supports manual entries, file upload, and URL ingest, all routed through `packages/server/src/services/knowledgeManagementService.ts`, which handles chunking and embedding.
 
-```
-knowledge-base/
-├── techniques/    searing, braising, emulsions, knife-skills
-├── pastry/        chocolate, custards, doughs
-├── spirits/       cocktail-structures
-└── ingredients/   fats, herbs
-```
+### Retrieval
 
-### Indexing
+`packages/server/src/services/knowledgeService.ts` exposes:
 
-At startup, `knowledgeService.buildIndex()` recursively scans all `.md` files, parses frontmatter, and builds an in-memory array. No vector database — search uses weighted term matching.
+- `searchKnowledge(query, k)` — vector similarity search used by the chatbot's tool-use loop.
+- `readKnowledgeDocument(documentId)` — fetches the full body of a single document the model already cited.
+- `retrieveForMobile(query, k)` — richer-shape sibling for the mobile RAG endpoint at `POST /api/mobile/rag/retrieve`.
 
 ---
 

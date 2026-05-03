@@ -2,9 +2,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 /**
  * Unit tests for sitePageService — focused on the load-bearing behaviour:
- *   - Reserved slugs (terms, privacy) cannot be deleted.
+ *   - Reserved slugs (terms, privacy) cannot be deleted on any surface.
  *   - Public read returns null on draft rows.
- *   - Idempotent seed inserts only when missing.
+ *   - Idempotent seed inserts only when missing — across all surfaces.
  */
 
 // ── Mocks ─────────────────────────────────────────────────────────────
@@ -51,6 +51,7 @@ vi.mock("../db/schema.js", () => ({
   sitePage: {
     pageId: "page_id",
     slug: "slug",
+    surface: "surface",
     title: "title",
     bodyMd: "body_md",
     publishedInd: "published_ind",
@@ -75,32 +76,38 @@ function setRows(...rowsByCall: unknown[][]) {
 // ── Tests ─────────────────────────────────────────────────────────────
 
 describe("deletePage — reserved slug guard", () => {
-  it("refuses to delete the terms slug", async () => {
+  it("refuses to delete the terms slug on web", async () => {
     const { deletePage } = await import("./sitePageService.js");
-    const result = await deletePage("terms");
+    const result = await deletePage("terms", "web");
     expect(result.deleted).toBe(false);
     expect(result.reason).toMatch(/reserved/i);
     expect(mockDeleteWhereReturning).not.toHaveBeenCalled();
   });
 
-  it("refuses to delete the privacy slug", async () => {
+  it("refuses to delete the terms slug on mobile", async () => {
     const { deletePage } = await import("./sitePageService.js");
-    const result = await deletePage("privacy");
+    const result = await deletePage("terms", "mobile");
     expect(result.deleted).toBe(false);
     expect(result.reason).toMatch(/reserved/i);
   });
 
-  it("deletes a non-reserved slug", async () => {
+  it("refuses to delete the privacy slug on either surface", async () => {
+    const { deletePage } = await import("./sitePageService.js");
+    expect((await deletePage("privacy", "web")).deleted).toBe(false);
+    expect((await deletePage("privacy", "mobile")).deleted).toBe(false);
+  });
+
+  it("deletes a non-reserved slug when scoped to the right surface", async () => {
     mockDeleteWhereReturning.mockResolvedValueOnce([{ pageId: "p1" }]);
     const { deletePage } = await import("./sitePageService.js");
-    const result = await deletePage("about");
+    const result = await deletePage("about", "mobile");
     expect(result.deleted).toBe(true);
   });
 
-  it("returns deleted=false when slug does not exist", async () => {
+  it("returns deleted=false when slug does not exist on the target surface", async () => {
     mockDeleteWhereReturning.mockResolvedValueOnce([]);
     const { deletePage } = await import("./sitePageService.js");
-    const result = await deletePage("missing-slug");
+    const result = await deletePage("missing-slug", "web");
     expect(result.deleted).toBe(false);
     expect(result.reason).toBeUndefined();
   });
@@ -108,40 +115,46 @@ describe("deletePage — reserved slug guard", () => {
 
 describe("getPublishedPageBySlug — published gate", () => {
   it("returns null when the row is in draft (publishedInd=false)", async () => {
-    setRows([{ slug: "terms", title: "Terms", bodyMd: "x", publishedInd: false }]);
+    setRows([{ slug: "terms", surface: "web", title: "Terms", bodyMd: "x", publishedInd: false }]);
     const { getPublishedPageBySlug } = await import("./sitePageService.js");
-    const page = await getPublishedPageBySlug("terms");
+    const page = await getPublishedPageBySlug("terms", "web");
     expect(page).toBeNull();
   });
 
-  it("returns the page when publishedInd=true", async () => {
-    setRows([{ slug: "terms", title: "Terms", bodyMd: "live copy", publishedInd: true }]);
+  it("returns the page when publishedInd=true on the requested surface", async () => {
+    setRows([{ slug: "terms", surface: "mobile", title: "Mobile Terms", bodyMd: "live mobile copy", publishedInd: true }]);
     const { getPublishedPageBySlug } = await import("./sitePageService.js");
-    const page = await getPublishedPageBySlug("terms");
+    const page = await getPublishedPageBySlug("terms", "mobile");
     expect(page).not.toBeNull();
-    expect(page?.bodyMd).toBe("live copy");
+    expect(page?.bodyMd).toBe("live mobile copy");
   });
 
-  it("returns null when the row does not exist", async () => {
+  it("returns null when the row does not exist on the requested surface", async () => {
     setRows([]);
     const { getPublishedPageBySlug } = await import("./sitePageService.js");
-    const page = await getPublishedPageBySlug("nope");
+    const page = await getPublishedPageBySlug("nope", "mobile");
     expect(page).toBeNull();
   });
 });
 
-describe("ensureSeededPages — idempotent", () => {
-  it("inserts both reserved slugs when neither exists", async () => {
-    setRows([], []); // first lookup empty, second lookup empty
+describe("ensureSeededPages — idempotent across surfaces", () => {
+  it("inserts terms + privacy on every surface when none exist", async () => {
+    // Service iterates surfaces × seeds = web/terms, web/privacy, mobile/terms, mobile/privacy.
+    setRows([], [], [], []);
     const { ensureSeededPages } = await import("./sitePageService.js");
     await ensureSeededPages();
-    expect(mockInsertValues).toHaveBeenCalledTimes(2);
-    const slugs = mockInsertValues.mock.calls.map((c) => c[0].slug).sort();
-    expect(slugs).toEqual(["privacy", "terms"]);
+    expect(mockInsertValues).toHaveBeenCalledTimes(4);
+    const inserted = mockInsertValues.mock.calls.map((c) => `${c[0].surface}/${c[0].slug}`).sort();
+    expect(inserted).toEqual([
+      "mobile/privacy",
+      "mobile/terms",
+      "web/privacy",
+      "web/terms",
+    ]);
   });
 
-  it("does not re-insert when both reserved slugs already exist", async () => {
-    setRows([{ pageId: "p1" }], [{ pageId: "p2" }]);
+  it("does not re-insert when every (surface, slug) combination already exists", async () => {
+    setRows([{ pageId: "p1" }], [{ pageId: "p2" }], [{ pageId: "p3" }], [{ pageId: "p4" }]);
     const { ensureSeededPages } = await import("./sitePageService.js");
     await ensureSeededPages();
     expect(mockInsertValues).not.toHaveBeenCalled();

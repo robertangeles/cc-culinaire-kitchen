@@ -53,11 +53,12 @@
   │     ├─ Decrypt each row (AES-256-GCM)
   │     └─ Set process.env[key] = decryptedValue
   │
-  ├─ 7. Build knowledge index ────────────────── buildIndex()
+  ├─ 7. Seed reserved site pages ────────────── ensureSeededPages()
   │     │
-  │     ├─ Scan knowledge-base/ recursively
-  │     ├─ Parse YAML frontmatter (gray-matter)
-  │     └─ Store in-memory array of { title, category, tags, content, path }
+  │     └─ Idempotent insert of 'terms' + 'privacy' rows
+  │        for every surface ('web', 'mobile')
+  │     (Knowledge content lives in knowledge_document /
+  │      knowledge_document_chunk; not synced from disk.)
   │
   └─ 8. Listen on port ──────────────────────── app.listen(3001)
 ```

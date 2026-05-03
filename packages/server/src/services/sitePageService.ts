@@ -2,18 +2,27 @@
  * @module services/sitePageService
  *
  * CRUD for `site_page`. Public reads honour `published_ind`; admin reads
- * see everything. The two seeded slugs ('terms', 'privacy') are
- * load-bearing for the landing footer — `deletePage` refuses to remove
- * them so a stray DELETE can't leave the public footer pointing at 404.
+ * see everything. Each row belongs to a single `surface` ('web' or
+ * 'mobile') so admins can author distinct legal copy per app. The two
+ * reserved slugs ('terms', 'privacy') are seeded for every surface —
+ * `deletePage` refuses to remove them so a stray DELETE can't leave the
+ * public footer pointing at 404.
  */
 
-import { eq, asc } from "drizzle-orm";
+import { and, eq, asc } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { sitePage } from "../db/schema.js";
+
+/** Which app surface a site page row belongs to. */
+export type Surface = "web" | "mobile";
+
+/** All surfaces seeded at boot. Add a new surface here to extend coverage. */
+const SURFACES: Surface[] = ["web", "mobile"];
 
 export interface SitePage {
   pageId: string;
   slug: string;
+  surface: Surface;
   title: string;
   bodyMd: string;
   publishedInd: boolean;
@@ -21,13 +30,13 @@ export interface SitePage {
   updatedDttm: Date;
 }
 
-/** Slugs that may not be deleted — they're wired into the landing footer. */
+/** Slugs that may not be deleted — they're wired into every surface's footer. */
 const RESERVED_SLUGS = new Set(["terms", "privacy"]);
 
 /**
  * Idempotent boot-time seed. Ensures the two reserved slugs exist as
- * draft rows so admins always have a starting point for ToS + Privacy
- * content. Called once during server startup.
+ * draft rows on every surface so admins always have a starting point
+ * for ToS + Privacy content. Called once during server startup.
  */
 export async function ensureSeededPages(): Promise<void> {
   const seeds = [
@@ -35,66 +44,87 @@ export async function ensureSeededPages(): Promise<void> {
     { slug: "privacy", title: "Privacy Policy" },
   ];
 
-  for (const seed of seeds) {
-    const existing = await db
-      .select({ pageId: sitePage.pageId })
-      .from(sitePage)
-      .where(eq(sitePage.slug, seed.slug));
-    if (existing.length === 0) {
-      await db.insert(sitePage).values({
-        slug: seed.slug,
-        title: seed.title,
-        bodyMd: "",
-        publishedInd: false,
-      });
+  for (const surface of SURFACES) {
+    for (const seed of seeds) {
+      const existing = await db
+        .select({ pageId: sitePage.pageId })
+        .from(sitePage)
+        .where(and(eq(sitePage.slug, seed.slug), eq(sitePage.surface, surface)));
+      if (existing.length === 0) {
+        await db.insert(sitePage).values({
+          slug: seed.slug,
+          surface,
+          title: seed.title,
+          bodyMd: "",
+          publishedInd: false,
+        });
+      }
     }
   }
 }
 
-/** Admin: every page, ordered by slug. */
-export async function listPages(): Promise<SitePage[]> {
-  return db.select().from(sitePage).orderBy(asc(sitePage.slug));
+/** Admin: every page on a surface, ordered by slug. */
+export async function listPages(surface: Surface): Promise<SitePage[]> {
+  const rows = await db
+    .select()
+    .from(sitePage)
+    .where(eq(sitePage.surface, surface))
+    .orderBy(asc(sitePage.slug));
+  return rows as SitePage[];
 }
 
-/** Public: published pages only — used by the footer to discover live pages. */
-export async function listPublishedPages(): Promise<Pick<SitePage, "slug" | "title" | "updatedDttm">[]> {
+/** Public: published pages on a surface — used by the footer to discover live pages. */
+export async function listPublishedPages(
+  surface: Surface,
+): Promise<Pick<SitePage, "slug" | "title" | "updatedDttm">[]> {
   return db
     .select({ slug: sitePage.slug, title: sitePage.title, updatedDttm: sitePage.updatedDttm })
     .from(sitePage)
-    .where(eq(sitePage.publishedInd, true))
+    .where(and(eq(sitePage.publishedInd, true), eq(sitePage.surface, surface)))
     .orderBy(asc(sitePage.slug));
 }
 
-/** Admin: one page by slug, regardless of publish state. Returns null when missing. */
-export async function getPageBySlugAdmin(slug: string): Promise<SitePage | null> {
-  const [row] = await db.select().from(sitePage).where(eq(sitePage.slug, slug));
-  return row ?? null;
+/** Admin: one page by (slug, surface), regardless of publish state. Returns null when missing. */
+export async function getPageBySlugAdmin(slug: string, surface: Surface): Promise<SitePage | null> {
+  const [row] = await db
+    .select()
+    .from(sitePage)
+    .where(and(eq(sitePage.slug, slug), eq(sitePage.surface, surface)));
+  return (row as SitePage | undefined) ?? null;
 }
 
-/** Public: one page by slug, only when published. Returns null when missing or draft. */
-export async function getPublishedPageBySlug(slug: string): Promise<SitePage | null> {
-  const [row] = await db.select().from(sitePage).where(eq(sitePage.slug, slug));
+/** Public: one page by (slug, surface), only when published. Returns null when missing or draft. */
+export async function getPublishedPageBySlug(
+  slug: string,
+  surface: Surface,
+): Promise<SitePage | null> {
+  const [row] = await db
+    .select()
+    .from(sitePage)
+    .where(and(eq(sitePage.slug, slug), eq(sitePage.surface, surface)));
   if (!row || !row.publishedInd) return null;
-  return row;
+  return row as SitePage;
 }
 
 export interface UpsertPageInput {
   slug: string;
+  surface: Surface;
   title: string;
   bodyMd: string;
   publishedInd: boolean;
 }
 
 /**
- * Insert or update a page by slug. Slug is the natural key — admins do
- * not edit it after creation, but the service does not enforce that
- * directly (the controller does, since it needs the request shape).
+ * Insert or update a page by (slug, surface). Each surface keeps its own
+ * row per slug — admins do not edit slug or surface after creation, but
+ * the service does not enforce that directly (the controller does, since
+ * it needs the request shape).
  */
 export async function upsertPage(input: UpsertPageInput): Promise<SitePage> {
   const existing = await db
     .select({ pageId: sitePage.pageId })
     .from(sitePage)
-    .where(eq(sitePage.slug, input.slug));
+    .where(and(eq(sitePage.slug, input.slug), eq(sitePage.surface, input.surface)));
 
   if (existing.length > 0) {
     const [updated] = await db
@@ -107,31 +137,38 @@ export async function upsertPage(input: UpsertPageInput): Promise<SitePage> {
       })
       .where(eq(sitePage.pageId, existing[0].pageId))
       .returning();
-    return updated;
+    return updated as SitePage;
   }
 
   const [created] = await db
     .insert(sitePage)
     .values({
       slug: input.slug,
+      surface: input.surface,
       title: input.title,
       bodyMd: input.bodyMd,
       publishedInd: input.publishedInd,
     })
     .returning();
-  return created;
+  return created as SitePage;
 }
 
 /**
- * Delete a page. Refuses to delete reserved slugs; the caller surfaces
- * the rejection as a 400 to the admin UI.
+ * Delete a page by (slug, surface). Refuses to delete reserved slugs on
+ * any surface; the caller surfaces the rejection as a 400 to the admin UI.
  */
-export async function deletePage(slug: string): Promise<{ deleted: boolean; reason?: string }> {
+export async function deletePage(
+  slug: string,
+  surface: Surface,
+): Promise<{ deleted: boolean; reason?: string }> {
   if (RESERVED_SLUGS.has(slug)) {
     return { deleted: false, reason: "Reserved page — cannot be deleted" };
   }
-  const result = await db.delete(sitePage).where(eq(sitePage.slug, slug)).returning({ pageId: sitePage.pageId });
+  const result = await db
+    .delete(sitePage)
+    .where(and(eq(sitePage.slug, slug), eq(sitePage.surface, surface)))
+    .returning({ pageId: sitePage.pageId });
   return { deleted: result.length > 0 };
 }
 
-export const __test = { RESERVED_SLUGS };
+export const __test = { RESERVED_SLUGS, SURFACES };

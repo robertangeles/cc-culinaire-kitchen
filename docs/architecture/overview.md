@@ -83,7 +83,6 @@ culinaire-kitchen/
     client/        The web application users see (React)
     server/        The API server handling requests (Express)
     shared/        Code shared between client and server (types, validation)
-  knowledge-base/  Culinary reference documents (markdown)
   prompts/         AI system prompt templates
   docs/            Documentation (you are here)
   uploads/         Uploaded files (logos, favicons)

@@ -28,9 +28,11 @@ export function SettingsPage() {
 
   return (
     <SettingsLayout activeTab={activeTab} onTabChange={setActiveTab}>
-      {activeTab === "prompts" && <PromptsTab />}
+      {activeTab === "prompts" && <PromptsTab runtimeFilter="server" />}
+      {activeTab === "mobilePrompts" && <PromptsTab runtimeFilter="device" />}
       {activeTab === "siteSettings" && <SiteSettingsTab />}
-      {activeTab === "pages" && <PagesTab />}
+      {activeTab === "pages" && <PagesTab surface="web" />}
+      {activeTab === "mobilePages" && <PagesTab surface="mobile" />}
       {activeTab === "appearance" && <AppearanceTab />}
       {activeTab === "users" && <UsersTab />}
       {activeTab === "roles" && <RolesTab />}
