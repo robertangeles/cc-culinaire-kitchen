@@ -48,12 +48,14 @@ Categories: **entity** (named things) · **concept** (patterns) · **decision** 
 | [Mobile API Contract](concepts/mobile-api-contract.md) | Cross-repo contract with the separate mobile repo: auth transport, `/api/mobile/*`, device tokens, push readiness | 2026-04-29 |
 | [Dev server + Playwright verification](concepts/dev-server-plus-playwright-verification.md) | UI ways of working: every UI change gets rendered + screenshotted via Playwright before being reported done | 2026-04-29 |
 | [PR description template](concepts/pr-description-template.md) | Every PR includes a structured description (summary / why / what / out-of-scope / test plan / risk / depends-on) | 2026-04-30 |
+| [Surface Partition](concepts/surface-partition.md) | The `(slug, surface)` / `runtime` pattern that lets web and mobile own distinct rows for the same logical content | 2026-05-03 |
 
 ## Decisions
 | Page | Summary | Created |
 |---|---|---|
 | [OpenRouter Migration](decisions/openrouter-migration.md) | Replaced direct AI provider keys with one OpenRouter gateway for chat/embeddings/web-search/image-gen | 2026-04-29 |
 | [Duplicate recipeRefinementPrompt.md — RESOLVED](decisions/duplicate-recipe-refinement-prompt.md) | Resolved 2026-05-03; the dead `prompts/recipe/` copy was deleted, the canonical `prompts/chatbot/` copy stays as runtime fallback | 2026-05-03 |
+| [Auto-inject shared-context on every prompt](decisions/shared-context-auto-injection.md) | UserPromptSubmit hook in `.claude/settings.local.json` injects head of `mobile-needs.md` + `decisions.md` so the web session is always aware of mobile updates | 2026-05-03 |
 | [CI Pipeline (GitHub Actions)](decisions/ci-pipeline.md) | Wire up the install→lint→typecheck→test→build pipeline CLAUDE.md described but had never existed on disk; triggered by 2026-04-29 Render deploy failure | 2026-04-29 |
 
 ## Synthesis

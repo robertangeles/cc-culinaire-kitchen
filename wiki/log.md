@@ -4,6 +4,35 @@ Append-only. Newest entry on top.
 
 ---
 
+## 2026-05-03 (afternoon) — Mobile v1.2 unblock, cross-repo coordination, auto-injected shared-context hook
+
+Three concurrent work streams, all driven by the parallel mobile session.
+
+### Mobile v1.2 unblock — commit `62ce119`
+
+The mobile session asked (URGENT in `mobile-needs.md`) for an FR placeholder slug + a feature-flag endpoint so the v1.2 language picker could be tested end-to-end without waiting for the authored translation + eval pass. Shipped both:
+
+- **FR placeholder.** [packages/server/src/scripts/createFrPlaceholderPrompt.ts](../packages/server/src/scripts/createFrPlaceholderPrompt.ts) — idempotent one-shot that inserts a device-runtime `prompt` row with key `antoine-system-prompt-fr`. Body is the EN body verbatim with `[PLACEHOLDER — pending culinary review, not production-ready]` as the first line so no downstream reader can mistake it for the authored translation. Reachable at `GET /api/mobile/prompts/antoine-system-prompt-fr` via the existing route — no controller change required.
+- **`GET /api/mobile/feature-flags`** — new route, Bearer-authed, reuses the 30 req/min `mobilePromptRateLimit`. Sets `Cache-Control: public, max-age=3600` (drops to private/no-store if per-user flags are added later). Response shape `{ "languages_enabled": ["en"] }` driven by a new `mobile_languages_enabled` site setting (JSON-encoded array). Service falls back to `["en"]` on parse failure so the mobile picker always has at least the default. Forward-compatible — adding a `features` map later won't break older mobile clients. Tests cover parse fallbacks, cache header, error pass-through (13 new tests; server suite now 173 passing).
+
+### Cross-repo coordination
+
+Parallel mobile asks landed in shared-context throughout the day; this session owned the responses:
+
+- **`shared-context/api-contracts.md`** — rewritten. Endpoints A (Mobile Prompt Fetch), B (Mobile RAG Retrieval), C (Mobile Feature Flags), and D (Public Site Pages with the `?surface=` query param) all populated with auth, rate limits, response shapes, and behavioural notes. Authentication and Subscription Verification still TBD.
+- **`shared-context/decisions.md`** — appended a durable record: mobile consumes Terms + Privacy via the JSON site-pages API scoped by surface, not by linking out to the web HTML pages.
+- **`shared-context/mobile-needs.md`** — both today's mobile asks marked complete with URLs, repro commands, and cache-header notes.
+
+A late-afternoon mobile ask landed (`mobile-needs.md` head): prod `GET /api/site-pages/{terms,privacy}?surface=mobile` still returning 404 despite Robert ticking Published in the admin. Working hypothesis from mobile: the admin UI was toggling the **web**-surface rows, not the mobile ones — i.e. either the `Settings → Mobile → Pages` tab is wired to the wrong surface or Robert clicked under `Settings → Web → Pages` by accident. Open; not yet investigated.
+
+### Auto-injected shared-context (hook)
+
+Wired a `UserPromptSubmit` hook in [.claude/settings.local.json](../.claude/settings.local.json) that runs before every prompt and injects the head of `mobile-needs.md` and `decisions.md` (~80 lines each, with mtime headers) wrapped in `<system-reminder>`. Trade: ~10 KB of context per turn for cross-repo awareness without manual prompting. Confirmed firing this session — no longer need the user to nudge me with "check shared context".
+
+Recommended reading order for any future session: this entry, then `mobile-needs.md` head (already auto-injected), then `decisions.md` head (also auto-injected). Older entries from earlier today below.
+
+---
+
 ## 2026-05-03 — Settings scope clarity + dead `knowledge-base/` folder removed
 
 **Settings reorganised by app surface.** The Settings sidebar now groups tabs under **Web / Mobile / Shared**. Empty primary groups still render their header with a "No tabs yet" hint so the cherry-pick targets stay visible. Tab placement is configurable via a new optional `group` field on the tab registry in [SettingsLayout.tsx](../packages/client/src/components/settings/SettingsLayout.tsx).
