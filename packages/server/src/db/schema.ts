@@ -147,6 +147,43 @@ export const siteSetting = pgTable("site_setting", {
   updatedDttm: timestamp("updated_dttm").notNull().defaultNow(),
 });
 
+/**
+ * The `site_page` table stores admin-editable static content (Terms of
+ * Service, Privacy Policy, About, etc.) keyed by URL slug. The body is
+ * stored as markdown; rendering happens client-side via react-markdown.
+ *
+ * `published_ind` gates public visibility — drafts return 404 to anyone
+ * but Administrators. `surface` partitions content per app: 'web' rows
+ * back the web client's /terms /privacy etc.; 'mobile' rows back the
+ * companion app's equivalent screens. Each surface owns its own copy
+ * because the legal text usually differs between surfaces. The two
+ * reserved slugs ('terms', 'privacy') are seeded for both surfaces and
+ * the service layer refuses to delete them.
+ *
+ * Composite unique on (slug, surface) so each surface can independently
+ * own a row called 'terms', 'privacy', etc.
+ *
+ * OLTP table, 2NF — every non-key column depends only on page_id.
+ */
+export const sitePage = pgTable(
+  "site_page",
+  {
+    pageId: uuid("page_id").defaultRandom().primaryKey(),
+    slug: varchar("slug", { length: 80 }).notNull(),
+    surface: varchar("surface", { length: 20 }).notNull().default("web"),
+    title: varchar("title", { length: 200 }).notNull(),
+    bodyMd: text("body_md").notNull().default(""),
+    publishedInd: boolean("published_ind").notNull().default(false),
+    createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
+    updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    // Each surface owns its own row per slug — admins manage 'terms' for web
+    // and 'terms' for mobile independently.
+    slugSurfaceUnq: uniqueIndex("site_page_slug_surface_unq").on(table.slug, table.surface),
+  }),
+);
+
 // ---------------------------------------------------------------------------
 // Auth & User Management Tables
 // ---------------------------------------------------------------------------

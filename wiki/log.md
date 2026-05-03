@@ -4,6 +4,31 @@ Append-only. Newest entry on top.
 
 ---
 
+## 2026-05-03 — Settings scope clarity + dead `knowledge-base/` folder removed
+
+**Settings reorganised by app surface.** The Settings sidebar now groups tabs under **Web / Mobile / Shared**. Empty primary groups still render their header with a "No tabs yet" hint so the cherry-pick targets stay visible. Tab placement is configurable via a new optional `group` field on the tab registry in [SettingsLayout.tsx](../packages/client/src/components/settings/SettingsLayout.tsx).
+
+Two existing single-tab features were extended to support per-surface scoping using the same pattern:
+- **Prompts** — `PromptsTab` accepts `runtimeFilter` (`"server" | "device"`); registry now has a Mobile-scoped Prompts tab (`runtime='device'`) and the Shared one filters to `runtime='server'`. Antoine and the other on-device prompts now appear under Mobile → Prompts only.
+- **Pages** — `PagesTab` accepts `surface` (`"web" | "mobile"`). The `site_page` table gained a `surface` column with composite unique on `(slug, surface)`, applied to the remote DB via a one-shot idempotent script ([addSitePageSurface.ts](../packages/server/src/scripts/addSitePageSurface.ts)) because `drizzle-kit push` was hanging on an interactive prompt even with `--force`. Reserved slugs (`terms`, `privacy`) are now seeded for both surfaces; the mobile app's legal copy is fully separate from the web's.
+
+**Knowledge base folder removed.** The top-level `knowledge-base/` folder (10 markdown files seeded in the project's earliest weeks) had no runtime consumer — no `fs.readFile`, no `readdir`, no SHA-256 sync. The wiki page describing it was actively wrong about boot-time behaviour. Removed via `git rm -r knowledge-base/` (recoverable from history) and rewrote [raw-index/knowledge-base.md](raw-index/knowledge-base.md) to point at the actual source of truth: the `knowledge_document` + `knowledge_document_chunk` Postgres tables, authored through Settings → Knowledge Base.
+
+**Prompts folder pruned.** Audit found the `prompts/` folder was genuinely live but had drifted. The `seed.ts` recipe-lab block referenced three files that either never existed (`recipePromptV2.md`) or had been deliberately deleted in Phase 8 (`patisseriePrompt.md`, `spiritsPrompt.md`). The `try/catch` wrapper meant `pnpm db:seed` was silently failing for three of four recipe-lab prompts on every fresh deploy. Per the Phase 8 commit message ("Recipe prompts moved from MD files to database (admin-editable)"), the deliberate target state is DB-only authoring through Settings → Mobile → Prompts. Cleaned up:
+- Removed the `recipePrompts[]` seeding block + `RECIPE_PROMPTS_DIR` constant from `packages/server/src/db/seed.ts`.
+- Deleted `prompts/recipe/patisseriePromptV2.md`, `prompts/recipe/spiritsPromptV2.md`, and `packages/server/src/db/migrations/update-domain-prompts-v2.ts` — the V2 files only existed as inputs to that one-shot migration, which has long since been applied.
+- Deleted the duplicate `prompts/recipe/recipeRefinementPrompt.md`; preserved the canonical `prompts/chatbot/recipeRefinementPrompt.md` as the runtime fallback for `promptService.loadPromptFromFile()` (which hard-codes `PROMPTS_DIR = prompts/chatbot`).
+- Updated [entities/prompt-system.md](entities/prompt-system.md) to reflect DB-as-source-of-truth, marked [decisions/duplicate-recipe-refinement-prompt.md](decisions/duplicate-recipe-refinement-prompt.md) RESOLVED, and ticked off the todo entry.
+
+End state of `prompts/`: just two files, both genuinely load-bearing — `prompts/chatbot/systemPrompt.md` (seed + runtime fallback) and `prompts/chatbot/recipeRefinementPrompt.md` (runtime fallback only).
+
+**Docs swept** to remove stale references and the fictitious `buildIndex()` startup step:
+- `CLAUDE.md` — folder listing trimmed; "Knowledge Base Structure" section rewritten to describe DB-backed storage; wiki rules updated to drop the `knowledge-base/` immutability claim.
+- `docs/architecture/overview.md`, `docs/architecture/technical-guide.md`, `docs/architecture/data-flow-diagrams.md` — folder listings trimmed; startup sequence corrected to `ensureSeededPages()` (truthful) instead of `buildIndex()` (never existed); Knowledge Base section rewritten around pgvector + admin UI.
+- `wiki/index.md`, `wiki/concepts/technical-architecture.md` — pointer entries updated.
+
+---
+
 ## 2026-04-30 — Ways of working: every PR ships with a structured description
 
 **What was established**

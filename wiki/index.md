@@ -53,7 +53,7 @@ Categories: **entity** (named things) · **concept** (patterns) · **decision** 
 | Page | Summary | Created |
 |---|---|---|
 | [OpenRouter Migration](decisions/openrouter-migration.md) | Replaced direct AI provider keys with one OpenRouter gateway for chat/embeddings/web-search/image-gen | 2026-04-29 |
-| [Duplicate recipeRefinementPrompt.md — pending cleanup](decisions/duplicate-recipe-refinement-prompt.md) | Two byte-identical copies; canonical = `prompts/chatbot/`, the `prompts/recipe/` copy is dead | 2026-04-29 |
+| [Duplicate recipeRefinementPrompt.md — RESOLVED](decisions/duplicate-recipe-refinement-prompt.md) | Resolved 2026-05-03; the dead `prompts/recipe/` copy was deleted, the canonical `prompts/chatbot/` copy stays as runtime fallback | 2026-05-03 |
 | [CI Pipeline (GitHub Actions)](decisions/ci-pipeline.md) | Wire up the install→lint→typecheck→test→build pipeline CLAUDE.md described but had never existed on disk; triggered by 2026-04-29 Render deploy failure | 2026-04-29 |
 
 ## Synthesis
@@ -65,7 +65,7 @@ Categories: **entity** (named things) · **concept** (patterns) · **decision** 
 ## Raw-index (pointers to immutable source content)
 | Page | Summary | Created |
 |---|---|---|
-| [Knowledge Base (raw culinary content)](raw-index/knowledge-base.md) | Pointer to `knowledge-base/` — the curated culinary corpus synced into pgvector | 2026-04-29 |
+| [Knowledge Base (deprecated folder)](raw-index/knowledge-base.md) | Records the 2026-05-03 removal of `knowledge-base/`; explains where knowledge content actually lives (DB + admin UI) | 2026-05-03 |
 | [Landing Page Creative Brief](raw-index/landing-page-creative-brief.md) | Pointer to the April 2026 creative brief (immutable artefact) | 2026-04-29 |
 
 ## Session log

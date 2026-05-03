@@ -330,12 +330,6 @@ This is a **pnpm monorepo**. All application code lives under `packages/`.
           types/
           utils/
 
-    knowledge-base/
-      techniques/
-      pastry/
-      spirits/
-      ingredients/
-
     prompts/
       chatbot/
 
@@ -460,36 +454,22 @@ Migrations are managed via `drizzle-kit` and output to
 
 ------------------------------------------------------------------------
 
-# Knowledge Base Structure
+# Knowledge Base
 
-The chatbot uses curated culinary knowledge content.
+Curated culinary knowledge is stored in Postgres:
 
-    knowledge-base/
+- `knowledge_document` — one row per document (title, source, metadata).
+- `knowledge_document_chunk` — chunked text + pgvector embeddings.
 
-Example structure:
+Documents are authored and managed exclusively through the admin UI at
+**Settings → Knowledge Base** (`packages/client/src/components/settings/KnowledgeBaseTab.tsx`).
+Server-side ingest goes through `packages/server/src/services/knowledgeManagementService.ts`;
+the chatbot reads via `searchKnowledge` / `readKnowledgeDocument` in
+`knowledgeService.ts`, and the mobile RAG endpoint reads via
+`retrieveForMobile`.
 
-    knowledge-base/
-
-    techniques/
-      searing.md
-      emulsions.md
-      braising.md
-
-    pastry/
-      custards.md
-      doughs.md
-      creams.md
-
-    spirits/
-      cocktail-structures.md
-      classic-cocktails.md
-
-    ingredients/
-      herbs.md
-      acids.md
-      fats.md
-
-Claude must not embed large knowledge documents inside code files.
+Claude must not embed large knowledge documents inside code files. Add new
+content through the admin UI, not by checking files into the repo.
 
 ------------------------------------------------------------------------
 
@@ -794,11 +774,11 @@ Update `wiki/log.md` with a summary of what was done and decided today.
 - `wiki/concepts/` — patterns and ideas: technical architecture, data flow, fine-tuning approach, RAG architecture, voice persona design
 - `wiki/decisions/` — architectural decisions with date and rationale
 - `wiki/synthesis/` — cross-cutting analysis, lessons, open questions
-- `wiki/raw-index/` — pointer pages to immutable source content that lives elsewhere (`knowledge-base/`, `prompts/`, briefs). The wiki documents these without owning or relocating them.
-- `raw/` is conceptual — there is no literal `raw/` folder. Files like `knowledge-base/*` and `prompts/*` are immutable source content but stay where they are because code reads them at runtime.
+- `wiki/raw-index/` — pointer pages to source content that lives elsewhere (`prompts/`, briefs). The wiki documents these without owning or relocating them.
+- `raw/` is conceptual — there is no literal `raw/` folder. Files like `prompts/*` are immutable source content but stay where they are because code reads them at runtime.
 - Always update `wiki/index.md` when creating a new wiki page
 - Always append to `wiki/log.md` when modifying the wiki
-- Never modify content under `knowledge-base/` or `prompts/` without understanding the runtime sync path (SHA-256 embedding sync, prompt loader). Treat both as immutable source.
+- Never modify content under `prompts/` without understanding the runtime path (the prompt loader and the mobile prompt-fetch route read from it). Treat as immutable source. Knowledge content is now DB-backed (`knowledge_document` + `knowledge_document_chunk`); edit through Settings → Knowledge Base.
 
 ## Wiki page format
 Every wiki page must start with:

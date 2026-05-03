@@ -22,6 +22,7 @@ import { Footer } from "./components/layout/Footer.js";
 import { ChatPage } from "./pages/ChatPage.js";
 import { SettingsPage } from "./pages/SettingsPage.js";
 import { LoginPage } from "./pages/LoginPage.js";
+import { PublicPage } from "./components/legal/PublicPage.js";
 import { RegisterPage } from "./pages/RegisterPage.js";
 import { VerifyEmailPage } from "./pages/VerifyEmailPage.js";
 import { ForgotPasswordPage } from "./pages/ForgotPasswordPage.js";
@@ -121,6 +122,11 @@ export function App() {
               <Route path="/verify-email" element={<VerifyEmailPage />} />
               <Route path="/forgot-password" element={<ForgotPasswordPage />} />
               <Route path="/reset-password" element={<ResetPasswordPage />} />
+
+              {/* Public site_page routes */}
+              <Route path="/terms" element={<PublicPage slug="terms" />} />
+              <Route path="/privacy" element={<PublicPage slug="privacy" />} />
+              <Route path="/pages/:slug" element={<PublicPage />} />
 
               {/* Protected app routes (with sidebar + footer) */}
               <Route

@@ -29,15 +29,33 @@ import {
   Server,
 } from "lucide-react";
 
+/** Props for {@link PromptsTab}. */
+interface PromptsTabProps {
+  /**
+   * Limit the list (and the create-form default) to a single runtime.
+   * Omit to show all prompts regardless of runtime.
+   */
+  runtimeFilter?: "server" | "device";
+}
+
 /**
  * Renders the multi-prompt management interface within the Settings page.
  * Left sidebar lists all prompts; right panel shows the editor for the
  * selected prompt.
+ *
+ * When {@link PromptsTabProps.runtimeFilter} is set, the list is restricted
+ * to prompts of that runtime and the create form defaults to the same
+ * runtime — used by the Mobile Prompts tab to scope to device-runtime
+ * prompts only.
  */
-export function PromptsTab() {
-  const { prompts, isLoading: listLoading, error: listError, refresh, create } = usePromptList();
+export function PromptsTab({ runtimeFilter }: PromptsTabProps = {}) {
+  const { prompts: allPrompts, isLoading: listLoading, error: listError, refresh, create } = usePromptList();
   const [selectedName, setSelectedName] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+
+  const prompts = runtimeFilter
+    ? allPrompts.filter((p) => p.runtime === runtimeFilter)
+    : allPrompts;
 
   // Auto-select first prompt once loaded
   const activeName = selectedName ?? (prompts.length > 0 ? prompts[0].promptName : null);
@@ -99,6 +117,7 @@ export function PromptsTab() {
             }}
             onCancel={() => setShowCreate(false)}
             create={create}
+            defaultRuntime={runtimeFilter ?? "server"}
           />
         ) : activeName ? (
           <PromptEditor name={activeName} />
@@ -450,17 +469,19 @@ interface CreatePromptFormProps {
     modelId?: string | null,
     runtime?: "server" | "device",
   ) => Promise<PromptSummary>;
+  /** Initial runtime selection when the form opens. Defaults to `"server"`. */
+  defaultRuntime?: "server" | "device";
 }
 
 /**
  * Inline form for creating a new prompt. Shows name input, auto-generated
  * key preview, runtime selector, and a content textarea.
  */
-function CreatePromptForm({ onCreated, onCancel, create }: CreatePromptFormProps) {
+function CreatePromptForm({ onCreated, onCancel, create, defaultRuntime = "server" }: CreatePromptFormProps) {
   const [name, setName] = useState("");
   const [content, setContent] = useState("");
   const [newModelId, setNewModelId] = useState<string | null>(null);
-  const [runtime, setRuntime] = useState<"server" | "device">("server");
+  const [runtime, setRuntime] = useState<"server" | "device">(defaultRuntime);
   const { models: availableModels } = useModelOptions();
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState("");

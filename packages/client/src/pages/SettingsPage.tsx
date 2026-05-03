@@ -10,6 +10,7 @@ import { useState } from "react";
 import { SettingsLayout } from "../components/settings/SettingsLayout.js";
 import { PromptsTab } from "../components/settings/PromptsTab.js";
 import { SiteSettingsTab } from "../components/settings/SiteSettingsTab.js";
+import { PagesTab } from "../components/settings/PagesTab.js";
 import { AppearanceTab } from "../components/settings/AppearanceTab.js";
 import { UsersTab } from "../components/settings/UsersTab.js";
 import { RolesTab } from "../components/settings/RolesTab.js";
@@ -27,8 +28,11 @@ export function SettingsPage() {
 
   return (
     <SettingsLayout activeTab={activeTab} onTabChange={setActiveTab}>
-      {activeTab === "prompts" && <PromptsTab />}
+      {activeTab === "prompts" && <PromptsTab runtimeFilter="server" />}
+      {activeTab === "mobilePrompts" && <PromptsTab runtimeFilter="device" />}
       {activeTab === "siteSettings" && <SiteSettingsTab />}
+      {activeTab === "pages" && <PagesTab surface="web" />}
+      {activeTab === "mobilePages" && <PagesTab surface="mobile" />}
       {activeTab === "appearance" && <AppearanceTab />}
       {activeTab === "users" && <UsersTab />}
       {activeTab === "roles" && <RolesTab />}

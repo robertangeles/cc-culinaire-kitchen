@@ -14,6 +14,8 @@ export interface PromptSummary {
   promptName: string;
   promptKey: string | null;
   modelId: string | null;
+  /** Where this prompt is invoked. `"server"` is the default. */
+  runtime: "server" | "device";
   updatedDttm: string;
   createdDttm: string;
 }
