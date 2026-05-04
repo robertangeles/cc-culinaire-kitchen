@@ -81,7 +81,7 @@ const WinePairingSchema = z.object({
  * Includes editorial depth, flavor balance, nutrition, virality elements,
  * and optional wine pairing.
  */
-export const RecipeOutputSchema = z.object({
+const RecipeOutputSchema = z.object({
   // Core fields
   name: z.string(),
   description: z.string(),

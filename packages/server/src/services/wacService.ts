@@ -172,35 +172,10 @@ export async function recompute(
  *
  * Throws today so a stray caller doesn't silently no-op.
  */
-export async function reverseOnVoid(_voidedReceivingSessionId: string): Promise<never> {
+async function reverseOnVoid(_voidedReceivingSessionId: string): Promise<never> {
   throw new Error(
     "wacService.reverseOnVoid is not yet implemented — confirmed receipts are terminal in Phase 1. " +
       "Add the admin void path before wiring this up.",
   );
 }
 
-/**
- * Read the cached WAC for a (location, ingredient) pair. Returns null if no
- * receiving has happened yet. The Menu Intelligence P&L view consumes this.
- */
-export async function getWac(
-  storeLocationId: string,
-  ingredientId: string,
-): Promise<{ wac: string | null; recomputedAt: Date | null }> {
-  const [row] = await db
-    .select({
-      wac: locationIngredient.weightedAverageCost,
-      recomputedAt: locationIngredient.wacLastRecomputedAt,
-    })
-    .from(locationIngredient)
-    .where(
-      and(
-        eq(locationIngredient.storeLocationId, storeLocationId),
-        eq(locationIngredient.ingredientId, ingredientId),
-      ),
-    );
-  return {
-    wac: row?.wac ?? null,
-    recomputedAt: row?.recomputedAt ?? null,
-  };
-}

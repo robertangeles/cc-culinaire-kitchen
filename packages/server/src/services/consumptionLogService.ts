@@ -466,7 +466,7 @@ export async function deleteConsumptionLog(
 // 6. getConsumptionByIngredient
 // ---------------------------------------------------------------------------
 
-export async function getConsumptionByIngredient(
+async function getConsumptionByIngredient(
   ingredientId: string,
   locationId: string,
   days: number,

@@ -369,7 +369,7 @@ export async function savePrompt(
  * @param name - Logical prompt identifier.
  * @returns The default prompt body text.
  */
-export async function getDefaultPrompt(name: string): Promise<string> {
+async function getDefaultPrompt(name: string): Promise<string> {
   const rows = await db
     .select({ promptBody: prompt.promptBody })
     .from(prompt)

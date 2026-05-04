@@ -801,7 +801,7 @@ export async function generateMfaSecret(userId: number) {
 /**
  * Verifies a TOTP code against the user's stored MFA secret.
  */
-export async function verifyMfaToken(userId: number, token: string): Promise<boolean> {
+async function verifyMfaToken(userId: number, token: string): Promise<boolean> {
   const [row] = await db.select().from(user).where(eq(user.userId, userId));
   if (!row || !row.mfaSecret) return false;
   const result = await otpVerify({ token, secret: row.mfaSecret });

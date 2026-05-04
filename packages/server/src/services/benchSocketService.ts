@@ -61,10 +61,6 @@ const typingMap = new Map<string, Map<number, { userName: string; timeout: Retur
 
 let io: Server;
 
-export function getIO(): Server {
-  return io;
-}
-
 function addUserSocket(userId: number, profile: UserProfile) {
   userProfiles.set(userId, profile);
   userSocketCount.set(userId, (userSocketCount.get(userId) ?? 0) + 1);
@@ -351,10 +347,6 @@ export function initBenchSocket(httpServer: HttpServer): void {
   });
 
   logger.info("The Bench Socket.io initialized");
-}
-
-export function getOnlineUsers(_channelKey: string) {
-  return getAllOnlineUsers();
 }
 
 // ── Typing helpers ────────────────────────────────────────────

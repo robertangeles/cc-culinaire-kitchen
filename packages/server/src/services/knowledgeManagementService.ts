@@ -334,7 +334,7 @@ function validateUrlSafety(url: string): void {
  * Uses paragraph breaks (`\n\n`) as soft boundaries. If a single
  * paragraph exceeds `maxTokens`, it falls back to sentence splitting.
  */
-export function chunkText(
+function chunkText(
   text: string,
   maxTokens = 1000,
   overlap = 200,

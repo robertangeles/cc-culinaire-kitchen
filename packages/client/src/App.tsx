@@ -51,7 +51,7 @@ const LandingPage = lazy(() => import("./pages/LandingPage.js"));
  * Incrementing chatKey changes the `key` prop on the ChatPage element, which
  * unmounts and remounts it even if the URL is already "/chat/new".
  */
-export const ChatKeyContext = createContext<{ chatKey: number; incrementChatKey: () => void }>({
+const ChatKeyContext = createContext<{ chatKey: number; incrementChatKey: () => void }>({
   chatKey: 0,
   incrementChatKey: () => {},
 });

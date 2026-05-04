@@ -202,7 +202,7 @@ export async function dismiss(notificationId: string, userId: number) {
  * Find all users in an org with a specific permission.
  * Used for notifying all HQ admins of pending approvals.
  */
-export async function getUsersWithPermission(
+async function getUsersWithPermission(
   orgId: number,
   permissionKey: string,
 ): Promise<Array<{ userId: number; userEmail: string; userName: string }>> {

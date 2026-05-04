@@ -35,7 +35,7 @@ export interface ThresholdResult {
  * Checks location-specific override first, then org default.
  * Returns null if no threshold is configured (all POs go direct).
  */
-export async function getThreshold(
+async function getThreshold(
   orgId: number,
   locationId: string,
 ): Promise<number | null> {
@@ -71,7 +71,7 @@ export async function getThreshold(
  * Calculate PO total value SERVER-SIDE from DB prices.
  * Never trust client-submitted values for threshold calculation.
  */
-export async function calculatePOTotal(poId: string): Promise<number> {
+async function calculatePOTotal(poId: string): Promise<number> {
   const lines = await db
     .select({
       orderedQty: purchaseOrderLine.orderedQty,

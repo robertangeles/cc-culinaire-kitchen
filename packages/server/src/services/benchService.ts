@@ -113,11 +113,6 @@ export async function updateChannelBanner(channelKey: string, banner: string) {
     .where(eq(benchChannel.channelKey, channelKey));
 }
 
-export async function getChannelBanner(channelKey: string): Promise<string | null> {
-  const ch = await getChannelByKey(channelKey);
-  return ch?.channelBanner ?? null;
-}
-
 // ---------------------------------------------------------------------------
 // Message operations
 // ---------------------------------------------------------------------------
@@ -374,10 +369,6 @@ async function getReactionsForMessages(messageIds: string[]) {
 // ---------------------------------------------------------------------------
 // Mention operations
 // ---------------------------------------------------------------------------
-
-export async function createMention(messageId: string, mentionedUserId: number) {
-  await db.insert(benchMention).values({ messageId, mentionedUserId });
-}
 
 export async function getUnreadMentions(userId: number) {
   const rows = await db

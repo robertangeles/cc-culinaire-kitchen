@@ -992,7 +992,7 @@ export function usePurchaseOrders(locationId: string | null) {
 
 // ─── useConsumptionSummary ───────────────────────────────────────
 
-export function useConsumptionSummary() {
+function useConsumptionSummary() {
   const [summary, setSummary] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
 

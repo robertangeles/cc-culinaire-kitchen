@@ -146,7 +146,7 @@ export async function listCredentials(): Promise<CredentialListItem[]> {
  * Get the decrypted value for a single credential key.
  * Returns from cache if available, otherwise queries DB.
  */
-export async function getCredentialValue(key: string): Promise<string | null> {
+async function getCredentialValue(key: string): Promise<string | null> {
   if (cache?.has(key)) return cache.get(key)!;
 
   const rows = await db

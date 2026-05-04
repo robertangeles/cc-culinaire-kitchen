@@ -82,7 +82,7 @@ export async function addStock(
  * Pass `tx` from a surrounding `db.transaction()` to make the read+update
  * atomic with other operations in the same logical event.
  */
-export async function deductStock(
+async function deductStock(
   storeLocationId: string,
   ingredientId: string,
   deductQty: number,

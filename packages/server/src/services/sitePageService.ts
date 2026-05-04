@@ -170,5 +170,3 @@ export async function deletePage(
     .returning({ pageId: sitePage.pageId });
   return { deleted: result.length > 0 };
 }
-
-export const __test = { RESERVED_SLUGS, SURFACES };
