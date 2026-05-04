@@ -7,6 +7,7 @@
  */
 
 import { rateLimit } from "express-rate-limit";
+import { createHash } from "crypto";
 import type { Request } from "express";
 
 /**
@@ -66,4 +67,37 @@ export const mobileRagRateLimit = rateLimit({
     return req.ip ?? "unknown";
   },
   message: { error: "Too many retrieval requests — please slow down before trying again." },
+});
+
+/**
+ * Rate limiter for the mobile feedback endpoint (`POST /api/mobile/feedback`).
+ *
+ * Per `needs-frontend.md` 2026-05-04:
+ *   - **10 / hour** for authenticated users (keyed by user_id)
+ *   - **3 / hour** per IP for anonymous submissions (login-screen path)
+ *
+ * Anonymous IPs are stored as a one-way SHA-256 hash so the rate-limiter's
+ * in-memory key store never holds a recoverable IP. The DB row itself
+ * never receives any IP information — that invariant is enforced in the
+ * controller, not here.
+ *
+ * `standardHeaders: "draft-8"` causes the `Retry-After` header to be sent
+ * on 429 responses, which the mobile client parses for the cooldown
+ * countdown UX (`ApiError.retryAfter`). Do NOT remove that flag without
+ * coordinating a mobile change.
+ */
+export const feedbackRateLimit = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  limit: (req: Request) => (req.user?.sub ? 10 : 3),
+  keyGenerator: (req: Request) => {
+    if (req.user?.sub) return `feedback-user-${req.user.sub}`;
+    // Defense-in-depth: hash the IP so the in-memory key store never
+    // holds a recoverable IP for anon submitters.
+    const ip = req.ip ?? "unknown";
+    const hash = createHash("sha256").update(ip).digest("hex").slice(0, 32);
+    return `feedback-ip-${hash}`;
+  },
+  message: { error: "rate_limited" },
 });

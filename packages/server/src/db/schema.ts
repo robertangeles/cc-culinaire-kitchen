@@ -27,6 +27,7 @@ import {
   smallint,
   numeric,
   date,
+  check,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
@@ -2181,5 +2182,92 @@ export const ingredientAlias = pgTable(
     index("idx_ingredient_alias_ingredient").on(table.ingredientId),
     // Recipe import hot path: "match this alias text in this org"
     index("idx_ingredient_alias_org").on(table.organisationId),
+  ],
+);
+
+/**
+ * The `ckm_feedback` table holds in-app bug / feature / feedback submissions
+ * from the CulinAIre Kitchen Mobile companion app. Both authenticated and
+ * anonymous submissions land here — anon rows have `user_id = NULL` and
+ * `anonymous_ind = true`, set by the optional-Bearer middleware.
+ *
+ * Naming deviation: the `ckm_` prefix is contractual with the mobile project
+ * (per shared-context `needs-frontend.md` 2026-05-04). It namespaces tables
+ * that are written to by the mobile build but never the web app — useful for
+ * future ops queries like "purge all mobile-only data for a deleted user".
+ *
+ * Privacy invariants enforced server-side, NOT in schema:
+ *   - `body` is human prose; never parsed, scanned, LLM-ified, or indexed.
+ *   - `device_info` JSONB is `z.object({...}).strict()` at the API boundary
+ *     so any new key requires explicit privacy review + a coordinated
+ *     mobile/server change.
+ *   - `screenshot_base64` is stored as-is. No EXIF strip, no OCR.
+ *   - Anon submissions: rate limit may key on a one-way hash of IP that is
+ *     NOT retrievable from the row (`user_id IS NULL` rows contain no IP).
+ *
+ * Email forwarding is async: the POST returns 201 the moment the insert
+ * succeeds; a 5-min retry interval scans
+ * `email_send_attempts < 5 AND email_sent_dttm IS NULL` and POSTs to Resend.
+ * The partial index below serves that exact query.
+ *
+ * CHECK constraints (added in the migration SQL, not the Drizzle types):
+ *   - `category IN ('bug','feature','feedback')`
+ *   - `length(body) <= 4000`
+ *
+ * OLTP table, 2NF — every non-key column depends on feedback_id.
+ */
+export const ckmFeedback = pgTable(
+  "ckm_feedback",
+  {
+    feedbackId: serial("feedback_id").primaryKey(),
+    /** NULL when the submission is anonymous (login screen path). */
+    userId: integer("user_id").references(() => user.userId, { onDelete: "set null" }),
+    /** True when the submission is anonymous. Mirrored from the request context. */
+    anonymousInd: boolean("anonymous_ind").notNull().default(false),
+    /** One of 'bug', 'feature', 'feedback'. CHECK constraint in migration. */
+    category: varchar("category", { length: 20 }).notNull(),
+    subject: varchar("subject", { length: 120 }).notNull(),
+    /** Free-text body. CHECK length(body) <= 4000 in migration. */
+    body: text("body").notNull(),
+    /** From the X-Mobile-App-Version header. Indexed for "all reports from app vN" queries. */
+    appVersion: varchar("app_version", { length: 32 }).notNull(),
+    /**
+     * Closed-shape JSONB with device_model / os_name / os_version / locale /
+     * app_version. Validated `.strict()` at the controller; any new key
+     * requires explicit privacy review.
+     */
+    deviceInfo: jsonb("device_info"),
+    /** Inline base64 (≤500 KB after client downscale). v1.4 may migrate to R2. */
+    screenshotBase64: text("screenshot_base64"),
+    /** Set by the retry job once Resend accepts the email. */
+    emailSentDttm: timestamp("email_sent_dttm", { withTimezone: true }),
+    /** Bumped per attempt; capped at 5 in the retry job. */
+    emailSendAttempts: smallint("email_send_attempts").notNull().default(0),
+    createdDttm: timestamp("created_dttm", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    // FK index: "list this user's feedback submissions"
+    index("idx_ckm_feedback_user").on(table.userId),
+    // "recent feedback first" (admin triage view, future)
+    index("idx_ckm_feedback_created").on(table.createdDttm),
+    // "all bug reports" / "all feature requests" filter
+    index("idx_ckm_feedback_category").on(table.category),
+    // Partial index for the 5-min retry job hot path:
+    //   WHERE email_sent_dttm IS NULL AND email_send_attempts < 5
+    index("idx_ckm_feedback_pending_send")
+      .on(table.emailSendAttempts)
+      .where(sql`email_sent_dttm IS NULL`),
+    // CHECK: category is one of the three contractual values. Belt-and-braces
+    // with the controller's zod enum — defends against direct SQL writes.
+    check(
+      "ckm_feedback_category_check",
+      sql`${table.category} IN ('bug', 'feature', 'feedback')`,
+    ),
+    // CHECK: body length cap, per the API contract. Defends against any
+    // future direct INSERT bypassing the zod validation in the controller.
+    check(
+      "ckm_feedback_body_length_check",
+      sql`length(${table.body}) <= 4000`,
+    ),
   ],
 );

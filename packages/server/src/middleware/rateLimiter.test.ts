@@ -35,10 +35,10 @@ describe("rateLimiter — chatRateLimit config", () => {
   it("constructs with 20 requests per 60 seconds", async () => {
     await import("./rateLimiter.js");
 
-    // Three limiters are constructed: chat + mobile prompt + mobile RAG.
-    // Assert call count first so we catch any future limiter being added
-    // or removed silently.
-    expect(mockRateLimit).toHaveBeenCalledTimes(3);
+    // Four limiters are constructed: chat + mobile prompt + mobile RAG +
+    // mobile feedback. Assert call count first so we catch any future
+    // limiter being added or removed silently.
+    expect(mockRateLimit).toHaveBeenCalledTimes(4);
 
     const chatConfig = mockRateLimit.mock.calls[0][0] as Record<string, unknown>;
     expect(chatConfig.limit).toBe(20);
@@ -157,5 +157,60 @@ describe("rateLimiter — mobileRagRateLimit config", () => {
     const ragConfig = mockRateLimit.mock.calls[2][0] as Record<string, unknown>;
     expect(ragConfig.standardHeaders).toBe("draft-8");
     expect(ragConfig.legacyHeaders).toBe(false);
+  });
+});
+
+describe("rateLimiter — feedbackRateLimit config", () => {
+  beforeEach(() => {
+    mockRateLimit.mockClear();
+    vi.resetModules();
+  });
+
+  it("constructs with a 1-hour window", async () => {
+    // Per `needs-frontend.md` 2026-05-04: 10/hr/user (auth), 3/hr/IP (anon).
+    // The window is locked to 1 hour; the per-request `limit` function is
+    // exercised separately below.
+    await import("./rateLimiter.js");
+
+    const config = mockRateLimit.mock.calls[3][0] as Record<string, unknown>;
+    expect(config.windowMs).toBe(60 * 60 * 1000);
+  });
+
+  it("returns 10 for authenticated requests, 3 for anonymous (limit fn)", async () => {
+    await import("./rateLimiter.js");
+
+    const config = mockRateLimit.mock.calls[3][0] as {
+      limit: (req: unknown) => number;
+    };
+    expect(config.limit({ user: { sub: 1 } })).toBe(10);
+    expect(config.limit({})).toBe(3);
+  });
+
+  it("hashes the IP for anonymous keying (privacy invariant)", async () => {
+    // The privacy contract: the rate-limiter store must not hold a
+    // recoverable IP. We assert the key shape includes `feedback-ip-` and
+    // is NOT the raw IP. This catches a future refactor that swaps in
+    // `req.ip` directly.
+    await import("./rateLimiter.js");
+
+    const config = mockRateLimit.mock.calls[3][0] as {
+      keyGenerator: (req: unknown) => string;
+    };
+    const key = config.keyGenerator({ ip: "1.2.3.4" });
+    expect(key.startsWith("feedback-ip-")).toBe(true);
+    expect(key).not.toContain("1.2.3.4");
+
+    // Auth path uses user-keyed bucket.
+    expect(config.keyGenerator({ user: { sub: 7 } })).toBe("feedback-user-7");
+  });
+
+  it("returns standardised draft-8 rate limit headers (Retry-After on 429)", async () => {
+    // Mobile parses Retry-After for the cooldown countdown UX
+    // (`ApiError.retryAfter`). draft-8 includes Retry-After automatically.
+    await import("./rateLimiter.js");
+
+    const config = mockRateLimit.mock.calls[3][0] as Record<string, unknown>;
+    expect(config.standardHeaders).toBe("draft-8");
+    expect(config.legacyHeaders).toBe(false);
   });
 });

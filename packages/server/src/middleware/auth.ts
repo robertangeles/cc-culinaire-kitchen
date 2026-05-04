@@ -52,6 +52,35 @@ export function authenticate(req: Request, res: Response, next: NextFunction) {
 }
 
 /**
+ * Optional-auth variant: attaches `req.user` when a valid token is present
+ * and silently continues (with `req.user` undefined) when none is — never
+ * 401s. For endpoints that accept BOTH signed-in and anonymous traffic, e.g.
+ * `POST /api/mobile/feedback` where the login screen submits anonymously
+ * before the user has an account.
+ *
+ * An *invalid* (malformed / expired) token is still 401 — silently treating
+ * a forged token as anonymous would be a downgrade-attack vector.
+ */
+export function authenticateOptional(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  const token = extractAccessToken(req);
+  if (!token) {
+    next();
+    return;
+  }
+
+  try {
+    req.user = verifyAccessToken(token);
+    next();
+  } catch {
+    res.status(401).json({ error: "Invalid or expired token." });
+  }
+}
+
+/**
  * Middleware factory that restricts access to users with any of the
  * specified roles.
  *

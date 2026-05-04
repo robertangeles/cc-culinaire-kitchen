@@ -16,6 +16,11 @@ import { promptsRouter } from "./routes/prompts.js";
 import { mobilePromptsRouter } from "./routes/mobilePrompts.js";
 import { mobileRagRouter } from "./routes/mobileRag.js";
 import { mobileFeatureFlagsRouter } from "./routes/mobileFeatureFlags.js";
+import { mobileFeedbackRouter } from "./routes/mobileFeedback.js";
+import {
+  assertFeedbackEmailConfig,
+  processPendingFeedbackEmails,
+} from "./services/feedbackService.js";
 import { conversationsRouter } from "./routes/conversations.js";
 import { settingsRouter } from "./routes/settings.js";
 import { publicSitePagesRouter, adminSitePagesRouter } from "./routes/sitePages.js";
@@ -110,6 +115,7 @@ app.use("/api/prompts", promptsRouter);
 app.use("/api/mobile/prompts", mobilePromptsRouter);
 app.use("/api/mobile/rag", mobileRagRouter);
 app.use("/api/mobile/feature-flags", mobileFeatureFlagsRouter);
+app.use("/api/mobile/feedback", mobileFeedbackRouter);
 app.use("/api/conversations", conversationsRouter);
 app.use("/api/settings", settingsRouter);
 app.use("/api/site-pages", publicSitePagesRouter);
@@ -345,6 +351,9 @@ app.use(errorHandler);
 // Start server: ensure encryption key exists, hydrate credentials, then build index
 ensureEncryptionKey();
 ensurePiiKeys();
+// Fail fast at boot if the feedback inbox isn't configured — silently
+// dropping feedback emails would be worse than refusing to start.
+assertFeedbackEmailConfig();
 hydrateEnvFromCredentials().then(() => {
   recoverStaleDocuments()
     .then((count) => {
@@ -391,6 +400,22 @@ hydrateEnvFromCredentials().then(() => {
       runRecipePurge();
       const purgeInterval = setInterval(runRecipePurge, 60 * 60 * 1000);
 
+      // Mobile feedback email retry — every 5 min. Async by design (per
+      // needs-frontend.md): the POST returns 201 the moment the row is
+      // inserted; this loop forwards each row to the RESEND_FEEDBACK_INBOX
+      // with exponential backoff (15 min × 2^attempts, capped at 5 tries).
+      async function runFeedbackEmailRetry() {
+        try {
+          await processPendingFeedbackEmails();
+        } catch (err) {
+          log.error({ err }, "Feedback email retry job failed");
+        }
+      }
+      // Defer the first run by 30 s so the server is fully warm before
+      // we start hitting Resend.
+      setTimeout(runFeedbackEmailRetry, 30_000);
+      const feedbackEmailInterval = setInterval(runFeedbackEmailRetry, 5 * 60 * 1000);
+
       // Weekly waste digest — Sunday 8 PM (check every minute)
       let lastWasteDigestRun = "";
       const wasteDigestInterval = setInterval(async () => {
@@ -413,6 +438,7 @@ hydrateEnvFromCredentials().then(() => {
         clearInterval(cleanupInterval);
         clearInterval(purgeInterval);
         clearInterval(wasteDigestInterval);
+        clearInterval(feedbackEmailInterval);
         httpServer.close(() => {
           log.info("Server closed");
           process.exit(0);
