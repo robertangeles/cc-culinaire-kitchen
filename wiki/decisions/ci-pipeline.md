@@ -72,7 +72,7 @@ What each step would catch in a regression:
 | Vite-specific config error | build | 5 |
 
 ## Known gap: lint
-CLAUDE.md lists `Lint (eslint)` as step 2 of the pipeline. **eslint is not installed anywhere in this repo** — no devDependency in any of the 3 packages, no `eslint.config.*` or `.eslintrc.*`, no rules. The per-package `"lint": "eslint src/"` scripts are broken stubs that error with "eslint is not recognized" when invoked.
+CLAUDE.md lists `Lint (eslint)` as step 2 of the pipeline. **eslint is not installed anywhere in this repo** — no devDependency in any of the 3 packages, no `eslint.config.*` or `.eslintrc.*`, no rules. The per-package `"lint": "eslint src/"` scripts were broken stubs that errored with "eslint is not recognized" when invoked, and were removed in Phase 6 of the dead-code-cleanup pass (package.json should not pretend to support a command that fails on every machine). They will be re-added when eslint is wired up.
 
 The CI workflow ships **without** the lint step, intentionally — running broken scripts in CI just guarantees a permanently-red pipeline.
 
@@ -80,8 +80,9 @@ To close the gap (separate piece of work, tracked in `tasks/todo.md`):
 1. Add `eslint` + relevant plugins (`@typescript-eslint/eslint-plugin`, `eslint-plugin-react`, `eslint-plugin-react-hooks` for client) as root devDependencies.
 2. Write a flat-config `eslint.config.js` at root, with package-specific overrides for client (React) vs server (Node) vs shared.
 3. Pick rules. Suggest starting with `@typescript-eslint/recommended` + project taste.
-4. Re-add the `Lint` step to `.github/workflows/ci.yml`.
-5. Update this page.
+4. Re-add `"lint": "eslint src/"` to each package's `scripts` and `"lint": "turbo run lint"` to the root.
+5. Re-add the `Lint` step to `.github/workflows/ci.yml`.
+6. Update this page.
 
 Out of scope for this CI work because rule selection is a taste decision worth its own discussion, and turning on lint with auto-discovered rules is likely to surface dozens of pre-existing issues that need triage.
 

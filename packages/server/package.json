@@ -13,7 +13,6 @@
     "db:deploy": "drizzle-kit push && tsx src/db/seed.ts",
     "db:studio": "drizzle-kit studio",
     "clean": "rm -rf dist",
-    "lint": "eslint src/",
     "test": "vitest run",
     "tsc:check": "tsc --noEmit"
   },
@@ -44,6 +43,7 @@
     "pino-pretty": "^13",
     "postgres": "^3",
     "qrcode": "^1.5.4",
+    "react": "^19",
     "resend": "^6.9.3",
     "socket.io": "^4.8.3",
     "stripe": "^20.4.1",

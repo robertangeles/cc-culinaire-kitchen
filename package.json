@@ -7,12 +7,12 @@
     "predev": "node scripts/kill-dev-ports.mjs",
     "dev": "turbo run dev",
     "build": "turbo run build",
-    "lint": "turbo run lint",
     "tsc:check": "turbo run tsc:check",
     "test": "turbo run test",
     "clean": "turbo run clean"
   },
   "devDependencies": {
+    "@vitest/coverage-v8": "^3",
     "turbo": "^2",
     "typescript": "^5.7"
   },
