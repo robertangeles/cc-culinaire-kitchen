@@ -128,7 +128,7 @@ export interface MenuForSelection {
  * Parse human-readable time strings into minutes.
  * Handles: "15 mins", "1 hour 30 mins", "45 minutes", "1h 30m", "2 hours"
  */
-export function parseTimeToMinutes(timeStr: string): number {
+function parseTimeToMinutes(timeStr: string): number {
   if (!timeStr) return 0;
   const s = timeStr.toLowerCase().trim();
 
@@ -155,7 +155,7 @@ export function parseTimeToMinutes(timeStr: string): number {
  * Parse yield/serving strings into a number.
  * Handles: "Serves 4", "Makes 12", "4 servings", "6", "Yields 8"
  */
-export function parseYieldToServings(yieldStr: string): number {
+function parseYieldToServings(yieldStr: string): number {
   if (!yieldStr) return 4;
   const match = yieldStr.match(/(\d+)/);
   return match ? parseInt(match[1], 10) : 4;
@@ -165,7 +165,7 @@ export function parseYieldToServings(yieldStr: string): number {
  * Parse ingredient amount strings into numbers.
  * Handles: "2", "1.5", "1/2", "1 1/2", "3/4"
  */
-export function parseAmountToNumber(amount: string): number {
+function parseAmountToNumber(amount: string): number {
   if (!amount) return 0;
   const s = amount.trim();
 

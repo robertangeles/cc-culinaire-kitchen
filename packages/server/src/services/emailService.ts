@@ -24,7 +24,7 @@ function getResend(): Resend | null {
 }
 
 const FROM_EMAIL = process.env.RESEND_FROM_EMAIL ?? "noreply@culinaire.kitchen";
-import { CLIENT_URL } from "../utils/env.js";
+import { CLIENT_URL, PORT } from "../utils/env.js";
 
 /**
  * Sends an email verification link to a newly registered user.
@@ -320,7 +320,7 @@ export async function sendRecipeEmail(
         attachments.push({ path: imageUrl, filename: "recipe-hero.jpg", contentId: "hero_image" });
       } else {
         // Local/relative URL — fetch from our own server and embed as base64
-        const fullUrl = `http://localhost:${process.env.PORT ?? 3009}${imageUrl}`;
+        const fullUrl = `http://localhost:${PORT}${imageUrl}`;
         const imgRes = await fetch(fullUrl);
         if (imgRes.ok) {
           const buffer = Buffer.from(await imgRes.arrayBuffer());

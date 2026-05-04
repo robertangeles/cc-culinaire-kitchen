@@ -38,7 +38,7 @@ import { recipesRouter } from "./routes/recipes.js";
 import { personalisationOptionsRouter, adminPersonalisationOptionsRouter } from "./routes/personalisationOptions.js";
 import { handleWebhook } from "./controllers/stripeController.js";
 import { errorHandler } from "./middleware/errorHandler.js";
-import { CLIENT_URL } from "./utils/env.js";
+import { CLIENT_URL, PORT } from "./utils/env.js";
 import { knowledgeRouter } from "./routes/knowledge.js";
 import { modelOptionsRouter } from "./routes/modelOptions.js";
 import { recoverStaleDocuments } from "./services/knowledgeManagementService.js";
@@ -54,7 +54,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const log = pino({ transport: { target: "pino-pretty" } });
 
 const app = express();
-const port = process.env.PORT ?? 3009;
+const port = PORT;
 
 // Stripe webhook needs raw body — must be before express.json()
 app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), handleWebhook);
