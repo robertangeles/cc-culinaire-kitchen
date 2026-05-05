@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 /**
  * Unit tests for sitePageService — focused on the load-bearing behaviour:
- *   - Reserved slugs (terms, privacy) cannot be deleted on any surface.
+ *   - Reserved slugs (terms, privacy, delete-account) cannot be deleted on any surface.
  *   - Public read returns null on draft rows.
  *   - Idempotent seed inserts only when missing — across all surfaces.
  */
@@ -97,6 +97,16 @@ describe("deletePage — reserved slug guard", () => {
     expect((await deletePage("privacy", "mobile")).deleted).toBe(false);
   });
 
+  it("refuses to delete the delete-account slug on either surface", async () => {
+    const { deletePage } = await import("./sitePageService.js");
+    const web = await deletePage("delete-account", "web");
+    const mobile = await deletePage("delete-account", "mobile");
+    expect(web.deleted).toBe(false);
+    expect(web.reason).toMatch(/reserved/i);
+    expect(mobile.deleted).toBe(false);
+    expect(mockDeleteWhereReturning).not.toHaveBeenCalled();
+  });
+
   it("deletes a non-reserved slug when scoped to the right surface", async () => {
     mockDeleteWhereReturning.mockResolvedValueOnce([{ pageId: "p1" }]);
     const { deletePage } = await import("./sitePageService.js");
@@ -138,23 +148,28 @@ describe("getPublishedPageBySlug — published gate", () => {
 });
 
 describe("ensureSeededPages — idempotent across surfaces", () => {
-  it("inserts terms + privacy on every surface when none exist", async () => {
-    // Service iterates surfaces × seeds = web/terms, web/privacy, mobile/terms, mobile/privacy.
-    setRows([], [], [], []);
+  it("inserts terms + privacy + delete-account on every surface when none exist", async () => {
+    // Service iterates surfaces × seeds = 2 surfaces × 3 slugs = 6 inserts.
+    setRows([], [], [], [], [], []);
     const { ensureSeededPages } = await import("./sitePageService.js");
     await ensureSeededPages();
-    expect(mockInsertValues).toHaveBeenCalledTimes(4);
+    expect(mockInsertValues).toHaveBeenCalledTimes(6);
     const inserted = mockInsertValues.mock.calls.map((c) => `${c[0].surface}/${c[0].slug}`).sort();
     expect(inserted).toEqual([
+      "mobile/delete-account",
       "mobile/privacy",
       "mobile/terms",
+      "web/delete-account",
       "web/privacy",
       "web/terms",
     ]);
   });
 
   it("does not re-insert when every (surface, slug) combination already exists", async () => {
-    setRows([{ pageId: "p1" }], [{ pageId: "p2" }], [{ pageId: "p3" }], [{ pageId: "p4" }]);
+    setRows(
+      [{ pageId: "p1" }], [{ pageId: "p2" }], [{ pageId: "p3" }],
+      [{ pageId: "p4" }], [{ pageId: "p5" }], [{ pageId: "p6" }],
+    );
     const { ensureSeededPages } = await import("./sitePageService.js");
     await ensureSeededPages();
     expect(mockInsertValues).not.toHaveBeenCalled();

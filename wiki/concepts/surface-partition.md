@@ -2,7 +2,7 @@
 title: Surface Partition
 category: concept
 created: 2026-05-03
-updated: 2026-05-03
+updated: 2026-05-05
 related: [[culinaire-kitchen-platform]], [[mobile-api-contract]], [[prompt-system]]
 ---
 
@@ -64,7 +64,35 @@ When a new partitioned table is added, these layers all need the surface:
 
 - **Admin UI surface ambiguity.** When the admin Pages list shows the same slug on both surfaces (`Privacy Policy /privacy` under Web, `Privacy Policy /privacy` under Mobile), the visual cue that distinguishes them is the sidebar group (Web vs Mobile) — but a sighted admin may not register that. Adding a surface badge in the row chip is cheap insurance against publishing the wrong surface.
 - **Slug rename is a destructive operation, not an edit.** The slug+surface pair is the natural key; changing the slug breaks every consumer. The Pages admin makes the slug field read-only post-create for exactly this reason.
-- **Reserved slug deletion guards span all surfaces.** `RESERVED_SLUGS = {terms, privacy}` matches by slug only — the delete guard refuses to remove a reserved slug regardless of surface. This is intentional: every surface needs its terms and privacy rows to exist.
+- **Reserved slug deletion guards span all surfaces.** `RESERVED_SLUGS = {terms, privacy, delete-account}` matches by slug only — the delete guard refuses to remove a reserved slug regardless of surface. This is intentional: every surface needs its policy rows to exist.
+
+## SPA-route surface override (added 2026-05-05)
+
+The default surface partition logic (controller default `surface=web`, mobile passes `surface=mobile` explicitly) is the right answer for **APIs that serve both surfaces**. But there's a class of public web URLs that exist *only* to satisfy app-store policy reviewers — Google Play's Privacy Policy URL field, Terms URL field, Data-Deletion URL field. Those URLs must serve the **mobile** copy because that's what the app shows end users; the reviewer needs to see the same wording the app does.
+
+For these URLs we override the default at the SPA route level rather than at the controller default:
+
+```tsx
+// packages/client/src/App.tsx
+<Route path="/privacy"        element={<PublicPage slug="privacy"        surface="mobile" />} />
+<Route path="/terms"          element={<PublicPage slug="terms"          surface="mobile" />} />
+<Route path="/delete-account" element={<PublicPage slug="delete-account" surface="mobile" />} />
+```
+
+`PublicPage` accepts an optional `surface` prop and forwards it to `usePublicPage`, which appends `?surface=mobile` to the API call. The controller default stays `web` so:
+
+- `/pages/:slug` (the generic catch-all for future admin-authored web pages) still defaults to `web`.
+- The `/api/site-pages/...` controller still defaults to `web` for backend callers that don't pass the param.
+- The three reviewer-facing URLs are unambiguous: paste them into Play Console, the SPA hydrates, the mobile copy renders.
+
+Adding a new policy URL for app-store review:
+
+1. Add the slug to `RESERVED_SLUGS` and the seed list in `sitePageService.ts`.
+2. Update server tests for the new slug count + reserved-slug guard.
+3. Add a `<Route path="/<slug>" element={<PublicPage slug="<slug>" surface="mobile" />} />` next to the existing entries.
+4. After deploy, author the body in `Settings → Mobile → Pages` and tick Published.
+
+The shared decision log (`cc-culinaire-shared-context/decisions.md` § 2026-05-05 — "Play Console listing URLs are SPA routes that surface-override to mobile") is the canonical reference for the pattern across both repos.
 
 ## Related
 

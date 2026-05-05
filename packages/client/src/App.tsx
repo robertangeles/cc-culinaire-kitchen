@@ -126,6 +126,7 @@ export function App() {
               {/* Public site_page routes */}
               <Route path="/terms" element={<PublicPage slug="terms" surface="mobile" />} />
               <Route path="/privacy" element={<PublicPage slug="privacy" surface="mobile" />} />
+              <Route path="/delete-account" element={<PublicPage slug="delete-account" surface="mobile" />} />
               <Route path="/pages/:slug" element={<PublicPage />} />
 
               {/* Protected app routes (with sidebar + footer) */}
