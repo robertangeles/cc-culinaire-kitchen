@@ -124,8 +124,8 @@ export function App() {
               <Route path="/reset-password" element={<ResetPasswordPage />} />
 
               {/* Public site_page routes */}
-              <Route path="/terms" element={<PublicPage slug="terms" />} />
-              <Route path="/privacy" element={<PublicPage slug="privacy" />} />
+              <Route path="/terms" element={<PublicPage slug="terms" surface="mobile" />} />
+              <Route path="/privacy" element={<PublicPage slug="privacy" surface="mobile" />} />
               <Route path="/pages/:slug" element={<PublicPage />} />
 
               {/* Protected app routes (with sidebar + footer) */}
