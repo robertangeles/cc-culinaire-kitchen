@@ -22,8 +22,9 @@
   },
   "pnpm": {
     "onlyBuiltDependencies": [
+      "bcrypt",
       "esbuild",
-      "bcrypt"
+      "tesseract.js"
     ]
   }
 }

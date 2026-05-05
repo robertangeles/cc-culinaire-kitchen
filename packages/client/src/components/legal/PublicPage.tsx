@@ -10,11 +10,13 @@ import { Loader2, FileQuestion, AlertTriangle } from "lucide-react";
 import { useParams, Link } from "react-router";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { usePublicPage } from "../../hooks/useSitePages.js";
+import { usePublicPage, type Surface } from "../../hooks/useSitePages.js";
 
 interface Props {
   /** When provided, fetch this slug. Otherwise read from useParams (for /pages/:slug). */
   slug?: string;
+  /** Surface to fetch from. Defaults to 'web'. /privacy and /terms pass 'mobile' so the published mobile copy is what Play Console reviewers see. */
+  surface?: Surface;
 }
 
 function formatLastUpdated(iso: string): string {
@@ -29,10 +31,10 @@ function formatLastUpdated(iso: string): string {
   }
 }
 
-export function PublicPage({ slug: slugProp }: Props) {
+export function PublicPage({ slug: slugProp, surface }: Props) {
   const params = useParams<{ slug: string }>();
   const slug = slugProp ?? params.slug ?? "";
-  const state = usePublicPage(slug);
+  const state = usePublicPage(slug, surface);
 
   return (
     <div className="min-h-screen bg-[#0A0A0A] text-[#E5E5E5] flex flex-col">
