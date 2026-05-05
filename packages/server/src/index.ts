@@ -336,9 +336,24 @@ app.get("/", (req, res, next) => {
 // Serve built client SPA in production (catch-all for client routes)
 app.use(express.static(CLIENT_DIST));
 app.use((req, res, next) => {
-  // Only serve index.html for non-API HTML requests (SPA fallback)
+  // SPA fallback for any non-API GET that could plausibly want HTML.
+  //
+  // We serve the SPA shell when the Accept header is text/html (real
+  // browsers), */* (curl, PowerShell Invoke-WebRequest, link checkers,
+  // Google's Play Console URL validator), or missing entirely (primitive
+  // HTTP clients). An explicit non-HTML Accept (application/json,
+  // image/*, etc.) falls through to the 404 — those are signals the
+  // caller does NOT want an HTML page.
+  //
+  // Static assets are handled by express.static above, so only paths
+  // with no matching asset reach this handler. Returning the SPA HTML
+  // for, e.g., a typo'd /missing-asset.png is harmless: the request
+  // wasn't for an asset (no Accept: image/*), so HTML is the right
+  // answer for "any path the SPA might know about."
   if (req.path.startsWith("/api/") || req.method !== "GET") return next();
-  if (!req.headers.accept?.includes("text/html")) return next();
+  const accept = req.headers.accept ?? "";
+  const wantsHtml = accept === "" || accept.includes("text/html") || accept.includes("*/*");
+  if (!wantsHtml) return next();
   const indexPath = join(CLIENT_DIST, "index.html");
   res.sendFile(indexPath, (err) => {
     if (err) next(); // No built client (dev mode)
