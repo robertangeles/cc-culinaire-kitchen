@@ -4,6 +4,41 @@ Append-only. Newest entry on top.
 
 ---
 
+## 2026-05-05 — Play Console legal-URL pattern: SPA-route surface override + `/delete-account`
+
+Two web sessions today, both driven by Play Console submission requirements for the mobile app.
+
+### Session 1 — Privacy + Terms wired to mobile-surface rows (PR #15, merged)
+
+Robert needed a public HTTPS URL for Play Console's "Privacy policy URL" listing field. The web SPA already had `/privacy` and `/terms` routes (from commit `9d770f1`), but they fetched `/api/site-pages/{slug}` with the controller's default `surface=web` — and only the mobile-surface rows are published on prod (web rows are still draft, intentionally per the 2026-05-03 surface-partition decision). So a Play reviewer hitting `https://www.culinaire.kitchen/privacy` was getting the SPA's "Page not found" state.
+
+Discovery flow worth keeping for the next time a "page is published but the URL 404s" report comes in:
+
+1. Pulled main, ran `pnpm install` (lockfile drift from PR #15's tree-shaking — `tesseract.js` flagged for `pnpm approve-builds`, approved).
+2. Naive curl `https://www.culinaire.kitchen/privacy` returned `Cannot GET /privacy` (Express envelope) — initially thought the route wasn't mounted, mirroring the 2026-05-03 incident. Re-checked with a browser-like `Accept: text/html` header and the SPA fallback at [packages/server/src/index.ts:338-346](../packages/server/src/index.ts#L338-L346) kicked in → 200 + SPA shell. Lesson: the SPA fallback is gated on Accept; curl's default `*/*` misses it. Always test with browser headers when reasoning about what reviewers see.
+3. Curled `/api/site-pages/privacy?surface=web` → JSON 404 envelope `{"error":"Page not found"}` and `/api/site-pages?surface=web` → `[]`. That's the "route mounted, data layer null" envelope from the 2026-05-03 decision — pointed straight at publish-state, not deploy.
+4. Confirmed Robert's "I published this a long time ago" was correct for `surface=mobile` (10,344 bytes / 14,211 bytes on prod, matches yesterday's resolution log) and unfilled for `surface=web`. Same admin-UI surface ambiguity from yesterday's incident — the editor doesn't show the surface, only the sidebar group does.
+
+Fix: SPA-route surface override. New optional `surface` prop on `<PublicPage>`, passed through to `usePublicPage`; `App.tsx` passes `surface="mobile"` on `/privacy` and `/terms` only. `/pages/:slug` (the generic catch-all) and the controller default both stay on `web`, so future admin-authored web pages still work. Three-line change. Verified locally with Playwright (full-page screenshots saved to `C:/tmp/legal-{privacy,terms}.png`); after merge + Render auto-deploy, re-verified against prod (new bundle hash `index-kloymna2.js`, h1s and bodies all match).
+
+### Session 2 — `/delete-account` for Play data-deletion policy (in flight)
+
+Mobile session posted a new ask in `mobile-needs.md` — Google Play's data-deletion policy requires a public URL with three required elements (app/dev name, deletion steps, data-deleted/kept breakdown), enforced at Closed Testing review onward. Same SPA-route surface-override pattern fits cleanly:
+
+1. Server `sitePageService.ts` — added `delete-account` to `RESERVED_SLUGS` and to the boot-time seed list. New seed count is 2 surfaces × 3 slugs = 6 inserts. Updated tests for both the new reserved-slug guard and the seed count.
+2. Client `App.tsx` — added `<Route path="/delete-account" element={<PublicPage slug="delete-account" surface="mobile" />} />` next to `/privacy` and `/terms`.
+3. Server suite green (217 passed); client typecheck clean.
+
+The post-deploy step is on Robert: open `Settings → Mobile → Pages → Deleting your account`, paste the body (suggested copy supplied by mobile in `mobile-needs.md`), tick Published. URL goes into Play Console → App content → Data deletion → "Delete account URL".
+
+### Pattern documented
+
+[concepts/surface-partition.md](concepts/surface-partition.md) updated with a new "SPA-route surface override" section explaining when to override the default `web` surface at the route level vs at the controller default. Cross-repo `decisions.md` (`cc-culinaire-shared-context/decisions.md`) is the canonical source for the pattern across both repos — added a 2026-05-05 entry that lists the three URLs (`/privacy`, `/terms`, `/delete-account`) and the four-step recipe for adding a new one.
+
+The takeaway: app-store review URLs are a third class of consumer for the `site_page` table. Web users default to web copy, mobile users default to mobile copy, and reviewers get the mobile copy via SPA-route override. The controller default stays `web` because that's still the right answer for everything else.
+
+---
+
 ## 2026-05-03 (afternoon) — Mobile v1.2 unblock, cross-repo coordination, auto-injected shared-context hook
 
 Three concurrent work streams, all driven by the parallel mobile session.

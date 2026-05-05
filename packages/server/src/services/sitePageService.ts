@@ -30,18 +30,20 @@ export interface SitePage {
   updatedDttm: Date;
 }
 
-/** Slugs that may not be deleted — they're wired into every surface's footer. */
-const RESERVED_SLUGS = new Set(["terms", "privacy"]);
+/** Slugs that may not be deleted — they're wired into every surface's footer or app-store policy listings. */
+const RESERVED_SLUGS = new Set(["terms", "privacy", "delete-account"]);
 
 /**
- * Idempotent boot-time seed. Ensures the two reserved slugs exist as
+ * Idempotent boot-time seed. Ensures the reserved slugs exist as
  * draft rows on every surface so admins always have a starting point
- * for ToS + Privacy content. Called once during server startup.
+ * for ToS / Privacy / account-deletion content. Called once during
+ * server startup.
  */
 export async function ensureSeededPages(): Promise<void> {
   const seeds = [
     { slug: "terms", title: "Terms of Service" },
     { slug: "privacy", title: "Privacy Policy" },
+    { slug: "delete-account", title: "Deleting your account" },
   ];
 
   for (const surface of SURFACES) {
