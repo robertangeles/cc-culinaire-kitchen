@@ -439,7 +439,7 @@ export function MenuItemFormModal({
       />
 
       {/* Modal */}
-      <div className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-[#161616] rounded-2xl border border-[#2A2A2A] shadow-2xl">
+      <div className="relative w-full max-w-4xl max-h-[90vh] overflow-y-auto bg-[#161616] rounded-2xl border border-[#2A2A2A] shadow-2xl">
         {/* Header */}
         <div className="sticky top-0 z-10 bg-[#161616] border-b border-[#2A2A2A] px-6 py-4 flex items-center justify-between rounded-t-2xl">
           <h2 className="text-lg font-bold text-[#FAFAFA]">
@@ -691,10 +691,10 @@ export function MenuItemFormModal({
                     <div className="grid grid-cols-12 gap-2 text-[10px] uppercase text-[#666666] font-medium px-1">
                       <div className="col-span-3">Name</div>
                       <div className="col-span-2">Quantity</div>
-                      <div className="col-span-2">Unit</div>
+                      <div className="col-span-1">Unit</div>
                       <div className="col-span-2">Unit Cost ($)</div>
                       <div className="col-span-1">Yield %</div>
-                      <div className="col-span-1 text-right">Line Cost</div>
+                      <div className="col-span-2 text-right">Line Cost</div>
                       <div className="col-span-1" />
                     </div>
 
@@ -705,7 +705,7 @@ export function MenuItemFormModal({
                           key={row.tempId}
                           className="grid grid-cols-12 gap-2 items-start"
                         >
-                          <div className="col-span-3">
+                          <div className="col-span-3 overflow-hidden">
                             <IngredientPickerInline
                               linkedId={row.ingredientId}
                               displayName={row.ingredientName}
@@ -797,7 +797,7 @@ export function MenuItemFormModal({
                                 e.target.value
                               )
                             }
-                            className="col-span-2 px-3 py-2 text-xs bg-[#0A0A0A] border border-[#2A2A2A] rounded-lg text-[#FAFAFA] focus:outline-none focus:ring-1 focus:ring-[#D4A574]/50 min-h-[36px]"
+                            className="col-span-1 px-2 py-2 text-xs bg-[#0A0A0A] border border-[#2A2A2A] rounded-lg text-[#FAFAFA] focus:outline-none focus:ring-1 focus:ring-[#D4A574]/50 min-h-[36px]"
                           >
                             {UNITS.map((u) => (
                               <option key={u} value={u}>
@@ -835,7 +835,7 @@ export function MenuItemFormModal({
                             }
                             className="col-span-1 px-2 py-2 text-xs bg-[#0A0A0A] border border-[#2A2A2A] rounded-lg text-[#FAFAFA] focus:outline-none focus:ring-1 focus:ring-[#D4A574]/50 min-h-[36px] text-center"
                           />
-                          <div className="col-span-1 text-right text-xs text-[#999999] font-mono">
+                          <div className="col-span-2 text-xs text-[#999999] font-mono min-h-[36px] flex items-center justify-end">
                             ${lineCost.toFixed(2)}
                           </div>
                           <button
