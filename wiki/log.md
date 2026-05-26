@@ -263,3 +263,25 @@ Initialised the LLM Wiki Brain by auditing every markdown file under `docs/`, `k
 
 **Originals preserved**
 No files moved. No files deleted. Wiki is purely additive.
+
+## 2026-05-26 — Recipe purge FK fix + schema drift catalog
+
+**Problem**: Server logged `Recipe archive purge failed` on every startup. PG error 23503: `recipe_version_recipe_id_fkey` FK had no ON DELETE rule, so `purgeArchivedRecipes` couldn't delete recipes that had any version rows.
+
+**Fix shipped**:
+- Edited `packages/server/src/db/schema.ts` — added `onDelete: "cascade"` to `recipeVersion.recipeId` FK, `onDelete: "set null"` to `prepTask.recipeId` and `prepMenuSelection.recipeId`.
+- Wrote `packages/server/scripts/fix-recipe-fk-cascade.ts` — targeted tsx migration that applied the two real FK changes (`recipe_version` → CASCADE, `prep_menu_selection` → SET NULL) in a transaction. Verified via `scripts/check-recipe-fks.ts`.
+- `drizzle-kit push` aborted before applying anything (pg_stat_statements_info bug + unrelated drift it wanted to surface). Used the targeted script instead.
+
+**Drift surfaced (NOT fixed today, see synthesis page)**:
+1. `prep_task.recipe_id` — code declares FK with SET NULL, DB has no constraint at all.
+2. `knowledge_document.file_path` — column dropped from code, DB still holds 18 rows.
+3. Five unique constraints declared but missing on live DB (`guide.guide_key`, `model_option.model_id`, `bench_channel.channel_key`, `recipe.slug`, `store_location.store_key`).
+4. `drizzle-kit push` bug: tries to drop `pg_stat_statements_info` view, postgres rejects.
+
+**Wiki pages touched**
+- Created `wiki/synthesis/schema-drift-may-2026.md` — full drift catalog + safe migration workflow.
+- Updated `wiki/index.md` — added synthesis entry.
+- Appended `tasks/lessons.md` — lesson #50 (never `drizzle-kit push` blind).
+
+**Rule going forward**: until the drift list is zero, all schema changes go through targeted tsx scripts under `packages/server/scripts/` following the `apply-ckm-feedback.ts` pattern. No `drizzle-kit push`.

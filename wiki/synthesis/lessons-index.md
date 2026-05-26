@@ -2,8 +2,8 @@
 title: Lessons Index
 category: synthesis
 created: 2026-04-29
-updated: 2026-04-29
-related: [[project-status]]
+updated: 2026-05-26
+related: [[project-status]], [[schema-drift-may-2026]]
 ---
 
 Index of the Problem / Fix / Rule entries in [tasks/lessons.md](../../tasks/lessons.md). The lessons file is the source of truth — this page is a discoverable surface so the wiki can point at the right rule fast.
@@ -25,6 +25,7 @@ Index of the Problem / Fix / Rule entries in [tasks/lessons.md](../../tasks/less
 | 6 | Keep imports consistent across route files | ESM module resolution |
 | 7 | otplib v4+ API migration (top-level exports, not `authenticator`) | dependency upgrade |
 | 8 | Role/permission renames require migration + seed + route updates | RBAC change protocol |
+| 50 | Never `drizzle-kit push` blind when schema has drifted — use targeted tsx scripts ([[schema-drift-may-2026]]) | DB migrations / schema drift |
 | … | _45+ entries — read the full list in [tasks/lessons.md](../../tasks/lessons.md)_ | — |
 
 ## Why this is a synthesis page, not an entity

@@ -621,7 +621,7 @@ export const recipe = pgTable("recipe", {
  */
 export const recipeVersion = pgTable("recipe_version", {
   versionId: uuid("version_id").defaultRandom().primaryKey(),
-  recipeId: uuid("recipe_id").notNull().references(() => recipe.recipeId),
+  recipeId: uuid("recipe_id").notNull().references(() => recipe.recipeId, { onDelete: "cascade" }),
   versionNumber: integer("version_number").notNull(),
   recipeData: jsonb("recipe_data").notNull(),
   editorialContent: text("editorial_content"),
@@ -943,7 +943,7 @@ export const prepTask = pgTable("prep_task", {
   prepSessionId: uuid("prep_session_id").notNull().references(() => prepSession.prepSessionId),
   userId: integer("user_id").notNull().references(() => user.userId),
   menuItemId: uuid("menu_item_id").references(() => menuItem.menuItemId),
-  recipeId: uuid("recipe_id").references(() => recipe.recipeId),
+  recipeId: uuid("recipe_id").references(() => recipe.recipeId, { onDelete: "set null" }),
   taskDescription: text("task_description").notNull(),
   ingredientName: varchar("ingredient_name", { length: 200 }).notNull(),
   quantityNeeded: numeric("quantity_needed", { precision: 10, scale: 3 }).notNull(),
@@ -995,7 +995,7 @@ export const guide = pgTable("guide", {
 export const prepMenuSelection = pgTable("prep_menu_selection", {
   selectionId: uuid("selection_id").defaultRandom().primaryKey(),
   prepSessionId: uuid("prep_session_id").notNull().references(() => prepSession.prepSessionId),
-  recipeId: uuid("recipe_id").references(() => recipe.recipeId),
+  recipeId: uuid("recipe_id").references(() => recipe.recipeId, { onDelete: "set null" }),
   menuItemId: uuid("menu_item_id").references(() => menuItem.menuItemId),
   dishName: varchar("dish_name", { length: 200 }).notNull(),
   expectedPortions: integer("expected_portions").notNull(),
