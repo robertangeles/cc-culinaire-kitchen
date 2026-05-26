@@ -752,8 +752,8 @@ If a feature introduces security risk, Claude must:
   explicit user confirmation before running `git push`. Never push automatically.
 - **MANDATORY**: When working with multiple developers — each developer
   owns their own pushes. Claude Code does not push on behalf of other developers.
-- Small changes (< 3 files, config, wiki): commit directly to `main`
-- Non-trivial changes: short-lived feature branch (max 2 days)
+- **All changes go through a feature branch** — no direct commits to `main`
+- Keep branches short-lived (max 2 days)
 - Merge to `main` with `--no-ff` when CI passes
 - For incomplete features touching shared code: use feature flags
 - Pre-commit hooks (Husky + lint-staged) run lint + format on staged files
