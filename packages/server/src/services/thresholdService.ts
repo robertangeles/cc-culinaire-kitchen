@@ -18,6 +18,7 @@ import {
   ingredientSupplier,
   ingredient,
 } from "../db/schema.js";
+import { sumPOLineTotal, shouldRouteToHQ } from "./poMath.js";
 import pino from "pino";
 
 const logger = pino({ name: "thresholdService" });
@@ -81,15 +82,12 @@ async function calculatePOTotal(poId: string): Promise<number> {
     .from(purchaseOrderLine)
     .where(eq(purchaseOrderLine.poId, poId));
 
-  let total = 0;
-  for (const line of lines) {
-    // Use PO line unit cost if available, otherwise fall back to ingredient cost
-    const cost = line.unitCost ? Number(line.unitCost) : 0;
-    const qty = Number(line.orderedQty);
-    total += qty * cost;
-  }
-
-  return Math.round(total * 100) / 100; // round to 2 decimal places
+  return sumPOLineTotal(
+    lines.map((line) => ({
+      orderedQty: Number(line.orderedQty),
+      unitCost: line.unitCost ? Number(line.unitCost) : 0,
+    })),
+  );
 }
 
 /**
@@ -110,7 +108,7 @@ export async function determineRouting(
     return { routing: "DIRECT", totalValue, thresholdAmount: null };
   }
 
-  const routing: ThresholdRouting = totalValue >= thresholdAmount ? "HQ_APPROVAL" : "DIRECT";
+  const routing: ThresholdRouting = shouldRouteToHQ(totalValue, thresholdAmount) ? "HQ_APPROVAL" : "DIRECT";
 
   logger.info(
     { poId, totalValue, thresholdAmount, routing },

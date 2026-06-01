@@ -29,6 +29,7 @@ import {
   pendingCatalogRequest,
 } from "../db/schema.js";
 import { convertToBase } from "./unitConversionService.js";
+import { varianceQty as calcVarianceQty, variancePct as calcVariancePct } from "./stockMath.js";
 
 /** Aliased user table for secondary JOINs (e.g. approver vs opener). */
 const approverUser = alias(user, "approver");
@@ -669,10 +670,10 @@ export async function saveLineItem(
   // Calculate expected qty from previous stock take (for variance)
   const expectedQty = await getPreviousCount(ingredientId, categoryId);
 
-  const varianceQty = expectedQty !== null ? baseQty - expectedQty : null;
-  const variancePct =
-    expectedQty !== null && expectedQty !== 0
-      ? ((baseQty - expectedQty) / expectedQty) * 100
+  const varianceQtyVal = expectedQty !== null ? calcVarianceQty(baseQty, expectedQty) : null;
+  const variancePctVal =
+    expectedQty !== null
+      ? calcVariancePct(varianceQtyVal!, expectedQty)
       : null;
 
   // Upsert: insert or update if this ingredient was already counted in this category
@@ -694,8 +695,8 @@ export async function saveLineItem(
         countedUnit: baseUnit,
         rawQty: String(rawQty),
         expectedQty: expectedQty !== null ? String(expectedQty) : null,
-        varianceQty: varianceQty !== null ? String(varianceQty) : null,
-        variancePct: variancePct !== null ? String(variancePct) : null,
+        varianceQty: varianceQtyVal !== null ? String(varianceQtyVal) : null,
+        variancePct: variancePctVal !== null ? String(variancePctVal) : null,
         countedByUserId: userId,
         countedDttm: new Date(),
         updatedDttm: new Date(),
@@ -714,8 +715,8 @@ export async function saveLineItem(
       countedUnit: baseUnit,
       rawQty: String(rawQty),
       expectedQty: expectedQty !== null ? String(expectedQty) : null,
-      varianceQty: varianceQty !== null ? String(varianceQty) : null,
-      variancePct: variancePct !== null ? String(variancePct) : null,
+      varianceQty: varianceQtyVal !== null ? String(varianceQtyVal) : null,
+      variancePct: variancePctVal !== null ? String(variancePctVal) : null,
       countedByUserId: userId,
     })
     .returning();
