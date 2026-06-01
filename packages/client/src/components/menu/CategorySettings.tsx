@@ -145,11 +145,13 @@ export function CategorySettings({
       <div className="bg-[#161616] rounded-2xl border border-[#2A2A2A] overflow-hidden">
         <div className="px-6 py-4 border-b border-[#2A2A2A]">
           <h3 className="text-sm font-semibold text-[#FAFAFA]">
-            Category Food Cost Targets
+            Food Cost Targets by Category
           </h3>
           <p className="text-xs text-[#666666] mt-1">
-            Set your target food cost percentage for each menu category. Items
-            exceeding the target will be flagged in the Menu Items table.
+            Control your margins category by category. Set the maximum food cost
+            percentage you'll accept — any menu item that runs over its category
+            target gets flagged in the Menu Items table so you can reprice or
+            re-engineer it.
           </p>
         </div>
 
@@ -263,6 +265,13 @@ export function CategorySettings({
               </div>
             );
           })}
+        </div>
+
+        <div className="px-6 py-3 border-t border-[#2A2A2A]">
+          <p className="text-xs text-[#666666]">
+            Categories appear automatically from your menu items. Add items in
+            the Menu Items tab to see new categories here.
+          </p>
         </div>
       </div>
     </div>

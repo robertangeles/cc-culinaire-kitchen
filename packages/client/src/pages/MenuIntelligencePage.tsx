@@ -9,7 +9,7 @@
  */
 
 import { useState, useMemo, useCallback, useEffect } from "react";
-import { BarChart3, LogIn, Loader2, RefreshCw, ChefHat, ArrowRight } from "lucide-react";
+import { BarChart3, LogIn, RefreshCw } from "lucide-react";
 import { Link } from "react-router";
 import { useAuth } from "../context/AuthContext.js";
 import { useMenuItems, type MenuItem, type MenuIngredient } from "../hooks/useMenuItems.js";
@@ -24,13 +24,12 @@ import { MenuCsvUpload } from "../components/menu/MenuCsvUpload.js";
 
 /* ---- Tab config ---- */
 
-type MenuTab = "dashboard" | "items" | "matrix" | "mise" | "categories";
+type MenuTab = "dashboard" | "items" | "matrix" | "categories";
 
 const TABS: { key: MenuTab; label: string }[] = [
   { key: "dashboard", label: "Dashboard" },
   { key: "items", label: "Menu Items" },
   { key: "matrix", label: "Engineering Matrix" },
-  { key: "mise", label: "Mise en Place" },
   { key: "categories", label: "Category Settings" },
 ];
 
@@ -334,28 +333,6 @@ export function MenuIntelligencePage() {
             loading={analysisLoading}
             onSelect={setSelectedItem}
           />
-        )}
-
-        {activeTab === "mise" && (
-          <div className="bg-[#161616] rounded-2xl border border-[#2A2A2A] p-8 text-center">
-            <div className="inline-flex items-center justify-center size-14 rounded-2xl bg-[#D4A574]/15 mb-4">
-              <ChefHat className="size-7 text-[#D4A574]" />
-            </div>
-            <h2 className="text-xl font-bold text-white mb-2">
-              Mise en Place lives in Kitchen Copilot
-            </h2>
-            <p className="text-[#999999] text-sm max-w-md mx-auto mb-6">
-              Plan prep there: forecast your covers, get suggested per-item counts, then
-              generate a scaled, by-station prep list from your recipes — no POS needed.
-            </p>
-            <Link
-              to="/kitchen-copilot"
-              className="inline-flex items-center gap-2 px-6 py-3 bg-[#D4A574] hover:bg-[#C4956A] text-[#0A0A0A] font-semibold rounded-xl transition-colors min-h-[44px]"
-            >
-              Open Mise en Place
-              <ArrowRight className="size-5" />
-            </Link>
-          </div>
         )}
 
         {activeTab === "categories" && (
