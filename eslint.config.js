@@ -39,6 +39,7 @@ export default tseslint.config(
       "no-control-regex": "warn",
       "no-constant-binary-expression": "warn",
       "prefer-const": "warn",
+      "preserve-caught-error": "warn",
     },
   },
 
