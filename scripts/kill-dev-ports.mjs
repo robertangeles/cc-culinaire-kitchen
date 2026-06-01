@@ -1,39 +1,46 @@
 /**
  * Kill any processes occupying the dev server ports (5179, 3009).
- * Runs automatically before `pnpm dev` to prevent port conflicts
- * from orphaned Node processes on Windows.
+ * Runs automatically before `pnpm dev` via the "predev" hook.
  *
- * Per CLAUDE.md Local Development Ports — Vite on 5179, Express on 3009
- * to avoid colliding with other local projects.
- *
- * Uses Node.js + child_process so it works on Windows without bash/WSL.
+ * Cross-platform: Linux, macOS, and Windows.
+ * Per CLAUDE.md — Vite on 5179, Express on 3009.
  */
 
-import { execSync } from "child_process";
+import { execFileSync } from "child_process";
+import { platform } from "os";
 
 const PORTS = [5179, 3009];
+const isWin = platform() === "win32";
 
 for (const port of PORTS) {
   try {
-    const output = execSync("netstat -ano", { encoding: "utf-8" });
-    const lines = output.split("\n").filter(
-      (line) => line.includes(`:${port} `) && line.includes("LISTENING")
-    );
-
-    const pids = [...new Set(
-      lines.map((line) => line.trim().split(/\s+/).pop()).filter((pid) => pid && pid !== "0")
-    )];
-
-    for (const pid of pids) {
-      console.log(`Killing stale process on port ${port} (PID ${pid})`);
-      try {
-        execSync(`taskkill /PID ${pid} /F`, { stdio: "ignore" });
-      } catch {
-        // Process may have already exited
+    if (isWin) {
+      const output = execFileSync("cmd", ["/c", `netstat -ano | findstr :${port} | findstr LISTENING`], {
+        encoding: "utf-8",
+        stdio: ["pipe", "pipe", "ignore"],
+      });
+      const pids = [...new Set(
+        output.split("\n")
+          .map((line) => line.trim().split(/\s+/).pop())
+          .filter((pid) => pid && pid !== "0"),
+      )];
+      for (const pid of pids) {
+        console.log(`Killing port ${port} (PID ${pid})`);
+        try { execFileSync("taskkill", ["/PID", pid, "/F"], { stdio: "ignore" }); } catch {}
+      }
+    } else {
+      const output = execFileSync("lsof", ["-ti", `:${port}`], {
+        encoding: "utf-8",
+        stdio: ["pipe", "pipe", "ignore"],
+      });
+      const pids = output.trim().split("\n").filter(Boolean);
+      for (const pid of pids) {
+        console.log(`Killing port ${port} (PID ${pid})`);
+        try { execFileSync("kill", ["-9", pid], { stdio: "ignore" }); } catch {}
       }
     }
   } catch {
-    // netstat not available or no matches — continue
+    // No process on this port
   }
 }
 

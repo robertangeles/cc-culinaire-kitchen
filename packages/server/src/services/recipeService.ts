@@ -18,7 +18,7 @@
  *  3. Final fallback → prose response (not persisted)
  */
 
-import { generateObject } from "ai";
+import { generateObject, generateText, NoObjectGeneratedError } from "ai";
 import { z } from "zod";
 import pino from "pino";
 import { getModel } from "./providerService.js";
@@ -347,7 +347,7 @@ export async function generateRecipe(input: RecipeInput): Promise<{
   const model = getModel();
   const userMessage = buildUserMessage(input, ragContext);
 
-  // Attempt 1
+  // Attempt 1: strict structured generation
   let recipe: RecipeOutput | null = null;
   try {
     const { object } = await generateObject({
@@ -360,23 +360,85 @@ export async function generateRecipe(input: RecipeInput): Promise<{
     logger.info({ domain: input.domain, recipeName: recipe.name }, "generateRecipe: structured generation succeeded");
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    logger.warn({ domain: input.domain, error: msg }, "generateRecipe: attempt 1 failed — retrying");
 
-    // Attempt 2 — stricter prompt
-    const stricterMessage = `${userMessage}\n\nIMPORTANT: Return ONLY a valid JSON object matching the schema exactly. No markdown, no commentary, no code fences.`;
-    try {
-      const { object } = await generateObject({
-        model,
-        schema: RecipeOutputSchema,
-        system: systemPrompt,
-        prompt: stricterMessage,
-      });
-      recipe = object;
-      logger.info({ domain: input.domain, recipeName: recipe.name }, "generateRecipe: retry succeeded");
-    } catch (retryErr) {
-      const retryMsg = retryErr instanceof Error ? retryErr.message : String(retryErr);
-      logger.error({ domain: input.domain, error: retryMsg }, "generateRecipe: retry also failed — prose fallback");
-      return { recipe: null, imageUrl: null, proseResponse: proseFallback(input), recipeId: null, slug: null };
+    // Extract the raw AI text and validation cause from NoObjectGeneratedError
+    let rawText: string | undefined;
+    let validationCause: string | undefined;
+    if (err instanceof NoObjectGeneratedError) {
+      rawText = err.text;
+      validationCause = err.cause instanceof Error ? err.cause.message : String(err.cause ?? "");
+    }
+    logger.warn({
+      domain: input.domain,
+      error: msg,
+      validationCause: validationCause?.slice(0, 500),
+      rawTextLength: rawText?.length,
+      rawTextPreview: rawText?.slice(0, 300),
+    }, "generateRecipe: attempt 1 failed");
+
+    // Attempt 2: if we have raw text, try lenient parsing (safeParse + fill defaults)
+    if (rawText) {
+      try {
+        const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          const result = RecipeOutputSchema.safeParse(parsed);
+          if (result.success) {
+            recipe = result.data;
+            logger.info({ domain: input.domain, recipeName: recipe.name }, "generateRecipe: lenient parse succeeded");
+          } else {
+            // Fill defaults for missing optional fields and retry parse
+            if (!parsed.allergenNote) parsed.allergenNote = "Please check all ingredients against your specific dietary requirements and allergies.";
+            if (!parsed.confidenceNote) parsed.confidenceNote = "Recipe generated with high confidence based on established culinary techniques.";
+            if (!parsed.imagePrompt) parsed.imagePrompt = `A beautifully plated ${input.request}, editorial food photography, soft natural light, 1:1 aspect ratio.`;
+            if (parsed.difficulty && !["beginner", "intermediate", "advanced", "expert"].includes(parsed.difficulty)) {
+              const d = parsed.difficulty.toLowerCase();
+              if (d.includes("easy") || d.includes("simple")) parsed.difficulty = "beginner";
+              else if (d.includes("moderate") || d.includes("medium")) parsed.difficulty = "intermediate";
+              else if (d.includes("hard") || d.includes("challenging")) parsed.difficulty = "advanced";
+              else parsed.difficulty = "intermediate";
+            }
+            const retryResult = RecipeOutputSchema.safeParse(parsed);
+            if (retryResult.success) {
+              recipe = retryResult.data;
+              logger.info({ domain: input.domain, recipeName: recipe.name, fieldsPatched: true }, "generateRecipe: lenient parse with defaults succeeded");
+            } else {
+              logger.warn({
+                domain: input.domain,
+                zodErrors: retryResult.error.issues.slice(0, 5).map(i => `${i.path.join(".")}: ${i.message}`),
+              }, "generateRecipe: lenient parse still failed");
+            }
+          }
+        }
+      } catch (parseErr) {
+        logger.warn({ domain: input.domain, error: parseErr instanceof Error ? parseErr.message : String(parseErr) }, "generateRecipe: raw text JSON parse failed");
+      }
+    }
+
+    // Attempt 3: if lenient parse didn't work, retry with generateObject
+    if (!recipe) {
+      const stricterMessage = `${userMessage}\n\nIMPORTANT: Return ONLY a valid JSON object matching the schema exactly. No markdown, no commentary, no code fences.`;
+      try {
+        const { object } = await generateObject({
+          model,
+          schema: RecipeOutputSchema,
+          system: systemPrompt,
+          prompt: stricterMessage,
+        });
+        recipe = object;
+        logger.info({ domain: input.domain, recipeName: recipe.name }, "generateRecipe: strict retry succeeded");
+      } catch (retryErr) {
+        let retryCause: string | undefined;
+        if (retryErr instanceof NoObjectGeneratedError) {
+          retryCause = retryErr.cause instanceof Error ? retryErr.cause.message : String(retryErr.cause ?? "");
+        }
+        logger.error({
+          domain: input.domain,
+          error: retryErr instanceof Error ? retryErr.message : String(retryErr),
+          validationCause: retryCause?.slice(0, 500),
+        }, "generateRecipe: all attempts failed — prose fallback");
+        return { recipe: null, imageUrl: null, proseResponse: proseFallback(input), recipeId: null, slug: null };
+      }
     }
   }
 

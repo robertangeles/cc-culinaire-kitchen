@@ -38,6 +38,8 @@ import {
   handleGetActivationStatus,
   handleGetIngredientTransactions,
   handleGetSupplierIngredientIds,
+  handleGetIngredientUsage,
+  handleSoftDeleteIngredient,
 } from "../controllers/ingredientController.js";
 import {
   handleOpenSession,
@@ -103,6 +105,8 @@ router.get("/ingredients", requirePermission("inventory:count"), handleListIngre
 
 // Parameterized ingredient routes
 router.patch("/ingredients/:id", requirePermission("inventory:manage"), handleUpdateIngredient);
+router.delete("/ingredients/:id", requirePermission("inventory:manage"), handleSoftDeleteIngredient);
+router.get("/ingredients/:id/usage", requirePermission("inventory:count"), handleGetIngredientUsage);
 router.post("/ingredients/:id/conversions", requirePermission("inventory:manage"), handleAddConversion);
 router.get("/ingredients/:id/conversions", requirePermission("inventory:count"), handleListConversions);
 router.delete("/ingredients/:id/conversions/:conversionId", requirePermission("inventory:manage"), handleDeleteConversion);

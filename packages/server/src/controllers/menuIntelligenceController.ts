@@ -31,12 +31,13 @@ import {
   getYieldVariance,
   listYieldVariance,
 } from "../services/yieldVarianceService.js";
-import { getMiseEnPlace } from "../services/misePlaceService.js";
 
 const menuItemSchema = z.object({
   name: z.string().min(1).max(200),
   category: z.string().min(1).max(100),
   sellingPrice: z.string().regex(/^\d+(\.\d{1,2})?$/, "Invalid price"),
+  servings: z.number().int().min(1).max(999).optional().default(1),
+  qFactorPct: z.string().regex(/^\d+(\.\d{1,2})?$/).optional().default("0"),
 });
 
 const ingredientSchema = z.object({
@@ -49,7 +50,7 @@ const ingredientSchema = z.object({
   unit: z.string().min(1).max(20),
   /** Optional manual override per dish. When omitted, cost flows from the linked
    *  ingredient's preferred_unit_cost (or org default if unlinked). */
-  unitCost: z.string().regex(/^\d+(\.\d{1,2})?$/, "Invalid cost").optional(),
+  unitCost: z.string().regex(/^\d+(\.\d{1,4})?$/, "Invalid cost").optional(),
   yieldPct: z.string().regex(/^\d+(\.\d{1,2})?$/).optional(),
 });
 
@@ -75,11 +76,25 @@ export async function handleCreateMenuItem(req: Request, res: Response, next: Ne
   } catch (err) { next(err); }
 }
 
+const updateMenuItemSchema = z.object({
+  name: z.string().min(1).max(200).optional(),
+  category: z.string().min(1).max(50).optional(),
+  sellingPrice: z.string().regex(/^\d+(\.\d{1,2})?$/, "Invalid price").optional(),
+  servings: z.number().int().min(1).max(999).optional(),
+  qFactorPct: z.string().regex(/^\d+(\.\d{1,2})?$/).optional(),
+  unitsSold: z.number().int().min(0).optional(),
+});
+
 export async function handleUpdateMenuItem(req: Request, res: Response, next: NextFunction) {
   try {
     const userId = (req as any).user.sub;
     const id = req.params.id as string;
-    await updateMenuItem(id, userId, req.body);
+    const parsed = updateMenuItemSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.issues[0].message });
+      return;
+    }
+    await updateMenuItem(id, userId, parsed.data);
     const item = await getMenuItem(id, userId);
     res.json(item);
   } catch (err) { next(err); }
@@ -282,34 +297,4 @@ export async function handleListYieldVariance(req: Request, res: Response, next:
   } catch (err) { next(err); }
 }
 
-// ── Phase 4b: Mise en Place Rollup ────────────────────────
 
-const miseQuerySchema = z.object({
-  serviceDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "serviceDate must be YYYY-MM-DD"),
-  coversForecast: z.coerce.number().int().min(1).max(100000),
-  storeLocationId: z.string().uuid().optional(),
-});
-
-/**
- * GET /api/menu/mise-en-place?serviceDate=YYYY-MM-DD&coversForecast=N[&storeLocationId=...]
- *
- * Returns a station-grouped prep sheet scaled to the forecast.
- */
-export async function handleGetMiseEnPlace(req: Request, res: Response, next: NextFunction) {
-  try {
-    const userId = (req as any).user.sub;
-    const parsed = miseQuerySchema.safeParse(req.query);
-    if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.issues[0].message });
-      return;
-    }
-    const { serviceDate, coversForecast, storeLocationId } = parsed.data;
-    const result = await getMiseEnPlace(
-      userId,
-      storeLocationId ?? null,
-      serviceDate,
-      coversForecast,
-    );
-    res.json(result);
-  } catch (err) { next(err); }
-}

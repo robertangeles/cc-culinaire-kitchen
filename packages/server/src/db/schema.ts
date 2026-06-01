@@ -772,11 +772,13 @@ export const benchDmThread = pgTable(
  */
 export const menuItem = pgTable("menu_item", {
   menuItemId: uuid("menu_item_id").defaultRandom().primaryKey(),
-  userId: integer("user_id").notNull(),
-  storeLocationId: uuid("store_location_id"),
+  userId: integer("user_id").notNull().references(() => user.userId),
+  storeLocationId: uuid("store_location_id").references(() => storeLocation.storeLocationId),
   name: varchar("name", { length: 200 }).notNull(),
   category: varchar("category", { length: 100 }).notNull(),
   sellingPrice: numeric("selling_price", { precision: 10, scale: 2 }).notNull(),
+  servings: integer("servings").notNull().default(1),
+  qFactorPct: numeric("q_factor_pct", { precision: 5, scale: 2 }).notNull().default("0"),
   foodCost: numeric("food_cost", { precision: 10, scale: 2 }),
   foodCostPct: numeric("food_cost_pct", { precision: 5, scale: 2 }),
   contributionMargin: numeric("contribution_margin", { precision: 10, scale: 2 }),
@@ -805,7 +807,10 @@ export const menuItem = pgTable("menu_item", {
   isVegetarianInd: boolean("is_vegetarian_ind").notNull().default(false),
   createdDttm: timestamp("created_dttm").notNull().defaultNow(),
   updatedDttm: timestamp("updated_dttm").notNull().defaultNow(),
-});
+}, (table) => [
+  index("idx_menu_item_user").on(table.userId),
+  index("idx_menu_item_store").on(table.storeLocationId),
+]);
 
 /**
  * The `menu_item_ingredient` table stores ingredients and their costs
@@ -823,7 +828,7 @@ export const menuItemIngredient = pgTable(
   "menu_item_ingredient",
   {
     id: serial("id").primaryKey(),
-    menuItemId: uuid("menu_item_id").notNull(),
+    menuItemId: uuid("menu_item_id").notNull().references(() => menuItem.menuItemId, { onDelete: "cascade" }),
     /** FK to the canonical Catalog ingredient. Null = legacy free-text row. */
     ingredientId: uuid("ingredient_id").references(() => ingredient.ingredientId, { onDelete: "set null" }),
     ingredientName: varchar("ingredient_name", { length: 200 }).notNull(),
@@ -831,7 +836,7 @@ export const menuItemIngredient = pgTable(
     note: text("note"),
     quantity: numeric("quantity", { precision: 10, scale: 3 }).notNull(),
     unit: varchar("unit", { length: 20 }).notNull(),
-    unitCost: numeric("unit_cost", { precision: 10, scale: 2 }).notNull(),
+    unitCost: numeric("unit_cost", { precision: 10, scale: 4 }).notNull(),
     yieldPct: numeric("yield_pct", { precision: 5, scale: 2 }).notNull().default("100"),
     lineCost: numeric("line_cost", { precision: 10, scale: 2 }),
     /**
@@ -847,12 +852,20 @@ export const menuItemIngredient = pgTable(
     costStaleInd: boolean("cost_stale_ind").notNull().default(false),
     /** When the cost was last marked stale. Null when not stale. */
     costStaleAt: timestamp("cost_stale_at", { withTimezone: true }),
+    /**
+     * When set, this dish line is a prepped sub-recipe (prep_component) rather
+     * than a raw ingredient. The prep rollup expands one level into the
+     * component's ingredients. Null = ordinary raw-ingredient line.
+     */
+    prepComponentId: uuid("prep_component_id").references(() => prepComponent.prepComponentId, { onDelete: "set null" }),
     createdDttm: timestamp("created_dttm").notNull().defaultNow(),
   },
   (table) => [
     // FK index: "get all rows linked to this catalog ingredient" — used by
     // stale-cost indicator + soft-delete cascade reads.
+    index("idx_menu_item_ingredient_menu_item").on(table.menuItemId),
     index("idx_menu_item_ingredient_ingredient").on(table.ingredientId),
+    index("idx_menu_item_ingredient_prep_component").on(table.prepComponentId),
   ],
 );
 
@@ -891,7 +904,7 @@ export const wasteLog = pgTable("waste_log", {
   wasteLogId: uuid("waste_log_id").defaultRandom().primaryKey(),
   userId: integer("user_id").notNull().references(() => user.userId),
   organisationId: integer("organisation_id").references(() => organisation.organisationId),
-  storeLocationId: uuid("store_location_id"),
+  storeLocationId: uuid("store_location_id").references(() => storeLocation.storeLocationId),
   ingredientName: text("ingredient_name").notNull(),
   quantity: numeric("quantity", { precision: 10, scale: 3 }).notNull(),
   unit: varchar("unit", { length: 20 }).notNull(),
@@ -902,7 +915,9 @@ export const wasteLog = pgTable("waste_log", {
   loggedAt: timestamp("logged_at", { withTimezone: true }).defaultNow().notNull(),
   createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
   updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
-});
+}, (table) => [
+  index("idx_waste_log_store").on(table.storeLocationId),
+]);
 
 // ---------------------------------------------------------------------------
 // Kitchen Operations Copilot Lite
@@ -919,7 +934,7 @@ export const prepSession = pgTable("prep_session", {
   prepSessionId: uuid("prep_session_id").defaultRandom().primaryKey(),
   userId: integer("user_id").notNull().references(() => user.userId),
   organisationId: integer("organisation_id").references(() => organisation.organisationId),
-  storeLocationId: uuid("store_location_id"),
+  storeLocationId: uuid("store_location_id").references(() => storeLocation.storeLocationId),
   prepDate: date("prep_date").notNull(),
   expectedCovers: integer("expected_covers"),
   actualCovers: integer("actual_covers"),
@@ -927,6 +942,7 @@ export const prepSession = pgTable("prep_session", {
   tasksCompleted: integer("tasks_completed").default(0).notNull(),
   tasksSkipped: integer("tasks_skipped").default(0).notNull(),
   notes: text("notes"),
+  isEndedInd: boolean("is_ended_ind").notNull().default(false),
   createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
   updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
 });
@@ -952,12 +968,31 @@ export const prepTask = pgTable("prep_task", {
   priorityScore: numeric("priority_score", { precision: 8, scale: 2 }).notNull(),
   priorityTier: varchar("priority_tier", { length: 20 }).notNull(),
   station: varchar("station", { length: 50 }),
+  /** FK to the canonical Catalog ingredient this task produces. Null = legacy free-text line. */
+  ingredientId: uuid("ingredient_id").references(() => ingredient.ingredientId),
+  /** Set when the task is a prepped sub-recipe (prep_component) rather than a raw ingredient. */
+  prepComponentId: uuid("prep_component_id").references(() => prepComponent.prepComponentId, { onDelete: "set null" }),
+  /** On-hand stock in the task's unit at generation time. Null = no stock data (free-text ingredient). */
+  onHandQty: numeric("on_hand_qty", { precision: 10, scale: 3 }),
+  /** What actually needs prepping: max(0, quantityNeeded - onHandQty). Null when on-hand unknown. */
+  prepNeeded: numeric("prep_needed", { precision: 10, scale: 3 }),
+  /** Use-by date = prep date + component shelf_life_days (TCS capped at 7d). Null when shelf life unknown. */
+  useBy: date("use_by"),
+  /** TRUE when planned quantity exceeds what the forecast sells before use_by (over-prep warning). */
+  isOverPrepInd: boolean("is_over_prep_ind").notNull().default(false),
   status: varchar("status", { length: 20 }).default("pending").notNull(),
   assignedTo: varchar("assigned_to", { length: 100 }),
   completedAt: timestamp("completed_at", { withTimezone: true }),
   createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
   updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
-});
+}, (table) => [
+  // Hot path: load all tasks for a session (getPrepSession / dashboard render).
+  index("idx_prep_task_session").on(table.prepSessionId),
+  // FK index: tasks producing a given catalog ingredient (cross-usage trace).
+  index("idx_prep_task_ingredient").on(table.ingredientId),
+  // FK index: tasks for a given prepped component.
+  index("idx_prep_task_prep_component").on(table.prepComponentId),
+]);
 
 /**
  * The `ingredient_cross_usage` table tracks ingredients used across
@@ -1007,6 +1042,13 @@ export const ingredientCrossUsage = pgTable("ingredient_cross_usage", {
   crossUsageId: uuid("cross_usage_id").defaultRandom().primaryKey(),
   userId: integer("user_id").notNull().references(() => user.userId),
   prepSessionId: uuid("prep_session_id").notNull().references(() => prepSession.prepSessionId),
+  /**
+   * FK to the canonical Catalog ingredient. Cross-usage is keyed on this id so
+   * "Tomato Sauce" and "tomato sauce" roll up to ONE batch number. Null only
+   * for legacy free-text lines (`ingredient_id IS NULL` on menu_item_ingredient),
+   * which fall back to name-keying.
+   */
+  ingredientId: uuid("ingredient_id").references(() => ingredient.ingredientId),
   ingredientName: varchar("ingredient_name", { length: 200 }).notNull(),
   dishCount: integer("dish_count").notNull(),
   totalQuantity: numeric("total_quantity", { precision: 10, scale: 3 }).notNull(),
@@ -1014,6 +1056,71 @@ export const ingredientCrossUsage = pgTable("ingredient_cross_usage", {
   dishNames: jsonb("dish_names").notNull(),
   createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
 });
+
+/**
+ * The `prep_component` table is a chef-defined sub-recipe / prepped component
+ * (e.g. "Tomato base", "Beurre blanc") that is itself used as an ingredient
+ * across multiple dishes. One-level only: a component's ingredients are raw
+ * Catalog ingredients — a component does NOT reference another component
+ * (no recursion, no cycle risk). Deliberately a separate domain from
+ * `menu_item` so non-sellable components never pollute menu engineering,
+ * menu-mix %, P&L, or allergen triggers.
+ *
+ * OLTP table, 2NF — every non-key column depends only on prep_component_id.
+ */
+export const prepComponent = pgTable(
+  "prep_component",
+  {
+    prepComponentId: uuid("prep_component_id").defaultRandom().primaryKey(),
+    organisationId: integer("organisation_id").notNull().references(() => organisation.organisationId),
+    name: varchar("name", { length: 200 }).notNull(),
+    /** Single base unit the whole component is measured/scaled in (e.g. "g", "ml", "each"). */
+    baseUnit: varchar("base_unit", { length: 20 }).notNull(),
+    /** Usable yield of the finished component (cooking/trim loss). */
+    yieldPct: numeric("yield_pct", { precision: 5, scale: 2 }).notNull().default("100"),
+    /** Shelf life of the prepped component in days. Null = unknown (no use-by computed). */
+    shelfLifeDays: integer("shelf_life_days"),
+    /** Temperature-Controlled-for-Safety: caps use-by at 7 days from prep. */
+    isTcsInd: boolean("is_tcs_ind").notNull().default(false),
+    createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
+    updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // One component name per org
+    uniqueIndex("idx_prep_component_org_name").on(table.organisationId, table.name),
+    // FK index: "get all components for an org" (picker + tenant scope)
+    index("idx_prep_component_org").on(table.organisationId),
+  ],
+);
+
+/**
+ * The `prep_component_ingredient` table holds the raw-ingredient lines of a
+ * `prep_component`. Mirrors `menu_item_ingredient`. One level only — there is
+ * NO `child_component_id`, so the prep graph is flat (component → raw
+ * ingredients) and cannot cycle.
+ *
+ * OLTP table, 2NF.
+ */
+export const prepComponentIngredient = pgTable(
+  "prep_component_ingredient",
+  {
+    id: serial("id").primaryKey(),
+    prepComponentId: uuid("prep_component_id").notNull().references(() => prepComponent.prepComponentId, { onDelete: "cascade" }),
+    /** FK to the canonical Catalog ingredient. Null = legacy free-text row. */
+    ingredientId: uuid("ingredient_id").references(() => ingredient.ingredientId, { onDelete: "set null" }),
+    ingredientName: varchar("ingredient_name", { length: 200 }).notNull(),
+    quantity: numeric("quantity", { precision: 10, scale: 3 }).notNull(),
+    unit: varchar("unit", { length: 20 }).notNull(),
+    yieldPct: numeric("yield_pct", { precision: 5, scale: 2 }).notNull().default("100"),
+    createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // FK index: load all ingredient lines for a component
+    index("idx_prep_component_ingredient_component").on(table.prepComponentId),
+    // FK index: "which components use this catalog ingredient"
+    index("idx_prep_component_ingredient_ingredient").on(table.ingredientId),
+  ],
+);
 
 // ---------------------------------------------------------------------------
 // Store Locations — Multi-Location Support
@@ -1194,6 +1301,7 @@ export const ingredient = pgTable(
     itemType: varchar("item_type", { length: 20 }).notNull().default("KITCHEN_INGREDIENT"),
     fifoApplicable: varchar("fifo_applicable", { length: 20 }).notNull().default("ALWAYS"),
     baseUnit: varchar("base_unit", { length: 20 }).notNull(),
+    packQty: numeric("pack_qty", { precision: 10, scale: 3 }),
     description: text("description"),
     unitCost: numeric("unit_cost"),
     parLevel: numeric("par_level"),
@@ -1224,7 +1332,7 @@ export const ingredient = pgTable(
      * A startup reconciliation check in serverIndex flags drift caused by
      * direct SQL surgery between deploys.
      */
-    preferredUnitCost: numeric("preferred_unit_cost", { precision: 10, scale: 2 }),
+    preferredUnitCost: numeric("preferred_unit_cost", { precision: 10, scale: 4 }),
     preferredSupplierId: uuid("preferred_supplier_id").references(() => supplier.supplierId),
     createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
     updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
@@ -1321,6 +1429,7 @@ export const ingredientSupplier = pgTable(
     ingredientSupplierId: uuid("ingredient_supplier_id").defaultRandom().primaryKey(),
     ingredientId: uuid("ingredient_id").notNull().references(() => ingredient.ingredientId),
     supplierId: uuid("supplier_id").notNull().references(() => supplier.supplierId),
+    packCost: numeric("pack_cost", { precision: 10, scale: 2 }),
     costPerUnit: numeric("cost_per_unit"),
     supplierItemCode: varchar("supplier_item_code", { length: 100 }),
     leadTimeDays: integer("lead_time_days"),

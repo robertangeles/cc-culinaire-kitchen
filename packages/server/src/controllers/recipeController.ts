@@ -914,10 +914,11 @@ export async function handleGetRecipesForImport(
       )
       .orderBy(recipeTable.domain, recipeTable.title);
 
-    // Map to lightweight response — extract only ingredients from recipeData
+    // Map to lightweight response — extract ingredients + yield from recipeData
     const result: ImportRecipeRow[] = recipes.map((r) => {
       const data = r.recipeData as Record<string, unknown> | null;
       const rawIngredients = (data?.ingredients as any[]) ?? [];
+      const recipeYield = typeof data?.yield === "string" ? data.yield : undefined;
 
       const ingredients: ImportIngredient[] = rawIngredients.map((ing: any) => ({
         name: typeof ing.name === "string" ? ing.name : (ing.ingredient ?? ""),
@@ -933,6 +934,7 @@ export async function handleGetRecipesForImport(
         ...(r.recipeUserId !== userId && r.ownerName
           ? { ownerName: r.ownerName }
           : {}),
+        ...(recipeYield ? { yield: recipeYield } : {}),
         ingredients,
       };
     });

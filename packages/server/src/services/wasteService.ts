@@ -75,14 +75,19 @@ export async function logWaste(
   userId: number,
   data: WasteLogInput,
 ): Promise<WasteLogRow> {
-  // Auto-set organisationId from user's org membership
   const orgCtx = await getUserOrgContext(userId);
+
+  const [userRow] = await db
+    .select({ selectedLocationId: user.selectedLocationId })
+    .from(user)
+    .where(eq(user.userId, userId));
 
   const [row] = await db
     .insert(wasteLog)
     .values({
       userId,
       organisationId: orgCtx.primaryOrgId,
+      storeLocationId: userRow?.selectedLocationId ?? null,
       ingredientName: data.ingredientName.trim(),
       quantity: String(data.quantity),
       unit: data.unit.trim(),
