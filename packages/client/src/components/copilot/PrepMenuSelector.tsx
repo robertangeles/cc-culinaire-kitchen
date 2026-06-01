@@ -14,6 +14,8 @@ import {
   ChevronRight,
   RotateCcw,
   Sparkles,
+  Wand2,
+  Users,
 } from "lucide-react";
 
 /* ------------------------------------------------------------------ */
@@ -90,6 +92,15 @@ export function PrepMenuSelector({ sessionId, onGenerated }: Props) {
   const [generating, setGenerating] = useState(false);
   const [genError, setGenError] = useState<string | null>(null);
   const [loadingPrevious, setLoadingPrevious] = useState(false);
+
+  /* ---- forecast state ---- */
+  const [forecastCovers, setForecastCovers] = useState("");
+  const [suggesting, setSuggesting] = useState(false);
+  const [suggestError, setSuggestError] = useState<string | null>(null);
+  const [basisByKey, setBasisByKey] = useState<Map<string, "historical" | "estimated">>(new Map());
+  const [anyHistory, setAnyHistory] = useState(true);
+  const [bufferPct, setBufferPct] = useState("25");
+  const [showFormula, setShowFormula] = useState(false);
 
   /* ---- helpers to build a stable key for each dish ---- */
   const menuKey = (mi: MenuItem) => `mi:${mi.menuItemId}`;
@@ -174,6 +185,65 @@ export function PrepMenuSelector({ sessionId, onGenerated }: Props) {
   }, []);
 
   /* ---------------------------------------------------------------- */
+  /*  Forecast → suggested portions                                    */
+  /* ---------------------------------------------------------------- */
+  const handleSuggest = useCallback(async () => {
+    const covers = parseInt(forecastCovers, 10);
+    if (!Number.isFinite(covers) || covers < 1) {
+      setSuggestError("Enter a forecast cover count of at least 1");
+      return;
+    }
+    setSuggesting(true);
+    setSuggestError(null);
+    try {
+      const buffer = 1 + (parseInt(bufferPct, 10) || 25) / 100;
+      const res = await fetch(`/api/prep/forecast-suggest?covers=${covers}&buffer=${buffer}`, {
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error((json as { error?: string }).error ?? `Failed (${res.status})`);
+      }
+      const data: {
+        anyHistory: boolean;
+        suggestions: {
+          menuItemId: string;
+          suggestedPortions: number;
+          basis: "historical" | "estimated";
+        }[];
+      } = await res.json();
+
+      // Merge suggestions into existing selections — don't overwrite manual adjustments.
+      setSelected((prev) => {
+        const next = new Map(prev);
+        for (const s of data.suggestions) {
+          if (s.suggestedPortions > 0) {
+            const key = `mi:${s.menuItemId}`;
+            if (!next.has(key)) next.set(key, s.suggestedPortions);
+          }
+        }
+        return next;
+      });
+      setBasisByKey((prev) => {
+        const next = new Map(prev);
+        for (const s of data.suggestions) {
+          if (s.suggestedPortions > 0) {
+            const key = `mi:${s.menuItemId}`;
+            if (!next.has(key)) next.set(key, s.basis);
+          }
+        }
+        return next;
+      });
+      setAnyHistory(data.anyHistory);
+      setSource("menu");
+    } catch (err) {
+      setSuggestError(err instanceof Error ? err.message : "Failed to suggest portions");
+    } finally {
+      setSuggesting(false);
+    }
+  }, [forecastCovers, bufferPct]);
+
+  /* ---------------------------------------------------------------- */
   /*  Generate prep list                                               */
   /* ---------------------------------------------------------------- */
   const generatePrepList = useCallback(async () => {
@@ -232,9 +302,16 @@ export function PrepMenuSelector({ sessionId, onGenerated }: Props) {
         const json = await genRes.json().catch(() => ({}));
         throw new Error((json as { error?: string }).error ?? `Failed to generate tasks (${genRes.status})`);
       }
+      await genRes.json();
 
-      const sessionData = await genRes.json();
-      onGenerated(sessionData);
+      // Reload the full session (the generate endpoint returns a flat task array;
+      // the dashboard needs the {session, tasks} wrapper with updated counts).
+      const sessionRes = await fetch(`/api/prep/sessions/${sessionId}`, {
+        credentials: "include",
+      });
+      if (!sessionRes.ok) throw new Error("Failed to load session after generation");
+      const fullSession = await sessionRes.json();
+      onGenerated(fullSession);
     } catch (err) {
       setGenError(err instanceof Error ? err.message : "Failed to generate prep list");
     } finally {
@@ -324,9 +401,96 @@ export function PrepMenuSelector({ sessionId, onGenerated }: Props) {
           What&apos;s on the menu today?
         </h2>
         <p className="text-[#999999] text-sm mt-1">
-          Select the dishes you&apos;re serving and set portion counts
+          Forecast your covers, fine-tune per dish, and build a scaled prep list
         </p>
       </div>
+
+      {/* Forecast covers → suggested portions */}
+      {menuData.hasMenuItems && (
+        <div className="bg-[#0A0A0A] border border-[#2A2A2A] rounded-xl p-4 mb-4 space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+            <div className="flex items-center gap-2">
+              <Users className="size-4 text-[#D4A574]" />
+              <label htmlFor="forecast-covers" className="text-sm text-[#999999] whitespace-nowrap">
+                Forecast covers
+              </label>
+            </div>
+            <input
+              id="forecast-covers"
+              type="number"
+              min={1}
+              value={forecastCovers}
+              onChange={(e) => setForecastCovers(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleSuggest();
+              }}
+              placeholder="e.g. 80"
+              className="w-28 px-3 py-2 bg-[#161616] border border-[#2A2A2A] rounded-xl text-white text-sm text-center placeholder-[#666666] focus:ring-2 focus:ring-[#D4A574]/50 focus:border-transparent min-h-[44px]"
+            />
+            <div className="flex items-center gap-2">
+              <label htmlFor="buffer-pct" className="text-sm text-[#999999] whitespace-nowrap">
+                Buffer
+              </label>
+              <div className="relative">
+                <input
+                  id="buffer-pct"
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={bufferPct}
+                  onChange={(e) => setBufferPct(e.target.value)}
+                  className="w-20 px-3 py-2 pr-7 bg-[#161616] border border-[#2A2A2A] rounded-xl text-white text-sm text-center placeholder-[#666666] focus:ring-2 focus:ring-[#D4A574]/50 focus:border-transparent min-h-[44px]"
+                />
+                <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-[#666666]">%</span>
+              </div>
+            </div>
+            <button
+              onClick={handleSuggest}
+              disabled={suggesting}
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-[#D4A574]/15 text-[#D4A574] hover:bg-[#D4A574]/25 disabled:opacity-50 rounded-xl text-sm font-medium transition-colors min-h-[44px]"
+            >
+              {suggesting ? <Loader2 className="size-4 animate-spin" /> : <Wand2 className="size-4" />}
+              Suggest portions
+            </button>
+          </div>
+          {/* Formula explainer */}
+          <div className="flex items-start gap-2">
+            <button
+              onClick={() => setShowFormula((v) => !v)}
+              className="text-xs text-[#666666] hover:text-[#D4A574] transition-colors underline underline-offset-2 shrink-0"
+            >
+              {showFormula ? "Hide" : "How it works"}
+            </button>
+            <span className="text-xs text-[#666666] sm:ml-auto">
+              {anyHistory
+                ? "Seeded from your sales mix — adjust as needed"
+                : "Even split (no sales history yet) — adjust as needed"}
+            </span>
+          </div>
+          {showFormula && (
+            <div className="bg-[#161616]/60 border border-[#2A2A2A] rounded-xl p-4 text-xs text-[#999999] space-y-2">
+              <p className="text-[#E5E5E5] font-medium">Per dish, we suggest:</p>
+              <p>
+                <span className="text-[#D4A574]">Covers</span> you entered
+                {" × "}
+                <span className="text-[#D4A574]">course rate</span> (how many of that course each guest orders — e.g. entrees = 1.0, desserts = 0.4)
+                {" × "}
+                <span className="text-[#D4A574]">item share</span> (this dish&apos;s slice of its category — even split if no sales history, or your actual sales mix)
+                {" × "}
+                <span className="text-[#D4A574]">buffer</span> ({bufferPct || 25}% extra to prep for the rush).
+              </p>
+              <p className="text-[#666666]">
+                Example: 50 covers × 1.0 (entree) × 100% (only entree on the menu) × {parseInt(bufferPct, 10) || 25}% buffer = {Math.round(50 * 1.0 * 1.0 * (1 + (parseInt(bufferPct, 10) || 25) / 100))} portions. You can always adjust the number — your override wins.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+      {suggestError && (
+        <div className="bg-red-900/50 border border-red-700 rounded-lg p-3 text-red-300 text-sm mb-4">
+          {suggestError}
+        </div>
+      )}
 
       {/* Source toggle + quick actions */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 mb-6">
@@ -470,6 +634,24 @@ export function PrepMenuSelector({ sessionId, onGenerated }: Props) {
                             {mi.foodCostPct != null && (
                               <span className="shrink-0 text-xs px-2 py-0.5 rounded-full bg-[#1E1E1E] text-[#999999]">
                                 {Number(mi.foodCostPct).toFixed(1)}% cost
+                              </span>
+                            )}
+
+                            {/* Forecast confidence badge */}
+                            {isSelected && basisByKey.get(key) && (
+                              <span
+                                className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
+                                  basisByKey.get(key) === "historical"
+                                    ? "bg-green-500/15 text-green-400"
+                                    : "bg-[#D4A574]/15 text-[#D4A574]"
+                                }`}
+                                title={
+                                  basisByKey.get(key) === "historical"
+                                    ? "Suggested from your sales mix"
+                                    : "Estimated even split (no sales history yet)"
+                                }
+                              >
+                                {basisByKey.get(key) === "historical" ? "hist" : "est"}
                               </span>
                             )}
 

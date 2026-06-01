@@ -20,7 +20,7 @@
 
 import pino from "pino";
 import { db } from "../db/index.js";
-import { menuItem, menuItemIngredient, menuCategorySetting, wasteLog, ingredient, locationIngredient } from "../db/schema.js";
+import { menuItem, menuItemIngredient, menuCategorySetting, wasteLog, ingredient, locationIngredient, user } from "../db/schema.js";
 import { eq, and, sql, desc, gte, ilike, inArray } from "drizzle-orm";
 import { convertToBaseUnit, normalizeUnit, type BaseUnit, IncompatibleUnitsError } from "@culinaire/shared";
 
@@ -34,12 +34,22 @@ export async function createMenuItem(userId: number, data: {
   name: string;
   category: string;
   sellingPrice: string;
+  servings?: number;
+  qFactorPct?: string;
 }) {
+  const [userRow] = await db
+    .select({ selectedLocationId: user.selectedLocationId })
+    .from(user)
+    .where(eq(user.userId, userId));
+
   const [item] = await db.insert(menuItem).values({
     userId,
+    storeLocationId: userRow?.selectedLocationId ?? null,
     name: data.name,
     category: data.category,
     sellingPrice: data.sellingPrice,
+    servings: data.servings ?? 1,
+    qFactorPct: data.qFactorPct ?? "0",
   }).returning();
   return item;
 }
@@ -65,6 +75,8 @@ export async function updateMenuItem(menuItemId: string, userId: number, data: P
   name: string;
   category: string;
   sellingPrice: string;
+  servings: number;
+  qFactorPct: string;
   unitsSold: number;
   periodStart: string;
   periodEnd: string;
@@ -73,6 +85,8 @@ export async function updateMenuItem(menuItemId: string, userId: number, data: P
   if (data.name !== undefined) setValues.name = data.name;
   if (data.category !== undefined) setValues.category = data.category;
   if (data.sellingPrice !== undefined) setValues.sellingPrice = data.sellingPrice;
+  if (data.servings !== undefined) setValues.servings = data.servings;
+  if (data.qFactorPct !== undefined) setValues.qFactorPct = data.qFactorPct;
   if (data.unitsSold !== undefined) setValues.unitsSold = data.unitsSold;
   if (data.periodStart !== undefined) setValues.periodStart = data.periodStart;
   if (data.periodEnd !== undefined) setValues.periodEnd = data.periodEnd;
@@ -103,14 +117,22 @@ export async function deleteMenuItem(menuItemId: string, userId: number) {
  * is NOT used here — it's reserved for the Menu Intelligence P&L view, not
  * the daily editor. The hybrid was the eng-review tension #1 resolution.
  */
-async function resolveUnitCost(
+export async function resolveUnitCost(
   callerUnitCost: string | null | undefined,
   ingredientId: string | null | undefined,
 ): Promise<string> {
-  if (callerUnitCost !== undefined && callerUnitCost !== null && callerUnitCost !== "") {
-    return callerUnitCost;
+  // A POSITIVE caller cost is an explicit manual override — use it as-is.
+  // A zero/empty/null cost means "no override" — fall through to the catalog
+  // when the row is linked. (Storing 0 must never freeze a linked ingredient
+  // at $0 when the catalog has a real price.)
+  const callerNum =
+    callerUnitCost !== undefined && callerUnitCost !== null && callerUnitCost !== ""
+      ? parseFloat(callerUnitCost)
+      : NaN;
+  if (Number.isFinite(callerNum) && callerNum > 0) {
+    return callerUnitCost as string;
   }
-  if (!ingredientId) return "0";
+  if (!ingredientId) return callerUnitCost && Number.isFinite(callerNum) ? callerUnitCost : "0";
   const [ing] = await db
     .select({
       preferred: ingredient.preferredUnitCost,
@@ -207,7 +229,24 @@ export async function addIngredient(menuItemId: string, data: {
 }
 
 export async function getIngredients(menuItemId: string) {
-  return db.select().from(menuItemIngredient)
+  return db.select({
+    id: menuItemIngredient.id,
+    menuItemId: menuItemIngredient.menuItemId,
+    ingredientId: menuItemIngredient.ingredientId,
+    ingredientName: menuItemIngredient.ingredientName,
+    note: menuItemIngredient.note,
+    quantity: menuItemIngredient.quantity,
+    unit: menuItemIngredient.unit,
+    unitCost: menuItemIngredient.unitCost,
+    yieldPct: menuItemIngredient.yieldPct,
+    lineCost: menuItemIngredient.lineCost,
+    costStaleInd: menuItemIngredient.costStaleInd,
+    costStaleAt: menuItemIngredient.costStaleAt,
+    createdDttm: menuItemIngredient.createdDttm,
+    baseUnit: ingredient.baseUnit,
+    catalogUnitCost: ingredient.preferredUnitCost,
+  }).from(menuItemIngredient)
+    .leftJoin(ingredient, eq(menuItemIngredient.ingredientId, ingredient.ingredientId))
     .where(eq(menuItemIngredient.menuItemId, menuItemId))
     .orderBy(menuItemIngredient.ingredientName);
 }
@@ -283,10 +322,11 @@ export async function refreshIngredientCost(rowId: number, menuItemId: string) {
 export async function getPandLFoodCost(menuItemId: string): Promise<number> {
   const [item] = await db.select({
     storeLocationId: menuItem.storeLocationId,
+    servings: menuItem.servings,
+    qFactorPct: menuItem.qFactorPct,
   }).from(menuItem).where(eq(menuItem.menuItemId, menuItemId));
   if (!item) throw new Error("Menu item not found");
   if (!item.storeLocationId) {
-    // No location → no per-location WAC → fall back to daily food_cost.
     const [m] = await db.select({ foodCost: menuItem.foodCost })
       .from(menuItem).where(eq(menuItem.menuItemId, menuItemId));
     return Number(m?.foodCost ?? 0);
@@ -323,7 +363,11 @@ export async function getPandLFoodCost(menuItemId: string): Promise<number> {
     const cost = li?.wac ?? r.unitCost;
     total += await lineCostFor(r.quantity, r.unit, cost, r.yieldPct, r.ingredientId);
   }
-  return Number(total.toFixed(2));
+  const servings = item.servings ?? 1;
+  const perServing = servings > 1 ? total / servings : total;
+  const qFactor = parseFloat(item.qFactorPct ?? "0");
+  const withQ = qFactor > 0 ? perServing * (1 + qFactor / 100) : perServing;
+  return Number(withQ.toFixed(2));
 }
 
 /** Internal helper: compute a single line cost as a number (vs. computeLineCost which returns string). */
@@ -346,13 +390,20 @@ async function recalculateItemCosts(menuItemId: string) {
   const ingredients = await db.select().from(menuItemIngredient)
     .where(eq(menuItemIngredient.menuItemId, menuItemId));
 
-  const foodCost = ingredients.reduce((sum, ing) => sum + parseFloat(ing.lineCost ?? "0"), 0);
+  const totalIngredientCost = ingredients.reduce((sum, ing) => sum + parseFloat(ing.lineCost ?? "0"), 0);
 
-  const [item] = await db.select({ sellingPrice: menuItem.sellingPrice })
-    .from(menuItem).where(eq(menuItem.menuItemId, menuItemId)).limit(1);
+  const [item] = await db.select({
+    sellingPrice: menuItem.sellingPrice,
+    servings: menuItem.servings,
+    qFactorPct: menuItem.qFactorPct,
+  }).from(menuItem).where(eq(menuItem.menuItemId, menuItemId)).limit(1);
 
   if (!item) return;
 
+  const servings = item.servings ?? 1;
+  const perServing = servings > 1 ? totalIngredientCost / servings : totalIngredientCost;
+  const qFactor = parseFloat(item.qFactorPct ?? "0");
+  const foodCost = qFactor > 0 ? perServing * (1 + qFactor / 100) : perServing;
   const sellingPrice = parseFloat(item.sellingPrice);
   const foodCostPct = sellingPrice > 0 ? (foodCost / sellingPrice) * 100 : 0;
   const contributionMargin = sellingPrice - foodCost;

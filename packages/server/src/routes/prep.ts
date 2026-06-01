@@ -17,6 +17,7 @@ import {
   handleGetHistory,
   handleEndSession,
   handleGetMenuForSelection,
+  handleForecastSuggest,
   handleSaveSelections,
   handleGenerateFromSelections,
   handleGetSelections,
@@ -30,6 +31,7 @@ prepRouter.use(authenticate);
 
 // Named routes must be before parameterized routes to avoid collision
 prepRouter.get("/menu", handleGetMenuForSelection);
+prepRouter.get("/forecast-suggest", handleForecastSuggest);
 prepRouter.get("/previous-selections", handleGetPreviousSelections);
 prepRouter.get("/sessions/today", handleGetTodaySession);
 prepRouter.get("/high-impact", handleGetHighImpact);

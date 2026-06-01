@@ -29,6 +29,8 @@ import {
   stockTakeCategory,
   stockTakeSession,
   consumptionLog,
+  menuItemIngredient,
+  menuItem,
   user,
 } from "../db/schema.js";
 import * as auditService from "./auditService.js";
@@ -42,6 +44,7 @@ export async function createIngredient(
     ingredientName: string;
     ingredientCategory: string;
     baseUnit: string;
+    packQty?: string;
     description?: string;
     unitCost?: string;
     parLevel?: string;
@@ -61,6 +64,7 @@ export async function createIngredient(
       ingredientName: data.ingredientName.trim(),
       ingredientCategory: data.ingredientCategory,
       baseUnit: data.baseUnit,
+      packQty: data.packQty ?? null,
       description: data.description ?? null,
       unitCost: data.unitCost ?? null,
       parLevel: data.parLevel ?? null,
@@ -159,6 +163,17 @@ export async function getIngredient(ingredientId: string, organisationId: number
  *
  * **There is no hard-delete counterpart.** See module docstring.
  */
+export async function getIngredientUsage(ingredientId: string) {
+  return db
+    .select({
+      menuItemId: menuItemIngredient.menuItemId,
+      menuItemName: menuItem.name,
+    })
+    .from(menuItemIngredient)
+    .innerJoin(menuItem, eq(menuItem.menuItemId, menuItemIngredient.menuItemId))
+    .where(eq(menuItemIngredient.ingredientId, ingredientId));
+}
+
 export async function softDeleteIngredient(
   ingredientId: string,
   organisationId: number,
@@ -266,10 +281,13 @@ export async function updateIngredient(
     ingredientName: string;
     ingredientCategory: string;
     baseUnit: string;
+    packQty: string | null;
     description: string | null;
     unitCost: string | null;
     parLevel: string | null;
     reorderQty: string | null;
+    itemType: string;
+    fifoApplicable: string;
     containsDairyInd: boolean;
     containsGlutenInd: boolean;
     containsNutsInd: boolean;
@@ -282,6 +300,9 @@ export async function updateIngredient(
   if (data.ingredientName !== undefined) updates.ingredientName = data.ingredientName.trim();
   if (data.ingredientCategory !== undefined) updates.ingredientCategory = data.ingredientCategory;
   if (data.baseUnit !== undefined) updates.baseUnit = data.baseUnit;
+  if (data.packQty !== undefined) updates.packQty = data.packQty;
+  if (data.itemType !== undefined) updates.itemType = data.itemType;
+  if (data.fifoApplicable !== undefined) updates.fifoApplicable = data.fifoApplicable;
   if (data.description !== undefined) updates.description = data.description;
   if (data.unitCost !== undefined) updates.unitCost = data.unitCost;
   if (data.parLevel !== undefined) updates.parLevel = data.parLevel;
@@ -685,6 +706,7 @@ export async function assignSupplierToIngredient(
   ingredientId: string,
   supplierId: string,
   data: {
+    packCost?: string;
     costPerUnit?: string;
     supplierItemCode?: string;
     leadTimeDays?: number;
@@ -710,6 +732,7 @@ export async function assignSupplierToIngredient(
     .values({
       ingredientId,
       supplierId,
+      packCost: data.packCost ?? null,
       costPerUnit: data.costPerUnit ?? null,
       supplierItemCode: data.supplierItemCode ?? null,
       leadTimeDays: data.leadTimeDays ?? null,
@@ -728,6 +751,7 @@ export async function listIngredientSuppliers(ingredientId: string) {
       supplierId: ingredientSupplier.supplierId,
       supplierName: supplier.supplierName,
       contactName: supplier.contactName,
+      packCost: ingredientSupplier.packCost,
       costPerUnit: ingredientSupplier.costPerUnit,
       supplierItemCode: ingredientSupplier.supplierItemCode,
       leadTimeDays: ingredientSupplier.leadTimeDays,

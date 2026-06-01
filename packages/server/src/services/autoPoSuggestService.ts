@@ -20,6 +20,7 @@
 
 import { sql } from "drizzle-orm";
 import { db } from "../db/index.js";
+import { suggestedOrderQty, estimatedLineCost } from "./poMath.js";
 
 export interface AutoPoLine {
   ingredientId: string;
@@ -118,11 +119,11 @@ export async function getAutoPoSuggestions(
 
     if (shortfall <= 0) continue; // belt + braces; the WHERE already filtered
 
-    const suggestedQty = Math.max(shortfall, reorderQty ?? 0);
+    const suggestedQtyVal = suggestedOrderQty(parLevel, currentQty, reorderQty);
     const preferredUnitCost =
       r.preferred_unit_cost != null ? parseFloat(r.preferred_unit_cost) : null;
     const estimatedCost =
-      preferredUnitCost != null ? Number((suggestedQty * preferredUnitCost).toFixed(2)) : null;
+      preferredUnitCost != null ? estimatedLineCost(suggestedQtyVal, preferredUnitCost) : null;
 
     const supplierKey = r.preferred_supplier_id ?? "__unassigned__";
     const supplierName = r.supplier_name ?? "Unassigned";
@@ -143,7 +144,7 @@ export async function getAutoPoSuggestions(
       parLevel,
       reorderQty,
       shortfall: Number(shortfall.toFixed(3)),
-      suggestedQty: Number(suggestedQty.toFixed(3)),
+      suggestedQty: Number(suggestedQtyVal.toFixed(3)),
       preferredUnitCost,
       estimatedCost,
     });

@@ -19,6 +19,7 @@ export interface Ingredient {
   ingredientName: string;
   ingredientCategory: string;
   baseUnit: string;
+  packQty: string | null;
   description: string | null;
   unitCost: string | null;
   parLevel: string | null;
@@ -198,6 +199,7 @@ export function useIngredients() {
     ingredientName: string;
     ingredientCategory: string;
     baseUnit: string;
+    packQty?: string;
     description?: string;
     unitCost?: string;
     parLevel?: string;
@@ -237,7 +239,22 @@ export function useIngredients() {
 
   useEffect(() => { refresh(); }, [refresh]);
 
-  return { ingredients, isLoading, refresh, create, update };
+  const checkUsage = useCallback(async (id: string) => {
+    const res = await fetch(`${API}/ingredients/${id}/usage`, opts);
+    if (!res.ok) return [];
+    return res.json() as Promise<Array<{ menuItemId: string; menuItemName: string }>>;
+  }, []);
+
+  const remove = useCallback(async (id: string) => {
+    const res = await fetch(`${API}/ingredients/${id}`, { ...opts, method: "DELETE" });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || "Failed to delete ingredient");
+    }
+    await refresh();
+  }, [refresh]);
+
+  return { ingredients, isLoading, refresh, create, update, checkUsage, remove };
 }
 
 // ─── useLocationIngredients ───────────────────────────────────────
@@ -315,6 +332,7 @@ export interface IngredientSupplierLink {
   supplierId: string;
   supplierName: string;
   contactName: string | null;
+  packCost: string | null;
   costPerUnit: string | null;
   supplierItemCode: string | null;
   leadTimeDays: number | null;

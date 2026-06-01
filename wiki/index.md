@@ -49,6 +49,8 @@ Categories: **entity** (named things) · **concept** (patterns) · **decision** 
 | [Dev server + Playwright verification](concepts/dev-server-plus-playwright-verification.md) | UI ways of working: every UI change gets rendered + screenshotted via Playwright before being reported done | 2026-04-29 |
 | [PR description template](concepts/pr-description-template.md) | Every PR includes a structured description (summary / why / what / out-of-scope / test plan / risk / depends-on) | 2026-04-30 |
 | [Surface Partition](concepts/surface-partition.md) | The `(slug, surface)` / `runtime` pattern that lets web and mobile own distinct rows for the same logical content | 2026-05-03 |
+| [Formula Catalog](concepts/formula-catalog.md) | Complete catalog of every formula in the cost, stock, prep, and forecasting engine with forward/backward proofs | 2026-06-01 |
+| [Reconciliation Matrix](concepts/reconciliation-matrix.md) | Cross-reference of stock-affecting and cost-affecting operations, balance rules, and cross-operation invariants | 2026-06-01 |
 
 ## Decisions
 | Page | Summary | Created |

@@ -16,9 +16,16 @@ import {
   recipe,
   menuItem,
   menuItemIngredient,
+  ingredient,
+  stockLevel,
+  consumptionLog,
+  user,
 } from "../db/schema.js";
 import { eq, desc, sql, and, inArray } from "drizzle-orm";
 import { getUserOrgContext } from "./orgContextService.js";
+import { computeSuggestedSelections, aggregatePrepLines, attachOnHand, type PrepSourceLine } from "./prepMath.js";
+import { convertUnit as sharedConvertUnit, normalizeUnit, type BaseUnit } from "@culinaire/shared";
+import { addStock, deductStock } from "./stockService.js";
 
 const logger = pino({ name: "prepService" });
 
@@ -36,6 +43,7 @@ export interface PrepSessionRow {
   tasksCompleted: number;
   tasksSkipped: number;
   notes: string | null;
+  isEnded: boolean;
   createdDttm: string;
   updatedDttm: string;
 }
@@ -52,7 +60,12 @@ export interface PrepTaskRow {
   prepTimeMinutes: number | null;
   priorityScore: number;
   priorityTier: string;
+  ingredientId: string | null;
   station: string | null;
+  onHandQty: number | null;
+  prepNeeded: number | null;
+  useBy: string | null;
+  isOverPrep: boolean;
   status: string;
   assignedTo: string | null;
   completedAt: string | null;
@@ -197,11 +210,18 @@ export async function createPrepSession(
 ): Promise<{ session: PrepSessionRow }> {
   const orgCtx = await getUserOrgContext(userId);
 
+  // Resolve the user's selected location so stock lookups work.
+  const [userRow] = await db
+    .select({ selectedLocationId: user.selectedLocationId })
+    .from(user)
+    .where(eq(user.userId, userId));
+
   const [row] = await db
     .insert(prepSession)
     .values({
       userId,
       organisationId: orgCtx.primaryOrgId,
+      storeLocationId: userRow?.selectedLocationId ?? null,
       prepDate,
       expectedCovers: expectedCovers ?? null,
     })
@@ -267,6 +287,82 @@ export async function getMenuForSelection(
 }
 
 // ---------------------------------------------------------------------------
+// suggestSelections — forecast covers → suggested per-item portion counts
+// ---------------------------------------------------------------------------
+
+export interface ForecastSuggestion {
+  menuItemId: string;
+  name: string;
+  category: string | null;
+  unitsSold: number;
+  suggestedPortions: number;
+  basis: "historical" | "estimated";
+}
+
+export interface ForecastSuggestResult {
+  covers: number;
+  hasMenuItems: boolean;
+  /** True when at least one selectable item has sales history (mix is real, not 1/N). */
+  anyHistory: boolean;
+  suggestions: ForecastSuggestion[];
+}
+
+/**
+ * Suggest per-item portion counts for a forecast cover count. Tenant-scoped to
+ * the user (or their org members under teamView), mirroring getMenuForSelection.
+ * The math lives in the pure prepMath.computeSuggestedSelections.
+ */
+export async function suggestSelections(
+  userId: number,
+  covers: number,
+  teamView?: boolean,
+  buffer?: number,
+): Promise<ForecastSuggestResult> {
+  let userIds: number[];
+  if (teamView) {
+    const orgCtx = await getUserOrgContext(userId);
+    userIds = orgCtx.orgIds.length > 0 ? orgCtx.orgMemberUserIds : [userId];
+  } else {
+    userIds = [userId];
+  }
+
+  const rows = await db
+    .select({
+      menuItemId: menuItem.menuItemId,
+      name: menuItem.name,
+      category: menuItem.category,
+      unitsSold: menuItem.unitsSold,
+    })
+    .from(menuItem)
+    .where(inArray(menuItem.userId, userIds));
+
+  const items = rows.map((r) => ({
+    menuItemId: r.menuItemId,
+    category: r.category,
+    unitsSold: Number(r.unitsSold) || 0,
+  }));
+
+  const byId = new Map(computeSuggestedSelections(covers, items, { buffer }).map((s) => [s.menuItemId, s]));
+
+  return {
+    covers,
+    hasMenuItems: rows.length > 0,
+    anyHistory: items.some((i) => i.unitsSold > 0),
+    suggestions: rows.map((r) => {
+      const s = byId.get(r.menuItemId);
+      return {
+        menuItemId: r.menuItemId,
+        name: r.name,
+        category: r.category,
+        unitsSold: Number(r.unitsSold) || 0,
+        suggestedPortions: s?.suggestedPortions ?? 0,
+        basis: s?.basis ?? ("estimated" as const),
+      };
+    }),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // saveMenuSelections — persist the chef's dish picks for a session
 // ---------------------------------------------------------------------------
 
@@ -284,27 +380,31 @@ export async function saveMenuSelections(
   if (!session) {
     throw new Error("Prep session not found or not yours");
   }
+  if (session.isEndedInd) {
+    throw new Error("Cannot modify an ended prep session");
+  }
 
-  // Delete any existing selections for this session (replace mode)
-  await db
-    .delete(prepMenuSelection)
-    .where(eq(prepMenuSelection.prepSessionId, sessionId));
+  const rows = await db.transaction(async (tx) => {
+    await tx
+      .delete(prepMenuSelection)
+      .where(eq(prepMenuSelection.prepSessionId, sessionId));
 
-  if (selections.length === 0) return [];
+    if (selections.length === 0) return [];
 
-  const rows = await db
-    .insert(prepMenuSelection)
-    .values(
-      selections.map((s) => ({
-        prepSessionId: sessionId,
-        recipeId: s.recipeId ?? null,
-        menuItemId: s.menuItemId ?? null,
-        dishName: s.dishName,
-        expectedPortions: s.expectedPortions,
-        category: s.category ?? null,
-      })),
-    )
-    .returning();
+    return tx
+      .insert(prepMenuSelection)
+      .values(
+        selections.map((s) => ({
+          prepSessionId: sessionId,
+          recipeId: s.recipeId ?? null,
+          menuItemId: s.menuItemId ?? null,
+          dishName: s.dishName,
+          expectedPortions: s.expectedPortions,
+          category: s.category ?? null,
+        })),
+      )
+      .returning();
+  });
 
   logger.info(
     { sessionId, selectionCount: rows.length },
@@ -349,16 +449,6 @@ export async function getSelections(
 // generateTasksFromSelections — THE KEY FUNCTION
 // ---------------------------------------------------------------------------
 
-interface IngredientAccum {
-  dishes: string[];
-  recipeIds: string[];
-  menuItemIds: string[];
-  totalQuantity: number;
-  unit: string;
-  prepTime: number;
-  classificationWeight: number;
-}
-
 export async function generateTasksFromSelections(
   sessionId: string,
   userId: number,
@@ -372,24 +462,15 @@ export async function generateTasksFromSelections(
   if (!session) {
     throw new Error("Prep session not found or not yours");
   }
+  if (session.isEndedInd) {
+    throw new Error("Cannot modify an ended prep session");
+  }
 
-  // Clear any existing tasks for this session (regenerate mode)
-  await db.delete(prepTask).where(eq(prepTask.prepSessionId, sessionId));
-  await db.delete(ingredientCrossUsage).where(eq(ingredientCrossUsage.prepSessionId, sessionId));
-
-  // Read selections
+  // Read selections (the clears + re-inserts happen atomically in the txn below)
   const selections = await db
     .select()
     .from(prepMenuSelection)
     .where(eq(prepMenuSelection.prepSessionId, sessionId));
-
-  if (selections.length === 0) {
-    await db
-      .update(prepSession)
-      .set({ tasksTotal: 0, updatedDttm: new Date() })
-      .where(eq(prepSession.prepSessionId, sessionId));
-    return [];
-  }
 
   // Classification weights for priority scoring
   const classificationWeights: Record<string, number> = {
@@ -400,81 +481,97 @@ export async function generateTasksFromSelections(
     unclassified: 2,
   };
 
-  // Preload menu items for classification lookup
-  const menuItemIds = selections
-    .map((s) => s.menuItemId)
-    .filter((id): id is string => id !== null);
+  // --- Batch loads (no per-dish N+1) ---
+  const menuItemIds = selections.map((s) => s.menuItemId).filter((id): id is string => id !== null);
+  const recipeIds = selections.map((s) => s.recipeId).filter((id): id is string => id !== null);
 
   const menuItemsMap = new Map<string, typeof menuItem.$inferSelect>();
   if (menuItemIds.length > 0) {
-    const mis = await db
-      .select()
-      .from(menuItem)
-      .where(inArray(menuItem.menuItemId, menuItemIds));
-    for (const mi of mis) {
-      menuItemsMap.set(mi.menuItemId, mi);
-    }
+    const mis = await db.select().from(menuItem).where(inArray(menuItem.menuItemId, menuItemIds));
+    for (const mi of mis) menuItemsMap.set(mi.menuItemId, mi);
   }
-
-  // Preload recipes for recipe-based selections
-  const recipeIds = selections
-    .map((s) => s.recipeId)
-    .filter((id): id is string => id !== null);
 
   const recipesMap = new Map<string, typeof recipe.$inferSelect>();
   if (recipeIds.length > 0) {
-    const recs = await db
+    const recs = await db.select().from(recipe).where(inArray(recipe.recipeId, recipeIds));
+    for (const r of recs) recipesMap.set(r.recipeId, r);
+  }
+
+  // All menu_item_ingredient rows for the selected dishes — ONE query (kills the
+  // previous per-dish N+1, which the one-level component expansion would amplify).
+  const miIngredientsByItem = new Map<string, (typeof menuItemIngredient.$inferSelect)[]>();
+  if (menuItemIds.length > 0) {
+    const rows = await db
       .select()
-      .from(recipe)
-      .where(inArray(recipe.recipeId, recipeIds));
-    for (const r of recs) {
-      recipesMap.set(r.recipeId, r);
+      .from(menuItemIngredient)
+      .where(inArray(menuItemIngredient.menuItemId, menuItemIds));
+    for (const row of rows) {
+      const list = miIngredientsByItem.get(row.menuItemId);
+      if (list) list.push(row);
+      else miIngredientsByItem.set(row.menuItemId, [row]);
     }
   }
 
-  // Build ingredient map across all selected dishes
-  const ingredientMap = new Map<string, IngredientAccum>();
+  // Catalog categories (→ station) for those ingredients — ONE query.
+  const ingredientIds = [
+    ...new Set(
+      [...miIngredientsByItem.values()]
+        .flat()
+        .map((r) => r.ingredientId)
+        .filter((id): id is string => id !== null),
+    ),
+  ];
+  const categoryById = new Map<string, string | null>();
+  if (ingredientIds.length > 0) {
+    const cats = await db
+      .select({ id: ingredient.ingredientId, category: ingredient.ingredientCategory })
+      .from(ingredient)
+      .where(inArray(ingredient.ingredientId, ingredientIds));
+    for (const c of cats) categoryById.set(c.id, c.category);
+  }
+
+  // Name-based category lookup for recipe-path ingredients (P1-5: recipe station assignment).
+  // Loads the full catalog, builds a lowercased name → category map so recipe
+  // ingredients like "Parsley" inherit the catalog station instead of "Other."
+  const categoryByName = new Map<string, string>();
+  if (recipeIds.length > 0) {
+    const allCats = await db
+      .select({ name: ingredient.ingredientName, category: ingredient.ingredientCategory })
+      .from(ingredient);
+    for (const c of allCats) categoryByName.set(c.name.toLowerCase().trim(), c.category);
+  }
+
+  // Build source ingredient lines across all selected dishes, then aggregate.
+  const sourceLines: PrepSourceLine[] = [];
 
   for (const sel of selections) {
     const portionsNeeded = sel.expectedPortions;
 
     if (sel.menuItemId && menuItemsMap.has(sel.menuItemId)) {
-      // Menu item path: get ingredients from menu_item_ingredient
+      // Menu-item path: per-BATCH quantities from menu_item_ingredient.
       const mi = menuItemsMap.get(sel.menuItemId)!;
-      const classification = mi.classification ?? "unclassified";
-      const weight = classificationWeights[classification] ?? 2;
+      const weight = classificationWeights[mi.classification ?? "unclassified"] ?? 2;
+      const servings = mi.servings ?? 1;
 
-      const miIngredients = await db
-        .select()
-        .from(menuItemIngredient)
-        .where(eq(menuItemIngredient.menuItemId, sel.menuItemId));
-
-      for (const ing of miIngredients) {
-        const key = ing.ingredientName.toLowerCase().trim();
-        // menu_item_ingredient quantities are per-serving already;
-        // multiply by expected portions
-        const scaledAmount = Number(ing.quantity) * portionsNeeded;
-
-        const existing = ingredientMap.get(key);
-        if (existing) {
-          existing.dishes.push(sel.dishName);
-          existing.menuItemIds.push(sel.menuItemId);
-          existing.totalQuantity += scaledAmount;
-          existing.classificationWeight = Math.max(existing.classificationWeight, weight);
-        } else {
-          ingredientMap.set(key, {
-            dishes: [sel.dishName],
-            recipeIds: [],
-            menuItemIds: [sel.menuItemId],
-            totalQuantity: scaledAmount,
-            unit: ing.unit,
-            prepTime: 0,
-            classificationWeight: weight,
-          });
-        }
+      for (const ing of miIngredientsByItem.get(sel.menuItemId) ?? []) {
+        sourceLines.push({
+          ingredientId: ing.ingredientId,
+          ingredientName: ing.ingredientName,
+          unit: ing.unit,
+          category: ing.ingredientId ? categoryById.get(ing.ingredientId) ?? null : null,
+          quantity: Number(ing.quantity),
+          yieldPct: Number(ing.yieldPct) || 100,
+          servings,
+          expectedPortions: portionsNeeded,
+          dishName: sel.dishName,
+          menuItemId: sel.menuItemId,
+          recipeId: null,
+          classificationWeight: weight,
+          prepTimeMinutes: 0,
+        });
       }
     } else if (sel.recipeId && recipesMap.has(sel.recipeId)) {
-      // Recipe path: parse ingredients from recipe.recipeData JSONB
+      // Recipe path: free-text ingredients from recipe.recipeData JSONB.
       const r = recipesMap.get(sel.recipeId)!;
       const data = r.recipeData as Record<string, unknown>;
       const ingredients = data.ingredients as Array<{
@@ -482,130 +579,144 @@ export async function generateTasksFromSelections(
         unit?: string;
         name?: string;
       }> | undefined;
-
       if (!ingredients || !Array.isArray(ingredients)) continue;
 
       const recipeYield = parseYieldToServings((data.yield as string) || "");
-      const prepTime = parseTimeToMinutes((data.prepTime as string) || "");
-      const cookTime = parseTimeToMinutes((data.cookTime as string) || "");
-      const totalTime = prepTime + cookTime;
-
-      // Try to match to a menu item for classification weight
+      const totalTime =
+        parseTimeToMinutes((data.prepTime as string) || "") +
+        parseTimeToMinutes((data.cookTime as string) || "");
       const matchedMi = [...menuItemsMap.values()].find(
         (mi) => mi.name.toLowerCase() === r.title.toLowerCase(),
       );
-      const classification = matchedMi?.classification ?? "unclassified";
-      const weight = classificationWeights[classification] ?? 2;
+      const weight = classificationWeights[matchedMi?.classification ?? "unclassified"] ?? 2;
 
       for (const ing of ingredients) {
         if (!ing.name) continue;
-        const key = ing.name.toLowerCase().trim();
-        const amount = parseAmountToNumber(ing.amount ?? "0");
-        // Scale: (amount / recipe yield) * expected portions
-        const scaledAmount = amount * (portionsNeeded / (recipeYield || 4));
-
-        const existing = ingredientMap.get(key);
-        if (existing) {
-          existing.dishes.push(sel.dishName);
-          existing.recipeIds.push(sel.recipeId);
-          if (matchedMi) existing.menuItemIds.push(matchedMi.menuItemId);
-          existing.totalQuantity += scaledAmount;
-          existing.prepTime = Math.max(existing.prepTime, totalTime);
-          existing.classificationWeight = Math.max(existing.classificationWeight, weight);
-        } else {
-          ingredientMap.set(key, {
-            dishes: [sel.dishName],
-            recipeIds: [sel.recipeId],
-            menuItemIds: matchedMi ? [matchedMi.menuItemId] : [],
-            totalQuantity: scaledAmount,
-            unit: ing.unit || "ea",
-            prepTime: totalTime,
-            classificationWeight: weight,
-          });
-        }
+        const matchedCategory = categoryByName.get(ing.name.toLowerCase().trim()) ?? null;
+        sourceLines.push({
+          ingredientId: null,
+          ingredientName: ing.name,
+          unit: ing.unit || "ea",
+          category: matchedCategory,
+          quantity: parseAmountToNumber(ing.amount ?? "0"),
+          yieldPct: 100,
+          // The recipe's yield IS its "servings" — the scaling divides by it.
+          servings: recipeYield || 4,
+          expectedPortions: portionsNeeded,
+          dishName: sel.dishName,
+          menuItemId: matchedMi?.menuItemId ?? null,
+          recipeId: sel.recipeId,
+          classificationWeight: weight,
+          prepTimeMinutes: totalTime,
+        });
       }
     }
   }
 
-  // Calculate priority scores and build task list
-  const taskEntries: Array<{
-    ingredientName: string;
-    accum: IngredientAccum;
-    priorityScore: number;
-    tier: string;
-  }> = [];
+  const rawAggregated = aggregatePrepLines(sourceLines);
 
-  for (const [name, accum] of ingredientMap.entries()) {
-    const crossUsageCount = accum.dishes.length;
-    const priorityScore =
-      crossUsageCount * (accum.prepTime / 10 + 1) * accum.classificationWeight;
-    taskEntries.push({ ingredientName: name, accum, priorityScore, tier: "" });
-  }
-
-  // Sort by priority descending
-  taskEntries.sort((a, b) => b.priorityScore - a.priorityScore);
-
-  // Assign tiers
-  const total = taskEntries.length;
-  const topCutoff = Math.ceil(total * 0.3);
-  const midCutoff = Math.ceil(total * 0.7);
-
-  for (let i = 0; i < taskEntries.length; i++) {
-    if (i < topCutoff) {
-      taskEntries[i].tier = "start_first";
-    } else if (i < midCutoff) {
-      taskEntries[i].tier = "then_these";
-    } else {
-      taskEntries[i].tier = "can_wait";
+  // Attach on-hand stock from stock_level (P1-1: forecast - on_hand = prep_needed).
+  const catalogIds = [...new Set(rawAggregated.map((l) => l.ingredientId).filter((id): id is string => id !== null))];
+  const stockByIngredientId = new Map<string, { qty: number; baseUnit: string }>();
+  if (catalogIds.length > 0 && session.storeLocationId) {
+    const stockRows = await db
+      .select({
+        ingredientId: stockLevel.ingredientId,
+        currentQty: stockLevel.currentQty,
+        baseUnit: ingredient.baseUnit,
+      })
+      .from(stockLevel)
+      .innerJoin(ingredient, eq(ingredient.ingredientId, stockLevel.ingredientId))
+      .where(
+        and(
+          eq(stockLevel.storeLocationId, session.storeLocationId),
+          inArray(stockLevel.ingredientId, catalogIds),
+        ),
+      );
+    for (const sr of stockRows) {
+      stockByIngredientId.set(sr.ingredientId, { qty: Number(sr.currentQty), baseUnit: sr.baseUnit });
     }
   }
 
-  // Insert prep_task rows
-  const taskRows: PrepTaskRow[] = [];
+  const safeConvert = (qty: number, from: string, to: string): number | null => {
+    const nFrom = normalizeUnit(from);
+    const nTo = normalizeUnit(to);
+    if (!nFrom || !nTo) return null;
+    try { return sharedConvertUnit(qty, nFrom, nTo); }
+    catch { return null; }
+  };
 
-  for (const entry of taskEntries) {
-    const acc = entry.accum;
+  const aggregated = attachOnHand(rawAggregated, stockByIngredientId, safeConvert);
 
-    const [row] = await db
-      .insert(prepTask)
-      .values({
-        prepSessionId: sessionId,
+  // Priority score + tiers: cross-usage count × prep-time weight × menu class.
+  const scored = aggregated
+    .map((line) => ({
+      line,
+      priorityScore:
+        line.dishes.length * (line.prepTimeMinutes / 10 + 1) * line.classificationWeight,
+    }))
+    .sort((a, b) => b.priorityScore - a.priorityScore);
+
+  const total = scored.length;
+  const topCutoff = Math.ceil(total * 0.3);
+  const midCutoff = Math.ceil(total * 0.7);
+
+  // Persist atomically: clearing + re-inserting a session's tasks must never be
+  // observable half-written, and a mid-write failure must roll back cleanly.
+  const taskRows: PrepTaskRow[] = await db.transaction(async (tx) => {
+    await tx.delete(prepTask).where(eq(prepTask.prepSessionId, sessionId));
+    await tx.delete(ingredientCrossUsage).where(eq(ingredientCrossUsage.prepSessionId, sessionId));
+
+    const rows: PrepTaskRow[] = [];
+    for (let i = 0; i < scored.length; i++) {
+      const { line, priorityScore } = scored[i];
+      const tier = i < topCutoff ? "start_first" : i < midCutoff ? "then_these" : "can_wait";
+      const [row] = await tx
+        .insert(prepTask)
+        .values({
+          prepSessionId: sessionId,
+          userId,
+          menuItemId: line.menuItemIds[0] ?? null,
+          recipeId: line.recipeIds[0] ?? null,
+          ingredientId: line.ingredientId,
+          taskDescription: `Prep ${line.ingredientName} for ${line.dishes.join(", ")}`,
+          ingredientName: line.ingredientName,
+          quantityNeeded: String(Math.round(line.totalQuantity * 1000) / 1000),
+          unit: line.unit,
+          prepTimeMinutes: line.prepTimeMinutes > 0 ? line.prepTimeMinutes : null,
+          priorityScore: String(Math.round(priorityScore * 100) / 100),
+          priorityTier: tier,
+          station: line.station,
+          onHandQty: line.onHandQty != null ? String(line.onHandQty) : null,
+          prepNeeded: line.prepNeeded != null ? String(line.prepNeeded) : null,
+        })
+        .returning();
+      rows.push(toTaskRow(row));
+    }
+
+    // Cross-usage: ingredients shared by 2+ dishes, keyed by catalog id so
+    // "Tomato Sauce" / "tomato sauce" collapse to ONE batch number.
+    for (const line of aggregated) {
+      if (line.dishes.length < 2) continue;
+      await tx.insert(ingredientCrossUsage).values({
         userId,
-        menuItemId: acc.menuItemIds[0] ?? null,
-        recipeId: acc.recipeIds[0] ?? null,
-        taskDescription: `Prep ${entry.ingredientName} for ${acc.dishes.join(", ")}`,
-        ingredientName: entry.ingredientName,
-        quantityNeeded: String(Math.round(acc.totalQuantity * 1000) / 1000),
-        unit: acc.unit,
-        prepTimeMinutes: acc.prepTime > 0 ? acc.prepTime : null,
-        priorityScore: String(Math.round(entry.priorityScore * 100) / 100),
-        priorityTier: entry.tier,
-      })
-      .returning();
+        prepSessionId: sessionId,
+        ingredientId: line.ingredientId,
+        ingredientName: line.ingredientName,
+        dishCount: line.dishes.length,
+        totalQuantity: String(Math.round(line.totalQuantity * 1000) / 1000),
+        unit: line.unit,
+        dishNames: line.dishes,
+      });
+    }
 
-    taskRows.push(toTaskRow(row));
-  }
+    await tx
+      .update(prepSession)
+      .set({ tasksTotal: rows.length, updatedDttm: new Date() })
+      .where(eq(prepSession.prepSessionId, sessionId));
 
-  // Insert ingredient cross-usage rows (only for ingredients in 2+ dishes)
-  for (const [name, accum] of ingredientMap.entries()) {
-    if (accum.dishes.length < 2) continue;
-
-    await db.insert(ingredientCrossUsage).values({
-      userId,
-      prepSessionId: sessionId,
-      ingredientName: name,
-      dishCount: accum.dishes.length,
-      totalQuantity: String(Math.round(accum.totalQuantity * 1000) / 1000),
-      unit: accum.unit,
-      dishNames: accum.dishes,
-    });
-  }
-
-  // Update session tasksTotal
-  await db
-    .update(prepSession)
-    .set({ tasksTotal: taskRows.length, updatedDttm: new Date() })
-    .where(eq(prepSession.prepSessionId, sessionId));
+    return rows;
+  });
 
   logger.info(
     { sessionId, taskCount: taskRows.length, selectionCount: selections.length },
@@ -664,8 +775,6 @@ export async function getTodaySession(
   teamView?: boolean,
   storeLocationId?: string,
 ): Promise<{ session: PrepSessionRow; tasks: PrepTaskRow[] } | null> {
-  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
-
   let userFilter;
   if (teamView) {
     const orgCtx = await getUserOrgContext(userId);
@@ -676,7 +785,7 @@ export async function getTodaySession(
     userFilter = eq(prepSession.userId, userId);
   }
 
-  const conditions = [userFilter, eq(prepSession.prepDate, today)];
+  const conditions = [userFilter, eq(prepSession.isEndedInd, false)];
   if (storeLocationId) conditions.push(eq(prepSession.storeLocationId, storeLocationId));
 
   const existing = await db
@@ -743,6 +852,22 @@ export async function updateTaskStatus(
   status: string,
   assignedTo?: string,
 ): Promise<PrepTaskRow | null> {
+  // Read previous status to detect real transitions (B10: prevent double-deduct).
+  const [existing] = await db
+    .select({ status: prepTask.status, prepSessionId: prepTask.prepSessionId })
+    .from(prepTask)
+    .where(and(eq(prepTask.prepTaskId, taskId), eq(prepTask.userId, userId)));
+  if (!existing) return null;
+
+  const prevStatus = existing.status;
+
+  // B9: Guard against modifying ended sessions.
+  const [sess] = await db
+    .select({ isEndedInd: prepSession.isEndedInd, storeLocationId: prepSession.storeLocationId, organisationId: prepSession.organisationId })
+    .from(prepSession)
+    .where(eq(prepSession.prepSessionId, existing.prepSessionId));
+  if (sess?.isEndedInd) return null;
+
   const updateValues: Record<string, unknown> = {
     status,
     updatedDttm: new Date(),
@@ -750,6 +875,7 @@ export async function updateTaskStatus(
 
   if (assignedTo !== undefined) updateValues.assignedTo = assignedTo;
   if (status === "completed") updateValues.completedAt = new Date();
+  else updateValues.completedAt = null;
 
   const [updated] = await db
     .update(prepTask)
@@ -758,6 +884,57 @@ export async function updateTaskStatus(
     .returning();
 
   if (!updated) return null;
+
+  // Stock deduction/restoration: only on real transitions to/from "completed".
+  const becomingCompleted = status === "completed" && prevStatus !== "completed";
+  const leavingCompleted = status !== "completed" && prevStatus === "completed";
+
+  if (updated.ingredientId && sess?.storeLocationId && (becomingCompleted || leavingCompleted)) {
+    const deductQty = Number(updated.quantityNeeded);
+    if (deductQty > 0) {
+      const [ing] = await db
+        .select({ baseUnit: ingredient.baseUnit })
+        .from(ingredient)
+        .where(eq(ingredient.ingredientId, updated.ingredientId));
+      const baseUnit = ing?.baseUnit ?? updated.unit;
+      const nFrom = normalizeUnit(updated.unit);
+      const nTo = normalizeUnit(baseUnit);
+      let baseQty = deductQty;
+      if (nFrom && nTo && nFrom !== nTo) {
+        try { baseQty = sharedConvertUnit(deductQty, nFrom, nTo); }
+        catch { baseQty = 0; }
+      }
+      if (baseQty > 0) {
+        // B11: Only add back if a stock_level row exists (don't create phantom stock).
+        try {
+          if (becomingCompleted) {
+            await deductStock(sess.storeLocationId, updated.ingredientId, baseQty);
+          } else {
+            const [stockRow] = await db
+              .select({ id: stockLevel.stockLevelId })
+              .from(stockLevel)
+              .where(and(eq(stockLevel.storeLocationId, sess.storeLocationId), eq(stockLevel.ingredientId, updated.ingredientId)));
+            if (stockRow) await addStock(sess.storeLocationId, updated.ingredientId, baseQty);
+          }
+          if (sess.organisationId) {
+            await db.insert(consumptionLog).values({
+              organisationId: sess.organisationId,
+              storeLocationId: sess.storeLocationId,
+              ingredientId: updated.ingredientId,
+              menuItemId: updated.menuItemId,
+              userId,
+              quantity: String(deductQty),
+              unit: updated.unit,
+              reason: becomingCompleted ? "prep" : "return_to_stock",
+              notes: `Prep task: ${updated.taskDescription}`,
+            });
+          }
+        } catch (err) {
+          logger.warn({ taskId, ingredientId: updated.ingredientId, baseQty, err }, "Stock adjustment failed — task status still updated");
+        }
+      }
+    }
+  }
 
   // Recalculate session counts
   const [counts] = await db
@@ -821,6 +998,14 @@ export async function getIngredientCrossUsage(
       sessionFilter = eq(ingredientCrossUsage.prepSessionId, sessionId);
     }
   } else {
+    // Non-teamView: verify the session belongs to this user before exposing data.
+    if (userId) {
+      const [own] = await db
+        .select({ id: prepSession.prepSessionId })
+        .from(prepSession)
+        .where(and(eq(prepSession.prepSessionId, sessionId), eq(prepSession.userId, userId)));
+      if (!own) return [];
+    }
     sessionFilter = eq(ingredientCrossUsage.prepSessionId, sessionId);
   }
 
@@ -994,6 +1179,7 @@ export async function endSession(
   actualCovers?: number,
 ): Promise<PrepSessionRow | null> {
   const updateValues: Record<string, unknown> = {
+    isEndedInd: true,
     updatedDttm: new Date(),
   };
   if (actualCovers !== undefined) updateValues.actualCovers = actualCovers;
@@ -1001,7 +1187,7 @@ export async function endSession(
   const [updated] = await db
     .update(prepSession)
     .set(updateValues)
-    .where(and(eq(prepSession.prepSessionId, sessionId), eq(prepSession.userId, userId)))
+    .where(and(eq(prepSession.prepSessionId, sessionId), eq(prepSession.userId, userId), eq(prepSession.isEndedInd, false)))
     .returning();
 
   if (!updated) return null;
@@ -1029,6 +1215,7 @@ function toSessionRow(r: typeof prepSession.$inferSelect): PrepSessionRow {
     tasksCompleted: r.tasksCompleted,
     tasksSkipped: r.tasksSkipped,
     notes: r.notes,
+    isEnded: r.isEndedInd,
     createdDttm: r.createdDttm.toISOString(),
     updatedDttm: r.updatedDttm.toISOString(),
   };
@@ -1047,7 +1234,12 @@ function toTaskRow(r: typeof prepTask.$inferSelect): PrepTaskRow {
     prepTimeMinutes: r.prepTimeMinutes,
     priorityScore: Number(r.priorityScore),
     priorityTier: r.priorityTier,
+    ingredientId: r.ingredientId,
     station: r.station,
+    onHandQty: r.onHandQty != null ? Number(r.onHandQty) : null,
+    prepNeeded: r.prepNeeded != null ? Number(r.prepNeeded) : null,
+    useBy: r.useBy ?? null,
+    isOverPrep: r.isOverPrepInd,
     status: r.status,
     assignedTo: r.assignedTo,
     completedAt: r.completedAt?.toISOString() ?? null,

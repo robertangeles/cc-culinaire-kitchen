@@ -198,8 +198,8 @@ export function RecipeShareBar({
 
       {/* Instagram dialog */}
       {igOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setIgOpen(false)}>
-          <div className="bg-[#161616] border border-[#2A2A2A] rounded-xl shadow-xl w-full max-w-sm mx-4 p-5" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-[#161616] border border-[#2A2A2A] rounded-xl shadow-xl w-full max-w-sm mx-4 p-5">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-semibold text-[#FAFAFA]">Share on Instagram</h3>
               <button onClick={() => setIgOpen(false)} className="p-1 rounded hover:bg-[#2A2A2A]">
@@ -234,8 +234,8 @@ export function RecipeShareBar({
 
       {/* Email dialog */}
       {emailOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setEmailOpen(false)}>
-          <div className="bg-[#161616] border border-[#2A2A2A] rounded-xl shadow-xl w-full max-w-sm mx-4 p-5" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-[#161616] border border-[#2A2A2A] rounded-xl shadow-xl w-full max-w-sm mx-4 p-5">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-semibold text-[#FAFAFA]">Email this recipe</h3>
               <button onClick={() => setEmailOpen(false)} className="p-1 rounded hover:bg-[#2A2A2A]">

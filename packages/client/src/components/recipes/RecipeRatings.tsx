@@ -181,7 +181,7 @@ export default function RecipeRatings({ recipeId, compact }: RecipeRatingsProps)
           const pct = data.count > 0 ? ((data.distribution[n] ?? 0) / data.count) * 100 : 0;
           return (
             <div key={n} className="contents">
-              <span className="text-xs text-[#999999] w-8 text-right">{n} star</span>
+              <span className="text-xs text-[#999999] w-10 text-right whitespace-nowrap">{n} star</span>
               <div className="h-2 bg-[#2A2A2A] rounded-full self-center overflow-hidden">
                 <div
                   className="h-full bg-[#D4A574] rounded-full transition-all"

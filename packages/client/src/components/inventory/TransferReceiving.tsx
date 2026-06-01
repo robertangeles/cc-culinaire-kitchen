@@ -183,7 +183,7 @@ export default function TransferReceiving({
                   value={receivedQtys[line.lineId] || ""}
                   onChange={(e) => updateReceivedQty(line.lineId, e.target.value)}
                   min="0"
-                  step="0.01"
+                  step="any"
                   className={`w-full px-2 py-1 rounded-md text-sm text-right transition-colors ${
                     disc
                       ? "bg-red-900/30 border-red-600/40 text-red-200 focus:border-red-500/60"

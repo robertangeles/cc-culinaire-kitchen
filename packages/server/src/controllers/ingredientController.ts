@@ -36,6 +36,8 @@ import {
   copyActivationFromLocation,
   getActivationStatus,
   getIngredientTransactions,
+  getIngredientUsage,
+  softDeleteIngredient,
 } from "../services/ingredientService.js";
 import { invalidateConversionCache } from "../services/unitConversionService.js";
 
@@ -50,6 +52,9 @@ const CreateIngredientSchema = z.object({
   ingredientName: z.string().min(1).max(200),
   ingredientCategory: z.enum(VALID_CATEGORIES),
   baseUnit: z.string().min(1).max(20),
+  packQty: z.string().refine(
+    (v) => !isNaN(Number(v)) && Number(v) > 0, "Must be a positive number",
+  ).optional(),
   description: z.string().max(2000).optional(),
   unitCost: z.string().refine(
     (v) => !isNaN(Number(v)) && Number(v) >= 0, "Must be a non-negative number",
@@ -60,6 +65,8 @@ const CreateIngredientSchema = z.object({
   reorderQty: z.string().refine(
     (v) => !isNaN(Number(v)) && Number(v) >= 0, "Must be a non-negative number",
   ).optional(),
+  itemType: z.enum(["KITCHEN_INGREDIENT", "FOH_CONSUMABLE", "OPERATIONAL_SUPPLY"]).optional(),
+  fifoApplicable: z.string().optional(),
   containsDairyInd: z.boolean().optional(),
   containsGlutenInd: z.boolean().optional(),
   containsNutsInd: z.boolean().optional(),
@@ -72,6 +79,9 @@ const UpdateIngredientSchema = z.object({
   ingredientName: z.string().min(1).max(200).optional(),
   ingredientCategory: z.enum(VALID_CATEGORIES).optional(),
   baseUnit: z.string().min(1).max(20).optional(),
+  packQty: z.string().refine(
+    (v) => !isNaN(Number(v)) && Number(v) > 0, "Must be a positive number",
+  ).nullable().optional(),
   description: z.string().max(2000).nullable().optional(),
   unitCost: z.string().refine(
     (v) => !isNaN(Number(v)) && Number(v) >= 0, "Must be a non-negative number",
@@ -82,6 +92,8 @@ const UpdateIngredientSchema = z.object({
   reorderQty: z.string().refine(
     (v) => !isNaN(Number(v)) && Number(v) >= 0, "Must be a non-negative number",
   ).nullable().optional(),
+  itemType: z.enum(["KITCHEN_INGREDIENT", "FOH_CONSUMABLE", "OPERATIONAL_SUPPLY"]).optional(),
+  fifoApplicable: z.string().optional(),
   containsDairyInd: z.boolean().optional(),
   containsGlutenInd: z.boolean().optional(),
   containsNutsInd: z.boolean().optional(),
@@ -364,6 +376,9 @@ export async function handleGetIngredientStockLevels(
 
 const AssignSupplierSchema = z.object({
   supplierId: z.string().uuid(),
+  packCost: z.string().refine(
+    (v) => !isNaN(Number(v)) && Number(v) >= 0, "Must be a non-negative number",
+  ).optional(),
   costPerUnit: z.string().refine(
     (v) => !isNaN(Number(v)) && Number(v) >= 0, "Must be a non-negative number",
   ).optional(),
@@ -671,6 +686,46 @@ export async function handleGetSupplierIngredientIds(
     const ids = await listSupplierIngredientIds(req.params.supplierId as string);
     res.json(ids);
   } catch (err) {
+    next(err);
+  }
+}
+
+export async function handleGetIngredientUsage(
+  req: Request, res: Response, next: NextFunction,
+): Promise<void> {
+  try {
+    const usage = await getIngredientUsage(req.params.id as string);
+    res.json(usage);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function handleSoftDeleteIngredient(
+  req: Request, res: Response, next: NextFunction,
+): Promise<void> {
+  try {
+    const orgId = await resolveOrgId(req, res);
+    if (orgId === null) return;
+
+    const usage = await getIngredientUsage(req.params.id as string);
+    if (usage.length > 0) {
+      const names = usage.map((u) => u.menuItemName).join(", ");
+      res.status(409).json({
+        error: `Cannot delete: used by ${usage.length} menu item${usage.length > 1 ? "s" : ""} (${names})`,
+        menuItems: usage,
+      });
+      return;
+    }
+
+    const deleted = await softDeleteIngredient(req.params.id as string, orgId, req.user!.sub);
+    logger.info({ ingredientId: req.params.id, userId: req.user!.sub }, "Ingredient soft-deleted");
+    res.json(deleted);
+  } catch (err: any) {
+    if (err.message?.includes("not found") || err.message?.includes("already soft-deleted")) {
+      res.status(404).json({ error: err.message });
+      return;
+    }
     next(err);
   }
 }

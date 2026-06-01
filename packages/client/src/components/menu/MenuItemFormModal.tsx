@@ -10,6 +10,7 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { X, Plus, Trash2, Loader2, DollarSign, Search, BookOpen, PenTool } from "lucide-react";
 import type { MenuItem, MenuIngredient } from "../../hooks/useMenuItems.js";
 import { IngredientPickerInline } from "../inventory/IngredientPickerInline.js";
+import { convertToBaseUnit, normalizeUnit, type BaseUnit } from "@culinaire/shared";
 
 const API = import.meta.env.VITE_API_URL ?? "";
 
@@ -29,7 +30,12 @@ const DEFAULT_CATEGORIES = [
   "Brunch",
 ];
 
-const UNITS = ["kg", "g", "L", "ml", "each", "portion"];
+const UNITS = [
+  "kg", "g", "mg",
+  "L", "mL", "tsp", "tbsp", "cup", "fl oz",
+  "each", "dozen", "portion",
+  "bottle", "can", "bag", "box", "case", "bunch",
+];
 
 /* ---- Unit mapping from recipe units to menu-compatible units ---- */
 
@@ -55,6 +61,12 @@ const UNIT_MAP: Record<string, string> = {
 function sanitizeQuantity(raw: string): string {
   const m = String(raw ?? "").match(/(\d+(?:\.\d{1,3})?)/);
   return m ? m[1] : "0";
+}
+
+function parseServingsFromYield(yieldStr: string | undefined): number {
+  if (!yieldStr) return 1;
+  const match = yieldStr.match(/(\d+)/);
+  return match ? Math.max(1, parseInt(match[1], 10)) : 1;
 }
 
 /* ---- Domain → category mapping ---- */
@@ -87,6 +99,7 @@ interface ImportRecipe {
   title: string;
   domain: string;
   ownerName?: string;
+  yield?: string;
   ingredients: ImportIngredient[];
 }
 
@@ -95,16 +108,15 @@ interface ImportRecipe {
 interface IngredientRow {
   tempId: number;
   existingId?: number;
-  /** Catalog FK — Phase 1 catalog spine. Null for legacy / not-yet-linked rows. */
   ingredientId?: string | null;
   ingredientName: string;
-  /** Narrative from a recipe import or chef notes. NEVER concatenate into ingredientName. */
   note?: string | null;
   quantity: string;
   unit: string;
+  /** The catalog ingredient's base unit (what unitCost is denominated in). */
+  baseUnit?: string;
   unitCost: string;
   yieldPct: string;
-  /** Phase 3: stale-cost flag carried over from server load. */
   costStaleInd?: boolean;
 }
 
@@ -113,7 +125,66 @@ function calcLineCost(row: IngredientRow): number {
   const cost = parseFloat(row.unitCost) || 0;
   const yld = parseFloat(row.yieldPct) || 100;
   if (yld === 0) return 0;
-  return (qty * cost) / (yld / 100);
+
+  let qtyInBase = qty;
+  if (row.baseUnit && row.unit !== row.baseUnit) {
+    const from = normalizeUnit(row.unit);
+    const to = normalizeUnit(row.baseUnit);
+    if (from && to) {
+      try {
+        qtyInBase = convertToBaseUnit(qty, from as BaseUnit, to as BaseUnit);
+      } catch {
+        return 0;
+      }
+    }
+  }
+  const raw = (qtyInBase * cost) / (yld / 100);
+  return Math.round(raw * 100) / 100;
+}
+
+function hasUnitMismatch(row: IngredientRow): boolean {
+  if (!row.baseUnit || !row.ingredientId || row.unit === row.baseUnit) return false;
+  const from = normalizeUnit(row.unit);
+  const to = normalizeUnit(row.baseUnit);
+  if (!from || !to) return false;
+  try {
+    convertToBaseUnit(1, from as BaseUnit, to as BaseUnit);
+    return false;
+  } catch {
+    return true;
+  }
+}
+
+function buildConversionText(row: IngredientRow): string | null {
+  if (!row.ingredientId || !row.baseUnit) return null;
+  const qty = parseFloat(row.quantity) || 0;
+  const cost = parseFloat(row.unitCost) || 0;
+  const yld = parseFloat(row.yieldPct) || 100;
+  if (qty === 0 && cost === 0) return null;
+
+  const from = normalizeUnit(row.unit);
+  const to = normalizeUnit(row.baseUnit);
+  let qtyInBase = qty;
+  let converted = false;
+  if (from && to && from !== to) {
+    try {
+      qtyInBase = convertToBaseUnit(qty, from as BaseUnit, to as BaseUnit);
+      converted = true;
+    } catch {
+      // incompatible — show raw
+    }
+  }
+
+  const qtyStr = converted
+    ? `${qty}${row.unit} = ${Number(qtyInBase.toFixed(4))}${row.baseUnit}`
+    : `${Number(qtyInBase.toFixed(4))}${row.baseUnit}`;
+  const costStr = `$${cost.toFixed(4)}/${row.baseUnit}`;
+  const lineCost = yld > 0 ? (qtyInBase * cost) / (yld / 100) : 0;
+
+  if (yld !== 100) {
+    return `${qtyStr} × ${costStr} / ${yld}% yield = $${lineCost.toFixed(2)}`;
+  }
+  return `${qtyStr} × ${costStr} = $${lineCost.toFixed(2)}`;
 }
 
 /* ---- Component ---- */
@@ -126,6 +197,8 @@ interface MenuItemFormModalProps {
     name: string;
     category: string;
     sellingPrice: string;
+    servings: number;
+    qFactorPct: string;
     unitsSold: number;
   }) => Promise<string | void>;
   onSaveIngredients: (
@@ -136,7 +209,7 @@ interface MenuItemFormModalProps {
       note?: string | null;
       quantity: string;
       unit: string;
-      unitCost: string;
+      unitCost?: string;
       yieldPct: string;
     }[]
   ) => Promise<void>;
@@ -178,7 +251,10 @@ export function MenuItemFormModal({
   const [sellingPrice, setSellingPrice] = useState(
     editItem ? editItem.sellingPrice.toFixed(2) : ""
   );
+  const [servings, setServings] = useState(editItem?.servings ?? 1);
+  const [qFactorPct, setQFactorPct] = useState(editItem?.qFactorPct?.toString() ?? "0");
   const [unitsSold, setUnitsSold] = useState(editItem?.unitsSold ?? 0);
+  const [expandedCostRow, setExpandedCostRow] = useState<number | null>(null);
 
   // Ingredients
   const [ingredients, setIngredients] = useState<IngredientRow[]>([]);
@@ -203,8 +279,16 @@ export function MenuItemFormModal({
           note: ing.note ?? null,
           quantity: ing.quantity,
           unit: ing.unit,
-          unitCost: ing.unitCost,
-          yieldPct: ing.yieldPct || "100",
+          baseUnit: ing.baseUnit ?? ing.unit,
+          // A linked row with a stored cost of 0 means "no override yet" —
+          // show the catalog's current cost instead of a frozen $0.
+          unitCost:
+            (parseFloat(ing.unitCost) || 0) > 0
+              ? ing.unitCost
+              : ing.ingredientId && ing.catalogUnitCost
+                ? ing.catalogUnitCost
+                : ing.unitCost,
+          yieldPct: ing.yieldPct ? String(parseFloat(ing.yieldPct)) : "100",
           costStaleInd: ing.costStaleInd ?? false,
         }))
       );
@@ -269,27 +353,22 @@ export function MenuItemFormModal({
   }, [filteredRecipes]);
 
   // Handle recipe selection for import.
-  //
-  // Catalog-spine Phase 1: ingredient_name and note stay SEPARATE (the bug
-  // the user reported was the old concatenation `${name}, ${note}`). After
-  // the rows are mapped, fire a bulk match against the Catalog so any
-  // unambiguous match auto-links the row to a canonical ingredientId. Rows
-  // that don't match cleanly stay unlinked — the chef resolves via the
-  // IngredientPicker on the row.
-  async function handleSelectRecipe(recipe: ImportRecipe) {
+  // Ingredients import as-is with ingredientId: null. The chef manually
+  // links each one to a Catalog item via the IngredientPicker on the row.
+  function handleSelectRecipe(recipe: ImportRecipe) {
     setName(recipe.title);
     setCategory(DOMAIN_CATEGORY_MAP[recipe.domain] ?? "");
     setSellingPrice("");
+    setServings(parseServingsFromYield(recipe.yield));
 
-    // Map ingredients — note kept separate.
     const mapped: IngredientRow[] = recipe.ingredients.map((ing) => {
       const mappedUnit = UNIT_MAP[ing.unit.toLowerCase()] ?? UNIT_MAP[ing.unit] ?? "each";
 
       return {
         tempId: nextTempId++,
         ingredientId: null,
-        ingredientName: ing.name, // canonical name only
-        note: ing.note ?? null,    // narrative preserved separately
+        ingredientName: ing.name,
+        note: ing.note ?? null,
         quantity: sanitizeQuantity(ing.amount),
         unit: mappedUnit,
         unitCost: "",
@@ -299,54 +378,21 @@ export function MenuItemFormModal({
 
     setIngredients(mapped);
     setImportedFromRecipe(true);
-    setMode("scratch"); // Switch to form view with pre-filled data
-
-    // Best-effort auto-link via bulk-match. Failure is non-blocking — rows
-    // just stay unlinked and the chef picks manually.
-    try {
-      const queries = mapped.map((r) => r.ingredientName);
-      const res = await fetch(`${API}/api/inventory/ingredient-aliases/match-bulk`, {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ queries }),
-      });
-      if (!res.ok) return;
-      const body = (await res.json()) as {
-        results: Array<{
-          query: string;
-          inputIndex: number;
-          status: "matched" | "ambiguous" | "unmatched";
-          candidates: Array<{ ingredientId: string; ingredientName: string }>;
-        }>;
-      };
-      setIngredients((prev) =>
-        prev.map((row) => {
-          const r = body.results.find((x) => x.inputIndex === mapped.findIndex((m) => m.tempId === row.tempId));
-          if (r && r.status === "matched" && r.candidates[0]) {
-            return {
-              ...row,
-              ingredientId: r.candidates[0].ingredientId,
-              ingredientName: r.candidates[0].ingredientName,
-            };
-          }
-          return row;
-        }),
-      );
-    } catch {
-      // ignore — rows stay unlinked
-    }
+    setMode("scratch");
   }
 
   // Auto-calculated totals
-  const totalFoodCost = useMemo(
+  const totalBatchCost = useMemo(
     () => ingredients.reduce((sum, row) => sum + calcLineCost(row), 0),
     [ingredients]
   );
+  const perServingCost = servings > 1 ? totalBatchCost / servings : totalBatchCost;
+  const qPct = parseFloat(qFactorPct) || 0;
+  const foodCostWithQ = qPct > 0 ? perServingCost * (1 + qPct / 100) : perServingCost;
 
   const price = parseFloat(sellingPrice) || 0;
-  const foodCostPct = price > 0 ? (totalFoodCost / price) * 100 : 0;
-  const contributionMargin = price - totalFoodCost;
+  const foodCostPct = price > 0 ? (foodCostWithQ / price) * 100 : 0;
+  const contributionMargin = price - foodCostWithQ;
 
   function addIngredientRow() {
     setIngredients((prev) => [
@@ -395,6 +441,8 @@ export function MenuItemFormModal({
         name: name.trim(),
         category: finalCategory,
         sellingPrice,
+        servings,
+        qFactorPct: qFactorPct || "0",
         unitsSold,
       });
 
@@ -413,7 +461,7 @@ export function MenuItemFormModal({
               note: r.note ?? null,
               quantity: r.quantity,
               unit: r.unit,
-              unitCost: r.unitCost || "0",
+              unitCost: r.unitCost || undefined,
               yieldPct: r.yieldPct || "100",
             }))
           );
@@ -433,10 +481,7 @@ export function MenuItemFormModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-        onClick={onClose}
-      />
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
 
       {/* Modal */}
       <div className="relative w-full max-w-4xl max-h-[90vh] overflow-y-auto bg-[#161616] rounded-2xl border border-[#2A2A2A] shadow-2xl">
@@ -580,7 +625,7 @@ export function MenuItemFormModal({
               {/* Import banner */}
               {importedFromRecipe && (
                 <div className="bg-[#D4A574]/10 border border-[#D4A574]/20 text-[#D4A574] rounded-xl p-3 text-sm">
-                  Ingredients imported — add your selling price and unit costs
+                  Ingredients imported — link each to a Catalog item, then set your selling price
                 </div>
               )}
 
@@ -643,7 +688,7 @@ export function MenuItemFormModal({
                     </label>
                     <input
                       type="number"
-                      step="0.01"
+                      step="any"
                       min="0"
                       value={sellingPrice}
                       onChange={(e) => setSellingPrice(e.target.value)}
@@ -654,18 +699,57 @@ export function MenuItemFormModal({
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-medium text-[#999999] mb-1.5">
-                    Units Sold (from POS or manual entry)
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={unitsSold}
-                    onChange={(e) => setUnitsSold(parseInt(e.target.value) || 0)}
-                    placeholder="0"
-                    className="w-full sm:w-48 px-4 py-2.5 text-sm bg-[#0A0A0A] border border-[#2A2A2A] rounded-xl text-[#FAFAFA] placeholder-[#666666] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-[#D4A574]/50 min-h-[44px]"
-                  />
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-xs font-medium text-[#999999] mb-1.5">
+                      Servings per Recipe
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      step="1"
+                      value={servings}
+                      onChange={(e) => setServings(Math.max(1, parseInt(e.target.value) || 1))}
+                      className="w-full px-4 py-2.5 text-sm bg-[#0A0A0A] border border-[#2A2A2A] rounded-xl text-[#FAFAFA] placeholder-[#666666] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-[#D4A574]/50 min-h-[44px]"
+                    />
+                    <p className="mt-1 text-[10px] text-[#666666]">
+                      How many plates does this recipe produce?
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-[#999999] mb-1.5">
+                      Q Factor %
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="50"
+                      step="0.5"
+                      value={qFactorPct}
+                      onChange={(e) => setQFactorPct(e.target.value)}
+                      placeholder="0"
+                      className="w-full px-4 py-2.5 text-sm bg-[#0A0A0A] border border-[#2A2A2A] rounded-xl text-[#FAFAFA] placeholder-[#666666] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-[#D4A574]/50 min-h-[44px]"
+                    />
+                    <p className="mt-1 text-[10px] text-[#666666]">
+                      Waste, condiments, disposables buffer (typically 5-10%)
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-[#999999] mb-1.5">
+                      Units Sold
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={unitsSold}
+                      onChange={(e) => setUnitsSold(parseInt(e.target.value) || 0)}
+                      placeholder="0"
+                      className="w-full px-4 py-2.5 text-sm bg-[#0A0A0A] border border-[#2A2A2A] rounded-xl text-[#FAFAFA] placeholder-[#666666] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-[#D4A574]/50 min-h-[44px]"
+                    />
+                    <p className="mt-1 text-[10px] text-[#666666]">
+                      From POS or manual entry
+                    </p>
+                  </div>
                 </div>
               </div>
 
@@ -688,24 +772,30 @@ export function MenuItemFormModal({
                 {ingredients.length > 0 && (
                   <div className="space-y-2">
                     {/* Header row */}
-                    <div className="grid grid-cols-12 gap-2 text-[10px] uppercase text-[#666666] font-medium px-1">
-                      <div className="col-span-3">Name</div>
-                      <div className="col-span-2">Quantity</div>
-                      <div className="col-span-1">Unit</div>
-                      <div className="col-span-2">Unit Cost ($)</div>
-                      <div className="col-span-1">Yield %</div>
-                      <div className="col-span-2 text-right">Line Cost</div>
-                      <div className="col-span-1" />
+                    <div
+                      className="grid gap-2 text-[10px] uppercase text-[#666666] font-medium px-1"
+                      style={{ gridTemplateColumns: "1fr 80px 70px 85px 65px 80px 36px" }}
+                    >
+                      <div>Name</div>
+                      <div>Qty</div>
+                      <div>Unit</div>
+                      <div>Cost</div>
+                      <div>Yield %</div>
+                      <div className="text-right">Line Cost</div>
+                      <div />
                     </div>
 
                     {ingredients.map((row) => {
                       const lineCost = calcLineCost(row);
+                      const unitMismatch = hasUnitMismatch(row);
+                      const breakdown = expandedCostRow === row.tempId ? buildConversionText(row) : null;
                       return (
+                        <div key={row.tempId}>
                         <div
-                          key={row.tempId}
-                          className="grid grid-cols-12 gap-2 items-start"
+                          className="grid gap-2 items-start"
+                          style={{ gridTemplateColumns: "1fr 80px 70px 85px 65px 80px 36px" }}
                         >
-                          <div className="col-span-3 overflow-hidden">
+                          <div className="min-w-0">
                             <IngredientPickerInline
                               linkedId={row.ingredientId}
                               displayName={row.ingredientName}
@@ -747,16 +837,9 @@ export function MenuItemFormModal({
                                           ...r,
                                           ingredientId: picked.ingredientId,
                                           ingredientName: picked.ingredientName,
-                                          // unit defaults to base unit on pick;
-                                          // chef can switch to a compatible unit after.
+                                          baseUnit: picked.baseUnit || r.unit,
                                           unit: picked.baseUnit || r.unit,
-                                          // cost defaults to preferred-supplier;
-                                          // chef can override per dish.
-                                          unitCost:
-                                            picked.preferredUnitCost && !r.unitCost
-                                              ? picked.preferredUnitCost
-                                              : r.unitCost,
-                                          // Picking a fresh row clears stale flag.
+                                          unitCost: picked.preferredUnitCost || r.unitCost,
                                           costStaleInd: false,
                                         }
                                       : r,
@@ -775,8 +858,9 @@ export function MenuItemFormModal({
                           </div>
                           <input
                             type="number"
-                            step="0.001"
+                            step="any"
                             min="0"
+                            max="999.99"
                             value={row.quantity}
                             onChange={(e) =>
                               updateIngredient(
@@ -786,7 +870,7 @@ export function MenuItemFormModal({
                               )
                             }
                             placeholder="0"
-                            className="col-span-2 px-3 py-2 text-xs bg-[#0A0A0A] border border-[#2A2A2A] rounded-lg text-[#FAFAFA] placeholder-[#666666] focus:outline-none focus:ring-1 focus:ring-[#D4A574]/50 min-h-[36px]"
+                            className="w-full px-2 py-2 text-xs bg-[#0A0A0A] border border-[#2A2A2A] rounded-lg text-[#FAFAFA] placeholder-[#666666] focus:outline-none focus:ring-1 focus:ring-[#D4A574]/50 min-h-[36px]"
                           />
                           <select
                             value={row.unit}
@@ -797,7 +881,7 @@ export function MenuItemFormModal({
                                 e.target.value
                               )
                             }
-                            className="col-span-1 px-2 py-2 text-xs bg-[#0A0A0A] border border-[#2A2A2A] rounded-lg text-[#FAFAFA] focus:outline-none focus:ring-1 focus:ring-[#D4A574]/50 min-h-[36px]"
+                            className="w-full px-1.5 py-2 text-xs bg-[#0A0A0A] border border-[#2A2A2A] rounded-lg text-[#FAFAFA] focus:outline-none focus:ring-1 focus:ring-[#D4A574]/50 min-h-[36px]"
                           >
                             {UNITS.map((u) => (
                               <option key={u} value={u}>
@@ -805,21 +889,23 @@ export function MenuItemFormModal({
                               </option>
                             ))}
                           </select>
-                          <input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            value={row.unitCost}
-                            onChange={(e) =>
-                              updateIngredient(
-                                row.tempId,
-                                "unitCost",
-                                e.target.value
-                              )
-                            }
-                            placeholder="0.00"
-                            className="col-span-2 px-3 py-2 text-xs bg-[#0A0A0A] border border-[#2A2A2A] rounded-lg text-[#FAFAFA] placeholder-[#666666] focus:outline-none focus:ring-1 focus:ring-[#D4A574]/50 min-h-[36px]"
-                          />
+                          <div className="relative">
+                            <input
+                              type="number"
+                              step="any"
+                              min="0"
+                              value={row.unitCost}
+                              onChange={(e) =>
+                                updateIngredient(
+                                  row.tempId,
+                                  "unitCost",
+                                  e.target.value
+                                )
+                              }
+                              placeholder="0.00"
+                              className="w-full px-2 py-2 text-xs bg-[#0A0A0A] border border-[#2A2A2A] rounded-lg text-[#FAFAFA] placeholder-[#666666] focus:outline-none focus:ring-1 focus:ring-[#D4A574]/50 min-h-[36px]"
+                            />
+                          </div>
                           <input
                             type="number"
                             step="1"
@@ -833,18 +919,34 @@ export function MenuItemFormModal({
                                 e.target.value
                               )
                             }
-                            className="col-span-1 px-2 py-2 text-xs bg-[#0A0A0A] border border-[#2A2A2A] rounded-lg text-[#FAFAFA] focus:outline-none focus:ring-1 focus:ring-[#D4A574]/50 min-h-[36px] text-center"
+                            className="w-full px-1.5 py-2 text-xs bg-[#0A0A0A] border border-[#2A2A2A] rounded-lg text-[#FAFAFA] focus:outline-none focus:ring-1 focus:ring-[#D4A574]/50 min-h-[36px] text-center"
                           />
-                          <div className="col-span-2 text-xs text-[#999999] font-mono min-h-[36px] flex items-center justify-end">
+                          <button
+                            type="button"
+                            onClick={() => setExpandedCostRow(expandedCostRow === row.tempId ? null : row.tempId)}
+                            className="text-xs text-[#999999] font-mono min-h-[36px] flex items-center justify-end hover:text-[#D4A574] transition-colors cursor-pointer"
+                            title={row.ingredientId ? "Tap to see cost breakdown" : undefined}
+                          >
                             ${lineCost.toFixed(2)}
-                          </div>
+                          </button>
                           <button
                             type="button"
                             onClick={() => removeIngredientRow(row.tempId)}
-                            className="col-span-1 p-1.5 rounded-lg hover:bg-[#2A2A2A] text-[#666666] hover:text-red-400 transition-colors flex items-center justify-center min-h-[36px]"
+                            className="p-1.5 rounded-lg hover:bg-[#2A2A2A] text-[#666666] hover:text-red-400 transition-colors flex items-center justify-center min-h-[36px]"
                           >
                             <Trash2 className="size-3.5" />
                           </button>
+                        </div>
+                        {breakdown && (
+                          <div className="px-2 pb-1 text-[10px] text-[#D4A574]/80 font-mono">
+                            {breakdown}
+                          </div>
+                        )}
+                        {unitMismatch && (
+                          <div className="px-2 pb-1 text-[10px] text-red-400">
+                            Unit mismatch: {row.unit} cannot convert to {row.baseUnit}. Change the unit to calculate cost.
+                          </div>
+                        )}
                         </div>
                       );
                     })}
@@ -870,11 +972,18 @@ export function MenuItemFormModal({
                 <div className="grid grid-cols-3 gap-4">
                   <div>
                     <p className="text-[10px] uppercase text-[#666666] mb-0.5">
-                      Total Food Cost
+                      Food Cost / Serving
                     </p>
                     <p className="text-lg font-bold text-[#FAFAFA]">
-                      ${totalFoodCost.toFixed(2)}
+                      ${foodCostWithQ.toFixed(2)}
                     </p>
+                    {(servings > 1 || qPct > 0) && (
+                      <p className="text-[10px] text-[#666666]">
+                        {servings > 1 && <>Batch: ${totalBatchCost.toFixed(2)} ({servings} servings)</>}
+                        {servings > 1 && qPct > 0 && " · "}
+                        {qPct > 0 && <>+{qPct}% Q Factor</>}
+                      </p>
+                    )}
                   </div>
                   <div>
                     <p className="text-[10px] uppercase text-[#666666] mb-0.5">

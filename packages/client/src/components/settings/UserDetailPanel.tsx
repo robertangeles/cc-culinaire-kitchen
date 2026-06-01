@@ -414,7 +414,7 @@ export function UserDetailPanel({ user, availableRoles, onClose, onRefresh }: Us
   return (
     <div className="fixed inset-0 z-50 flex justify-end" ref={trapRef} role="dialog" aria-modal="true" aria-label={`User details: ${user.userName}`}>
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/20" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/20" />
 
       {/* Panel */}
       <div className="relative w-full max-w-lg bg-[#161616] shadow-2xl shadow-black/40 flex flex-col">

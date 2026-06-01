@@ -239,7 +239,7 @@ export default function DeliveryReceiving({ po, onBack }: Props) {
                       value={data?.unitCost ?? ""}
                       onChange={(e) => updateReceiveData(line.lineId, "unitCost", e.target.value)}
                       min="0"
-                      step="0.01"
+                      step="any"
                       className="w-full px-2 py-1.5 rounded-lg text-sm bg-[#1A1A1A] text-white
                         border border-[#2A2A2A] focus:border-[#D4A574]/40
                         focus:shadow-[0_0_6px_rgba(212,165,116,0.1)] outline-none"

@@ -17,6 +17,7 @@ import {
   getSessionHistory,
   endSession,
   getMenuForSelection,
+  suggestSelections,
   saveMenuSelections,
   generateTasksFromSelections,
   getSelections,
@@ -50,6 +51,12 @@ const historyQuerySchema = z.object({
 const teamViewQuerySchema = z.object({
   teamView: z.enum(["true", "false"]).optional(),
   storeLocationId: z.string().uuid().optional(),
+});
+
+const forecastSuggestSchema = z.object({
+  covers: z.coerce.number().int().min(1, "Enter a forecast cover count of at least 1").max(100000),
+  buffer: z.coerce.number().min(1).max(3).optional(),
+  teamView: z.enum(["true", "false"]).optional(),
 });
 
 const selectionItemSchema = z.object({
@@ -258,6 +265,29 @@ export async function handleGetMenuForSelection(req: Request, res: Response) {
 
   const data = await getMenuForSelection(userId, teamView);
   res.json(data);
+}
+
+/** GET /api/prep/forecast-suggest?covers=N — suggested per-item portions from a cover forecast */
+export async function handleForecastSuggest(req: Request, res: Response) {
+  const userId = (req as any).user?.sub;
+  if (!userId) {
+    res.status(401).json({ error: "Sign in to forecast prep" });
+    return;
+  }
+
+  const parsed = forecastSuggestSchema.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.issues[0].message });
+    return;
+  }
+
+  const result = await suggestSelections(
+    userId,
+    parsed.data.covers,
+    parsed.data.teamView === "true",
+    parsed.data.buffer,
+  );
+  res.json(result);
 }
 
 /** POST /api/prep/sessions/:id/selections — save dish selections */

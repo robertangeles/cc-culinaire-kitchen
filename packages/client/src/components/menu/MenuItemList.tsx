@@ -329,8 +329,7 @@ export function MenuItemList({
                 return (
                   <tr
                     key={item.menuItemId}
-                    onClick={() => onSelect(item)}
-                    className="hover:bg-[#1E1E1E] cursor-pointer transition-colors"
+                    className="hover:bg-[#1E1E1E] transition-colors"
                   >
                     <td className="px-4 py-3 font-medium text-[#FAFAFA]">
                       <div>{item.name}</div>

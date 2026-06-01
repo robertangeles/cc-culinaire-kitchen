@@ -159,7 +159,7 @@ function TransferRow({
                           type="number"
                           defaultValue={Number(line.sentQty)}
                           min="0.01"
-                          step="0.01"
+                          step="any"
                           onChange={(e) => { line.sentQty = e.target.value; }}
                           className="w-20 px-2 py-1 rounded-md bg-[#161616] border border-[#2A2A2A] text-white text-sm text-right focus:outline-none focus:border-[#D4A574]/40 transition-colors"
                         />

@@ -60,6 +60,7 @@ export async function getYieldVariance(menuItemId: string): Promise<YieldVarianc
     .select({
       menuItemId: menuItem.menuItemId,
       unitsSold: menuItem.unitsSold,
+      servings: menuItem.servings,
       periodStart: menuItem.periodStart,
       periodEnd: menuItem.periodEnd,
     })
@@ -89,25 +90,24 @@ export async function getYieldVariance(menuItemId: string): Promise<YieldVarianc
   const periodStartDate = new Date(item.periodStart);
   const periodEndDate = new Date(item.periodEnd);
 
-  // Theoretical: per-unit recipe cost × units_sold.
+  // Theoretical: SUM(lineCost) / servings × units_sold.
+  // lineCost is pre-computed by computeLineCost which properly converts
+  // quantity to the ingredient's base unit before multiplication.
   const recipeRows = await db
     .select({
-      quantity: menuItemIngredient.quantity,
-      unitCost: menuItemIngredient.unitCost,
-      yieldPct: menuItemIngredient.yieldPct,
+      lineCost: menuItemIngredient.lineCost,
     })
     .from(menuItemIngredient)
     .where(eq(menuItemIngredient.menuItemId, menuItemId));
 
   if (recipeRows.length === 0) return empty("no-recipe");
 
-  const perUnitRecipeCost = recipeRows.reduce((sum, r) => {
-    const q = parseFloat(r.quantity);
-    const c = parseFloat(r.unitCost);
-    const y = parseFloat(r.yieldPct ?? "100") || 100;
-    if (!Number.isFinite(q) || !Number.isFinite(c) || y === 0) return sum;
-    return sum + (q * c) / (y / 100);
+  const totalRecipeCost = recipeRows.reduce((sum, r) => {
+    const lc = parseFloat(r.lineCost ?? "0");
+    return Number.isFinite(lc) ? sum + lc : sum;
   }, 0);
+  const servings = Number(item.servings) || 1;
+  const perUnitRecipeCost = totalRecipeCost / servings;
 
   const unitsSold = item.unitsSold ?? 0;
   const theoretical = perUnitRecipeCost * unitsSold;

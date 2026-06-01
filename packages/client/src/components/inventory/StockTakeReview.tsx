@@ -183,12 +183,8 @@ export function StockTakeReview({ session, onActionComplete }: Props) {
 
       {/* Flag modal */}
       {flagModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-[fadeIn_150ms_ease-out]"
-          onClick={() => setFlagModalOpen(false)}
-        >
-          <div className="w-full max-w-md p-6 rounded-2xl bg-[#161616] border border-[#2A2A2A] shadow-2xl animate-[scaleIn_200ms_ease-out]"
-            onClick={(e) => e.stopPropagation()}
-          >
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-[fadeIn_150ms_ease-out]">
+          <div className="w-full max-w-md p-6 rounded-2xl bg-[#161616] border border-[#2A2A2A] shadow-2xl animate-[scaleIn_200ms_ease-out]">
             <h4 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
               <Flag className="size-5 text-red-400" />
               Flag Categories for Recount

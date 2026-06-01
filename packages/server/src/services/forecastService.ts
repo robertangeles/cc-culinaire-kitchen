@@ -19,6 +19,12 @@ import {
   ingredientSupplier,
   locationIngredient,
 } from "../db/schema.js";
+import {
+  dailyUsageRate as calcDailyUsage,
+  daysUntilDepletion as calcDaysRemaining,
+  suggestedReorderQty as calcReorderQty,
+  forecastConfidence as calcConfidence,
+} from "./forecastMath.js";
 
 // ---------------------------------------------------------------------------
 // 1. generateForecasts
@@ -112,13 +118,13 @@ export async function generateForecasts(locationId: string, orgId: number) {
 
     const basedOnDays = consumption.dayCount;
     // Calculate elapsed calendar days for accurate daily rate
-    const elapsedDays = Math.max(1, Math.ceil(
+    const elapsedDays = Math.ceil(
       (now.getTime() - thirtyDaysAgo.getTime()) / (24 * 60 * 60 * 1000),
-    ));
-    const dailyUsage = totalConsumed / elapsedDays;
+    );
+    const dailyUsage = calcDailyUsage(totalConsumed, elapsedDays);
     const currentStock = stockMap.get(item.ingredientId) ?? 0;
     const daysRemaining = dailyUsage > 0
-      ? Math.floor(currentStock / dailyUsage)
+      ? calcDaysRemaining(currentStock, dailyUsage)
       : 999;
 
     const leadTime = leadTimeMap.get(item.ingredientId) ?? 3;
@@ -126,8 +132,8 @@ export async function generateForecasts(locationId: string, orgId: number) {
 
     // Only create recommendation if depletion is within lead_time + buffer
     if (daysRemaining < leadTime + buffer) {
-      const suggestedOrderQty = Math.ceil(dailyUsage * 14); // 2 weeks supply
-      const confidence = Math.min(1, basedOnDays / 30);
+      const suggestedOrderQty = calcReorderQty(dailyUsage); // 2 weeks supply
+      const confidence = calcConfidence(basedOnDays);
       const predictedDepletionDate = new Date(
         now.getTime() + daysRemaining * 24 * 60 * 60 * 1000,
       );
