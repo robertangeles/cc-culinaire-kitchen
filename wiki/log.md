@@ -4,6 +4,27 @@ Append-only. Newest entry on top.
 
 ---
 
+## 2026-06-01 — Formula audit: complete catalog + reconciliation matrix
+
+**What was done**
+
+Full audit of every formula in the CulinAIre Kitchen calculation engine. Read 13 source files across the server and shared packages, documented 27 formulas with forward/backward proofs, and created a reconciliation matrix showing how stock-affecting and cost-affecting operations must balance.
+
+**Pages created**
+- `wiki/concepts/formula-catalog.md` — 27 formulas across 8 categories (Unit Conversion, Stock, WAC, Menu Cost, Prep, PO, Forecast, Yield Variance). Each formula documented with ID, source file:line, inputs/outputs, precision/rounding, forward proof, backward proof, dependency chain, conversion system used, and test file status.
+- `wiki/concepts/reconciliation-matrix.md` — 8 operations mapped (receiving, transfer send, transfer receive, stock take approve, consumption, waste logging, PO creation, menu cost recalculation) with stock effects, cost effects, balance rules, and 5 cross-operation invariants.
+
+**Key findings**
+- Two unit conversion systems coexist: System A (static, `shared/utils/units.ts`) for menu cost engine, System B (DB-backed, `unitConversionService.ts`) for stock take. Documented explicitly to prevent confusion.
+- Pure math modules (`prepMath.ts`, `poMath.ts`, `stockMath.ts`, `forecastMath.ts`) are well-separated from I/O services. These are the easiest to test and have the best coverage.
+- Test coverage gaps identified: `poMath.ts`, `wacService.ts`, `stockService.ts`, `thresholdService.ts`, `autoPoSuggestService.ts`, and `forecastService.ts` (integration) all lack dedicated test files.
+- Precision varies across formulas: `.toFixed(2)` is the most common (menu costs, PO totals), `Math.round` for prep portions, `Math.floor` for depletion days, `Math.ceil` for reorder quantities, and `Math.round(x*1000)/1000` for on-hand display. All documented per formula.
+
+**Pages updated**
+- `wiki/index.md` — added both new concept entries.
+
+---
+
 ## 2026-05-05 — Play Console legal-URL pattern: SPA-route surface override + `/delete-account`
 
 Two web sessions today, both driven by Play Console submission requirements for the mobile app.
