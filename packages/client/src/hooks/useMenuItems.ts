@@ -14,6 +14,8 @@ export interface MenuItem {
   name: string;
   category: string;
   sellingPrice: number;
+  servings: number;
+  qFactorPct: number;
   foodCost: number;
   foodCostPct: number;
   contributionMargin: number;
@@ -34,19 +36,20 @@ export interface MenuItem {
 export interface MenuIngredient {
   id: number;
   menuItemId: string;
-  /** Catalog FK — Phase 1 catalog spine. Null for legacy free-text rows. */
   ingredientId?: string | null;
   ingredientName: string;
-  /** Narrative carried over from a recipe import or chef notes. */
   note?: string | null;
   quantity: string;
   unit: string;
+  /** The catalog ingredient's base unit (what unitCost is denominated in). Null for unlinked rows. */
+  baseUnit?: string | null;
   unitCost: string;
+  /** The linked catalog ingredient's current per-unit cost. Used as a fallback
+   *  when the stored unitCost is 0/empty so a linked row never shows $0. */
+  catalogUnitCost?: string | null;
   yieldPct: string;
   lineCost: string;
-  /** Phase 3: TRUE when the linked Catalog cost has changed since last refresh. */
   costStaleInd?: boolean;
-  /** Phase 3: when the cost was marked stale. ISO string. */
   costStaleAt?: string | null;
 }
 
@@ -64,6 +67,8 @@ export function useMenuItems(category?: string) {
       setItems(data.map((i: any) => ({
         ...i,
         sellingPrice: parseFloat(i.sellingPrice ?? "0"),
+        servings: i.servings ?? 1,
+        qFactorPct: parseFloat(i.qFactorPct ?? "0"),
         foodCost: parseFloat(i.foodCost ?? "0"),
         foodCostPct: parseFloat(i.foodCostPct ?? "0"),
         contributionMargin: parseFloat(i.contributionMargin ?? "0"),
@@ -78,7 +83,7 @@ export function useMenuItems(category?: string) {
 
   useEffect(() => { fetchItems(); }, [fetchItems]);
 
-  const createItem = useCallback(async (data: { name: string; category: string; sellingPrice: string }): Promise<MenuItem> => {
+  const createItem = useCallback(async (data: { name: string; category: string; sellingPrice: string; servings?: number; qFactorPct?: string }): Promise<MenuItem> => {
     const res = await fetch(`${API}/api/menu/items`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },

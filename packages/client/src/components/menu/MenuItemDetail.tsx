@@ -103,7 +103,7 @@ export function MenuItemDetail({ item, onClose, onAddIngredient, onRemoveIngredi
 
   return (
     <div className="fixed inset-0 z-40 flex justify-end">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
       <div className="relative w-full max-w-lg bg-[#161616] shadow-2xl overflow-y-auto border-l border-[#2A2A2A]">
         {/* Header */}
         <div className="sticky top-0 bg-[#161616] border-b border-[#2A2A2A] px-6 py-4 flex items-center justify-between z-10">
@@ -177,7 +177,7 @@ export function MenuItemDetail({ item, onClose, onAddIngredient, onRemoveIngredi
                     <option value="kg">kg</option><option value="g">g</option><option value="l">l</option>
                     <option value="ml">ml</option><option value="each">each</option><option value="bunch">bunch</option>
                   </select>
-                  <input type="number" step="0.01" value={ingCost} onChange={(e) => setIngCost(e.target.value)} placeholder="$/unit" required
+                  <input type="number" step="any" value={ingCost} onChange={(e) => setIngCost(e.target.value)} placeholder="$/unit" required
                     className="px-2 py-1.5 text-xs bg-[#0A0A0A] border border-[#2A2A2A] rounded-lg text-[#FAFAFA] placeholder-[#666666] focus:outline-none focus:ring-1 focus:ring-[#D4A574]/50 min-h-[36px]" />
                   <button type="submit" disabled={addingIng}
                     className="flex items-center justify-center px-2 py-1.5 text-xs bg-[#D4A574] text-white rounded-lg hover:bg-[#C4956A] disabled:opacity-50 transition-colors min-h-[36px]">

@@ -500,7 +500,7 @@ export function WasteLogger({ onSwitchTab, teamView = false, isOrgAdmin = false 
             onChange={(e) => setEstimatedCost(e.target.value)}
             placeholder="0.00"
             min="0"
-            step="0.01"
+            step="any"
             className="w-full px-3 py-2.5 bg-[#1E1E1E] border border-[#2A2A2A] rounded-lg text-white placeholder-[#666666] focus:ring-2 focus:ring-[#D4A574]/50 focus:border-[#D4A574] text-sm"
           />
         </div>
@@ -613,7 +613,7 @@ export function WasteLogger({ onSwitchTab, teamView = false, isOrgAdmin = false 
                         className="px-2 py-1.5 bg-[#1E1E1E] border border-[#2A2A2A] rounded text-white text-sm"
                         placeholder="Cost ($)"
                         min="0"
-                        step="0.01"
+                        step="any"
                       />
                     </div>
                     <div className="flex gap-2 justify-end">

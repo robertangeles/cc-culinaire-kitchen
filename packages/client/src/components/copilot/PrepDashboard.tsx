@@ -18,6 +18,8 @@ import {
   User,
   ClipboardList,
   AlertTriangle,
+  Pencil,
+  Printer,
 } from "lucide-react";
 
 interface PrepTask {
@@ -33,6 +35,11 @@ interface PrepTask {
   priorityScore: number;
   priorityTier: string;
   station: string | null;
+  ingredientId: string | null;
+  onHandQty: number | null;
+  prepNeeded: number | null;
+  useBy: string | null;
+  isOverPrep: boolean;
   status: string;
   assignedTo: string | null;
   completedAt: string | null;
@@ -49,6 +56,7 @@ interface PrepSession {
   tasksCompleted: number;
   tasksSkipped: number;
   notes: string | null;
+  isEnded: boolean;
   createdDttm: string;
   updatedDttm: string;
 }
@@ -61,6 +69,7 @@ interface PrepSessionWithTasks {
 interface Props {
   sessionData: PrepSessionWithTasks | null;
   onSessionUpdate: (data: PrepSessionWithTasks | null) => void;
+  onEditSelections?: () => void;
   teamView?: boolean;
 }
 
@@ -75,7 +84,66 @@ const TIER_CONFIG: {
   { key: "can_wait", label: "Can Wait", borderClass: "border-l-[#2A2A2A]", icon: "" },
 ];
 
-export function PrepDashboard({ sessionData, onSessionUpdate, teamView }: Props) {
+function fmtQty(value: number, unit: string): string {
+  const u = unit.toLowerCase();
+  if (u === "kg" || u === "l" || u === "lb") return value.toFixed(1).replace(/\.0$/, "");
+  return Math.round(value).toString();
+}
+
+function buildPrintHtml(session: PrepSession | null, tasks: PrepTask[]): string {
+  const date = session?.prepDate ? new Date(session.prepDate).toLocaleDateString("en-AU", { weekday: "long", year: "numeric", month: "long", day: "numeric" }) : "Today";
+  const covers = session?.expectedCovers ?? "—";
+
+  const byStation = new Map<string, PrepTask[]>();
+  for (const t of tasks) {
+    const station = t.station || "Other";
+    const list = byStation.get(station);
+    if (list) list.push(t); else byStation.set(station, [t]);
+  }
+
+  const stationHtml = [...byStation.entries()].map(([station, stationTasks]) => `
+    <div style="break-inside:avoid;margin-bottom:24px">
+      <h2 style="font-size:16px;font-weight:700;border-bottom:2px solid #333;padding-bottom:4px;margin-bottom:8px">${station}</h2>
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead><tr style="border-bottom:1px solid #ccc;text-align:left">
+          <th style="padding:4px 8px;width:30px"></th>
+          <th style="padding:4px 8px">Ingredient</th>
+          <th style="padding:4px 8px;text-align:right">Need</th>
+          <th style="padding:4px 8px;text-align:right">On Hand</th>
+          <th style="padding:4px 8px;text-align:right;font-weight:700">Prep</th>
+          <th style="padding:4px 8px">For</th>
+        </tr></thead>
+        <tbody>${stationTasks.map((t) => {
+          const qty = fmtQty(t.quantityNeeded, t.unit);
+          const onHand = t.onHandQty != null ? fmtQty(t.onHandQty, t.unit) : "—";
+          const prep = t.prepNeeded != null ? fmtQty(t.prepNeeded, t.unit) : qty;
+          const dishes = t.taskDescription.includes("for ") ? t.taskDescription.split("for ").slice(1).join("for ") : "";
+          return `<tr style="border-bottom:1px solid #eee">
+            <td style="padding:4px 8px"><div style="width:14px;height:14px;border:1.5px solid #999;border-radius:3px"></div></td>
+            <td style="padding:4px 8px;font-weight:500">${t.ingredientName}</td>
+            <td style="padding:4px 8px;text-align:right">${qty} ${t.unit}</td>
+            <td style="padding:4px 8px;text-align:right;color:#666">${onHand} ${t.unit}</td>
+            <td style="padding:4px 8px;text-align:right;font-weight:700">${prep} ${t.unit}</td>
+            <td style="padding:4px 8px;color:#666;font-size:11px">${dishes}</td>
+          </tr>`;
+        }).join("")}</tbody>
+      </table>
+    </div>
+  `).join("");
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8">
+    <title>Prep Sheet — ${date}</title>
+    <style>
+      body{font-family:-apple-system,system-ui,sans-serif;margin:24px;color:#111}
+      @media print{body{margin:12px}h1{font-size:18px}}
+    </style></head><body>
+    <h1 style="font-size:20px;margin-bottom:4px">Prep Sheet — ${date}</h1>
+    <p style="color:#666;font-size:13px;margin-bottom:20px">Expected covers: ${covers} | ${tasks.length} items | Printed ${new Date().toLocaleTimeString()}</p>
+    ${stationHtml}
+  </body></html>`;
+}
+
+export function PrepDashboard({ sessionData, onSessionUpdate, onEditSelections, teamView }: Props) {
   const session = sessionData?.session ?? null;
   const tasks = sessionData?.tasks ?? [];
   const [expandedTiers, setExpandedTiers] = useState<Set<string>>(
@@ -88,6 +156,21 @@ export function PrepDashboard({ sessionData, onSessionUpdate, teamView }: Props)
   const [showEndForm, setShowEndForm] = useState(false);
   const [actualCovers, setActualCovers] = useState("");
   const [error, setError] = useState<string | null>(null);
+
+  const handlePrint = useCallback(() => {
+    const html = buildPrintHtml(session, tasks);
+    const iframe = document.createElement("iframe");
+    iframe.style.position = "fixed";
+    iframe.style.left = "-9999px";
+    document.body.appendChild(iframe);
+    const doc = iframe.contentDocument;
+    if (!doc) { document.body.removeChild(iframe); return; }
+    doc.open();
+    doc.write(html);
+    doc.close();
+    iframe.contentWindow?.addEventListener("afterprint", () => document.body.removeChild(iframe));
+    setTimeout(() => iframe.contentWindow?.print(), 300);
+  }, [session, tasks]);
 
   // Waste alert: check if today's prep ingredients overlap with top waste items
   const [wasteAlertItems, setWasteAlertItems] = useState<string[]>([]);
@@ -205,26 +288,26 @@ export function PrepDashboard({ sessionData, onSessionUpdate, teamView }: Props)
   );
 
   /** End the prep session. */
-  const endSession = async () => {
-    if (!sessionData) return;
-    const covers = Number(actualCovers);
-    if (!covers || covers < 0) return;
-
+  const endSession = async (withActuals: boolean) => {
+    if (!sessionData?.session?.prepSessionId) return;
     setEndingSession(true);
     setError(null);
     try {
+      const covers = withActuals ? Number(actualCovers) : undefined;
+      const body: Record<string, unknown> = {};
+      if (covers && covers > 0) body.actualCovers = covers;
       const res = await fetch(`/api/prep/sessions/${sessionData.session.prepSessionId}/end`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ actualCovers: covers }),
+        body: JSON.stringify(body),
       });
       if (!res.ok) {
         const json = await res.json().catch(() => ({}));
         throw new Error((json as { error?: string }).error ?? `Failed (${res.status})`);
       }
-      const data = await res.json();
-      onSessionUpdate(data);
+      await res.json();
+      onSessionUpdate(null);
       setShowEndForm(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to end session");
@@ -298,9 +381,29 @@ export function PrepDashboard({ sessionData, onSessionUpdate, teamView }: Props)
             style={{ width: `${progressPct}%` }}
           />
         </div>
-        <p className="text-xs text-[#666666] mt-2">
-          Expected covers: {session?.expectedCovers ?? "—"}
-        </p>
+        <div className="flex items-center justify-between mt-2">
+          <p className="text-xs text-[#666666]">
+            Expected covers: {session?.expectedCovers ?? "—"}
+          </p>
+          <div className="flex items-center gap-3">
+            {onEditSelections && (
+              <button
+                onClick={onEditSelections}
+                className="inline-flex items-center gap-1.5 text-xs text-[#D4A574] hover:text-[#C4956A] transition-colors"
+              >
+                <Pencil className="size-3" />
+                Edit selections
+              </button>
+            )}
+            <button
+              onClick={handlePrint}
+              className="inline-flex items-center gap-1.5 text-xs text-[#999999] hover:text-white transition-colors"
+            >
+              <Printer className="size-3" />
+              Print
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Priority tiers */}
@@ -331,132 +434,149 @@ export function PrepDashboard({ sessionData, onSessionUpdate, teamView }: Props)
               </span>
             </button>
 
-            {/* Task cards */}
+            {/* Task rows — compact single-line layout */}
             {isExpanded && (
-              <div className="space-y-3">
+              <div className="space-y-1">
                 {tierTasks.map((task) => {
                   const isDone = task.status === "completed";
                   const isSkipped = task.status === "skipped";
                   const dimmed = isDone || isSkipped;
 
                   return (
-                    <div
-                      key={task.prepTaskId}
-                      className={`bg-[#161616] rounded-lg p-4 border border-[#2A2A2A] border-l-4 ${tier.borderClass} flex items-start gap-3 transition-opacity ${
-                        dimmed ? "opacity-50" : ""
-                      }`}
-                    >
-                      {/* Checkbox */}
-                      <button
-                        onClick={() =>
-                          updateTaskStatus(task.prepTaskId, isDone ? "pending" : "completed")
-                        }
-                        disabled={updatingTask === task.prepTaskId}
-                        className={`mt-0.5 shrink-0 size-6 rounded border-2 flex items-center justify-center transition-colors min-h-[44px] min-w-[44px] ${
-                          isDone
-                            ? "bg-[#D4A574] border-[#D4A574] text-white"
-                            : "border-[#2A2A2A] hover:border-[#D4A574]"
+                    <div key={task.prepTaskId}>
+                      <div
+                        className={`bg-[#161616] rounded-xl px-3 py-2.5 border border-[#2A2A2A] border-l-4 ${tier.borderClass} flex items-center gap-2.5 transition-opacity ${
+                          dimmed ? "opacity-40" : ""
                         }`}
-                        aria-label={isDone ? "Mark as pending" : "Mark as done"}
                       >
-                        {updatingTask === task.prepTaskId ? (
-                          <Loader2 className="size-3 animate-spin" />
-                        ) : isDone ? (
-                          <Check className="size-3" />
-                        ) : null}
-                      </button>
+                        {/* Checkbox */}
+                        <button
+                          onClick={() =>
+                            updateTaskStatus(task.prepTaskId, isDone ? "pending" : "completed")
+                          }
+                          disabled={updatingTask === task.prepTaskId}
+                          className={`shrink-0 size-5 rounded border-2 flex items-center justify-center transition-colors ${
+                            isDone
+                              ? "bg-[#D4A574] border-[#D4A574] text-white"
+                              : "border-[#2A2A2A] hover:border-[#D4A574]"
+                          }`}
+                          aria-label={isDone ? "Mark as pending" : "Mark as done"}
+                        >
+                          {updatingTask === task.prepTaskId ? (
+                            <Loader2 className="size-2.5 animate-spin" />
+                          ) : isDone ? (
+                            <Check className="size-2.5" />
+                          ) : null}
+                        </button>
 
-                      {/* Task details */}
-                      <div className="flex-1 min-w-0">
-                        <p className={`font-semibold text-white ${isDone ? "line-through" : ""}`}>
-                          {task.taskDescription}
-                        </p>
-                        <p className={`text-sm text-[#999999] ${isDone ? "line-through" : ""}`}>
-                          {task.ingredientName} &mdash; {task.quantityNeeded} {task.unit}
-                        </p>
-
-                        {/* Badges */}
-                        <div className="flex flex-wrap gap-2 mt-2">
-                          {task.prepTimeMinutes != null && (
-                            <span className="inline-flex items-center gap-1 text-xs bg-[#1E1E1E] text-[#E5E5E5] px-2 py-1 rounded-full">
-                              <Clock className="size-3" />
-                              ~{task.prepTimeMinutes} min
+                        {/* Ingredient + quantity breakdown */}
+                        <span className={`font-semibold text-sm text-white truncate ${isDone ? "line-through" : ""}`}>
+                          {task.ingredientName}
+                        </span>
+                        {task.onHandQty != null ? (
+                          <span className={`text-sm whitespace-nowrap flex items-center gap-1.5 ${isDone ? "line-through" : ""}`}>
+                            <span className="font-medium text-[#D4A574]">
+                              {fmtQty(task.quantityNeeded, task.unit)} {task.unit}
                             </span>
-                          )}
+                            <span className={`text-[10px] ${task.prepNeeded != null && task.prepNeeded <= 0 ? "text-green-400/70" : "text-[#666666]"}`}>
+                              {task.prepNeeded != null && task.prepNeeded <= 0
+                                ? `In stock (${fmtQty(task.onHandQty, task.unit)} ${task.unit} on hand)`
+                                : `${fmtQty(task.onHandQty, task.unit)} ${task.unit} on hand`}
+                            </span>
+                          </span>
+                        ) : (
+                          <span className={`text-sm text-[#D4A574] font-medium whitespace-nowrap ${isDone ? "line-through" : ""}`}>
+                            {fmtQty(task.quantityNeeded, task.unit)} {task.unit}
+                          </span>
+                        )}
+
+                        {/* Inline badges */}
+                        <div className="flex items-center gap-1.5 ml-auto shrink-0">
                           {task.station && (
-                            <span className="inline-flex items-center gap-1 text-xs bg-[#1E1E1E] text-[#E5E5E5] px-2 py-1 rounded-full">
-                              <MapPin className="size-3" />
+                            <span className="inline-flex items-center gap-1 text-[10px] bg-[#1E1E1E] text-[#999999] px-1.5 py-0.5 rounded-full">
+                              <MapPin className="size-2.5" />
                               {task.station}
                             </span>
                           )}
+                          {task.prepTimeMinutes != null && (
+                            <span className="inline-flex items-center gap-1 text-[10px] bg-[#1E1E1E] text-[#999999] px-1.5 py-0.5 rounded-full">
+                              <Clock className="size-2.5" />
+                              {task.prepTimeMinutes}m
+                            </span>
+                          )}
                           {task.assignedTo && (
-                            <span className="inline-flex items-center gap-1 text-xs bg-[#D4A574]/20 text-[#D4A574] px-2 py-1 rounded-full">
-                              <User className="size-3" />
+                            <span className="inline-flex items-center gap-1 text-[10px] bg-[#D4A574]/15 text-[#D4A574] px-1.5 py-0.5 rounded-full">
+                              <User className="size-2.5" />
                               {task.assignedTo}
                             </span>
                           )}
+
+                          {/* Actions — inline, minimal */}
+                          {!isDone && !isSkipped && assigningTask !== task.prepTaskId && (
+                            <button
+                              onClick={() => { setAssigningTask(task.prepTaskId); setAssignName(task.assignedTo ?? ""); }}
+                              className="text-[10px] text-[#666666] hover:text-[#D4A574] transition-colors px-1"
+                            >
+                              Assign
+                            </button>
+                          )}
+                          {!isDone && !isSkipped && (
+                            <button
+                              onClick={() => updateTaskStatus(task.prepTaskId, "skipped")}
+                              disabled={updatingTask === task.prepTaskId}
+                              className="text-[10px] text-[#666666] hover:text-red-400 transition-colors px-1"
+                            >
+                              Skip
+                            </button>
+                          )}
+                          {isSkipped && (
+                            <button
+                              onClick={() => updateTaskStatus(task.prepTaskId, "pending")}
+                              disabled={updatingTask === task.prepTaskId}
+                              className="text-[10px] text-[#666666] hover:text-[#D4A574] transition-colors px-1"
+                            >
+                              Undo
+                            </button>
+                          )}
                         </div>
-
-                        {/* Assign input (inline) */}
-                        {assigningTask === task.prepTaskId && (
-                          <div className="flex gap-2 mt-2">
-                            <input
-                              type="text"
-                              placeholder="Staff name"
-                              value={assignName}
-                              onChange={(e) => setAssignName(e.target.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") assignTask(task.prepTaskId, assignName);
-                                if (e.key === "Escape") { setAssigningTask(null); setAssignName(""); }
-                              }}
-                              className="flex-1 px-3 py-1.5 bg-[#1E1E1E] border border-[#2A2A2A] rounded text-sm text-white focus:ring-2 focus:ring-[#D4A574]/50 min-h-[44px]"
-                              autoFocus
-                            />
-                            <button
-                              onClick={() => assignTask(task.prepTaskId, assignName)}
-                              className="px-3 py-1.5 bg-[#D4A574] hover:bg-[#C4956A] text-white text-sm rounded min-h-[44px]"
-                            >
-                              Save
-                            </button>
-                            <button
-                              onClick={() => { setAssigningTask(null); setAssignName(""); }}
-                              className="px-3 py-1.5 bg-[#1E1E1E] hover:bg-[#2A2A2A] text-[#E5E5E5] text-sm rounded min-h-[44px]"
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        )}
                       </div>
 
-                      {/* Action buttons */}
-                      <div className="flex flex-col gap-1 shrink-0">
-                        {!isDone && !isSkipped && assigningTask !== task.prepTaskId && (
+                      {/* Dishes this ingredient is for (subtle, below the row) */}
+                      {!dimmed && task.taskDescription.includes("for ") && (
+                        <p className="text-[10px] text-[#666666] pl-10 mt-0.5 mb-1 truncate">
+                          {task.taskDescription.split("for ").slice(1).join("for ")}
+                        </p>
+                      )}
+
+                      {/* Assign input (inline, expands below the row) */}
+                      {assigningTask === task.prepTaskId && (
+                        <div className="flex gap-2 ml-10 mt-1 mb-2">
+                          <input
+                            type="text"
+                            placeholder="Staff name"
+                            value={assignName}
+                            onChange={(e) => setAssignName(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") assignTask(task.prepTaskId, assignName);
+                              if (e.key === "Escape") { setAssigningTask(null); setAssignName(""); }
+                            }}
+                            className="flex-1 px-3 py-1.5 bg-[#1E1E1E] border border-[#2A2A2A] rounded-lg text-sm text-white focus:ring-2 focus:ring-[#D4A574]/50"
+                            autoFocus
+                          />
                           <button
-                            onClick={() => { setAssigningTask(task.prepTaskId); setAssignName(task.assignedTo ?? ""); }}
-                            className="text-xs text-[#666666] hover:text-[#D4A574] transition-colors px-2 py-1 min-h-[44px]"
+                            onClick={() => assignTask(task.prepTaskId, assignName)}
+                            className="px-3 py-1.5 bg-[#D4A574] hover:bg-[#C4956A] text-[#0A0A0A] text-xs font-medium rounded-lg"
                           >
-                            Assign
+                            Save
                           </button>
-                        )}
-                        {!isDone && !isSkipped && (
                           <button
-                            onClick={() => updateTaskStatus(task.prepTaskId, "skipped")}
-                            disabled={updatingTask === task.prepTaskId}
-                            className="text-xs text-[#666666] hover:text-red-400 transition-colors px-2 py-1 min-h-[44px]"
+                            onClick={() => { setAssigningTask(null); setAssignName(""); }}
+                            className="px-3 py-1.5 bg-[#1E1E1E] hover:bg-[#2A2A2A] text-[#999999] text-xs rounded-lg"
                           >
-                            Skip
+                            Cancel
                           </button>
-                        )}
-                        {isSkipped && (
-                          <button
-                            onClick={() => updateTaskStatus(task.prepTaskId, "pending")}
-                            disabled={updatingTask === task.prepTaskId}
-                            className="text-xs text-[#666666] hover:text-[#D4A574] transition-colors px-2 py-1 min-h-[44px]"
-                          >
-                            Undo
-                          </button>
-                        )}
-                      </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -471,36 +591,50 @@ export function PrepDashboard({ sessionData, onSessionUpdate, teamView }: Props)
         {!showEndForm ? (
           <button
             onClick={() => setShowEndForm(true)}
-            className="flex items-center gap-2 px-5 py-3 bg-[#161616] hover:bg-[#1E1E1E] text-[#E5E5E5] hover:text-white border border-[#2A2A2A] rounded-lg transition-colors min-h-[44px]"
+            className="flex items-center gap-2 px-5 py-3 bg-[#161616] hover:bg-[#1E1E1E] text-[#E5E5E5] hover:text-white border border-[#2A2A2A] rounded-xl transition-colors min-h-[44px]"
           >
             <X className="size-4" />
             End Session
           </button>
         ) : (
-          <div className="bg-[#161616] rounded-xl p-5 border border-[#2A2A2A] max-w-md">
-            <p className="text-sm font-medium text-[#E5E5E5] mb-3">
-              How many covers did you actually serve?
+          <div className="bg-[#0A0A0A]/80 backdrop-blur-sm rounded-2xl p-6 border border-[#2A2A2A] max-w-md shadow-lg shadow-black/20">
+            <p className="text-sm font-semibold text-white mb-1">
+              Wrap up this prep session
             </p>
-            <div className="flex gap-3">
+            <p className="text-xs text-[#666666] mb-4">
+              Logging actual covers helps your next forecast — but it&apos;s optional.
+            </p>
+            <div className="flex items-center gap-3 mb-4">
               <input
                 type="number"
                 min={0}
-                placeholder="Actual covers"
+                placeholder="Actual covers (optional)"
                 value={actualCovers}
                 onChange={(e) => setActualCovers(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") endSession(); }}
-                className="flex-1 px-4 py-3 bg-[#1E1E1E] border border-[#2A2A2A] rounded-lg text-white focus:ring-2 focus:ring-[#D4A574]/50 min-h-[44px]"
+                onKeyDown={(e) => { if (e.key === "Enter") endSession(true); }}
+                className="flex-1 px-4 py-2.5 bg-[#161616] border border-[#2A2A2A] rounded-xl text-white text-sm placeholder-[#666666] focus:ring-2 focus:ring-[#D4A574]/50 focus:border-transparent min-h-[44px]"
               />
+              {actualCovers && (
+                <button
+                  onClick={() => endSession(true)}
+                  disabled={endingSession}
+                  className="px-5 py-2.5 bg-[#D4A574] hover:bg-[#C4956A] disabled:opacity-50 text-[#0A0A0A] font-semibold rounded-xl transition-colors min-h-[44px] whitespace-nowrap"
+                >
+                  {endingSession ? <Loader2 className="size-4 animate-spin" /> : "Save & End"}
+                </button>
+              )}
+            </div>
+            <div className="flex gap-3">
               <button
-                onClick={endSession}
-                disabled={endingSession || !actualCovers}
-                className="px-5 py-3 bg-[#D4A574] hover:bg-[#C4956A] disabled:bg-[#2A2A2A] disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors min-h-[44px]"
+                onClick={() => endSession(false)}
+                disabled={endingSession}
+                className="flex-1 px-4 py-2.5 bg-[#1E1E1E] hover:bg-[#2A2A2A] text-[#999999] hover:text-white text-sm font-medium rounded-xl transition-colors min-h-[44px]"
               >
-                {endingSession ? <Loader2 className="size-5 animate-spin" /> : "End"}
+                End without logging
               </button>
               <button
-                onClick={() => setShowEndForm(false)}
-                className="px-4 py-3 bg-[#1E1E1E] hover:bg-[#2A2A2A] text-[#E5E5E5] rounded-lg transition-colors min-h-[44px]"
+                onClick={() => { setShowEndForm(false); setActualCovers(""); }}
+                className="px-4 py-2.5 text-[#666666] hover:text-[#999999] text-sm transition-colors min-h-[44px]"
               >
                 Cancel
               </button>

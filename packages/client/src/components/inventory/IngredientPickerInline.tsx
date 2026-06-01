@@ -281,64 +281,70 @@ export function IngredientPickerInline({
         />
       </div>
 
-      <div
-        id="ingredient-picker-list"
-        className="absolute z-30 left-0 right-0 mt-1 bg-[#161616] border border-[#2A2A2A] rounded-xl shadow-xl overflow-hidden max-h-[260px] overflow-y-auto"
-      >
-        {loading && (
-          <div className="px-3 py-2 text-xs text-[#999]">Searching...</div>
-        )}
-        {!loading && results.length === 0 && query.trim().length > 0 && (
-          <div className="px-3 py-2 text-xs text-[#999]">No matches.</div>
-        )}
-        {!loading && query.trim().length === 0 && (
-          <div className="px-3 py-2 text-xs text-[#999]">
-            Type to search the Catalog.
-          </div>
-        )}
-        {results.map((r, idx) => (
-          <button
-            key={r.ingredientId}
-            type="button"
-            onClick={() => {
-              onPick({
-                ingredientId: r.ingredientId,
-                ingredientName: r.ingredientName,
-                baseUnit: r.baseUnit,
-                preferredUnitCost: r.preferredUnitCost,
-              });
-              setIsOpen(false);
-              setQuery("");
-            }}
-            onMouseEnter={() => setHighlight(idx)}
-            className={`w-full px-3 py-2 flex items-center gap-2 text-left text-sm transition-colors ${
-              idx === highlight
-                ? "bg-[#D4A574]/10 ring-1 ring-[#D4A574]/30"
-                : "hover:bg-[#1E1E1E]"
-            }`}
-          >
-            <Link2 className="size-3 text-emerald-400 shrink-0" aria-hidden />
-            <span className="truncate text-[#FAFAFA]">{r.ingredientName}</span>
-            <span className="ml-auto text-[10px] text-[#999] tabular-nums shrink-0">
-              {r.preferredUnitCost
-                ? `$${parseFloat(r.preferredUnitCost).toFixed(2)}/${r.baseUnit}`
-                : `(${r.baseUnit})`}
-            </span>
-          </button>
-        ))}
+      {(loading || query.trim().length > 0) && (
+        <div
+          id="ingredient-picker-list"
+          className="absolute z-50 left-0 mt-1 min-w-[280px] w-max max-w-[400px] bg-[#161616]/95 backdrop-blur-xl border border-[#D4A574]/15 rounded-xl overflow-hidden max-h-[240px] overflow-y-auto"
+          style={{ boxShadow: "0 8px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(42,42,42,0.5)" }}
+        >
+          {loading && (
+            <div className="px-3 py-2.5 text-xs text-[#999]">Searching...</div>
+          )}
+          {!loading && results.length === 0 && query.trim().length > 0 && (
+            <div className="px-3 py-2.5 text-xs text-[#666]">No matches found.</div>
+          )}
+          {results.map((r, idx) => (
+            <button
+              key={r.ingredientId}
+              type="button"
+              onClick={() => {
+                onPick({
+                  ingredientId: r.ingredientId,
+                  ingredientName: r.ingredientName,
+                  baseUnit: r.baseUnit,
+                  preferredUnitCost: r.preferredUnitCost,
+                });
+                setIsOpen(false);
+                setQuery("");
+              }}
+              onMouseEnter={() => setHighlight(idx)}
+              className={`w-full px-3 py-2 flex items-center gap-2 text-left text-xs transition-colors ${
+                idx === highlight
+                  ? "bg-[#D4A574]/12 border-l-2 border-l-[#D4A574]"
+                  : "hover:bg-[#1E1E1E] border-l-2 border-l-transparent"
+              }`}
+            >
+              <Link2 className="size-3 text-emerald-400 shrink-0" aria-hidden />
+              <span className="truncate text-[#FAFAFA]">{r.ingredientName}</span>
+              <span className="ml-auto text-[10px] text-[#999] tabular-nums shrink-0 pl-2">
+                {r.preferredUnitCost
+                  ? `$${parseFloat(r.preferredUnitCost).toFixed(2)}/${r.baseUnit}`
+                  : r.baseUnit}
+              </span>
+            </button>
+          ))}
 
-        {/* Create-new affordance — only if user typed something + no exact match */}
-        {!loading && query.trim().length > 0 && !exactMatchExists && onCreateRequest && (
-          <button
-            type="button"
-            onClick={() => onCreateRequest(query.trim())}
-            className="w-full px-3 py-2 flex items-center gap-2 text-left text-sm text-[#D4A574] border-t border-[#2A2A2A] bg-[#0F0F0F] hover:bg-[#1A1A1A] transition-colors"
-          >
-            <Plus className="size-3.5" />
-            <span className="truncate">Add to Catalog: "{query.trim()}"</span>
-          </button>
-        )}
-      </div>
+          {!loading && query.trim().length > 0 && !exactMatchExists && onCreateRequest && (
+            <button
+              type="button"
+              onClick={() => onCreateRequest(query.trim())}
+              className="w-full px-3 py-2 flex items-center gap-2 text-left text-xs text-[#D4A574] border-t border-[#2A2A2A] bg-[#0F0F0F] hover:bg-[#1A1A1A] transition-colors"
+            >
+              <Plus className="size-3.5" />
+              <span className="truncate">Add to Catalog: &ldquo;{query.trim()}&rdquo;</span>
+            </button>
+          )}
+        </div>
+      )}
+
+      {!loading && query.trim().length === 0 && isOpen && (
+        <div
+          className="absolute z-50 left-0 mt-1 min-w-[280px] bg-[#161616]/95 backdrop-blur-xl border border-[#2A2A2A] rounded-xl px-3 py-2.5 text-xs text-[#666]"
+          style={{ boxShadow: "0 8px 32px rgba(0,0,0,0.5)" }}
+        >
+          Type to search the Catalog.
+        </div>
+      )}
     </div>
   );
 }

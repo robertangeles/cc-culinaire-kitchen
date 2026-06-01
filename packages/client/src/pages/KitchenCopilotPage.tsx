@@ -36,7 +36,7 @@ type CopilotTab = "prep" | "cross-usage" | "high-impact" | "history";
 type CopilotState = "loading" | "no-session" | "selecting" | "prepping";
 
 const TABS: { key: CopilotTab; label: string }[] = [
-  { key: "prep", label: "Today's Prep" },
+  { key: "prep", label: "Mise en Place" },
   { key: "cross-usage", label: "Cross-Usage" },
   { key: "high-impact", label: "High-Impact" },
   { key: "history", label: "History" },
@@ -55,6 +55,11 @@ interface PrepTask {
   priorityScore: number;
   priorityTier: string;
   station: string | null;
+  ingredientId: string | null;
+  onHandQty: number | null;
+  prepNeeded: number | null;
+  useBy: string | null;
+  isOverPrep: boolean;
   status: string;
   assignedTo: string | null;
   completedAt: string | null;
@@ -71,6 +76,7 @@ interface PrepSession {
   tasksCompleted: number;
   tasksSkipped: number;
   notes: string | null;
+  isEnded: boolean;
   createdDttm: string;
   updatedDttm: string;
 }
@@ -206,6 +212,12 @@ export function KitchenCopilotPage() {
   const handleGenerated = (data: PrepSessionWithTasks) => {
     setSessionData(data);
     setCopilotState("prepping");
+  };
+
+  /** Called when PrepDashboard ends or nulls the session. */
+  const handleSessionUpdate = (data: PrepSessionWithTasks | null) => {
+    setSessionData(data);
+    if (!data) setCopilotState("no-session");
   };
 
   // Guest users see sign-up prompt
@@ -348,7 +360,8 @@ export function KitchenCopilotPage() {
             {copilotState === "prepping" && (
               <PrepDashboard
                 sessionData={sessionData}
-                onSessionUpdate={setSessionData}
+                onSessionUpdate={handleSessionUpdate}
+                onEditSelections={() => setCopilotState("selecting")}
                 teamView={teamView}
               />
             )}

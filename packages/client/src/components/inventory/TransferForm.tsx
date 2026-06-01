@@ -170,21 +170,21 @@ export default function TransferForm({ onClose, editTransferId, editData }: Tran
     return item ? Number(item.currentQty || 0) : 0;
   }
 
-  const handleSubmit = useCallback(async () => {
+  const handleSubmit = useCallback(async (): Promise<boolean> => {
     setError(null);
 
     if (!toLocationId) {
       setError("Select a destination location");
-      return;
+      return false;
     }
     if (lines.length === 0) {
       setError("Add at least one item");
-      return;
+      return false;
     }
     const invalidLines = lines.filter((l) => !l.sentQty || Number(l.sentQty) <= 0);
     if (invalidLines.length > 0) {
       setError("Enter a quantity for each item");
-      return;
+      return false;
     }
 
     setSaving(true);
@@ -217,8 +217,10 @@ export default function TransferForm({ onClose, editTransferId, editData }: Tran
         });
       }
       onClose();
+      return true;
     } catch (err: any) {
       setError(err.message || "Failed to save transfer");
+      return false;
     } finally {
       setSaving(false);
     }
@@ -492,7 +494,7 @@ export default function TransferForm({ onClose, editTransferId, editData }: Tran
                       onChange={(e) => updateQty(idx, e.target.value)}
                       placeholder="Qty"
                       min="0.01"
-                      step="0.01"
+                      step="any"
                       className="w-20 px-2 py-1.5 rounded-md bg-[#161616] border border-[#2A2A2A] text-white text-sm text-right focus:outline-none focus:border-[#D4A574]/40 transition-colors"
                     />
                     <span className="text-xs text-[#666] w-8">{line.sentUnit}</span>
@@ -544,11 +546,11 @@ export default function TransferForm({ onClose, editTransferId, editData }: Tran
           </button>
           <button
             onClick={async () => {
-              await handleSubmit();
-              if (!error) {
+              const ok = await handleSubmit();
+              if (ok) {
                 setSaving(true);
                 try { await confirmSent(editTransferId!); onClose(); } catch { }
-                setSaving(false);
+                finally { setSaving(false); }
               }
             }}
             disabled={saving}

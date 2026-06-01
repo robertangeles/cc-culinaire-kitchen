@@ -441,7 +441,7 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
                         value={line.unitCost}
                         onChange={(e) => updateLine(line.id, "unitCost", e.target.value)}
                         min="0"
-                        step="0.01"
+                        step="any"
                         placeholder="0.00"
                         className="w-full px-2 py-1.5 rounded-lg text-sm bg-[#0A0A0A] text-white
                           border border-[#2A2A2A] focus:border-[#D4A574]/40

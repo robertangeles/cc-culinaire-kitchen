@@ -9,7 +9,7 @@
  */
 
 import { useState, useMemo, useCallback, useEffect } from "react";
-import { BarChart3, LogIn, Loader2, RefreshCw } from "lucide-react";
+import { BarChart3, LogIn, Loader2, RefreshCw, ChefHat, ArrowRight } from "lucide-react";
 import { Link } from "react-router";
 import { useAuth } from "../context/AuthContext.js";
 import { useMenuItems, type MenuItem, type MenuIngredient } from "../hooks/useMenuItems.js";
@@ -21,7 +21,6 @@ import { MenuEngineeringMatrix } from "../components/menu/MenuEngineeringMatrix.
 import { CategorySettings } from "../components/menu/CategorySettings.js";
 import { MenuItemDetail } from "../components/menu/MenuItemDetail.js";
 import { MenuCsvUpload } from "../components/menu/MenuCsvUpload.js";
-import { MiseEnPlaceSheet } from "../components/menu/MiseEnPlaceSheet.js";
 
 /* ---- Tab config ---- */
 
@@ -152,6 +151,8 @@ export function MenuIntelligencePage() {
       name: string;
       category: string;
       sellingPrice: string;
+      servings: number;
+      qFactorPct: string;
       unitsSold: number;
     }): Promise<string | void> => {
       if (editItem) {
@@ -159,6 +160,8 @@ export function MenuIntelligencePage() {
           name: data.name,
           category: data.category,
           sellingPrice: data.sellingPrice,
+          servings: data.servings,
+          qFactorPct: data.qFactorPct,
           unitsSold: data.unitsSold,
         });
         return editItem.menuItemId;
@@ -167,6 +170,8 @@ export function MenuIntelligencePage() {
           name: data.name,
           category: data.category,
           sellingPrice: data.sellingPrice,
+          servings: data.servings,
+          qFactorPct: data.qFactorPct,
         });
         return created.menuItemId;
       }
@@ -178,10 +183,12 @@ export function MenuIntelligencePage() {
     async (
       itemId: string,
       ingredients: {
+        ingredientId?: string | null;
         ingredientName: string;
+        note?: string | null;
         quantity: string;
         unit: string;
-        unitCost: string;
+        unitCost?: string;
         yieldPct: string;
       }[]
     ) => {
@@ -201,7 +208,7 @@ export function MenuIntelligencePage() {
     setFormOpen(false);
     setEditItem(null);
     setEditIngredients([]);
-    // Refresh data after form close
+    setActiveTab("items");
     refreshItems();
     refreshAnalysis();
   }, [refreshItems, refreshAnalysis]);
@@ -330,7 +337,25 @@ export function MenuIntelligencePage() {
         )}
 
         {activeTab === "mise" && (
-          <MiseEnPlaceSheet />
+          <div className="bg-[#161616] rounded-2xl border border-[#2A2A2A] p-8 text-center">
+            <div className="inline-flex items-center justify-center size-14 rounded-2xl bg-[#D4A574]/15 mb-4">
+              <ChefHat className="size-7 text-[#D4A574]" />
+            </div>
+            <h2 className="text-xl font-bold text-white mb-2">
+              Mise en Place lives in Kitchen Copilot
+            </h2>
+            <p className="text-[#999999] text-sm max-w-md mx-auto mb-6">
+              Plan prep there: forecast your covers, get suggested per-item counts, then
+              generate a scaled, by-station prep list from your recipes — no POS needed.
+            </p>
+            <Link
+              to="/kitchen-copilot"
+              className="inline-flex items-center gap-2 px-6 py-3 bg-[#D4A574] hover:bg-[#C4956A] text-[#0A0A0A] font-semibold rounded-xl transition-colors min-h-[44px]"
+            >
+              Open Mise en Place
+              <ArrowRight className="size-5" />
+            </Link>
+          </div>
         )}
 
         {activeTab === "categories" && (

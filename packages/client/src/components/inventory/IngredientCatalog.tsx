@@ -27,7 +27,12 @@ import {
 import { TransactionHistory } from "./TransactionHistory.js";
 import { CATEGORIES, CATEGORY_LABELS, ITEM_TYPES, ITEM_TYPE_KEYS, FIFO_MODES, FIFO_DEFAULTS, getItemTypeStyle, getCategoriesForType, type ItemTypeKey, type FifoModeKey } from "@culinaire/shared";
 
-const UNITS = ["kg", "g", "L", "mL", "each", "case", "dozen", "bunch", "bottle", "can", "bag", "box"];
+const UNITS = [
+  "kg", "g", "mg",
+  "L", "mL", "tsp", "tbsp", "cup", "fl oz",
+  "each", "dozen", "portion",
+  "bottle", "can", "bag", "box", "case", "bunch",
+];
 
 const ALLERGEN_DEFS = [
   { key: "containsDairyInd" as const, label: "Dairy", color: "bg-blue-500/20 text-blue-400 border-blue-500/30" },
@@ -56,7 +61,8 @@ const STATUS_LABEL: Record<string, { text: string; className: string }> = {
 };
 
 export function IngredientCatalog() {
-  const { ingredients, isLoading, create, update } = useIngredients();
+  const { ingredients, isLoading, create, update, checkUsage, remove } = useIngredients();
+  const { suppliers: allSuppliers } = useSuppliers();
   const { selectedLocationId } = useLocation();
   const { items: locItems } = useLocationIngredients(selectedLocationId);
   const [search, setSearch] = useState("");
@@ -204,9 +210,26 @@ export function IngredientCatalog() {
 
       {showAdd && (
         <AddIngredientForm
-          onSave={async (data) => {
-            try { setError(null); await create(data); setShowAdd(false); }
-            catch (err: any) { setError(err.message); }
+          suppliers={allSuppliers}
+          onSave={async (data, supplierLink) => {
+            try {
+              setError(null);
+              const created = await create(data);
+              if (supplierLink?.supplierId && created?.ingredientId) {
+                await fetch(`/api/inventory/ingredients/${created.ingredientId}/suppliers`, {
+                  method: "POST",
+                  credentials: "include",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    supplierId: supplierLink.supplierId,
+                    costPerUnit: supplierLink.costPerUnit || undefined,
+                    packCost: supplierLink.packCost || undefined,
+                    preferredInd: true,
+                  }),
+                });
+              }
+              setShowAdd(false);
+            } catch (err: any) { setError(err.message); }
           }}
           onCancel={() => setShowAdd(false)}
         />
@@ -295,13 +318,15 @@ export function IngredientCatalog() {
                 >
                   <div className="col-span-4 text-white truncate">{ing.ingredientName}</div>
                   <div className="col-span-1 text-[#666]">{ing.baseUnit}</div>
-                  <div className="col-span-2 text-right text-[#999] tabular-nums">
-                    {cost ? `$${Number(cost).toFixed(2)}` : "—"}
+                  <div className="col-span-2 text-right text-[#999] font-mono tabular-nums">
+                    {cost
+                      ? `$${(ing.packQty ? (Number(cost) * Number(ing.packQty)).toFixed(2) : Number(cost).toFixed(2))}`
+                      : "—"}
                   </div>
-                  <div className={`col-span-2 text-right font-medium tabular-nums ${isLowStock ? "text-amber-400" : "text-white"}`}>
+                  <div className={`col-span-2 text-right font-mono tabular-nums ${isLowStock ? "text-amber-400" : "text-white"}`}>
                     {qty !== null ? qty.toFixed(1) : "—"}
                   </div>
-                  <div className="col-span-1 text-right text-[#666] tabular-nums">
+                  <div className="col-span-1 text-right text-[#666] font-mono tabular-nums">
                     {par !== null ? par.toFixed(0) : "—"}
                   </div>
                   <div className={`col-span-2 text-right text-xs font-medium ${sl.className}`}>
@@ -329,6 +354,16 @@ export function IngredientCatalog() {
               setError(err.message);
             }
           }}
+          onDelete={async () => {
+            try {
+              setError(null);
+              await remove(editIngredient.ingredientId);
+              setEditIngredient(null);
+            } catch (err: any) {
+              setError(err.message);
+            }
+          }}
+          onCheckUsage={() => checkUsage(editIngredient.ingredientId)}
           onClose={() => setEditIngredient(null)}
         />
       )}
@@ -339,10 +374,12 @@ export function IngredientCatalog() {
 // ─── Edit Modal ──────────────────────────────────────────────────
 
 function EditIngredientModal({
-  ingredient, onSave, onClose,
+  ingredient, onSave, onDelete, onCheckUsage, onClose,
 }: {
   ingredient: Ingredient;
   onSave: (data: Partial<Ingredient>) => Promise<void>;
+  onDelete: () => Promise<void>;
+  onCheckUsage: () => Promise<Array<{ menuItemId: string; menuItemName: string }>>;
   onClose: () => void;
 }) {
   const { levels } = useIngredientStock(ingredient.ingredientId);
@@ -357,11 +394,21 @@ function EditIngredientModal({
   const [editFifo, setEditFifo] = useState<FifoModeKey>((ingredient.fifoApplicable as FifoModeKey) || FIFO_DEFAULTS[(ingredient.itemType as ItemTypeKey) || "KITCHEN_INGREDIENT"]);
   const [cat, setCat] = useState(ingredient.ingredientCategory);
   const [unit, setUnit] = useState(ingredient.baseUnit);
+  const [editPackQty, setEditPackQty] = useState(ingredient.packQty || "");
   const [desc, setDesc] = useState(ingredient.description || "");
-  const [cost, setCost] = useState(ingredient.unitCost || "");
+  const packCostInit = ingredient.packQty && ingredient.unitCost
+    ? (Number(ingredient.unitCost) * Number(ingredient.packQty)).toFixed(2)
+    : ingredient.unitCost || "";
+  const [cost, setCost] = useState(packCostInit);
+
+  const derivedUnitCost = editPackQty && cost && parseFloat(editPackQty) > 0
+    ? (parseFloat(cost) / parseFloat(editPackQty)).toFixed(4)
+    : cost || null;
   const [par, setPar] = useState(ingredient.parLevel || "");
   const [reorder, setReorder] = useState(ingredient.reorderQty || "");
   const editModalCategories = getCategoriesForType(editItemType);
+  const [deleteConfirm, setDeleteConfirm] = useState<"idle" | "checking" | "blocked" | "confirm">("idle");
+  const [usageList, setUsageList] = useState<Array<{ menuItemId: string; menuItemName: string }>>([]);
   const [allergens, setAllergens] = useState<Set<AllergenKey>>(
     new Set(ALLERGEN_DEFS.filter((a) => ingredient[a.key]).map((a) => a.key)),
   );
@@ -376,11 +423,9 @@ function EditIngredientModal({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-[fadeIn_150ms_ease-out]"
-      onClick={onClose}
     >
       <div
         className="w-full max-w-4xl max-h-[90vh] overflow-hidden flex rounded-2xl bg-[#161616] border border-[#2A2A2A] shadow-2xl animate-[scaleIn_200ms_ease-out]"
-        onClick={(e) => e.stopPropagation()}
       >
         {/* Left panel — edit form */}
         <div className="flex-1 min-w-0 overflow-y-auto p-6">
@@ -438,13 +483,19 @@ function EditIngredientModal({
             </select>
           </div>
 
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-4 gap-2">
             <div>
               <label className="block text-[10px] uppercase tracking-wider text-[#666] mb-1">Category</label>
               <select value={cat} onChange={(e) => setCat(e.target.value)}
                 className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white focus:outline-none">
                 {editModalCategories.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
               </select>
+            </div>
+            <div>
+              <label className="block text-[10px] uppercase tracking-wider text-[#666] mb-1">Quantity</label>
+              <input type="text" value={editPackQty} onChange={(e) => setEditPackQty(e.target.value)}
+                placeholder="Quantity"
+                className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none" />
             </div>
             <div>
               <label className="block text-[10px] uppercase tracking-wider text-[#666] mb-1">UOM</label>
@@ -454,7 +505,9 @@ function EditIngredientModal({
               </select>
             </div>
             <div>
-              <label className="block text-[10px] uppercase tracking-wider text-[#666] mb-1">Cost / Unit</label>
+              <label className="block text-[10px] uppercase tracking-wider text-[#666] mb-1">
+                {editPackQty ? "Cost" : "Cost / Unit"}
+              </label>
               <div className="relative">
                 <DollarSign className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-[#666]" />
                 <input type="text" value={cost} onChange={(e) => setCost(e.target.value)}
@@ -463,6 +516,11 @@ function EditIngredientModal({
               </div>
             </div>
           </div>
+          {editPackQty && derivedUnitCost && (
+            <p className="text-[10px] text-[#D4A574]">
+              = ${derivedUnitCost} per {unit}
+            </p>
+          )}
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="block text-[10px] uppercase tracking-wider text-[#666] mb-1">Par Level (min stock)</label>
@@ -517,8 +575,10 @@ function EditIngredientModal({
                       )}
                     </div>
                     <div className="flex items-center gap-2 shrink-0 ml-2">
-                      {s.costPerUnit && (
-                        <span className="text-emerald-400 tabular-nums">${Number(s.costPerUnit).toFixed(2)}</span>
+                      {(s.packCost || s.costPerUnit) && (
+                        <span className="text-emerald-400 tabular-nums">
+                          ${s.packCost ? Number(s.packCost).toFixed(2) : Number(s.costPerUnit).toFixed(4)}
+                        </span>
                       )}
                       <button
                         onClick={() => removeLink(s.supplierId)}
@@ -599,11 +659,19 @@ function EditIngredientModal({
               <div className="rounded-lg border border-[#2A2A2A] divide-y divide-[#2A2A2A]/30">
                 {levels.map((l) => {
                   const qty = Number(l.currentQty || 0);
+                  const hasStock = l.currentQty != null;
+                  const parQty = l.parLevel ? Number(l.parLevel) : null;
+                  const isLow = hasStock && parQty != null && qty < parQty;
                   return (
                     <div key={l.storeLocationId} className="flex items-center justify-between px-3 py-1.5 text-xs">
                       <span className="text-white">{l.locationName}</span>
-                      <span className="text-[#999] tabular-nums">
-                        {l.currentQty ? `${qty.toFixed(1)} ${unit}` : "No data"}
+                      <span className={`tabular-nums ${isLow ? "text-red-400" : hasStock ? "text-[#E5E5E5]" : "text-[#666]"}`}>
+                        {hasStock
+                          ? `${qty % 1 === 0 ? qty.toString() : qty.toFixed(1)} ${unit}`
+                          : "Not counted yet"}
+                        {hasStock && parQty != null && (
+                          <span className="text-[#666] ml-1.5">(par: {parQty % 1 === 0 ? parQty.toString() : parQty.toFixed(1)})</span>
+                        )}
                       </span>
                     </div>
                   );
@@ -614,8 +682,52 @@ function EditIngredientModal({
 
         </div>
 
+        {/* Delete */}
+        {deleteConfirm === "blocked" && (
+          <div className="mt-4 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-xs">
+            <p className="text-red-400 font-medium mb-1">
+              Cannot delete — used by {usageList.length} menu item{usageList.length > 1 ? "s" : ""}:
+            </p>
+            <ul className="text-[#999] ml-3 list-disc">
+              {usageList.map((u) => <li key={u.menuItemId}>{u.menuItemName}</li>)}
+            </ul>
+            <button onClick={() => setDeleteConfirm("idle")} className="mt-2 text-[#666] underline text-[10px]">Dismiss</button>
+          </div>
+        )}
+        {deleteConfirm === "confirm" && (
+          <div className="mt-4 p-3 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center gap-3">
+            <span className="text-xs text-red-400">Permanently remove this ingredient?</span>
+            <button
+              onClick={async () => { await onDelete(); }}
+              className="px-3 py-1.5 rounded-lg text-xs text-white bg-red-600 hover:bg-red-500 transition-colors"
+            >
+              Yes, delete
+            </button>
+            <button onClick={() => setDeleteConfirm("idle")} className="text-xs text-[#666]">Cancel</button>
+          </div>
+        )}
+
         {/* Actions */}
-        <div className="flex justify-end gap-2 mt-5 pt-4 border-t border-[#2A2A2A]">
+        <div className="flex justify-between mt-5 pt-4 border-t border-[#2A2A2A]">
+          <button
+            type="button"
+            onClick={async () => {
+              if (deleteConfirm !== "idle") return;
+              setDeleteConfirm("checking");
+              const usage = await onCheckUsage();
+              if (usage.length > 0) {
+                setUsageList(usage);
+                setDeleteConfirm("blocked");
+              } else {
+                setDeleteConfirm("confirm");
+              }
+            }}
+            disabled={deleteConfirm === "checking"}
+            className="px-3 py-2 rounded-xl text-xs text-red-400 hover:bg-red-500/10 border border-red-500/20 transition-colors disabled:opacity-50"
+          >
+            {deleteConfirm === "checking" ? "Checking..." : "Delete"}
+          </button>
+          <div className="flex gap-2">
           <button onClick={onClose}
             className="px-4 py-2 rounded-xl text-sm text-[#999] hover:text-white transition-colors">
             Cancel
@@ -624,24 +736,28 @@ function EditIngredientModal({
             onClick={async () => {
               if (!name.trim()) return;
               setSaving(true);
-              await onSave({
-                ingredientName: name,
-                ingredientCategory: cat,
-                baseUnit: unit,
-                description: desc || null,
-                unitCost: cost || null,
-                parLevel: par || null,
-                reorderQty: reorder || null,
-                itemType: editItemType,
-                fifoApplicable: editFifo,
-                containsDairyInd: allergens.has("containsDairyInd"),
-                containsGlutenInd: allergens.has("containsGlutenInd"),
-                containsNutsInd: allergens.has("containsNutsInd"),
-                containsShellfishInd: allergens.has("containsShellfishInd"),
-                containsEggsInd: allergens.has("containsEggsInd"),
-                isVegetarianInd: allergens.has("isVegetarianInd"),
-              } as any);
-              setSaving(false);
+              try {
+                await onSave({
+                  ingredientName: name,
+                  ingredientCategory: cat,
+                  baseUnit: unit,
+                  packQty: editPackQty || null,
+                  description: desc || null,
+                  unitCost: derivedUnitCost || null,
+                  parLevel: par || null,
+                  reorderQty: reorder || null,
+                  itemType: editItemType,
+                  fifoApplicable: editFifo,
+                  containsDairyInd: allergens.has("containsDairyInd"),
+                  containsGlutenInd: allergens.has("containsGlutenInd"),
+                  containsNutsInd: allergens.has("containsNutsInd"),
+                  containsShellfishInd: allergens.has("containsShellfishInd"),
+                  containsEggsInd: allergens.has("containsEggsInd"),
+                  isVegetarianInd: allergens.has("isVegetarianInd"),
+                } as any);
+              } finally {
+                setSaving(false);
+              }
             }}
             disabled={!name.trim() || saving}
             className="flex items-center gap-1.5 px-5 py-2 rounded-xl bg-gradient-to-r from-[#D4A574] to-[#C4956A] text-[#0A0A0A] text-sm font-semibold disabled:opacity-50 active:scale-[0.98] transition-all"
@@ -649,6 +765,7 @@ function EditIngredientModal({
             {saving ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
             Save
           </button>
+          </div>
         </div>
       </div>
 
@@ -666,10 +783,15 @@ function EditIngredientModal({
 // ─── Add Form ────────────────────────────────────────────────────
 
 function AddIngredientForm({
+  suppliers,
   onSave,
   onCancel,
 }: {
-  onSave: (data: Parameters<ReturnType<typeof useIngredients>["create"]>[0]) => Promise<void>;
+  suppliers: Supplier[];
+  onSave: (
+    data: Parameters<ReturnType<typeof useIngredients>["create"]>[0],
+    supplierLink?: { supplierId: string; costPerUnit: string; packCost?: string },
+  ) => Promise<void>;
   onCancel: () => void;
 }) {
   const [name, setName] = useState("");
@@ -682,7 +804,14 @@ function AddIngredientForm({
   const [par, setPar] = useState("");
   const [reorder, setReorder] = useState("");
   const [allergens, setAllergens] = useState<Set<AllergenKey>>(new Set());
+  const [packQty, setPackQty] = useState("");
+  const [supplierId, setSupplierId] = useState("");
+  const [packCost, setPackCost] = useState("");
   const [saving, setSaving] = useState(false);
+
+  const autoUnitCost = packQty && cost && parseFloat(packQty) > 0
+    ? (parseFloat(cost) / parseFloat(packQty)).toFixed(4)
+    : null;
 
   const addFormCategories = getCategoriesForType(itemType);
 
@@ -740,11 +869,14 @@ function AddIngredientForm({
           </select>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           <select value={category} onChange={(e) => setCategory(e.target.value)}
             className="px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white focus:outline-none">
             {addFormCategories.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
           </select>
+          <input type="text" value={packQty} onChange={(e) => setPackQty(e.target.value)}
+            placeholder="Quantity"
+            className="px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none" />
           <select value={unit} onChange={(e) => setUnit(e.target.value)}
             className="px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white focus:outline-none">
             {UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
@@ -752,9 +884,16 @@ function AddIngredientForm({
           <div className="relative">
             <DollarSign className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-[#666]" />
             <input type="text" value={cost} onChange={(e) => setCost(e.target.value)}
-              placeholder="Cost/unit"
+              placeholder={packQty ? "Cost" : "Cost/unit"}
               className="w-full pl-8 pr-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none" />
           </div>
+        </div>
+        {autoUnitCost && (
+          <p className="text-[10px] text-[#D4A574]">
+            = ${autoUnitCost} per {unit}
+          </p>
+        )}
+        <div className="grid grid-cols-2 gap-2">
           <input type="text" value={par} onChange={(e) => setPar(e.target.value)}
             placeholder="Min stock (par)"
             className="px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none" />
@@ -765,6 +904,20 @@ function AddIngredientForm({
         <textarea value={description} onChange={(e) => setDescription(e.target.value)}
           placeholder="Description (optional)" rows={2}
           className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none resize-none" />
+
+        {suppliers.length > 0 && (
+          <div>
+            <p className="text-[10px] text-[#666] uppercase tracking-wider mb-1.5">Supplier (optional)</p>
+            <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white focus:outline-none">
+              <option value="">No supplier</option>
+              {suppliers.filter((s) => s.activeInd).map((s) => (
+                <option key={s.supplierId} value={s.supplierId}>{s.supplierName}</option>
+              ))}
+            </select>
+          </div>
+        )}
+
         <div>
           <p className="text-[10px] text-[#666] uppercase tracking-wider mb-1.5">Allergens</p>
           <div className="flex flex-wrap gap-1.5">
@@ -787,19 +940,30 @@ function AddIngredientForm({
           onClick={async () => {
             if (!name.trim()) return;
             setSaving(true);
-            await onSave({
-              ingredientName: name, ingredientCategory: category, baseUnit: unit,
-              description: description || undefined, unitCost: cost || undefined,
-              parLevel: par || undefined, reorderQty: reorder || undefined,
-              itemType: itemType, fifoApplicable: fifo,
-              containsDairyInd: allergens.has("containsDairyInd"),
-              containsGlutenInd: allergens.has("containsGlutenInd"),
-              containsNutsInd: allergens.has("containsNutsInd"),
-              containsShellfishInd: allergens.has("containsShellfishInd"),
-              containsEggsInd: allergens.has("containsEggsInd"),
-              isVegetarianInd: allergens.has("isVegetarianInd"),
-            });
-            setSaving(false);
+            try {
+              await onSave(
+                {
+                  ingredientName: name, ingredientCategory: category, baseUnit: unit,
+                  packQty: packQty || undefined,
+                  description: description || undefined, unitCost: autoUnitCost || cost || undefined,
+                  parLevel: par || undefined, reorderQty: reorder || undefined,
+                  itemType: itemType, fifoApplicable: fifo,
+                  containsDairyInd: allergens.has("containsDairyInd"),
+                  containsGlutenInd: allergens.has("containsGlutenInd"),
+                  containsNutsInd: allergens.has("containsNutsInd"),
+                  containsShellfishInd: allergens.has("containsShellfishInd"),
+                  containsEggsInd: allergens.has("containsEggsInd"),
+                  isVegetarianInd: allergens.has("isVegetarianInd"),
+                },
+                supplierId ? {
+                  supplierId,
+                  costPerUnit: autoUnitCost || cost,
+                  packCost: cost || undefined,
+                } : undefined,
+              );
+            } finally {
+              setSaving(false);
+            }
           }}
           disabled={!name.trim() || saving}
           className="flex items-center gap-1.5 px-5 py-1.5 rounded-lg bg-gradient-to-r from-[#D4A574] to-[#C4956A] text-[#0A0A0A] text-sm font-semibold disabled:opacity-50 active:scale-[0.98] transition-all"
