@@ -9,6 +9,7 @@
     "build": "tsc",
     "clean": "rm -rf dist",
     "test": "vitest run",
+    "lint": "eslint src/",
     "tsc:check": "tsc --noEmit"
   },
   "dependencies": {

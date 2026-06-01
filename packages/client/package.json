@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "test": "vitest run",
+    "lint": "eslint src/",
     "tsc:check": "tsc -b --noEmit",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",

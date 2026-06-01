@@ -130,8 +130,8 @@ _Nothing confirmed outstanding. New work to be defined._
 
 ### Cleanup
 - [x] Remove duplicate prompt file `prompts/recipe/recipeRefinementPrompt.md` (resolved 2026-05-03 — canonical at `prompts/chatbot/recipeRefinementPrompt.md` is preserved as the runtime fallback; recipe-lab prompts are DB-only since Phase 8). See `wiki/decisions/duplicate-recipe-refinement-prompt.md`.
-- [ ] Install eslint + flat config + per-package overrides (server: Node, client: React, shared: pure TS), then add `"lint": "eslint src/"` scripts back to each package + a root `"lint": "turbo run lint"`, then re-add the `Lint` step to `.github/workflows/ci.yml`. CLAUDE.md describes lint as part of CI but the prerequisite was never installed; the broken `"lint"` stubs were removed in Phase 6 cleanup so package.json doesn't pretend to support a command that fails on every machine. See `wiki/decisions/ci-pipeline.md` § Known gap: lint.
-- [ ] Configure GitHub branch protection on `main`: require the CI check (`Typecheck, test, build`) to pass before merge. Repo Settings → Branches → Add rule. Code-side wire-up is done; this is the policy switch.
+- [x] Install eslint + flat config + per-package overrides (resolved 2026-06-01 — eslint v10, typescript-eslint, react-hooks, react-refresh. Root eslint.config.js with per-package overrides. All rules start as warnings. Lint step re-enabled in CI).
+- [x] Configure GitHub branch protection on `main` (resolved 2026-06-01 — CI check `ci / Typecheck, test, build` now required before merge via GitHub API).
 
 ### Candidates (not started)
 - [ ] Purchasing v2 — supplier invoice reconciliation against credit notes
