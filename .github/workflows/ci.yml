@@ -1,13 +1,8 @@
 name: CI
 
-# Implements 4 of the 5 steps declared in CLAUDE.md:
+# Implements all 5 steps declared in CLAUDE.md:
 #   1. pnpm install --frozen-lockfile
-#   2. Lint                         <-- DEFERRED: eslint is not installed in this repo
-#                                       and there is no eslint.config.* / .eslintrc.*.
-#                                       Per-package "lint" scripts were removed once
-#                                       Phase 6 cleanup confirmed the stubs were dead;
-#                                       re-add scripts + this step once eslint flat
-#                                       config is wired up. See tasks/todo.md.
+#   2. Lint (eslint flat config)
 #   3. TypeScript check (tsc --noEmit)
 #   4. Unit tests (vitest)
 #   5. Build (pnpm build)
@@ -49,6 +44,9 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
 
       - name: Typecheck
         run: pnpm tsc:check
