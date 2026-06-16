@@ -53,7 +53,7 @@ const LoginSchema = z.object({
 });
 
 /** Sets access and refresh token cookies on the response. */
-function setAuthCookies(
+export function setAuthCookies(
   res: Response,
   accessToken: string,
   refreshTokenValue: string,

@@ -1365,6 +1365,13 @@ export const supplier = pgTable(
     contactName: varchar("contact_name", { length: 200 }),
     contactEmail: varchar("contact_email", { length: 255 }),
     contactPhone: varchar("contact_phone", { length: 50 }),
+    // Postal/physical address — mirrors organisation & store_location.
+    addressLine1: varchar("address_line_1", { length: 200 }),
+    addressLine2: varchar("address_line_2", { length: 200 }),
+    suburb: varchar("suburb", { length: 100 }),
+    state: varchar("state", { length: 100 }),
+    country: varchar("country", { length: 100 }),
+    postcode: varchar("postcode", { length: 20 }),
     supplierCategory: varchar("supplier_category", { length: 50 }),
     paymentTerms: varchar("payment_terms", { length: 50 }),
     orderingMethod: varchar("ordering_method", { length: 50 }),

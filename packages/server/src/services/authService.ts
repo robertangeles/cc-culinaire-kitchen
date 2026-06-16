@@ -23,6 +23,7 @@ import {
   emailVerification,
   oauthAccount,
   passwordReset,
+  userOrganisation,
 } from "../db/schema.js";
 import { sendVerificationEmail, sendPasswordResetEmail } from "./emailService.js";
 import { encryptUserPii, decryptUserPii, hashForLookup } from "./piiService.js";
@@ -209,6 +210,24 @@ export async function loginUser(
 }
 
 /**
+ * Permissions every organisation admin holds, independent of their system
+ * RBAC role. An org admin runs their organisation, so they can manage its
+ * suppliers, ingredient catalog, stock takes, transfers, and purchasing.
+ * Mirrors the inventory + purchasing domain of the Administrator system role.
+ */
+const ORG_ADMIN_PERMISSIONS = [
+  "inventory:count",
+  "inventory:manage",
+  "inventory:transfer",
+  "inventory:hq",
+  "purchasing:draft",
+  "purchasing:submit",
+  "purchasing:approve",
+  "purchasing:receive",
+  "purchasing:credit",
+];
+
+/**
  * Fetches a user record with their roles and permissions populated.
  */
 export async function getUserWithRolesAndPermissions(
@@ -279,6 +298,21 @@ export async function getUserWithRolesAndPermissions(
     }
 
     permKeys = [...new Set(perms.map((p) => p.permissionKey))];
+  }
+
+  // Org admins inherit the inventory + purchasing permission set regardless
+  // of their system role, so whoever runs an organisation can manage it.
+  const adminMemberships = await db
+    .select({ organisationId: userOrganisation.organisationId })
+    .from(userOrganisation)
+    .where(
+      and(
+        eq(userOrganisation.userId, userId),
+        eq(userOrganisation.role, "admin"),
+      ),
+    );
+  if (adminMemberships.length > 0) {
+    permKeys = [...new Set([...permKeys, ...ORG_ADMIN_PERMISSIONS])];
   }
 
   return {

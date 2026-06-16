@@ -621,6 +621,9 @@ export function ProfilePage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to create organisation");
       setOrg(data.organisation);
+      // Creator is the org admin (organisationService assigns role "admin").
+      // Set it locally so admin-only UI (e.g. Locations) renders without a reload.
+      setMyOrgRole("admin");
       setOrgMsg("Organisation created!");
     } catch (err: unknown) {
       setOrgError(err instanceof Error ? err.message : "Creation failed");

@@ -306,3 +306,10 @@ No files moved. No files deleted. Wiki is purely additive.
 - Appended `tasks/lessons.md` — lesson #50 (never `drizzle-kit push` blind).
 
 **Rule going forward**: until the drift list is zero, all schema changes go through targeted tsx scripts under `packages/server/scripts/` following the `apply-ckm-feedback.ts` pattern. No `drizzle-kit push`.
+
+## 2026-06-16 — Org-admin permissions + supplier address
+
+Fixed two onboarding blockers and added supplier addresses (branch `fix/ck-web/org-create-admin-role-state`):
+- **Org admin → inventory perms**: new org creators (system role Subscriber) got 403 "Insufficient permissions" on inventory/purchasing routes. `getUserWithRolesAndPermissions` now unions an `ORG_ADMIN_PERMISSIONS` set when the user is `admin` of any org; `handleCreateOrganisation` re-mints the JWT (exported `setAuthCookies`) so perms apply without re-login. See lesson #51.
+- **Location-less org resolution**: `resolveOrgId` (8 copies) derived org from location context only → 400 for location-less admins. `LocationContext` now exposes `organisationId` from membership; each `resolveOrgId` falls back to it.
+- **Supplier address**: `supplier` table gained the 6-field address block (mirrors organisation/store_location). Migration via targeted tsx script `scripts/add-supplier-address.ts` (no `drizzle-kit push`, per lesson #50). Wired through Zod schemas, `createSupplier`/`updateSupplier`, client `Supplier` type, and the `SupplierManager` form. Verified create+update round-trip via API.

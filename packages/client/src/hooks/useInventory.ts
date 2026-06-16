@@ -80,6 +80,12 @@ export interface Supplier {
   contactName: string | null;
   contactEmail: string | null;
   contactPhone: string | null;
+  addressLine1: string | null;
+  addressLine2: string | null;
+  suburb: string | null;
+  state: string | null;
+  country: string | null;
+  postcode: string | null;
   leadTimeDays: number | null;
   minimumOrderValue: string | null;
   notes: string | null;
