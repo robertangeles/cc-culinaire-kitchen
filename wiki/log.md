@@ -4,6 +4,20 @@ Append-only. Newest entry on top.
 
 ---
 
+## 2026-06-16 — Dev/prod database separation (+ migrations rejected)
+
+**What was done**
+
+Split local dev off the shared production Postgres. Local dev now runs against a local Postgres (`culinaire_kitchen_dev`) seeded from a sanitized prod snapshot (`pg_dump` read-only → `pg_restore` → new `packages/server/scripts/sanitize-local.sql`: PII nulled, secret/token tables deleted, fresh local encryption keys, uniform dev password, `admin@local.test`). Root `.env` repointed to local with rotated keys; prod URL saved to gitignored `.env.production.local`. Added a boot guard in `packages/server/src/db/index.ts` that refuses a remote DB host unless `NODE_ENV=production`.
+
+**Decided**
+
+Did **not** adopt drizzle-kit versioned migrations. A drift gate (baseline `0000` from `schema.ts` → empty throwaway DB → `pg_dump --schema-only` diff vs prod snapshot) reconfirmed [[schema-drift-may-2026]] and surfaced new drift (4 DB functions/triggers, `citext`/`uuid-ossp`, code-only indexes, `_fkey` vs verbose FK names). Removed the migration scaffolding; the repo keeps its targeted-tsx-script workflow until drift is reconciled.
+
+**Touched**: `wiki/decisions/dev-prod-db-separation.md` (new), `wiki/synthesis/schema-drift-may-2026.md` (drift items 5–8 + 2026-06-16 section), `wiki/index.md`, `tasks/lessons.md` (#52).
+
+---
+
 ## 2026-06-01 — Formula audit: complete catalog + reconciliation matrix
 
 **What was done**
