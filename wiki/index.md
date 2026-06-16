@@ -59,6 +59,7 @@ Categories: **entity** (named things) · **concept** (patterns) · **decision** 
 | [Duplicate recipeRefinementPrompt.md — RESOLVED](decisions/duplicate-recipe-refinement-prompt.md) | Resolved 2026-05-03; the dead `prompts/recipe/` copy was deleted, the canonical `prompts/chatbot/` copy stays as runtime fallback | 2026-05-03 |
 | [Auto-inject shared-context on every prompt](decisions/shared-context-auto-injection.md) | UserPromptSubmit hook in `.claude/settings.local.json` injects head of `mobile-needs.md` + `decisions.md` so the web session is always aware of mobile updates | 2026-05-03 |
 | [CI Pipeline (GitHub Actions)](decisions/ci-pipeline.md) | Wire up the install→lint→typecheck→test→build pipeline CLAUDE.md described but had never existed on disk; triggered by 2026-04-29 Render deploy failure | 2026-04-29 |
+| [Dev/prod database separation](decisions/dev-prod-db-separation.md) | Local dev now runs on a local Postgres seeded from a sanitized prod snapshot; boot guard blocks dev→remote DB. drizzle-kit versioned migrations rejected due to known schema drift | 2026-06-16 |
 
 ## Synthesis
 | Page | Summary | Created |

@@ -14,6 +14,39 @@ import * as schema from "./schema.js";
 /** Singleton Drizzle instance; initialized on first call to {@link getDb}. */
 let _db: PostgresJsDatabase<typeof schema> | null = null;
 
+/** Hostnames considered "local" — a dev process may only talk to these. */
+const LOCAL_DB_HOSTS = new Set(["localhost", "127.0.0.1", "::1", ""]);
+
+/**
+ * Refuses to let a non-production process connect to a remote database.
+ *
+ * Dev and prod historically shared one Postgres, so a stray query or migration
+ * from a laptop could hit live data. This guard makes that impossible: unless
+ * `NODE_ENV=production` (set by Render in prod), the connection host must be
+ * local. Set `NODE_ENV=production` to intentionally target a remote DB.
+ *
+ * @param connectionString The resolved `DATABASE_URL`.
+ * @throws {Error} If a dev process points at a non-local host.
+ */
+function assertNotRemoteInDev(connectionString: string): void {
+  if (process.env.NODE_ENV === "production") return;
+
+  let host = "";
+  try {
+    host = new URL(connectionString).hostname;
+  } catch {
+    // Unparseable URL — let postgres.js surface the real connection error.
+    return;
+  }
+
+  if (!LOCAL_DB_HOSTS.has(host)) {
+    throw new Error(
+      `Refusing to connect a non-production process to a remote database (host: ${host}). ` +
+        `Point DATABASE_URL at a local Postgres for development, or set NODE_ENV=production to override.`,
+    );
+  }
+}
+
 /**
  * Returns the singleton Drizzle database instance, creating it on first call.
  *
@@ -27,6 +60,8 @@ export function getDb(): PostgresJsDatabase<typeof schema> {
   if (!connectionString) {
     throw new Error("DATABASE_URL environment variable is required");
   }
+
+  assertNotRemoteInDev(connectionString);
 
   const client = postgres(connectionString);
   _db = drizzle(client, { schema });
