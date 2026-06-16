@@ -15,11 +15,14 @@ const logger = pino({ name: "consumptionLogController" });
 /** Resolve the user's org ID from their location context. */
 async function resolveOrgId(req: Request, res: Response): Promise<number | null> {
   const ctx = await getUserLocationContext(req.user!.sub);
-  if (ctx.locations.length === 0) {
+  // Prefer a location's org; fall back to the admin's org membership so a
+  // location-less org admin can still manage org-wide records (e.g. suppliers).
+  const orgId = ctx.locations[0]?.organisationId ?? ctx.organisationId;
+  if (orgId === null) {
     res.status(400).json({ error: "You are not a member of any organisation" });
     return null;
   }
-  return ctx.locations[0].organisationId;
+  return orgId;
 }
 
 // ─── Log consumption ────────────────────────────────────────────

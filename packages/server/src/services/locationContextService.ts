@@ -33,6 +33,8 @@ export interface LocationContext {
   }>;
   /** Currently selected location (resolved from DB preference) */
   selectedLocationId: string | null;
+  /** Primary org from membership — set even when the user has no locations yet */
+  organisationId: number | null;
   /** Whether the user is an org admin (implicit access to all locations) */
   isOrgAdmin: boolean;
   /** Whether the user has at least one location (or is admin) */
@@ -59,6 +61,7 @@ export async function getUserLocationContext(
     return {
       locations: [],
       selectedLocationId: null,
+      organisationId: null,
       isOrgAdmin: false,
       hasLocationAccess: false,
     };
@@ -129,6 +132,7 @@ export async function getUserLocationContext(
   return {
     locations,
     selectedLocationId,
+    organisationId: primaryOrgId,
     isOrgAdmin,
     hasLocationAccess: isOrgAdmin || locations.length > 0,
   };

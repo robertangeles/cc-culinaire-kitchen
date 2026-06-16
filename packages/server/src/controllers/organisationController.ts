@@ -7,6 +7,11 @@
 import type { Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import {
+  generateTokens,
+  getUserWithRolesAndPermissions,
+} from "../services/authService.js";
+import { setAuthCookies } from "./authController.js";
+import {
   createOrganisation,
   updateOrganisation,
   joinOrganisation,
@@ -44,6 +49,12 @@ export async function handleCreateOrganisation(req: Request, res: Response, next
       return;
     }
     const org = await createOrganisation(req.user!.sub, parsed.data);
+    // The creator is now an org admin, which grants inventory + purchasing
+    // permissions. Re-mint the access token so those apply immediately without
+    // requiring the user to log out and back in.
+    const authUser = await getUserWithRolesAndPermissions(req.user!.sub);
+    const tokens = await generateTokens(authUser);
+    setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
     res.status(201).json({ organisation: org });
   } catch (err) {
     next(err);

@@ -512,6 +512,12 @@ export async function createSupplier(
     contactName?: string;
     contactEmail?: string;
     contactPhone?: string;
+    addressLine1?: string;
+    addressLine2?: string;
+    suburb?: string;
+    state?: string;
+    country?: string;
+    postcode?: string;
     leadTimeDays?: number;
     minimumOrderValue?: string;
     notes?: string;
@@ -530,6 +536,12 @@ export async function createSupplier(
       contactName: data.contactName ?? null,
       contactEmail: data.contactEmail ?? null,
       contactPhone: data.contactPhone ?? null,
+      addressLine1: data.addressLine1 ?? null,
+      addressLine2: data.addressLine2 ?? null,
+      suburb: data.suburb ?? null,
+      state: data.state ?? null,
+      country: data.country ?? null,
+      postcode: data.postcode ?? null,
       leadTimeDays: data.leadTimeDays ?? null,
       minimumOrderValue: data.minimumOrderValue ?? null,
       notes: data.notes ?? null,
@@ -565,6 +577,12 @@ export async function updateSupplier(
     contactName: string | null;
     contactEmail: string | null;
     contactPhone: string | null;
+    addressLine1: string | null;
+    addressLine2: string | null;
+    suburb: string | null;
+    state: string | null;
+    country: string | null;
+    postcode: string | null;
     leadTimeDays: number | null;
     minimumOrderValue: string | null;
     notes: string | null;
@@ -580,6 +598,12 @@ export async function updateSupplier(
   if (data.contactName !== undefined) updates.contactName = data.contactName;
   if (data.contactEmail !== undefined) updates.contactEmail = data.contactEmail;
   if (data.contactPhone !== undefined) updates.contactPhone = data.contactPhone;
+  if (data.addressLine1 !== undefined) updates.addressLine1 = data.addressLine1;
+  if (data.addressLine2 !== undefined) updates.addressLine2 = data.addressLine2;
+  if (data.suburb !== undefined) updates.suburb = data.suburb;
+  if (data.state !== undefined) updates.state = data.state;
+  if (data.country !== undefined) updates.country = data.country;
+  if (data.postcode !== undefined) updates.postcode = data.postcode;
   if (data.leadTimeDays !== undefined) updates.leadTimeDays = data.leadTimeDays;
   if (data.minimumOrderValue !== undefined) updates.minimumOrderValue = data.minimumOrderValue;
   if (data.notes !== undefined) updates.notes = data.notes;

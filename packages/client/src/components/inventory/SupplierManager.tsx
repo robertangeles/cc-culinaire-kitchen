@@ -302,6 +302,12 @@ function SupplierForm({
   const [contactName, setContactName] = useState(initial?.contactName || "");
   const [contactEmail, setContactEmail] = useState(initial?.contactEmail || "");
   const [contactPhone, setContactPhone] = useState(initial?.contactPhone || "");
+  const [addressLine1, setAddressLine1] = useState(initial?.addressLine1 || "");
+  const [addressLine2, setAddressLine2] = useState(initial?.addressLine2 || "");
+  const [suburb, setSuburb] = useState(initial?.suburb || "");
+  const [stateProv, setStateProv] = useState(initial?.state || "");
+  const [country, setCountry] = useState(initial?.country || "");
+  const [postcode, setPostcode] = useState(initial?.postcode || "");
   const [leadTime, setLeadTime] = useState(initial?.leadTimeDays?.toString() || "");
   const [minOrder, setMinOrder] = useState(initial?.minimumOrderValue || "");
   const [notes, setNotes] = useState(initial?.notes || "");
@@ -341,6 +347,12 @@ function SupplierForm({
       contactName: contactName || undefined,
       contactEmail: contactEmail || undefined,
       contactPhone: contactPhone || undefined,
+      addressLine1: addressLine1 || undefined,
+      addressLine2: addressLine2 || undefined,
+      suburb: suburb || undefined,
+      state: stateProv || undefined,
+      country: country || undefined,
+      postcode: postcode || undefined,
       leadTimeDays: leadTime ? parseInt(leadTime) : undefined,
       minimumOrderValue: minOrder || undefined,
       notes: notes || undefined,
@@ -397,6 +409,48 @@ function SupplierForm({
             <label className="text-[10px] text-[#666] uppercase tracking-wider block mb-1">Phone</label>
             <input type="tel" value={contactPhone} onChange={(e) => setContactPhone(e.target.value)}
               placeholder="e.g. +61-3-9999-0000"
+              className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none" />
+          </div>
+        </div>
+
+        {/* Row 2b: Address */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label className="text-[10px] text-[#666] uppercase tracking-wider block mb-1">Address Line 1</label>
+            <input type="text" value={addressLine1} onChange={(e) => setAddressLine1(e.target.value)}
+              placeholder="e.g. 12 Market St"
+              className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none" />
+          </div>
+          <div>
+            <label className="text-[10px] text-[#666] uppercase tracking-wider block mb-1">Address Line 2</label>
+            <input type="text" value={addressLine2} onChange={(e) => setAddressLine2(e.target.value)}
+              placeholder="e.g. Unit 4"
+              className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none" />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div>
+            <label className="text-[10px] text-[#666] uppercase tracking-wider block mb-1">Suburb</label>
+            <input type="text" value={suburb} onChange={(e) => setSuburb(e.target.value)}
+              placeholder="e.g. Richmond"
+              className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none" />
+          </div>
+          <div>
+            <label className="text-[10px] text-[#666] uppercase tracking-wider block mb-1">State</label>
+            <input type="text" value={stateProv} onChange={(e) => setStateProv(e.target.value)}
+              placeholder="e.g. VIC"
+              className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none" />
+          </div>
+          <div>
+            <label className="text-[10px] text-[#666] uppercase tracking-wider block mb-1">Postcode</label>
+            <input type="text" value={postcode} onChange={(e) => setPostcode(e.target.value)}
+              placeholder="e.g. 3121"
+              className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none" />
+          </div>
+          <div>
+            <label className="text-[10px] text-[#666] uppercase tracking-wider block mb-1">Country</label>
+            <input type="text" value={country} onChange={(e) => setCountry(e.target.value)}
+              placeholder="e.g. Australia"
               className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none" />
           </div>
         </div>

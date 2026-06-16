@@ -143,6 +143,12 @@ const CreateSupplierSchema = z.object({
   contactName: z.string().max(200).optional(),
   contactEmail: z.string().email().max(255).optional(),
   contactPhone: z.string().max(50).optional(),
+  addressLine1: z.string().max(200).optional(),
+  addressLine2: z.string().max(200).optional(),
+  suburb: z.string().max(100).optional(),
+  state: z.string().max(100).optional(),
+  country: z.string().max(100).optional(),
+  postcode: z.string().max(20).optional(),
   leadTimeDays: z.number().int().min(0).max(365).optional(),
   minimumOrderValue: z.string().refine(
     (v) => !isNaN(Number(v)) && Number(v) >= 0, "Must be a non-negative number",
@@ -161,6 +167,12 @@ const UpdateSupplierSchema = z.object({
   contactName: z.string().max(200).nullable().optional(),
   contactEmail: z.string().email().max(255).nullable().optional(),
   contactPhone: z.string().max(50).nullable().optional(),
+  addressLine1: z.string().max(200).nullable().optional(),
+  addressLine2: z.string().max(200).nullable().optional(),
+  suburb: z.string().max(100).nullable().optional(),
+  state: z.string().max(100).nullable().optional(),
+  country: z.string().max(100).nullable().optional(),
+  postcode: z.string().max(20).nullable().optional(),
   leadTimeDays: z.number().int().min(0).max(365).nullable().optional(),
   minimumOrderValue: z.string().refine(
     (v) => !isNaN(Number(v)) && Number(v) >= 0, "Must be a non-negative number",
@@ -172,11 +184,14 @@ const UpdateSupplierSchema = z.object({
 /** Resolve the user's org ID from their location context. */
 async function resolveOrgId(req: Request, res: Response): Promise<number | null> {
   const ctx = await getUserLocationContext(req.user!.sub);
-  if (ctx.locations.length === 0) {
+  // Prefer a location's org; fall back to the admin's org membership so a
+  // location-less org admin can still manage org-wide records (e.g. suppliers).
+  const orgId = ctx.locations[0]?.organisationId ?? ctx.organisationId;
+  if (orgId === null) {
     res.status(400).json({ error: "You are not a member of any organisation" });
     return null;
   }
-  return ctx.locations[0].organisationId;
+  return orgId;
 }
 
 // ─── Org-wide ingredient CRUD ─────────────────────────────────────
