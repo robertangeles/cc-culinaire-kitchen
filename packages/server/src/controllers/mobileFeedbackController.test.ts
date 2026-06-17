@@ -1,6 +1,5 @@
 /**
- * Unit tests for the mobile feedback controller. Mirrors the testing
- * pattern in `mobilePromptsController.test.ts`: service is mocked, the
+ * Unit tests for the mobile feedback controller. Service is mocked, the
  * controller is the unit under test for zod validation and the
  * auth/anon split. The service layer is exercised in feedbackService.test.ts.
  */

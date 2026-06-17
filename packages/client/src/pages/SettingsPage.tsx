@@ -28,8 +28,7 @@ export function SettingsPage() {
 
   return (
     <SettingsLayout activeTab={activeTab} onTabChange={setActiveTab}>
-      {activeTab === "prompts" && <PromptsTab runtimeFilter="server" />}
-      {activeTab === "mobilePrompts" && <PromptsTab runtimeFilter="device" />}
+      {activeTab === "prompts" && <PromptsTab />}
       {activeTab === "siteSettings" && <SiteSettingsTab />}
       {activeTab === "pages" && <PagesTab surface="web" />}
       {activeTab === "mobilePages" && <PagesTab surface="mobile" />}

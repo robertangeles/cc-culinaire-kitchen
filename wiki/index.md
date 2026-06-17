@@ -61,6 +61,7 @@ Categories: **entity** (named things) · **concept** (patterns) · **decision** 
 | [CI Pipeline (GitHub Actions)](decisions/ci-pipeline.md) | Wire up the install→lint→typecheck→test→build pipeline CLAUDE.md described but had never existed on disk; triggered by 2026-04-29 Render deploy failure | 2026-04-29 |
 | [Dev/prod database separation](decisions/dev-prod-db-separation.md) | Local dev runs on a local Postgres; boot guard blocks dev→remote DB. drizzle-kit versioned migrations rejected due to known schema drift | 2026-06-16 |
 | [Single .env file with DEV_/PROD_ prefixes](decisions/single-env-file.md) | One root `.env` for everything; `APP_ENV` switch + bootstrap shim copies prefixed values into unprefixed slots at startup | 2026-06-17 |
+| [Remove on-device prompt runtime](decisions/remove-device-runtime-prompts.md) | Mobile pivoted to server-side chat (2026-06-15); `prompt.runtime`, `/api/mobile/prompts/:slug`, on-device admin UI, and Antoine prompts removed | 2026-06-17 |
 
 ## Synthesis
 | Page | Summary | Created |

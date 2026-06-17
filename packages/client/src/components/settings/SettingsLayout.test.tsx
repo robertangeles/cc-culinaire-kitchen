@@ -74,7 +74,7 @@ describe("SettingsLayout — rendered shell", () => {
     expect(screen.queryByRole("heading", { name: "Unassigned" })).toBeNull();
   });
 
-  it("renders the Mobile Prompts tab inside the Mobile group", () => {
+  it("renders the Mobile Pages tab inside the Mobile group", () => {
     render(
       <SettingsLayout activeTab="prompts" onTabChange={() => {}}>
         <div>panel</div>
@@ -82,7 +82,7 @@ describe("SettingsLayout — rendered shell", () => {
     );
 
     const mobileGroup = screen.getByRole("group", { name: "Mobile" });
-    expect(within(mobileGroup).getByRole("tab", { name: /Prompts/ })).toBeInTheDocument();
+    expect(within(mobileGroup).getByRole("tab", { name: /Pages/ })).toBeInTheDocument();
   });
 
   it("renders every tab from the registry as a tab role", () => {
@@ -92,10 +92,9 @@ describe("SettingsLayout — rendered shell", () => {
       </SettingsLayout>,
     );
 
-    // Two "Prompts" tabs (web, mobile) and two "Pages" tabs (web, mobile)
-    // intentionally share their label — check those by id, not label.
+    // Two "Pages" tabs (web, mobile) intentionally share their label — check
+    // those by id, not label.
     expect(document.getElementById("settings-tab-prompts")).toBeInTheDocument();
-    expect(document.getElementById("settings-tab-mobilePrompts")).toBeInTheDocument();
     expect(document.getElementById("settings-tab-pages")).toBeInTheDocument();
     expect(document.getElementById("settings-tab-mobilePages")).toBeInTheDocument();
 
@@ -136,12 +135,12 @@ describe("SettingsLayout — rendered shell", () => {
     );
 
     // userGuide is the last Web tab in the draft registry. ArrowDown should
-    // cross into the Mobile group (its sole tab — mobilePrompts).
+    // cross into the Mobile group (its sole tab — mobilePages).
     const userGuideTab = screen.getByRole("tab", { name: /User Guide/ });
     fireEvent.keyDown(userGuideTab, { key: "ArrowDown" });
 
     expect(onTabChange).toHaveBeenCalledTimes(1);
-    expect(onTabChange.mock.calls[0][0]).toBe("mobilePrompts");
+    expect(onTabChange.mock.calls[0][0]).toBe("mobilePages");
   });
 
   it("ArrowUp wraps from the first enabled tab back to the last enabled tab", () => {

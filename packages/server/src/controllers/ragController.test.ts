@@ -4,8 +4,8 @@ import type { Request, Response, NextFunction } from "express";
 /**
  * Contract tests for the mobile RAG retrieval endpoint.
  *
- * Pattern follows mobilePromptsController.test.ts: the controller is the
- * unit-under-test; the retrieval service is mocked. The auth middleware
+ * The controller is the unit-under-test; the retrieval service is mocked.
+ * The auth middleware
  * is part of the route's pipeline (assembled in routes/mobileRag.ts);
  * route-pipeline tests would need a real Bearer token + a test fixture
  * harness this repo doesn't have. The contract guarantees we DO test here:
