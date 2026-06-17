@@ -57,7 +57,6 @@ const GROUP_ORDER: { id: SettingsGroup; label: string }[] = [
 /** Registry of all settings tabs. Disabled tabs are planned future features. */
 const tabs: TabItem[] = [
   { id: "prompts", label: "Prompts", icon: ScrollText, group: "shared" },
-  { id: "mobilePrompts", label: "Prompts", icon: ScrollText, group: "mobile" },
   { id: "mobilePages", label: "Pages", icon: FileText, group: "mobile" },
   { id: "siteSettings", label: "Site Settings", icon: Globe, group: "web" },
   { id: "pages", label: "Pages", icon: FileText, group: "web" },

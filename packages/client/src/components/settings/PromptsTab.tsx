@@ -13,7 +13,6 @@ import { usePrompt } from "../../hooks/usePrompt.js";
 import { VersionHistory } from "./VersionHistory.js";
 import { useModelOptions } from "../../hooks/useModelOptions.js";
 import { ModelSelector } from "./ModelSelector.js";
-import { OnDeviceRuntimeBanner } from "./OnDeviceRuntimeBanner.js";
 import {
   Save,
   RotateCcw,
@@ -25,37 +24,17 @@ import {
   FileText,
   X,
   Bot,
-  Smartphone,
-  Server,
 } from "lucide-react";
-
-/** Props for {@link PromptsTab}. */
-interface PromptsTabProps {
-  /**
-   * Limit the list (and the create-form default) to a single runtime.
-   * Omit to show all prompts regardless of runtime.
-   */
-  runtimeFilter?: "server" | "device";
-}
 
 /**
  * Renders the multi-prompt management interface within the Settings page.
  * Left sidebar lists all prompts; right panel shows the editor for the
  * selected prompt.
- *
- * When {@link PromptsTabProps.runtimeFilter} is set, the list is restricted
- * to prompts of that runtime and the create form defaults to the same
- * runtime — used by the Mobile Prompts tab to scope to device-runtime
- * prompts only.
  */
-export function PromptsTab({ runtimeFilter }: PromptsTabProps = {}) {
-  const { prompts: allPrompts, isLoading: listLoading, error: listError, refresh, create } = usePromptList();
+export function PromptsTab() {
+  const { prompts, isLoading: listLoading, error: listError, refresh, create } = usePromptList();
   const [selectedName, setSelectedName] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
-
-  const prompts = runtimeFilter
-    ? allPrompts.filter((p) => p.runtime === runtimeFilter)
-    : allPrompts;
 
   // Auto-select first prompt once loaded
   const activeName = selectedName ?? (prompts.length > 0 ? prompts[0].promptName : null);
@@ -117,7 +96,6 @@ export function PromptsTab({ runtimeFilter }: PromptsTabProps = {}) {
             }}
             onCancel={() => setShowCreate(false)}
             create={create}
-            defaultRuntime={runtimeFilter ?? "server"}
           />
         ) : activeName ? (
           <PromptEditor name={activeName} />
@@ -193,8 +171,6 @@ function PromptEditor({ name }: PromptEditorProps) {
     setContent,
     modelId,
     setModelId,
-    runtime,
-    changeRuntime,
     isLoading,
     isSaving,
     isDirty,
@@ -206,7 +182,6 @@ function PromptEditor({ name }: PromptEditorProps) {
 
   const { models: availableModels } = useModelOptions();
   const [showVersions, setShowVersions] = useState(false);
-  const [pendingRuntime, setPendingRuntime] = useState<"server" | "device" | null>(null);
 
   /** Called when a version is restored from the VersionHistory panel. */
   function handleRollback(restoredContent: string) {
@@ -233,48 +208,20 @@ function PromptEditor({ name }: PromptEditorProps) {
         </p>
       </div>
 
-      {/* Runtime-aware AI model section. Server-runtime prompts get the
-          existing OpenRouter model dropdown. Device-runtime prompts get a
-          read-only banner — the server cannot invoke a model for them, so
-          a dropdown would be misleading. A "Switch runtime" button on
-          either side opens a confirmation modal before flipping. */}
+      {/* AI model section */}
       <div className="px-8 py-3 border-b border-[#2A2A2A]">
-        {runtime === "device" ? (
-          <div className="space-y-2 max-w-md">
-            <OnDeviceRuntimeBanner />
-            <button
-              type="button"
-              onClick={() => setPendingRuntime("server")}
-              disabled={isSaving}
-              className="text-xs text-[#999999] hover:text-[#D4A574] underline-offset-2 hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Switch to Server runtime…
-            </button>
-          </div>
-        ) : (
-          <>
-            <label className="block text-sm font-medium text-[#E5E5E5] mb-1">
-              AI Model
-            </label>
-            <p className="text-xs text-[#999999] mb-2">
-              Override which model this prompt uses. &ldquo;Global Default&rdquo; uses the system-wide model.
-            </p>
-            <ModelSelector
-              value={modelId}
-              onChange={setModelId}
-              models={availableModels}
-              className="max-w-md"
-            />
-            <button
-              type="button"
-              onClick={() => setPendingRuntime("device")}
-              disabled={isSaving}
-              className="mt-2 text-xs text-[#999999] hover:text-[#D4A574] underline-offset-2 hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Switch to On-Device runtime…
-            </button>
-          </>
-        )}
+        <label className="block text-sm font-medium text-[#E5E5E5] mb-1">
+          AI Model
+        </label>
+        <p className="text-xs text-[#999999] mb-2">
+          Override which model this prompt uses. &ldquo;Global Default&rdquo; uses the system-wide model.
+        </p>
+        <ModelSelector
+          value={modelId}
+          onChange={setModelId}
+          models={availableModels}
+          className="max-w-md"
+        />
       </div>
 
       {/* Editor */}
@@ -351,106 +298,6 @@ function PromptEditor({ name }: PromptEditorProps) {
           onRollback={handleRollback}
         />
       )}
-
-      {/* Runtime-change confirmation. Names the consequences explicitly
-          so the admin doesn't flip blindly. */}
-      {pendingRuntime && (
-        <RuntimeChangeConfirm
-          currentRuntime={runtime}
-          targetRuntime={pendingRuntime}
-          isSaving={isSaving}
-          onCancel={() => setPendingRuntime(null)}
-          onConfirm={async () => {
-            await changeRuntime(pendingRuntime);
-            setPendingRuntime(null);
-          }}
-        />
-      )}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Runtime-change confirmation modal
-// ---------------------------------------------------------------------------
-
-interface RuntimeChangeConfirmProps {
-  currentRuntime: "server" | "device";
-  targetRuntime: "server" | "device";
-  isSaving: boolean;
-  onCancel: () => void;
-  onConfirm: () => void;
-}
-
-/**
- * Modal that confirms a runtime flip and explicitly names the consequences.
- * The two flip directions have asymmetric blast radii — server→device
- * silences server callers loudly (502 from the runtime guard), while
- * device→server breaks mobile fetches (404 until the mobile cache busts).
- * Naming both prevents the admin from flipping without context.
- */
-function RuntimeChangeConfirm({
-  currentRuntime,
-  targetRuntime,
-  isSaving,
-  onCancel,
-  onConfirm,
-}: RuntimeChangeConfirmProps) {
-  const consequences =
-    targetRuntime === "device"
-      ? [
-          "Any server code that calls this prompt (chat, recipe gen, refinement, etc.) will start returning 502 errors.",
-          "The current model override will be cleared.",
-          "Mobile clients (with a valid JWT) will be able to fetch the body via the mobile prompt-fetch route.",
-        ]
-      : [
-          "Mobile clients fetching this prompt will start receiving 404 until they refresh their cache.",
-          "Server code may immediately try to invoke this prompt with the global default model.",
-          "Make sure a model is appropriate before flipping — you can pick one in the dropdown after the switch.",
-        ];
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="w-full max-w-md bg-[#161616] rounded-2xl border border-[#2A2A2A] shadow-2xl overflow-hidden">
-        <div className="px-6 py-5 border-b border-[#2A2A2A]">
-          <h2 className="text-lg font-semibold text-[#FAFAFA]">
-            Switch runtime: {currentRuntime} → {targetRuntime}
-          </h2>
-          <p className="mt-1 text-sm text-[#999999]">
-            This change is reversible but takes effect immediately.
-          </p>
-        </div>
-        <div className="px-6 py-4 space-y-2">
-          <p className="text-sm font-medium text-[#E5E5E5]">Consequences:</p>
-          <ul className="space-y-1.5 text-sm text-[#999999]">
-            {consequences.map((c) => (
-              <li key={c} className="flex gap-2">
-                <span className="text-[#D4A574] flex-shrink-0">•</span>
-                <span>{c}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-        <div className="px-6 py-4 border-t border-[#2A2A2A] bg-[#0A0A0A] flex items-center justify-end gap-3">
-          <button
-            type="button"
-            onClick={onCancel}
-            disabled={isSaving}
-            className="px-4 py-2 text-sm text-[#E5E5E5] hover:text-[#FAFAFA] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={onConfirm}
-            disabled={isSaving}
-            className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-white bg-[#D4A574] rounded-lg hover:bg-[#C4956A] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            {isSaving ? <Loader2 className="size-4 animate-spin" /> : null}
-            Switch to {targetRuntime}
-          </button>
-        </div>
-      </div>
     </div>
   );
 }
@@ -467,21 +314,17 @@ interface CreatePromptFormProps {
     name: string,
     content: string,
     modelId?: string | null,
-    runtime?: "server" | "device",
   ) => Promise<PromptSummary>;
-  /** Initial runtime selection when the form opens. Defaults to `"server"`. */
-  defaultRuntime?: "server" | "device";
 }
 
 /**
  * Inline form for creating a new prompt. Shows name input, auto-generated
- * key preview, runtime selector, and a content textarea.
+ * key preview, and a content textarea.
  */
-function CreatePromptForm({ onCreated, onCancel, create, defaultRuntime = "server" }: CreatePromptFormProps) {
+function CreatePromptForm({ onCreated, onCancel, create }: CreatePromptFormProps) {
   const [name, setName] = useState("");
   const [content, setContent] = useState("");
   const [newModelId, setNewModelId] = useState<string | null>(null);
-  const [runtime, setRuntime] = useState<"server" | "device">(defaultRuntime);
   const { models: availableModels } = useModelOptions();
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState("");
@@ -498,7 +341,7 @@ function CreatePromptForm({ onCreated, onCancel, create, defaultRuntime = "serve
     setIsCreating(true);
     setError("");
     try {
-      await create(name.trim(), content, runtime === "device" ? null : newModelId, runtime);
+      await create(name.trim(), content, newModelId);
       onCreated(name.trim());
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create prompt");
@@ -553,68 +396,17 @@ function CreatePromptForm({ onCreated, onCancel, create, defaultRuntime = "serve
             )}
           </div>
 
-          {/* Runtime selector — fixed at creation time, cannot be edited later */}
           <div>
-            <label className="block text-sm font-medium text-[#E5E5E5] mb-2">
-              Where does this prompt run?
+            <label className="block text-sm font-medium text-[#E5E5E5] mb-1">
+              AI Model <span className="text-[#999999] font-normal">(optional)</span>
             </label>
-            <div className="grid grid-cols-2 gap-2 max-w-md">
-              <button
-                type="button"
-                onClick={() => setRuntime("server")}
-                className={`flex items-start gap-2 px-3 py-2.5 rounded-lg border text-left transition-colors ${
-                  runtime === "server"
-                    ? "border-[#D4A574] bg-[#D4A574]/10 text-[#FAFAFA]"
-                    : "border-[#2A2A2A] text-[#E5E5E5] hover:border-[#3A3A3A]"
-                }`}
-              >
-                <Server className="size-4 mt-0.5 flex-shrink-0" />
-                <span className="text-sm leading-tight">
-                  <span className="block font-medium">Server</span>
-                  <span className="block text-xs text-[#999999]">
-                    Invoked via OpenRouter (default)
-                  </span>
-                </span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setRuntime("device")}
-                className={`flex items-start gap-2 px-3 py-2.5 rounded-lg border text-left transition-colors ${
-                  runtime === "device"
-                    ? "border-[#D4A574] bg-[#D4A574]/10 text-[#FAFAFA]"
-                    : "border-[#2A2A2A] text-[#E5E5E5] hover:border-[#3A3A3A]"
-                }`}
-              >
-                <Smartphone className="size-4 mt-0.5 flex-shrink-0" />
-                <span className="text-sm leading-tight">
-                  <span className="block font-medium">On-Device (mobile)</span>
-                  <span className="block text-xs text-[#999999]">
-                    Runs locally on the user&apos;s device
-                  </span>
-                </span>
-              </button>
-            </div>
-            <p className="mt-1.5 text-xs text-[#999999]">
-              Cannot be changed after creation.
-            </p>
+            <ModelSelector
+              value={newModelId}
+              onChange={setNewModelId}
+              models={availableModels}
+              className="max-w-md"
+            />
           </div>
-
-          {/* Model selector — only meaningful for server-runtime prompts */}
-          {runtime === "server" ? (
-            <div>
-              <label className="block text-sm font-medium text-[#E5E5E5] mb-1">
-                AI Model <span className="text-[#999999] font-normal">(optional)</span>
-              </label>
-              <ModelSelector
-                value={newModelId}
-                onChange={setNewModelId}
-                models={availableModels}
-                className="max-w-md"
-              />
-            </div>
-          ) : (
-            <OnDeviceRuntimeBanner />
-          )}
         </div>
 
         <div className="flex-1 px-8 pb-4 min-h-0">
