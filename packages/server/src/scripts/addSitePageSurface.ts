@@ -15,6 +15,8 @@ import { fileURLToPath } from "node:url";
 // Match the path the main server entry uses so DATABASE_URL resolves the
 // same way under tsx as it does under `pnpm dev`.
 config({ path: resolve(dirname(fileURLToPath(import.meta.url)), "../../../../.env") });
+const { applyEnvPrefix } = await import("../utils/envShim.js");
+applyEnvPrefix();
 
 import { sql } from "drizzle-orm";
 import { db } from "../db/index.js";

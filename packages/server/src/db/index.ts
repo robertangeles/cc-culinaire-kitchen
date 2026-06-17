@@ -22,14 +22,15 @@ const LOCAL_DB_HOSTS = new Set(["localhost", "127.0.0.1", "::1", ""]);
  *
  * Dev and prod historically shared one Postgres, so a stray query or migration
  * from a laptop could hit live data. This guard makes that impossible: unless
- * `NODE_ENV=production` (set by Render in prod), the connection host must be
- * local. Set `NODE_ENV=production` to intentionally target a remote DB.
+ * `APP_ENV=prod` (the explicit local opt-in) or `NODE_ENV=production`
+ * (set by Render in prod), the connection host must be local.
  *
  * @param connectionString The resolved `DATABASE_URL`.
  * @throws {Error} If a dev process points at a non-local host.
  */
 function assertNotRemoteInDev(connectionString: string): void {
   if (process.env.NODE_ENV === "production") return;
+  if ((process.env.APP_ENV ?? "").toLowerCase() === "prod") return;
 
   let host = "";
   try {
@@ -42,7 +43,7 @@ function assertNotRemoteInDev(connectionString: string): void {
   if (!LOCAL_DB_HOSTS.has(host)) {
     throw new Error(
       `Refusing to connect a non-production process to a remote database (host: ${host}). ` +
-        `Point DATABASE_URL at a local Postgres for development, or set NODE_ENV=production to override.`,
+        `Point DEV_DATABASE_URL at a local Postgres for development, or set APP_ENV=prod to deliberately target prod.`,
     );
   }
 }
