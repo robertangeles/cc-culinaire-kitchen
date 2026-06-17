@@ -1,0 +1,42 @@
+---
+title: Single .env file with DEV_/PROD_ prefixes
+category: decision
+created: 2026-06-17
+updated: 2026-06-17
+related: [[dev-prod-db-separation]], [[technical-architecture]]
+---
+
+One `.env` at the repo root holds every secret for every environment, with `DEV_` / `PROD_` prefixes on keys that differ between environments. A bootstrap shim copies the active set into the unprefixed slot the application code already reads. Render's prod environment supplies unprefixed vars from its dashboard, so the shim is a no-op there.
+
+## Problem
+
+The repo accumulated multiple env files:
+- `.env` (server runtime, gitignored)
+- `.env.production.local` (gitignored, holding the prod `DATABASE_URL` for ad-hoc scripts)
+- `.env.example` (committed template)
+- `packages/client/.env.test` + `.env.test.example` (E2E credentials)
+
+Five files for ~10 vars, all serving a single operator. Cognitive overhead with no payoff: forgetting which file held which value is what caused the prod-data-on-laptop debugging spiral on 2026-06-17.
+
+## Decision
+
+- **One `.env` at repo root.** Every key, every environment, one file.
+- **Prefix convention.** Keys that differ per environment are duplicated as `DEV_<KEY>` and `PROD_<KEY>` (e.g. `DEV_DATABASE_URL`, `PROD_DATABASE_URL`, `DEV_JWT_ACCESS_SECRET`, `PROD_JWT_ACCESS_SECRET`). Keys that don't differ (`PORT`, `BCRYPT_ROUNDS`) stay unprefixed.
+- **`APP_ENV` switch.** Top of the file declares `APP_ENV=dev` (or `prod`). The shim in [`packages/server/src/utils/envShim.ts`](../../packages/server/src/utils/envShim.ts) reads `APP_ENV` immediately after `dotenv.config()` and copies every `<APP_ENV>_<KEY>` into `<KEY>`.
+- **Consumer code unchanged.** Services keep reading `process.env.DATABASE_URL`, etc. The shim is the only place the prefix exists.
+- **Render is unaffected.** Render's dashboard injects unprefixed env vars; the shim only writes if the prefixed variant is non-empty, so it's a no-op in prod.
+- **Boot guard updated.** `db/index.ts` `assertNotRemoteInDev` now treats `APP_ENV=prod` as the local opt-in to talk to the prod DB (in addition to the existing `NODE_ENV=production` Render path).
+- **Scripts and seeds call the shim.** Every standalone tsx script that calls `dotenv.config()` (`db/seed.ts`, `scripts/inspectSitePages.ts`, `scripts/addSitePageSurface.ts`, `scripts/removeAntoineMobilePrompts.ts`) also calls `applyEnvPrefix()` immediately after.
+- **Playwright reads root `.env`.** `packages/client/playwright.config.ts` loads `../../.env` for `E2E_USER_EMAIL` / `E2E_USER_PASSWORD`. The client-side `.env.test` files are deleted.
+- **No `.env.example`.** This is a solo-operator codebase; a template that drifts from the real file is worse than no template.
+
+## Limits
+
+- **JWT secrets are captured at module-load time** in `authService.ts` (`const ACCESS_SECRET = process.env.JWT_ACCESS_SECRET ?? "dev-access-secret"`). ESM hoists imports, so this read happens before `dotenv.config()` runs in `index.ts` — meaning the .env JWT values are NOT actually used in local dev; the fallback `"dev-access-secret"` is. Login works because sign and verify both use the same fallback. This is a pre-existing latent bug, not introduced by this change. Fix would require moving env loading into a bootstrap module imported first.
+- **`DATABASE_URL`, PII keys, credentials key** are read at call-time (or via `ensurePiiKeys` / `ensureEncryptionKey` at startup, which run AFTER `dotenv.config()` in the body of `index.ts`). These pick up the shim's writes correctly.
+
+## Alternative considered
+
+**Two files: dev + prod.** Rejected — same drift risk as today, just renamed. The shim approach gives the same separation with one file and zero new abstractions.
+
+**`env-cmd` or similar wrapper to swap files.** Rejected — adds a dependency and a build-time concern for a runtime decision. The shim is 20 lines of code with no deps.

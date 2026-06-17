@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-loadEnv({ path: path.resolve(__dirname, ".env.test") });
+loadEnv({ path: path.resolve(__dirname, "../../.env") });
 
 export default defineConfig({
   testDir: "./tests/e2e",

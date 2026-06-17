@@ -9,6 +9,8 @@ import { join, dirname, resolve } from "path";
 import { fileURLToPath } from "url";
 import { config } from "dotenv";
 config({ path: resolve(dirname(fileURLToPath(import.meta.url)), "../../../.env") });
+import { applyEnvPrefix } from "./utils/envShim.js";
+applyEnvPrefix();
 
 import { healthRouter } from "./routes/health.js";
 import { chatRouter } from "./routes/chat.js";

@@ -10,6 +10,8 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 config({ path: resolve(dirname(fileURLToPath(import.meta.url)), "../../../../.env") });
+const { applyEnvPrefix } = await import("../utils/envShim.js");
+applyEnvPrefix();
 
 import { asc } from "drizzle-orm";
 import { db } from "../db/index.js";

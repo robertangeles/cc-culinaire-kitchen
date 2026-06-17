@@ -20,6 +20,8 @@
 
 import { config } from "dotenv";
 config({ path: "../../.env" });
+const { applyEnvPrefix } = await import("../utils/envShim.js");
+applyEnvPrefix();
 
 // Dynamic imports are used so dotenv can load DATABASE_URL before
 // the db module attempts to connect.
