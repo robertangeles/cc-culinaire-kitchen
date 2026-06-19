@@ -32,11 +32,23 @@ import { getAllSettings } from "./settingsService.js";
 const DEFAULT_REGISTERED_SESSIONS = 10;
 
 const BCRYPT_ROUNDS = parseInt(process.env.BCRYPT_ROUNDS ?? "12", 10);
-const ACCESS_SECRET = process.env.JWT_ACCESS_SECRET ?? "dev-access-secret";
-const REFRESH_SECRET = process.env.JWT_REFRESH_SECRET ?? "dev-refresh-secret";
+
+// JWT secrets MUST be read at call time, never captured at module load. ESM
+// evaluates this module before index.ts runs applyEnvPrefix(), so a top-level
+// `const X = process.env.JWT_ACCESS_SECRET` would capture the "dev-*" fallback
+// and silently ignore DEV_JWT_ACCESS_SECRET from .env in local dev. (Prod is
+// unaffected — Render injects the unprefixed var into the environment before
+// node boots.) See tasks/lessons.md #53 and wiki/decisions/single-env-file.md.
+function accessSecret(): string {
+  return process.env.JWT_ACCESS_SECRET ?? "dev-access-secret";
+}
+function mfaSessionSecret(): string {
+  return process.env.JWT_ACCESS_SECRET ?? "dev-mfa-secret";
+}
+// NB: refresh tokens are random bytes hashed in the DB (see generateTokens),
+// NOT JWTs — there is intentionally no JWT_REFRESH_SECRET in use here.
 const ACCESS_EXPIRY = "1h";
 const REFRESH_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
-const MFA_SESSION_SECRET = process.env.JWT_ACCESS_SECRET ?? "dev-mfa-secret";
 
 /** Shape of the JWT access token payload. */
 export interface TokenPayload {
@@ -199,7 +211,7 @@ export async function loginUser(
   if (row.mfaEnabledInd) {
     const mfaSessionToken = jwt.sign(
       { sub: row.userId, purpose: "mfa" },
-      MFA_SESSION_SECRET,
+      mfaSessionSecret(),
       { expiresIn: "5m" },
     );
     return { requiresMfa: true, mfaSessionToken };
@@ -342,7 +354,7 @@ export async function generateTokens(authUser: AuthUser) {
     permissions: authUser.permissions,
   };
 
-  const accessToken = jwt.sign(payload, ACCESS_SECRET, {
+  const accessToken = jwt.sign(payload, accessSecret(), {
     expiresIn: ACCESS_EXPIRY,
   });
 
@@ -398,7 +410,7 @@ export async function refreshAccessToken(rawToken: string) {
     permissions: authUser.permissions,
   };
 
-  const accessToken = jwt.sign(payload, ACCESS_SECRET, {
+  const accessToken = jwt.sign(payload, accessSecret(), {
     expiresIn: ACCESS_EXPIRY,
   });
 
@@ -421,7 +433,7 @@ export async function revokeRefreshToken(rawToken: string) {
  * Verifies a JWT access token and returns the decoded payload.
  */
 export function verifyAccessToken(token: string): TokenPayload {
-  return jwt.verify(token, ACCESS_SECRET) as unknown as TokenPayload;
+  return jwt.verify(token, accessSecret()) as unknown as TokenPayload;
 }
 
 /**
@@ -876,7 +888,7 @@ export async function completeMfaLogin(
 ): Promise<AuthUser> {
   let decoded: { sub: number; purpose: string };
   try {
-    decoded = jwt.verify(mfaSessionToken, MFA_SESSION_SECRET) as unknown as typeof decoded;
+    decoded = jwt.verify(mfaSessionToken, mfaSessionSecret()) as unknown as typeof decoded;
   } catch {
     throw new Error("INVALID_MFA_SESSION");
   }

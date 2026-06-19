@@ -134,7 +134,7 @@ _Nothing confirmed outstanding. New work to be defined._
 - [x] Configure GitHub branch protection on `main` (resolved 2026-06-01 — CI check `ci / Typecheck, test, build` now required before merge via GitHub API).
 
 ### Candidates (not started)
-- [ ] **Fix JWT secret module-load capture** — `authService.ts` captures `ACCESS_SECRET`/`REFRESH_SECRET`/`MFA_SESSION_SECRET` at import time, before `applyEnvPrefix()` runs, so the `DEV_*` JWT secrets in `.env` are silently ignored in dev (the `"dev-access-secret"` fallback is used instead). Latent, currently harmless (sign+verify share the fallback; prod unaffected). Fix: read secrets at call-time (lesson #3) or add a first-imported `bootstrap/env.ts`. Applying it invalidates current dev tokens once (re-login). See lessons.md #53 and `wiki/decisions/single-env-file.md` "Limits".
+- [x] **Fix JWT secret module-load capture** (resolved 2026-06-19, branch `fix/ck-web/supplier-read-gating`'s follow-up `fix/ck-web/jwt-secret-module-load`) — converted `ACCESS_SECRET`/`MFA_SESSION_SECRET` to call-time getters; removed dead `REFRESH_SECRET`. Verified live (real DEV secret → 200, old fallback → 401) + regression test in `authService.test.ts`. See lessons.md #53.
 - [ ] Purchasing v2 — supplier invoice reconciliation against credit notes
 - [ ] Waste Intelligence v2 — AI root cause suggestions, cost impact per item
 - [ ] Menu Intelligence v2 — margin analysis, engineering matrix (star/plow/puzzle/dog)
