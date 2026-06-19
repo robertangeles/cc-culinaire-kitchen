@@ -126,10 +126,10 @@ router.post("/ingredient-aliases/match-bulk", requirePermission("inventory:count
 // ─── Suppliers (org-wide) ─────────────────────────────────────────
 
 router.post("/suppliers", requirePermission("inventory:manage"), handleCreateSupplier);
-router.get("/suppliers", requirePermission("inventory:manage"), handleListSuppliers);
+router.get("/suppliers", requirePermission("inventory:count"), handleListSuppliers);
 router.patch("/suppliers/:id", requirePermission("inventory:manage"), handleUpdateSupplier);
 router.delete("/suppliers/:id", requirePermission("inventory:manage"), handleDeleteSupplier);
-router.get("/suppliers/:id/locations", requirePermission("inventory:manage"), handleGetSupplierLocations);
+router.get("/suppliers/:id/locations", requirePermission("inventory:count"), handleGetSupplierLocations);
 router.get("/suppliers/:supplierId/ingredient-ids", requirePermission("inventory:count"), handleGetSupplierIngredientIds);
 
 // ─── Location ingredient config ───────────────────────────────────
