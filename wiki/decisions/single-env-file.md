@@ -2,7 +2,7 @@
 title: Single .env file with DEV_/PROD_ prefixes
 category: decision
 created: 2026-06-17
-updated: 2026-06-17
+updated: 2026-06-19
 related: [[dev-prod-db-separation]], [[technical-architecture]]
 ---
 
@@ -32,7 +32,7 @@ Five files for ~10 vars, all serving a single operator. Cognitive overhead with 
 
 ## Limits
 
-- **JWT secrets are captured at module-load time** in `authService.ts` (`const ACCESS_SECRET = process.env.JWT_ACCESS_SECRET ?? "dev-access-secret"`). ESM hoists imports, so this read happens before `dotenv.config()` runs in `index.ts` — meaning the .env JWT values are NOT actually used in local dev; the fallback `"dev-access-secret"` is. Login works because sign and verify both use the same fallback. This is a pre-existing latent bug, not introduced by this change. Fix would require moving env loading into a bootstrap module imported first.
+- **JWT secrets are captured at module-load time** in `authService.ts` (`ACCESS_SECRET` :35, `REFRESH_SECRET` :36, `MFA_SESSION_SECRET` :39 — e.g. `const ACCESS_SECRET = process.env.JWT_ACCESS_SECRET ?? "dev-access-secret"`). ESM evaluates imported modules depth-first before the importing module's body, so this read happens before `dotenv.config()` + `applyEnvPrefix()` run in `index.ts` — meaning the `DEV_*` JWT values are NOT actually used in local dev; the fallback `"dev-access-secret"` is. Login works because sign and verify both use the same fallback. **Empirically confirmed 2026-06-19** (during the supplier read-gating fix): a JWT hand-signed with the literal `"dev-access-secret"` was accepted by the running dev server (HTTP 200), while one signed with the real `DEV_JWT_ACCESS_SECRET` was rejected (`401 invalid signature`). The eager `CLIENT_URL` export in `utils/env.ts:9` is the same class but cosmetic (its default equals the dev value). **Prod is unaffected** — Render injects unprefixed `JWT_ACCESS_SECRET` into the environment before node starts, so the module-load read captures the real prod value there. This is a pre-existing latent bug, not introduced by this change. Tracked in `tasks/todo.md` + lessons.md #53 (which also reaffirms lesson #3). Fix: read secrets at call-time (lazy getter), or move env loading into a `bootstrap/env.ts` imported first by every entry point; applying it invalidates current dev tokens once (re-login).
 - **`DATABASE_URL`, PII keys, credentials key** are read at call-time (or via `ensurePiiKeys` / `ensureEncryptionKey` at startup, which run AFTER `dotenv.config()` in the body of `index.ts`). These pick up the shim's writes correctly.
 
 ## Alternative considered
