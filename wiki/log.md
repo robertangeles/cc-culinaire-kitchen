@@ -4,6 +4,14 @@ Append-only. Newest entry on top.
 
 ---
 
+## 2026-06-29 — Feature Catalog page added
+
+**What was done**
+
+Created [[features]] (`wiki/synthesis/features.md`) — a living, complete enumeration of every user-facing feature in CulinAIre Kitchen, grouped by the four product lobes (Chat Assistant, Creative Labs, Kitchen Operations, Community) plus accounts, settings/admin, and the platform layer. Built from a fresh sweep of client routes/components and server routes/services. Linked it from `wiki/index.md` under Synthesis. Intent: keep this updated as features are built, changed, or removed — it's the "what exists now" view, complementary to [[project-status]]'s delivery timeline.
+
+---
+
 ## 2026-06-16 — Dev/prod database separation (+ migrations rejected)
 
 **What was done**

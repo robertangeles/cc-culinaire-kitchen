@@ -1,5 +1,7 @@
 # CulinAIre Kitchen — System Overview
 
+> **Full feature list:** see the living [Feature Catalog](../../wiki/synthesis/features.md) (`wiki/synthesis/features.md`) for the complete, up-to-date enumeration of every user-facing feature. Update it whenever a feature is built, changed, or removed.
+
 ## What Is CulinAIre Kitchen?
 
 CulinAIre Kitchen is an AI-powered platform for chefs, restaurateurs, and culinary professionals. It provides a conversational assistant that draws on a curated knowledge base of cooking techniques, ingredients, pastry fundamentals, and spirits to deliver expert-level culinary guidance. Users chat with the AI, which can search and reference authoritative culinary documents to provide sourced, reliable answers.

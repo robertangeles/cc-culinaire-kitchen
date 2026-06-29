@@ -2,6 +2,8 @@
 
 _Last updated: 2026-04-22. Reflects actual codebase state, not aspirational._
 
+> **Feature Catalog:** the complete "what exists now" feature list lives in the wiki at [`wiki/synthesis/features.md`](../wiki/synthesis/features.md). When you ship, change, or remove a feature, update that catalog (and bump its `updated:` date) as part of the work — this TODO tracks *what's planned*, the catalog tracks *what's built*.
+
 ---
 
 ## Completed
