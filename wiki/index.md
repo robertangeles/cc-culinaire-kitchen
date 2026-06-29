@@ -66,6 +66,7 @@ Categories: **entity** (named things) · **concept** (patterns) · **decision** 
 ## Synthesis
 | Page | Summary | Created |
 |---|---|---|
+| [Feature Catalog](synthesis/features.md) | Living catalog of every user-facing feature, grouped by product lobe + platform layer; update as features ship or change | 2026-06-29 |
 | [Project Status](synthesis/project-status.md) | Phase-by-phase summary of shipped work, derived from `tasks/todo.md` | 2026-04-29 |
 | [Lessons Index](synthesis/lessons-index.md) | Discoverable index of the Problem/Fix/Rule entries in `tasks/lessons.md` | 2026-04-29 |
 | [Schema drift (May 2026)](synthesis/schema-drift-may-2026.md) | Known drift between Drizzle code and live DB; safe migration workflow until drift is zero | 2026-05-26 |
