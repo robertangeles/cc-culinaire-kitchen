@@ -4,6 +4,19 @@ import crypto from "node:crypto";
 // A valid 32-byte hex key for testing
 const TEST_KEY = crypto.randomBytes(32).toString("hex");
 
+/**
+ * Flip the first byte of a hex string by XOR-ing it with 0xff. Deterministic —
+ * the byte ALWAYS changes, unlike replacing it with a fixed "ff" (which is a
+ * no-op ~1/256 of the time when the original byte is already 0xff, the source
+ * of this test's prior flakiness).
+ */
+function tamperFirstByte(hex: string): string {
+  const flipped = (parseInt(hex.slice(0, 2), 16) ^ 0xff)
+    .toString(16)
+    .padStart(2, "0");
+  return flipped + hex.slice(2);
+}
+
 describe("crypto utils", () => {
   beforeEach(() => {
     process.env.CREDENTIALS_ENCRYPTION_KEY = TEST_KEY;
@@ -32,14 +45,14 @@ describe("crypto utils", () => {
   it("throws on tampered ciphertext", async () => {
     const { encrypt, decrypt } = await import("./crypto.js");
     const { ciphertext, iv, authTag } = encrypt("secret");
-    const tampered = "ff" + ciphertext.slice(2);
+    const tampered = tamperFirstByte(ciphertext);
     expect(() => decrypt(tampered, iv, authTag)).toThrow();
   });
 
   it("throws on tampered auth tag", async () => {
     const { encrypt, decrypt } = await import("./crypto.js");
     const { ciphertext, iv, authTag } = encrypt("secret");
-    const tampered = "ff" + authTag.slice(2);
+    const tampered = tamperFirstByte(authTag);
     expect(() => decrypt(ciphertext, iv, tampered)).toThrow();
   });
 
