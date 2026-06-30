@@ -29,10 +29,59 @@ import {
   resetPassword,
 } from "../services/authService.js";
 import { linkGuestConversations } from "../services/guestService.js";
+import { verifyTurnstileToken } from "../services/turnstileService.js";
+import { getCredentialValueWithFallback } from "../services/credentialService.js";
 
 const logger = pino({ name: "authController" });
 
 const IS_PROD = process.env.NODE_ENV === "production";
+
+/**
+ * Browser requests carry an `Origin` header; native clients (the React Native
+ * mobile app) do not. We use this to scope Turnstile to the web client, which
+ * is the only client that can render the browser widget.
+ */
+function isBrowserRequest(req: Request): boolean {
+  return typeof req.headers.origin === "string" && req.headers.origin.length > 0;
+}
+
+/**
+ * Enforces Cloudflare Turnstile for browser-originated auth requests, and
+ * writes a 400 if the check is missing or fails. Returns `true` when the
+ * caller may continue, `false` when a response has already been sent.
+ *
+ * Web-only by design: the mobile app shares these endpoints but cannot render
+ * the browser widget, so native requests (no `Origin` header) skip the captcha
+ * and are covered by `authRateLimit` instead. For browser requests the token
+ * is required and verified (hard enforcement for web).
+ *
+ * Note: `reset-password` and `resend-verification` are intentionally NOT gated
+ * — they are already protected by a single-use emailed token and an
+ * enumeration-safe constant response, respectively.
+ */
+async function enforceTurnstileForWeb(
+  req: Request,
+  res: Response,
+  token: string | undefined,
+): Promise<boolean> {
+  if (!isBrowserRequest(req)) return true; // native client — captcha not applicable
+
+  if (!token) {
+    res.status(400).json({ error: "Security check is required." });
+    return false;
+  }
+
+  const result = await verifyTurnstileToken(token, req.ip);
+  if (!result.success) {
+    logger.warn(
+      { errorCodes: result.errorCodes, ip: req.ip },
+      "Turnstile verification failed",
+    );
+    res.status(400).json({ error: "Security check failed. Please try again." });
+    return false;
+  }
+  return true;
+}
 
 /** Zod schema for registration requests. */
 const RegisterSchema = z.object({
@@ -44,12 +93,16 @@ const RegisterSchema = z.object({
     .regex(/[A-Z]/, "Password must contain at least one uppercase letter")
     .regex(/[0-9]/, "Password must contain at least one number"),
   guestToken: z.string().uuid().optional(),
+  // Optional at the schema layer; enforced for browser requests in the handler
+  // (web-only — the mobile app shares this endpoint and can't send a token).
+  turnstileToken: z.string().optional(),
 });
 
 /** Zod schema for login requests. */
 const LoginSchema = z.object({
   email: z.string().email("Invalid email address"),
   password: z.string().min(1, "Password is required"),
+  turnstileToken: z.string().optional(),
 });
 
 /** Sets access and refresh token cookies on the response. */
@@ -82,6 +135,30 @@ function clearAuthCookies(res: Response) {
 }
 
 /**
+ * GET /api/auth/turnstile-config
+ *
+ * Public endpoint returning the Cloudflare Turnstile **site key** so the
+ * browser can render the widget. The site key is public by design (it ships
+ * in the page); the secret key never leaves the server. Served at runtime
+ * from the DB/env so admins can rotate it in Settings → Integrations →
+ * Cloudflare without a rebuild.
+ */
+export async function handleTurnstileConfig(
+  _req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const siteKey = await getCredentialValueWithFallback(
+      "CLOUDFLARE_TURNSTILE_SITE_KEY",
+    );
+    res.json({ siteKey });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
  * POST /api/auth/register
  *
  * Creates a new user account with hashed password.
@@ -99,6 +176,8 @@ export async function handleRegister(
       res.status(400).json({ error: messages });
       return;
     }
+
+    if (!(await enforceTurnstileForWeb(req, res, parsed.data.turnstileToken))) return;
 
     const { name, email, password, guestToken } = parsed.data;
     const userId = await registerUser(name, email, password);
@@ -151,6 +230,8 @@ export async function handleLogin(
       res.status(400).json({ error: messages });
       return;
     }
+
+    if (!(await enforceTurnstileForWeb(req, res, parsed.data.turnstileToken))) return;
 
     const { email, password } = parsed.data;
     const result = await loginUser(email, password);
@@ -357,6 +438,7 @@ export async function handleResendVerification(
 
 const ForgotPasswordSchema = z.object({
   email: z.string().email(),
+  turnstileToken: z.string().optional(),
 });
 
 const ResetPasswordSchema = z.object({
@@ -382,6 +464,8 @@ export async function handleForgotPassword(
       res.status(400).json({ error: messages });
       return;
     }
+
+    if (!(await enforceTurnstileForWeb(req, res, parsed.data.turnstileToken))) return;
 
     await requestPasswordReset(parsed.data.email);
     res.json({ success: true, message: "If that email is registered, a reset link has been sent." });

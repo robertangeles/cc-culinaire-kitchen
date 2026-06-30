@@ -64,15 +64,21 @@ app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), handl
 app.set("trust proxy", 1);
 
 // Middleware
+// `https://challenges.cloudflare.com` is required for Cloudflare Turnstile on
+// the auth pages: scriptSrc loads its api.js, frameSrc hosts the challenge
+// iframe, connectSrc is its verification beacon. Without these the widget can't
+// load and (fail-closed) web auth would be locked out. The Express server
+// serves the built SPA, so this CSP governs the React app's pages too.
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
       imgSrc: ["'self'", "data:", "https://res.cloudinary.com", "blob:"],
-      scriptSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "https://challenges.cloudflare.com"],
+      frameSrc: ["'self'", "https://challenges.cloudflare.com"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
-      connectSrc: ["'self'", "https://res.cloudinary.com", "wss:", "ws:"],
+      connectSrc: ["'self'", "https://res.cloudinary.com", "https://challenges.cloudflare.com", "wss:", "ws:"],
     },
   },
 }));

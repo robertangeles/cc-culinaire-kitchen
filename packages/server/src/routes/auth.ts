@@ -24,19 +24,27 @@ import {
   handleMfaVerify,
   handleForgotPassword,
   handleResetPassword,
+  handleTurnstileConfig,
 } from "../controllers/authController.js";
 import { authenticate } from "../middleware/auth.js";
+import { authRateLimit } from "../middleware/rateLimiter.js";
 
 const router = Router();
 
-router.post("/register", handleRegister);
-router.post("/login", handleLogin);
+// Public: site key for the browser-side Turnstile widget.
+router.get("/turnstile-config", handleTurnstileConfig);
+
+// authRateLimit is the abuse backstop for the non-browser path: Turnstile is
+// enforced only for browser requests, so native/scripted clients are throttled
+// here instead (20/min per IP).
+router.post("/register", authRateLimit, handleRegister);
+router.post("/login", authRateLimit, handleLogin);
 router.post("/logout", handleLogout);
 router.post("/refresh", handleRefresh);
 router.get("/me", authenticate, handleGetMe);
 router.get("/verify-email", handleVerifyEmail);
 router.post("/resend-verification", handleResendVerification);
-router.post("/forgot-password", handleForgotPassword);
+router.post("/forgot-password", authRateLimit, handleForgotPassword);
 router.post("/reset-password", handleResetPassword);
 
 // OAuth
