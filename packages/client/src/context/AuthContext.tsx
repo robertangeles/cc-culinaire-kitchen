@@ -61,9 +61,9 @@ interface AuthContextValue {
   initGuest: () => Promise<void>;
   /** Refresh guest usage info. */
   refreshGuestUsage: () => Promise<void>;
-  login: (email: string, password: string) => Promise<LoginResult>;
+  login: (email: string, password: string, turnstileToken: string) => Promise<LoginResult>;
   completeMfaLogin: (mfaSessionToken: string, code: string) => Promise<void>;
-  register: (name: string, email: string, password: string) => Promise<{ message: string }>;
+  register: (name: string, email: string, password: string, turnstileToken: string) => Promise<{ message: string }>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
@@ -272,14 +272,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [fetchMe, startRefreshLoop, stopRefreshLoop, refreshToken]);
 
   const login = useCallback(
-    async (email: string, password: string): Promise<LoginResult> => {
+    async (email: string, password: string, turnstileToken: string): Promise<LoginResult> => {
       let res: Response;
       try {
         res = await fetch("/api/auth/login", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
-          body: JSON.stringify({ email, password }),
+          body: JSON.stringify({ email, password, turnstileToken }),
         });
       } catch {
         throw new Error("Cannot reach the server. Is the backend running?");
@@ -356,7 +356,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const register = useCallback(
-    async (name: string, email: string, password: string) => {
+    async (name: string, email: string, password: string, turnstileToken: string) => {
       // Include guest token for conversation linking
       const currentGuestToken = localStorage.getItem(GUEST_TOKEN_KEY);
 
@@ -370,6 +370,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             name,
             email,
             password,
+            turnstileToken,
             ...(currentGuestToken ? { guestToken: currentGuestToken } : {}),
           }),
         });

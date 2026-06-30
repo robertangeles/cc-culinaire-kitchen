@@ -5,12 +5,13 @@
  * On success, shows a message prompting user to verify their email.
  */
 
-import { useState, type FormEvent } from "react";
+import { useState, useRef, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router";
 import { ChefHat, Loader2, AlertCircle, CheckCircle2, Eye, EyeOff } from "lucide-react";
 import { useAuth } from "../context/AuthContext.js";
 import { useSettings } from "../context/SettingsContext.js";
 import { OAuthButtons } from "../components/auth/OAuthButtons.js";
+import { TurnstileWidget, type TurnstileHandle } from "../components/auth/TurnstileWidget.js";
 import {
   PasswordRequirements,
   isPasswordValid,
@@ -30,6 +31,9 @@ export function RegisterPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  // Turnstile (bot protection)
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const turnstileRef = useRef<TurnstileHandle>(null);
 
   const pageTitle = settings.page_title || "CulinAIre Kitchen";
   const logoPath = settings.logo_path;
@@ -49,16 +53,24 @@ export function RegisterPage() {
       return;
     }
 
+    if (!turnstileToken) {
+      setError("Please complete the security check.");
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
-      const result = await register(name, email, password);
+      const result = await register(name, email, password, turnstileToken);
       setSuccess(result.message + " Redirecting to login...");
       setTimeout(() => {
         navigate("/login", { state: { registrationSuccess: result.message } });
       }, 3000);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Registration failed");
+      // Turnstile tokens are single-use — reset so the user can retry.
+      turnstileRef.current?.reset();
+      setTurnstileToken(null);
     } finally {
       setIsSubmitting(false);
     }
@@ -202,13 +214,16 @@ export function RegisterPage() {
             )}
           </div>
 
+          <TurnstileWidget ref={turnstileRef} onToken={setTurnstileToken} />
+
           <button
             type="submit"
             disabled={
               isSubmitting ||
               !!success ||
               !isPasswordValid(password) ||
-              password !== confirmPassword
+              password !== confirmPassword ||
+              !turnstileToken
             }
             className="w-full flex items-center justify-center gap-2 py-3 text-base font-semibold text-[#0A0A0A] bg-[#D4A574] rounded-xl hover:bg-[#C4956A] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >

@@ -5,12 +5,13 @@
  * to the chat page. Links to registration for new users.
  */
 
-import { useState, type FormEvent } from "react";
+import { useState, useRef, type FormEvent } from "react";
 import { Link, useNavigate, useLocation } from "react-router";
 import { ChefHat, Loader2, AlertCircle, ShieldCheck, CheckCircle2, Eye, EyeOff } from "lucide-react";
 import { useAuth } from "../context/AuthContext.js";
 import { useSettings } from "../context/SettingsContext.js";
 import { OAuthButtons } from "../components/auth/OAuthButtons.js";
+import { TurnstileWidget, type TurnstileHandle } from "../components/auth/TurnstileWidget.js";
 
 export function LoginPage() {
   const { login, completeMfaLogin } = useAuth();
@@ -25,6 +26,9 @@ export function LoginPage() {
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  // Turnstile (bot protection)
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const turnstileRef = useRef<TurnstileHandle>(null);
   // MFA state
   const [mfaSessionToken, setMfaSessionToken] = useState<string | null>(null);
   const [mfaCode, setMfaCode] = useState("");
@@ -34,11 +38,15 @@ export function LoginPage() {
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    if (!turnstileToken) {
+      setError("Please complete the security check.");
+      return;
+    }
     setError("");
     setIsSubmitting(true);
 
     try {
-      const result = await login(email, password);
+      const result = await login(email, password, turnstileToken);
       if (result.requiresMfa) {
         setMfaSessionToken(result.mfaSessionToken);
       } else {
@@ -46,6 +54,9 @@ export function LoginPage() {
       }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Login failed");
+      // Turnstile tokens are single-use — reset so the user can retry.
+      turnstileRef.current?.reset();
+      setTurnstileToken(null);
     } finally {
       setIsSubmitting(false);
     }
@@ -207,6 +218,8 @@ export function LoginPage() {
               </Link>
             </div>
 
+            <TurnstileWidget ref={turnstileRef} onToken={setTurnstileToken} />
+
             <div className="flex gap-3">
               <button
                 type="button"
@@ -217,7 +230,7 @@ export function LoginPage() {
               </button>
               <button
                 type="submit"
-                disabled={isSubmitting}
+                disabled={isSubmitting || !turnstileToken}
                 className="flex-1 flex items-center justify-center gap-2 py-3 text-base font-semibold text-[#0A0A0A] bg-[#D4A574] rounded-xl hover:bg-[#C4956A] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {isSubmitting && <Loader2 className="size-4 animate-spin" />}
