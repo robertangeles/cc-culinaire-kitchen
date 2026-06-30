@@ -236,14 +236,29 @@ describe("rateLimiter — authRateLimit config", () => {
     await import("./rateLimiter.js");
 
     const config = mockRateLimit.mock.calls[4][0] as {
-      keyGenerator: (req: unknown) => string;
+      keyGenerator: (req: { ip?: string; headers?: Record<string, string> }) => string;
     };
-    const key = config.keyGenerator({ ip: "1.2.3.4" });
+    const key = config.keyGenerator({ ip: "1.2.3.4", headers: {} });
     expect(key.startsWith("auth-ip-")).toBe(true);
     expect(key).not.toContain("1.2.3.4");
-    // No auth context on these unauthenticated routes → falls back to "unknown".
-    const unknownKey = config.keyGenerator({});
+    // No IP at all → falls back to a hashed "unknown".
+    const unknownKey = config.keyGenerator({ headers: {} });
     expect(unknownKey.startsWith("auth-ip-")).toBe(true);
+  });
+
+  it("prefers Cloudflare's CF-Connecting-IP over req.ip (spoof-resistant behind CF)", async () => {
+    await import("./rateLimiter.js");
+
+    const config = mockRateLimit.mock.calls[4][0] as {
+      keyGenerator: (req: { ip?: string; headers?: Record<string, string> }) => string;
+    };
+    // When CF-Connecting-IP is present it keys on that, NOT the (proxy) req.ip.
+    const cfKey = config.keyGenerator({ ip: "10.0.0.1", headers: { "cf-connecting-ip": "203.0.113.7" } });
+    const directKey = config.keyGenerator({ ip: "203.0.113.7", headers: {} });
+    // Same real client IP via either path → same bucket; raw IP never leaks.
+    expect(cfKey).toBe(directKey);
+    expect(cfKey).not.toContain("203.0.113.7");
+    expect(cfKey).not.toContain("10.0.0.1");
   });
 
   it("returns standardised draft-8 rate limit headers", async () => {

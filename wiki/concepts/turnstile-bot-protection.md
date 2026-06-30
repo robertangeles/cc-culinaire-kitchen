@@ -65,6 +65,21 @@ never silently bypass the check for web. Tokens are single-use; the widget
 auto-resets on a failed submit so the user can retry. (Native requests skip the
 check entirely and rely on `authRateLimit`.)
 
+## Deployment — make the rate-limit backstop trustworthy
+
+The non-browser path relies on `authRateLimit` keying on the real client IP.
+Two settings make that spoof-resistant behind Cloudflare:
+
+- **`TRUST_PROXY`** (env, default `1`): the number of proxy hops in front of
+  Express. A single platform proxy (Render) is `1`; adding Cloudflare is usually
+  `2`. Set it to match prod (accepts a hop count, `true`/`false`, or a CIDR
+  allowlist) so `req.ip` isn't `X-Forwarded-For`-spoofable. Configured in
+  `index.ts`.
+- **`CF-Connecting-IP`**: `authRateLimit` prefers this header (set by Cloudflare
+  at the edge, not client-spoofable) over `req.ip`. This holds only if the
+  origin is locked to Cloudflare (IP allowlist / Authenticated Origin Pulls);
+  otherwise an attacker hitting the origin directly could forge it.
+
 ## Bootstrap / lockout note
 
 Web enforcement gates browser login, and the Integrations panel that holds the
