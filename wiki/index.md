@@ -51,6 +51,7 @@ Categories: **entity** (named things) · **concept** (patterns) · **decision** 
 | [Surface Partition](concepts/surface-partition.md) | The `(slug, surface)` / `runtime` pattern that lets web and mobile own distinct rows for the same logical content | 2026-05-03 |
 | [Formula Catalog](concepts/formula-catalog.md) | Complete catalog of every formula in the cost, stock, prep, and forecasting engine with forward/backward proofs | 2026-06-01 |
 | [Reconciliation Matrix](concepts/reconciliation-matrix.md) | Cross-reference of stock-affecting and cost-affecting operations, balance rules, and cross-operation invariants | 2026-06-01 |
+| [Cloudflare Turnstile Bot Protection](concepts/turnstile-bot-protection.md) | Hard-enforced Turnstile on login/register/forgot-password; DB-managed keys via Settings → Integrations → Cloudflare; fail-closed verification | 2026-06-30 |
 
 ## Decisions
 | Page | Summary | Created |

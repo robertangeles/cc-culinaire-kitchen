@@ -2,8 +2,8 @@
 title: Mobile API Contract
 category: concept
 created: 2026-04-29
-updated: 2026-04-29
-related: [[culinaire-kitchen-platform]], [[prompt-system]], [[technical-architecture]]
+updated: 2026-06-30
+related: [[culinaire-kitchen-platform]], [[prompt-system]], [[technical-architecture]], [[turnstile-bot-protection]]
 ---
 
 The contract between the web monorepo (this repo, API-only for mobile) and the separate CulinAIre mobile repo (React Native, on-device Gemma 3n E4B inference). Documents every cross-repo touchpoint so both sides can change in lockstep.
@@ -24,7 +24,27 @@ Same JWT system as the web client, but **token transport differs**:
 The unified `authenticate` middleware ([packages/server/src/middleware/auth.ts:25-52](../../packages/server/src/middleware/auth.ts)) accepts either Bearer or cookie — every protected route works for both clients without route-level branching.
 
 ### Mobile-specific entry point
-- `POST /api/auth/google/idtoken` ([routes/auth.ts:47](../../packages/server/src/routes/auth.ts), [authController.ts:473-476](../../packages/server/src/controllers/authController.ts)) — accepts a Google ID token from the React Native Google Sign-In library and returns `{ user, tokens: { accessToken, refreshToken } }`. Web clients hit the same shape but ignore `tokens` and read cookies instead.
+- `POST /api/auth/google/idtoken` ([routes/auth.ts:47](../../packages/server/src/routes/auth.ts), [authController.ts:473-476](../../packages/server/src/controllers/authController.ts)) — accepts a Google ID token from the React Native Google Sign-In library and returns `{ user, tokens: { accessToken, refreshToken } }`. Web clients hit the same shape but ignore `tokens` and read cookies instead. **Not** Turnstile-gated.
+
+### Turnstile is web-only (2026-06-30) — mobile is exempt by design
+Cloudflare Turnstile now guards `POST /api/auth/login`, `/register`, and
+`/forgot-password` — but **only for browser requests** (those with an `Origin`
+header). Mobile sends no browser `Origin`, so `enforceTurnstileForWeb()` skips
+the check and mobile requests flow through unchanged. See [[turnstile-bot-protection]].
+
+What mobile needs to know (all backward-compatible):
+- `turnstileToken` is a NEW **optional** field on those three request bodies.
+  Mobile keeps sending its current bodies unchanged — the field is only required
+  when an `Origin` header is present.
+- A new per-IP limiter `authRateLimit` (20 req/min, hashed IP) applies to those
+  three routes as the non-browser abuse backstop. Mobile can see
+  `429 { error: "Too many attempts ..." }` with draft-8 `RateLimit-*` +
+  `Retry-After` headers — parse for backoff.
+- New public `GET /api/auth/turnstile-config` → `{ siteKey }` is web-widget only;
+  mobile ignores it.
+- Open question (mobile's call): native bot protection (App Attest / Play
+  Integrity) is out of scope for the web change — tracked in shared-context
+  `web-needs.md` [2026-06-30].
 
 ## Mobile-prefixed routes
 **Currently a single endpoint.** The `/api/mobile/*` namespace is reserved for routes that exist *because* the mobile client is on-device — not for routes mobile happens to use.
