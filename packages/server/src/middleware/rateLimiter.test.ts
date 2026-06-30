@@ -246,19 +246,17 @@ describe("rateLimiter — authRateLimit config", () => {
     expect(unknownKey.startsWith("auth-ip-")).toBe(true);
   });
 
-  it("prefers Cloudflare's CF-Connecting-IP over req.ip (spoof-resistant behind CF)", async () => {
+  it("does NOT trust a client-supplied CF-Connecting-IP (keys only on req.ip)", async () => {
     await import("./rateLimiter.js");
 
     const config = mockRateLimit.mock.calls[4][0] as {
       keyGenerator: (req: { ip?: string; headers?: Record<string, string> }) => string;
     };
-    // When CF-Connecting-IP is present it keys on that, NOT the (proxy) req.ip.
-    const cfKey = config.keyGenerator({ ip: "10.0.0.1", headers: { "cf-connecting-ip": "203.0.113.7" } });
-    const directKey = config.keyGenerator({ ip: "203.0.113.7", headers: {} });
-    // Same real client IP via either path → same bucket; raw IP never leaks.
-    expect(cfKey).toBe(directKey);
-    expect(cfKey).not.toContain("203.0.113.7");
-    expect(cfKey).not.toContain("10.0.0.1");
+    // A forged CF-Connecting-IP must not change the bucket — Express resolves
+    // the trusted client IP via req.ip / trust proxy, not raw client headers.
+    const forged = config.keyGenerator({ ip: "203.0.113.7", headers: { "cf-connecting-ip": "1.1.1.1" } });
+    const plain = config.keyGenerator({ ip: "203.0.113.7", headers: {} });
+    expect(forged).toBe(plain);
   });
 
   it("returns standardised draft-8 rate limit headers", async () => {
