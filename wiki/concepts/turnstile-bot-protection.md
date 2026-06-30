@@ -67,18 +67,21 @@ check entirely and rely on `authRateLimit`.)
 
 ## Deployment — make the rate-limit backstop trustworthy
 
-The non-browser path relies on `authRateLimit` keying on the real client IP.
-Two settings make that spoof-resistant behind Cloudflare:
+The non-browser path relies on `authRateLimit` keying on the real client IP via
+`req.ip`. The single setting that makes that non-spoofable behind Cloudflare:
 
-- **`TRUST_PROXY`** (env, default `1`): the number of proxy hops in front of
-  Express. A single platform proxy (Render) is `1`; adding Cloudflare is usually
-  `2`. Set it to match prod (accepts a hop count, `true`/`false`, or a CIDR
-  allowlist) so `req.ip` isn't `X-Forwarded-For`-spoofable. Configured in
-  `index.ts`.
-- **`CF-Connecting-IP`**: `authRateLimit` prefers this header (set by Cloudflare
-  at the edge, not client-spoofable) over `req.ip`. This holds only if the
-  origin is locked to Cloudflare (IP allowlist / Authenticated Origin Pulls);
-  otherwise an attacker hitting the origin directly could forge it.
+- **`TRUST_PROXY`** (env, default `1`): what Express trusts when resolving
+  `req.ip` from `X-Forwarded-For`. Behind Cloudflare set it to **Cloudflare's
+  published CIDR ranges** (https://www.cloudflare.com/ips/) — Express then
+  honours `X-Forwarded-For` only from Cloudflare hops and ignores forged values.
+  A bare hop count (e.g. `2`) also works but is more brittle. Configured in
+  `index.ts`; accepts a hop count, `true`/`false`, or a comma-separated CIDR
+  list.
+
+Do **not** read `CF-Connecting-IP` (or other client headers) directly for the
+rate-limit key: if the origin is reachable outside Cloudflare, an attacker can
+forge that header and rotate the key to defeat the limiter. `req.ip` + a
+correctly-scoped `TRUST_PROXY` is the safe path.
 
 ## Bootstrap / lockout note
 

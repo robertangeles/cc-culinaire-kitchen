@@ -116,12 +116,14 @@ export const feedbackRateLimit = rateLimit({
  * The IP is stored as a one-way SHA-256 hash so the in-memory key store
  * never holds a recoverable IP for login attempts.
  *
- * Client IP resolution prefers Cloudflare's `CF-Connecting-IP` header: when the
- * app is fronted by Cloudflare (with the origin locked to Cloudflare IPs / via
- * Authenticated Origin Pulls), that header is set at the edge and cannot be
- * spoofed by the client — making it more trustworthy than `req.ip`, which
- * depends on the `trust proxy` hop count being exactly right. Falls back to
- * `req.ip` when the header is absent (e.g. local dev or no Cloudflare).
+ * Keying uses `req.ip`, which Express resolves from `X-Forwarded-For` according
+ * to the `trust proxy` setting. We deliberately do NOT read client-controlled
+ * headers like `CF-Connecting-IP` directly — when the origin is reachable
+ * outside Cloudflare, an attacker could forge that header and rotate the key to
+ * defeat the limiter. The non-spoofable way to get the real client IP behind
+ * Cloudflare is to set `TRUST_PROXY` to Cloudflare's published CIDR ranges (or
+ * the exact hop count): Express then honours `X-Forwarded-For` only from those
+ * trusted hops and ignores forged values. See index.ts.
  */
 export const authRateLimit = rateLimit({
   windowMs: 60 * 1000,
@@ -129,11 +131,7 @@ export const authRateLimit = rateLimit({
   standardHeaders: "draft-8",
   legacyHeaders: false,
   keyGenerator: (req: Request) => {
-    const cfIp = req.headers["cf-connecting-ip"];
-    const ip =
-      (typeof cfIp === "string" && cfIp.length > 0 ? cfIp : null) ??
-      req.ip ??
-      "unknown";
+    const ip = req.ip ?? "unknown";
     const hash = createHash("sha256").update(ip).digest("hex").slice(0, 32);
     return `auth-ip-${hash}`;
   },
