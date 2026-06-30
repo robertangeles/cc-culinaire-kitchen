@@ -19,6 +19,7 @@ const PREFIXED_KEYS = [
   "CREDENTIALS_ENCRYPTION_KEY",
   "PII_ENCRYPTION_KEY",
   "PII_HMAC_KEY",
+  "TRUST_PROXY",
 ] as const;
 
 export function applyEnvPrefix(): void {

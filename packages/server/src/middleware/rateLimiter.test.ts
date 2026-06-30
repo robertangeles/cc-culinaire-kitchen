@@ -35,10 +35,10 @@ describe("rateLimiter — chatRateLimit config", () => {
   it("constructs with 20 requests per 60 seconds", async () => {
     await import("./rateLimiter.js");
 
-    // Four limiters are constructed: chat + mobile prompt + mobile RAG +
-    // mobile feedback. Assert call count first so we catch any future
+    // Five limiters are constructed: chat + mobile prompt + mobile RAG +
+    // mobile feedback + auth. Assert call count first so we catch any future
     // limiter being added or removed silently.
-    expect(mockRateLimit).toHaveBeenCalledTimes(4);
+    expect(mockRateLimit).toHaveBeenCalledTimes(5);
 
     const chatConfig = mockRateLimit.mock.calls[0][0] as Record<string, unknown>;
     expect(chatConfig.limit).toBe(20);
@@ -210,6 +210,61 @@ describe("rateLimiter — feedbackRateLimit config", () => {
     await import("./rateLimiter.js");
 
     const config = mockRateLimit.mock.calls[3][0] as Record<string, unknown>;
+    expect(config.standardHeaders).toBe("draft-8");
+    expect(config.legacyHeaders).toBe(false);
+  });
+});
+
+describe("rateLimiter — authRateLimit config", () => {
+  beforeEach(() => {
+    mockRateLimit.mockClear();
+    vi.resetModules();
+  });
+
+  it("constructs with 20 requests per 60 seconds", async () => {
+    // Abuse backstop for the non-browser auth path (Turnstile is web-only).
+    // 20/min per IP throttles credential-stuffing without blocking a busy
+    // shared-IP kitchen.
+    await import("./rateLimiter.js");
+
+    const config = mockRateLimit.mock.calls[4][0] as Record<string, unknown>;
+    expect(config.limit).toBe(20);
+    expect(config.windowMs).toBe(60 * 1000);
+  });
+
+  it("hashes the IP for keying (privacy invariant) — never stores a raw IP", async () => {
+    await import("./rateLimiter.js");
+
+    const config = mockRateLimit.mock.calls[4][0] as {
+      keyGenerator: (req: { ip?: string; headers?: Record<string, string> }) => string;
+    };
+    const key = config.keyGenerator({ ip: "1.2.3.4", headers: {} });
+    expect(key.startsWith("auth-ip-")).toBe(true);
+    expect(key).not.toContain("1.2.3.4");
+    // No IP at all → falls back to a hashed "unknown".
+    const unknownKey = config.keyGenerator({ headers: {} });
+    expect(unknownKey.startsWith("auth-ip-")).toBe(true);
+  });
+
+  it("prefers Cloudflare's CF-Connecting-IP over req.ip (spoof-resistant behind CF)", async () => {
+    await import("./rateLimiter.js");
+
+    const config = mockRateLimit.mock.calls[4][0] as {
+      keyGenerator: (req: { ip?: string; headers?: Record<string, string> }) => string;
+    };
+    // When CF-Connecting-IP is present it keys on that, NOT the (proxy) req.ip.
+    const cfKey = config.keyGenerator({ ip: "10.0.0.1", headers: { "cf-connecting-ip": "203.0.113.7" } });
+    const directKey = config.keyGenerator({ ip: "203.0.113.7", headers: {} });
+    // Same real client IP via either path → same bucket; raw IP never leaks.
+    expect(cfKey).toBe(directKey);
+    expect(cfKey).not.toContain("203.0.113.7");
+    expect(cfKey).not.toContain("10.0.0.1");
+  });
+
+  it("returns standardised draft-8 rate limit headers", async () => {
+    await import("./rateLimiter.js");
+
+    const config = mockRateLimit.mock.calls[4][0] as Record<string, unknown>;
     expect(config.standardHeaders).toBe("draft-8");
     expect(config.legacyHeaders).toBe(false);
   });

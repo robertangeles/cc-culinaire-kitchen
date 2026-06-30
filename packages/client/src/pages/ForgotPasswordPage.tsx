@@ -5,18 +5,26 @@
  * registered email address. Shows a confirmation message on success.
  */
 
-import { useState, type FormEvent } from "react";
+import { useState, useRef, type FormEvent } from "react";
 import { Link } from "react-router";
 import { Mail, Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
+import { TurnstileWidget, type TurnstileHandle } from "../components/auth/TurnstileWidget.js";
 
 export function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Turnstile (bot protection)
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const turnstileRef = useRef<TurnstileHandle>(null);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    if (!turnstileToken) {
+      setError("Please complete the security check.");
+      return;
+    }
     setError("");
     setIsSubmitting(true);
 
@@ -24,7 +32,7 @@ export function ForgotPasswordPage() {
       const res = await fetch("/api/auth/forgot-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email, turnstileToken }),
       });
 
       if (!res.ok) {
@@ -35,6 +43,9 @@ export function ForgotPasswordPage() {
       setSuccess(true);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+      // Turnstile tokens are single-use — reset so the user can retry.
+      turnstileRef.current?.reset();
+      setTurnstileToken(null);
     } finally {
       setIsSubmitting(false);
     }
@@ -96,9 +107,11 @@ export function ForgotPasswordPage() {
               />
             </div>
 
+            <TurnstileWidget ref={turnstileRef} onToken={setTurnstileToken} />
+
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isSubmitting || !turnstileToken}
               className="w-full flex items-center justify-center gap-2 py-2.5 text-sm font-medium text-white bg-[#D4A574] rounded-lg hover:bg-[#C4956A] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {isSubmitting && <Loader2 className="size-4 animate-spin" />}

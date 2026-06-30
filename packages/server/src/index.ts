@@ -60,19 +60,39 @@ const port = PORT;
 // Stripe webhook needs raw body — must be before express.json()
 app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), handleWebhook);
 
-// Trust first proxy (Railway / Nginx) so req.ip returns the real client IP
-app.set("trust proxy", 1);
+// How many proxy hops sit in front of Express, so req.ip (and the rate
+// limiters keyed on it) resolve the real client IP and can't be X-Forwarded-For
+// spoofed. Configurable because the count changes with the ingress: a single
+// platform proxy (Render/Railway/Nginx) is 1, but adding Cloudflare in front is
+// usually 2. Set TRUST_PROXY (or PROD_TRUST_PROXY) to match production; it
+// accepts a hop count, "true"/"false", or a comma-separated IP/CIDR allowlist.
+// Default 1 preserves the prior single-proxy behaviour.
+const TRUST_PROXY_RAW = process.env.TRUST_PROXY ?? "1";
+const trustProxy: number | boolean | string[] = /^\d+$/.test(TRUST_PROXY_RAW)
+  ? parseInt(TRUST_PROXY_RAW, 10)
+  : TRUST_PROXY_RAW === "true"
+    ? true
+    : TRUST_PROXY_RAW === "false"
+      ? false
+      : TRUST_PROXY_RAW.split(",").map((s) => s.trim());
+app.set("trust proxy", trustProxy);
 
 // Middleware
+// `https://challenges.cloudflare.com` is required for Cloudflare Turnstile on
+// the auth pages: scriptSrc loads its api.js, frameSrc hosts the challenge
+// iframe, connectSrc is its verification beacon. Without these the widget can't
+// load and (fail-closed) web auth would be locked out. The Express server
+// serves the built SPA, so this CSP governs the React app's pages too.
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
       imgSrc: ["'self'", "data:", "https://res.cloudinary.com", "blob:"],
-      scriptSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "https://challenges.cloudflare.com"],
+      frameSrc: ["'self'", "https://challenges.cloudflare.com"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
-      connectSrc: ["'self'", "https://res.cloudinary.com", "wss:", "ws:"],
+      connectSrc: ["'self'", "https://res.cloudinary.com", "https://challenges.cloudflare.com", "wss:", "ws:"],
     },
   },
 }));

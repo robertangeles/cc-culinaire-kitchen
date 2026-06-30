@@ -101,3 +101,41 @@ export const feedbackRateLimit = rateLimit({
   },
   message: { error: "rate_limited" },
 });
+
+/**
+ * Rate limiter for the unauthenticated auth endpoints
+ * (`POST /api/auth/login`, `/register`, `/forgot-password`).
+ *
+ * 20 requests per minute per IP. This is the abuse backstop for the
+ * *non-browser* path: Cloudflare Turnstile is enforced only on requests
+ * that carry a browser `Origin` header (web), so native/scripted clients
+ * skip the captcha. This limiter throttles credential-stuffing and
+ * password-reset spam from those clients without blocking a busy
+ * shared-IP kitchen during a shift change.
+ *
+ * The IP is stored as a one-way SHA-256 hash so the in-memory key store
+ * never holds a recoverable IP for login attempts.
+ *
+ * Client IP resolution prefers Cloudflare's `CF-Connecting-IP` header: when the
+ * app is fronted by Cloudflare (with the origin locked to Cloudflare IPs / via
+ * Authenticated Origin Pulls), that header is set at the edge and cannot be
+ * spoofed by the client — making it more trustworthy than `req.ip`, which
+ * depends on the `trust proxy` hop count being exactly right. Falls back to
+ * `req.ip` when the header is absent (e.g. local dev or no Cloudflare).
+ */
+export const authRateLimit = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 20,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  keyGenerator: (req: Request) => {
+    const cfIp = req.headers["cf-connecting-ip"];
+    const ip =
+      (typeof cfIp === "string" && cfIp.length > 0 ? cfIp : null) ??
+      req.ip ??
+      "unknown";
+    const hash = createHash("sha256").update(ip).digest("hex").slice(0, 32);
+    return `auth-ip-${hash}`;
+  },
+  message: { error: "Too many attempts — please wait a minute before trying again." },
+});

@@ -42,7 +42,7 @@ describe("AuthContext — defensive JSON parsing", () => {
 
     await expect(
       act(async () => {
-        await result.current.register("Bob", "bob@test.com", "Password1");
+        await result.current.register("Bob", "bob@test.com", "Password1", "turnstile-tok");
       }),
     ).rejects.toThrow("Registration failed");
   });
@@ -62,7 +62,7 @@ describe("AuthContext — defensive JSON parsing", () => {
 
     await expect(
       act(async () => {
-        await result.current.register("Bob", "bob@test.com", "Password1");
+        await result.current.register("Bob", "bob@test.com", "Password1", "turnstile-tok");
       }),
     ).rejects.toThrow("Email already exists");
   });
@@ -83,7 +83,7 @@ describe("AuthContext — defensive JSON parsing", () => {
 
     let data: any;
     await act(async () => {
-      data = await result.current.register("Bob", "bob@test.com", "Password1");
+      data = await result.current.register("Bob", "bob@test.com", "Password1", "turnstile-tok");
     });
 
     expect(data).toEqual(
@@ -106,7 +106,7 @@ describe("AuthContext — defensive JSON parsing", () => {
 
     await expect(
       act(async () => {
-        await result.current.login("bob@test.com", "Password1");
+        await result.current.login("bob@test.com", "Password1", "turnstile-tok");
       }),
     ).rejects.toThrow("Login failed");
   });
@@ -126,7 +126,7 @@ describe("AuthContext — defensive JSON parsing", () => {
 
     await expect(
       act(async () => {
-        await result.current.login("bob@test.com", "wrong");
+        await result.current.login("bob@test.com", "wrong", "turnstile-tok");
       }),
     ).rejects.toThrow("Invalid credentials");
   });

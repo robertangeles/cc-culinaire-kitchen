@@ -35,6 +35,7 @@ import {
   AlertTriangle,
   Clock,
   Cloud,
+  ShieldCheck,
   Zap,
   Layers,
 } from "lucide-react";
@@ -64,6 +65,7 @@ const CATEGORY_ICONS: Record<string, typeof KeyRound> = {
   email: Mail,
   payments: CreditCard,
   security: Shield,
+  cloudflare: ShieldCheck,
   database: Database,
   cloudinary: Cloud,
 };

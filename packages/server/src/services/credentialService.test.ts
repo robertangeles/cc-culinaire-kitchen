@@ -78,6 +78,23 @@ describe("credentialService", () => {
     expect(CREDENTIAL_REGISTRY.GEMINI_API_KEY).toBeUndefined();
   });
 
+  it("CREDENTIAL_REGISTRY includes Cloudflare Turnstile keys with correct sensitivity", async () => {
+    const { CREDENTIAL_REGISTRY } = await import("./credentialService.js");
+    // Site key is public (ships to the browser) — must NOT be masked.
+    expect(CREDENTIAL_REGISTRY.CLOUDFLARE_TURNSTILE_SITE_KEY).toBeDefined();
+    expect(CREDENTIAL_REGISTRY.CLOUDFLARE_TURNSTILE_SITE_KEY.category).toBe("cloudflare");
+    expect(CREDENTIAL_REGISTRY.CLOUDFLARE_TURNSTILE_SITE_KEY.sensitive).toBe(false);
+    // Secret key is used server-side only — must be masked.
+    expect(CREDENTIAL_REGISTRY.CLOUDFLARE_TURNSTILE_SECRET_KEY).toBeDefined();
+    expect(CREDENTIAL_REGISTRY.CLOUDFLARE_TURNSTILE_SECRET_KEY.category).toBe("cloudflare");
+    expect(CREDENTIAL_REGISTRY.CLOUDFLARE_TURNSTILE_SECRET_KEY.sensitive).toBe(true);
+  });
+
+  it("CREDENTIAL_CATEGORIES exposes the cloudflare tab", async () => {
+    const { CREDENTIAL_CATEGORIES } = await import("./credentialService.js");
+    expect(CREDENTIAL_CATEGORIES.some((c) => c.id === "cloudflare")).toBe(true);
+  });
+
   it("maskSecret works correctly via crypto util", async () => {
     const { maskSecret } = await import("../utils/crypto.js");
     expect(maskSecret("sk-ant-secret-1234")).toBe("••••1234");

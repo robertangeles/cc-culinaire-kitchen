@@ -46,6 +46,10 @@ export const CREDENTIAL_REGISTRY: Record<string, CredentialMeta> = {
   STRIPE_PRICE_YEARLY:     { category: "payments", label: "Stripe Yearly Price ID",  sensitive: false },
   RECAPTCHA_SITE_KEY:      { category: "security", label: "reCAPTCHA Site Key",      sensitive: false },
   RECAPTCHA_SECRET_KEY:    { category: "security", label: "reCAPTCHA Secret Key",    sensitive: true },
+  // Cloudflare Turnstile — bot protection for login, registration, and password reset.
+  // Site key is public (ships to the browser); secret key is used server-side for verification.
+  CLOUDFLARE_TURNSTILE_SITE_KEY:   { category: "cloudflare", label: "Turnstile Site Key",   sensitive: false },
+  CLOUDFLARE_TURNSTILE_SECRET_KEY: { category: "cloudflare", label: "Turnstile Secret Key", sensitive: true },
   DATABASE_URL:            { category: "database", label: "Database Connection URL", sensitive: true },
   CLOUDINARY_CLOUD_NAME:   { category: "cloudinary", label: "Cloud Name",           sensitive: false },
   CLOUDINARY_API_KEY:      { category: "cloudinary", label: "API Key",              sensitive: true },
@@ -59,6 +63,7 @@ export const CREDENTIAL_CATEGORIES = [
   { id: "email",    label: "Email" },
   { id: "payments", label: "Payments" },
   { id: "security", label: "Security" },
+  { id: "cloudflare", label: "Cloudflare" },
   { id: "database", label: "Database" },
   { id: "cloudinary", label: "Cloudinary (Images)" },
 ];
