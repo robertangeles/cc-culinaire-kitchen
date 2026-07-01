@@ -122,6 +122,14 @@ export function requirePermission(...perms: string[]) {
       return;
     }
 
+    // Administrators are superusers — implicit all-access. This prevents a new
+    // permission from silently locking admins out of a feature until someone
+    // remembers to grant it to the Administrator role in the seed.
+    if (req.user.roles.includes("Administrator")) {
+      next();
+      return;
+    }
+
     const hasPerm = req.user.permissions.some((p) => perms.includes(p));
     if (!hasPerm) {
       res.status(403).json({ error: "Insufficient permissions." });

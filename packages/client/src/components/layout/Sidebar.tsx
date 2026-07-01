@@ -8,10 +8,12 @@
 
 import { useState } from "react";
 import { Link, NavLink } from "react-router";
-import { ChefHat, UtensilsCrossed, Croissant, GlassWater, MessageSquare, LayoutGrid, BookMarked, MessagesSquare, BarChart3, Leaf, ClipboardList, ChevronDown, ChevronRight, Package, ShoppingCart } from "lucide-react";
+import { ChefHat, ChevronDown, ChevronRight } from "lucide-react";
 import { useSettings } from "../../context/SettingsContext.js";
 import { useAuth } from "../../context/AuthContext.js";
 import { UserMenu } from "./UserMenu.js";
+import { NAV_SECTIONS, filterNav, type NavItem } from "./navConfig.js";
+import { LocationChip } from "../location/LocationChip.js";
 
 /** Shared Tailwind class builder for sidebar nav links. */
 const navLinkClass = ({ isActive }: { isActive: boolean }) =>
@@ -51,73 +53,52 @@ function SidebarGroup({
   );
 }
 
-/** Grouped sidebar navigation */
-function SidebarNav({ isGuest, isAuthenticated }: { isGuest: boolean; isAuthenticated: boolean }) {
+/** A single nav link rendered from a config item. */
+function NavItemLink({ item }: { item: NavItem }) {
+  const Icon = item.icon;
+  return (
+    <NavLink to={item.to} className={navLinkClass}>
+      <Icon className="size-4" />
+      {item.label}
+    </NavLink>
+  );
+}
+
+/**
+ * Grouped sidebar navigation, rendered from {@link NAV_SECTIONS} filtered to
+ * what the current viewer is allowed to see. Sections with a `null` label are
+ * top-level (ungrouped); the rest render as collapsible groups. Empty sections
+ * are already dropped by `filterNav`.
+ */
+function SidebarNav({
+  isGuest,
+  isAuthenticated,
+  permissions,
+  roles,
+}: {
+  isGuest: boolean;
+  isAuthenticated: boolean;
+  permissions: string[];
+  roles: string[];
+}) {
+  const sections = filterNav(NAV_SECTIONS, { isGuest, isAuthenticated, permissions, roles });
   return (
     <nav className="px-3 pt-4 flex flex-col gap-1 overflow-y-auto">
-      {/* Always visible */}
-      <NavLink to="/chat/new" className={navLinkClass}>
-        <MessageSquare className="size-4" />
-        Chat Assistant
-      </NavLink>
-
-      {/* Creative Labs */}
-      <SidebarGroup label="Creative Labs">
-        <NavLink to="/recipes" className={navLinkClass}>
-          <UtensilsCrossed className="size-4" />
-          Recipe Lab
-        </NavLink>
-        <NavLink to="/patisserie" className={navLinkClass}>
-          <Croissant className="size-4" />
-          Patisserie Lab
-        </NavLink>
-        <NavLink to="/spirits" className={navLinkClass}>
-          <GlassWater className="size-4" />
-          Spirits Lab
-        </NavLink>
-      </SidebarGroup>
-
-      {/* Kitchen Operations — auth required */}
-      {!isGuest && isAuthenticated && (
-        <SidebarGroup label="Kitchen Operations">
-          <NavLink to="/my-shelf" className={navLinkClass}>
-            <BookMarked className="size-4" />
-            My Recipe Book
-          </NavLink>
-          <NavLink to="/inventory" className={navLinkClass}>
-            <Package className="size-4" />
-            Stock Room
-          </NavLink>
-          <NavLink to="/purchasing" className={navLinkClass}>
-            <ShoppingCart className="size-4" />
-            Purchasing
-          </NavLink>
-          <NavLink to="/menu-intelligence" className={navLinkClass}>
-            <BarChart3 className="size-4" />
-            Menu Intelligence
-          </NavLink>
-          <NavLink to="/kitchen-copilot" className={navLinkClass}>
-            <ClipboardList className="size-4" />
-            Kitchen Copilot
-          </NavLink>
-          <NavLink to="/waste-intelligence" className={navLinkClass}>
-            <Leaf className="size-4" />
-            Waste Intelligence
-          </NavLink>
-        </SidebarGroup>
+      {sections.map((section) =>
+        section.label === null ? (
+          <div key={section.id} className="flex flex-col gap-0.5">
+            {section.items.map((item) => (
+              <NavItemLink key={item.id} item={item} />
+            ))}
+          </div>
+        ) : (
+          <SidebarGroup key={section.id} label={section.label}>
+            {section.items.map((item) => (
+              <NavItemLink key={item.id} item={item} />
+            ))}
+          </SidebarGroup>
+        ),
       )}
-
-      {/* Community */}
-      <SidebarGroup label="Community">
-        <NavLink to="/kitchen-shelf" className={navLinkClass}>
-          <LayoutGrid className="size-4" />
-          CulinAIre Recipe Book
-        </NavLink>
-        <NavLink to="/bench" className={navLinkClass}>
-          <MessagesSquare className="size-4" />
-          The Bench
-        </NavLink>
-      </SidebarGroup>
     </nav>
   );
 }
@@ -129,6 +110,8 @@ function SidebarNav({ isGuest, isAuthenticated }: { isGuest: boolean; isAuthenti
 export function Sidebar() {
   const { settings } = useSettings();
   const { user, isGuest } = useAuth();
+  const permissions = user?.permissions ?? [];
+  const roles = user?.roles ?? [];
   const pageTitle = settings.page_title || "CulinAIre";
   const logoPath = settings.logo_path;
   const sidebarBg = settings.sidebar_bg || undefined;
@@ -159,8 +142,11 @@ export function Sidebar() {
         </span>
       </Link>
 
+      {/* Active kitchen anchor — which location am I in (multi-location only) */}
+      <LocationChip />
+
       {/* Module navigation */}
-      <SidebarNav isGuest={isGuest} isAuthenticated={!!user} />
+      <SidebarNav isGuest={isGuest} isAuthenticated={!!user} permissions={permissions} roles={roles} />
 
       {/* Spacer — pushes settings + user menu to the bottom */}
       <div className="flex-1" />

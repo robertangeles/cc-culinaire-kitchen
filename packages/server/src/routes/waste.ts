@@ -6,7 +6,7 @@
  */
 
 import { Router } from "express";
-import { authenticate } from "../middleware/auth.js";
+import { authenticate, requirePermission } from "../middleware/auth.js";
 import {
   handleLogWaste,
   handleGetWasteLogs,
@@ -20,8 +20,9 @@ import {
 
 export const wasteRouter = Router();
 
-// All waste routes require authentication
+// All waste routes require authentication + the Waste module permission.
 wasteRouter.use(authenticate);
+wasteRouter.use(requirePermission("waste:read"));
 
 // Summary must be before /:id to avoid route collision
 wasteRouter.get("/summary", handleGetWasteSummary);

@@ -4,6 +4,10 @@ Append-only. Newest entry on top.
 
 ---
 
+## 2026-07-01 — Role-aware, kitchen-native navigation (branch: feature/ck-web/role-aware-nav)
+
+CEO review (`/plan-ceo-review`, SELECTIVE EXPANSION) of the sidebar found two root causes behind "it works but something's off": the nav was grouped by the codebase (Creative Labs / Kitchen Operations / Community) not the user's day, and it showed all 12 items to everyone despite a full role + permission system. Rebuilt the sidebar as a data-driven, permission-filtered config (`navConfig.ts` + pure `filterNav` + `useHasPermission`) and renamed to kitchen vernacular (Ask Antoine, Test Kitchen, Run the Kitchen, Menu & Costing, Prep, Waste, Community Recipes). Added new permission keys `menu:read` / `waste:read` / `prep:manage`, enforced them on the previously `authenticate`-only routes (`/api/menu`, `/api/waste`, `/api/prep`) via existing `requirePermission`, and wrapped the matching client routes in `RequirePermission`. Added a sidebar location chip (E1) and per-role landing route (E2). Outside-voice review caught the rollout gap: `scripts/backfillNavPermissions.ts` grants the new keys to every existing role and MUST run before enforcement deploys (a test-user cleanup runs first). New page [[role-aware-navigation]]. Verified: client tsc + server tsc clean, 33 client + 418 server tests pass, build + lint (0 errors) green. Deferred: test-user audit/cleanup (needs DB + PII-decryption confirmation), persona rename to Antoine in systemPrompt.md, mobile nav (web is desktop-only by decision).
+
 ## 2026-07-01 — MFA consolidated into Profile → Security tab
 
 **What was done**

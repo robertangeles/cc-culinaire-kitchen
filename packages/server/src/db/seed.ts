@@ -137,6 +137,10 @@ async function seed() {
     { permissionKey: "purchasing:approve", permissionDescription: "Approve or reject purchase orders above spend threshold (HQ only)" },
     { permissionKey: "purchasing:receive", permissionDescription: "Start receiving sessions and confirm delivery receipt" },
     { permissionKey: "purchasing:credit", permissionDescription: "Log credit notes against delivery discrepancies" },
+    // Kitchen Operations module permissions (gate the Menu & Costing, Waste, and Prep modules)
+    { permissionKey: "menu:read", permissionDescription: "View Menu & Costing — menu engineering, food cost %, and P&L per item" },
+    { permissionKey: "waste:read", permissionDescription: "View Waste analytics and log wastage" },
+    { permissionKey: "prep:manage", permissionDescription: "Create and manage Prep (mise en place) sessions and tasks" },
   ];
 
   for (const p of defaultPermissions) {
@@ -161,12 +165,19 @@ async function seed() {
       "chat:access", "chat:unlimited", "org:create-organisation", "org:manage-organisation",
       "inventory:count", "inventory:manage", "inventory:transfer", "inventory:hq",
       "purchasing:draft", "purchasing:submit", "purchasing:approve", "purchasing:receive", "purchasing:credit",
+      "menu:read", "waste:read", "prep:manage",
     ],
-    Subscriber: ["chat:access", "org:create-organisation", "inventory:count", "purchasing:draft", "purchasing:receive"],
+    // Default tiers are solo operators (chef + owner in one) — they keep full module
+    // access. Staff differentiation (BOH/FOH) is done via custom roles that omit these.
+    Subscriber: [
+      "chat:access", "org:create-organisation", "inventory:count", "purchasing:draft", "purchasing:receive",
+      "menu:read", "waste:read", "prep:manage",
+    ],
     "Paid Subscriber": [
       "chat:access", "chat:unlimited", "org:create-organisation", "org:manage-organisation",
       "inventory:count", "inventory:manage", "inventory:transfer",
       "purchasing:draft", "purchasing:submit", "purchasing:receive", "purchasing:credit",
+      "menu:read", "waste:read", "prep:manage",
     ],
   };
 

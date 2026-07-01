@@ -12,6 +12,7 @@ import { AuthProvider, useAuth } from "./context/AuthContext.js";
 import { ConversationProvider } from "./context/ConversationContext.js";
 import { ChatStreamProvider } from "./context/ChatStreamContext.js";
 import { ProtectedRoute } from "./components/auth/ProtectedRoute.js";
+import { RequirePermission } from "./components/auth/RequirePermission.js";
 import { BackgroundStreamBanner } from "./components/chat/BackgroundStreamBanner.js";
 import { Sidebar } from "./components/layout/Sidebar.js";
 import { ConversationSidebar } from "./components/layout/ConversationSidebar.js";
@@ -155,11 +156,11 @@ export function App() {
                           <Route path="/patisserie" element={<RecipeLabPage key="patisserie" domain="patisserie" />} />
                           <Route path="/spirits" element={<RecipeLabPage key="spirits" domain="spirits" />} />
                           <Route path="/my-shelf" element={<AuthenticatedOnly><MyShelfPage /></AuthenticatedOnly>} />
-                          <Route path="/menu-intelligence" element={<AuthenticatedOnly><LocationGate><KitchenOpsLayout><MenuIntelligencePage /></KitchenOpsLayout></LocationGate></AuthenticatedOnly>} />
-                          <Route path="/waste-intelligence" element={<AuthenticatedOnly><LocationGate><KitchenOpsLayout><WasteIntelligencePage /></KitchenOpsLayout></LocationGate></AuthenticatedOnly>} />
-                          <Route path="/kitchen-copilot" element={<AuthenticatedOnly><LocationGate><KitchenOpsLayout><KitchenCopilotPage /></KitchenOpsLayout></LocationGate></AuthenticatedOnly>} />
-                          <Route path="/inventory" element={<AuthenticatedOnly><LocationGate><KitchenOpsLayout><InventoryPage /></KitchenOpsLayout></LocationGate></AuthenticatedOnly>} />
-                          <Route path="/purchasing" element={<AuthenticatedOnly><LocationGate><KitchenOpsLayout><PurchasingPage /></KitchenOpsLayout></LocationGate></AuthenticatedOnly>} />
+                          <Route path="/menu-intelligence" element={<AuthenticatedOnly><RequirePermission anyOf={["menu:read"]}><LocationGate><KitchenOpsLayout><MenuIntelligencePage /></KitchenOpsLayout></LocationGate></RequirePermission></AuthenticatedOnly>} />
+                          <Route path="/waste-intelligence" element={<AuthenticatedOnly><RequirePermission anyOf={["waste:read"]}><LocationGate><KitchenOpsLayout><WasteIntelligencePage /></KitchenOpsLayout></LocationGate></RequirePermission></AuthenticatedOnly>} />
+                          <Route path="/kitchen-copilot" element={<AuthenticatedOnly><RequirePermission anyOf={["prep:manage"]}><LocationGate><KitchenOpsLayout><KitchenCopilotPage /></KitchenOpsLayout></LocationGate></RequirePermission></AuthenticatedOnly>} />
+                          <Route path="/inventory" element={<AuthenticatedOnly><RequirePermission anyOf={["inventory:count", "inventory:manage", "inventory:transfer", "inventory:hq"]}><LocationGate><KitchenOpsLayout><InventoryPage /></KitchenOpsLayout></LocationGate></RequirePermission></AuthenticatedOnly>} />
+                          <Route path="/purchasing" element={<AuthenticatedOnly><RequirePermission anyOf={["purchasing:draft", "purchasing:submit", "purchasing:approve", "purchasing:receive", "purchasing:credit"]}><LocationGate><KitchenOpsLayout><PurchasingPage /></KitchenOpsLayout></LocationGate></RequirePermission></AuthenticatedOnly>} />
                           <Route path="/bench" element={<BenchPage />} />
                           <Route path="/kitchen-shelf" element={<RecipeGalleryPage />} />
                           <Route path="/kitchen-shelf/:id" element={<RecipeDetailPage />} />

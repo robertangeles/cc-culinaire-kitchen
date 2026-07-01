@@ -33,9 +33,9 @@ export interface AuthUser {
   permissions: string[];
 }
 
-/** Result of login: either success or MFA challenge. */
+/** Result of login: either success (with the user) or MFA challenge. */
 export type LoginResult =
-  | { requiresMfa: false }
+  | { requiresMfa: false; user: AuthUser }
   | { requiresMfa: true; mfaSessionToken: string };
 
 /** Guest session usage info. */
@@ -62,7 +62,7 @@ interface AuthContextValue {
   /** Refresh guest usage info. */
   refreshGuestUsage: () => Promise<void>;
   login: (email: string, password: string, turnstileToken: string) => Promise<LoginResult>;
-  completeMfaLogin: (mfaSessionToken: string, code: string) => Promise<void>;
+  completeMfaLogin: (mfaSessionToken: string, code: string) => Promise<AuthUser>;
   register: (name: string, email: string, password: string, turnstileToken: string) => Promise<{ message: string }>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
@@ -304,14 +304,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { requiresMfa: true, mfaSessionToken: data.mfaSessionToken as string };
       }
 
-      setUser(data.user as AuthUser);
+      const loggedInUser = data.user as AuthUser;
+      setUser(loggedInUser);
       // Clear guest state on login
       localStorage.removeItem(GUEST_TOKEN_KEY);
       setGuestToken(null);
       setGuestUsage(null);
       lastRefreshTime.current = Date.now();
       startRefreshLoop();
-      return { requiresMfa: false };
+      return { requiresMfa: false, user: loggedInUser };
     },
     [startRefreshLoop],
   );
@@ -345,12 +346,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         );
       }
 
-      setUser(data.user as AuthUser);
+      const verifiedUser = data.user as AuthUser;
+      setUser(verifiedUser);
       localStorage.removeItem(GUEST_TOKEN_KEY);
       setGuestToken(null);
       setGuestUsage(null);
       lastRefreshTime.current = Date.now();
       startRefreshLoop();
+      return verifiedUser;
     },
     [startRefreshLoop],
   );
