@@ -607,6 +607,54 @@ Routes must never call LLM APIs directly.
 
 ------------------------------------------------------------------------
 
+# Access Control — Permission-Driven by Default
+
+Every feature that exposes data or actions is gated by a **permission**, never by
+a hardcoded role name. Access is checked against the user's `permissions[]`
+(populated at login from their roles). The one exception is the **Administrator**
+role, which is a **superuser with implicit all-access** — it bypasses every
+`requirePermission` check on the server ([middleware/auth.ts](packages/server/src/middleware/auth.ts))
+and every client permission check (`useHasPermission`, `filterNav`). This means a
+newly-added permission can never silently lock admins out; it does NOT mean access
+is automatic for anyone else. Non-admin roles get a new permission ONLY when you
+explicitly grant it.
+
+Nav-hiding is UX only. **Hiding a sidebar item is never access control** — the
+server route is the security boundary. Every gated nav item MUST have a matching
+server `requirePermission` AND a client route guard.
+
+## Checklist — adding a new permission (do ALL steps)
+
+When a new feature needs access control, wire all of the following. Missing one is
+the common bug (e.g. seeded but not enforced, or enforced but not shown in the UI).
+
+1. **Define the key.** Add `"<domain>:<action>"` (e.g. `orders:read`,
+   `orders:manage`) to `defaultPermissions` in `packages/server/src/db/schema`-backed
+   `db/seed.ts`. Split read vs write (`:read` / `:manage`) unless there is a reason not to.
+2. **Grant to the right non-admin roles.** Add the key to `rolePermMappings` in
+   `db/seed.ts` for each default role that should have it (Subscriber / Paid
+   Subscriber). Administrator does NOT need it listed (superuser bypass), but keep
+   the seed complete for clarity.
+3. **Seed it.** `pnpm --filter @culinaire/server db:seed`. This inserts the key into
+   the `permission` table — which is also what makes it appear in the
+   **Settings → Roles** editor. An unseeded key is invisible to role admins.
+4. **Enforce it — all three layers:**
+   - Server: `requirePermission("<key>")` on the route(s) in `routes/`.
+   - Client route: wrap the route element in `RequirePermission anyOf={["<key>"]}`
+     in `App.tsx`.
+   - Nav: add the item to `components/layout/navConfig.ts` with
+     `gate: { anyPermission: ["<key>"] }`.
+5. **Backfill existing installs.** If the feature ships to a DB that already has
+   roles (prod), write a one-time idempotent script under `server/src/scripts/`
+   (pattern: `backfillNavPermissions.ts`) that grants the key to the intended
+   existing roles, and run it BEFORE the enforcing code deploys (else existing
+   users 403). Wrap the grant loop in a transaction.
+6. **Test the boundary.** Add an integration test asserting 403 without the
+   permission, 200 with it, 401 without a token, and pass for Administrator
+   (pattern: `routes/navPermissions.test.ts`).
+
+------------------------------------------------------------------------
+
 # Documentation
 
 Documentation location:

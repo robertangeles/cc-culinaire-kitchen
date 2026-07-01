@@ -52,6 +52,7 @@ Categories: **entity** (named things) · **concept** (patterns) · **decision** 
 | [Formula Catalog](concepts/formula-catalog.md) | Complete catalog of every formula in the cost, stock, prep, and forecasting engine with forward/backward proofs | 2026-06-01 |
 | [Reconciliation Matrix](concepts/reconciliation-matrix.md) | Cross-reference of stock-affecting and cost-affecting operations, balance rules, and cross-operation invariants | 2026-06-01 |
 | [Cloudflare Turnstile Bot Protection](concepts/turnstile-bot-protection.md) | Hard-enforced Turnstile on login/register/forgot-password; DB-managed keys via Settings → Integrations → Cloudflare; fail-closed verification | 2026-06-30 |
+| [Role-Aware Navigation](concepts/role-aware-navigation.md) | Data-driven, permission-filtered sidebar + kitchen-native rename; server+client enforcement of new `menu:read`/`waste:read`/`prep:manage`; ordered backfill rollout | 2026-07-01 |
 
 ## Decisions
 | Page | Summary | Created |
