@@ -23,21 +23,26 @@ const navLinkClass = ({ isActive }: { isActive: boolean }) =>
       : "text-[#999999] hover:text-[#FAFAFA] hover:bg-[#161616]"
   }`;
 
-/** Collapsible group header */
+/**
+ * Collapsible group header. Open/closed state is controlled by the parent
+ * ({@link SidebarNav}) so the groups behave as an accordion — expanding one
+ * collapses the others.
+ */
 function SidebarGroup({
   label,
-  defaultOpen = true,
+  open,
+  onToggle,
   children,
 }: {
   label: string;
-  defaultOpen?: boolean;
+  open: boolean;
+  onToggle: () => void;
   children: React.ReactNode;
 }) {
-  const [open, setOpen] = useState(defaultOpen);
   return (
     <div className="mb-1">
       <button
-        onClick={() => setOpen((o) => !o)}
+        onClick={onToggle}
         className="flex items-center gap-1.5 w-full px-3 py-1.5 text-xs font-medium text-[#666666] uppercase tracking-wider hover:text-[#999999] transition-colors"
       >
         {open ? <ChevronDown className="size-3 text-[#666666]" /> : <ChevronRight className="size-3 text-[#666666]" />}
@@ -82,6 +87,10 @@ function SidebarNav({
   roles: string[];
 }) {
   const sections = filterNav(NAV_SECTIONS, { isGuest, isAuthenticated, permissions, roles });
+  // Accordion: at most one group open at a time. Clicking an open group closes
+  // it; clicking a closed group opens it and collapses the rest. Groups start
+  // collapsed so only headers show until the user picks one.
+  const [openSectionId, setOpenSectionId] = useState<string | null>(null);
   return (
     <nav className="px-3 pt-4 flex flex-col gap-1 overflow-y-auto">
       {sections.map((section) =>
@@ -92,7 +101,14 @@ function SidebarNav({
             ))}
           </div>
         ) : (
-          <SidebarGroup key={section.id} label={section.label}>
+          <SidebarGroup
+            key={section.id}
+            label={section.label}
+            open={openSectionId === section.id}
+            onToggle={() =>
+              setOpenSectionId((current) => (current === section.id ? null : section.id))
+            }
+          >
             {section.items.map((item) => (
               <NavItemLink key={item.id} item={item} />
             ))}
@@ -137,12 +153,10 @@ export function Sidebar() {
           <ChefHat className="size-12 text-[#D4A574]" />
         )}
         <span className="font-semibold text-lg truncate text-center w-full text-[#FAFAFA] tracking-tight">{pageTitle}</span>
-        <span className="text-[10px] font-medium text-[#D4A574] bg-[#D4A574]/15 border border-[#D4A574]/20 px-1.5 py-0.5 rounded-full">
-          Open Beta
-        </span>
       </Link>
 
-      {/* Active kitchen anchor — which location am I in (multi-location only) */}
+      {/* Active kitchen anchor — which location am I in — sits directly under the
+          title in place of the old "Open Beta" badge (multi-location only). */}
       <LocationChip />
 
       {/* Module navigation */}

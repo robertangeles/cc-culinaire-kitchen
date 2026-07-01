@@ -6,7 +6,7 @@
  * permissions — a line cook sees the line tools, an owner sees menu/orders/
  * money. This is UX only; the security boundary is server-side middleware.
  *
- * Labels are kitchen-native on purpose (Ask Antoine, Test Kitchen, Prep, …).
+ * Labels are kitchen-native on purpose (Ask Antoine, Food Laboratory, Prep, …).
  * Changing a `label` here is a display-only change — never change `to` (route
  * paths) here, and never rename a route's `guideKey`.
  */
@@ -59,7 +59,7 @@ export interface NavSection {
 
 /**
  * The full navigation. Order is intentional: the front door (Ask Antoine)
- * first, then R&D (Test Kitchen), then daily ops (Run the Kitchen), then
+ * first, then R&D (Food Laboratory), then daily ops (Run the Kitchen), then
  * Community.
  */
 export const NAV_SECTIONS: NavSection[] = [
@@ -72,7 +72,7 @@ export const NAV_SECTIONS: NavSection[] = [
   },
   {
     id: "test-kitchen",
-    label: "Test Kitchen",
+    label: "Food Laboratory",
     items: [
       { id: "recipe-lab", label: "Recipe Lab", icon: UtensilsCrossed, to: "/recipes", gate: "guest-ok" },
       { id: "pastry-lab", label: "Pastry Lab", icon: Croissant, to: "/patisserie", gate: "guest-ok" },

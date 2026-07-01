@@ -28,8 +28,11 @@ The `Administrator` role bypasses every permission check — server (`requirePer
 
 ## Also in this change
 - Assistant renamed **"Ask Antoine"** in the nav (persona lives in `prompts/chatbot/systemPrompt.md`, currently unnamed/"CulinAIre" — renaming the on-disk persona is a follow-up).
-- Group/item renames: Test Kitchen (Recipe/Pastry/Cocktail Lab), Run the Kitchen (My Recipe Book, Stock Room, Ordering, Menu & Costing, Prep, Waste), Community (Community Recipes, The Bench).
-- **Location chip** (`components/location/LocationChip.tsx`) surfaces the active kitchen and opens the existing Ctrl+L switcher via a custom event.
+- Group/item renames: Food Laboratory (Recipe/Pastry/Cocktail Lab), Run the Kitchen (My Recipe Book, Stock Room, Ordering, Menu & Costing, Prep, Waste), Community (Community Recipes, The Bench).
+- **Location chip** (`components/location/LocationChip.tsx`) surfaces the active kitchen and opens the existing Ctrl+L switcher via a custom event. It sits directly under the sidebar title, in the slot the removed "Open Beta" badge used to occupy.
+
+## Accordion group behaviour
+Sidebar groups are an **accordion**: at most one group is expanded at a time. Open/closed state is lifted into `SidebarNav` (a single `openSectionId`), and `SidebarGroup` is now a controlled component (`open` + `onToggle` props, no internal `useState`). Clicking a collapsed group opens it and collapses the others; clicking the open group closes it. Groups start collapsed so only the headers (Food Laboratory, Run the Kitchen, Community) show until the user picks one. The ungrouped "Ask Antoine" item (section `label: null`) is always visible.
 - **Per-role landing** (`lib/landing.ts`): admins with `menu:read` land on Menu & Costing; everyone else on chat.
 
 ## Explicitly out of scope
