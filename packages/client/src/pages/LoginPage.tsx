@@ -12,6 +12,7 @@ import { useAuth } from "../context/AuthContext.js";
 import { useSettings } from "../context/SettingsContext.js";
 import { OAuthButtons } from "../components/auth/OAuthButtons.js";
 import { TurnstileWidget, type TurnstileHandle } from "../components/auth/TurnstileWidget.js";
+import { computeLandingRoute } from "../lib/landing.js";
 
 export function LoginPage() {
   const { login, completeMfaLogin } = useAuth();
@@ -50,7 +51,7 @@ export function LoginPage() {
       if (result.requiresMfa) {
         setMfaSessionToken(result.mfaSessionToken);
       } else {
-        navigate("/chat/new");
+        navigate(computeLandingRoute(result.user));
       }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Login failed");
@@ -69,8 +70,8 @@ export function LoginPage() {
     setIsSubmitting(true);
 
     try {
-      await completeMfaLogin(mfaSessionToken, mfaCode);
-      navigate("/chat/new");
+      const verifiedUser = await completeMfaLogin(mfaSessionToken, mfaCode);
+      navigate(computeLandingRoute(verifiedUser));
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "MFA verification failed");
     } finally {

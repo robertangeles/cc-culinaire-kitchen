@@ -10,6 +10,9 @@ import { MapPin, Search, X } from "lucide-react";
 import { useLocation } from "../../context/LocationContext";
 import { LocationPulse } from "./LocationPulse";
 
+/** Custom event that opens the switcher (dispatched by the sidebar location chip). */
+export const OPEN_LOCATION_SWITCHER_EVENT = "culinaire:open-location-switcher";
+
 const CLASSIFICATION_COLORS: Record<string, string> = {
   hq: "bg-amber-600",
   branch: "bg-blue-500",
@@ -55,8 +58,17 @@ export function LocationSwitcher() {
         setSearch("");
       }
     }
+    function handleOpenEvent() {
+      setIsOpen(true);
+      setSearch("");
+      setSelectedIndex(0);
+    }
     window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    window.addEventListener(OPEN_LOCATION_SWITCHER_EVENT, handleOpenEvent);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener(OPEN_LOCATION_SWITCHER_EVENT, handleOpenEvent);
+    };
   }, [isOpen]);
 
   // Focus search on open
