@@ -29,13 +29,13 @@ const groups: FeatureGroup[] = [
       },
       {
         icon: "\u{1F950}",
-        name: "Patisserie Lab",
+        name: "Pastry Lab",
         description:
           "Precision pastry intelligence. Ratios, hydration, fermentation, tempering. What generic AI gets wrong, this gets right.",
       },
       {
         icon: "\u{1F378}",
-        name: "Spirits Lab",
+        name: "Cocktail Lab",
         description:
           "Cocktail structures, flavour pairing, and spirits fundamentals for restaurants with serious beverage programs.",
       },
@@ -46,7 +46,7 @@ const groups: FeatureGroup[] = [
     features: [
       {
         icon: "\u{1F4CB}",
-        name: "Kitchen Copilot",
+        name: "Prep",
         description:
           "Plan today\u2019s prep before you touch a knife. Prioritised tasks, cross-usage analysis, high-impact dishes flagged first.",
       },
@@ -58,19 +58,19 @@ const groups: FeatureGroup[] = [
       },
       {
         icon: "\u{1F6D2}",
-        name: "Purchasing",
+        name: "Ordering",
         description:
           "Draft POs from par-level suggestions. Mobile receiving in 90 seconds. Discrepancy logging that protects your margins.",
       },
       {
         icon: "\u{1F4CA}",
-        name: "Menu Intelligence",
+        name: "Menu & Costing",
         description:
           "See which dishes make you money and which ones don\u2019t. Stars, Puzzles, Workhorses, Dogs \u2014 know your menu mix.",
       },
       {
         icon: "\u267B\uFE0F",
-        name: "Waste Intelligence",
+        name: "Waste",
         description:
           "End-of-service leftovers get a plan, not a bin. Log waste, see the cost impact, get AI-powered reuse ideas.",
       },

@@ -21,17 +21,17 @@ const CLASSIFICATION_BADGE: Record<string, { bg: string; label: string }> = {
 
 const MODULE_MAP: Record<string, string> = {
   "/inventory": "Stock Room",
-  "/purchasing": "Purchasing",
-  "/menu-intelligence": "Menu Intelligence",
-  "/kitchen-copilot": "Kitchen Copilot",
-  "/waste-intelligence": "Waste Intelligence",
+  "/purchasing": "Ordering",
+  "/menu-intelligence": "Menu & Costing",
+  "/kitchen-copilot": "Prep",
+  "/waste-intelligence": "Waste",
 };
 
 function getModuleName(pathname: string): string {
   for (const [prefix, name] of Object.entries(MODULE_MAP)) {
     if (pathname.startsWith(prefix)) return name;
   }
-  return "Kitchen Operations";
+  return "Run the Kitchen";
 }
 
 export function KitchenOpsToolbar() {

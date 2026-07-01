@@ -21,25 +21,25 @@ const timeline: TimelineEntry[] = [
   },
   {
     time: "10 am",
-    module: "Kitchen Copilot",
+    module: "Prep",
     description:
       "<b>Prioritised task list for today\u2019s service.</b> Mirepoix flagged as cross-use across 4 dishes \u2014 prep once. Beef stock needs to start now for a 4-hour simmer. No guessing. No crumpled ticket.",
   },
   {
     time: "2 pm",
-    module: "Menu Intelligence",
+    module: "Menu & Costing",
     description:
       "Quick menu review before the dinner rush. <b>Pork Belly: Star dish \u2014 high margin, high popularity.</b> Duck Confit: Puzzle \u2014 good margin but slow moving. Time to promote or rethink.",
   },
   {
     time: "4 pm",
-    module: "AI Culinary Assistant",
+    module: "Ask Antoine",
     description:
       "New sauce isn\u2019t emulsifying right before service. <b>Type it in. Get a fix in seconds</b> \u2014 from an AI that understands culinary science, not a food blog SEO article.",
   },
   {
     time: "10 pm",
-    module: "Waste Intelligence",
+    module: "Waste",
     description:
       "End of service. 4kg of carrot trim, 2kg of duck confit leftover. <b>Log the waste. AI surfaces 3 reuse ideas for tomorrow.</b> Nothing goes in the bin without a plan first.",
   },

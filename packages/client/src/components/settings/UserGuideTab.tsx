@@ -20,9 +20,9 @@ interface Guide {
 }
 
 const SUB_TABS = [
-  { key: "waste_intelligence", label: "Waste Intelligence" },
-  { key: "kitchen_copilot", label: "Kitchen Copilot" },
-  { key: "menu_intelligence", label: "Menu Intelligence" },
+  { key: "waste_intelligence", label: "Waste" },
+  { key: "kitchen_copilot", label: "Prep" },
+  { key: "menu_intelligence", label: "Menu & Costing" },
 ] as const;
 
 type GuideKey = (typeof SUB_TABS)[number]["key"];

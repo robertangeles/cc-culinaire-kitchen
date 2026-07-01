@@ -226,7 +226,7 @@ export function KitchenCopilotPage() {
       <div className="flex-1 overflow-y-auto bg-[#0A0A0A]">
         <div className="min-h-full flex flex-col items-center justify-center p-6 md:p-10">
           <ClipboardList className="size-12 mx-auto mb-4 text-[#D4A574]" />
-          <h1 className="text-2xl md:text-3xl font-bold text-white mb-2">Kitchen Copilot</h1>
+          <h1 className="text-2xl md:text-3xl font-bold text-white mb-2">Prep</h1>
           <p className="text-[#999999] mb-6 text-center max-w-md">
             Sign up to plan your kitchen prep, track cross-usage, and identify high-impact dishes.
           </p>
@@ -248,7 +248,7 @@ export function KitchenCopilotPage() {
         {/* Header */}
         <div className="text-center mb-8">
           <ClipboardList className="size-10 mx-auto mb-3 text-[#D4A574]" />
-          <h1 className="text-2xl md:text-3xl font-bold text-white">Kitchen Copilot</h1>
+          <h1 className="text-2xl md:text-3xl font-bold text-white">Prep</h1>
           <p className="text-[#999999] mt-2">
             {orgContext?.hasOrg && orgContext.orgName
               ? `${orgContext.orgName} Kitchen`

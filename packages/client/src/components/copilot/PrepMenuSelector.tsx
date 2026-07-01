@@ -551,7 +551,7 @@ export function PrepMenuSelector({ sessionId, onGenerated }: Props) {
       {!menuData.hasMenuItems && (
         <div className="bg-[#D4A574]/10 border border-[#D4A574]/20 rounded-xl p-4 mb-6">
           <p className="text-sm text-[#D4A574]">
-            Set up your menu in Menu Intelligence for classification badges and cost data.
+            Set up your menu in Menu &amp; Costing for classification badges and cost data.
           </p>
         </div>
       )}
