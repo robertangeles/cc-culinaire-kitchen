@@ -595,7 +595,16 @@ export async function handleGoogleCallback(
     setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
 
     logger.info({ userId: authUser.userId }, "User logged in via Google");
-    res.redirect(`${CLIENT_URL}/chat/new`);
+    // Per-role landing, mirroring the client computeLandingRoute rule
+    // (packages/client/src/lib/landing.ts): anyone who can see Menu & Costing
+    // starts there, everyone else on chat. Administrators are superusers
+    // (implicit menu:read), so they land there too. Keep both rules in sync.
+    const isAdmin = authUser.roles?.includes("Administrator");
+    const landing =
+      isAdmin || authUser.permissions?.includes("menu:read")
+        ? "/menu-intelligence"
+        : "/chat/new";
+    res.redirect(`${CLIENT_URL}${landing}`);
   } catch (err) {
     logger.error(err, "Google OAuth callback failed");
     res.redirect(`${CLIENT_URL}/login?error=oauth_failed`);

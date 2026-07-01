@@ -6,7 +6,7 @@
  */
 
 import { Router } from "express";
-import { authenticate } from "../middleware/auth.js";
+import { authenticate, requirePermission } from "../middleware/auth.js";
 import {
   handleCreateSession,
   handleGetTodaySession,
@@ -26,8 +26,9 @@ import {
 
 export const prepRouter = Router();
 
-// All prep routes require authentication
+// All prep routes require authentication + the Prep module permission.
 prepRouter.use(authenticate);
+prepRouter.use(requirePermission("prep:manage"));
 
 // Named routes must be before parameterized routes to avoid collision
 prepRouter.get("/menu", handleGetMenuForSelection);

@@ -7,7 +7,7 @@
 
 import { Router } from "express";
 import multer from "multer";
-import { authenticate } from "../middleware/auth.js";
+import { authenticate, requirePermission } from "../middleware/auth.js";
 import {
   handleListMenuItems,
   handleCreateMenuItem,
@@ -34,6 +34,9 @@ export const menuIntelligenceRouter = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 
 menuIntelligenceRouter.use(authenticate);
+// Gate the whole module on the Menu & Costing permission (read gate covers the
+// module for v1; a menu:manage write split is a documented follow-up).
+menuIntelligenceRouter.use(requirePermission("menu:read"));
 
 // Menu items
 menuIntelligenceRouter.get("/items", handleListMenuItems);
