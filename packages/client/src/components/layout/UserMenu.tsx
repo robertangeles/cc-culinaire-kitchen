@@ -7,7 +7,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router";
-import { User, ShieldCheck, LogOut, ChevronUp, Settings } from "lucide-react";
+import { User, LogOut, ChevronUp, Settings } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.js";
 
 export function UserMenu({ compact = false }: { compact?: boolean }) {
@@ -56,13 +56,6 @@ export function UserMenu({ compact = false }: { compact?: boolean }) {
               <User className="size-4" />
               Profile
             </button>
-            <button
-              onClick={() => { navigate("/mfa-setup"); setOpen(false); }}
-              className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-[#E5E5E5] hover:bg-[#2A2A2A] transition-colors"
-            >
-              <ShieldCheck className="size-4" />
-              MFA Settings
-            </button>
             {isAdmin && (
               <button
                 onClick={() => { navigate("/settings"); setOpen(false); }}
@@ -110,13 +103,6 @@ export function UserMenu({ compact = false }: { compact?: boolean }) {
           >
             <User className="size-4" />
             Profile
-          </button>
-          <button
-            onClick={() => { navigate("/mfa-setup"); setOpen(false); }}
-            className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-[#E5E5E5] hover:bg-[#2A2A2A] transition-colors"
-          >
-            <ShieldCheck className="size-4" />
-            MFA Settings
           </button>
           {isAdmin && (
             <button

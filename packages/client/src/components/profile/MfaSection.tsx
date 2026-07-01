@@ -1,14 +1,18 @@
 /**
- * @module pages/MfaSetupPage
+ * @module components/profile/MfaSection
  *
- * Allows authenticated users to set up, enable, or disable TOTP MFA.
- * Displays a QR code for scanning with an authenticator app.
+ * Two-Factor Authentication controls, rendered inline inside the
+ * Profile → Security tab. Lets an authenticated user set up, enable,
+ * or disable TOTP MFA. On enable/disable it refreshes the app-wide
+ * auth user so `user.mfaEnabled` stays in sync everywhere.
  */
 
 import { useState, useEffect, type FormEvent } from "react";
 import { ShieldCheck, ShieldOff, Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
+import { useAuth } from "../../context/AuthContext.js";
 
-export function MfaSetupPage() {
+export function MfaSection() {
+  const { refreshUser } = useAuth();
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [secret, setSecret] = useState<string | null>(null);
   const [code, setCode] = useState("");
@@ -74,6 +78,7 @@ export function MfaSetupPage() {
       setSecret(null);
       setCode("");
       setSuccess("MFA has been enabled successfully.");
+      await refreshUser();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Enable failed");
     } finally {
@@ -94,6 +99,7 @@ export function MfaSetupPage() {
       if (!res.ok) throw new Error(data.error ?? "Disable failed");
       setMfaEnabled(false);
       setSuccess("MFA has been disabled.");
+      await refreshUser();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Disable failed");
     } finally {
@@ -101,38 +107,32 @@ export function MfaSetupPage() {
     }
   }
 
-  if (isChecking) {
-    return (
-      <div className="flex items-center justify-center p-12">
-        <Loader2 className="size-6 animate-spin text-[#999999]" />
-      </div>
-    );
-  }
-
   return (
-    <div className="max-w-lg mx-auto py-8 px-4">
-      <h1 className="text-xl font-bold text-[#FAFAFA] mb-6 flex items-center gap-2">
-        <ShieldCheck className="size-5" />
-        Two-Factor Authentication
-      </h1>
+    <div className="bg-[#161616] rounded-2xl border border-[#2A2A2A] p-6 space-y-4">
+      <div className="flex items-center gap-2">
+        <ShieldCheck className="size-4 text-[#D4A574]" />
+        <h3 className="text-sm font-semibold text-[#E5E5E5]">Two-Factor Authentication</h3>
+      </div>
 
       {error && (
-        <div className="flex items-center gap-2 text-sm text-red-400 bg-red-900/30 border border-red-700/40 rounded-lg px-3 py-2 mb-4">
-          <AlertCircle className="size-4 flex-shrink-0" />
-          {error}
+        <div className="flex items-center gap-2 text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
+          <AlertCircle className="size-4 flex-shrink-0" /> {error}
         </div>
       )}
 
       {success && (
-        <div className="flex items-center gap-2 text-sm text-green-400 bg-green-900/30 border border-green-700/40 rounded-lg px-3 py-2 mb-4">
-          <CheckCircle2 className="size-4 flex-shrink-0" />
-          {success}
+        <div className="flex items-center gap-2 text-sm text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-2">
+          <CheckCircle2 className="size-4 flex-shrink-0" /> {success}
         </div>
       )}
 
-      {mfaEnabled ? (
-        <div className="bg-[#161616] rounded-2xl shadow-lg shadow-black/20 border border-[#2A2A2A] p-6 space-y-4">
-          <div className="flex items-center gap-2 text-sm text-green-400 bg-green-900/30 border border-green-700/40 rounded-lg px-3 py-2">
+      {isChecking ? (
+        <div className="flex items-center justify-center py-6">
+          <Loader2 className="size-5 animate-spin text-[#999999]" />
+        </div>
+      ) : mfaEnabled ? (
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 text-sm text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-2">
             <ShieldCheck className="size-4 flex-shrink-0" />
             MFA is currently enabled on your account.
           </div>
@@ -146,7 +146,7 @@ export function MfaSetupPage() {
           </button>
         </div>
       ) : qrDataUrl ? (
-        <form onSubmit={handleEnable} className="bg-[#161616] rounded-2xl shadow-lg shadow-black/20 border border-[#2A2A2A] p-6 space-y-4">
+        <form onSubmit={handleEnable} className="space-y-4">
           <p className="text-sm text-[#E5E5E5]">
             Scan this QR code with your authenticator app (Google Authenticator, Authy, etc.):
           </p>
@@ -185,7 +185,7 @@ export function MfaSetupPage() {
           </button>
         </form>
       ) : (
-        <div className="bg-[#161616] rounded-2xl shadow-lg shadow-black/20 border border-[#2A2A2A] p-6 space-y-4">
+        <div className="space-y-4">
           <p className="text-sm text-[#E5E5E5]">
             Add an extra layer of security to your account by enabling two-factor authentication.
             You'll need an authenticator app like Google Authenticator or Authy.
