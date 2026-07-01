@@ -17,6 +17,8 @@ Moved MFA out of its scattered homes (a standalone `/mfa-setup` page reached via
 
 Backend MFA endpoints unchanged — pure frontend reorganisation. Verified: `tsc:check`, `vite build`, lint (0 errors), grep confirms no `mfa-setup`/`MfaSetupPage` refs remain. Updated [[features]].
 
+**Live QA + two latent bugs fixed.** Ran an authenticated browser pass (client :5179 / server :3009). It surfaced two client/server field-name mismatches carried over verbatim from the old `MfaSetupPage`, meaning the standalone MFA flow never actually worked: setup read `data.qrDataUrl` but the endpoint returns `qrCodeDataUrl` (QR never rendered), and enable sent `{ code }` but the server expects `{ token }` (authController.ts:636, always failed). Both `any`-typed so tsc/build/lint were blind. Fixed in `MfaSection.tsx`; verified full UI round-trip (Set Up → QR → TOTP → Enable → Disable) with `/api/auth/me` confirming the `mfaEnabled` round-trip. Lesson: type the `/api/auth/mfa/*` shapes in `shared/` so field drift fails at compile time.
+
 ## 2026-06-29 — Feature Catalog page added
 
 **What was done**
