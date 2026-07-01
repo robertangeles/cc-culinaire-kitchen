@@ -4,6 +4,21 @@ Append-only. Newest entry on top.
 
 ---
 
+## 2026-07-01 — MFA consolidated into Profile → Security tab
+
+**What was done**
+
+Moved MFA out of its scattered homes (a standalone `/mfa-setup` page reached via a sidebar "MFA Settings" dropdown item, plus a secondary "Manage MFA" button on the Account tab) into a single **Security** tab on the Profile page. The renamed tab (was "Change Password") now holds two section cards: Change Password (unchanged) and Two-Factor Authentication.
+
+- New `packages/client/src/components/profile/MfaSection.tsx` — MFA setup/enable/disable logic adapted from the deleted `MfaSetupPage.tsx`, now calls `refreshUser()` from AuthContext so `user.mfaEnabled` stays in sync app-wide.
+- `ProfilePage.tsx` — tab id `password` → `security`, label "Security" + ShieldCheck icon; removed the Account-tab "Manage MFA" button and the now-orphaned `useNavigate` import.
+- `UserMenu.tsx` — removed "MFA Settings" from both dropdown variants + unused `ShieldCheck` import.
+- `App.tsx` — removed `/mfa-setup` route + import; deleted `pages/MfaSetupPage.tsx`.
+
+Backend MFA endpoints unchanged — pure frontend reorganisation. Verified: `tsc:check`, `vite build`, lint (0 errors), grep confirms no `mfa-setup`/`MfaSetupPage` refs remain. Updated [[features]].
+
+**Live QA + two latent bugs fixed.** Ran an authenticated browser pass (client :5179 / server :3009). It surfaced two client/server field-name mismatches carried over verbatim from the old `MfaSetupPage`, meaning the standalone MFA flow never actually worked: setup read `data.qrDataUrl` but the endpoint returns `qrCodeDataUrl` (QR never rendered), and enable sent `{ code }` but the server expects `{ token }` (authController.ts:636, always failed). Both `any`-typed so tsc/build/lint were blind. Fixed in `MfaSection.tsx`; verified full UI round-trip (Set Up → QR → TOTP → Enable → Disable) with `/api/auth/me` confirming the `mfaEnabled` round-trip. Lesson: type the `/api/auth/mfa/*` shapes in `shared/` so field drift fails at compile time.
+
 ## 2026-06-29 — Feature Catalog page added
 
 **What was done**

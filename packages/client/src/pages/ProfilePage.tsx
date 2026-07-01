@@ -6,7 +6,6 @@
  */
 
 import { useState, useEffect, useRef, type FormEvent, type ElementType, type KeyboardEvent } from "react";
-import { useNavigate } from "react-router";
 import {
   User,
   Users,
@@ -23,13 +22,14 @@ import {
   Info,
 } from "lucide-react";
 import { MyKitchenTab } from "../components/profile/MyKitchenTab.js";
+import { MfaSection } from "../components/profile/MfaSection.js";
 import { useAuth } from "../context/AuthContext.js";
 import { ImageCropModal } from "../components/ui/ImageCropModal.js";
 import { StoreLocationsSection } from "../components/location/StoreLocationsSection.js";
 
-const tabs: { id: "account" | "password" | "kitchen"; label: string; Icon: ElementType }[] = [
+const tabs: { id: "account" | "security" | "kitchen"; label: string; Icon: ElementType }[] = [
   { id: "account", label: "Account Details", Icon: User },
-  { id: "password", label: "Change Password", Icon: Key },
+  { id: "security", label: "Security", Icon: ShieldCheck },
   { id: "kitchen", label: "Profile", Icon: UtensilsCrossed },
 ];
 
@@ -323,10 +323,9 @@ function OrgBenchBanner({ orgId }: { orgId: number }) {
 
 export function ProfilePage() {
   const { user, refreshUser } = useAuth();
-  const navigate = useNavigate();
 
   // Tabs
-  const [activeTab, setActiveTab] = useState<"account" | "password" | "kitchen">("account");
+  const [activeTab, setActiveTab] = useState<"account" | "security" | "kitchen">("account");
 
   // Profile
   const [name, setName] = useState(user?.userName ?? "");
@@ -981,52 +980,52 @@ export function ProfilePage() {
                 {savingProfile && <Loader2 className="size-4 animate-spin inline mr-1" />}
                 Save
               </button>
-
-              <button
-                type="button"
-                onClick={() => navigate("/mfa-setup")}
-                className="px-4 py-2 text-sm font-medium text-[#D4A574] bg-[#D4A574]/10 border border-[#D4A574]/20 rounded-xl hover:bg-[#D4A574]/20 transition-colors flex items-center gap-1"
-              >
-                <ShieldCheck className="size-4" />
-                {user?.mfaEnabled ? "Manage MFA" : "Enable MFA"}
-              </button>
             </div>
           </form>
         )}
 
-        {/* Change Password Tab */}
-        {activeTab === "password" && (
-          <form onSubmit={handleChangePassword} role="tabpanel" id="profile-tabpanel-password" aria-labelledby="profile-tab-password" className="bg-[#161616] rounded-2xl border border-[#2A2A2A] p-6 space-y-4">
-            {passwordMsg && (
-              <div className="flex items-center gap-2 text-sm text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-2">
-                <CheckCircle2 className="size-4 flex-shrink-0" /> {passwordMsg}
+        {/* Security Tab — Change Password + Two-Factor Authentication */}
+        {activeTab === "security" && (
+          <div role="tabpanel" id="profile-tabpanel-security" aria-labelledby="profile-tab-security" className="space-y-4">
+            <form onSubmit={handleChangePassword} className="bg-[#161616] rounded-2xl border border-[#2A2A2A] p-6 space-y-4">
+              <div className="flex items-center gap-2">
+                <Key className="size-4 text-[#D4A574]" />
+                <h3 className="text-sm font-semibold text-[#E5E5E5]">Change Password</h3>
               </div>
-            )}
-            {passwordError && (
-              <div className="flex items-center gap-2 text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
-                <AlertCircle className="size-4 flex-shrink-0" /> {passwordError}
+
+              {passwordMsg && (
+                <div className="flex items-center gap-2 text-sm text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-2">
+                  <CheckCircle2 className="size-4 flex-shrink-0" /> {passwordMsg}
+                </div>
+              )}
+              {passwordError && (
+                <div className="flex items-center gap-2 text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
+                  <AlertCircle className="size-4 flex-shrink-0" /> {passwordError}
+                </div>
+              )}
+
+              <div>
+                <label className="block text-sm font-medium text-[#E5E5E5] mb-1">Current Password</label>
+                <input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} required className={inputClass} />
               </div>
-            )}
 
-            <div>
-              <label className="block text-sm font-medium text-[#E5E5E5] mb-1">Current Password</label>
-              <input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} required className={inputClass} />
-            </div>
+              <div>
+                <label className="block text-sm font-medium text-[#E5E5E5] mb-1">New Password</label>
+                <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required minLength={8} className={inputClass} placeholder="Min 8 chars" />
+              </div>
 
-            <div>
-              <label className="block text-sm font-medium text-[#E5E5E5] mb-1">New Password</label>
-              <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required minLength={8} className={inputClass} placeholder="Min 8 chars" />
-            </div>
+              <button
+                type="submit"
+                disabled={savingPassword}
+                className="px-4 py-2 text-sm font-medium text-[#0A0A0A] bg-[#D4A574] rounded-xl hover:bg-[#C4956A] disabled:opacity-50 transition-colors"
+              >
+                {savingPassword && <Loader2 className="size-4 animate-spin inline mr-1" />}
+                Change Password
+              </button>
+            </form>
 
-            <button
-              type="submit"
-              disabled={savingPassword}
-              className="px-4 py-2 text-sm font-medium text-[#0A0A0A] bg-[#D4A574] rounded-xl hover:bg-[#C4956A] disabled:opacity-50 transition-colors"
-            >
-              {savingPassword && <Loader2 className="size-4 animate-spin inline mr-1" />}
-              Change Password
-            </button>
-          </form>
+            <MfaSection />
+          </div>
         )}
 
         {/* Organisation Tab */}

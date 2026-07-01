@@ -2,7 +2,7 @@
 title: Feature Catalog
 category: synthesis
 created: 2026-06-29
-updated: 2026-06-29
+updated: 2026-07-01
 related: [[culinaire-kitchen-platform]], [[project-status]], [[store-locations-system]], [[prompt-system]]
 ---
 
@@ -106,7 +106,7 @@ The running-a-kitchen toolkit (authenticated, location-scoped). See [[store-loca
 ## 5. Accounts, Profile & Multi-Location
 
 - **Auth** — email/password, Google OAuth, email verification, forgot/reset password, **TOTP MFA**, guest tokens
-- **Profile** — edit details, photo upload + crop, change password, social links, bio
+- **Profile** — edit details, photo upload + crop, social links, bio; a **Security** tab consolidates change-password and TOTP MFA setup/enable/disable (MFA no longer a standalone `/mfa-setup` page or sidebar item)
 - **Organisations** — create/join via invite key, member roster, role assignment
 - **Store locations** — CRUD, staff assignment, operating hours, location pulse, multi-location data isolation (Ctrl+L switcher, location gate)
 - **Roles & permissions** — built-in roles (Administrator, Chef, User) + custom roles; 50+ granular permissions (`inventory:*`, `purchasing:*`, `admin:*`)
