@@ -50,7 +50,7 @@ export function MfaSection() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Setup failed");
-      setQrDataUrl(data.qrDataUrl);
+      setQrDataUrl(data.qrCodeDataUrl);
       setSecret(data.secret);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Setup failed");
@@ -69,7 +69,7 @@ export function MfaSection() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ code }),
+        body: JSON.stringify({ token: code }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Enable failed");
