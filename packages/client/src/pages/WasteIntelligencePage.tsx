@@ -62,7 +62,7 @@ export function WasteIntelligencePage() {
       <div className="flex-1 overflow-y-auto bg-[#0A0A0A]">
         <div className="min-h-full flex flex-col items-center justify-center p-6 md:p-10">
           <Leaf className="size-12 mx-auto mb-4 text-[#D4A574]" />
-          <h1 className="text-2xl md:text-3xl font-bold text-white mb-2">Waste Intelligence</h1>
+          <h1 className="text-2xl md:text-3xl font-bold text-white mb-2">Waste</h1>
           <p className="text-[#999999] mb-6 text-center max-w-md">
             Sign up to track kitchen waste, uncover cost savings, and get AI-powered reuse suggestions.
           </p>
@@ -84,7 +84,7 @@ export function WasteIntelligencePage() {
         {/* Header */}
         <div className="text-center mb-8">
           <Leaf className="size-10 mx-auto mb-3 text-[#D4A574]" />
-          <h1 className="text-2xl md:text-3xl font-bold text-white">Waste Intelligence</h1>
+          <h1 className="text-2xl md:text-3xl font-bold text-white">Waste</h1>
           <p className="text-[#999999] mt-2">
             {orgContext?.hasOrg && orgContext.orgName
               ? `${orgContext.orgName} Kitchen`

@@ -232,7 +232,7 @@ export function MenuIntelligencePage() {
         <div className="min-h-full flex flex-col items-center justify-center p-6 md:p-10">
           <BarChart3 className="size-12 mx-auto mb-4 text-[#D4A574]" />
           <h1 className="text-2xl md:text-3xl font-bold text-white mb-2">
-            Menu Intelligence
+            Menu &amp; Costing
           </h1>
           <p className="text-[#999999] mb-6 text-center max-w-md">
             Sign up to analyze your menu performance, find your Stars, and fix
@@ -259,7 +259,7 @@ export function MenuIntelligencePage() {
             <BarChart3 className="size-7 text-[#D4A574]" />
             <div>
               <h1 className="text-2xl font-bold text-[#FAFAFA]">
-                Menu Intelligence
+                Menu &amp; Costing
               </h1>
               <p className="text-sm text-[#999999]">
                 Analyze your menu. Find your Stars. Fix your Dogs.

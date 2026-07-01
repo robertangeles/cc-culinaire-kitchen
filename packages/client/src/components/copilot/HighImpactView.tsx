@@ -101,7 +101,7 @@ export function HighImpactView({ teamView }: Props) {
         <div className="flex items-start gap-3 bg-[#D4A574]/10 border border-[#D4A574]/20 rounded-lg px-4 py-3 mb-4">
           <Info className="size-4 text-[#D4A574] mt-0.5 flex-shrink-0" />
           <p className="text-sm text-[#D4A574]">
-            Set up your menu in Menu Intelligence for richer insights. Showing recipe library analysis.
+            Set up your menu in Menu &amp; Costing for richer insights. Showing recipe library analysis.
           </p>
         </div>
       )}

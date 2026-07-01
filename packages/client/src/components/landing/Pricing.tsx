@@ -2,12 +2,12 @@ import { motion } from "framer-motion";
 import { Link } from "react-router";
 
 const features = [
-  "AI Culinary Assistant \u2014 unlimited",
-  "Kitchen Copilot \u2014 daily prep planning",
-  "Recipe Lab, Patisserie Lab & Spirits Lab",
+  "Ask Antoine \u2014 unlimited culinary help",
+  "Prep \u2014 daily mise en place planning",
+  "Recipe Lab, Pastry Lab & Cocktail Lab",
   "Stock Room \u2014 full inventory management",
-  "Purchasing & mobile delivery receiving",
-  "Menu Intelligence & Waste Intelligence",
+  "Ordering & mobile delivery receiving",
+  "Menu & Costing plus Waste",
   "The Bench community & Kitchen Shelf",
   "Multi-location support & HQ dashboard",
 ];

@@ -57,7 +57,7 @@ export function NoLocationScreen() {
         <div className="text-center mb-8">
           <MapPin className="size-10 mx-auto mb-3 text-[#D4A574]" />
           <h1 className="text-2xl md:text-3xl font-bold text-white">
-            Kitchen Operations
+            Run the Kitchen
           </h1>
           <p className="text-[#999999] mt-2 max-w-lg mx-auto">
             You need to be assigned to a kitchen location to access this module.
@@ -158,7 +158,7 @@ export function NoLocationScreen() {
               </div>
               <p className="text-sm text-[#666666] leading-relaxed mb-3">
                 Create your first store location in your organisation settings
-                to unlock Kitchen Operations.
+                to unlock the Run the Kitchen tools.
               </p>
               <Link
                 to="/profile"

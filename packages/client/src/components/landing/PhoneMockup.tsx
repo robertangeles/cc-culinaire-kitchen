@@ -75,7 +75,7 @@ export function PhoneMockup() {
           {/* Header */}
           <div className="flex items-center justify-between">
             <h3 className="font-display text-base font-semibold text-white">
-              Kitchen Copilot
+              Prep
             </h3>
             <span className="flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-medium text-emerald-400">
               <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400" />
