@@ -395,3 +395,12 @@ During `/ship` review of the Turnstile branch, the API-contract reviewer caught 
 ## 2026-07-01 — Sidebar: rename Test Kitchen, accordion groups, location replaces Open Beta
 
 Three UX changes to the desktop sidebar ([[role-aware-navigation]]). (1) Renamed the "Test Kitchen" group to **Food Laboratory** in `navConfig.ts` (label + comments; route paths and `id` unchanged). (2) Turned the nav groups into an **accordion** — lifted open/closed state into `SidebarNav` as a single `openSectionId`, made `SidebarGroup` a controlled component (`open`/`onToggle`), so expanding one group collapses the rest; groups start collapsed. (3) Removed the **"Open Beta"** badge under the title so the `LocationChip` sits in its place. `tsc --noEmit` clean on `@culinaire/client`; `navConfig.test.ts` unaffected (no label assertions).
+
+## 2026-07-04 — Documented the Brain memory implementation plan
+
+Moved the approved, fully-reviewed plan for **the Brain** (per-user + per-org AI memory) into the repo so it survives across machines.
+
+- Added `docs/specs/brain-memory.md` — the canonical, resume-ready spec (native pgvector, two-tier scope, exact-scan recall, `recordMemory` never-rejects, flag-gated, phased 3 ways). Reviewed by CEO + Eng + Design + two outside-voice passes (16 findings folded).
+- Added `wiki/concepts/brain-memory-plan.md` + index entry as the discovery hook: "brief me on the current plan" → show `docs/specs/brain-memory.md`.
+- Added a pointer + Phase 1 task list to `tasks/todo.md`.
+- Next: implement Phase 1 (T1-T10 + D-T1..D-T3) on `feature/ck-web/brain-spine`.
