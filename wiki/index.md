@@ -53,6 +53,7 @@ Categories: **entity** (named things) · **concept** (patterns) · **decision** 
 | [Reconciliation Matrix](concepts/reconciliation-matrix.md) | Cross-reference of stock-affecting and cost-affecting operations, balance rules, and cross-operation invariants | 2026-06-01 |
 | [Cloudflare Turnstile Bot Protection](concepts/turnstile-bot-protection.md) | Hard-enforced Turnstile on login/register/forgot-password; DB-managed keys via Settings → Integrations → Cloudflare; fail-closed verification | 2026-06-30 |
 | [Role-Aware Navigation](concepts/role-aware-navigation.md) | Data-driven, permission-filtered sidebar + kitchen-native rename; server+client enforcement of new `menu:read`/`waste:read`/`prep:manage`; ordered backfill rollout | 2026-07-01 |
+| [Brain Memory Plan](concepts/brain-memory-plan.md) | Approved plan for the per-user+per-org AI memory layer (the Brain); full spec in `docs/specs/brain-memory.md`. "Brief me on the current plan" → show that file | 2026-07-04 |
 
 ## Decisions
 | Page | Summary | Created |

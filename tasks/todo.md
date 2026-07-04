@@ -154,3 +154,29 @@ _Nothing confirmed outstanding. New work to be defined._
 - [ ] Supplier portal (external supplier access to POs)
 - [ ] Compliance / HACCP logging
 - [ ] Rostering / Staff scheduling
+
+---
+
+## The Brain — per-user + per-org AI memory (APPROVED, ready to build)
+
+Canonical plan: **`docs/specs/brain-memory.md`** (CEO + Eng + Design reviewed, 2026-07-04). "Brief me on the current plan" → read that file.
+
+Build on `feature/ck-web/brain-spine`, verify against a local DB, then commit/push/merge per CLAUDE.md.
+
+**Phase 1 — user-scope spine (build first):**
+- [ ] T1 schema: `brain_memory` (+ nullable org col, `attempt_count`, `next_attempt_dttm`) + `unique(user_id, source_type, source_ref)` + btree indexes, NO ANN; `drizzle-kit push`
+- [ ] T2 seed `brain:read`/`brain:manage` + `brain_*` settings (OFF) + `backfillBrainPermissions.ts`
+- [ ] T3 `brainSanitize` + unit tests
+- [ ] T4 `recordMemory` (chat raw+embed, internal catch, never rejects) + `brainWorker` (SKIP LOCKED claim, `processing`, `attempt_count` backoff)
+- [ ] T5 chat capture after `saveMessages` (`void recordMemory(...)`)
+- [ ] T6 refactor `streamChat` awaits to `Promise.all` + CRITICAL byte-identical regression test
+- [ ] T7 `recallMemories` (exact scan, user-scope, `hasReadyMemory` gate, `sanitizeForPrompt`) spliced into `streamChat`
+- [ ] T8 "Your Brain" view/delete route + UI (consent baseline)
+- [ ] T9 wire + verify capture-error alert (Phase-1 exit criterion)
+- [ ] T10 user-isolation canary (A∦B) + never-rejects test + zero-org test + route auth tests
+- [ ] D-T1 `BrainGroundedChip` in chat (trust signal), ships with T7
+- [ ] D-T2 `BrainEmptyState` + `MemoryRow` + `ProvenanceChip` + interaction states
+- [ ] D-T3 responsive + a11y on the Your-Brain baseline
+
+**Phase 2:** org tier + ops capture + Labs/Copilot recall + rich Your-Brain UI + org-admin mgmt + org digests (T11-T15, D-T4).
+**Phase 3:** compaction + nudges + ranking tuning (T16-T18, D-T5).
