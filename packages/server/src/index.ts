@@ -49,6 +49,8 @@ import { cleanupStaleSessions } from "./services/guestService.js";
 import { purgeArchivedRecipes } from "./services/recipePersistenceService.js";
 import { getAllSettings } from "./services/settingsService.js";
 import { sendWeeklyWasteDigests } from "./services/wasteDigestService.js";
+import { runBrainWorkerTick, BRAIN_WORKER_INTERVAL_MS } from "./services/brainWorker.js";
+import { brainRouter } from "./routes/brain.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -161,6 +163,7 @@ app.use("/api/store-locations", storeLocationsRouter);
 app.use("/api/inventory", inventoryRouter);
 app.use("/api/internal", internalRouter);
 app.use("/api/notifications", notificationsRouter);
+app.use("/api/brain", brainRouter);
 
 // Location context routes are now inside usersRouter (before /:id params)
 
@@ -451,6 +454,20 @@ hydrateEnvFromCredentials().then(() => {
       setTimeout(runFeedbackEmailRetry, 30_000);
       const feedbackEmailInterval = setInterval(runFeedbackEmailRetry, 5 * 60 * 1000);
 
+      // Brain embedding worker — claims pending brain_memory rows and embeds
+      // them (SKIP LOCKED claim, attempt backoff). Inert while the
+      // brain_enabled site setting is "false", so the flags-off rollback
+      // leaves it doing nothing. Deferred 20 s so the server is warm first.
+      async function runBrainWorker() {
+        try {
+          await runBrainWorkerTick();
+        } catch (err) {
+          log.error({ err }, "Brain worker tick failed");
+        }
+      }
+      setTimeout(runBrainWorker, 20_000);
+      const brainWorkerInterval = setInterval(runBrainWorker, BRAIN_WORKER_INTERVAL_MS);
+
       // Weekly waste digest — Sunday 8 PM (check every minute)
       let lastWasteDigestRun = "";
       const wasteDigestInterval = setInterval(async () => {
@@ -474,6 +491,7 @@ hydrateEnvFromCredentials().then(() => {
         clearInterval(purgeInterval);
         clearInterval(wasteDigestInterval);
         clearInterval(feedbackEmailInterval);
+        clearInterval(brainWorkerInterval);
         httpServer.close(() => {
           log.info("Server closed");
           process.exit(0);

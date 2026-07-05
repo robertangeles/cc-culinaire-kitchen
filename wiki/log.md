@@ -404,3 +404,10 @@ Moved the approved, fully-reviewed plan for **the Brain** (per-user + per-org AI
 - Added `wiki/concepts/brain-memory-plan.md` + index entry as the discovery hook: "brief me on the current plan" → show `docs/specs/brain-memory.md`.
 - Added a pointer + Phase 1 task list to `tasks/todo.md`.
 - Next: implement Phase 1 (T1-T10 + D-T1..D-T3) on `feature/ck-web/brain-spine`.
+
+## 2026-07-05 — The Brain Phase 1 implemented (feature/ck-web/brain-spine)
+
+- Implemented the full Phase-1 user-scope spine from `docs/specs/brain-memory.md`: T1–T10 + D-T1..D-T3. New table `brain_memory` (pgvector, NO ANN — exact scan per E3), `brainSanitize`/`brainCaptureService`/`brainWorker`/`brainRecallService`/`brainService`, chat capture in `handleSaveMessages`, `streamChat` await-parallelisation + recall splice + `brain_grounded` annotation, "Your Brain" page (`/your-brain`) + `BrainGroundedChip`/`MemoryRow`/`ProvenanceChip`/`BrainEmptyState`, permissions + flags (OFF) + `backfillBrainPermissions.ts`, admin `GET /api/brain/stats`.
+- Verified: LIVE capture→embed→recall round-trip on local dev (Antoine recalled a prior-session hollandaise fix, grounded chip fired); curl auth matrix on all routes; browser walkthrough incl. 375px mobile, expand, delete, empty state; 21 Brain tests incl. A∦B isolation canary; full suites green (server 479 / client 42 / shared 51); tsc + lint + build clean. Flags reset to OFF (ship posture).
+- Deviations documented in the spec's new "Implementation status" appendix (worker claims pending-only; no Phase-1 resolveActiveOrg; targeted DDL script instead of drizzle-kit push; Brain-block fallback append when `{{KITCHEN_CONTEXT}}` is missing; per-item sanitizeForPrompt).
+- New wiki page: `entities/the-brain.md` (+ index entry). New lessons: #55 (admin-editable prompt lost the `{{KITCHEN_CONTEXT}}` placeholder — injection must not silently no-op; prod check required before enabling recall) and #56 (drizzle-kit push interactive/dangerous on this drifted DB — new tables ship as targeted idempotent DDL scripts; see `scripts/createBrainMemoryTable.ts`).

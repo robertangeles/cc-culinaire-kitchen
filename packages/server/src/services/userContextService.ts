@@ -184,8 +184,12 @@ export async function upsertProfile(
  * Sanitize freeform text before injecting into AI prompts.
  * Strips markdown headers, code fences, and instruction-like patterns
  * to mitigate prompt injection from profile fields.
+ *
+ * Exported for reuse by the Brain recall path (docs/specs/brain-memory.md):
+ * recalled memory titles/bodies pass through this guard again at injection
+ * time as defence-in-depth on top of the capture-side `brainSanitize`.
  */
-function sanitizeForPrompt(text: string | null): string {
+export function sanitizeForPrompt(text: string | null): string {
   if (!text) return "";
   return text
     .replace(/^#{1,6}\s/gm, "")       // Strip markdown headers

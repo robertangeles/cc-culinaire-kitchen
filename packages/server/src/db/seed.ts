@@ -141,6 +141,9 @@ async function seed() {
     { permissionKey: "menu:read", permissionDescription: "View Menu & Costing — menu engineering, food cost %, and P&L per item" },
     { permissionKey: "waste:read", permissionDescription: "View Waste analytics and log wastage" },
     { permissionKey: "prep:manage", permissionDescription: "Create and manage Prep (mise en place) sessions and tasks" },
+    // The Brain — per-user AI memory (docs/specs/brain-memory.md)
+    { permissionKey: "brain:read", permissionDescription: "View Your Brain — the memories CulinAIre has captured for you" },
+    { permissionKey: "brain:manage", permissionDescription: "Delete and correct Brain memories (own memories; org admins also manage org-shared memories)" },
   ];
 
   for (const p of defaultPermissions) {
@@ -166,18 +169,23 @@ async function seed() {
       "inventory:count", "inventory:manage", "inventory:transfer", "inventory:hq",
       "purchasing:draft", "purchasing:submit", "purchasing:approve", "purchasing:receive", "purchasing:credit",
       "menu:read", "waste:read", "prep:manage",
+      "brain:read", "brain:manage",
     ],
     // Default tiers are solo operators (chef + owner in one) — they keep full module
     // access. Staff differentiation (BOH/FOH) is done via custom roles that omit these.
+    // brain:read/brain:manage are a consent baseline: any user whose chat turns are
+    // captured must be able to view and delete their own memories.
     Subscriber: [
       "chat:access", "org:create-organisation", "inventory:count", "purchasing:draft", "purchasing:receive",
       "menu:read", "waste:read", "prep:manage",
+      "brain:read", "brain:manage",
     ],
     "Paid Subscriber": [
       "chat:access", "chat:unlimited", "org:create-organisation", "org:manage-organisation",
       "inventory:count", "inventory:manage", "inventory:transfer",
       "purchasing:draft", "purchasing:submit", "purchasing:receive", "purchasing:credit",
       "menu:read", "waste:read", "prep:manage",
+      "brain:read", "brain:manage",
     ],
   };
 
@@ -226,6 +234,16 @@ async function seed() {
     { key: "default_registered_sessions", value: "10" },
     { key: "recipe_archive_retention_days", value: "30" },
     { key: "recipes_per_page", value: "20" },
+    // The Brain — all flags ship OFF; rollout flips them in order:
+    // brain_enabled → brain_capture_enabled (corpus warms) → brain_recall_enabled.
+    // Rollback is flags → "false" (instant, no deploy).
+    { key: "brain_enabled", value: "false" },
+    { key: "brain_capture_enabled", value: "false" },
+    { key: "brain_recall_enabled", value: "false" },
+    { key: "brain_nudges_enabled", value: "false" },
+    // Phase 2 ops distillation model — verify the exact OpenRouter slug with a
+    // live call before any Phase 2 ship (per CLAUDE.md external-API rule).
+    { key: "brain_distillation_model", value: "anthropic/claude-haiku-4-5" },
   ];
 
   for (const s of defaultSettings) {

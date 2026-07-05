@@ -17,6 +17,7 @@ import {
   Croissant,
   GlassWater,
   BookMarked,
+  Brain,
   Package,
   ShoppingCart,
   BarChart3,
@@ -68,6 +69,13 @@ export const NAV_SECTIONS: NavSection[] = [
     label: null,
     items: [
       { id: "chat", label: "Ask Antoine", icon: MessageSquare, to: "/chat/new", gate: "guest-ok" },
+      {
+        id: "your-brain",
+        label: "Your Brain",
+        icon: Brain,
+        to: "/your-brain",
+        gate: { anyPermission: ["brain:read"] },
+      },
     ],
   },
   {

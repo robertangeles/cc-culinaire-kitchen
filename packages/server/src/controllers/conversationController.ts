@@ -27,6 +27,7 @@ import {
   updateGuestConversationTitle,
   deleteGuestConversation,
 } from "../services/conversationService.js";
+import { recordMemory } from "../services/brainCaptureService.js";
 
 const log = pino({ transport: { target: "pino-pretty" } });
 
@@ -213,6 +214,29 @@ export async function handleSaveMessages(
     }
 
     await saveMessages(id, parsed.data.messages);
+
+    // Brain capture (spec T5): remember this chat turn for the authenticated
+    // user. Fired AFTER the message write, as `void` — recordMemory catches
+    // internally and never rejects (spec E2), so a Brain failure can never
+    // break message persistence. Guests never record.
+    if (req.user) {
+      const turn = [...parsed.data.messages].sort(
+        (a, b) => a.messageSequence - b.messageSequence,
+      );
+      const firstUserMessage = turn.find((m) => m.messageRole === "user");
+      void recordMemory({
+        userId: req.user.sub,
+        sourceType: "chat",
+        title: firstUserMessage?.messageBody.slice(0, 120) ?? null,
+        rawContent: turn
+          .map(
+            (m) =>
+              `${m.messageRole === "user" ? "Cook asked" : "CulinAIre answered"}: ${m.messageBody}`,
+          )
+          .join("\n"),
+      });
+    }
+
     log.info({ id, count: parsed.data.messages.length }, "Messages saved");
     res.json({ success: true });
   } catch (err) {
