@@ -23,6 +23,13 @@ vi.mock("../db/index.js", () => ({
   db: { insert: vi.fn(() => ({ values: insertValues })) },
 }));
 
+// Controlled distillation verdict for the recordChatTurn gate.
+let mockVerdict = { remember: true, reason: "distilled-keep" };
+const shouldRememberSpy = vi.fn(async () => mockVerdict);
+vi.mock("./brainDistillService.js", () => ({
+  shouldRememberChatTurn: (...args: unknown[]) => shouldRememberSpy(...(args as [])),
+}));
+
 describe("brainCaptureService — recordMemory (never rejects, spec E2)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -85,6 +92,74 @@ describe("brainCaptureService — recordMemory (never rejects, spec E2)", () => 
 
     await expect(
       recordMemory({ userId: 7, sourceType: "chat", rawContent: "anything" }),
+    ).resolves.toBeUndefined();
+  });
+});
+
+describe("brainCaptureService — recordChatTurn (Balanced distillation gate)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    insertShouldThrow = false;
+    mockVerdict = { remember: true, reason: "distilled-keep" };
+    // Capture on; distillation on unless a test overrides.
+    mockSettings = {
+      brain_enabled: "true",
+      brain_capture_enabled: "true",
+      brain_distillation_enabled: "true",
+    };
+  });
+
+  it("STORES the turn when the judge says remember (insert happens)", async () => {
+    mockVerdict = { remember: true, reason: "distilled-keep" };
+    const { recordChatTurn } = await import("./brainCaptureService.js");
+    await recordChatTurn({ userId: 7, rawContent: "Cook asked: my pasta ratio is 100g/egg" });
+    expect(shouldRememberSpy).toHaveBeenCalledTimes(1);
+    expect(insertValues).toHaveBeenCalledTimes(1);
+  });
+
+  it("DROPS the turn (no insert) when the judge says skip", async () => {
+    mockVerdict = { remember: false, reason: "distilled-skip" };
+    const { recordChatTurn, getCaptureCounters } = await import("./brainCaptureService.js");
+    const before = getCaptureCounters().skipped;
+    await recordChatTurn({ userId: 7, rawContent: "Cook asked: what's my pasta ratio?" });
+    expect(shouldRememberSpy).toHaveBeenCalledTimes(1);
+    expect(insertValues).not.toHaveBeenCalled();
+    expect(getCaptureCounters().skipped).toBe(before + 1);
+  });
+
+  it("does NOT call the judge when distillation is off — raw pass-through to recordMemory", async () => {
+    mockSettings = {
+      brain_enabled: "true",
+      brain_capture_enabled: "true",
+      brain_distillation_enabled: "false",
+    };
+    const { recordChatTurn } = await import("./brainCaptureService.js");
+    await recordChatTurn({ userId: 7, rawContent: "Cook asked: what's my pasta ratio?" });
+    expect(shouldRememberSpy).not.toHaveBeenCalled();
+    expect(insertValues).toHaveBeenCalledTimes(1);
+  });
+
+  it("never records for guests and never spends a judge call", async () => {
+    const { recordChatTurn } = await import("./brainCaptureService.js");
+    await recordChatTurn({ userId: 0, rawContent: "guest turn" });
+    expect(shouldRememberSpy).not.toHaveBeenCalled();
+    expect(insertValues).not.toHaveBeenCalled();
+  });
+
+  it("is inert (no judge, no insert) while capture flags are off", async () => {
+    mockSettings = { brain_enabled: "true", brain_capture_enabled: "false" };
+    const { recordChatTurn } = await import("./brainCaptureService.js");
+    await recordChatTurn({ userId: 7, rawContent: "Cook asked: my pasta ratio is 100g/egg" });
+    expect(shouldRememberSpy).not.toHaveBeenCalled();
+    expect(insertValues).not.toHaveBeenCalled();
+  });
+
+  it("resolves (never rejects) — best-effort contract", async () => {
+    insertShouldThrow = true;
+    mockVerdict = { remember: true, reason: "distilled-keep" };
+    const { recordChatTurn } = await import("./brainCaptureService.js");
+    await expect(
+      recordChatTurn({ userId: 7, rawContent: "Cook asked: my pasta ratio is 100g/egg" }),
     ).resolves.toBeUndefined();
   });
 });

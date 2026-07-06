@@ -241,8 +241,11 @@ async function seed() {
     { key: "brain_capture_enabled", value: "false" },
     { key: "brain_recall_enabled", value: "false" },
     { key: "brain_nudges_enabled", value: "false" },
-    // Phase 2 ops distillation model — verify the exact OpenRouter slug with a
-    // live call before any Phase 2 ship (per CLAUDE.md external-API rule).
+    // Balanced capture-time keep/drop gate for chat memories (deviation from
+    // spec D10, pulled into Phase 1). OFF → raw capture, spec-faithful; ON →
+    // noise turns (retrieval questions, chit-chat) never get stored.
+    { key: "brain_distillation_enabled", value: "false" },
+    // Distillation model — slug verified live (anthropic/claude-haiku-4-5).
     { key: "brain_distillation_model", value: "anthropic/claude-haiku-4-5" },
   ];
 

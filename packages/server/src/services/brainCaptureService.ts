@@ -21,6 +21,7 @@ import pino from "pino";
 import { db } from "../db/index.js";
 import { brainMemory } from "../db/schema.js";
 import { sanitizeMemoryText } from "./brainSanitize.js";
+import { shouldRememberChatTurn } from "./brainDistillService.js";
 import { getAllSettings } from "./settingsService.js";
 
 const logger = pino({ name: "brainCaptureService" });
@@ -136,6 +137,73 @@ export async function recordMemory(input: RecordMemoryInput): Promise<void> {
         sourceRef: input.sourceRef ?? null,
       },
       "brain.capture.error — memory not recorded",
+    );
+  }
+}
+
+/** Input to {@link recordChatTurn}. */
+export interface RecordChatTurnInput {
+  /** Author/owner. Guests (userId <= 0) are never recorded. */
+  userId: number;
+  /** Optional short label shown in "Your Brain" (the first user message). */
+  title?: string | null;
+  /** The composed, sanitized chat turn ("Cook asked: … / CulinAIre answered: …"). */
+  rawContent: string;
+}
+
+/**
+ * Record a chat turn, passing it through the capture-time relevance gate
+ * (docs/specs/brain-memory.md — the distillation deviation from D10).
+ *
+ * When `brain_distillation_enabled` is on, a Balanced keep/drop judge decides
+ * whether the turn carries durable signal BEFORE it is inserted, so noise turns
+ * (pure retrieval questions, chit-chat) never appear in "Your Brain". When the
+ * flag is off, this is a straight pass-through to {@link recordMemory} — raw
+ * capture, identical to the pre-distillation behaviour.
+ *
+ * Best-effort like {@link recordMemory}: never throws. Callers fire it as
+ * `void recordChatTurn(...)` after the message write.
+ */
+export async function recordChatTurn(input: RecordChatTurnInput): Promise<void> {
+  try {
+    // Guests never record — skip the judge call too.
+    if (!input.userId || input.userId <= 0) {
+      captureCounters.skipped++;
+      return;
+    }
+
+    const settings = await getAllSettings();
+    // Capture disabled → do nothing (and never spend a judge call).
+    if (settings.brain_enabled !== "true" || settings.brain_capture_enabled !== "true") {
+      captureCounters.skipped++;
+      return;
+    }
+
+    // Relevance gate (Balanced). Fail-open inside shouldRememberChatTurn.
+    if (settings.brain_distillation_enabled === "true") {
+      const verdict = await shouldRememberChatTurn(input.rawContent);
+      if (!verdict.remember) {
+        captureCounters.skipped++;
+        logger.info(
+          { userId: input.userId, sourceType: "chat", reason: verdict.reason },
+          "brain.capture.distill_skip",
+        );
+        return;
+      }
+    }
+
+    await recordMemory({
+      userId: input.userId,
+      sourceType: "chat",
+      title: input.title ?? null,
+      rawContent: input.rawContent,
+    });
+  } catch (err) {
+    // Same best-effort contract as recordMemory — never break chat.
+    captureCounters.errors++;
+    logger.error(
+      { err, alert: "brain_capture_error", userId: input.userId, sourceType: "chat" },
+      "brain.capture.error — chat turn not recorded",
     );
   }
 }
