@@ -37,6 +37,7 @@ Categories: **entity** (named things) · **concept** (patterns) · **decision** 
 | Page | Summary | Created |
 |---|---|---|
 | [CulinAIre Kitchen Platform](entities/culinaire-kitchen-platform.md) | The product as a whole — chat, creative labs, kitchen ops, community | 2026-04-29 |
+| [The Brain (per-user AI memory)](entities/the-brain.md) | Phase-1 memory layer: chat capture → embed worker → recall into every prompt; Your Brain page; flag-gated | 2026-07-05 |
 | [Store Locations System](entities/store-locations-system.md) | Multi-location subsystem under each Organisation (HQ, Branch, Commissary, Satellite) | 2026-04-29 |
 | [Prompt System](entities/prompt-system.md) | Prompt registry, runtime guard, versioning, mobile fetch endpoint | 2026-04-29 |
 

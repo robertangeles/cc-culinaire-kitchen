@@ -163,20 +163,22 @@ Canonical plan: **`docs/specs/brain-memory.md`** (CEO + Eng + Design reviewed, 2
 
 Build on `feature/ck-web/brain-spine`, verify against a local DB, then commit/push/merge per CLAUDE.md.
 
-**Phase 1 — user-scope spine (build first):**
-- [ ] T1 schema: `brain_memory` (+ nullable org col, `attempt_count`, `next_attempt_dttm`) + `unique(user_id, source_type, source_ref)` + btree indexes, NO ANN; `drizzle-kit push`
-- [ ] T2 seed `brain:read`/`brain:manage` + `brain_*` settings (OFF) + `backfillBrainPermissions.ts`
-- [ ] T3 `brainSanitize` + unit tests
-- [ ] T4 `recordMemory` (chat raw+embed, internal catch, never rejects) + `brainWorker` (SKIP LOCKED claim, `processing`, `attempt_count` backoff)
-- [ ] T5 chat capture after `saveMessages` (`void recordMemory(...)`)
-- [ ] T6 refactor `streamChat` awaits to `Promise.all` + CRITICAL byte-identical regression test
-- [ ] T7 `recallMemories` (exact scan, user-scope, `hasReadyMemory` gate, `sanitizeForPrompt`) spliced into `streamChat`
-- [ ] T8 "Your Brain" view/delete route + UI (consent baseline)
-- [ ] T9 wire + verify capture-error alert (Phase-1 exit criterion)
-- [ ] T10 user-isolation canary (A∦B) + never-rejects test + zero-org test + route auth tests
-- [ ] D-T1 `BrainGroundedChip` in chat (trust signal), ships with T7
-- [ ] D-T2 `BrainEmptyState` + `MemoryRow` + `ProvenanceChip` + interaction states
-- [ ] D-T3 responsive + a11y on the Your-Brain baseline
+**Phase 1 — user-scope spine (SHIPPED 2026-07-05, branch `feature/ck-web/brain-spine`):**
+- [x] T1 schema: `brain_memory` (+ nullable org col, `attempt_count`, `next_attempt_dttm`) + `unique(user_id, source_type, source_ref)` + btree indexes, NO ANN — via targeted `scripts/createBrainMemoryTable.ts` (NOT drizzle-kit push, per lessons #52/#54)
+- [x] T2 seed `brain:read`/`brain:manage` + `brain_*` settings (OFF) + `backfillBrainPermissions.ts`
+- [x] T3 `brainSanitize` + unit tests (14)
+- [x] T4 `recordMemory` (chat raw+embed, internal catch, never rejects) + `brainWorker` (SKIP LOCKED claim, `processing`, `attempt_count` backoff, terminal failed at 3, stale-claim recovery)
+- [x] T5 chat capture after `saveMessages` (`void recordMemory(...)`, authenticated users only)
+- [x] T6 refactor `streamChat` awaits to `Promise.all` + CRITICAL byte-identical regression test
+- [x] T7 `recallMemories` (exact scan, user-scope, `hasReadyMemory` gate, `sanitizeForPrompt`, 2s budget) spliced into `streamChat` — verified LIVE (Antoine recalled a prior-session hollandaise fix)
+- [x] T8 "Your Brain" view/delete route + UI (consent baseline) — routes curl-verified 200/400/401/403/404
+- [x] T9 capture-error alert marker (`alert:"brain_capture_error"` structured log) + `GET /api/brain/stats` admin snapshot (flags, queue depth, memories/day, capture counters)
+- [x] T10 user-isolation canary (A∦B) + never-rejects test + zero-org test + route auth tests (21 tests)
+- [x] D-T1 `BrainGroundedChip` in chat (trust signal, `8:` message annotation), ships with T7
+- [x] D-T2 `BrainEmptyState` + `MemoryRow` + `ProvenanceChip` + interaction states (learning chip, skeleton, retry, warm empty)
+- [x] D-T3 responsive (375px walkthrough) + a11y (aria-expanded, focus rings, reduced-motion, ≥44px targets)
+
+See "Implementation status" appendix in `docs/specs/brain-memory.md` for the 5 documented deviations + prod rollout checklist.
 
 **Phase 2:** org tier + ops capture + Labs/Copilot recall + rich Your-Brain UI + org-admin mgmt + org digests (T11-T15, D-T4).
 **Phase 3:** compaction + nudges + ranking tuning (T16-T18, D-T5).

@@ -12,6 +12,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { ChefHat, User } from "lucide-react";
 import { useSettings } from "../../context/SettingsContext.js";
+import { BrainGroundedChip } from "../brain/BrainGroundedChip.js";
 
 interface MessageBubbleProps {
   message: UIMessage;
@@ -44,13 +45,13 @@ function MessageBubbleInner({ message }: MessageBubbleProps) {
         )}
       </div>
 
+      <div style={{ maxWidth: bubbleMaxWidth }} className="min-w-0">
       <div
         className={`rounded-2xl px-4 py-3 ${
           isUser
             ? "bg-[#D4A574]/10 border border-[#D4A574]/20 text-[#E5E5E5]"
             : "bg-[#161616] border border-[#2A2A2A] text-[#E5E5E5]"
         }`}
-        style={{ maxWidth: bubbleMaxWidth }}
       >
         {isUser ? (
           <p className="whitespace-pre-wrap leading-relaxed">{textContent}</p>
@@ -74,6 +75,10 @@ function MessageBubbleInner({ message }: MessageBubbleProps) {
           </div>
         )}
       </div>
+      {/* Grounded-in-your-Brain trust chip (brain-memory.md DR1) — only on
+          assistant replies that carry the server's brain_grounded annotation. */}
+      {!isUser && <BrainGroundedChip annotations={message.annotations} />}
+      </div>
     </div>
   );
 }
@@ -85,6 +90,9 @@ function MessageBubbleInner({ message }: MessageBubbleProps) {
 export const MessageBubble = memo(MessageBubbleInner, (prev, next) => {
   return (
     prev.message.id === next.message.id &&
-    prev.message.content === next.message.content
+    prev.message.content === next.message.content &&
+    // brain_grounded annotations can attach around the content stream —
+    // compare length so the grounded chip is never dropped by memoisation.
+    (prev.message.annotations?.length ?? 0) === (next.message.annotations?.length ?? 0)
   );
 });

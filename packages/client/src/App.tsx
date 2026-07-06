@@ -39,6 +39,7 @@ import { WasteIntelligencePage } from "./pages/WasteIntelligencePage.js";
 import { KitchenCopilotPage } from "./pages/KitchenCopilotPage.js";
 import { InventoryPage } from "./pages/InventoryPage.js";
 import { PurchasingPage } from "./pages/PurchasingPage.js";
+import { YourBrainPage } from "./pages/YourBrainPage.js";
 import { KitchenOnboarding } from "./components/onboarding/KitchenOnboarding.js";
 import { LocationProvider } from "./context/LocationContext.js";
 import { LocationSwitcher } from "./components/location/LocationSwitcher.js";
@@ -156,6 +157,7 @@ export function App() {
                           <Route path="/patisserie" element={<RecipeLabPage key="patisserie" domain="patisserie" />} />
                           <Route path="/spirits" element={<RecipeLabPage key="spirits" domain="spirits" />} />
                           <Route path="/my-shelf" element={<AuthenticatedOnly><MyShelfPage /></AuthenticatedOnly>} />
+                          <Route path="/your-brain" element={<AuthenticatedOnly><RequirePermission anyOf={["brain:read"]}><YourBrainPage /></RequirePermission></AuthenticatedOnly>} />
                           <Route path="/menu-intelligence" element={<AuthenticatedOnly><RequirePermission anyOf={["menu:read"]}><LocationGate><KitchenOpsLayout><MenuIntelligencePage /></KitchenOpsLayout></LocationGate></RequirePermission></AuthenticatedOnly>} />
                           <Route path="/waste-intelligence" element={<AuthenticatedOnly><RequirePermission anyOf={["waste:read"]}><LocationGate><KitchenOpsLayout><WasteIntelligencePage /></KitchenOpsLayout></LocationGate></RequirePermission></AuthenticatedOnly>} />
                           <Route path="/kitchen-copilot" element={<AuthenticatedOnly><RequirePermission anyOf={["prep:manage"]}><LocationGate><KitchenOpsLayout><KitchenCopilotPage /></KitchenOpsLayout></LocationGate></RequirePermission></AuthenticatedOnly>} />

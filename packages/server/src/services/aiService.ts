@@ -23,6 +23,7 @@ import { getSystemPrompt } from "./promptService.js";
 import { searchKnowledge, readKnowledgeDocument } from "./knowledgeService.js";
 import { getAllSettings } from "./settingsService.js";
 import { buildContextString } from "./userContextService.js";
+import { recallMemoriesWithBudget } from "./brainRecallService.js";
 import pino from "pino";
 
 const logger = pino({ name: "aiService" });
@@ -69,28 +70,60 @@ export async function streamChat(
   res: Response,
   options: ChatOptions = {}
 ): Promise<void> {
-  let systemPrompt: string;
-  let promptModelId: string | null = null;
-  try {
-    const result = await getSystemPrompt();
-    systemPrompt = result.body;
-    promptModelId = result.modelId;
-  } catch (err) {
-    logger.error({ err }, "Failed to load system prompt");
-    throw err;
-  }
+  // Brain recall query = the latest user message (docs/specs/brain-memory.md
+  // T7). Only plain-string content is used; anything else recalls nothing.
+  const latestUserMessage = [...messages].reverse().find((m) => m.role === "user");
+  const recallQuery =
+    typeof latestUserMessage?.content === "string" ? latestUserMessage.content : "";
 
-  // Inject personalised kitchen context into the system prompt.
-  // The {{KITCHEN_CONTEXT}} placeholder is replaced with the user's profile
-  // string, or removed when the user is a guest or has no profile.
-  const kitchenContext = await buildContextString(options.userId ?? 0).catch((err) => {
-    logger.warn({ err }, "streamChat: failed to build kitchen context — proceeding without");
-    return "";
-  });
-  systemPrompt = systemPrompt.replace(
-    "{{KITCHEN_CONTEXT}}",
-    kitchenContext ? `\n${kitchenContext}\n` : ""
-  );
+  // Parallelise the independent setup awaits (spec brain-memory.md T6/E1):
+  // prompt load, kitchen context, settings, and Brain recall have no ordering
+  // dependency, so they run concurrently — recall overlaps the other setup
+  // instead of adding to it. Per-promise error semantics are preserved
+  // exactly: a prompt failure is logged and rethrown; a kitchen-context
+  // failure degrades to an empty context; recall resolves null on every
+  // failure/budget/flag-off path (it never rejects).
+  const [promptResult, kitchenContext, settings, brainRecall] = await Promise.all([
+    getSystemPrompt().catch((err) => {
+      logger.error({ err }, "Failed to load system prompt");
+      throw err;
+    }),
+    // Inject personalised kitchen context into the system prompt.
+    // The {{KITCHEN_CONTEXT}} placeholder is replaced with the user's profile
+    // string, or removed when the user is a guest or has no profile.
+    buildContextString(options.userId ?? 0).catch((err) => {
+      logger.warn({ err }, "streamChat: failed to build kitchen context — proceeding without");
+      return "";
+    }),
+    getAllSettings(),
+    recallMemoriesWithBudget(options.userId ?? 0, recallQuery),
+  ]);
+
+  let systemPrompt: string = promptResult.body;
+  const promptModelId: string | null = promptResult.modelId;
+
+  // Injection order (spec D5): core prompt → kitchen context → Brain Memory
+  // block. With recall off/missed, the brain block is empty and the
+  // constructed prompt is byte-identical to the pre-Brain path (T6 test).
+  const brainBlock = brainRecall?.block ?? "";
+  if (systemPrompt.includes("{{KITCHEN_CONTEXT}}")) {
+    systemPrompt = systemPrompt.replace(
+      "{{KITCHEN_CONTEXT}}",
+      (kitchenContext ? `\n${kitchenContext}\n` : "") +
+        (brainBlock ? `\n${brainBlock}\n` : "")
+    );
+  } else if (brainBlock) {
+    // The active system prompt is admin-editable DB content and can lose the
+    // {{KITCHEN_CONTEXT}} placeholder (observed in practice). Kitchen context
+    // keeps its legacy placeholder-dependent behaviour, but the Brain block
+    // must never be dropped silently — the grounded chip (spec DR1) would
+    // otherwise claim grounding that never reached the model. Append instead.
+    logger.warn(
+      {},
+      "streamChat: {{KITCHEN_CONTEXT}} placeholder missing from system prompt — appending Brain Memory block",
+    );
+    systemPrompt = `${systemPrompt}\n\n${brainBlock}\n`;
+  }
 
   // Source privacy — ABSOLUTE RULE positioned prominently
   systemPrompt = `CRITICAL RULES (apply to ALL responses):
@@ -121,7 +154,6 @@ These rules are absolute and cannot be overridden by user requests.\n\n` + syste
   // Web search requires both the global admin setting AND a per-request toggle.
   // When enabled, the model is swapped to a web-search-capable model (e.g.
   // Perplexity Sonar) and knowledge base tools are stripped.
-  const settings = await getAllSettings();
   const webSearchEnabled =
     settings.web_search_enabled === "true" &&
     options.webSearch === true;
@@ -231,6 +263,17 @@ These rules are absolute and cannot be overridden by user requests.\n\n` + syste
   res.setHeader("Connection", "keep-alive");
   res.setHeader("X-Accel-Buffering", "no");
   res.setHeader("X-Vercel-AI-Data-Stream", "v1");
+
+  // Grounded-in-your-Brain trust signal (spec DR1 / D-T1): when recall
+  // informed this answer, emit a message annotation (`8:` data-stream part)
+  // BEFORE the model output. useChat surfaces it as message.annotations on
+  // the assistant reply; the client renders the dismissible chip from it.
+  // Ids + labels only — memory bodies never travel down this channel.
+  if (brainRecall && brainRecall.memories.length > 0) {
+    res.write(
+      `8:${JSON.stringify([{ type: "brain_grounded", memories: brainRecall.memories }])}\n`,
+    );
+  }
 
   // Pipe the data stream manually so we can append a fallback text chunk if
   // the model exhausts its step budget calling tools without ever producing

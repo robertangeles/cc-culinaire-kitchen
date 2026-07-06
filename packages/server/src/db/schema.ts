@@ -2382,3 +2382,77 @@ export const ckmFeedback = pgTable(
     ),
   ],
 );
+
+// ---------------------------------------------------------------------------
+// The Brain — per-user + per-org AI memory (docs/specs/brain-memory.md)
+// ---------------------------------------------------------------------------
+
+/**
+ * The `brain_memory` table stores captured memories for the Brain — the
+ * per-user (Phase 2: + per-org) AI memory layer. Each row is one remembered
+ * event: a chat turn (Phase 1) or a curated kitchen-ops event (Phase 2).
+ *
+ * Bodies are sanitized/redacted at capture (`brainSanitize`); embeddings are
+ * filled asynchronously by `brainWorker` (SKIP LOCKED claim → embed →
+ * ready/failed with attempt backoff). Only `status = 'ready'` rows are ever
+ * recalled into an AI prompt.
+ *
+ * Status flow: pending → processing → ready | pending (retry with backoff)
+ *                                   | failed (terminal at attempt_count 3)
+ *
+ * Recall is an exact cosine scan over the tenant's own rows (btree
+ * pre-filtered) — deliberately NO ANN index (spec decision E3): a single
+ * tenant's slice is small, and an exact scan avoids filtered-HNSW
+ * under-recall. Revisit only if a single tenant's corpus is measured large.
+ *
+ * OLTP table, 2NF — every non-key column depends only on memory_id.
+ * `organisation_id` is nullable and unused until Phase 2 (org tier, spec
+ * decision E4). Deviation from the every-FK-gets-an-index rule, stated per
+ * the DB standards: the `idx_brain_memory_org_scope (organisation_id, scope)`
+ * index is deferred to Phase 2 alongside the org-recall query it serves —
+ * indexing an always-NULL column in Phase 1 would be a speculative index.
+ */
+export const brainMemory = pgTable(
+  "brain_memory",
+  {
+    memoryId: uuid("memory_id").defaultRandom().primaryKey(),
+    /** Author/owner of the memory. */
+    userId: integer("user_id").notNull().references(() => user.userId),
+    /** Set when scope='org' (Phase 2 logic). NULL on every Phase-1 row. */
+    organisationId: integer("organisation_id").references(() => organisation.organisationId),
+    /** Recall visibility tier: 'user' (private) | 'org' (shared, Phase 2). */
+    scope: varchar("scope", { length: 10 }).notNull().default("user"),
+    /** 'event' | 'digest' (Phase 3 compaction writes 'digest' rows). */
+    memoryKind: varchar("memory_kind", { length: 20 }).notNull().default("event"),
+    /** 'chat' | 'recipe' | 'purchase_order' | 'waste' | 'stock' | 'menu' | 'prep'. */
+    sourceType: varchar("source_type", { length: 30 }).notNull(),
+    /** Originating entity id. NULL for chat — so chat rows never collide on the upsert target. */
+    sourceRef: varchar("source_ref", { length: 100 }),
+    title: varchar("title", { length: 200 }),
+    /** Sanitized raw content (chat) or distilled summary (ops, Phase 2). Redacted at capture. */
+    body: text("body").notNull(),
+    /** Filled async by brainWorker; NULL until embedded. */
+    embedding: vector1536("embedding"),
+    /** 'pending' | 'processing' | 'ready' | 'failed'. Only 'ready' is recalled. */
+    status: varchar("status", { length: 20 }).notNull().default("pending"),
+    /** Worker retry counter — status becomes terminal 'failed' at 3. */
+    attemptCount: integer("attempt_count").notNull().default(0),
+    /** Earliest next worker claim after a failure; enforces real backoff (no hot-loop). */
+    nextAttemptDttm: timestamp("next_attempt_dttm", { withTimezone: true }),
+    createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
+    updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // Upsert target for recordMemory. Owner-scoped so a source id can't
+    // cross-collide between users. Postgres treats NULLs as distinct, so a
+    // NULL source_ref (chat) never conflicts → chat turns always insert.
+    uniqueIndex("idx_brain_memory_source_unique").on(table.userId, table.sourceType, table.sourceRef),
+    // User-private recall pre-filter + "Your Brain" listing.
+    index("idx_brain_memory_user_scope").on(table.userId, table.scope),
+    // Worker claim scan (pending rows due for processing) + admin queue-depth /
+    // re-embed-failed queries. Partial: ready rows dominate and never match.
+    index("idx_brain_memory_status")
+      .on(table.status)
+      .where(sql`status IN ('pending', 'failed')`),
+  ],
+);

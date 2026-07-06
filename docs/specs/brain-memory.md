@@ -36,7 +36,9 @@ Reviewed by `/plan-ceo-review` (SELECTIVE EXPANSION) + `/plan-eng-review`, each 
 | D7 | Org insight digests | In the v1 platform (Phase 2) |
 | D8 | "Your Brain" UI | Full management (view/delete baseline; provenance, pin, correct, scope-toggle) |
 | D9 | Scope commitment | Full commitment, no evidence gate |
-| D10 | Chat distillation | Raw + embed for chat; distill only ops + compaction |
+| D10 | Chat distillation | Raw + embed for chat; distill only ops + compaction — **AMENDED, see below** |
+
+> **D10 amendment (2026-07-06, product-owner call — flag-gated):** live Phase-1 testing showed raw chat capture stores pure retrieval questions ("what's my pasta ratio?") as memories, cluttering "Your Brain" and eroding trust. A *lightweight* slice of Phase-3 chat distillation was pulled forward: a binary **Balanced** keep/drop judge (`brainDistillService.shouldRememberChatTurn`, `anthropic/claude-haiku-4-5`) runs in `recordChatTurn` **before** insert. Gated by `brain_distillation_enabled` (seeded OFF → raw capture, D10-faithful; ON → noise dropped). Fail-open on any judge error/timeout. This is ONLY the binary gate — memory rewriting/merging/compaction remains Phase 3. See `tasks/lessons.md` #58.
 
 **Engineering (eng review):**
 
@@ -430,3 +432,20 @@ Time-horizons: 5-sec = the grounded chip; 5-min = steering the list; 5-year = a 
 - **VERDICT:** CEO + ENG + DESIGN CLEARED — ready to implement.
 
 NO UNRESOLVED DECISIONS
+
+---
+
+## Implementation status — Phase 1 SHIPPED (2026-07-05, branch `feature/ck-web/brain-spine`)
+
+T1–T10 + D-T1..D-T3 are implemented, tested (server 479/479, client 42/42, shared 51/51; 21 Brain-specific tests incl. the A∦B canary), and verified end-to-end against the local DB — including a LIVE capture→embed→recall round-trip (real OpenRouter embedding; Antoine recalled a prior-session hollandaise fix with the grounded chip firing).
+
+**Key files:** `brain_memory` in [schema.ts](../../packages/server/src/db/schema.ts) · `brainSanitize` / `brainCaptureService` / `brainWorker` / `brainRecallService` / `brainService` in `packages/server/src/services/` · routes `packages/server/src/routes/brain.ts` · capture hook in `conversationController.handleSaveMessages` · recall splice in `aiService.streamChat` · client `pages/YourBrainPage.tsx` + `components/brain/*` + `hooks/useBrainMemories.ts`.
+
+**Documented deviations from this spec (all deliberate, none change locked decisions):**
+1. **Worker claim selects `status='pending'` only** (spec's claim SQL listed `'failed'` too). The state machine makes `failed` terminal and the chaos criterion is "poisoned row stops at 3 attempts" — claiming failed rows would contradict both. Failed rows re-enter only via the future admin re-embed action. Stale `processing` rows (dead process) are reclaimed after 10 min.
+2. **`resolveActiveOrg` not implemented in Phase 1** (T10 listed a zero-org unit test). E4 defers the org tier entirely; implementing an unused resolver would be dead code. The zero-org posture is covered by an integration test: a user with zero org memberships recalls user-scope memories.
+3. **Deployment step 1 is NOT `drizzle-kit push`** — this DB has managed drift and the standing rule (lessons #52/#54) bans whole-schema push. The targeted, idempotent replacement is `packages/server/src/scripts/createBrainMemoryTable.ts` (already applied to local dev; run on prod before the code deploys).
+4. **Brain-block fallback append**: the active system prompt is admin-editable DB content and was observed WITHOUT the `{{KITCHEN_CONTEXT}}` placeholder — a silent no-op splice would make the grounded chip lie. When the placeholder is missing, the Brain block is appended to the prompt end (kitchen context keeps its legacy placeholder-dependent behaviour; pre-existing gap flagged in lessons #55).
+5. **`sanitizeForPrompt` applied per-item, not to the whole block** — applying it to the formatted block would strip the `## Brain Memory` label itself; per-item preserves the guard on untrusted content and the trusted scaffolding.
+
+**Prod rollout checklist (unchanged otherwise):** run `createBrainMemoryTable.ts` → `db:seed` → `backfillBrainPermissions.ts` → deploy (flags OFF) → flip `brain_enabled`+`brain_capture_enabled` → wire log alert on `alert:"brain_capture_error"` + watch `GET /api/brain/stats` → flip `brain_recall_enabled`. **Prod prompt check:** verify the active `systemPrompt` row still contains `{{KITCHEN_CONTEXT}}`; if not, kitchen-context injection has been silently broken in prod (pre-existing) — restore the placeholder.

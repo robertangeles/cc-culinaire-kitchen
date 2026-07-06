@@ -27,6 +27,8 @@ import {
   updateGuestConversationTitle,
   deleteGuestConversation,
 } from "../services/conversationService.js";
+import { recordChatTurn } from "../services/brainCaptureService.js";
+import { sanitizeMemoryText } from "../services/brainSanitize.js";
 
 const log = pino({ transport: { target: "pino-pretty" } });
 
@@ -213,6 +215,36 @@ export async function handleSaveMessages(
     }
 
     await saveMessages(id, parsed.data.messages);
+
+    // Brain capture (spec T5): remember this chat turn for the authenticated
+    // user. Fired AFTER the message write, as `void` — recordMemory catches
+    // internally and never rejects (spec E2), so a Brain failure can never
+    // break message persistence. Guests never record.
+    if (req.user) {
+      const turn = [...parsed.data.messages].sort(
+        (a, b) => a.messageSequence - b.messageSequence,
+      );
+      // Sanitize each message body BEFORE applying the role label, so the
+      // label can't push injection markers (e.g. a leading "## ") off
+      // line-start where the sanitizer would otherwise strip them. Messages
+      // that reduce to nothing (control chars, stray markup) are dropped, and
+      // a turn with no surviving content is never recorded — no junk
+      // label-only memory, no wasted embed call.
+      const labelled = turn
+        .map((m) => ({ role: m.messageRole, body: sanitizeMemoryText(m.messageBody) }))
+        .filter((m) => m.body.length > 0)
+        .map((m) => `${m.role === "user" ? "Cook asked" : "CulinAIre answered"}: ${m.body}`);
+
+      if (labelled.length > 0) {
+        const firstUserMessage = turn.find((m) => m.messageRole === "user");
+        void recordChatTurn({
+          userId: req.user.sub,
+          title: firstUserMessage?.messageBody.slice(0, 120) ?? null,
+          rawContent: labelled.join("\n"),
+        });
+      }
+    }
+
     log.info({ id, count: parsed.data.messages.length }, "Messages saved");
     res.json({ success: true });
   } catch (err) {
