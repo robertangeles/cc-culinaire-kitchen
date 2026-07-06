@@ -32,7 +32,7 @@ Expected: `PROD_DATABASE_URL: set` and one row `vector`. If pgvector is missing,
 ## 1. Create the `brain_memory` table (DDL)
 
 ```bash
-APP_ENV=prod pnpm --filter @culinaire/server tsx src/scripts/createBrainMemoryTable.ts
+APP_ENV=prod pnpm --filter @culinaire/server exec tsx src/scripts/createBrainMemoryTable.ts
 ```
 Expected: `brain_memory table + indexes ensured (additive, idempotent). NO ANN index by design (spec E3).`
 
@@ -46,7 +46,7 @@ Expected: a mix of `already exists, skipping` (prompts/roles/guides prod already
 ## 3. Backfill Brain perms to every existing role
 
 ```bash
-APP_ENV=prod pnpm --filter @culinaire/server tsx src/scripts/backfillBrainPermissions.ts
+APP_ENV=prod pnpm --filter @culinaire/server exec tsx src/scripts/backfillBrainPermissions.ts
 ```
 Expected: `Brain backfill complete: N roles checked, M new role→permission links added.` Grants `brain:read`/`brain:manage` to ALL roles (incl. custom prod roles) so no captured-memory user is ever locked out of their own consent surface (spec D8).
 
