@@ -36,7 +36,9 @@ Reviewed by `/plan-ceo-review` (SELECTIVE EXPANSION) + `/plan-eng-review`, each 
 | D7 | Org insight digests | In the v1 platform (Phase 2) |
 | D8 | "Your Brain" UI | Full management (view/delete baseline; provenance, pin, correct, scope-toggle) |
 | D9 | Scope commitment | Full commitment, no evidence gate |
-| D10 | Chat distillation | Raw + embed for chat; distill only ops + compaction |
+| D10 | Chat distillation | Raw + embed for chat; distill only ops + compaction — **AMENDED, see below** |
+
+> **D10 amendment (2026-07-06, product-owner call — flag-gated):** live Phase-1 testing showed raw chat capture stores pure retrieval questions ("what's my pasta ratio?") as memories, cluttering "Your Brain" and eroding trust. A *lightweight* slice of Phase-3 chat distillation was pulled forward: a binary **Balanced** keep/drop judge (`brainDistillService.shouldRememberChatTurn`, `anthropic/claude-haiku-4-5`) runs in `recordChatTurn` **before** insert. Gated by `brain_distillation_enabled` (seeded OFF → raw capture, D10-faithful; ON → noise dropped). Fail-open on any judge error/timeout. This is ONLY the binary gate — memory rewriting/merging/compaction remains Phase 3. See `tasks/lessons.md` #58.
 
 **Engineering (eng review):**
 
