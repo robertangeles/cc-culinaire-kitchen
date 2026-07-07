@@ -27,7 +27,8 @@ export type NotificationType =
   | "PO_APPROVED"
   | "PO_REJECTED"
   | "DISCREPANCY_ALERT"
-  | "DELIVERY_OVERDUE";
+  | "DELIVERY_OVERDUE"
+  | "BRAIN_CAPTURE_ERROR";
 
 export type NotificationChannel = "IN_APP" | "EMAIL";
 
