@@ -50,6 +50,7 @@ import { purgeArchivedRecipes } from "./services/recipePersistenceService.js";
 import { getAllSettings } from "./services/settingsService.js";
 import { sendWeeklyWasteDigests } from "./services/wasteDigestService.js";
 import { runBrainWorkerTick, BRAIN_WORKER_INTERVAL_MS } from "./services/brainWorker.js";
+import { checkCaptureHealth } from "./services/brainCaptureAlertService.js";
 import { brainRouter } from "./routes/brain.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -468,6 +469,20 @@ hydrateEnvFromCredentials().then(() => {
       setTimeout(runBrainWorker, 20_000);
       const brainWorkerInterval = setInterval(runBrainWorker, BRAIN_WORKER_INTERVAL_MS);
 
+      // Brain capture-health alert — pushes an in-app + email alert to
+      // Administrators when the capture error rate says capture is broken
+      // (spec T9 exit criterion: a silently-failing capture must page). Inert
+      // unless capture is enabled; rate-limited to one alert/hour. Checks
+      // every 5 min.
+      async function runCaptureHealthCheck() {
+        try {
+          await checkCaptureHealth();
+        } catch (err) {
+          log.error({ err }, "Brain capture-health check failed");
+        }
+      }
+      const captureHealthInterval = setInterval(runCaptureHealthCheck, 5 * 60 * 1000);
+
       // Weekly waste digest — Sunday 8 PM (check every minute)
       let lastWasteDigestRun = "";
       const wasteDigestInterval = setInterval(async () => {
@@ -492,6 +507,7 @@ hydrateEnvFromCredentials().then(() => {
         clearInterval(wasteDigestInterval);
         clearInterval(feedbackEmailInterval);
         clearInterval(brainWorkerInterval);
+        clearInterval(captureHealthInterval);
         httpServer.close(() => {
           log.info("Server closed");
           process.exit(0);
