@@ -1,0 +1,316 @@
+/**
+ * @module components/settings/BrainTab
+ *
+ * Admin settings for The Brain — the per-user AI memory layer
+ * (docs/specs/brain-memory.md). Exposes the five `brain_*` rollout flags as
+ * live toggles (no more devtools `PUT /api/settings` surgery) plus a health
+ * readout from `GET /api/brain/stats` (queue depth by status, memories/day,
+ * in-process capture counters).
+ *
+ * Rollout guidance is baked into the UI: capture/recall/distillation only do
+ * anything while the master `brain_enabled` is on, and the recommended order is
+ * capture → (warm the corpus) → distillation → recall. Each toggle writes a
+ * single flag immediately (the settings PUT invalidates the server cache) and
+ * refreshes the stats. All flag flips are instantly reversible.
+ */
+
+import { useCallback, useEffect, useState } from "react";
+import {
+  Loader2,
+  AlertCircle,
+  Brain,
+  RefreshCw,
+} from "lucide-react";
+
+const API = import.meta.env.VITE_API_URL ?? "";
+
+/** Health snapshot returned by GET /api/brain/stats. */
+interface BrainStats {
+  flags: Record<string, string>;
+  statusCounts: Record<string, number>;
+  memoriesLast24h: number;
+  memoriesLast7d: number;
+  capture: { recorded: number; skipped: number; errors: number };
+}
+
+/** The five rollout flags, in recommended activation order. */
+const FLAGS: {
+  key: string;
+  label: string;
+  desc: string;
+  /** When true, the flag is a no-op until the master flag is on. */
+  needsMaster?: boolean;
+  /** Not yet built (Phase 3) — shown but not interactive. */
+  soon?: boolean;
+}[] = [
+  {
+    key: "brain_enabled",
+    label: "Brain (master)",
+    desc: "Master switch. Off means capture, recall, and the embed worker are all inert — instant kill.",
+  },
+  {
+    key: "brain_capture_enabled",
+    label: "Capture",
+    desc: "Record chat turns as memories and embed them. Warm the corpus here before turning on recall.",
+    needsMaster: true,
+  },
+  {
+    key: "brain_distillation_enabled",
+    label: "Distillation filter",
+    desc: "Drop low-value turns (retrieval questions, chit-chat) before storing, so Your Brain stays signal.",
+    needsMaster: true,
+  },
+  {
+    key: "brain_recall_enabled",
+    label: "Recall",
+    desc: "Ground answers in the user's own memories and show the “grounded in your Brain” chip.",
+    needsMaster: true,
+  },
+  {
+    key: "brain_nudges_enabled",
+    label: "Proactive nudges",
+    desc: "Surface memory-driven suggestions. Phase 3 — not built yet.",
+    needsMaster: true,
+    soon: true,
+  },
+];
+
+export function BrainTab() {
+  const [flags, setFlags] = useState<Record<string, string>>({});
+  const [stats, setStats] = useState<BrainStats | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [savingKey, setSavingKey] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState("");
+
+  const loadStats = useCallback(async () => {
+    try {
+      const res = await fetch(`${API}/api/brain/stats`, { credentials: "include" });
+      if (!res.ok) return;
+      const data: BrainStats = await res.json();
+      setStats(data);
+      // The stats payload echoes the live flags — treat it as the source of truth.
+      if (data.flags) setFlags(data.flags);
+    } catch {
+      // Non-fatal — the toggles still work without the readout.
+    }
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      await loadStats();
+      setLoading(false);
+    })();
+    // Refresh the health readout periodically so queue depth stays current.
+    const id = setInterval(loadStats, 10_000);
+    return () => clearInterval(id);
+  }, [loadStats]);
+
+  const masterOn = flags.brain_enabled === "true";
+
+  async function toggle(key: string, next: boolean) {
+    setSavingKey(key);
+    setErrorMsg("");
+    const prev = flags[key];
+    // Optimistic update.
+    setFlags((f) => ({ ...f, [key]: next ? "true" : "false" }));
+    try {
+      const res = await fetch(`${API}/api/settings`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ [key]: next ? "true" : "false" }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error((body as { error?: string }).error ?? "Failed to save");
+      }
+      await loadStats();
+    } catch (err) {
+      // Revert on failure.
+      setFlags((f) => ({ ...f, [key]: prev }));
+      setErrorMsg(err instanceof Error ? err.message : "Failed to update flag.");
+    } finally {
+      setSavingKey(null);
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12 text-[#999999]">
+        <Loader2 className="size-5 animate-spin mr-2" />
+        Loading Brain settings…
+      </div>
+    );
+  }
+
+  const errorsCount = stats?.capture.errors ?? 0;
+
+  return (
+    <div className="max-w-3xl space-y-6 p-6">
+      <div>
+        <h2 className="flex items-center gap-2 text-base font-semibold text-[#FAFAFA]">
+          <Brain className="size-4 text-[#D4A574]" />
+          The Brain
+        </h2>
+        <p className="text-sm text-[#999999] mt-1">
+          Per-user AI memory. Flip flags one at a time; every change is instant and reversible.
+          Recommended order: Capture → let it warm → Distillation → Recall.
+        </p>
+      </div>
+
+      {errorMsg && (
+        <div className="flex items-center gap-2 text-sm text-red-400 bg-red-900/30 border border-red-700/40 rounded-lg px-3 py-2">
+          <AlertCircle className="size-4 flex-shrink-0" /> {errorMsg}
+        </div>
+      )}
+
+      {/* Health readout */}
+      <div className="rounded-xl border border-[#2A2A2A] bg-[#111111] p-4">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold text-[#E5E5E5]">Health</h3>
+          <button
+            type="button"
+            onClick={loadStats}
+            className="flex items-center gap-1.5 text-xs text-[#999999] hover:text-[#FAFAFA] transition-colors"
+            aria-label="Refresh Brain health"
+          >
+            <RefreshCw className="size-3.5" /> Refresh
+          </button>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <Stat label="Ready" value={stats?.statusCounts.ready ?? 0} />
+          <Stat label="Pending" value={stats?.statusCounts.pending ?? 0} />
+          <Stat
+            label="Failed"
+            value={stats?.statusCounts.failed ?? 0}
+            tone={(stats?.statusCounts.failed ?? 0) > 0 ? "warn" : undefined}
+          />
+          <Stat label="Memories / 24h" value={stats?.memoriesLast24h ?? 0} />
+        </div>
+        <div className="mt-3 pt-3 border-t border-white/5 grid grid-cols-3 gap-3">
+          <Stat label="Captured (boot)" value={stats?.capture.recorded ?? 0} small />
+          <Stat label="Skipped (boot)" value={stats?.capture.skipped ?? 0} small />
+          <Stat
+            label="Errors (boot)"
+            value={errorsCount}
+            small
+            tone={errorsCount > 0 ? "warn" : undefined}
+          />
+        </div>
+        {errorsCount > 0 && (
+          <p className="mt-3 text-xs text-[#D4A574]">
+            Capture errors since boot — check the <code>brain_capture_error</code> log alert. A broken
+            capture path is otherwise silent by design.
+          </p>
+        )}
+      </div>
+
+      {/* Flag toggles */}
+      <div className="space-y-2">
+        {FLAGS.map((f) => {
+          const on = flags[f.key] === "true";
+          const dimmed = f.needsMaster && !masterOn;
+          return (
+            <div
+              key={f.key}
+              className={`flex items-start justify-between gap-4 rounded-xl border px-4 py-3 transition-colors ${
+                on
+                  ? "border-[#D4A574]/40 bg-[#D4A574]/[0.06] shadow-[0_0_12px_rgba(212,165,116,0.10)]"
+                  : "border-[#2A2A2A] bg-[#111111]"
+              }`}
+            >
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-[#FAFAFA]">{f.label}</span>
+                  {f.soon && (
+                    <span className="text-[10px] uppercase tracking-wide text-[#666666] border border-[#333] rounded px-1.5 py-0.5">
+                      Soon
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-[#999999] mt-0.5">{f.desc}</p>
+                {dimmed && !f.soon && (
+                  <p className="text-xs text-[#D4A574]/80 mt-1">Turn on the master switch first.</p>
+                )}
+              </div>
+              <ToggleSwitch
+                on={on}
+                disabled={f.soon || savingKey === f.key}
+                busy={savingKey === f.key}
+                onChange={(next) => toggle(f.key, next)}
+                label={f.label}
+              />
+            </div>
+          );
+        })}
+      </div>
+
+      <p className="text-xs text-[#666666]">
+        Distillation model: <code className="text-[#999999]">{flags.brain_distillation_model ?? "—"}</code>
+      </p>
+    </div>
+  );
+}
+
+/** Small labelled metric for the health readout. */
+function Stat({
+  label,
+  value,
+  tone,
+  small,
+}: {
+  label: string;
+  value: number;
+  tone?: "warn";
+  small?: boolean;
+}) {
+  return (
+    <div>
+      <div
+        className={`${small ? "text-lg" : "text-2xl"} font-semibold ${
+          tone === "warn" ? "text-red-400" : "text-[#FAFAFA]"
+        }`}
+      >
+        {value}
+      </div>
+      <div className="text-[11px] text-[#999999]">{label}</div>
+    </div>
+  );
+}
+
+/** Accessible on/off switch matching the app's amber accent. */
+function ToggleSwitch({
+  on,
+  disabled,
+  busy,
+  onChange,
+  label,
+}: {
+  on: boolean;
+  disabled?: boolean;
+  busy?: boolean;
+  onChange: (next: boolean) => void;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      aria-label={`Toggle ${label}`}
+      disabled={disabled}
+      onClick={() => onChange(!on)}
+      className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[#D4A574]/60 disabled:opacity-50 disabled:cursor-not-allowed ${
+        on ? "bg-[#D4A574]" : "bg-[#333333]"
+      }`}
+    >
+      <span
+        className={`inline-flex h-4 w-4 items-center justify-center rounded-full bg-white transition-transform ${
+          on ? "translate-x-6" : "translate-x-1"
+        }`}
+      >
+        {busy && <Loader2 className="size-3 animate-spin text-[#666]" />}
+      </span>
+    </button>
+  );
+}

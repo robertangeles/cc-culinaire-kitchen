@@ -23,6 +23,7 @@ import {
   Plug,
   MessagesSquare,
   FileText,
+  Brain,
   type LucideIcon,
 } from "lucide-react";
 
@@ -68,6 +69,7 @@ const tabs: TabItem[] = [
   { id: "knowledge", label: "Knowledge Base", icon: BookOpen, group: "shared" },
   { id: "bench", label: "The Bench", icon: MessagesSquare, group: "web" },
   { id: "userGuide", label: "User Guide", icon: BookOpen, group: "web" },
+  { id: "brain", label: "Brain", icon: Brain, group: "web" },
 ];
 
 /**

@@ -129,15 +129,15 @@ describe("SettingsLayout — rendered shell", () => {
   it("ArrowDown moves selection to the next enabled tab, crossing group boundaries", () => {
     const onTabChange = vi.fn();
     render(
-      <SettingsLayout activeTab="userGuide" onTabChange={onTabChange}>
+      <SettingsLayout activeTab="brain" onTabChange={onTabChange}>
         <div>panel</div>
       </SettingsLayout>,
     );
 
-    // userGuide is the last Web tab in the draft registry. ArrowDown should
-    // cross into the Mobile group (its sole tab — mobilePages).
-    const userGuideTab = screen.getByRole("tab", { name: /User Guide/ });
-    fireEvent.keyDown(userGuideTab, { key: "ArrowDown" });
+    // brain is the last Web tab in the registry. ArrowDown should cross into
+    // the Mobile group (its sole tab — mobilePages).
+    const brainTab = screen.getByRole("tab", { name: /Brain/ });
+    fireEvent.keyDown(brainTab, { key: "ArrowDown" });
 
     expect(onTabChange).toHaveBeenCalledTimes(1);
     expect(onTabChange.mock.calls[0][0]).toBe("mobilePages");
