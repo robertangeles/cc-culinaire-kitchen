@@ -31,7 +31,7 @@ the tab or this endpoint.
 | # | What you do | Pass condition |
 |---|---|---|
 | ☐ A1 | Log into www.culinaire.kitchen as admin → click **Your Brain** in the sidebar | Warm **"Your Brain is warming up"** empty state loads, no error. (Confirms the read path + table work in prod.) |
-| ☐ A2 | Wire a **log alert** in Render (or your log aggregator) that fires on the string `"alert":"brain_capture_error"` in the server logs | Alert exists and you've test-fired it. **This is the spec's Phase-1 exit criterion** — capture swallows its own errors, so a silently-broken capture looks healthy without this alarm. |
+| ☐ A2 | **Built-in — no setup needed.** A capture-health alert ships in the app: a 5-min interval watches the capture error rate and pushes an **in-app notification + Resend email** to Administrators when capture is broken (rate-limited to 1/hour). This satisfies the spec's Phase-1 exit criterion (capture swallows its own errors, so a silently-broken path must page). | Confirm Administrators exist to receive it; the Settings → Brain readout also shows **Errors in red** live. *Optional belt-and-suspenders:* also add an external log alert on `"alert":"brain_capture_error"` if you aggregate logs. |
 
 Do not proceed past A until both are ticked.
 

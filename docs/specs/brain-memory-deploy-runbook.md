@@ -90,7 +90,7 @@ Expected `200` with `{"memories":[],"total":0}`. A `500` means the table didn't 
 Flip flags in this order via the admin Settings API (or Settings UI), verifying between each. Rollback at any point = set the flag back to `false` (instant, no deploy).
 
 1. `brain_enabled = true` + `brain_capture_enabled = true` — corpus starts warming (chat turns captured + embedded). Watch logs for `brain.capture.recorded` / `brain.worker.tick`.
-2. **Wire the capture-error alert** (Phase-1 exit criterion): confirm a log alert keys on `alert:"brain_capture_error"` before relying on capture — a 100%-broken capture must page, not look healthy.
+2. **Capture-error alert — built-in** (Phase-1 exit criterion): the app pushes an in-app + email alert to Administrators when the capture error rate says capture is broken (rate-limited 1/hour). No external setup needed; just confirm Administrators exist. An external log alert on `alert:"brain_capture_error"` is optional belt-and-suspenders.
 3. `brain_distillation_enabled = true` — turns on the Balanced noise filter (drops retrieval questions). Optional but recommended for a clean "Your Brain".
 4. `brain_recall_enabled = true` — answers start grounding; the "grounded in your Brain" chip appears.
 
