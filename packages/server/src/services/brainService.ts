@@ -12,11 +12,12 @@
  * missing one (no IDOR oracle).
  */
 
-import { and, eq, desc, ilike, or, sql, count } from "drizzle-orm";
+import { and, eq, desc, ilike, or, inArray, sql, count } from "drizzle-orm";
 import { db } from "../db/index.js";
-import { brainMemory } from "../db/schema.js";
+import { brainMemory, userOrganisation } from "../db/schema.js";
 import { getAllSettings } from "./settingsService.js";
 import { getCaptureCounters } from "./brainCaptureService.js";
+import { getUserOrgContext } from "./orgContextService.js";
 
 /** One row in the "Your Brain" list. Bodies are the user's own data. */
 export interface BrainMemoryListItem {
@@ -34,6 +35,8 @@ export interface BrainMemoryListItem {
 export interface ListMemoriesOptions {
   /** Filter to one source type (e.g. 'chat'). */
   sourceType?: string;
+  /** Restrict to one visibility tier: 'user' (private) or 'org' (shared). */
+  scope?: "user" | "org";
   /** Case-insensitive substring search over title + body. */
   search?: string;
   limit?: number;
@@ -41,9 +44,14 @@ export interface ListMemoriesOptions {
 }
 
 /**
- * List a user's own memories, newest first, with optional source-type filter
- * and search. Includes pending/processing rows so the UI can show the
- * "learning…" state (spec interaction-states table).
+ * List the memories a user may see, newest first: their own private rows plus
+ * the shared (`scope='org'`) rows of every org they belong to (spec T11). An
+ * optional `scope` filter narrows to one tier. Optional source-type filter and
+ * search apply within that tenant boundary. Includes pending/processing rows so
+ * the UI can show the "learning…" state (spec interaction-states table).
+ *
+ * The org membership is read live per call, so a removed member immediately
+ * stops seeing that org's shared rows (no stale-membership leak).
  */
 export async function listMemories(
   userId: number,
@@ -52,7 +60,20 @@ export async function listMemories(
   const limit = Math.min(Math.max(options.limit ?? 50, 1), 100);
   const offset = Math.max(options.offset ?? 0, 0);
 
-  const conditions = [eq(brainMemory.userId, userId)];
+  // Tenant boundary: own private rows OR shared rows of a live-member org.
+  const { orgIds } = await getUserOrgContext(userId);
+  const tenant =
+    orgIds.length > 0
+      ? or(
+          eq(brainMemory.userId, userId),
+          and(inArray(brainMemory.organisationId, orgIds), eq(brainMemory.scope, "org")),
+        )!
+      : eq(brainMemory.userId, userId);
+
+  const conditions = [tenant];
+  if (options.scope) {
+    conditions.push(eq(brainMemory.scope, options.scope));
+  }
   if (options.sourceType) {
     conditions.push(eq(brainMemory.sourceType, options.sourceType));
   }
@@ -87,14 +108,51 @@ export async function listMemories(
 }
 
 /**
- * Delete one of the user's own memories. Ownership is enforced in the WHERE
- * clause; returns false when the id doesn't exist OR belongs to someone else
- * (identical outcomes — no cross-tenant oracle).
+ * Delete a memory the caller is authorised to remove (spec T11 / E5):
+ *   - `scope='user'` → only the owner (`user_id = caller`).
+ *   - `scope='org'`  → only an admin of the OWNING org (a live
+ *     `user_organisation` row with `role='admin'` for that org).
+ *
+ * Returns false for a missing id, another user's private row, or an org row the
+ * caller does not admin — all indistinguishable outcomes (no cross-tenant
+ * oracle; the controller maps false → 404).
  */
 export async function deleteMemory(userId: number, memoryId: string): Promise<boolean> {
+  const [row] = await db
+    .select({
+      scope: brainMemory.scope,
+      ownerUserId: brainMemory.userId,
+      organisationId: brainMemory.organisationId,
+    })
+    .from(brainMemory)
+    .where(eq(brainMemory.memoryId, memoryId))
+    .limit(1);
+
+  if (!row) return false;
+
+  if (row.scope === "org") {
+    // Authorise against the specific owning org — being an admin of some other
+    // org must not grant delete here.
+    if (row.organisationId == null) return false;
+    const adminRows = await db
+      .select({ userOrganisationId: userOrganisation.userOrganisationId })
+      .from(userOrganisation)
+      .where(
+        and(
+          eq(userOrganisation.userId, userId),
+          eq(userOrganisation.organisationId, row.organisationId),
+          eq(userOrganisation.role, "admin"),
+        ),
+      )
+      .limit(1);
+    if (adminRows.length === 0) return false;
+  } else if (row.ownerUserId !== userId) {
+    return false;
+  }
+
   const deleted = await db
     .delete(brainMemory)
-    .where(and(eq(brainMemory.memoryId, memoryId), eq(brainMemory.userId, userId)))
+    .where(eq(brainMemory.memoryId, memoryId))
     .returning({ memoryId: brainMemory.memoryId });
   return deleted.length > 0;
 }

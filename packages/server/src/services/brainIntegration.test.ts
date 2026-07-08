@@ -252,3 +252,298 @@ suite("Brain integration (real local DB)", () => {
     nextEmbedding = fakeVector(0); // restore for any later suite
   });
 });
+
+/**
+ * Org-tier isolation suite (docs/specs/brain-memory.md T11, Phase 2). Proves the
+ * two-tier recall + management surface keeps orgs apart:
+ *
+ *  - ORG-ISOLATION CANARY X∦Y: an org-X member never recalls org-Y's shared rows
+ *  - positive org recall: an org-Y member DOES recall org-Y's shared rows
+ *  - EX-MEMBER CANARY: a removed member (stale selected_organisation_id) recalls
+ *    nothing from the org they left — resolveActiveOrg refuses the stale value
+ *  - resolveActiveOrg: all four deterministic rungs + stale-drops-to-fallback
+ *  - management: listMemories tenant boundary + scope filter; deleteMemory
+ *    org-admin authorisation matrix (owner-org admin only)
+ *
+ * Same harness as above: embeddings mocked, SQL/constraints/`<=>` real, whole
+ * suite SKIPS with no local DB.
+ */
+suite("Brain org tier (real local DB)", () => {
+  let orgX = 0;
+  let orgY = 0;
+  let locYId = "";
+  let userX = 0; // member of orgX (+ a private memory)
+  let adminX = 0; // admin of orgX (other-org admin for delete matrix)
+  let userY = 0; // member of orgY (non-admin)
+  let adminY = 0; // admin of orgY (authors org memories)
+  let multiUser = 0; // member of BOTH orgs (lowest-membership fallback)
+  let noOrgUser = 0; // no memberships (resolves to null)
+  let exUser = 0; // member of orgY, then removed
+  let locUser = 0; // member of both, active via selected location in orgY
+  const flagBackup: Record<string, string> = {};
+
+  const key = (p: string) => `${p}-${randomUUID().slice(0, 12)}`;
+
+  beforeAll(async () => {
+    const { getAllSettings, upsertSettings } = await import("./settingsService.js");
+    const settings = await getAllSettings();
+    for (const k of ["brain_enabled", "brain_capture_enabled", "brain_recall_enabled"]) {
+      flagBackup[k] = settings[k] ?? "false";
+    }
+    await upsertSettings({
+      brain_enabled: "true",
+      brain_capture_enabled: "true",
+      brain_recall_enabled: "true",
+    });
+
+    const users = (await db.execute(sql`
+      INSERT INTO "user" (user_name, user_email) VALUES
+        ('OrgTier userX',   ${`otx-${randomUUID()}@test.local`}),
+        ('OrgTier adminX',  ${`ota-${randomUUID()}@test.local`}),
+        ('OrgTier userY',   ${`oty-${randomUUID()}@test.local`}),
+        ('OrgTier adminY',  ${`otay-${randomUUID()}@test.local`}),
+        ('OrgTier multi',   ${`otm-${randomUUID()}@test.local`}),
+        ('OrgTier noOrg',   ${`otn-${randomUUID()}@test.local`}),
+        ('OrgTier exUser',  ${`ote-${randomUUID()}@test.local`}),
+        ('OrgTier locUser', ${`otl-${randomUUID()}@test.local`})
+      RETURNING user_id
+    `)) as unknown as Array<{ user_id: number }>;
+    [userX, adminX, userY, adminY, multiUser, noOrgUser, exUser, locUser] = users.map(
+      (u) => u.user_id,
+    );
+
+    const orgs = (await db.execute(sql`
+      INSERT INTO organisation (organisation_name, join_key, created_by) VALUES
+        ('Kitchen X', ${key("jkx")}, ${adminX}),
+        ('Kitchen Y', ${key("jky")}, ${adminY})
+      RETURNING organisation_id
+    `)) as unknown as Array<{ organisation_id: number }>;
+    orgX = orgs[0].organisation_id;
+    orgY = orgs[1].organisation_id;
+
+    await db.execute(sql`
+      INSERT INTO user_organisation (user_id, organisation_id, role) VALUES
+        (${userX},   ${orgX}, 'member'),
+        (${adminX},  ${orgX}, 'admin'),
+        (${userY},   ${orgY}, 'member'),
+        (${adminY},  ${orgY}, 'admin'),
+        (${multiUser}, ${orgX}, 'member'),
+        (${multiUser}, ${orgY}, 'member'),
+        (${exUser},  ${orgY}, 'member'),
+        (${locUser}, ${orgX}, 'member'),
+        (${locUser}, ${orgY}, 'member')
+    `);
+
+    // A store location in orgY, so the locUser's selected-location rung resolves
+    // to orgY even though orgX is the numerically-lower membership.
+    const locs = (await db.execute(sql`
+      INSERT INTO store_location (organisation_id, location_name, store_key, created_by)
+      VALUES (${orgY}, 'Kitchen Y HQ', ${key("skY")}, ${adminY})
+      RETURNING store_location_id
+    `)) as unknown as Array<{ store_location_id: string }>;
+    locYId = locs[0].store_location_id;
+    await db.execute(sql`
+      UPDATE "user" SET selected_location_id = ${locYId} WHERE user_id = ${locUser}
+    `);
+  });
+
+  afterAll(async () => {
+    const { upsertSettings } = await import("./settingsService.js");
+    await upsertSettings(flagBackup);
+    const ids = [userX, adminX, userY, adminY, multiUser, noOrgUser, exUser, locUser].filter(
+      Boolean,
+    );
+    if (ids.length) {
+      // ids are DB-issued integers — safe to inline as a raw IN list.
+      const idList = sql.raw(ids.join(","));
+      await db.execute(sql`DELETE FROM brain_memory WHERE user_id IN (${idList})`);
+      if (locYId) await db.execute(sql`UPDATE "user" SET selected_location_id = NULL WHERE user_id = ${locUser}`);
+      if (locYId) await db.execute(sql`DELETE FROM store_location WHERE store_location_id = ${locYId}`);
+      await db.execute(sql`DELETE FROM user_organisation WHERE user_id IN (${idList})`);
+      await db.execute(sql`DELETE FROM "user" WHERE user_id IN (${idList})`);
+      await db.execute(sql`DELETE FROM organisation WHERE organisation_id IN (${orgX}, ${orgY})`);
+    }
+  });
+
+  it("seeds a ready org-shared memory in orgY and a private memory for userX", async () => {
+    const { recordMemory } = await import("./brainCaptureService.js");
+    const { runBrainWorkerTick } = await import("./brainWorker.js");
+
+    // Org-Y shared memory (authored by adminY), identical hot vector to userX's
+    // private memory — the leak trap for the X∦Y canary.
+    nextEmbedding = fakeVector(7);
+    await recordMemory({
+      userId: adminY,
+      organisationId: orgY,
+      scope: "org",
+      sourceType: "waste",
+      sourceRef: "orgY-waste-1",
+      title: "Kitchen Y waste rule",
+      rawContent: "Cook logged: trim beef offcuts into stock, never the bin.",
+    });
+    // userX's OWN private memory, same topic vector.
+    nextEmbedding = fakeVector(7);
+    await recordMemory({
+      userId: userX,
+      sourceType: "chat",
+      title: "X private note",
+      rawContent: "Cook asked: how do I portion beef offcuts for my own station?",
+    });
+    await runBrainWorkerTick();
+
+    const ready = (await db.execute(sql`
+      SELECT count(*)::int AS n FROM brain_memory
+      WHERE status = 'ready' AND user_id IN (${adminY}, ${userX})
+    `)) as unknown as Array<{ n: number }>;
+    expect(ready[0].n).toBe(2);
+  });
+
+  it("ORG-ISOLATION CANARY: an org-X member NEVER recalls org-Y's shared memory (X∦Y)", async () => {
+    const { recallMemories } = await import("./brainRecallService.js");
+    const { resolveActiveOrg } = await import("./activeOrgService.js");
+
+    const activeX = await resolveActiveOrg(userX);
+    expect(activeX).toBe(orgX);
+
+    nextEmbedding = fakeVector(7); // identical topic vector to org-Y's memory
+    const recallX = await recallMemories(userX, "portioning beef offcuts", activeX);
+    expect(recallX).not.toBeNull();
+    const titlesX = recallX!.memories.map((m) => m.title ?? "");
+    expect(titlesX).toContain("X private note");
+    expect(titlesX).not.toContain("Kitchen Y waste rule");
+    expect(recallX!.block).not.toContain("never the bin");
+  });
+
+  it("positive org recall: an org-Y member DOES recall org-Y's shared memory", async () => {
+    const { recallMemories } = await import("./brainRecallService.js");
+    const { resolveActiveOrg } = await import("./activeOrgService.js");
+
+    const activeY = await resolveActiveOrg(userY);
+    expect(activeY).toBe(orgY);
+
+    nextEmbedding = fakeVector(7);
+    const recallY = await recallMemories(userY, "what to do with beef offcuts", activeY);
+    expect(recallY).not.toBeNull();
+    const titlesY = recallY!.memories.map((m) => m.title ?? "");
+    expect(titlesY).toContain("Kitchen Y waste rule");
+    expect(recallY!.block).toContain("beef offcuts");
+  });
+
+  it("EX-MEMBER CANARY: a removed member with a stale selection recalls nothing from the org they left", async () => {
+    const { recallMemories } = await import("./brainRecallService.js");
+    const { resolveActiveOrg } = await import("./activeOrgService.js");
+
+    // exUser was a member of orgY and explicitly selected it — then leaves.
+    await db.execute(sql`
+      UPDATE "user" SET selected_organisation_id = ${orgY} WHERE user_id = ${exUser}
+    `);
+    await db.execute(sql`
+      DELETE FROM user_organisation WHERE user_id = ${exUser} AND organisation_id = ${orgY}
+    `);
+
+    // The stored selection is refused: no live membership → null.
+    const activeEx = await resolveActiveOrg(exUser);
+    expect(activeEx).toBeNull();
+
+    // Even if a stale org id were somehow passed, recall must surface nothing —
+    // exUser has no private memories, so the existence gate returns null.
+    nextEmbedding = fakeVector(7);
+    const recallEx = await recallMemories(exUser, "beef offcuts", activeEx);
+    expect(recallEx).toBeNull();
+  });
+
+  it("resolveActiveOrg: explicit live selection wins", async () => {
+    const { resolveActiveOrg } = await import("./activeOrgService.js");
+    // multiUser belongs to both orgs; explicitly select orgY (a live membership).
+    await db.execute(sql`
+      UPDATE "user" SET selected_organisation_id = ${orgY} WHERE user_id = ${multiUser}
+    `);
+    expect(await resolveActiveOrg(multiUser)).toBe(orgY);
+    // Reset for the fallback test below.
+    await db.execute(sql`
+      UPDATE "user" SET selected_organisation_id = NULL WHERE user_id = ${multiUser}
+    `);
+  });
+
+  it("resolveActiveOrg: selected-location org wins over lowest-membership fallback", async () => {
+    const { resolveActiveOrg } = await import("./activeOrgService.js");
+    // locUser is in both orgs, no explicit org, selected location is in orgY.
+    // Lowest membership would be orgX; the location rung must return orgY.
+    expect(Math.min(orgX, orgY)).toBe(orgX);
+    expect(await resolveActiveOrg(locUser)).toBe(orgY);
+  });
+
+  it("resolveActiveOrg: falls back to the numerically-lowest membership", async () => {
+    const { resolveActiveOrg } = await import("./activeOrgService.js");
+    // multiUser: both orgs, no selection, no location → lowest org id.
+    expect(await resolveActiveOrg(multiUser)).toBe(Math.min(orgX, orgY));
+  });
+
+  it("resolveActiveOrg: stale selection (non-member org) drops to fallback", async () => {
+    const { resolveActiveOrg } = await import("./activeOrgService.js");
+    // adminX is a member of orgX only; point the selection at orgY.
+    await db.execute(sql`
+      UPDATE "user" SET selected_organisation_id = ${orgY} WHERE user_id = ${adminX}
+    `);
+    expect(await resolveActiveOrg(adminX)).toBe(orgX);
+    await db.execute(sql`
+      UPDATE "user" SET selected_organisation_id = NULL WHERE user_id = ${adminX}
+    `);
+  });
+
+  it("resolveActiveOrg: a user with no memberships resolves to null", async () => {
+    const { resolveActiveOrg } = await import("./activeOrgService.js");
+    expect(await resolveActiveOrg(noOrgUser)).toBeNull();
+  });
+
+  it("listMemories: tenant boundary + scope filter", async () => {
+    const { listMemories } = await import("./brainService.js");
+
+    // userY sees the org-Y shared memory.
+    const yAll = await listMemories(userY);
+    expect(yAll.memories.some((m) => m.title === "Kitchen Y waste rule")).toBe(true);
+
+    // userX (org-X) never sees org-Y's shared memory.
+    const xAll = await listMemories(userX);
+    expect(xAll.memories.some((m) => m.title === "Kitchen Y waste rule")).toBe(false);
+
+    // scope='user' filter hides the org row from userY.
+    const yUserOnly = await listMemories(userY, { scope: "user" });
+    expect(yUserOnly.memories.some((m) => m.title === "Kitchen Y waste rule")).toBe(false);
+  });
+
+  it("deleteMemory: only an admin of the OWNING org can delete a shared memory", async () => {
+    const { recordMemory } = await import("./brainCaptureService.js");
+    const { deleteMemory } = await import("./brainService.js");
+
+    nextEmbedding = fakeVector(8);
+    await recordMemory({
+      userId: adminY,
+      organisationId: orgY,
+      scope: "org",
+      sourceType: "menu",
+      sourceRef: "orgY-del-1",
+      title: "Deletable org memo",
+      rawContent: "Cook logged: swap the winter garnish next week.",
+    });
+    const [seed] = (await db.execute(sql`
+      SELECT memory_id FROM brain_memory
+      WHERE organisation_id = ${orgY} AND source_ref = 'orgY-del-1'
+    `)) as unknown as Array<{ memory_id: string }>;
+    const memId = seed.memory_id;
+
+    // Non-admin member of the owning org → refused.
+    expect(await deleteMemory(userY, memId)).toBe(false);
+    // Admin of a DIFFERENT org → refused.
+    expect(await deleteMemory(adminX, memId)).toBe(false);
+    // Admin of the owning org → allowed.
+    expect(await deleteMemory(adminY, memId)).toBe(true);
+
+    const [gone] = (await db.execute(sql`
+      SELECT count(*)::int AS n FROM brain_memory WHERE memory_id = ${memId}
+    `)) as unknown as Array<{ n: number }>;
+    expect(gone.n).toBe(0);
+
+    nextEmbedding = fakeVector(0);
+  });
+});
