@@ -587,4 +587,86 @@ suite("Brain org tier (real local DB)", () => {
 
     nextEmbedding = fakeVector(0);
   });
+
+  it("T14b pin: owner pins own memory (sorts first); a non-owner cannot", async () => {
+    const { recordMemory } = await import("./brainCaptureService.js");
+    const { runBrainWorkerTick } = await import("./brainWorker.js");
+    const { pinMemory, listMemories } = await import("./brainService.js");
+
+    nextEmbedding = fakeVector(60);
+    await recordMemory({ userId: userX, sourceType: "chat", title: "X pin target", rawContent: "a memory to pin" });
+    await runBrainWorkerTick();
+    const [row] = (await db.execute(sql`
+      SELECT memory_id FROM brain_memory WHERE user_id = ${userX} AND title = 'X pin target'
+    `)) as unknown as Array<{ memory_id: string }>;
+
+    expect(await pinMemory(userY, row.memory_id, true)).toBe(false); // non-owner denied
+    expect(await pinMemory(userX, row.memory_id, true)).toBe(true); // owner allowed
+
+    const listed = await listMemories(userX);
+    expect(listed.memories[0].memoryId).toBe(row.memory_id); // pinned sorts first
+    expect(listed.memories[0].isPinned).toBe(true);
+  });
+
+  it("T14b correct: editing the body clears the embedding and re-embeds (pending → ready)", async () => {
+    const { recordMemory } = await import("./brainCaptureService.js");
+    const { runBrainWorkerTick } = await import("./brainWorker.js");
+    const { correctMemory } = await import("./brainService.js");
+
+    nextEmbedding = fakeVector(61);
+    await recordMemory({ userId: userX, sourceType: "chat", title: "X correct target", rawContent: "original body" });
+    await runBrainWorkerTick();
+    const [row] = (await db.execute(sql`
+      SELECT memory_id FROM brain_memory WHERE user_id = ${userX} AND title = 'X correct target'
+    `)) as unknown as Array<{ memory_id: string }>;
+
+    expect(await correctMemory(userX, row.memory_id, "corrected body text")).toBe(true);
+    const [after] = (await db.execute(sql`
+      SELECT body, status, (embedding IS NULL) AS cleared FROM brain_memory WHERE memory_id = ${row.memory_id}
+    `)) as unknown as Array<{ body: string; status: string; cleared: boolean }>;
+    expect(after.body).toContain("corrected body");
+    expect(after.status).toBe("pending");
+    expect(after.cleared).toBe(true);
+
+    nextEmbedding = fakeVector(61);
+    await runBrainWorkerTick();
+    const [ready] = (await db.execute(sql`
+      SELECT status, (embedding IS NOT NULL) AS embedded FROM brain_memory WHERE memory_id = ${row.memory_id}
+    `)) as unknown as Array<{ status: string; embedded: boolean }>;
+    expect(ready.status).toBe("ready");
+    expect(ready.embedded).toBe(true);
+  });
+
+  it("T14b scope: sharing a private memory makes a colleague see it; only an org-admin un-shares", async () => {
+    const { recordMemory } = await import("./brainCaptureService.js");
+    const { runBrainWorkerTick } = await import("./brainWorker.js");
+    const { toggleScope, listMemories } = await import("./brainService.js");
+
+    nextEmbedding = fakeVector(62);
+    await recordMemory({ userId: userY, sourceType: "chat", title: "Y private tip", rawContent: "prefer gluten-free on Tuesdays" });
+    await runBrainWorkerTick();
+    const [row] = (await db.execute(sql`
+      SELECT memory_id FROM brain_memory WHERE user_id = ${userY} AND title = 'Y private tip'
+    `)) as unknown as Array<{ memory_id: string }>;
+
+    // Share (user → org): userY's active org resolves to orgY.
+    expect(await toggleScope(userY, row.memory_id, "org")).toBe(true);
+    const [shared] = (await db.execute(sql`
+      SELECT scope, organisation_id FROM brain_memory WHERE memory_id = ${row.memory_id}
+    `)) as unknown as Array<{ scope: string; organisation_id: number }>;
+    expect(shared.scope).toBe("org");
+    expect(shared.organisation_id).toBe(orgY);
+    // A colleague (adminY) now sees it in their list.
+    const adminList = await listMemories(adminY);
+    expect(adminList.memories.some((m) => m.memoryId === row.memory_id)).toBe(true);
+
+    // Un-share (org → user): the owner is only a MEMBER of orgY, so cannot; the org-admin can.
+    expect(await toggleScope(userY, row.memory_id, "user")).toBe(false);
+    expect(await toggleScope(adminY, row.memory_id, "user")).toBe(true);
+    const [unshared] = (await db.execute(sql`
+      SELECT scope, organisation_id FROM brain_memory WHERE memory_id = ${row.memory_id}
+    `)) as unknown as Array<{ scope: string; organisation_id: number | null }>;
+    expect(unshared.scope).toBe("user");
+    expect(unshared.organisation_id).toBeNull();
+  });
 });

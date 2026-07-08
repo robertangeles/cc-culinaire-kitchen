@@ -2442,6 +2442,8 @@ export const brainMemory = pgTable(
     attemptCount: integer("attempt_count").notNull().default(0),
     /** Earliest next worker claim after a failure; enforces real backoff (no hot-loop). */
     nextAttemptDttm: timestamp("next_attempt_dttm", { withTimezone: true }),
+    /** User pinned this memory to keep it top-of-mind (spec T14b). Sorts first in "Your Brain". */
+    isPinned: boolean("is_pinned").notNull().default(false),
     createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
     updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
   },
@@ -2460,5 +2462,10 @@ export const brainMemory = pgTable(
     index("idx_brain_memory_status")
       .on(table.status)
       .where(sql`status IN ('pending', 'failed')`),
+    // Pinned-first "Your Brain" listing (spec T14b). Partial: pinned rows are a
+    // small minority, so an unpinned-excluding index stays tiny.
+    index("idx_brain_memory_pinned")
+      .on(table.userId)
+      .where(sql`is_pinned = true`),
   ],
 );

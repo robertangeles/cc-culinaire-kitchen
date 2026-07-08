@@ -1,22 +1,33 @@
 /**
  * @module pages/YourBrainPage
  *
- * "Your Brain" — the consent baseline for the Brain memory layer
- * (docs/specs/brain-memory.md T8, design D-T2/D-T3): see everything
- * CulinAIre remembers about you, search it, and delete anything.
+ * "Your Brain" — the management surface for the Brain memory layer
+ * (docs/specs/brain-memory.md T8/T14b, design D-T2/D-T3/D-T4): see everything
+ * CulinAIre remembers, search + filter it, pin / correct / share, and delete.
  *
- * Phase 1 baseline: private-scope list (newest first) + search + delete.
- * Phase 2 adds the scope tabs, source filters, pin/correct, and the
- * org-admin surface (spec T14/D-T4).
- *
- * IA (spec): primary = the memory list; secondary = search; tertiary =
- * per-row actions. Memories are a LIST, never a card grid.
+ * IA (spec D-T4): primary = the memory list; secondary = search + scope tabs +
+ * source-type chips; tertiary = per-row actions. Memories are a LIST, never a
+ * card grid; one amber accent only.
  */
 
 import { Brain, Search, Loader2 } from "lucide-react";
 import { useBrainMemories } from "../hooks/useBrainMemories.js";
 import { MemoryRow } from "../components/brain/MemoryRow.js";
 import { BrainEmptyState } from "../components/brain/BrainEmptyState.js";
+import { ScopeToggle } from "../components/brain/ScopeToggle.js";
+import { useLocation } from "../context/LocationContext.js";
+
+/** Source-type filter chips (spec D-T4). `null` value = "All". */
+const SOURCE_CHIPS: ReadonlyArray<{ value: string | null; label: string }> = [
+  { value: null, label: "All" },
+  { value: "chat", label: "Chat" },
+  { value: "recipe", label: "Recipes" },
+  { value: "purchase_order", label: "Purchasing" },
+  { value: "waste", label: "Waste" },
+  { value: "stock", label: "Stock" },
+  { value: "menu", label: "Menu" },
+  { value: "prep", label: "Prep" },
+];
 
 /** Skeleton rows shown while the list loads (states table: LOADING). */
 function LoadingRows() {
@@ -33,10 +44,32 @@ function LoadingRows() {
 }
 
 export function YourBrainPage() {
-  const { memories, total, isLoading, error, search, setSearch, reload, remove } =
-    useBrainMemories();
+  const {
+    memories,
+    total,
+    isLoading,
+    error,
+    search,
+    setSearch,
+    scopeFilter,
+    setScopeFilter,
+    sourceTypeFilter,
+    setSourceTypeFilter,
+    reload,
+    remove,
+    pin,
+    correct,
+    toggleScope,
+  } = useBrainMemories();
 
-  const hasQuery = search.trim().length > 0;
+  // "Belongs to a kitchen" gate for the scope tabs + per-row share action.
+  const { hasLocationAccess } = useLocation();
+  const hasOrg = hasLocationAccess;
+
+  // An empty result is a "no match" (not a warming-up hero) whenever a filter
+  // or search is narrowing the view, or we're on the Shared tab.
+  const hasQuery =
+    search.trim().length > 0 || sourceTypeFilter !== null || scopeFilter === "org";
 
   return (
     <div className="flex-1 overflow-y-auto bg-[#0A0A0A]">
@@ -54,20 +87,47 @@ export function YourBrainPage() {
           </div>
         </header>
 
-        {/* Search (secondary) */}
-        <div className="relative mt-6">
-          <Search
-            className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[#777777]"
-            aria-hidden="true"
-          />
-          <input
-            type="search"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search your memories…"
-            aria-label="Search your memories"
-            className="w-full rounded-xl border border-[#1E1E1E] bg-[#111111] py-2.5 pl-9 pr-3 text-sm text-[#E5E5E5] placeholder:text-[#777777] shadow-[inset_0_1px_2px_rgba(0,0,0,0.4)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4A574]/60"
-          />
+        {/* Search + scope tabs (secondary) */}
+        <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="relative flex-1">
+            <Search
+              className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[#777777]"
+              aria-hidden="true"
+            />
+            <input
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search your memories…"
+              aria-label="Search your memories"
+              className="w-full rounded-xl border border-[#1E1E1E] bg-[#111111] py-2.5 pl-9 pr-3 text-sm text-[#E5E5E5] placeholder:text-[#777777] shadow-[inset_0_1px_2px_rgba(0,0,0,0.4)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4A574]/60"
+            />
+          </div>
+          {hasOrg && (
+            <ScopeToggle value={scopeFilter} onChange={setScopeFilter} />
+          )}
+        </div>
+
+        {/* Source-type filter chips (spec D-T4) */}
+        <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+          {SOURCE_CHIPS.map((chip) => {
+            const active = sourceTypeFilter === chip.value;
+            return (
+              <button
+                key={chip.label}
+                type="button"
+                onClick={() => setSourceTypeFilter(chip.value)}
+                aria-pressed={active}
+                className={`flex-shrink-0 rounded-full border px-3 py-1 text-xs font-medium transition-colors motion-reduce:transition-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4A574]/60 ${
+                  active
+                    ? "border-[#D4A574]/30 bg-[#D4A574]/15 text-[#D4A574]"
+                    : "border-[#1E1E1E] bg-[#111111] text-[#999999] hover:text-[#E5E5E5]"
+                }`}
+              >
+                {chip.label}
+              </button>
+            );
+          })}
         </div>
 
         {/* List states (spec interaction table) */}
@@ -89,20 +149,24 @@ export function YourBrainPage() {
                 Retry
               </button>
             </div>
-          ) : memories.length === 0 && !hasQuery ? (
-            <BrainEmptyState />
           ) : memories.length === 0 ? (
-            <p className="px-2 py-8 text-center text-sm text-[#999999]">
-              Nothing in your Brain matches that — try a different word.
-            </p>
+            <BrainEmptyState hasQuery={hasQuery} />
           ) : (
             <>
               <p className="mb-2 px-1 text-xs text-[#777777]" aria-live="polite">
-                {total} {total === 1 ? "memory" : "memories"}, newest first
+                {total} {total === 1 ? "memory" : "memories"}
               </p>
               <ul className="space-y-2">
                 {memories.map((memory) => (
-                  <MemoryRow key={memory.memoryId} memory={memory} onDelete={remove} />
+                  <MemoryRow
+                    key={memory.memoryId}
+                    memory={memory}
+                    hasOrg={hasOrg}
+                    onDelete={remove}
+                    onPin={pin}
+                    onCorrect={correct}
+                    onToggleScope={toggleScope}
+                  />
                 ))}
               </ul>
             </>
