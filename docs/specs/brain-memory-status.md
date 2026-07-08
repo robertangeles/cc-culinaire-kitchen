@@ -137,12 +137,11 @@ produced a recipe that reflected the seeded memory (crisp-skin detail carried th
 
 ### T14 — Rich "Your Brain" controls (being sliced, to the locked D-T4 spec)
 
-- **✅ T14 slice 1 — Labs grounded chip** (branch `feature/ck-web/brain-labs-chip`, PR #47). The "Grounded in your Brain" chip now appears on Lab results.
-- **✅ T14b — rich self-service controls** (branch `feature/ck-web/brain-your-brain-controls`, 2026-07-08). "Your Brain" is now a management surface: **pin** (sorts first), **correct** (edit → re-embed), **scope-toggle** (private↔shared), plus **scope tabs** `[Private | Shared]` + **source-type filter chips** + a warm no-match empty state.
-  - Backend: `is_pinned` column + partial index (idempotent `scripts/addBrainPinColumn.ts`); `pinMemory`/`correctMemory`/`toggleScope` in `brainService.ts` behind a single `canManage` auth helper (own row OR org-admin of the owning org); `PATCH /memories/:id/pin|:id|:id/scope` (all `brain:manage`). Share promotes to the user's active org; un-share requires org-admin.
+- **✅ T14 slice 1 — Labs grounded chip** (merged, PR #47). Closes the T13 deferral: Recipe/Patisserie/Spirits Lab results now show the same "Grounded in your Brain" chip as chat. `generateRecipe` returns its recalled `memories`; `recipeHandler` adds an additive `brainGrounded` field to the JSON; `BrainGroundedChip` gained a direct `memories` prop (chat `annotations` path unchanged); `RecipeLabPage` (one shared component for all 3 Labs) renders it after the hero. No schema/migration, no contract break (web-only endpoints).
+- **✅ T14b — rich self-service controls** (PR #48, 2026-07-08). "Your Brain" is now a management surface: **pin** (sorts first), **correct** (edit → re-embed), **scope-toggle** (private↔shared), plus **scope tabs** `[Private | Shared]` + **source-type filter chips** + a warm no-match empty state.
+  - Backend: `is_pinned` column + partial index (idempotent `scripts/addBrainPinColumn.ts`, **applied to prod**); `pinMemory`/`correctMemory`/`toggleScope` in `brainService.ts` behind a single `canManage` auth helper (own row OR org-admin of the owning org); `PATCH /memories/:id/pin|:id|:id/scope` (all `brain:manage`). Share promotes to the user's active org; un-share requires org-admin.
   - Frontend: `useBrainMemories` filters + optimistic mutations; `ScopeToggle` (new), `MemoryRow` pin/edit/scope actions, `BrainEmptyState` `hasQuery` variant; `hasOrg` gates the share UI.
-  - Verified: server 544/544 (route matrix + pin/correct/scope integration incl. org boundary + colleague-visibility), client 58/58, tsc/build green, **live PATCH smoke** (pin/correct/scope via HTTP → DB reflects it; the worker re-embedded the corrected body).
-  - **⚠️ Deploy prereq:** run `scripts/addBrainPinColumn.ts` on prod (backup-first) before this deploys.
+  - Verified: server 544/544 (route matrix + pin/correct/scope integration incl. org boundary + colleague-visibility), client 58/58, tsc/build green, **live PATCH smoke** (pin/correct/scope via HTTP → DB reflects it; the worker re-embedded the corrected body). Independently reviewed APPROVE by the pr-reviewer agent.
 - **⬜ T14c — org-admin management surface** ← **NEXT**. Browse/correct/delete *other members'* shared memories under an admin view + org attribution on `ProvenanceChip` (reuses these same endpoints).
 
 | Task | Plain English | Notes |

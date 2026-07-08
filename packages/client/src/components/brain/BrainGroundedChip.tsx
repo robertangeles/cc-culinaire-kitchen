@@ -4,20 +4,30 @@
  * "Grounded in your Brain" trust signal under a chat reply
  * (docs/specs/brain-memory.md DR1 / D-T1).
  *
- * Quiet by default: a small dismissible pill that appears only when the
- * server's `brain_grounded` message annotation says memories informed this
- * answer. Expanding it reveals WHICH memories (titles only — bodies never
- * travel down this channel). Announced politely to screen readers.
+ * Quiet by default: a small dismissible pill that appears only when memories
+ * informed this answer. Expanding it reveals WHICH memories (titles only —
+ * bodies never travel down this channel). Announced politely to screen readers.
+ *
+ * Two sources (spec T14): chat streams the `brain_grounded` message annotation
+ * (`annotations` prop); the non-streaming Labs pass their recalled `memories`
+ * directly (`memories` prop). Either drives the same chip.
  */
 
 import { useState } from "react";
 import { Brain, ChevronDown, X } from "lucide-react";
 import type { JSONValue } from "ai";
 
+/** A recalled memory reference — ids + labels only, never bodies. */
+interface GroundedMemory {
+  memoryId: string;
+  title: string | null;
+  sourceType: string;
+}
+
 /** Shape of the server's brain_grounded message annotation. */
 interface BrainGroundedAnnotation {
   type: "brain_grounded";
-  memories: Array<{ memoryId: string; title: string | null; sourceType: string }>;
+  memories: GroundedMemory[];
 }
 
 /** Extract the brain_grounded annotation from a message's annotations, if any. */
@@ -36,12 +46,20 @@ function findGrounding(annotations: JSONValue[] | undefined): BrainGroundedAnnot
   return null;
 }
 
-export function BrainGroundedChip({ annotations }: { annotations: JSONValue[] | undefined }) {
+export function BrainGroundedChip({
+  annotations,
+  memories: directMemories,
+}: {
+  /** Chat path: Vercel AI SDK message annotations carrying `brain_grounded`. */
+  annotations?: JSONValue[] | undefined;
+  /** Labs path: recalled memories passed directly from the JSON response. */
+  memories?: GroundedMemory[] | null;
+}) {
   const [expanded, setExpanded] = useState(false);
   const [dismissed, setDismissed] = useState(false);
 
-  const grounding = findGrounding(annotations);
-  if (!grounding || grounding.memories.length === 0 || dismissed) return null;
+  const memories = directMemories ?? findGrounding(annotations)?.memories ?? null;
+  if (!memories || memories.length === 0 || dismissed) return null;
 
   return (
     <div role="status" aria-live="polite" className="mt-1.5">
@@ -71,7 +89,7 @@ export function BrainGroundedChip({ annotations }: { annotations: JSONValue[] | 
 
       {expanded && (
         <ul className="mt-1.5 space-y-0.5 pl-1">
-          {grounding.memories.map((memory) => (
+          {memories.map((memory) => (
             <li key={memory.memoryId} className="text-[11px] text-[#999999]">
               · {memory.title || "A note from your kitchen"}
             </li>
