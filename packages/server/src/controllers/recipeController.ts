@@ -145,6 +145,9 @@ export function recipeHandler(domain: RecipeDomain) {
       imageUrl: result.imageUrl,
       recipeId: result.recipeId,
       slug: result.slug,
+      // "Grounded in your Brain" chip data (spec T14) — additive, omitted when
+      // recall didn't inform this generation. Ids + labels only, never bodies.
+      brainGrounded: result.memories ?? undefined,
     });
   };
 }

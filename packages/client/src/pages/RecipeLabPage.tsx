@@ -20,6 +20,7 @@ import { ChefHat, Croissant, GlassWater, AlertCircle, RefreshCw } from "lucide-r
 import { RecipeForm, type RecipeFormData, type RecipeDomain } from "../components/recipes/RecipeForm.js";
 import { RecipeHero } from "../components/recipes/RecipeHero.js";
 import { RecipeCard, type RecipeData } from "../components/recipes/RecipeCard.js";
+import { BrainGroundedChip } from "../components/brain/BrainGroundedChip.js";
 import { useAuth } from "../context/AuthContext.js";
 
 // ---------------------------------------------------------------------------
@@ -75,6 +76,8 @@ interface GeneratedRecipe {
   imageUrl: string | null;
   recipeId: string | null;
   slug: string | null;
+  /** Memories that grounded this generation (spec T14) — drives the chip. */
+  brainGrounded?: Array<{ memoryId: string; title: string | null; sourceType: string }> | null;
 }
 
 export function RecipeLabPage({ domain }: RecipeLabPageProps) {
@@ -135,6 +138,7 @@ export function RecipeLabPage({ domain }: RecipeLabPageProps) {
         recipeId?: string | null;
         slug?: string | null;
         prose?: string;
+        brainGrounded?: Array<{ memoryId: string; title: string | null; sourceType: string }>;
       };
 
       if (data.prose) {
@@ -145,6 +149,7 @@ export function RecipeLabPage({ domain }: RecipeLabPageProps) {
           imageUrl: data.imageUrl ?? null,
           recipeId: data.recipeId ?? null,
           slug: data.slug ?? null,
+          brainGrounded: data.brainGrounded ?? null,
         };
         setGenerated(gen);
         setIsPublic(false);
@@ -236,6 +241,13 @@ export function RecipeLabPage({ domain }: RecipeLabPageProps) {
           domain={domain}
         />
         <div className="max-w-5xl mx-auto">
+          {/* "Grounded in your Brain" trust chip (spec T14) — shows when this
+              generation was informed by the chef's + kitchen's memory. */}
+          {generated.brainGrounded && generated.brainGrounded.length > 0 && (
+            <div className="px-4 pt-4">
+              <BrainGroundedChip memories={generated.brainGrounded} />
+            </div>
+          )}
           <RecipeCard
             recipe={generated.recipe}
             domain={domain}

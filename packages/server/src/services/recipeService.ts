@@ -348,13 +348,16 @@ export async function generateRecipe(input: RecipeInput): Promise<{
   proseResponse: string | null;
   recipeId: string | null;
   slug: string | null;
+  /** Recall memories that grounded this generation (spec T14) — ids + labels
+   * only, never bodies. Drives the "Grounded in your Brain" chip. */
+  memories: Array<{ memoryId: string; title: string | null; sourceType: string }> | null;
 }> {
   let systemPrompt: string;
   try {
     systemPrompt = await loadDomainPrompt(input.domain);
   } catch (err) {
     logger.error({ err, domain: input.domain }, "generateRecipe: failed to load domain prompt");
-    return { recipe: null, imageUrl: null, proseResponse: proseFallback(input), recipeId: null, slug: null };
+    return { recipe: null, imageUrl: null, proseResponse: proseFallback(input), recipeId: null, slug: null, memories: null };
   }
 
   // Brain recall (spec T13): ground the Lab in the chef's own + kitchen memory.
@@ -470,7 +473,7 @@ export async function generateRecipe(input: RecipeInput): Promise<{
           error: retryErr instanceof Error ? retryErr.message : String(retryErr),
           validationCause: retryCause?.slice(0, 500),
         }, "generateRecipe: all attempts failed — prose fallback");
-        return { recipe: null, imageUrl: null, proseResponse: proseFallback(input), recipeId: null, slug: null };
+        return { recipe: null, imageUrl: null, proseResponse: proseFallback(input), recipeId: null, slug: null, memories: null };
       }
     }
   }
@@ -530,5 +533,5 @@ export async function generateRecipe(input: RecipeInput): Promise<{
     logger.warn({ err }, "generateRecipe: failed to persist recipe — returning without ID");
   }
 
-  return { recipe, imageUrl, proseResponse: null, recipeId, slug };
+  return { recipe, imageUrl, proseResponse: null, recipeId, slug, memories: brainRecall?.memories ?? null };
 }
