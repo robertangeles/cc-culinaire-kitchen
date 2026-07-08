@@ -10,6 +10,7 @@
 import { generateObject } from "ai";
 import { z } from "zod";
 import { getModel } from "./providerService.js";
+import { recallMemoriesWithBudget } from "./brainRecallService.js";
 import pino from "pino";
 
 const logger = pino({ name: "recipeRefinement" });
@@ -144,8 +145,20 @@ export async function refineRecipe(
   currentRecipeData: Record<string, unknown>,
   instruction: string,
   kitchenContext?: string,
+  userId?: number,
+  activeOrgId?: number | null,
 ): Promise<{ refinedData: Record<string, unknown>; changeSummary: string }> {
   const model = getModel();
+
+  const recipeName = (currentRecipeData as any).name ?? "";
+
+  // Brain recall (spec T13): ground the refinement in the chef's + kitchen memory.
+  // Fired concurrently with the RAG search below; null on every miss/flag-off path.
+  const brainRecallPromise = recallMemoriesWithBudget(
+    userId ?? 0,
+    `${instruction} ${recipeName}`,
+    activeOrgId ?? null,
+  );
 
   // Load prompt from database (admin-editable via Settings → Prompts)
   const { getPromptRaw } = await import("./promptService.js");
@@ -161,7 +174,6 @@ export async function refineRecipe(
   let ragContext = "";
   try {
     const { searchKnowledge } = await import("./knowledgeService.js");
-    const recipeName = (currentRecipeData as any).name ?? "";
     const searchQuery = `${instruction} ${recipeName}`;
     const results = await searchKnowledge(searchQuery, "3");
     if (results.length > 0) {
@@ -171,12 +183,19 @@ export async function refineRecipe(
     // Knowledge search failed — continue without RAG context
   }
 
+  const brainRecall = await brainRecallPromise;
+
   const parts: string[] = [];
   if (ragContext) {
     parts.push(ragContext);
   }
   if (kitchenContext) {
     parts.push(`## Chef's Kitchen Context:\n${kitchenContext}\n`);
+  }
+  // Brain Memory block (spec T13). Empty when recall is off/missed → byte-identical
+  // to the pre-Brain build. The block carries its own trusted-data guardrail.
+  if (brainRecall?.block) {
+    parts.push(`${brainRecall.block}\n`);
   }
   parts.push(`## Current Recipe:\n\`\`\`json\n${JSON.stringify(currentRecipeData, null, 2)}\n\`\`\`\n`);
   parts.push(`## Chef's Instruction:\n${instruction}`);

@@ -2,9 +2,9 @@
 
 **One-line status:** Phase 1 is **built, shipped, deployed, and LIVE in production**
 (capture + distillation + recall all on), verified end-to-end. **T11 (org tier) + T12
-(ops-event capture) are built + tested on branch `feature/ck-web/brain-org-tier`**
-(T11 committed; T12 not yet committed; neither merged/deployed). Continue Phase 2 with
-**T13 (recall in Labs + Copilot)**.
+(ops-event capture) + T13 (recall in the Labs) are built + tested on branch
+`feature/ck-web/brain-org-tier`** (T11 + T12 committed; T13 not yet committed; none
+merged/deployed). Continue Phase 2 with **T14 (rich "Your Brain" UI)**.
 
 _Last updated: 2026-07-08. This is the living "where are we / what's next" doc.
 The original plan (with full rationale + reviews) is `brain-memory.md`._
@@ -108,12 +108,38 @@ not); tsc clean; **live curl smoke** — `POST /api/waste` produced a `brain_mem
 add an LLM pass later); no schema/migration change (carried-risk withdrawn); recipes stay
 `scope='user'` (no org column — a chef's recipe history recalls only for them).
 
+### ✅ T13 — Recall in the Creative Labs (built + tested, branch `feature/ck-web/brain-org-tier`, 2026-07-08)
+
+Recipe / Patisserie / Spirits Lab generation + recipe refinement are now grounded in the
+recalled `## Brain Memory` block, same as chat. One splice covers all three Labs (shared
+`recipeService.generateRecipe`); the block is injected into the user message in D5 order
+(kitchen context → Brain → RAG → request), recall fired concurrently with the RAG search,
+`activeOrgId` resolved in the controller.
+
+| Piece | Where |
+|---|---|
+| Recall seed + concurrent recall + `buildUserMessage` block splice | `services/recipeService.ts` |
+| `resolveActiveOrg` in the shared Labs controller + refine handler | `controllers/recipeController.ts` |
+| Refinement grounding (optional `userId`/`activeOrgId` params) | `services/recipeRefinementService.ts` |
+| Splice + D5-order + byte-identical-when-null tests | `services/recipeService.test.ts`, `services/recipeRefinementService.test.ts` |
+
+**Scope:** **Labs only — Copilot deferred.** "Kitchen Copilot" is the prep module and its
+task generation is pure scoring math with NO LLM, so there's no prompt to ground; wire it
+when/if prep gains an AI step. **No schema/migration; no API-contract change** (the Labs
+"grounded in your Brain" chip is deferred to the Your-Brain UI work, ~T14).
+
+**Verified:** server suite 529/529; 7 new splice tests (query seed, block in D5 order,
+byte-identical when recall null, per-domain seeding, refinement); tsc clean; lint 0
+errors; build 3/3. **Live LLM smoke PASSED** — with the OpenRouter key hydrated from the
+DB `credential` table, a seeded recipe memory embedded (real), live recall returned it,
+and a real grounded generation fired `brain.recall.hit` inside `generateRecipe` and
+produced a recipe that reflected the seeded memory (crisp-skin detail carried through).
+
 ### ⬜ Pending — remaining Phase 2
 
 | Task | Plain English | Notes |
 |---|---|---|
-| **T13 — Recall in Labs + Copilot** ← **START HERE** | Recipe/Patisserie/Spirits Labs + Kitchen Copilot get grounded like chat. | Seed recall from recipe request params / dish brief / prep selections. |
-| **T14 — Rich "Your Brain" controls** | Provenance, pin, correct(→re-embed), private/shared scope toggle + org-admin management of shared memories. | Design: **D-T4** (scope tabs + source filter). |
+| **T14 — Rich "Your Brain" controls** ← **START HERE** | Provenance, pin, correct(→re-embed), private/shared scope toggle + org-admin management of shared memories; + the grounded chip for Labs. | Design: **D-T4** (scope tabs + source filter). Needs a `/plan-design-review` pass. |
 | **T15 — Org digest** | Periodic "what your kitchen's Brain learned" summary. | `brainDigestService`, `pg_advisory_lock`-guarded. |
 
 ## ⬜ Pending — Phase 3 (intelligence layer)
@@ -127,9 +153,10 @@ add an LLM pass later); no schema/migration change (carried-risk withdrawn); rec
 ---
 
 ## Recommended pick-up order
-1. ~~**T11 (org tier)**~~ — ✅ done (committed). The unlock is in place.
-2. ~~**T12 (ops capture)**~~ — ✅ done (branch, not yet committed). It's now "kitchen memory."
-3. **T13 (recall in Labs + Copilot)** ← next — extend recall to the R&D surfaces. Then T14–T15, then Phase 3.
+1. ~~**T11 (org tier)**~~ — ✅ done (committed).
+2. ~~**T12 (ops capture)**~~ — ✅ done (committed). It's now "kitchen memory."
+3. ~~**T13 (recall in the Labs)**~~ — ✅ done (branch, not yet committed). R&D is grounded. Copilot deferred (no LLM there yet).
+4. **T14 (rich "Your Brain" UI)** ← next — scope tabs, provenance, org-admin management, + the Labs grounded chip. Run `/plan-design-review` first. Then T15, then Phase 3.
 
 Each is a self-contained ship-and-verify chunk on the existing capture/recall seam
 — same pattern proven in Phase 1.

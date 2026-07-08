@@ -28,6 +28,7 @@ import { searchKnowledge } from "./knowledgeService.js";
 import { saveRecipe } from "./recipePersistenceService.js";
 import { getPromptRaw } from "./promptService.js";
 import { recordOpsEvent } from "./brainCaptureService.js";
+import { recallMemoriesWithBudget } from "./brainRecallService.js";
 
 const logger = pino({ name: "recipeService" });
 
@@ -188,6 +189,12 @@ export interface RecipeInput {
   kitchenContext?: string;
   /** User ID for persistence (null for guests) */
   userId?: number;
+  /**
+   * Pre-resolved active organisation id for org-shared Brain recall (spec T13).
+   * MUST already be a verified live membership (resolved by the controller via
+   * activeOrgService.resolveActiveOrg). Null → user-scope recall only.
+   */
+  activeOrgId?: number | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -247,11 +254,19 @@ async function searchRecipeContext(input: RecipeInput): Promise<string> {
 // User message builder
 // ---------------------------------------------------------------------------
 
-function buildUserMessage(input: RecipeInput, ragContext: string): string {
+function buildUserMessage(input: RecipeInput, ragContext: string, brainBlock = ""): string {
   const parts: string[] = [];
 
   if (input.kitchenContext) {
     parts.push(input.kitchenContext);
+    parts.push("");
+  }
+
+  // Brain recall block (spec T13/D5): kitchen context → Brain Memory → RAG →
+  // request. Empty when recall is off/missed, so the message is byte-identical
+  // to the pre-Brain build. The block carries its own trusted-data guardrail.
+  if (brainBlock) {
+    parts.push(brainBlock);
     parts.push("");
   }
 
@@ -342,11 +357,28 @@ export async function generateRecipe(input: RecipeInput): Promise<{
     return { recipe: null, imageUrl: null, proseResponse: proseFallback(input), recipeId: null, slug: null };
   }
 
-  // RAG knowledge search — inject relevant culinary context
-  const ragContext = await searchRecipeContext(input);
+  // Brain recall (spec T13): ground the Lab in the chef's own + kitchen memory.
+  // Seed the query from the brief + domain params. Fire concurrently with the
+  // RAG search so it adds no latency; null on every miss/flag-off path.
+  const recallQuery = [
+    input.request,
+    input.cuisine,
+    input.spiritBase,
+    input.pastryType,
+    input.drinkStyle,
+    ...(input.mainIngredients ?? []),
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  // RAG knowledge search — inject relevant culinary context (concurrent with recall)
+  const [ragContext, brainRecall] = await Promise.all([
+    searchRecipeContext(input),
+    recallMemoriesWithBudget(input.userId ?? 0, recallQuery, input.activeOrgId ?? null),
+  ]);
 
   const model = getModel();
-  const userMessage = buildUserMessage(input, ragContext);
+  const userMessage = buildUserMessage(input, ragContext, brainRecall?.block ?? "");
 
   // Attempt 1: strict structured generation
   let recipe: RecipeOutput | null = null;
