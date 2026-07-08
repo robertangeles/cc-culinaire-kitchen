@@ -129,4 +129,18 @@ describe("recipeService — Brain recall splice in the Labs (spec T13)", () => {
     await generateRecipe({ domain: "patisserie", request: "layered tart", pastryType: "choux", userId: 5 });
     expect((recallSpy.mock.calls[0] as [number, string])[1]).toContain("choux");
   });
+
+  it("returns the recalled memories that grounded the generation (drives the Labs chip, spec T14)", async () => {
+    mockRecall = RECALL;
+    const { generateRecipe } = await import("./recipeService.js");
+    const result = await generateRecipe({ domain: "recipe", request: "miso cod", userId: 5, activeOrgId: 9 });
+    expect(result.memories).toEqual(RECALL.memories);
+  });
+
+  it("returns memories: null when recall misses (no chip)", async () => {
+    mockRecall = null;
+    const { generateRecipe } = await import("./recipeService.js");
+    const result = await generateRecipe({ domain: "recipe", request: "miso cod", userId: 5 });
+    expect(result.memories).toBeNull();
+  });
 });
