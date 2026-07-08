@@ -30,6 +30,8 @@ import {
   revertToVersion,
 } from "../services/recipePersistenceService.js";
 import { refineRecipe } from "../services/recipeRefinementService.js";
+import { recordOpsEvent } from "../services/brainCaptureService.js";
+import { resolveActiveOrg } from "../services/activeOrgService.js";
 import { sendRecipeEmail } from "../services/emailService.js";
 import { generateImage } from "../services/imageService.js";
 import { db } from "../db/index.js";
@@ -86,6 +88,11 @@ export function recipeHandler(domain: RecipeDomain) {
     const body: RecipeRequest = parsed.data;
     const userId = req.user?.sub ?? 0;
 
+    // Resolve the active org for org-shared Brain recall (spec T13) — outside
+    // generateRecipe so its membership lookups don't spend recall's budget.
+    // Degrades to user-scope recall on any failure.
+    const activeOrgId = userId ? await resolveActiveOrg(userId).catch(() => null) : null;
+
     let kitchenContext: string | undefined;
     try {
       kitchenContext = (await buildContextString(userId)) || undefined;
@@ -120,6 +127,7 @@ export function recipeHandler(domain: RecipeDomain) {
         season: body.season,
         kitchenContext,
         userId: userId > 0 ? userId : undefined,
+        activeOrgId,
       });
     } catch (err) {
       logger.error({ domain, err }, "recipeHandler: unexpected error during generation");
@@ -501,7 +509,15 @@ export async function handleRefineRecipe(
     const currentRecipeData = rec.recipeData as Record<string, unknown>;
     const kitchenContext = rec.kitchenContext ?? undefined;
 
-    const result = await refineRecipe(currentRecipeData, parsed.data.instruction, kitchenContext);
+    // Resolve the active org for org-shared Brain recall (spec T13).
+    const activeOrgId = await resolveActiveOrg(userId).catch(() => null);
+    const result = await refineRecipe(
+      currentRecipeData,
+      parsed.data.instruction,
+      kitchenContext,
+      userId,
+      activeOrgId,
+    );
 
     res.json({
       refinedData: result.refinedData,
@@ -550,6 +566,19 @@ export async function handleAcceptRefinement(
       res.status(404).json({ error: "Recipe not found or not owned by you." });
       return;
     }
+
+    // Brain memory (spec T12): remember this AI refinement (user-scoped).
+    const recipeName = (result.recipe as { title?: string })?.title ?? "recipe";
+    void recordOpsEvent({
+      userId,
+      sourceType: "recipe",
+      scope: "user",
+      stage: "refined",
+      sourceRef: id,
+      title: recipeName,
+      recipeName,
+      changeSummary: parsed.data.changeSummary ?? null,
+    });
 
     res.json({ recipe: result.recipe, versionNumber: result.versionNumber });
   } catch (err) {

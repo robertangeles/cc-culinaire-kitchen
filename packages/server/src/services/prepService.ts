@@ -26,6 +26,7 @@ import { getUserOrgContext } from "./orgContextService.js";
 import { computeSuggestedSelections, aggregatePrepLines, attachOnHand, type PrepSourceLine } from "./prepMath.js";
 import { convertUnit as sharedConvertUnit, normalizeUnit, type BaseUnit } from "@culinaire/shared";
 import { addStock, deductStock } from "./stockService.js";
+import { recordOpsEvent } from "./brainCaptureService.js";
 
 const logger = pino({ name: "prepService" });
 
@@ -1191,6 +1192,26 @@ export async function endSession(
     .returning();
 
   if (!updated) return null;
+
+  // Brain memory (spec T12): remember this prep session completed. Org-scoped
+  // when the session carries an org (nullable → scope follows the data).
+  const prepDateStr =
+    typeof updated.prepDate === "string"
+      ? updated.prepDate
+      : new Date(updated.prepDate).toISOString().slice(0, 10);
+  void recordOpsEvent({
+    userId,
+    sourceType: "prep",
+    scope: updated.organisationId ? "org" : "user",
+    organisationId: updated.organisationId ?? null,
+    sourceRef: sessionId,
+    title: `Prep completed ${prepDateStr}`,
+    prepDate: prepDateStr,
+    tasksCompleted: updated.tasksCompleted ?? 0,
+    tasksTotal: updated.tasksTotal ?? 0,
+    actualCovers: updated.actualCovers ?? null,
+    notes: updated.notes ?? null,
+  });
 
   logger.info(
     { sessionId, actualCovers },

@@ -1,10 +1,12 @@
 # The Brain — Status & Next Steps (resume point)
 
 **One-line status:** Phase 1 is **built, shipped, deployed, and LIVE in production**
-(capture + distillation + recall all on), verified end-to-end. Phase 2 and Phase 3
-are the pending work. Start Phase 2 with **T11 (org tier)**.
+(capture + distillation + recall all on), verified end-to-end. **T11 (org tier) + T12
+(ops-event capture) + T13 (recall in the Labs) are built + tested on branch
+`feature/ck-web/brain-org-tier`** (T11 + T12 committed; T13 not yet committed; none
+merged/deployed). Continue Phase 2 with **T14 (rich "Your Brain" UI)**.
 
-_Last updated: 2026-07-07. This is the living "where are we / what's next" doc.
+_Last updated: 2026-07-08. This is the living "where are we / what's next" doc.
 The original plan (with full rationale + reviews) is `brain-memory.md`._
 
 ---
@@ -46,16 +48,98 @@ the Brain yet — that's Phase 2.
 
 ---
 
-## ⬜ Pending — Phase 2 (make it the *whole kitchen's* memory)
+## Phase 2 (make it the *whole kitchen's* memory)
 
-Start here. The `organisation_id` column already exists (added in Phase 1 for this).
+### ✅ T11 — Org tier (built + tested, branch `feature/ck-web/brain-org-tier`, 2026-07-08)
+
+Per-org shared memory foundation. The recall/management surface now serves
+`scope='org'` rows with hard tenant isolation, resolved to a single active org.
+
+| Piece | Where |
+|---|---|
+| `user.selected_organisation_id` (+FK) + `idx_brain_memory_org_scope` | `db/schema.ts`, idempotent `scripts/addBrainOrgTier.ts` |
+| Deterministic active-org resolver (E-fold #8) + **live-membership recheck** | `services/activeOrgService.ts` (`resolveActiveOrg`, `switchOrganisation`) |
+| Two-tier recall (own `scope='user'` OR active org's `scope='org'`) — both the scan and the `hasReadyMemory` gate | `services/brainRecallService.ts` |
+| `activeOrgId` threaded `chatController → streamChat → recall` (resolved OUTSIDE the 2s budget race) | `controllers/chatController.ts`, `services/aiService.ts` |
+| `listMemories` tenant boundary + `scope` filter; `deleteMemory` org-admin-of-owning-org path (E5) | `services/brainService.ts`, `controllers/brainController.ts` |
+| Tests: **X∦Y** + **ex-member** canaries, resolver units, delete matrix, byte-identical regression, curl smoke | `services/brainIntegration.test.ts`, `services/aiService.test.ts` |
+
+**Verified:** server suite 513/513; 17 org-tier integration tests (real DB) incl. the
+X∦Y and ex-member canaries; migration idempotent (run twice); curl smoke 401/200/400/404
++ non-admin org delete refused (memory survives).
+
+**Documented deviations from the T11 plan (all deliberate):**
+1. Active-org resolved in **`chatController`** (the real recall splice site), not
+   `conversationController` (that is the capture site — untouched, chat stays private).
+2. The delete-authorisation matrix lives in the **integration suite** (needs a real DB),
+   not the hermetic route-gate test — no new route or permission key was added, so the
+   gate matrix in `routes/brain.test.ts` is unchanged.
+3. Local dev DB was missing the Phase-1 `brain_memory` table; ran
+   `createBrainMemoryTable.ts` before `addBrainOrgTier.ts`. Prod already has it.
+
+**~~⚠️ Carried risk for T12~~ — WITHDRAWN (see T12 below):** the upsert unique index
+does NOT need changing. Ops `sourceRef`s are globally-unique entity UUIDs + each
+`source_type` has a fixed scope, so the existing `(user_id, source_type, source_ref)`
+key already can't collide across orgs; adding `organisation_id` would *break* user-scoped
+recipe dedup (NULL-distinct → duplicate inserts) and `NULLS NOT DISTINCT` would break chat.
+
+### ✅ T12 — Ops-event capture (built + tested, branch `feature/ck-web/brain-org-tier`, 2026-07-08)
+
+The Brain now remembers what the kitchen *does*. A new `recordOpsEvent` wrapper builds a
+**deterministic template** body per event (NO LLM distiller — chosen over the spec's LLM
+ops distiller: free, instant, no injection surface; free-text sanitized per-field before
+framing), fired `void` after each write commits.
+
+| Piece | Where |
+|---|---|
+| `recordOpsEvent` + `buildOpsBody` (discriminated union, 7 event types) | `services/brainCaptureService.ts` |
+| PO submitted/approved/received (`scope='org'`, `sourceRef=${poId}:${stage}`) | `controllers/purchaseOrderController.ts` |
+| Waste / Stock count / Prep completed (`scope='org'`, service-side) | `wasteService.ts`, `stockTakeService.ts`, `prepService.ts` |
+| Recipe saved / refined (`scope='user'` — no org column) | `recipeService.ts`, `controllers/recipeController.ts` |
+| Menu created/updated (`scope='org'` via `getUserOrgContext`; **semantic-field gate** skips nightly analytics writes) | `menuIntelligenceService.ts` |
+| Unit templates + injection tests; colleague-recall integration canary | `brainCaptureService.test.ts`, `brainIntegration.test.ts` |
+
+**Verified:** server suite 522/522; 20 template/posture unit tests + the T12 ops canary
+(adminY logs waste → embedded → colleague userY recalls it, userX in another org does
+not); tsc clean; **live curl smoke** — `POST /api/waste` produced a `brain_memory` row
+`scope='org'`, `source_type='waste'`, templated body, `status=ready`, embedded.
+
+**Deviations:** deterministic templates instead of the spec's LLM ops distiller (flag can
+add an LLM pass later); no schema/migration change (carried-risk withdrawn); recipes stay
+`scope='user'` (no org column — a chef's recipe history recalls only for them).
+
+### ✅ T13 — Recall in the Creative Labs (built + tested, branch `feature/ck-web/brain-org-tier`, 2026-07-08)
+
+Recipe / Patisserie / Spirits Lab generation + recipe refinement are now grounded in the
+recalled `## Brain Memory` block, same as chat. One splice covers all three Labs (shared
+`recipeService.generateRecipe`); the block is injected into the user message in D5 order
+(kitchen context → Brain → RAG → request), recall fired concurrently with the RAG search,
+`activeOrgId` resolved in the controller.
+
+| Piece | Where |
+|---|---|
+| Recall seed + concurrent recall + `buildUserMessage` block splice | `services/recipeService.ts` |
+| `resolveActiveOrg` in the shared Labs controller + refine handler | `controllers/recipeController.ts` |
+| Refinement grounding (optional `userId`/`activeOrgId` params) | `services/recipeRefinementService.ts` |
+| Splice + D5-order + byte-identical-when-null tests | `services/recipeService.test.ts`, `services/recipeRefinementService.test.ts` |
+
+**Scope:** **Labs only — Copilot deferred.** "Kitchen Copilot" is the prep module and its
+task generation is pure scoring math with NO LLM, so there's no prompt to ground; wire it
+when/if prep gains an AI step. **No schema/migration; no API-contract change** (the Labs
+"grounded in your Brain" chip is deferred to the Your-Brain UI work, ~T14).
+
+**Verified:** server suite 529/529; 7 new splice tests (query seed, block in D5 order,
+byte-identical when recall null, per-domain seeding, refinement); tsc clean; lint 0
+errors; build 3/3. **Live LLM smoke PASSED** — with the OpenRouter key hydrated from the
+DB `credential` table, a seeded recipe memory embedded (real), live recall returned it,
+and a real grounded generation fired `brain.recall.hit` inside `generateRecipe` and
+produced a recipe that reflected the seeded memory (crisp-skin detail carried through).
+
+### ⬜ Pending — remaining Phase 2
 
 | Task | Plain English | Notes |
 |---|---|---|
-| **T11 — Org tier** ← **START HERE** | Per-org shared memory; a colleague's memories become the kitchen's. | `user.selected_organisation_id` + deterministic active-org selector + `idx_org_scope` + org-scope branch in `recallMemories` + org-isolation canary (X∦Y, ex-member) + warm-start (join org → inherit shared memories). Foundation for the rest. |
-| **T12 — Ops-event capture** | Brain remembers what you *do*: recipe saved/refined, PO submitted/approved/received, waste logged, stock count, menu change, prep done. | `void recordMemory({...})` fire-after-commit at each call-site + ops distillation (harden for untrusted input). Highest visible payoff. |
-| **T13 — Recall in Labs + Copilot** | Recipe/Patisserie/Spirits Labs + Kitchen Copilot get grounded like chat. | Seed recall from recipe request params / dish brief / prep selections. |
-| **T14 — Rich "Your Brain" controls** | Provenance, pin, correct(→re-embed), private/shared scope toggle + org-admin management of shared memories. | Design: **D-T4** (scope tabs + source filter). |
+| **T14 — Rich "Your Brain" controls** ← **START HERE** | Provenance, pin, correct(→re-embed), private/shared scope toggle + org-admin management of shared memories; + the grounded chip for Labs. | Design: **D-T4** (scope tabs + source filter). Needs a `/plan-design-review` pass. |
 | **T15 — Org digest** | Periodic "what your kitchen's Brain learned" summary. | `brainDigestService`, `pg_advisory_lock`-guarded. |
 
 ## ⬜ Pending — Phase 3 (intelligence layer)
@@ -69,9 +153,10 @@ Start here. The `organisation_id` column already exists (added in Phase 1 for th
 ---
 
 ## Recommended pick-up order
-1. **T11 (org tier)** — plan it first (like Phase 1), then build. It's the unlock; most of Phase 2 depends on it.
-2. **T12 (ops capture)** — the moment it stops being "chat memory" and becomes "kitchen memory."
-3. Then T13–T15, then Phase 3.
+1. ~~**T11 (org tier)**~~ — ✅ done (committed).
+2. ~~**T12 (ops capture)**~~ — ✅ done (committed). It's now "kitchen memory."
+3. ~~**T13 (recall in the Labs)**~~ — ✅ done (branch, not yet committed). R&D is grounded. Copilot deferred (no LLM there yet).
+4. **T14 (rich "Your Brain" UI)** ← next — scope tabs, provenance, org-admin management, + the Labs grounded chip. Run `/plan-design-review` first. Then T15, then Phase 3.
 
 Each is a self-contained ship-and-verify chunk on the existing capture/recall seam
 — same pattern proven in Phase 1.

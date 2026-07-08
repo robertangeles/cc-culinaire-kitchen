@@ -236,6 +236,11 @@ export const user = pgTable("user", {
   userStatus: varchar("user_status", { length: 20 }).notNull().default("active"),
   // Active store location selection (persisted for cross-device consistency)
   selectedLocationId: uuid("selected_location_id"),
+  // Active organisation selection for the Brain org tier (spec E-fold #8).
+  // Nullable; only trusted after a live membership recheck (never for recall raw).
+  selectedOrganisationId: integer("selected_organisation_id").references(
+    () => organisation.organisationId,
+  ),
   createdDttm: timestamp("created_dttm").notNull().defaultNow(),
   updatedDttm: timestamp("updated_dttm").notNull().defaultNow(),
 });
@@ -2406,11 +2411,9 @@ export const ckmFeedback = pgTable(
  * under-recall. Revisit only if a single tenant's corpus is measured large.
  *
  * OLTP table, 2NF — every non-key column depends only on memory_id.
- * `organisation_id` is nullable and unused until Phase 2 (org tier, spec
- * decision E4). Deviation from the every-FK-gets-an-index rule, stated per
- * the DB standards: the `idx_brain_memory_org_scope (organisation_id, scope)`
- * index is deferred to Phase 2 alongside the org-recall query it serves —
- * indexing an always-NULL column in Phase 1 would be a speculative index.
+ * `organisation_id` is set on scope='org' rows (Phase 2 org tier, spec
+ * decision E4) and indexed by `idx_brain_memory_org_scope` for the
+ * org-shared recall query it serves.
  */
 export const brainMemory = pgTable(
   "brain_memory",
@@ -2449,6 +2452,9 @@ export const brainMemory = pgTable(
     uniqueIndex("idx_brain_memory_source_unique").on(table.userId, table.sourceType, table.sourceRef),
     // User-private recall pre-filter + "Your Brain" listing.
     index("idx_brain_memory_user_scope").on(table.userId, table.scope),
+    // Org-shared recall pre-filter (spec Phase 2, T11): the org branch of the
+    // recall WHERE narrows to one active org's scope='org' slice.
+    index("idx_brain_memory_org_scope").on(table.organisationId, table.scope),
     // Worker claim scan (pending rows due for processing) + admin queue-depth /
     // re-embed-failed queries. Partial: ready rows dominate and never match.
     index("idx_brain_memory_status")

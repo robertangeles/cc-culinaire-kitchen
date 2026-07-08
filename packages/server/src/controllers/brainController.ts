@@ -20,6 +20,7 @@ const log = pino({ transport: { target: "pino-pretty" } });
 /** Zod schema for the list query params. */
 const ListQuerySchema = z.object({
   sourceType: z.enum(["chat", "recipe", "purchase_order", "waste", "stock", "menu", "prep"]).optional(),
+  scope: z.enum(["user", "org"]).optional(),
   search: z.string().max(200).optional(),
   limit: z.coerce.number().int().min(1).max(100).optional(),
   offset: z.coerce.number().int().min(0).optional(),

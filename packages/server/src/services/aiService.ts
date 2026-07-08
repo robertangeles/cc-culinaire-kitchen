@@ -63,6 +63,13 @@ export interface ChatOptions {
   webSearch?: boolean;
   /** Authenticated user ID for kitchen profile context injection (0 = guest). */
   userId?: number;
+  /**
+   * Pre-resolved active organisation id for org-shared Brain recall (spec T11).
+   * MUST already be a verified live membership (resolved by the caller via
+   * activeOrgService.resolveActiveOrg) — recall trusts it without re-checking.
+   * Null/undefined → user-scope recall only.
+   */
+  activeOrgId?: number | null;
 }
 
 export async function streamChat(
@@ -96,7 +103,7 @@ export async function streamChat(
       return "";
     }),
     getAllSettings(),
-    recallMemoriesWithBudget(options.userId ?? 0, recallQuery),
+    recallMemoriesWithBudget(options.userId ?? 0, recallQuery, options.activeOrgId ?? null),
   ]);
 
   let systemPrompt: string = promptResult.body;

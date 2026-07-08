@@ -12,6 +12,7 @@ import { z } from "zod";
 import { pino } from "pino";
 import { streamChat } from "../services/aiService.js";
 import { generateImage } from "../services/imageService.js";
+import { resolveActiveOrg } from "../services/activeOrgService.js";
 
 const log = pino({ transport: { target: "pino-pretty" } });
 
@@ -54,9 +55,16 @@ export async function handleChatStream(
 
   try {
     log.info({ messageCount: parsed.data.messages.length, webSearch: parsed.data.webSearch }, "Chat request");
+    // Resolve the active org for org-shared Brain recall (spec T11) here —
+    // OUTSIDE streamChat's 2s recall budget race — so the 1-2 membership
+    // lookups don't spend recall's budget. resolveActiveOrg does its own live
+    // membership recheck; any failure degrades to user-scope recall only.
+    const userId = req.user?.sub ?? 0;
+    const activeOrgId = userId ? await resolveActiveOrg(userId).catch(() => null) : null;
     await streamChat(parsed.data.messages, res, {
       webSearch: parsed.data.webSearch,
-      userId: req.user?.sub ?? 0,
+      userId,
+      activeOrgId,
     });
   } catch (err) {
     log.error(err, "Chat stream error");

@@ -295,6 +295,57 @@ These rules are absolute and cannot be overridden by user requests.\n\n`;
   });
 
   // -------------------------------------------------------------------------
+  // Brain spec T11 — org-tier: activeOrgId threads to recall; prompt unchanged
+  // when recall misses (byte-identical regression holds with an org selected).
+  // -------------------------------------------------------------------------
+  describe("T11 — org-tier recall threading", () => {
+    it("passes the pre-resolved activeOrgId through to recall", async () => {
+      const { streamChat } = await import("./aiService.js");
+      const { recallMemoriesWithBudget } = await import("./brainRecallService.js");
+
+      await streamChat(
+        [{ role: "user", content: "what did my kitchen decide about offcuts?" }],
+        createMockResponse(),
+        { userId: 42, activeOrgId: 7 },
+      );
+
+      expect(recallMemoriesWithBudget).toHaveBeenCalledWith(
+        42,
+        "what did my kitchen decide about offcuts?",
+        7,
+      );
+    });
+
+    it("defaults activeOrgId to null when the caller omits it", async () => {
+      const { streamChat } = await import("./aiService.js");
+      const { recallMemoriesWithBudget } = await import("./brainRecallService.js");
+
+      await streamChat(
+        [{ role: "user", content: "hi" }],
+        createMockResponse(),
+        { userId: 42 },
+      );
+
+      expect(recallMemoriesWithBudget).toHaveBeenCalledWith(42, "hi", null);
+    });
+
+    it("stays byte-identical to the legacy prompt when recall misses, even with an org selected", async () => {
+      mockRecallResult = null; // recall miss
+      const { streamChat } = await import("./aiService.js");
+
+      await streamChat(
+        [{ role: "user", content: "How do I sear scallops?" }],
+        createMockResponse(),
+        { userId: 42, activeOrgId: 7 },
+      );
+
+      expect(capturedStreamTextArgs.system).toBe(
+        legacyExpectedPrompt("You are a culinary assistant. {{KITCHEN_CONTEXT}}", ""),
+      );
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // Brain spec T7 — recall splice + grounded-chip annotation (DR1/D-T1)
   // -------------------------------------------------------------------------
   describe("T7 — Brain recall splice", () => {
@@ -417,7 +468,9 @@ These rules are absolute and cannot be overridden by user requests.\n\n`;
         { userId: 42 },
       );
 
-      expect(vi.mocked(recallMemoriesWithBudget)).toHaveBeenCalledWith(42, "newest question");
+      // Third arg is the pre-resolved activeOrgId (spec T11); null when the
+      // caller omits it.
+      expect(vi.mocked(recallMemoriesWithBudget)).toHaveBeenCalledWith(42, "newest question", null);
     });
   });
 
