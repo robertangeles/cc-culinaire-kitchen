@@ -18,6 +18,8 @@ import { brainMemory, userOrganisation } from "../db/schema.js";
 import { getAllSettings } from "./settingsService.js";
 import { getCaptureCounters } from "./brainCaptureService.js";
 import { getUserOrgContext } from "./orgContextService.js";
+import { sanitizeMemoryText } from "./brainSanitize.js";
+import { resolveActiveOrg } from "./activeOrgService.js";
 
 /** One row in the "Your Brain" list. Bodies are the user's own data. */
 export interface BrainMemoryListItem {
@@ -26,6 +28,8 @@ export interface BrainMemoryListItem {
   body: string;
   sourceType: string;
   scope: string;
+  /** Pinned memories sort first (spec T14b). */
+  isPinned: boolean;
   /** 'pending' | 'processing' → "learning…" chip; 'ready' | 'failed'. */
   status: string;
   createdDttm: Date;
@@ -93,12 +97,14 @@ export async function listMemories(
         body: brainMemory.body,
         sourceType: brainMemory.sourceType,
         scope: brainMemory.scope,
+        isPinned: brainMemory.isPinned,
         status: brainMemory.status,
         createdDttm: brainMemory.createdDttm,
       })
       .from(brainMemory)
       .where(where)
-      .orderBy(desc(brainMemory.createdDttm))
+      // Pinned first (spec T14b), then newest.
+      .orderBy(desc(brainMemory.isPinned), desc(brainMemory.createdDttm))
       .limit(limit)
       .offset(offset),
     db.select({ total: count() }).from(brainMemory).where(where),
@@ -107,17 +113,15 @@ export async function listMemories(
   return { memories: rows, total: Number(total) };
 }
 
-/**
- * Delete a memory the caller is authorised to remove (spec T11 / E5):
- *   - `scope='user'` → only the owner (`user_id = caller`).
- *   - `scope='org'`  → only an admin of the OWNING org (a live
- *     `user_organisation` row with `role='admin'` for that org).
- *
- * Returns false for a missing id, another user's private row, or an org row the
- * caller does not admin — all indistinguishable outcomes (no cross-tenant
- * oracle; the controller maps false → 404).
- */
-export async function deleteMemory(userId: number, memoryId: string): Promise<boolean> {
+/** The row fields needed to authorise a manage action. */
+interface ManageableRow {
+  scope: string;
+  ownerUserId: number;
+  organisationId: number | null;
+}
+
+/** Fetch just the fields needed to authorise a manage action, or null. */
+async function fetchManageableRow(memoryId: string): Promise<ManageableRow | null> {
   const [row] = await db
     .select({
       scope: brainMemory.scope,
@@ -127,12 +131,17 @@ export async function deleteMemory(userId: number, memoryId: string): Promise<bo
     .from(brainMemory)
     .where(eq(brainMemory.memoryId, memoryId))
     .limit(1);
+  return row ?? null;
+}
 
-  if (!row) return false;
-
+/**
+ * Single source of truth for "can this caller manage this memory?" (spec T11/T14b):
+ *   - `scope='user'` → only the owner.
+ *   - `scope='org'`  → only a live admin of the OWNING org (being an admin of
+ *     some other org must not grant access).
+ */
+async function canManage(userId: number, row: ManageableRow): Promise<boolean> {
   if (row.scope === "org") {
-    // Authorise against the specific owning org — being an admin of some other
-    // org must not grant delete here.
     if (row.organisationId == null) return false;
     const adminRows = await db
       .select({ userOrganisationId: userOrganisation.userOrganisationId })
@@ -145,16 +154,104 @@ export async function deleteMemory(userId: number, memoryId: string): Promise<bo
         ),
       )
       .limit(1);
-    if (adminRows.length === 0) return false;
-  } else if (row.ownerUserId !== userId) {
-    return false;
+    return adminRows.length > 0;
   }
+  return row.ownerUserId === userId;
+}
+
+/**
+ * Delete a memory the caller is authorised to remove (spec T11 / E5). Returns
+ * false for a missing id or an unauthorised caller — indistinguishable outcomes
+ * (no cross-tenant oracle; the controller maps false → 404).
+ */
+export async function deleteMemory(userId: number, memoryId: string): Promise<boolean> {
+  const row = await fetchManageableRow(memoryId);
+  if (!row || !(await canManage(userId, row))) return false;
 
   const deleted = await db
     .delete(brainMemory)
     .where(eq(brainMemory.memoryId, memoryId))
     .returning({ memoryId: brainMemory.memoryId });
   return deleted.length > 0;
+}
+
+/**
+ * Pin / unpin a memory (spec T14b) — pinned rows sort first in "Your Brain".
+ * Body unchanged, so no re-embed. Same authorisation as delete. Returns false
+ * (→ 404) on a missing id or unauthorised caller.
+ */
+export async function pinMemory(userId: number, memoryId: string, pinned: boolean): Promise<boolean> {
+  const row = await fetchManageableRow(memoryId);
+  if (!row || !(await canManage(userId, row))) return false;
+
+  await db
+    .update(brainMemory)
+    .set({ isPinned: pinned, updatedDttm: new Date() })
+    .where(eq(brainMemory.memoryId, memoryId));
+  return true;
+}
+
+/**
+ * Correct a memory's text (spec T14b). The body changed, so the stale embedding
+ * is cleared and the row re-enters the worker queue — exactly the reset
+ * `recordMemory`'s upsert performs. Returns false (→ 404) on a missing id,
+ * unauthorised caller, or empty-after-sanitise body.
+ */
+export async function correctMemory(userId: number, memoryId: string, newBody: string): Promise<boolean> {
+  const row = await fetchManageableRow(memoryId);
+  if (!row || !(await canManage(userId, row))) return false;
+
+  const body = sanitizeMemoryText(newBody);
+  if (!body) return false;
+
+  await db
+    .update(brainMemory)
+    .set({
+      body,
+      // Content changed → previous embedding is stale; re-enter the queue.
+      embedding: null,
+      status: "pending",
+      attemptCount: 0,
+      nextAttemptDttm: null,
+      updatedDttm: new Date(),
+    })
+    .where(eq(brainMemory.memoryId, memoryId));
+  return true;
+}
+
+/**
+ * Toggle a memory's scope (spec T14b):
+ *   - private → shared: the owner promotes it to their ACTIVE org
+ *     (`resolveActiveOrg`); fails if they have no org to share into.
+ *   - shared → private: an admin of the owning org un-shares it.
+ * Body is unchanged either way, so no re-embed. Idempotent if already in the
+ * target scope. Returns false (→ 404) on a missing id or unauthorised caller.
+ */
+export async function toggleScope(
+  userId: number,
+  memoryId: string,
+  targetScope: "user" | "org",
+): Promise<boolean> {
+  const row = await fetchManageableRow(memoryId);
+  if (!row || !(await canManage(userId, row))) return false;
+  if (row.scope === targetScope) return true; // already there — idempotent
+
+  if (targetScope === "org") {
+    // private → shared: share into the user's active org.
+    const orgId = await resolveActiveOrg(userId);
+    if (orgId == null) return false; // no org to share into
+    await db
+      .update(brainMemory)
+      .set({ scope: "org", organisationId: orgId, updatedDttm: new Date() })
+      .where(eq(brainMemory.memoryId, memoryId));
+  } else {
+    // shared → private: un-share (canManage already required org-admin here).
+    await db
+      .update(brainMemory)
+      .set({ scope: "user", organisationId: null, updatedDttm: new Date() })
+      .where(eq(brainMemory.memoryId, memoryId));
+  }
+  return true;
 }
 
 /** Admin observability snapshot (spec T9). */

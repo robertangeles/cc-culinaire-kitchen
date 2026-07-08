@@ -14,7 +14,7 @@ import { brainRouter } from "./brain.js";
  * role gate is the second layer.
  */
 
-type Method = "get" | "delete";
+type Method = "get" | "delete" | "patch";
 type Gate = (req: Request, res: Response, next: () => void) => void;
 
 /** Returns the gate middleware (2nd layer) for a route+method. */
@@ -84,6 +84,35 @@ describe("brain route enforcement", () => {
       const { passed, status } = runGate(gate(), undefined);
       expect(passed).toBe(false);
       expect(status).toHaveBeenCalledWith(401);
+    });
+  });
+
+  // Pin / correct / scope — all brain:manage (spec T14b).
+  describe.each([
+    ["patch", "/memories/:id/pin"],
+    ["patch", "/memories/:id"],
+    ["patch", "/memories/:id/scope"],
+  ] as const)("%s %s (brain:manage)", (method, path) => {
+    const gate = () => findGate(method as Method, path);
+
+    it("allows a user holding brain:manage", () => {
+      expect(runGate(gate(), { permissions: ["brain:manage"] }).passed).toBe(true);
+    });
+
+    it("403s a user holding only brain:read", () => {
+      const { passed, status } = runGate(gate(), { permissions: ["brain:read"] });
+      expect(passed).toBe(false);
+      expect(status).toHaveBeenCalledWith(403);
+    });
+
+    it("401s with no authenticated user", () => {
+      const { passed, status } = runGate(gate(), undefined);
+      expect(passed).toBe(false);
+      expect(status).toHaveBeenCalledWith(401);
+    });
+
+    it("allows an Administrator via superuser bypass", () => {
+      expect(runGate(gate(), { permissions: [], roles: ["Administrator"] }).passed).toBe(true);
     });
   });
 
