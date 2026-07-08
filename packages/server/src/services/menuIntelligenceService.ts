@@ -23,6 +23,8 @@ import { db } from "../db/index.js";
 import { menuItem, menuItemIngredient, menuCategorySetting, wasteLog, ingredient, locationIngredient, user } from "../db/schema.js";
 import { eq, and, sql, desc, gte, ilike, inArray } from "drizzle-orm";
 import { convertToBaseUnit, normalizeUnit, type BaseUnit, IncompatibleUnitsError } from "@culinaire/shared";
+import { recordOpsEvent } from "./brainCaptureService.js";
+import { getUserOrgContext } from "./orgContextService.js";
 
 const logger = pino({ name: "menuIntelligence" });
 
@@ -51,6 +53,23 @@ export async function createMenuItem(userId: number, data: {
     servings: data.servings ?? 1,
     qFactorPct: data.qFactorPct ?? "0",
   }).returning();
+
+  // Brain memory (spec T12): remember this menu item was added. menuItem has no
+  // org column, so resolve the acting user's org for scope.
+  const orgCtx = await getUserOrgContext(userId);
+  void recordOpsEvent({
+    userId,
+    sourceType: "menu",
+    scope: orgCtx.primaryOrgId ? "org" : "user",
+    organisationId: orgCtx.primaryOrgId,
+    sourceRef: item.menuItemId,
+    title: data.name,
+    action: "created",
+    itemName: data.name,
+    category: data.category,
+    sellingPrice: data.sellingPrice,
+  });
+
   return item;
 }
 
@@ -93,6 +112,35 @@ export async function updateMenuItem(menuItemId: string, userId: number, data: P
 
   await db.update(menuItem).set(setValues)
     .where(and(eq(menuItem.menuItemId, menuItemId), eq(menuItem.userId, userId)));
+
+  // Brain memory (spec T12): only capture SEMANTIC menu changes (name/category/
+  // price). Nightly analytics writes (unitsSold, period dates) must NOT create a
+  // memory or re-embed. Re-read the row so the memory has the authoritative
+  // fields even when the payload only changed one of them.
+  const semanticChange =
+    data.name !== undefined || data.category !== undefined || data.sellingPrice !== undefined;
+  if (semanticChange) {
+    const [current] = await db
+      .select({ name: menuItem.name, category: menuItem.category, sellingPrice: menuItem.sellingPrice })
+      .from(menuItem)
+      .where(and(eq(menuItem.menuItemId, menuItemId), eq(menuItem.userId, userId)))
+      .limit(1);
+    if (current) {
+      const orgCtx = await getUserOrgContext(userId);
+      void recordOpsEvent({
+        userId,
+        sourceType: "menu",
+        scope: orgCtx.primaryOrgId ? "org" : "user",
+        organisationId: orgCtx.primaryOrgId,
+        sourceRef: menuItemId,
+        title: current.name,
+        action: "updated",
+        itemName: current.name,
+        category: current.category,
+        sellingPrice: current.sellingPrice,
+      });
+    }
+  }
 }
 
 export async function deleteMenuItem(menuItemId: string, userId: number) {

@@ -27,6 +27,7 @@ import { getAllSettings } from "./settingsService.js";
 import { searchKnowledge } from "./knowledgeService.js";
 import { saveRecipe } from "./recipePersistenceService.js";
 import { getPromptRaw } from "./promptService.js";
+import { recordOpsEvent } from "./brainCaptureService.js";
 
 const logger = pino({ name: "recipeService" });
 
@@ -480,6 +481,19 @@ export async function generateRecipe(input: RecipeInput): Promise<{
     recipeId = saved.recipeId;
     slug = saved.slug;
     logger.info({ recipeId, slug, title: recipe.name }, "generateRecipe: recipe persisted");
+    // Brain memory (spec T12): remember this recipe. Recipes have no org column,
+    // so this is user-scoped (private R&D history), like chat.
+    void recordOpsEvent({
+      userId: input.userId ?? 0,
+      sourceType: "recipe",
+      scope: "user",
+      stage: "saved",
+      sourceRef: recipeId,
+      title: recipe.name,
+      recipeName: recipe.name,
+      domain: input.domain ?? null,
+      requestSummary: input.request?.slice(0, 200) ?? null,
+    });
   } catch (err) {
     logger.warn({ err }, "generateRecipe: failed to persist recipe — returning without ID");
   }

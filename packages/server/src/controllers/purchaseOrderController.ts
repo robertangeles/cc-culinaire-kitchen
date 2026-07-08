@@ -22,6 +22,7 @@ import {
 } from "../services/purchaseOrderService.js";
 import * as thresholdService from "../services/thresholdService.js";
 import * as pdfService from "../services/pdfService.js";
+import { recordOpsEvent } from "../services/brainCaptureService.js";
 
 const logger = pino({ name: "purchaseOrderController" });
 
@@ -155,6 +156,18 @@ export async function handleSubmitPO(
 
     const result = await submitPO(poId, orgId, userId);
     logger.info({ poId, userId }, "Purchase order submitted");
+    // Brain org memory (spec T12): remember this PO was submitted for the kitchen.
+    void recordOpsEvent({
+      userId,
+      sourceType: "purchase_order",
+      scope: "org",
+      organisationId: orgId,
+      stage: "submitted",
+      sourceRef: `${poId}:submitted`,
+      poNumber: result.poNumber,
+      totalValue: result.totalValue != null ? String(result.totalValue) : null,
+      title: `PO ${result.poNumber} submitted`,
+    });
     res.json(result);
   } catch (err: any) {
     if (err.message?.includes("Cannot submit") || err.message?.includes("not found")) {
@@ -192,6 +205,19 @@ export async function handleReceiveLine(
     );
 
     logger.info({ poId, lineId, userId }, "PO line received");
+    // Brain org memory (spec T12): "goods arrived on this PO". Each line receipt
+    // upserts the one `${poId}:received` memory (last-receipt-wins) — this is a
+    // PO-level "received" memory, not per-line item detail.
+    void recordOpsEvent({
+      userId,
+      sourceType: "purchase_order",
+      scope: "org",
+      organisationId: orgId,
+      stage: "received",
+      sourceRef: `${poId}:received`,
+      poNumber: (result as { poNumber?: string })?.poNumber ?? poId,
+      title: "Stock received on a purchase order",
+    });
     res.json(result);
   } catch (err: any) {
     if (err.message?.includes("Cannot receive") || err.message?.includes("not found") || err.message?.includes("already received")) {
@@ -258,6 +284,18 @@ export async function handleApprovePO(
 
     const result = await approvePO(poId, orgId, userId);
     logger.info({ poId, userId }, "Purchase order approved");
+    // Brain org memory (spec T12): remember this PO was approved for the kitchen.
+    void recordOpsEvent({
+      userId,
+      sourceType: "purchase_order",
+      scope: "org",
+      organisationId: orgId,
+      stage: "approved",
+      sourceRef: `${poId}:approved`,
+      poNumber: result.poNumber,
+      totalValue: result.totalValue != null ? String(result.totalValue) : null,
+      title: `PO ${result.poNumber} approved`,
+    });
     res.json(result);
   } catch (err: any) {
     if (err.message?.includes("Cannot") || err.message?.includes("not found")) {

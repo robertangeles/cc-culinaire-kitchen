@@ -1,9 +1,10 @@
 # The Brain — Status & Next Steps (resume point)
 
 **One-line status:** Phase 1 is **built, shipped, deployed, and LIVE in production**
-(capture + distillation + recall all on), verified end-to-end. **T11 (org tier) is
-built + tested on branch `feature/ck-web/brain-org-tier`** (not yet merged/deployed).
-Continue Phase 2 with **T12 (ops-event capture)**.
+(capture + distillation + recall all on), verified end-to-end. **T11 (org tier) + T12
+(ops-event capture) are built + tested on branch `feature/ck-web/brain-org-tier`**
+(T11 committed; T12 not yet committed; neither merged/deployed). Continue Phase 2 with
+**T13 (recall in Labs + Copilot)**.
 
 _Last updated: 2026-07-08. This is the living "where are we / what's next" doc.
 The original plan (with full rationale + reviews) is `brain-memory.md`._
@@ -76,17 +77,42 @@ X∦Y and ex-member canaries; migration idempotent (run twice); curl smoke 401/2
 3. Local dev DB was missing the Phase-1 `brain_memory` table; ran
    `createBrainMemoryTable.ts` before `addBrainOrgTier.ts`. Prod already has it.
 
-**⚠️ Carried risk for T12:** the capture upsert target `(user_id, source_type, source_ref)`
-excludes `scope`/`organisation_id`. Harmless in T11 (no org writers). **T12 MUST revisit
-this unique index before shipping org-scope ops writers**, or an ops event sharing a key
-with a private capture will scope-flip/clobber a row.
+**~~⚠️ Carried risk for T12~~ — WITHDRAWN (see T12 below):** the upsert unique index
+does NOT need changing. Ops `sourceRef`s are globally-unique entity UUIDs + each
+`source_type` has a fixed scope, so the existing `(user_id, source_type, source_ref)`
+key already can't collide across orgs; adding `organisation_id` would *break* user-scoped
+recipe dedup (NULL-distinct → duplicate inserts) and `NULLS NOT DISTINCT` would break chat.
+
+### ✅ T12 — Ops-event capture (built + tested, branch `feature/ck-web/brain-org-tier`, 2026-07-08)
+
+The Brain now remembers what the kitchen *does*. A new `recordOpsEvent` wrapper builds a
+**deterministic template** body per event (NO LLM distiller — chosen over the spec's LLM
+ops distiller: free, instant, no injection surface; free-text sanitized per-field before
+framing), fired `void` after each write commits.
+
+| Piece | Where |
+|---|---|
+| `recordOpsEvent` + `buildOpsBody` (discriminated union, 7 event types) | `services/brainCaptureService.ts` |
+| PO submitted/approved/received (`scope='org'`, `sourceRef=${poId}:${stage}`) | `controllers/purchaseOrderController.ts` |
+| Waste / Stock count / Prep completed (`scope='org'`, service-side) | `wasteService.ts`, `stockTakeService.ts`, `prepService.ts` |
+| Recipe saved / refined (`scope='user'` — no org column) | `recipeService.ts`, `controllers/recipeController.ts` |
+| Menu created/updated (`scope='org'` via `getUserOrgContext`; **semantic-field gate** skips nightly analytics writes) | `menuIntelligenceService.ts` |
+| Unit templates + injection tests; colleague-recall integration canary | `brainCaptureService.test.ts`, `brainIntegration.test.ts` |
+
+**Verified:** server suite 522/522; 20 template/posture unit tests + the T12 ops canary
+(adminY logs waste → embedded → colleague userY recalls it, userX in another org does
+not); tsc clean; **live curl smoke** — `POST /api/waste` produced a `brain_memory` row
+`scope='org'`, `source_type='waste'`, templated body, `status=ready`, embedded.
+
+**Deviations:** deterministic templates instead of the spec's LLM ops distiller (flag can
+add an LLM pass later); no schema/migration change (carried-risk withdrawn); recipes stay
+`scope='user'` (no org column — a chef's recipe history recalls only for them).
 
 ### ⬜ Pending — remaining Phase 2
 
 | Task | Plain English | Notes |
 |---|---|---|
-| **T12 — Ops-event capture** ← **START HERE** | Brain remembers what you *do*: recipe saved/refined, PO submitted/approved/received, waste logged, stock count, menu change, prep done. | `void recordMemory({...})` fire-after-commit at each call-site + ops distillation (harden for untrusted input). Highest visible payoff. **Fix the upsert unique index first (see carried risk).** |
-| **T13 — Recall in Labs + Copilot** | Recipe/Patisserie/Spirits Labs + Kitchen Copilot get grounded like chat. | Seed recall from recipe request params / dish brief / prep selections. |
+| **T13 — Recall in Labs + Copilot** ← **START HERE** | Recipe/Patisserie/Spirits Labs + Kitchen Copilot get grounded like chat. | Seed recall from recipe request params / dish brief / prep selections. |
 | **T14 — Rich "Your Brain" controls** | Provenance, pin, correct(→re-embed), private/shared scope toggle + org-admin management of shared memories. | Design: **D-T4** (scope tabs + source filter). |
 | **T15 — Org digest** | Periodic "what your kitchen's Brain learned" summary. | `brainDigestService`, `pg_advisory_lock`-guarded. |
 
@@ -101,9 +127,9 @@ with a private capture will scope-flip/clobber a row.
 ---
 
 ## Recommended pick-up order
-1. ~~**T11 (org tier)**~~ — ✅ done (branch `feature/ck-web/brain-org-tier`). The unlock is in place.
-2. **T12 (ops capture)** ← next — the moment it stops being "chat memory" and becomes "kitchen memory." Fix the upsert unique index first (carried risk above).
-3. Then T13–T15, then Phase 3.
+1. ~~**T11 (org tier)**~~ — ✅ done (committed). The unlock is in place.
+2. ~~**T12 (ops capture)**~~ — ✅ done (branch, not yet committed). It's now "kitchen memory."
+3. **T13 (recall in Labs + Copilot)** ← next — extend recall to the R&D surfaces. Then T14–T15, then Phase 3.
 
 Each is a self-contained ship-and-verify chunk on the existing capture/recall seam
 — same pattern proven in Phase 1.

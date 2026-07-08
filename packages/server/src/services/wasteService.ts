@@ -16,6 +16,7 @@ import { recipe } from "../db/schema.js";
 import { eq, desc, sql, and, gte, lte, ilike, inArray } from "drizzle-orm";
 import { getUserOrgContext, type OrgContext } from "./orgContextService.js";
 import { getModel } from "./providerService.js";
+import { recordOpsEvent } from "./brainCaptureService.js";
 
 const logger = pino({ name: "wasteService" });
 
@@ -98,6 +99,22 @@ export async function logWaste(
       loggedAt: data.loggedAt ? new Date(data.loggedAt) : new Date(),
     })
     .returning();
+
+  // Brain memory (spec T12): remember this waste event for the kitchen. Org-scoped
+  // when the user has an org; falls back to private otherwise. Fire-after-commit.
+  void recordOpsEvent({
+    userId,
+    sourceType: "waste",
+    scope: orgCtx.primaryOrgId ? "org" : "user",
+    organisationId: orgCtx.primaryOrgId,
+    sourceRef: row.wasteLogId,
+    title: `Waste: ${row.ingredientName}`,
+    ingredientName: row.ingredientName,
+    quantity: row.quantity,
+    unit: row.unit,
+    estimatedCost: row.estimatedCost ?? null,
+    reason: row.reason ?? null,
+  });
 
   logger.info(
     { wasteLogId: row.wasteLogId, userId, ingredient: row.ingredientName },

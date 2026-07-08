@@ -30,6 +30,7 @@ import {
 } from "../db/schema.js";
 import { convertToBase } from "./unitConversionService.js";
 import { varianceQty as calcVarianceQty, variancePct as calcVariancePct } from "./stockMath.js";
+import { recordOpsEvent } from "./brainCaptureService.js";
 
 /** Aliased user table for secondary JOINs (e.g. approver vs opener). */
 const approverUser = alias(user, "approver");
@@ -573,6 +574,18 @@ export async function approveSession(sessionId: string, userId: number) {
     })
     .where(eq(stockTakeSession.sessionId, sessionId))
     .returning();
+
+  // Brain org memory (spec T12): remember this stock count was approved.
+  // Fire-after-commit; the idempotent early-return above skips re-captures.
+  void recordOpsEvent({
+    userId,
+    sourceType: "stock",
+    scope: "org",
+    organisationId: session.organisationId,
+    sourceRef: sessionId,
+    title: "Stock count approved",
+    locationDescription: session.storeLocationId ?? null,
+  });
 
   // Update stock levels from approved counts
   await updateStockLevelsFromSession(sessionId, session.storeLocationId);

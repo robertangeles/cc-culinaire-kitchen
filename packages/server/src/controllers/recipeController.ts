@@ -30,6 +30,7 @@ import {
   revertToVersion,
 } from "../services/recipePersistenceService.js";
 import { refineRecipe } from "../services/recipeRefinementService.js";
+import { recordOpsEvent } from "../services/brainCaptureService.js";
 import { sendRecipeEmail } from "../services/emailService.js";
 import { generateImage } from "../services/imageService.js";
 import { db } from "../db/index.js";
@@ -550,6 +551,19 @@ export async function handleAcceptRefinement(
       res.status(404).json({ error: "Recipe not found or not owned by you." });
       return;
     }
+
+    // Brain memory (spec T12): remember this AI refinement (user-scoped).
+    const recipeName = (result.recipe as { title?: string })?.title ?? "recipe";
+    void recordOpsEvent({
+      userId,
+      sourceType: "recipe",
+      scope: "user",
+      stage: "refined",
+      sourceRef: id,
+      title: recipeName,
+      recipeName,
+      changeSummary: parsed.data.changeSummary ?? null,
+    });
 
     res.json({ recipe: result.recipe, versionNumber: result.versionNumber });
   } catch (err) {

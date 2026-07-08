@@ -207,3 +207,173 @@ export async function recordChatTurn(input: RecordChatTurnInput): Promise<void> 
     );
   }
 }
+
+/**
+ * Structured input to {@link recordOpsEvent} — a discriminated union on
+ * `sourceType` (docs/specs/brain-memory.md T12). Each variant carries only the
+ * fields its template needs. The memory body is built deterministically in code
+ * ({@link buildOpsBody}) — NO LLM — so ops capture is free, instant, and has no
+ * prompt-injection surface. Free-text fields are sanitized before framing.
+ *
+ * Scope follows the data: kitchen-ops entities that carry an `organisationId`
+ * are `scope: 'org'` (shared with the kitchen); recipes have no org column and
+ * are `scope: 'user'` (private to the author).
+ */
+export type RecordOpsEventInput = { userId: number; sourceRef: string; title?: string | null } & (
+  | {
+      sourceType: "recipe";
+      scope: "user";
+      organisationId?: null;
+      stage: "saved" | "refined";
+      recipeName: string;
+      domain?: string | null;
+      requestSummary?: string | null;
+      changeSummary?: string | null;
+    }
+  | {
+      sourceType: "purchase_order";
+      scope: "org";
+      organisationId: number;
+      stage: "submitted" | "approved" | "received";
+      poNumber: string;
+      supplierName?: string | null;
+      linesDescription?: string | null;
+      totalValue?: string | null;
+    }
+  | {
+      sourceType: "waste";
+      scope: "user" | "org";
+      organisationId?: number | null;
+      ingredientName: string;
+      quantity: string;
+      unit: string;
+      estimatedCost?: string | null;
+      reason?: string | null;
+    }
+  | {
+      sourceType: "stock";
+      scope: "org";
+      organisationId: number;
+      locationDescription?: string | null;
+    }
+  | {
+      sourceType: "prep";
+      scope: "user" | "org";
+      organisationId?: number | null;
+      prepDate: string;
+      tasksCompleted: number;
+      tasksTotal: number;
+      actualCovers?: number | null;
+      notes?: string | null;
+    }
+  | {
+      sourceType: "menu";
+      scope: "user" | "org";
+      organisationId?: number | null;
+      action: "created" | "updated";
+      itemName: string;
+      category: string;
+      sellingPrice: string;
+    }
+);
+
+/**
+ * Build the deterministic memory body for an ops event (spec T12). Every
+ * user-derived string field is passed through `sanitizeMemoryText` BEFORE it is
+ * framed by the template scaffolding (lesson #57: sanitize each part, then
+ * frame — so injected markup can't ride in on the structural words). Numeric,
+ * price, id, and date fields are structured data and interpolated as-is.
+ */
+function buildOpsBody(input: RecordOpsEventInput): string {
+  const s = (v: string | null | undefined) => sanitizeMemoryText(v ?? "");
+  switch (input.sourceType) {
+    case "recipe": {
+      const name = s(input.recipeName);
+      if (input.stage === "refined") {
+        const change = s(input.changeSummary);
+        return `Recipe refined: ${name}.${change ? ` Changes: ${change}.` : ""}`;
+      }
+      const domain = s(input.domain);
+      const req = s(input.requestSummary);
+      return `Recipe saved: ${name}.${domain ? ` Domain: ${domain}.` : ""}${req ? ` Request: ${req}.` : ""}`;
+    }
+    case "purchase_order": {
+      const po = s(input.poNumber);
+      const supplier = s(input.supplierName);
+      const total = input.totalValue ? ` Total: ${input.totalValue}.` : "";
+      if (input.stage === "submitted") {
+        const lines = s(input.linesDescription);
+        return `Purchase order ${po} submitted${supplier ? ` to ${supplier}` : ""}.${lines ? ` Lines: ${lines}.` : ""}${total}`;
+      }
+      if (input.stage === "approved") {
+        return `Purchase order ${po} approved${supplier ? ` — supplier ${supplier}` : ""}.${total}`;
+      }
+      return `Stock received on purchase order ${po}${supplier ? ` from ${supplier}` : ""}.`;
+    }
+    case "waste": {
+      const ing = s(input.ingredientName);
+      const unit = s(input.unit);
+      const reason = s(input.reason);
+      const cost = input.estimatedCost ? ` Estimated cost: ${input.estimatedCost}.` : "";
+      return `Waste logged: ${input.quantity} ${unit} of ${ing}.${reason ? ` Reason: ${reason}.` : ""}${cost}`;
+    }
+    case "stock": {
+      const loc = s(input.locationDescription);
+      return `Stock count approved${loc ? ` for ${loc}` : ""}.`;
+    }
+    case "prep": {
+      const notes = s(input.notes);
+      const covers = input.actualCovers != null ? ` Covers: ${input.actualCovers}.` : "";
+      return `Prep session completed for ${s(input.prepDate)}. Tasks done: ${input.tasksCompleted}/${input.tasksTotal}.${covers}${notes ? ` Notes: ${notes}.` : ""}`;
+    }
+    case "menu": {
+      const name = s(input.itemName);
+      const cat = s(input.category);
+      const verb = input.action === "created" ? "created" : "updated";
+      return `Menu item ${verb}: ${name}${cat ? ` (${cat})` : ""}${input.sellingPrice ? `, priced at ${input.sellingPrice}` : ""}.`;
+    }
+  }
+}
+
+/**
+ * Record a curated kitchen-ops event as a Brain memory (spec T12). Fired as
+ * `void recordOpsEvent(...)` AFTER the ops write commits, so a capture failure
+ * can never roll back the primary action. Best-effort like {@link recordMemory}
+ * — never throws.
+ *
+ * The body is a deterministic template (no LLM, no keep/drop gate — ops events
+ * are curated/high-signal by construction). Guest/flag gating and body
+ * sanitisation are handled by {@link recordMemory}; the early guards here mirror
+ * {@link recordChatTurn} and avoid building a body that would be dropped anyway.
+ */
+export async function recordOpsEvent(input: RecordOpsEventInput): Promise<void> {
+  try {
+    if (!input.userId || input.userId <= 0) {
+      captureCounters.skipped++;
+      return;
+    }
+
+    const settings = await getAllSettings();
+    if (settings.brain_enabled !== "true" || settings.brain_capture_enabled !== "true") {
+      captureCounters.skipped++;
+      return;
+    }
+
+    await recordMemory({
+      userId: input.userId,
+      organisationId: input.organisationId ?? null,
+      scope: input.scope,
+      sourceType: input.sourceType,
+      sourceRef: input.sourceRef,
+      title: input.title ?? null,
+      rawContent: buildOpsBody(input),
+    });
+  } catch (err) {
+    // Same best-effort contract as recordMemory — never break the ops write.
+    captureCounters.errors++;
+    logger.error(
+      { err, alert: "brain_capture_error", userId: input.userId, sourceType: input.sourceType },
+      "brain.capture.error — ops event not recorded",
+    );
+  }
+}

@@ -546,4 +546,45 @@ suite("Brain org tier (real local DB)", () => {
 
     nextEmbedding = fakeVector(0);
   });
+
+  it("T12 OPS CAPTURE canary: adminY logs waste (org) → embedded → colleague userY recalls it; userX (org X) does not", async () => {
+    const { recordOpsEvent } = await import("./brainCaptureService.js");
+    const { runBrainWorkerTick } = await import("./brainWorker.js");
+    const { recallMemories } = await import("./brainRecallService.js");
+
+    // adminY logs a waste ops event for org Y — the first true "kitchen memory".
+    nextEmbedding = fakeVector(50);
+    await recordOpsEvent({
+      userId: adminY,
+      sourceType: "waste",
+      scope: "org",
+      organisationId: orgY,
+      sourceRef: `waste-t12-${randomUUID()}`,
+      title: "Waste: duck confit",
+      ingredientName: "duck confit",
+      quantity: "2.5",
+      unit: "kg",
+      estimatedCost: "38.00",
+      reason: "over-prep",
+    });
+    const tick = await runBrainWorkerTick();
+    expect(tick.claimed).toBeGreaterThanOrEqual(1);
+
+    // Colleague userY (same org, active org = Y) recalls what adminY did.
+    nextEmbedding = fakeVector(50);
+    const recallY = await recallMemories(userY, "how much duck confit did we waste?", orgY);
+    expect(recallY).not.toBeNull();
+    expect(recallY!.block).toContain("duck confit");
+    expect(recallY!.block).toContain("Waste logged");
+
+    // Isolation: userX (org X) never sees org Y's waste memory, even with the
+    // identical topic vector.
+    nextEmbedding = fakeVector(50);
+    const recallX = await recallMemories(userX, "duck confit waste", orgX);
+    if (recallX !== null) {
+      expect(recallX.block).not.toContain("duck confit");
+    }
+
+    nextEmbedding = fakeVector(0);
+  });
 });
