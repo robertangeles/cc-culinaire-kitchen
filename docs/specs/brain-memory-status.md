@@ -135,11 +135,14 @@ DB `credential` table, a seeded recipe memory embedded (real), live recall retur
 and a real grounded generation fired `brain.recall.hit` inside `generateRecipe` and
 produced a recipe that reflected the seeded memory (crisp-skin detail carried through).
 
-### ⬜ Pending — remaining Phase 2
+### T14 — Rich "Your Brain" controls (being sliced)
+
+- **✅ T14 slice 1 — Labs grounded chip** (built + tested, branch `feature/ck-web/brain-labs-chip`, 2026-07-08). Closes the T13 deferral: Recipe/Patisserie/Spirits Lab results now show the same "Grounded in your Brain" chip as chat. `generateRecipe` returns its recalled `memories`; `recipeHandler` adds an additive `brainGrounded` field to the JSON; `BrainGroundedChip` gained a direct `memories` prop (chat `annotations` path unchanged); `RecipeLabPage` (one shared component for all 3 Labs) renders it after the hero. No schema/migration, no contract break (web-only endpoints; mobile doesn't call them). Verified: server 531/531 + client 50/50, tsc/build green, live smoke (`generateRecipe` returned the seeded memory as chip data).
+- **⬜ T14b — rich self-service controls** ← **NEXT**. `is_pinned` migration + `pinMemory`/`correctMemory`(→re-embed)/`toggleScope` service fns + `PATCH /memories/:id/pin|:id|:id/scope` (all `brain:manage`) + the D-T4 UI (scope tabs `[Private | Shared]`, source-filter chips, per-row pin/edit/scope actions). Build to the locked D-T4 spec in `brain-memory.md`.
+- **⬜ T14c — org-admin management surface**. Org admins manage/correct/delete shared memories (reuses the T11 org-admin auth pattern).
 
 | Task | Plain English | Notes |
 |---|---|---|
-| **T14 — Rich "Your Brain" controls** ← **START HERE** | Provenance, pin, correct(→re-embed), private/shared scope toggle + org-admin management of shared memories; + the grounded chip for Labs. | Design: **D-T4** (scope tabs + source filter). Needs a `/plan-design-review` pass. |
 | **T15 — Org digest** | Periodic "what your kitchen's Brain learned" summary. | `brainDigestService`, `pg_advisory_lock`-guarded. |
 
 ## ⬜ Pending — Phase 3 (intelligence layer)
