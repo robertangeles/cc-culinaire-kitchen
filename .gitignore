@@ -51,8 +51,10 @@ coverage/
 /_*.ts
 /_*.js
 
-# Local tooling state
-.claude/
+# Local tooling state — ignore .claude contents…
+.claude/*
+# …but share version-controlled subagents with the team.
+!.claude/agents/
 .gstack/
 
 # User uploads
