@@ -19,7 +19,7 @@
  * `db:deploy`). Idempotent: re-running only inserts missing links.
  *
  * Run once:
- *   pnpm --filter @culinaire/server tsx src/scripts/backfillNavPermissions.ts
+ *   pnpm --filter @culinaire/server exec tsx src/scripts/backfillNavPermissions.ts
  */
 
 import { config } from "dotenv";

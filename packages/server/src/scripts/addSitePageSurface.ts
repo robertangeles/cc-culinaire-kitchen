@@ -5,7 +5,7 @@
  * unique on `slug`, and replace it with a composite unique on
  * `(slug, surface)`. Idempotent — each statement guards against re-runs.
  *
- * Run with: `pnpm --filter @culinaire/server tsx src/scripts/addSitePageSurface.ts`
+ * Run with: `pnpm --filter @culinaire/server exec tsx src/scripts/addSitePageSurface.ts`
  */
 
 import { config } from "dotenv";
