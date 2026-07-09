@@ -1,13 +1,65 @@
 # The Brain — Status & Next Steps (resume point)
 
-**One-line status:** Phase 1 is **built, shipped, deployed, and LIVE in production**
-(capture + distillation + recall all on), verified end-to-end. **T11 (org tier) + T12
-(ops-event capture) + T13 (recall in the Labs) are built + tested on branch
-`feature/ck-web/brain-org-tier`** (T11 + T12 committed; T13 not yet committed; none
-merged/deployed). Continue Phase 2 with **T14 (rich "Your Brain" UI)**.
+**One-line status:** Phase 1 **and all of Phase 2 through T14b** are **built, shipped,
+merged to `main`, and LIVE in production** (capture + distillation + recall all on),
+verified end-to-end. T11 (org tier) + T12 (ops-event capture) + T13 (recall in the Labs)
+shipped in **PR #46**; T14 slice 1 (Labs grounded chip) in **PR #47**; T14b (rich "Your
+Brain" controls) in **PR #48**. Continue Phase 2 with **T14c (org-admin management surface)**.
 
-_Last updated: 2026-07-08. This is the living "where are we / what's next" doc.
+_Last updated: 2026-07-09. This is the living "where are we / what's next" doc.
 The original plan (with full rationale + reviews) is `brain-memory.md`._
+
+---
+
+## ✅ Updated checklist (2026-07-09)
+
+Snapshot after fast-forwarding local `main` to `8895c03` and syncing the local dev DB to
+the merged Brain schema (`addBrainOrgTier` + `addBrainPinColumn` applied; T12/T13 add no
+schema). The dated task sections below remain point-in-time (they say "branch" because that
+was true when written); this checklist is the current reconciled view.
+
+### Completed — merged to `main` + live in prod
+- **Phase 1** (flags on): schema · never-reject capture + chat capture · async embed worker ·
+  exact-cosine recall · Your Brain page · `brain:read`/`brain:manage` perms + `brain_*` flags ·
+  balanced distillation gate · Settings → Brain tab · capture-health alert
+- **T11 — Org tier** (PR #46, deployed): per-org shared recall, live-membership-rechecked
+  active-org resolver, hard tenant isolation
+- **T12 — Ops-event capture** (PR #46, deployed): kitchen actions → memory
+  (PO/waste/stock/prep/recipe/menu), deterministic templates (no LLM distiller)
+- **T13 — Recall in the Labs** (PR #46, deployed): Recipe/Patisserie/Spirits generation +
+  refinement grounded in Brain
+- **T14 slice 1 — Labs grounded chip** (PR #47): "Grounded in your Brain" chip on Lab results
+- **T14b — Rich Your Brain controls** (PR #48): pin · correct(→re-embed) · scope-toggle ·
+  scope tabs · source-filter chips · warm empty state (prod pin migration applied)
+
+### Pending
+- **T14c — Org-admin management** ← NEXT: browse/correct/delete *other members'* shared
+  memories + org attribution on `ProvenanceChip`. Reuses the T14b endpoints (`canManage`
+  already gates org-admins); no new schema.
+- **T15 — Org digest**: periodic "what your kitchen's Brain learned" (`brainDigestService`,
+  `pg_advisory_lock`-guarded)
+- **T16 — Compaction + full distiller**: merge/summarize old memories, per-scope cap; adds
+  `last_recalled_dttm` (schema migration)
+- **T17 — Proactive nudges**: memory-driven "For you" slot; `brain_nudges_enabled` seeded off
+- **T18 — Ranking tuning + admin re-embed panel + dashboards**
+
+### Needs cleanup
+- **Central backup repository (parked)**: no owned, off-Render, scheduled backup. Confirm
+  Render's daily backups exist; agreed follow-up is a scheduled `pg_dump → cloud bucket`
+  with retention.
+- **Migration-script run command** (Brain scripts fixed on `chore/ck-web/brain-doc-sync`,
+  2026-07-09): the DDL scripts documented `pnpm --filter @culinaire/server tsx …`, which
+  fails (`ERR_PNPM_RECURSIVE_RUN_NO_SCRIPT`); corrected to `… exec tsx …` in
+  `createBrainMemoryTable` / `addBrainOrgTier` / `addBrainPinColumn`. The same wrong form
+  still exists in 4 non-Brain scripts (`addSitePageSurface`, `backfillNavPermissions`,
+  `removeAntoineMobilePrompts`, `backfillBrainPermissions`) — a repo-wide sweep is pending.
+
+**Resolved** (were open in the 2026-07-08 handoff): local prod backup deleted · #47/#48
+doc-merge conflict resolved at merge · prod pin migration applied.
+
+**Accepted limitations (documented, not bugs):** recipes user-scoped (no org column) ·
+Copilot recall deferred (no LLM step yet) · PO multi-line receive last-wins · scope-toggle
+promotes to active org (no picker), un-share is org-admin-only.
 
 ---
 
@@ -159,10 +211,11 @@ produced a recipe that reflected the seeded memory (crisp-skin detail carried th
 ---
 
 ## Recommended pick-up order
-1. ~~**T11 (org tier)**~~ — ✅ done (committed).
-2. ~~**T12 (ops capture)**~~ — ✅ done (committed). It's now "kitchen memory."
-3. ~~**T13 (recall in the Labs)**~~ — ✅ done (branch, not yet committed). R&D is grounded. Copilot deferred (no LLM there yet).
-4. **T14 (rich "Your Brain" UI)** ← next — scope tabs, provenance, org-admin management, + the Labs grounded chip. Run `/plan-design-review` first. Then T15, then Phase 3.
+1. ~~**T11 (org tier)**~~ — ✅ done + merged (PR #46).
+2. ~~**T12 (ops capture)**~~ — ✅ done + merged (PR #46). It's now "kitchen memory."
+3. ~~**T13 (recall in the Labs)**~~ — ✅ done + merged (PR #46). R&D is grounded. Copilot deferred (no LLM there yet).
+4. ~~**T14 (rich "Your Brain" UI)**~~ — ✅ done + merged (slice 1 PR #47, T14b PR #48): scope tabs, source filters, pin/correct/scope-toggle, Labs grounded chip.
+5. **T14c (org-admin management surface)** ← next — browse/correct/delete other members' shared memories + org attribution on `ProvenanceChip`. Run `/plan-design-review` first. Then T15, then Phase 3.
 
 Each is a self-contained ship-and-verify chunk on the existing capture/recall seam
 — same pattern proven in Phase 1.

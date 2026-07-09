@@ -15,7 +15,7 @@
  *
  * Run once per environment (local dev is already applied; prod before
  * the Brain code deploys):
- *   pnpm --filter @culinaire/server tsx src/scripts/createBrainMemoryTable.ts
+ *   pnpm --filter @culinaire/server exec tsx src/scripts/createBrainMemoryTable.ts
  */
 
 import { config } from "dotenv";

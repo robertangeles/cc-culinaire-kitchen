@@ -14,7 +14,7 @@
  * (ADD COLUMN / CREATE INDEX IF NOT EXISTS), so it is zero-downtime and re-runnable.
  *
  * Run once per environment (local dev, then prod before the T14b code deploys):
- *   pnpm --filter @culinaire/server tsx src/scripts/addBrainPinColumn.ts
+ *   pnpm --filter @culinaire/server exec tsx src/scripts/addBrainPinColumn.ts
  */
 
 import { config } from "dotenv";

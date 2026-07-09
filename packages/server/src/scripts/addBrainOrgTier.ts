@@ -16,7 +16,7 @@
  * and re-runnable.
  *
  * Run once per environment (local dev, then prod before the T11 code deploys):
- *   pnpm --filter @culinaire/server tsx src/scripts/addBrainOrgTier.ts
+ *   pnpm --filter @culinaire/server exec tsx src/scripts/addBrainOrgTier.ts
  */
 
 import { config } from "dotenv";
