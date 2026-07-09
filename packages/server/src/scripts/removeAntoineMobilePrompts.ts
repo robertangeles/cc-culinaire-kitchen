@@ -17,7 +17,7 @@
  * and exits cleanly.
  *
  * Run once:
- *   pnpm --filter @culinaire/server tsx src/scripts/removeAntoineMobilePrompts.ts
+ *   pnpm --filter @culinaire/server exec tsx src/scripts/removeAntoineMobilePrompts.ts
  *
  * After it succeeds, delete this script in the same commit — it has no
  * reason to exist beyond the one-time cleanup.

@@ -19,7 +19,7 @@
  * mid-run crash rolls back cleanly.
  *
  * Run once:
- *   pnpm --filter @culinaire/server tsx src/scripts/backfillBrainPermissions.ts
+ *   pnpm --filter @culinaire/server exec tsx src/scripts/backfillBrainPermissions.ts
  */
 
 import { config } from "dotenv";
