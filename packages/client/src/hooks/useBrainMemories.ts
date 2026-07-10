@@ -21,6 +21,10 @@ export interface BrainMemory {
   /** 'pending' | 'processing' render the "learning…" chip; 'ready' | 'failed'. */
   status: string;
   createdDttm: string;
+  /** Whether the viewer may pin/edit/share/delete this row (spec T14c) — gates row actions. */
+  canManage: boolean;
+  /** Author label for shared rows ("Maria" / "Former team member"); null on your own rows. */
+  authorName: string | null;
 }
 
 /** Scope segmented-control value (D-T4): 'user' = Private, 'org' = Shared. */

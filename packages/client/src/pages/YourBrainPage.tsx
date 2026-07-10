@@ -66,10 +66,15 @@ export function YourBrainPage() {
   const { hasLocationAccess } = useLocation();
   const hasOrg = hasLocationAccess;
 
-  // An empty result is a "no match" (not a warming-up hero) whenever a filter
-  // or search is narrowing the view, or we're on the Shared tab.
-  const hasQuery =
-    search.trim().length > 0 || sourceTypeFilter !== null || scopeFilter === "org";
+  // Pick the empty state (spec T14c). A search/source filter with no hits is a
+  // "no match"; an unfiltered Shared tab with no rows is an invitation ("nothing
+  // shared yet"), NOT a no-match; an unfiltered Private tab is the warming hero.
+  const isFiltered = search.trim().length > 0 || sourceTypeFilter !== null;
+  const emptyVariant = isFiltered
+    ? "no-match"
+    : scopeFilter === "org"
+      ? "no-shared"
+      : "warming";
 
   return (
     <div className="flex-1 overflow-y-auto bg-[#0A0A0A]">
@@ -150,7 +155,7 @@ export function YourBrainPage() {
               </button>
             </div>
           ) : memories.length === 0 ? (
-            <BrainEmptyState hasQuery={hasQuery} />
+            <BrainEmptyState variant={emptyVariant} />
           ) : (
             <>
               <p className="mb-2 px-1 text-xs text-[#777777]" aria-live="polite">

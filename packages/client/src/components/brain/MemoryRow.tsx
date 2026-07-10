@@ -12,8 +12,10 @@ import { Trash2, Loader2, Sparkles, Star, Pencil, Share2, Check } from "lucide-r
 import { ProvenanceChip } from "./ProvenanceChip.js";
 import type { BrainMemory } from "../../hooks/useBrainMemories.js";
 
+// 44px touch target on mobile (spec ≥44px); tightens to 36px on desktop where a
+// mouse hovers the row to reveal the action (spec T14c / a11y DT4).
 const ACTION_BTN =
-  "flex-shrink-0 flex size-9 items-center justify-center rounded-lg text-[#777777] transition-opacity motion-reduce:transition-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4A574]/60 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100";
+  "flex-shrink-0 flex size-11 sm:size-9 items-center justify-center rounded-lg text-[#777777] transition-opacity motion-reduce:transition-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4A574]/60 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100";
 
 export function MemoryRow({
   memory,
@@ -139,7 +141,11 @@ export function MemoryRow({
               <p className="text-sm text-[#E5E5E5] leading-snug break-words">{label}</p>
             </div>
             <div className="mt-1 flex flex-wrap items-center gap-2">
-              <ProvenanceChip sourceType={memory.sourceType} createdDttm={memory.createdDttm} />
+              <ProvenanceChip
+                sourceType={memory.sourceType}
+                createdDttm={memory.createdDttm}
+                authorName={memory.authorName}
+              />
               {isShared && (
                 <span className="inline-flex items-center gap-1 rounded-full border border-[#D4A574]/20 bg-[#D4A574]/10 px-2 py-0.5 text-[10px] text-[#D4A574]">
                   <Share2 className="size-2.5" aria-hidden="true" />
@@ -155,6 +161,10 @@ export function MemoryRow({
             </div>
           </button>
 
+          {/* Row actions render only when the viewer can manage THIS memory
+              (spec T14c). A member viewing a colleague's shared row gets a
+              read-only row — no buttons that the server would 403. */}
+          {memory.canManage && (
           <div className="flex flex-shrink-0 items-center">
             <button
               type="button"
@@ -213,6 +223,7 @@ export function MemoryRow({
               )}
             </button>
           </div>
+          )}
         </div>
       )}
 

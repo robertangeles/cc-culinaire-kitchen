@@ -13,6 +13,8 @@ function makeMemory(overrides: Partial<BrainMemory> = {}): BrainMemory {
     isPinned: false,
     status: "ready",
     createdDttm: "2026-07-02T00:00:00.000Z",
+    canManage: true,
+    authorName: null,
     ...overrides,
   };
 }
@@ -69,5 +71,35 @@ describe("MemoryRow (T14b actions)", () => {
     render(<MemoryRow memory={makeMemory({ scope: "org" })} hasOrg {...h} />);
     fireEvent.click(screen.getByRole("button", { name: /un-share/i }));
     await waitFor(() => expect(h.onToggleScope).toHaveBeenCalledWith("m1", "user"));
+  });
+
+  // T14c: a non-manageable shared row (colleague's memory, viewer isn't admin)
+  // is read-only — no action buttons that the server would 403.
+  it("renders no action buttons when canManage is false", () => {
+    render(
+      <MemoryRow
+        memory={makeMemory({ scope: "org", canManage: false })}
+        hasOrg
+        {...handlers()}
+      />,
+    );
+    expect(screen.queryByRole("button", { name: /pin this memory/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /edit this memory/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /remove this memory/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /share with your kitchen/i })).toBeNull();
+    // …but the memory is still readable (expand toggle present).
+    expect(screen.getByText(/prefers gluten-free/i)).toBeInTheDocument();
+  });
+
+  // T14c: the author of a shared memory folds into the provenance caption.
+  it("shows the author inline on a shared row", () => {
+    render(
+      <MemoryRow
+        memory={makeMemory({ scope: "org", authorName: "Maria" })}
+        hasOrg
+        {...handlers()}
+      />,
+    );
+    expect(screen.getByText(/Maria · from a chat/i)).toBeInTheDocument();
   });
 });

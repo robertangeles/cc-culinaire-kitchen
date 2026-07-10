@@ -11,6 +11,8 @@ const SEED: BrainMemory = {
   isPinned: false,
   status: "ready",
   createdDttm: "2026-07-01T00:00:00.000Z",
+  canManage: true,
+  authorName: null,
 };
 
 const fetchMock = vi.fn();
