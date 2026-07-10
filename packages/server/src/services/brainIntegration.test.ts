@@ -547,6 +547,84 @@ suite("Brain org tier (real local DB)", () => {
     nextEmbedding = fakeVector(0);
   });
 
+  it("correctMemory: an admin corrects a colleague's shared memory → re-queued; a member is refused (T14c)", async () => {
+    const { recordMemory } = await import("./brainCaptureService.js");
+    const { correctMemory } = await import("./brainService.js");
+
+    nextEmbedding = fakeVector(9);
+    await recordMemory({
+      userId: adminY,
+      organisationId: orgY,
+      scope: "org",
+      sourceType: "menu",
+      sourceRef: "orgY-correct-1",
+      title: "Correctable org memo",
+      rawContent: "Cook logged: plate the terrine colder.",
+    });
+    const [seed] = (await db.execute(sql`
+      SELECT memory_id FROM brain_memory
+      WHERE organisation_id = ${orgY} AND source_ref = 'orgY-correct-1'
+    `)) as unknown as Array<{ memory_id: string }>;
+    const memId = seed.memory_id;
+
+    // A non-admin member of the owning org cannot correct a colleague's memory.
+    expect(await correctMemory(userY, memId, "member tries to rewrite")).toBe(false);
+    // An admin of a DIFFERENT org cannot either.
+    expect(await correctMemory(adminX, memId, "cross-org admin tries")).toBe(false);
+    // The owning org's admin can — and the row re-enters the embed queue.
+    expect(await correctMemory(adminY, memId, "Admin correction: plate at 4C.")).toBe(true);
+
+    const [row] = (await db.execute(sql`
+      SELECT body, status, (embedding IS NULL) AS embed_cleared
+      FROM brain_memory WHERE memory_id = ${memId}
+    `)) as unknown as Array<{ body: string; status: string; embed_cleared: boolean }>;
+    expect(row.body).toContain("plate at 4C");
+    expect(row.status).toBe("pending");
+    expect(row.embed_cleared).toBe(true);
+
+    nextEmbedding = fakeVector(0);
+  });
+
+  it("listMemories: canManage + authorName reflect role and live authorship (T14c)", async () => {
+    const { recordMemory } = await import("./brainCaptureService.js");
+    const { listMemories } = await import("./brainService.js");
+
+    // Make exUser a non-member of orgY, then author a shared memory as them:
+    // attribution must read "Former team member" (self-contained, order-independent).
+    await db.execute(
+      sql`DELETE FROM user_organisation WHERE user_id = ${exUser} AND organisation_id = ${orgY}`,
+    );
+    nextEmbedding = fakeVector(10);
+    await recordMemory({
+      userId: exUser,
+      organisationId: orgY,
+      scope: "org",
+      sourceType: "menu",
+      sourceRef: "orgY-attrib-1",
+      title: "Departed author memo",
+      rawContent: "Cook logged: the old winter menu note.",
+    });
+
+    // adminY (owning-org admin) can manage org rows; the memo shows the departed author.
+    const asAdmin = await listMemories(adminY, { scope: "org" });
+    const memo = asAdmin.memories.find((m) => m.title === "Departed author memo");
+    expect(memo).toBeDefined();
+    expect(memo!.canManage).toBe(true);
+    expect(memo!.authorName).toBe("Former team member");
+
+    // userY (member, not admin) sees the same shared row but cannot manage it.
+    const asMember = await listMemories(userY, { scope: "org" });
+    const memoAsMember = asMember.memories.find((m) => m.title === "Departed author memo");
+    expect(memoAsMember).toBeDefined();
+    expect(memoAsMember!.canManage).toBe(false);
+
+    // A user's own private rows carry no author attribution.
+    const xPrivate = await listMemories(userX, { scope: "user" });
+    expect(xPrivate.memories.every((m) => m.authorName === null)).toBe(true);
+
+    nextEmbedding = fakeVector(0);
+  });
+
   it("T12 OPS CAPTURE canary: adminY logs waste (org) → embedded → colleague userY recalls it; userX (org X) does not", async () => {
     const { recordOpsEvent } = await import("./brainCaptureService.js");
     const { runBrainWorkerTick } = await import("./brainWorker.js");
