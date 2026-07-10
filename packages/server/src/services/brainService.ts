@@ -378,6 +378,22 @@ export async function toggleScope(
     if (row.scope === targetScope) return true; // already there — idempotent
 
     if (targetScope === "org") {
+      // `resolveActiveOrg` ran before the tx opened, so re-verify the caller is
+      // STILL a live member of the share target inside the lock (lesson #59:
+      // re-authorise the tenant on the write path). Closes the narrow window
+      // where the caller is removed from the org between resolve and write.
+      const stillMember = await tx
+        .select({ id: userOrganisation.userOrganisationId })
+        .from(userOrganisation)
+        .where(
+          and(
+            eq(userOrganisation.userId, userId),
+            eq(userOrganisation.organisationId, shareOrgId!),
+          ),
+        )
+        .limit(1);
+      if (stillMember.length === 0) return false;
+
       await tx
         .update(brainMemory)
         .set({ scope: "org", organisationId: shareOrgId, updatedDttm: new Date() })
