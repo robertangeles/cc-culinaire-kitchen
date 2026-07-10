@@ -51,6 +51,9 @@ import { getAllSettings } from "./services/settingsService.js";
 import { sendWeeklyWasteDigests } from "./services/wasteDigestService.js";
 import { runBrainWorkerTick, BRAIN_WORKER_INTERVAL_MS } from "./services/brainWorker.js";
 import { checkCaptureHealth } from "./services/brainCaptureAlertService.js";
+import { sendOrgDigests } from "./services/brainDigestService.js";
+import { withAdvisoryLock } from "./utils/advisoryLock.js";
+import { ADVISORY_LOCK_KEYS } from "./db/advisoryLockKeys.js";
 import { brainRouter } from "./routes/brain.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -483,18 +486,36 @@ hydrateEnvFromCredentials().then(() => {
       }
       const captureHealthInterval = setInterval(runCaptureHealthCheck, 5 * 60 * 1000);
 
-      // Weekly waste digest — Sunday 8 PM (check every minute)
+      // Weekly digests — Sunday 8 PM (checked every minute). Two guards (spec T15):
+      // the in-memory `last*DigestRun` key dedups within the hour on THIS instance,
+      // and `withAdvisoryLock` ensures only ONE instance actually sends across a
+      // horizontally-scaled deploy. Both are required — the lock alone would let the
+      // same instance's next tick re-fire once it releases.
       let lastWasteDigestRun = "";
       const wasteDigestInterval = setInterval(async () => {
         const now = new Date();
-        // Only fire on Sunday (0) at 20:00, and only once per minute window
         const key = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}-${now.getHours()}`;
         if (now.getDay() === 0 && now.getHours() === 20 && lastWasteDigestRun !== key) {
           lastWasteDigestRun = key;
           try {
-            await sendWeeklyWasteDigests();
+            await withAdvisoryLock(ADVISORY_LOCK_KEYS.wasteDigest, sendWeeklyWasteDigests);
           } catch (err) {
             log.error({ err }, "Weekly waste digest failed");
+          }
+        }
+      }, 60_000);
+
+      // Weekly Brain org digest — Sunday 8 PM (spec T15), same dual-guard pattern.
+      let lastBrainDigestRun = "";
+      const brainDigestInterval = setInterval(async () => {
+        const now = new Date();
+        const key = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}-${now.getHours()}`;
+        if (now.getDay() === 0 && now.getHours() === 20 && lastBrainDigestRun !== key) {
+          lastBrainDigestRun = key;
+          try {
+            await withAdvisoryLock(ADVISORY_LOCK_KEYS.brainDigest, sendOrgDigests);
+          } catch (err) {
+            log.error({ err }, "Weekly Brain digest failed");
           }
         }
       }, 60_000);
@@ -505,6 +526,7 @@ hydrateEnvFromCredentials().then(() => {
         clearInterval(cleanupInterval);
         clearInterval(purgeInterval);
         clearInterval(wasteDigestInterval);
+        clearInterval(brainDigestInterval);
         clearInterval(feedbackEmailInterval);
         clearInterval(brainWorkerInterval);
         clearInterval(captureHealthInterval);
