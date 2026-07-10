@@ -28,7 +28,8 @@ export type NotificationType =
   | "PO_REJECTED"
   | "DISCREPANCY_ALERT"
   | "DELIVERY_OVERDUE"
-  | "BRAIN_CAPTURE_ERROR";
+  | "BRAIN_CAPTURE_ERROR"
+  | "BRAIN_DIGEST";
 
 export type NotificationChannel = "IN_APP" | "EMAIL";
 
