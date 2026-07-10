@@ -47,19 +47,64 @@ was true when written); this checklist is the current reconciled view.
 - **Central backup repository (parked)**: no owned, off-Render, scheduled backup. Confirm
   Render's daily backups exist; agreed follow-up is a scheduled `pg_dump → cloud bucket`
   with retention.
-- **Migration-script run command** (Brain scripts fixed on `chore/ck-web/brain-doc-sync`,
-  2026-07-09): the DDL scripts documented `pnpm --filter @culinaire/server tsx …`, which
-  fails (`ERR_PNPM_RECURSIVE_RUN_NO_SCRIPT`); corrected to `… exec tsx …` in
-  `createBrainMemoryTable` / `addBrainOrgTier` / `addBrainPinColumn`. The same wrong form
-  still exists in 4 non-Brain scripts (`addSitePageSurface`, `backfillNavPermissions`,
-  `removeAntoineMobilePrompts`, `backfillBrainPermissions`) — a repo-wide sweep is pending.
-
-**Resolved** (were open in the 2026-07-08 handoff): local prod backup deleted · #47/#48
-doc-merge conflict resolved at merge · prod pin migration applied.
+**Resolved** (2026-07-09): the migration-script run command (`pnpm --filter … tsx …` failed
+with `ERR_PNPM_RECURSIVE_RUN_NO_SCRIPT`; corrected to `… exec tsx …`) fixed across all 7
+`src/scripts/*.ts` — 4 non-Brain in PR #51, 3 Brain DDL in PR #52, both merged. Earlier
+(2026-07-08 handoff): local prod backup deleted · #47/#48 doc-merge conflict resolved at
+merge · prod pin migration applied.
 
 **Accepted limitations (documented, not bugs):** recipes user-scoped (no org column) ·
 Copilot recall deferred (no LLM step yet) · PO multi-line receive last-wins · scope-toggle
 promotes to active org (no picker), un-share is org-admin-only.
+
+---
+
+## Phase 2 build spec — T14c + T15 (locked 2026-07-10)
+
+Reviewed 2026-07-09/10: `/plan-eng-review` (scope-reduced — Phase 3 parked) + `/plan-design-review`
+(Your Brain page 6/10 → 9/10) + an outside-voice pass. All decisions below are **locked**;
+build in two independent lanes. Task artifacts: `~/.gstack/projects/robertangeles-cc-culinaire-kitchen/tasks-eng-review-*.jsonl` + `tasks-design-review-*.jsonl`.
+
+### Locked decisions
+| Area | Decision |
+|---|---|
+| T15 digest single-run | New `withAdvisoryLock(key, fn)` helper; **retrofit** the existing weekly waste digest onto it |
+| T14c admin surface | **No new page** — admin-gated row actions on the existing Shared tab (server `canManage` already enforces) |
+| T15 digest body | **Deterministic template** (counts + top items), not LLM — matches T12 / lessons #60; LLM pass deferred behind a flag |
+| Shipped-code TOCTOU | Fix now via **serializable/`FOR UPDATE` tx** across `deleteMemory` / `correctMemory` / `toggleScope` |
+| Departed author | Show **"Former team member"** (live-membership check), not the stored name |
+| Author attribution | **Inline in the ProvenanceChip caption** (`Maria · from the waste log · Jul 8`), no new element |
+
+### Implementation constraints (outside-voice, verified against code)
+- **Advisory lock must be `pg_try_advisory_xact_lock` inside `db.transaction()`** — a session-scoped `pg_advisory_lock` leaks across the postgres.js pool (acquire on conn A, unlock runs on conn B, unlocks nothing → digest silently skips forever). See lessons: `pg-advisory-lock-pool-leak`.
+- **Keep the in-memory `lastWasteDigestRun`/`lastBrainDigestRun` guard AND add the lock** — the lock only stops cross-instance dupes; after it releases the same instance's next 60s tick re-fires (~60 emails/Sunday) without the in-memory guard.
+- **Author name via `decryptUserPii()`** — real name is in `user_name_enc/iv/tag`, not the plaintext `userName` fallback (pattern: `wasteDigestService.ts`). Silently "works" in local dev.
+- **Digest query:** filter `created_dttm > now()-7d` (no empty emails) + `GROUP BY organisation_id` (no N+1).
+
+### Lane A — T14c org-admin management (client + `brainService`)
+Files: `brainService.ts`, `brainController.ts`, `YourBrainPage.tsx`, `MemoryRow.tsx`, `ProvenanceChip.tsx`, `BrainEmptyState.tsx`, `useBrainMemories.ts`, `brainIntegration.test.ts`.
+- [ ] **T1 (P1)** — `listMemories`: author attribution for org rows (`LEFT JOIN user` + `decryptUserPii`; departed → "Former team member").
+- [ ] **T2 (P1)** — Close TOCTOU: wrap fetch→`canManage`→mutate in a `FOR UPDATE`/serializable tx for `deleteMemory`, `correctMemory`, `toggleScope`.
+- [ ] **T3 (P2)** — Shared tab: author on `ProvenanceChip` + admin-gated row actions (no new page).
+- [ ] **T4 (P2)** — Integration test: org-admin corrects a colleague's org memory → `status=pending`, embedding null, re-queued.
+- [ ] **DT1 (P1)** — `MemoryRow`: gate pin/edit/delete/share on client-side `canManage` (`isOwner || isOrgAdmin`); non-manageable shared rows are **read-only** (expand only — no buttons that 403). *Depends on T1 (author `userId`).*
+- [ ] **DT2 (P2)** — `ProvenanceChip`: optional `authorName` inline in the caption; org rows only; "Former team member" when departed.
+- [ ] **DT3 (P2)** — `BrainEmptyState`: add a 3rd warm `no-shared` variant; fix `YourBrainPage.tsx:71-72` so an unfiltered Shared tab with zero rows is an invitation, not "No memories match".
+- [ ] **DT4 (P3)** — a11y: bump row-action touch targets `size-9` (36px) → 44px on mobile (pre-existing gap).
+
+### Lane B — T15 org digest (new service + `index.ts`), sequential
+Files: `utils/advisoryLock.ts` (new), `db/advisoryLockKeys.ts` (new), `services/brainDigestService.ts` (new), `index.ts`, `wasteDigestService.ts`.
+- [ ] **T5 (P1)** — `withAdvisoryLock(key, fn)` via `pg_try_advisory_xact_lock` inside `db.transaction()`.
+- [ ] **T6 (P1)** — `db/advisoryLockKeys.ts` registry (waste, brain-digest keys; prevents collision before T16/T17).
+- [ ] **T7 (P1)** — `brainDigestService.sendOrgDigests`: deterministic template from `GROUP BY org` 7-day stats; skip zero-memory orgs; deliver via `notificationService`.
+- [ ] **T8 (P1)** — Wire Sunday-8pm interval via `withAdvisoryLock` **and keep** the in-memory guard.
+- [ ] **T9 (P1, CRITICAL REGRESSION)** — Retrofit `sendWeeklyWasteDigests` onto the lock, keep `lastWasteDigestRun`; regression test: fires once Sunday-8pm across many ticks + 2 instances.
+
+### Parallelization
+Lane A (client + `brainService`) ∥ Lane B (new digest service + `index.ts`) — no shared files. Build in parallel worktrees, merge independently. Within Lane A, DT1 waits on T1.
+
+### NOT locked (parked)
+Phase 3 (T16 compaction / T17 nudges / T18 ranking+dashboards) — review each when Phase 2 is in prod producing the corpus-size, hit-rate, and memory-density numbers those designs need.
 
 ---
 
