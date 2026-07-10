@@ -1,12 +1,13 @@
 # The Brain — Status & Next Steps (resume point)
 
-**One-line status:** Phase 1 **and all of Phase 2 through T14b** are **built, shipped,
-merged to `main`, and LIVE in production** (capture + distillation + recall all on),
-verified end-to-end. T11 (org tier) + T12 (ops-event capture) + T13 (recall in the Labs)
-shipped in **PR #46**; T14 slice 1 (Labs grounded chip) in **PR #47**; T14b (rich "Your
-Brain" controls) in **PR #48**. Continue Phase 2 with **T14c (org-admin management surface)**.
+**One-line status:** **Phase 1 and ALL of Phase 2 (T11–T15) are built, shipped, merged to
+`main`, and LIVE in production**, verified end-to-end. Phase 2 finished 2026-07-10: **T14c
+(org-admin management) in PR #54** and **T15 (org digest + advisory-lock helper) in PR #55**,
+both CI-green, pr-reviewer-checked, and **live-smoke-tested** (author decryption, "Former
+team member", admin manage-over-HTTP, digest delivery). Next up: **Phase 3 (T16 compaction),
+parked** until prod signal — see the Phase 3 section.
 
-_Last updated: 2026-07-09. This is the living "where are we / what's next" doc.
+_Last updated: 2026-07-10. This is the living "where are we / what's next" doc.
 The original plan (with full rationale + reviews) is `brain-memory.md`._
 
 ---
@@ -31,13 +32,14 @@ was true when written); this checklist is the current reconciled view.
 - **T14 slice 1 — Labs grounded chip** (PR #47): "Grounded in your Brain" chip on Lab results
 - **T14b — Rich Your Brain controls** (PR #48): pin · correct(→re-embed) · scope-toggle ·
   scope tabs · source-filter chips · warm empty state (prod pin migration applied)
+- **T14c — Org-admin management** (PR #54, 2026-07-10): author attribution on shared rows
+  (decrypted; "Former team member" when departed), admin-gated row actions on the Shared tab,
+  TOCTOU hardened via `FOR UPDATE` transactions, warm `no-shared` empty state, 44px targets.
+- **T15 — Org digest** (PR #55, 2026-07-10): weekly deterministic "what your kitchen learned"
+  in-app digest to org admins via `brainDigestService` + reusable `withAdvisoryLock`
+  (`pg_try_advisory_xact_lock`); the existing waste digest was retrofitted onto the same lock.
 
 ### Pending
-- **T14c — Org-admin management** ← NEXT: browse/correct/delete *other members'* shared
-  memories + org attribution on `ProvenanceChip`. Reuses the T14b endpoints (`canManage`
-  already gates org-admins); no new schema.
-- **T15 — Org digest**: periodic "what your kitchen's Brain learned" (`brainDigestService`,
-  `pg_advisory_lock`-guarded)
 - **T16 — Compaction + full distiller**: merge/summarize old memories, per-scope cap; adds
   `last_recalled_dttm` (schema migration)
 - **T17 — Proactive nudges**: memory-driven "For you" slot; `brain_nudges_enabled` seeded off
@@ -59,11 +61,13 @@ promotes to active org (no picker), un-share is org-admin-only.
 
 ---
 
-## Phase 2 build spec — T14c + T15 (locked 2026-07-10)
+## Phase 2 build spec — T14c + T15 — ✅ SHIPPED 2026-07-10 (PR #54 + #55)
 
 Reviewed 2026-07-09/10: `/plan-eng-review` (scope-reduced — Phase 3 parked) + `/plan-design-review`
-(Your Brain page 6/10 → 9/10) + an outside-voice pass. All decisions below are **locked**;
-build in two independent lanes. Task artifacts: `~/.gstack/projects/robertangeles-cc-culinaire-kitchen/tasks-eng-review-*.jsonl` + `tasks-design-review-*.jsonl`.
+(Your Brain page 6/10 → 9/10) + an outside-voice pass. Built in two lanes, each verified
+(server 556/556, client 64/64, tsc + build green), pr-reviewer-checked, merged, and
+**live-smoke-tested over HTTP** (GET shape + `canManage`/`authorName`, admin manage,
+"Former team member", digest delivery). All 13 tasks below are done.
 
 ### Locked decisions
 | Area | Decision |
@@ -83,22 +87,22 @@ build in two independent lanes. Task artifacts: `~/.gstack/projects/robertangele
 
 ### Lane A — T14c org-admin management (client + `brainService`)
 Files: `brainService.ts`, `brainController.ts`, `YourBrainPage.tsx`, `MemoryRow.tsx`, `ProvenanceChip.tsx`, `BrainEmptyState.tsx`, `useBrainMemories.ts`, `brainIntegration.test.ts`.
-- [ ] **T1 (P1)** — `listMemories`: author attribution for org rows (`LEFT JOIN user` + `decryptUserPii`; departed → "Former team member").
-- [ ] **T2 (P1)** — Close TOCTOU: wrap fetch→`canManage`→mutate in a `FOR UPDATE`/serializable tx for `deleteMemory`, `correctMemory`, `toggleScope`.
-- [ ] **T3 (P2)** — Shared tab: author on `ProvenanceChip` + admin-gated row actions (no new page).
-- [ ] **T4 (P2)** — Integration test: org-admin corrects a colleague's org memory → `status=pending`, embedding null, re-queued.
-- [ ] **DT1 (P1)** — `MemoryRow`: gate pin/edit/delete/share on client-side `canManage` (`isOwner || isOrgAdmin`); non-manageable shared rows are **read-only** (expand only — no buttons that 403). *Depends on T1 (author `userId`).*
-- [ ] **DT2 (P2)** — `ProvenanceChip`: optional `authorName` inline in the caption; org rows only; "Former team member" when departed.
-- [ ] **DT3 (P2)** — `BrainEmptyState`: add a 3rd warm `no-shared` variant; fix `YourBrainPage.tsx:71-72` so an unfiltered Shared tab with zero rows is an invitation, not "No memories match".
-- [ ] **DT4 (P3)** — a11y: bump row-action touch targets `size-9` (36px) → 44px on mobile (pre-existing gap).
+- [x] **T1 (P1)** — `listMemories`: author attribution for org rows (`LEFT JOIN user` + `decryptUserPii`; departed → "Former team member").
+- [x] **T2 (P1)** — Close TOCTOU: wrap fetch→`canManage`→mutate in a `FOR UPDATE`/serializable tx for `deleteMemory`, `correctMemory`, `toggleScope`.
+- [x] **T3 (P2)** — Shared tab: author on `ProvenanceChip` + admin-gated row actions (no new page).
+- [x] **T4 (P2)** — Integration test: org-admin corrects a colleague's org memory → `status=pending`, embedding null, re-queued.
+- [x] **DT1 (P1)** — `MemoryRow`: gate pin/edit/delete/share on client-side `canManage` (`isOwner || isOrgAdmin`); non-manageable shared rows are **read-only** (expand only — no buttons that 403). *Depends on T1 (author `userId`).*
+- [x] **DT2 (P2)** — `ProvenanceChip`: optional `authorName` inline in the caption; org rows only; "Former team member" when departed.
+- [x] **DT3 (P2)** — `BrainEmptyState`: add a 3rd warm `no-shared` variant; fix `YourBrainPage.tsx:71-72` so an unfiltered Shared tab with zero rows is an invitation, not "No memories match".
+- [x] **DT4 (P3)** — a11y: bump row-action touch targets `size-9` (36px) → 44px on mobile (pre-existing gap).
 
 ### Lane B — T15 org digest (new service + `index.ts`), sequential
 Files: `utils/advisoryLock.ts` (new), `db/advisoryLockKeys.ts` (new), `services/brainDigestService.ts` (new), `index.ts`, `wasteDigestService.ts`.
-- [ ] **T5 (P1)** — `withAdvisoryLock(key, fn)` via `pg_try_advisory_xact_lock` inside `db.transaction()`.
-- [ ] **T6 (P1)** — `db/advisoryLockKeys.ts` registry (waste, brain-digest keys; prevents collision before T16/T17).
-- [ ] **T7 (P1)** — `brainDigestService.sendOrgDigests`: deterministic template from `GROUP BY org` 7-day stats; skip zero-memory orgs; deliver via `notificationService`.
-- [ ] **T8 (P1)** — Wire Sunday-8pm interval via `withAdvisoryLock` **and keep** the in-memory guard.
-- [ ] **T9 (P1, CRITICAL REGRESSION)** — Retrofit `sendWeeklyWasteDigests` onto the lock, keep `lastWasteDigestRun`; regression test: fires once Sunday-8pm across many ticks + 2 instances.
+- [x] **T5 (P1)** — `withAdvisoryLock(key, fn)` via `pg_try_advisory_xact_lock` inside `db.transaction()`.
+- [x] **T6 (P1)** — `db/advisoryLockKeys.ts` registry (waste, brain-digest keys; prevents collision before T16/T17).
+- [x] **T7 (P1)** — `brainDigestService.sendOrgDigests`: deterministic template from `GROUP BY org` 7-day stats; skip zero-memory orgs; deliver via `notificationService`.
+- [x] **T8 (P1)** — Wire Sunday-8pm interval via `withAdvisoryLock` **and keep** the in-memory guard.
+- [x] **T9 (P1, CRITICAL REGRESSION)** — Retrofit `sendWeeklyWasteDigests` onto the lock, keep `lastWasteDigestRun`; regression test: fires once Sunday-8pm across many ticks + 2 instances.
 
 ### Parallelization
 Lane A (client + `brainService`) ∥ Lane B (new digest service + `index.ts`) — no shared files. Build in parallel worktrees, merge independently. Within Lane A, DT1 waits on T1.
@@ -239,11 +243,8 @@ produced a recipe that reflected the seeded memory (crisp-skin detail carried th
   - Backend: `is_pinned` column + partial index (idempotent `scripts/addBrainPinColumn.ts`, **applied to prod**); `pinMemory`/`correctMemory`/`toggleScope` in `brainService.ts` behind a single `canManage` auth helper (own row OR org-admin of the owning org); `PATCH /memories/:id/pin|:id|:id/scope` (all `brain:manage`). Share promotes to the user's active org; un-share requires org-admin.
   - Frontend: `useBrainMemories` filters + optimistic mutations; `ScopeToggle` (new), `MemoryRow` pin/edit/scope actions, `BrainEmptyState` `hasQuery` variant; `hasOrg` gates the share UI.
   - Verified: server 544/544 (route matrix + pin/correct/scope integration incl. org boundary + colleague-visibility), client 58/58, tsc/build green, **live PATCH smoke** (pin/correct/scope via HTTP → DB reflects it; the worker re-embedded the corrected body). Independently reviewed APPROVE by the pr-reviewer agent.
-- **⬜ T14c — org-admin management surface** ← **NEXT**. Browse/correct/delete *other members'* shared memories under an admin view + org attribution on `ProvenanceChip` (reuses these same endpoints).
-
-| Task | Plain English | Notes |
-|---|---|---|
-| **T15 — Org digest** | Periodic "what your kitchen's Brain learned" summary. | `brainDigestService`, `pg_advisory_lock`-guarded. |
+- **✅ T14c — org-admin management surface** (PR #54, 2026-07-10). Org-admins correct/delete other members' shared memories via admin-gated actions on the existing Shared tab; author attribution on `ProvenanceChip` (decrypted, "Former team member" when the author has left the org); delete/correct/pin/scope hardened against a TOCTOU race with `FOR UPDATE` transactions.
+- **✅ T15 — org digest** (PR #55, 2026-07-10). Weekly deterministic "what your kitchen's Brain learned" in-app digest to org admins (`brainDigestService`), guarded by the new `withAdvisoryLock` (`pg_try_advisory_xact_lock` — no pool-leak); the existing weekly waste digest was retrofitted onto the same lock. **Phase 2 complete.**
 
 ## ⬜ Pending — Phase 3 (intelligence layer)
 
@@ -260,7 +261,9 @@ produced a recipe that reflected the seeded memory (crisp-skin detail carried th
 2. ~~**T12 (ops capture)**~~ — ✅ done + merged (PR #46). It's now "kitchen memory."
 3. ~~**T13 (recall in the Labs)**~~ — ✅ done + merged (PR #46). R&D is grounded. Copilot deferred (no LLM there yet).
 4. ~~**T14 (rich "Your Brain" UI)**~~ — ✅ done + merged (slice 1 PR #47, T14b PR #48): scope tabs, source filters, pin/correct/scope-toggle, Labs grounded chip.
-5. **T14c (org-admin management surface)** ← next — browse/correct/delete other members' shared memories + org attribution on `ProvenanceChip`. Run `/plan-design-review` first. Then T15, then Phase 3.
+5. ~~**T14c (org-admin management surface)**~~ — ✅ done + merged (PR #54). Admin-gated Shared-tab actions + author attribution + TOCTOU-hardened mutations.
+6. ~~**T15 (org digest)**~~ — ✅ done + merged (PR #55). Weekly advisory-lock-guarded digest. **Phase 2 complete.**
+7. **Phase 3 (T16 compaction → T17 nudges → T18 ranking/dashboards)** ← next — review each when Phase 2 is in prod producing the corpus-size, hit-rate, and density numbers those designs need.
 
 Each is a self-contained ship-and-verify chunk on the existing capture/recall seam
 — same pattern proven in Phase 1.
