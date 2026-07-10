@@ -12,4 +12,6 @@ export const ADVISORY_LOCK_KEYS = {
   wasteDigest: 8_100_001,
   /** Weekly Brain org digest (Sunday 8 PM). */
   brainDigest: 8_100_002,
+  /** Nightly Brain corpus snapshot (03:00) — Phase 3 analytics prep. */
+  brainCorpusSnapshot: 8_100_003,
 } as const;

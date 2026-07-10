@@ -2446,6 +2446,9 @@ export const brainMemory = pgTable(
     isPinned: boolean("is_pinned").notNull().default(false),
     createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
     updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
+    /** Best-effort recency signal (Phase 3 prep): set on each recall hit, off the
+     * hot path. Drives T16 compaction (evict/merge least-recently-recalled). */
+    lastRecalledDttm: timestamp("last_recalled_dttm", { withTimezone: true }),
   },
   (table) => [
     // Upsert target for recordMemory. Owner-scoped so a source id can't
@@ -2467,5 +2470,116 @@ export const brainMemory = pgTable(
     index("idx_brain_memory_pinned")
       .on(table.userId)
       .where(sql`is_pinned = true`),
+  ],
+);
+
+// ── Brain analytics (OLAP star schema, Phase 3 prep) ─────────────────────────
+// A reporting layer separate from the OLTP `brain_memory`, capturing the
+// time-series signal Phase 3's design is gated on: recall hit-rate/latency
+// (T18), corpus growth + density (T16/T17). Kimball star: two conformed
+// dimensions (`dim_date`, `dim_scope`) + two fact tables holding FKs + numeric
+// measures only. `user`/`organisation` are reused as the tenant dimensions.
+//
+// Deviation from "PK = uuid" (DB standards): the dimensions use smart integer
+// keys (`date_key` = YYYYMMDD, `scope_key` = 1/2) — the universal date/low-
+// cardinality-dimension convention; facts keep uuid PKs.
+
+/** Conformed date dimension (smart key YYYYMMDD). Seeded by the migration. */
+export const dimDate = pgTable(
+  "dim_date",
+  {
+    dateKey: integer("date_key").primaryKey(), // YYYYMMDD
+    fullDate: date("full_date").notNull(),
+    year: smallint("year").notNull(),
+    quarter: smallint("quarter").notNull(),
+    month: smallint("month").notNull(),
+    day: smallint("day").notNull(),
+    dayOfWeek: smallint("day_of_week").notNull(), // 0=Sunday
+    weekOfYear: smallint("week_of_year").notNull(),
+    isWeekendInd: boolean("is_weekend_ind").notNull().default(false),
+  },
+  (table) => [
+    // Lookup a day by calendar date when writing facts.
+    uniqueIndex("idx_dim_date_full_date").on(table.fullDate),
+  ],
+);
+
+/** Conformed scope dimension: 1 = user (Private), 2 = org (Shared). Seeded by the migration. */
+export const dimScope = pgTable(
+  "dim_scope",
+  {
+    scopeKey: smallint("scope_key").primaryKey(),
+    scopeCode: varchar("scope_code", { length: 10 }).notNull(), // 'user' | 'org'
+    scopeLabel: varchar("scope_label", { length: 20 }).notNull(), // 'Private' | 'Shared'
+  },
+  (table) => [uniqueIndex("idx_dim_scope_code").on(table.scopeCode)],
+);
+
+/**
+ * Fact: one row per recall event (T18 hit-rate/latency). A recall spans both
+ * scopes in one call, so scope isn't a grain here — `organisation_id` is set
+ * when the recall included the active-org branch, NULL for user-only recalls.
+ */
+export const factBrainRecall = pgTable(
+  "fact_brain_recall",
+  {
+    recallId: uuid("recall_id").defaultRandom().primaryKey(),
+    // Analytics are derived/disposable → cascade with the tenant they describe.
+    userId: integer("user_id").notNull().references(() => user.userId, { onDelete: "cascade" }),
+    organisationId: integer("organisation_id").references(() => organisation.organisationId, {
+      onDelete: "cascade",
+    }),
+    dateKey: integer("date_key").notNull().references(() => dimDate.dateKey),
+    hitCount: integer("hit_count").notNull(), // measure
+    latencyMs: integer("latency_ms").notNull(), // measure
+    recalledDttm: timestamp("recalled_dttm", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // Per-user recall history.
+    index("idx_fact_brain_recall_user").on(table.userId),
+    // Per-org recall history (org-branch recalls).
+    index("idx_fact_brain_recall_org").on(table.organisationId),
+    // Time-series rollups (hit-rate over time) join on the date dimension.
+    index("idx_fact_brain_recall_date").on(table.dateKey),
+  ],
+);
+
+/**
+ * Fact: nightly snapshot of corpus size per (day, scope, tenant) (T16 growth,
+ * T17 density). One of `user_id` / `organisation_id` is set per the scope.
+ */
+export const factBrainCorpus = pgTable(
+  "fact_brain_corpus",
+  {
+    snapshotId: uuid("snapshot_id").defaultRandom().primaryKey(),
+    dateKey: integer("date_key").notNull().references(() => dimDate.dateKey),
+    scopeKey: smallint("scope_key").notNull().references(() => dimScope.scopeKey),
+    userId: integer("user_id").references(() => user.userId, { onDelete: "cascade" }), // NULL for org-scope rows
+    organisationId: integer("organisation_id").references(() => organisation.organisationId, {
+      onDelete: "cascade",
+    }), // NULL for user-scope rows
+    memoryCount: integer("memory_count").notNull(), // measures
+    readyCount: integer("ready_count").notNull(),
+    pendingCount: integer("pending_count").notNull(),
+    failedCount: integer("failed_count").notNull(),
+  },
+  (table) => [
+    // Grain: one row per tenant+scope+day. Non-unique because user_id/org_id are
+    // nullable (a unique index would treat NULLs as distinct and not enforce it);
+    // the nightly job is idempotent by deleting the day's rows before re-inserting.
+    index("idx_fact_brain_corpus_grain").on(
+      table.dateKey,
+      table.scopeKey,
+      table.userId,
+      table.organisationId,
+    ),
+    // Time-series growth rollups join on the date dimension.
+    index("idx_fact_brain_corpus_date").on(table.dateKey),
+    // Slice snapshots by scope.
+    index("idx_fact_brain_corpus_scope").on(table.scopeKey),
+    // Per-user density series.
+    index("idx_fact_brain_corpus_user").on(table.userId),
+    // Per-org density series.
+    index("idx_fact_brain_corpus_org").on(table.organisationId),
   ],
 );

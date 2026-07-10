@@ -26,6 +26,7 @@ import { db } from "../db/index.js";
 import { embedText } from "./knowledgeService.js";
 import { getAllSettings } from "./settingsService.js";
 import { sanitizeForPrompt } from "./userContextService.js";
+import { recordRecall } from "./brainAnalyticsService.js";
 
 const logger = pino({ name: "brainRecallService" });
 
@@ -170,6 +171,16 @@ export async function recallMemories(
       { userId, hits: top.length, latencyMs: Date.now() - startedAt },
       "brain.recall.hit",
     );
+
+    // Analytics (Phase 3 prep, T18/T16): record the recall + stamp recency.
+    // Fire-and-forget and never-throws — must not affect the recall path.
+    void recordRecall({
+      userId,
+      organisationId: activeOrgId,
+      hitCount: top.length,
+      latencyMs: Date.now() - startedAt,
+      recalledMemoryIds: top.map((row) => row.memory_id),
+    });
 
     return {
       block,

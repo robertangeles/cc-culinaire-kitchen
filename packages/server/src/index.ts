@@ -52,6 +52,7 @@ import { sendWeeklyWasteDigests } from "./services/wasteDigestService.js";
 import { runBrainWorkerTick, BRAIN_WORKER_INTERVAL_MS } from "./services/brainWorker.js";
 import { checkCaptureHealth } from "./services/brainCaptureAlertService.js";
 import { sendOrgDigests } from "./services/brainDigestService.js";
+import { snapshotCorpus } from "./services/brainAnalyticsService.js";
 import { withAdvisoryLock } from "./utils/advisoryLock.js";
 import { ADVISORY_LOCK_KEYS } from "./db/advisoryLockKeys.js";
 import { brainRouter } from "./routes/brain.js";
@@ -520,6 +521,22 @@ hydrateEnvFromCredentials().then(() => {
         }
       }, 60_000);
 
+      // Nightly Brain corpus snapshot — 03:00 daily (Phase 3 analytics prep). Same
+      // dual-guard pattern; the day-keyed in-memory guard fires it once per day.
+      let lastCorpusSnapshotRun = "";
+      const corpusSnapshotInterval = setInterval(async () => {
+        const now = new Date();
+        const key = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}`;
+        if (now.getHours() === 3 && lastCorpusSnapshotRun !== key) {
+          lastCorpusSnapshotRun = key;
+          try {
+            await withAdvisoryLock(ADVISORY_LOCK_KEYS.brainCorpusSnapshot, snapshotCorpus);
+          } catch (err) {
+            log.error({ err }, "Brain corpus snapshot failed");
+          }
+        }
+      }, 60_000);
+
       // Graceful shutdown: close server and release port on termination signals
       function shutdown(signal: string) {
         log.info(`${signal} received — shutting down`);
@@ -527,6 +544,7 @@ hydrateEnvFromCredentials().then(() => {
         clearInterval(purgeInterval);
         clearInterval(wasteDigestInterval);
         clearInterval(brainDigestInterval);
+        clearInterval(corpusSnapshotInterval);
         clearInterval(feedbackEmailInterval);
         clearInterval(brainWorkerInterval);
         clearInterval(captureHealthInterval);
