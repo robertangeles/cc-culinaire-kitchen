@@ -133,7 +133,7 @@ export async function getRecallStats(days = 30): Promise<RecallStats> {
       coalesce(avg(latency_ms), 0)::float AS avg_latency_ms,
       coalesce(percentile_cont(0.95) WITHIN GROUP (ORDER BY latency_ms), 0)::float AS p95_latency_ms
     FROM fact_brain_recall
-    WHERE recalled_dttm > now() - ${days} * interval '1 day'
+    WHERE date_key >= to_char(now() - ${days} * interval '1 day', 'YYYYMMDD')::int
   `)) as unknown as Array<{
     total_recalls: number;
     hit_rate: number;
@@ -148,7 +148,7 @@ export async function getRecallStats(days = 30): Promise<RecallStats> {
            coalesce(avg(hit_count), 0)::float AS avg_hits,
            coalesce(avg(latency_ms), 0)::float AS avg_latency_ms
     FROM fact_brain_recall
-    WHERE recalled_dttm > now() - ${days} * interval '1 day'
+    WHERE date_key >= to_char(now() - ${days} * interval '1 day', 'YYYYMMDD')::int
     GROUP BY date_key
     ORDER BY date_key
   `)) as unknown as Array<{ date_key: number; recalls: number; avg_hits: number; avg_latency_ms: number }>;

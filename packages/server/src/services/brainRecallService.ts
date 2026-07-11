@@ -165,7 +165,8 @@ export async function recallMemories(
     // 0.7 / 0.2 / 30-day blend, so recall is byte-identical until an admin tunes them.
     const simWeight = settingNumber(settings.brain_rank_similarity_weight, 0.7);
     const recWeight = settingNumber(settings.brain_rank_recency_weight, 0.2);
-    const halflifeDays = settingNumber(settings.brain_rank_recency_halflife_days, 30);
+    // Floor the half-life so a misconfigured 0 can't divide-by-zero into a NaN rank.
+    const halflifeDays = Math.max(0.001, settingNumber(settings.brain_rank_recency_halflife_days, 30));
     const now = Date.now();
     const top = rows
       .map((row) => {
