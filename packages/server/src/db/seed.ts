@@ -253,6 +253,12 @@ async function seed() {
     { key: "brain_rank_similarity_weight", value: "0.7" },
     { key: "brain_rank_recency_weight", value: "0.2" },
     { key: "brain_rank_recency_halflife_days", value: "30" },
+    // Compaction (Phase 3 T16) — folds a tenant's coldest memories into a digest
+    // once they exceed the cap, soft-archiving the sources. Off by default; the
+    // cap is data-gated (0 = disabled) — set it once fact_brain_corpus shows real
+    // per-tenant sizes so recall's exact-scan stays fast without over-compacting.
+    { key: "brain_compaction_enabled", value: "false" },
+    { key: "brain_compaction_cap", value: "0" },
   ];
 
   for (const s of defaultSettings) {

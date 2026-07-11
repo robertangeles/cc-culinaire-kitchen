@@ -53,6 +53,7 @@ import { runBrainWorkerTick, BRAIN_WORKER_INTERVAL_MS } from "./services/brainWo
 import { checkCaptureHealth } from "./services/brainCaptureAlertService.js";
 import { sendOrgDigests } from "./services/brainDigestService.js";
 import { snapshotCorpus } from "./services/brainAnalyticsService.js";
+import { compactAll } from "./services/brainCompactionService.js";
 import { withAdvisoryLock } from "./utils/advisoryLock.js";
 import { ADVISORY_LOCK_KEYS } from "./db/advisoryLockKeys.js";
 import { brainRouter } from "./routes/brain.js";
@@ -537,6 +538,24 @@ hydrateEnvFromCredentials().then(() => {
         }
       }, 60_000);
 
+      // Nightly Brain compaction — 03:30 daily (Phase 3 T16), after the snapshot.
+      // No-op unless brain_compaction_enabled + a positive cap; same dual-guard.
+      let lastCompactionRun = "";
+      const compactionInterval = setInterval(async () => {
+        const now = new Date();
+        const key = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}`;
+        if (now.getHours() === 3 && now.getMinutes() >= 30 && lastCompactionRun !== key) {
+          lastCompactionRun = key;
+          try {
+            await withAdvisoryLock(ADVISORY_LOCK_KEYS.brainCompaction, async () => {
+              await compactAll();
+            });
+          } catch (err) {
+            log.error({ err }, "Brain compaction failed");
+          }
+        }
+      }, 60_000);
+
       // Graceful shutdown: close server and release port on termination signals
       function shutdown(signal: string) {
         log.info(`${signal} received — shutting down`);
@@ -545,6 +564,7 @@ hydrateEnvFromCredentials().then(() => {
         clearInterval(wasteDigestInterval);
         clearInterval(brainDigestInterval);
         clearInterval(corpusSnapshotInterval);
+        clearInterval(compactionInterval);
         clearInterval(feedbackEmailInterval);
         clearInterval(brainWorkerInterval);
         clearInterval(captureHealthInterval);
