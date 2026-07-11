@@ -241,6 +241,10 @@ export const user = pgTable("user", {
   selectedOrganisationId: integer("selected_organisation_id").references(
     () => organisation.organisationId,
   ),
+  /** Per-user opt-in for proactive Brain nudges (Phase 3 T17). Off by default —
+   * nudges only reach a user who has explicitly turned them on (and the admin
+   * `brain_nudges_enabled` master flag is on). */
+  brainNudgesOptIn: boolean("brain_nudges_opt_in").notNull().default(false),
   createdDttm: timestamp("created_dttm").notNull().defaultNow(),
   updatedDttm: timestamp("updated_dttm").notNull().defaultNow(),
 });

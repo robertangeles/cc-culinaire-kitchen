@@ -7,7 +7,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useNotifications, type AppNotification } from "../../hooks/useNotifications.js";
-import { Bell, Check, X, FileText, AlertTriangle, Clock, Truck } from "lucide-react";
+import { Bell, Check, X, FileText, AlertTriangle, Clock, Truck, Sparkles, Brain } from "lucide-react";
 
 const TYPE_CONFIG: Record<string, { icon: typeof Bell; color: string; label: string }> = {
   APPROVAL_REQUIRED: { icon: FileText,      color: "text-amber-400",   label: "Approval needed" },
@@ -15,6 +15,8 @@ const TYPE_CONFIG: Record<string, { icon: typeof Bell; color: string; label: str
   PO_REJECTED:       { icon: X,              color: "text-red-400",     label: "PO rejected" },
   DISCREPANCY_ALERT: { icon: AlertTriangle,  color: "text-orange-400",  label: "Discrepancy" },
   DELIVERY_OVERDUE:  { icon: Clock,          color: "text-red-400",     label: "Delivery overdue" },
+  BRAIN_DIGEST:      { icon: Brain,          color: "text-[#D4A574]",   label: "Brain digest" },
+  BRAIN_NUDGE:       { icon: Sparkles,       color: "text-[#D4A574]",   label: "Nudge" },
 };
 
 function timeAgo(dateStr: string): string {
@@ -110,10 +112,14 @@ export default function NotificationBell() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="text-xs font-medium text-white">{config.label}</div>
-                      <div className="text-xs text-[#999] mt-0.5 truncate">
-                        {payload.poNumber && `PO ${payload.poNumber}`}
-                        {payload.reason && ` — ${payload.reason}`}
-                        {payload.supplierName && ` — ${payload.supplierName}`}
+                      <div className="text-xs text-[#999] mt-0.5">
+                        {payload.body ?? payload.summary ?? (
+                          <span className="block truncate">
+                            {payload.poNumber && `PO ${payload.poNumber}`}
+                            {payload.reason && ` — ${payload.reason}`}
+                            {payload.supplierName && ` — ${payload.supplierName}`}
+                          </span>
+                        )}
                       </div>
                       <div className="text-[10px] text-[#666] mt-1">{timeAgo(n.createdAt)}</div>
                     </div>

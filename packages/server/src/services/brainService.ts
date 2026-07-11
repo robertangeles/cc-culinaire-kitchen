@@ -470,3 +470,18 @@ export async function reembedFailedMemories(): Promise<number> {
     .returning({ memoryId: brainMemory.memoryId });
   return rows.length;
 }
+
+/** Whether the user has opted in to proactive nudges (spec T17). */
+export async function getNudgeOptIn(userId: number): Promise<boolean> {
+  const [row] = await db
+    .select({ optIn: user.brainNudgesOptIn })
+    .from(user)
+    .where(eq(user.userId, userId))
+    .limit(1);
+  return row?.optIn ?? false;
+}
+
+/** Set the user's proactive-nudge opt-in (spec T17). Self-service, no admin gate. */
+export async function setNudgeOptIn(userId: number, optIn: boolean): Promise<void> {
+  await db.update(user).set({ brainNudgesOptIn: optIn }).where(eq(user.userId, userId));
+}

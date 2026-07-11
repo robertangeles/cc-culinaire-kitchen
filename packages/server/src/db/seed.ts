@@ -259,6 +259,9 @@ async function seed() {
     // per-tenant sizes so recall's exact-scan stays fast without over-compacting.
     { key: "brain_compaction_enabled", value: "false" },
     { key: "brain_compaction_cap", value: "0" },
+    // Proactive nudges (Phase 3 T17) — max NUDGE notifications per user per 7 days.
+    // Gated by brain_nudges_enabled (off) + each user's brain_nudges_opt_in.
+    { key: "brain_nudge_rate_limit", value: "2" },
   ];
 
   for (const s of defaultSettings) {

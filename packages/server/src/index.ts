@@ -54,6 +54,7 @@ import { checkCaptureHealth } from "./services/brainCaptureAlertService.js";
 import { sendOrgDigests } from "./services/brainDigestService.js";
 import { snapshotCorpus } from "./services/brainAnalyticsService.js";
 import { compactAll } from "./services/brainCompactionService.js";
+import { runNudges } from "./services/brainNudgeService.js";
 import { withAdvisoryLock } from "./utils/advisoryLock.js";
 import { ADVISORY_LOCK_KEYS } from "./db/advisoryLockKeys.js";
 import { brainRouter } from "./routes/brain.js";
@@ -556,6 +557,24 @@ hydrateEnvFromCredentials().then(() => {
         }
       }, 60_000);
 
+      // Daily Brain nudges — 09:00 (Phase 3 T17), a reasonable operator hour.
+      // No-op unless brain_nudges_enabled; per-user opt-in + rate-limit inside.
+      let lastNudgeRun = "";
+      const nudgeInterval = setInterval(async () => {
+        const now = new Date();
+        const key = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}`;
+        if (now.getHours() === 9 && lastNudgeRun !== key) {
+          lastNudgeRun = key;
+          try {
+            await withAdvisoryLock(ADVISORY_LOCK_KEYS.brainNudge, async () => {
+              await runNudges();
+            });
+          } catch (err) {
+            log.error({ err }, "Brain nudges failed");
+          }
+        }
+      }, 60_000);
+
       // Graceful shutdown: close server and release port on termination signals
       function shutdown(signal: string) {
         log.info(`${signal} received — shutting down`);
@@ -565,6 +584,7 @@ hydrateEnvFromCredentials().then(() => {
         clearInterval(brainDigestInterval);
         clearInterval(corpusSnapshotInterval);
         clearInterval(compactionInterval);
+        clearInterval(nudgeInterval);
         clearInterval(feedbackEmailInterval);
         clearInterval(brainWorkerInterval);
         clearInterval(captureHealthInterval);

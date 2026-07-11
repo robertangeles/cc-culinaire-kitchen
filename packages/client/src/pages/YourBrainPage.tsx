@@ -15,6 +15,7 @@ import { useBrainMemories } from "../hooks/useBrainMemories.js";
 import { MemoryRow } from "../components/brain/MemoryRow.js";
 import { BrainEmptyState } from "../components/brain/BrainEmptyState.js";
 import { ScopeToggle } from "../components/brain/ScopeToggle.js";
+import { NudgeOptIn } from "../components/brain/NudgeOptIn.js";
 import { useLocation } from "../context/LocationContext.js";
 
 /** Source-type filter chips (spec D-T4). `null` value = "All". */
@@ -177,6 +178,9 @@ export function YourBrainPage() {
             </>
           )}
         </div>
+
+        {/* Proactive nudges opt-in (Phase 3 T17) */}
+        <NudgeOptIn />
       </div>
     </div>
   );

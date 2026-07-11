@@ -21,6 +21,8 @@ import {
   toggleScope,
   getBrainStats,
   reembedFailedMemories,
+  getNudgeOptIn,
+  setNudgeOptIn,
 } from "../services/brainService.js";
 import { getRecallStats, getCorpusStats } from "../services/brainAnalyticsService.js";
 
@@ -257,6 +259,46 @@ export async function handleReembedFailed(
     res.json({ requeued });
   } catch (err) {
     log.error(err, "Failed to requeue brain memories");
+    next(err);
+  }
+}
+
+/**
+ * **GET /nudges/opt-in** — the caller's own proactive-nudge opt-in (spec T17).
+ * @returns 200 `{ optIn: boolean }`
+ */
+export async function handleGetNudgeOptIn(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    res.json({ optIn: await getNudgeOptIn(req.user!.sub) });
+  } catch (err) {
+    log.error(err, "Failed to read nudge opt-in");
+    next(err);
+  }
+}
+
+/**
+ * **PUT /nudges/opt-in** — set the caller's own proactive-nudge opt-in (spec T17).
+ * Body: `{ optIn: boolean }`. Self-service — a user only ever changes their own.
+ */
+export async function handleSetNudgeOptIn(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const parsed = z.object({ optIn: z.boolean() }).safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "Invalid request." });
+      return;
+    }
+    await setNudgeOptIn(req.user!.sub, parsed.data.optIn);
+    res.json({ optIn: parsed.data.optIn });
+  } catch (err) {
+    log.error(err, "Failed to set nudge opt-in");
     next(err);
   }
 }
