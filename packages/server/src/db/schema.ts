@@ -247,7 +247,13 @@ export const user = pgTable("user", {
   brainNudgesOptIn: boolean("brain_nudges_opt_in").notNull().default(false),
   createdDttm: timestamp("created_dttm").notNull().defaultNow(),
   updatedDttm: timestamp("updated_dttm").notNull().defaultNow(),
-});
+}, (table) => [
+  // Daily runNudges() scans users with nudges turned on. Partial: opted-in users
+  // are a small minority (off by default), so an opted-out-excluding index stays tiny.
+  index("idx_user_brain_nudges_opt_in")
+    .on(table.userId)
+    .where(sql`brain_nudges_opt_in = true`),
+]);
 
 /**
  * The `role` table defines permission groupings such as Admin, Subscriber,

@@ -38,8 +38,16 @@ describe.runIf(dbAvailable)("brainNudgeService (T17, real DB)", () => {
   beforeAll(async () => {
     const { getAllSettings, upsertSettings } = await import("./settingsService.js");
     const s = await getAllSettings();
-    for (const k of ["brain_enabled", "brain_nudges_enabled", "brain_nudge_rate_limit"]) {
-      flagBackup[k] = s[k] ?? "false";
+    // Restore to the real seed defaults for any setting absent when the test
+    // runs — a blanket "false" would poison `brain_nudge_rate_limit` (a number)
+    // with a value `Number()` reads as NaN, silently disabling nudges.
+    const defaults: Record<string, string> = {
+      brain_enabled: "false",
+      brain_nudges_enabled: "false",
+      brain_nudge_rate_limit: "2",
+    };
+    for (const k of Object.keys(defaults)) {
+      flagBackup[k] = s[k] ?? defaults[k];
     }
 
     const [u] = (await db.execute(sql`
