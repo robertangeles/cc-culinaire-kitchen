@@ -3,13 +3,13 @@
 **One-line status:** **Phase 1, all of Phase 2 (T11–T15), the Phase 3 signal-capture prep,
 AND all three Phase 3 lanes (T18 · T16 · T17) are built and shipped.** Phase 2 finished
 2026-07-10 (T14c PR #54 · T15 PR #55), live-smoke-tested. **Phase 3 prep** — the Brain
-analytics star schema — shipped 2026-07-11 (PR #57), prod-migrated. **Phase 3 build**:
-Lane 1 T18 dashboards/re-embed/ranking-config (PR #59) and Lane 2 T16 compaction (PR #60)
-merged 2026-07-11; **Lane 3 T17 proactive nudges is on branch
-`feature/ck-web/brain-t17-nudges`, gate-green, shipping now.** ⚠️ T17 adds
-`user.brain_nudges_opt_in` — `addBrainNudgeOptIn.ts` is run on dev but **must run on prod
-before the T17 deploy**. Nudges are off by default (admin `brain_nudges_enabled` +
-per-user opt-in both required) and delivered via the existing notification bell.
+analytics star schema — shipped 2026-07-11 (PR #57), prod-migrated. **Phase 3 build** — all
+three lanes merged 2026-07-11: Lane 1 T18 dashboards/re-embed/ranking-config (PR #59),
+Lane 2 T16 compaction (PR #60), **Lane 3 T17 proactive nudges (PR #61)**. T17's prod
+migration `addBrainNudgeOptIn.ts` (column + partial index + `brain_nudge_rate_limit`
+setting) was **run + verified on prod before merge**. Nudges are off by default (admin
+`brain_nudges_enabled` + per-user opt-in both required) and delivered via the existing
+notification bell. **Phase 3 complete.**
 
 _Last updated: 2026-07-11. This is the living "where are we / what's next" doc.
 The original plan (with full rationale + reviews) is `brain-memory.md`._
@@ -144,7 +144,7 @@ settings, set later on real data** (no hardcoded guesses). Build in three sequen
 - [x] **L2-2 (P2)** — `brainCompactionService`: pick coldest N over cap (`last_recalled_dttm` NULLS FIRST), summarize → INSERT `memory_kind='digest'`, UPDATE sources `status='archived'`; cap = `brain_compaction_cap` (`0`=off).
 - [x] **L2-3 (P2)** — nightly compaction via `withAdvisoryLock` (`brainCompaction` key), off unless `brain_compaction_enabled` + cap>0; recall + `listMemories` exclude `archived`.
 
-### Lane 3 — T17 nudges ✅ BUILT (branch `feature/ck-web/brain-t17-nudges`, shipping)
+### Lane 3 — T17 nudges ✅ SHIPPED (PR #61, prod-migrated)
 **Design pivot (2026-07-11):** the design pass (L3-2) ran this session, not deferred — and
 we chose to build the **full generation** now (not stubbed). Two product calls settled it:
 **ops-action nudges** (act on the user's most recent ready ops memory — PO/waste/stock/prep/
@@ -152,7 +152,7 @@ menu) delivered via the **existing notification bell** (D-T5's "For you" NudgeCa
 superseded — the app has no operator dashboard to host it yet).
 - [x] **L3-1** — `brainNudgeService`: `runNudges()` daily job under `withAdvisoryLock(brainNudge)`, no-op unless `brain_enabled` + `brain_nudges_enabled` + `brain_nudge_rate_limit`>0; iterates opted-in users, per-user rate-limit (`recentNudgeCount`, 7-day window), dedupes on source `related_entity_id`, `createInApp` `BRAIN_NUDGE` delivery.
 - [x] **L3-2** — nudge **generation** built: `generateNudgeText` (fail-soft `claude-haiku`, sanitized+delimited untrusted body, returns null on error/NONE). Per-user opt-in: `user.brain_nudges_opt_in` (off) + `GET|PUT /api/brain/nudges/opt-in` (`brain:read`) + `NudgeOptIn` toggle on Your Brain. `NotificationBell` renders `BRAIN_NUDGE` (+ backfilled `BRAIN_DIGEST`, previously unrendered).
-- ⚠️ **Prod migration pending** — `addBrainNudgeOptIn.ts` must run on prod before deploy.
+- [x] **Prod migration done** — `addBrainNudgeOptIn.ts` run + verified on prod (column `boolean`, `idx_user_brain_nudges_opt_in` present, `brain_nudge_rate_limit='2'`) before the PR #61 merge.
 
 ### Data-gated (deferred — set on real signal, not now)
 Ranking weight values · compaction cap value · nudge triggering thresholds. The Lane 1 dashboards are what make these tunable on evidence.
@@ -299,7 +299,7 @@ produced a recipe that reflected the seeded memory (crisp-skin detail carried th
 |---|---|---|
 | **T18 — Ranking tuning + admin re-embed panel + dashboards** | Ranking weights to settings; admin Brain analytics (hit-rate/latency/corpus growth); re-embed-failed panel. | PR #59 |
 | **T16 — Compaction + full distiller** | Merge/summarize cold memories over a per-scope cap into a `digest`, soft-archive sources. Adds `last_recalled_dttm`. Off unless `brain_compaction_enabled` + cap>0. | PR #60 |
-| **T17 — Proactive nudges** | Ops-action nudges (act on recent PO/waste/stock/prep/menu memory) delivered to the **notification bell** (D-T5 NudgeCard superseded — no dashboard yet). Opt-in + rate-limited; `brain_nudges_enabled` off. | branch, shipping |
+| **T17 — Proactive nudges** | Ops-action nudges (act on recent PO/waste/stock/prep/menu memory) delivered to the **notification bell** (D-T5 NudgeCard superseded — no dashboard yet). Opt-in + rate-limited; `brain_nudges_enabled` off. | PR #61 |
 
 ---
 
