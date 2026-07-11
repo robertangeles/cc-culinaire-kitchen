@@ -20,6 +20,9 @@ import {
   AlertCircle,
   Brain,
   RefreshCw,
+  BarChart3,
+  Database,
+  Wand2,
 } from "lucide-react";
 
 const API = import.meta.env.VITE_API_URL ?? "";
@@ -31,6 +34,27 @@ interface BrainStats {
   memoriesLast24h: number;
   memoriesLast7d: number;
   capture: { recorded: number; skipped: number; errors: number };
+}
+
+/** Analytics returned by GET /api/brain/analytics (Phase 3 T18). */
+interface RecallStats {
+  totalRecalls: number;
+  hitRate: number;
+  avgHits: number;
+  avgLatencyMs: number;
+  p95LatencyMs: number;
+  daily: Array<{ dateKey: number; recalls: number; avgHits: number; avgLatencyMs: number }>;
+}
+interface CorpusStats {
+  totalMemories: number;
+  byScope: { user: number; org: number };
+  byStatus: Record<string, number>;
+  growth: Array<{ dateKey: number; scopeKey: number; total: number }>;
+  topOrgs: Array<{ organisationId: number; count: number }>;
+}
+interface BrainAnalytics {
+  recall: RecallStats;
+  corpus: CorpusStats;
 }
 
 /** The five rollout flags, in recommended activation order. */
@@ -78,9 +102,12 @@ const FLAGS: {
 export function BrainTab() {
   const [flags, setFlags] = useState<Record<string, string>>({});
   const [stats, setStats] = useState<BrainStats | null>(null);
+  const [analytics, setAnalytics] = useState<BrainAnalytics | null>(null);
   const [loading, setLoading] = useState(true);
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState("");
+  const [reembedding, setReembedding] = useState(false);
+  const [reembedMsg, setReembedMsg] = useState("");
 
   const loadStats = useCallback(async () => {
     try {
@@ -90,10 +117,37 @@ export function BrainTab() {
       setStats(data);
       // The stats payload echoes the live flags — treat it as the source of truth.
       if (data.flags) setFlags(data.flags);
+      // Analytics (Phase 3 T18) — best-effort; the readout still works without it.
+      // Only accept a well-formed payload so a partial/unexpected response can't
+      // crash the render (the tiles guard on analytics.recall existing).
+      const ares = await fetch(`${API}/api/brain/analytics`, { credentials: "include" });
+      if (ares.ok) {
+        const a = (await ares.json()) as Partial<BrainAnalytics>;
+        if (a?.recall && a?.corpus) setAnalytics(a as BrainAnalytics);
+      }
     } catch {
       // Non-fatal — the toggles still work without the readout.
     }
   }, []);
+
+  async function reembedFailed() {
+    setReembedding(true);
+    setReembedMsg("");
+    try {
+      const res = await fetch(`${API}/api/brain/reembed-failed`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to requeue");
+      const { requeued } = (await res.json()) as { requeued: number };
+      setReembedMsg(`Requeued ${requeued} memor${requeued === 1 ? "y" : "ies"} for re-embed.`);
+      await loadStats();
+    } catch {
+      setReembedMsg("Couldn't requeue — try again.");
+    } finally {
+      setReembedding(false);
+    }
+  }
 
   useEffect(() => {
     (async () => {
@@ -144,6 +198,7 @@ export function BrainTab() {
   }
 
   const errorsCount = stats?.capture.errors ?? 0;
+  const failedCount = stats?.statusCounts.failed ?? 0;
 
   return (
     <div className="max-w-3xl space-y-6 p-6">
@@ -203,6 +258,63 @@ export function BrainTab() {
             capture path is otherwise silent by design.
           </p>
         )}
+        {/* Re-embed panel (T18) — only when there's something stuck to requeue. */}
+        {(failedCount > 0 || reembedMsg) && (
+          <div className="mt-3 pt-3 border-t border-white/5 flex items-center justify-between gap-3">
+            <p className="text-xs text-[#999999]">
+              {reembedMsg
+                ? reembedMsg
+                : `${failedCount} memor${failedCount === 1 ? "y" : "ies"} failed to embed after 3 tries. Requeue to try again.`}
+            </p>
+            {failedCount > 0 && (
+              <button
+                type="button"
+                onClick={reembedFailed}
+                disabled={reembedding}
+                className="flex flex-shrink-0 items-center gap-1.5 rounded-lg bg-[#D4A574] px-3 py-1.5 text-xs font-medium text-[#0A0A0A] hover:bg-[#C4956A] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4A574]/60 disabled:opacity-50"
+              >
+                {reembedding ? <Loader2 className="size-3.5 animate-spin" /> : <Wand2 className="size-3.5" />}
+                Re-embed failed
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Analytics dashboards (Phase 3 T18) — recall + corpus signal */}
+      <div className="rounded-xl border border-[#2A2A2A] bg-[#111111] p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <BarChart3 className="size-4 text-[#D4A574]" />
+          <h3 className="text-sm font-semibold text-[#E5E5E5]">Analytics</h3>
+          <span className="text-[11px] text-[#666666]">recall &amp; corpus signal, last 30 days</span>
+        </div>
+        {!analytics || analytics.recall.totalRecalls === 0 ? (
+          <p className="text-xs text-[#999999] py-2">
+            No recall activity yet — the dashboards fill in as the Brain is used. Capture and recall
+            events feed <code>fact_brain_recall</code>; the nightly job snapshots corpus size.
+          </p>
+        ) : (
+          <>
+            <div className="text-[11px] uppercase tracking-wide text-[#777777] mb-2">Recall (30d)</div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <Stat label="Hit rate" value={`${Math.round(analytics.recall.hitRate * 100)}%`} />
+              <Stat label="Recalls" value={analytics.recall.totalRecalls} />
+              <Stat label="Avg latency" value={`${Math.round(analytics.recall.avgLatencyMs)}ms`} />
+              <Stat label="p95 latency" value={`${Math.round(analytics.recall.p95LatencyMs)}ms`} />
+            </div>
+          </>
+        )}
+        <div className="mt-3 pt-3 border-t border-white/5">
+          <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-[#777777] mb-2">
+            <Database className="size-3" /> Corpus
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <Stat label="Total" value={analytics?.corpus.totalMemories ?? (stats?.statusCounts.ready ?? 0)} small />
+            <Stat label="Private" value={analytics?.corpus.byScope.user ?? 0} small />
+            <Stat label="Shared" value={analytics?.corpus.byScope.org ?? 0} small />
+            <Stat label="Archived" value={analytics?.corpus.byStatus.archived ?? 0} small />
+          </div>
+        </div>
       </div>
 
       {/* Flag toggles */}
@@ -260,7 +372,7 @@ function Stat({
   small,
 }: {
   label: string;
-  value: number;
+  value: number | string;
   tone?: "warn";
   small?: boolean;
 }) {

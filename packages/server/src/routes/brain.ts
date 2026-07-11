@@ -25,6 +25,8 @@ import {
   handleCorrectMemory,
   handleToggleScope,
   handleBrainStats,
+  handleBrainAnalytics,
+  handleReembedFailed,
 } from "../controllers/brainController.js";
 
 export const brainRouter = Router();
@@ -35,3 +37,5 @@ brainRouter.patch("/memories/:id/pin", authenticate, requirePermission("brain:ma
 brainRouter.patch("/memories/:id/scope", authenticate, requirePermission("brain:manage"), handleToggleScope);
 brainRouter.patch("/memories/:id", authenticate, requirePermission("brain:manage"), handleCorrectMemory);
 brainRouter.get("/stats", authenticate, requireRole("Administrator"), handleBrainStats);
+brainRouter.get("/analytics", authenticate, requireRole("Administrator"), handleBrainAnalytics);
+brainRouter.post("/reembed-failed", authenticate, requireRole("Administrator"), handleReembedFailed);
