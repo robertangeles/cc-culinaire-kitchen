@@ -20,7 +20,9 @@ import {
   correctMemory,
   toggleScope,
   getBrainStats,
+  reembedFailedMemories,
 } from "../services/brainService.js";
+import { getRecallStats, getCorpusStats } from "../services/brainAnalyticsService.js";
 
 const log = pino({ transport: { target: "pino-pretty" } });
 
@@ -215,6 +217,46 @@ export async function handleBrainStats(
     res.json(stats);
   } catch (err) {
     log.error(err, "Failed to load brain stats");
+    next(err);
+  }
+}
+
+/**
+ * **GET /analytics** — Admin-only Phase-3 dashboards (T18): recall hit-rate +
+ * latency and corpus growth/density, from the `fact_brain_*` analytics tables.
+ *
+ * Query: `?days=` (1–365, default 30) — window for the recall series.
+ */
+export async function handleBrainAnalytics(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const days = Math.min(Math.max(Number(req.query.days) || 30, 1), 365);
+    const [recall, corpus] = await Promise.all([getRecallStats(days), getCorpusStats()]);
+    res.json({ recall, corpus });
+  } catch (err) {
+    log.error(err, "Failed to load brain analytics");
+    next(err);
+  }
+}
+
+/**
+ * **POST /reembed-failed** — Admin-only (T18 re-embed panel): requeue every
+ * terminal-`failed` memory so the worker re-embeds it. Returns `{ requeued }`.
+ */
+export async function handleReembedFailed(
+  _req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const requeued = await reembedFailedMemories();
+    log.info({ requeued }, "Brain failed memories requeued for re-embed");
+    res.json({ requeued });
+  } catch (err) {
+    log.error(err, "Failed to requeue brain memories");
     next(err);
   }
 }

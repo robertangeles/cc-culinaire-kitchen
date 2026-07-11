@@ -95,4 +95,30 @@ describe("BrainTab", () => {
     // Reverted back to off.
     expect(masterSwitch).toHaveAttribute("aria-checked", "false");
   });
+
+  it("shows the re-embed button when memories failed and requeues them (T18)", async () => {
+    const statsFailed = { ...STATS, statusCounts: { ready: 3, pending: 1, failed: 2 } };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (String(url).includes("/api/brain/reembed-failed")) {
+          return { ok: true, json: async () => ({ requeued: 2 }) } as Response;
+        }
+        if (String(url).includes("/api/brain/stats")) {
+          return { ok: true, json: async () => statsFailed } as Response;
+        }
+        return { ok: true, json: async () => ({}) } as Response;
+      }),
+    );
+    render(<BrainTab />);
+    const btn = await screen.findByRole("button", { name: /re-embed failed/i });
+    fireEvent.click(btn);
+    await waitFor(() => {
+      const called = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.some(
+        (c) => String(c[0]).includes("/api/brain/reembed-failed") && c[1]?.method === "POST",
+      );
+      expect(called).toBe(true);
+    });
+    await waitFor(() => expect(screen.getByText(/requeued 2 memories/i)).toBeInTheDocument());
+  });
 });

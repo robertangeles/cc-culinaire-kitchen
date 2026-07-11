@@ -247,6 +247,12 @@ async function seed() {
     { key: "brain_distillation_enabled", value: "false" },
     // Distillation model — slug verified live (anthropic/claude-haiku-4-5).
     { key: "brain_distillation_model", value: "anthropic/claude-haiku-4-5" },
+    // Recall ranking weights (Phase 3 T18) — configurable so they can be tuned
+    // on real hit-rate data (fact_brain_recall) without a deploy. Defaults are
+    // the shipped values, so recall is byte-identical until an admin changes them.
+    { key: "brain_rank_similarity_weight", value: "0.7" },
+    { key: "brain_rank_recency_weight", value: "0.2" },
+    { key: "brain_rank_recency_halflife_days", value: "30" },
   ];
 
   for (const s of defaultSettings) {

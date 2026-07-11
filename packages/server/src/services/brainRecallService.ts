@@ -46,6 +46,12 @@ const TOP_K = 6;
 /** Per-memory body budget inside the prompt block — bounds token spend. */
 const BLOCK_BODY_CHARS = 500;
 
+/** Parse a numeric site-setting, falling back to `def` when unset/malformed (0 is honored). */
+function settingNumber(value: string | undefined, def: number): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : def;
+}
+
 /** Row shape returned by the exact-scan query. */
 interface CandidateRow {
   memory_id: string;
@@ -153,13 +159,20 @@ export async function recallMemories(
 
     if (rows.length === 0) return null;
 
-    // App-side re-rank (spec): rank = 0.7·similarity + 0.2·recency.
+    // App-side re-rank: rank = simWeight·similarity + recWeight·recency(half-life).
+    // Weights are settings (Phase 3 T18) so they can be tuned on real hit-rate
+    // data (fact_brain_recall) without a deploy; defaults reproduce the original
+    // 0.7 / 0.2 / 30-day blend, so recall is byte-identical until an admin tunes them.
+    const simWeight = settingNumber(settings.brain_rank_similarity_weight, 0.7);
+    const recWeight = settingNumber(settings.brain_rank_recency_weight, 0.2);
+    // Floor the half-life so a misconfigured 0 can't divide-by-zero into a NaN rank.
+    const halflifeDays = Math.max(0.001, settingNumber(settings.brain_rank_recency_halflife_days, 30));
     const now = Date.now();
     const top = rows
       .map((row) => {
         const ageDays = Math.max(0, (now - new Date(row.created_dttm).getTime()) / 86_400_000);
         const similarity = 1 - Number(row.distance);
-        return { row, rank: 0.7 * similarity + 0.2 * Math.exp(-ageDays / 30) };
+        return { row, rank: simWeight * similarity + recWeight * Math.exp(-ageDays / halflifeDays) };
       })
       .sort((a, b) => b.rank - a.rank)
       .slice(0, TOP_K)

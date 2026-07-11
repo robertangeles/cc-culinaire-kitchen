@@ -10,7 +10,10 @@ applyEnvPrefix();
 
 const { sql } = await import("drizzle-orm");
 const { db } = await import("../db/index.js");
-const { recordRecall, snapshotCorpus } = await import("./brainAnalyticsService.js");
+const { recordRecall, snapshotCorpus, getRecallStats, getCorpusStats } = await import(
+  "./brainAnalyticsService.js"
+);
+const { reembedFailedMemories } = await import("./brainService.js");
 
 const dbAvailable = await (async () => {
   try {
@@ -156,5 +159,37 @@ describe.runIf(dbAvailable)("brainAnalyticsService (Phase 3 prep, real DB)", () 
       SELECT count(*)::int AS n FROM fact_brain_corpus WHERE user_id = ${userId}
     `)) as unknown as Array<{ n: number }>;
     expect(n).toBe(1);
+  });
+
+  it("getRecallStats: aggregates hit-rate + latency over the window (T18)", async () => {
+    await recordRecall({ userId, organisationId: orgId, hitCount: 3, latencyMs: 20, recalledMemoryIds: [] });
+    const s = await getRecallStats(30);
+    expect(s.totalRecalls).toBeGreaterThanOrEqual(1);
+    expect(s.hitRate).toBeGreaterThan(0); // at least our hits>0 recall counts
+    expect(s.avgLatencyMs).toBeGreaterThan(0);
+    expect(s.daily.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("getCorpusStats: live scope/status breakdown (T16/T17 density signal)", async () => {
+    const c = await getCorpusStats();
+    expect(c.totalMemories).toBeGreaterThanOrEqual(5); // our 2 user + 3 org
+    expect(c.byScope.user).toBeGreaterThanOrEqual(2);
+    expect(c.byScope.org).toBeGreaterThanOrEqual(3);
+    expect(c.byStatus.ready).toBeGreaterThanOrEqual(1);
+  });
+
+  it("reembedFailedMemories: resets failed → pending for the worker (T18)", async () => {
+    const [f] = (await db.execute(sql`
+      INSERT INTO brain_memory (user_id, scope, source_type, body, status, attempt_count)
+      VALUES (${userId}, 'user', 'chat', 'failed one', 'failed', 3)
+      RETURNING memory_id
+    `)) as unknown as Array<{ memory_id: string }>;
+    const requeued = await reembedFailedMemories();
+    expect(requeued).toBeGreaterThanOrEqual(1);
+    const [row] = (await db.execute(sql`
+      SELECT status, attempt_count FROM brain_memory WHERE memory_id = ${f.memory_id}
+    `)) as unknown as Array<{ status: string; attempt_count: number }>;
+    expect(row.status).toBe("pending");
+    expect(row.attempt_count).toBe(0);
   });
 });

@@ -452,3 +452,17 @@ export async function getBrainStats(): Promise<BrainStats> {
     capture: getCaptureCounters(),
   };
 }
+
+/**
+ * Reset every terminal-`failed` memory back to `pending` so the async worker
+ * re-embeds them (spec T18 admin re-embed panel). Clears the retry counter and
+ * backoff so they're claimed on the next tick. Returns the number requeued.
+ */
+export async function reembedFailedMemories(): Promise<number> {
+  const rows = await db
+    .update(brainMemory)
+    .set({ status: "pending", attemptCount: 0, nextAttemptDttm: null, updatedDttm: new Date() })
+    .where(eq(brainMemory.status, "failed"))
+    .returning({ memoryId: brainMemory.memoryId });
+  return rows.length;
+}

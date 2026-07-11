@@ -108,3 +108,113 @@ export async function snapshotCorpus(): Promise<void> {
 
   logger.info("brain.analytics.corpus_snapshot_written");
 }
+
+// ── Read side: dashboards (Phase 3 T18) ──────────────────────────────────────
+// Raw-SQL aggregates over the OLAP facts (per the DB standards: analytics never
+// go through the ORM). Admin-only; consumed by Settings → Brain.
+
+/** Recall hit-rate + latency, summary + daily series, over the last `days`. */
+export interface RecallStats {
+  totalRecalls: number;
+  /** Fraction of recalls that returned at least one memory (0..1). */
+  hitRate: number;
+  avgHits: number;
+  avgLatencyMs: number;
+  p95LatencyMs: number;
+  daily: Array<{ dateKey: number; recalls: number; avgHits: number; avgLatencyMs: number }>;
+}
+
+export async function getRecallStats(days = 30): Promise<RecallStats> {
+  const [summary] = (await db.execute(sql`
+    SELECT
+      count(*)::int AS total_recalls,
+      coalesce((count(*) FILTER (WHERE hit_count > 0))::float / nullif(count(*), 0), 0) AS hit_rate,
+      coalesce(avg(hit_count), 0)::float AS avg_hits,
+      coalesce(avg(latency_ms), 0)::float AS avg_latency_ms,
+      coalesce(percentile_cont(0.95) WITHIN GROUP (ORDER BY latency_ms), 0)::float AS p95_latency_ms
+    FROM fact_brain_recall
+    WHERE date_key >= to_char(now() - ${days} * interval '1 day', 'YYYYMMDD')::int
+  `)) as unknown as Array<{
+    total_recalls: number;
+    hit_rate: number;
+    avg_hits: number;
+    avg_latency_ms: number;
+    p95_latency_ms: number;
+  }>;
+
+  const daily = (await db.execute(sql`
+    SELECT date_key,
+           count(*)::int AS recalls,
+           coalesce(avg(hit_count), 0)::float AS avg_hits,
+           coalesce(avg(latency_ms), 0)::float AS avg_latency_ms
+    FROM fact_brain_recall
+    WHERE date_key >= to_char(now() - ${days} * interval '1 day', 'YYYYMMDD')::int
+    GROUP BY date_key
+    ORDER BY date_key
+  `)) as unknown as Array<{ date_key: number; recalls: number; avg_hits: number; avg_latency_ms: number }>;
+
+  return {
+    totalRecalls: summary?.total_recalls ?? 0,
+    hitRate: summary?.hit_rate ?? 0,
+    avgHits: summary?.avg_hits ?? 0,
+    avgLatencyMs: summary?.avg_latency_ms ?? 0,
+    p95LatencyMs: summary?.p95_latency_ms ?? 0,
+    daily: daily.map((d) => ({
+      dateKey: d.date_key,
+      recalls: d.recalls,
+      avgHits: d.avg_hits,
+      avgLatencyMs: d.avg_latency_ms,
+    })),
+  };
+}
+
+/** Corpus size: live status/scope breakdown + snapshot growth series + top orgs. */
+export interface CorpusStats {
+  totalMemories: number;
+  byScope: { user: number; org: number };
+  byStatus: Record<string, number>;
+  growth: Array<{ dateKey: number; scopeKey: number; total: number }>;
+  topOrgs: Array<{ organisationId: number; count: number }>;
+}
+
+export async function getCorpusStats(): Promise<CorpusStats> {
+  // Live breakdown from the OLTP table (current truth).
+  const breakdown = (await db.execute(sql`
+    SELECT scope, status, count(*)::int AS n FROM brain_memory GROUP BY scope, status
+  `)) as unknown as Array<{ scope: string; status: string; n: number }>;
+
+  const byScope = { user: 0, org: 0 };
+  const byStatus: Record<string, number> = {};
+  let totalMemories = 0;
+  for (const r of breakdown) {
+    totalMemories += r.n;
+    if (r.scope === "user") byScope.user += r.n;
+    else if (r.scope === "org") byScope.org += r.n;
+    byStatus[r.status] = (byStatus[r.status] ?? 0) + r.n;
+  }
+
+  // Growth over time from the nightly snapshots (per day + scope).
+  const growth = (await db.execute(sql`
+    SELECT date_key, scope_key, sum(memory_count)::int AS total
+    FROM fact_brain_corpus
+    GROUP BY date_key, scope_key
+    ORDER BY date_key
+  `)) as unknown as Array<{ date_key: number; scope_key: number; total: number }>;
+
+  const topOrgs = (await db.execute(sql`
+    SELECT organisation_id, count(*)::int AS n
+    FROM brain_memory
+    WHERE scope = 'org' AND organisation_id IS NOT NULL
+    GROUP BY organisation_id
+    ORDER BY n DESC
+    LIMIT 5
+  `)) as unknown as Array<{ organisation_id: number; n: number }>;
+
+  return {
+    totalMemories,
+    byScope,
+    byStatus,
+    growth: growth.map((g) => ({ dateKey: g.date_key, scopeKey: g.scope_key, total: g.total })),
+    topOrgs: topOrgs.map((o) => ({ organisationId: o.organisation_id, count: o.n })),
+  };
+}
