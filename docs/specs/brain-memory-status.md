@@ -1,63 +1,66 @@
 # The Brain — Status & Next Steps (resume point)
 
-**One-line status:** **Phase 1 and ALL of Phase 2 (T11–T15) are built, shipped, merged to
-`main`, and LIVE in production**, verified end-to-end. Phase 2 finished 2026-07-10: **T14c
-(org-admin management) in PR #54** and **T15 (org digest + advisory-lock helper) in PR #55**,
-both CI-green, pr-reviewer-checked, and **live-smoke-tested** (author decryption, "Former
-team member", admin manage-over-HTTP, digest delivery). Next up: **Phase 3 (T16 compaction),
-parked** until prod signal — see the Phase 3 section.
+**One-line status:** **Phase 1, all of Phase 2 (T11–T15), and the Phase 3 signal-capture
+prep are built, shipped, merged to `main`, and LIVE in production.** Phase 2 finished
+2026-07-10 (T14c PR #54 · T15 PR #55), live-smoke-tested. **Phase 3 prep** — the Brain
+analytics star schema (recall + corpus signal capture) — shipped 2026-07-11 (PR #57) and
+`addBrainAnalytics.ts` was **run + verified on prod**, so the design signal for T16/T18 is
+now accruing. **T16/T17/T18 are un-parked but not started** — design each once a few weeks
+of real signal lands.
 
-_Last updated: 2026-07-10. This is the living "where are we / what's next" doc.
+_Last updated: 2026-07-11. This is the living "where are we / what's next" doc.
 The original plan (with full rationale + reviews) is `brain-memory.md`._
 
 ---
 
-## ✅ Updated checklist (2026-07-09)
+## ✅ Status checklist (2026-07-11)
 
-Snapshot after fast-forwarding local `main` to `8895c03` and syncing the local dev DB to
-the merged Brain schema (`addBrainOrgTier` + `addBrainPinColumn` applied; T12/T13 add no
-schema). The dated task sections below remain point-in-time (they say "branch" because that
-was true when written); this checklist is the current reconciled view.
+The single reconciled view: what's live, what's planned, and what's parked. The dated task
+sections further down remain point-in-time (they say "branch" because that was true when
+written).
 
-### Completed — merged to `main` + live in prod
+### ✅ Done — shipped to `main` + LIVE in prod
 - **Phase 1** (flags on): schema · never-reject capture + chat capture · async embed worker ·
   exact-cosine recall · Your Brain page · `brain:read`/`brain:manage` perms + `brain_*` flags ·
   balanced distillation gate · Settings → Brain tab · capture-health alert
-- **T11 — Org tier** (PR #46, deployed): per-org shared recall, live-membership-rechecked
-  active-org resolver, hard tenant isolation
-- **T12 — Ops-event capture** (PR #46, deployed): kitchen actions → memory
-  (PO/waste/stock/prep/recipe/menu), deterministic templates (no LLM distiller)
-- **T13 — Recall in the Labs** (PR #46, deployed): Recipe/Patisserie/Spirits generation +
-  refinement grounded in Brain
-- **T14 slice 1 — Labs grounded chip** (PR #47): "Grounded in your Brain" chip on Lab results
-- **T14b — Rich Your Brain controls** (PR #48): pin · correct(→re-embed) · scope-toggle ·
-  scope tabs · source-filter chips · warm empty state (prod pin migration applied)
-- **T14c — Org-admin management** (PR #54, 2026-07-10): author attribution on shared rows
-  (decrypted; "Former team member" when departed), admin-gated row actions on the Shared tab,
-  TOCTOU hardened via `FOR UPDATE` transactions, warm `no-shared` empty state, 44px targets.
-- **T15 — Org digest** (PR #55, 2026-07-10): weekly deterministic "what your kitchen learned"
-  in-app digest to org admins via `brainDigestService` + reusable `withAdvisoryLock`
-  (`pg_try_advisory_xact_lock`); the existing waste digest was retrofitted onto the same lock.
+- **T11–T13** (PR #46): org tier (per-org shared recall, live-membership resolver) · ops-event
+  capture (deterministic templates) · recall grounded in the Creative Labs
+- **T14 slice 1** (PR #47) + **T14b** (PR #48): Labs "grounded in your Brain" chip · rich Your
+  Brain controls (pin · correct → re-embed · scope-toggle · scope tabs · source filters)
+- **T14c — Org-admin management** (PR #54): author attribution on shared rows (decrypted;
+  "Former team member" when departed) · admin-gated Shared-tab actions · TOCTOU hardened via
+  `FOR UPDATE` transactions · warm `no-shared` empty state · 44px targets
+- **T15 — Org digest** (PR #55): weekly deterministic "what your kitchen learned" in-app digest
+  to org admins (`brainDigestService`) + reusable `withAdvisoryLock`; waste digest retrofitted
+- **Phase 3 prep — signal-capture layer** (PR #57): strict Kimball star schema — `dim_date`
+  (**50-year runway**, lesson #61) + `dim_scope` + `fact_brain_recall` + `fact_brain_corpus` +
+  `brain_memory.last_recalled_dttm`; fire-and-forget recall capture + nightly corpus snapshot
+  (`withAdvisoryLock`). **`addBrainAnalytics.ts` run + verified on prod 2026-07-11** (18,627
+  dates, 2 scopes, both facts + column, FK cascades correct). Signal is now accruing.
 
-### Pending
-- **T16 — Compaction + full distiller**: merge/summarize old memories, per-scope cap; adds
-  `last_recalled_dttm` (schema migration)
-- **T17 — Proactive nudges**: memory-driven "For you" slot; `brain_nudges_enabled` seeded off
-- **T18 — Ranking tuning + admin re-embed panel + dashboards**
+### ⏳ Pending — planned, un-parked, gated on real signal (design when the data lands)
+- **T16 — Compaction + full distiller**: merge/summarize old memories, per-scope size cap;
+  reads `last_recalled_dttm` (now capturing). Design once `fact_brain_corpus` shows growth.
+- **T18 — Ranking tuning + admin re-embed panel + dashboards**: tune what recall surfaces
+  using `fact_brain_recall` hit-rate/latency; ops tooling incl. surfacing the new analytics.
+- **T17 — Proactive nudges**: memory-driven "For you" slot; `brain_nudges_enabled` seeded off.
+  Design once memory-density is measurable.
 
-### Needs cleanup
-- **Central backup repository (parked)**: no owned, off-Render, scheduled backup. Confirm
-  Render's daily backups exist; agreed follow-up is a scheduled `pg_dump → cloud bucket`
-  with retention.
-**Resolved** (2026-07-09): the migration-script run command (`pnpm --filter … tsx …` failed
-with `ERR_PNPM_RECURSIVE_RUN_NO_SCRIPT`; corrected to `… exec tsx …`) fixed across all 7
-`src/scripts/*.ts` — 4 non-Brain in PR #51, 3 Brain DDL in PR #52, both merged. Earlier
-(2026-07-08 handoff): local prod backup deleted · #47/#48 doc-merge conflict resolved at
-merge · prod pin migration applied.
+### 🅿️ Parking lot — deferred, not scheduled
+- **Central backup repository**: no owned, off-Render scheduled backup; Render's daily backups
+  are the current net. Agreed follow-up: scheduled `pg_dump → cloud bucket` with retention.
+- **ANN index on `brain_memory`**: only if a single tenant's corpus is measured large (recall
+  is exact-scan today). `fact_brain_corpus` will tell us if/when.
+- **LLM digest prose pass**: flag-gated upgrade to the deterministic T15 digest.
+- **Analytics-write alerting**: `recordRecall`/`snapshotCorpus` failures are best-effort/logged;
+  add alerting when T18 dashboards land.
+- **`dim_date` beyond 2075**: re-run `addBrainAnalytics.ts` with a later end date (~50 yr out).
+- **Accepted limitations (by design):** recipes user-scoped (no org column) · Copilot recall
+  deferred (no LLM step) · PO multi-line receive last-wins · scope-toggle uses active org
+  (no picker), un-share is org-admin-only.
 
-**Accepted limitations (documented, not bugs):** recipes user-scoped (no org column) ·
-Copilot recall deferred (no LLM step yet) · PO multi-line receive last-wins · scope-toggle
-promotes to active org (no picker), un-share is org-admin-only.
+**Resolved this cycle:** migration-script `tsx`→`exec tsx` across all 7 scripts (#51/#52) ·
+Phase-2 doc reconciliation (#56) · #57 prod migration run + verified.
 
 ---
 
