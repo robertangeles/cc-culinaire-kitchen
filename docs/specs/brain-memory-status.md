@@ -111,7 +111,42 @@ Files: `utils/advisoryLock.ts` (new), `db/advisoryLockKeys.ts` (new), `services/
 Lane A (client + `brainService`) ∥ Lane B (new digest service + `index.ts`) — no shared files. Build in parallel worktrees, merge independently. Within Lane A, DT1 waits on T1.
 
 ### NOT locked (parked)
-Phase 3 (T16 compaction / T17 nudges / T18 ranking+dashboards) — review each when Phase 2 is in prod producing the corpus-size, hit-rate, and memory-density numbers those designs need.
+Nothing — Phase 3 was **un-parked 2026-07-11** once the signal-capture layer shipped. See the Phase 3 build spec below.
+
+---
+
+## Phase 3 build spec — T18 / T16 / T17 (locked 2026-07-11, un-parked)
+
+`/plan-eng-review` un-parked Phase 3 (supersedes the 2026-07-09 park decision) now that the
+analytics signal is capturing. **Mechanisms + configs are locked; tuning values ship as
+settings, set later on real data** (no hardcoded guesses). Build in three sequential lanes.
+
+### Locked decisions
+| Area | Decision |
+|---|---|
+| Build order | **Lane 1 T18 dashboards → Lane 2 T16 compaction → Lane 3 T17 nudges** — dashboards first give the observability to tune the rest |
+| T16 disposal | **Soft-archive** merged sources (`status='archived'`), never hard-delete — recall (`status='ready'`) drops them immediately, reversible/auditable. Hard-purge = later opt-in setting |
+| Tuning | Ranking weights, compaction cap (`0=off`), nudge rate-limit all ship as `site_setting`s, tuned on real data |
+| T17 depth | Plumbing now; nudge **generation/triggering/NudgeCard UX gets its own /plan-design-review + product call** at Lane 3 |
+| Reuse | `withAdvisoryLock`, `createInApp`, `brainDistillService`, `brainWorker` SKIP-LOCKED, the live `fact_brain_*` — Phase 3 is assembly, not greenfield |
+
+### Lane 1 — T18 dashboards + re-embed + ranking-config (build first)
+- [ ] **L1-1 (P2)** — extract recall ranking weights to `site_setting`s (`brain_rank_similarity_weight` 0.7 · `brain_rank_recency_weight` 0.2 · `brain_rank_recency_halflife_days` 30); read in `brainRecallService` (settings already loaded there); byte-identical at defaults.
+- [ ] **L1-2 (P2)** — `brainAnalyticsService` read fns: `getRecallStats` (hit-rate/latency/count) + `getCorpusStats` (growth/size/failed) via raw SQL over `fact_brain_recall`/`fact_brain_corpus`.
+- [ ] **L1-3 (P2)** — admin dashboards in Settings → Brain (`GET /api/brain/analytics`, admin): hit-rate/latency + corpus growth + status breakdown.
+- [ ] **L1-4 (P2)** — admin re-embed panel: reset `status='failed'` → `'pending'` for the worker (`POST /api/brain/reembed-failed`, admin).
+
+### Lane 2 — T16 compaction + full distiller
+- [ ] **L2-1 (P2)** — `brainDistillService.summarizeMemories(bodies[])` → distilled digest (`claude-haiku`, ops-distiller hardening).
+- [ ] **L2-2 (P2)** — `brainCompactionService`: pick coldest N over cap (`last_recalled_dttm` NULLS FIRST), summarize → INSERT `memory_kind='digest'`, UPDATE sources `status='archived'`; cap = `brain_compaction_cap` (`0`=off).
+- [ ] **L2-3 (P2)** — nightly compaction via `withAdvisoryLock` (new key), off unless `brain_compaction_enabled` + cap>0; recall + `listMemories` exclude `archived`.
+
+### Lane 3 — T17 nudges (plumbing now, UX deferred)
+- [ ] **L3-1 (P3)** — `brainNudgeService` plumbing: advisory-lock job scaffold, `createInApp` NUDGE delivery, per-user opt-in setting, rate-limit setting + delivery log, `brain_nudges_enabled` (off). Generation/triggering **stubbed**.
+- [ ] **L3-2** — `/plan-design-review` + product call on nudge generation/triggering/NudgeCard UX **before** building the generation.
+
+### Data-gated (deferred — set on real signal, not now)
+Ranking weight values · compaction cap value · nudge triggering thresholds. The Lane 1 dashboards are what make these tunable on evidence.
 
 ---
 
