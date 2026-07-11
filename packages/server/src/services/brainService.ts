@@ -12,7 +12,7 @@
  * missing one (no IDOR oracle).
  */
 
-import { and, eq, desc, ilike, or, inArray, sql, count } from "drizzle-orm";
+import { and, eq, ne, desc, ilike, or, inArray, sql, count } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { brainMemory, userOrganisation, user } from "../db/schema.js";
 import { getAllSettings } from "./settingsService.js";
@@ -107,6 +107,10 @@ export async function listMemories(
       : eq(brainMemory.userId, userId);
 
   const conditions = [tenant];
+  // Compacted-away originals (Phase 3 T16 soft-archive) are hidden from Your
+  // Brain — the digest that replaced them shows instead. Recall excludes them
+  // too (it filters status='ready').
+  conditions.push(ne(brainMemory.status, "archived"));
   if (options.scope) {
     conditions.push(eq(brainMemory.scope, options.scope));
   }
