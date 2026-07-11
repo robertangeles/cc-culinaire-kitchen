@@ -121,7 +121,18 @@ async function main(): Promise<void> {
       (2,'org','Shared')
     ON CONFLICT ("scope_key") DO NOTHING
   `);
-  // ~7 years of calendar rows (2025-2031); re-runnable via ON CONFLICT.
+  // Seed the date dimension 2025-2075 — a deliberate ~50-YEAR runway.
+  //
+  // Why 50 years, not the usual few: `fact_brain_recall.date_key` and
+  // `fact_brain_corpus.date_key` FK into `dim_date`, so a recall/snapshot on a
+  // day with no `dim_date` row throws (recordRecall swallows it → analytics
+  // silently stop; snapshotCorpus errors to the log). A short seed turns that
+  // into a "silent failure in N years." The product owner asked for a runway
+  // that outlives them (turning 50 in Sept 2026) — the Brain should keep
+  // learning for the whole life of the product. ~18.6k rows is trivial.
+  //
+  // Still self-healing: re-run this script with a later end date to extend
+  // (ON CONFLICT DO NOTHING only adds the new days).
   await db.execute(sql`
     INSERT INTO "dim_date"
       ("date_key","full_date","year","quarter","month","day","day_of_week","week_of_year","is_weekend_ind")
@@ -135,7 +146,7 @@ async function main(): Promise<void> {
       extract(dow from d)::smallint,
       extract(week from d)::smallint,
       (extract(dow from d) IN (0,6))
-    FROM generate_series('2025-01-01'::date,'2031-12-31'::date,'1 day') AS d
+    FROM generate_series('2025-01-01'::date,'2075-12-31'::date,'1 day') AS d
     ON CONFLICT ("date_key") DO NOTHING
   `);
 
