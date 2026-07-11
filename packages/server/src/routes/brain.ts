@@ -27,6 +27,8 @@ import {
   handleBrainStats,
   handleBrainAnalytics,
   handleReembedFailed,
+  handleGetNudgeOptIn,
+  handleSetNudgeOptIn,
 } from "../controllers/brainController.js";
 
 export const brainRouter = Router();
@@ -39,3 +41,5 @@ brainRouter.patch("/memories/:id", authenticate, requirePermission("brain:manage
 brainRouter.get("/stats", authenticate, requireRole("Administrator"), handleBrainStats);
 brainRouter.get("/analytics", authenticate, requireRole("Administrator"), handleBrainAnalytics);
 brainRouter.post("/reembed-failed", authenticate, requireRole("Administrator"), handleReembedFailed);
+brainRouter.get("/nudges/opt-in", authenticate, requirePermission("brain:read"), handleGetNudgeOptIn);
+brainRouter.put("/nudges/opt-in", authenticate, requirePermission("brain:read"), handleSetNudgeOptIn);

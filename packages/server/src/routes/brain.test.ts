@@ -14,7 +14,7 @@ import { brainRouter } from "./brain.js";
  * role gate is the second layer.
  */
 
-type Method = "get" | "delete" | "patch";
+type Method = "get" | "delete" | "patch" | "put";
 type Gate = (req: Request, res: Response, next: () => void) => void;
 
 /** Returns the gate middleware (2nd layer) for a route+method. */
@@ -101,6 +101,35 @@ describe("brain route enforcement", () => {
 
     it("403s a user holding only brain:read", () => {
       const { passed, status } = runGate(gate(), { permissions: ["brain:read"] });
+      expect(passed).toBe(false);
+      expect(status).toHaveBeenCalledWith(403);
+    });
+
+    it("401s with no authenticated user", () => {
+      const { passed, status } = runGate(gate(), undefined);
+      expect(passed).toBe(false);
+      expect(status).toHaveBeenCalledWith(401);
+    });
+
+    it("allows an Administrator via superuser bypass", () => {
+      expect(runGate(gate(), { permissions: [], roles: ["Administrator"] }).passed).toBe(true);
+    });
+  });
+
+  // Nudge opt-in (spec T17) — read + write both gated by brain:read, since a
+  // user managing their OWN opt-in preference only needs Brain access.
+  describe.each([
+    ["get", "/nudges/opt-in"],
+    ["put", "/nudges/opt-in"],
+  ] as const)("%s %s (brain:read)", (method, path) => {
+    const gate = () => findGate(method as Method, path);
+
+    it("allows a user holding brain:read", () => {
+      expect(runGate(gate(), { permissions: ["brain:read"] }).passed).toBe(true);
+    });
+
+    it("403s an authenticated user WITHOUT brain:read", () => {
+      const { passed, status } = runGate(gate(), { permissions: ["chat:access"] });
       expect(passed).toBe(false);
       expect(status).toHaveBeenCalledWith(403);
     });

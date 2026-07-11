@@ -1,12 +1,15 @@
 # The Brain — Status & Next Steps (resume point)
 
-**One-line status:** **Phase 1, all of Phase 2 (T11–T15), and the Phase 3 signal-capture
-prep are built, shipped, merged to `main`, and LIVE in production.** Phase 2 finished
+**One-line status:** **Phase 1, all of Phase 2 (T11–T15), the Phase 3 signal-capture prep,
+AND all three Phase 3 lanes (T18 · T16 · T17) are built and shipped.** Phase 2 finished
 2026-07-10 (T14c PR #54 · T15 PR #55), live-smoke-tested. **Phase 3 prep** — the Brain
-analytics star schema (recall + corpus signal capture) — shipped 2026-07-11 (PR #57) and
-`addBrainAnalytics.ts` was **run + verified on prod**, so the design signal for T16/T18 is
-now accruing. **T16/T17/T18 are un-parked but not started** — design each once a few weeks
-of real signal lands.
+analytics star schema — shipped 2026-07-11 (PR #57), prod-migrated. **Phase 3 build**:
+Lane 1 T18 dashboards/re-embed/ranking-config (PR #59) and Lane 2 T16 compaction (PR #60)
+merged 2026-07-11; **Lane 3 T17 proactive nudges is on branch
+`feature/ck-web/brain-t17-nudges`, gate-green, shipping now.** ⚠️ T17 adds
+`user.brain_nudges_opt_in` — `addBrainNudgeOptIn.ts` is run on dev but **must run on prod
+before the T17 deploy**. Nudges are off by default (admin `brain_nudges_enabled` +
+per-user opt-in both required) and delivered via the existing notification bell.
 
 _Last updated: 2026-07-11. This is the living "where are we / what's next" doc.
 The original plan (with full rationale + reviews) is `brain-memory.md`._
@@ -130,20 +133,26 @@ settings, set later on real data** (no hardcoded guesses). Build in three sequen
 | T17 depth | Plumbing now; nudge **generation/triggering/NudgeCard UX gets its own /plan-design-review + product call** at Lane 3 |
 | Reuse | `withAdvisoryLock`, `createInApp`, `brainDistillService`, `brainWorker` SKIP-LOCKED, the live `fact_brain_*` — Phase 3 is assembly, not greenfield |
 
-### Lane 1 — T18 dashboards + re-embed + ranking-config (build first)
-- [ ] **L1-1 (P2)** — extract recall ranking weights to `site_setting`s (`brain_rank_similarity_weight` 0.7 · `brain_rank_recency_weight` 0.2 · `brain_rank_recency_halflife_days` 30); read in `brainRecallService` (settings already loaded there); byte-identical at defaults.
-- [ ] **L1-2 (P2)** — `brainAnalyticsService` read fns: `getRecallStats` (hit-rate/latency/count) + `getCorpusStats` (growth/size/failed) via raw SQL over `fact_brain_recall`/`fact_brain_corpus`.
-- [ ] **L1-3 (P2)** — admin dashboards in Settings → Brain (`GET /api/brain/analytics`, admin): hit-rate/latency + corpus growth + status breakdown.
-- [ ] **L1-4 (P2)** — admin re-embed panel: reset `status='failed'` → `'pending'` for the worker (`POST /api/brain/reembed-failed`, admin).
+### Lane 1 — T18 dashboards + re-embed + ranking-config ✅ SHIPPED (PR #59)
+- [x] **L1-1 (P2)** — extract recall ranking weights to `site_setting`s (`brain_rank_similarity_weight` 0.7 · `brain_rank_recency_weight` 0.2 · `brain_rank_recency_halflife_days` 30); read in `brainRecallService` (settings already loaded there); byte-identical at defaults. _Half-life floored at 0.001; analytics WHERE uses indexed `date_key`._
+- [x] **L1-2 (P2)** — `brainAnalyticsService` read fns: `getRecallStats` (hit-rate/latency/count) + `getCorpusStats` (growth/size/failed) via raw SQL over `fact_brain_recall`/`fact_brain_corpus`.
+- [x] **L1-3 (P2)** — admin dashboards in Settings → Brain (`GET /api/brain/analytics`, admin): hit-rate/latency + corpus growth + status breakdown.
+- [x] **L1-4 (P2)** — admin re-embed panel: reset `status='failed'` → `'pending'` for the worker (`POST /api/brain/reembed-failed`, admin).
 
-### Lane 2 — T16 compaction + full distiller
-- [ ] **L2-1 (P2)** — `brainDistillService.summarizeMemories(bodies[])` → distilled digest (`claude-haiku`, ops-distiller hardening).
-- [ ] **L2-2 (P2)** — `brainCompactionService`: pick coldest N over cap (`last_recalled_dttm` NULLS FIRST), summarize → INSERT `memory_kind='digest'`, UPDATE sources `status='archived'`; cap = `brain_compaction_cap` (`0`=off).
-- [ ] **L2-3 (P2)** — nightly compaction via `withAdvisoryLock` (new key), off unless `brain_compaction_enabled` + cap>0; recall + `listMemories` exclude `archived`.
+### Lane 2 — T16 compaction + full distiller ✅ SHIPPED (PR #60)
+- [x] **L2-1 (P2)** — `brainDistillService.summarizeMemories(bodies[])` → distilled digest (`claude-haiku`, ops-distiller hardening).
+- [x] **L2-2 (P2)** — `brainCompactionService`: pick coldest N over cap (`last_recalled_dttm` NULLS FIRST), summarize → INSERT `memory_kind='digest'`, UPDATE sources `status='archived'`; cap = `brain_compaction_cap` (`0`=off).
+- [x] **L2-3 (P2)** — nightly compaction via `withAdvisoryLock` (`brainCompaction` key), off unless `brain_compaction_enabled` + cap>0; recall + `listMemories` exclude `archived`.
 
-### Lane 3 — T17 nudges (plumbing now, UX deferred)
-- [ ] **L3-1 (P3)** — `brainNudgeService` plumbing: advisory-lock job scaffold, `createInApp` NUDGE delivery, per-user opt-in setting, rate-limit setting + delivery log, `brain_nudges_enabled` (off). Generation/triggering **stubbed**.
-- [ ] **L3-2** — `/plan-design-review` + product call on nudge generation/triggering/NudgeCard UX **before** building the generation.
+### Lane 3 — T17 nudges ✅ BUILT (branch `feature/ck-web/brain-t17-nudges`, shipping)
+**Design pivot (2026-07-11):** the design pass (L3-2) ran this session, not deferred — and
+we chose to build the **full generation** now (not stubbed). Two product calls settled it:
+**ops-action nudges** (act on the user's most recent ready ops memory — PO/waste/stock/prep/
+menu) delivered via the **existing notification bell** (D-T5's "For you" NudgeCard is
+superseded — the app has no operator dashboard to host it yet).
+- [x] **L3-1** — `brainNudgeService`: `runNudges()` daily job under `withAdvisoryLock(brainNudge)`, no-op unless `brain_enabled` + `brain_nudges_enabled` + `brain_nudge_rate_limit`>0; iterates opted-in users, per-user rate-limit (`recentNudgeCount`, 7-day window), dedupes on source `related_entity_id`, `createInApp` `BRAIN_NUDGE` delivery.
+- [x] **L3-2** — nudge **generation** built: `generateNudgeText` (fail-soft `claude-haiku`, sanitized+delimited untrusted body, returns null on error/NONE). Per-user opt-in: `user.brain_nudges_opt_in` (off) + `GET|PUT /api/brain/nudges/opt-in` (`brain:read`) + `NudgeOptIn` toggle on Your Brain. `NotificationBell` renders `BRAIN_NUDGE` (+ backfilled `BRAIN_DIGEST`, previously unrendered).
+- ⚠️ **Prod migration pending** — `addBrainNudgeOptIn.ts` must run on prod before deploy.
 
 ### Data-gated (deferred — set on real signal, not now)
 Ranking weight values · compaction cap value · nudge triggering thresholds. The Lane 1 dashboards are what make these tunable on evidence.
@@ -284,13 +293,13 @@ produced a recipe that reflected the seeded memory (crisp-skin detail carried th
 - **✅ T14c — org-admin management surface** (PR #54, 2026-07-10). Org-admins correct/delete other members' shared memories via admin-gated actions on the existing Shared tab; author attribution on `ProvenanceChip` (decrypted, "Former team member" when the author has left the org); delete/correct/pin/scope hardened against a TOCTOU race with `FOR UPDATE` transactions.
 - **✅ T15 — org digest** (PR #55, 2026-07-10). Weekly deterministic "what your kitchen's Brain learned" in-app digest to org admins (`brainDigestService`), guarded by the new `withAdvisoryLock` (`pg_try_advisory_xact_lock` — no pool-leak); the existing weekly waste digest was retrofitted onto the same lock. **Phase 2 complete.**
 
-## ⬜ Pending — Phase 3 (intelligence layer)
+## ✅ Done — Phase 3 (intelligence layer)
 
-| Task | Plain English |
-|---|---|
-| **T16 — Compaction + full distiller** | Merge/summarize old memories, per-scope size cap (keeps recall fast). The richer version of the binary gate we shipped. Adds `last_recalled_dttm`. |
-| **T17 — Proactive nudges** | Memory-driven suggestions in a "For you" slot (opt-in, rate-limited). `brain_nudges_enabled` flag already seeded off. Design: **D-T5** (NudgeCard). |
-| **T18 — Ranking tuning + admin re-embed panel + dashboards** | Tune what surfaces; ops tooling. |
+| Task | Plain English | Ship |
+|---|---|---|
+| **T18 — Ranking tuning + admin re-embed panel + dashboards** | Ranking weights to settings; admin Brain analytics (hit-rate/latency/corpus growth); re-embed-failed panel. | PR #59 |
+| **T16 — Compaction + full distiller** | Merge/summarize cold memories over a per-scope cap into a `digest`, soft-archive sources. Adds `last_recalled_dttm`. Off unless `brain_compaction_enabled` + cap>0. | PR #60 |
+| **T17 — Proactive nudges** | Ops-action nudges (act on recent PO/waste/stock/prep/menu memory) delivered to the **notification bell** (D-T5 NudgeCard superseded — no dashboard yet). Opt-in + rate-limited; `brain_nudges_enabled` off. | branch, shipping |
 
 ---
 
@@ -301,7 +310,7 @@ produced a recipe that reflected the seeded memory (crisp-skin detail carried th
 4. ~~**T14 (rich "Your Brain" UI)**~~ — ✅ done + merged (slice 1 PR #47, T14b PR #48): scope tabs, source filters, pin/correct/scope-toggle, Labs grounded chip.
 5. ~~**T14c (org-admin management surface)**~~ — ✅ done + merged (PR #54). Admin-gated Shared-tab actions + author attribution + TOCTOU-hardened mutations.
 6. ~~**T15 (org digest)**~~ — ✅ done + merged (PR #55). Weekly advisory-lock-guarded digest. **Phase 2 complete.**
-7. **Phase 3 (T16 compaction → T17 nudges → T18 ranking/dashboards)** ← next — review each when Phase 2 is in prod producing the corpus-size, hit-rate, and density numbers those designs need.
+7. ~~**Phase 3 (T18 dashboards → T16 compaction → T17 nudges)**~~ — ✅ built: T18 PR #59, T16 PR #60, T17 shipping. Tuning values (ranking weights, compaction cap, nudge rate-limit) ship as settings, set later on real signal from the Lane 1 dashboards.
 
 Each is a self-contained ship-and-verify chunk on the existing capture/recall seam
 — same pattern proven in Phase 1.

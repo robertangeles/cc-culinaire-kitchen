@@ -16,4 +16,6 @@ export const ADVISORY_LOCK_KEYS = {
   brainCorpusSnapshot: 8_100_003,
   /** Nightly Brain compaction (03:30) — Phase 3 T16. */
   brainCompaction: 8_100_004,
+  /** Daily Brain nudges (09:00) — Phase 3 T17. */
+  brainNudge: 8_100_005,
 } as const;

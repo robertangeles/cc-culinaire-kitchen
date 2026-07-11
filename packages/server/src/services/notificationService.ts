@@ -29,7 +29,8 @@ export type NotificationType =
   | "DISCREPANCY_ALERT"
   | "DELIVERY_OVERDUE"
   | "BRAIN_CAPTURE_ERROR"
-  | "BRAIN_DIGEST";
+  | "BRAIN_DIGEST"
+  | "BRAIN_NUDGE";
 
 export type NotificationChannel = "IN_APP" | "EMAIL";
 
