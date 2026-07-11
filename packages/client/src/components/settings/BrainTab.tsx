@@ -64,8 +64,6 @@ const FLAGS: {
   desc: string;
   /** When true, the flag is a no-op until the master flag is on. */
   needsMaster?: boolean;
-  /** Not yet built (Phase 3) — shown but not interactive. */
-  soon?: boolean;
 }[] = [
   {
     key: "brain_enabled",
@@ -93,9 +91,14 @@ const FLAGS: {
   {
     key: "brain_nudges_enabled",
     label: "Proactive nudges",
-    desc: "Surface memory-driven suggestions. Phase 3 — not built yet.",
+    desc: "Send opted-in users the occasional actionable suggestion from their kitchen's recent activity, via the notification bell. Rate-limited; each user opts in on Your Brain.",
     needsMaster: true,
-    soon: true,
+  },
+  {
+    key: "brain_compaction_enabled",
+    label: "Compaction",
+    desc: "Nightly, merge each user's coldest memories over the cap below into one digest and archive the originals, so recall stays fast. No-op unless the cap is above 0.",
+    needsMaster: true,
   },
 ];
 
@@ -161,18 +164,18 @@ export function BrainTab() {
 
   const masterOn = flags.brain_enabled === "true";
 
-  async function toggle(key: string, next: boolean) {
+  async function saveValue(key: string, value: string) {
     setSavingKey(key);
     setErrorMsg("");
     const prev = flags[key];
     // Optimistic update.
-    setFlags((f) => ({ ...f, [key]: next ? "true" : "false" }));
+    setFlags((f) => ({ ...f, [key]: value }));
     try {
       const res = await fetch(`${API}/api/settings`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ [key]: next ? "true" : "false" }),
+        body: JSON.stringify({ [key]: value }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -187,6 +190,8 @@ export function BrainTab() {
       setSavingKey(null);
     }
   }
+
+  const toggle = (key: string, next: boolean) => saveValue(key, next ? "true" : "false");
 
   if (loading) {
     return (
@@ -332,22 +337,15 @@ export function BrainTab() {
               }`}
             >
               <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-[#FAFAFA]">{f.label}</span>
-                  {f.soon && (
-                    <span className="text-[10px] uppercase tracking-wide text-[#666666] border border-[#333] rounded px-1.5 py-0.5">
-                      Soon
-                    </span>
-                  )}
-                </div>
+                <span className="text-sm font-medium text-[#FAFAFA]">{f.label}</span>
                 <p className="text-xs text-[#999999] mt-0.5">{f.desc}</p>
-                {dimmed && !f.soon && (
+                {dimmed && (
                   <p className="text-xs text-[#D4A574]/80 mt-1">Turn on the master switch first.</p>
                 )}
               </div>
               <ToggleSwitch
                 on={on}
-                disabled={f.soon || savingKey === f.key}
+                disabled={savingKey === f.key}
                 busy={savingKey === f.key}
                 onChange={(next) => toggle(f.key, next)}
                 label={f.label}
@@ -355,6 +353,30 @@ export function BrainTab() {
             </div>
           );
         })}
+
+        {/* Compaction cap — brain_compaction_enabled is a no-op unless this is > 0. */}
+        <div className="flex items-start justify-between gap-4 rounded-xl border border-[#2A2A2A] bg-[#111111] px-4 py-3">
+          <div className="min-w-0">
+            <span className="text-sm font-medium text-[#FAFAFA]">Compaction cap</span>
+            <p className="text-xs text-[#999999] mt-0.5">
+              Memories per user before the coldest are compacted. 0 disables compaction even when the
+              toggle above is on.
+            </p>
+          </div>
+          <input
+            type="number"
+            min={0}
+            key={flags.brain_compaction_cap ?? "0"}
+            defaultValue={flags.brain_compaction_cap ?? "0"}
+            disabled={savingKey === "brain_compaction_cap"}
+            aria-label="Compaction cap"
+            onBlur={(e) => {
+              const v = String(Math.max(0, parseInt(e.target.value || "0", 10) || 0));
+              if (v !== (flags.brain_compaction_cap ?? "0")) saveValue("brain_compaction_cap", v);
+            }}
+            className="w-20 flex-shrink-0 rounded-lg border border-[#2A2A2A] bg-[#0A0A0A] px-2 py-1 text-right text-sm text-[#E5E5E5] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/60 disabled:opacity-50"
+          />
+        </div>
       </div>
 
       <p className="text-xs text-[#666666]">

@@ -15,6 +15,8 @@ const STATS = {
     brain_recall_enabled: "false",
     brain_distillation_enabled: "false",
     brain_nudges_enabled: "false",
+    brain_compaction_enabled: "false",
+    brain_compaction_cap: "0",
     brain_distillation_model: "anthropic/claude-haiku-4-5",
   },
   statusCounts: { ready: 3, pending: 1, failed: 0 },
@@ -39,13 +41,14 @@ describe("BrainTab", () => {
     vi.restoreAllMocks();
   });
 
-  it("renders the five flags and the health readout", async () => {
+  it("renders the six flags and the health readout", async () => {
     render(<BrainTab />);
     await waitFor(() => expect(screen.getByText("Brain (master)")).toBeInTheDocument());
     expect(screen.getByText("Capture")).toBeInTheDocument();
     expect(screen.getByText("Distillation filter")).toBeInTheDocument();
     expect(screen.getByText("Recall")).toBeInTheDocument();
     expect(screen.getByText("Proactive nudges")).toBeInTheDocument();
+    expect(screen.getByText("Compaction")).toBeInTheDocument();
     // Health readout reflects the stats payload.
     expect(screen.getByText("Ready").previousSibling).toHaveTextContent("3");
     expect(screen.getByText(/anthropic\/claude-haiku-4-5/)).toBeInTheDocument();
@@ -69,10 +72,25 @@ describe("BrainTab", () => {
     });
   });
 
-  it("nudges toggle is disabled (Phase 3 not built)", async () => {
+  it("nudges toggle is interactive once the master flag is on (T17 shipped)", async () => {
     render(<BrainTab />);
     await waitFor(() => expect(screen.getByText("Proactive nudges")).toBeInTheDocument());
-    expect(screen.getByRole("switch", { name: /Toggle Proactive nudges/ })).toBeDisabled();
+    expect(screen.getByRole("switch", { name: /Toggle Proactive nudges/ })).toBeEnabled();
+  });
+
+  it("compaction cap input saves brain_compaction_cap on blur", async () => {
+    render(<BrainTab />);
+    await waitFor(() => expect(screen.getByText("Compaction")).toBeInTheDocument());
+    const cap = screen.getByLabelText("Compaction cap");
+    fireEvent.change(cap, { target: { value: "50" } });
+    fireEvent.blur(cap);
+    await waitFor(() => {
+      const putCall = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.find(
+        (c) => c[1]?.method === "PUT",
+      );
+      expect(putCall).toBeTruthy();
+      expect(JSON.parse(putCall![1].body)).toEqual({ brain_compaction_cap: "50" });
+    });
   });
 
   it("reverts the toggle and shows an error when the PUT fails", async () => {
