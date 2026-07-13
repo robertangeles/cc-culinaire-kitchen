@@ -345,7 +345,7 @@ export async function refreshIngredientCost(rowId: number, menuItemId: string) {
       costStaleInd: false,
       costStaleAt: null,
     })
-    .where(eq(menuItemIngredient.id, rowId))
+    .where(and(eq(menuItemIngredient.id, rowId), eq(menuItemIngredient.menuItemId, menuItemId)))
     .returning();
 
   await recalculateItemCosts(menuItemId);

@@ -97,12 +97,13 @@ export async function generateForecasts(locationId: string, orgId: number) {
     supplierLeads.map((s) => [s.ingredientId, s.leadTimeDays ?? 3]),
   );
 
-  // Delete old ACTIVE recommendations for this location
+  // Delete old ACTIVE recommendations for this location — AND org so we only touch our own
   await db
     .delete(forecastRecommendation)
     .where(
       and(
         eq(forecastRecommendation.storeLocationId, locationId),
+        eq(forecastRecommendation.organisationId, orgId),
         eq(forecastRecommendation.status, "ACTIVE"),
       ),
     );
@@ -163,10 +164,12 @@ export async function generateForecasts(locationId: string, orgId: number) {
 
 export async function listRecommendations(
   locationId: string,
+  orgId: number,
   opts?: { status?: string; limit?: number },
 ) {
   const conditions = [
     eq(forecastRecommendation.storeLocationId, locationId),
+    eq(forecastRecommendation.organisationId, orgId),
     eq(forecastRecommendation.status, opts?.status ?? "ACTIVE"),
   ];
 

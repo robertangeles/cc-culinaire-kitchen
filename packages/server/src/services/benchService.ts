@@ -398,6 +398,37 @@ export async function unpinMessage(messageId: string) {
   await db.delete(benchPin).where(eq(benchPin.messageId, messageId));
 }
 
+/** Look up a pin and its channel type/org in one query (for unpin auth). */
+export async function getPinWithChannel(messageId: string) {
+  const [row] = await db
+    .select({
+      channelId: benchPin.channelId,
+      pinnedBy: benchPin.pinnedBy,
+      channelType: benchChannel.channelType,
+      organisationId: benchChannel.organisationId,
+    })
+    .from(benchPin)
+    .innerJoin(benchChannel, eq(benchPin.channelId, benchChannel.channelId))
+    .where(eq(benchPin.messageId, messageId))
+    .limit(1);
+  return row ?? null;
+}
+
+/** Look up a channel via message id (for reaction auth on org channels). Returns null for DM messages. */
+export async function getChannelForMessage(messageId: string) {
+  const [row] = await db
+    .select({
+      channelId: benchChannel.channelId,
+      channelType: benchChannel.channelType,
+      organisationId: benchChannel.organisationId,
+    })
+    .from(benchMessage)
+    .innerJoin(benchChannel, eq(benchMessage.channelId, benchChannel.channelId))
+    .where(eq(benchMessage.messageId, messageId))
+    .limit(1);
+  return row ?? null;
+}
+
 export async function getPinnedMessages(channelId: number) {
   const pins = await db
     .select({

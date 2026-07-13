@@ -142,10 +142,17 @@ export async function handleClaimCategory(
   req: Request, res: Response, next: NextFunction,
 ): Promise<void> {
   try {
-    const cat = await claimCategory(req.params.id as string, req.params.cat as string, req.user!.sub);
+    const ctx = await resolveContext(req, res);
+    if (!ctx) return;
+
+    const sessionId = req.params.id as string;
+    const session = await getSessionDetail(sessionId, ctx.orgId);
+    if (!session) { res.status(404).json({ error: "Session not found" }); return; }
+
+    const cat = await claimCategory(sessionId, req.params.cat as string, req.user!.sub);
 
     logger.info(
-      { sessionId: req.params.id as string, category: req.params.cat as string, userId: req.user!.sub },
+      { sessionId, category: req.params.cat as string, userId: req.user!.sub },
       "Category claimed",
     );
     res.json(cat);
@@ -217,10 +224,17 @@ export async function handleSubmitCategory(
   req: Request, res: Response, next: NextFunction,
 ): Promise<void> {
   try {
-    const cat = await submitCategory(req.params.id as string, req.params.cat as string);
+    const ctx = await resolveContext(req, res);
+    if (!ctx) return;
+
+    const sessionId = req.params.id as string;
+    const session = await getSessionDetail(sessionId, ctx.orgId);
+    if (!session) { res.status(404).json({ error: "Session not found" }); return; }
+
+    const cat = await submitCategory(sessionId, req.params.cat as string);
 
     logger.info(
-      { sessionId: req.params.id as string, category: req.params.cat as string, userId: req.user!.sub },
+      { sessionId, category: req.params.cat as string, userId: req.user!.sub },
       "Category submitted",
     );
     res.json(cat);
@@ -235,7 +249,10 @@ export async function handleSubmitForReview(
   req: Request, res: Response, next: NextFunction,
 ): Promise<void> {
   try {
-    const session = await submitSessionForReview(req.params.id as string);
+    const ctx = await resolveContext(req, res);
+    if (!ctx) return;
+
+    const session = await submitSessionForReview(req.params.id as string, ctx.orgId);
     logger.info(
       { sessionId: req.params.id as string, userId: req.user!.sub },
       "Stock take session submitted for review",
@@ -252,7 +269,10 @@ export async function handleApproveSession(
   req: Request, res: Response, next: NextFunction,
 ): Promise<void> {
   try {
-    const session = await approveSession(req.params.id as string, req.user!.sub);
+    const ctx = await resolveContext(req, res);
+    if (!ctx) return;
+
+    const session = await approveSession(req.params.id as string, req.user!.sub, ctx.orgId);
 
     logger.info(
       { sessionId: req.params.id as string, userId: req.user!.sub },
@@ -274,10 +294,14 @@ export async function handleFlagSession(
       return;
     }
 
+    const ctx = await resolveContext(req, res);
+    if (!ctx) return;
+
     const session = await flagSession(
       req.params.id as string,
       parsed.data.flaggedCategories,
       parsed.data.reason,
+      ctx.orgId,
     );
 
     logger.info(
@@ -355,7 +379,7 @@ export async function handleGetLocationDashboard(
     const dashboard = await getLocationDashboard(req.params.locId as string, ctx.orgId);
     res.json(dashboard);
   } catch (err) {
-    next(err);
+    handleServiceError(err, res, next);
   }
 }
 
