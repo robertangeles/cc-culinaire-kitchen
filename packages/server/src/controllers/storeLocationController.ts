@@ -494,6 +494,15 @@ export async function handleUpdateModulePreference(
       return;
     }
 
+    // Only allow pinning a location the user can actually access — same guard
+    // as handleSwitchLocation, so a stored preference can't become a trusted
+    // scope pointing at another org's location.
+    const access = await hasLocationAccess(req.user!.sub, parsed.data.storeLocationId);
+    if (!access) {
+      res.status(403).json({ error: "Not assigned to this location." });
+      return;
+    }
+
     await updateModulePreference(
       req.user!.sub,
       parsed.data.moduleKey,

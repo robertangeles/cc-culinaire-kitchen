@@ -9,7 +9,7 @@
  * conversation via `conversation_id` FK.
  */
 
-import { eq, desc, and, isNull } from "drizzle-orm";
+import { eq, desc, and } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { conversation, message } from "../db/schema.js";
 
@@ -96,14 +96,33 @@ export async function updateConversationTitle(
  */
 export async function saveMessages(
   conversationId: string,
+  owner: { userId: number } | { guestToken: string },
   msgs: Array<{
     messageId: string;
     messageRole: string;
     messageBody: string;
     messageSequence: number;
   }>
-): Promise<void> {
-  if (msgs.length === 0) return;
+): Promise<boolean> {
+  // Ownership guard: if the conversation already exists it MUST belong to the
+  // caller — a userId match for authenticated users, or a guestSessionToken
+  // match for guests (guest rows have userId NULL, so NULL alone is not enough
+  // to distinguish one guest from another). A conversation that does not exist
+  // yet is allowed through so the client's create-then-save flow still works.
+  // Returns false on a cross-owner write attempt.
+  const [conv] = await db
+    .select({ userId: conversation.userId, guestToken: conversation.guestSessionToken })
+    .from(conversation)
+    .where(eq(conversation.conversationId, conversationId));
+  if (conv) {
+    const owns =
+      "userId" in owner
+        ? conv.userId === owner.userId
+        : conv.guestToken === owner.guestToken;
+    if (!owns) return false;
+  }
+
+  if (msgs.length === 0) return true;
 
   await db.insert(message).values(
     msgs.map((m) => ({
@@ -120,6 +139,8 @@ export async function saveMessages(
     .update(conversation)
     .set({ updatedDttm: new Date() })
     .where(eq(conversation.conversationId, conversationId));
+
+  return true;
 }
 
 /**
