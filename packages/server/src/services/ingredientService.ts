@@ -430,6 +430,7 @@ export async function listLocationIngredients(
 export async function updateLocationIngredient(
   ingredientId: string,
   storeLocationId: string,
+  organisationId: number,
   data: Partial<{
     parLevel: string;
     reorderQty: string;
@@ -440,6 +441,16 @@ export async function updateLocationIngredient(
     activeInd: boolean;
   }>,
 ) {
+  // Verify ingredient and location both belong to the org before writing
+  const ing = await getIngredient(ingredientId, organisationId);
+  if (!ing) return null;
+
+  const [loc] = await db
+    .select({ orgId: storeLocation.organisationId })
+    .from(storeLocation)
+    .where(eq(storeLocation.storeLocationId, storeLocationId));
+  if (!loc || loc.orgId !== organisationId) return null;
+
   // Ensure record exists first
   await getOrCreateLocationIngredient(ingredientId, storeLocationId);
 
@@ -488,11 +499,11 @@ export async function listUnitConversions(ingredientId: string) {
     .where(eq(unitConversion.ingredientId, ingredientId));
 }
 
-/** Delete a unit conversion. */
-export async function deleteUnitConversion(conversionId: string) {
+/** Delete a unit conversion — scoped to the owning ingredient so a caller cannot delete another ingredient's conversion. */
+export async function deleteUnitConversion(conversionId: string, ingredientId: string) {
   const [row] = await db
     .delete(unitConversion)
-    .where(eq(unitConversion.conversionId, conversionId))
+    .where(and(eq(unitConversion.conversionId, conversionId), eq(unitConversion.ingredientId, ingredientId)))
     .returning();
   return row ?? null;
 }
@@ -636,6 +647,15 @@ export async function deleteSupplier(supplierId: string, organisationId: number)
   return row ?? null;
 }
 
+/** Fetch a supplier only if it belongs to the org. Null otherwise. */
+export async function getSupplierInOrg(supplierId: string, organisationId: number) {
+  const rows = await db
+    .select()
+    .from(supplier)
+    .where(and(eq(supplier.supplierId, supplierId), eq(supplier.organisationId, organisationId)));
+  return rows[0] ?? null;
+}
+
 // ─── Supplier-Location assignments ───────────────────────────────
 
 /** Get which locations a supplier serves. */
@@ -656,7 +676,24 @@ export async function getSupplierLocations(supplierId: string) {
 export async function setSupplierLocations(
   supplierId: string,
   locationIds: string[],
+  organisationId: number,
 ) {
+  // Verify all locationIds belong to the org before (de)activating links
+  if (locationIds.length > 0) {
+    const valid = await db
+      .select({ storeLocationId: storeLocation.storeLocationId })
+      .from(storeLocation)
+      .where(
+        and(
+          eq(storeLocation.organisationId, organisationId),
+          inArray(storeLocation.storeLocationId, locationIds),
+        ),
+      );
+    if (valid.length !== locationIds.length) {
+      throw new Error("One or more location IDs do not belong to your organisation");
+    }
+  }
+
   // Deactivate all existing
   await db
     .update(supplierLocation)

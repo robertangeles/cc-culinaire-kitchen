@@ -19,6 +19,7 @@ import {
   createAlias,
   deleteAlias,
 } from "../services/ingredientAliasService.js";
+import { getIngredient } from "../services/ingredientService.js";
 
 const MatchBulkSchema = z.object({
   /** Up to 100 ingredient names to match against the Catalog. */
@@ -92,6 +93,9 @@ export async function handleCreateAlias(
     }
 
     const ingredientId = req.params.id as string;
+    const ing = await getIngredient(ingredientId, orgId);
+    if (!ing) { res.status(404).json({ error: "Ingredient not found" }); return; }
+
     const row = await createAlias(orgId, ingredientId, parsed.data.aliasText, req.user!.sub);
     res.status(201).json(row);
   } catch (err: any) {

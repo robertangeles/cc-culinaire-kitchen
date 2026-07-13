@@ -38,6 +38,7 @@ import {
   getIngredientTransactions,
   getIngredientUsage,
   softDeleteIngredient,
+  getSupplierInOrg,
 } from "../services/ingredientService.js";
 import { invalidateConversionCache } from "../services/unitConversionService.js";
 
@@ -318,7 +319,13 @@ export async function handleDeleteConversion(
   req: Request, res: Response, next: NextFunction,
 ): Promise<void> {
   try {
-    const row = await deleteUnitConversion(req.params.conversionId as string);
+    const orgId = await resolveOrgId(req, res);
+    if (orgId === null) return;
+
+    const ing = await getIngredient(req.params.id as string, orgId);
+    if (!ing) { res.status(404).json({ error: "Ingredient not found" }); return; }
+
+    const row = await deleteUnitConversion(req.params.conversionId as string, req.params.id as string);
     if (!row) { res.status(404).json({ error: "Conversion not found" }); return; }
 
     invalidateConversionCache(row.ingredientId);
@@ -358,7 +365,7 @@ export async function handleUpdateLocationIngredient(
       return;
     }
 
-    const row = await updateLocationIngredient(req.params.id as string, req.params.locId as string, parsed.data);
+    const row = await updateLocationIngredient(req.params.id as string, req.params.locId as string, orgId, parsed.data);
     if (!row) { res.status(404).json({ error: "Location ingredient config not found" }); return; }
 
     logger.info(
@@ -421,6 +428,12 @@ export async function handleAssignSupplier(
   req: Request, res: Response, next: NextFunction,
 ): Promise<void> {
   try {
+    const orgId = await resolveOrgId(req, res);
+    if (orgId === null) return;
+
+    const ing = await getIngredient(req.params.id as string, orgId);
+    if (!ing) { res.status(404).json({ error: "Ingredient not found" }); return; }
+
     const parsed = AssignSupplierSchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({ error: "Validation failed", details: parsed.error.flatten() });
@@ -428,6 +441,9 @@ export async function handleAssignSupplier(
     }
 
     const { supplierId, ...data } = parsed.data;
+    const sup = await getSupplierInOrg(supplierId, orgId);
+    if (!sup) { res.status(404).json({ error: "Supplier not found" }); return; }
+
     const row = await assignSupplierToIngredient(req.params.id as string, supplierId, data);
     logger.info({ ingredientId: req.params.id, supplierId, userId: req.user!.sub }, "Supplier assigned to ingredient");
     res.status(201).json(row);
@@ -444,6 +460,12 @@ export async function handleListIngredientSuppliers(
   req: Request, res: Response, next: NextFunction,
 ): Promise<void> {
   try {
+    const orgId = await resolveOrgId(req, res);
+    if (orgId === null) return;
+
+    const ing = await getIngredient(req.params.id as string, orgId);
+    if (!ing) { res.status(404).json({ error: "Ingredient not found" }); return; }
+
     const rows = await listIngredientSuppliers(req.params.id as string);
     res.json(rows);
   } catch (err) {
@@ -455,6 +477,15 @@ export async function handleUpdateIngredientSupplier(
   req: Request, res: Response, next: NextFunction,
 ): Promise<void> {
   try {
+    const orgId = await resolveOrgId(req, res);
+    if (orgId === null) return;
+
+    const ing = await getIngredient(req.params.id as string, orgId);
+    if (!ing) { res.status(404).json({ error: "Ingredient not found" }); return; }
+
+    const sup = await getSupplierInOrg(req.params.supId as string, orgId);
+    if (!sup) { res.status(404).json({ error: "Supplier not found" }); return; }
+
     const parsed = UpdateIngredientSupplierSchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({ error: "Validation failed", details: parsed.error.flatten() });
@@ -475,6 +506,15 @@ export async function handleRemoveIngredientSupplier(
   req: Request, res: Response, next: NextFunction,
 ): Promise<void> {
   try {
+    const orgId = await resolveOrgId(req, res);
+    if (orgId === null) return;
+
+    const ing = await getIngredient(req.params.id as string, orgId);
+    if (!ing) { res.status(404).json({ error: "Ingredient not found" }); return; }
+
+    const sup = await getSupplierInOrg(req.params.supId as string, orgId);
+    if (!sup) { res.status(404).json({ error: "Supplier not found" }); return; }
+
     const row = await removeIngredientSupplier(req.params.id as string, req.params.supId as string);
     if (!row) { res.status(404).json({ error: "Supplier assignment not found" }); return; }
 
@@ -503,11 +543,15 @@ export async function handleCreateSupplier(
     const { locationIds, ...supplierData } = parsed.data;
     const row = await createSupplier(orgId, supplierData);
     if (locationIds && locationIds.length > 0) {
-      await setSupplierLocations(row.supplierId, locationIds);
+      await setSupplierLocations(row.supplierId, locationIds, orgId);
     }
     logger.info({ supplierId: row.supplierId, userId: req.user!.sub }, "Supplier created");
     res.status(201).json(row);
   } catch (err: any) {
+    if (err.message?.includes("do not belong to your organisation")) {
+      res.status(400).json({ error: err.message });
+      return;
+    }
     if (err.code === "23505") {
       res.status(409).json({ error: "A supplier with this name already exists" });
       return;
@@ -547,11 +591,15 @@ export async function handleUpdateSupplier(
     const row = await updateSupplier(req.params.id as string, orgId, supplierData);
     if (!row) { res.status(404).json({ error: "Supplier not found" }); return; }
     if (locationIds !== undefined) {
-      await setSupplierLocations(row.supplierId, locationIds);
+      await setSupplierLocations(row.supplierId, locationIds, orgId);
     }
     logger.info({ supplierId: row.supplierId, userId: req.user!.sub }, "Supplier updated");
     res.json(row);
   } catch (err: any) {
+    if (err.message?.includes("do not belong to your organisation")) {
+      res.status(400).json({ error: err.message });
+      return;
+    }
     if (err.code === "23505") {
       res.status(409).json({ error: "A supplier with this name already exists" });
       return;
@@ -581,6 +629,12 @@ export async function handleGetSupplierLocations(
   req: Request, res: Response, next: NextFunction,
 ): Promise<void> {
   try {
+    const orgId = await resolveOrgId(req, res);
+    if (orgId === null) return;
+
+    const sup = await getSupplierInOrg(req.params.id as string, orgId);
+    if (!sup) { res.status(404).json({ error: "Supplier not found" }); return; }
+
     const rows = await getSupplierLocations(req.params.id as string);
     res.json(rows);
   } catch (err) {
@@ -698,6 +752,12 @@ export async function handleGetSupplierIngredientIds(
   req: Request, res: Response, next: NextFunction,
 ): Promise<void> {
   try {
+    const orgId = await resolveOrgId(req, res);
+    if (orgId === null) return;
+
+    const sup = await getSupplierInOrg(req.params.supplierId as string, orgId);
+    if (!sup) { res.status(404).json({ error: "Supplier not found" }); return; }
+
     const ids = await listSupplierIngredientIds(req.params.supplierId as string);
     res.json(ids);
   } catch (err) {
@@ -709,6 +769,12 @@ export async function handleGetIngredientUsage(
   req: Request, res: Response, next: NextFunction,
 ): Promise<void> {
   try {
+    const orgId = await resolveOrgId(req, res);
+    if (orgId === null) return;
+
+    const ing = await getIngredient(req.params.id as string, orgId);
+    if (!ing) { res.status(404).json({ error: "Ingredient not found" }); return; }
+
     const usage = await getIngredientUsage(req.params.id as string);
     res.json(usage);
   } catch (err) {
@@ -722,6 +788,9 @@ export async function handleSoftDeleteIngredient(
   try {
     const orgId = await resolveOrgId(req, res);
     if (orgId === null) return;
+
+    const ing = await getIngredient(req.params.id as string, orgId);
+    if (!ing) { res.status(404).json({ error: "Ingredient not found" }); return; }
 
     const usage = await getIngredientUsage(req.params.id as string);
     if (usage.length > 0) {
