@@ -387,6 +387,9 @@ export async function handleGetIngredientStockLevels(
     const orgId = await resolveOrgId(req, res);
     if (orgId === null) return;
 
+    const ing = await getIngredient(req.params.id as string, orgId);
+    if (!ing) { res.status(404).json({ error: "Ingredient not found" }); return; }
+
     const rows = await getIngredientStockAcrossLocations(req.params.id as string, orgId);
     res.json(rows);
   } catch (err) {
@@ -739,6 +742,9 @@ export async function handleGetIngredientTransactions(
     if (orgId === null) return;
 
     const ingredientId = req.params.id as string;
+    const ing = await getIngredient(ingredientId, orgId);
+    if (!ing) { res.status(404).json({ error: "Ingredient not found" }); return; }
+
     const month = (req.query.month as string) || new Date().toISOString().slice(0, 7);
 
     const result = await getIngredientTransactions(ingredientId, orgId, month);

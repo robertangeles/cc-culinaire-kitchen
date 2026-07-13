@@ -650,7 +650,7 @@ export async function deleteSupplier(supplierId: string, organisationId: number)
 /** Fetch a supplier only if it belongs to the org. Null otherwise. */
 export async function getSupplierInOrg(supplierId: string, organisationId: number) {
   const rows = await db
-    .select()
+    .select({ supplierId: supplier.supplierId })
     .from(supplier)
     .where(and(eq(supplier.supplierId, supplierId), eq(supplier.organisationId, organisationId)));
   return rows[0] ?? null;
