@@ -21,6 +21,7 @@ import {
   getOrCreateOrgChannel,
   getUserOrganisationIds,
   updateChannelBanner,
+  getPinWithChannel,
 } from "../services/benchService.js";
 import {
   getOrCreateThread,
@@ -73,11 +74,20 @@ export async function handleGetMessages(req: Request, res: Response, next: NextF
 /** GET /api/bench/channels/:key/pins */
 export async function handleGetPins(req: Request, res: Response, next: NextFunction) {
   try {
+    const userId = (req as any).user.sub;
     const channelKey = req.params.key as string;
     const channel = await getChannelByKey(channelKey);
     if (!channel) {
       res.status(404).json({ error: "Channel not found" });
       return;
+    }
+    // Verify org membership for org channels
+    if (channel.channelType === "organisation" && channel.organisationId) {
+      const orgIds = await getUserOrganisationIds(userId);
+      if (!orgIds.includes(channel.organisationId)) {
+        res.status(403).json({ error: "Not a member of this organisation" });
+        return;
+      }
     }
     const pins = await getPinnedMessages(channel.channelId);
     res.json(pins);
@@ -105,6 +115,15 @@ export async function handlePinMessage(req: Request, res: Response, next: NextFu
       return;
     }
 
+    // Verify org membership for org channels
+    if (channel.channelType === "organisation" && channel.organisationId) {
+      const orgIds = await getUserOrganisationIds(userId);
+      if (!orgIds.includes(channel.organisationId)) {
+        res.status(403).json({ error: "Not a member of this organisation" });
+        return;
+      }
+    }
+
     await pinMessage(parsed.data.messageId, channel.channelId, userId);
     res.json({ ok: true });
   } catch (err) {
@@ -115,7 +134,24 @@ export async function handlePinMessage(req: Request, res: Response, next: NextFu
 /** DELETE /api/bench/pins/:messageId */
 export async function handleUnpinMessage(req: Request, res: Response, next: NextFunction) {
   try {
+    const userId = (req as any).user.sub;
     const messageId = req.params.messageId as string;
+
+    const pin = await getPinWithChannel(messageId);
+    if (!pin) {
+      res.status(404).json({ error: "Pin not found" });
+      return;
+    }
+
+    // Verify org membership for org channels
+    if (pin.channelType === "organisation" && pin.organisationId) {
+      const orgIds = await getUserOrganisationIds(userId);
+      if (!orgIds.includes(pin.organisationId)) {
+        res.status(403).json({ error: "Not a member of this organisation" });
+        return;
+      }
+    }
+
     await unpinMessage(messageId);
     res.json({ ok: true });
   } catch (err) {
@@ -126,11 +162,21 @@ export async function handleUnpinMessage(req: Request, res: Response, next: Next
 /** GET /api/bench/channels/:key/search */
 export async function handleSearchMessages(req: Request, res: Response, next: NextFunction) {
   try {
+    const userId = (req as any).user.sub;
     const channelKey = req.params.key as string;
     const channel = await getChannelByKey(channelKey);
     if (!channel) {
       res.status(404).json({ error: "Channel not found" });
       return;
+    }
+
+    // Verify org membership for org channels
+    if (channel.channelType === "organisation" && channel.organisationId) {
+      const orgIds = await getUserOrganisationIds(userId);
+      if (!orgIds.includes(channel.organisationId)) {
+        res.status(403).json({ error: "Not a member of this organisation" });
+        return;
+      }
     }
 
     const q = (req.query.q as string) ?? "";
