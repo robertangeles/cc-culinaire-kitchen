@@ -67,6 +67,7 @@ Categories: **entity** (named things) · **concept** (patterns) · **decision** 
 | [Single .env file with DEV_/PROD_ prefixes](decisions/single-env-file.md) | One root `.env` for everything; `APP_ENV` switch + bootstrap shim copies prefixed values into unprefixed slots at startup | 2026-06-17 |
 | [Remove on-device prompt runtime](decisions/remove-device-runtime-prompts.md) | Mobile pivoted to server-side chat (2026-06-15); `prompt.runtime`, `/api/mobile/prompts/:slug`, on-device admin UI, and Antoine prompts removed | 2026-06-17 |
 | [Tenant-Isolation Remediation (July 2026)](decisions/tenant-isolation-remediation.md) | Red-team fixed ~51 cross-tenant holes across 8 PRs; user-first-then-org model; prod forensic sweep found no breach; required real-DB CI gate | 2026-07-14 |
+| [Database Backup Location](decisions/db-backup-location.md) | Every DB backup goes in one home-relative folder `~/culinaire-prod-backups/` — consistent across machines, outside any repo, never committed | 2026-07-14 |
 
 ## Synthesis
 | Page | Summary | Created |
