@@ -7,7 +7,7 @@
 import type { Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import pino from "pino";
-import { getUserLocationContext } from "../services/locationContextService.js";
+import { getUserLocationContext, getLocationInOrg } from "../services/locationContextService.js";
 import * as receivingService from "../services/receivingService.js";
 import * as creditNoteService from "../services/creditNoteService.js";
 
@@ -61,9 +61,17 @@ export async function handleStartSession(
   req: Request, res: Response, next: NextFunction,
 ): Promise<void> {
   try {
+    const orgId = await resolveOrgId(req, res);
+    if (orgId === null) return;
+
     const parsed = StartSessionSchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({ error: "Validation failed", details: parsed.error.flatten() });
+      return;
+    }
+
+    if (!await getLocationInOrg(parsed.data.storeLocationId, orgId)) {
+      res.status(400).json({ error: "Location not found" });
       return;
     }
 
@@ -72,6 +80,7 @@ export async function handleStartSession(
       parsed.data.poId,
       parsed.data.storeLocationId,
       userId,
+      orgId,
     );
 
     logger.info({ sessionId: result.session.sessionId, poId: parsed.data.poId, userId }, "Receiving session started");
@@ -89,8 +98,11 @@ export async function handleGetSession(
   req: Request, res: Response, next: NextFunction,
 ): Promise<void> {
   try {
+    const orgId = await resolveOrgId(req, res);
+    if (orgId === null) return;
+
     const sessionId = req.params.sessionId as string;
-    const result = await receivingService.getSession(sessionId);
+    const result = await receivingService.getSession(sessionId, orgId);
 
     if (!result) {
       res.status(404).json({ error: "Receiving session not found" });
@@ -107,6 +119,9 @@ export async function handleActionLine(
   req: Request, res: Response, next: NextFunction,
 ): Promise<void> {
   try {
+    const orgId = await resolveOrgId(req, res);
+    if (orgId === null) return;
+
     const sessionId = req.params.sessionId as string;
     const receivingLineId = req.params.lineId as string;
 
@@ -116,7 +131,7 @@ export async function handleActionLine(
       return;
     }
 
-    const result = await receivingService.actionLine(receivingLineId, sessionId, parsed.data);
+    const result = await receivingService.actionLine(receivingLineId, sessionId, parsed.data, orgId);
 
     logger.info({ sessionId, receivingLineId, status: parsed.data.status }, "Receiving line actioned");
     res.json(result);
@@ -133,8 +148,11 @@ export async function handleConfirmReceipt(
   req: Request, res: Response, next: NextFunction,
 ): Promise<void> {
   try {
+    const orgId = await resolveOrgId(req, res);
+    if (orgId === null) return;
+
     const sessionId = req.params.sessionId as string;
-    const result = await receivingService.confirmReceipt(sessionId);
+    const result = await receivingService.confirmReceipt(sessionId, orgId);
 
     logger.info({ sessionId, poStatus: result.poStatus }, "Receipt confirmed");
     res.json(result);
@@ -151,8 +169,11 @@ export async function handleCancelSession(
   req: Request, res: Response, next: NextFunction,
 ): Promise<void> {
   try {
+    const orgId = await resolveOrgId(req, res);
+    if (orgId === null) return;
+
     const sessionId = req.params.sessionId as string;
-    await receivingService.cancelSession(sessionId);
+    await receivingService.cancelSession(sessionId, orgId);
 
     logger.info({ sessionId }, "Receiving session cancelled");
     res.json({ success: true });
@@ -208,7 +229,7 @@ export async function handleGetCreditNotes(
     if (orgId === null) return;
 
     const result = supplierId
-      ? await creditNoteService.getCreditNotesForSupplier(supplierId)
+      ? await creditNoteService.getCreditNotesForSupplier(supplierId, orgId)
       : await creditNoteService.getCreditNotesForOrg(orgId);
 
     res.json(result);

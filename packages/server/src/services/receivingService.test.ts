@@ -228,9 +228,9 @@ describe("receivingService — transaction + audit invariants", () => {
         callOrder.push("tx-start");
         const tx = makeQueryMock([
           [session],            // SELECT session
+          [po],                 // SELECT po (org guard, now before lines)
           [],                   // SELECT lines (none — empty receipt)
           [rejectedDisc],       // SELECT discrepancies (one rejection)
-          [po],                 // SELECT po
         ]);
         const result = await cb(tx);
         callOrder.push("tx-end");
@@ -273,9 +273,9 @@ describe("receivingService — transaction + audit invariants", () => {
 
       withTxRows([
         [session],
+        [po],
         [],
         [rejectedDisc],
-        [po],
       ]);
 
       notifyMock.mockRejectedValueOnce(new Error("smtp dead"));
@@ -298,9 +298,9 @@ describe("receivingService — transaction + audit invariants", () => {
 
       withTxRows([
         [session],
+        [po],
         [],     // no lines
         [],     // no discrepancies — perfect delivery
-        [po],
       ]);
 
       const { confirmReceipt } = await import("./receivingService.js");
@@ -322,9 +322,9 @@ describe("receivingService — transaction + audit invariants", () => {
 
       withTxRows([
         [session],
+        [po],            // org guard now runs before the line/poLine fetch
         [line],
         [poLine],
-        [po],
         [updatedLine],   // UPDATE returning
         [inserted],      // INSERT discrepancy returning
       ]);

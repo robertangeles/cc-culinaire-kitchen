@@ -7,7 +7,7 @@
 import type { Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import pino from "pino";
-import { getUserLocationContext } from "../services/locationContextService.js";
+import { getUserLocationContext, getLocationInOrg } from "../services/locationContextService.js";
 import {
   createPO,
   listPOs,
@@ -202,6 +202,7 @@ export async function handleReceiveLine(
       parsed.data.receivedUnit,
       parsed.data.unitCost ?? null,
       userId,
+      orgId,
     );
 
     logger.info({ poId, lineId, userId }, "PO line received");
@@ -260,6 +261,11 @@ export async function handleGetSuggestions(
     const storeLocationId = req.query.storeLocationId as string;
     if (!storeLocationId) {
       res.status(400).json({ error: "storeLocationId query parameter is required" });
+      return;
+    }
+
+    if (!await getLocationInOrg(storeLocationId, orgId)) {
+      res.status(400).json({ error: "Location not found" });
       return;
     }
 
@@ -462,8 +468,11 @@ export async function handleDownloadPOPdf(
   req: Request, res: Response, next: NextFunction,
 ): Promise<void> {
   try {
+    const orgId = await resolveOrgId(req, res);
+    if (orgId === null) return;
+
     const poId = req.params.id as string;
-    const buffer = await pdfService.generatePOPdf(poId);
+    const buffer = await pdfService.generatePOPdf(poId, orgId);
 
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `attachment; filename="PO-${poId.slice(0, 8)}.pdf"`);
