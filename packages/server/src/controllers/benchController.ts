@@ -22,6 +22,7 @@ import {
   getUserOrganisationIds,
   updateChannelBanner,
   getPinWithChannel,
+  getChannelForMessage,
 } from "../services/benchService.js";
 import {
   getOrCreateThread,
@@ -122,6 +123,15 @@ export async function handlePinMessage(req: Request, res: Response, next: NextFu
         res.status(403).json({ error: "Not a member of this organisation" });
         return;
       }
+    }
+
+    // The message must belong to THIS channel. Without this a member could pin a
+    // message from another (foreign) channel into their own and then read its
+    // content back via getPinnedMessages.
+    const msgChannel = await getChannelForMessage(parsed.data.messageId);
+    if (!msgChannel || msgChannel.channelId !== channel.channelId) {
+      res.status(404).json({ error: "Message not found in this channel" });
+      return;
     }
 
     await pinMessage(parsed.data.messageId, channel.channelId, userId);
