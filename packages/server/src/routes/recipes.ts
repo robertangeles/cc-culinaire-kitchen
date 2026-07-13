@@ -9,7 +9,7 @@
 
 import { Router } from "express";
 import { authenticateOrGuest } from "../middleware/guestAuth.js";
-import { authenticate } from "../middleware/auth.js";
+import { authenticate, requireRole } from "../middleware/auth.js";
 import { checkUsageLimit, decrementFreeSessions } from "../middleware/usage.js";
 import { checkGuestUsageLimit } from "../middleware/guestUsage.js";
 import { incrementGuestSessions } from "../services/guestService.js";
@@ -88,8 +88,9 @@ recipesRouter.post("/patisserie", authenticateOrGuest, ...withUsageTracking("pat
 recipesRouter.post("/spirits", authenticateOrGuest, ...withUsageTracking("spirits"));
 
 // Bulk regenerate images (admin only)
-recipesRouter.post("/regenerate-images", authenticate, handleRegenerateImages);
-recipesRouter.post("/migrate-images", authenticate, handleMigrateImages);
+// Admin-only maintenance jobs — these mutate images/settings across ALL tenants.
+recipesRouter.post("/regenerate-images", authenticate, requireRole("Administrator"), handleRegenerateImages);
+recipesRouter.post("/migrate-images", authenticate, requireRole("Administrator"), handleMigrateImages);
 
 // Lightweight recipe list for menu-item import
 recipesRouter.get("/for-import", authenticate, handleGetRecipesForImport);

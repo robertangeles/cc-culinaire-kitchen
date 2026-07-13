@@ -618,6 +618,14 @@ export async function handleEmailRecipe(
       return;
     }
 
+    // A private recipe may only be emailed by its owner — same visibility gate
+    // as handleGetRecipe. Otherwise anyone with the UUID could exfiltrate the
+    // full costed recipe to an arbitrary address.
+    if (!rec.isPublicInd && rec.userId !== req.user?.sub) {
+      res.status(404).json({ error: "Recipe not found." });
+      return;
+    }
+
     const data = rec.recipeData as Record<string, unknown>;
     const result = await sendRecipeEmail(
       parsed.data.to,
