@@ -7,7 +7,7 @@
 
 import type { Request, Response, NextFunction } from "express";
 import pino from "pino";
-import { getUserLocationContext } from "../services/locationContextService.js";
+import { getUserLocationContext, getLocationInOrg } from "../services/locationContextService.js";
 import * as transferService from "../services/transferService.js";
 
 const logger = pino({ name: "transferController" });
@@ -226,6 +226,9 @@ export async function handleListPending(
   req: Request, res: Response, next: NextFunction,
 ): Promise<void> {
   try {
+    const orgId = await resolveOrgId(req, res);
+    if (orgId === null) return;
+
     const { storeLocationId } = req.query;
 
     if (!storeLocationId) {
@@ -233,8 +236,14 @@ export async function handleListPending(
       return;
     }
 
+    if (!await getLocationInOrg(storeLocationId as string, orgId)) {
+      res.status(400).json({ error: "Location not found" });
+      return;
+    }
+
     const transfers = await transferService.listPendingTransfers(
       storeLocationId as string,
+      orgId,
     );
 
     res.json(transfers);
