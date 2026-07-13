@@ -121,7 +121,17 @@ export async function handleLeaveOrganisation(req: Request, res: Response, next:
 /** GET /api/organisations/:id — get organisation details. */
 export async function handleGetOrganisation(req: Request, res: Response, next: NextFunction) {
   try {
-    const org = await getOrganisation(parseInt(req.params.id as string));
+    const orgId = parseInt(req.params.id as string);
+    // Security: this returns the org's join_key + decrypted PII. Gate on
+    // membership so it can't be read by enumerating org ids — same guard as
+    // the sibling handleGetMembers.
+    const membership = await getMembership(req.user!.sub, orgId);
+    if (!membership) {
+      res.status(403).json({ error: "You are not a member of this organisation." });
+      return;
+    }
+
+    const org = await getOrganisation(orgId);
     if (!org) {
       res.status(404).json({ error: "Organisation not found." });
       return;
