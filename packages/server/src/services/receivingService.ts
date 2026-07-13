@@ -244,6 +244,17 @@ export async function actionLine(
       .where(eq(receivingSession.sessionId, sessionId));
 
     if (!session) throw new Error("Receiving session not found");
+
+    // Org guard FIRST — before the status check — so a session in another org
+    // is indistinguishable from a missing one (no status/existence oracle).
+    // Also supplies the supplier id + org for the audit row below.
+    const [po] = await tx
+      .select()
+      .from(purchaseOrder)
+      .where(and(eq(purchaseOrder.poId, session.poId), eq(purchaseOrder.organisationId, orgId)));
+
+    if (!po) throw new Error("Receiving session not found");
+
     if (session.status !== "ACTIVE") {
       throw new Error("Receiving session is no longer active");
     }
@@ -266,14 +277,6 @@ export async function actionLine(
       .select()
       .from(purchaseOrderLine)
       .where(eq(purchaseOrderLine.lineId, line.poLineId));
-
-    // Get the PO for supplier ID + org scoping on the audit row — AND org guard
-    const [po] = await tx
-      .select()
-      .from(purchaseOrder)
-      .where(and(eq(purchaseOrder.poId, session.poId), eq(purchaseOrder.organisationId, orgId)));
-
-    if (!po) throw new Error("Receiving session not found");
 
     // Update the line
     const updateData: Record<string, unknown> = {
@@ -399,6 +402,16 @@ export async function confirmReceipt(sessionId: string, orgId: number) {
       .where(eq(receivingSession.sessionId, sessionId));
 
     if (!session) throw new Error("Receiving session not found");
+
+    // Org guard FIRST — before status validation — so a session in another org
+    // is indistinguishable from a missing one (no status/existence oracle).
+    const [po] = await tx
+      .select()
+      .from(purchaseOrder)
+      .where(and(eq(purchaseOrder.poId, session.poId), eq(purchaseOrder.organisationId, orgId)));
+
+    if (!po) throw new Error("Receiving session not found");
+
     validateTransition(session.status, "COMPLETED", RECEIVING_SESSION_TRANSITIONS, "receiving session");
 
     const lines = await tx
@@ -410,14 +423,6 @@ export async function confirmReceipt(sessionId: string, orgId: number) {
       .select()
       .from(receivingDiscrepancy)
       .where(eq(receivingDiscrepancy.sessionId, sessionId));
-
-    // AND org guard — prevents confirming receipt on another org's session
-    const [po] = await tx
-      .select()
-      .from(purchaseOrder)
-      .where(and(eq(purchaseOrder.poId, session.poId), eq(purchaseOrder.organisationId, orgId)));
-
-    if (!po) throw new Error("Receiving session not found");
 
     const processedLines: string[] = [];
     // Track (location, ingredient) pairs whose WAC needs recomputing once
@@ -635,15 +640,18 @@ export async function cancelSession(sessionId: string, orgId: number) {
       .where(eq(receivingSession.sessionId, sessionId));
 
     if (!session) throw new Error("Receiving session not found");
-    validateTransition(session.status, "CANCELLED", RECEIVING_SESSION_TRANSITIONS, "receiving session");
 
-    // Org-scope via PO — fetch early so we can gate and reuse for the audit row
+    // Org guard FIRST — before status validation — so a session in another org
+    // is indistinguishable from a missing one (no status/existence oracle).
+    // Reused for the audit row below.
     const [po] = await tx
       .select()
       .from(purchaseOrder)
       .where(and(eq(purchaseOrder.poId, session.poId), eq(purchaseOrder.organisationId, orgId)));
 
     if (!po) throw new Error("Receiving session not found");
+
+    validateTransition(session.status, "CANCELLED", RECEIVING_SESSION_TRANSITIONS, "receiving session");
 
     await tx
       .update(receivingSession)
@@ -662,7 +670,7 @@ export async function cancelSession(sessionId: string, orgId: number) {
         entityId: sessionId,
         action: "cancel",
         actorUserId: session.receivedByUserId,
-        organisationId: po?.organisationId ?? null,
+        organisationId: po.organisationId,
         beforeValue: { status: session.status },
         afterValue: { status: "CANCELLED" },
         metadata: { poId: session.poId },
