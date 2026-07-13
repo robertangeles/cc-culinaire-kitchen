@@ -112,23 +112,35 @@ export async function handleDeleteMenuItem(req: Request, res: Response, next: Ne
 
 export async function handleAddIngredient(req: Request, res: Response, next: NextFunction) {
   try {
+    const userId = (req as any).user.sub;
     const parsed = ingredientSchema.safeParse(req.body);
     if (!parsed.success) { res.status(400).json({ error: parsed.error.issues[0].message }); return; }
-    const ing = await addIngredient(req.params.id as string, parsed.data);
+    const menuItemId = req.params.id as string;
+    const item = await getMenuItem(menuItemId, userId);
+    if (!item) { res.status(404).json({ error: "Item not found" }); return; }
+    const ing = await addIngredient(menuItemId, parsed.data);
     res.status(201).json(ing);
   } catch (err) { next(err); }
 }
 
 export async function handleListIngredients(req: Request, res: Response, next: NextFunction) {
   try {
-    const ingredients = await getIngredients(req.params.id as string);
+    const userId = (req as any).user.sub;
+    const menuItemId = req.params.id as string;
+    const item = await getMenuItem(menuItemId, userId);
+    if (!item) { res.status(404).json({ error: "Item not found" }); return; }
+    const ingredients = await getIngredients(menuItemId);
     res.json(ingredients);
   } catch (err) { next(err); }
 }
 
 export async function handleDeleteIngredient(req: Request, res: Response, next: NextFunction) {
   try {
-    await deleteIngredient(parseInt(req.params.ingredientId as string, 10), req.params.id as string);
+    const userId = (req as any).user.sub;
+    const menuItemId = req.params.id as string;
+    const item = await getMenuItem(menuItemId, userId);
+    if (!item) { res.status(404).json({ error: "Item not found" }); return; }
+    await deleteIngredient(parseInt(req.params.ingredientId as string, 10), menuItemId);
     res.json({ ok: true });
   } catch (err) { next(err); }
 }
@@ -141,8 +153,12 @@ export async function handleDeleteIngredient(req: Request, res: Response, next: 
  */
 export async function handleRefreshCost(req: Request, res: Response, next: NextFunction) {
   try {
+    const userId = (req as any).user.sub;
+    const menuItemId = req.params.id as string;
+    const item = await getMenuItem(menuItemId, userId);
+    if (!item) { res.status(404).json({ error: "Item not found" }); return; }
     const rowId = parseInt(req.params.ingredientId as string, 10);
-    const updated = await refreshIngredientCost(rowId, req.params.id as string);
+    const updated = await refreshIngredientCost(rowId, menuItemId);
     res.json(updated);
   } catch (err: any) {
     if (err.message?.includes("not found")) {
@@ -165,8 +181,12 @@ export async function handleRefreshCost(req: Request, res: Response, next: NextF
  */
 export async function handleGetPandLCost(req: Request, res: Response, next: NextFunction) {
   try {
-    const total = await getPandLFoodCost(req.params.id as string);
-    res.json({ menuItemId: req.params.id, foodCost: total });
+    const userId = (req as any).user.sub;
+    const menuItemId = req.params.id as string;
+    const item = await getMenuItem(menuItemId, userId);
+    if (!item) { res.status(404).json({ error: "Item not found" }); return; }
+    const total = await getPandLFoodCost(menuItemId);
+    res.json({ menuItemId, foodCost: total });
   } catch (err: any) {
     if (err.message?.includes("not found")) {
       res.status(404).json({ error: err.message });

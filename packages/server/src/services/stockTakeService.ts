@@ -389,11 +389,11 @@ export async function submitCategory(sessionId: string, categoryName: string) {
  * Requires at least one category to be SUBMITTED. Unclaimed (NOT_STARTED)
  * categories are left as-is — this supports partial/cycle counts.
  */
-export async function submitSessionForReview(sessionId: string) {
+export async function submitSessionForReview(sessionId: string, orgId: number) {
   const [session] = await db
     .select()
     .from(stockTakeSession)
-    .where(eq(stockTakeSession.sessionId, sessionId));
+    .where(and(eq(stockTakeSession.sessionId, sessionId), eq(stockTakeSession.organisationId, orgId)));
 
   if (!session) throw new NotFoundError("Session not found");
   if (session.sessionStatus !== "OPEN" && session.sessionStatus !== "FLAGGED") {
@@ -536,11 +536,11 @@ async function checkAndAdvanceSession(sessionId: string) {
 // ─── HQ review actions ───────────────────────────────────────────
 
 /** Approve a session. Updates all SUBMITTED categories to APPROVED and updates stock levels. */
-export async function approveSession(sessionId: string, userId: number) {
+export async function approveSession(sessionId: string, userId: number, orgId: number) {
   const [session] = await db
     .select()
     .from(stockTakeSession)
-    .where(eq(stockTakeSession.sessionId, sessionId));
+    .where(and(eq(stockTakeSession.sessionId, sessionId), eq(stockTakeSession.organisationId, orgId)));
 
   if (!session) throw new NotFoundError("Session not found");
 
@@ -598,11 +598,12 @@ export async function flagSession(
   sessionId: string,
   flaggedCategories: string[],
   reason: string,
+  orgId: number,
 ) {
   const [session] = await db
     .select()
     .from(stockTakeSession)
-    .where(eq(stockTakeSession.sessionId, sessionId));
+    .where(and(eq(stockTakeSession.sessionId, sessionId), eq(stockTakeSession.organisationId, orgId)));
 
   if (!session) throw new NotFoundError("Session not found");
   if (session.sessionStatus !== "PENDING_REVIEW") {
@@ -961,6 +962,18 @@ export async function getLocationDashboard(
   storeLocationId: string,
   organisationId: number,
 ) {
+  // Verify location belongs to this org (prevents cross-org data exposure via req.params.locId)
+  const [locVerify] = await db
+    .select({ storeLocationId: storeLocation.storeLocationId })
+    .from(storeLocation)
+    .where(
+      and(
+        eq(storeLocation.storeLocationId, storeLocationId),
+        eq(storeLocation.organisationId, organisationId),
+      ),
+    );
+  if (!locVerify) throw new NotFoundError("Location not found");
+
   // Current stock levels with ingredient info
   const levels = await db
     .select({

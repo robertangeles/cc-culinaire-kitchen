@@ -8,7 +8,7 @@
 import pino from "pino";
 import { db } from "../db/index.js";
 import { recipe, recipeRating, recipeVersion, user, kitchenProfile } from "../db/schema.js";
-import { eq, and, or, sql, desc, max } from "drizzle-orm";
+import { eq, and, or, sql, desc, max, isNull } from "drizzle-orm";
 
 const logger = pino({ name: "recipePersistence" });
 
@@ -320,12 +320,14 @@ export async function updateRecipe(
     .returning({ recipeId: recipe.recipeId });
 
   // Fallback: if only toggling isPublicInd and owner check failed,
-  // allow update by recipeId alone (the user has the ID from generation)
+  // allow update for guest-created recipes (userId IS NULL) by recipeId alone.
+  // Scoping to NULL userId prevents cross-user exploitation of recipes owned by
+  // authenticated users (those always match the first update via userId).
   if (result.length === 0 && updates.isPublicInd !== undefined && Object.keys(updates).length === 1) {
     result = await db
       .update(recipe)
       .set({ isPublicInd: updates.isPublicInd, updatedDttm: new Date() })
-      .where(eq(recipe.recipeId, recipeId))
+      .where(and(eq(recipe.recipeId, recipeId), isNull(recipe.userId)))
       .returning({ recipeId: recipe.recipeId });
   }
 
