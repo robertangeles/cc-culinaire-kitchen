@@ -106,6 +106,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # @culinaire/shared resolves to ./dist; the server suite imports it, so it
+      # must be built before vitest can resolve the package.
+      - name: Build shared package
+        run: pnpm --filter @culinaire/shared build
+
       - name: Enable pgvector extension
         run: PGPASSWORD=ci psql -h localhost -U ci -d culinaire_it -c "CREATE EXTENSION IF NOT EXISTS vector"
 
