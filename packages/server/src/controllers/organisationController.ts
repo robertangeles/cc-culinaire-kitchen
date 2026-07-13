@@ -121,7 +121,17 @@ export async function handleLeaveOrganisation(req: Request, res: Response, next:
 /** GET /api/organisations/:id — get organisation details. */
 export async function handleGetOrganisation(req: Request, res: Response, next: NextFunction) {
   try {
-    const org = await getOrganisation(parseInt(req.params.id as string));
+    const orgId = parseInt(req.params.id as string);
+    // Security: this returns the org's join_key + decrypted PII. Gate on
+    // membership so it can't be read by enumerating org ids. Non-members get
+    // the SAME 404 as a missing org so the response is not an existence oracle.
+    const membership = await getMembership(req.user!.sub, orgId);
+    if (!membership) {
+      res.status(404).json({ error: "Organisation not found." });
+      return;
+    }
+
+    const org = await getOrganisation(orgId);
     if (!org) {
       res.status(404).json({ error: "Organisation not found." });
       return;
@@ -166,10 +176,11 @@ export async function handleGetMembers(req: Request, res: Response, next: NextFu
     const orgId = parseInt(req.params.id as string);
     const userId = req.user!.sub;
 
-    // Security: verify requesting user is a member of this org
+    // Security: verify requesting user is a member of this org. Non-members get
+    // a 404 (not 403) so the endpoint is not an org-existence oracle.
     const membership = await getMembership(userId, orgId);
     if (!membership) {
-      res.status(403).json({ error: "You are not a member of this organisation." });
+      res.status(404).json({ error: "Organisation not found." });
       return;
     }
 

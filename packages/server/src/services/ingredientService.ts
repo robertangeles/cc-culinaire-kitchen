@@ -87,48 +87,21 @@ export async function createIngredient(
  * for admin views that need to surface soft-deleted entries (e.g. an "all
  * ingredients" report or restoration UI).
  */
-export async function listIngredients(
+export function listIngredients(
   organisationId: number,
   opts?: { category?: string; search?: string; itemType?: string; includeSoftDeleted?: boolean },
 ) {
-  let query = db
-    .select()
-    .from(ingredient)
-    .where(eq(ingredient.organisationId, organisationId))
-    .$dynamic();
+  // Build one AND of every predicate and apply it in a single .where().
+  // Chaining .where() on a $dynamic() query REPLACES the prior clause rather
+  // than ANDing it — that footgun previously let isNull(deletedAt) overwrite
+  // the org filter, leaking every tenant's catalog on the default list.
+  const conds = [eq(ingredient.organisationId, organisationId)];
+  if (!opts?.includeSoftDeleted) conds.push(isNull(ingredient.deletedAt));
+  if (opts?.category) conds.push(eq(ingredient.ingredientCategory, opts.category));
+  if (opts?.search) conds.push(ilike(ingredient.ingredientName, `%${opts.search}%`));
+  if (opts?.itemType) conds.push(eq(ingredient.itemType, opts.itemType));
 
-  if (!opts?.includeSoftDeleted) {
-    query = query.where(isNull(ingredient.deletedAt));
-  }
-
-  if (opts?.category) {
-    query = query.where(
-      and(
-        eq(ingredient.organisationId, organisationId),
-        eq(ingredient.ingredientCategory, opts.category),
-      ),
-    );
-  }
-
-  if (opts?.search) {
-    query = query.where(
-      and(
-        eq(ingredient.organisationId, organisationId),
-        ilike(ingredient.ingredientName, `%${opts.search}%`),
-      ),
-    );
-  }
-
-  if (opts?.itemType) {
-    query = query.where(
-      and(
-        eq(ingredient.organisationId, organisationId),
-        eq(ingredient.itemType, opts.itemType),
-      ),
-    );
-  }
-
-  return query;
+  return db.select().from(ingredient).where(and(...conds));
 }
 
 /**
