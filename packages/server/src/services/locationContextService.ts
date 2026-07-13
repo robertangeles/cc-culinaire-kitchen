@@ -229,3 +229,24 @@ export async function updateModulePreference(
     });
   }
 }
+
+/**
+ * Verify that a storeLocationId belongs to the given org.
+ * Returns true if valid, false otherwise. Use this to guard
+ * client-supplied locationIds before querying or mutating data.
+ */
+export async function getLocationInOrg(
+  storeLocationId: string,
+  orgId: number,
+): Promise<boolean> {
+  const [loc] = await db
+    .select({ storeLocationId: storeLocation.storeLocationId })
+    .from(storeLocation)
+    .where(
+      and(
+        eq(storeLocation.storeLocationId, storeLocationId),
+        eq(storeLocation.organisationId, orgId),
+      ),
+    );
+  return !!loc;
+}

@@ -225,11 +225,14 @@ export async function logConsumption(
 // 2. listConsumptionLogs
 // ---------------------------------------------------------------------------
 
-export async function listConsumptionLogs(locationId: string, opts?: ListOpts) {
+export async function listConsumptionLogs(locationId: string, orgId: number, opts?: ListOpts) {
   const limit = opts?.limit ?? 50;
   const offset = opts?.offset ?? 0;
 
-  const conditions = [eq(consumptionLog.storeLocationId, locationId)];
+  const conditions = [
+    eq(consumptionLog.storeLocationId, locationId),
+    eq(consumptionLog.organisationId, orgId),
+  ];
 
   if (opts?.startDate) {
     conditions.push(gte(consumptionLog.loggedAt, opts.startDate));

@@ -508,7 +508,7 @@ export async function getTransferDetail(transferId: string, orgId: number) {
 // 7. listPendingTransfers
 // ---------------------------------------------------------------------------
 
-export async function listPendingTransfers(locationId: string) {
+export async function listPendingTransfers(locationId: string, orgId: number) {
   const fromLoc = alias(storeLocation, "from_loc");
   const toLoc = alias(storeLocation, "to_loc");
 
@@ -534,6 +534,7 @@ export async function listPendingTransfers(locationId: string) {
       and(
         eq(inventoryTransfer.toLocationId, locationId),
         eq(inventoryTransfer.status, "SENT"),
+        eq(inventoryTransfer.organisationId, orgId),
       ),
     )
     .orderBy(desc(inventoryTransfer.sentDttm));
