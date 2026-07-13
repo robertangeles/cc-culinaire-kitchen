@@ -14,11 +14,10 @@
 > | `fix/ck-web/tenant-isolation-bench` | E2–E8 |
 > | `fix/ck-web/tenant-isolation-conversations-identity` | E1, D2, D3 |
 >
-> Still open (recommended, not done this session): (1) real-DB integration
-> boundary tests (403 cross-tenant) per the repo checklist — the current suite
-> mocks the DB, so fixes were proven via live probes instead; (2) a read-only
-> **prod** exposure assessment (tenant count, cross-tenant overlap) — deferred,
-> local-only this session.
+> Prod exposure assessment: **DONE** — see `prod-exposure-check.md` (0/22
+> contamination detectors, no breach evidence). Still recommended: real-DB
+> integration boundary tests (403 cross-tenant) per the repo checklist — the
+> current suite mocks the DB, so these fixes were proven via live probes instead.
 
 **Trigger:** rob.angeles@culinaire.kitchen (org 2, Almost French Pâtisserie) saw
 55 catalog items in Stock Room → Catalog on localhost. Org 2 has 0 ingredients
@@ -60,7 +59,7 @@ tenant takeover).
 
 ---
 
-## OPEN — CRITICAL (cross-tenant read/write of another tenant's data)
+## FIXED — CRITICAL (cross-tenant read/write of another tenant's data)
 
 Inventory (controllers/ingredientController.ts, services/ingredientService.ts):
 - **A1** `handleDeleteConversion` → `deleteUnitConversion(conversionId)` — deletes any org's unit conversion by uuid. *A*
@@ -90,7 +89,7 @@ Stock Take (controllers/stockTakeController.ts, services/stockTakeService.ts):
 
 ---
 
-## OPEN — HIGH
+## FIXED — HIGH
 
 Inventory reads:
 - **A6** `handleListIngredientSuppliers(id)` — read another org's supplier terms. *A*
@@ -123,14 +122,14 @@ Bench (controllers/benchController.ts, services/benchService.ts):
 
 ---
 
-## OPEN — MEDIUM
+## FIXED — MEDIUM
 
 - **B13** `forecastService.generateForecasts` delete block — deletes another org's ACTIVE forecasts (client-supplied locationId). *B/C*
 - **B14** `getCreditNotesForSupplier(supplierId)` — org filter bypassed when supplierId supplied. *A*
 - **C11** `getLocationDashboard(locId)` — leaks another org's location status/activation/session existence (stock is filtered; these 3 subqueries aren't). *A/B*
 - **E6** `benchSocketService` `bench:reaction:add/remove` — react to a message in a channel you can't access. *A*
 
-## OPEN — LOW
+## FIXED — LOW
 
 - **A11** `ingredientAliasController.createAlias` — create an alias on another org's ingredient (list read is post-filtered, so read is safe; write isn't). *A*
 - **C12** `recipePersistenceService.updateRecipe` — `isPublicInd`-only fallback bypasses ownership; guest/cross-org can publish a private recipe by uuid. *C*
