@@ -65,13 +65,14 @@ export async function startSession(
   poId: string,
   locationId: string,
   userId: number,
+  orgId: number,
 ) {
   return db.transaction(async (tx) => {
-    // Validate PO is in SENT status
+    // Validate PO is in SENT status — AND org so callers cannot start receiving on another org's PO
     const [po] = await tx
       .select()
       .from(purchaseOrder)
-      .where(eq(purchaseOrder.poId, poId));
+      .where(and(eq(purchaseOrder.poId, poId), eq(purchaseOrder.organisationId, orgId)));
 
     if (!po) throw new Error("Purchase order not found");
     if (po.status !== "SENT") {
@@ -164,14 +165,23 @@ export async function startSession(
 
 /**
  * Get a receiving session with all lines and ingredient details.
+ * Returns null when the session does not exist OR belongs to a different org.
  */
-export async function getSession(sessionId: string) {
-  const [session] = await db
-    .select()
+export async function getSession(sessionId: string, orgId: number) {
+  // Join to purchaseOrder to verify org ownership — null means not found or wrong org
+  const [sessionRow] = await db
+    .select({ session: receivingSession })
     .from(receivingSession)
-    .where(eq(receivingSession.sessionId, sessionId));
+    .innerJoin(purchaseOrder, eq(receivingSession.poId, purchaseOrder.poId))
+    .where(
+      and(
+        eq(receivingSession.sessionId, sessionId),
+        eq(purchaseOrder.organisationId, orgId),
+      ),
+    );
 
-  if (!session) return null;
+  if (!sessionRow) return null;
+  const session = sessionRow.session;
 
   const lines = await db
     .select({
@@ -224,6 +234,7 @@ export async function actionLine(
   receivingLineId: string,
   sessionId: string,
   input: ActionLineInput,
+  orgId: number,
 ) {
   return db.transaction(async (tx) => {
     // Validate session is ACTIVE
@@ -256,11 +267,13 @@ export async function actionLine(
       .from(purchaseOrderLine)
       .where(eq(purchaseOrderLine.lineId, line.poLineId));
 
-    // Get the PO for supplier ID + org scoping on the audit row
+    // Get the PO for supplier ID + org scoping on the audit row — AND org guard
     const [po] = await tx
       .select()
       .from(purchaseOrder)
-      .where(eq(purchaseOrder.poId, session.poId));
+      .where(and(eq(purchaseOrder.poId, session.poId), eq(purchaseOrder.organisationId, orgId)));
+
+    if (!po) throw new Error("Receiving session not found");
 
     // Update the line
     const updateData: Record<string, unknown> = {
@@ -376,7 +389,7 @@ export async function actionLine(
  * discrepancies. Notification failure is logged but does NOT roll back the
  * receipt — a failed email shouldn't undo a successful delivery.
  */
-export async function confirmReceipt(sessionId: string) {
+export async function confirmReceipt(sessionId: string, orgId: number) {
   // Wrap all DB writes in a single transaction so rollback is automatic on
   // any error (FIFO batch insert, stock update conflict, PO update, etc.).
   const result = await db.transaction(async (tx) => {
@@ -398,12 +411,13 @@ export async function confirmReceipt(sessionId: string) {
       .from(receivingDiscrepancy)
       .where(eq(receivingDiscrepancy.sessionId, sessionId));
 
+    // AND org guard — prevents confirming receipt on another org's session
     const [po] = await tx
       .select()
       .from(purchaseOrder)
-      .where(eq(purchaseOrder.poId, session.poId));
+      .where(and(eq(purchaseOrder.poId, session.poId), eq(purchaseOrder.organisationId, orgId)));
 
-    if (!po) throw new Error("Purchase order not found");
+    if (!po) throw new Error("Receiving session not found");
 
     const processedLines: string[] = [];
     // Track (location, ingredient) pairs whose WAC needs recomputing once
@@ -613,7 +627,7 @@ export async function confirmReceipt(sessionId: string) {
  * built in Phase 1) can identify cancellations regardless of when they
  * happened.
  */
-export async function cancelSession(sessionId: string) {
+export async function cancelSession(sessionId: string, orgId: number) {
   return db.transaction(async (tx) => {
     const [session] = await tx
       .select()
@@ -622,6 +636,14 @@ export async function cancelSession(sessionId: string) {
 
     if (!session) throw new Error("Receiving session not found");
     validateTransition(session.status, "CANCELLED", RECEIVING_SESSION_TRANSITIONS, "receiving session");
+
+    // Org-scope via PO — fetch early so we can gate and reuse for the audit row
+    const [po] = await tx
+      .select()
+      .from(purchaseOrder)
+      .where(and(eq(purchaseOrder.poId, session.poId), eq(purchaseOrder.organisationId, orgId)));
+
+    if (!po) throw new Error("Receiving session not found");
 
     await tx
       .update(receivingSession)
@@ -632,12 +654,6 @@ export async function cancelSession(sessionId: string) {
     await tx
       .update(purchaseOrder)
       .set({ status: "SENT", updatedDttm: new Date() })
-      .where(eq(purchaseOrder.poId, session.poId));
-
-    // Org-scope the audit row via the PO.
-    const [po] = await tx
-      .select()
-      .from(purchaseOrder)
       .where(eq(purchaseOrder.poId, session.poId));
 
     await auditService.log(

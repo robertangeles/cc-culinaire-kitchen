@@ -7,7 +7,7 @@
 
 import type { Request, Response, NextFunction } from "express";
 import pino from "pino";
-import { getUserLocationContext } from "../services/locationContextService.js";
+import { getUserLocationContext, getLocationInOrg } from "../services/locationContextService.js";
 import * as consumptionLogService from "../services/consumptionLogService.js";
 
 const logger = pino({ name: "consumptionLogController" });
@@ -85,6 +85,9 @@ export async function handleListLogs(
   req: Request, res: Response, next: NextFunction,
 ): Promise<void> {
   try {
+    const orgId = await resolveOrgId(req, res);
+    if (orgId === null) return;
+
     const { storeLocationId, startDate, endDate, reason, limit, offset } = req.query;
 
     if (!storeLocationId) {
@@ -92,8 +95,14 @@ export async function handleListLogs(
       return;
     }
 
+    if (!await getLocationInOrg(storeLocationId as string, orgId)) {
+      res.status(400).json({ error: "Location not found" });
+      return;
+    }
+
     const logs = await consumptionLogService.listConsumptionLogs(
       storeLocationId as string,
+      orgId,
       {
         startDate: startDate ? new Date(startDate as string) : undefined,
         endDate: endDate ? new Date(endDate as string) : undefined,

@@ -29,12 +29,12 @@ const PDF_TIMEOUT_MS = 10_000;
  * Generate a PDF buffer for a purchase order.
  * Returns the PDF as a Buffer suitable for email attachment or download.
  */
-export async function generatePOPdf(poId: string): Promise<Buffer> {
-  // Fetch all required data
+export async function generatePOPdf(poId: string, orgId: number): Promise<Buffer> {
+  // Fetch all required data — AND org so callers cannot download another org's PO
   const [po] = await db
     .select()
     .from(purchaseOrder)
-    .where(eq(purchaseOrder.poId, poId));
+    .where(and(eq(purchaseOrder.poId, poId), eq(purchaseOrder.organisationId, orgId)));
 
   if (!po) throw new Error("Purchase order not found");
 
