@@ -214,7 +214,21 @@ export async function handleSaveMessages(
       return;
     }
 
-    await saveMessages(id, parsed.data.messages);
+    let owner: { userId: number } | { guestToken: string };
+    if (req.user) {
+      owner = { userId: req.user.sub };
+    } else if (req.guestToken) {
+      owner = { guestToken: req.guestToken };
+    } else {
+      res.status(401).json({ error: "Authentication required." });
+      return;
+    }
+
+    const saved = await saveMessages(id, owner, parsed.data.messages);
+    if (!saved) {
+      res.status(403).json({ error: "You do not have access to this conversation." });
+      return;
+    }
 
     // Brain capture (spec T5): remember this chat turn for the authenticated
     // user. Fired AFTER the message write, as `void` — recordMemory catches

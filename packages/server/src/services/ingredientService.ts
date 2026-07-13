@@ -87,48 +87,21 @@ export async function createIngredient(
  * for admin views that need to surface soft-deleted entries (e.g. an "all
  * ingredients" report or restoration UI).
  */
-export async function listIngredients(
+export function listIngredients(
   organisationId: number,
   opts?: { category?: string; search?: string; itemType?: string; includeSoftDeleted?: boolean },
 ) {
-  let query = db
-    .select()
-    .from(ingredient)
-    .where(eq(ingredient.organisationId, organisationId))
-    .$dynamic();
+  // Build one AND of every predicate and apply it in a single .where().
+  // Chaining .where() on a $dynamic() query REPLACES the prior clause rather
+  // than ANDing it — that footgun previously let isNull(deletedAt) overwrite
+  // the org filter, leaking every tenant's catalog on the default list.
+  const conds = [eq(ingredient.organisationId, organisationId)];
+  if (!opts?.includeSoftDeleted) conds.push(isNull(ingredient.deletedAt));
+  if (opts?.category) conds.push(eq(ingredient.ingredientCategory, opts.category));
+  if (opts?.search) conds.push(ilike(ingredient.ingredientName, `%${opts.search}%`));
+  if (opts?.itemType) conds.push(eq(ingredient.itemType, opts.itemType));
 
-  if (!opts?.includeSoftDeleted) {
-    query = query.where(isNull(ingredient.deletedAt));
-  }
-
-  if (opts?.category) {
-    query = query.where(
-      and(
-        eq(ingredient.organisationId, organisationId),
-        eq(ingredient.ingredientCategory, opts.category),
-      ),
-    );
-  }
-
-  if (opts?.search) {
-    query = query.where(
-      and(
-        eq(ingredient.organisationId, organisationId),
-        ilike(ingredient.ingredientName, `%${opts.search}%`),
-      ),
-    );
-  }
-
-  if (opts?.itemType) {
-    query = query.where(
-      and(
-        eq(ingredient.organisationId, organisationId),
-        eq(ingredient.itemType, opts.itemType),
-      ),
-    );
-  }
-
-  return query;
+  return db.select().from(ingredient).where(and(...conds));
 }
 
 /**
@@ -430,6 +403,7 @@ export async function listLocationIngredients(
 export async function updateLocationIngredient(
   ingredientId: string,
   storeLocationId: string,
+  organisationId: number,
   data: Partial<{
     parLevel: string;
     reorderQty: string;
@@ -440,6 +414,16 @@ export async function updateLocationIngredient(
     activeInd: boolean;
   }>,
 ) {
+  // Verify ingredient and location both belong to the org before writing
+  const ing = await getIngredient(ingredientId, organisationId);
+  if (!ing) return null;
+
+  const [loc] = await db
+    .select({ orgId: storeLocation.organisationId })
+    .from(storeLocation)
+    .where(eq(storeLocation.storeLocationId, storeLocationId));
+  if (!loc || loc.orgId !== organisationId) return null;
+
   // Ensure record exists first
   await getOrCreateLocationIngredient(ingredientId, storeLocationId);
 
@@ -488,11 +472,11 @@ export async function listUnitConversions(ingredientId: string) {
     .where(eq(unitConversion.ingredientId, ingredientId));
 }
 
-/** Delete a unit conversion. */
-export async function deleteUnitConversion(conversionId: string) {
+/** Delete a unit conversion — scoped to the owning ingredient so a caller cannot delete another ingredient's conversion. */
+export async function deleteUnitConversion(conversionId: string, ingredientId: string) {
   const [row] = await db
     .delete(unitConversion)
-    .where(eq(unitConversion.conversionId, conversionId))
+    .where(and(eq(unitConversion.conversionId, conversionId), eq(unitConversion.ingredientId, ingredientId)))
     .returning();
   return row ?? null;
 }
@@ -636,6 +620,15 @@ export async function deleteSupplier(supplierId: string, organisationId: number)
   return row ?? null;
 }
 
+/** Fetch a supplier only if it belongs to the org. Null otherwise. */
+export async function getSupplierInOrg(supplierId: string, organisationId: number) {
+  const rows = await db
+    .select({ supplierId: supplier.supplierId })
+    .from(supplier)
+    .where(and(eq(supplier.supplierId, supplierId), eq(supplier.organisationId, organisationId)));
+  return rows[0] ?? null;
+}
+
 // ─── Supplier-Location assignments ───────────────────────────────
 
 /** Get which locations a supplier serves. */
@@ -656,7 +649,24 @@ export async function getSupplierLocations(supplierId: string) {
 export async function setSupplierLocations(
   supplierId: string,
   locationIds: string[],
+  organisationId: number,
 ) {
+  // Verify all locationIds belong to the org before (de)activating links
+  if (locationIds.length > 0) {
+    const valid = await db
+      .select({ storeLocationId: storeLocation.storeLocationId })
+      .from(storeLocation)
+      .where(
+        and(
+          eq(storeLocation.organisationId, organisationId),
+          inArray(storeLocation.storeLocationId, locationIds),
+        ),
+      );
+    if (valid.length !== locationIds.length) {
+      throw new Error("One or more location IDs do not belong to your organisation");
+    }
+  }
+
   // Deactivate all existing
   await db
     .update(supplierLocation)

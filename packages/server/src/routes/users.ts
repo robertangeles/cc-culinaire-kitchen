@@ -6,7 +6,7 @@
 
 import { Router } from "express";
 import multer from "multer";
-import { authenticate, requireRole, requirePermission } from "../middleware/auth.js";
+import { authenticate, requireRole } from "../middleware/auth.js";
 import { upload } from "../middleware/upload.js";
 import {
   handleGetProfile,
@@ -73,7 +73,10 @@ router.post("/profile/avatar", (req, res, next) => {
 // Admin user management
 router.get("/", requireRole("Administrator"), handleListUsers);
 router.get("/:id", requireRole("Administrator"), handleGetUserById);
-router.patch("/:id", requirePermission("admin:manage-users"), handleAdminUpdateUser);
+// Editing any user (incl. PII) is a platform-admin operation with no org scope,
+// so it is Administrator-only like every sibling /:id route — not a delegable
+// permission that a non-admin role could be granted to reach across tenants.
+router.patch("/:id", requireRole("Administrator"), handleAdminUpdateUser);
 router.patch("/:id/suspend", requireRole("Administrator"), handleSuspendUser);
 router.patch("/:id/reactivate", requireRole("Administrator"), handleReactivateUser);
 router.patch("/:id/cancel", requireRole("Administrator"), handleCancelUser);

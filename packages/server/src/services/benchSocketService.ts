@@ -35,6 +35,7 @@ import {
   softDeleteMessage,
   editMessage,
   getUserOrganisationIds,
+  getChannelForMessage,
 } from "./benchService.js";
 import { getOrCreateThread, createDmMessage, getThreadById } from "./benchDmService.js";
 import { db } from "../db/index.js";
@@ -167,6 +168,14 @@ export function initBenchSocket(httpServer: HttpServer): void {
         }
       }
 
+      // Verify DM participation for dm channels
+      if (channelKey.startsWith("dm_")) {
+        const threadId = parseInt(channelKey.replace("dm_", ""), 10);
+        if (isNaN(threadId)) return;
+        const thread = await getThreadById(threadId);
+        if (!thread || (thread.userAId !== userId && thread.userBId !== userId)) return;
+      }
+
       socket.join(`bench:${channelKey}`);
       broadcastPresence(channelKey);
       logger.debug({ userId, channelKey }, "Bench: joined channel");
@@ -223,7 +232,13 @@ export function initBenchSocket(httpServer: HttpServer): void {
     });
 
     // ── Typing indicator ──────────────────────────────────
-    socket.on("bench:typing", ({ channelKey }: { channelKey: string }) => {
+    socket.on("bench:typing", async ({ channelKey }: { channelKey: string }) => {
+      if (channelKey.startsWith("org_")) {
+        const orgId = parseInt(channelKey.replace("org_", ""), 10);
+        if (isNaN(orgId)) return;
+        const userOrgIds = await getUserOrganisationIds(userId);
+        if (!userOrgIds.includes(orgId)) return;
+      }
       setTyping(channelKey, userId, userName);
       socket.to(`bench:${channelKey}`).emit("bench:typing", { channelKey, userId, userName });
     });
@@ -231,6 +246,12 @@ export function initBenchSocket(httpServer: HttpServer): void {
     // ── Reactions ─────────────────────────────────────────
     socket.on("bench:reaction:add", async ({ messageId, emoji }: { messageId: string; emoji: string }) => {
       try {
+        // Verify org membership if this message belongs to an org channel
+        const msgChannel = await getChannelForMessage(messageId);
+        if (msgChannel?.channelType === "organisation" && msgChannel.organisationId) {
+          const userOrgIds = await getUserOrganisationIds(userId);
+          if (!userOrgIds.includes(msgChannel.organisationId)) return;
+        }
         await addReaction(messageId, userId, emoji);
         const reactions = await getReactions(messageId);
         // Broadcast to all rooms this socket is in (scoped, not global)
@@ -247,6 +268,12 @@ export function initBenchSocket(httpServer: HttpServer): void {
 
     socket.on("bench:reaction:remove", async ({ messageId, emoji }: { messageId: string; emoji: string }) => {
       try {
+        // Verify org membership if this message belongs to an org channel
+        const msgChannel = await getChannelForMessage(messageId);
+        if (msgChannel?.channelType === "organisation" && msgChannel.organisationId) {
+          const userOrgIds = await getUserOrganisationIds(userId);
+          if (!userOrgIds.includes(msgChannel.organisationId)) return;
+        }
         await removeReaction(messageId, userId, emoji);
         const reactions = await getReactions(messageId);
         for (const room of socket.rooms) {

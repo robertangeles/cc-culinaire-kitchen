@@ -507,12 +507,13 @@ export async function receiveLine(
   receivedUnit: string,
   unitCost: string | null,
   userId: number,
+  orgId: number,
 ) {
-  // Validate PO status
+  // Validate PO status — AND org so a caller cannot receive on another org's PO
   const [po] = await db
     .select()
     .from(purchaseOrder)
-    .where(eq(purchaseOrder.poId, poId));
+    .where(and(eq(purchaseOrder.poId, poId), eq(purchaseOrder.organisationId, orgId)));
 
   if (!po) throw new Error("Purchase order not found");
   if (po.status !== "SUBMITTED" && po.status !== "PARTIALLY_RECEIVED") {
@@ -652,6 +653,7 @@ export async function getSuggestions(locationId: string, orgId: number) {
       and(
         eq(locationIngredient.storeLocationId, locationId),
         eq(locationIngredient.activeInd, true),
+        eq(ingredient.organisationId, orgId),
         sql`COALESCE(${stockLevel.currentQty}::numeric, 0) < COALESCE(${locationIngredient.parLevel}::numeric, 0)`,
         sql`${locationIngredient.parLevel} IS NOT NULL AND ${locationIngredient.parLevel}::numeric > 0`,
       ),
