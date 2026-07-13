@@ -56,3 +56,61 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+  # Real-database tenant-isolation boundary tests. Separate job so the main
+  # pipeline stays fast; spins up a throwaway Postgres, pushes the schema, and
+  # runs the TENANT_IT-gated suite (skipped everywhere else).
+  integration:
+    name: Tenant isolation (real DB)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        # pgvector image: the schema declares vector(1536) columns, so the
+        # extension must exist for `drizzle-kit push` to create them.
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: culinaire_it
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 15
+
+    env:
+      APP_ENV: dev
+      TENANT_IT: "1"
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/culinaire_it
+      DEV_DATABASE_URL: postgresql://ci:ci@localhost:5432/culinaire_it
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.31.0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Enable pgvector extension
+        run: PGPASSWORD=ci psql -h localhost -U ci -d culinaire_it -c "CREATE EXTENSION IF NOT EXISTS vector"
+
+      - name: Push schema to test database
+        run: pnpm --filter @culinaire/server db:push
+
+      - name: Run tenant-isolation integration tests
+        run: pnpm --filter @culinaire/server exec vitest run src/tenantIsolation.integration.test.ts
