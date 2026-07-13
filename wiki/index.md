@@ -66,6 +66,7 @@ Categories: **entity** (named things) · **concept** (patterns) · **decision** 
 | [Dev/prod database separation](decisions/dev-prod-db-separation.md) | Local dev runs on a local Postgres; boot guard blocks dev→remote DB. drizzle-kit versioned migrations rejected due to known schema drift | 2026-06-16 |
 | [Single .env file with DEV_/PROD_ prefixes](decisions/single-env-file.md) | One root `.env` for everything; `APP_ENV` switch + bootstrap shim copies prefixed values into unprefixed slots at startup | 2026-06-17 |
 | [Remove on-device prompt runtime](decisions/remove-device-runtime-prompts.md) | Mobile pivoted to server-side chat (2026-06-15); `prompt.runtime`, `/api/mobile/prompts/:slug`, on-device admin UI, and Antoine prompts removed | 2026-06-17 |
+| [Tenant-Isolation Remediation (July 2026)](decisions/tenant-isolation-remediation.md) | Red-team fixed ~51 cross-tenant holes across 8 PRs; user-first-then-org model; prod forensic sweep found no breach; required real-DB CI gate | 2026-07-14 |
 
 ## Synthesis
 | Page | Summary | Created |
@@ -74,6 +75,7 @@ Categories: **entity** (named things) · **concept** (patterns) · **decision** 
 | [Project Status](synthesis/project-status.md) | Phase-by-phase summary of shipped work, derived from `tasks/todo.md` | 2026-04-29 |
 | [Lessons Index](synthesis/lessons-index.md) | Discoverable index of the Problem/Fix/Rule entries in `tasks/lessons.md` | 2026-04-29 |
 | [Schema drift (May 2026)](synthesis/schema-drift-may-2026.md) | Known drift between Drizzle code and live DB; safe migration workflow until drift is zero | 2026-05-26 |
+| [Tenant Isolation](synthesis/tenant-isolation.md) | Multi-tenant model (user-first, then org), the July 2026 bug class + fix patterns, and the required real-DB regression gate | 2026-07-14 |
 
 ## Raw-index (pointers to immutable source content)
 | Page | Summary | Created |
