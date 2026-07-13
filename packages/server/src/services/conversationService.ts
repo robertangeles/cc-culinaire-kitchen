@@ -9,7 +9,7 @@
  * conversation via `conversation_id` FK.
  */
 
-import { eq, desc, and, isNull } from "drizzle-orm";
+import { eq, desc, and } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { conversation, message } from "../db/schema.js";
 

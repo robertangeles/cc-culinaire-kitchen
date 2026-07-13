@@ -6,7 +6,7 @@
 
 import { Router } from "express";
 import multer from "multer";
-import { authenticate, requireRole, requirePermission } from "../middleware/auth.js";
+import { authenticate, requireRole } from "../middleware/auth.js";
 import { upload } from "../middleware/upload.js";
 import {
   handleGetProfile,
