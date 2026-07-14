@@ -85,7 +85,7 @@ export const CATEGORIES: readonly CategoryDef[] = [
     label: "Beverages",
     validTypes: ["KITCHEN_INGREDIENT", "FOH_CONSUMABLE"],
   },
-  { key: "spirits", label: "Spirits", validTypes: ["KITCHEN_INGREDIENT"] },
+  { key: "spirits", label: "Spirits", validTypes: ["KITCHEN_INGREDIENT", "FOH_CONSUMABLE"] },
   { key: "frozen", label: "Frozen", validTypes: ["KITCHEN_INGREDIENT"] },
   { key: "bakery", label: "Bakery", validTypes: ["KITCHEN_INGREDIENT"] },
   { key: "condiments", label: "Condiments", validTypes: ["KITCHEN_INGREDIENT"] },
