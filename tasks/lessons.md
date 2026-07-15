@@ -468,3 +468,35 @@ the safety property it relies on is actually enforced — especially when the pl
 as different functions when `unitConversionService.ts:147` is
 `export const resolveToBase = convertToBase;`. Re-check the claims that matter, including
 your own reviewers'.
+
+## 2026-07-15 — drizzle-kit reads DEV_DATABASE_URL first, not DATABASE_URL
+
+**Problem.** Verifying that `pnpm db:push` could build the new storage-area tables,
+every attempt hung and created ZERO tables — even against a brand-new empty database.
+Two wrong diagnoses followed: first "the dev DB's drift", then "Postgres 18 vs
+drizzle-kit 0.30". Both were guesses dressed up as conclusions.
+
+**Root cause.** `packages/server/drizzle.config.ts:28-30`:
+```js
+config({ path: "../../.env" });
+const appEnv = (process.env.APP_ENV ?? "dev").toUpperCase();
+const databaseUrl = process.env[`${appEnv}_DATABASE_URL`] ?? process.env.DATABASE_URL;
+```
+It resolves `DEV_DATABASE_URL` FIRST. Overriding only `DATABASE_URL` is silently
+ignored, so every "probe" push was actually pointed at the real dev database — the
+drifted one that push can never finish on. The probe DB was never touched.
+
+**Fix.** To point drizzle-kit anywhere other than dev, set `DEV_DATABASE_URL`
+(or `APP_ENV` + the matching prefix). CI works because its job sets BOTH vars.
+
+**Verified once pointed correctly:** `db:push` completes (exit 0, "Changes applied")
+against a fresh pg16 — the same version CI uses — creating all three tables with all
+CHECKs enforcing. So push is not broken in general; it is broken *on the drifted dev
+DB specifically*, exactly as wiki/synthesis/schema-drift-may-2026.md says.
+
+**Rule.** When a tool "ignores" your env var, read its config file before theorising
+about versions or infrastructure. A config that silently prefers a different variable
+will let you run the same failing experiment repeatedly and draw a new wrong
+conclusion each time. This machine has a stopped pg16 cluster on port 5433
+(`sudo pg_ctlcluster 16 main start`) — use it to reproduce CI locally instead of
+guessing about version skew.
