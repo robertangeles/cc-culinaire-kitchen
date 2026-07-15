@@ -9,7 +9,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { useLocation } from "../../context/LocationContext.js";
 import { useLocationIngredients, useConsumptionLog, type ConsumptionLogEntry } from "../../hooks/useInventory.js";
 import { useMenuItems } from "../../hooks/useMenuItems.js";
-import { Search, Check, Pencil, Trash2, Loader2, ClipboardEdit, Clock, X } from "lucide-react";
+import { Search, Check, Pencil, Trash2, Loader2, ClipboardEdit, Clock, X, ArrowRightLeft } from "lucide-react";
 import { CATEGORY_LABELS } from "@culinaire/shared";
 
 /* ── Reason + Shift chips ───────────────────────────────────────── */
@@ -35,6 +35,17 @@ const SHIFTS = [
 const REASON_LABELS: Record<string, string> = Object.fromEntries(
   REASONS.map((r) => [r.key, r.label]),
 );
+
+/**
+ * Item types where "FOH" means the stock physically moved to the bar/floor but
+ * is still sellable — it hasn't been consumed. Logging those as usage deducts
+ * stock that later gets deducted AGAIN when the item sells, and shows up as
+ * phantom yield variance.
+ *
+ * OPERATIONAL_SUPPLY is deliberately absent: napkins taken to the floor really
+ * are consumed, so FOH usage is the correct entry for them.
+ */
+const FOH_MOVE_ITEM_TYPES: readonly string[] = ["KITCHEN_INGREDIENT", "FOH_CONSUMABLE"];
 
 /* ── Helpers ────────────────────────────────────────────────────── */
 
@@ -77,6 +88,7 @@ export default function ConsumptionLogger() {
   const [saving, setSaving] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showMoveWarning, setShowMoveWarning] = useState(false);
 
   /* --- inline edit state --- */
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -123,13 +135,20 @@ export default function ConsumptionLogger() {
     setTimeout(() => searchRef.current?.focus(), 50);
   }, []);
 
-  const handleSubmit = useCallback(async () => {
-    if (!selectedItem || !quantity || !reason || !selectedLocationId) return;
+  /**
+   * True when the operator is about to log sellable stock as "used" because it
+   * went to the bar or the floor. That stock hasn't been consumed — it moves
+   * with the venue and gets deducted for real when it sells, so logging it here
+   * deducts it twice and invents yield variance.
+   */
+  const needsMoveWarning =
+    reason === "foh_operations" &&
+    !!selectedItem &&
+    FOH_MOVE_ITEM_TYPES.includes(selectedItem.itemType);
+
+  const submitLog = useCallback(async () => {
+    if (!selectedItem || !selectedLocationId) return;
     const qty = parseFloat(quantity);
-    if (isNaN(qty) || qty <= 0) {
-      setError("Quantity must be greater than 0");
-      return;
-    }
     setSaving(true);
     setError(null);
     try {
@@ -145,6 +164,7 @@ export default function ConsumptionLogger() {
         notes: notes.trim() || undefined,
         storeLocationId: selectedLocationId,
       });
+      setShowMoveWarning(false);
       setShowSuccess(true);
       handleClearItem();
       refreshItems(); // reload stock levels after deduction/return
@@ -155,6 +175,20 @@ export default function ConsumptionLogger() {
       setSaving(false);
     }
   }, [selectedItem, quantity, reason, menuItemId, shift, notes, selectedLocationId, logConsumption, handleClearItem, refreshItems]);
+
+  const handleSubmit = useCallback(() => {
+    if (!selectedItem || !quantity || !reason || !selectedLocationId) return;
+    const qty = parseFloat(quantity);
+    if (isNaN(qty) || qty <= 0) {
+      setError("Quantity must be greater than 0");
+      return;
+    }
+    if (needsMoveWarning) {
+      setShowMoveWarning(true);
+      return;
+    }
+    void submitLog();
+  }, [selectedItem, quantity, reason, selectedLocationId, needsMoveWarning, submitLog]);
 
   const handleStartEdit = useCallback((entry: ConsumptionLogEntry) => {
     setEditingId(entry.consumptionLogId);
@@ -231,6 +265,51 @@ export default function ConsumptionLogger() {
         <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm animate-fade-in shadow-[0_0_16px_rgba(16,185,129,0.1)]">
           <Check size={16} />
           <span className="font-medium">Logged successfully</span>
+        </div>
+      )}
+
+      {/* ── "That's a move, not usage" guardrail ───────────────── */}
+      {showMoveWarning && selectedItem && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-[fadeIn_150ms_ease-out] p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="move-warning-title"
+        >
+          <div className="w-full max-w-md bg-[#111]/95 backdrop-blur-md border border-[#D4A574]/25 rounded-2xl p-6 space-y-4 shadow-[0_0_32px_rgba(212,165,116,0.12)]">
+            <div className="flex items-start gap-3">
+              <div className="mt-0.5 p-2 rounded-xl bg-[#D4A574]/10 border border-[#D4A574]/20">
+                <ArrowRightLeft size={18} className="text-[#D4A574]" />
+              </div>
+              <div className="space-y-1.5">
+                <h3 id="move-warning-title" className="text-base font-semibold text-[#EEE]">
+                  Taking stock to the bar or front of house?
+                </h3>
+                <p className="text-sm text-[#999] leading-relaxed">
+                  That's a move, not usage — {selectedItem.ingredientName} stays at this site
+                  until it's sold or wasted. Logging it as FOH usage deducts it now and again
+                  when it sells.
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 pt-1">
+              <button
+                onClick={() => setShowMoveWarning(false)}
+                disabled={saving}
+                className="px-4 py-2.5 rounded-xl text-sm font-medium text-[#999] hover:text-[#CCC] border border-[#2A2A2A] hover:border-[#3A3A3A] transition-colors disabled:opacity-50"
+              >
+                Go back
+              </button>
+              <button
+                onClick={() => void submitLog()}
+                disabled={saving}
+                className="px-4 py-2.5 rounded-xl text-sm font-medium bg-[#1A1A1A] border border-[#2A2A2A] text-[#CCC] hover:border-[#D4A574]/30 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {saving && <Loader2 size={14} className="animate-spin" />}
+                Log as usage anyway
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

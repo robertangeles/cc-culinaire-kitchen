@@ -47,6 +47,7 @@ export interface LocationIngredient {
   ingredientId: string;
   ingredientName: string;
   ingredientCategory: string;
+  itemType: string;
   /** THE kitchen unit — stock/counts/display all live in this unit. No lens. */
   baseUnit: string;
   contentQty: string | null;
