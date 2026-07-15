@@ -108,7 +108,49 @@ Menu items: **Glass — Belicard** ($12, recipe 150 mL) · **Bottle — Belicard
 
 ---
 
+## I. Storage areas — know what's at the bar without corrupting stock
+
+Shipped in PR #76 (B1). Prod schema is already applied. The whole feature exists because
+"moved 4 bottles to the bar" used to be logged as *usage*, which deducted them then and
+AGAIN at the sale, and showed as phantom yield variance.
+
+**Setup (Stock Room → Areas tab, org-admin only)**
+- [ ] Create **Stock Room** and **Bar**. The copy should say areas never change what you have.
+- [ ] Try to create an area called **Unassigned** → refused, in plain English, not a DB error.
+- [ ] Create **Bar** twice → refused ("this location already has an area called Bar").
+- [ ] Click an area's item count → add a wine → leave par blank → Save.
+      The tab's count must update to "1 item" **without a page reload**.
+- [ ] Add the same wine to the other area with **par 6**. Reorder the rows; the order sticks.
+
+**The invariant — the point of the whole feature**
+- [ ] Note the wine's site stock (Dashboard or Catalog). Call it **N**.
+- [ ] Transfers → **Move Between Areas** → move 4 bottles Stock Room → Bar → Record move.
+- [ ] **Site stock is STILL N.** Not N−4. If it changed, stop and raise it — that is the bug
+      this feature was built to make impossible.
+- [ ] The success banner says "site stock unchanged".
+
+**The guardrail**
+- [ ] Transfers → Internal Usage → reason **FOH** → pick a **wine** → qty 4 → Transfer.
+      → intercepted: "That's a move, not usage."
+- [ ] Click **Record as movement** → the movement form opens with the wine and qty 4 already
+      filled in. You should only have to answer "from where, to where".
+- [ ] Repeat with **Napkins** (Op Supply) + FOH → **no** intercept. Napkins taken to the floor
+      really are consumed.
+- [ ] Repeat with a wine + reason **Kitchen** → no intercept.
+- [ ] "Log as usage anyway" still works (staff comps are real).
+
+**The history**
+- [ ] Open the wine in Catalog → its transaction history shows the move as **Area Move**,
+      "Stock Room → Bar", alongside counts and usage.
+
+**Edges**
+- [ ] With fewer than 2 areas, Move Between Areas explains itself instead of showing a
+      broken form.
+- [ ] The "to" list never offers the area you picked as "from".
+
+---
+
 ## Sign-off
-- Tester: __________  Date: __________  Branch: `feature/ck-web/uom-and-recipe-selling`
+- Tester: __________  Date: __________  Branch: `main` (PR #75 UOM + #76 storage areas, both merged)
 - Overall: ☐ Pass ☐ Pass with notes ☐ Fail
 - Notes:
