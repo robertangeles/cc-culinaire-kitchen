@@ -258,6 +258,17 @@ PATCH/DELETE /consumption-logs/:id with no client caller.
 Real cost today is signal drowning: at 166 warnings nobody reads warnings, so the next
 real one is invisible.
 
+**Also in this chore — no catch-all route (found by /qa against main, 2026-07-15):**
+`packages/client/src/App.tsx` has no `path="*"` route. Any unknown URL (a typo, a stale
+link, `/chat` instead of `/chat/new`) returns 200 and renders the app shell with an EMPTY
+main — a white void against the dark theme, no "page not found", no way back. Verified:
+`/this-page-does-not-exist-xyz` → 200, main innerText 46 chars.
+- Add a `<Route path="*" element={<NotFound />} />` with a plain-English message and a
+  link home. Low severity, real, pre-existing on main.
+- Trap for whoever picks this up: `/chat` looks broken but ISN'T a route —
+  App.tsx:152-153 defines only `/chat/new` and `/chat/:id`. The blank page IS this bug,
+  not a broken Chat module. Chat itself is fine.
+
 Afterwards:
 1. **Extend the UAT doc** with section **I. Storage areas** (area counts sum to venue; movement
    log zero stock effect; guardrail intercepts FOH usage of sellable items; spot check never
