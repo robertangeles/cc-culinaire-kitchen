@@ -20,12 +20,13 @@ import { OpeningInventory } from "../components/inventory/OpeningInventory.js";
 import { CatalogRequestQueue } from "../components/inventory/CatalogRequestQueue.js";
 import ConsumptionLogger from "../components/inventory/ConsumptionLogger.js";
 import TransferList from "../components/inventory/TransferList.js";
+import StorageAreasTab from "../components/inventory/StorageAreasTab.js";
 import { Tooltip } from "../components/ui/Tooltip.js";
-import { Package, ClipboardCheck, Utensils, ShieldCheck, Settings, FileQuestion, FileEdit, ArrowRightLeft } from "lucide-react";
+import { Package, ClipboardCheck, Utensils, ShieldCheck, Settings, FileQuestion, FileEdit, ArrowRightLeft, Boxes } from "lucide-react";
 
 type TransferSubView = "usage" | "transfers";
 
-type InventoryTab = "dashboard" | "setup" | "stock-take" | "log" | "review" | "ingredients" | "requests";
+type InventoryTab = "dashboard" | "setup" | "stock-take" | "log" | "review" | "ingredients" | "requests" | "areas";
 
 export function InventoryPage() {
   const { user, isGuest } = useAuth();
@@ -53,6 +54,7 @@ export function InventoryPage() {
       t.push({ key: "review", label: "Review", icon: ShieldCheck });
       t.push({ key: "requests", label: "Requests", icon: FileQuestion });
       t.push({ key: "ingredients", label: "Catalog", icon: Utensils });
+      t.push({ key: "areas", label: "Areas", icon: Boxes });
     }
     return t;
   }, [isOrgAdmin]);
@@ -183,6 +185,7 @@ export function InventoryPage() {
             <IngredientCatalog />
           )}
           {activeTab === "requests" && isOrgAdmin && <CatalogRequestQueue />}
+          {activeTab === "areas" && isOrgAdmin && <StorageAreasTab />}
         </div>
       </div>
 

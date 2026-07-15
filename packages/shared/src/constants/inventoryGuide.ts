@@ -150,6 +150,25 @@ export const INVENTORY_TAB_GUIDES: Record<string, TabGuide> = {
     ],
   },
 
+  areas: {
+    key: "areas",
+    tooltip: "Name the places stock lives — Stock Room, Bar, Walk-in — to organise your count",
+    title: "Storage Areas Guide",
+    why: "Areas are count sheets, not separate stock. Your site still has one number per item — 24 bottles is 24 bottles whether they're in the cellar or behind the bar. What areas do is split the stocktake into the places you actually walk, so two people can count at once and nobody double-counts the same shelf. Give an area a par and you also get a restock list: 'Bar par is 6, you counted 2, bring up 4'.",
+    steps: [
+      "Add an area for each place you physically store stock — Stock Room, Bar, Walk-in, FOH counter.",
+      "Put them in the order you walk them. The count sheet follows that order.",
+      "Click the item count on an area to choose what lives there. An item can be in more than one area — wine in both the cellar and the bar is normal.",
+      "Set a par per area for anything you restock to a level. Leave it blank if you don't.",
+      "Order the items on each sheet shelf-by-shelf, so counting is a walk and not a hunt.",
+    ],
+    tips: [
+      "Defining an area never changes your stock. Neither does moving something between areas — the bottles are still on site and still sellable until they sell or get wasted.",
+      "Taking stock to the bar is a move, not usage. Log it under Transfers → Move between areas, not Internal Usage, or it gets deducted twice.",
+      "Removing an area keeps your count history — it just stops appearing on future sheets.",
+      "'Unassigned' is reserved: items you haven't put in any area still show up on the count under that name, so nothing gets missed.",
+    ],
+  },
   requests: {
     key: "requests",
     tooltip: "Review item requests — approve or reject new items submitted by location staff",
