@@ -26,7 +26,6 @@ import {
   locationIngredient,
   user,
   storeLocation,
-  pendingCatalogRequest,
 } from "../db/schema.js";
 import { convertToBase } from "./unitConversionService.js";
 import { varianceQty as calcVarianceQty, variancePct as calcVariancePct } from "./stockMath.js";

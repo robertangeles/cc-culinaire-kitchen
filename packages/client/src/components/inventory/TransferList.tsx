@@ -5,7 +5,7 @@
  * with status badges, action buttons, and drill-down to detail.
  */
 
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import { useLocation } from "../../context/LocationContext.js";
 import { useTransfers, useLocationIngredients, type Transfer, type LocationIngredient } from "../../hooks/useInventory.js";
 import {

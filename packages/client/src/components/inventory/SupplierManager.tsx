@@ -6,19 +6,29 @@
  * currency, location assignments, and linked items view.
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import {
   useSuppliers,
-  useIngredientSuppliers,
   type Supplier,
-  type IngredientSupplierLink,
 } from "../../hooks/useInventory.js";
 import { useLocation } from "../../context/LocationContext.js";
 import {
-  Plus, Search, Loader2, Truck, X, Check,
-  ChevronDown, ChevronRight, Mail, Phone, Clock,
-  DollarSign, Edit3, Package, MapPin, CreditCard,
-  ShoppingCart, CalendarDays, Globe,
+  Plus,
+  Search,
+  Loader2,
+  Truck,
+  Check,
+  ChevronDown,
+  ChevronRight,
+  Mail,
+  Phone,
+  Clock,
+  DollarSign,
+  Edit3,
+  CreditCard,
+  ShoppingCart,
+  CalendarDays,
+  Globe,
 } from "lucide-react";
 
 // ─── Constants ───────────────────────────────────────────────────

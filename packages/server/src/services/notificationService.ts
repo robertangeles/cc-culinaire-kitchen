@@ -6,7 +6,7 @@
  * Polymorphic: type + JSONB payload for type-specific data.
  */
 
-import { eq, and, ne, inArray, desc, sql } from "drizzle-orm";
+import { eq, and, ne, desc, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import {
   notification,

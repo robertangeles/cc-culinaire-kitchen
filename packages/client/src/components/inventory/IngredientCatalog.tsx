@@ -14,18 +14,22 @@ import {
   useIngredientSuppliers,
   type Ingredient,
   type LocationIngredient,
-  type IngredientStockLevel,
-  type IngredientSupplierLink,
   type Supplier,
 } from "../../hooks/useInventory.js";
 import { useLocation } from "../../context/LocationContext.js";
 import {
-  Plus, Search, Loader2, Utensils, X, Check,
-  DollarSign, ChevronDown, ChevronRight, Package, Truck,
-  AlertTriangle, Star, Trash2,
+  Plus,
+  Search,
+  Loader2,
+  Utensils,
+  X,
+  Check,
+  DollarSign,
+  Star,
+  Trash2,
 } from "lucide-react";
 import { TransactionHistory } from "./TransactionHistory.js";
-import { CATEGORIES, CATEGORY_LABELS, ITEM_TYPES, ITEM_TYPE_KEYS, FIFO_MODES, FIFO_DEFAULTS, getItemTypeStyle, getCategoriesForType, type ItemTypeKey, type FifoModeKey } from "@culinaire/shared";
+import { CATEGORIES, ITEM_TYPES, ITEM_TYPE_KEYS, FIFO_MODES, FIFO_DEFAULTS, getCategoriesForType, type ItemTypeKey, type FifoModeKey } from "@culinaire/shared";
 
 const UNITS = [
   "kg", "g", "mg",

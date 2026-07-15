@@ -12,7 +12,7 @@ import pino from "pino";
 import { Resend } from "resend";
 import { db } from "../db/index.js";
 import { wasteLog, user } from "../db/schema.js";
-import { sql, gte, lte } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { getWasteSummary, type WasteSummary } from "./wasteService.js";
 import { getAllSettings } from "./settingsService.js";
 import { decryptUserPii } from "./piiService.js";

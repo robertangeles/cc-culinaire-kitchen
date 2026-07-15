@@ -15,7 +15,6 @@ import {
   Copy,
   CheckCircle2,
   Key,
-  Users,
   ChevronDown,
   ChevronRight,
   RefreshCw,

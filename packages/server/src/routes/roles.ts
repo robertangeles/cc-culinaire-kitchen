@@ -11,7 +11,6 @@ import {
   handleCreateRole,
   handleUpdateRole,
   handleDeleteRole,
-  handleListPermissions,
   handleSetRolePermissions,
 } from "../controllers/roleController.js";
 

@@ -29,7 +29,7 @@
  *     location it's never been seen at MUST not silently drop the WAC.
  */
 
-import { sql, and, eq } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import type { DbOrTx } from "./auditService.js";
 import * as auditService from "./auditService.js";

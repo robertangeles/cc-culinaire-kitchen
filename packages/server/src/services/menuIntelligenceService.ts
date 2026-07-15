@@ -21,7 +21,7 @@
 import pino from "pino";
 import { db } from "../db/index.js";
 import { menuItem, menuItemIngredient, menuCategorySetting, wasteLog, ingredient, locationIngredient, user } from "../db/schema.js";
-import { eq, and, sql, desc, gte, ilike, inArray } from "drizzle-orm";
+import { eq, and, sql, gte, inArray } from "drizzle-orm";
 import { IncompatibleUnitsError } from "@culinaire/shared";
 import { resolveToBase } from "./unitConversionService.js";
 import { recordOpsEvent } from "./brainCaptureService.js";

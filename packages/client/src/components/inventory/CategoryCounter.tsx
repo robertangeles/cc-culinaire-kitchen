@@ -10,8 +10,10 @@
 
 import { useState, useEffect, useCallback } from "react";
 import {
-  useStockTake, useLocationIngredients,
-  type StockTakeCategory, type StockTakeLine, type LocationIngredient,
+  useStockTake,
+  useLocationIngredients,
+  type StockTakeCategory,
+  type StockTakeLine,
 } from "../../hooks/useInventory.js";
 import { useLocation } from "../../context/LocationContext.js";
 import { useOfflineSync } from "../../hooks/useOfflineSync.js";

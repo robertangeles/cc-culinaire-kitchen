@@ -15,7 +15,6 @@ import {
   AlertTriangle,
   Loader2,
   Truck,
-  Package,
   CheckCircle2,
 } from "lucide-react";
 

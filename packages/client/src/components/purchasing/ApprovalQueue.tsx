@@ -7,7 +7,7 @@
 
 import { useState, useCallback } from "react";
 import { useLocation } from "../../context/LocationContext.js";
-import { usePurchaseOrders, type PurchaseOrder } from "../../hooks/useInventory.js";
+import { usePurchaseOrders } from "../../hooks/useInventory.js";
 import { Check, X, Clock, Loader2, ShieldCheck, AlertTriangle } from "lucide-react";
 
 export default function ApprovalQueue() {

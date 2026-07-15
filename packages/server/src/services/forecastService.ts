@@ -9,7 +9,7 @@
  *   confidence = min(1, based_on_days / 30)
  */
 
-import { eq, and, desc, sql, gte, lte } from "drizzle-orm";
+import { eq, and, sql, gte } from "drizzle-orm";
 import { db } from "../db/index.js";
 import {
   forecastRecommendation,

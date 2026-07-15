@@ -33,7 +33,7 @@ import { sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import type { DbOrTx } from "./auditService.js";
 import * as auditService from "./auditService.js";
-import { ingredient, ingredientAlias } from "../db/schema.js";
+import { ingredientAlias } from "../db/schema.js";
 import { eq, and } from "drizzle-orm";
 
 // ─── Types ──────────────────────────────────────────────────────────

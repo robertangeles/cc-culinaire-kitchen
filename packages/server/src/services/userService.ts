@@ -7,7 +7,7 @@
 import bcrypt from "bcrypt";
 import { eq, ilike, or, desc, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
-import { decryptUserPii, encryptUserPii } from "./piiService.js";
+import { decryptUserPii } from "./piiService.js";
 import { encryptPii, hashForLookup } from "../utils/crypto.js";
 import {
   user,

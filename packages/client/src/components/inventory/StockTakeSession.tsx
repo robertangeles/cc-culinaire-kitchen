@@ -10,8 +10,15 @@ import { useState } from "react";
 import { useStockTake, type StockTakeCategory } from "../../hooks/useInventory.js";
 import { CategoryCounter } from "./CategoryCounter.js";
 import {
-  ClipboardCheck, Play, CheckCircle2, AlertTriangle,
-  Clock, Loader2, ChevronRight, Lock, ShieldCheck, Flag,
+  ClipboardCheck,
+  Play,
+  CheckCircle2,
+  AlertTriangle,
+  Clock,
+  Loader2,
+  ChevronRight,
+  Lock,
+  ShieldCheck,
 } from "lucide-react";
 import { CATEGORIES, CATEGORY_LABELS } from "@culinaire/shared";
 

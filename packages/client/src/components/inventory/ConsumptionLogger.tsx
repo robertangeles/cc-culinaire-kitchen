@@ -5,14 +5,11 @@
  * Designed for ~15 second completion per entry — search, qty, reason, done.
  */
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef } from "react";
 import { useLocation } from "../../context/LocationContext.js";
 import { useLocationIngredients, useConsumptionLog, type ConsumptionLogEntry, type LocationIngredient } from "../../hooks/useInventory.js";
 import { useMenuItems } from "../../hooks/useMenuItems.js";
-import { Search, Check, Pencil, Trash2, Loader2, ClipboardEdit, Clock, X, ArrowRightLeft } from "lucide-react";
-import { CATEGORY_LABELS } from "@culinaire/shared";
-
-/* ── Reason + Shift chips ───────────────────────────────────────── */
+import { Search, Check, Loader2, ClipboardEdit, Clock, X, ArrowRightLeft } from "lucide-react";/* ── Reason + Shift chips ───────────────────────────────────────── */
 
 const REASONS = [
   { key: "kitchen_operations", label: "Kitchen" },

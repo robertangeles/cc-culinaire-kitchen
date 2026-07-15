@@ -10,7 +10,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useLocation } from "../../context/LocationContext.js";
 import { CategoryCounter } from "./CategoryCounter.js";
 import { CompletionRing } from "./CompletionRing.js";
-import { CATEGORY_LABELS, STATUS_LEGEND } from "@culinaire/shared";
+import { CATEGORY_LABELS } from "@culinaire/shared";
 import type { StockTakeCategory } from "../../hooks/useInventory.js";
 import {
   Package, CheckCircle2, Play, Loader2, ArrowRight, Sparkles,

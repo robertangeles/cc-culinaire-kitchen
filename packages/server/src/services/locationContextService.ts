@@ -12,7 +12,6 @@ import { db } from "../db/index.js";
 import {
   user,
   userOrganisation,
-  userStoreLocation,
   userLocationPreference,
   storeLocation,
 } from "../db/schema.js";

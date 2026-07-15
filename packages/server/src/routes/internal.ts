@@ -7,7 +7,7 @@
 
 import { Router } from "express";
 import type { Request, Response, NextFunction } from "express";
-import { eq, and, lt, sql } from "drizzle-orm";
+import { eq, and, lt } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { purchaseOrder, supplier, storeLocation } from "../db/schema.js";
 import * as notificationService from "../services/notificationService.js";

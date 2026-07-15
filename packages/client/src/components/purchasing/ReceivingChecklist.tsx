@@ -10,7 +10,7 @@
  */
 
 import { useState, useCallback, useEffect } from "react";
-import { useReceiving, type LineAction, type ReceivingLine } from "../../hooks/useReceiving.js";
+import { useReceiving, type LineAction } from "../../hooks/useReceiving.js";
 import { type PurchaseOrder } from "../../hooks/useInventory.js";
 import {
   ArrowLeft,
@@ -23,9 +23,7 @@ import {
   Loader2,
   WifiOff,
   PartyPopper,
-  Truck,
   ChevronDown,
-  Camera,
 } from "lucide-react";
 
 interface Props {

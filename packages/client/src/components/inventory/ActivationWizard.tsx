@@ -15,7 +15,6 @@ import {
 import {
   CATEGORIES,
   CATEGORY_LABELS,
-  ITEM_TYPES,
   ITEM_TYPE_KEYS,
   getItemTypeStyle,
   getCategoriesForType,

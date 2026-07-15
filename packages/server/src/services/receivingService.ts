@@ -24,7 +24,6 @@ import {
   purchaseOrder,
   purchaseOrderLine,
   ingredient,
-  supplier,
 } from "../db/schema.js";
 import * as fifoService from "./fifoService.js";
 import * as stockService from "./stockService.js";

@@ -21,7 +21,7 @@ vi.mock("drizzle-orm", () => ({
   eq: vi.fn((a, b) => ({ field: a, value: b })),
 }));
 
-import { checkUsageLimit, decrementFreeSessions } from "./usage.js";
+import { checkUsageLimit } from "./usage.js";
 import { db } from "../db/index.js";
 
 function mockReq(user?: { sub: number }): Request {

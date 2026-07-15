@@ -7,7 +7,7 @@
  */
 
 import { useState, useCallback } from "react";
-import { Printer, Clock, Users, ChefHat, AlertTriangle, Thermometer, GlassWater, Flame, Wine, Hash, Sparkles, Share2, Copy, Check, Pencil, History, ImagePlus, Loader2 } from "lucide-react";
+import { Printer, Clock, Users, ChefHat, AlertTriangle, Thermometer, GlassWater, Flame, Wine, Hash, Sparkles, Share2, Pencil, History, ImagePlus, Loader2 } from "lucide-react";
 import type { RecipeDomain } from "./RecipeForm.js";
 import { RecipeShareBar } from "./RecipeShareBar.js";
 import RecipeRatings from "./RecipeRatings.js";

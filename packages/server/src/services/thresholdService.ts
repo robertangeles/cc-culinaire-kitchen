@@ -8,15 +8,12 @@
  * Resolution order: location override → org default → null (no threshold, always direct).
  */
 
-import { eq, and, isNull } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { db } from "../db/index.js";
 import {
   spendThreshold,
   organisation,
-  purchaseOrder,
   purchaseOrderLine,
-  ingredientSupplier,
-  ingredient,
 } from "../db/schema.js";
 import { sumPOLineTotal, shouldRouteToHQ } from "./poMath.js";
 import pino from "pino";

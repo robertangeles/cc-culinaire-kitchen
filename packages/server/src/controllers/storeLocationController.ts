@@ -10,7 +10,6 @@ import { z } from "zod";
 import {
   createStoreLocation,
   getStoreLocation,
-  getOrgStoreLocations,
   updateStoreLocation,
   deactivateStoreLocation,
   joinStoreLocation,
@@ -21,7 +20,6 @@ import {
   getLocationHours,
   setLocationHours,
   getLocationPulse,
-  getUserStoreLocations,
   hasLocationAccess,
 } from "../services/storeLocationService.js";
 import {

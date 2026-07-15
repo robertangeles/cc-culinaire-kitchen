@@ -18,7 +18,7 @@
  *  3. Final fallback → prose response (not persisted)
  */
 
-import { generateObject, generateText, NoObjectGeneratedError } from "ai";
+import { generateObject, NoObjectGeneratedError } from "ai";
 import { z } from "zod";
 import pino from "pino";
 import { getModel } from "./providerService.js";
