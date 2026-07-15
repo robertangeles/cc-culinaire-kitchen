@@ -10,7 +10,12 @@
 -- drizzle-kit push cannot be used on this database (pre-existing bench_channel drift +
 -- pg_stat_statements_info abort — see wiki/synthesis/schema-drift-may-2026.md).
 -- Apply: psql "$DEV_DATABASE_URL" -f packages/server/src/scripts/migrateStorageAreas.sql
--- Same script is the prod apply artifact later.
+--
+-- APPLIED TO PROD 2026-07-15. Verified after: 3 tables created, every FK indexed,
+-- all 3 CHECKs + both unique indexes present and enforcing, re-run clean (idempotent),
+-- stock_level untouched (55 rows, 0 triggers on the new tables).
+-- Backup taken immediately before: ~/culinaire-prod-backups/culinaire_prod_full_2026-07-15_231627.dump
+-- (65 MB, 700 TOC entries, 85 tables with data, validated via pg_restore --list).
 
 BEGIN;
 
