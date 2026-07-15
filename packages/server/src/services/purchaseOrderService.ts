@@ -27,6 +27,7 @@ import {
 import { validateTransition, PO_TRANSITIONS } from "../utils/stateTransition.js";
 import * as thresholdService from "./thresholdService.js";
 import * as notificationService from "./notificationService.js";
+import { resolveToBase } from "./unitConversionService.js";
 import pino from "pino";
 
 const logger = pino({ name: "purchaseOrderService" });
@@ -544,19 +545,32 @@ export async function receiveLine(
     .where(eq(purchaseOrderLine.lineId, lineId))
     .returning();
 
-  // Create FIFO batch
+  // Convert the received qty from its entered/packaging unit to the
+  // ingredient's KITCHEN unit at the receiving boundary — packaging (case,
+  // bag) must never touch the stock count directly. The unit cost converts
+  // with it (per-case → per-kitchen-unit) so FIFO/WAC stay consistent.
+  const { baseQty: receivedBaseQty } = await resolveToBase(
+    line.ingredientId,
+    Number(receivedQty),
+    receivedUnit || line.orderedUnit,
+  );
+  const conversionFactor = receivedBaseQty / Number(receivedQty);
+  const enteredCost = unitCost ?? line.unitCost;
+  const baseUnitCost = enteredCost != null ? String(Number(enteredCost) / conversionFactor) : enteredCost;
+
+  // Create FIFO batch (kitchen units + per-kitchen-unit cost)
   await db.insert(fifoBatch).values({
     storeLocationId: po.storeLocationId,
     ingredientId: line.ingredientId,
     arrivalDate: new Date(),
-    quantityRemaining: receivedQty,
-    originalQuantity: receivedQty,
-    unitCost: unitCost ?? line.unitCost,
+    quantityRemaining: String(receivedBaseQty),
+    originalQuantity: String(receivedBaseQty),
+    unitCost: baseUnitCost,
     sourcePoLineId: lineId,
     isDepleted: false,
   });
 
-  // Upsert stock level — add received qty
+  // Upsert stock level — add received qty (kitchen units)
   const existingStock = await db
     .select()
     .from(stockLevel)
@@ -571,7 +585,7 @@ export async function receiveLine(
     await db
       .update(stockLevel)
       .set({
-        currentQty: sql`${stockLevel.currentQty}::numeric + ${receivedQty}::numeric`,
+        currentQty: sql`${stockLevel.currentQty}::numeric + ${receivedBaseQty}::numeric`,
         updatedDttm: new Date(),
       })
       .where(eq(stockLevel.stockLevelId, existingStock[0].stockLevelId));
@@ -579,7 +593,7 @@ export async function receiveLine(
     await db.insert(stockLevel).values({
       storeLocationId: po.storeLocationId,
       ingredientId: line.ingredientId,
-      currentQty: receivedQty,
+      currentQty: String(receivedBaseQty),
     });
   }
 

@@ -2,7 +2,7 @@
 title: Reconciliation Matrix
 category: concept
 created: 2026-06-01
-updated: 2026-06-01
+updated: 2026-07-14
 related: [[formula-catalog]], [[technical-architecture]], [[data-flow-architecture]]
 ---
 
@@ -22,6 +22,9 @@ Cross-reference of every stock-affecting and cost-affecting operation in CulinAI
 | **Waste logging** (`wasteService`) | Decrease: quantity removed from usable stock | Waste cost tracked: `qty * unit_cost`. Categorised by reason (spoilage, over-prep, etc.). | Waste value should be reconcilable against total food cost. Waste % = waste cost / total food cost. | F-SK-02 |
 | **PO creation** | No immediate stock effect (stock changes on receipt, not on PO creation) | Line totals computed: `orderedQty * unitCost` per line. PO total = SUM of line totals. Threshold routing determines approval path. | PO total must equal SUM of line totals (F-PO-01). Routing decision (F-PO-04) must use server-computed total, never client-submitted. | F-PO-01, F-PO-04 |
 | **Menu cost recalculation** (`recalculateItemCosts`) | No stock effect | Line cost per ingredient (F-MC-01). Food cost per serving (F-MC-03). Food cost % (F-MC-04). Contribution margin (F-MC-05). Classification (F-MC-07). | food_cost must equal SUM(line_costs) / servings * (1 + qFactor/100). food_cost_pct must equal food_cost / selling_price * 100. CM must equal selling_price - food_cost. All stored values must be refreshable and reproducible. | F-UC-01, F-MC-01 through F-MC-07 |
+| **Recipe-based sale** (`saleService.recordSale`) | Decrease per recipe line: `deductStock(location, ingredient, qty÷yield÷servings×qtySold)`, unit-converted to base. Oversell allowed + flagged. | COGS at WAC (no FIFO layer depletion). `units_sold += qtySold` feeds menu engineering + theoretical variance. | Every stock-linked line resolves to base or the whole sale aborts (nothing deducts). Each depletion writes a `consumption_log` row tagged `menu_item_id` + `sale_id`, so actual (F-YV-02) reconciles against theoretical (F-YV-01). Reversible via `voidSale`. | F-SK-02, F-UC-01/02, F-YV-01/02 |
+| **Void sale** (`saleService.voidSale`) | Increase: restore every `consumption_log` row's base qty for the sale | `units_sold -= qtySold` (floored at 0) | Guarded against double-void (409); restores exactly what the sale depleted, once. | F-SK-01 |
+| **All stock flows** (receiving×2 / transfer / consumption / stock take / sale) | Quantities resolve to the KITCHEN unit (`base_unit`) via `unitConversionService.resolveToBase` at input time: purchase packaging × pack_qty, content equivalence ÷ content_qty (150 ml → 0.2 bottle), rows, family math | Receiving converts the unit cost too (per-case → per-kitchen-unit) so FIFO/WAC stay consistent | Stock, pars, and costs are ALWAYS in the kitchen unit; packaging (case/bag) exists only at order/receive; `consumption_log.base_qty` is what aggregations sum. | F-UC-01, F-UC-02 |
 
 ---
 

@@ -34,16 +34,28 @@ import {
   user,
 } from "../db/schema.js";
 import * as auditService from "./auditService.js";
+import { invalidateConversionCache } from "./unitConversionService.js";
 
 // ─── Org-wide ingredient catalog ──────────────────────────────────
 
-/** Create a new ingredient in the org catalog. */
+/**
+ * Create a new ingredient in the org catalog.
+ *
+ * Kitchen-unit model: `baseUnit` is THE unit the item is counted/stocked in
+ * (flour g, wine bottle). `contentQty`/`contentUnit` optionally state what one
+ * kitchen unit contains (1 bottle = 750 ml) so recipes can use measured units.
+ * `purchaseUnit` + `packQty` describe the primary purchase packaging
+ * (case of 12 bottles) used only at ordering/receiving.
+ */
 export async function createIngredient(
   organisationId: number,
   data: {
     ingredientName: string;
     ingredientCategory: string;
     baseUnit: string;
+    contentQty?: string | null;
+    contentUnit?: string | null;
+    purchaseUnit?: string | null;
     packQty?: string;
     description?: string;
     unitCost?: string;
@@ -64,6 +76,9 @@ export async function createIngredient(
       ingredientName: data.ingredientName.trim(),
       ingredientCategory: data.ingredientCategory,
       baseUnit: data.baseUnit,
+      contentQty: data.contentQty ?? null,
+      contentUnit: data.contentUnit ?? null,
+      purchaseUnit: data.purchaseUnit ?? null,
       packQty: data.packQty ?? null,
       description: data.description ?? null,
       unitCost: data.unitCost ?? null,
@@ -77,7 +92,69 @@ export async function createIngredient(
       isVegetarianInd: data.isVegetarianInd ?? false,
     })
     .returning();
+  invalidateConversionCache(row.ingredientId);
   return row;
+}
+
+/**
+ * Change an item's KITCHEN unit, converting everything stored in it — atomically.
+ *
+ * `factor` = old kitchen units per ONE new kitchen unit (ml → bottle: 750).
+ * Quantities divide by factor (6000 ml → 8 bottles); per-unit costs multiply
+ * ($0.02/ml → $15/bottle). Converts: stock_level.current_qty, ingredient
+ * par/reorder/unit_cost, location_ingredient par/reorder/unit_cost/WAC,
+ * fifo_batch quantities + unit_cost, and ingredient_supplier unit costs (the
+ * preferred-cost trigger then refreshes ingredient.preferred_unit_cost).
+ *
+ * Recipe lines (menu_item_ingredient) are NOT touched: they carry their own
+ * unit (e.g. "150 ml") and resolve through the content equivalence at
+ * depletion/cost time — set contentQty/contentUnit alongside this call.
+ */
+export async function changeKitchenUnit(
+  ingredientId: string,
+  organisationId: number,
+  newUnit: string,
+  factor: number,
+): Promise<void> {
+  if (!(factor > 0)) throw new Error("factor must be > 0");
+  await db.transaction(async (tx) => {
+    const [ing] = await tx
+      .select()
+      .from(ingredient)
+      .where(and(eq(ingredient.ingredientId, ingredientId), eq(ingredient.organisationId, organisationId)));
+    if (!ing) throw new Error("Ingredient not found in this organisation");
+
+    const f = String(factor);
+    await tx.execute(sql`
+      UPDATE stock_level SET current_qty = (current_qty::numeric / ${f}::numeric), updated_dttm = now()
+      WHERE ingredient_id = ${ingredientId}::uuid`);
+    await tx.execute(sql`
+      UPDATE fifo_batch SET quantity_remaining = (quantity_remaining::numeric / ${f}::numeric),
+        original_quantity = (original_quantity::numeric / ${f}::numeric),
+        unit_cost = (unit_cost::numeric * ${f}::numeric)
+      WHERE ingredient_id = ${ingredientId}::uuid`);
+    await tx.execute(sql`
+      UPDATE location_ingredient SET
+        par_level = (par_level::numeric / ${f}::numeric),
+        reorder_qty = (reorder_qty::numeric / ${f}::numeric),
+        unit_cost = (unit_cost::numeric * ${f}::numeric),
+        weighted_average_cost = (weighted_average_cost::numeric * ${f}::numeric),
+        updated_dttm = now()
+      WHERE ingredient_id = ${ingredientId}::uuid`);
+    // cost_per_unit is per kitchen unit → converts; pack_cost is per package
+    // (a case costs the same regardless of the kitchen unit) → untouched.
+    await tx.execute(sql`
+      UPDATE ingredient_supplier SET cost_per_unit = (cost_per_unit::numeric * ${f}::numeric)
+      WHERE ingredient_id = ${ingredientId}::uuid`);
+    await tx.execute(sql`
+      UPDATE ingredient SET base_unit = ${newUnit},
+        par_level = (par_level::numeric / ${f}::numeric),
+        reorder_qty = (reorder_qty::numeric / ${f}::numeric),
+        unit_cost = (unit_cost::numeric * ${f}::numeric),
+        updated_dttm = now()
+      WHERE ingredient_id = ${ingredientId}::uuid`);
+  });
+  invalidateConversionCache(ingredientId);
 }
 
 /**
@@ -253,7 +330,14 @@ export async function updateIngredient(
   data: Partial<{
     ingredientName: string;
     ingredientCategory: string;
+    /**
+     * NOTE: the kitchen unit. Editing it here does NOT convert existing stock —
+     * use changeKitchenUnit for a unit flip on an item that already has stock.
+     */
     baseUnit: string;
+    contentQty: string | null;
+    contentUnit: string | null;
+    purchaseUnit: string | null;
     packQty: string | null;
     description: string | null;
     unitCost: string | null;
@@ -273,6 +357,9 @@ export async function updateIngredient(
   if (data.ingredientName !== undefined) updates.ingredientName = data.ingredientName.trim();
   if (data.ingredientCategory !== undefined) updates.ingredientCategory = data.ingredientCategory;
   if (data.baseUnit !== undefined) updates.baseUnit = data.baseUnit;
+  if (data.contentQty !== undefined) updates.contentQty = data.contentQty;
+  if (data.contentUnit !== undefined) updates.contentUnit = data.contentUnit;
+  if (data.purchaseUnit !== undefined) updates.purchaseUnit = data.purchaseUnit;
   if (data.packQty !== undefined) updates.packQty = data.packQty;
   if (data.itemType !== undefined) updates.itemType = data.itemType;
   if (data.fifoApplicable !== undefined) updates.fifoApplicable = data.fifoApplicable;
@@ -297,7 +384,10 @@ export async function updateIngredient(
       ),
     )
     .returning();
-  return row ?? null;
+  if (!row) return null;
+  // Unit facts may have changed (packaging/content) — drop the resolver cache.
+  invalidateConversionCache(row.ingredientId);
+  return row;
 }
 
 // ─── Per-location ingredient config ───────────────────────────────
@@ -348,7 +438,13 @@ export async function listLocationIngredients(
       ingredientCategory: ingredient.ingredientCategory,
       itemType: ingredient.itemType,
       fifoApplicable: ingredient.fifoApplicable,
+      // Kitchen unit — stock/counts/display all live in this unit; no lens.
       baseUnit: ingredient.baseUnit,
+      // Content equivalence + purchase packaging (recipes / ordering surfaces).
+      contentQty: ingredient.contentQty,
+      contentUnit: ingredient.contentUnit,
+      purchaseUnit: ingredient.purchaseUnit,
+      packQty: ingredient.packQty,
       description: ingredient.description,
       orgUnitCost: ingredient.unitCost,
       orgParLevel: ingredient.parLevel,

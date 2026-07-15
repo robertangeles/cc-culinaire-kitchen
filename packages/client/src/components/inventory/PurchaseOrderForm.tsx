@@ -136,7 +136,9 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
         ingredientId: ing.ingredientId,
         ingredientName: ing.ingredientName,
         orderedQty: ing.reorderQty ?? "1",
-        orderedUnit: ing.baseUnit,
+        // Order in the purchase packaging (case/bag) when the item has one;
+        // receiving converts to kitchen units at the boundary.
+        orderedUnit: ing.purchaseUnit || ing.baseUnit,
         unitCost: ing.locationUnitCost ?? ing.orgUnitCost ?? "",
       },
     ]);
@@ -393,7 +395,7 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
                       <div className="text-sm font-medium text-white">{line.ingredientName}</div>
                       <div className="flex items-center gap-3 mt-0.5 text-xs">
                         <span className={stock < par && par > 0 ? "text-amber-400" : "text-[#666]"}>
-                          In stock: {stock.toFixed(1)} {line.orderedUnit}
+                          In stock: {stock.toFixed(1)} {ing?.baseUnit ?? ""}
                         </span>
                         {par > 0 && (
                           <span className="text-[#666]">Par: {par.toFixed(1)}</span>
@@ -425,17 +427,24 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
                     </div>
                     <div>
                       <label className="block text-[10px] uppercase tracking-wider text-[#666] mb-1">Unit</label>
-                      <input
-                        type="text"
+                      <select
                         value={line.orderedUnit}
                         onChange={(e) => updateLine(line.id, "orderedUnit", e.target.value)}
                         className="w-full px-2 py-1.5 rounded-lg text-sm bg-[#0A0A0A] text-white
                           border border-[#2A2A2A] focus:border-[#D4A574]/40
                           focus:shadow-[0_0_8px_rgba(212,165,116,0.12)] outline-none"
-                      />
+                      >
+                        {/* Purchase packaging first (case of 12), then the kitchen unit */}
+                        {ing?.purchaseUnit && (
+                          <option value={ing.purchaseUnit}>
+                            {ing.purchaseUnit}{ing.packQty ? ` (${Number(ing.packQty)} ${ing.baseUnit})` : ""}
+                          </option>
+                        )}
+                        <option value={ing?.baseUnit ?? line.orderedUnit}>{ing?.baseUnit ?? line.orderedUnit}</option>
+                      </select>
                     </div>
                     <div>
-                      <label className="block text-[10px] uppercase tracking-wider text-[#666] mb-1">Unit Cost ($)</label>
+                      <label className="block text-[10px] uppercase tracking-wider text-[#666] mb-1">Cost ($ per {line.orderedUnit || "unit"})</label>
                       <input
                         type="number"
                         value={line.unitCost}

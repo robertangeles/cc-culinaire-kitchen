@@ -18,7 +18,14 @@ export interface Ingredient {
   organisationId: number;
   ingredientName: string;
   ingredientCategory: string;
+  /** THE kitchen unit — the item is counted/stocked in this unit (g, ml, each, bottle). */
   baseUnit: string;
+  /** Content equivalence: 1 kitchen unit contains contentQty contentUnit (1 bottle = 750 ml). */
+  contentQty: string | null;
+  contentUnit: string | null;
+  /** Primary purchase packaging label (case, bag) — ordering/receiving only. */
+  purchaseUnit: string | null;
+  /** Kitchen units per purchase package (also the pack-cost helper). */
   packQty: string | null;
   description: string | null;
   unitCost: string | null;
@@ -40,7 +47,12 @@ export interface LocationIngredient {
   ingredientId: string;
   ingredientName: string;
   ingredientCategory: string;
+  /** THE kitchen unit — stock/counts/display all live in this unit. No lens. */
   baseUnit: string;
+  contentQty: string | null;
+  contentUnit: string | null;
+  purchaseUnit: string | null;
+  packQty: string | null;
   description: string | null;
   orgUnitCost: string | null;
   orgParLevel: string | null;

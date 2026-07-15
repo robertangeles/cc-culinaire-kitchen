@@ -18,6 +18,9 @@ export interface AutoPoLine {
   reorderQty: number | null;
   shortfall: number;
   suggestedQty: number;
+  purchaseUnit?: string | null;
+  packQty?: number | null;
+  suggestedPackages?: number | null;
   preferredUnitCost: number | null;
   estimatedCost: number | null;
 }

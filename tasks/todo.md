@@ -114,6 +114,15 @@ _Last updated: 2026-04-22. Reflects actual codebase state, not aspirational._
 - [x] Sidebar nav restructure for Kitchen Operations
 - [x] Playwright E2E suite for Purchasing & Receiving harness
 
+### Phase 12c — Kitchen-unit model + recipe-based selling (branch `feature/ck-web/uom-and-recipe-selling`)
+- [x] **Kitchen units**: every item counted in ONE unit (`base_unit` — wine: bottle via `changeKitchenUnit` migration, 17 items flipped); content equivalence (1 bottle = 750 mL) for recipe lines; purchase packaging (`purchase_unit` + `pack_qty`) converts only at ordering/receiving (qty + cost)
+- [x] One `resolveToBase` resolver (base → packaging → row (D9) → content ÷ → family → throw) at every flow; `consumption_log.base_qty` for safe aggregation
+- [x] **Two pre-existing bugs fixed**: legacy PO `receiveLine` added raw qty (no conversion); consumption summaries summed mixed units
+- [x] `sale` header + `recordSale` (preflight/commit, org boundary) → fractional kitchen-unit depletion feeding yield variance; `voidSale`; idempotency; two-phase CSV (per-row-content keys)
+- [x] FOH consumables sell **directly** (hidden auto 1:1 link); op supplies manual-log only
+- [x] Item setup = Counted in / Contains / Purchased as; PO in packaging units w/ per-case cost; auto-PO suggests whole packages; 31-case real-DB E2E (`UOM_IT=1`). See [[uom-and-recipe-selling]], `docs/qa/uom-recipe-selling-uat.md`
+- [ ] Follow-up (backlog, named in the plan): per-order supply allowance; prep-as-stock; central-kitchen BOM; live POS adapter; true FIFO/FEFO layer depletion (whole-app); density conversions
+
 ### Phase 13 — Landing + Admin UX
 - [x] Public landing page
 - [x] Kitchen profile accordion in admin settings
@@ -182,3 +191,51 @@ See "Implementation status" appendix in `docs/specs/brain-memory.md` for the 5 d
 
 **Phase 2:** org tier + ops capture + Labs/Copilot recall + rich Your-Brain UI + org-admin mgmt + org digests (T11-T15, D-T4).
 **Phase 3:** compaction + nudges + ranking tuning (T16-T18, D-T5).
+
+---
+
+## Storage Areas — post-v1 backlog (deferred 2026-07-15, CEO review)
+
+Context: v1 ships storage areas as count sheets (industry pattern: one venue stock number;
+areas organize the stocktake walk, hold per-area pars, snapshots from counts, zero-sum
+movement log). Plan: `~/.claude/plans/storage-areas-count-sheets.md`. These three were
+considered and deliberately deferred:
+
+- [ ] **"Counted + moved since" snapshot arithmetic** — show `Bar: 5 (counted Mon) +4 moved in since`
+  next to the count-date snapshot. Deferred: keeps snapshots honest-simple; build only if
+  operators say the count-date figure goes stale too fast between counts. Effort S.
+- [ ] **Per-area variance analytics** — bar shrinkage vs cellar shrinkage from area-tagged count
+  lines + movements. Mid-market feature; needs several count cycles of data first. The v1
+  schema (storage_area, area-tagged stock_take_line, stock_movement) is the exact foundation.
+  Effort M.
+- [ ] **Receive deliveries directly into an area** — optional to-area on receiving so the snapshot
+  reflects where the delivery was shelved. Deferred: receiving already converts pack→kitchen
+  units at the boundary; adding area routing before areas are habitual invites wrong data.
+  Effort S-M.
+
+---
+
+## ⏸ RESUME HERE (parked 2026-07-15) — after merging `feature/ck-web/uom-and-recipe-selling`
+
+State: kitchen-unit model + recipe selling COMPLETE and verified (31-case E2E, full regression
+green), committed + pushed on `feature/ck-web/uom-and-recipe-selling`, awaiting merge.
+UAT (`docs/qa/uom-recipe-selling-uat.md`): section A partially walked, B–H untested.
+
+Next conversation, in order:
+1. **Build storage areas as count sheets** — canonical, review-hardened plan:
+   `docs/specs/storage-areas-count-sheets.md` (CEO-reviewed 2026-07-15; 3-round adversarial
+   spec loop, 9/10; zero unresolved decisions — read it before anything else; run
+   `/plan-eng-review` on it first, then a fresh branch, e.g.
+   `feature/ck-web/storage-areas-count-sheets`).
+   - Critical implementation trap already identified in the plan: `updateStockLevelsFromSession`
+     (stockTakeService.ts:872–896) upserts stock PER LINE — AREA mode MUST use the GROUP BY SUM
+     variant or multi-area items get last-area-wins stock corruption.
+   - Step 0 of the plan (reverse the 4-bottle foh_operations entry) is ALREADY DONE (2026-07-15).
+2. **Extend the UAT doc** with section **I. Storage areas** (area counts sum to venue; movement
+   log zero stock effect; guardrail intercepts FOH usage of sellable items; spot check never
+   adjusts site stock) and re-seed fixture: Patisserie areas Stock Room + Bar, Shiraz assigned
+   to both with bar par 6.
+3. **Finish UAT sections A–H** for the kitchen-unit model, then sign off.
+
+Also uncommitted on purpose: `data/imports/` (supplier catalog import batches — separate
+workstream, keep out of this feature branch).

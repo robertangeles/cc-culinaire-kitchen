@@ -223,14 +223,19 @@ export default function DeliveryReceiving({ po, onBack }: Props) {
                   </div>
                   <div className="col-span-3">
                     <label className="block text-[10px] text-[#666] mb-0.5">Unit</label>
-                    <input
-                      type="text"
+                    <select
                       value={data?.receivedUnit ?? ""}
                       onChange={(e) => updateReceiveData(line.lineId, "receivedUnit", e.target.value)}
                       className="w-full px-2 py-1.5 rounded-lg text-sm bg-[#1A1A1A] text-white
                         border border-[#2A2A2A] focus:border-[#D4A574]/40
                         focus:shadow-[0_0_6px_rgba(212,165,116,0.1)] outline-none"
-                    />
+                    >
+                      {/* Ordered unit (packaging) + the kitchen unit; server converts at receipt */}
+                      <option value={line.orderedUnit}>{line.orderedUnit}</option>
+                      {line.baseUnit && line.baseUnit !== line.orderedUnit && (
+                        <option value={line.baseUnit}>{line.baseUnit}</option>
+                      )}
+                    </select>
                   </div>
                   <div className="col-span-3">
                     <label className="block text-[10px] text-[#666] mb-0.5">Unit cost ($)</label>

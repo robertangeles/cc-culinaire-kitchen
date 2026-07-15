@@ -112,14 +112,15 @@ export async function getYieldVariance(menuItemId: string): Promise<YieldVarianc
   const unitsSold = item.unitsSold ?? 0;
   const theoretical = perUnitRecipeCost * unitsSold;
 
-  // Actual: sum consumption_log.quantity × ingredient.preferred_unit_cost
+  // Actual: sum KITCHEN-unit consumption (base_qty; legacy rows fall back to
+  // quantity) × ingredient.preferred_unit_cost (cost per kitchen unit)
   // WHERE menu_item_id = thisDish AND logged_at BETWEEN period.
   const actualRows = await db.execute<{
     actual_cost: string | null;
     log_count: number | string;
   }>(sql`
     SELECT
-      COALESCE(SUM(c.quantity::numeric * COALESCE(i.preferred_unit_cost, 0)::numeric), 0) AS actual_cost,
+      COALESCE(SUM(COALESCE(c.base_qty, c.quantity)::numeric * COALESCE(i.preferred_unit_cost, 0)::numeric), 0) AS actual_cost,
       COUNT(*) AS log_count
     FROM consumption_log c
     JOIN ingredient i ON i.ingredient_id = c.ingredient_id

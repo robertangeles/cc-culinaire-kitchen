@@ -41,8 +41,11 @@ export interface MenuIngredient {
   note?: string | null;
   quantity: string;
   unit: string;
-  /** The catalog ingredient's base unit (what unitCost is denominated in). Null for unlinked rows. */
+  /** The catalog ingredient's KITCHEN unit (what unitCost is denominated in). Null for unlinked rows. */
   baseUnit?: string | null;
+  /** Content equivalence: 1 kitchen unit contains contentQty contentUnit (1 bottle = 750 ml). */
+  contentQty?: string | null;
+  contentUnit?: string | null;
   unitCost: string;
   /** The linked catalog ingredient's current per-unit cost. Used as a fallback
    *  when the stored unitCost is 0/empty so a linked row never shows $0. */
