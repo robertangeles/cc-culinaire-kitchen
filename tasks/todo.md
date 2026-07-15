@@ -1,5 +1,50 @@
 # CulinAIre Kitchen — TODO
 
+## ▶ START HERE — 2026-07-16
+
+Yesterday ended clean: **PR #76 (storage areas B1)** and **PR #77 (cleanup chore)** are both
+merged to `main`, CI green, prod schema applied and verified. Nothing is half-finished.
+
+### 1. UAT — `docs/qa/uom-recipe-selling-uat.md`
+Sections **A–H** (kitchen-unit model) were never walked; **section I** (storage areas) is new.
+The fixture is already seeded — say "re-seed UAT" to reset it.
+
+The one check that matters most, in section I: **move 4 bottles to the Bar and confirm site
+stock does NOT change.** That is the entire reason the feature exists. Everything else is
+detail.
+
+### 2. Five product decisions (found by the cleanup; flagged, not acted on)
+None are urgent. Each is "should this exist?", which is yours to answer, not a lint fix.
+
+| # | What | The decision |
+|---|---|---|
+| 1 | `DeliveryReceiving.tsx` — 295 lines, now referenced by nothing. The old receiving screen, superseded by `ReceivingChecklist`; receiving lives in Purchasing → ReceiveQueue. | Delete it, or keep as a fallback? |
+| 2 | `GET /locations/:locId/activation-status` — no client caller. It fed state nothing rendered (3 wasted round-trips, now removed). Not in any mobile contract. | Delete the endpoint, or was an "112 of 340 items activated" indicator meant to exist? |
+| 3 | `PATCH`/`DELETE /consumption-logs/:id` — no client caller since the edit flow went ("Entries are final — no edits"). Server still enforces ownership + a 24h window. Not in any mobile contract. | Delete, or keep deliberately for admin/mobile later? |
+| 4 | RecipeLab has **no "start over" control**. `handleReset` existed (cleared the recipe + sessionStorage); nothing called it. | Missing button, or intentional? Most likely a real UX gap. |
+| 5 | The **create-organisation form has no address inputs**. It sent 6 address fields that were permanently empty, so every org is created with no address. | Add the inputs, or is address captured elsewhere? |
+
+### 3. Then: B2 — AREA-mode counting
+`docs/specs/storage-areas-count-sheets.md`, branch `feature/ck-web/storage-areas-count-sheets`.
+**This is the only branch that changes stock writes.** It carries the two critical guards:
+- `updateStockLevelsFromSession` must GROUP BY SUM, not upsert per line (last-area-wins would
+  silently delete stock).
+- The uncounted-area guard, on **both** `submitSessionForReview` AND `checkAndAdvanceSession` —
+  they each exclude `NOT_STARTED` by design for cycle counts, which is safe in CATEGORY mode
+  and silently deletes stock in AREA mode.
+
+Then **B3** (snapshot, restock list, spot check).
+
+### 4. Backlog (approved 2026-07-15, was only in memory until now)
+**Promote Almost French's dev catalog to prod** — 112 ingredients with kitchen units, content
+equivalences, packaging and supplier links (org 2 dev → org 2 prod). Needs ID remapping, an
+org-scoped export/import, and a prod backup first. Prod currently has **0** ingredients for
+Almost French; all 112 live in dev only, which is why the UOM wine backfill was a no-op on
+prod. Dev and prod schemas are now identical, which is what makes this feasible. Do it when
+Almost French goes live in prod.
+
+---
+
 _Last updated: 2026-04-22. Reflects actual codebase state, not aspirational._
 
 > **Feature Catalog:** the complete "what exists now" feature list lives in the wiki at [`wiki/synthesis/features.md`](../wiki/synthesis/features.md). When you ship, change, or remove a feature, update that catalog (and bump its `updated:` date) as part of the work — this TODO tracks *what's planned*, the catalog tracks *what's built*.
