@@ -1275,6 +1275,28 @@ export async function getIngredientTransactions(
     transferRows = (trResult as any).rows ?? trResult ?? [];
   } catch { transferRows = []; }
 
+  // 5. Area-to-area moves within one site (Stock Room → Bar).
+  //    These have ZERO stock effect — the item never left the venue. They appear
+  //    here so "where did my stock go?" has an honest answer: it didn't go
+  //    anywhere, someone carried it to the bar.
+  let movementRows: any[] = [];
+  try {
+    const mvResult = await db.execute(sql`
+      SELECT sm.stock_movement_id as id, sm.quantity, sm.unit,
+             sm.moved_at as "occurredAt", u.user_name as "userName",
+             sa_from.area_name as "fromArea", sa_to.area_name as "toArea"
+      FROM stock_movement sm
+      INNER JOIN "user" u ON u.user_id = sm.user_id
+      INNER JOIN storage_area sa_from ON sa_from.storage_area_id = sm.from_storage_area_id
+      INNER JOIN storage_area sa_to ON sa_to.storage_area_id = sm.to_storage_area_id
+      WHERE sm.ingredient_id = ${ingredientId}
+        AND sm.organisation_id = ${organisationId}
+        AND sm.moved_at >= ${startDate}::timestamptz
+        AND sm.moved_at < ${endDate}::timestamptz
+    `);
+    movementRows = (mvResult as any).rows ?? mvResult ?? [];
+  } catch { movementRows = []; }
+
   // Merge all into unified TransactionEvent[]
   const transactions = [
     ...stockTakeRows.map((r: any) => ({
@@ -1312,6 +1334,16 @@ export async function getIngredientTransactions(
       reason: `${r.fromLocation} → ${r.toLocation}`,
       userName: r.userName || "Unknown",
       occurredAt: r.occurredAt instanceof Date ? r.occurredAt.toISOString() : String(r.occurredAt || r.created_dttm || ""),
+    })),
+    ...movementRows.map((r: any) => ({
+      id: r.id,
+      type: "movement" as const,
+      quantity: String(r.quantity),
+      unit: r.unit,
+      // Mirrors how transfer_loc formats its detail line.
+      reason: `${r.fromArea} → ${r.toArea}`,
+      userName: r.userName || "Unknown",
+      occurredAt: r.occurredAt instanceof Date ? r.occurredAt.toISOString() : String(r.occurredAt),
     })),
   ].sort((a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime());
 

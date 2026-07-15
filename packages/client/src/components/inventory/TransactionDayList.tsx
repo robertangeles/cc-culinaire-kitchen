@@ -5,23 +5,22 @@
  * Each row displays type icon, label, quantity, reason, user, and time.
  */
 
-import { ClipboardCheck, ArrowRightLeft, Trash2, Loader2, CalendarOff } from "lucide-react";
+import { ClipboardCheck, ArrowRightLeft, Trash2, Loader2, CalendarOff, Boxes } from "lucide-react";
 
-export interface TransactionEvent {
-  id: string;
-  type: "stock_take" | "transfer" | "transfer_loc" | "waste";
-  quantity: string;
-  unit: string;
-  reason: string | null;
-  userName: string;
-  occurredAt: string;
-}
+// Single source of truth — this file used to keep its own copy of the type and
+// the two drifted apart. See the docblock there for what each type name means
+// (they are not what you'd guess: "transfer" is consumption).
+export type { TransactionEvent } from "../../hooks/useInventory.js";
+import type { TransactionEvent } from "../../hooks/useInventory.js";
 
 const TYPE_CONFIG: Record<string, { label: string; icon: typeof ClipboardCheck; color: string; bg: string; border: string }> = {
   stock_take:   { label: "Counted", icon: ClipboardCheck, color: "text-emerald-400", bg: "bg-emerald-500/10", border: "border-emerald-500/20" },
   transfer:     { label: "Usage", icon: ArrowRightLeft, color: "text-[#D4A574]", bg: "bg-[#D4A574]/10", border: "border-[#D4A574]/20" },
   transfer_loc: { label: "Location Transfer", icon: ArrowRightLeft, color: "text-sky-400", bg: "bg-sky-500/10", border: "border-sky-500/20" },
   waste:        { label: "Waste", icon: Trash2, color: "text-red-400", bg: "bg-red-500/10", border: "border-red-500/20" },
+  // An area-to-area move. Deliberately NOT amber/red: nothing was used and
+  // nothing left the site, so it must not read like a deduction.
+  movement:     { label: "Area Move", icon: Boxes, color: "text-[#888]", bg: "bg-white/[0.04]", border: "border-white/10" },
 };
 
 const REASON_LABELS: Record<string, string> = {

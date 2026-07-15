@@ -255,6 +255,12 @@ PATCH/DELETE /consumption-logs/:id with no client caller.
 - Checked already, NOT a bug: roles.ts:14 `handleListPermissions` looks unwired but is
   wired at permissions.ts:14 as GET /api/permissions.
 - Finish by flipping the rule to `error` so it can't regrow.
+- **`no-useless-assignment` x4 in `ingredientService.getIngredientTransactions`**: each of
+  the now-five source blocks does `let xRows: any[] = []` then assigns in BOTH the try and
+  the catch, so the initializer is dead. Pre-existing on 3 (stockTakeRows:1190,
+  consumptionRows:1208, transferRows:1256); B1 added a 4th (movementRows) that deliberately
+  matches its siblings rather than being the odd one out. Fix all four together (drop the
+  `= []`), not one.
 Real cost today is signal drowning: at 166 warnings nobody reads warnings, so the next
 real one is invisible.
 

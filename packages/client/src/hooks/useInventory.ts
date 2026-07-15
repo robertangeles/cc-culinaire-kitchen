@@ -952,9 +952,25 @@ export function useConsumptionLog(locationId: string | null) {
 
 // ─── useIngredientTransactions ──────────────────────────────────
 
+/**
+ * One event in an item's history, from `GET /ingredients/:id/transactions`.
+ *
+ * The server merges five sources into this shape (ingredientService
+ * `getIngredientTransactions`). Mind the type names — they are NOT what you'd
+ * guess:
+ *   stock_take   a count
+ *   transfer     CONSUMPTION (internal usage). Not a transfer. Historical name.
+ *   transfer_loc an inter-LOCATION transfer — the one that really moves stock off site
+ *   waste        a waste log
+ *   movement     an area-to-area move within one site. ZERO stock effect.
+ *
+ * This is the single declaration. TransactionDayList imports it rather than
+ * keeping its own copy — they had drifted, and this one was missing
+ * `transfer_loc` even though the server has always emitted it.
+ */
 export interface TransactionEvent {
   id: string;
-  type: "stock_take" | "transfer" | "waste";
+  type: "stock_take" | "transfer" | "transfer_loc" | "waste" | "movement";
   quantity: string;
   unit: string;
   reason: string | null;

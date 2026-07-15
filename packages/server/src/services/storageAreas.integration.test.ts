@@ -27,6 +27,7 @@ import {
   listMovements,
   StockMovementError,
 } from "./stockMovementService.js";
+import { getIngredientTransactions } from "./ingredientService.js";
 
 /**
  * Real-DB suite for storage areas + stock movements (B1).
@@ -448,6 +449,26 @@ describe.skipIf(!RUN)("storage areas + stock movements — real DB", () => {
     for (let i = 1; i < rows.length; i++) {
       expect(rows[i - 1].movedAt.getTime()).toBeGreaterThanOrEqual(rows[i].movedAt.getTime());
     }
+  });
+
+  it("a move shows up in the item's transaction feed, as a move", async () => {
+    // "Where did my stock go?" must have an honest answer. The move belongs in
+    // the history — labelled as a move, next to the counts and the usage — or
+    // the operator is left guessing why the bar has bottles the cellar doesn't.
+    const month = new Date().toISOString().slice(0, 7);
+    const { transactions } = await getIngredientTransactions(fx.wineId, fx.orgId, month);
+
+    const moves = transactions.filter((t: { type: string }) => t.type === "movement");
+    expect(moves.length).toBeGreaterThanOrEqual(1);
+    expect(moves[0]).toMatchObject({
+      type: "movement",
+      unit: "bottle",
+      reason: "Stock Room → Bar",
+    });
+
+    // Newest-first ordering holds across the merged sources.
+    const times = transactions.map((t: { occurredAt: string }) => new Date(t.occurredAt).getTime());
+    expect([...times].sort((a, b) => b - a)).toEqual(times);
   });
 
   it("404s movements at a location in another org", async () => {
