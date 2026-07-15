@@ -17,6 +17,7 @@ import {
   useLocationIngredients,
   type StorageArea,
   type AreaItem,
+  type AreaItemInput,
 } from "../../hooks/useInventory.js";
 import {
   Boxes, Plus, Pencil, Trash2, Loader2, X, Check, Search,
@@ -27,14 +28,26 @@ import {
 
 function AreaItemsEditor({
   area,
+  getItems,
+  setItems,
   onClose,
 }: {
   area: StorageArea;
+  /**
+   * Passed in from the tab ON PURPOSE — do NOT call useStorageAreas() here.
+   *
+   * Each call to the hook builds its own state and its own refresh. When this
+   * editor owned an instance, saving refreshed the EDITOR's copy of `areas`
+   * (which it never renders) and left the tab's copy stale: you'd assign five
+   * items, hit Save, and the tab still read "0 items". Sharing the tab's
+   * functions means one save refreshes the list you're actually looking at.
+   */
+  getItems: (areaId: string) => Promise<AreaItem[]>;
+  setItems: (areaId: string, items: AreaItemInput[]) => Promise<void>;
   onClose: () => void;
 }) {
   const { selectedLocationId } = useLocation();
   const { items: locationItems } = useLocationIngredients(selectedLocationId);
-  const { getItems, setItems } = useStorageAreas(selectedLocationId);
 
   const [rows, setRows] = useState<AreaItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -243,7 +256,8 @@ function AreaItemsEditor({
 
 export default function StorageAreasTab() {
   const { selectedLocationId } = useLocation();
-  const { areas, isLoading, create, update, deactivate } = useStorageAreas(selectedLocationId);
+  const { areas, isLoading, create, update, deactivate, getItems, setItems } =
+    useStorageAreas(selectedLocationId);
 
   const [newName, setNewName] = useState("");
   const [creating, setCreating] = useState(false);
@@ -311,7 +325,12 @@ export default function StorageAreasTab() {
   return (
     <div className="space-y-4">
       {editingItemsFor && (
-        <AreaItemsEditor area={editingItemsFor} onClose={() => setEditingItemsFor(null)} />
+        <AreaItemsEditor
+          area={editingItemsFor}
+          getItems={getItems}
+          setItems={setItems}
+          onClose={() => setEditingItemsFor(null)}
+        />
       )}
 
       {/* Add an area */}
