@@ -203,6 +203,44 @@ describe.skipIf(!RUN)("storage areas + stock movements — real DB", () => {
     expect(await listAreaItems(bar.storageAreaId, fx.orgId)).toHaveLength(1);
   });
 
+  it("a par of null round-trips as NULL, never 0 — 'no par' is not 'par of zero'", async () => {
+    const areas = await listAreas(fx.locId, fx.orgId);
+    const bar = areas.find((a) => a.areaName === "Bar")!;
+
+    // Explicit null, and omitted entirely: both mean "nobody set a par here".
+    // The restock list only covers items WITH a par — collapsing null to 0 would
+    // make it demand you bring up every item you never set a par for.
+    const explicitNull = await setAreaItems(bar.storageAreaId, fx.orgId, [
+      { ingredientId: fx.wineId, areaParLevel: null },
+    ]);
+    expect(explicitNull[0].areaParLevel).toBeNull();
+
+    const omitted = await setAreaItems(bar.storageAreaId, fx.orgId, [
+      { ingredientId: fx.wineId },
+    ]);
+    expect(omitted[0].areaParLevel).toBeNull();
+
+    // ...and 0 is a real, different answer: "stock none of this here".
+    const zero = await setAreaItems(bar.storageAreaId, fx.orgId, [
+      { ingredientId: fx.wineId, areaParLevel: 0 },
+    ]);
+    expect(zero[0].areaParLevel).not.toBeNull();
+    expect(Number(zero[0].areaParLevel)).toBe(0);
+
+    // restore the fixture's par for later tests
+    await setAreaItems(bar.storageAreaId, fx.orgId, [
+      { ingredientId: fx.wineId, areaParLevel: 6, sortOrder: 0 },
+    ]);
+  });
+
+  it("refuses a negative par", async () => {
+    const areas = await listAreas(fx.locId, fx.orgId);
+    const bar = areas.find((a) => a.areaName === "Bar")!;
+    await expect(
+      setAreaItems(bar.storageAreaId, fx.orgId, [{ ingredientId: fx.wineId, areaParLevel: -1 }]),
+    ).rejects.toThrow(/can't be negative/i);
+  });
+
   it("refuses an item from another org, even smuggled in a batch", async () => {
     const areas = await listAreas(fx.locId, fx.orgId);
     const bar = areas.find((a) => a.areaName === "Bar")!;

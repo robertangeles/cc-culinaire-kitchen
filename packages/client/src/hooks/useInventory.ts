@@ -950,8 +950,6 @@ export function useConsumptionLog(locationId: string | null) {
   return { logs, isLoading, logConsumption, editLog, deleteLog, refresh };
 }
 
-// ─── useConsumptionSummary ───────────────────────────────────────
-
 // ─── useIngredientTransactions ──────────────────────────────────
 
 export interface TransactionEvent {
@@ -1185,30 +1183,6 @@ export function usePurchaseOrders(locationId: string | null) {
     pos, isLoading, refresh, getDetail, createPO, submitPO, cancelPO,
     receiveLine, getSuggestions, approvePO, rejectPO, clonePO, downloadPdf,
   };
-}
-
-// ─── useConsumptionSummary ───────────────────────────────────────
-
-function useConsumptionSummary() {
-  const [summary, setSummary] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(false);
-
-  const refresh = useCallback(async (startDate?: string, endDate?: string) => {
-    setIsLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (startDate) params.set("startDate", startDate);
-      if (endDate) params.set("endDate", endDate);
-      const res = await fetch(`${API}/consumption-logs/summary?${params}`, opts);
-      if (res.ok) setSummary(await res.json());
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { refresh(); }, [refresh]);
-
-  return { summary, isLoading, refresh };
 }
 
 // ─── useTransfers (Wave 4) ──────────────────────────────────────
