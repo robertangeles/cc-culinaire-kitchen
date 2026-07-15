@@ -88,7 +88,7 @@ export async function handleDatabaseStats(
 export async function handleDatabaseQuery(
   req: Request,
   res: Response,
-  next: NextFunction,
+  _next: NextFunction,
 ): Promise<void> {
   try {
     const { query } = req.body;

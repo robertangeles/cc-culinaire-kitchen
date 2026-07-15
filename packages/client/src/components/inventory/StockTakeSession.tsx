@@ -35,13 +35,10 @@ const STATUS_CONFIG: Record<string, { color: string; bg: string; border: string;
 export function StockTakeSession() {
   const {
     session, isLoading, openSession, claimCategory,
-    submitCategory, getDetail, approveSession, flagSession, submitForReview,
+    submitCategory, getDetail, submitForReview,
   } = useStockTake();
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [flagModalOpen, setFlagModalOpen] = useState(false);
-  const [flagReason, setFlagReason] = useState("");
-  const [flaggedCats, setFlaggedCats] = useState<Set<string>>(new Set());
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [selectedNewCats, setSelectedNewCats] = useState<Set<string>>(new Set(ALL_CATEGORIES.map(c => c.key)));
