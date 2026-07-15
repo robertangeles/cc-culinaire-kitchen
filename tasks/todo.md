@@ -215,27 +215,38 @@ considered and deliberately deferred:
 
 ---
 
-## ⏸ RESUME HERE (parked 2026-07-15) — after merging `feature/ck-web/uom-and-recipe-selling`
+## ⏸ RESUME HERE (parked 2026-07-15) — mid-B1 on `feature/ck-web/storage-areas-and-movements`
 
-State: kitchen-unit model + recipe selling COMPLETE and verified (31-case E2E, full regression
-green), committed + pushed on `feature/ck-web/uom-and-recipe-selling`, awaiting merge.
-UAT (`docs/qa/uom-recipe-selling-uat.md`): section A partially walked, B–H untested.
+PR #75 (kitchen-unit model + recipe selling) is MERGED. Eng review of the storage-areas spec
+is DONE and the spec is hardened — `docs/specs/storage-areas-count-sheets.md` is now the
+source of truth and is CEO + ENG CLEARED, zero unresolved decisions. **Read it before
+anything else.** It ships as THREE sequential branches (see its Build order table).
 
-Next conversation, in order:
-1. **Build storage areas as count sheets** — canonical, review-hardened plan:
-   `docs/specs/storage-areas-count-sheets.md` (CEO-reviewed 2026-07-15; 3-round adversarial
-   spec loop, 9/10; zero unresolved decisions — read it before anything else; run
-   `/plan-eng-review` on it first, then a fresh branch, e.g.
-   `feature/ck-web/storage-areas-count-sheets`).
-   - Critical implementation trap already identified in the plan: `updateStockLevelsFromSession`
-     (stockTakeService.ts:872–896) upserts stock PER LINE — AREA mode MUST use the GROUP BY SUM
-     variant or multi-area items get last-area-wins stock corruption.
-   - Step 0 of the plan (reverse the 4-bottle foh_operations entry) is ALREADY DONE (2026-07-15).
-2. **Extend the UAT doc** with section **I. Storage areas** (area counts sum to venue; movement
+**B1 `feature/ck-web/storage-areas-and-movements` — IN PROGRESS (2 commits, not pushed)**
+- ✅ T8: `itemType` added to `LocationIngredient` (`useInventory.ts:50`). Server already
+  selected it; the gap was client-only.
+- ✅ Guardrail: move-not-usage intercept in `ConsumptionLogger.tsx` + 6 tests (verified
+  non-vacuous). Client tsc/tests/build all green.
+- ⬜ **NEXT: `stock_movement` + `storage_area` + `ingredient_storage_area` schema**
+  (`migrateStorageAreas.sql`, step 1a — drizzle-kit push is blocked by pre-existing
+  bench_channel drift, so apply with `psql "$DEV_DATABASE_URL" -f`).
+- ⬜ `storageAreaService` + `stockMovementService` + routes + tests.
+- ⬜ Then wire the modal's **[Record as movement]** button — it's intentionally absent until
+  a movement path exists; the modal only offers "Go back" today.
+- ⬜ Areas admin as a NEW TOP-LEVEL `areas` tab in `InventoryPage.tsx:47-56` (there are no
+  sub-tabs in Stock Room — the spec's original "sub-tab" wording was wrong).
+
+**Then B2** (AREA-mode counting — the only branch that writes stock; carries the two CRITICAL
+guards: GROUP BY SUM instead of per-line upsert, AND the uncounted-area guard on BOTH
+`submitSessionForReview` and `checkAndAdvanceSession`). **Then B3** (snapshot/restock/spot check).
+
+Afterwards:
+1. **Extend the UAT doc** with section **I. Storage areas** (area counts sum to venue; movement
    log zero stock effect; guardrail intercepts FOH usage of sellable items; spot check never
    adjusts site stock) and re-seed fixture: Patisserie areas Stock Room + Bar, Shiraz assigned
    to both with bar par 6.
-3. **Finish UAT sections A–H** for the kitchen-unit model, then sign off.
+2. **Finish UAT sections A–H** for the kitchen-unit model (section A partially walked, B–H
+   untested), then sign off.
 
 Also uncommitted on purpose: `data/imports/` (supplier catalog import batches — separate
 workstream, keep out of this feature branch).
