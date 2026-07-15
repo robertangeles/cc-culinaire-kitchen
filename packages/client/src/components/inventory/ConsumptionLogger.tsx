@@ -7,7 +7,7 @@
 
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useLocation } from "../../context/LocationContext.js";
-import { useLocationIngredients, useConsumptionLog, type ConsumptionLogEntry } from "../../hooks/useInventory.js";
+import { useLocationIngredients, useConsumptionLog, type ConsumptionLogEntry, type LocationIngredient } from "../../hooks/useInventory.js";
 import { useMenuItems } from "../../hooks/useMenuItems.js";
 import { Search, Check, Pencil, Trash2, Loader2, ClipboardEdit, Clock, X, ArrowRightLeft } from "lucide-react";
 import { CATEGORY_LABELS } from "@culinaire/shared";
@@ -66,7 +66,17 @@ function isToday(iso: string): boolean {
 
 /* ── Component ──────────────────────────────────────────────────── */
 
-export default function ConsumptionLogger() {
+export default function ConsumptionLogger({
+  onRecordMovement,
+}: {
+  /**
+   * Escape route for the "that's a move, not usage" guardrail: hands the item
+   * and amount to the movement form so the operator doesn't retype them.
+   * Optional — when absent the guardrail still warns, it just can't offer the
+   * redirect.
+   */
+  onRecordMovement?: (prefill: { item: LocationIngredient; quantity: number }) => void;
+} = {}) {
   const { selectedLocationId } = useLocation();
   const { items: locationItems, isLoading: itemsLoading, refresh: refreshItems } =
     useLocationIngredients(selectedLocationId);
@@ -308,6 +318,23 @@ export default function ConsumptionLogger() {
                 {saving && <Loader2 size={14} className="animate-spin" />}
                 Log as usage anyway
               </button>
+              {/* The right answer, so it gets the weight. Absent until there's a
+                  movement form to send them to. */}
+              {onRecordMovement && (
+                <button
+                  onClick={() =>
+                    onRecordMovement({
+                      item: selectedItem,
+                      quantity: parseFloat(quantity),
+                    })
+                  }
+                  disabled={saving}
+                  className="px-4 py-2.5 rounded-xl text-sm font-semibold bg-gradient-to-r from-[#D4A574] to-[#C4956A] text-[#0A0A0A] transition-all hover:shadow-[0_0_20px_rgba(212,165,116,0.2)] hover:brightness-110 disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  <ArrowRightLeft size={14} />
+                  Record as movement
+                </button>
+              )}
             </div>
           </div>
         </div>

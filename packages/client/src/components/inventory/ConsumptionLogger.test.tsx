@@ -139,6 +139,36 @@ describe("ConsumptionLogger — move-not-usage guardrail", () => {
     );
   });
 
+  it("'Record as movement' hands the item and amount to the movement form", async () => {
+    const onRecordMovement = vi.fn();
+    render(<ConsumptionLogger onRecordMovement={onRecordMovement} />);
+    await fillEntry("FOH", "Shiraz");
+    submit();
+    await screen.findByRole("dialog");
+
+    fireEvent.click(screen.getByRole("button", { name: /record as movement/i }));
+
+    // The redirect is the point of the guardrail: it must carry the operator's
+    // work across, and must NOT write the consumption log it just intercepted.
+    expect(onRecordMovement).toHaveBeenCalledWith({
+      item: expect.objectContaining({ ingredientId: "ing-1", ingredientName: "Shiraz" }),
+      quantity: 4,
+    });
+    expect(logConsumption).not.toHaveBeenCalled();
+  });
+
+  it("offers no movement redirect when there's nowhere to send them", async () => {
+    // No onRecordMovement prop: the warning still fires, but a button that
+    // goes nowhere would be worse than no button.
+    render(<ConsumptionLogger />);
+    await fillEntry("FOH", "Shiraz");
+    submit();
+    await screen.findByRole("dialog");
+
+    expect(screen.queryByRole("button", { name: /record as movement/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /log as usage anyway/i })).toBeInTheDocument();
+  });
+
   it("'Go back' dismisses without writing anything", async () => {
     render(<ConsumptionLogger />);
     await fillEntry("FOH", "Shiraz");

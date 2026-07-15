@@ -240,6 +240,24 @@ anything else.** It ships as THREE sequential branches (see its Build order tabl
 guards: GROUP BY SUM instead of per-line upsert, AND the uncounted-area guard on BOTH
 `submitSessionForReview` and `checkAndAdvanceSession`). **Then B3** (snapshot/restock/spot check).
 
+**Chore, queued (agreed 2026-07-15, do AFTER B1 lands — not inside it):**
+`chore/ck-web/unused-vars-sweep`. 81 files / 166 unused-var warnings on main
+(109 unused imports, 57 unused locals). The rule is `"warn"` in eslint.config.js:29 and
+`eslint src/` has no `--max-warnings`, so nothing gates on them. Mostly residue from
+removed features — e.g. ConsumptionLogger.tsx has an UNREACHABLE edit branch at :636
+(`editingId` can only be set by `handleStartEdit`, which nothing calls) left behind when
+"Entries are final — no edits" (:718) landed; the server still exposes
+PATCH/DELETE /consumption-logs/:id with no client caller.
+- Imports (109): mechanical delete.
+- Locals (57): NOT mechanical — each is a question, "is this dead code or UI someone
+  forgot to render?" (e.g. ActivationWizard.tsx:57 `activationStatus`). That triage is
+  where the value is.
+- Checked already, NOT a bug: roles.ts:14 `handleListPermissions` looks unwired but is
+  wired at permissions.ts:14 as GET /api/permissions.
+- Finish by flipping the rule to `error` so it can't regrow.
+Real cost today is signal drowning: at 166 warnings nobody reads warnings, so the next
+real one is invisible.
+
 Afterwards:
 1. **Extend the UAT doc** with section **I. Storage areas** (area counts sum to venue; movement
    log zero stock effect; guardrail intercepts FOH usage of sellable items; spot check never
