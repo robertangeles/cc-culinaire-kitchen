@@ -1555,6 +1555,161 @@ export const locationIngredient = pgTable(
 );
 
 /**
+ * The `storage_area` table names a physical place within ONE site —
+ * Stock Room, Bar, FOH Counter, Walk-in.
+ *
+ * Areas are COUNT SHEETS, not ledgers. There is exactly one live on-hand
+ * number per item per venue, and it lives in `stock_level` keyed
+ * (store_location_id, ingredient_id) — areas never key stock. What areas do
+ * is organise the stocktake walk ("shelf-to-sheet") and hold per-area pars:
+ *
+ *   ORDER ──receive──▶ VENUE STOCK (ONE number) ──sale/waste──▶ gone
+ *                           ▲            │
+ *              counts SUM up│            │organises the walk
+ *                           │            ▼
+ *                  ┌ Stock Room ─ Bar ─ FOH ┐   ← count sheets
+ *                  └ stock_movement (0 stock)┘  ← audit only
+ *
+ * Why no per-area ledger: every physical move would need a matching data
+ * entry or the ledgers drift within days. Vendor research (Restaurant365,
+ * xtraCHEF/Toast, Apicbase, Backbar) converges on this same model at this
+ * market tier.
+ *
+ * OLTP table, 2NF — every non-key column depends only on the PK.
+ */
+export const storageArea = pgTable(
+  "storage_area",
+  {
+    storageAreaId: uuid("storage_area_id").defaultRandom().primaryKey(),
+    organisationId: integer("organisation_id").notNull().references(() => organisation.organisationId),
+    storeLocationId: uuid("store_location_id").notNull().references(() => storeLocation.storeLocationId),
+    areaName: varchar("area_name", { length: 50 }).notNull(),
+    sortOrder: integer("sort_order").notNull().default(0),
+    /** Soft delete — deactivating an area with assignments keeps history intact. */
+    activeInd: boolean("active_ind").notNull().default(true),
+    createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
+    updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // One area name per site. AREA-mode stock-take category names ARE area names, so
+    // idx_stock_take_category_unique(sessionId, categoryName) depends on this holding.
+    uniqueIndex("storage_area_name_unique").on(table.storeLocationId, table.areaName),
+    // FK index: "list the areas at this location" — areas admin + every AREA-mode session open
+    index("idx_storage_area_location").on(table.storeLocationId),
+    // FK index: org-scoped listings + tenant guard lookups
+    index("idx_storage_area_org").on(table.organisationId),
+    // CHECK: 'Unassigned' is the reserved sentinel for the AREA-mode bucket holding items
+    // that belong to no area. A real area by that name would make the bucket ambiguous.
+    // storageAreaService also rejects it with a plain message so operators never see a raw
+    // constraint error; this defends against direct SQL writes.
+    check(
+      "storage_area_name_not_reserved",
+      sql`${table.areaName} <> 'Unassigned'`,
+    ),
+  ],
+);
+
+/**
+ * The `ingredient_storage_area` junction records which areas an item lives in.
+ *
+ * An item can sit on several sheets (wine: Stock Room + Bar). Its per-area
+ * counts SUM to the venue count at approval — see the AREA-mode branch of
+ * stockTakeService.updateStockLevelsFromSession. Counting an item in two areas
+ * and upserting per line would make the last area win and silently delete the
+ * rest, which is why that path groups by ingredient.
+ *
+ * OLTP table, 2NF — every non-key column depends on the composite
+ * (ingredient_id, storage_area_id).
+ */
+export const ingredientStorageArea = pgTable(
+  "ingredient_storage_area",
+  {
+    ingredientStorageAreaId: uuid("ingredient_storage_area_id").defaultRandom().primaryKey(),
+    ingredientId: uuid("ingredient_id").notNull().references(() => ingredient.ingredientId),
+    storageAreaId: uuid("storage_area_id").notNull().references(() => storageArea.storageAreaId),
+    /**
+     * In the item's kitchen unit (= ingredient.base_unit), following the
+     * location_ingredient.par_level precedent. Drives the restock list:
+     * max(0, par - last counted qty in this area) → "bring up 4".
+     */
+    areaParLevel: numeric("area_par_level", { precision: 10, scale: 3 }),
+    /** Shelf-to-sheet order — the sequence the counter walks the shelf. */
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
+    updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // One assignment per item per area
+    uniqueIndex("ingredient_storage_area_unique").on(table.ingredientId, table.storageAreaId),
+    // FK index: "what's on this area's count sheet"
+    index("idx_ingredient_storage_area_area").on(table.storageAreaId),
+    // FK index: "which areas is this item in" — the ingredient modal's area chips
+    index("idx_ingredient_storage_area_ingredient").on(table.ingredientId),
+  ],
+);
+
+/**
+ * The `stock_movement` table is the audit trail for physical moves between
+ * areas — "4 bottles, Stock Room → Bar".
+ *
+ * ZERO STOCK EFFECT BY DESIGN. This is the whole point of the table, not an
+ * oversight: bottles carried to the bar are still on site and still sellable,
+ * so venue stock must not change. Before this existed, the product's only
+ * vocabulary for "restocked the bar" was to CONSUME the stock — which deducted
+ * it once at the move and again at the sale, and showed the gap as phantom
+ * yield variance.
+ *
+ * Nothing in this table's write path may touch `stock_level`.
+ *
+ * OLTP table, 2NF — every non-key column depends only on the PK.
+ */
+export const stockMovement = pgTable(
+  "stock_movement",
+  {
+    stockMovementId: uuid("stock_movement_id").defaultRandom().primaryKey(),
+    organisationId: integer("organisation_id").notNull().references(() => organisation.organisationId),
+    storeLocationId: uuid("store_location_id").notNull().references(() => storeLocation.storeLocationId),
+    ingredientId: uuid("ingredient_id").notNull().references(() => ingredient.ingredientId),
+    fromStorageAreaId: uuid("from_storage_area_id").notNull().references(() => storageArea.storageAreaId),
+    toStorageAreaId: uuid("to_storage_area_id").notNull().references(() => storageArea.storageAreaId),
+    quantity: numeric("quantity", { precision: 10, scale: 3 }).notNull(),
+    unit: varchar("unit", { length: 20 }).notNull(),
+    /** Resolver-converted at insert via resolveToBase — mirrors consumption_log.base_qty. */
+    baseQty: numeric("base_qty", { precision: 12, scale: 4 }).notNull(),
+    userId: integer("user_id").notNull().references(() => user.userId),
+    notes: text("notes"),
+    /** Domain event time, cf. consumption_log.logged_at. created/updated track the row. */
+    movedAt: timestamp("moved_at", { withTimezone: true }).defaultNow().notNull(),
+    createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
+    updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // FK index: the item transaction feed reads movements per ingredient, newest first
+    index("idx_stock_movement_ingredient").on(table.ingredientId, table.movedAt),
+    // FK index: "movements at this location" listing, newest first
+    index("idx_stock_movement_location").on(table.storeLocationId, table.movedAt),
+    // FK index: org-scoped tenant guard lookups
+    index("idx_stock_movement_org").on(table.organisationId),
+    // FK index: "what moved out of / into this area"
+    index("idx_stock_movement_from_area").on(table.fromStorageAreaId),
+    index("idx_stock_movement_to_area").on(table.toStorageAreaId),
+    // FK index: the audit question — "who moved what"
+    index("idx_stock_movement_user").on(table.userId),
+    // CHECK: a move is a positive quantity. Negative/zero would be a no-op or a
+    // disguised reverse move; the service validates too, this defends direct SQL.
+    check(
+      "stock_movement_qty_positive",
+      sql`${table.quantity} > 0`,
+    ),
+    // CHECK: a move must go somewhere. from === to is always a bug.
+    check(
+      "stock_movement_areas_differ",
+      sql`${table.fromStorageAreaId} <> ${table.toStorageAreaId}`,
+    ),
+  ],
+);
+
+/**
  * The `unit_conversion` table maps alternative counting units to an
  * ingredient's canonical base unit.
  *

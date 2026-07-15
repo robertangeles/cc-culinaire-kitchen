@@ -95,12 +95,22 @@ unit                  varchar(20) NOT NULL
 base_qty              numeric(12,4) NOT NULL   -- resolver-converted at insert (kitchen units)
 user_id               integer NOT NULL FK
 notes                 text NULL
-moved_dttm            timestamptz NOT NULL DEFAULT now()
-created_dttm / updated_dttm
+moved_at              timestamptz NOT NULL DEFAULT now()   -- domain event time
+created_dttm / updated_dttm                                -- row lifecycle
 CHECK (from_storage_area_id <> to_storage_area_id)
 ```
 2NF. Service validates both areas belong to the same `store_location_id` + org (cross-tenant
 guard) and the ingredient belongs to the org. Writes touch NO stock table.
+
+**Timestamp convention (settled 2026-07-15, round 3 — an earlier eng-review "correction" to
+`moved_dttm` was WRONG and is reverted).** The schema uses BOTH suffixes, deliberately:
+`_dttm` for row lifecycle (130 columns: `created_dttm`, `updated_dttm`, `opened_dttm`,
+`closed_dttm`) and `_at` for domain event times (22 columns: `sold_at`, `voided_at`,
+`approved_at`, `submitted_at`, `wac_last_recomputed_at`). The decisive precedent is
+`consumption_log` — the table `stock_movement` most directly parallels — which carries both at
+once: `logged_at` for when the usage happened, plus `created_dttm`/`updated_dttm` for the row
+(schema.ts:1856-1858). `stock_movement` follows it exactly: `moved_at` + `created_dttm`/
+`updated_dttm`. Do not "fix" `moved_at` to `moved_dttm`.
 
 ### Extended: stock take tables (nullable columns — fully backward compatible)
 ```
@@ -176,9 +186,13 @@ must win). Two corrections from eng review 2026-07-15, both verified against sch
 
 1. **`stock_take_line` has NO `session_id`.** It links via `category_id`
    (schema.ts:1674–1678), so the join goes through `stock_take_category`.
-2. **There is no approval-timestamp column.** No `approved_at` exists. `approveSession`
-   (stockTakeService.ts:572–573) sets `closed_dttm` and `approved_by_user_id` at approval,
-   so `closed_dttm` filtered on `session_status = 'APPROVED'` IS the approval timestamp.
+2. **`stock_take_session` has no approval-timestamp column.** It has `approved_by_user_id`
+   but no `approved_at` (full def at schema.ts:1600-1625). `approveSession`
+   (stockTakeService.ts:572–573) sets `closed_dttm` at approval, so `closed_dttm` filtered on
+   `session_status = 'APPROVED'` IS the approval timestamp here.
+   *(Precision, corrected round 3: an `approved_at` column DOES exist elsewhere — on
+   `purchase_order`, schema.ts:1896. It is unrelated to stock takes; don't let it mislead you
+   into thinking the stock-take path has one.)*
 
 ```sql
 SELECT DISTINCT ON (l.storage_area_id, l.ingredient_id)
@@ -631,6 +645,16 @@ Synthesized from this review's findings. Each task derives from a specific findi
   `convertToBase` are NOT different functions (`unitConversionService.ts:147`:
   `export const resolveToBase = convertToBase;`), and `area_par_level` being "fictitious" is
   expected — this plan introduces it.
+- **ROUND 3 — the eng review's own error, caught at implementation (2026-07-15).** The round-1
+  "naming correction" of `moved_at` → `moved_dttm` was WRONG, and its justification ("no `_at`
+  column exists anywhere in the schema") was fabricated — the schema has 22 `_at` columns. The
+  spec's original `moved_at` was correct: `_at` is this schema's convention for *domain event*
+  times and `_dttm` for *row lifecycle*, and `consumption_log` (the nearest sibling table)
+  carries both at once — `logged_at` + `created_dttm`/`updated_dttm` (schema.ts:1856-1858).
+  Reverted. Also corrected: "no `approved_at` exists" overstated a true finding — `stock_take_session`
+  has none, but `purchase_order` does (schema.ts:1896). The `is_active_ind` → `active_ind`
+  correction stands (verified: `locationIngredient.activeInd`, schema.ts:1531).
+  Lesson recorded in `tasks/lessons.md`: a reviewer's confident claim is not evidence either.
 - **ENG REVIEW — what changed:** the spec asserted three things about the code that are not
   true, each of which would have shipped a silent stock bug: (1) the approval gate does not
   block uncounted groups, on either path; (2) `stock_take_line` has no `session_id` and there
