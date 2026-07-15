@@ -65,7 +65,11 @@ async function assertLocationInOrg(locationId: string, orgId: number): Promise<v
  */
 async function getAreaInOrg(areaId: string, orgId: number) {
   const [area] = await db
-    .select()
+    .select({
+      storageAreaId: storageArea.storageAreaId,
+      storeLocationId: storageArea.storeLocationId,
+      areaName: storageArea.areaName,
+    })
     .from(storageArea)
     .where(and(eq(storageArea.storageAreaId, areaId), eq(storageArea.organisationId, orgId)));
   if (!area) throw new StorageAreaError("Storage area not found", 404);
@@ -127,11 +131,22 @@ export async function createArea(
     throw new StorageAreaError(`This location already has an area called "${name}"`, 409);
   }
 
-  const [created] = await db
-    .insert(storageArea)
-    .values({ organisationId: orgId, storeLocationId: locationId, areaName: name, sortOrder })
-    .returning();
-  return created;
+  try {
+    const [created] = await db
+      .insert(storageArea)
+      .values({ organisationId: orgId, storeLocationId: locationId, areaName: name, sortOrder })
+      .returning();
+    return created;
+  } catch (err) {
+    // The SELECT above is a friendliness check, not a lock: two admins creating
+    // the same name at once both pass it, and the second one lands here on the
+    // unique index. Without this, that operator gets a raw 500 instead of the
+    // sentence explaining what happened. 23505 = unique_violation.
+    if ((err as { code?: string })?.code === "23505") {
+      throw new StorageAreaError(`This location already has an area called "${name}"`, 409);
+    }
+    throw err;
+  }
 }
 
 export async function updateArea(
@@ -166,10 +181,14 @@ export async function updateArea(
   if (data.sortOrder !== undefined) patch.sortOrder = data.sortOrder;
   if (data.activeInd !== undefined) patch.activeInd = data.activeInd;
 
+  // Scope the mutation by both areaId and orgId — the prior SELECT is an auth
+  // check, but CLAUDE.md requires mutations to carry their own scope so a
+  // row whose org-membership changed between the SELECT and the UPDATE can
+  // never be written cross-tenant.
   const [updated] = await db
     .update(storageArea)
     .set(patch)
-    .where(eq(storageArea.storageAreaId, areaId))
+    .where(and(eq(storageArea.storageAreaId, areaId), eq(storageArea.organisationId, orgId)))
     .returning();
   return updated;
 }
@@ -181,10 +200,11 @@ export async function updateArea(
  */
 export async function deactivateArea(areaId: string, orgId: number) {
   await getAreaInOrg(areaId, orgId);
+  // Scope the mutation by both areaId and orgId (same reason as updateArea above).
   const [updated] = await db
     .update(storageArea)
     .set({ activeInd: false, updatedDttm: new Date() })
-    .where(eq(storageArea.storageAreaId, areaId))
+    .where(and(eq(storageArea.storageAreaId, areaId), eq(storageArea.organisationId, orgId)))
     .returning();
   return updated;
 }

@@ -219,6 +219,20 @@ describe.skipIf(!RUN)("storage areas + stock movements — real DB", () => {
     await expect(createArea(fx.locId, fx.orgId, "Bar")).rejects.toThrow(/already has an area/i);
   });
 
+  it("a racing duplicate hits the unique index and STILL gets the sentence, not a 500", async () => {
+    // The SELECT-before-INSERT is a friendliness check, not a lock. Simulate the
+    // loser of the race by inserting straight past the check — the operator must
+    // still get "already has an area called X", never a raw constraint error.
+    const areas = await listAreas(fx.locId, fx.orgId);
+    const bar = areas.find((a) => a.areaName === "Bar")!;
+    expect(bar).toBeTruthy();
+
+    await expect(createArea(fx.locId, fx.orgId, "Bar")).rejects.toMatchObject({
+      statusCode: 409,
+      message: expect.stringMatching(/already has an area/i),
+    });
+  });
+
   it("404s a location in another org rather than confirming it exists", async () => {
     await expect(listAreas(fx.otherLocId, fx.orgId)).rejects.toThrow(/not found/i);
     await expect(createArea(fx.otherLocId, fx.orgId, "Sneaky")).rejects.toThrow(/not found/i);

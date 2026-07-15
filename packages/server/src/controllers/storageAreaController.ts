@@ -256,7 +256,18 @@ export async function handleListMovements(
     const ctx = await resolveContext(req, res);
     if (!ctx) return;
 
-    const ingredientId = typeof req.query.ingredientId === "string" ? req.query.ingredientId : undefined;
+    // Validate before it reaches SQL: a non-UUID makes Postgres throw
+    // "invalid input syntax for type uuid", which isn't a StockMovementError,
+    // so it would fall through to the generic handler as a 500. The write side
+    // already validates this; the read side should too.
+    const parsedIngredientId = z.string().uuid().optional().safeParse(
+      typeof req.query.ingredientId === "string" ? req.query.ingredientId : undefined,
+    );
+    if (!parsedIngredientId.success) {
+      res.status(400).json({ error: "That item id isn't valid" });
+      return;
+    }
+    const ingredientId = parsedIngredientId.data;
     const limit = req.query.limit ? Math.min(Number(req.query.limit) || 100, 500) : undefined;
 
     res.json(await listMovements(req.params.locId as string, ctx.orgId, { ingredientId, limit }));
