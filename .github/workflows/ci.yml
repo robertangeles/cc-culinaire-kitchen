@@ -119,3 +119,8 @@ jobs:
 
       - name: Run tenant-isolation integration tests
         run: pnpm --filter @culinaire/server exec vitest run src/tenantIsolation.integration.test.ts
+
+      # Storage areas + stock movements. The load-bearing assertion is that a
+      # move NEVER changes stock_level — needs a real DB to be worth anything.
+      - name: Run storage-area integration tests
+        run: pnpm --filter @culinaire/server exec vitest run src/services/storageAreas.integration.test.ts

@@ -28,11 +28,18 @@ CREATE TABLE IF NOT EXISTS storage_area (
   updated_dttm      timestamptz NOT NULL DEFAULT now(),
   -- 'Unassigned' is the reserved sentinel for the AREA-mode bucket that catches items
   -- belonging to no area. A real area by that name would make the bucket ambiguous.
-  CONSTRAINT storage_area_name_not_reserved CHECK (area_name <> 'Unassigned'),
-  -- One area name per site. AREA-mode stock-take category names are area names, and
-  -- idx_stock_take_category_unique(session_id, category_name) depends on this holding.
-  CONSTRAINT storage_area_name_unique UNIQUE (store_location_id, area_name)
+  CONSTRAINT storage_area_name_not_reserved CHECK (area_name <> 'Unassigned')
 );
+-- One area name per site. AREA-mode stock-take category names are area names, and
+-- idx_stock_take_category_unique(session_id, category_name) depends on this holding.
+--
+-- A unique INDEX, not a UNIQUE constraint, on purpose: drizzle's uniqueIndex() models it
+-- as an index, so a constraint here would leave the live DB disagreeing with schema.ts —
+-- the exact drift class that already broke drizzle-kit push on this database
+-- (wiki/synthesis/schema-drift-may-2026.md). Enforcement is identical either way.
+ALTER TABLE storage_area DROP CONSTRAINT IF EXISTS storage_area_name_unique;
+CREATE UNIQUE INDEX IF NOT EXISTS storage_area_name_unique
+  ON storage_area (store_location_id, area_name);
 -- FK index: "list the areas at this location" — the areas admin + every AREA-mode session open
 CREATE INDEX IF NOT EXISTS idx_storage_area_location ON storage_area (store_location_id);
 -- FK index: org-scoped area listings + tenant guard lookups
@@ -50,9 +57,13 @@ CREATE TABLE IF NOT EXISTS ingredient_storage_area (
   -- Shelf-to-sheet order: the sequence the counter physically walks the shelf.
   sort_order                 integer NOT NULL DEFAULT 0,
   created_dttm               timestamptz NOT NULL DEFAULT now(),
-  updated_dttm               timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT ingredient_storage_area_unique UNIQUE (ingredient_id, storage_area_id)
+  updated_dttm               timestamptz NOT NULL DEFAULT now()
 );
+-- One assignment per item per area. Unique INDEX to match drizzle's uniqueIndex() — see
+-- the note on storage_area_name_unique above.
+ALTER TABLE ingredient_storage_area DROP CONSTRAINT IF EXISTS ingredient_storage_area_unique;
+CREATE UNIQUE INDEX IF NOT EXISTS ingredient_storage_area_unique
+  ON ingredient_storage_area (ingredient_id, storage_area_id);
 -- FK index: "what's on this area's count sheet" — drives every AREA-mode sheet render
 CREATE INDEX IF NOT EXISTS idx_ingredient_storage_area_area ON ingredient_storage_area (storage_area_id);
 -- FK index: "which areas is this item in" — the ingredient modal's area chips

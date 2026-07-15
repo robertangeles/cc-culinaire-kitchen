@@ -14,6 +14,17 @@
 import { Router } from "express";
 import { authenticate, requirePermission } from "../middleware/auth.js";
 import {
+  handleListAreas,
+  handleCreateArea,
+  handleUpdateArea,
+  handleDeactivateArea,
+  handleListAreaItems,
+  handleSetAreaItems,
+  handleGetAssignmentMap,
+  handleCreateMovement,
+  handleListMovements,
+} from "../controllers/storageAreaController.js";
+import {
   handleCreateIngredient,
   handleListIngredients,
   handleUpdateIngredient,
@@ -136,6 +147,28 @@ router.get("/suppliers/:supplierId/ingredient-ids", requirePermission("inventory
 
 router.get("/locations/:locId/ingredients", requirePermission("inventory:count"), handleListLocationIngredients);
 router.patch("/locations/:locId/ingredients/:id", requirePermission("inventory:manage"), handleUpdateLocationIngredient);
+
+// ─── Storage areas (count sheets) ─────────────────────────────────
+// Permissions mirror the location-ingredient config above: reading the sheet
+// layout is inventory:count, editing it is inventory:manage. No new key —
+// areas are catalog admin, which inventory:manage already gates.
+
+router.get("/locations/:locId/storage-areas", requirePermission("inventory:count"), handleListAreas);
+router.post("/locations/:locId/storage-areas", requirePermission("inventory:manage"), handleCreateArea);
+// The map the AREA-mode count sheet filters on, client-side, mirroring CATEGORY mode.
+router.get("/locations/:locId/storage-areas/assignments", requirePermission("inventory:count"), handleGetAssignmentMap);
+router.patch("/storage-areas/:areaId", requirePermission("inventory:manage"), handleUpdateArea);
+// Soft delete — deactivates, keeps count history intact.
+router.delete("/storage-areas/:areaId", requirePermission("inventory:manage"), handleDeactivateArea);
+router.get("/storage-areas/:areaId/items", requirePermission("inventory:count"), handleListAreaItems);
+router.put("/storage-areas/:areaId/items", requirePermission("inventory:manage"), handleSetAreaItems);
+
+// ─── Stock movements (area → area, ZERO stock effect) ─────────────
+// inventory:count, matching POST /consumption-logs: recording what physically
+// happened on the floor is a counting-staff action, not catalog admin.
+
+router.post("/locations/:locId/stock-movements", requirePermission("inventory:count"), handleCreateMovement);
+router.get("/locations/:locId/stock-movements", requirePermission("inventory:count"), handleListMovements);
 
 // ─── Stock take sessions ──────────────────────────────────────────
 
