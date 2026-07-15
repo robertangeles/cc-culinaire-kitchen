@@ -132,7 +132,6 @@ export default function ForecastCard() {
     generate,
     dismiss,
     markOrdered,
-    refresh,
   } = useForecasts(selectedLocationId);
 
   const [busy, setBusy] = useState<string | null>(null);

@@ -7,7 +7,7 @@
  * Sends heartbeat every 30s to keep presence alive.
  */
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useBenchSocket } from "../context/BenchSocketContext.js";
 
 export interface PresenceUser {

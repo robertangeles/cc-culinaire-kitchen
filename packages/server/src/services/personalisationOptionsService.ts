@@ -8,7 +8,7 @@
 
 import { db } from "../db/index.js";
 import { kitchenProfileOption } from "../db/schema.js";
-import { eq, and, asc } from "drizzle-orm";
+import { eq, asc } from "drizzle-orm";
 
 export type OptionType = "skill_level" | "cuisine" | "dietary" | "equipment";
 

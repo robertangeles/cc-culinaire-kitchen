@@ -7,7 +7,7 @@
 import pino from "pino";
 import { db } from "../db/index.js";
 import { benchDmThread, benchMessage, user } from "../db/schema.js";
-import { eq, and, or, desc, lt, sql } from "drizzle-orm";
+import { eq, and, or, desc, lt } from "drizzle-orm";
 
 const logger = pino({ name: "benchDmService" });
 

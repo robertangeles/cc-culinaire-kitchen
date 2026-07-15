@@ -15,6 +15,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // ── Shared mock state ─────────────────────────────────────────────────
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- shape reference
 interface FluentMock {
   calls: unknown[][];
   rows: unknown[];

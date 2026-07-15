@@ -21,7 +21,7 @@
 import pino from "pino";
 import { db } from "../db/index.js";
 import { menuItem, menuItemIngredient, menuCategorySetting, wasteLog, ingredient, locationIngredient, user } from "../db/schema.js";
-import { eq, and, sql, desc, gte, ilike, inArray } from "drizzle-orm";
+import { eq, and, sql, gte, inArray } from "drizzle-orm";
 import { IncompatibleUnitsError } from "@culinaire/shared";
 import { resolveToBase } from "./unitConversionService.js";
 import { recordOpsEvent } from "./brainCaptureService.js";
@@ -762,9 +762,6 @@ export async function getWasteImpactForMenuItems(userId: number): Promise<WasteI
     .where(inArray(menuItemIngredient.menuItemId, allItemIds));
 
   if (allIngredients.length === 0) return [];
-
-  // Get unique ingredient names across all menu items
-  const ingredientNames = [...new Set(allIngredients.map((i) => i.ingredientName.toLowerCase()))];
 
   // Query waste logs for matching ingredients in the last 30 days
   const thirtyDaysAgo = new Date();

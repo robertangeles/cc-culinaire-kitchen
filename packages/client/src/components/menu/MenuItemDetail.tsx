@@ -10,7 +10,6 @@ import { useNavigate } from "react-router";
 import type { MenuItem, MenuIngredient } from "../../hooks/useMenuItems.js";
 import { useMenuRecommendations } from "../../hooks/useMenuRecommendations.js";
 
-const API = import.meta.env.VITE_API_URL ?? "";
 
 const CLASS_INFO: Record<string, { label: string; bg: string; text: string; icon: typeof Star; desc: string }> = {
   star: { label: "Star", bg: "bg-[#D4A574]/15", text: "text-[#D4A574]", icon: Star, desc: "High profit, high popularity \u2014 protect this item" },
@@ -52,7 +51,8 @@ export function MenuItemDetail({ item, onClose, onAddIngredient, onRemoveIngredi
   const [ingQty, setIngQty] = useState("");
   const [ingUnit, setIngUnit] = useState("kg");
   const [ingCost, setIngCost] = useState("");
-  const [ingYield, setIngYield] = useState("100");
+  // No UI sets yield — every add is 100%. A constant, not state.
+  const ingYield = "100";
   const [addingIng, setAddingIng] = useState(false);
 
   const cls = CLASS_INFO[item.classification] ?? CLASS_INFO.unclassified;

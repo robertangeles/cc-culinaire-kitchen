@@ -167,7 +167,7 @@ export async function handleTurnstileConfig(
 export async function handleRegister(
   req: Request,
   res: Response,
-  next: NextFunction,
+  _next: NextFunction,
 ) {
   try {
     const parsed = RegisterSchema.safeParse(req.body);
@@ -581,7 +581,7 @@ export async function handleGoogleIdToken(
 export async function handleGoogleCallback(
   req: Request,
   res: Response,
-  next: NextFunction,
+  _next: NextFunction,
 ) {
   try {
     const code = req.query.code;

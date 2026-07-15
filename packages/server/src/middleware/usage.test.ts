@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { Request, Response, NextFunction } from "express";
+import type { Request, Response } from "express";
 
 // Mock the db module
 vi.mock("../db/index.js", () => ({
@@ -21,7 +21,7 @@ vi.mock("drizzle-orm", () => ({
   eq: vi.fn((a, b) => ({ field: a, value: b })),
 }));
 
-import { checkUsageLimit, decrementFreeSessions } from "./usage.js";
+import { checkUsageLimit } from "./usage.js";
 import { db } from "../db/index.js";
 
 function mockReq(user?: { sub: number }): Request {

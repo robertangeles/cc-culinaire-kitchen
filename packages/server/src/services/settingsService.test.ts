@@ -1,12 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // Mock the db module
-const mockSelect = vi.fn();
 const mockFrom = vi.fn();
-const mockInsert = vi.fn();
 const mockValues = vi.fn();
-const mockUpdate = vi.fn();
-const mockSet = vi.fn();
 const mockWhere = vi.fn();
 
 vi.mock("../db/index.js", () => ({

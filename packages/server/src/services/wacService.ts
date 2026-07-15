@@ -29,7 +29,7 @@
  *     location it's never been seen at MUST not silently drop the WAC.
  */
 
-import { sql, and, eq } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import type { DbOrTx } from "./auditService.js";
 import * as auditService from "./auditService.js";
@@ -101,7 +101,10 @@ export async function recompute(
   // Step 3: SELECT FOR UPDATE. Postgres doesn't support multi-pair tuple
   // FOR UPDATE in Drizzle's typed builder cleanly, so we drop to raw SQL.
   // The lock is held until tx commits.
-  const lockRows = await tx.execute<{ location_ingredient_id: string }>(sql`
+  // Unused ON PURPOSE — the QUERY is the lock, not its result. Deleting this
+  // assignment (or the statement) removes the FOR UPDATE that serialises
+  // concurrent WAC recomputation.
+  const _lockRows = await tx.execute<{ location_ingredient_id: string }>(sql`
     SELECT location_ingredient_id
       FROM location_ingredient
      WHERE (store_location_id, ingredient_id) IN (
@@ -172,6 +175,10 @@ export async function recompute(
  *
  * Throws today so a stray caller doesn't silently no-op.
  */
+// Reserved on purpose (see the module docblock): a loud guard so a future
+// caller fails fast instead of silently no-opping. Unused until admin void
+// tooling exists.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function reverseOnVoid(_voidedReceivingSessionId: string): Promise<never> {
   throw new Error(
     "wacService.reverseOnVoid is not yet implemented — confirmed receipts are terminal in Phase 1. " +

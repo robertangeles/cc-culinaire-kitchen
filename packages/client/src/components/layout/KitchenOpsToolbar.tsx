@@ -8,7 +8,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useLocation as useRouterLocation } from "react-router";
-import { MapPin, ChevronDown, Search, Building2 } from "lucide-react";
+import { ChevronDown, Search, Building2 } from "lucide-react";
 import { useLocation } from "../../context/LocationContext.js";
 import NotificationBell from "./NotificationBell.js";
 

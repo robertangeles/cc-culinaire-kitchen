@@ -3,7 +3,7 @@
  * Appears in the top-right corner and auto-dismisses after 5 seconds.
  */
 
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 import { X, MessageCircle } from "lucide-react";
 
 export interface BenchNotification {

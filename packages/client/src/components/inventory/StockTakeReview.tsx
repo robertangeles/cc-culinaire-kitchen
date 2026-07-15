@@ -17,9 +17,18 @@ import {
 } from "../../hooks/useInventory.js";
 import { useLocation } from "../../context/LocationContext.js";
 import {
-  ShieldCheck, CheckCircle2, Flag, ChevronDown, ChevronRight,
-  MapPin, User, Clock, AlertTriangle, TrendingDown, TrendingUp,
-  Loader2, Package,
+  ShieldCheck,
+  CheckCircle2,
+  Flag,
+  ChevronDown,
+  ChevronRight,
+  MapPin,
+  User,
+  Clock,
+  AlertTriangle,
+  TrendingDown,
+  TrendingUp,
+  Loader2,
 } from "lucide-react";
 
 interface Props {

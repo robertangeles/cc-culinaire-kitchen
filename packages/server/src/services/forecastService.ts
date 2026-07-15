@@ -9,7 +9,7 @@
  *   confidence = min(1, based_on_days / 30)
  */
 
-import { eq, and, desc, sql, gte, lte } from "drizzle-orm";
+import { eq, and, sql, gte } from "drizzle-orm";
 import { db } from "../db/index.js";
 import {
   forecastRecommendation,
@@ -240,7 +240,7 @@ export async function dismissRecommendation(recId: string, orgId: number) {
 // 4. markOrdered
 // ---------------------------------------------------------------------------
 
-export async function markOrdered(recId: string, orgId: number, poId?: string) {
+export async function markOrdered(recId: string, orgId: number) {
   const [rec] = await db
     .select()
     .from(forecastRecommendation)

@@ -126,8 +126,7 @@ export async function handleMarkOrdered(
     const orgId = await resolveOrgId(req, res);
     if (orgId === null) return;
 
-    const { poId } = req.body;
-    const rec = await forecastService.markOrdered(req.params.id as string, orgId, poId);
+    const rec = await forecastService.markOrdered(req.params.id as string, orgId);
     res.json(rec);
   } catch (err: any) {
     if (err.message?.includes("not found")) {

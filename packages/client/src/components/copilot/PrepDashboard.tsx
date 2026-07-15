@@ -143,7 +143,7 @@ function buildPrintHtml(session: PrepSession | null, tasks: PrepTask[]): string 
   </body></html>`;
 }
 
-export function PrepDashboard({ sessionData, onSessionUpdate, onEditSelections, teamView }: Props) {
+export function PrepDashboard({ sessionData, onSessionUpdate, onEditSelections }: Props) {
   const session = sessionData?.session ?? null;
   const tasks = sessionData?.tasks ?? [];
   const [expandedTiers, setExpandedTiers] = useState<Set<string>>(

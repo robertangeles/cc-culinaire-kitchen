@@ -3,7 +3,7 @@
  * Supports @mention autocomplete — type @ to see matching users.
  */
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Send } from "lucide-react";
 import type { PresenceUser } from "../../hooks/useBenchPresence.js";
 

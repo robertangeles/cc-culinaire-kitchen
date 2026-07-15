@@ -52,7 +52,7 @@ interface TransferFormProps {
 
 export default function TransferForm({ onClose, editTransferId, editData }: TransferFormProps) {
   const { selectedLocationId, locations, selectedLocation } = useLocation();
-  const { items: locationItems, isLoading: itemsLoading } = useLocationIngredients(selectedLocationId);
+  const { items: locationItems } = useLocationIngredients(selectedLocationId);
   const { initiate, confirmSent, cancel } = useTransfers(selectedLocationId);
   const isEditMode = !!editTransferId;
 

@@ -60,7 +60,7 @@ const RetrieveRequestSchema = z
 export async function handleMobileRagRetrieve(
   req: Request,
   res: Response,
-  next: NextFunction,
+  _next: NextFunction,
 ): Promise<void> {
   const parsed = RetrieveRequestSchema.safeParse(req.body);
   if (!parsed.success) {

@@ -297,7 +297,7 @@ app.get("/kitchen-shelf/:slug", async (req, res, next) => {
     );
 
     res.send(html);
-  } catch (err) {
+  } catch {
     next();
   }
 });

@@ -7,7 +7,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useNotifications, type AppNotification } from "../../hooks/useNotifications.js";
-import { Bell, Check, X, FileText, AlertTriangle, Clock, Truck, Sparkles, Brain } from "lucide-react";
+import { Bell, Check, X, FileText, AlertTriangle, Clock, Sparkles, Brain } from "lucide-react";
 
 const TYPE_CONFIG: Record<string, { icon: typeof Bell; color: string; label: string }> = {
   APPROVAL_REQUIRED: { icon: FileText,      color: "text-amber-400",   label: "Approval needed" },
@@ -30,7 +30,7 @@ function timeAgo(dateStr: string): string {
 }
 
 export default function NotificationBell() {
-  const { notifications, unreadCount, isLoading, refreshList, markAsRead, dismiss } = useNotifications();
+  const { notifications, unreadCount, refreshList, markAsRead, dismiss } = useNotifications();
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 

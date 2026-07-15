@@ -31,6 +31,7 @@ import { ResetPasswordPage } from "./pages/ResetPasswordPage.js";
 import { ProfilePage } from "./pages/ProfilePage.js";
 import { RecipeLabPage } from "./pages/RecipeLabPage.js";
 import { RecipeGalleryPage } from "./pages/RecipeGalleryPage.js";
+import { NotFoundPage } from "./pages/NotFoundPage.js";
 import { RecipeDetailPage } from "./pages/RecipeDetailPage.js";
 import { MyShelfPage } from "./pages/MyShelfPage.js";
 import { BenchPage } from "./pages/BenchPage.js";
@@ -166,6 +167,9 @@ export function App() {
                           <Route path="/bench" element={<BenchPage />} />
                           <Route path="/kitchen-shelf" element={<RecipeGalleryPage />} />
                           <Route path="/kitchen-shelf/:id" element={<RecipeDetailPage />} />
+                          {/* Catch-all. Without this an unknown URL rendered an empty
+                              main — a white void with no way back. */}
+                          <Route path="*" element={<NotFoundPage />} />
                         </Routes>
                         <Footer />
                       </main>

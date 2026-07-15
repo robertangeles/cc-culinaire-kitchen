@@ -7,7 +7,7 @@
 
 import pino from "pino";
 import { db } from "../db/index.js";
-import { recipe, recipeRating, recipeVersion, user, kitchenProfile } from "../db/schema.js";
+import { recipe, recipeVersion, user, kitchenProfile } from "../db/schema.js";
 import { eq, and, or, sql, desc, max, isNull } from "drizzle-orm";
 
 const logger = pino({ name: "recipePersistence" });

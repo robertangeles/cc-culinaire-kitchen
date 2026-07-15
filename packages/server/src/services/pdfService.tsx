@@ -18,7 +18,7 @@ import {
   user,
 } from "../db/schema.js";
 import { PurchaseOrderPdf } from "../templates/PurchaseOrderPdf.js";
-import type { POPdfData, POPdfLine } from "../templates/PurchaseOrderPdf.js";
+import type { POPdfData } from "../templates/PurchaseOrderPdf.js";
 import pino from "pino";
 
 const logger = pino({ name: "pdfService" });

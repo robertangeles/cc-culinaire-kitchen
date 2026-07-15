@@ -7,7 +7,7 @@
  */
 
 import { useState, useCallback } from "react";
-import { Printer, Clock, Users, ChefHat, AlertTriangle, Thermometer, GlassWater, Flame, Wine, Hash, Sparkles, Share2, Copy, Check, Pencil, History, ImagePlus, Loader2 } from "lucide-react";
+import { Printer, Clock, Users, ChefHat, AlertTriangle, Thermometer, GlassWater, Flame, Wine, Hash, Sparkles, Share2, Pencil, History, ImagePlus, Loader2 } from "lucide-react";
 import type { RecipeDomain } from "./RecipeForm.js";
 import { RecipeShareBar } from "./RecipeShareBar.js";
 import RecipeRatings from "./RecipeRatings.js";
@@ -132,7 +132,6 @@ const DIFFICULTY_COLORS: Record<string, string> = {
 export function RecipeCard({ recipe, domain, recipeId, slug, imageUrl, onTogglePublic, isPublic, creator, isOwner, onRecipeUpdate, onImageUpdate }: RecipeCardProps) {
   const [checkedIngredients, setCheckedIngredients] = useState<Set<number>>(new Set());
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
-  const [copied, setCopied] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [regeneratingImage, setRegeneratingImage] = useState(false);
   const [showRefine, setShowRefine] = useState(false);

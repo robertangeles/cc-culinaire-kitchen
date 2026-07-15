@@ -24,7 +24,7 @@ import {
 import { eq, desc, sql, and, inArray } from "drizzle-orm";
 import { getUserOrgContext } from "./orgContextService.js";
 import { computeSuggestedSelections, aggregatePrepLines, attachOnHand, type PrepSourceLine } from "./prepMath.js";
-import { convertUnit as sharedConvertUnit, normalizeUnit, type BaseUnit } from "@culinaire/shared";
+import { convertUnit as sharedConvertUnit, normalizeUnit } from "@culinaire/shared";
 import { addStock, deductStock } from "./stockService.js";
 import { recordOpsEvent } from "./brainCaptureService.js";
 

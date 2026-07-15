@@ -75,13 +75,9 @@ export const CREDENTIAL_CATEGORIES = [
 /** Cache of decrypted credential values: key → plaintext. */
 let cache: Map<string, string> | null = null;
 
-/** Set of keys that have a stored DB value (vs. env-only). */
-let storedKeys: Set<string> | null = null;
-
 /** Invalidate the in-memory cache. */
 function invalidateCache() {
   cache = null;
-  storedKeys = null;
 }
 
 // ---------------------------------------------------------------------------

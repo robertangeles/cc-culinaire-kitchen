@@ -240,40 +240,32 @@ anything else.** It ships as THREE sequential branches (see its Build order tabl
 guards: GROUP BY SUM instead of per-line upsert, AND the uncounted-area guard on BOTH
 `submitSessionForReview` and `checkAndAdvanceSession`). **Then B3** (snapshot/restock/spot check).
 
-**Chore, queued (agreed 2026-07-15, do AFTER B1 lands — not inside it):**
-`chore/ck-web/unused-vars-sweep`. 81 files / 166 unused-var warnings on main
-(109 unused imports, 57 unused locals). The rule is `"warn"` in eslint.config.js:29 and
-`eslint src/` has no `--max-warnings`, so nothing gates on them. Mostly residue from
-removed features — e.g. ConsumptionLogger.tsx has an UNREACHABLE edit branch at :636
-(`editingId` can only be set by `handleStartEdit`, which nothing calls) left behind when
-"Entries are final — no edits" (:718) landed; the server still exposes
-PATCH/DELETE /consumption-logs/:id with no client caller.
-- Imports (109): mechanical delete.
-- Locals (57): NOT mechanical — each is a question, "is this dead code or UI someone
-  forgot to render?" (e.g. ActivationWizard.tsx:57 `activationStatus`). That triage is
-  where the value is.
-- Checked already, NOT a bug: roles.ts:14 `handleListPermissions` looks unwired but is
-  wired at permissions.ts:14 as GET /api/permissions.
-- Finish by flipping the rule to `error` so it can't regrow.
-- **`no-useless-assignment` x4 in `ingredientService.getIngredientTransactions`**: each of
-  the now-five source blocks does `let xRows: any[] = []` then assigns in BOTH the try and
-  the catch, so the initializer is dead. Pre-existing on 3 (stockTakeRows:1190,
-  consumptionRows:1208, transferRows:1256); B1 added a 4th (movementRows) that deliberately
-  matches its siblings rather than being the odd one out. Fix all four together (drop the
-  `= []`), not one.
-Real cost today is signal drowning: at 166 warnings nobody reads warnings, so the next
-real one is invisible.
+**Chore — DONE 2026-07-16** (`chore/ck-web/unused-vars-sweep`). 166 unused vars → **0**,
+rule flipped to `error` so it can't regrow. Catch-all 404 route added. What the triage
+turned up (the value was never the lint count):
+- **Two that must never be "cleaned"**: `userService.ts` omit-secrets destructure (deleting
+  those names returns the password hash + MFA secret) and `wacService` `SELECT FOR UPDATE`
+  (the query IS the lock). Both now marked `_` with the reason inline.
+- **A missing test restore**: authController.test captured `originalEnv` for an `afterEach`
+  nobody wrote — the suite left `process.env` mutated for later tests. Added.
+- **A test that didn't test**: recipeService.test captured the AI system prompt and never
+  asserted on it.
+- **Wasted work removed**: 3 `activation-status` round-trips feeding write-only state, a
+  `useSuppliers()` fetch never read, a reduce over every stock-take category that wasn't
+  returned, a filter that ran every render and rendered nowhere.
+- **Dead API promises**: `markOrdered(…, poId?)` (no column exists to link a PO),
+  `markMentionsRead(…, channelId?)` (never in the WHERE — the first caller to pass it
+  would silently mark every channel read).
+- **Unreachable UI**: ConsumptionLogger's whole inline-edit flow (":742 Entries are final"),
+  PurchaseOrderList's pre-"receive-new" branch.
 
-**Also in this chore — no catch-all route (found by /qa against main, 2026-07-15):**
-`packages/client/src/App.tsx` has no `path="*"` route. Any unknown URL (a typo, a stale
-link, `/chat` instead of `/chat/new`) returns 200 and renders the app shell with an EMPTY
-main — a white void against the dark theme, no "page not found", no way back. Verified:
-`/this-page-does-not-exist-xyz` → 200, main innerText 46 chars.
-- Add a `<Route path="*" element={<NotFound />} />` with a plain-English message and a
-  link home. Low severity, real, pre-existing on main.
-- Trap for whoever picks this up: `/chat` looks broken but ISN'T a route —
-  App.tsx:152-153 defines only `/chat/new` and `/chat/:id`. The blank page IS this bug,
-  not a broken Chat module. Chat itself is fine.
+**Still open, needs a product call (flagged, not deleted):**
+- `DeliveryReceiving.tsx` (295 lines) is now referenced by nothing — superseded by
+  `ReceivingChecklist`. Delete it, or is it coming back?
+- `GET /locations/:locId/activation-status` now has no client caller.
+- `PATCH`/`DELETE /consumption-logs/:id` have no client caller since the edit flow went.
+- RecipeLab has no "start over" control (the reset function existed, nothing called it).
+- No org-address inputs on the create-organisation form (the payload fields were dead).
 
 Afterwards:
 1. **Extend the UAT doc** with section **I. Storage areas** (area counts sum to venue; movement

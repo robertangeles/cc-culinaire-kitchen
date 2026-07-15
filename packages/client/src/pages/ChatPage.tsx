@@ -33,7 +33,7 @@ export function ChatPage() {
   const location = useLocation();
   const isNew = !id || id === "new";
   const { claimStream, hasBackgroundStream } = useChatStream();
-  const { isAuthenticated, isGuest } = useAuth();
+  useAuth();
 
   const [initialMessages, setInitialMessages] = useState<UIMessage[] | null>(
     isNew ? [] : null

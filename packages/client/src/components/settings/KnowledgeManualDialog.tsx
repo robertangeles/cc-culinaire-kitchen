@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { X, FileText, Loader2 } from "lucide-react";
+import { X, Loader2 } from "lucide-react";
 
 const CATEGORIES = ["techniques", "pastry", "spirits", "ingredients", "general"];
 

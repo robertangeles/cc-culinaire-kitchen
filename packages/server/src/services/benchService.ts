@@ -381,7 +381,7 @@ export async function getUnreadMentions(userId: number) {
   return { count: rows.length, mentions: rows };
 }
 
-export async function markMentionsRead(userId: number, channelId?: number) {
+export async function markMentionsRead(userId: number) {
   const conditions = [eq(benchMention.mentionedUserId, userId), eq(benchMention.readInd, false)];
   await db.update(benchMention).set({ readInd: true }).where(and(...conditions));
 }

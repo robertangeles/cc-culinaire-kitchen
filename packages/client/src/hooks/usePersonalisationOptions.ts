@@ -47,7 +47,7 @@ export function usePersonalisationOptions(): UsePersonalisationOptionsResult {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data: PersonalisationOptions = await res.json();
         if (!cancelled) setOptions(data);
-      } catch (err) {
+      } catch {
         if (!cancelled) {
           setError("Failed to load personalisation options.");
         }

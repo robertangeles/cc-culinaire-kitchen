@@ -138,12 +138,6 @@ function BenchContent() {
     checkOrg();
   }, [user, isGuest]);
 
-  function handleReaction(messageId: string, emoji: string) {
-    const { socket } = useBenchSocket as any;
-    // Reactions are handled via the socket in useBenchMessages
-    // For now, emit directly
-  }
-
   const isReadOnly = !user || isGuest;
 
   return (

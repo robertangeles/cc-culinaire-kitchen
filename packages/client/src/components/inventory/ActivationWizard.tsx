@@ -15,7 +15,6 @@ import {
 import {
   CATEGORIES,
   CATEGORY_LABELS,
-  ITEM_TYPES,
   ITEM_TYPE_KEYS,
   getItemTypeStyle,
   getCategoriesForType,
@@ -38,12 +37,6 @@ interface CatalogItem {
   itemType: string;
 }
 
-interface ActivationStatus {
-  total: number;
-  activated: number;
-  byType: Record<string, number>;
-}
-
 type TabFilter = "ALL" | ItemTypeKey;
 
 // ─── Component ───────────────────────────────────────────────
@@ -54,7 +47,6 @@ export function ActivationWizard() {
   // ── Data state ──
   const [catalog, setCatalog] = useState<CatalogItem[]>([]);
   const [localActiveMap, setLocalActiveMap] = useState<Record<string, boolean>>({});
-  const [activationStatus, setActivationStatus] = useState<ActivationStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -89,12 +81,6 @@ export function ActivationWizard() {
     return (data.ingredients ?? data) as Array<{ ingredientId: string; isActive?: boolean }>;
   }, []);
 
-  const fetchStatus = useCallback(async (locId: string) => {
-    const res = await fetch(`${API}/locations/${locId}/activation-status`, opts);
-    if (!res.ok) return null;
-    return (await res.json()) as ActivationStatus;
-  }, []);
-
   // ── Initial load ──
   useEffect(() => {
     if (!selectedLocationId) return;
@@ -104,10 +90,9 @@ export function ActivationWizard() {
       setLoading(true);
       setError(null);
       try {
-        const [catalogData, locItems, status] = await Promise.all([
+        const [catalogData, locItems] = await Promise.all([
           fetchCatalog(),
           fetchLocationItems(selectedLocationId),
-          fetchStatus(selectedLocationId),
         ]);
         if (cancelled) return;
 
@@ -119,7 +104,6 @@ export function ActivationWizard() {
           map[item.ingredientId] = item.isActive !== false;
         }
         setLocalActiveMap(map);
-        if (status) setActivationStatus(status);
       } catch (err: any) {
         if (!cancelled) setError(err.message ?? "Failed to load data");
       } finally {
@@ -128,7 +112,7 @@ export function ActivationWizard() {
     })();
 
     return () => { cancelled = true; };
-  }, [selectedLocationId, fetchCatalog, fetchLocationItems, fetchStatus]);
+  }, [selectedLocationId, fetchCatalog, fetchLocationItems]);
 
   // ── Flush pending changes ──
   const flush = useCallback(async () => {
@@ -157,11 +141,8 @@ export function ActivationWizard() {
     }
     if (promises.length) {
       await Promise.all(promises);
-      // Refresh status
-      const status = await fetchStatus(selectedLocationId);
-      if (status) setActivationStatus(status);
     }
-  }, [selectedLocationId, fetchStatus]);
+  }, [selectedLocationId]);
 
   // Flush on unmount
   useEffect(() => () => { flush(); }, [flush]);
@@ -231,14 +212,10 @@ export function ActivationWizard() {
       if (!res.ok) throw new Error("Copy failed");
 
       // Reload data
-      const [locItems, status] = await Promise.all([
-        fetchLocationItems(selectedLocationId),
-        fetchStatus(selectedLocationId),
-      ]);
+      const locItems = await fetchLocationItems(selectedLocationId);
       const map: Record<string, boolean> = {};
       for (const item of locItems) map[item.ingredientId] = item.isActive !== false;
       setLocalActiveMap(map);
-      if (status) setActivationStatus(status);
       setCopySuccess(true);
       setTimeout(() => setCopySuccess(false), 3000);
     } catch (err: any) {

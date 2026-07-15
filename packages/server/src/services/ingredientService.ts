@@ -13,7 +13,7 @@
  * of any `deleteIngredient` export here — do NOT add one.
  */
 
-import { eq, and, ilike, ne, sql, count, inArray, gte, isNull } from "drizzle-orm";
+import { eq, and, ilike, sql, count, inArray, isNull } from "drizzle-orm";
 import { db } from "../db/index.js";
 import {
   ingredient,
@@ -24,10 +24,6 @@ import {
   supplierLocation,
   ingredientSupplier,
   storeLocation,
-  pendingCatalogRequest,
-  stockTakeLine,
-  stockTakeCategory,
-  stockTakeSession,
   consumptionLog,
   menuItemIngredient,
   menuItem,

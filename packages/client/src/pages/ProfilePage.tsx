@@ -9,7 +9,6 @@ import { useState, useEffect, useRef, type FormEvent, type ElementType, type Key
 import {
   User,
   Users,
-  Building2,
   Key,
   Loader2,
   AlertCircle,
@@ -359,12 +358,6 @@ export function ProfilePage() {
   const [orgTab, setOrgTab] = useState<"create" | "join">("create");
   const [orgSubTab, setOrgSubTab] = useState<"overview" | "team" | "locations">("overview");
   const [orgName, setOrgName] = useState("");
-  const [orgAddressLine1, setOrgAddressLine1] = useState("");
-  const [orgAddressLine2, setOrgAddressLine2] = useState("");
-  const [orgSuburb, setOrgSuburb] = useState("");
-  const [orgStateProv, setOrgStateProv] = useState("");
-  const [orgCountry, setOrgCountry] = useState("");
-  const [orgPostcode, setOrgPostcode] = useState("");
   const [orgWebsite, setOrgWebsite] = useState("");
   const [orgEmail, setOrgEmail] = useState("");
   const [orgFacebook, setOrgFacebook] = useState("");
@@ -602,12 +595,6 @@ export function ProfilePage() {
         credentials: "include",
         body: JSON.stringify({
           name: orgName,
-          addressLine1: orgAddressLine1 || undefined,
-          addressLine2: orgAddressLine2 || undefined,
-          suburb: orgSuburb || undefined,
-          state: orgStateProv || undefined,
-          country: orgCountry || undefined,
-          postcode: orgPostcode || undefined,
           website: orgWebsite || undefined,
           email: orgEmail || undefined,
           facebook: orgFacebook || undefined,

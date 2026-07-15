@@ -23,7 +23,7 @@ type PurchasingTab = "orders" | "suggestions" | "receive" | "suppliers" | "appro
 
 export function PurchasingPage() {
   const { user, isGuest } = useAuth();
-  const { selectedLocationId, locations, isOrgAdmin } = useLocation();
+  const { selectedLocationId, isOrgAdmin } = useLocation();
   const [activeTab, setActiveTab] = useState<PurchasingTab>("orders");
   const { setGuideKeyOverride } = useGuide();
   const { pos } = usePurchaseOrders(selectedLocationId);

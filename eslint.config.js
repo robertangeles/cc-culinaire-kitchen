@@ -26,8 +26,13 @@ export default tseslint.config(
   // Shared rule overrides (lenient for initial setup)
   {
     rules: {
+      // error, not warn: the repo went from 166 unused vars to 0 in the
+      // 2026-07-15 sweep. At "warn" nothing gated on them, so they accumulated
+      // until nobody read warnings at all -- and real ones hid in the noise.
+      // ^_ still opts out for the deliberate cases (omit-secrets destructures,
+      // SELECT FOR UPDATE locks, Express handlers that must keep their arity).
       "@typescript-eslint/no-unused-vars": [
-        "warn",
+        "error",
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
       ],
       "@typescript-eslint/no-explicit-any": "off",

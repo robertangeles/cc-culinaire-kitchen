@@ -63,7 +63,7 @@ export function ChatContainer({
   const { refresh } = useConversationContext();
   const { isGuest, guestToken, refreshGuestUsage, refreshUser } = useAuth();
   const { settings } = useSettings();
-  const { transferToBackground, claimStream } = useChatStream();
+  const { transferToBackground } = useChatStream();
 
   /** Web search toggle state (per-message opt-in). */
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);

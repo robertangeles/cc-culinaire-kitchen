@@ -18,7 +18,6 @@ interface RecipeRatingsProps {
 /** Filled / empty / half star rendering */
 function StarIcon({
   filled,
-  half,
   size = 20,
   className = "",
   onClick,

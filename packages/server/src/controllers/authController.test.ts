@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { Request, Response, NextFunction } from "express";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import type { Request, Response } from "express";
 
 // Mock the auth service before importing the controller
 vi.mock("../services/authService.js", () => ({
@@ -357,6 +357,13 @@ describe("OAuth redirect guards", () => {
     // Reset env
     delete process.env.GOOGLE_CLIENT_ID;
     delete process.env.MICROSOFT_CLIENT_ID;
+  });
+
+  // originalEnv was captured for this restore, which was never written: the
+  // suite deletes and sets OAuth env vars and left process.env mutated for
+  // whatever ran next. Put it back.
+  afterEach(() => {
+    process.env = { ...originalEnv };
   });
 
   it("redirects to error when GOOGLE_CLIENT_ID is missing", () => {

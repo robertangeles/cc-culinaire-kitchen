@@ -10,7 +10,7 @@
  * On receive, creates FIFO batches and updates stock levels.
  */
 
-import { eq, and, desc, sql, count } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import {
   purchaseOrder,
@@ -18,7 +18,6 @@ import {
   fifoBatch,
   stockLevel,
   ingredient,
-  ingredientSupplier,
   supplier,
   storeLocation,
   user,

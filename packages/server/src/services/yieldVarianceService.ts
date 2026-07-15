@@ -24,13 +24,11 @@
  *     bad direction. Negative (underuse) is fine.
  */
 
-import { sql, and, eq, gte, lte } from "drizzle-orm";
+import { sql, eq } from "drizzle-orm";
 import { db } from "../db/index.js";
 import {
   menuItem,
   menuItemIngredient,
-  ingredient,
-  consumptionLog,
 } from "../db/schema.js";
 
 /** Below this many consumption_log rows for the period, refuse to compute. */
