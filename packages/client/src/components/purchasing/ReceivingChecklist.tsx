@@ -52,7 +52,7 @@ const REJECTION_REASONS = [
 export default function ReceivingChecklist({ po, onBack }: Props) {
   const {
     sessionData, isLoading, isSyncing, isOffline, error,
-    discrepancyCount, isPerfectDelivery,
+    discrepancyCount,
     startSession, actionLine, confirmReceipt, cancelSession,
   } = useReceiving();
 

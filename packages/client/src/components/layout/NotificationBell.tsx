@@ -30,7 +30,7 @@ function timeAgo(dateStr: string): string {
 }
 
 export default function NotificationBell() {
-  const { notifications, unreadCount, isLoading, refreshList, markAsRead, dismiss } = useNotifications();
+  const { notifications, unreadCount, refreshList, markAsRead, dismiss } = useNotifications();
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 

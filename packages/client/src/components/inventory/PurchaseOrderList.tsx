@@ -15,7 +15,6 @@ import {
   type PurchaseOrder,
 } from "../../hooks/useInventory.js";
 import PurchaseOrderForm from "./PurchaseOrderForm.js";
-import DeliveryReceiving from "./DeliveryReceiving.js";
 import ReceivingChecklist from "../purchasing/ReceivingChecklist.js";
 import {
   Plus,
@@ -73,7 +72,7 @@ const FILTER_OPTIONS = [
 
 /* ── Main component ──────────────────────────────────────────── */
 
-type View = "list" | "create" | "receive" | "receive-new";
+type View = "list" | "create" | "receive-new";
 
 export default function PurchaseOrderList() {
   const { selectedLocationId } = useLocation();
@@ -143,14 +142,6 @@ export default function PurchaseOrderList() {
     }
   }, [cancelPO]);
 
-  const handleReceive = useCallback(async (poId: string) => {
-    const detail = detailCache[poId] ?? await getDetail(poId);
-    if (detail) {
-      setReceivePO(detail);
-      setView("receive");
-    }
-  }, [detailCache, getDetail]);
-
   const handleCreated = useCallback(() => {
     setView("list");
     refresh();
@@ -215,10 +206,6 @@ export default function PurchaseOrderList() {
 
   if (view === "create") {
     return <PurchaseOrderForm onBack={() => setView("list")} onCreated={handleCreated} />;
-  }
-
-  if (view === "receive" && receivePO) {
-    return <DeliveryReceiving po={receivePO} onBack={handleReceiveDone} />;
   }
 
   if (view === "receive-new" && receivePO) {
