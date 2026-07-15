@@ -25,6 +25,9 @@ import { Search, Plus, Link2, Pencil, AlertTriangle, RefreshCw } from "lucide-re
 const API = import.meta.env.VITE_API_URL ?? "";
 
 export interface PickedIngredient {
+  /** Content equivalence: 1 kitchen unit contains contentQty contentUnit (1 bottle = 750 ml). */
+  contentQty?: string | null;
+  contentUnit?: string | null;
   ingredientId: string;
   ingredientName: string;
   baseUnit: string;
@@ -37,6 +40,8 @@ interface CatalogRow {
   baseUnit: string;
   preferredUnitCost: string | null;
   ingredientCategory: string | null;
+  contentQty?: string | null;
+  contentUnit?: string | null;
 }
 
 interface IngredientPickerInlineProps {
@@ -108,6 +113,8 @@ export function IngredientPickerInline({
           baseUnit: string;
           preferredUnitCost: string | null;
           ingredientCategory: string | null;
+          contentQty?: string | null;
+          contentUnit?: string | null;
         }>;
         setResults(rows.slice(0, 8));
         setHighlight(0);
@@ -161,6 +168,8 @@ export function IngredientPickerInline({
             ingredientName: row.ingredientName,
             baseUnit: row.baseUnit,
             preferredUnitCost: row.preferredUnitCost,
+            contentQty: row.contentQty ?? null,
+            contentUnit: row.contentUnit ?? null,
           });
           setIsOpen(false);
           setQuery("");
@@ -303,6 +312,8 @@ export function IngredientPickerInline({
                   ingredientName: r.ingredientName,
                   baseUnit: r.baseUnit,
                   preferredUnitCost: r.preferredUnitCost,
+                  contentQty: r.contentQty ?? null,
+                  contentUnit: r.contentUnit ?? null,
                 });
                 setIsOpen(false);
                 setQuery("");

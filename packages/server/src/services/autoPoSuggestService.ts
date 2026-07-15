@@ -32,6 +32,12 @@ export interface AutoPoLine {
   reorderQty: number | null;
   shortfall: number;
   suggestedQty: number;
+  /** Purchase packaging: order in this unit when set (case of 12 bottles). */
+  purchaseUnit: string | null;
+  /** Kitchen units per purchase package. */
+  packQty: number | null;
+  /** suggestedQty expressed in purchase packages, rounded UP (order whole cases). */
+  suggestedPackages: number | null;
   preferredUnitCost: number | null;
   estimatedCost: number | null;
 }
@@ -59,6 +65,8 @@ interface AutoPoRow extends Record<string, unknown> {
   current_qty: string | null;
   par_level: string | null;
   reorder_qty: string | null;
+  purchase_unit: string | null;
+  pack_qty: string | null;
   preferred_unit_cost: string | null;
   preferred_supplier_id: string | null;
   supplier_name: string | null;
@@ -79,6 +87,8 @@ export async function getAutoPoSuggestions(
       sl.current_qty,
       COALESCE(li.par_level, i.par_level) AS par_level,
       COALESCE(li.reorder_qty, i.reorder_qty) AS reorder_qty,
+      i.purchase_unit,
+      i.pack_qty,
       i.preferred_unit_cost,
       i.preferred_supplier_id,
       s.supplier_name
@@ -135,6 +145,11 @@ export async function getAutoPoSuggestions(
       estimatedTotal: 0,
     };
 
+    // Express the suggestion in purchase packages (order whole cases/bags).
+    const packQty = r.pack_qty != null ? parseFloat(r.pack_qty) : null;
+    const suggestedPackages =
+      r.purchase_unit && packQty && packQty > 0 ? Math.ceil(suggestedQtyVal / packQty) : null;
+
     block.lines.push({
       ingredientId: r.ingredient_id,
       ingredientName: r.ingredient_name,
@@ -145,6 +160,9 @@ export async function getAutoPoSuggestions(
       reorderQty,
       shortfall: Number(shortfall.toFixed(3)),
       suggestedQty: Number(suggestedQtyVal.toFixed(3)),
+      purchaseUnit: r.purchase_unit,
+      packQty,
+      suggestedPackages,
       preferredUnitCost,
       estimatedCost,
     });

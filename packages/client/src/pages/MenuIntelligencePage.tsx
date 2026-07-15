@@ -9,9 +9,11 @@
  */
 
 import { useState, useMemo, useCallback, useEffect } from "react";
-import { BarChart3, LogIn, RefreshCw } from "lucide-react";
+import { BarChart3, LogIn, RefreshCw, ShoppingCart } from "lucide-react";
 import { Link } from "react-router";
 import { useAuth } from "../context/AuthContext.js";
+import { useLocation } from "../context/LocationContext.js";
+import { RecordSaleModal } from "../components/menu-intelligence/RecordSaleModal.js";
 import { useMenuItems, type MenuItem, type MenuIngredient } from "../hooks/useMenuItems.js";
 import { useMenuAnalysis } from "../hooks/useMenuAnalysis.js";
 import { MenuDashboard } from "../components/menu/MenuDashboard.js";
@@ -61,11 +63,14 @@ export function MenuIntelligencePage() {
     recalculate,
   } = useMenuAnalysis();
 
+  const { selectedLocationId } = useLocation();
+
   // Modal state
   const [formOpen, setFormOpen] = useState(false);
   const [editItem, setEditItem] = useState<MenuItem | null>(null);
   const [editIngredients, setEditIngredients] = useState<MenuIngredient[]>([]);
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
+  const [showSale, setShowSale] = useState(false);
 
   // Category targets
   const [categoryTargets, setCategoryTargets] = useState<
@@ -266,16 +271,25 @@ export function MenuIntelligencePage() {
               </p>
             </div>
           </div>
-          <button
-            onClick={handleRecalculate}
-            disabled={loading}
-            className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-[#D4A574] bg-[#D4A574]/10 rounded-xl border border-[#D4A574]/20 hover:bg-[#D4A574]/20 disabled:opacity-50 transition-colors min-h-[44px]"
-          >
-            <RefreshCw
-              className={`size-4 ${loading ? "animate-spin" : ""}`}
-            />
-            Recalculate
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowSale(true)}
+              className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-black bg-[#D4A574] rounded-xl hover:bg-[#c4956a] transition-colors min-h-[44px]"
+            >
+              <ShoppingCart className="size-4" />
+              Record sale
+            </button>
+            <button
+              onClick={handleRecalculate}
+              disabled={loading}
+              className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-[#D4A574] bg-[#D4A574]/10 rounded-xl border border-[#D4A574]/20 hover:bg-[#D4A574]/20 disabled:opacity-50 transition-colors min-h-[44px]"
+            >
+              <RefreshCw
+                className={`size-4 ${loading ? "animate-spin" : ""}`}
+              />
+              Recalculate
+            </button>
+          </div>
         </div>
 
         {/* Tab navigation */}
@@ -361,6 +375,16 @@ export function MenuIntelligencePage() {
           onAddIngredient={addIngredient}
           onRemoveIngredient={removeIngredient}
           getIngredients={getIngredients}
+        />
+      )}
+
+      {/* Record sale (recipe → stock depletion) */}
+      {showSale && (
+        <RecordSaleModal
+          items={items}
+          locationId={selectedLocationId}
+          onClose={() => setShowSale(false)}
+          onDone={() => { refreshItems(); refreshAnalysis(); }}
         />
       )}
     </div>

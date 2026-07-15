@@ -113,11 +113,48 @@ interface IngredientRow {
   note?: string | null;
   quantity: string;
   unit: string;
-  /** The catalog ingredient's base unit (what unitCost is denominated in). */
+  /** The catalog ingredient's KITCHEN unit (what unitCost is denominated in). */
   baseUnit?: string;
+  /** Content equivalence: 1 kitchen unit contains contentQty contentUnit (1 bottle = 750 ml). */
+  contentQty?: string | null;
+  contentUnit?: string | null;
   unitCost: string;
   yieldPct: string;
   costStaleInd?: boolean;
+}
+
+/**
+ * Convert a recipe-line qty to the ingredient's KITCHEN unit (client mirror of
+ * the server resolver's relevant steps): exact match → content equivalence
+ * ("150 ml of a bottle-counted wine" → 0.2 bottle) → same-family standard
+ * conversion. Returns null when no path exists (unit mismatch).
+ */
+function toKitchenQty(row: IngredientRow, qty: number): number | null {
+  if (!row.baseUnit || row.unit === row.baseUnit) return qty;
+  // Content equivalence: measured entry against a counted kitchen unit.
+  const contentQty = row.contentQty ? parseFloat(row.contentQty) : 0;
+  if (contentQty > 0 && row.contentUnit) {
+    const from = normalizeUnit(row.unit);
+    const content = normalizeUnit(row.contentUnit);
+    if (from && content) {
+      try {
+        return convertToBaseUnit(qty, from as BaseUnit, content as BaseUnit) / contentQty;
+      } catch {
+        // different family than the content unit — fall through
+      }
+    }
+  }
+  // Same-family standard conversion straight to the kitchen unit.
+  const from = normalizeUnit(row.unit);
+  const to = normalizeUnit(row.baseUnit);
+  if (from && to) {
+    try {
+      return convertToBaseUnit(qty, from as BaseUnit, to as BaseUnit);
+    } catch {
+      return null;
+    }
+  }
+  return null;
 }
 
 function calcLineCost(row: IngredientRow): number {
@@ -126,33 +163,15 @@ function calcLineCost(row: IngredientRow): number {
   const yld = parseFloat(row.yieldPct) || 100;
   if (yld === 0) return 0;
 
-  let qtyInBase = qty;
-  if (row.baseUnit && row.unit !== row.baseUnit) {
-    const from = normalizeUnit(row.unit);
-    const to = normalizeUnit(row.baseUnit);
-    if (from && to) {
-      try {
-        qtyInBase = convertToBaseUnit(qty, from as BaseUnit, to as BaseUnit);
-      } catch {
-        return 0;
-      }
-    }
-  }
+  const qtyInBase = toKitchenQty(row, qty);
+  if (qtyInBase === null) return 0;
   const raw = (qtyInBase * cost) / (yld / 100);
   return Math.round(raw * 100) / 100;
 }
 
 function hasUnitMismatch(row: IngredientRow): boolean {
   if (!row.baseUnit || !row.ingredientId || row.unit === row.baseUnit) return false;
-  const from = normalizeUnit(row.unit);
-  const to = normalizeUnit(row.baseUnit);
-  if (!from || !to) return false;
-  try {
-    convertToBaseUnit(1, from as BaseUnit, to as BaseUnit);
-    return false;
-  } catch {
-    return true;
-  }
+  return toKitchenQty(row, 1) === null;
 }
 
 function buildConversionText(row: IngredientRow): string | null {
@@ -162,22 +181,13 @@ function buildConversionText(row: IngredientRow): string | null {
   const yld = parseFloat(row.yieldPct) || 100;
   if (qty === 0 && cost === 0) return null;
 
-  const from = normalizeUnit(row.unit);
-  const to = normalizeUnit(row.baseUnit);
-  let qtyInBase = qty;
-  let converted = false;
-  if (from && to && from !== to) {
-    try {
-      qtyInBase = convertToBaseUnit(qty, from as BaseUnit, to as BaseUnit);
-      converted = true;
-    } catch {
-      // incompatible — show raw
-    }
-  }
+  const resolved = toKitchenQty(row, qty);
+  const qtyInBase = resolved ?? qty;
+  const converted = resolved !== null && row.unit !== row.baseUnit;
 
   const qtyStr = converted
-    ? `${qty}${row.unit} = ${Number(qtyInBase.toFixed(4))}${row.baseUnit}`
-    : `${Number(qtyInBase.toFixed(4))}${row.baseUnit}`;
+    ? `${qty}${row.unit} = ${Number(qtyInBase.toFixed(4))} ${row.baseUnit}`
+    : `${Number(qtyInBase.toFixed(4))} ${row.baseUnit}`;
   const costStr = `$${cost.toFixed(4)}/${row.baseUnit}`;
   const lineCost = yld > 0 ? (qtyInBase * cost) / (yld / 100) : 0;
 
@@ -280,6 +290,8 @@ export function MenuItemFormModal({
           quantity: ing.quantity,
           unit: ing.unit,
           baseUnit: ing.baseUnit ?? ing.unit,
+          contentQty: ing.contentQty ?? null,
+          contentUnit: ing.contentUnit ?? null,
           // A linked row with a stored cost of 0 means "no override yet" —
           // show the catalog's current cost instead of a frozen $0.
           unitCost:
@@ -838,7 +850,12 @@ export function MenuItemFormModal({
                                           ingredientId: picked.ingredientId,
                                           ingredientName: picked.ingredientName,
                                           baseUnit: picked.baseUnit || r.unit,
-                                          unit: picked.baseUnit || r.unit,
+                                          contentQty: picked.contentQty ?? null,
+                                          contentUnit: picked.contentUnit ?? null,
+                                          // Recipes default to the MEASURED unit when the item
+                                          // has a content equivalence (pour wine in mL even
+                                          // though it's counted in bottles); else the kitchen unit.
+                                          unit: picked.contentUnit || picked.baseUnit || r.unit,
                                           unitCost: picked.preferredUnitCost || r.unitCost,
                                           costStaleInd: false,
                                         }

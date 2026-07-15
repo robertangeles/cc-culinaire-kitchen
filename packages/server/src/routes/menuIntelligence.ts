@@ -28,6 +28,13 @@ import {
   handleGetWasteImpact,
   handleGetYieldVariance,
   handleListYieldVariance,
+  handleRecordSale,
+  handleVoidSale,
+  handleListSales,
+  handleSalesCsvPreview,
+  handleSalesCsvCommit,
+  handleListConsumables,
+  handleRecordConsumableSale,
 } from "../controllers/menuIntelligenceController.js";
 
 export const menuIntelligenceRouter = Router();
@@ -37,6 +44,17 @@ menuIntelligenceRouter.use(authenticate);
 // Gate the whole module on the Menu & Costing permission (read gate covers the
 // module for v1; a menu:manage write split is a documented follow-up).
 menuIntelligenceRouter.use(requirePermission("menu:read"));
+
+// Recipe-based selling: record a sale (explodes recipe → deducts stock),
+// void a sale, and list a location's sales.
+menuIntelligenceRouter.post("/items/:id/sales", handleRecordSale);
+menuIntelligenceRouter.post("/sales/:saleId/void", handleVoidSale);
+menuIntelligenceRouter.get("/locations/:locId/sales", handleListSales);
+menuIntelligenceRouter.post("/sales/import/preview", upload.single("file"), handleSalesCsvPreview);
+menuIntelligenceRouter.post("/sales/import/commit", handleSalesCsvCommit);
+// FOH consumables sell directly (auto 1:1 link — no hand-built menu item per can)
+menuIntelligenceRouter.get("/consumables", handleListConsumables);
+menuIntelligenceRouter.post("/consumables/:ingredientId/sales", handleRecordConsumableSale);
 
 // Menu items
 menuIntelligenceRouter.get("/items", handleListMenuItems);

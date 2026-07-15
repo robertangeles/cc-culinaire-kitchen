@@ -57,7 +57,9 @@ export async function generateForecasts(locationId: string, orgId: number) {
   const consumptionAgg = await db
     .select({
       ingredientId: consumptionLog.ingredientId,
-      totalConsumed: sql<string>`coalesce(sum(${consumptionLog.quantity}), '0')`,
+      // Sum kitchen-unit qty (base_qty; legacy rows fall back to quantity) —
+      // mixed-unit entries would otherwise poison the daily-usage rate.
+      totalConsumed: sql<string>`coalesce(sum(coalesce(${consumptionLog.baseQty}, ${consumptionLog.quantity})), '0')`,
       dayCount: sql<number>`count(distinct date_trunc('day', ${consumptionLog.loggedAt}))::int`,
     })
     .from(consumptionLog)

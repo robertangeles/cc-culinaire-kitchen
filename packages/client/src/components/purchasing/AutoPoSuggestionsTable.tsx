@@ -111,7 +111,9 @@ export function AutoPoSuggestionsTable() {
                       {line.parLevel.toFixed(2)} {line.baseUnit}
                     </td>
                     <td className="py-2 px-4 text-right tabular-nums text-amber-400 font-medium">
-                      {line.suggestedQty.toFixed(2)} {line.baseUnit}
+                      {line.suggestedPackages != null && line.purchaseUnit
+                        ? `${line.suggestedPackages} ${line.purchaseUnit}${line.packQty ? ` (${line.suggestedPackages * line.packQty} ${line.baseUnit})` : ""}`
+                        : `${line.suggestedQty.toFixed(2)} ${line.baseUnit}`}
                     </td>
                     <td className="py-2 px-4 text-right tabular-nums text-[#999]">
                       {line.preferredUnitCost != null ? `$${line.preferredUnitCost.toFixed(2)}` : "—"}

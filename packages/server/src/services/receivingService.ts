@@ -31,6 +31,7 @@ import * as stockService from "./stockService.js";
 import * as notificationService from "./notificationService.js";
 import * as auditService from "./auditService.js";
 import * as wacService from "./wacService.js";
+import { resolveToBase } from "./unitConversionService.js";
 import { validateTransition, RECEIVING_SESSION_TRANSITIONS } from "../utils/stateTransition.js";
 import pino from "pino";
 
@@ -447,12 +448,22 @@ export async function confirmReceipt(sessionId: string, orgId: number) {
           }
         }
 
+        // Convert the received qty AND its unit cost from the entered
+        // (ordered/received) unit to the ingredient's base unit, so both
+        // stock_level and the FIFO/WAC layer stay in base units. For items
+        // whose entered unit == base unit, factor is 1 and nothing changes.
+        const enteredUnit = line.orderedUnit;
+        const { baseQty } = await resolveToBase(batchIngredientId, receivedQty, enteredUnit);
+        const factor = baseQty / receivedQty; // base units per entered unit
+        const baseUnitCost =
+          line.actualUnitCost != null ? String(Number(line.actualUnitCost) / factor) : line.actualUnitCost;
+
         await fifoService.createBatch(
           {
             storeLocationId: session.storeLocationId,
             ingredientId: batchIngredientId,
-            quantity: receivedQty,
-            unitCost: line.actualUnitCost,
+            quantity: baseQty,
+            unitCost: baseUnitCost,
             sourcePoLineId: line.poLineId,
           },
           tx,
@@ -461,7 +472,7 @@ export async function confirmReceipt(sessionId: string, orgId: number) {
         await stockService.addStock(
           session.storeLocationId,
           batchIngredientId,
-          receivedQty,
+          baseQty,
           tx,
         );
 

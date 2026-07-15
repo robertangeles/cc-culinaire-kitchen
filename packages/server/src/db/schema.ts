@@ -798,6 +798,13 @@ export const menuItem = pgTable("menu_item", {
   periodStart: date("period_start"),
   periodEnd: date("period_end"),
   /**
+   * FOH direct sale: when set, this menu item is the system-generated 1:1
+   * sale link for a FOH consumable (sell 3 cans → deplete 3). Auto-created on
+   * first direct sale of the consumable; hidden from the menu-engineering UI.
+   * NULL for every operator-authored menu item.
+   */
+  linkedIngredientId: uuid("linked_ingredient_id").references(() => ingredient.ingredientId),
+  /**
    * Catalog-spine Phase 3: denormalised allergen rollup.
    *
    * Computed as the boolean OR across every linked Catalog ingredient's
@@ -820,6 +827,9 @@ export const menuItem = pgTable("menu_item", {
 }, (table) => [
   index("idx_menu_item_user").on(table.userId),
   index("idx_menu_item_store").on(table.storeLocationId),
+  // FOH direct sale: one auto-generated 1:1 link per (user, consumable) — the
+  // partial unique makes "create once, reuse forever" race-safe.
+  uniqueIndex("idx_menu_item_linked_ingredient").on(table.userId, table.linkedIngredientId).where(sql`linked_ingredient_id IS NOT NULL`),
 ]);
 
 /**
@@ -1310,7 +1320,36 @@ export const ingredient = pgTable(
     ingredientCategory: varchar("ingredient_category", { length: 50 }).notNull(),
     itemType: varchar("item_type", { length: 20 }).notNull().default("KITCHEN_INGREDIENT"),
     fifoApplicable: varchar("fifo_applicable", { length: 20 }).notNull().default("ALWAYS"),
+    /**
+     * base_unit is THE KITCHEN UNIT — the one fixed physical unit this item is
+     * counted, stocked, transferred, and depleted in (flour: g, oil: ml,
+     * eggs: each, wine: bottle). `stock_level.current_qty`, par levels, and
+     * per-unit costs all live in this unit. It is picked at item creation and
+     * only changed via the convert-stock action (changeKitchenUnit), never a
+     * silent edit.
+     */
     baseUnit: varchar("base_unit", { length: 20 }).notNull(),
+    /**
+     * Content equivalence: "1 kitchen unit CONTAINS content_qty content_unit"
+     * (wine: 1 bottle contains 750 ml). Lets recipe lines use measured units
+     * (150 ml) against a counted item — the resolver divides at runtime
+     * (150 ml ÷ 750 = 0.2 bottle), so no repeating-decimal factor is stored.
+     * NULL for items whose kitchen unit is already a measured unit (flour: g).
+     */
+    contentQty: numeric("content_qty", { precision: 10, scale: 3 }),
+    contentUnit: varchar("content_unit", { length: 20 }),
+    /**
+     * Primary purchase packaging label ('case', 'bag', 'carton'). Packaging
+     * exists ONLY at ordering + receiving — it converts to kitchen units at
+     * the moment of receiving and never touches the stock count. `pack_qty`
+     * is the kitchen units per package (case of 12 bottles → 12; 25 kg bag of
+     * flour → 25000 g). NULL ⇒ purchased in the kitchen unit directly.
+     */
+    purchaseUnit: varchar("purchase_unit", { length: 20 }),
+    /**
+     * Kitchen units per purchase package. Doubles as the cost helper:
+     * pack cost ÷ pack_qty = cost per kitchen unit.
+     */
     packQty: numeric("pack_qty", { precision: 10, scale: 3 }),
     description: text("description"),
     unitCost: numeric("unit_cost"),
@@ -1733,6 +1772,47 @@ export const pendingCatalogRequest = pgTable(
 );
 
 /**
+ * The `sale` table is the header for a recorded menu-item sale. Selling a
+ * menu item explodes its recipe and deducts each ingredient from stock; the
+ * `sale` row is the entity, and its effects are the `consumption_log` rows that
+ * carry `sale_id`. This is NOT a parallel stock ledger — depletion still flows
+ * through consumption_log + stock_level. Sources: MANUAL entry, CSV import,
+ * (future) POS. `voided_at` supports reversal; `idempotency_key` (partial-unique
+ * per org) makes record + CSV re-import retry-safe.
+ *
+ * OLTP table, 2NF — every non-key column depends on sale_id.
+ */
+export const sale = pgTable(
+  "sale",
+  {
+    saleId: uuid("sale_id").defaultRandom().primaryKey(),
+    organisationId: integer("organisation_id").notNull().references(() => organisation.organisationId),
+    menuItemId: uuid("menu_item_id").notNull().references(() => menuItem.menuItemId),
+    storeLocationId: uuid("store_location_id").notNull().references(() => storeLocation.storeLocationId),
+    qtySold: numeric("qty_sold", { precision: 10, scale: 3 }).notNull(),
+    /** 'MANUAL' | 'CSV' | (future) 'POS'. */
+    source: varchar("source", { length: 20 }).notNull(),
+    /** Client/derived idempotency token; replay returns this sale instead of re-recording. */
+    idempotencyKey: varchar("idempotency_key", { length: 120 }),
+    soldAt: timestamp("sold_at", { withTimezone: true }).notNull(),
+    voidedAt: timestamp("voided_at", { withTimezone: true }),
+    voidedBy: integer("voided_by").references(() => user.userId),
+    createdBy: integer("created_by").references(() => user.userId),
+    createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // Retry/re-import guard: one sale per (org, idempotency_key) when a key is present
+    uniqueIndex("idx_sale_idempotency").on(table.organisationId, table.idempotencyKey).where(sql`idempotency_key IS NOT NULL`),
+    // Sales report: "all sales for an org over a period, newest first"
+    index("idx_sale_org").on(table.organisationId, table.soldAt),
+    // Location report
+    index("idx_sale_location").on(table.storeLocationId, table.soldAt),
+    // Per-menu-item sales history
+    index("idx_sale_menu_item").on(table.menuItemId),
+  ],
+);
+
+/**
  * The `consumption_log` table records stock consumed outside of
  * recipes, prep sessions, or stock takes. Entries deduct stock
  * immediately — no approval workflow. HQ reviews via daily digest.
@@ -1753,9 +1833,23 @@ export const consumptionLog = pgTable(
      * to compute per-dish theoretical-vs-actual cost.
      */
     menuItemId: uuid("menu_item_id").references(() => menuItem.menuItemId, { onDelete: "set null" }),
+    /**
+     * When this consumption row was written by a recorded sale (recipe
+     * depletion), this links to the `sale` header. NULL for non-sale
+     * consumption (waste, prep, staff meals). Lets `voidSale` find + reverse
+     * exactly the rows a sale produced.
+     */
+    saleId: uuid("sale_id").references(() => sale.saleId),
     userId: integer("user_id").notNull().references(() => user.userId),
     quantity: numeric("quantity", { precision: 10, scale: 3 }).notNull(),
     unit: varchar("unit", { length: 20 }).notNull(),
+    /**
+     * The quantity resolved to the ingredient's KITCHEN unit at insert time.
+     * `quantity`+`unit` preserve what was entered (display history); base_qty
+     * is what aggregations (consumption summary, forecasts) sum — summing
+     * as-entered quantities across mixed units produces garbage.
+     */
+    baseQty: numeric("base_qty", { precision: 12, scale: 4 }),
     reason: varchar("reason", { length: 30 }).notNull(),
     notes: text("notes"),
     shift: varchar("shift", { length: 20 }),
@@ -1772,6 +1866,8 @@ export const consumptionLog = pgTable(
     index("idx_consumption_log_ingredient").on(table.ingredientId),
     // Phase 4 yield variance: "consumption rolled up per menu item per period"
     index("idx_consumption_log_menu_item").on(table.menuItemId, table.loggedAt),
+    // voidSale: "get all consumption rows a sale produced"
+    index("idx_consumption_log_sale").on(table.saleId),
   ],
 );
 

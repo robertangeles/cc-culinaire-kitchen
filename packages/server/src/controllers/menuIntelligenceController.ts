@@ -31,6 +31,142 @@ import {
   getYieldVariance,
   listYieldVariance,
 } from "../services/yieldVarianceService.js";
+import { recordSale, voidSale, listSales, previewSalesCsv, commitSalesCsv, listSellableConsumables, recordConsumableSale, SaleError } from "../services/saleService.js";
+import { getUserLocationContext } from "../services/locationContextService.js";
+
+/** Resolve the caller's org id from their location context. */
+async function resolveSalesOrgId(req: Request, res: Response): Promise<number | null> {
+  const ctx = await getUserLocationContext((req as any).user.sub);
+  const orgId = ctx.locations[0]?.organisationId ?? ctx.organisationId;
+  if (orgId === null) {
+    res.status(400).json({ error: "You are not a member of any organisation" });
+    return null;
+  }
+  return orgId;
+}
+
+/** Map a SaleError to its status; otherwise bubble to the error handler. */
+function handleSaleError(err: unknown, res: Response, next: NextFunction): void {
+  if (err instanceof SaleError) {
+    res.status(err.statusCode).json({ error: err.message });
+    return;
+  }
+  next(err as Error);
+}
+
+/** POST /items/:id/sales — record a menu-item sale (recipe → stock depletion). */
+export async function handleRecordSale(req: Request, res: Response, next: NextFunction) {
+  try {
+    const orgId = await resolveSalesOrgId(req, res);
+    if (orgId === null) return;
+    const userId = (req as any).user.sub;
+    const { qtySold, soldAt, locationId } = req.body ?? {};
+    if (qtySold === undefined || Number(qtySold) <= 0) {
+      res.status(400).json({ error: "qtySold must be greater than 0" });
+      return;
+    }
+    const idempotencyKey = (req.header("Idempotency-Key") as string | undefined) ?? undefined;
+    const result = await recordSale(orgId, userId, {
+      menuItemId: req.params.id as string,
+      qtySold: Number(qtySold),
+      soldAt: soldAt ? new Date(String(soldAt)) : undefined,
+      locationId: locationId || undefined,
+      idempotencyKey,
+    });
+    res.status(201).json(result);
+  } catch (err) {
+    handleSaleError(err, res, next);
+  }
+}
+
+/** POST /sales/:saleId/void — reverse a recorded sale. */
+export async function handleVoidSale(req: Request, res: Response, next: NextFunction) {
+  try {
+    const orgId = await resolveSalesOrgId(req, res);
+    if (orgId === null) return;
+    const result = await voidSale(orgId, (req as any).user.sub, req.params.saleId as string);
+    res.json(result);
+  } catch (err) {
+    handleSaleError(err, res, next);
+  }
+}
+
+/** GET /locations/:locId/sales — recent sales for a location. */
+export async function handleListSales(req: Request, res: Response, next: NextFunction) {
+  try {
+    const orgId = await resolveSalesOrgId(req, res);
+    if (orgId === null) return;
+    const limit = req.query.limit ? Number(req.query.limit) : undefined;
+    res.json(await listSales(orgId, req.params.locId as string, limit));
+  } catch (err) {
+    handleSaleError(err, res, next);
+  }
+}
+
+/** GET /consumables — sellable FOH consumables for the Record-sale picker. */
+export async function handleListConsumables(req: Request, res: Response, next: NextFunction) {
+  try {
+    const orgId = await resolveSalesOrgId(req, res);
+    if (orgId === null) return;
+    res.json(await listSellableConsumables(orgId));
+  } catch (err) {
+    handleSaleError(err, res, next);
+  }
+}
+
+/** POST /consumables/:ingredientId/sales — sell a FOH consumable directly (auto 1:1 link). */
+export async function handleRecordConsumableSale(req: Request, res: Response, next: NextFunction) {
+  try {
+    const orgId = await resolveSalesOrgId(req, res);
+    if (orgId === null) return;
+    const userId = (req as any).user.sub;
+    const { qtySold, soldAt, locationId } = req.body ?? {};
+    if (qtySold === undefined || Number(qtySold) <= 0) {
+      res.status(400).json({ error: "qtySold must be greater than 0" });
+      return;
+    }
+    const idempotencyKey = (req.header("Idempotency-Key") as string | undefined) ?? undefined;
+    const result = await recordConsumableSale(orgId, userId, {
+      ingredientId: req.params.ingredientId as string,
+      qtySold: Number(qtySold),
+      soldAt: soldAt ? new Date(String(soldAt)) : undefined,
+      locationId: locationId || undefined,
+      idempotencyKey,
+    });
+    res.status(201).json(result);
+  } catch (err) {
+    handleSaleError(err, res, next);
+  }
+}
+
+/** POST /sales/import/preview — match a CSV to menu items (deplete nothing). */
+export async function handleSalesCsvPreview(req: Request, res: Response, next: NextFunction) {
+  try {
+    const userId = (req as any).user.sub;
+    const file = req.file;
+    if (!file) { res.status(400).json({ error: "CSV file required" }); return; }
+    res.json(await previewSalesCsv(userId, file.buffer.toString("utf-8")));
+  } catch (err) {
+    handleSaleError(err, res, next);
+  }
+}
+
+/** POST /sales/import/commit — record matched CSV rows (per-row atomic). */
+export async function handleSalesCsvCommit(req: Request, res: Response, next: NextFunction) {
+  try {
+    const orgId = await resolveSalesOrgId(req, res);
+    if (orgId === null) return;
+    const userId = (req as any).user.sub;
+    const lines = req.body?.lines;
+    if (!Array.isArray(lines) || lines.length === 0) {
+      res.status(400).json({ error: "lines must be a non-empty array" });
+      return;
+    }
+    res.json(await commitSalesCsv(orgId, userId, lines));
+  } catch (err) {
+    handleSaleError(err, res, next);
+  }
+}
 
 const menuItemSchema = z.object({
   name: z.string().min(1).max(200),

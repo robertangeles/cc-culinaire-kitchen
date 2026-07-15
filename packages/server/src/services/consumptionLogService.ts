@@ -7,6 +7,7 @@
 
 import { eq, and, desc, sql, gte, lte, count } from "drizzle-orm";
 import { db } from "../db/index.js";
+import { resolveToBase } from "./unitConversionService.js";
 import {
   consumptionLog,
   ingredient,
@@ -194,6 +195,11 @@ export async function logConsumption(
     throw new Error("Ingredient not found or does not belong to this organisation");
   }
 
+  // Resolve to the kitchen unit up-front: the deduction AND the stored
+  // base_qty both come from this one conversion, so aggregations (summary,
+  // forecasts) can sum base_qty safely across entries logged in mixed units.
+  const { baseQty } = await resolveToBase(data.ingredientId, data.quantity, data.unit);
+
   // Create consumption log row
   const [entry] = await db
     .insert(consumptionLog)
@@ -205,17 +211,19 @@ export async function logConsumption(
       userId,
       quantity: String(data.quantity),
       unit: data.unit,
+      baseQty: String(baseQty),
       reason: data.reason,
       notes: data.notes ?? null,
       shift: data.shift ?? null,
     })
     .returning();
 
-  // Adjust stock level — deduct for usage, add back for returns
+  // Adjust stock level — deduct for usage, add back for returns. The log row
+  // keeps the entered qty + unit for display; base_qty is the kitchen-unit truth.
   if (data.reason === "return_to_stock") {
-    await restoreStockLevel(locationId, data.ingredientId, data.quantity);
+    await restoreStockLevel(locationId, data.ingredientId, baseQty);
   } else {
-    await deductStockLevel(locationId, data.ingredientId, data.quantity);
+    await deductStockLevel(locationId, data.ingredientId, baseQty);
   }
 
   return entry;
@@ -292,7 +300,10 @@ export async function getConsumptionSummary(orgId: number, opts?: SummaryOpts) {
       storeLocationId: consumptionLog.storeLocationId,
       locationName: storeLocation.locationName,
       totalEntries: count(consumptionLog.consumptionLogId),
-      totalValue: sql<string>`coalesce(sum(${consumptionLog.quantity}::numeric * coalesce(${ingredient.unitCost}::numeric, 0)), 0)`,
+      // Sum the KITCHEN-unit qty (base_qty), never the as-entered quantity —
+      // entries logged in mixed units (bottle vs ml) don't add. coalesce
+      // covers legacy rows written before base_qty existed (backfilled).
+      totalValue: sql<string>`coalesce(sum(coalesce(${consumptionLog.baseQty}, ${consumptionLog.quantity})::numeric * coalesce(${ingredient.unitCost}::numeric, 0)), 0)`,
     })
     .from(consumptionLog)
     .innerJoin(ingredient, eq(consumptionLog.ingredientId, ingredient.ingredientId))
@@ -315,14 +326,14 @@ export async function getConsumptionSummary(orgId: number, opts?: SummaryOpts) {
     .select({
       ingredientId: consumptionLog.ingredientId,
       ingredientName: ingredient.ingredientName,
-      totalQty: sql<string>`sum(${consumptionLog.quantity}::numeric)`,
+      totalQty: sql<string>`sum(coalesce(${consumptionLog.baseQty}, ${consumptionLog.quantity})::numeric)`,
       unit: ingredient.baseUnit,
     })
     .from(consumptionLog)
     .innerJoin(ingredient, eq(consumptionLog.ingredientId, ingredient.ingredientId))
     .where(baseConditions)
     .groupBy(consumptionLog.ingredientId, ingredient.ingredientName, ingredient.baseUnit)
-    .orderBy(sql`sum(${consumptionLog.quantity}::numeric) desc`)
+    .orderBy(sql`sum(coalesce(${consumptionLog.baseQty}, ${consumptionLog.quantity})::numeric) desc`)
     .limit(10);
 
   return {
@@ -384,15 +395,17 @@ export async function editConsumptionLog(
     throw new Error("Cannot edit entries older than 24 hours");
   }
 
-  // If quantity changed, adjust stock level
+  // If quantity changed, adjust stock level (convert the delta from the
+  // entry's unit to base — stock_level is in base units).
   if (data.quantity !== undefined && data.quantity !== Number(existing.quantity)) {
     const delta = data.quantity - Number(existing.quantity);
+    const { baseQty: baseDelta } = await resolveToBase(existing.ingredientId, Math.abs(delta), existing.unit);
     if (delta > 0) {
       // New qty is larger — deduct the difference
-      await deductStockLevel(existing.storeLocationId, existing.ingredientId, delta);
+      await deductStockLevel(existing.storeLocationId, existing.ingredientId, baseDelta);
     } else {
       // New qty is smaller — restore the difference
-      await restoreStockLevel(existing.storeLocationId, existing.ingredientId, Math.abs(delta));
+      await restoreStockLevel(existing.storeLocationId, existing.ingredientId, baseDelta);
     }
   }
 
@@ -403,6 +416,14 @@ export async function editConsumptionLog(
   if (data.reason !== undefined) updates.reason = data.reason;
   if (data.notes !== undefined) updates.notes = data.notes;
   if (data.shift !== undefined) updates.shift = data.shift;
+  // Keep base_qty (the kitchen-unit truth aggregations sum) in step with any
+  // quantity/unit change.
+  if (data.quantity !== undefined || data.unit !== undefined) {
+    const effQty = data.quantity ?? Number(existing.quantity);
+    const effUnit = data.unit ?? existing.unit;
+    const { baseQty: newBaseQty } = await resolveToBase(existing.ingredientId, effQty, effUnit);
+    updates.baseQty = String(newBaseQty);
+  }
 
   const [updated] = await db
     .update(consumptionLog)
@@ -449,12 +470,13 @@ export async function deleteConsumptionLog(
     throw new Error("Cannot delete entries older than 24 hours");
   }
 
-  // Restore stock
-  await restoreStockLevel(
-    existing.storeLocationId,
+  // Restore stock (convert the entry's qty from its unit to base)
+  const { baseQty: baseRestore } = await resolveToBase(
     existing.ingredientId,
     Number(existing.quantity),
+    existing.unit,
   );
+  await restoreStockLevel(existing.storeLocationId, existing.ingredientId, baseRestore);
 
   // Delete the row
   const [deleted] = await db
@@ -480,7 +502,7 @@ async function getConsumptionByIngredient(
   const rows = await db
     .select({
       date: sql<string>`date_trunc('day', ${consumptionLog.loggedAt})::date`,
-      totalQty: sql<string>`sum(${consumptionLog.quantity}::numeric)`,
+      totalQty: sql<string>`sum(coalesce(${consumptionLog.baseQty}, ${consumptionLog.quantity})::numeric)`,
     })
     .from(consumptionLog)
     .where(

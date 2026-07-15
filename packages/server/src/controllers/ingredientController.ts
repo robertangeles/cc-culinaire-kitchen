@@ -53,6 +53,11 @@ const CreateIngredientSchema = z.object({
   ingredientName: z.string().min(1).max(200),
   ingredientCategory: z.enum(VALID_CATEGORIES),
   baseUnit: z.string().min(1).max(20),
+  contentQty: z.string().refine(
+    (v) => !isNaN(Number(v)) && Number(v) > 0, "Must be a positive number",
+  ).nullable().optional(),
+  contentUnit: z.string().max(20).nullable().optional(),
+  purchaseUnit: z.string().max(20).nullable().optional(),
   packQty: z.string().refine(
     (v) => !isNaN(Number(v)) && Number(v) > 0, "Must be a positive number",
   ).optional(),
@@ -80,6 +85,11 @@ const UpdateIngredientSchema = z.object({
   ingredientName: z.string().min(1).max(200).optional(),
   ingredientCategory: z.enum(VALID_CATEGORIES).optional(),
   baseUnit: z.string().min(1).max(20).optional(),
+  contentQty: z.string().refine(
+    (v) => !isNaN(Number(v)) && Number(v) > 0, "Must be a positive number",
+  ).nullable().optional(),
+  contentUnit: z.string().max(20).nullable().optional(),
+  purchaseUnit: z.string().max(20).nullable().optional(),
   packQty: z.string().refine(
     (v) => !isNaN(Number(v)) && Number(v) > 0, "Must be a positive number",
   ).nullable().optional(),

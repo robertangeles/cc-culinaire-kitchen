@@ -68,14 +68,26 @@ describe("unitConversionService", () => {
         .rejects.toThrow("Ingredient not found");
     });
 
-    it("throws when unit has no conversion", async () => {
+    it("throws when the unit has no conversion and no compatible family", async () => {
       mockIngredientRows = [{ baseUnit: "kg" }];
       mockConversionRows = [];
       const { convertToBase, invalidateConversionCache } = await import("./unitConversionService.js");
       invalidateConversionCache("ing-3");
 
+      // "bogus" is neither a conversion-row unit nor a known family unit.
       await expect(convertToBase("ing-3", 5, "bogus"))
-        .rejects.toThrow("No conversion found");
+        .rejects.toThrow("Cannot convert");
+    });
+
+    it("falls back to same-family standard conversion when no row exists", async () => {
+      mockIngredientRows = [{ baseUnit: "g" }];
+      mockConversionRows = [];
+      const { convertToBase, invalidateConversionCache } = await import("./unitConversionService.js");
+      invalidateConversionCache("ing-fam");
+
+      // No unit_conversion row, but kg → g is a standard family conversion.
+      const result = await convertToBase("ing-fam", 2, "kg");
+      expect(result).toEqual({ baseQty: 2000, baseUnit: "g" });
     });
 
     it("is case-insensitive for base unit matching", async () => {

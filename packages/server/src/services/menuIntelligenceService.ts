@@ -22,7 +22,8 @@ import pino from "pino";
 import { db } from "../db/index.js";
 import { menuItem, menuItemIngredient, menuCategorySetting, wasteLog, ingredient, locationIngredient, user } from "../db/schema.js";
 import { eq, and, sql, desc, gte, ilike, inArray } from "drizzle-orm";
-import { convertToBaseUnit, normalizeUnit, type BaseUnit, IncompatibleUnitsError } from "@culinaire/shared";
+import { IncompatibleUnitsError } from "@culinaire/shared";
+import { resolveToBase } from "./unitConversionService.js";
 import { recordOpsEvent } from "./brainCaptureService.js";
 import { getUserOrgContext } from "./orgContextService.js";
 
@@ -74,7 +75,12 @@ export async function createMenuItem(userId: number, data: {
 }
 
 export async function getMenuItems(userId: number, category?: string, storeLocationId?: string) {
-  const conditions = [eq(menuItem.userId, userId)];
+  const conditions = [
+    eq(menuItem.userId, userId),
+    // Hide system-generated FOH direct-sale links — they're plumbing (a can's
+    // 1:1 depletion), not dishes the operator engineers.
+    sql`${menuItem.linkedIngredientId} IS NULL`,
+  ];
   if (category) conditions.push(eq(menuItem.category, category));
   if (storeLocationId) conditions.push(eq(menuItem.storeLocationId, storeLocationId));
 
@@ -217,23 +223,20 @@ async function computeLineCost(
 
   let qtyInBase = qty;
   if (ingredientId) {
-    const [ing] = await db
-      .select({ baseUnit: ingredient.baseUnit })
-      .from(ingredient)
-      .where(eq(ingredient.ingredientId, ingredientId));
-    const fromUnit = normalizeUnit(unit);
-    const toUnit = ing?.baseUnit ? normalizeUnit(ing.baseUnit) : null;
-    if (fromUnit && toUnit) {
-      try {
-        qtyInBase = convertToBaseUnit(qty, fromUnit as BaseUnit, toUnit as BaseUnit);
-      } catch (err) {
-        if (err instanceof IncompatibleUnitsError) {
-          // Surface the error: cost would be silently wrong otherwise.
-          logger.warn({ ingredientId, fromUnit, toUnit, err: err.message }, "Unit conversion failed in computeLineCost");
-          throw err;
-        }
+    // Item-aware resolution to the ingredient's KITCHEN unit: handles the
+    // content equivalence ("150 ml of a bottle-counted wine" → 0.2 bottle),
+    // purchase packaging, per-item conversion rows, and family math. unitCost
+    // is per kitchen unit, so the product is the true line cost.
+    try {
+      const { baseQty } = await resolveToBase(ingredientId, qty, unit);
+      qtyInBase = baseQty;
+    } catch (err) {
+      if (err instanceof IncompatibleUnitsError) {
+        // Surface the error: cost would be silently wrong otherwise.
+        logger.warn({ ingredientId, unit, err: err.message }, "Unit conversion failed in computeLineCost");
         throw err;
       }
+      throw err;
     }
   }
 
@@ -292,6 +295,8 @@ export async function getIngredients(menuItemId: string) {
     costStaleAt: menuItemIngredient.costStaleAt,
     createdDttm: menuItemIngredient.createdDttm,
     baseUnit: ingredient.baseUnit,
+    contentQty: ingredient.contentQty,
+    contentUnit: ingredient.contentUnit,
     catalogUnitCost: ingredient.preferredUnitCost,
   }).from(menuItemIngredient)
     .leftJoin(ingredient, eq(menuItemIngredient.ingredientId, ingredient.ingredientId))

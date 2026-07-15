@@ -73,6 +73,8 @@ The running-a-kitchen toolkit (authenticated, location-scoped). See [[store-loca
 - **Menu engineering matrix** — Star / Plowhorse / Puzzle / Dog classification
 - Food cost %, contribution margin, P&L per item, yield variance
 - Allergen badges, category profitability targets, CSV bulk upload
+- **Record sale** — a sale is a menu-item event: it explodes the recipe and deducts each ingredient in kitchen units (a 150 mL glass depletes **0.2 bottles**), feeding yield variance. Manual entry + two-phase CSV import; FOH consumables sell **directly** (hidden auto 1:1 link — no recipe math for a can); oversell flagged; reversible via **Void**; idempotency-guarded. See [[uom-and-recipe-selling]]
+- **Kitchen units** — every item is counted/stocked in ONE kitchen unit (wine: **bottle**, flour: g, napkins: each) with an optional content equivalence (1 bottle = 750 mL) for recipes; purchase packaging (case of 12, 25 kg bag) exists only at ordering/receiving and converts at the boundary (qty + cost); one resolver serves every stock flow
 - Waste-impact cross-reference
 
 ### Kitchen Copilot — Mise en Place (`/kitchen-copilot`)

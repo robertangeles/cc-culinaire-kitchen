@@ -34,6 +34,14 @@ const UNITS = [
   "bottle", "can", "bag", "box", "case", "bunch",
 ];
 
+/**
+ * Units that ARE measurements (weight/volume). Items counted in these need no
+ * "size" declaration — recipes convert g↔kg / mL↔L automatically. Counted
+ * things (bottle, can, each…) may declare a size (1 bottle = 750 mL) so
+ * recipes can measure out of them.
+ */
+const MEASURED_UNITS = ["kg", "g", "mg", "L", "mL", "tsp", "tbsp", "cup", "fl oz"];
+
 const ALLERGEN_DEFS = [
   { key: "containsDairyInd" as const, label: "Dairy", color: "bg-blue-500/20 text-blue-400 border-blue-500/30" },
   { key: "containsGlutenInd" as const, label: "Gluten", color: "bg-amber-500/20 text-amber-400 border-amber-500/30" },
@@ -306,9 +314,12 @@ export function IngredientCatalog() {
               const status = getStockStatus(loc);
               const sl = STATUS_LABEL[status];
               const cost = loc?.locationUnitCost || ing.unitCost;
+              // Kitchen-unit model: stock, par, and display all live in the
+              // item's kitchen unit (baseUnit — bottle, g, each). No lens.
               const qty = loc?.currentQty ? Number(loc.currentQty) : null;
               const par = loc?.parLevel ? Number(loc.parLevel) : ing.parLevel ? Number(ing.parLevel) : null;
               const isLowStock = qty !== null && par !== null && par > 0 && qty / par <= 0.75;
+              const fmtStock = (n: number) => (n % 1 === 0 ? n.toString() : n.toFixed(1));
 
               return (
                 <button
@@ -324,10 +335,10 @@ export function IngredientCatalog() {
                       : "—"}
                   </div>
                   <div className={`col-span-2 text-right font-mono tabular-nums ${isLowStock ? "text-amber-400" : "text-white"}`}>
-                    {qty !== null ? qty.toFixed(1) : "—"}
+                    {qty !== null ? fmtStock(qty) : "—"}
                   </div>
                   <div className="col-span-1 text-right text-[#666] font-mono tabular-nums">
-                    {par !== null ? par.toFixed(0) : "—"}
+                    {par !== null ? fmtStock(par) : "—"}
                   </div>
                   <div className={`col-span-2 text-right text-xs font-medium ${sl.className}`}>
                     {sl.text}
@@ -393,7 +404,13 @@ function EditIngredientModal({
   const [editItemType, setEditItemType] = useState<ItemTypeKey>((ingredient.itemType as ItemTypeKey) || "KITCHEN_INGREDIENT");
   const [editFifo, setEditFifo] = useState<FifoModeKey>((ingredient.fifoApplicable as FifoModeKey) || FIFO_DEFAULTS[(ingredient.itemType as ItemTypeKey) || "KITCHEN_INGREDIENT"]);
   const [cat, setCat] = useState(ingredient.ingredientCategory);
+  // Kitchen unit — THE unit this item is counted/stocked in (g, mL, each, bottle).
   const [unit, setUnit] = useState(ingredient.baseUnit);
+  // Content equivalence: 1 kitchen unit contains [contentQty] [contentUnit].
+  const [contentQty, setContentQty] = useState(ingredient.contentQty || "");
+  const [contentUnit, setContentUnit] = useState(ingredient.contentUnit || "");
+  // Purchase packaging: bought as [purchaseUnit] of [packQty] kitchen units.
+  const [purchaseUnit, setPurchaseUnit] = useState(ingredient.purchaseUnit || "");
   const [editPackQty, setEditPackQty] = useState(ingredient.packQty || "");
   const [desc, setDesc] = useState(ingredient.description || "");
   const packCostInit = ingredient.packQty && ingredient.unitCost
@@ -401,11 +418,38 @@ function EditIngredientModal({
     : ingredient.unitCost || "";
   const [cost, setCost] = useState(packCostInit);
 
-  const derivedUnitCost = editPackQty && cost && parseFloat(editPackQty) > 0
+  // Cost per kitchen unit: with packaging, the entered cost is per package
+  // (÷ pack qty); buying loose, the entered cost IS per kitchen unit — a stale
+  // pack qty must not divide it.
+  const derivedUnitCost = purchaseUnit && editPackQty && cost && parseFloat(editPackQty) > 0
     ? (parseFloat(cost) / parseFloat(editPackQty)).toFixed(4)
     : cost || null;
   const [par, setPar] = useState(ingredient.parLevel || "");
   const [reorder, setReorder] = useState(ingredient.reorderQty || "");
+  // Par/reorder can be ENTERED in kitchen units or purchase packages ("2 bags");
+  // they are always STORED in kitchen units (stock comparisons need one unit).
+  const [parEntryUnit, setParEntryUnit] = useState<"base" | "pack">("base");
+  const [reorderEntryUnit, setReorderEntryUnit] = useState<"base" | "pack">("base");
+  const packFactor = purchaseUnit && editPackQty && parseFloat(editPackQty) > 0 ? parseFloat(editPackQty) : null;
+  const canEnterInPacks = packFactor !== null;
+  /** Convert an entered par/reorder value to kitchen units for saving. */
+  const toKitchen = (value: string, entryUnit: "base" | "pack"): string | null => {
+    if (!value) return null;
+    const n = parseFloat(value);
+    if (isNaN(n)) return value;
+    return entryUnit === "pack" && packFactor ? String(n * packFactor) : value;
+  };
+  /** Live translation line so there's never doubt about what gets saved. */
+  const echoFor = (value: string, entryUnit: "base" | "pack"): string | null => {
+    if (!packFactor || !value) return null;
+    const n = parseFloat(value);
+    if (isNaN(n) || n <= 0) return null;
+    return entryUnit === "pack"
+      ? `= ${n * packFactor} ${unit}`
+      : `= ${(n / packFactor).toFixed(2)} ${purchaseUnit}`;
+  };
+  const parEcho = echoFor(par, parEntryUnit);
+  const reorderEcho = echoFor(reorder, reorderEntryUnit);
   const editModalCategories = getCategoriesForType(editItemType);
   const [deleteConfirm, setDeleteConfirm] = useState<"idle" | "checking" | "blocked" | "confirm">("idle");
   const [usageList, setUsageList] = useState<Array<{ menuItemId: string; menuItemName: string }>>([]);
@@ -442,6 +486,9 @@ function EditIngredientModal({
             placeholder="Item name" autoFocus
             className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white focus:outline-none focus:border-[#D4A574]/50"
           />
+          <textarea value={desc} onChange={(e) => setDesc(e.target.value)}
+            placeholder="Description" rows={2}
+            className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none resize-none" />
 
           {/* Item type selector */}
           <div>
@@ -472,73 +519,6 @@ function EditIngredientModal({
             </div>
           </div>
 
-          {/* FIFO mode */}
-          <div>
-            <p className="text-[10px] text-[#666] uppercase tracking-wider mb-1.5">FIFO Mode</p>
-            <select value={editFifo} onChange={(e) => setEditFifo(e.target.value as FifoModeKey)}
-              className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white focus:outline-none">
-              {(Object.keys(FIFO_MODES) as FifoModeKey[]).map((fk) => (
-                <option key={fk} value={fk}>{FIFO_MODES[fk].label} — {FIFO_MODES[fk].description}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="grid grid-cols-4 gap-2">
-            <div>
-              <label className="block text-[10px] uppercase tracking-wider text-[#666] mb-1">Category</label>
-              <select value={cat} onChange={(e) => setCat(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white focus:outline-none">
-                {editModalCategories.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-[10px] uppercase tracking-wider text-[#666] mb-1">Quantity</label>
-              <input type="text" value={editPackQty} onChange={(e) => setEditPackQty(e.target.value)}
-                placeholder="Quantity"
-                className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none" />
-            </div>
-            <div>
-              <label className="block text-[10px] uppercase tracking-wider text-[#666] mb-1">UOM</label>
-              <select value={unit} onChange={(e) => setUnit(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white focus:outline-none">
-                {UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-[10px] uppercase tracking-wider text-[#666] mb-1">
-                {editPackQty ? "Cost" : "Cost / Unit"}
-              </label>
-              <div className="relative">
-                <DollarSign className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-[#666]" />
-                <input type="text" value={cost} onChange={(e) => setCost(e.target.value)}
-                  placeholder="0.00"
-                  className="w-full pl-8 pr-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none" />
-              </div>
-            </div>
-          </div>
-          {editPackQty && derivedUnitCost && (
-            <p className="text-[10px] text-[#D4A574]">
-              = ${derivedUnitCost} per {unit}
-            </p>
-          )}
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="block text-[10px] uppercase tracking-wider text-[#666] mb-1">Par Level (min stock)</label>
-              <input type="text" value={par} onChange={(e) => setPar(e.target.value)}
-                placeholder="0"
-                className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none" />
-            </div>
-            <div>
-              <label className="block text-[10px] uppercase tracking-wider text-[#666] mb-1">Reorder Qty</label>
-              <input type="text" value={reorder} onChange={(e) => setReorder(e.target.value)}
-                placeholder="0"
-                className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none" />
-            </div>
-          </div>
-          <textarea value={desc} onChange={(e) => setDesc(e.target.value)}
-            placeholder="Description" rows={2}
-            className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none resize-none" />
-
           {/* Allergen toggles */}
           <div>
             <p className="text-[10px] text-[#666] uppercase tracking-wider mb-1.5">Allergens</p>
@@ -554,9 +534,144 @@ function EditIngredientModal({
             </div>
           </div>
 
-          {/* Suppliers */}
+          {/* FIFO mode */}
           <div>
-            <p className="text-[10px] text-[#666] uppercase tracking-wider mb-1.5">Suppliers</p>
+            <p className="text-[10px] text-[#666] uppercase tracking-wider mb-1.5">FIFO Mode</p>
+            <select value={editFifo} onChange={(e) => setEditFifo(e.target.value as FifoModeKey)}
+              className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white focus:outline-none">
+              {(Object.keys(FIFO_MODES) as FifoModeKey[]).map((fk) => (
+                <option key={fk} value={fk}>{FIFO_MODES[fk].label} — {FIFO_MODES[fk].description}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-[10px] uppercase tracking-wider text-[#666] mb-1">Category</label>
+              <select value={cat} onChange={(e) => setCat(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white focus:outline-none">
+                {editModalCategories.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] uppercase tracking-wider text-[#666] mb-1">Counted in</label>
+              <select value={unit} onChange={(e) => setUnit(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white focus:outline-none">
+                {UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
+              </select>
+              <p className="text-[10px] text-[#666] mt-1">How you count it at stocktake — bottles, kg, each. All stock numbers use this.</p>
+            </div>
+          </div>
+
+          {/* "Bottle size: 750 mL" — the trade term for what one counted thing
+              holds; lets recipes measure out of it. Hidden for measured kitchen
+              units (kg/mL): those are already measurements. */}
+          {!MEASURED_UNITS.includes(unit) && (
+            <div>
+              <label className="block text-[10px] uppercase tracking-wider text-[#666] mb-1">
+                {["each", "dozen", "portion"].includes(unit) ? "Unit size" : `${unit} size`}
+              </label>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-[#999]">1 {unit} =</span>
+                <input type="text" value={contentQty} onChange={(e) => setContentQty(e.target.value)}
+                  placeholder="750"
+                  className="w-24 px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none" />
+                <select value={contentUnit} onChange={(e) => setContentUnit(e.target.value)}
+                  className="px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white focus:outline-none">
+                  <option value="">unit…</option>
+                  {MEASURED_UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
+                </select>
+              </div>
+              <p className="text-[10px] text-[#666] mt-1">
+                e.g. a 750 mL bottle — recipes can then pour by the mL and a 150 mL glass uses 0.2 {unit}s.
+                Leave empty if recipes only ever use whole {unit}s.
+              </p>
+            </div>
+          )}
+
+
+          {/* Purchase packaging — exists ONLY at ordering + receiving */}
+          <div className="rounded-xl border border-[#2A2A2A] bg-[#111]/70 p-3">
+            <label className="block text-[10px] uppercase tracking-wider text-[#D4A574]/70 mb-1">Purchased as</label>
+            <p className="text-[10px] text-[#666] mb-1.5">
+              How the supplier delivers it — a case of 12, a 25 kg bag, or loose by the {unit}.
+              Deliveries convert to {unit} the moment they're received.
+            </p>
+            <div className="flex items-center gap-2 flex-wrap">
+              <select value={purchaseUnit} onChange={(e) => setPurchaseUnit(e.target.value)}
+                className="px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white focus:outline-none">
+                <option value="">— by the {unit} —</option>
+                {UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
+              </select>
+              {/* "of N <unit>" only makes sense when there IS a package (a case
+                  of 12 bottles). Buying loose by the kitchen unit hides it. */}
+              {purchaseUnit && (
+                <>
+                  <span className="text-xs text-[#999]">of</span>
+                  <input type="text" value={editPackQty} onChange={(e) => setEditPackQty(e.target.value)}
+                    placeholder="12"
+                    className="w-20 px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none" />
+                  <span className="text-xs text-[#999]">{unit}</span>
+                </>
+              )}
+              <span className="text-xs text-[#999]">@</span>
+              <div className="relative">
+                <DollarSign className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-[#666]" />
+                <input type="text" value={cost} onChange={(e) => setCost(e.target.value)}
+                  placeholder="0.00"
+                  className="w-28 pl-8 pr-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none" />
+              </div>
+              <span className="text-[10px] text-[#666]">{purchaseUnit ? `per ${purchaseUnit}` : `per ${unit}`}</span>
+            </div>
+            {purchaseUnit && editPackQty && derivedUnitCost && (
+              <p className="text-[10px] text-[#D4A574] mt-1">= ${derivedUnitCost} per {unit}</p>
+            )}
+
+            {/* Par + reorder live with purchasing: "when do I order, and how much". */}
+            <div className="mt-3 pt-3 border-t border-[#2A2A2A]/60 grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-[10px] uppercase tracking-wider text-[#666] mb-1">Par Level (min stock)</label>
+                <div className="flex items-center gap-1.5">
+                  <input type="text" value={par} onChange={(e) => setPar(e.target.value)}
+                    placeholder="0"
+                    className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none" />
+                  {canEnterInPacks ? (
+                    <select value={parEntryUnit} onChange={(e) => setParEntryUnit(e.target.value as "base" | "pack")}
+                      className="px-2 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-xs text-white focus:outline-none">
+                      <option value="base">{unit}</option>
+                      <option value="pack">{purchaseUnit}</option>
+                    </select>
+                  ) : (
+                    <span className="text-xs text-[#666]">{unit}</span>
+                  )}
+                </div>
+                {parEcho && <p className="text-[10px] text-[#D4A574] mt-1">{parEcho}</p>}
+                <p className="text-[10px] text-[#666] mt-1">Order when stock falls below this.</p>
+              </div>
+              <div>
+                <label className="block text-[10px] uppercase tracking-wider text-[#666] mb-1">Reorder Qty</label>
+                <div className="flex items-center gap-1.5">
+                  <input type="text" value={reorder} onChange={(e) => setReorder(e.target.value)}
+                    placeholder="0"
+                    className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none" />
+                  {canEnterInPacks ? (
+                    <select value={reorderEntryUnit} onChange={(e) => setReorderEntryUnit(e.target.value as "base" | "pack")}
+                      className="px-2 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-xs text-white focus:outline-none">
+                      <option value="base">{unit}</option>
+                      <option value="pack">{purchaseUnit}</option>
+                    </select>
+                  ) : (
+                    <span className="text-xs text-[#666]">{unit}</span>
+                  )}
+                </div>
+                {reorderEcho && <p className="text-[10px] text-[#D4A574] mt-1">{reorderEcho}</p>}
+                <p className="text-[10px] text-[#666] mt-1">How much to order then.</p>
+              </div>
+            </div>
+          </div>
+          {/* Suppliers */}
+          <div className="rounded-xl border border-[#2A2A2A] bg-[#111]/70 p-3">
+            <p className="text-[10px] text-[#D4A574]/70 uppercase tracking-wider mb-1.5">Suppliers</p>
             {ingSuppliers.length > 0 ? (
               <div className="rounded-lg border border-[#2A2A2A] divide-y divide-[#2A2A2A]/30">
                 {ingSuppliers.map((s) => (
@@ -654,8 +769,8 @@ function EditIngredientModal({
 
           {/* Cross-location stock (read-only) */}
           {levels.length > 0 && (
-            <div>
-              <p className="text-[10px] text-[#666] uppercase tracking-wider mb-1.5">Stock Across Locations</p>
+            <div className="rounded-xl border border-[#2A2A2A] bg-[#111]/70 p-3">
+              <p className="text-[10px] text-[#D4A574]/70 uppercase tracking-wider mb-1.5">Stock Across Locations</p>
               <div className="rounded-lg border border-[#2A2A2A] divide-y divide-[#2A2A2A]/30">
                 {levels.map((l) => {
                   const qty = Number(l.currentQty || 0);
@@ -741,11 +856,16 @@ function EditIngredientModal({
                   ingredientName: name,
                   ingredientCategory: cat,
                   baseUnit: unit,
-                  packQty: editPackQty || null,
+                  // Size only applies to counted things; packaging qty only
+                  // when there IS a package — never save stale leftovers.
+                  contentQty: MEASURED_UNITS.includes(unit) ? null : contentQty || null,
+                  contentUnit: MEASURED_UNITS.includes(unit) ? null : contentUnit || null,
+                  purchaseUnit: purchaseUnit || null,
+                  packQty: purchaseUnit ? editPackQty || null : null,
                   description: desc || null,
                   unitCost: derivedUnitCost || null,
-                  parLevel: par || null,
-                  reorderQty: reorder || null,
+                  parLevel: toKitchen(par, parEntryUnit),
+                  reorderQty: toKitchen(reorder, reorderEntryUnit),
                   itemType: editItemType,
                   fifoApplicable: editFifo,
                   containsDairyInd: allergens.has("containsDairyInd"),

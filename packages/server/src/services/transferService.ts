@@ -21,6 +21,7 @@ import {
   user,
   fifoBatch,
 } from "../db/schema.js";
+import { resolveToBase } from "./unitConversionService.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -241,13 +242,11 @@ export async function confirmSent(
     .from(inventoryTransferLine)
     .where(eq(inventoryTransferLine.transferId, transferId));
 
-  // Deduct stock from source location
+  // Deduct stock from source location — convert the sent qty from its entered
+  // unit to the ingredient's base unit (identity when they're the same).
   for (const line of lines) {
-    await deductStockLevel(
-      transfer.fromLocationId,
-      line.ingredientId,
-      Number(line.sentQty),
-    );
+    const { baseQty } = await resolveToBase(line.ingredientId, Number(line.sentQty), line.sentUnit);
+    await deductStockLevel(transfer.fromLocationId, line.ingredientId, baseQty);
   }
 
   // Update transfer status
@@ -306,8 +305,12 @@ export async function confirmReceived(
       hasDiscrepancy = true;
     }
 
+    // Convert received qty (entered in the line's sent unit) to base for the
+    // destination stock + FIFO batch.
+    const { baseQty: baseReceivedQty } = await resolveToBase(line.ingredientId, receivedQty, line.sentUnit);
+
     // Add stock at destination
-    await addStockLevel(transfer.toLocationId, line.ingredientId, receivedQty);
+    await addStockLevel(transfer.toLocationId, line.ingredientId, baseReceivedQty);
 
     // Create FIFO batch at destination
     // Look up source batch for arrival date if exists
@@ -326,8 +329,8 @@ export async function confirmReceived(
       storeLocationId: transfer.toLocationId,
       ingredientId: line.ingredientId,
       arrivalDate,
-      quantityRemaining: String(receivedQty),
-      originalQuantity: String(receivedQty),
+      quantityRemaining: String(baseReceivedQty),
+      originalQuantity: String(baseReceivedQty),
       sourceTransferId: transferId,
     });
 

@@ -120,6 +120,12 @@ vi.mock("./stockService.js", () => ({
   addStock: addStockMock,
 }));
 
+// These tests don't exercise unit conversion — stub the resolver as identity
+// (base qty = entered qty) so the receiving logic under test is unchanged.
+vi.mock("./unitConversionService.js", () => ({
+  resolveToBase: vi.fn(async (_id: string, qty: number) => ({ baseQty: qty, baseUnit: "base" })),
+}));
+
 const notifyMock = vi.fn(async () => undefined);
 vi.mock("./notificationService.js", () => ({
   notifyHQAdmins: notifyMock,

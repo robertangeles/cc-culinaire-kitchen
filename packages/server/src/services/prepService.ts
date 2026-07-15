@@ -926,6 +926,8 @@ export async function updateTaskStatus(
               userId,
               quantity: String(deductQty),
               unit: updated.unit,
+              // baseQty computed above (the same value the stock adjustment used)
+              baseQty: String(baseQty),
               reason: becomingCompleted ? "prep" : "return_to_stock",
               notes: `Prep task: ${updated.taskDescription}`,
             });
