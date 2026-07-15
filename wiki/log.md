@@ -4,6 +4,41 @@ Append-only. Newest entry on top.
 
 ---
 
+## 2026-07-15 — Storage areas as count sheets, B1 (branch: feature/ck-web/storage-areas-and-movements)
+
+Built B1 of `docs/specs/storage-areas-count-sheets.md`: areas exist, items get assigned to
+them with per-area pars, moves record with zero stock effect, and the FOH guardrail finally
+has somewhere to send people.
+
+**Pages touched**
+- NEW [[storage-areas]] — the model, why not per-area ledgers, and the traps.
+- [[reconciliation-matrix]] — added the **Area movement** row. It's the only row whose
+  "Must Balance Against" is *nothing*, which is the whole point.
+- [[index]] — new concept page listed.
+
+**What the eng review caught (the spec asserted 3 things about the code that were false)**
+1. "existing category-status machinery enforces every group submitted" — it does NOT.
+   Both `checkAndAdvanceSession` and `submitSessionForReview` exclude `NOT_STARTED` by
+   design. Harmless in CATEGORY mode, silent stock deletion in AREA mode. B2 must guard
+   BOTH paths.
+2. The E1 snapshot query joined `stock_take_line.session_id` — no such column (links via
+   `category_id`) — and ordered by an approval timestamp that doesn't exist.
+3. The Unassigned anti-join targeted a server-side item universe that isn't there; the
+   sheet is a client-side filter with a LOOSER predicate.
+
+**Corrections to the eng review itself** (a reviewer's confident claim is not evidence
+either): `moved_at` → `moved_dttm` was WRONG and reverted — the schema uses `_at` for domain
+events and `_dttm` for row lifecycle, and `consumption_log` carries both.
+
+**Also fixed**: `TransactionEvent` was declared twice with different unions; the hook's copy
+had been missing `transfer_loc` since forever while the server emitted it. One declaration now.
+
+**Recorded in `tasks/lessons.md`**: a spec's claims about the code are not evidence; and
+drizzle-kit reads `DEV_DATABASE_URL` before `DATABASE_URL` (cost an hour of wrong diagnoses
+— and the 2026-07-02 entry below already knew this).
+
+---
+
 ## 2026-07-02 — Local DB bootstrap + drizzle-kit env-prefix fix (branch: feature/ck-web/local-db-bootstrap, PR #38)
 
 Stood up local dev on a second machine (HEPHAESTUS) and fixed three DB-setup failures, captured in full as lesson #54 in `tasks/lessons.md`. (1) The machine had no `archos_dev` role / `culinaire_kitchen_dev` DB → `28P01 password authentication failed` on every startup task. (2) `pnpm db:deploy` failed with *"Either connection url or host/database are required"* — `drizzle.config.ts` read unprefixed `process.env.DATABASE_URL`, but `.env` only defines `DEV_DATABASE_URL`, and the `DEV_/PROD_` shim (`utils/envShim.applyEnvPrefix`) runs in the server process, not the separate drizzle-kit process that loads the config. (3) A raw `pg_dump` restore of prod aborted on `type "public.citext" does not exist` — prod uses `citext` + `uuid-ossp` (+ `vector`), local had only `vector`.

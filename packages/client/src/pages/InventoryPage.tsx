@@ -20,12 +20,14 @@ import { OpeningInventory } from "../components/inventory/OpeningInventory.js";
 import { CatalogRequestQueue } from "../components/inventory/CatalogRequestQueue.js";
 import ConsumptionLogger from "../components/inventory/ConsumptionLogger.js";
 import TransferList from "../components/inventory/TransferList.js";
+import StorageAreasTab from "../components/inventory/StorageAreasTab.js";
+import StockMovementForm, { type MovementPrefill } from "../components/inventory/StockMovementForm.js";
 import { Tooltip } from "../components/ui/Tooltip.js";
-import { Package, ClipboardCheck, Utensils, ShieldCheck, Settings, FileQuestion, FileEdit, ArrowRightLeft } from "lucide-react";
+import { Package, ClipboardCheck, Utensils, ShieldCheck, Settings, FileQuestion, FileEdit, ArrowRightLeft, Boxes } from "lucide-react";
 
-type TransferSubView = "usage" | "transfers";
+type TransferSubView = "usage" | "transfers" | "movement";
 
-type InventoryTab = "dashboard" | "setup" | "stock-take" | "log" | "review" | "ingredients" | "requests";
+type InventoryTab = "dashboard" | "setup" | "stock-take" | "log" | "review" | "ingredients" | "requests" | "areas";
 
 export function InventoryPage() {
   const { user, isGuest } = useAuth();
@@ -33,6 +35,7 @@ export function InventoryPage() {
   const { sessions: pendingReviews, refresh: refreshReviews } = usePendingReviews();
   const [activeTab, setActiveTab] = useState<InventoryTab>("dashboard");
   const [transferView, setTransferView] = useState<TransferSubView>("usage");
+  const [movementPrefill, setMovementPrefill] = useState<MovementPrefill | null>(null);
   const { setGuideKeyOverride } = useGuide();
 
   // Sync active tab to GuideSidebar guide key
@@ -53,6 +56,7 @@ export function InventoryPage() {
       t.push({ key: "review", label: "Review", icon: ShieldCheck });
       t.push({ key: "requests", label: "Requests", icon: FileQuestion });
       t.push({ key: "ingredients", label: "Catalog", icon: Utensils });
+      t.push({ key: "areas", label: "Areas", icon: Boxes });
     }
     return t;
   }, [isOrgAdmin]);
@@ -172,8 +176,34 @@ export function InventoryPage() {
                   <ArrowRightLeft className="size-3" />
                   Location Transfer
                 </button>
+                <button
+                  onClick={() => {
+                    // Manual pill = fresh form. Only the guardrail prefills.
+                    setMovementPrefill(null);
+                    setTransferView("movement");
+                  }}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                    transferView === "movement"
+                      ? "bg-[#1E1E1E] text-white shadow-[0_0_6px_rgba(212,165,116,0.1)]"
+                      : "text-[#888] hover:text-white"
+                  }`}
+                >
+                  <Boxes className="size-3" />
+                  Move Between Areas
+                </button>
               </div>
-              {transferView === "usage" ? <ConsumptionLogger /> : <TransferList />}
+              {transferView === "usage" && (
+                <ConsumptionLogger
+                  onRecordMovement={(prefill) => {
+                    // The guardrail caught a move logged as usage. Carry the
+                    // item and amount over so they don't type it twice.
+                    setMovementPrefill(prefill);
+                    setTransferView("movement");
+                  }}
+                />
+              )}
+              {transferView === "transfers" && <TransferList />}
+              {transferView === "movement" && <StockMovementForm prefill={movementPrefill} />}
             </div>
           )}
           {activeTab === "review" && (
@@ -183,6 +213,7 @@ export function InventoryPage() {
             <IngredientCatalog />
           )}
           {activeTab === "requests" && isOrgAdmin && <CatalogRequestQueue />}
+          {activeTab === "areas" && isOrgAdmin && <StorageAreasTab />}
         </div>
       </div>
 

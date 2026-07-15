@@ -438,3 +438,68 @@ Format: Problem / Fix / Rule
 - **Problem**: After building a "count unit display lens" (stock stored in ml, bottle as an optional per-item display factor), a stock panel still showed "500 mL" for wine. The user's correction exposed the design error: the lens left ml as the DEFAULT experience (every unconfigured item and every un-lensed surface leaks ml), and blanket-lensing would over-correct (flour would show as "bags" in a stock take — flour is counted in grams). Two latent bugs surfaced during the rework: the legacy PO receive path added received quantities with NO unit conversion ("2 cases" added 2, not 24), and consumption aggregations summed as-entered quantities across mixed units (poisoning forecasts and yield variance).
 - **Fix**: Make the kitchen unit THE stored unit (`base_unit` = bottle for wine; stock 6000 ml → 8 bottles via an atomic `changeKitchenUnit` that converts stock ÷factor and per-unit costs ×factor incl. FIFO batches and supplier costs). Packaging (`purchase_unit`+`pack_qty`) exists only at ordering/receiving and converts at the boundary (qty AND cost). Recipes keep measured units via a content equivalence ("1 bottle = 750 ml") resolved by runtime division — never a stored repeating-decimal factor. One resolver serves every flow; `consumption_log.base_qty` (resolved at insert) is what aggregations sum. FOH consumables sell directly via a hidden auto-created 1:1 menu link — non-food never goes through recipe math.
 - **Rule**: (a) Ask "what unit do you COUNT this in when it's sitting in the kitchen" and store THAT — a display lens over the wrong canonical unit means every new surface is a leak waiting to happen, while the right canonical unit makes every surface correct by default. (b) Purchase packaging is a boundary translation, not a stock unit: convert qty AND per-unit cost at the receiving instant, then never mention cases again. (c) When quantities can be entered in mixed units, store the resolved canonical qty on the row at insert (`base_qty`) — aggregations must never sum as-entered numbers. (d) A "1 X = N Y" equivalence stored as its N (divide at runtime) is exact; storing 1/N as a factor loses precision on non-terminating decimals.
+
+## 2026-07-15 — A spec's claims about the code are not evidence
+
+**Problem.** The storage-areas spec passed a CEO review and a 3-round adversarial spec loop
+(self-scored 9/10, "zero unresolved decisions"), yet asserted three things about the codebase
+that were simply false — each one would have shipped a silent stock-corruption bug:
+1. "existing category-status machinery already enforces [every group submitted]" — it does
+   not. `checkAndAdvanceSession` (stockTakeService.ts:518-521) and `submitSessionForReview`
+   (:389) both exclude `NOT_STARTED` groups *by design*, to support cycle counts.
+2. The E1 snapshot query joined `stock_take_line.session_id` — no such column (lines link via
+   `category_id`) — and ordered by an approval-timestamp column that does not exist.
+3. The "Unassigned" anti-join targeted a server-side item universe that doesn't exist:
+   `openSession` creates no lines at all; the count sheet is a client-side filter.
+
+The spec loop caught a *related* bug (per-line stock overwrite) and then trusted the very gate
+that would have let a partial sum through anyway. Round 2 of verification found 6 more false
+claims, all client-side surfaces ("Areas sub-tab in Stock Room" — there are no sub-tabs).
+
+**Fix.** Verify every load-bearing claim against source before reviewing the design. Quote
+file:line. A spec that says "verify the exact column name at implementation" has already told
+you it is guessing — go look now, because that placeholder is where the bug hides.
+
+**Rule.** Adversarial review of a *document* only checks the document against itself. Confidence
+scores from a self-review are not evidence; a quoted line of source is. Before accepting any
+plan's claim about existing behaviour: read the function, grep its callers, and check whether
+the safety property it relies on is actually enforced — especially when the plan says
+"already handled". Subagents hallucinate too: one reported `resolveToBase` and `convertToBase`
+as different functions when `unitConversionService.ts:147` is
+`export const resolveToBase = convertToBase;`. Re-check the claims that matter, including
+your own reviewers'.
+
+## 2026-07-15 — Read the wiki and these lessons BEFORE debugging (the answers were already here)
+
+**Problem.** Spent roughly an hour on two problems this repo had already solved and
+written down:
+1. `pnpm db:push` hung and created zero tables. I diagnosed it twice, confidently and
+   wrongly — first "the dev DB's drift", then "Postgres 18 vs drizzle-kit 0.30" — before
+   reading `drizzle.config.ts` and finding it resolves `DEV_DATABASE_URL` BEFORE
+   `DATABASE_URL`, so my override was silently ignored and every "fresh DB probe" was
+   actually pushing at the drifted dev DB. **Lesson #54 already documents this exact
+   config behaviour. Lesson #56 already says push is unusable on this DB and that new
+   tables go in via targeted idempotent DDL scripts** — which is what I eventually
+   re-derived and wrote as `migrateStorageAreas.sql`.
+2. Turnstile blocked headless browser QA of login. I stopped and asked the user how to
+   proceed. **`wiki/log.md` 2026-07-02 already documents the answer**: a local clone has
+   no Turnstile config, and you bootstrap local login with Cloudflare's test keys
+   (`1x00000000000000000000AA`).
+
+**Root cause.** I never read `wiki/index.md` or `tasks/lessons.md` at session start. This
+project's CLAUDE.md mandates both ("Read `wiki/index.md` ... before doing any work";
+"Review lessons at session start"). Skipping them didn't just cost time — it produced
+confident wrong diagnoses in front of the user, which cost trust that the code never lost.
+
+**Rule.** Read `wiki/index.md` and skim `tasks/lessons.md` headers at session start, and
+grep both the MOMENT a tool misbehaves — before forming any theory about versions,
+infrastructure, or the environment. In a repo that keeps a lessons file this good, "I hit
+a weird tooling problem" should mean "grep lessons.md", not "start guessing". The most
+expensive mistakes today were not in the code; they were re-deriving documented knowledge
+out loud and getting it wrong on the way.
+
+**Only genuinely new fact worth keeping:** this machine has a stopped **pg16** cluster on
+port 5433 (`sudo pg_ctlcluster 16 main start`) — CI's exact Postgres version. Use it to
+reproduce the CI `db:push` path locally instead of theorising about version skew. Pointed
+at a fresh pg16 DB with `DEV_DATABASE_URL` set, `db:push` completes cleanly (exit 0) and
+builds all tables with CHECKs enforcing. Stop it again when done.

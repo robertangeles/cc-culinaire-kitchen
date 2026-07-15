@@ -215,27 +215,73 @@ considered and deliberately deferred:
 
 ---
 
-## ⏸ RESUME HERE (parked 2026-07-15) — after merging `feature/ck-web/uom-and-recipe-selling`
+## ⏸ RESUME HERE (parked 2026-07-15) — mid-B1 on `feature/ck-web/storage-areas-and-movements`
 
-State: kitchen-unit model + recipe selling COMPLETE and verified (31-case E2E, full regression
-green), committed + pushed on `feature/ck-web/uom-and-recipe-selling`, awaiting merge.
-UAT (`docs/qa/uom-recipe-selling-uat.md`): section A partially walked, B–H untested.
+PR #75 (kitchen-unit model + recipe selling) is MERGED. Eng review of the storage-areas spec
+is DONE and the spec is hardened — `docs/specs/storage-areas-count-sheets.md` is now the
+source of truth and is CEO + ENG CLEARED, zero unresolved decisions. **Read it before
+anything else.** It ships as THREE sequential branches (see its Build order table).
 
-Next conversation, in order:
-1. **Build storage areas as count sheets** — canonical, review-hardened plan:
-   `docs/specs/storage-areas-count-sheets.md` (CEO-reviewed 2026-07-15; 3-round adversarial
-   spec loop, 9/10; zero unresolved decisions — read it before anything else; run
-   `/plan-eng-review` on it first, then a fresh branch, e.g.
-   `feature/ck-web/storage-areas-count-sheets`).
-   - Critical implementation trap already identified in the plan: `updateStockLevelsFromSession`
-     (stockTakeService.ts:872–896) upserts stock PER LINE — AREA mode MUST use the GROUP BY SUM
-     variant or multi-area items get last-area-wins stock corruption.
-   - Step 0 of the plan (reverse the 4-bottle foh_operations entry) is ALREADY DONE (2026-07-15).
-2. **Extend the UAT doc** with section **I. Storage areas** (area counts sum to venue; movement
+**B1 `feature/ck-web/storage-areas-and-movements` — IN PROGRESS (2 commits, not pushed)**
+- ✅ T8: `itemType` added to `LocationIngredient` (`useInventory.ts:50`). Server already
+  selected it; the gap was client-only.
+- ✅ Guardrail: move-not-usage intercept in `ConsumptionLogger.tsx` + 6 tests (verified
+  non-vacuous). Client tsc/tests/build all green.
+- ⬜ **NEXT: `stock_movement` + `storage_area` + `ingredient_storage_area` schema**
+  (`migrateStorageAreas.sql`, step 1a — drizzle-kit push is blocked by pre-existing
+  bench_channel drift, so apply with `psql "$DEV_DATABASE_URL" -f`).
+- ⬜ `storageAreaService` + `stockMovementService` + routes + tests.
+- ⬜ Then wire the modal's **[Record as movement]** button — it's intentionally absent until
+  a movement path exists; the modal only offers "Go back" today.
+- ⬜ Areas admin as a NEW TOP-LEVEL `areas` tab in `InventoryPage.tsx:47-56` (there are no
+  sub-tabs in Stock Room — the spec's original "sub-tab" wording was wrong).
+
+**Then B2** (AREA-mode counting — the only branch that writes stock; carries the two CRITICAL
+guards: GROUP BY SUM instead of per-line upsert, AND the uncounted-area guard on BOTH
+`submitSessionForReview` and `checkAndAdvanceSession`). **Then B3** (snapshot/restock/spot check).
+
+**Chore, queued (agreed 2026-07-15, do AFTER B1 lands — not inside it):**
+`chore/ck-web/unused-vars-sweep`. 81 files / 166 unused-var warnings on main
+(109 unused imports, 57 unused locals). The rule is `"warn"` in eslint.config.js:29 and
+`eslint src/` has no `--max-warnings`, so nothing gates on them. Mostly residue from
+removed features — e.g. ConsumptionLogger.tsx has an UNREACHABLE edit branch at :636
+(`editingId` can only be set by `handleStartEdit`, which nothing calls) left behind when
+"Entries are final — no edits" (:718) landed; the server still exposes
+PATCH/DELETE /consumption-logs/:id with no client caller.
+- Imports (109): mechanical delete.
+- Locals (57): NOT mechanical — each is a question, "is this dead code or UI someone
+  forgot to render?" (e.g. ActivationWizard.tsx:57 `activationStatus`). That triage is
+  where the value is.
+- Checked already, NOT a bug: roles.ts:14 `handleListPermissions` looks unwired but is
+  wired at permissions.ts:14 as GET /api/permissions.
+- Finish by flipping the rule to `error` so it can't regrow.
+- **`no-useless-assignment` x4 in `ingredientService.getIngredientTransactions`**: each of
+  the now-five source blocks does `let xRows: any[] = []` then assigns in BOTH the try and
+  the catch, so the initializer is dead. Pre-existing on 3 (stockTakeRows:1190,
+  consumptionRows:1208, transferRows:1256); B1 added a 4th (movementRows) that deliberately
+  matches its siblings rather than being the odd one out. Fix all four together (drop the
+  `= []`), not one.
+Real cost today is signal drowning: at 166 warnings nobody reads warnings, so the next
+real one is invisible.
+
+**Also in this chore — no catch-all route (found by /qa against main, 2026-07-15):**
+`packages/client/src/App.tsx` has no `path="*"` route. Any unknown URL (a typo, a stale
+link, `/chat` instead of `/chat/new`) returns 200 and renders the app shell with an EMPTY
+main — a white void against the dark theme, no "page not found", no way back. Verified:
+`/this-page-does-not-exist-xyz` → 200, main innerText 46 chars.
+- Add a `<Route path="*" element={<NotFound />} />` with a plain-English message and a
+  link home. Low severity, real, pre-existing on main.
+- Trap for whoever picks this up: `/chat` looks broken but ISN'T a route —
+  App.tsx:152-153 defines only `/chat/new` and `/chat/:id`. The blank page IS this bug,
+  not a broken Chat module. Chat itself is fine.
+
+Afterwards:
+1. **Extend the UAT doc** with section **I. Storage areas** (area counts sum to venue; movement
    log zero stock effect; guardrail intercepts FOH usage of sellable items; spot check never
    adjusts site stock) and re-seed fixture: Patisserie areas Stock Room + Bar, Shiraz assigned
    to both with bar par 6.
-3. **Finish UAT sections A–H** for the kitchen-unit model, then sign off.
+2. **Finish UAT sections A–H** for the kitchen-unit model (section A partially walked, B–H
+   untested), then sign off.
 
 Also uncommitted on purpose: `data/imports/` (supplier catalog import batches — separate
 workstream, keep out of this feature branch).
