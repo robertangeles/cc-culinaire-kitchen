@@ -123,24 +123,64 @@ describe.skipIf(!RUN)("storage areas + stock movements — real DB", () => {
     });
   });
 
+  /**
+   * Cleanup must survive a PARTIAL beforeAll.
+   *
+   * This bit me for real: an early beforeAll insert failed, so `fx.wineId` was
+   * still "". The first uuid delete then threw `invalid input syntax for type
+   * uuid: ""`, every later delete was skipped, and the test user was stranded in
+   * a database other suites share. Filter the ids that never got set, and let no
+   * single failed step stop the rest — a leaked row outlives the run.
+   */
   afterAll(async () => {
-    await db.delete(stockMovement).where(eq(stockMovement.organisationId, fx.orgId));
-    const areas = await db
-      .select({ id: storageArea.storageAreaId })
-      .from(storageArea)
-      .where(inArray(storageArea.organisationId, [fx.orgId, fx.otherOrgId]));
-    if (areas.length > 0) {
-      await db.delete(ingredientStorageArea).where(
-        inArray(ingredientStorageArea.storageAreaId, areas.map((a) => a.id)),
-      );
+    const set = <T,>(...vals: T[]): T[] => vals.filter((v) => v !== "" && v !== 0);
+    const orgIds = set(fx.orgId, fx.otherOrgId);
+    const locIds = set(fx.locId, fx.otherLocId);
+    const ingIds = set(fx.wineId, fx.otherOrgIngId);
+
+    const step = async (label: string, fn: () => Promise<unknown>) => {
+      try {
+        await fn();
+      } catch (err) {
+        // Report, don't rethrow: the remaining steps still need to run.
+        console.warn(`[storageAreas.it] cleanup step "${label}" failed:`, err);
+      }
+    };
+
+    if (orgIds.length) {
+      await step("movements", () =>
+        db.delete(stockMovement).where(inArray(stockMovement.organisationId, orgIds)));
+      const areas = await db
+        .select({ id: storageArea.storageAreaId })
+        .from(storageArea)
+        .where(inArray(storageArea.organisationId, orgIds));
+      if (areas.length > 0) {
+        await step("assignments", () =>
+          db.delete(ingredientStorageArea).where(
+            inArray(ingredientStorageArea.storageAreaId, areas.map((a) => a.id)),
+          ));
+      }
+      await step("areas", () =>
+        db.delete(storageArea).where(inArray(storageArea.organisationId, orgIds)));
     }
-    await db.delete(storageArea).where(inArray(storageArea.organisationId, [fx.orgId, fx.otherOrgId]));
-    await db.delete(stockLevel).where(eq(stockLevel.storeLocationId, fx.locId));
-    await db.delete(locationIngredient).where(eq(locationIngredient.storeLocationId, fx.locId));
-    await db.delete(ingredient).where(inArray(ingredient.ingredientId, [fx.wineId, fx.otherOrgIngId]));
-    await db.delete(storeLocation).where(inArray(storeLocation.storeLocationId, [fx.locId, fx.otherLocId]));
-    await db.delete(organisation).where(inArray(organisation.organisationId, [fx.orgId, fx.otherOrgId]));
-    await db.delete(user).where(eq(user.userId, fx.userId));
+    if (locIds.length) {
+      await step("stock", () => db.delete(stockLevel).where(inArray(stockLevel.storeLocationId, locIds)));
+      await step("locationIngredient", () =>
+        db.delete(locationIngredient).where(inArray(locationIngredient.storeLocationId, locIds)));
+    }
+    if (ingIds.length) {
+      await step("ingredients", () => db.delete(ingredient).where(inArray(ingredient.ingredientId, ingIds)));
+    }
+    if (locIds.length) {
+      await step("locations", () =>
+        db.delete(storeLocation).where(inArray(storeLocation.storeLocationId, locIds)));
+    }
+    if (orgIds.length) {
+      await step("orgs", () => db.delete(organisation).where(inArray(organisation.organisationId, orgIds)));
+    }
+    if (fx.userId) {
+      await step("user", () => db.delete(user).where(eq(user.userId, fx.userId)));
+    }
   });
 
   /** The venue's single source of on-hand truth. */
