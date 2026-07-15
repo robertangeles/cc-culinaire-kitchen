@@ -469,34 +469,37 @@ as different functions when `unitConversionService.ts:147` is
 `export const resolveToBase = convertToBase;`. Re-check the claims that matter, including
 your own reviewers'.
 
-## 2026-07-15 — drizzle-kit reads DEV_DATABASE_URL first, not DATABASE_URL
+## 2026-07-15 — Read the wiki and these lessons BEFORE debugging (the answers were already here)
 
-**Problem.** Verifying that `pnpm db:push` could build the new storage-area tables,
-every attempt hung and created ZERO tables — even against a brand-new empty database.
-Two wrong diagnoses followed: first "the dev DB's drift", then "Postgres 18 vs
-drizzle-kit 0.30". Both were guesses dressed up as conclusions.
+**Problem.** Spent roughly an hour on two problems this repo had already solved and
+written down:
+1. `pnpm db:push` hung and created zero tables. I diagnosed it twice, confidently and
+   wrongly — first "the dev DB's drift", then "Postgres 18 vs drizzle-kit 0.30" — before
+   reading `drizzle.config.ts` and finding it resolves `DEV_DATABASE_URL` BEFORE
+   `DATABASE_URL`, so my override was silently ignored and every "fresh DB probe" was
+   actually pushing at the drifted dev DB. **Lesson #54 already documents this exact
+   config behaviour. Lesson #56 already says push is unusable on this DB and that new
+   tables go in via targeted idempotent DDL scripts** — which is what I eventually
+   re-derived and wrote as `migrateStorageAreas.sql`.
+2. Turnstile blocked headless browser QA of login. I stopped and asked the user how to
+   proceed. **`wiki/log.md` 2026-07-02 already documents the answer**: a local clone has
+   no Turnstile config, and you bootstrap local login with Cloudflare's test keys
+   (`1x00000000000000000000AA`).
 
-**Root cause.** `packages/server/drizzle.config.ts:28-30`:
-```js
-config({ path: "../../.env" });
-const appEnv = (process.env.APP_ENV ?? "dev").toUpperCase();
-const databaseUrl = process.env[`${appEnv}_DATABASE_URL`] ?? process.env.DATABASE_URL;
-```
-It resolves `DEV_DATABASE_URL` FIRST. Overriding only `DATABASE_URL` is silently
-ignored, so every "probe" push was actually pointed at the real dev database — the
-drifted one that push can never finish on. The probe DB was never touched.
+**Root cause.** I never read `wiki/index.md` or `tasks/lessons.md` at session start. This
+project's CLAUDE.md mandates both ("Read `wiki/index.md` ... before doing any work";
+"Review lessons at session start"). Skipping them didn't just cost time — it produced
+confident wrong diagnoses in front of the user, which cost trust that the code never lost.
 
-**Fix.** To point drizzle-kit anywhere other than dev, set `DEV_DATABASE_URL`
-(or `APP_ENV` + the matching prefix). CI works because its job sets BOTH vars.
+**Rule.** Read `wiki/index.md` and skim `tasks/lessons.md` headers at session start, and
+grep both the MOMENT a tool misbehaves — before forming any theory about versions,
+infrastructure, or the environment. In a repo that keeps a lessons file this good, "I hit
+a weird tooling problem" should mean "grep lessons.md", not "start guessing". The most
+expensive mistakes today were not in the code; they were re-deriving documented knowledge
+out loud and getting it wrong on the way.
 
-**Verified once pointed correctly:** `db:push` completes (exit 0, "Changes applied")
-against a fresh pg16 — the same version CI uses — creating all three tables with all
-CHECKs enforcing. So push is not broken in general; it is broken *on the drifted dev
-DB specifically*, exactly as wiki/synthesis/schema-drift-may-2026.md says.
-
-**Rule.** When a tool "ignores" your env var, read its config file before theorising
-about versions or infrastructure. A config that silently prefers a different variable
-will let you run the same failing experiment repeatedly and draw a new wrong
-conclusion each time. This machine has a stopped pg16 cluster on port 5433
-(`sudo pg_ctlcluster 16 main start`) — use it to reproduce CI locally instead of
-guessing about version skew.
+**Only genuinely new fact worth keeping:** this machine has a stopped **pg16** cluster on
+port 5433 (`sudo pg_ctlcluster 16 main start`) — CI's exact Postgres version. Use it to
+reproduce the CI `db:push` path locally instead of theorising about version skew. Pointed
+at a fresh pg16 DB with `DEV_DATABASE_URL` set, `db:push` completes cleanly (exit 0) and
+builds all tables with CHECKs enforcing. Stop it again when done.
