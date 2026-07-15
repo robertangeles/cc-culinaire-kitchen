@@ -132,7 +132,6 @@ const DIFFICULTY_COLORS: Record<string, string> = {
 export function RecipeCard({ recipe, domain, recipeId, slug, imageUrl, onTogglePublic, isPublic, creator, isOwner, onRecipeUpdate, onImageUpdate }: RecipeCardProps) {
   const [checkedIngredients, setCheckedIngredients] = useState<Set<number>>(new Set());
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
-  const [copied, setCopied] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [regeneratingImage, setRegeneratingImage] = useState(false);
   const [showRefine, setShowRefine] = useState(false);

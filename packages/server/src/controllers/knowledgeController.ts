@@ -21,7 +21,6 @@ import {
 
 const logger = pino({ name: "knowledgeController" });
 
-const CATEGORIES = ["techniques", "pastry", "spirits", "ingredients", "general"] as const;
 
 // ---------------------------------------------------------------------------
 // Validation schemas

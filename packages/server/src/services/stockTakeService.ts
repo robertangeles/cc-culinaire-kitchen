@@ -50,20 +50,26 @@ const DEFAULT_CATEGORIES = [
   "other",
 ];
 
-// Valid state transitions
-const SESSION_TRANSITIONS: Record<string, string[]> = {
-  OPEN: ["PENDING_REVIEW"],
-  PENDING_REVIEW: ["APPROVED", "FLAGGED"],
-  FLAGGED: ["OPEN"],
-  APPROVED: ["ARCHIVED"],
-};
-
-const CATEGORY_TRANSITIONS: Record<string, string[]> = {
-  NOT_STARTED: ["IN_PROGRESS"],
-  IN_PROGRESS: ["SUBMITTED"],
-  SUBMITTED: ["APPROVED", "FLAGGED"],
-  FLAGGED: ["IN_PROGRESS"],
-};
+/**
+ * Valid state transitions — reference, not enforcement.
+ *
+ * These were const objects that nothing ever read. The transitions are actually
+ * enforced ad-hoc at each call site (e.g. approveSession guards on
+ * PENDING_REVIEW, submitSessionForReview rejects IN_PROGRESS categories), so
+ * the objects were dead weight that looked like a live state machine.
+ * Kept as documentation because the shape is genuinely useful:
+ *
+ *   session:   OPEN ──▶ PENDING_REVIEW ──▶ APPROVED ──▶ ARCHIVED
+ *                            └──▶ FLAGGED ──▶ OPEN
+ *
+ *   category:  NOT_STARTED ──▶ IN_PROGRESS ──▶ SUBMITTED ──▶ APPROVED
+ *                                    ▲              └──▶ FLAGGED
+ *                                    └───────────────────────┘
+ *
+ * NOTE for AREA mode (B2): NOT_STARTED categories are deliberately EXCLUDED
+ * from the all-submitted gate to support cycle counts. Safe in CATEGORY mode;
+ * in AREA mode an uncounted area would let a partial SUM overwrite stock.
+ */
 
 // ─── Session lifecycle ────────────────────────────────────────────
 

@@ -22,12 +22,9 @@ import {
   createOption,
   updateOption,
   deleteOption,
-  type OptionType,
 } from "../services/personalisationOptionsService.js";
 
 const logger = pino({ name: "personalisationOptionsController" });
-
-const VALID_TYPES: OptionType[] = ["skill_level", "cuisine", "dietary", "equipment"];
 
 const CreateOptionSchema = z.object({
   optionType:        z.enum(["skill_level", "cuisine", "dietary", "equipment"]),

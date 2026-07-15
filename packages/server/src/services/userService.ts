@@ -33,7 +33,10 @@ export async function getUserProfile(userId: number) {
 
   if (rows.length === 0) return null;
 
-  const { userPasswordHash, mfaSecret, ...rest } = rows[0];
+  // Destructured to STRIP them: whatever is in `rest` gets returned to the
+  // caller, so these two must never survive. Renaming or removing them leaks
+  // the password hash and the MFA secret.
+  const { userPasswordHash: _userPasswordHash, mfaSecret: _mfaSecret, ...rest } = rows[0];
   const pii = decryptUserPii(rest as Record<string, unknown>);
   return { ...rest, ...pii };
 }

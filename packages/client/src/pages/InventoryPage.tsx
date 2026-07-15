@@ -31,7 +31,7 @@ type InventoryTab = "dashboard" | "setup" | "stock-take" | "log" | "review" | "i
 
 export function InventoryPage() {
   const { user, isGuest } = useAuth();
-  const { selectedLocationId, locations, isOrgAdmin } = useLocation();
+  const { selectedLocationId, isOrgAdmin } = useLocation();
   const { sessions: pendingReviews, refresh: refreshReviews } = usePendingReviews();
   const [activeTab, setActiveTab] = useState<InventoryTab>("dashboard");
   const [transferView, setTransferView] = useState<TransferSubView>("usage");
@@ -75,7 +75,6 @@ export function InventoryPage() {
     );
   }
 
-  const currentLocation = locations.find((l) => l.storeLocationId === selectedLocationId);
 
   return (
     <div className="flex-1 flex flex-col bg-[#0A0A0A] overflow-hidden">

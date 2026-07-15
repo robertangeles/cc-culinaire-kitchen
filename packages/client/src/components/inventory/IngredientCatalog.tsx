@@ -930,7 +930,6 @@ function AddIngredientForm({
   const [allergens, setAllergens] = useState<Set<AllergenKey>>(new Set());
   const [packQty, setPackQty] = useState("");
   const [supplierId, setSupplierId] = useState("");
-  const [packCost, setPackCost] = useState("");
   const [saving, setSaving] = useState(false);
 
   const autoUnitCost = packQty && cost && parseFloat(packQty) > 0

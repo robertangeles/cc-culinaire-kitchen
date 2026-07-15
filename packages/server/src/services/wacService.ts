@@ -101,7 +101,10 @@ export async function recompute(
   // Step 3: SELECT FOR UPDATE. Postgres doesn't support multi-pair tuple
   // FOR UPDATE in Drizzle's typed builder cleanly, so we drop to raw SQL.
   // The lock is held until tx commits.
-  const lockRows = await tx.execute<{ location_ingredient_id: string }>(sql`
+  // Unused ON PURPOSE — the QUERY is the lock, not its result. Deleting this
+  // assignment (or the statement) removes the FOR UPDATE that serialises
+  // concurrent WAC recomputation.
+  const _lockRows = await tx.execute<{ location_ingredient_id: string }>(sql`
     SELECT location_ingredient_id
       FROM location_ingredient
      WHERE (store_location_id, ingredient_id) IN (

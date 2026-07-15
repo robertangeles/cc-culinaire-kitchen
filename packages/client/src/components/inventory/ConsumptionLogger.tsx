@@ -7,7 +7,7 @@
 
 import { useState, useCallback, useRef } from "react";
 import { useLocation } from "../../context/LocationContext.js";
-import { useLocationIngredients, useConsumptionLog, type ConsumptionLogEntry, type LocationIngredient } from "../../hooks/useInventory.js";
+import { useLocationIngredients, useConsumptionLog, type LocationIngredient } from "../../hooks/useInventory.js";
 import { useMenuItems } from "../../hooks/useMenuItems.js";
 import { Search, Check, Loader2, ClipboardEdit, Clock, X, ArrowRightLeft } from "lucide-react";/* ── Reason + Shift chips ───────────────────────────────────────── */
 
@@ -75,9 +75,9 @@ export default function ConsumptionLogger({
   onRecordMovement?: (prefill: { item: LocationIngredient; quantity: number }) => void;
 } = {}) {
   const { selectedLocationId } = useLocation();
-  const { items: locationItems, isLoading: itemsLoading, refresh: refreshItems } =
+  const { items: locationItems, refresh: refreshItems } =
     useLocationIngredients(selectedLocationId);
-  const { logs, isLoading: logsLoading, logConsumption, editLog, deleteLog } =
+  const { logs, isLoading: logsLoading, logConsumption } =
     useConsumptionLog(selectedLocationId);
   // Phase 4 (B1): menu items list for the optional dish-attribution dropdown.
   // Only shown when reason === "kitchen_operations" (the dish-attributable reason).
@@ -97,24 +97,8 @@ export default function ConsumptionLogger({
   const [error, setError] = useState<string | null>(null);
   const [showMoveWarning, setShowMoveWarning] = useState(false);
 
-  /* --- inline edit state --- */
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editQty, setEditQty] = useState("");
-  const [editReason, setEditReason] = useState("");
-  const [editNotes, setEditNotes] = useState("");
-
   const qtyRef = useRef<HTMLInputElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
-
-  /* --- search filtering --- */
-  const activeItems = locationItems.filter((i) => i.activeInd !== false);
-  const searchResults = searchQuery.trim().length > 0
-    ? activeItems
-        .filter((i) =>
-          i.ingredientName.toLowerCase().includes(searchQuery.toLowerCase()),
-        )
-        .slice(0, 8)
-    : [];
 
   /* --- today's entries --- */
   const todayEntries = logs.filter((e) => isToday(e.loggedAt));
@@ -196,35 +180,6 @@ export default function ConsumptionLogger({
     }
     void submitLog();
   }, [selectedItem, quantity, reason, selectedLocationId, needsMoveWarning, submitLog]);
-
-  const handleStartEdit = useCallback((entry: ConsumptionLogEntry) => {
-    setEditingId(entry.consumptionLogId);
-    setEditQty(entry.quantity);
-    setEditReason(entry.reason);
-    setEditNotes(entry.notes || "");
-  }, []);
-
-  const handleSaveEdit = useCallback(async () => {
-    if (!editingId) return;
-    try {
-      await editLog(editingId, {
-        quantity: parseFloat(editQty),
-        reason: editReason,
-        notes: editNotes.trim() || null,
-      });
-      setEditingId(null);
-    } catch {
-      // keep edit mode open on error
-    }
-  }, [editingId, editQty, editReason, editNotes, editLog]);
-
-  const handleDelete = useCallback(
-    async (id: string) => {
-      if (!window.confirm("Delete this consumption entry?")) return;
-      await deleteLog(id);
-    },
-    [deleteLog],
-  );
 
   /* --- keyboard shortcut: Enter to submit --- */
   const handleKeyDown = useCallback(
@@ -657,64 +612,7 @@ export default function ConsumptionLogger({
 
         {!logsLoading &&
           todayEntries.map((entry) =>
-            editingId === entry.consumptionLogId ? (
-              /* inline edit row */
-              <div
-                key={entry.consumptionLogId}
-                className="bg-[#111]/80 backdrop-blur-md border border-[#D4A574]/20 rounded-xl px-4 py-3 space-y-2.5 animate-fade-in"
-              >
-                <div className="flex gap-2 items-center flex-wrap">
-                  <input
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    value={editQty}
-                    onChange={(e) => setEditQty(e.target.value)}
-                    className="w-20 bg-[#0A0A0A] border border-[#2A2A2A] rounded-lg px-2 py-1.5 text-xs text-[#E0E0E0] focus:outline-none focus:border-[#D4A574]/40 transition-all text-center"
-                  />
-                  <span className="text-xs text-[#666]">{entry.unit || entry.baseUnit}</span>
-                  <span className="text-xs text-[#E0E0E0] font-medium">
-                    {entry.ingredientName}
-                  </span>
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {REASONS.map((r) => (
-                    <button
-                      key={r.key}
-                      onClick={() => setEditReason(r.key)}
-                      className={`px-2.5 py-1 rounded-full text-xs border transition-all cursor-pointer ${
-                        editReason === r.key
-                          ? "bg-[#D4A574]/20 text-[#D4A574] border-[#D4A574]/30"
-                          : "bg-[#161616] text-[#888] border-[#2A2A2A] hover:border-[#444]"
-                      }`}
-                    >
-                      {r.label}
-                    </button>
-                  ))}
-                </div>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={editNotes}
-                    onChange={(e) => setEditNotes(e.target.value)}
-                    placeholder="Notes..."
-                    className="flex-1 bg-[#0A0A0A] border border-[#2A2A2A] rounded-lg px-2 py-1.5 text-xs text-[#E0E0E0] placeholder-[#555] focus:outline-none focus:border-[#D4A574]/40 transition-all"
-                  />
-                  <button
-                    onClick={handleSaveEdit}
-                    className="px-3 py-1.5 bg-[#D4A574]/20 text-[#D4A574] rounded-lg text-xs font-medium hover:bg-[#D4A574]/30 transition-colors"
-                  >
-                    Save
-                  </button>
-                  <button
-                    onClick={() => setEditingId(null)}
-                    className="px-3 py-1.5 bg-white/5 text-[#888] rounded-lg text-xs hover:bg-white/10 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            ) : (
+            (
               /* read-only row */
               <div
                 key={entry.consumptionLogId}

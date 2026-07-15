@@ -763,9 +763,6 @@ export async function getWasteImpactForMenuItems(userId: number): Promise<WasteI
 
   if (allIngredients.length === 0) return [];
 
-  // Get unique ingredient names across all menu items
-  const ingredientNames = [...new Set(allIngredients.map((i) => i.ingredientName.toLowerCase()))];
-
   // Query waste logs for matching ingredients in the last 30 days
   const thirtyDaysAgo = new Date();
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);

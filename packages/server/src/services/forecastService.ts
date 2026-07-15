@@ -240,7 +240,7 @@ export async function dismissRecommendation(recId: string, orgId: number) {
 // 4. markOrdered
 // ---------------------------------------------------------------------------
 
-export async function markOrdered(recId: string, orgId: number, poId?: string) {
+export async function markOrdered(recId: string, orgId: number) {
   const [rec] = await db
     .select()
     .from(forecastRecommendation)

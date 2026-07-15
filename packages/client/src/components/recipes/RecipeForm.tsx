@@ -153,7 +153,6 @@ export function RecipeForm({ domain, onSubmit, loading }: RecipeFormProps) {
   const [componentCount, setComponentCount] = useState("");
   // Spirits
   const [spiritBase, setSpiritBase] = useState("");
-  const [flavourProfile, setFlavourProfile] = useState("");
   const [alcoholic, setAlcoholic] = useState(true);
   const [venueType, setVenueType] = useState("");
   const [drinkStyle, setDrinkStyle] = useState("");
@@ -186,7 +185,6 @@ export function RecipeForm({ domain, onSubmit, loading }: RecipeFormProps) {
       occasion: occasion || undefined,
       // Spirits
       spiritBase: domain === "spirits" ? spiritBase || undefined : undefined,
-      flavourProfile: domain === "spirits" ? flavourProfile || undefined : undefined,
       alcoholic: domain === "spirits" ? alcoholic : undefined,
       venueType: domain === "spirits" ? venueType || undefined : undefined,
       drinkStyle: domain === "spirits" ? drinkStyle || undefined : undefined,

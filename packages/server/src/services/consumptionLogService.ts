@@ -486,37 +486,3 @@ export async function deleteConsumptionLog(
 
   return deleted;
 }
-
-// ---------------------------------------------------------------------------
-// 6. getConsumptionByIngredient
-// ---------------------------------------------------------------------------
-
-async function getConsumptionByIngredient(
-  ingredientId: string,
-  locationId: string,
-  days: number,
-) {
-  const startDate = new Date();
-  startDate.setDate(startDate.getDate() - days);
-
-  const rows = await db
-    .select({
-      date: sql<string>`date_trunc('day', ${consumptionLog.loggedAt})::date`,
-      totalQty: sql<string>`sum(coalesce(${consumptionLog.baseQty}, ${consumptionLog.quantity})::numeric)`,
-    })
-    .from(consumptionLog)
-    .where(
-      and(
-        eq(consumptionLog.ingredientId, ingredientId),
-        eq(consumptionLog.storeLocationId, locationId),
-        gte(consumptionLog.loggedAt, startDate),
-      ),
-    )
-    .groupBy(sql`date_trunc('day', ${consumptionLog.loggedAt})::date`)
-    .orderBy(sql`date_trunc('day', ${consumptionLog.loggedAt})::date`);
-
-  return rows.map((row) => ({
-    date: String(row.date),
-    totalQty: Number(row.totalQty),
-  }));
-}

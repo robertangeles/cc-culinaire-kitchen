@@ -100,7 +100,6 @@ export function MenuItemList({
   onAdd,
   onEdit,
   onDelete,
-  onSelect,
 }: MenuItemListProps) {
   const navigate = useNavigate();
   const [sortKey, setSortKey] = useState<SortKey>("name");
