@@ -170,13 +170,6 @@ export function RecipeLabPage({ domain }: RecipeLabPageProps) {
     }
   }
 
-  function handleReset() {
-    setGenerated(null);
-    setProseResponse(null);
-    setError(null);
-    sessionStorage.removeItem(storageKey);
-  }
-
   // ---------------------------------------------------------------------------
   // Split-screen layout: form left, output right (md+). Stacked on mobile.
   // When no recipe generated yet: form centered full-width.

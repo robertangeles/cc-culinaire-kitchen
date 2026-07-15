@@ -92,6 +92,10 @@ function serverComputeLineCost(
  * This is display-only — the .toFixed(2) is on the rendered string.
  * The accumulated total (line 189-195) does NOT round per-line.
  */
+// Kept as the documented reference for the client's per-line display formula:
+// the PO Total tests below exist precisely because this rounding does NOT feed
+// the accumulated total.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function clientPOLineTotal(orderedQty: string, unitCost: string): number {
   return (Number(orderedQty) || 0) * (Number(unitCost) || 0);
 }

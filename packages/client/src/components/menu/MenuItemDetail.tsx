@@ -10,7 +10,6 @@ import { useNavigate } from "react-router";
 import type { MenuItem, MenuIngredient } from "../../hooks/useMenuItems.js";
 import { useMenuRecommendations } from "../../hooks/useMenuRecommendations.js";
 
-const API = import.meta.env.VITE_API_URL ?? "";
 
 const CLASS_INFO: Record<string, { label: string; bg: string; text: string; icon: typeof Star; desc: string }> = {
   star: { label: "Star", bg: "bg-[#D4A574]/15", text: "text-[#D4A574]", icon: Star, desc: "High profit, high popularity \u2014 protect this item" },

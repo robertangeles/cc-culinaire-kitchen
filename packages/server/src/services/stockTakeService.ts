@@ -1203,10 +1203,6 @@ export async function getPendingReviewSessions(organisationId: number) {
       const submittedCount = cats.filter(
         (c) => c.categoryStatus === "SUBMITTED" || c.categoryStatus === "APPROVED",
       ).length;
-      const totalLineCount = cats.reduce(
-        (sum, c) => sum + (typeof (c as any).lineCount === "number" ? (c as any).lineCount : 0),
-        0,
-      );
       return {
         ...s,
         categoryCount: cats.length,

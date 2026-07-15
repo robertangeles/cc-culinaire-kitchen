@@ -24,7 +24,7 @@ const h = vi.hoisted(() => {
   const mockUpdate = vi.fn(() => ({ set: mockUpdateSet }));
   return { mockReturning, mockInsertValues, mockInsert, mockSelectRows, mockUpdateSet, mockUpdate };
 });
-const { mockReturning, mockInsertValues, mockInsert, mockSelectRows, mockUpdateSet, mockUpdate } = h;
+const { mockReturning, mockInsertValues, mockSelectRows, mockUpdateSet, mockUpdate } = h;
 
 vi.mock("../db/index.js", () => ({
   db: {

@@ -10,7 +10,6 @@ import { useState, useCallback, useMemo } from "react";
 import { useLocation } from "../../context/LocationContext.js";
 import {
   usePurchaseOrders,
-  useSuppliers,
   useLocationIngredients,
   type PurchaseOrder,
 } from "../../hooks/useInventory.js";
@@ -80,7 +79,6 @@ export default function PurchaseOrderList() {
     pos, isLoading, refresh, submitPO, cancelPO,
     approvePO, rejectPO, clonePO, downloadPdf, getDetail,
   } = usePurchaseOrders(selectedLocationId);
-  const { suppliers } = useSuppliers();
   const { items: ingredients } = useLocationIngredients(selectedLocationId);
   const ingMap = useMemo(() => {
     const m = new Map<string, typeof ingredients[0]>();

@@ -228,7 +228,6 @@ export function ModelRegistryPanel() {
     isLoading,
     isFetchingCatalog,
     error,
-    refresh,
     fetchCatalog,
     enable,
     disable,

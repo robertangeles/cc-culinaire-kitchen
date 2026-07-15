@@ -10,10 +10,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // generateObject — capture the args, return a minimal valid recipe object.
 let capturedPrompt = "";
-let capturedSystem = "";
 const generateObjectMock = vi.fn(async (args: { system: string; prompt: string }) => {
   capturedPrompt = args.prompt;
-  capturedSystem = args.system;
   return { object: { name: "Test Dish", description: "d", imagePrompt: "p" } };
 });
 vi.mock("ai", () => ({
@@ -52,7 +50,6 @@ describe("recipeService — Brain recall splice in the Labs (spec T13)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     capturedPrompt = "";
-    capturedSystem = "";
     mockRecall = null;
     ragSnippets = [];
   });

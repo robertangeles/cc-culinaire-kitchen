@@ -36,7 +36,7 @@ describe.runIf(dbAvailable)("brainNudgeService (T17, real DB)", () => {
   const key = (p: string) => `NDG-${p}-${randomUUID().slice(0, 8)}`.toUpperCase();
 
   beforeAll(async () => {
-    const { getAllSettings, upsertSettings } = await import("./settingsService.js");
+    const { getAllSettings } = await import("./settingsService.js");
     const s = await getAllSettings();
     // Restore to the real seed defaults for any setting absent when the test
     // runs — a blanket "false" would poison `brain_nudge_rate_limit` (a number)

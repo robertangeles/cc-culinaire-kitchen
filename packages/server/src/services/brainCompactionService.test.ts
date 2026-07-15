@@ -39,7 +39,7 @@ describe.runIf(dbAvailable)("brainCompactionService (T16, real DB)", () => {
   const flagBackup: Record<string, string> = {};
 
   beforeAll(async () => {
-    const { getAllSettings, upsertSettings } = await import("./settingsService.js");
+    const { getAllSettings } = await import("./settingsService.js");
     const s = await getAllSettings();
     for (const k of ["brain_enabled", "brain_compaction_enabled", "brain_compaction_cap"]) {
       flagBackup[k] = s[k] ?? "false";

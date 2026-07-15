@@ -175,6 +175,10 @@ export async function recompute(
  *
  * Throws today so a stray caller doesn't silently no-op.
  */
+// Reserved on purpose (see the module docblock): a loud guard so a future
+// caller fails fast instead of silently no-opping. Unused until admin void
+// tooling exists.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function reverseOnVoid(_voidedReceivingSessionId: string): Promise<never> {
   throw new Error(
     "wacService.reverseOnVoid is not yet implemented — confirmed receipts are terminal in Phase 1. " +
