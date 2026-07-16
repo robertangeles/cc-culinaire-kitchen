@@ -43,6 +43,21 @@ Almost French; all 112 live in dev only, which is why the UOM wine backfill was 
 prod. Dev and prod schemas are now identical, which is what makes this feasible. Do it when
 Almost French goes live in prod.
 
+### 5. ⚠️ Check ARCHOS dev data was promoted to prod (DO THIS ON ARCHOS — noted 2026-07-16)
+**Not doable from HEPHAESTUS.** ARCHOS is the *other* dev machine (back home); its local dev
+Postgres is not reachable from this machine, so this can only run there. Concern: data that
+was worked on in **ARCHOS's local dev** may never have been pushed up to prod.
+
+- On ARCHOS, run a **read-only** dev-vs-prod comparison (same approach as the `/update-db`
+  command, but compare-only — a per-table row-count diff of ARCHOS dev vs prod) to identify
+  exactly what exists in ARCHOS dev but not in prod.
+- This likely **overlaps the Almost French promotion above** — the "112 ingredients in dev
+  only" may physically live on ARCHOS, which is why prod shows 0.
+- Promoting dev → prod is a **production write** (the risky direction): needs explicit scope
+  (which tables/rows) and user go-ahead before touching prod. Back up prod first.
+- Context: `DEV_ENVIRONMENT` in `.env` marks the current machine. See agent memory
+  `dev-machine-topology`.
+
 ---
 
 _Last updated: 2026-04-22. Reflects actual codebase state, not aspirational._

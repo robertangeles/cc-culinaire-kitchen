@@ -150,6 +150,10 @@ AGAIN at the sale, and showed as phantom yield variance.
 
 ---
 
+## UAT Report
+- Stockroom -> Catalog -> When editing an ingredient, add 50% of the size of the description field
+
+
 ## Sign-off
 - Tester: __________  Date: __________  Branch: `main` (PR #75 UOM + #76 storage areas, both merged)
 - Overall: ☐ Pass ☐ Pass with notes ☐ Fail
