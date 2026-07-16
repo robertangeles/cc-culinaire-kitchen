@@ -35,28 +35,28 @@ None are urgent. Each is "should this exist?", which is yours to answer, not a l
 
 Then **B3** (snapshot, restock list, spot check).
 
-### 4. Backlog (approved 2026-07-15, was only in memory until now)
-**Promote Almost French's dev catalog to prod** — 112 ingredients with kitchen units, content
-equivalences, packaging and supplier links (org 2 dev → org 2 prod). Needs ID remapping, an
-org-scoped export/import, and a prod backup first. Prod currently has **0** ingredients for
-Almost French; all 112 live in dev only, which is why the UOM wine backfill was a no-op on
-prod. Dev and prod schemas are now identical, which is what makes this feasible. Do it when
-Almost French goes live in prod.
+### 4. ✅ DONE 2026-07-16 — Almost French catalog promoted dev → prod
+**Done, on ARCHOS.** 332 rows for org 2 (Almost French) copied dev → prod in one
+transaction: 112 ingredients + 1 unit_conversion + 94 ingredient_supplier + 115
+location_ingredient + 10 stock_level. Prod org-2 counts now equal dev. FK integrity verified
+(0 orphans). Turned out cleaner than feared: org 2 and both store_location UUIDs already
+existed in prod with matching IDs, so **no ID remapping** was needed — a straight additive
+insert. Backup taken first (the FIRST attempt truncated at a timeout, 45 MB vs 65 MB; caught
+it, deleted it, re-ran in the background):
+`~/culinaire-prod-backups/culinaire_prod_full_2026-07-16_201717.dump` (65 MB, pg_restore
+--list verified). Comfort Spoon (org 1) already matched (55=55).
 
-### 5. ⚠️ Check ARCHOS dev data was promoted to prod (DO THIS ON ARCHOS — noted 2026-07-16)
-**Not doable from HEPHAESTUS.** ARCHOS is the *other* dev machine (back home); its local dev
-Postgres is not reachable from this machine, so this can only run there. Concern: data that
-was worked on in **ARCHOS's local dev** may never have been pushed up to prod.
-
-- On ARCHOS, run a **read-only** dev-vs-prod comparison (same approach as the `/update-db`
-  command, but compare-only — a per-table row-count diff of ARCHOS dev vs prod) to identify
-  exactly what exists in ARCHOS dev but not in prod.
-- This likely **overlaps the Almost French promotion above** — the "112 ingredients in dev
-  only" may physically live on ARCHOS, which is why prod shows 0.
-- Promoting dev → prod is a **production write** (the risky direction): needs explicit scope
-  (which tables/rows) and user go-ahead before touching prod. Back up prod first.
+### 5. ✅ DONE 2026-07-16 — ARCHOS dev-vs-prod comparison (this was the same gap)
+Ran the read-only comparison on ARCHOS. The only real dev-only data was Almost French's
+catalog — which is item 4 above, now promoted. Also found and **deleted a test-leak org**
+from ARCHOS dev: `uomit_1784021481913-org` (id 150) + its user (403) + 4 ingredients + 1
+location + 2 consumption_log rows, leaked by `uomAndSelling.integration.test.ts` when an
+afterAll failed partway (same leak class fixed in the storage-areas suite this session).
+Dev ingredient total went 171 → 167; dev and prod now match (167 each).
 - Context: `DEV_ENVIRONMENT` in `.env` marks the current machine. See agent memory
   `dev-machine-topology`.
+- Open follow-up: the UOM integration test's afterAll should be hardened the same way the
+  storage-areas one was (filter unset ids, per-step try/catch) so it stops leaking.
 
 ---
 
