@@ -1,2 +1,10 @@
 packages:
   - "packages/*"
+
+# Allowlist of dependencies permitted to run install/build scripts.
+# pnpm 10 blocks build scripts by default and reads this from here — the old
+# home (the "pnpm" field in package.json) is no longer read.
+onlyBuiltDependencies:
+  - bcrypt
+  - esbuild
+  - tesseract.js
