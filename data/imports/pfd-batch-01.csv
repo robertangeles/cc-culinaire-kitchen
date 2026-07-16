@@ -1,0 +1,99 @@
+sheet_supplier,matched_supplier,supplier_id,original,cleaned,item_type,category,base_unit,status,note
+PFD,PFD Food Services,5ab06a44-ea25-4279-b582-a6ce731d58e9,Apples,Apples,KITCHEN_INGREDIENT,produce,kg,ok,
+PFD,PFD Food Services,5ab06a44-ea25-4279-b582-a6ce731d58e9,Apricot,Apricot,KITCHEN_INGREDIENT,produce,kg,ok,fresh or puree?
+PFD,PFD Food Services,5ab06a44-ea25-4279-b582-a6ce731d58e9,Pear,Pear,KITCHEN_INGREDIENT,produce,kg,ok,
+PFD,PFD Food Services,5ab06a44-ea25-4279-b582-a6ce731d58e9,Spinach,Spinach,KITCHEN_INGREDIENT,produce,kg,ok,
+PFD,PFD Food Services,5ab06a44-ea25-4279-b582-a6ce731d58e9,Butter 25kg,Butter 25kg,KITCHEN_INGREDIENT,dairy,kg,ok,pack size in name
+PFD,PFD Food Services,5ab06a44-ea25-4279-b582-a6ce731d58e9,Muffins,Muffins,KITCHEN_INGREDIENT,bakery,each,ok,finished product for resale? which kind
+PFD,PFD Food Services,5ab06a44-ea25-4279-b582-a6ce731d58e9,Salmon,Salmon,KITCHEN_INGREDIENT,proteins,kg,ok,
+PFD,PFD Food Services,5ab06a44-ea25-4279-b582-a6ce731d58e9,Rapsberry whole,Raspberry Whole,KITCHEN_INGREDIENT,frozen,kg,fixed,frozen whole raspberries
+PFD,PFD Food Services,5ab06a44-ea25-4279-b582-a6ce731d58e9,Euro flour,Euro Flour,KITCHEN_INGREDIENT,dry_goods,kg,ok,specific flour type/brand?
+PFD,PFD Food Services,5ab06a44-ea25-4279-b582-a6ce731d58e9,Plain flour,Plain Flour,KITCHEN_INGREDIENT,dry_goods,kg,ok,
+PFD,PFD Food Services,5ab06a44-ea25-4279-b582-a6ce731d58e9,Caster sugar,Caster Sugar,KITCHEN_INGREDIENT,dry_goods,kg,ok,
+PFD,PFD Food Services,5ab06a44-ea25-4279-b582-a6ce731d58e9,Icing sugar,Icing Sugar,KITCHEN_INGREDIENT,dry_goods,kg,ok,
+PFD,PFD Food Services,5ab06a44-ea25-4279-b582-a6ce731d58e9,Drop compound,Drop Compound,KITCHEN_INGREDIENT,dry_goods,kg,ok,compound chocolate drops/buttons?
+PFD,PFD Food Services,5ab06a44-ea25-4279-b582-a6ce731d58e9,Compound dark,Dark Compound Chocolate,KITCHEN_INGREDIENT,dry_goods,kg,ok,confirm = dark compound chocolate
+PFD,PFD Food Services,5ab06a44-ea25-4279-b582-a6ce731d58e9,Piping bag,Piping Bag,FOH_CONSUMABLE,packaging,each,ok,NON-FOOD supply
+PFD,PFD Food Services,5ab06a44-ea25-4279-b582-a6ce731d58e9,Brie,Brie,KITCHEN_INGREDIENT,dairy,kg,ok,
+PFD,PFD Food Services,5ab06a44-ea25-4279-b582-a6ce731d58e9,Salt,Salt,KITCHEN_INGREDIENT,dry_goods,kg,ok,
+PFD,PFD Food Services,5ab06a44-ea25-4279-b582-a6ce731d58e9,Cocoa powder,Cocoa Powder,KITCHEN_INGREDIENT,dry_goods,kg,ok,
+PFD,PFD Food Services,5ab06a44-ea25-4279-b582-a6ce731d58e9,ice creme vanila,Ice Cream Vanilla,KITCHEN_INGREDIENT,frozen,l,fixed,
+PFD,PFD Food Services,5ab06a44-ea25-4279-b582-a6ce731d58e9,Ice cream Chocolate,Ice Cream Chocolate,KITCHEN_INGREDIENT,frozen,l,ok,
+PFD,PFD Food Services,5ab06a44-ea25-4279-b582-a6ce731d58e9,Ice cream Strawberry,Ice Cream Strawberry,KITCHEN_INGREDIENT,frozen,l,ok,
+PFD,PFD Food Services,5ab06a44-ea25-4279-b582-a6ce731d58e9,Ice cream Caramel,Ice Cream Caramel,KITCHEN_INGREDIENT,frozen,l,ok,
+PFD,PFD Food Services,5ab06a44-ea25-4279-b582-a6ce731d58e9,Sparkling water,Sparkling Water,KITCHEN_INGREDIENT,beverages,l,ok,
+PFD,PFD Food Services,5ab06a44-ea25-4279-b582-a6ce731d58e9,Slived almond,Slivered Almonds,KITCHEN_INGREDIENT,dry_goods,kg,fixed,
+PFD,PFD Food Services,5ab06a44-ea25-4279-b582-a6ce731d58e9,Golden syrup,Golden Syrup,KITCHEN_INGREDIENT,condiments,each,ok,
+PFD,PFD Food Services,5ab06a44-ea25-4279-b582-a6ce731d58e9,Condensed milk,Condensed Milk,KITCHEN_INGREDIENT,dairy,l,ok,
+PFD,PFD Food Services,5ab06a44-ea25-4279-b582-a6ce731d58e9,Tomato sauce,Tomato Sauce,KITCHEN_INGREDIENT,condiments,each,ok,
+PFD,PFD Food Services,5ab06a44-ea25-4279-b582-a6ce731d58e9,Pesto,Pesto,KITCHEN_INGREDIENT,condiments,each,ok,
+PFD,PFD Food Services,5ab06a44-ea25-4279-b582-a6ce731d58e9,Relish,Relish,KITCHEN_INGREDIENT,condiments,each,ok,
+PFD,PFD Food Services,5ab06a44-ea25-4279-b582-a6ce731d58e9,Bocconcini,Bocconcini,KITCHEN_INGREDIENT,dairy,kg,ok,
+PFD,PFD Food Services,5ab06a44-ea25-4279-b582-a6ce731d58e9,Spread cream cheese,Cream Cheese Spread,KITCHEN_INGREDIENT,dairy,kg,ok,same as 'Cream cheese' below?
+PFD,PFD Food Services,5ab06a44-ea25-4279-b582-a6ce731d58e9,Mayo,Mayo,KITCHEN_INGREDIENT,condiments,each,ok,
+PFD,PFD Food Services,5ab06a44-ea25-4279-b582-a6ce731d58e9,Bacon,Bacon,KITCHEN_INGREDIENT,proteins,kg,ok,CROSS-SUPPLIER dup with Local Milk
+PFD,PFD Food Services,5ab06a44-ea25-4279-b582-a6ce731d58e9,Raspberry jam,Raspberry Jam,KITCHEN_INGREDIENT,condiments,each,ok,
+PFD,PFD Food Services,5ab06a44-ea25-4279-b582-a6ce731d58e9,Sugar sticks,Sugar Sticks,KITCHEN_INGREDIENT,dry_goods,each,ok,sugar sachets/sticks?
+PFD,PFD Food Services,5ab06a44-ea25-4279-b582-a6ce731d58e9,Cinnamon powder,Ground Cinnamon,KITCHEN_INGREDIENT,dry_goods,kg,ok,survivor of merge (Cinnamon powder + Cinamon ground)
+PFD,PFD Food Services,5ab06a44-ea25-4279-b582-a6ce731d58e9,Marshmallow,Marshmallow,KITCHEN_INGREDIENT,dry_goods,each,ok,
+PFD,PFD Food Services,5ab06a44-ea25-4279-b582-a6ce731d58e9,Label,Label,FOH_CONSUMABLE,packaging,each,ok,NON-FOOD? packaging labels
+PFD,PFD Food Services,5ab06a44-ea25-4279-b582-a6ce731d58e9,Shredded coconut,Shredded Coconut,KITCHEN_INGREDIENT,dry_goods,kg,ok,
+PFD,PFD Food Services,5ab06a44-ea25-4279-b582-a6ce731d58e9,Marie biscuits,Marie Biscuits,KITCHEN_INGREDIENT,bakery,each,ok,
+PFD,PFD Food Services,5ab06a44-ea25-4279-b582-a6ce731d58e9,White compound,White Compound Chocolate,KITCHEN_INGREDIENT,dry_goods,kg,ok,confirm = white compound chocolate
+PFD,PFD Food Services,5ab06a44-ea25-4279-b582-a6ce731d58e9,Chicken,Chicken,KITCHEN_INGREDIENT,proteins,kg,ok,
+PFD,PFD Food Services,5ab06a44-ea25-4279-b582-a6ce731d58e9,Cream cheese,Cream Cheese,KITCHEN_INGREDIENT,dairy,kg,ok,same as 'Spread cream cheese' above?
+PFD,PFD Food Services,5ab06a44-ea25-4279-b582-a6ce731d58e9,salami,Salami,KITCHEN_INGREDIENT,proteins,kg,ok,
+PFD,PFD Food Services,5ab06a44-ea25-4279-b582-a6ce731d58e9,Smarties,Smarties,KITCHEN_INGREDIENT,dry_goods,each,ok,
+PFD,PFD Food Services,5ab06a44-ea25-4279-b582-a6ce731d58e9,Lady finger,Lady Finger Biscuits,KITCHEN_INGREDIENT,bakery,each,ok,savoiardi/sponge fingers?
+PFD,PFD Food Services,5ab06a44-ea25-4279-b582-a6ce731d58e9,canola spray,Canola Spray,KITCHEN_INGREDIENT,other,each,ok,NON-FOOD supply
+PFD,PFD Food Services,5ab06a44-ea25-4279-b582-a6ce731d58e9,Corn flour,Corn Flour,KITCHEN_INGREDIENT,dry_goods,kg,ok,
+PFD,PFD Food Services,5ab06a44-ea25-4279-b582-a6ce731d58e9,custard powder,Custard Powder,KITCHEN_INGREDIENT,dry_goods,kg,ok,
+PFD,PFD Food Services,5ab06a44-ea25-4279-b582-a6ce731d58e9,tortillas,Tortillas,KITCHEN_INGREDIENT,bakery,each,ok,
+PFD,PFD Food Services,5ab06a44-ea25-4279-b582-a6ce731d58e9,mix herb,Mixed Herbs,KITCHEN_INGREDIENT,dry_goods,kg,fixed,
+PFD,PFD Food Services,5ab06a44-ea25-4279-b582-a6ce731d58e9,Biscuit grams,Biscuit Crumbs,KITCHEN_INGREDIENT,bakery,kg,ok,'grams' read as crumbs — verify
+PFD,PFD Food Services,5ab06a44-ea25-4279-b582-a6ce731d58e9,mix spice,Mixed Spice,KITCHEN_INGREDIENT,dry_goods,kg,fixed,
+PFD,PFD Food Services,5ab06a44-ea25-4279-b582-a6ce731d58e9,gluten free flour,Gluten Free Flour,KITCHEN_INGREDIENT,dry_goods,kg,ok,survivor of merge
+PFD,PFD Food Services,5ab06a44-ea25-4279-b582-a6ce731d58e9,baking powder,Baking Powder,KITCHEN_INGREDIENT,dry_goods,kg,ok,
+PFD,PFD Food Services,5ab06a44-ea25-4279-b582-a6ce731d58e9,Mustard english mild,English Mild Mustard,KITCHEN_INGREDIENT,condiments,each,fixed,
+PFD,PFD Food Services,5ab06a44-ea25-4279-b582-a6ce731d58e9,Yogurt,Yogurt,KITCHEN_INGREDIENT,dairy,each,ok,
+PFD,PFD Food Services,5ab06a44-ea25-4279-b582-a6ce731d58e9,Mascarpone,Mascarpone,KITCHEN_INGREDIENT,dairy,kg,ok,
+PFD,PFD Food Services,5ab06a44-ea25-4279-b582-a6ce731d58e9,Gf flour,Gluten Free Flour,KITCHEN_INGREDIENT,dry_goods,kg,merged,MERGED into 'gluten free flour'
+PFD,PFD Food Services,5ab06a44-ea25-4279-b582-a6ce731d58e9,brown sugar,Brown Sugar,KITCHEN_INGREDIENT,dry_goods,kg,ok,
+PFD,PFD Food Services,5ab06a44-ea25-4279-b582-a6ce731d58e9,Nutella,Nutella,KITCHEN_INGREDIENT,dry_goods,kg,ok,
+PFD,PFD Food Services,5ab06a44-ea25-4279-b582-a6ce731d58e9,swiss slice,Swiss Cheese Slices,KITCHEN_INGREDIENT,dairy,kg,ok,confirm = swiss cheese slices
+PFD,PFD Food Services,5ab06a44-ea25-4279-b582-a6ce731d58e9,Cinamon ground,Ground Cinnamon,KITCHEN_INGREDIENT,dry_goods,kg,merged,MERGED into Ground Cinnamon
+PFD,PFD Food Services,5ab06a44-ea25-4279-b582-a6ce731d58e9,Nutmeg Ground,Ground Nutmeg,KITCHEN_INGREDIENT,dry_goods,kg,fixed,
+PFD,PFD Food Services,5ab06a44-ea25-4279-b582-a6ce731d58e9,Eggs,Eggs,KITCHEN_INGREDIENT,dairy,each,ok,
+PFD,PFD Food Services,5ab06a44-ea25-4279-b582-a6ce731d58e9,coffee machine cleaner,Coffee Machine Cleaner,OPERATIONAL_SUPPLY,cleaning,each,ok,NON-FOOD supply
+Hudson,Hudson Food Group,229abdf5-e7e9-4b18-8b42-9036a618595e,Butter,Butter,KITCHEN_INGREDIENT,dairy,kg,ok,
+Eustralis,Eustralis -  Melbourne Wholesale Food Supplier,ba1e1aa8-0be6-4a3a-83b9-45780b13b710,Baguette,Baguette,KITCHEN_INGREDIENT,bakery,each,ok,
+Eustralis,Eustralis -  Melbourne Wholesale Food Supplier,ba1e1aa8-0be6-4a3a-83b9-45780b13b710,Bagel,Bagel,KITCHEN_INGREDIENT,bakery,each,ok,
+Eustralis,Eustralis -  Melbourne Wholesale Food Supplier,ba1e1aa8-0be6-4a3a-83b9-45780b13b710,Doughnut,Doughnut,KITCHEN_INGREDIENT,bakery,each,ok,
+Eustralis,Eustralis -  Melbourne Wholesale Food Supplier,ba1e1aa8-0be6-4a3a-83b9-45780b13b710,Puree,,,,,excluded,"Excluded — ambiguous, flavour unspecified"
+Eustralis,Eustralis -  Melbourne Wholesale Food Supplier,ba1e1aa8-0be6-4a3a-83b9-45780b13b710,Canele,Canelé,KITCHEN_INGREDIENT,bakery,each,fixed,
+Eustralis,Eustralis -  Melbourne Wholesale Food Supplier,ba1e1aa8-0be6-4a3a-83b9-45780b13b710,Hot glaze,Hot Glaze,KITCHEN_INGREDIENT,dry_goods,each,ok,pastry glaze
+Eustralis,Eustralis -  Melbourne Wholesale Food Supplier,ba1e1aa8-0be6-4a3a-83b9-45780b13b710,Salt guerande,Guérande Salt,KITCHEN_INGREDIENT,dry_goods,kg,fixed,fleur de sel de Guérande
+Eustralis,Eustralis -  Melbourne Wholesale Food Supplier,ba1e1aa8-0be6-4a3a-83b9-45780b13b710,Butter sheet,Butter Sheet,KITCHEN_INGREDIENT,dairy,each,ok,laminating butter
+Eustralis,Eustralis -  Melbourne Wholesale Food Supplier,ba1e1aa8-0be6-4a3a-83b9-45780b13b710,fondant,Fondant,KITCHEN_INGREDIENT,dry_goods,each,ok,
+Eustralis,Eustralis -  Melbourne Wholesale Food Supplier,ba1e1aa8-0be6-4a3a-83b9-45780b13b710,gold sheet,Gold Leaf Sheet,KITCHEN_INGREDIENT,dry_goods,each,ok,edible gold leaf?
+Eustralis,Eustralis -  Melbourne Wholesale Food Supplier,ba1e1aa8-0be6-4a3a-83b9-45780b13b710,gold powder,Gold Powder,KITCHEN_INGREDIENT,dry_goods,kg,ok,edible gold dust?
+Eustralis,Eustralis -  Melbourne Wholesale Food Supplier,ba1e1aa8-0be6-4a3a-83b9-45780b13b710,chocolate baton,Chocolate Baton,KITCHEN_INGREDIENT,dry_goods,each,ok,CROSS-SUPPLIER dup with Creative
+Eustralis,Eustralis -  Melbourne Wholesale Food Supplier,ba1e1aa8-0be6-4a3a-83b9-45780b13b710,milk chocolate,Milk Chocolate,KITCHEN_INGREDIENT,dry_goods,kg,ok,
+Eustralis,Eustralis -  Melbourne Wholesale Food Supplier,ba1e1aa8-0be6-4a3a-83b9-45780b13b710,dark chocolate,Dark Chocolate,KITCHEN_INGREDIENT,dry_goods,kg,ok,
+Eustralis,Eustralis -  Melbourne Wholesale Food Supplier,ba1e1aa8-0be6-4a3a-83b9-45780b13b710,white chocolate,White Chocolate,KITCHEN_INGREDIENT,dry_goods,kg,ok,
+Creative,Creative Gourmet,a0babb4d-0f3a-4f84-8c7a-6b8a2bbbedd0,Lemon puree,Lemon Puree,KITCHEN_INGREDIENT,condiments,each,ok,
+Creative,Creative Gourmet,a0babb4d-0f3a-4f84-8c7a-6b8a2bbbedd0,Puree,,,,,excluded,"Excluded — ambiguous, flavour unspecified (Lemon Puree retained)"
+Creative,Creative Gourmet,a0babb4d-0f3a-4f84-8c7a-6b8a2bbbedd0,Chocolate baton,Chocolate Baton,KITCHEN_INGREDIENT,dry_goods,each,ok,CROSS-SUPPLIER dup with Eustralis
+Local Milk,Riverina Fresh,97c8d90e-bb77-430c-aae8-ee95167549ca,Full cream,Full Cream Milk,KITCHEN_INGREDIENT,dairy,l,fixed,
+Local Milk,Riverina Fresh,97c8d90e-bb77-430c-aae8-ee95167549ca,Skinny milk,Skim Milk,KITCHEN_INGREDIENT,dairy,l,ok,confirm skim vs light
+Local Milk,Riverina Fresh,97c8d90e-bb77-430c-aae8-ee95167549ca,Oat milk,Oat Milk,KITCHEN_INGREDIENT,dairy,l,ok,
+Local Milk,Riverina Fresh,97c8d90e-bb77-430c-aae8-ee95167549ca,Soy milk,Soy Milk,KITCHEN_INGREDIENT,dairy,l,ok,
+Local Milk,Riverina Fresh,97c8d90e-bb77-430c-aae8-ee95167549ca,Almond milk,Almond Milk,KITCHEN_INGREDIENT,dairy,l,ok,
+Local Milk,Riverina Fresh,97c8d90e-bb77-430c-aae8-ee95167549ca,Tasty Shredded cheese,Tasty Shredded Cheese,KITCHEN_INGREDIENT,dairy,kg,ok,
+Local Milk,Riverina Fresh,97c8d90e-bb77-430c-aae8-ee95167549ca,Orange juice organic,Organic Orange Juice,KITCHEN_INGREDIENT,beverages,l,fixed,
+Local Milk,Riverina Fresh,97c8d90e-bb77-430c-aae8-ee95167549ca,Apple juice Organic,Organic Apple Juice,KITCHEN_INGREDIENT,beverages,l,fixed,
+Local Milk,Riverina Fresh,97c8d90e-bb77-430c-aae8-ee95167549ca,Thicken Cream,Thickened Cream,KITCHEN_INGREDIENT,dairy,l,fixed,
+Local Milk,Riverina Fresh,97c8d90e-bb77-430c-aae8-ee95167549ca,Bacon,Bacon,KITCHEN_INGREDIENT,proteins,kg,ok,CROSS-SUPPLIER dup with PFD
+Local Milk,Riverina Fresh,97c8d90e-bb77-430c-aae8-ee95167549ca,Ham,Ham,KITCHEN_INGREDIENT,proteins,kg,ok,
+Local Milk,Riverina Fresh,97c8d90e-bb77-430c-aae8-ee95167549ca,Lactose Milk,Lactose-Free Milk,KITCHEN_INGREDIENT,dairy,l,ok,confirm lactose-free
+Local Milk,Riverina Fresh,97c8d90e-bb77-430c-aae8-ee95167549ca,Spring water,Spring Water,KITCHEN_INGREDIENT,beverages,l,ok,
