@@ -1,0 +1,18 @@
+section,original,cleaned,style,item_type,category,base_unit,bottle_price,pack_ml,cost_per_ml,status,note
+Champagne,Jean Luc Mouillard,Jean-Luc Mouillard,Champagne,FOH_CONSUMABLE,spirits,ml,48.00,750,0.0640,fixed,hyphenated producer name
+Champagne,Taitinger,Taittinger,Champagne,FOH_CONSUMABLE,spirits,ml,83.05,750,0.1107,fixed,typo -> Taittinger (Champagne house)
+Champagne,Billecart salmon,Billecart-Salmon,Champagne,FOH_CONSUMABLE,spirits,ml,138.00,750,0.1840,fixed,Champagne house Billecart-Salmon
+Champagne,Half btl Hhure Frere,Huré Frères (Half Bottle),Champagne,FOH_CONSUMABLE,spirits,ml,45.00,375,0.1200,flag,uncertain read as Huré Frères; half bottle 375ml
+White,Sebastien Petit Chablis,Sébastien Petit Chablis,White,FOH_CONSUMABLE,spirits,ml,43.50,750,0.0580,fixed,accent added; verify producer
+White,Chardonay SA,Chardonnay (South Australia),White,FOH_CONSUMABLE,spirits,ml,19.23,750,0.0256,fixed,typo Chardonay; SA expanded
+White,Pinot Grigio Tas,Pinot Grigio (Tasmania),White,FOH_CONSUMABLE,spirits,ml,20.00,750,0.0267,fixed,Tas expanded
+White,Riesling,Riesling,White,FOH_CONSUMABLE,spirits,ml,23.65,750,0.0315,ok,
+White,Belicard Blac Chardonney,Belicard Blanc Chardonnay,White,FOH_CONSUMABLE,spirits,ml,59.50,750,0.0793,flag,typos Blac->Blanc Chardonney->Chardonnay; verify producer
+White,sancerre,Sancerre,White,FOH_CONSUMABLE,spirits,ml,41.69,750,0.0556,fixed,capitalised (Loire appellation)
+Rose,Lafon Languedoc,Lafon Languedoc,Rosé,FOH_CONSUMABLE,spirits,ml,19.10,750,0.0255,ok,
+Rose,Luke Lambert Y vallee,Luke Lambert Yarra Valley,Rosé,FOH_CONSUMABLE,spirits,ml,22.00,750,0.0293,fixed,Y vallee -> Yarra Valley
+Red,Boourgogne Pinot Noir,Bourgogne Pinot Noir,Red,FOH_CONSUMABLE,spirits,ml,35.00,750,0.0467,fixed,typo Boourgogne
+Red,Cote du rhone,Côte du Rhône,Red,FOH_CONSUMABLE,spirits,ml,21.50,750,0.0287,fixed,accents added
+Red,Bordeaux,Bordeaux,Red,FOH_CONSUMABLE,spirits,ml,24.50,750,0.0327,ok,
+Red,Y Valee Pinot Noir,Yarra Valley Pinot Noir,Red,FOH_CONSUMABLE,spirits,ml,23.65,750,0.0315,fixed,Y Valee -> Yarra Valley
+Red,Eleventh Hour Barossa Shiraz,Eleventh Hour Barossa Shiraz,Red,FOH_CONSUMABLE,spirits,ml,30.80,750,0.0411,ok,
