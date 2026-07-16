@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+#
+# Stamp the dev machine onto every commit as a `Dev-Environment:` trailer, read
+# from DEV_ENVIRONMENT in the repo-root .env (gitignored, per-machine). This is
+# provenance: it answers "which machine did this work" straight from `git log`
+# and every PR's commit list — the thing that was unclear when data lived only
+# on one machine's local dev DB.
+#
+# Shared via `git config core.hooksPath hooks` (see hooks/README.md). Reads the
+# local .env, so the value is correct on each box without any per-machine edit
+# to this script.
+
+COMMIT_MSG_FILE="$1"
+COMMIT_SOURCE="$2"   # "message", "merge", "squash", "commit" (amend/-c), or empty
+
+# Skip merges and amends/templated commits — only stamp real, authored commits.
+case "$COMMIT_SOURCE" in
+  merge|squash|commit) exit 0 ;;
+esac
+
+ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
+ENV_FILE="$ROOT/.env"
+[ -f "$ENV_FILE" ] || exit 0
+
+# Pull DEV_ENVIRONMENT without sourcing the whole .env (avoids side effects).
+DEV_ENV="$(grep -E '^DEV_ENVIRONMENT=' "$ENV_FILE" | head -1 | cut -d= -f2- | tr -d '"'"'"' \t\r')"
+[ -n "$DEV_ENV" ] || exit 0
+
+# Already stamped (e.g. commit -C, rebase reword)? Leave it.
+grep -qiE '^Dev-Environment:' "$COMMIT_MSG_FILE" && exit 0
+
+# Append as a trailer. A blank line first only if the file doesn't already end
+# in one, so it sits cleanly with Co-Authored-By etc.
+if [ -n "$(tail -c1 "$COMMIT_MSG_FILE")" ]; then printf '\n' >> "$COMMIT_MSG_FILE"; fi
+printf 'Dev-Environment: %s\n' "$DEV_ENV" >> "$COMMIT_MSG_FILE"
