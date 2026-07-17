@@ -14,38 +14,63 @@ import * as schema from "./schema.js";
 /** Singleton Drizzle instance; initialized on first call to {@link getDb}. */
 let _db: PostgresJsDatabase<typeof schema> | null = null;
 
-/** Hostnames considered "local" — a dev process may only talk to these. */
+/** Hostnames considered "local" — always safe for a dev process. */
 const LOCAL_DB_HOSTS = new Set(["localhost", "127.0.0.1", "::1", ""]);
 
+/** Parse a URL's hostname; "" if absent or unparseable. */
+function hostOf(url: string | undefined): string {
+  if (!url) return "";
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return "";
+  }
+}
+
 /**
- * Refuses to let a non-production process connect to a remote database.
+ * Guards which database a non-production process may connect to.
  *
  * Dev and prod historically shared one Postgres, so a stray query or migration
- * from a laptop could hit live data. This guard makes that impossible: unless
- * `APP_ENV=prod` (the explicit local opt-in) or `NODE_ENV=production`
- * (set by Render in prod), the connection host must be local.
+ * from a laptop could hit live data. The invariants, in order:
+ *   1. A prod process (`NODE_ENV=production`, or the explicit `APP_ENV=prod`
+ *      opt-in) may connect anywhere.
+ *   2. A non-prod process may NEVER reach the prod database host — even with the
+ *      remote opt-in below. This is the hard rail.
+ *   3. Local hosts are always allowed.
+ *   4. A remote host (e.g. a shared cloud dev DB on Neon) is allowed only with an
+ *      explicit `ALLOW_REMOTE_DEV_DB=1` opt-in, so it can never happen by accident.
  *
  * @param connectionString The resolved `DATABASE_URL`.
- * @throws {Error} If a dev process points at a non-local host.
+ * @throws {Error} If a dev process points at prod, or at a remote host without opt-in.
  */
-function assertNotRemoteInDev(connectionString: string): void {
+export function assertSafeDbHost(connectionString: string): void {
   if (process.env.NODE_ENV === "production") return;
   if ((process.env.APP_ENV ?? "").toLowerCase() === "prod") return;
 
-  let host = "";
-  try {
-    host = new URL(connectionString).hostname;
-  } catch {
-    // Unparseable URL — let postgres.js surface the real connection error.
-    return;
-  }
+  const host = hostOf(connectionString);
+  if (!host) return; // Unparseable URL — let postgres.js surface the real error.
 
-  if (!LOCAL_DB_HOSTS.has(host)) {
+  // (2) The hard rail: a non-prod process must never touch the prod host, even
+  // if ALLOW_REMOTE_DEV_DB is set. Checked FIRST so the opt-in can't override it.
+  const prodHost = hostOf(process.env.PROD_DATABASE_URL);
+  if (prodHost && host === prodHost) {
     throw new Error(
-      `Refusing to connect a non-production process to a remote database (host: ${host}). ` +
-        `Point DEV_DATABASE_URL at a local Postgres for development, or set APP_ENV=prod to deliberately target prod.`,
+      `Refusing: a non-production process is pointed at the PROD database host (${host}). ` +
+        `Set APP_ENV=prod only to deliberately target production.`,
     );
   }
+
+  // (3) Local is always fine.
+  if (LOCAL_DB_HOSTS.has(host)) return;
+
+  // (4) A remote dev DB (e.g. Neon) requires a deliberate opt-in.
+  if (process.env.ALLOW_REMOTE_DEV_DB === "1") return;
+
+  throw new Error(
+    `Refusing to connect a non-production process to a remote database (host: ${host}). ` +
+      `Set ALLOW_REMOTE_DEV_DB=1 to use a cloud dev DB, point DEV_DATABASE_URL at a local ` +
+      `Postgres, or set APP_ENV=prod to deliberately target prod.`,
+  );
 }
 
 /**
@@ -62,7 +87,7 @@ export function getDb(): PostgresJsDatabase<typeof schema> {
     throw new Error("DATABASE_URL environment variable is required");
   }
 
-  assertNotRemoteInDev(connectionString);
+  assertSafeDbHost(connectionString);
 
   const client = postgres(connectionString);
   _db = drizzle(client, { schema });
