@@ -128,7 +128,7 @@ export default function StockMovementForm({
         </h3>
         <p className="text-sm text-[#888] max-w-sm mx-auto">
           {areas.length === 0
-            ? "Set up Stock Room, Bar, or wherever you keep stock in Areas — then you can record what moves between them."
+            ? "Set up Dry Storage, Cool Room, Back Bar, or wherever you keep stock in Areas — then you can record what moves between them."
             : "A move needs somewhere to come from and somewhere to go. Add another area to get started."}
         </p>
       </div>

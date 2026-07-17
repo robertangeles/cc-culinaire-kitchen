@@ -9,7 +9,7 @@ interface TimelineEntry {
 const timeline: TimelineEntry[] = [
   {
     time: "6 am",
-    module: "Stock Room",
+    module: "Inventory",
     description:
       "Check stock levels. <b>AI flags 3 items below par</b> \u2014 salmon, double cream, and pine nuts. Draft PO generated. One tap to approve and send to supplier.",
   },

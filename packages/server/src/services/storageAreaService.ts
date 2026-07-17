@@ -16,6 +16,7 @@
 
 import { eq, and, sql, asc, inArray } from "drizzle-orm";
 import { db } from "../db/index.js";
+import type { DbOrTx } from "./auditService.js";
 import {
   storageArea,
   ingredientStorageArea,
@@ -37,6 +38,37 @@ export class StorageAreaError extends Error {
  * check here so the operator gets a sentence instead of a constraint violation.
  */
 const RESERVED_AREA_NAME = "Unassigned";
+
+/**
+ * The count-sheet areas a location starts with. AU-worded (Cool Room, not the US
+ * "Walk-in") and deliberately minimal — universal to any cafe/patisserie/
+ * restaurant, so a patisserie isn't handed bar zones it will never use. Every one
+ * is editable and deletable; operators add Back Bar / Speed Rail / Cellar as they
+ * need them. Seeded on location creation and by the one-time backfill.
+ */
+export const DEFAULT_AREA_NAMES = ["Dry Storage", "Cool Room", "Freezer", "FOH / Counter"] as const;
+
+/**
+ * Seed a location's starting set of storage areas in one bulk insert, walk order
+ * preserved. Takes a tx so it runs atomically with the location insert in
+ * createStoreLocation; defaults to `db` for the standalone backfill script.
+ * Callers guarantee the location has no areas yet (fresh location, or the
+ * backfill's zero-area filter), so this does not dedup.
+ */
+export async function seedDefaultAreas(
+  locationId: string,
+  orgId: number,
+  tx: DbOrTx = db,
+): Promise<void> {
+  await tx.insert(storageArea).values(
+    DEFAULT_AREA_NAMES.map((areaName, idx) => ({
+      organisationId: orgId,
+      storeLocationId: locationId,
+      areaName,
+      sortOrder: idx,
+    })),
+  );
+}
 
 export interface AreaItemAssignment {
   ingredientId: string;

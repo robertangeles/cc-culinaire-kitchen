@@ -52,7 +52,7 @@ const groups: FeatureGroup[] = [
       },
       {
         icon: "\u{1F4E6}",
-        name: "Stock Room",
+        name: "Inventory",
         description:
           "Real-time inventory with FIFO batch management. Par levels, parallel stock takes, cross-location transfers, and AI depletion forecasting.",
       },

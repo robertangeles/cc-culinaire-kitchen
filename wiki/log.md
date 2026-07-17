@@ -538,3 +538,21 @@ Moved the approved, fully-reviewed plan for **the Brain** (per-user + per-org AI
 - **Plan (CEO-reviewed, SELECTIVE EXPANSION, all 4 expansions accepted, 3-iteration adversarial spec loop: 11 issues found/fixed incl. a critical per-line stock overwrite in `updateStockLevelsFromSession`, final 9/10)**: `docs/specs/storage-areas-count-sheets.md`. Core: `storage_area` + `ingredient_storage_area` (+area par, sheet order) + zero-sum `stock_movement`; AREA-mode stocktakes sum to the one venue number (Unassigned bucket); restock pick list; last-counted snapshots; area spot checks (snapshot-only); ConsumptionLogger guardrail redirecting FOH "usage" of sellable items to a movement. `stock_level` gets ZERO new writers.
 - Decisions: one-active-session rule kept for spot checks; reuse existing inventory permission keys; 3 deferred items in tasks/todo.md backlog.
 - **UAT status**: section A (catalog kitchen units) partially tested; B–H pending. Kitchen-unit branch committed + pushed for merge; storage areas = next branch (`/plan-eng-review` first), then extend the UAT doc with an areas section.
+
+## 2026-07-17 — Stock model locked + "Stock Room" → "Inventory" rename
+
+- Re-ran industry research (3 agents, vendor docs + hospitality SOPs) to settle a modelling
+  debate: does stock live *in* an area (retail warehouse framing) or at the venue? Confirmed the
+  venue-level model is industry standard at our tier; "Stock room" (two words) is a *retail* term
+  that reads as amateurish to chefs. Decision recorded: [[stock-model-and-storage-areas]].
+- **Decisions locked with user:** (1) venue-level on-hand + areas-as-count-sheets is the standard;
+  POS import depletes the venue pool via `consumption_log`, never an area — `store_location` is the
+  only "where" axis. (2) per-area balances = deferred opt-in (hotel/high-control-bar requisition
+  model). (3) Rename module **"Stock Room" → "Inventory"** everywhere incl. marketing. (4) Seed a
+  minimal AU-worded default area set per location.
+- **Code:** renamed labels (nav, KitchenOpsToolbar, InventoryPage, StorageAreasTab placeholders,
+  StockMovementForm hint, landing Pricing/DayInTheLife/FeatureShowcase) — internal ids/routes/
+  permissions were already `inventory`-based. Added `DEFAULT_AREA_NAMES` + `seedDefaultAreas()` to
+  `storageAreaService.ts`, wired into `createStoreLocation` (transaction). Added idempotent
+  `scripts/backfillDefaultStorageAreas.ts` for existing area-less locations.
+- Branch: `feature/ck-web/inventory-rename-and-storage-area-standards`.

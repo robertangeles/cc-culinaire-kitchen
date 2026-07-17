@@ -19,6 +19,7 @@ import {
 } from "../db/schema.js";
 import { encryptPii, decryptPii } from "../utils/crypto.js";
 import { decryptUserPii } from "./piiService.js";
+import { seedDefaultAreas } from "./storageAreaService.js";
 
 // ---------------------------------------------------------------------------
 // Store Key Generation
@@ -174,25 +175,32 @@ export async function createStoreLocation(
     postcode: data.postcode,
   });
 
-  const [location] = await db
-    .insert(storeLocation)
-    .values({
-      organisationId,
-      locationName: data.locationName,
-      classification: data.classification ?? "branch",
-      addressLine1: data.addressLine1 ?? null,
-      addressLine2: data.addressLine2 ?? null,
-      suburb: data.suburb ?? null,
-      state: data.state ?? null,
-      country: data.country ?? null,
-      postcode: data.postcode ?? null,
-      ...pii,
-      storeKey,
-      colorAccent: data.colorAccent ?? null,
-      photoPath: data.photoPath ?? null,
-      createdBy,
-    })
-    .returning();
+  // Insert the location and seed its starting count-sheet areas atomically, so a
+  // new venue is never observed without its default areas.
+  const location = await db.transaction(async (tx) => {
+    const [loc] = await tx
+      .insert(storeLocation)
+      .values({
+        organisationId,
+        locationName: data.locationName,
+        classification: data.classification ?? "branch",
+        addressLine1: data.addressLine1 ?? null,
+        addressLine2: data.addressLine2 ?? null,
+        suburb: data.suburb ?? null,
+        state: data.state ?? null,
+        country: data.country ?? null,
+        postcode: data.postcode ?? null,
+        ...pii,
+        storeKey,
+        colorAccent: data.colorAccent ?? null,
+        photoPath: data.photoPath ?? null,
+        createdBy,
+      })
+      .returning();
+
+    await seedDefaultAreas(loc.storeLocationId, organisationId, tx);
+    return loc;
+  });
 
   return location;
 }

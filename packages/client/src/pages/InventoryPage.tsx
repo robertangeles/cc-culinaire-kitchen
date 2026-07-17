@@ -87,7 +87,7 @@ export function InventoryPage() {
               <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#D4A574] to-[#C4956A] flex items-center justify-center shadow-[0_0_12px_rgba(212,165,116,0.2)]">
                 <Package className="size-5 text-[#0A0A0A]" />
               </div>
-              Stock Room
+              Inventory
             </h1>
           </div>
 
