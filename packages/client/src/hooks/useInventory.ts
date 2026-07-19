@@ -164,6 +164,8 @@ export interface StockTakeLine {
   ingredientCategory?: string;
   baseUnit?: string;
   countedByUserName?: string;
+  /** Cost per counting (base) unit — for the variance $ value; not stored on the line. */
+  unitCost?: string | null;
 }
 
 export interface SetupProgress {
@@ -838,6 +840,9 @@ export interface PendingReviewSession {
   openedDttm: string;
   submittedDttm: string | null;
   flagReason: string | null;
+  /** History only: who approved it + when. */
+  approvedByUserName?: string;
+  closedDttm?: string | null;
   categoryCount: number;
   submittedCount: number;
   categories: StockTakeCategory[];
@@ -851,6 +856,26 @@ export function usePendingReviews() {
     setIsLoading(true);
     try {
       const res = await fetch(`${API}/stock-takes/pending-reviews`, opts);
+      if (res.ok) setSessions(await res.json());
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { refresh(); }, [refresh]);
+
+  return { sessions, isLoading, refresh };
+}
+
+/** Approved (closed) stock-take sessions for the HQ-only History view. */
+export function useStockTakeHistory() {
+  const [sessions, setSessions] = useState<PendingReviewSession[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const refresh = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const res = await fetch(`${API}/stock-takes/history`, opts);
       if (res.ok) setSessions(await res.json());
     } finally {
       setIsLoading(false);

@@ -17,9 +17,12 @@ import {
 interface Props {
   sessions: PendingReviewSession[];
   refresh: () => Promise<void> | void;
+  /** History view: read-only (no Approve/Flag actions) + neutral styling/copy. */
+  readOnly?: boolean;
+  title?: string;
 }
 
-export function StockTakeReviewQueue({ sessions, refresh }: Props) {
+export function StockTakeReviewQueue({ sessions, refresh, readOnly = false, title }: Props) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   if (sessions.length === 0) {
@@ -28,9 +31,11 @@ export function StockTakeReviewQueue({ sessions, refresh }: Props) {
         <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-emerald-600/10 flex items-center justify-center shadow-[0_0_20px_rgba(52,211,153,0.1)]">
           <CheckCircle2 className="size-10 text-emerald-400" />
         </div>
-        <h3 className="text-xl font-semibold text-white mb-2">All Clear</h3>
+        <h3 className="text-xl font-semibold text-white mb-2">{readOnly ? "No History Yet" : "All Clear"}</h3>
         <p className="text-sm text-[#999] max-w-md mx-auto">
-          No stock takes pending review. All locations are up to date.
+          {readOnly
+            ? "Approved stock takes will appear here for reference."
+            : "No stock takes pending review. All locations are up to date."}
         </p>
       </div>
     );
@@ -39,9 +44,9 @@ export function StockTakeReviewQueue({ sessions, refresh }: Props) {
   return (
     <div className="space-y-4 animate-[fadeInUp_200ms_ease-out]">
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-white">Pending Reviews</h3>
-        <span className="text-xs px-2.5 py-1 rounded-full bg-red-500/10 text-red-400 border border-red-500/20 font-medium">
-          {sessions.length} pending
+        <h3 className="text-lg font-semibold text-white">{title ?? "Pending Reviews"}</h3>
+        <span className={`text-xs px-2.5 py-1 rounded-full font-medium border ${readOnly ? "bg-[#2A2A2A] text-[#999] border-[#3A3A3A]" : "bg-red-500/10 text-red-400 border-red-500/20"}`}>
+          {sessions.length}{readOnly ? "" : " pending"}
         </span>
       </div>
 
@@ -57,6 +62,7 @@ export function StockTakeReviewQueue({ sessions, refresh }: Props) {
             setExpandedId(null);
             refresh();
           }}
+          readOnly={readOnly}
         />
       ))}
     </div>
@@ -68,11 +74,13 @@ function ReviewCard({
   isExpanded,
   onToggle,
   onActionComplete,
+  readOnly,
 }: {
   session: PendingReviewSession;
   isExpanded: boolean;
   onToggle: () => void;
   onActionComplete: () => void;
+  readOnly?: boolean;
 }) {
   const isFlagged = session.sessionStatus === "FLAGGED";
   const timeAgo = formatTimeAgo(session.submittedDttm ?? session.openedDttm);
@@ -83,7 +91,7 @@ function ReviewCard({
     organisationId: 0, // not needed by review component
     openedByUserId: session.openedByUserId,
     approvedByUserId: null,
-    closedDttm: null,
+    closedDttm: session.closedDttm ?? null,
     openedByUserName: session.openedByUserName,
     locationName: session.locationName,
   };
@@ -116,6 +124,12 @@ function ReviewCard({
               <Clock className="size-3 shrink-0" />
               {timeAgo}
             </span>
+            {readOnly && session.approvedByUserName && (
+              <span className="flex items-center gap-1 text-xs text-emerald-400">
+                <CheckCircle2 className="size-3 shrink-0" />
+                Approved by {session.approvedByUserName}
+              </span>
+            )}
           </div>
 
           {/* Row 2: type + counts + flag */}
@@ -148,6 +162,7 @@ function ReviewCard({
           <StockTakeReview
             session={fullSession as any}
             onActionComplete={onActionComplete}
+            readOnly={readOnly}
           />
         </div>
       )}

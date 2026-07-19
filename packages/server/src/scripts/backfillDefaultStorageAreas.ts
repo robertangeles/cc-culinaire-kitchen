@@ -5,7 +5,7 @@
  *
  * `seedDefaultAreas` now runs on every new location (createStoreLocation), but
  * locations created before that change have no areas. This seeds the default
- * count-sheet areas (Dry Storage, Cool Room, Freezer, FOH / Counter) into every
+ * count-sheet areas (Dry Storage, Cool Room, Freezer, FOH Counter) into every
  * existing location that has ZERO areas. Locations where an operator has already
  * created areas are left untouched — we never clobber their setup.
  *

@@ -4,7 +4,7 @@
 > [wiki/decisions/stock-model-and-storage-areas.md](../../wiki/decisions/stock-model-and-storage-areas.md):
 > venue-level on-hand, areas = count sheets (not ledgers), POS depletes the venue pool, per-area
 > balances are a deferred opt-in. The inventory module is renamed **"Stock Room" → "Inventory"**
-> and new locations seed AU-worded default areas (Dry Storage, Cool Room, Freezer, FOH / Counter).
+> and new locations seed AU-worded default areas (Dry Storage, Cool Room, Freezer, FOH Counter).
 
 ## Context
 

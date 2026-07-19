@@ -30,6 +30,19 @@ interface QueuedItem {
   queuedAt: number; // timestamp
 }
 
+/**
+ * Outcome of a save attempt. The three cases are DELIBERATELY distinct so the UI
+ * never tells a chef "saved offline" when the truth is "the server rejected it":
+ *   - "server"  — saved to the server (the normal path).
+ *   - "offline" — genuinely offline (no server response). Queued for later sync.
+ *   - "error"   — reached the server and it REJECTED the count (400/404/5xx).
+ *                 NOT saved, NOT queued — the chef must see why and act.
+ */
+export type SaveResult =
+  | { saved: "server"; line: unknown }
+  | { saved: "offline" }
+  | { saved: "error"; status: number; message: string };
+
 // ─── IndexedDB helpers ────────────────────────────────────────────
 
 function openDB(): Promise<IDBDatabase> {
@@ -94,6 +107,9 @@ export function useOfflineSync() {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [queueSize, setQueueSize] = useState(0);
   const [isSyncing, setIsSyncing] = useState(false);
+  // Set when a queued (offline) count is later REJECTED by the server on sync.
+  // Surfaced to the chef instead of silently dropping the count.
+  const [lastSyncError, setLastSyncError] = useState<string | null>(null);
   const syncInProgress = useRef(false);
 
   // Track online/offline state
@@ -141,12 +157,14 @@ export function useOfflineSync() {
     await refreshQueueSize();
   }, [refreshQueueSize]);
 
-  // Save a line item — try server first, queue if offline/failed
+  // Save a line item. Three honest outcomes — see SaveResult. We only ever say
+  // "offline" when there was NO server response (offline flag or a thrown fetch);
+  // a server that answers with an error is reported as "error", never disguised.
   const saveWithOfflineFallback = useCallback(async (
     sessionId: string,
     categoryName: string,
     data: { ingredientId: string; rawQty: number; countedUnit: string },
-  ): Promise<{ saved: "server" | "offline"; line?: unknown }> => {
+  ): Promise<SaveResult> => {
     if (!isOnline) {
       await queueLineItem(sessionId, categoryName, data.ingredientId, data.rawQty, data.countedUnit);
       return { saved: "offline" };
@@ -154,7 +172,9 @@ export function useOfflineSync() {
 
     try {
       const res = await fetch(
-        `/api/inventory/stock-takes/${sessionId}/categories/${categoryName}/lines`,
+        // encode the name — category/area names can contain spaces or slashes;
+        // an unencoded slash would split the path and break route matching.
+        `/api/inventory/stock-takes/${sessionId}/categories/${encodeURIComponent(categoryName)}/lines`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -168,11 +188,17 @@ export function useOfflineSync() {
         return { saved: "server", line };
       }
 
-      // Server error — queue for retry
-      await queueLineItem(sessionId, categoryName, data.ingredientId, data.rawQty, data.countedUnit);
-      return { saved: "offline" };
+      // Reached the server; it rejected the count (e.g. category NOT_STARTED,
+      // validation, 5xx). This is NOT offline — surface the real reason and do
+      // not pretend it was saved.
+      const body = await res.json().catch(() => null);
+      return {
+        saved: "error",
+        status: res.status,
+        message: body?.error ?? `Couldn't save (server error ${res.status})`,
+      };
     } catch {
-      // Network error — queue for retry
+      // fetch threw = the request never reached the server = genuinely offline.
       await queueLineItem(sessionId, categoryName, data.ingredientId, data.rawQty, data.countedUnit);
       return { saved: "offline" };
     }
@@ -193,7 +219,7 @@ export function useOfflineSync() {
       for (const item of items) {
         try {
           const res = await fetch(
-            `/api/inventory/stock-takes/${item.sessionId}/categories/${item.categoryName}/lines`,
+            `/api/inventory/stock-takes/${item.sessionId}/categories/${encodeURIComponent(item.categoryName)}/lines`,
             {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -209,15 +235,22 @@ export function useOfflineSync() {
           if (res.ok) {
             await removeFromQueue(item.id!);
             synced++;
+            setLastSyncError(null);
           } else {
-            // Server rejected (e.g., session closed) — discard
+            // The server rejected a previously-offline count (session closed,
+            // category not started, validation...). NEVER silently drop it —
+            // keep it queued and surface the reason so a chef's count is never
+            // lost without them knowing. Stop the drain so we don't hammer.
+            // ponytail: a stuck permanent-reject sits in the queue and keeps the
+            // "waiting to sync" banner up; add a "review & discard" affordance if
+            // that proves annoying (clearQueue already exists as the escape hatch).
             const err = await res.json().catch(() => null);
-            console.warn("[offlineSync] Server rejected queued item:", err?.error);
-            await removeFromQueue(item.id!);
+            setLastSyncError(err?.error ?? `A queued count was rejected (${res.status})`);
             failed++;
+            break;
           }
         } catch {
-          // Network still down — stop trying
+          // Network still down — stop trying, retry on next reconnect.
           failed++;
           break;
         }
@@ -243,6 +276,7 @@ export function useOfflineSync() {
     isOnline,
     queueSize,
     isSyncing,
+    lastSyncError,
     saveWithOfflineFallback,
     syncQueue,
     clearQueue: useCallback(async () => {

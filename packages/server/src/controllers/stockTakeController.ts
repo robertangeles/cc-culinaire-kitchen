@@ -22,6 +22,7 @@ import {
   getCategoryLines,
   getPreviousCountLines,
   getPendingReviewSessions,
+  getApprovedSessions,
   getLocationDashboard,
   getOrgDashboardSummary,
   openOpeningCount,
@@ -324,6 +325,21 @@ export async function handleGetPendingReviews(
     if (!ctx) return;
 
     const sessions = await getPendingReviewSessions(ctx.orgId);
+    res.json(sessions);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/** History: approved (closed) stock-take sessions. HQ-only, read-only. */
+export async function handleGetHistory(
+  req: Request, res: Response, next: NextFunction,
+): Promise<void> {
+  try {
+    const ctx = await resolveContext(req, res);
+    if (!ctx) return;
+
+    const sessions = await getApprovedSessions(ctx.orgId);
     res.json(sessions);
   } catch (err) {
     next(err);

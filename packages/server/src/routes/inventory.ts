@@ -65,6 +65,7 @@ import {
   handleFlagSession,
   handleGetPreviousLines,
   handleGetPendingReviews,
+  handleGetHistory,
   handleGetOrgDashboard,
   handleGetLocationDashboard,
   handleOpenOpeningCount,
@@ -176,6 +177,7 @@ router.get("/locations/:locId/stock-movements", requirePermission("inventory:cou
 router.post("/stock-takes", requirePermission("inventory:manage"), handleOpenSession);
 router.get("/stock-takes/active", requirePermission("inventory:count"), handleGetActiveSession);
 router.get("/stock-takes/pending-reviews", requirePermission("inventory:hq"), handleGetPendingReviews);
+router.get("/stock-takes/history", requirePermission("inventory:hq"), handleGetHistory);
 
 // Parameterized session routes
 router.get("/stock-takes/:id", requirePermission("inventory:count"), handleGetSessionDetail);

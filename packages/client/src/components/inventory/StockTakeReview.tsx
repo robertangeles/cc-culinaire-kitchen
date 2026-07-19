@@ -16,6 +16,7 @@ import {
   type StockTakeLine,
 } from "../../hooks/useInventory.js";
 import { useLocation } from "../../context/LocationContext.js";
+import { useHasPermission } from "../../hooks/useHasPermission.js";
 import {
   ShieldCheck,
   CheckCircle2,
@@ -34,6 +35,8 @@ import {
 interface Props {
   session: StockTakeSession;
   onActionComplete: () => void;
+  /** History view: hide the Approve/Flag actions (the session is already closed). */
+  readOnly?: boolean;
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -42,9 +45,12 @@ const CATEGORY_LABELS: Record<string, string> = {
   frozen: "Frozen", bakery: "Bakery", condiments: "Condiments", other: "Other",
 };
 
-export function StockTakeReview({ session, onActionComplete }: Props) {
+export function StockTakeReview({ session, onActionComplete, readOnly = false }: Props) {
   const { approveSession, flagSession, getLines } = useStockTake();
   const { locations } = useLocation();
+  // Approving/flagging is HQ-only. The server enforces requirePermission("inventory:hq");
+  // this hides the actions so a non-HQ viewer never sees a button that would 403.
+  const canApprove = useHasPermission()("inventory:hq");
 
   const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set());
   const [catLines, setCatLines] = useState<Record<string, StockTakeLine[]>>({});
@@ -158,7 +164,8 @@ export function StockTakeReview({ session, onActionComplete }: Props) {
         />
       ))}
 
-      {/* Action buttons */}
+      {/* Action buttons — HQ only, hidden in the read-only history view */}
+      {!readOnly && canApprove && (
       <div className="flex flex-col sm:flex-row gap-3 pt-2">
         <button
           onClick={async () => {
@@ -187,6 +194,7 @@ export function StockTakeReview({ session, onActionComplete }: Props) {
           Flag for Recount
         </button>
       </div>
+      )}
 
       {error && <p className="text-sm text-red-400">{error}</p>}
 
@@ -324,11 +332,12 @@ function CategoryReviewCard({
             <div className="divide-y divide-[#2A2A2A]/50">
               {/* Column headers */}
               <div className="grid grid-cols-12 gap-2 px-4 py-2 text-[10px] text-[#666] uppercase tracking-wider">
-                <div className="col-span-4">Ingredient</div>
-                <div className="col-span-2 text-right">Counted</div>
-                <div className="col-span-2 text-right">Expected</div>
+                <div className="col-span-3">Ingredient</div>
+                <div className="col-span-1 text-right">Counted</div>
+                <div className="col-span-1 text-right">Expected</div>
                 <div className="col-span-2 text-right">Variance</div>
-                <div className="col-span-2 text-right">By</div>
+                <div className="col-span-2 text-right">Variance Cost</div>
+                <div className="col-span-3 text-right">By</div>
               </div>
               {lines.map((line) => (
                 <LineItemRow key={line.lineId} line={line} />
@@ -345,6 +354,11 @@ function LineItemRow({ line }: { line: StockTakeLine }) {
   const variance = line.varianceQty ? Number(line.varianceQty) : null;
   const variancePct = line.variancePct ? Number(line.variancePct) : null;
   const isHigh = variancePct !== null && Math.abs(variancePct) > 10;
+  // Variance $ value = variance × cost of one counting unit (bottle, bag, each).
+  // Computed at display only — never stored.
+  const unitCost = line.unitCost ? Number(line.unitCost) : null;
+  const varianceCost = variance !== null && unitCost !== null ? variance * unitCost : null;
+  const fmtCost = (v: number) => `${v >= 0 ? "+" : "−"}$${Math.abs(v).toFixed(2)}`;
 
   return (
     <div className={`px-4 py-2.5 text-sm ${
@@ -352,14 +366,14 @@ function LineItemRow({ line }: { line: StockTakeLine }) {
     } transition-colors`}>
       {/* Desktop: grid layout */}
       <div className="hidden sm:grid grid-cols-12 gap-2">
-        <div className="col-span-4 text-white truncate">
+        <div className="col-span-3 text-white truncate">
           {line.ingredientName ?? line.ingredientId.slice(0, 8)}
           <span className="text-[10px] text-[#666] ml-1">{line.countedUnit}</span>
         </div>
-        <div className="col-span-2 text-right text-white font-medium tabular-nums">
+        <div className="col-span-1 text-right text-white font-medium tabular-nums">
           {Number(line.countedQty).toFixed(1)}
         </div>
-        <div className="col-span-2 text-right text-[#999] tabular-nums">
+        <div className="col-span-1 text-right text-[#999] tabular-nums">
           {line.expectedQty ? Number(line.expectedQty).toFixed(1) : "—"}
         </div>
         <div className={`col-span-2 text-right tabular-nums flex items-center justify-end gap-1 ${
@@ -378,10 +392,19 @@ function LineItemRow({ line }: { line: StockTakeLine }) {
             </>
           ) : "—"}
         </div>
-        <div className="col-span-2 text-right text-[10px] text-[#666]">
-          {line.countedByUserName ?? `#${line.countedByUserId}`}
-          <br />
-          {new Date(line.countedDttm).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+        <div className={`col-span-2 text-right tabular-nums ${
+          varianceCost === null ? "text-[#666]"
+            : varianceCost > 0 ? "text-emerald-400"
+            : varianceCost < 0 ? "text-red-400"
+            : "text-[#999]"
+        }`}>
+          {varianceCost !== null ? fmtCost(varianceCost) : "—"}
+        </div>
+        <div className="col-span-3 flex items-center justify-end gap-1 text-[10px] text-[#666]">
+          <span className="truncate min-w-0">{line.countedByUserName ?? `#${line.countedByUserId}`}</span>
+          <span className="shrink-0 whitespace-nowrap">
+            · {new Date(line.countedDttm).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+          </span>
         </div>
       </div>
       {/* Mobile: stacked layout */}
@@ -395,13 +418,21 @@ function LineItemRow({ line }: { line: StockTakeLine }) {
           </span>
         </div>
         <div className="flex justify-between text-[10px] text-[#666]">
-          <span>{line.countedByUserName ?? `#${line.countedByUserId}`} · {new Date(line.countedDttm).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+          <span>{line.countedByUserName ?? `#${line.countedByUserId}`} · {new Date(line.countedDttm).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
           {variance !== null && (
             <span className={variance > 0 ? "text-emerald-400" : variance < 0 ? "text-red-400" : "text-[#999]"}>
               {variance > 0 ? "+" : ""}{variance.toFixed(1)} ({variancePct?.toFixed(0)}%)
             </span>
           )}
         </div>
+        {varianceCost !== null && (
+          <div className="flex justify-between text-[10px]">
+            <span className="text-[#666]">Variance cost</span>
+            <span className={varianceCost > 0 ? "text-emerald-400" : varianceCost < 0 ? "text-red-400" : "text-[#999]"}>
+              {fmtCost(varianceCost)}
+            </span>
+          </div>
+        )}
       </div>
     </div>
   );

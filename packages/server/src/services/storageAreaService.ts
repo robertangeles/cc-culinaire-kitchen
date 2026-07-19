@@ -46,7 +46,7 @@ const RESERVED_AREA_NAME = "Unassigned";
  * is editable and deletable; operators add Back Bar / Speed Rail / Cellar as they
  * need them. Seeded on location creation and by the one-time backfill.
  */
-export const DEFAULT_AREA_NAMES = ["Dry Storage", "Cool Room", "Freezer", "FOH / Counter"] as const;
+export const DEFAULT_AREA_NAMES = ["Dry Storage", "Cool Room", "Freezer", "FOH Counter"] as const;
 
 /**
  * Seed a location's starting set of storage areas in one bulk insert, walk order
