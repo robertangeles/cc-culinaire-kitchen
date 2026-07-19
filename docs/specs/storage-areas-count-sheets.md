@@ -1,5 +1,11 @@
 # Plan: Storage areas as count sheets — know what's at the bar without corrupting stock
 
+> **Standard locked (2026-07-17):** the model here is now formalised in
+> [wiki/decisions/stock-model-and-storage-areas.md](../../wiki/decisions/stock-model-and-storage-areas.md):
+> venue-level on-hand, areas = count sheets (not ledgers), POS depletes the venue pool, per-area
+> balances are a deferred opt-in. The inventory module is renamed **"Stock Room" → "Inventory"**
+> and new locations seed AU-worded default areas (Dry Storage, Cool Room, Freezer, FOH Counter).
+
 ## Context
 
 **The trigger.** During UAT the user moved 4 bottles of Shiraz to the bar and logged it as

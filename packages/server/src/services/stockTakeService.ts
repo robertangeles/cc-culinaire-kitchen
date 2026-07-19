@@ -686,8 +686,9 @@ export async function saveLineItem(
   // Convert to base unit
   const { baseQty, baseUnit } = await convertToBase(ingredientId, rawQty, countedUnit);
 
-  // Calculate expected qty from previous stock take (for variance)
-  const expectedQty = await getPreviousCount(ingredientId, categoryId);
+  // Expected = the current book on-hand (stock_level) at this location, in base
+  // units. A cycle count reconciles the physical count against the book.
+  const expectedQty = await getExpectedOnHand(ingredientId, categoryId);
 
   const varianceQtyVal = expectedQty !== null ? calcVarianceQty(baseQty, expectedQty) : null;
   const variancePctVal =
@@ -752,72 +753,65 @@ export async function getCategoryLines(categoryId: string) {
       ingredientCategory: ingredient.ingredientCategory,
       baseUnit: ingredient.baseUnit,
       countedByUserName: user.userName,
+      // Cost per base (counting) unit at this location — drives the variance $
+      // value in review (variance × unitCost, computed at display, never stored).
+      // WAC first (actual cost of stock on hand), then location/catalog fallback.
+      unitCost: sql<
+        string | null
+      >`coalesce(${locationIngredient.weightedAverageCost}, ${locationIngredient.unitCost}, ${ingredient.preferredUnitCost})`,
     })
     .from(stockTakeLine)
     .innerJoin(ingredient, eq(ingredient.ingredientId, stockTakeLine.ingredientId))
     .innerJoin(user, eq(user.userId, stockTakeLine.countedByUserId))
+    .innerJoin(stockTakeCategory, eq(stockTakeCategory.categoryId, stockTakeLine.categoryId))
+    .innerJoin(stockTakeSession, eq(stockTakeSession.sessionId, stockTakeCategory.sessionId))
+    .leftJoin(
+      locationIngredient,
+      and(
+        eq(locationIngredient.ingredientId, stockTakeLine.ingredientId),
+        eq(locationIngredient.storeLocationId, stockTakeSession.storeLocationId),
+      ),
+    )
     .where(eq(stockTakeLine.categoryId, categoryId));
 }
 
 /**
- * Get the previous approved count for an ingredient (for variance calculation).
- * Looks at the most recent APPROVED session at the same location.
+ * The book on-hand a count is measured against: the current `stock_level` for
+ * this ingredient at the session's location, in the item's base unit. A cycle
+ * count reconciles physical reality against this perpetual "expected"
+ * (variance = counted − book), which is the industry-standard cycle-count
+ * variance — NOT count-vs-last-count, which shows nothing on a first count and
+ * ignores receiving/usage between counts. Returns null only when the item has no
+ * `stock_level` row at this location (genuinely nothing to compare → blank).
  */
-async function getPreviousCount(
+async function getExpectedOnHand(
   ingredientId: string,
   currentCategoryId: string,
 ): Promise<number | null> {
-  // Find which session/location this category belongs to
+  // category → session → location
   const [cat] = await db
     .select({ sessionId: stockTakeCategory.sessionId })
     .from(stockTakeCategory)
     .where(eq(stockTakeCategory.categoryId, currentCategoryId));
-
   if (!cat) return null;
 
   const [session] = await db
     .select({ storeLocationId: stockTakeSession.storeLocationId })
     .from(stockTakeSession)
     .where(eq(stockTakeSession.sessionId, cat.sessionId));
-
   if (!session) return null;
 
-  // Find the most recent APPROVED session at this location (not current one)
-  const prevSessions = await db
-    .select({ sessionId: stockTakeSession.sessionId })
-    .from(stockTakeSession)
+  const [level] = await db
+    .select({ currentQty: stockLevel.currentQty })
+    .from(stockLevel)
     .where(
       and(
-        eq(stockTakeSession.storeLocationId, session.storeLocationId),
-        eq(stockTakeSession.sessionStatus, "APPROVED"),
-        ne(stockTakeSession.sessionId, cat.sessionId),
+        eq(stockLevel.storeLocationId, session.storeLocationId),
+        eq(stockLevel.ingredientId, ingredientId),
       ),
-    )
-    .orderBy(desc(stockTakeSession.closedDttm))
-    .limit(1);
-
-  if (prevSessions.length === 0) return null;
-
-  // Find the line for this ingredient in the previous session
-  const prevCategories = await db
-    .select({ categoryId: stockTakeCategory.categoryId })
-    .from(stockTakeCategory)
-    .where(eq(stockTakeCategory.sessionId, prevSessions[0].sessionId));
-
-  for (const prevCat of prevCategories) {
-    const [line] = await db
-      .select({ countedQty: stockTakeLine.countedQty })
-      .from(stockTakeLine)
-      .where(
-        and(
-          eq(stockTakeLine.categoryId, prevCat.categoryId),
-          eq(stockTakeLine.ingredientId, ingredientId),
-        ),
-      );
-    if (line) return Number(line.countedQty);
-  }
-
-  return null;
+    );
+  if (!level) return null;
+  return Number(level.currentQty);
 }
 
 /**
@@ -1197,6 +1191,54 @@ export async function getPendingReviewSessions(organisationId: number) {
     .orderBy(desc(stockTakeSession.submittedDttm));
 
   // Attach category summaries
+  return Promise.all(
+    sessions.map(async (s) => {
+      const cats = await enrichCategoriesWithUserNames(s.sessionId);
+      const submittedCount = cats.filter(
+        (c) => c.categoryStatus === "SUBMITTED" || c.categoryStatus === "APPROVED",
+      ).length;
+      return {
+        ...s,
+        categoryCount: cats.length,
+        submittedCount,
+        categories: cats,
+      };
+    }),
+  );
+}
+
+/**
+ * Approved (closed) stock-take sessions for the History view — HQ-only, read-only.
+ * Mirrors getPendingReviewSessions but for status APPROVED, newest first by close
+ * time, and adds who approved it + when.
+ */
+export async function getApprovedSessions(organisationId: number) {
+  const sessions = await db
+    .select({
+      sessionId: stockTakeSession.sessionId,
+      storeLocationId: stockTakeSession.storeLocationId,
+      locationName: storeLocation.locationName,
+      sessionStatus: stockTakeSession.sessionStatus,
+      openedByUserId: stockTakeSession.openedByUserId,
+      openedByUserName: user.userName,
+      openedDttm: stockTakeSession.openedDttm,
+      submittedDttm: stockTakeSession.submittedDttm,
+      flagReason: stockTakeSession.flagReason,
+      approvedByUserName: approverUser.userName,
+      closedDttm: stockTakeSession.closedDttm,
+    })
+    .from(stockTakeSession)
+    .innerJoin(storeLocation, eq(storeLocation.storeLocationId, stockTakeSession.storeLocationId))
+    .innerJoin(user, eq(user.userId, stockTakeSession.openedByUserId))
+    .leftJoin(approverUser, eq(approverUser.userId, stockTakeSession.approvedByUserId))
+    .where(
+      and(
+        eq(stockTakeSession.organisationId, organisationId),
+        eq(stockTakeSession.sessionStatus, "APPROVED"),
+      ),
+    )
+    .orderBy(desc(stockTakeSession.closedDttm));
+
   return Promise.all(
     sessions.map(async (s) => {
       const cats = await enrichCategoriesWithUserNames(s.sessionId);

@@ -94,7 +94,7 @@ export const NAV_SECTIONS: NavSection[] = [
       { id: "my-recipe-book", label: "My Recipe Book", icon: BookMarked, to: "/my-shelf", gate: "auth" },
       {
         id: "stock-room",
-        label: "Stock Room",
+        label: "Inventory",
         icon: Package,
         to: "/inventory",
         gate: { anyPermission: ["inventory:count", "inventory:manage", "inventory:transfer", "inventory:hq"] },

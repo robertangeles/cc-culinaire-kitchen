@@ -93,17 +93,26 @@ export function OpeningInventory() {
 
   // ── Claim category ────────────────────────────────────────────
 
-  const claimCategory = async (categoryId: string) => {
-    if (!session) return;
+  // Returns true only if the claim succeeded. The server resolves :cat by
+  // category NAME (not id) — passing the id 404s and leaves the category
+  // NOT_STARTED, which then makes every count fail. Callers must gate on the
+  // return value so a failed claim never opens a doomed counter.
+  const claimCategory = async (categoryName: string): Promise<boolean> => {
+    if (!session) return false;
     try {
       const res = await fetch(
-        `${API}/stock-takes/${session.sessionId}/categories/${categoryId}/claim`,
+        `${API}/stock-takes/${session.sessionId}/categories/${encodeURIComponent(categoryName)}/claim`,
         { ...jsonOpts, method: "POST" },
       );
-      if (!res.ok) throw new Error("Failed to claim category");
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.error || "Failed to claim category");
+      }
       await refreshSession();
+      return true;
     } catch (err: any) {
       setError(err.message);
+      return false;
     }
   };
 
@@ -328,8 +337,10 @@ export function OpeningInventory() {
                 ) : (
                   <button
                     onClick={async () => {
-                      await claimCategory(cat.categoryId);
-                      setActiveCategory(cat);
+                      // Only open the counter if the claim actually succeeded.
+                      if (await claimCategory(cat.categoryName)) {
+                        setActiveCategory(cat);
+                      }
                     }}
                     className="px-3 py-1.5 rounded-lg bg-amber-500/10 text-amber-400 text-xs font-medium hover:bg-amber-500/20 transition-colors"
                   >

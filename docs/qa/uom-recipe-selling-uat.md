@@ -1,6 +1,6 @@
 # UAT Checklist — Kitchen-Unit Model + Recipe-Based Selling
 
-> **Status 2026-07-15:** parked mid-UAT. Section A partially walked (not signed off); B–H untested.
+> **Status 2026-07-19:** Sections **A (catalog)** and **B (stock take)** signed off ✅. C–H + I (storage areas) pending.
 > Fixture live: Chicken 10 kg, Flour 25 kg, Shiraz 24 bottles per location (the 4-bottle
 > foh_operations test entry was reversed). NEXT: after the storage-areas build
 > (`docs/specs/storage-areas-count-sheets.md`) this checklist gains an **I. Storage areas**
@@ -40,18 +40,18 @@ Menu items: **Glass — Belicard** ($12, recipe 150 mL) · **Bottle — Belicard
 
 | # | Steps | Expected | Result |
 |---|---|---|---|
-| A1 | Stock Room → Catalog → Belicard | UOM **bottle**, Stock **8** — no mL anywhere in the row | ☐ |
-| A2 | Open Belicard's edit modal | **Counted in: bottle** · **bottle size: 1 bottle = 750 mL** · **Purchased as: case of 12 bottle @ cost** — plain chef language, no jargon | ☐ |
-| A3 | "Stock across locations" panel in the modal | Patisserie shows **8 bottle** (not 6000 mL) | ☐ |
-| A4 | Sancerre row (the item that started all this) | Stock ≈ **0.7 bottle** — the ⅔-open bottle, in bottles | ☐ |
-| A5 | Flour row + edit modal | UOM **g**, stock 12500; the modal shows **no "size" row** for a grams-counted item (nothing to declare) and "Purchased as: bag of 25000 g" | ☐ |
+| A1 | Inventory → Catalog → Belicard | UOM **bottle**, Stock **8** — no mL anywhere in the row | ✅ |
+| A2 | Open Belicard's edit modal | **Counted in: bottle** · **bottle size: 1 bottle = 750 mL** · **Purchased as: case of 12 bottle @ cost** — plain chef language, no jargon | ✅ |
+| A3 | "Stock across locations" panel in the modal | Patisserie shows **8 bottle** (not 6000 mL) | ✅ |
+| A4 | Sancerre row (the item that started all this) | Stock ≈ **0.7 bottle** — the ⅔-open bottle, in bottles | ✅ |
+| A5 | Flour row + edit modal | UOM **g**, stock 12500; the modal shows **no "size" row** for a grams-counted item (nothing to declare) and "Purchased as: bag of 25000 g" | ✅ |
 
 ## B. Stock take — count what you see
 
 | # | Steps | Expected | Result |
 |---|---|---|---|
-| B1 | Start a stock take covering Belicard | Keypad counts in **bottle**; enter **6.5** (6 full + 1 half) | ☐ |
-| B2 | Approve (HQ review) | Catalog stock = **6.5 bottles**; variance shown in bottles | ☐ |
+| B1 | Start a stock take covering Belicard | Keypad counts in **bottle**; enter **6.5** (6 full + 1 half) | ✅ |
+| B2 | Approve (HQ review) | Catalog stock = **6.5 bottles**; variance shown in bottles | ✅ |
 
 ## C. Purchasing — packaging exists only here
 
@@ -114,17 +114,18 @@ Shipped in PR #76 (B1). Prod schema is already applied. The whole feature exists
 "moved 4 bottles to the bar" used to be logged as *usage*, which deducted them then and
 AGAIN at the sale, and showed as phantom yield variance.
 
-**Setup (Stock Room → Areas tab, org-admin only)**
-- [ ] Create **Stock Room** and **Bar**. The copy should say areas never change what you have.
+**Setup (Inventory → Areas tab, org-admin only)**
+- [ ] Confirm the seeded default areas are present: **Dry Storage, Cool Room, Freezer, FOH Counter**.
+      Add **Back Bar**. The copy should say areas never change what you have.
 - [ ] Try to create an area called **Unassigned** → refused, in plain English, not a DB error.
-- [ ] Create **Bar** twice → refused ("this location already has an area called Bar").
+- [ ] Create **Back Bar** twice → refused ("this location already has an area called Back Bar").
 - [ ] Click an area's item count → add a wine → leave par blank → Save.
       The tab's count must update to "1 item" **without a page reload**.
 - [ ] Add the same wine to the other area with **par 6**. Reorder the rows; the order sticks.
 
 **The invariant — the point of the whole feature**
 - [ ] Note the wine's site stock (Dashboard or Catalog). Call it **N**.
-- [ ] Transfers → **Move Between Areas** → move 4 bottles Stock Room → Bar → Record move.
+- [ ] Transfers → **Move Between Areas** → move 4 bottles Dry Storage → Back Bar → Record move.
 - [ ] **Site stock is STILL N.** Not N−4. If it changed, stop and raise it — that is the bug
       this feature was built to make impossible.
 - [ ] The success banner says "site stock unchanged".
@@ -141,7 +142,7 @@ AGAIN at the sale, and showed as phantom yield variance.
 
 **The history**
 - [ ] Open the wine in Catalog → its transaction history shows the move as **Area Move**,
-      "Stock Room → Bar", alongside counts and usage.
+      "Dry Storage → Back Bar", alongside counts and usage.
 
 **Edges**
 - [ ] With fewer than 2 areas, Move Between Areas explains itself instead of showing a

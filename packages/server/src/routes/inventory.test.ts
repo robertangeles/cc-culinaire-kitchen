@@ -96,3 +96,32 @@ describe("supplier read-gating", () => {
     expect(runGate(findGate("delete", "/suppliers/:id"), MANAGER).passed).toBe(true);
   });
 });
+
+// Approving/flagging a stock take and viewing the review + history queues are
+// HQ-only (inventory:hq) — a counter or a plain manager must NOT get in.
+const HQ = [...MANAGER, "inventory:hq"];
+
+describe("stock-take review + history — inventory:hq only", () => {
+  const HQ_ROUTES: [Method, string][] = [
+    ["get", "/stock-takes/pending-reviews"],
+    ["get", "/stock-takes/history"],
+    ["post", "/stock-takes/:id/approve"],
+    ["post", "/stock-takes/:id/flag"],
+  ];
+
+  it.each(HQ_ROUTES)("403s a counter (inventory:count) on %s %s", (method, path) => {
+    const { passed, status } = runGate(findGate(method, path), SUBSCRIBER);
+    expect(passed).toBe(false);
+    expect(status).toHaveBeenCalledWith(403);
+  });
+
+  it.each(HQ_ROUTES)("403s a manager WITHOUT inventory:hq on %s %s", (method, path) => {
+    const { passed, status } = runGate(findGate(method, path), MANAGER);
+    expect(passed).toBe(false);
+    expect(status).toHaveBeenCalledWith(403);
+  });
+
+  it.each(HQ_ROUTES)("passes an inventory:hq user on %s %s", (method, path) => {
+    expect(runGate(findGate(method, path), HQ).passed).toBe(true);
+  });
+});

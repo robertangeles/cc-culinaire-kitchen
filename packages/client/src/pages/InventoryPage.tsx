@@ -8,8 +8,9 @@
 import { useState, useMemo, useEffect } from "react";
 import { useAuth } from "../context/AuthContext.js";
 import { useLocation } from "../context/LocationContext.js";
+import { useHasPermission } from "../hooks/useHasPermission.js";
 import { useGuide } from "../context/GuideContext.js";
-import { usePendingReviews } from "../hooks/useInventory.js";
+import { usePendingReviews, useStockTakeHistory } from "../hooks/useInventory.js";
 import { INVENTORY_TAB_GUIDES } from "@culinaire/shared";
 import { LocationDashboard } from "../components/inventory/LocationDashboard.js";
 import { StockTakeSession } from "../components/inventory/StockTakeSession.js";
@@ -23,18 +24,23 @@ import TransferList from "../components/inventory/TransferList.js";
 import StorageAreasTab from "../components/inventory/StorageAreasTab.js";
 import StockMovementForm, { type MovementPrefill } from "../components/inventory/StockMovementForm.js";
 import { Tooltip } from "../components/ui/Tooltip.js";
-import { Package, ClipboardCheck, Utensils, ShieldCheck, Settings, FileQuestion, FileEdit, ArrowRightLeft, Boxes } from "lucide-react";
+import { Package, ClipboardCheck, Utensils, ShieldCheck, Settings, FileQuestion, FileEdit, ArrowRightLeft, Boxes, History } from "lucide-react";
 
 type TransferSubView = "usage" | "transfers" | "movement";
 
-type InventoryTab = "dashboard" | "setup" | "stock-take" | "log" | "review" | "ingredients" | "requests" | "areas";
+type InventoryTab = "dashboard" | "setup" | "stock-take" | "log" | "ingredients" | "requests" | "areas";
+// Review + History are HQ-only sub-views WITHIN Stock Take (not top-level).
+type StockTakeView = "count" | "review" | "history";
 
 export function InventoryPage() {
   const { user, isGuest } = useAuth();
   const { selectedLocationId, isOrgAdmin } = useLocation();
   const { sessions: pendingReviews, refresh: refreshReviews } = usePendingReviews();
+  const { sessions: history, refresh: refreshHistory } = useStockTakeHistory();
+  const canReview = useHasPermission()("inventory:hq");
   const [activeTab, setActiveTab] = useState<InventoryTab>("dashboard");
   const [transferView, setTransferView] = useState<TransferSubView>("usage");
+  const [stockTakeView, setStockTakeView] = useState<StockTakeView>("count");
   const [movementPrefill, setMovementPrefill] = useState<MovementPrefill | null>(null);
   const { setGuideKeyOverride } = useGuide();
 
@@ -49,14 +55,15 @@ export function InventoryPage() {
     const t: { key: InventoryTab; label: string; icon: typeof Package }[] = [
       { key: "dashboard", label: "Dashboard", icon: Package },
       { key: "setup", label: "Setup", icon: Settings },
-      { key: "stock-take", label: "Stock Take", icon: ClipboardCheck },
-      { key: "log", label: "Transfers", icon: FileEdit },
     ];
     if (isOrgAdmin) {
-      t.push({ key: "review", label: "Review", icon: ShieldCheck });
-      t.push({ key: "requests", label: "Requests", icon: FileQuestion });
-      t.push({ key: "ingredients", label: "Catalog", icon: Utensils });
       t.push({ key: "areas", label: "Areas", icon: Boxes });
+      t.push({ key: "ingredients", label: "Catalog", icon: Utensils });
+    }
+    t.push({ key: "stock-take", label: "Stock Take", icon: ClipboardCheck });
+    t.push({ key: "log", label: "Transfers", icon: FileEdit });
+    if (isOrgAdmin) {
+      t.push({ key: "requests", label: "Requests", icon: FileQuestion });
     }
     return t;
   }, [isOrgAdmin]);
@@ -87,7 +94,7 @@ export function InventoryPage() {
               <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#D4A574] to-[#C4956A] flex items-center justify-center shadow-[0_0_12px_rgba(212,165,116,0.2)]">
                 <Package className="size-5 text-[#0A0A0A]" />
               </div>
-              Stock Room
+              Inventory
             </h1>
           </div>
 
@@ -100,7 +107,7 @@ export function InventoryPage() {
               {tabs.map((tab) => {
                 const Icon = tab.icon;
                 const isActive = activeTab === tab.key;
-                const pendingCount = tab.key === "review" ? pendingReviews.length : 0;
+                const pendingCount = tab.key === "stock-take" && canReview ? pendingReviews.length : 0;
                 const guide = INVENTORY_TAB_GUIDES[tab.key];
                 return (
                   <Tooltip key={tab.key} text={guide?.tooltip ?? tab.label} position="bottom">
@@ -147,7 +154,46 @@ export function InventoryPage() {
             </div>
           )}
           {activeTab === "stock-take" && (
-            <StockTakeSession />
+            <div className="space-y-4">
+              {/* HQ users get Review + History as sub-views of Stock Take */}
+              {canReview && (
+                <div className="flex gap-1 p-1 rounded-lg bg-[#161616] border border-[#2A2A2A] w-fit">
+                  <button
+                    onClick={() => setStockTakeView("count")}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${stockTakeView === "count" ? "bg-[#1E1E1E] text-white shadow-[0_0_6px_rgba(212,165,116,0.1)]" : "text-[#888] hover:text-white"}`}
+                  >
+                    <ClipboardCheck className="size-3" />
+                    Count
+                  </button>
+                  <button
+                    onClick={() => setStockTakeView("review")}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${stockTakeView === "review" ? "bg-[#1E1E1E] text-white shadow-[0_0_6px_rgba(212,165,116,0.1)]" : "text-[#888] hover:text-white"}`}
+                  >
+                    <ShieldCheck className="size-3" />
+                    Review
+                    {pendingReviews.length > 0 && (
+                      <span className="ml-0.5 px-1.5 py-0.5 rounded-full bg-red-500 text-white text-[10px] font-bold min-w-[16px] text-center leading-none">
+                        {pendingReviews.length}
+                      </span>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => setStockTakeView("history")}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${stockTakeView === "history" ? "bg-[#1E1E1E] text-white shadow-[0_0_6px_rgba(212,165,116,0.1)]" : "text-[#888] hover:text-white"}`}
+                  >
+                    <History className="size-3" />
+                    History
+                  </button>
+                </div>
+              )}
+              {(!canReview || stockTakeView === "count") && <StockTakeSession />}
+              {canReview && stockTakeView === "review" && (
+                <StockTakeReviewQueue sessions={pendingReviews} refresh={refreshReviews} />
+              )}
+              {canReview && stockTakeView === "history" && (
+                <StockTakeReviewQueue sessions={history} refresh={refreshHistory} readOnly title="Stock Take History" />
+              )}
+            </div>
           )}
           {activeTab === "log" && (
             <div className="space-y-4">
@@ -204,9 +250,6 @@ export function InventoryPage() {
               {transferView === "transfers" && <TransferList />}
               {transferView === "movement" && <StockMovementForm prefill={movementPrefill} />}
             </div>
-          )}
-          {activeTab === "review" && (
-            <StockTakeReviewQueue sessions={pendingReviews} refresh={refreshReviews} />
           )}
           {activeTab === "ingredients" && (
             <IngredientCatalog />

@@ -343,7 +343,7 @@ export default function StorageAreasTab() {
             <input
               id="new-area"
               type="text"
-              placeholder="Stock Room, Bar, FOH counter..."
+              placeholder="Dry Storage, Cool Room, Back Bar..."
               value={newName}
               maxLength={50}
               onChange={(e) => setNewName(e.target.value)}
@@ -375,7 +375,7 @@ export default function StorageAreasTab() {
           </div>
           <h3 className="text-base font-semibold text-white mb-1">Create your first area</h3>
           <p className="text-sm text-[#888] max-w-sm mx-auto">
-            Stock Room, Bar, FOH counter — wherever you actually walk when you count.
+            Dry Storage, Cool Room, Back Bar — wherever you actually walk when you count.
           </p>
         </div>
       ) : (

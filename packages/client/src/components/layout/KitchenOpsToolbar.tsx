@@ -20,7 +20,7 @@ const CLASSIFICATION_BADGE: Record<string, { bg: string; label: string }> = {
 };
 
 const MODULE_MAP: Record<string, string> = {
-  "/inventory": "Stock Room",
+  "/inventory": "Inventory",
   "/purchasing": "Ordering",
   "/menu-intelligence": "Menu & Costing",
   "/kitchen-copilot": "Prep",

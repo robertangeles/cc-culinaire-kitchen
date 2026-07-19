@@ -70,6 +70,7 @@ Categories: **entity** (named things) · **concept** (patterns) · **decision** 
 | [Remove on-device prompt runtime](decisions/remove-device-runtime-prompts.md) | Mobile pivoted to server-side chat (2026-06-15); `prompt.runtime`, `/api/mobile/prompts/:slug`, on-device admin UI, and Antoine prompts removed | 2026-06-17 |
 | [Tenant-Isolation Remediation (July 2026)](decisions/tenant-isolation-remediation.md) | Red-team fixed ~51 cross-tenant holes across 8 PRs; user-first-then-org model; prod forensic sweep found no breach; required real-DB CI gate | 2026-07-14 |
 | [Database Backup Location](decisions/db-backup-location.md) | Every DB backup goes in one home-relative folder `~/culinaire-prod-backups/` — consistent across machines, outside any repo, never committed | 2026-07-14 |
+| [Stock Model + Storage-Area Standards](decisions/stock-model-and-storage-areas.md) | Venue-level on-hand (areas = count sheets, not ledgers); POS depletes the venue pool; per-area balances deferred opt-in; module renamed "Stock Room" → "Inventory"; AU-worded default areas seeded per location | 2026-07-17 |
 
 ## Synthesis
 | Page | Summary | Created |

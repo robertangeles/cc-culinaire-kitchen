@@ -5,7 +5,7 @@ const features = [
   "Ask Antoine \u2014 unlimited culinary help",
   "Prep \u2014 daily mise en place planning",
   "Recipe Lab, Pastry Lab & Cocktail Lab",
-  "Stock Room \u2014 full inventory management",
+  "Inventory \u2014 full stock control",
   "Ordering & mobile delivery receiving",
   "Menu & Costing plus Waste",
   "The Bench community & Kitchen Shelf",

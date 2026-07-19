@@ -73,7 +73,7 @@ describe("StorageAreasTab", () => {
   it("invites the first area instead of showing an empty table", () => {
     render(<StorageAreasTab />);
     expect(screen.getByText(/create your first area/i)).toBeInTheDocument();
-    expect(screen.getByText(/stock room, bar, foh counter/i)).toBeInTheDocument();
+    expect(screen.getByText(/dry storage, cool room, back bar/i)).toBeInTheDocument();
   });
 
   it("says plainly that areas do not move stock — the thing operators fear", () => {

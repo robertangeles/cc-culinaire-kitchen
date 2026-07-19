@@ -30,13 +30,15 @@ export function CategoryCounter({ sessionId, category, onBack }: Props) {
   const { selectedLocationId } = useLocation();
   const { saveLine, getLines, getPreviousLines } = useStockTake();
   const { items: locationIngredients } = useLocationIngredients(selectedLocationId);
-  const { isOnline, queueSize, isSyncing, saveWithOfflineFallback, syncQueue } = useOfflineSync();
+  const { isOnline, queueSize, isSyncing, lastSyncError, saveWithOfflineFallback, syncQueue } = useOfflineSync();
 
   const [lines, setLines] = useState<StockTakeLine[]>([]);
   const [activeIngredient, setActiveIngredient] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // Transient feedback for the current count. `kind` keeps offline (amber, all
+  // good, will sync) visually distinct from error (red, NOT saved, act now).
+  const [notice, setNotice] = useState<{ kind: "info" | "error"; text: string } | null>(null);
 
   // Filter ingredients for this category
   const categoryIngredients = locationIngredients.filter(
@@ -62,7 +64,7 @@ export function CategoryCounter({ sessionId, category, onBack }: Props) {
     try {
       const prev = await getPreviousLines(sessionId, category.categoryName);
       if (prev.length === 0) {
-        setError("No previous count data available");
+        setNotice({ kind: "error", text: "No previous count data available" });
         return;
       }
       // Save each previous line as a new count
@@ -74,23 +76,32 @@ export function CategoryCounter({ sessionId, category, onBack }: Props) {
         });
       }
       await loadLines();
-      setError(null);
+      setNotice(null);
     } catch (err: any) {
-      setError(err.message);
+      setNotice({ kind: "error", text: err.message });
     }
   }, [sessionId, category.categoryName, getPreviousLines, saveLine, loadLines]);
 
   // Save a count — with offline fallback
   const handleSave = useCallback(async (ingredientId: string, qty: number, unit: string) => {
     setIsSaving(true);
-    setError(null);
+    setNotice(null);
     try {
       const result = await saveWithOfflineFallback(sessionId, category.categoryName, {
         ingredientId, rawQty: qty, countedUnit: unit,
       });
-      if (result.saved === "offline") {
-        setError("Saved offline — will sync when connected");
+
+      // Server reached but REJECTED the count (e.g. category not started).
+      // Show the real reason and keep the chef on this item — nothing was saved.
+      if (result.saved === "error") {
+        setNotice({ kind: "error", text: `Couldn't save — ${result.message}` });
+        return;
       }
+
+      if (result.saved === "offline") {
+        setNotice({ kind: "info", text: "Saved offline — will sync when connected" });
+      }
+
       await loadLines();
       // Move to next uncounted ingredient
       const currentIdx = categoryIngredients.findIndex((i) => i.ingredientId === ingredientId);
@@ -99,7 +110,7 @@ export function CategoryCounter({ sessionId, category, onBack }: Props) {
       );
       setActiveIngredient(nextUncounted?.ingredientId ?? null);
     } catch (err: any) {
-      setError(err.message);
+      setNotice({ kind: "error", text: err.message });
     } finally {
       setIsSaving(false);
     }
@@ -148,7 +159,11 @@ export function CategoryCounter({ sessionId, category, onBack }: Props) {
           )}
         </div>
 
-        {error && <p className="text-sm text-red-400 text-center mb-4">{error}</p>}
+        {notice && (
+          <p className={`text-sm text-center mb-4 ${notice.kind === "error" ? "text-red-400" : "text-amber-400"}`}>
+            {notice.text}
+          </p>
+        )}
 
         <SmartKeypad
           unit={ing.unitOverride || ing.baseUnit}
@@ -181,25 +196,28 @@ export function CategoryCounter({ sessionId, category, onBack }: Props) {
         </button>
       </div>
 
-      {/* Offline banner */}
+      {/* Offline / sync banner. Red when a queued count was REJECTED on sync
+          (a count is stuck and the chef must know), amber for normal offline. */}
       {(!isOnline || queueSize > 0) && (
-        <div className="flex items-center justify-between p-3 mb-4 rounded-xl bg-amber-500/10 border border-amber-500/20">
+        <div className={`flex items-center justify-between p-3 mb-4 rounded-xl border ${lastSyncError ? "bg-red-500/10 border-red-500/20" : "bg-amber-500/10 border-amber-500/20"}`}>
           <div className="flex items-center gap-2">
-            <WifiOff className="size-4 text-amber-400" />
-            <span className="text-xs text-amber-400">
-              {!isOnline
-                ? "Offline — counts will sync when connected"
-                : `${queueSize} item${queueSize !== 1 ? "s" : ""} waiting to sync`}
+            <WifiOff className={`size-4 ${lastSyncError ? "text-red-400" : "text-amber-400"}`} />
+            <span className={`text-xs ${lastSyncError ? "text-red-400" : "text-amber-400"}`}>
+              {lastSyncError
+                ? `Couldn't sync a count — ${lastSyncError}`
+                : !isOnline
+                  ? "Offline — counts will sync when connected"
+                  : `${queueSize} count${queueSize !== 1 ? "s" : ""} waiting to sync`}
             </span>
           </div>
           {isOnline && queueSize > 0 && (
             <button
               onClick={() => syncQueue()}
               disabled={isSyncing}
-              className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs text-amber-400 hover:bg-amber-500/10 transition-colors"
+              className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs transition-colors ${lastSyncError ? "text-red-400 hover:bg-red-500/10" : "text-amber-400 hover:bg-amber-500/10"}`}
             >
               <RefreshCw className={`size-3 ${isSyncing ? "animate-spin" : ""}`} />
-              Sync
+              Retry
             </button>
           )}
         </div>
@@ -213,7 +231,11 @@ export function CategoryCounter({ sessionId, category, onBack }: Props) {
         <CategoryProgressRing counted={countedCount} total={totalCount} />
       </div>
 
-      {error && <p className="text-sm text-red-400 mb-4">{error}</p>}
+      {notice && (
+        <p className={`text-sm mb-4 ${notice.kind === "error" ? "text-red-400" : "text-amber-400"}`}>
+          {notice.text}
+        </p>
+      )}
 
       {/* Ingredient list */}
       {categoryIngredients.length === 0 ? (
