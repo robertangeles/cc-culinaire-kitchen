@@ -1,6 +1,6 @@
 # UAT Checklist — Kitchen-Unit Model + Recipe-Based Selling
 
-> **Status 2026-07-19:** Sections **A (catalog)** and **B (stock take)** signed off ✅. C–H + I (storage areas) pending.
+> **Status 2026-07-19:** Sections **A (catalog)** + **B (stock take)** signed off ✅. **B3 (stock-take HQ review, PR #84 — variance, variance cost, review gating, History)** verified via browser QA and shipped to prod ✅ (merge `5e19857`). C–H + I (storage areas) pending.
 > Fixture live: Chicken 10 kg, Flour 25 kg, Shiraz 24 bottles per location (the 4-bottle
 > foh_operations test entry was reversed). NEXT: after the storage-areas build
 > (`docs/specs/storage-areas-count-sheets.md`) this checklist gains an **I. Storage areas**
@@ -52,6 +52,19 @@ Menu items: **Glass — Belicard** ($12, recipe 150 mL) · **Bottle — Belicard
 |---|---|---|---|
 | B1 | Start a stock take covering Belicard | Keypad counts in **bottle**; enter **6.5** (6 full + 1 half) | ✅ |
 | B2 | Approve (HQ review) | Catalog stock = **6.5 bottles**; variance shown in bottles | ✅ |
+
+## B3. Stock-take HQ review (PR #84 — verified 2026-07-19, browser QA on branch)
+
+Rob = org admin, holds `inventory:hq`. Verified live at localhost:5179 against the merged branch.
+
+| # | Steps | Expected | Result |
+|---|---|---|---|
+| B3.1 | Open Stock Take tab as an org-admin (has `inventory:hq`) | **Count / Review / History** sub-pills appear | ✅ |
+| B3.2 | Open a session with a variance in Review/History | Dedicated **Variance** and **Variance Cost** columns; variance cost = WAC × qty (e.g. +8 × $15 = **+$120.00**), computed not stored | ✅ |
+| B3.3 | Expected column on a first count | Shows venue **book on-hand** (e.g. 8.0), never "—" | ✅ |
+| B3.4 | "By" column | One line: counter name **+ date** (e.g. "Rob Angeles · Jul 19, 12:37 PM") | ✅ |
+| B3.5 | History sub-view | Approved sessions listed, **read-only** (no Approve/Flag), header "Approved by X · date" | ✅ |
+| B3.6 | Non-HQ user (no `inventory:hq`) | Review/History pills hidden; `GET /stock-takes/history` → **403** | test-covered (route-gate + `useHasPermission`) |
 
 ## C. Purchasing — packaging exists only here
 
