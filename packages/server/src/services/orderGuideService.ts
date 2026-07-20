@@ -30,6 +30,7 @@ import {
   storeLocation,
 } from "../db/schema.js";
 import { suggestedOrderQty } from "./poMath.js";
+import type { OrderGuideItemView } from "@culinaire/shared";
 
 export class OrderGuideError extends Error {
   constructor(
@@ -206,7 +207,11 @@ export async function listGuideItemsRaw(guideId: string, orgId: number) {
  *  - the real supplier minimum (`minimum_order_qty`) surfaced for validation (T7).
  * `suggestedOrderQty` reuses poMath so it matches the Suggestions tab exactly.
  */
-export async function getGuideItems(guideId: string, orgId: number, locationId: string) {
+export async function getGuideItems(
+  guideId: string,
+  orgId: number,
+  locationId: string,
+): Promise<OrderGuideItemView[]> {
   const guide = await getGuideInOrg(guideId, orgId);
   await assertLocationInOrg(locationId, orgId);
 

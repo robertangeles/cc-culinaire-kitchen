@@ -34,3 +34,46 @@ export interface HealthResponse {
   status: "ok";
   timestamp: string;
 }
+
+// ─── Purchasing: order guides (P1) ────────────────────────────────
+// Shared so client/server drift fails at COMPILE time rather than at runtime —
+// `any`-typed JSON is invisible to tsc, which is how the MFA field-name
+// mismatch shipped. The server annotates getGuideItems with OrderGuideItemView.
+
+/** A reusable per-supplier ordering list, as shown in a location's guide picker. */
+export interface OrderGuideSummary {
+  orderGuideId: string;
+  name: string;
+  supplierId: string;
+  supplierName: string;
+  /** null = an org-wide guide shared across locations. */
+  storeLocationId: string | null;
+  sortOrder: number;
+  activeInd: boolean;
+  /** ISO string over the wire (Date server-side). */
+  updatedDttm: string;
+  itemCount: number;
+}
+
+/**
+ * One priced guide line, resolved against a location. Cost, pack size and the
+ * supplier minimum are read live at render, never stored on the guide.
+ */
+export interface OrderGuideItemView {
+  ingredientId: string;
+  ingredientName: string;
+  baseUnit: string;
+  purchaseUnit: string | null;
+  packQty: number | null;
+  onHand: number;
+  parLevel: number | null;
+  /** P2 forecast PREVIEW — accepted into parLevel by the operator; never drives ordering. */
+  suggestedParLevel: number | null;
+  suggestedOrderQty: number;
+  belowPar: boolean;
+  unitCost: number | null;
+  supplierMinOrderQty: number | null;
+  defaultOrderQty: number | null;
+  defaultPurchaseUnit: string | null;
+  sortOrder: number;
+}
