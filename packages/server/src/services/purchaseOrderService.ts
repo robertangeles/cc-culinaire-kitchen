@@ -10,7 +10,7 @@
  * On receive, creates FIFO batches and updates stock levels.
  */
 
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc, sql, inArray } from "drizzle-orm";
 import { db } from "../db/index.js";
 import {
   purchaseOrder,
@@ -428,32 +428,39 @@ export async function clonePO(
   const skippedItems: string[] = [];
   const adjustedLines: CreatePOLineInput[] = [];
 
+  // Batch-load current stock + par for every source line at this location in two
+  // queries, not two per line (P1 T12 — a clone of a 500-line PO was ~1,000 queries).
+  const lineIngredientIds = source.lines.map((l) => l.ingredientId);
+  const [stockRows, parRows] = lineIngredientIds.length
+    ? await Promise.all([
+        db
+          .select({ ingredientId: stockLevel.ingredientId, currentQty: stockLevel.currentQty })
+          .from(stockLevel)
+          .where(
+            and(
+              eq(stockLevel.storeLocationId, locationId),
+              inArray(stockLevel.ingredientId, lineIngredientIds),
+            ),
+          ),
+        db
+          .select({ ingredientId: locationIngredient.ingredientId, parLevel: locationIngredient.parLevel })
+          .from(locationIngredient)
+          .where(
+            and(
+              eq(locationIngredient.storeLocationId, locationId),
+              inArray(locationIngredient.ingredientId, lineIngredientIds),
+              eq(locationIngredient.activeInd, true),
+            ),
+          ),
+      ])
+    : [[], []];
+  const stockByIngredient = new Map(stockRows.map((r) => [r.ingredientId, r.currentQty]));
+  const parByIngredient = new Map(parRows.map((r) => [r.ingredientId, r.parLevel]));
+
   for (const line of source.lines) {
-    // Get current stock at this location
-    const [stock] = await db
-      .select({ currentQty: stockLevel.currentQty })
-      .from(stockLevel)
-      .where(
-        and(
-          eq(stockLevel.storeLocationId, locationId),
-          eq(stockLevel.ingredientId, line.ingredientId),
-        ),
-      );
-
-    // Get par level for this item at this location
-    const [locIng] = await db
-      .select({ parLevel: locationIngredient.parLevel })
-      .from(locationIngredient)
-      .where(
-        and(
-          eq(locationIngredient.storeLocationId, locationId),
-          eq(locationIngredient.ingredientId, line.ingredientId),
-          eq(locationIngredient.activeInd, true),
-        ),
-      );
-
-    const currentQty = stock ? Number(stock.currentQty) : 0;
-    const parLevel = locIng?.parLevel ? Number(locIng.parLevel) : null;
+    const currentQty = Number(stockByIngredient.get(line.ingredientId) ?? 0);
+    const parRaw = parByIngredient.get(line.ingredientId);
+    const parLevel = parRaw != null ? Number(parRaw) : null;
 
     // Calculate suggested qty: par level - current stock, or original qty if no par
     let suggestedQty: number;
