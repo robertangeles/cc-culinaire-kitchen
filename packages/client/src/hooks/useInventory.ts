@@ -1071,20 +1071,6 @@ export interface PurchaseOrderLine {
   ingredientCategory: string | null;
 }
 
-export interface POSuggestionGroup {
-  supplierId: string | null;
-  supplierName: string | null;
-  items: {
-    ingredientId: string;
-    ingredientName: string;
-    ingredientCategory: string;
-    baseUnit: string;
-    parLevel: string | null;
-    reorderQty: string | null;
-    currentQty: string | null;
-  }[];
-}
-
 export function usePurchaseOrders(locationId: string | null) {
   const [pos, setPOs] = useState<PurchaseOrder[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -1166,12 +1152,6 @@ export function usePurchaseOrders(locationId: string | null) {
     return res.json();
   }, [refresh]);
 
-  const getSuggestions = useCallback(async (locId: string) => {
-    const res = await fetch(`${API}/purchase-orders/suggestions?storeLocationId=${locId}`, opts);
-    if (res.ok) return res.json() as Promise<POSuggestionGroup[]>;
-    return [];
-  }, []);
-
   const approvePO = useCallback(async (poId: string) => {
     const res = await fetch(`${API}/purchase-orders/${poId}/approve`, {
       ...jsonOpts, method: "POST",
@@ -1222,7 +1202,7 @@ export function usePurchaseOrders(locationId: string | null) {
 
   return {
     pos, isLoading, refresh, getDetail, createPO, submitPO, cancelPO,
-    receiveLine, getSuggestions, approvePO, rejectPO, clonePO, downloadPdf,
+    receiveLine, approvePO, rejectPO, clonePO, downloadPdf,
   };
 }
 

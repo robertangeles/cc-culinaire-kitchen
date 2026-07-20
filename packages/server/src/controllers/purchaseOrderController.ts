@@ -7,7 +7,7 @@
 import type { Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import pino from "pino";
-import { getUserLocationContext, getLocationInOrg } from "../services/locationContextService.js";
+import { getUserLocationContext } from "../services/locationContextService.js";
 import {
   createPO,
   listPOs,
@@ -15,7 +15,6 @@ import {
   submitPO,
   receiveLine,
   cancelPO,
-  getSuggestions,
   approvePO,
   rejectPO,
   clonePO,
@@ -247,31 +246,6 @@ export async function handleCancelPO(
       res.status(400).json({ error: err.message });
       return;
     }
-    next(err);
-  }
-}
-
-export async function handleGetSuggestions(
-  req: Request, res: Response, next: NextFunction,
-): Promise<void> {
-  try {
-    const orgId = await resolveOrgId(req, res);
-    if (orgId === null) return;
-
-    const storeLocationId = req.query.storeLocationId as string;
-    if (!storeLocationId) {
-      res.status(400).json({ error: "storeLocationId query parameter is required" });
-      return;
-    }
-
-    if (!await getLocationInOrg(storeLocationId, orgId)) {
-      res.status(400).json({ error: "Location not found" });
-      return;
-    }
-
-    const result = await getSuggestions(storeLocationId, orgId);
-    res.json(result);
-  } catch (err) {
     next(err);
   }
 }

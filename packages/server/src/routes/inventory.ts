@@ -86,7 +86,6 @@ import {
   handleSubmitPO,
   handleReceiveLine,
   handleCancelPO,
-  handleGetSuggestions,
   handleApprovePO,
   handleRejectPO,
   handleClonePO,
@@ -262,7 +261,6 @@ router.post("/forecasts/:id/ordered", requirePermission("inventory:manage"), for
 // Collection routes first (BEFORE /:id params)
 router.post("/purchase-orders", requirePermission("inventory:manage"), handleCreatePO);
 router.get("/purchase-orders", requirePermission("inventory:count"), handleListPOs);
-router.get("/purchase-orders/suggestions", requirePermission("inventory:manage"), handleGetSuggestions);
 
 // Parameterized PO routes
 router.get("/purchase-orders/:id", requirePermission("inventory:count"), handleGetPODetail);

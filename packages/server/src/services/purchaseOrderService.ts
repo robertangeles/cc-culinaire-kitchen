@@ -636,60 +636,6 @@ export async function cancelPO(poId: string, orgId: number, userId: number) {
   return updated;
 }
 
-// ─── getSuggestions ───────────────────────────────────────────────
-
-export async function getSuggestions(locationId: string, orgId: number) {
-  // Find items where current stock < par level, grouped by preferred supplier
-  const rows = await db
-    .select({
-      ingredientId: ingredient.ingredientId,
-      ingredientName: ingredient.ingredientName,
-      ingredientCategory: ingredient.ingredientCategory,
-      baseUnit: ingredient.baseUnit,
-      parLevel: locationIngredient.parLevel,
-      reorderQty: locationIngredient.reorderQty,
-      currentQty: stockLevel.currentQty,
-      supplierId: supplier.supplierId,
-      supplierName: supplier.supplierName,
-    })
-    .from(locationIngredient)
-    .innerJoin(ingredient, eq(locationIngredient.ingredientId, ingredient.ingredientId))
-    .leftJoin(
-      stockLevel,
-      and(
-        eq(stockLevel.ingredientId, ingredient.ingredientId),
-        eq(stockLevel.storeLocationId, locationId),
-      ),
-    )
-    .leftJoin(supplier, eq(locationIngredient.supplierId, supplier.supplierId))
-    .where(
-      and(
-        eq(locationIngredient.storeLocationId, locationId),
-        eq(locationIngredient.activeInd, true),
-        eq(ingredient.organisationId, orgId),
-        sql`COALESCE(${stockLevel.currentQty}::numeric, 0) < COALESCE(${locationIngredient.parLevel}::numeric, 0)`,
-        sql`${locationIngredient.parLevel} IS NOT NULL AND ${locationIngredient.parLevel}::numeric > 0`,
-      ),
-    );
-
-  // Group by supplier
-  const grouped: Record<string, {
-    supplierId: string | null;
-    supplierName: string | null;
-    items: typeof rows;
-  }> = {};
-
-  for (const row of rows) {
-    const key = row.supplierId ?? "unassigned";
-    if (!grouped[key]) {
-      grouped[key] = {
-        supplierId: row.supplierId,
-        supplierName: row.supplierName,
-        items: [],
-      };
-    }
-    grouped[key].items.push(row);
-  }
-
-  return Object.values(grouped);
-}
+// getSuggestions removed (Purchasing P1, T3): superseded by autoPoSuggestService,
+// which is the live "items below par" engine the Suggestions tab and order guides
+// both use. This older per-location variant was called by no live component.
