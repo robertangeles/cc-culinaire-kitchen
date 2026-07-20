@@ -1539,6 +1539,17 @@ export const locationIngredient = pgTable(
     weightedAverageCost: numeric("weighted_average_cost", { precision: 10, scale: 4 }),
     /** When the WAC was last recomputed. NULL until the first receiving. */
     wacLastRecomputedAt: timestamp("wac_last_recomputed_at", { withTimezone: true }),
+    /**
+     * Purchasing P1 (order guides): a par level SUGGESTED by the system
+     * (usage forecast in P2, never AI-computed in P1). Kept separate from
+     * `parLevel` so a suggestion never clobbers the operator's hand-set par —
+     * the bulk par editor previews this and the operator accepts it into
+     * `parLevel`. NULL until a suggestion exists. The ordering engine reads
+     * ONLY `parLevel`, never this column.
+     */
+    suggestedParLevel: numeric("suggested_par_level"),
+    suggestedParSource: varchar("suggested_par_source", { length: 30 }),
+    suggestedParAt: timestamp("suggested_par_at", { withTimezone: true }),
     createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
     updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
   },
@@ -2084,6 +2095,68 @@ export const purchaseOrderLine = pgTable(
   (table) => [
     index("idx_po_line_po").on(table.poId),
     index("idx_po_line_ingredient").on(table.ingredientId),
+  ],
+);
+
+/**
+ * Purchasing P1: an `order_guide` is a reusable, per-supplier ordering list an
+ * operator works from every week — the primary PO-creation surface (the manual
+ * catalog is a fallback). Lines reference `ingredient_id`; cost / pack size /
+ * supplier minimum are resolved LIVE from `ingredient_supplier` / `ingredient`
+ * at render + order time, so a guide never holds stale prices (2NF).
+ *
+ * `store_location_id` is NULLABLE: NULL = an org-wide guide shared across
+ * locations, a value = location-specific. P1 ships location-scoped behavior;
+ * the nullable column makes shareable guides a later flag flip, not a migration.
+ *
+ * OLTP, 2NF. Cross-supplier guides later: drop `supplier_id`, move it onto
+ * `order_guide_item`.
+ */
+export const orderGuide = pgTable(
+  "order_guide",
+  {
+    orderGuideId: uuid("order_guide_id").defaultRandom().primaryKey(),
+    organisationId: integer("organisation_id").notNull().references(() => organisation.organisationId),
+    storeLocationId: uuid("store_location_id").references(() => storeLocation.storeLocationId),
+    supplierId: uuid("supplier_id").notNull().references(() => supplier.supplierId),
+    name: varchar("name", { length: 100 }).notNull(),
+    activeInd: boolean("active_ind").notNull().default(true),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdByUserId: integer("created_by_user_id").notNull().references(() => user.userId),
+    createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
+    updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // "list guides for this location (or org-wide) at this org", ordered by sortOrder
+    index("idx_order_guide_org_location").on(table.organisationId, table.storeLocationId),
+    // FK index: "get all guides for a supplier"
+    index("idx_order_guide_supplier").on(table.supplierId),
+  ],
+);
+
+/**
+ * A row in an `order_guide`: one ingredient the operator regularly orders from
+ * that guide's supplier, with an optional remembered default order quantity and
+ * purchase unit. Order-to-par overrides the default at draft time. `sort_order`
+ * gives the operator's chosen shelf-to-sheet walk order.
+ */
+export const orderGuideItem = pgTable(
+  "order_guide_item",
+  {
+    orderGuideItemId: uuid("order_guide_item_id").defaultRandom().primaryKey(),
+    orderGuideId: uuid("order_guide_id").notNull().references(() => orderGuide.orderGuideId),
+    ingredientId: uuid("ingredient_id").notNull().references(() => ingredient.ingredientId),
+    defaultOrderQty: numeric("default_order_qty"),
+    defaultPurchaseUnit: varchar("default_purchase_unit", { length: 20 }),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
+    updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // One row per ingredient per guide (leading column also serves "list a guide's items")
+    uniqueIndex("idx_order_guide_item_unique").on(table.orderGuideId, table.ingredientId),
+    // FK index: "which guides contain this ingredient"
+    index("idx_order_guide_item_ingredient").on(table.ingredientId),
   ],
 );
 
