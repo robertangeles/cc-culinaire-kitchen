@@ -16,6 +16,18 @@ import {
 import { useOrderGuides, useOrderGuideItems } from "../../hooks/useOrderGuides.js";
 import type { OrderGuideSummary, OrderGuideItemView } from "@culinaire/shared";
 import { costForOrderedUnit } from "@culinaire/shared";
+import {
+  ArrowLeft,
+  Plus,
+  Trash2,
+  Search,
+  Send,
+  Save,
+  Loader2,
+  ShoppingCart,
+  BookOpen,
+  Sparkles,
+} from "lucide-react";
 
 /**
  * The number that belongs in the ORDER QTY field.
@@ -55,18 +67,6 @@ function costForCatalogLine(
     ),
   );
 }
-import {
-  ArrowLeft,
-  Plus,
-  Trash2,
-  Search,
-  Send,
-  Save,
-  Loader2,
-  ShoppingCart,
-  BookOpen,
-  Sparkles,
-} from "lucide-react";
 
 /* ── Types ────────────────────────────────────────────────────── */
 
@@ -97,7 +97,6 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
   const [expectedDate, setExpectedDate] = useState("");
   const [lines, setLines] = useState<LineItem[]>([]);
   const [search, setSearch] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [supplierIngredientIds, setSupplierIngredientIds] = useState<Set<string> | null>(null);
@@ -182,34 +181,13 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
     })();
   }, [supplierId]);
 
-  // Available categories from the ingredient list (filtered by supplier if selected)
+  // Scope the picker to what this supplier actually sells.
   const supplierFilteredIngredients = useMemo(() => {
     if (!supplierIngredientIds) return ingredients;
     return ingredients.filter((i) => supplierIngredientIds.has(i.ingredientId));
   }, [ingredients, supplierIngredientIds]);
 
-  const categories = useMemo(() => {
-    const cats = [...new Set(supplierFilteredIngredients.map((i) => i.ingredientCategory))].sort();
-    return cats;
-  }, [supplierFilteredIngredients]);
-
-  const CATEGORY_LABELS: Record<string, string> = {
-    proteins: "Proteins",
-    dairy: "Dairy",
-    produce: "Produce",
-    dry_goods: "Dry Goods",
-    beverages: "Beverages",
-    frozen: "Frozen",
-    bakery: "Bakery",
-    condiments: "Condiments",
-    spirits: "Spirits",
-    packaging: "Packaging",
-    cleaning: "Cleaning",
-    admin: "Admin",
-    other: "Other",
-  };
-
-  // Filter ingredients: by category + search text, exclude already-added
+  // Filter ingredients: search text, exclude already-added
   const addedIds = useMemo(() => new Set(lines.map((l) => l.ingredientId)), [lines]);
 
   // Debounce the picker filter — otherwise every keystroke re-scans the whole
@@ -223,11 +201,6 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
   const filteredIngredients = useMemo(() => {
     let result = supplierFilteredIngredients.filter((i) => !addedIds.has(i.ingredientId));
 
-    // Category filter
-    if (selectedCategory !== "all") {
-      result = result.filter((i) => i.ingredientCategory === selectedCategory);
-    }
-
     // Search filter
     const q = debouncedSearch.trim().toLowerCase();
     if (q) {
@@ -235,7 +208,7 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
     }
 
     return result;
-  }, [supplierFilteredIngredients, addedIds, selectedCategory, debouncedSearch]);
+  }, [supplierFilteredIngredients, addedIds, debouncedSearch]);
 
   /**
    * Cap what actually goes into the DOM. The catalogue is the FALLBACK path now
@@ -466,41 +439,10 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
       <div className="rounded-xl bg-[#161616]/80 backdrop-blur-sm border border-[#2A2A2A] p-4">
         <h3 className="text-sm font-medium text-white mb-3">Line Items</h3>
 
-        {/* Category tabs + search */}
+        {/* Search. Category pills used to sit here: nobody orders by browsing
+            "Condiments" — you order from a supplier, off a list. Supplier scope
+            plus type-to-find covers the fallback path. */}
         <div className="space-y-3 mb-3">
-          {/* Category pills */}
-          <div className="flex gap-1 flex-wrap">
-            <button
-              onClick={() => setSelectedCategory("all")}
-              className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
-                selectedCategory === "all"
-                  ? "bg-[#D4A574]/20 text-[#D4A574] border border-[#D4A574]/30"
-                  : "bg-[#1A1A1A] text-[#999] border border-transparent hover:text-white"
-              }`}
-            >
-              All ({supplierFilteredIngredients.filter(i => !addedIds.has(i.ingredientId)).length})
-            </button>
-            {categories.map((cat) => {
-              const count = supplierFilteredIngredients.filter(
-                (i) => i.ingredientCategory === cat && !addedIds.has(i.ingredientId),
-              ).length;
-              if (count === 0) return null;
-              return (
-                <button
-                  key={cat}
-                  onClick={() => setSelectedCategory(cat)}
-                  className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
-                    selectedCategory === cat
-                      ? "bg-[#D4A574]/20 text-[#D4A574] border border-[#D4A574]/30"
-                      : "bg-[#1A1A1A] text-[#999] border border-transparent hover:text-white"
-                  }`}
-                >
-                  {CATEGORY_LABELS[cat] ?? cat} ({count})
-                </button>
-              );
-            })}
-          </div>
-
           {/* Search */}
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-[#666]" />
