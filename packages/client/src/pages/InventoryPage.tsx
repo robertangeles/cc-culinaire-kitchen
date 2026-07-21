@@ -18,6 +18,7 @@ import { IngredientCatalog } from "../components/inventory/IngredientCatalog.js"
 import { StockTakeReviewQueue } from "../components/inventory/StockTakeReviewQueue.js";
 import { ActivationWizard } from "../components/inventory/ActivationWizard.js";
 import { OpeningInventory } from "../components/inventory/OpeningInventory.js";
+import BulkParEditor from "../components/inventory/BulkParEditor.js";
 import { CatalogRequestQueue } from "../components/inventory/CatalogRequestQueue.js";
 import ConsumptionLogger from "../components/inventory/ConsumptionLogger.js";
 import TransferList from "../components/inventory/TransferList.js";
@@ -38,6 +39,9 @@ export function InventoryPage() {
   const { sessions: pendingReviews, refresh: refreshReviews } = usePendingReviews();
   const { sessions: history, refresh: refreshHistory } = useStockTakeHistory();
   const canReview = useHasPermission()("inventory:hq");
+  // Par editing writes location_ingredient — same gate as the route (inventory:manage).
+  // Hiding it isn't the security boundary, it just avoids showing a control that 403s.
+  const canManageInventory = useHasPermission()("inventory:manage");
   const [activeTab, setActiveTab] = useState<InventoryTab>("dashboard");
   const [transferView, setTransferView] = useState<TransferSubView>("usage");
   const [stockTakeView, setStockTakeView] = useState<StockTakeView>("count");
@@ -151,6 +155,9 @@ export function InventoryPage() {
             <div className="space-y-6">
               <ActivationWizard />
               <OpeningInventory />
+              {/* Pars gate every order-to-par suggestion — without them the order
+                  guides look empty, so this belongs in the setup flow. */}
+              {canManageInventory && <BulkParEditor />}
             </div>
           )}
           {activeTab === "stock-take" && (
