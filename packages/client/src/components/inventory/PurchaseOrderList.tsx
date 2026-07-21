@@ -48,8 +48,30 @@ const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }>
   CANCELLED:          { bg: "bg-red-500/15",          text: "text-red-400",    label: "Cancelled" },
 };
 
-function StatusBadge({ status }: { status: string }) {
-  const s = STATUS_STYLES[status] ?? STATUS_STYLES.DRAFT;
+/**
+ * A LINE's status is a different vocabulary from the ORDER's — PENDING /
+ * PARTIAL / RECEIVED, not DRAFT / SENT / RECEIVING. Rendering lines through
+ * STATUS_STYLES meant PENDING missed every key and fell through to the DRAFT
+ * default, so a line on a SENT order read "Draft". On a purchase order that is
+ * not a cosmetic slip: it says the order hasn't gone out when it has.
+ */
+const LINE_STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
+  PENDING:            { bg: "bg-blue-500/15",     text: "text-blue-400",    label: "Awaiting delivery" },
+  PARTIAL:            { bg: "bg-sky-500/15",      text: "text-sky-400",     label: "Part received" },
+  PARTIALLY_RECEIVED: { bg: "bg-sky-500/15",      text: "text-sky-400",     label: "Part received" },
+  RECEIVED:           { bg: "bg-emerald-500/15",  text: "text-emerald-400", label: "Received" },
+  CANCELLED:          { bg: "bg-red-500/15",      text: "text-red-400",     label: "Cancelled" },
+};
+
+/**
+ * Falls back to showing the raw status rather than guessing a label. Silently
+ * defaulting to "Draft" is how an unmapped value got to claim the opposite of
+ * the truth; an unstyled but honest badge is always better on a document
+ * someone spends money against.
+ */
+export function StatusBadge({ status, kind = "order" }: { status: string; kind?: "order" | "line" }) {
+  const map = kind === "line" ? LINE_STATUS_STYLES : STATUS_STYLES;
+  const s = map[status] ?? { bg: "bg-[#333]/60", text: "text-[#999]", label: status };
   return (
     <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${s.bg} ${s.text}`}>
       {s.label}
@@ -398,7 +420,7 @@ export default function PurchaseOrderList() {
                                   {line.unitCost ? `$${Number(line.unitCost).toFixed(2)}` : "—"}
                                 </td>
                                 <td className="py-2 text-center">
-                                  <StatusBadge status={line.lineStatus} />
+                                  <StatusBadge status={line.lineStatus} kind="line" />
                                 </td>
                               </tr>
                               );
