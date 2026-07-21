@@ -198,6 +198,13 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
     return () => clearTimeout(t);
   }, [search]);
 
+  /**
+   * Has the operator said what they want yet? Browsing an unfiltered catalogue
+   * is not a purchasing behaviour — picking a supplier or typing a name is.
+   * Until one of those happens there is nothing worth putting on screen.
+   */
+  const hasPickerIntent = Boolean(supplierId) || search.trim().length > 0;
+
   const filteredIngredients = useMemo(() => {
     let result = supplierFilteredIngredients.filter((i) => !addedIds.has(i.ingredientId));
 
@@ -459,8 +466,15 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
           </div>
         </div>
 
-        {/* Browseable item list */}
-        {filteredIngredients.length > 0 && (
+        {/* Browseable item list.
+            Gated on intent. With no supplier and no search this table rendered
+            the WHOLE catalogue — 63 rows whose Par / Min Ord / Unit Cost were
+            all "—", because none of those resolve until a supplier or location
+            item is in play. A wall of dashes reads as "this product has no
+            data", which is the opposite of true and was the original complaint
+            that kicked off this whole rework. The columns are worth showing;
+            showing them empty, unprompted, is not. */}
+        {hasPickerIntent && filteredIngredients.length > 0 && (
           <div className="max-h-48 overflow-y-auto rounded-lg border border-[#2A2A2A] bg-[#0A0A0A]/50 mb-3">
             {/* Column headers */}
             <div className="sticky top-0 flex items-center gap-3 px-3 py-1.5 text-[10px] uppercase tracking-wider text-[#666] bg-[#141414] border-b border-[#2A2A2A]">
@@ -519,14 +533,23 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
             )}
           </div>
         )}
-        {filteredIngredients.length === 0 && search.trim() && (
+        {hasPickerIntent && filteredIngredients.length === 0 && search.trim() && (
           <p className="text-xs text-[#666] mb-3 text-center py-4">No items match your search.</p>
         )}
 
         {/* Lines */}
         {lines.length === 0 ? (
-          <div className="text-center py-8 text-[#666] text-sm">
-            Search and add items above
+          <div className="text-center py-8 text-sm">
+            {guides.length > 0 ? (
+              <>
+                <p className="text-[#999]">Pick a guide above to fill this order to par.</p>
+                <p className="text-[#666] text-xs mt-1">
+                  Or choose a supplier and search to build it by hand.
+                </p>
+              </>
+            ) : (
+              <p className="text-[#666]">Choose a supplier, or search for an item to add.</p>
+            )}
           </div>
         ) : (
           <div className="space-y-2">

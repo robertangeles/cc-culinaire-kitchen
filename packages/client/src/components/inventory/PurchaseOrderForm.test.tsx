@@ -20,8 +20,10 @@ vi.mock("../../context/LocationContext.js", () => ({
   useLocation: () => ({ selectedLocationId: "loc-1" }),
 }));
 
+let mockIngredients: any[] = [];
+
 vi.mock("../../hooks/useInventory.js", () => ({
-  useLocationIngredients: () => ({ items: [], isLoading: false, refresh: vi.fn() }),
+  useLocationIngredients: () => ({ items: mockIngredients, isLoading: false, refresh: vi.fn() }),
   useSuppliers: () => ({
     suppliers: [{ supplierId: "sup-1", supplierName: "PFD Food Services" }],
     isLoading: false,
@@ -120,10 +122,26 @@ async function pickGuide() {
   await waitFor(() => expect(screen.getByDisplayValue("3")).toBeTruthy());
 }
 
+/** A catalogue item with none of its optional data resolved — the "—" row. */
+const BARE_CATALOG_ITEM = {
+  ingredientId: "ing-spice",
+  ingredientName: "Mixed Spice",
+  baseUnit: "kg",
+  currentQty: "0",
+  parLevel: null,
+  orgParLevel: null,
+  supplierMinOrderQty: null,
+  locationUnitCost: null,
+  orgUnitCost: null,
+  purchaseUnit: null,
+  packQty: null,
+};
+
 beforeEach(() => {
   vi.clearAllMocks();
   mockGuides = [GUIDE];
   mockGuideItems = [WINE, FLOUR];
+  mockIngredients = [];
 });
 
 describe("PurchaseOrderForm — order-guide-first", () => {
@@ -186,6 +204,32 @@ describe("PurchaseOrderForm — order-guide-first", () => {
     // Warn, don't block — the operator can still knowingly under-order.
     fireEvent.click(screen.getByText("Save as Draft"));
     await waitFor(() => expect(createPO).toHaveBeenCalled());
+  });
+
+  it("does not dump the catalogue before the operator has picked or searched", async () => {
+    // The complaint that started this rework: opening a PO rendered every item
+    // in the catalogue with Par / Min Ord / Unit Cost all "—", which reads as
+    // "we hold no data on any of your products".
+    mockIngredients = [BARE_CATALOG_ITEM];
+    renderForm();
+
+    expect(screen.queryByText("Mixed Spice")).toBeNull();
+    expect(screen.queryByText("Min Ord")).toBeNull();
+    // ...and it says what to do instead of showing a wall of dashes.
+    expect(screen.getByText(/Pick a guide above/)).toBeTruthy();
+  });
+
+  it("shows the catalogue once the operator actually searches", async () => {
+    mockIngredients = [BARE_CATALOG_ITEM];
+    renderForm();
+
+    fireEvent.change(screen.getByPlaceholderText(/Filter items by name/), {
+      target: { value: "spice" },
+    });
+
+    // Debounced at 150ms.
+    await waitFor(() => expect(screen.getByText("Mixed Spice")).toBeTruthy());
+    expect(screen.getByText("Min Ord")).toBeTruthy();
   });
 
   it("submits the package qty against the package unit, and drops at-par rows", async () => {
