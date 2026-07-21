@@ -7,3 +7,4 @@ export function generateId(): string {
 
 export * from "./kitchenProfileConstants.js";
 export * from "./units.js";
+export * from "./packaging.js";

@@ -15,6 +15,7 @@ import {
 } from "../../hooks/useInventory.js";
 import { useOrderGuides, useOrderGuideItems } from "../../hooks/useOrderGuides.js";
 import type { OrderGuideSummary, OrderGuideItemView } from "@culinaire/shared";
+import { costForOrderedUnit } from "@culinaire/shared";
 
 /**
  * The number that belongs in the ORDER QTY field.
@@ -25,6 +26,34 @@ import type { OrderGuideSummary, OrderGuideItemView } from "@culinaire/shared";
  */
 function orderQtyFor(gi: OrderGuideItemView): number {
   return gi.suggestedPackages ?? gi.suggestedOrderQty;
+}
+
+/**
+ * The number that belongs in the COST field, which is labelled
+ * "$ per {orderedUnit}". Stored costs are per KITCHEN unit, so a packaged item
+ * needs the pack cost — otherwise the order is understated AND receiving
+ * divides the already-per-kg figure again, valuing stock at cost/packQty.
+ */
+function costFor(gi: OrderGuideItemView): string {
+  if (gi.unitCost == null) return "";
+  return String(gi.packUnitCost ?? gi.unitCost);
+}
+
+/** Same conversion for the catalogue fallback, whose costs are also per kitchen unit. */
+function costForCatalogLine(
+  ing: { locationUnitCost?: string | null; orgUnitCost?: string | null; packQty?: string | null; purchaseUnit?: string | null },
+  orderedUnit: string,
+): string {
+  const base = ing.locationUnitCost ?? ing.orgUnitCost;
+  if (base == null || base === "") return "";
+  return String(
+    costForOrderedUnit(
+      Number(base),
+      ing.packQty != null ? Number(ing.packQty) : null,
+      ing.purchaseUnit ?? null,
+      orderedUnit,
+    ),
+  );
 }
 import {
   ArrowLeft,
@@ -104,7 +133,7 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
         // Already at par -> 0; the operator sees the row but it won't be ordered.
         orderedQty: String(orderQtyFor(gi)),
         orderedUnit: gi.purchaseUnit || gi.baseUnit,
-        unitCost: gi.unitCost != null ? String(gi.unitCost) : "",
+        unitCost: costFor(gi),
       })),
     );
     setPendingGuideApply(false);
@@ -233,7 +262,9 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
         // Order in the purchase packaging (case/bag) when the item has one;
         // receiving converts to kitchen units at the boundary.
         orderedUnit: ing.purchaseUnit || ing.baseUnit,
-        unitCost: ing.locationUnitCost ?? ing.orgUnitCost ?? "",
+        // Stored costs are per kitchen unit; this line is priced per ordered
+        // unit. Same conversion the guide path uses.
+        unitCost: costForCatalogLine(ing, ing.purchaseUnit || ing.baseUnit),
       },
     ]);
     setSearch("");
@@ -244,6 +275,24 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
       prev.map((l) => (l.id === id ? { ...l, [field]: value } : l)),
     );
   }, []);
+
+  /**
+   * Switching a line between the package and the kitchen unit must re-price it.
+   * The cost field is labelled "$ per {orderedUnit}", so leaving the old number
+   * behind changes what the line total means without changing what it says.
+   */
+  const changeLineUnit = useCallback(
+    (id: string, unit: string, ing?: { locationUnitCost?: string | null; orgUnitCost?: string | null; packQty?: string | null; purchaseUnit?: string | null }) => {
+      setLines((prev) =>
+        prev.map((l) =>
+          l.id === id
+            ? { ...l, orderedUnit: unit, unitCost: ing ? costForCatalogLine(ing, unit) : l.unitCost }
+            : l,
+        ),
+      );
+    },
+    [],
+  );
 
   const removeLine = useCallback((id: string) => {
     setLines((prev) => prev.filter((l) => l.id !== id));
@@ -542,8 +591,12 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
             {lines.map((line) => {
               // Find the ingredient to get stock context
               const ing = ingredients.find((i) => i.ingredientId === line.ingredientId);
-              const stock = Number(ing?.currentQty ?? 0);
-              const par = Number(ing?.parLevel ?? ing?.orgParLevel ?? 0);
+              // A guide line carries the location's authoritative on-hand/par
+              // (the server resolved loc -> org fallback already), so prefer it
+              // and don't render a second copy of the same two numbers below.
+              const gLine = guideItemById.get(line.ingredientId);
+              const stock = Number(gLine?.onHand ?? ing?.currentQty ?? 0);
+              const par = Number(gLine?.parLevel ?? ing?.parLevel ?? ing?.orgParLevel ?? 0);
 
               return (
                 <div
@@ -560,6 +613,9 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
                         </span>
                         {par > 0 && (
                           <span className="text-[#666]">Par: {par.toFixed(1)}</span>
+                        )}
+                        {par > 0 && stock < par && (
+                          <span className="text-[#D4A574]">below par</span>
                         )}
                       </div>
                     </div>
@@ -607,27 +663,20 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
                         // the operator may knowingly under-order and take the call.
                         const belowMin =
                           gi.supplierMinOrderQty != null && qty > 0 && qty < gi.supplierMinOrderQty;
-                        return (
-                          <>
-                            <p className="mt-1 text-[10px] text-[#666]">
-                              On hand {gi.onHand}
-                              {gi.parLevel != null ? ` / par ${gi.parLevel}` : ""}
-                              {gi.belowPar && <span className="text-[#D4A574]"> · below par</span>}
-                            </p>
-                            {belowMin && (
-                              <p className="mt-0.5 text-[10px] text-amber-400">
-                                Supplier minimum is {gi.supplierMinOrderQty}
-                              </p>
-                            )}
-                          </>
-                        );
+                        // On-hand / par / below-par already read on the header
+                        // line above — don't print them twice.
+                        return belowMin ? (
+                          <p className="mt-0.5 text-[10px] text-amber-400">
+                            Supplier minimum is {gi.supplierMinOrderQty}
+                          </p>
+                        ) : null;
                       })()}
                     </div>
                     <div>
                       <label className="block text-[10px] uppercase tracking-wider text-[#666] mb-1">Unit</label>
                       <select
                         value={line.orderedUnit}
-                        onChange={(e) => updateLine(line.id, "orderedUnit", e.target.value)}
+                        onChange={(e) => changeLineUnit(line.id, e.target.value, ing)}
                         className="w-full px-2 py-1.5 rounded-lg text-sm bg-[#0A0A0A] text-white
                           border border-[#2A2A2A] focus:border-[#D4A574]/40
                           focus:shadow-[0_0_8px_rgba(212,165,116,0.12)] outline-none"

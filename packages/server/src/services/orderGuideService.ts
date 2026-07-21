@@ -29,7 +29,7 @@ import {
   supplier,
   storeLocation,
 } from "../db/schema.js";
-import { suggestedOrderQty, toPurchasePackages } from "./poMath.js";
+import { suggestedOrderQty, toPurchasePackages, toPackCost } from "./poMath.js";
 import type { OrderGuideItemView } from "@culinaire/shared";
 
 export class OrderGuideError extends Error {
@@ -295,6 +295,14 @@ export async function getGuideItems(
       suggestedPackages: toPurchasePackages(shortfall, packQty, r.purchaseUnit),
       belowPar: parLevel != null && onHand < parLevel,
       unitCost,
+      /**
+       * unitCost is per KITCHEN unit (schema: pack cost / pack_qty). A PO line
+       * is priced per ORDERED unit — receiving divides it back down by the
+       * conversion factor. Putting the per-kg cost on a per-bag line
+       * understates the order AND then values received stock at cost/packQty.
+       * Null when the item has no packaging.
+       */
+      packUnitCost: unitCost != null ? toPackCost(unitCost, packQty, r.purchaseUnit) : null,
       supplierMinOrderQty: num(r.supplierMinOrderQty),
       defaultOrderQty: num(r.defaultOrderQty),
       defaultPurchaseUnit: r.defaultPurchaseUnit,

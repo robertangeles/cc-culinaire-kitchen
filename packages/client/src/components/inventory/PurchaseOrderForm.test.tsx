@@ -83,6 +83,7 @@ const WINE = {
   suggestedPackages: 3,
   belowPar: true,
   unitCost: 15,
+  packUnitCost: 180, // $15/bottle x 12 per case
   supplierMinOrderQty: 2,
   defaultOrderQty: null,
   defaultPurchaseUnit: null,
@@ -103,6 +104,7 @@ const FLOUR = {
   suggestedPackages: null,
   belowPar: false,
   unitCost: 2,
+  packUnitCost: null, // no packaging
   supplierMinOrderQty: null,
   defaultOrderQty: null,
   defaultPurchaseUnit: null,
@@ -137,9 +139,12 @@ describe("PurchaseOrderForm — order-guide-first", () => {
     // The kitchen-unit shortfall must NEVER reach the qty field: that is the
     // 12x over-order that shipped ("50 bag" of flour against a 25 kg par).
     expect(screen.queryByDisplayValue("36")).toBeNull();
-    // Par context still reads in the unit the chef counts in.
-    expect(screen.getByText(/On hand 6 \/ par 42/)).toBeTruthy();
-    expect(screen.getByText(/below par/)).toBeTruthy();
+    // Par context reads in the unit the chef counts in — ONCE. It used to
+    // print "In stock / Par" and then "On hand / par" directly beneath it.
+    expect(screen.getByText(/In stock: 6.0/)).toBeTruthy();
+    expect(screen.getByText(/Par: 42.0/)).toBeTruthy();
+    expect(screen.getAllByText("below par")).toHaveLength(1);
+    expect(screen.queryByText(/On hand 6/)).toBeNull();
     // At-par item is still listed, just at zero.
     expect(screen.getByDisplayValue("0")).toBeTruthy();
   });

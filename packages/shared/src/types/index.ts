@@ -74,6 +74,8 @@ export interface OrderGuideItemView {
   /** Same shortfall in the PURCHASE unit (bag, case), rounded up. Null = no packaging, order in the kitchen unit. */
   suggestedPackages: number | null;
   belowPar: boolean;
+  /** Cost per PURCHASE unit ($/bag). Null = no packaging; use unitCost. */
+  packUnitCost: number | null;
   unitCost: number | null;
   supplierMinOrderQty: number | null;
   defaultOrderQty: number | null;

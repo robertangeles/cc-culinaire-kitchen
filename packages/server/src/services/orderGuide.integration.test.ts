@@ -168,6 +168,12 @@ describe.skipIf(!RUN)("order guides end-to-end (real DB)", () => {
     // asserting THIS is what let "50 bag" of flour reach a live PO.
     expect(wine.suggestedPackages).toBe(1);
     expect(flour.suggestedPackages).toBeNull(); // no packaging -> order in the kitchen unit
+    // Cost must be expressed in the SAME unit as the qty. unitCost is per
+    // bottle; a line ordered in cases is priced per case. Getting this wrong
+    // understates the PO and then makes receiving value stock at cost/packQty.
+    expect(wine.unitCost).toBe(15);
+    expect(wine.packUnitCost).toBe(180); // $15 x 12
+    expect(flour.packUnitCost).toBeNull();
   });
 
   it("exposes the supplier's real minimum in the catalogue list too", async () => {
