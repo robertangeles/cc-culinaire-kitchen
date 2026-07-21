@@ -16,10 +16,12 @@ import ReceiveQueue from "../components/purchasing/ReceiveQueue.js";
 import ApprovalQueue from "../components/purchasing/ApprovalQueue.js";
 import SpendThresholdSettings from "../components/purchasing/SpendThresholdSettings.js";
 import { AutoPoSuggestionsTable } from "../components/purchasing/AutoPoSuggestionsTable.js";
+import OrderGuideManager from "../components/purchasing/OrderGuideManager.js";
+import { useHasPermission } from "../hooks/useHasPermission.js";
 import { Tooltip } from "../components/ui/Tooltip.js";
-import { ShoppingCart, Package, Truck, ClipboardCheck, Settings, FileText, Sparkles } from "lucide-react";
+import { ShoppingCart, Package, Truck, ClipboardCheck, Settings, FileText, Sparkles, BookOpen } from "lucide-react";
 
-type PurchasingTab = "orders" | "suggestions" | "receive" | "suppliers" | "approvals" | "settings";
+type PurchasingTab = "orders" | "guides" | "suggestions" | "receive" | "suppliers" | "approvals" | "settings";
 
 export function PurchasingPage() {
   const { user, isGuest } = useAuth();
@@ -45,19 +47,24 @@ export function PurchasingPage() {
     return () => setGuideKeyOverride(null);
   }, [activeTab, setGuideKeyOverride]);
 
+  // Authoring guides writes the catalogue — same gate as the routes.
+  const canManageGuides = useHasPermission()("inventory:manage");
+
   const tabs = useMemo(() => {
     const t: { key: PurchasingTab; label: string; icon: typeof ShoppingCart; badge?: number }[] = [
       { key: "orders", label: "Orders", icon: FileText },
-      { key: "suggestions", label: "Suggestions", icon: Sparkles },
-      { key: "receive", label: "Receive", icon: Package, badge: awaitingReceiptCount },
-      { key: "suppliers", label: "Suppliers", icon: Truck },
     ];
+    // Guides sit next to Orders: it's where the ordering list gets built.
+    if (canManageGuides) t.push({ key: "guides", label: "Guides", icon: BookOpen });
+    t.push({ key: "suggestions", label: "Suggestions", icon: Sparkles });
+    t.push({ key: "receive", label: "Receive", icon: Package, badge: awaitingReceiptCount });
+    t.push({ key: "suppliers", label: "Suppliers", icon: Truck });
     if (isOrgAdmin) {
       t.push({ key: "approvals", label: "Approvals", icon: ClipboardCheck, badge: pendingApprovalCount });
       t.push({ key: "settings", label: "Settings", icon: Settings });
     }
     return t;
-  }, [isOrgAdmin, pendingApprovalCount, awaitingReceiptCount]);
+  }, [isOrgAdmin, canManageGuides, pendingApprovalCount, awaitingReceiptCount]);
 
   if (isGuest || !user) {
     return (
@@ -129,6 +136,7 @@ export function PurchasingPage() {
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 animate-[fadeIn_150ms_ease-out]">
           {activeTab === "orders" && <PurchaseOrderList />}
+          {activeTab === "guides" && canManageGuides && <OrderGuideManager />}
           {activeTab === "suggestions" && <AutoPoSuggestionsTable />}
           {activeTab === "receive" && <ReceiveQueue />}
           {activeTab === "suppliers" && <SupplierManager />}
