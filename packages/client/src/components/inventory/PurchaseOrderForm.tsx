@@ -172,6 +172,14 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
   // Filter ingredients: by category + search text, exclude already-added
   const addedIds = useMemo(() => new Set(lines.map((l) => l.ingredientId)), [lines]);
 
+  // Debounce the picker filter — otherwise every keystroke re-scans the whole
+  // catalogue, which stutters once a location carries a few hundred items.
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 150);
+    return () => clearTimeout(t);
+  }, [search]);
+
   const filteredIngredients = useMemo(() => {
     let result = supplierFilteredIngredients.filter((i) => !addedIds.has(i.ingredientId));
 
@@ -181,13 +189,25 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
     }
 
     // Search filter
-    if (search.trim()) {
-      const q = search.toLowerCase();
+    const q = debouncedSearch.trim().toLowerCase();
+    if (q) {
       result = result.filter((i) => i.ingredientName.toLowerCase().includes(q));
     }
 
     return result;
-  }, [ingredients, addedIds, selectedCategory, search]);
+  }, [supplierFilteredIngredients, addedIds, selectedCategory, debouncedSearch]);
+
+  /**
+   * Cap what actually goes into the DOM. The catalogue is the FALLBACK path now
+   * (order guides are the primary surface), so narrowing by search is a better
+   * trade than shipping a virtualiser dependency for a secondary screen.
+   */
+  const MAX_PICKER_ROWS = 100;
+  const visibleIngredients = useMemo(
+    () => filteredIngredients.slice(0, MAX_PICKER_ROWS),
+    [filteredIngredients],
+  );
+  const hiddenIngredientCount = filteredIngredients.length - visibleIngredients.length;
 
   const addLine = useCallback((ing: LocationIngredient) => {
     // Duplicate guard
@@ -454,7 +474,7 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
               <div className="w-14 text-right">Reorder</div>
               <div className="w-16 text-right">Unit Cost</div>
             </div>
-            {filteredIngredients.map((ing) => {
+            {visibleIngredients.map((ing) => {
               const stock = Number(ing.currentQty ?? 0);
               const par = Number(ing.parLevel ?? ing.orgParLevel ?? 0);
               const isLow = par > 0 && stock < par;
@@ -491,6 +511,11 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
                 </button>
               );
             })}
+            {hiddenIngredientCount > 0 && (
+              <p className="px-3 py-2 text-[11px] text-[#666] text-center border-t border-[#1A1A1A]">
+                +{hiddenIngredientCount} more — keep typing to narrow it down
+              </p>
+            )}
           </div>
         )}
         {filteredIngredients.length === 0 && search.trim() && (

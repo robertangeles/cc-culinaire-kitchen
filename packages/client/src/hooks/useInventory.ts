@@ -440,6 +440,37 @@ export function useStockMovements(locationId: string | null) {
 
 // ─── useLocationIngredients ───────────────────────────────────────
 
+/**
+ * Share an in-flight location-ingredients request between concurrent callers.
+ *
+ * The PO list and the PO form both mount at once and both need this list, so each
+ * was firing its own identical GET. This is NOT a cache — the entry is dropped the
+ * moment the request settles, so any later refresh still hits the server. It only
+ * collapses the simultaneous duplicates.
+ */
+const inFlightLocationIngredients = new Map<string, Promise<LocationIngredient[] | null>>();
+
+function fetchLocationIngredients(locationId: string): Promise<LocationIngredient[] | null> {
+  const existing = inFlightLocationIngredients.get(locationId);
+  if (existing) return existing;
+
+  const request = (async (): Promise<LocationIngredient[] | null> => {
+    try {
+      const res = await fetch(`${API}/locations/${locationId}/ingredients`, opts);
+      // null = "leave what's on screen alone" (matches the previous behaviour of
+      // only calling setItems on a successful response).
+      if (!res.ok) return null;
+      return (await res.json()) as LocationIngredient[];
+    } catch {
+      return null;
+    }
+  })();
+
+  inFlightLocationIngredients.set(locationId, request);
+  void request.finally(() => inFlightLocationIngredients.delete(locationId));
+  return request;
+}
+
 export function useLocationIngredients(locationId: string | null) {
   const [items, setItems] = useState<LocationIngredient[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -448,8 +479,8 @@ export function useLocationIngredients(locationId: string | null) {
     if (!locationId) return;
     setIsLoading(true);
     try {
-      const res = await fetch(`${API}/locations/${locationId}/ingredients`, opts);
-      if (res.ok) setItems(await res.json());
+      const data = await fetchLocationIngredients(locationId);
+      if (data) setItems(data);
     } finally {
       setIsLoading(false);
     }
