@@ -76,6 +76,8 @@ export interface LocationIngredient {
   // Supplier
   supplierId: string | null;
   supplierName: string | null;
+  /** The supplier's real minimum order quantity — NOT the internal reorder trigger. */
+  supplierMinOrderQty: string | null;
   // Stock
   currentQty: string | null;
   lastCountedDttm: string | null;

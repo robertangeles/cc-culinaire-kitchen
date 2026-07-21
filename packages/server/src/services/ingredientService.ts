@@ -463,6 +463,13 @@ export async function listLocationIngredients(
       // Supplier
       supplierId: locationIngredient.supplierId,
       supplierName: supplier.supplierName,
+      /**
+       * The supplier's REAL minimum order quantity. Ordering surfaces used to
+       * show location_ingredient.reorder_qty under a "Min Ord" heading, which
+       * read as a supplier constraint and misled buyers — a PO could be sent
+       * below an actual minimum with nothing flagging it.
+       */
+      supplierMinOrderQty: ingredientSupplier.minimumOrderQty,
       // Current stock
       currentQty: stockLevel.currentQty,
       lastCountedDttm: stockLevel.lastCountedDttm,
@@ -478,6 +485,16 @@ export async function listLocationIngredients(
     .leftJoin(
       supplier,
       eq(supplier.supplierId, locationIngredient.supplierId),
+    )
+    // Minimum for whichever supplier this location actually buys from — its own
+    // choice, else the ingredient's preferred one (a location with no override
+    // row still gets a meaningful minimum instead of null).
+    .leftJoin(
+      ingredientSupplier,
+      and(
+        eq(ingredientSupplier.ingredientId, ingredient.ingredientId),
+        sql`${ingredientSupplier.supplierId} = COALESCE(${locationIngredient.supplierId}, ${ingredient.preferredSupplierId})`,
+      ),
     )
     .leftJoin(
       stockLevel,

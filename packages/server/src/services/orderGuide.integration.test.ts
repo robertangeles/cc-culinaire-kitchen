@@ -19,6 +19,7 @@ import {
   getGuideItems,
   listGuides,
 } from "./orderGuideService.js";
+import { listLocationIngredients } from "./ingredientService.js";
 
 /**
  * Order guides end-to-end against the real DB. Proves T2 + the folded decisions:
@@ -161,6 +162,16 @@ describe.skipIf(!RUN)("order guides end-to-end (real DB)", () => {
     expect(wine.supplierMinOrderQty).toBe(2); // real supplier minimum (T7)
     expect(wine.purchaseUnit).toBe("case");
     expect(wine.packQty).toBe(12);
+  });
+
+  it("exposes the supplier's real minimum in the catalogue list too", async () => {
+    // activeOnly:false because this fixture has no location_ingredient override row.
+    const rows = await listLocationIngredients(fx.locId, fx.orgId, { activeOnly: false });
+    const wine = rows.find((r) => r.ingredientId === fx.wineId);
+    expect(wine).toBeTruthy();
+    // Resolved via the preferred supplier (set by the ingredient_supplier trigger),
+    // NOT location_ingredient.reorder_qty — that conflation was the original bug.
+    expect(Number(wine!.supplierMinOrderQty)).toBe(2);
   });
 
   it("drops a soft-deleted ingredient from the guide render (T11)", async () => {

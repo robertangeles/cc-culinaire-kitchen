@@ -467,11 +467,10 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
               <div className="w-12 text-center">UOM</div>
               <div className="w-14 text-right">Stock</div>
               <div className="w-14 text-right">Par</div>
-              {/* This column renders location_ingredient.reorder_qty — the internal
-                  reorder trigger, NOT the supplier's minimum order quantity. It was
-                  labelled "Min Ord", which read as a supplier constraint and misled
-                  the buyer. The real supplier minimum is surfaced on guide lines. */}
-              <div className="w-14 text-right">Reorder</div>
+              {/* The supplier's REAL minimum_order_qty. This heading used to render
+                  location_ingredient.reorder_qty (the internal reorder trigger), which
+                  read as a supplier constraint and misled the buyer. */}
+              <div className="w-14 text-right">Min Ord</div>
               <div className="w-16 text-right">Unit Cost</div>
             </div>
             {visibleIngredients.map((ing) => {
@@ -501,7 +500,7 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
                     {par > 0 ? par.toFixed(1) : "—"}
                   </div>
                   <div className="w-14 text-right text-xs text-[#555] shrink-0">
-                    {ing.reorderQty ? Number(ing.reorderQty).toFixed(1) : "—"}
+                    {ing.supplierMinOrderQty ? Number(ing.supplierMinOrderQty).toFixed(1) : "—"}
                   </div>
                   <div className="w-16 text-right text-xs text-[#666] shrink-0">
                     {(ing.locationUnitCost || ing.orgUnitCost)
