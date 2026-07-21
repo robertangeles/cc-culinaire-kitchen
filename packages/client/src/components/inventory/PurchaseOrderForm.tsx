@@ -199,11 +199,13 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
   }, [search]);
 
   /**
-   * Has the operator said what they want yet? Browsing an unfiltered catalogue
-   * is not a purchasing behaviour — picking a supplier or typing a name is.
-   * Until one of those happens there is nothing worth putting on screen.
+   * The catalogue is the FALLBACK path and only ever appears on an explicit
+   * search. Not on supplier selection: picking a guide sets the supplier, so
+   * gating on it re-opened the whole matrix underneath the guide — the exact
+   * thing this gate exists to prevent. Scoping the dump to one supplier still
+   * leaves a dump.
    */
-  const hasPickerIntent = Boolean(supplierId) || search.trim().length > 0;
+  const hasPickerIntent = search.trim().length > 0;
 
   const filteredIngredients = useMemo(() => {
     let result = supplierFilteredIngredients.filter((i) => !addedIds.has(i.ingredientId));
@@ -346,8 +348,9 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
       {/* Supplier + date row */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="md:col-span-2">
-          <label className="block text-xs text-[#999] mb-1">Supplier *</label>
+          <label htmlFor="po-supplier" className="block text-xs text-[#999] mb-1">Supplier *</label>
           <select
+            id="po-supplier"
             value={supplierId}
             onChange={(e) => setSupplierId(e.target.value)}
             className="w-full px-3 py-2 rounded-lg text-sm bg-[#1A1A1A] text-white

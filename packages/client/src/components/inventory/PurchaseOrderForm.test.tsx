@@ -219,6 +219,28 @@ describe("PurchaseOrderForm — order-guide-first", () => {
     expect(screen.getByText(/Pick a guide above/)).toBeTruthy();
   });
 
+  it("keeps the catalogue shut after a guide is picked", async () => {
+    // REGRESSION: the first version of this gate allowed the catalogue whenever
+    // a supplier was set. Picking a guide SETS the supplier, so the matrix came
+    // straight back underneath the guide — on the primary path, which the
+    // original test never exercised because it only checked the opening state.
+    mockIngredients = [BARE_CATALOG_ITEM];
+    renderForm();
+    await pickGuide();
+
+    expect(screen.queryByText("Mixed Spice")).toBeNull();
+    expect(screen.queryByText("Min Ord")).toBeNull();
+  });
+
+  it("keeps the catalogue shut when a supplier is chosen by hand", async () => {
+    mockIngredients = [BARE_CATALOG_ITEM];
+    renderForm();
+    fireEvent.change(screen.getByLabelText(/Supplier/), { target: { value: "sup-1" } });
+
+    // Scoping the dump to one supplier is still a dump.
+    expect(screen.queryByText("Mixed Spice")).toBeNull();
+  });
+
   it("shows the catalogue once the operator actually searches", async () => {
     mockIngredients = [BARE_CATALOG_ITEM];
     renderForm();
