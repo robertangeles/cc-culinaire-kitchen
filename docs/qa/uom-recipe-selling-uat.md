@@ -75,6 +75,23 @@ Rob = org admin, holds `inventory:hq`. Verified live at localhost:5179 against t
 | C3 | Auto-PO suggestions (set flour par above stock first) | Suggestion reads in **bags** (whole packages, rounded up), e.g. "1 bag (25000 g)" | ☐ |
 | C4 | Receive a PO line via the legacy per-line receive with unit **case** | Stock rises by cases × 12 — never by the raw "2" (this was a live bug, now fixed) | ☐ |
 
+### C-guides. Order guides + order-to-par (Purchasing P1, 2026-07-20)
+
+Spec: [docs/specs/purchasing-order-guides.md](../specs/purchasing-order-guides.md).
+**Do these in order — nothing below is visible until pars exist.**
+
+| # | Steps | Expected | Result |
+|---|---|---|---|
+| C5 | Inventory → Setup → **Par Levels**. Set Belicard par **8**, save | Header counter climbs ("N of M set"); reopening shows 8 persisted. Only edited rows are written | ☐ |
+| C6 | Purchasing → **Guides** → create "Weekly Wine" for the wine supplier | Guide appears with supplier name and "0 items" | ☐ |
+| C7 | Open the guide, add Belicard + one more item, reorder with ↑↓, Save items | Row order is the order you set; reopening keeps it. Removing a row and saving drops it | ☐ |
+| C8 | Purchasing → Orders → New PO → click the **Weekly Wine** pill | Supplier auto-selects; lines prefill. Belicard qty = **par − on hand** (8 − 6.5 = 1.5); line reads "On hand 6.5 / par 8 · below par" | ☐ |
+| C9 | Change Belicard qty to 1, then click its **TO PAR** chip | Snaps back to 1.5. "Order everything to par" re-snaps every guide line at once | ☐ |
+| C10 | Add an item already at/above par to the guide, reload the PO | It shows in the list at qty **0** and is NOT included when you save the PO | ☐ |
+| C11 | Set a qty below the supplier's minimum (Belicard min 2) | Inline amber "Supplier minimum is 2" under the qty. It **warns, doesn't block** — saving still works | ☐ |
+| C12 | Catalogue fallback: search the item list, check the **Min Ord** column | Shows the supplier's real minimum_order_qty, NOT the internal reorder qty. Typing is debounced; a long list caps with "+N more" | ☐ |
+| C13 | Sign in as a user WITHOUT `inventory:manage` | No **Guides** tab, no Par Levels editor. Ordering from an existing guide still works (`purchasing:draft`) | ☐ |
+
 ## D. Recipes — the ONLY place mL appears
 
 | # | Steps | Expected | Result |
