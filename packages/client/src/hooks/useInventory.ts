@@ -1122,9 +1122,21 @@ export function usePurchaseOrders(locationId: string | null) {
   useEffect(() => { refresh(); }, [refresh]);
 
   const getDetail = useCallback(async (poId: string) => {
-    const res = await fetch(`${API}/purchase-orders/${poId}`, opts);
+    // Every failure used to collapse to `null`, so the UI could only ever say
+    // "Failed to load details." — a 403, a 500 and the dev server restarting
+    // under you were indistinguishable. Say which one it was.
+    let res: Response;
+    try {
+      res = await fetch(`${API}/purchase-orders/${poId}`, opts);
+    } catch {
+      throw new Error("Can't reach the server. Check your connection and try again.");
+    }
     if (res.ok) return res.json() as Promise<PurchaseOrder>;
-    return null;
+    if (res.status === 401) throw new Error("Your session expired. Sign in again.");
+    if (res.status === 403) throw new Error("You don't have access to this purchase order.");
+    if (res.status === 404) throw new Error("This purchase order no longer exists.");
+    if (res.status >= 500) throw new Error(`The server couldn't load this order (${res.status}). Try again in a moment.`);
+    throw new Error(`Couldn't load this order (${res.status}).`);
   }, []);
 
   const createPO = useCallback(async (data: {

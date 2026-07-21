@@ -17,9 +17,18 @@ export default function ReceiveQueue() {
 
   const sentPOs = pos.filter((p) => p.status === "SENT" || p.status === "RECEIVING");
 
+  const [startError, setStartError] = useState<string | null>(null);
+
   const handleStartReceiving = useCallback(async (poId: string) => {
-    const detail = await getDetail(poId);
-    if (detail) setReceivePO(detail);
+    setStartError(null);
+    try {
+      const detail = await getDetail(poId);
+      if (detail) setReceivePO(detail);
+    } catch (e) {
+      // getDetail reports the real reason now; silently swallowing it left the
+      // operator tapping a button that appeared to do nothing.
+      setStartError(e instanceof Error ? e.message : "Couldn't open this delivery.");
+    }
   }, [getDetail]);
 
   if (receivePO) {
@@ -39,6 +48,12 @@ export default function ReceiveQueue() {
           Deliveries to Receive
         </h2>
       </div>
+
+      {startError && (
+        <p className="text-sm text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+          {startError}
+        </p>
+      )}
 
       {isLoading ? (
         <div className="flex items-center justify-center py-16">

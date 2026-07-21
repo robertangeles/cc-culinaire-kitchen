@@ -91,6 +91,7 @@ export default function PurchaseOrderList() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [detailCache, setDetailCache] = useState<Record<string, PurchaseOrder>>({});
   const [loadingDetail, setLoadingDetail] = useState<string | null>(null);
+  const [detailError, setDetailError] = useState<Record<string, string | null>>({});
   const [receivePO, setReceivePO] = useState<PurchaseOrder | null>(null);
   const [rejectModalPO, setRejectModalPO] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState("");
@@ -107,9 +108,20 @@ export default function PurchaseOrderList() {
     setExpandedId(poId);
     if (!detailCache[poId]) {
       setLoadingDetail(poId);
-      const detail = await getDetail(poId);
-      if (detail) setDetailCache((prev) => ({ ...prev, [poId]: detail }));
-      setLoadingDetail(null);
+      setDetailError((prev) => ({ ...prev, [poId]: null }));
+      try {
+        const detail = await getDetail(poId);
+        if (detail) setDetailCache((prev) => ({ ...prev, [poId]: detail }));
+      } catch (e) {
+        setDetailError((prev) => ({
+          ...prev,
+          [poId]: e instanceof Error ? e.message : "Couldn't load this order.",
+        }));
+      } finally {
+        // finally, not a trailing statement: a throw used to skip this and
+        // leave the spinner turning forever.
+        setLoadingDetail(null);
+      }
     }
   }, [expandedId, detailCache, getDetail]);
 
@@ -195,10 +207,14 @@ export default function PurchaseOrderList() {
   }, [downloadPdf]);
 
   const handleStartReceiving = useCallback(async (poId: string) => {
-    const detail = detailCache[poId] ?? await getDetail(poId);
-    if (detail) {
-      setReceivePO(detail);
-      setView("receive-new");
+    try {
+      const detail = detailCache[poId] ?? await getDetail(poId);
+      if (detail) {
+        setReceivePO(detail);
+        setView("receive-new");
+      }
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Couldn't open this delivery.");
     }
   }, [detailCache, getDetail]);
 
@@ -481,7 +497,17 @@ export default function PurchaseOrderList() {
                       </div>
                     </>
                   ) : (
-                    <p className="text-[#999] text-sm py-2">Failed to load details.</p>
+                    <div className="py-2">
+                      <p className="text-[#999] text-sm">
+                        {detailError[po.poId] ?? "Couldn't load this order."}
+                      </p>
+                      <button
+                        onClick={() => { setExpandedId(null); toggleExpand(po.poId); }}
+                        className="mt-2 text-xs text-[#D4A574] hover:underline"
+                      >
+                        Try again
+                      </button>
+                    </div>
                   )}
                 </div>
               )}
