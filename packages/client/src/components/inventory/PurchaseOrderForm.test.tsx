@@ -10,8 +10,8 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
  * stay visible (so they can be bumped) but must never become PO lines.
  */
 
-const createPO = vi.fn(async () => ({ poId: "po-1" }));
-const submitPO = vi.fn(async () => ({}));
+const createPO = vi.fn(async (_input: any) => ({ poId: "po-1" }));
+const submitPO = vi.fn(async (_poId: string) => ({}));
 
 let mockGuides: any[] = [];
 let mockGuideItems: any[] = [];
@@ -152,6 +152,21 @@ describe("PurchaseOrderForm — order-guide-first", () => {
     fireEvent.click(screen.getAllByText("TO PAR")[0]);
 
     expect(screen.getByDisplayValue("5")).toBeTruthy();
+  });
+
+  it("warns when a line falls under the supplier's real minimum", async () => {
+    renderForm();
+    await pickGuide();
+
+    // At the par shortfall (5) we're above the supplier minimum of 2 — no warning.
+    expect(screen.queryByText(/Supplier minimum is 2/)).toBeNull();
+
+    fireEvent.change(screen.getByDisplayValue("5"), { target: { value: "1" } });
+    expect(screen.getByText(/Supplier minimum is 2/)).toBeTruthy();
+
+    // Warn, don't block — the operator can still knowingly under-order.
+    fireEvent.click(screen.getByText("Save as Draft"));
+    await waitFor(() => expect(createPO).toHaveBeenCalled());
   });
 
   it("does not submit rows that are already at par", async () => {

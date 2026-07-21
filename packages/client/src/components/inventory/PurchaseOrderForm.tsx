@@ -447,7 +447,11 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
               <div className="w-12 text-center">UOM</div>
               <div className="w-14 text-right">Stock</div>
               <div className="w-14 text-right">Par</div>
-              <div className="w-14 text-right">Min Ord</div>
+              {/* This column renders location_ingredient.reorder_qty — the internal
+                  reorder trigger, NOT the supplier's minimum order quantity. It was
+                  labelled "Min Ord", which read as a supplier constraint and misled
+                  the buyer. The real supplier minimum is surfaced on guide lines. */}
+              <div className="w-14 text-right">Reorder</div>
               <div className="w-16 text-right">Unit Cost</div>
             </div>
             {filteredIngredients.map((ing) => {
@@ -563,12 +567,24 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
                       {(() => {
                         const gi = guideItemById.get(line.ingredientId);
                         if (!gi) return null;
+                        const qty = Number(line.orderedQty) || 0;
+                        // The supplier's real minimum_order_qty — warn, don't block:
+                        // the operator may knowingly under-order and take the call.
+                        const belowMin =
+                          gi.supplierMinOrderQty != null && qty > 0 && qty < gi.supplierMinOrderQty;
                         return (
-                          <p className="mt-1 text-[10px] text-[#666]">
-                            On hand {gi.onHand}
-                            {gi.parLevel != null ? ` / par ${gi.parLevel}` : ""}
-                            {gi.belowPar && <span className="text-[#D4A574]"> · below par</span>}
-                          </p>
+                          <>
+                            <p className="mt-1 text-[10px] text-[#666]">
+                              On hand {gi.onHand}
+                              {gi.parLevel != null ? ` / par ${gi.parLevel}` : ""}
+                              {gi.belowPar && <span className="text-[#D4A574]"> · below par</span>}
+                            </p>
+                            {belowMin && (
+                              <p className="mt-0.5 text-[10px] text-amber-400">
+                                Supplier minimum is {gi.supplierMinOrderQty}
+                              </p>
+                            )}
+                          </>
                         );
                       })()}
                     </div>
