@@ -78,19 +78,84 @@ Rob = org admin, holds `inventory:hq`. Verified live at localhost:5179 against t
 ### C-guides. Order guides + order-to-par (Purchasing P1, 2026-07-20)
 
 Spec: [docs/specs/purchasing-order-guides.md](../specs/purchasing-order-guides.md).
-**Do these in order — nothing below is visible until pars exist.**
+
+**This section is the only proof this feature works.** The automated E2E
+(`packages/client/tests/e2e/order-guides.spec.ts`) was written but has **never been executed** —
+Turnstile verification is fail-closed with no dev bypass, so Playwright can't log in. The server
+logic is covered by real-DB integration tests; the browser wiring is not. Treat a failure here as
+a real bug, not a stale checklist.
+
+**Do C5→C7 in order.** Order-to-par renders *nothing* until pars exist, so skipping setup makes
+every later row pass vacuously — which looks like success and proves nothing.
+
+#### Before you start
+
+1. **Log in as Rob** (org admin — holds `inventory:manage` + `purchasing:draft`). Ports 3009 / 5179,
+   location **Almost French Patisserie**.
+2. **Belicard must have a supplier minimum**, or C13 has nothing to trigger.
+   ⚠️ **There is no UI for this.** `ingredient_supplier.minimum_order_qty` is rendered everywhere
+   but writable only via the API — no client component calls the write route. Set it with:
+   ```bash
+   # token: copy access_token from localStorage after logging in
+   curl -X PATCH http://localhost:3009/api/inventory/ingredients/<belicardId>/suppliers/<supplierId> \
+     -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+     -d '{"minimumOrderQty":"2"}'
+   ```
+   *(Flagged as a gap — see "Known gaps" below.)*
+3. Note Belicard's current on-hand before you start (fixture says **6.5 bottles** after section B).
+   Every expected number below is derived from it.
+
+#### Setup — pars, then a guide
 
 | # | Steps | Expected | Result |
 |---|---|---|---|
-| C5 | Inventory → Setup → **Par Levels**. Set Belicard par **8**, save | Header counter climbs ("N of M set"); reopening shows 8 persisted. Only edited rows are written | ☐ |
-| C6 | Purchasing → **Guides** → create "Weekly Wine" for the wine supplier | Guide appears with supplier name and "0 items" | ☐ |
-| C7 | Open the guide, add Belicard + one more item, reorder with ↑↓, Save items | Row order is the order you set; reopening keeps it. Removing a row and saving drops it | ☐ |
-| C8 | Purchasing → Orders → New PO → click the **Weekly Wine** pill | Supplier auto-selects; lines prefill. Belicard qty = **par − on hand** (8 − 6.5 = 1.5); line reads "On hand 6.5 / par 8 · below par" | ☐ |
-| C9 | Change Belicard qty to 1, then click its **TO PAR** chip | Snaps back to 1.5. "Order everything to par" re-snaps every guide line at once | ☐ |
-| C10 | Add an item already at/above par to the guide, reload the PO | It shows in the list at qty **0** and is NOT included when you save the PO | ☐ |
-| C11 | Set a qty below the supplier's minimum (Belicard min 2) | Inline amber "Supplier minimum is 2" under the qty. It **warns, doesn't block** — saving still works | ☐ |
-| C12 | Catalogue fallback: search the item list, check the **Min Ord** column | Shows the supplier's real minimum_order_qty, NOT the internal reorder qty. Typing is debounced; a long list caps with "+N more" | ☐ |
-| C13 | Sign in as a user WITHOUT `inventory:manage` | No **Guides** tab, no Par Levels editor. Ordering from an existing guide still works (`purchasing:draft`) | ☐ |
+| C5 | Inventory → **Setup** → scroll to **Par Levels**. Filter "Belicard", set par **8**. Also set a par on one other item. Click **Save pars** | Counter reads "N of M set" and climbs. Button confirms "Saved 2 pars". Reload → both persist. Rows you didn't touch are never written (a full-catalogue save should only report the count you edited) | ☐ |
+| C6 | Purchasing → **Guides** → type "Weekly Wine", pick the wine supplier, **Create guide** | Guide card appears with the supplier's name. Creating with a name but **no supplier** shows "Pick a supplier" and creates nothing | ☐ |
+| C7 | Open the guide → **Add an item…** → add Belicard + 2 others. Reorder with ↑ / ↓ into your walk order. **Save items** | The order you set is the order that saves. Reload the page → same order. This is the shelf-to-sheet walk; if it resets to alphabetical or insertion order, that's a bug | ☐ |
+| C8 | In the guide, remove one row, **Save items** | Row is gone after reload. The server replaces the set wholesale — check the *other* rows survived | ☐ |
+
+#### The core flow — order to par
+
+| # | Steps | Expected | Result |
+|---|---|---|---|
+| C9 | Purchasing → Orders → **New Purchase Order** → click the **Weekly Wine** pill | Supplier auto-selects. Lines prefill with no typing. Belicard qty = **par − on hand = 8 − 6.5 = 1.5** | ☐ |
+| C10 | Read the Belicard line | Reads **"On hand 6.5 / par 8 · below par"**. The par context is the whole point — an operator must not have to compute the quantity | ☐ |
+| C11 | Change Belicard qty to **1**, then click its **TO PAR** chip | Snaps back to **1.5** | ☐ |
+| C12 | Zero out a line, then click **Order everything to par** | Every guide line re-snaps at once, including the one you zeroed | ☐ |
+| C13 | Set Belicard qty to **1** (below the minimum you set in prep step 2) | Inline amber **"Supplier minimum is 2"** under the qty. It **warns but does not block** — an operator may knowingly under-order. Saving still works | ☐ |
+| C14 | Add an item **already at or above par** to the guide, reopen the PO | Shows in the list at qty **0** (visible, not hidden — the operator should see it was considered) but is **excluded** from the saved PO. Check the created PO's line count | ☐ |
+| C15 | Save the PO, then open it from the Orders list | Only the non-zero lines are on it. Totals match qty × unit cost | ☐ |
+
+#### Regressions — bugs this build fixed
+
+These are the ones most likely to silently come back.
+
+| # | Steps | Expected | Result |
+|---|---|---|---|
+| C16 | Catalogue fallback (don't pick a guide): search the item list, read the **Min Ord** column | Shows the supplier's **minimum_order_qty**, NOT `reorder_qty`. This column previously rendered the internal reorder trigger under a supplier-constraint heading — a PO could ship below a real supplier minimum with nothing flagging it. If Min Ord matches the item's reorder qty rather than what you set in prep step 2, the bug is back | ☐ |
+| C17 | Compare a line's unit cost between the guide-prefilled PO and the **Suggestions** tab for the same item | Identical. They previously read different columns (`unit_cost` vs `preferred_unit_cost`) and disagreed | ☐ |
+| C18 | Soft-delete an ingredient that's on a guide, reopen the guide in a PO | The deleted item does not appear. It should not resurrect as a line | ☐ |
+| C19 | Open the Orders tab and watch the network panel on load | The ingredients list is fetched **once**, not twice. The PO list and PO form each used to fire an identical request on mount | ☐ |
+| C20 | Type quickly in the catalogue search with a long catalogue | No lag per keystroke (debounced). A long list caps with **"+N more — keep typing to narrow it down"** rather than rendering thousands of rows | ☐ |
+
+#### Unhappy paths + permissions
+
+| # | Steps | Expected | Result |
+|---|---|---|---|
+| C21 | Create a guide, add **no** items, open it in a PO | No crash. Empty guide yields an empty draft, not an error | ☐ |
+| C22 | Put an item with **no par set** on a guide, open the PO | Line appears at qty 0 with no par context — never a negative qty, never NaN | ☐ |
+| C23 | Delete a guide that a draft PO was built from | Delete succeeds; the already-created PO is unaffected (guides are a template, not a foreign key on the order) | ☐ |
+| C24 | Sign in as a user **without** `inventory:manage` | No **Guides** tab, no Par Levels editor. Ordering from an existing guide **still works** (that's `purchasing:draft`). Hitting the guide write routes directly → **403** | ☐ |
+
+#### Known gaps (found while writing this checklist — not bugs in the build)
+
+- **No UI to set a supplier minimum.** `minimum_order_qty` is displayed in the Min Ord column and
+  drives the C13 warning, but the only write path is `PATCH /inventory/ingredients/:id/suppliers/:supId`
+  — no client component calls it. The warning can't be configured by an operator, only by import
+  or curl. Worth a small editor in the supplier-link UI.
+- **Pars are hand-entered only.** Forecast-suggested pars are deferred to P2 (org 2 has no
+  `consumption_log` history to forecast from). The bulk editor speeds up entry; it doesn't
+  invent pars.
 
 ## D. Recipes — the ONLY place mL appears
 
