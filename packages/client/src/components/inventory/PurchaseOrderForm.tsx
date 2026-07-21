@@ -13,6 +13,8 @@ import {
   usePurchaseOrders,
   type LocationIngredient,
 } from "../../hooks/useInventory.js";
+import { useOrderGuides, useOrderGuideItems } from "../../hooks/useOrderGuides.js";
+import type { OrderGuideSummary } from "@culinaire/shared";
 import {
   ArrowLeft,
   Plus,
@@ -22,6 +24,8 @@ import {
   Save,
   Loader2,
   ShoppingCart,
+  BookOpen,
+  Sparkles,
 } from "lucide-react";
 
 /* ── Types ────────────────────────────────────────────────────── */
@@ -57,6 +61,65 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [supplierIngredientIds, setSupplierIngredientIds] = useState<Set<string> | null>(null);
+
+  // ── Order guides: the default way in ───────────────────────────
+  // Picking a guide fills the draft from the operator's regular list with every
+  // quantity already at par - on-hand, so the screen opens as a correct draft
+  // instead of an empty form. The catalog below stays as the fallback.
+  const [selectedGuideId, setSelectedGuideId] = useState<string | null>(null);
+  const [pendingGuideApply, setPendingGuideApply] = useState(false);
+  const { guides } = useOrderGuides(selectedLocationId);
+  const { items: guideItems } = useOrderGuideItems(selectedGuideId, selectedLocationId);
+
+  const guideItemById = useMemo(
+    () => new Map(guideItems.map((g) => [g.ingredientId, g])),
+    [guideItems],
+  );
+
+  const applyGuide = useCallback((guide: OrderGuideSummary) => {
+    setSelectedGuideId(guide.orderGuideId);
+    setSupplierId(guide.supplierId);
+    setPendingGuideApply(true);
+    setError(null);
+  }, []);
+
+  useEffect(() => {
+    if (!pendingGuideApply || guideItems.length === 0) return;
+    setLines(
+      guideItems.map((gi) => ({
+        id: crypto.randomUUID(),
+        ingredientId: gi.ingredientId,
+        ingredientName: gi.ingredientName,
+        // Already at par -> 0; the operator sees the row but it won't be ordered.
+        orderedQty: String(gi.suggestedOrderQty ?? 0),
+        orderedUnit: gi.purchaseUnit || gi.baseUnit,
+        unitCost: gi.unitCost != null ? String(gi.unitCost) : "",
+      })),
+    );
+    setPendingGuideApply(false);
+  }, [pendingGuideApply, guideItems]);
+
+  /** Snap every guide-backed line to its par shortfall in one tap. */
+  const orderEverythingToPar = useCallback(() => {
+    setLines((prev) =>
+      prev.map((l) => {
+        const gi = guideItemById.get(l.ingredientId);
+        return gi ? { ...l, orderedQty: String(gi.suggestedOrderQty) } : l;
+      }),
+    );
+  }, [guideItemById]);
+
+  /** Snap one line back to its par shortfall. */
+  const setLineToPar = useCallback(
+    (lineId: string, ingredientId: string) => {
+      const gi = guideItemById.get(ingredientId);
+      if (!gi) return;
+      setLines((prev) =>
+        prev.map((l) => (l.id === lineId ? { ...l, orderedQty: String(gi.suggestedOrderQty) } : l)),
+      );
+    },
+    [guideItemById],
+  );
 
   // Fetch ingredient IDs linked to the selected supplier
   useEffect(() => {
@@ -160,13 +223,21 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
     if (!supplierId) { setError("Select a supplier"); return; }
     if (lines.length === 0) { setError("Add at least one item"); return; }
 
+    // Guide rows already at par sit at 0 so the operator can still see and bump
+    // them — they just don't become PO lines.
+    const orderable = lines.filter((l) => (Number(l.orderedQty) || 0) > 0);
+    if (orderable.length === 0) {
+      setError("Nothing to order yet — set a quantity on at least one item");
+      return;
+    }
+
     setError(null);
     setIsSaving(true);
     try {
       const po = await createPO({
         storeLocationId: selectedLocationId,
         supplierId,
-        lines: lines.map((l) => ({
+        lines: orderable.map((l) => ({
           ingredientId: l.ingredientId,
           orderedQty: l.orderedQty,
           orderedUnit: l.orderedUnit,
@@ -259,6 +330,57 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
             outline-none resize-none placeholder:text-[#555]"
         />
       </div>
+
+      {/* Order guides — the default way in. Pick the regular list and the draft
+          arrives already filled to par; the catalog below stays as the fallback. */}
+      {guides.length > 0 && (
+        <div className="rounded-xl bg-[#161616]/80 backdrop-blur-sm border border-[#2A2A2A] p-4">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <h3 className="text-sm font-medium text-white flex items-center gap-2">
+              <BookOpen className="size-4 text-[#D4A574]" />
+              Order Guide
+            </h3>
+            {selectedGuideId && lines.length > 0 && (
+              <button
+                type="button"
+                onClick={orderEverythingToPar}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold
+                  bg-gradient-to-r from-[#D4A574] to-[#C4956A] text-[#0A0A0A]
+                  shadow-[0_0_12px_rgba(212,165,116,0.25)] hover:brightness-110 transition-all"
+              >
+                <Sparkles className="size-3.5" />
+                Order everything to par
+              </button>
+            )}
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            {guides.map((g) => {
+              const active = g.orderGuideId === selectedGuideId;
+              return (
+                <button
+                  key={g.orderGuideId}
+                  type="button"
+                  onClick={() => applyGuide(g)}
+                  className={`px-3 py-2 rounded-xl text-left transition-all border ${
+                    active
+                      ? "bg-[#D4A574]/15 border-[#D4A574]/40 shadow-[0_0_10px_rgba(212,165,116,0.15)]"
+                      : "bg-[#1A1A1A] border-[#2A2A2A] hover:border-[#3A3A3A]"
+                  }`}
+                >
+                  <span
+                    className={`block text-xs font-medium ${active ? "text-[#D4A574]" : "text-white"}`}
+                  >
+                    {g.name}
+                  </span>
+                  <span className="block text-[10px] text-[#777] mt-0.5">
+                    {g.supplierName} · {g.itemCount} item{g.itemCount === 1 ? "" : "s"}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Add items */}
       <div className="rounded-xl bg-[#161616]/80 backdrop-blur-sm border border-[#2A2A2A] p-4">
@@ -414,16 +536,41 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
                   <div className="grid grid-cols-4 gap-2">
                     <div>
                       <label className="block text-[10px] uppercase tracking-wider text-[#666] mb-1">Order Qty</label>
-                      <input
-                        type="number"
-                        value={line.orderedQty}
-                        onChange={(e) => updateLine(line.id, "orderedQty", e.target.value)}
-                        min="0.01"
-                        step="0.1"
-                        className="w-full px-2 py-1.5 rounded-lg text-sm bg-[#0A0A0A] text-white
-                          border border-[#2A2A2A] focus:border-[#D4A574]/40
-                          focus:shadow-[0_0_8px_rgba(212,165,116,0.12)] outline-none"
-                      />
+                      <div className="flex gap-1">
+                        <input
+                          type="number"
+                          value={line.orderedQty}
+                          onChange={(e) => updateLine(line.id, "orderedQty", e.target.value)}
+                          min="0"
+                          step="0.1"
+                          className="w-full min-w-0 px-2 py-1.5 rounded-lg text-sm bg-[#0A0A0A] text-white
+                            border border-[#2A2A2A] focus:border-[#D4A574]/40
+                            focus:shadow-[0_0_8px_rgba(212,165,116,0.12)] outline-none"
+                        />
+                        {guideItemById.has(line.ingredientId) && (
+                          <button
+                            type="button"
+                            onClick={() => setLineToPar(line.id, line.ingredientId)}
+                            title={`Set to par (${guideItemById.get(line.ingredientId)!.suggestedOrderQty})`}
+                            className="shrink-0 px-2 rounded-lg text-[10px] font-semibold tracking-wide
+                              text-[#D4A574] border border-[#D4A574]/30 bg-[#D4A574]/10
+                              hover:bg-[#D4A574]/20 transition-all"
+                          >
+                            TO PAR
+                          </button>
+                        )}
+                      </div>
+                      {(() => {
+                        const gi = guideItemById.get(line.ingredientId);
+                        if (!gi) return null;
+                        return (
+                          <p className="mt-1 text-[10px] text-[#666]">
+                            On hand {gi.onHand}
+                            {gi.parLevel != null ? ` / par ${gi.parLevel}` : ""}
+                            {gi.belowPar && <span className="text-[#D4A574]"> · below par</span>}
+                          </p>
+                        );
+                      })()}
                     </div>
                     <div>
                       <label className="block text-[10px] uppercase tracking-wider text-[#666] mb-1">Unit</label>
