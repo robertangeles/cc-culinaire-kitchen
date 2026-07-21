@@ -14,7 +14,7 @@ import router from "./inventory.js";
  * reads (`inventory:count`); writes stay on `inventory:manage`.
  */
 
-type Method = "get" | "post" | "patch" | "delete";
+type Method = "get" | "post" | "patch" | "put" | "delete";
 
 // Realistic seeded permission tiers (packages/server/src/db/seed.ts).
 // Free Subscriber holds the basic read tier but NOT the manage tier.
@@ -123,5 +123,49 @@ describe("stock-take review + history — inventory:hq only", () => {
 
   it.each(HQ_ROUTES)("passes an inventory:hq user on %s %s", (method, path) => {
     expect(runGate(findGate(method, path), HQ).passed).toBe(true);
+  });
+});
+
+/**
+ * Order-guide gating (Purchasing P1).
+ *
+ * Deliberately reuses EXISTING permissions rather than minting a new key:
+ * ordering from a guide is `purchasing:draft` (if you can draft a PO you can use
+ * the guide), while creating/editing/deleting a guide is `inventory:manage`
+ * (curating what gets ordered is a catalogue-management action). Reusing keys
+ * means no seed entry and no backfill — which is what makes adding these routes
+ * safe for existing roles rather than a 403 for everyone.
+ */
+describe("order-guide gating", () => {
+  const READ_ROUTES: [Method, string][] = [
+    ["get", "/locations/:locId/order-guides"],
+    ["get", "/order-guides/:guideId/items"],
+  ];
+  const MANAGE_ROUTES: [Method, string][] = [
+    ["post", "/locations/:locId/order-guides"],
+    ["patch", "/order-guides/:guideId"],
+    ["delete", "/order-guides/:guideId"],
+    ["put", "/order-guides/:guideId/items"],
+  ];
+
+  it.each(READ_ROUTES)("lets a purchasing:draft user %s %s", (method, path) => {
+    expect(runGate(findGate(method, path), SUBSCRIBER).passed).toBe(true);
+  });
+
+  it.each(READ_ROUTES)("403s a user without purchasing:draft on %s %s", (method, path) => {
+    const noPurchasing = ["chat:access", "inventory:count"];
+    const { passed, status } = runGate(findGate(method, path), noPurchasing);
+    expect(passed).toBe(false);
+    expect(status).toHaveBeenCalledWith(403);
+  });
+
+  it.each(MANAGE_ROUTES)("403s a drafter without inventory:manage on %s %s", (method, path) => {
+    const { passed, status } = runGate(findGate(method, path), SUBSCRIBER);
+    expect(passed).toBe(false);
+    expect(status).toHaveBeenCalledWith(403);
+  });
+
+  it.each(MANAGE_ROUTES)("passes an inventory:manage user on %s %s", (method, path) => {
+    expect(runGate(findGate(method, path), MANAGER).passed).toBe(true);
   });
 });
