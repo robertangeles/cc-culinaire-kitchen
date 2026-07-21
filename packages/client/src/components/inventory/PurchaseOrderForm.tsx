@@ -14,7 +14,18 @@ import {
   type LocationIngredient,
 } from "../../hooks/useInventory.js";
 import { useOrderGuides, useOrderGuideItems } from "../../hooks/useOrderGuides.js";
-import type { OrderGuideSummary } from "@culinaire/shared";
+import type { OrderGuideSummary, OrderGuideItemView } from "@culinaire/shared";
+
+/**
+ * The number that belongs in the ORDER QTY field.
+ *
+ * That field is labelled with purchaseUnit (bag, case), so it takes packages.
+ * suggestedOrderQty is the shortfall in the KITCHEN unit (kg, bottle) — using
+ * it here orders packQty times too much: 25 kg of flour became "50 bag".
+ */
+function orderQtyFor(gi: OrderGuideItemView): number {
+  return gi.suggestedPackages ?? gi.suggestedOrderQty;
+}
 import {
   ArrowLeft,
   Plus,
@@ -91,7 +102,7 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
         ingredientId: gi.ingredientId,
         ingredientName: gi.ingredientName,
         // Already at par -> 0; the operator sees the row but it won't be ordered.
-        orderedQty: String(gi.suggestedOrderQty ?? 0),
+        orderedQty: String(orderQtyFor(gi)),
         orderedUnit: gi.purchaseUnit || gi.baseUnit,
         unitCost: gi.unitCost != null ? String(gi.unitCost) : "",
       })),
@@ -104,7 +115,7 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
     setLines((prev) =>
       prev.map((l) => {
         const gi = guideItemById.get(l.ingredientId);
-        return gi ? { ...l, orderedQty: String(gi.suggestedOrderQty) } : l;
+        return gi ? { ...l, orderedQty: String(orderQtyFor(gi)) } : l;
       }),
     );
   }, [guideItemById]);
@@ -115,7 +126,7 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
       const gi = guideItemById.get(ingredientId);
       if (!gi) return;
       setLines((prev) =>
-        prev.map((l) => (l.id === lineId ? { ...l, orderedQty: String(gi.suggestedOrderQty) } : l)),
+        prev.map((l) => (l.id === lineId ? { ...l, orderedQty: String(orderQtyFor(gi)) } : l)),
       );
     },
     [guideItemById],
@@ -579,7 +590,7 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
                           <button
                             type="button"
                             onClick={() => setLineToPar(line.id, line.ingredientId)}
-                            title={`Set to par (${guideItemById.get(line.ingredientId)!.suggestedOrderQty})`}
+                            title={`Set to par (${orderQtyFor(guideItemById.get(line.ingredientId)!)} ${line.orderedUnit})`}
                             className="shrink-0 px-2 rounded-lg text-[10px] font-semibold tracking-wide
                               text-[#D4A574] border border-[#D4A574]/30 bg-[#D4A574]/10
                               hover:bg-[#D4A574]/20 transition-all"

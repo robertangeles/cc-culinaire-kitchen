@@ -69,7 +69,10 @@ export interface OrderGuideItemView {
   parLevel: number | null;
   /** P2 forecast PREVIEW — accepted into parLevel by the operator; never drives ordering. */
   suggestedParLevel: number | null;
+  /** Shortfall in the KITCHEN unit (kg, bottle). Display only — never fill an order field from this. */
   suggestedOrderQty: number;
+  /** Same shortfall in the PURCHASE unit (bag, case), rounded up. Null = no packaging, order in the kitchen unit. */
+  suggestedPackages: number | null;
   belowPar: boolean;
   unitCost: number | null;
   supplierMinOrderQty: number | null;

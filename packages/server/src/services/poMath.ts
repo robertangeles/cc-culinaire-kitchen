@@ -47,6 +47,29 @@ export function suggestedOrderQty(
 }
 
 /**
+ * Convert a kitchen-unit quantity into whole purchase packages.
+ *
+ * `suggestedOrderQty` answers "how much do we need?" in the unit the item is
+ * COUNTED in (kg, bottle, each). A purchase order is placed in the unit the
+ * item is BOUGHT in (bag, case). Those are different numbers and mixing them
+ * is a 12.5x error, not a rounding one: 25 kg of flour is 2 bags, and writing
+ * 25 into a field labelled "bag" orders 312 kg.
+ *
+ * Returns null when the item has no packaging — the caller then orders in the
+ * kitchen unit and no conversion applies.
+ *
+ * Rounds UP: you cannot buy two thirds of a bag.
+ */
+export function toPurchasePackages(
+  qty: number,
+  packQty: number | null,
+  purchaseUnit: string | null,
+): number | null {
+  if (!purchaseUnit || packQty == null || packQty <= 0) return null;
+  return Math.ceil(qty / packQty);
+}
+
+/**
  * Estimate the line cost for a suggested order.
  * Returns qty × cost, formatted to 2 decimal places.
  */

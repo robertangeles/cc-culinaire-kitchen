@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   sumPOLineTotal,
   suggestedOrderQty,
+  toPurchasePackages,
   estimatedLineCost,
   shouldRouteToHQ,
 } from "./poMath.js";
@@ -121,6 +122,71 @@ describe("Formula F-PO-02: suggestedOrderQty", () => {
       const shortfall = par - current;
       const result = suggestedOrderQty(par, current, 10);
       expect(result).toBeGreaterThanOrEqual(shortfall);
+    });
+  });
+});
+
+describe("Formula F-PO-04: toPurchasePackages", () => {
+  describe("Forward reconciliation", () => {
+    it("converts the live bug: 25 kg of flour in 12.5 kg bags is 2 bags, not 50", () => {
+      expect(toPurchasePackages(25, 12.5, "bag")).toBe(2);
+    });
+
+    it("24 bottles short, case of 12 -> 2 cases", () => {
+      expect(toPurchasePackages(24, 12, "case")).toBe(2);
+    });
+  });
+
+  describe("Boundary conditions", () => {
+    it("rounds UP — you cannot buy part of a bag", () => {
+      expect(toPurchasePackages(13, 12.5, "bag")).toBe(2);
+      expect(toPurchasePackages(0.1, 12.5, "bag")).toBe(1);
+    });
+
+    it("exact multiples do not round up a spare package", () => {
+      expect(toPurchasePackages(25, 12.5, "bag")).toBe(2);
+      expect(toPurchasePackages(12.5, 12.5, "bag")).toBe(1);
+    });
+
+    it("nothing needed -> nothing ordered", () => {
+      expect(toPurchasePackages(0, 12.5, "bag")).toBe(0);
+    });
+
+    it("returns null when the item has no packaging (order in the kitchen unit)", () => {
+      expect(toPurchasePackages(25, null, null)).toBeNull();
+      expect(toPurchasePackages(25, 12.5, null)).toBeNull();
+      expect(toPurchasePackages(25, null, "bag")).toBeNull();
+    });
+
+    it("guards a zero/negative pack size instead of dividing by it", () => {
+      expect(toPurchasePackages(25, 0, "bag")).toBeNull();
+      expect(toPurchasePackages(25, -5, "bag")).toBeNull();
+    });
+  });
+
+  describe("Invariants", () => {
+    it("packages x packSize always covers the shortfall", () => {
+      for (const [qty, pack] of [
+        [25, 12.5],
+        [24, 12],
+        [13, 12.5],
+        [1, 500],
+        [999, 7],
+      ] as const) {
+        const packs = toPurchasePackages(qty, pack, "case")!;
+        expect(packs * pack).toBeGreaterThanOrEqual(qty);
+      }
+    });
+
+    it("never over-orders by a full package or more", () => {
+      for (const [qty, pack] of [
+        [25, 12.5],
+        [13, 12.5],
+        [999, 7],
+      ] as const) {
+        const packs = toPurchasePackages(qty, pack, "case")!;
+        expect(packs * pack - qty).toBeLessThan(pack);
+      }
     });
   });
 });

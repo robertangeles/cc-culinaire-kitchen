@@ -154,6 +154,7 @@ describe.skipIf(!RUN)("order guides end-to-end (real DB)", () => {
 
     const items = await getGuideItems(fx.guideId, fx.orgId, fx.locId);
     const wine = items.find((i) => i.ingredientId === fx.wineId)!;
+    const flour = items.find((i) => i.ingredientId === fx.flourId)!;
     expect(wine.onHand).toBe(3);
     expect(wine.parLevel).toBe(8);
     expect(wine.suggestedOrderQty).toBe(5); // par 8 - on-hand 3
@@ -162,6 +163,11 @@ describe.skipIf(!RUN)("order guides end-to-end (real DB)", () => {
     expect(wine.supplierMinOrderQty).toBe(2); // real supplier minimum (T7)
     expect(wine.purchaseUnit).toBe("case");
     expect(wine.packQty).toBe(12);
+    // The number the PO is actually placed with. 5 bottles short, bought by the
+    // case of 12 -> 1 case. Asserting packQty and suggestedOrderQty without
+    // asserting THIS is what let "50 bag" of flour reach a live PO.
+    expect(wine.suggestedPackages).toBe(1);
+    expect(flour.suggestedPackages).toBeNull(); // no packaging -> order in the kitchen unit
   });
 
   it("exposes the supplier's real minimum in the catalogue list too", async () => {

@@ -29,7 +29,7 @@ import {
   supplier,
   storeLocation,
 } from "../db/schema.js";
-import { suggestedOrderQty } from "./poMath.js";
+import { suggestedOrderQty, toPurchasePackages } from "./poMath.js";
 import type { OrderGuideItemView } from "@culinaire/shared";
 
 export class OrderGuideError extends Error {
@@ -272,17 +272,27 @@ export async function getGuideItems(
     const parLevel = num(r.locParLevel) ?? num(r.orgParLevel);
     const reorderQty = num(r.locReorderQty) ?? num(r.orgReorderQty);
     const unitCost = num(r.preferredUnitCost) ?? num(r.locUnitCost) ?? num(r.orgUnitCost);
+    const packQty = num(r.packQty);
+    // Kitchen units — what the shortfall actually is (25 kg), for display.
+    const shortfall = parLevel != null ? suggestedOrderQty(parLevel, onHand, reorderQty) : 0;
     return {
       ingredientId: r.ingredientId,
       ingredientName: r.ingredientName,
       baseUnit: r.baseUnit,
       purchaseUnit: r.purchaseUnit,
-      packQty: num(r.packQty),
+      packQty,
       onHand,
       parLevel,
       /** P2 preview only — the operator accepts this into parLevel; never drives ordering. */
       suggestedParLevel: num(r.suggestedParLevel),
-      suggestedOrderQty: parLevel != null ? suggestedOrderQty(parLevel, onHand, reorderQty) : 0,
+      suggestedOrderQty: shortfall,
+      /**
+       * The same shortfall in the unit the PO is actually placed in. The form
+       * labels the qty field with purchaseUnit, so it MUST fill it from this —
+       * filling it from suggestedOrderQty orders packQty times too much.
+       * Null when the item has no packaging (order in the kitchen unit).
+       */
+      suggestedPackages: toPurchasePackages(shortfall, packQty, r.purchaseUnit),
       belowPar: parLevel != null && onHand < parLevel,
       unitCost,
       supplierMinOrderQty: num(r.supplierMinOrderQty),
