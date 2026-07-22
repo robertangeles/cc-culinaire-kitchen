@@ -32,6 +32,7 @@ import {
   Download,
   Clock,
   AlertTriangle,
+  Mail,
 } from "lucide-react";
 
 /* ── Status badge config ──────────────────────────────────────── */
@@ -99,7 +100,7 @@ export default function PurchaseOrderList() {
   const { selectedLocationId } = useLocation();
   const {
     pos, isLoading, refresh, submitPO, cancelPO,
-    approvePO, rejectPO, clonePO, downloadPdf, getDetail,
+    approvePO, rejectPO, clonePO, downloadPdf, emailPOToSupplier, getDetail,
   } = usePurchaseOrders(selectedLocationId);
   const { items: ingredients } = useLocationIngredients(selectedLocationId);
   const ingMap = useMemo(() => {
@@ -220,13 +221,27 @@ export default function PurchaseOrderList() {
     }
   }, [clonePO, selectedLocationId]);
 
-  const handleDownloadPdf = useCallback(async (poId: string) => {
+  const handleDownloadPdf = useCallback(async (poId: string, poNumber: string) => {
     try {
-      await downloadPdf(poId);
+      await downloadPdf(poId, poNumber);
     } catch (err: any) {
       alert(err.message);
     }
   }, [downloadPdf]);
+
+  const handleSendEmail = useCallback(async (poId: string) => {
+    try {
+      const result = await emailPOToSupplier(poId);
+      if (result.emailed) {
+        alert(`Order emailed to the supplier (${result.to}).`);
+      } else {
+        // No supplier email on file, or email not set up on this server.
+        alert(result.message);
+      }
+    } catch (err: any) {
+      alert(err.message);
+    }
+  }, [emailPOToSupplier]);
 
   const handleStartReceiving = useCallback(async (poId: string) => {
     try {
@@ -487,19 +502,37 @@ export default function PurchaseOrderList() {
                           </>
                         )}
                         {po.status === "SENT" && (
-                          <button
-                            onClick={() => handleStartReceiving(po.poId)}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium
-                              bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 transition-all"
-                          >
-                            <Truck className="size-3" /> Receive Delivery
-                          </button>
+                          <>
+                            <button
+                              onClick={() => handleStartReceiving(po.poId)}
+                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium
+                                bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 transition-all"
+                            >
+                              <Truck className="size-3" /> Receive Delivery
+                            </button>
+                            {po.supplierOrderingMethod === "email" && (
+                              <>
+                                <button
+                                  onClick={() => handleSendEmail(po.poId)}
+                                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium
+                                    bg-[#D4A574]/10 text-[#D4A574] hover:bg-[#D4A574]/20 transition-all"
+                                >
+                                  <Mail className="size-3" /> {po.supplierEmailedAt ? "Resend to supplier" : "Send to supplier"}
+                                </button>
+                                {po.supplierEmailedAt && (
+                                  <span className="flex items-center gap-1 text-[11px] text-emerald-400/80">
+                                    <Check className="size-3" /> Emailed {new Date(po.supplierEmailedAt).toLocaleDateString()}
+                                  </span>
+                                )}
+                              </>
+                            )}
+                          </>
                         )}
                         {/* Common actions for non-terminal statuses */}
                         {!["RECEIVED", "PARTIAL_RECEIVED", "PARTIALLY_RECEIVED", "CANCELLED"].includes(po.status) && (
                           <>
                             <button
-                              onClick={() => handleDownloadPdf(po.poId)}
+                              onClick={() => handleDownloadPdf(po.poId, po.poNumber)}
                               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium
                                 bg-[#1E1E1E] text-[#999] hover:text-white transition-all"
                             >

@@ -110,3 +110,64 @@ Order-to-par shows nothing until pars exist. On a fresh org:
 1. Inventory → Setup → **Par Levels** — set pars for the items you reorder.
 2. Purchasing → **Guides** — create a guide for a supplier and add those items.
 3. Purchasing → **Orders** → New PO — pick the guide; the draft arrives filled to par.
+
+## Send to supplier (PO email, 2026-07-22)
+
+Emailing a PO to its supplier is an **explicit operator action on a SENT order**, not a
+side-effect of the `SENT` transition — `SENT` stays a pure internal status flip.
+
+- **Route:** `POST /purchase-orders/:id/send-email`, gated by `purchasing:submit` (the same tier
+  as Submit + PDF download — no new permission).
+- **Flow:** `emailPOToSupplier` (in `purchaseOrderService.ts`) loads the PO + supplier + org +
+  lines, generates the PO PDF via `pdfService.generatePOPdf`, and sends it through
+  `emailService.sendPurchaseOrderEmail` (Resend, PDF attached) to `supplier.contact_email`.
+- **State:** on a successful send it stamps `purchase_order.supplier_emailed_at`; the client
+  button then shows **Resend to supplier** + an **"Emailed {date}"** tag.
+- **Order-Via gate:** the action is only for suppliers whose `ordering_method = "email"`. The
+  client hides the Send/Resend button for phone/portal suppliers, and the server refuses with
+  `{ emailed:false, reason:"not_email_supplier" }` — so a phone-ordered supplier is never emailed.
+- **Skip-and-flag, never block:** a supplier with no `contact_email` → `{ emailed:false,
+  reason:"no_supplier_email" }` (200, plain message); an unconfigured email transport →
+  `reason:"email_not_configured"`. Only a genuine Resend error throws (→ 5xx). Emailing a
+  non-`SENT` PO → 400.
+- **Tests:** `routes/inventory.test.ts` asserts the `purchasing:submit` boundary on the route.
+  The full send path (200 emailed, 403/401/404) was verified by curl against the running dev
+  server.
+
+### PO PDF header (2026-07-22)
+
+The PO PDF/email header is the ordering party's identity block:
+- **Brand name** (org name) as the title.
+- **Ordering kitchen** (location name) — shown **only when it differs from the brand** (accent-
+  and case-insensitive compare), so a single-brand org doesn't get a near-duplicate line while a
+  real branch (e.g. "Almost French Epicure") still shows — plus that **location's address** (a PO
+  is placed by a kitchen, so the address comes from `store_location`, not the org).
+- Labeled contact rows — **PHONE / EMAIL / WEB** (all from the `organisation`), each on its own
+  aligned row so nothing wraps mid-word; a row is omitted if its field is unset, and the
+  website's `https://` is stripped for display.
+
+`organisation.organisation_phone` was added for this (there was previously no phone field for
+the business anywhere — only `supplier.contact_phone`). It's edited in **Profile → Organisation**
+(create + edit forms) and flows through `updateOrganisation`. Built in `PurchaseOrderPdf.tsx`
+(header) + `pdfService.tsx` (data), so it applies to both the downloaded PDF and the emailed one.
+
+The **Supplier** block uses the same format: supplier name in bold, its address, then aligned
+labeled rows (Contact / Phone / Email / Web), each omitted when unset — so the buyer
+and supplier blocks read symmetrically. `supplier.website` was added for this (the supplier had
+no website field previously) — edited on the **Edit Supplier** form and wired through
+`ingredientService` create/update; the supplier's phone/website flow into the PDF via
+`pdfService.tsx`.
+
+The **Supplier** (left pane) and a dedicated **Purchase Order** block (right pane) sit side by
+side in a two-column row. The Purchase Order pane carries the order terms in labeled
+rows: **PO Number, Order Date, Expected Delivery Date, Payment Terms** (payment terms mapped from
+the supplier's term key to a human label, e.g. `net_30` → "Net 30 days"). The order date moved
+out of the top-right header, and the delivery date moved out of the supplier block, into here.
+The free-text notes box at the foot is labeled **PO Notes**.
+
+The PDF is named after the PO reference (`<poNumber>.pdf`, e.g. `PO-MRUH46AZ.pdf`) for both the
+download (`generatePOPdf` now returns `{ buffer, poNumber }`; the client names the file from the
+PO's number) and the email attachment. In the line-items table, a line ordered by the pack shows
+the pack contents in the Unit column — `"<purchaseUnit> of <packQty> <baseUnit>"`, e.g.
+**"bag of 12.5 kg"** — so "bag" is never ambiguous; lines ordered directly in the kitchen unit
+show that unit as-is.

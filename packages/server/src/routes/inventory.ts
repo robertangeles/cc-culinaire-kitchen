@@ -94,6 +94,7 @@ import {
   handleSetLocationThreshold,
   handleRemoveLocationThreshold,
   handleDownloadPOPdf,
+  handleEmailPOToSupplier,
 } from "../controllers/purchaseOrderController.js";
 import * as orderGuideController from "../controllers/orderGuideController.js";
 import * as receivingController from "../controllers/receivingController.js";
@@ -266,6 +267,7 @@ router.get("/purchase-orders", requirePermission("inventory:count"), handleListP
 router.get("/purchase-orders/:id", requirePermission("inventory:count"), handleGetPODetail);
 router.post("/purchase-orders/:id/submit", requirePermission("purchasing:submit"), handleSubmitPO);
 router.post("/purchase-orders/:id/approve", requirePermission("purchasing:approve"), handleApprovePO);
+router.post("/purchase-orders/:id/send-email", requirePermission("purchasing:submit"), handleEmailPOToSupplier);
 router.post("/purchase-orders/:id/reject", requirePermission("purchasing:approve"), handleRejectPO);
 router.post("/purchase-orders/:id/clone", requirePermission("purchasing:draft"), handleClonePO);
 router.get("/purchase-orders/:id/pdf", requirePermission("purchasing:submit"), handleDownloadPOPdf);

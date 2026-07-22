@@ -169,3 +169,18 @@ describe("order-guide gating", () => {
     expect(runGate(findGate(method, path), MANAGER).passed).toBe(true);
   });
 });
+
+describe("PO send-to-supplier gating", () => {
+  const path = "/purchase-orders/:id/send-email";
+
+  it("403s a user without purchasing:submit", () => {
+    // MANAGER holds inventory:manage + purchasing:draft but NOT purchasing:submit.
+    const { passed, status } = runGate(findGate("post", path), MANAGER);
+    expect(passed).toBe(false);
+    expect(status).toHaveBeenCalledWith(403);
+  });
+
+  it("passes a user with purchasing:submit", () => {
+    expect(runGate(findGate("post", path), [...MANAGER, "purchasing:submit"]).passed).toBe(true);
+  });
+});

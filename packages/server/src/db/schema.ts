@@ -313,6 +313,7 @@ export const organisation = pgTable("organisation", {
   organisationPostcode: varchar("organisation_postcode", { length: 20 }),
   organisationWebsite: varchar("organisation_website", { length: 500 }),
   organisationEmail: varchar("organisation_email", { length: 255 }),
+  organisationPhone: varchar("organisation_phone", { length: 50 }),
   // PII encryption columns
   orgNameEnc: text("org_name_enc"),
   orgNameIv: varchar("org_name_iv", { length: 24 }),
@@ -1414,6 +1415,7 @@ export const supplier = pgTable(
     contactName: varchar("contact_name", { length: 200 }),
     contactEmail: varchar("contact_email", { length: 255 }),
     contactPhone: varchar("contact_phone", { length: 50 }),
+    website: varchar("website", { length: 500 }),
     // Postal/physical address — mirrors organisation & store_location.
     addressLine1: varchar("address_line_1", { length: 200 }),
     addressLine2: varchar("address_line_2", { length: 200 }),
@@ -2061,6 +2063,9 @@ export const purchaseOrder = pgTable(
     submittedAt: timestamp("submitted_at", { withTimezone: true }),
     approvedAt: timestamp("approved_at", { withTimezone: true }),
     sentAt: timestamp("sent_at", { withTimezone: true }),
+    // Set when the PO is emailed to the supplier (explicit "Send to supplier"
+    // action). Distinct from sentAt, which is the internal SENT status flip.
+    supplierEmailedAt: timestamp("supplier_emailed_at", { withTimezone: true }),
     createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
     updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
   },

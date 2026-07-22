@@ -95,6 +95,7 @@ export interface Supplier {
   contactName: string | null;
   contactEmail: string | null;
   contactPhone: string | null;
+  website: string | null;
   addressLine1: string | null;
   addressLine2: string | null;
   suburb: string | null;
@@ -676,6 +677,7 @@ export function useSuppliers() {
     contactName?: string;
     contactEmail?: string;
     contactPhone?: string;
+    website?: string;
     leadTimeDays?: number;
     minimumOrderValue?: string;
     notes?: string;
@@ -1074,6 +1076,7 @@ export interface PurchaseOrder {
   submittedAt: string | null;
   approvedAt: string | null;
   sentAt: string | null;
+  supplierEmailedAt: string | null;
   createdDttm: string;
   updatedDttm: string;
   storeLocationId: string;
@@ -1082,6 +1085,7 @@ export interface PurchaseOrder {
   supplierName: string | null;
   locationName: string | null;
   createdByUserName: string | null;
+  supplierOrderingMethod: string | null;
   lineCount: number;
   lines?: PurchaseOrderLine[];
 }
@@ -1233,21 +1237,36 @@ export function usePurchaseOrders(locationId: string | null) {
     return res.json() as Promise<PurchaseOrder & { skippedItems: string[] }>;
   }, [refresh]);
 
-  const downloadPdf = useCallback(async (poId: string) => {
+  const downloadPdf = useCallback(async (poId: string, poNumber?: string) => {
     const res = await fetch(`${API}/purchase-orders/${poId}/pdf`, opts);
     if (!res.ok) throw new Error("Failed to download PDF");
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `PO-${poId.slice(0, 8)}.pdf`;
+    a.download = `${poNumber ?? `PO-${poId.slice(0, 8)}`}.pdf`;
     a.click();
     URL.revokeObjectURL(url);
   }, []);
 
+  const emailPOToSupplier = useCallback(async (poId: string) => {
+    const res = await fetch(`${API}/purchase-orders/${poId}/send-email`, {
+      ...jsonOpts, method: "POST",
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || "Couldn't email the supplier.");
+    }
+    await refresh();
+    return res.json() as Promise<
+      | { emailed: true; emailedAt: string; to: string }
+      | { emailed: false; reason: "no_supplier_email" | "email_not_configured" | "not_email_supplier"; message: string }
+    >;
+  }, [refresh]);
+
   return {
     pos, isLoading, refresh, getDetail, createPO, submitPO, cancelPO,
-    receiveLine, approvePO, rejectPO, clonePO, downloadPdf,
+    receiveLine, approvePO, rejectPO, clonePO, downloadPdf, emailPOToSupplier,
   };
 }
 

@@ -43,6 +43,7 @@ interface Organisation {
   organisationPostcode: string | null;
   organisationWebsite: string | null;
   organisationEmail: string | null;
+  organisationPhone: string | null;
   organisationFacebook: string | null;
   organisationInstagram: string | null;
   organisationTiktok: string | null;
@@ -360,6 +361,7 @@ export function ProfilePage() {
   const [orgName, setOrgName] = useState("");
   const [orgWebsite, setOrgWebsite] = useState("");
   const [orgEmail, setOrgEmail] = useState("");
+  const [orgPhone, setOrgPhone] = useState("");
   const [orgFacebook, setOrgFacebook] = useState("");
   const [orgInstagram, setOrgInstagram] = useState("");
   const [orgTiktok, setOrgTiktok] = useState("");
@@ -380,6 +382,7 @@ export function ProfilePage() {
   const [editOrgPostcode, setEditOrgPostcode] = useState("");
   const [editOrgWebsite, setEditOrgWebsite] = useState("");
   const [editOrgEmail, setEditOrgEmail] = useState("");
+  const [editOrgPhone, setEditOrgPhone] = useState("");
   const [editOrgFacebook, setEditOrgFacebook] = useState("");
   const [editOrgInstagram, setEditOrgInstagram] = useState("");
   const [editOrgTiktok, setEditOrgTiktok] = useState("");
@@ -597,6 +600,7 @@ export function ProfilePage() {
           name: orgName,
           website: orgWebsite || undefined,
           email: orgEmail || undefined,
+          phone: orgPhone || undefined,
           facebook: orgFacebook || undefined,
           instagram: orgInstagram || undefined,
           tiktok: orgTiktok || undefined,
@@ -669,6 +673,7 @@ export function ProfilePage() {
     setEditOrgPostcode(org.organisationPostcode ?? "");
     setEditOrgWebsite(org.organisationWebsite ?? "");
     setEditOrgEmail(org.organisationEmail ?? "");
+    setEditOrgPhone(org.organisationPhone ?? "");
     setEditOrgFacebook(org.organisationFacebook ?? "");
     setEditOrgInstagram(org.organisationInstagram ?? "");
     setEditOrgTiktok(org.organisationTiktok ?? "");
@@ -698,6 +703,7 @@ export function ProfilePage() {
           postcode: editOrgPostcode || undefined,
           website: editOrgWebsite || undefined,
           email: editOrgEmail || undefined,
+          phone: editOrgPhone || undefined,
           facebook: editOrgFacebook || undefined,
           instagram: editOrgInstagram || undefined,
           tiktok: editOrgTiktok || undefined,
@@ -1075,6 +1081,10 @@ export function ProfilePage() {
                           <label className="block text-sm font-medium text-[#E5E5E5] mb-1">Email</label>
                           <input type="email" value={editOrgEmail} onChange={(e) => setEditOrgEmail(e.target.value)} className={inputClass} />
                         </div>
+                        <div>
+                          <label className="block text-sm font-medium text-[#E5E5E5] mb-1">Phone</label>
+                          <input type="tel" value={editOrgPhone} onChange={(e) => setEditOrgPhone(e.target.value)} placeholder="e.g. +61 3 9999 0000" className={inputClass} />
+                        </div>
                         <div className="border-t border-[#2A2A2A] pt-3 mt-1">
                           <h4 className="text-sm font-semibold text-[#E5E5E5] mb-3">Social Media Accounts</h4>
                           <div className="space-y-3">
@@ -1233,6 +1243,10 @@ export function ProfilePage() {
                     <div>
                       <label className="block text-sm font-medium text-[#E5E5E5] mb-1">Email</label>
                       <input type="email" value={orgEmail} onChange={(e) => setOrgEmail(e.target.value)} className={inputClass} />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-[#E5E5E5] mb-1">Phone</label>
+                      <input type="tel" value={orgPhone} onChange={(e) => setOrgPhone(e.target.value)} placeholder="e.g. +61 3 9999 0000" className={inputClass} />
                     </div>
 
                     <div className="border-t border-[#2A2A2A] pt-3 mt-1">

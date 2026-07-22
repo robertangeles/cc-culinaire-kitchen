@@ -18,6 +18,7 @@ import {
   approvePO,
   rejectPO,
   clonePO,
+  emailPOToSupplier,
 } from "../services/purchaseOrderService.js";
 import * as thresholdService from "../services/thresholdService.js";
 import * as pdfService from "../services/pdfService.js";
@@ -286,6 +287,43 @@ export async function handleApprovePO(
   }
 }
 
+// ─── Email PO to supplier ───────────────────────────────────────
+
+export async function handleEmailPOToSupplier(
+  req: Request, res: Response, next: NextFunction,
+): Promise<void> {
+  try {
+    const orgId = await resolveOrgId(req, res);
+    if (orgId === null) return;
+
+    const poId = req.params.id as string;
+    const result = await emailPOToSupplier(poId, orgId);
+
+    if (!result.emailed) {
+      const messages: Record<string, string> = {
+        no_supplier_email: "This supplier has no contact email on file. Add one in Suppliers to email the order.",
+        email_not_configured: "Email isn't set up on this server yet, so the order wasn't sent. Download the PDF and send it manually.",
+        not_email_supplier: "This supplier isn't set to order by email. Change their Order Via to Email, or send the PO another way.",
+      };
+      res.json({ emailed: false, reason: result.reason, message: messages[result.reason] });
+      return;
+    }
+
+    logger.info({ poId, to: result.to }, "Purchase order emailed to supplier");
+    res.json({ emailed: true, emailedAt: result.emailedAt, to: result.to });
+  } catch (err: any) {
+    if (err.message?.includes("not found")) {
+      res.status(404).json({ error: err.message });
+      return;
+    }
+    if (err.message?.includes("Only a sent")) {
+      res.status(400).json({ error: err.message });
+      return;
+    }
+    next(err);
+  }
+}
+
 // ─── Reject PO (HQ) ─────────────────────────────────────────────
 
 const RejectPOSchema = z.object({
@@ -446,10 +484,10 @@ export async function handleDownloadPOPdf(
     if (orgId === null) return;
 
     const poId = req.params.id as string;
-    const buffer = await pdfService.generatePOPdf(poId, orgId);
+    const { buffer, poNumber } = await pdfService.generatePOPdf(poId, orgId);
 
     res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `attachment; filename="PO-${poId.slice(0, 8)}.pdf"`);
+    res.setHeader("Content-Disposition", `attachment; filename="${poNumber}.pdf"`);
     res.send(buffer);
   } catch (err: any) {
     if (err.message?.includes("not found")) {

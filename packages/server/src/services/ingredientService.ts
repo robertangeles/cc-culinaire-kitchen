@@ -605,6 +605,7 @@ export async function createSupplier(
     contactName?: string;
     contactEmail?: string;
     contactPhone?: string;
+    website?: string;
     addressLine1?: string;
     addressLine2?: string;
     suburb?: string;
@@ -629,6 +630,7 @@ export async function createSupplier(
       contactName: data.contactName ?? null,
       contactEmail: data.contactEmail ?? null,
       contactPhone: data.contactPhone ?? null,
+      website: data.website ?? null,
       addressLine1: data.addressLine1 ?? null,
       addressLine2: data.addressLine2 ?? null,
       suburb: data.suburb ?? null,
@@ -670,6 +672,7 @@ export async function updateSupplier(
     contactName: string | null;
     contactEmail: string | null;
     contactPhone: string | null;
+    website: string | null;
     addressLine1: string | null;
     addressLine2: string | null;
     suburb: string | null;
@@ -691,6 +694,7 @@ export async function updateSupplier(
   if (data.contactName !== undefined) updates.contactName = data.contactName;
   if (data.contactEmail !== undefined) updates.contactEmail = data.contactEmail;
   if (data.contactPhone !== undefined) updates.contactPhone = data.contactPhone;
+  if (data.website !== undefined) updates.website = data.website;
   if (data.addressLine1 !== undefined) updates.addressLine1 = data.addressLine1;
   if (data.addressLine2 !== undefined) updates.addressLine2 = data.addressLine2;
   if (data.suburb !== undefined) updates.suburb = data.suburb;

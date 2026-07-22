@@ -147,6 +147,19 @@ These are the ones most likely to silently come back.
 | C23 | Delete a guide that a draft PO was built from | Delete succeeds; the already-created PO is unaffected (guides are a template, not a foreign key on the order) | ☐ |
 | C24 | Sign in as a user **without** `inventory:manage` | No **Guides** tab, no Par Levels editor. Ordering from an existing guide **still works** (that's `purchasing:draft`). Hitting the guide write routes directly → **403** | ☐ |
 
+#### Send to supplier (PO email, 2026-07-22)
+
+The PO email to the supplier is an **explicit action on a SENT order**, not automatic — `SENT`
+stays an internal status flip. The server route (`POST /purchase-orders/:id/send-email`) is gated
+by `purchasing:submit`, the same tier as Submit and the PDF download.
+
+| # | Steps | Expected | Result |
+|---|---|---|---|
+| C25 | On a **SENT** PO, click **Send to supplier** | Supplier's contact email receives the PO with the **PDF attached**. Button flips to **Resend to supplier** and an **"Emailed {date}"** tag appears — no page reload | ☐ |
+| C26 | Point a SENT PO at a supplier with **no contact email**, click Send to supplier | Plain message: *"This supplier has no contact email on file. Add one in Suppliers…"* — no error, PO unchanged, not marked emailed | ☐ |
+| C27 | On a server with **no email configured** (no `RESEND_API_KEY`), click Send to supplier | Plain message: *"Email isn't set up on this server yet…"* — PO unchanged, not marked emailed. (This machine **has** Resend configured via the process env, so expect a real send instead) | ☐ |
+| C28 | Hit `POST /purchase-orders/:id/send-email` as a user **without** `purchasing:submit` | **403**. The button is shown (matching the Submit button's pattern — server is the boundary), but the action is refused server-side | ☐ |
+
 #### Known gaps (found while writing this checklist — not bugs in the build)
 
 - **No UI to set a supplier minimum.** `minimum_order_qty` is displayed in the Min Ord column and

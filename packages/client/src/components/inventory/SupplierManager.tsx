@@ -312,6 +312,7 @@ function SupplierForm({
   const [contactName, setContactName] = useState(initial?.contactName || "");
   const [contactEmail, setContactEmail] = useState(initial?.contactEmail || "");
   const [contactPhone, setContactPhone] = useState(initial?.contactPhone || "");
+  const [website, setWebsite] = useState(initial?.website || "");
   const [addressLine1, setAddressLine1] = useState(initial?.addressLine1 || "");
   const [addressLine2, setAddressLine2] = useState(initial?.addressLine2 || "");
   const [suburb, setSuburb] = useState(initial?.suburb || "");
@@ -357,6 +358,7 @@ function SupplierForm({
       contactName: contactName || undefined,
       contactEmail: contactEmail || undefined,
       contactPhone: contactPhone || undefined,
+      website: website || undefined,
       addressLine1: addressLine1 || undefined,
       addressLine2: addressLine2 || undefined,
       suburb: suburb || undefined,
@@ -421,6 +423,14 @@ function SupplierForm({
               placeholder="e.g. +61-3-9999-0000"
               className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none" />
           </div>
+        </div>
+
+        {/* Row 2a: Website */}
+        <div>
+          <label className="text-[10px] text-[#666] uppercase tracking-wider block mb-1">Website</label>
+          <input type="url" value={website} onChange={(e) => setWebsite(e.target.value)}
+            placeholder="e.g. https://sysco.com"
+            className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none" />
         </div>
 
         {/* Row 2b: Address */}

@@ -22,10 +22,13 @@ import {
   storeLocation,
   user,
   locationIngredient,
+  organisation,
 } from "../db/schema.js";
 import { validateTransition, PO_TRANSITIONS } from "../utils/stateTransition.js";
 import * as thresholdService from "./thresholdService.js";
 import * as notificationService from "./notificationService.js";
+import * as pdfService from "./pdfService.js";
+import * as emailService from "./emailService.js";
 import { resolveToBase } from "./unitConversionService.js";
 import pino from "pino";
 
@@ -120,6 +123,7 @@ export async function listPOs(orgId: number, opts: ListPOOpts = {}) {
       submittedAt: purchaseOrder.submittedAt,
       approvedAt: purchaseOrder.approvedAt,
       sentAt: purchaseOrder.sentAt,
+      supplierEmailedAt: purchaseOrder.supplierEmailedAt,
       createdDttm: purchaseOrder.createdDttm,
       updatedDttm: purchaseOrder.updatedDttm,
       storeLocationId: purchaseOrder.storeLocationId,
@@ -128,6 +132,7 @@ export async function listPOs(orgId: number, opts: ListPOOpts = {}) {
       supplierName: supplier.supplierName,
       locationName: storeLocation.locationName,
       createdByUserName: user.userName,
+      supplierOrderingMethod: supplier.orderingMethod,
       lineCount: sql<number>`(SELECT count(*) FROM purchase_order_line pol WHERE pol.po_id = ${purchaseOrder.poId})::int`,
     })
     .from(purchaseOrder)
@@ -153,6 +158,7 @@ export async function getPODetail(poId: string, orgId: number) {
       status: purchaseOrder.status,
       notes: purchaseOrder.notes,
       expectedDeliveryDate: purchaseOrder.expectedDeliveryDate,
+      supplierEmailedAt: purchaseOrder.supplierEmailedAt,
       createdDttm: purchaseOrder.createdDttm,
       updatedDttm: purchaseOrder.updatedDttm,
       storeLocationId: purchaseOrder.storeLocationId,
@@ -319,6 +325,87 @@ export async function approvePO(poId: string, orgId: number, userId: number) {
 
   logger.info({ poId, approvedBy: userId }, "PO approved by HQ");
   return updated;
+}
+
+// ─── emailPOToSupplier ───────────────────────────────────────────
+
+/**
+ * Emails a SENT purchase order to its supplier with the PO PDF attached.
+ * Explicit operator action — separate from the internal SENT status flip.
+ * Never throws for expected states: a supplier with no email on file, or an
+ * unconfigured email transport, is reported back so the UI can flag it.
+ */
+export async function emailPOToSupplier(poId: string, orgId: number) {
+  const [po] = await db
+    .select({
+      poNumber: purchaseOrder.poNumber,
+      status: purchaseOrder.status,
+      expectedDeliveryDate: purchaseOrder.expectedDeliveryDate,
+      supplierName: supplier.supplierName,
+      contactEmail: supplier.contactEmail,
+      orderingMethod: supplier.orderingMethod,
+      locationName: storeLocation.locationName,
+      orgName: organisation.organisationName,
+    })
+    .from(purchaseOrder)
+    .leftJoin(supplier, eq(purchaseOrder.supplierId, supplier.supplierId))
+    .leftJoin(storeLocation, eq(purchaseOrder.storeLocationId, storeLocation.storeLocationId))
+    .leftJoin(organisation, eq(purchaseOrder.organisationId, organisation.organisationId))
+    .where(and(eq(purchaseOrder.poId, poId), eq(purchaseOrder.organisationId, orgId)));
+
+  if (!po) throw new Error("Purchase order not found");
+
+  // Only a finalised (SENT) PO can be emailed to a supplier.
+  if (po.status !== "SENT") {
+    throw new Error("Only a sent purchase order can be emailed to the supplier");
+  }
+
+  // This action is for suppliers ordered via email. Phone/portal suppliers are
+  // not emailed — flag it rather than sending an unwanted email.
+  if (po.orderingMethod !== "email") {
+    return { emailed: false as const, reason: "not_email_supplier" as const };
+  }
+
+  // Skip-and-flag: no supplier email on file → do not send, report back.
+  if (!po.contactEmail) {
+    return { emailed: false as const, reason: "no_supplier_email" as const };
+  }
+
+  // The full order (line items, totals, notes) lives in the attached PDF; the
+  // email body is a brief cover note, so no line-items query is needed here.
+  const { buffer: pdfBuffer } = await pdfService.generatePOPdf(poId, orgId);
+
+  const result = await emailService.sendPurchaseOrderEmail(
+    po.contactEmail,
+    {
+      poNumber: po.poNumber,
+      supplierName: po.supplierName ?? "there",
+      orgName: po.orgName ?? "CulinAIre Kitchen",
+      locationName: po.locationName ?? "",
+      expectedDeliveryDate: po.expectedDeliveryDate
+        ? po.expectedDeliveryDate.toISOString().slice(0, 10)
+        : null,
+    },
+    pdfBuffer,
+  );
+
+  // Transport not set up (e.g. local dev without RESEND_API_KEY) → flag, don't crash.
+  if (result.notConfigured) {
+    return { emailed: false as const, reason: "email_not_configured" as const };
+  }
+  // Genuine send failure (Resend returned an error) → surface it.
+  if (!result.sent) {
+    throw new Error(result.error ?? "Failed to send supplier email");
+  }
+
+  const now = new Date();
+  await db
+    .update(purchaseOrder)
+    .set({ supplierEmailedAt: now, updatedDttm: now })
+    .where(eq(purchaseOrder.poId, poId));
+
+  logger.info({ poId, to: po.contactEmail }, "PO emailed to supplier");
+  return { emailed: true as const, emailedAt: now, to: po.contactEmail };
 }
 
 // ─── rejectPO ────────────────────────────────────────────────────
