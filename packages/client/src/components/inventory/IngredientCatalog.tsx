@@ -5,7 +5,7 @@
  * view items on the right. Click a row to open the edit modal.
  */
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   useIngredients,
   useSuppliers,
@@ -29,7 +29,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { TransactionHistory } from "./TransactionHistory.js";
-import { CATEGORIES, ITEM_TYPES, ITEM_TYPE_KEYS, FIFO_MODES, FIFO_DEFAULTS, getCategoriesForType, type ItemTypeKey, type FifoModeKey } from "@culinaire/shared";
+import { CATEGORIES, ITEM_TYPES, ITEM_TYPE_KEYS, FIFO_MODES, FIFO_DEFAULTS, getCategoriesForType, suggestDensity, type ItemTypeKey, type FifoModeKey } from "@culinaire/shared";
 
 const UNITS = [
   "kg", "g", "mg",
@@ -413,6 +413,17 @@ function EditIngredientModal({
   // Content equivalence: 1 kitchen unit contains [contentQty] [contentUnit].
   const [contentQty, setContentQty] = useState(ingredient.contentQty || "");
   const [contentUnit, setContentUnit] = useState(ingredient.contentUnit || "");
+  // Density g/mL — the volume↔mass bridge (weigh liquids in recipes).
+  const [density, setDensity] = useState(ingredient.densityGPerMl || "");
+  // Auto-suggest for volume-counted liquids from the shared density library —
+  // a prefill only, never overwrites a value the operator typed.
+  useEffect(() => {
+    if (density !== "") return;
+    if (!["ml", "l"].includes(unit.toLowerCase())) return;
+    const suggested = suggestDensity(name);
+    if (suggested) setDensity(String(suggested));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [name, unit]);
   // Purchase packaging: bought as [purchaseUnit] of [packQty] kitchen units.
   const [purchaseUnit, setPurchaseUnit] = useState(ingredient.purchaseUnit || "");
   const [editPackQty, setEditPackQty] = useState(ingredient.packQty || "");
@@ -589,6 +600,32 @@ function EditIngredientModal({
               <p className="text-[10px] text-[#666] mt-1">
                 e.g. a 750 mL bottle — recipes can then pour by the mL and a 150 mL glass uses 0.2 {unit}s.
                 Leave empty if recipes only ever use whole {unit}s.
+              </p>
+            </div>
+          )}
+
+          {/* Density — the volume↔mass bridge (specific gravity). Pâtisserie
+              weighs everything, including liquids: with a density set, a recipe
+              can say "95 g milk" against a litre-counted item and cost it. */}
+          {(["ml", "l", "mg", "g", "kg"].includes(unit.toLowerCase()) ||
+            ["ml", "l"].includes(contentUnit.toLowerCase())) && (
+            <div>
+              <label className="block text-[10px] uppercase tracking-wider text-[#666] mb-1">Density (g per mL)</label>
+              <div className="flex items-center gap-2">
+                <input type="text" value={density} onChange={(e) => setDensity(e.target.value)}
+                  placeholder="e.g. 1.03"
+                  className="w-24 px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none" />
+                {!density && suggestDensity(name) && (
+                  <button type="button" onClick={() => setDensity(String(suggestDensity(name)))}
+                    className="text-[10px] text-[#D4A574] hover:underline">
+                    use {suggestDensity(name)}
+                  </button>
+                )}
+              </div>
+              <p className="text-[10px] text-[#666] mt-1">
+                Lets recipes weigh this liquid (95 g milk → 0.092 L) or measure a weighed item by
+                volume. Milk 1.03 · cream 1.01 · oil 0.92 · honey 1.42. Leave empty to keep strict
+                unit families.
               </p>
             </div>
           )}
@@ -864,6 +901,7 @@ function EditIngredientModal({
                   // when there IS a package — never save stale leftovers.
                   contentQty: MEASURED_UNITS.includes(unit) ? null : contentQty || null,
                   contentUnit: MEASURED_UNITS.includes(unit) ? null : contentUnit || null,
+                  densityGPerMl: density || null,
                   purchaseUnit: purchaseUnit || null,
                   packQty: purchaseUnit ? editPackQty || null : null,
                   description: desc || null,

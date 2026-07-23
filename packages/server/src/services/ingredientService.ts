@@ -51,6 +51,7 @@ export async function createIngredient(
     baseUnit: string;
     contentQty?: string | null;
     contentUnit?: string | null;
+    densityGPerMl?: string | null;
     purchaseUnit?: string | null;
     packQty?: string;
     description?: string;
@@ -74,6 +75,7 @@ export async function createIngredient(
       baseUnit: data.baseUnit,
       contentQty: data.contentQty ?? null,
       contentUnit: data.contentUnit ?? null,
+      densityGPerMl: data.densityGPerMl ?? null,
       purchaseUnit: data.purchaseUnit ?? null,
       packQty: data.packQty ?? null,
       description: data.description ?? null,
@@ -333,6 +335,7 @@ export async function updateIngredient(
     baseUnit: string;
     contentQty: string | null;
     contentUnit: string | null;
+    densityGPerMl: string | null;
     purchaseUnit: string | null;
     packQty: string | null;
     description: string | null;
@@ -355,6 +358,7 @@ export async function updateIngredient(
   if (data.baseUnit !== undefined) updates.baseUnit = data.baseUnit;
   if (data.contentQty !== undefined) updates.contentQty = data.contentQty;
   if (data.contentUnit !== undefined) updates.contentUnit = data.contentUnit;
+  if (data.densityGPerMl !== undefined) updates.densityGPerMl = data.densityGPerMl;
   if (data.purchaseUnit !== undefined) updates.purchaseUnit = data.purchaseUnit;
   if (data.packQty !== undefined) updates.packQty = data.packQty;
   if (data.itemType !== undefined) updates.itemType = data.itemType;

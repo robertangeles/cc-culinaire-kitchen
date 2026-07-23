@@ -172,11 +172,23 @@ by `purchasing:submit`, the same tier as Submit and the PDF download.
 
 ## D. Recipes — the ONLY place mL appears
 
+> **2026-07-23 rework:** the recipe editor now runs THE shared 6-step unit resolver
+> (`packages/shared/src/utils/unitResolution.ts`) — the same code every server stock
+> flow uses — and each line's unit dropdown offers **only units that resolve** for
+> the picked ingredient (kitchen unit, pack label, custom conversions, content/base
+> families). Design doc: `~/.gstack/projects/.../…design-uom-recipe-costing…` (APPROVED).
+
 | # | Steps | Expected | Result |
 |---|---|---|---|
-| D1 | Edit **Glass — Belicard** recipe line | Line reads **150 mL**; cost preview: `150ml = 0.2 bottle × $15/bottle = $3.00` | ☐ |
+| D1 | Edit **Glass — Belicard** recipe line, tap the line cost to expand the breakdown | Line reads **150 mL**; breakdown proves the content-equivalence path: `150mL = 0.2 bottle × $15/bottle = $3.00 · org cost` (the formula is the assertion — the dollar tracks the live catalog cost) | ☐ |
 | D2 | Pick Belicard fresh in a new recipe row | Unit defaults to **mL** (the measured unit), not bottle | ☐ |
-| D3 | Set a line's unit to something unconvertible (e.g. kg of wine) | Unit-mismatch warning; cost shows 0 — never a silent wrong number | ☐ |
+| D3 | Open the unit dropdown on a Belicard line, then on a Baker's Flour line | Only resolvable units are offered (wine: mL, bottle, case + volume units; flour: kg, bag, mg, g). **kg is NOT offered for wine** — the mismatch state is unreachable from the dropdown | ☐ |
+| D4 | Legacy mismatch: a pre-existing row whose stored unit no longer resolves (set via API if none exists) | Unit-mismatch warning + cost 0 — never a silent wrong number. Newly authored lines cannot reach this state | ☐ |
+| D5 | Add a linked ingredient that has never been costed (no receiving, no supplier cost) | Line cost shows **"—"** with a "No cost yet — receive a PO or set a supplier cost" tooltip — never $0.00 | ☐ |
+| D6 | Add a custom conversion for Baker's Flour (Catalog → conversions: `cup = 0.12 kg`), reopen a flour recipe line's dropdown | **cup** now appears and 2 cup costs ≈ 0.24 kg × $/kg — operator-defined units flow into recipes with zero code | ☐ |
+| D7 | **Density bridge** (2026-07-23): open the Brioche Bun — the `95 g Full Cream Milk` and `1 g Vanilla Extract` lines | No mismatch warning. Milk resolves 95 g → **0.0922 L** (density 1.03, not the water approximation); the unit dropdown for milk offers **g/kg alongside mL/L**. Catalog → edit a liquid shows the **Density (g per mL)** field with an auto-suggested value | ☐ |
+| D8 | Reopen a SAVED recipe with conversion/density-dependent lines | No false "unit mismatch" flash on load — conversions prefetch for all linked rows (regression: the lazy fetch used to leave saved lines warning until the dropdown was touched) | ☐ |
+| D9 | **Yield vs sales unit** (2026-07-23): open Brioche Buns (12 × 75 g) — Servings **12** (kitchen yield), "Price covers **12** servings (pack pricing)", price $15 | Cost Summary reads Batch **$6.37** → FC/serving **$0.58** → Food Cost % **46.7%** ($7.01 per sale of 12) → Margin **$7.99** per sale. Setting "price covers" back to 1 flips FC% to 3.9% (per-bun pricing). Changing price/servings/Q/pack on the item PATCH refreshes stored margins immediately (regression: item updates used to leave stored costs stale) | ☐ |
 
 ## E. Selling — recipe explosion in kitchen units
 

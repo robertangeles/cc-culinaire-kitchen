@@ -57,6 +57,9 @@ const CreateIngredientSchema = z.object({
     (v) => !isNaN(Number(v)) && Number(v) > 0, "Must be a positive number",
   ).nullable().optional(),
   contentUnit: z.string().max(20).nullable().optional(),
+  densityGPerMl: z.string().refine(
+    (v) => !isNaN(Number(v)) && Number(v) > 0, "Must be a positive number",
+  ).nullable().optional(),
   purchaseUnit: z.string().max(20).nullable().optional(),
   packQty: z.string().refine(
     (v) => !isNaN(Number(v)) && Number(v) > 0, "Must be a positive number",
@@ -89,6 +92,9 @@ const UpdateIngredientSchema = z.object({
     (v) => !isNaN(Number(v)) && Number(v) > 0, "Must be a positive number",
   ).nullable().optional(),
   contentUnit: z.string().max(20).nullable().optional(),
+  densityGPerMl: z.string().refine(
+    (v) => !isNaN(Number(v)) && Number(v) > 0, "Must be a positive number",
+  ).nullable().optional(),
   purchaseUnit: z.string().max(20).nullable().optional(),
   packQty: z.string().refine(
     (v) => !isNaN(Number(v)) && Number(v) > 0, "Must be a positive number",

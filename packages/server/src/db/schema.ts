@@ -789,6 +789,13 @@ export const menuItem = pgTable("menu_item", {
   category: varchar("category", { length: 100 }).notNull(),
   sellingPrice: numeric("selling_price", { precision: 10, scale: 2 }).notNull(),
   servings: integer("servings").notNull().default(1),
+  /**
+   * Sales-unit size: how many servings one sale (the selling_price) covers.
+   * Yield stays the kitchen truth in `servings` (batch makes 12 buns); a
+   * 12-pack sold for $15 sets servings_per_sale = 12. Default 1 = sold by the
+   * serving — the historical behavior. (meez pattern: yield ≠ portion.)
+   */
+  servingsPerSale: integer("servings_per_sale").notNull().default(1),
   qFactorPct: numeric("q_factor_pct", { precision: 5, scale: 2 }).notNull().default("0"),
   foodCost: numeric("food_cost", { precision: 10, scale: 2 }),
   foodCostPct: numeric("food_cost_pct", { precision: 5, scale: 2 }),
@@ -1339,6 +1346,13 @@ export const ingredient = pgTable(
      */
     contentQty: numeric("content_qty", { precision: 10, scale: 3 }),
     contentUnit: varchar("content_unit", { length: 20 }),
+    /**
+     * Density in g/mL (specific gravity) — the industry-standard volume↔mass
+     * bridge (milk 1.03, oil 0.92). When set, the unit resolver converts a
+     * weighed entry against a volume-counted item (95 g milk → 0.0922 L) and
+     * vice versa; pâtisserie weighs everything, including liquids.
+     */
+    densityGPerMl: numeric("density_g_per_ml", { precision: 6, scale: 4 }),
     /**
      * Primary purchase packaging label ('case', 'bag', 'carton'). Packaging
      * exists ONLY at ordering + receiving — it converts to kitchen units at

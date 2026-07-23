@@ -156,6 +156,7 @@ export function MenuIntelligencePage() {
       category: string;
       sellingPrice: string;
       servings: number;
+      servingsPerSale: number;
       qFactorPct: string;
       unitsSold: number;
     }): Promise<string | void> => {
@@ -165,6 +166,7 @@ export function MenuIntelligencePage() {
           category: data.category,
           sellingPrice: data.sellingPrice,
           servings: data.servings,
+          servingsPerSale: data.servingsPerSale,
           qFactorPct: data.qFactorPct,
           unitsSold: data.unitsSold,
         });
@@ -175,6 +177,7 @@ export function MenuIntelligencePage() {
           category: data.category,
           sellingPrice: data.sellingPrice,
           servings: data.servings,
+          servingsPerSale: data.servingsPerSale,
           qFactorPct: data.qFactorPct,
         });
         return created.menuItemId;

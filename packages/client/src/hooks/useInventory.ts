@@ -23,6 +23,8 @@ export interface Ingredient {
   /** Content equivalence: 1 kitchen unit contains contentQty contentUnit (1 bottle = 750 ml). */
   contentQty: string | null;
   contentUnit: string | null;
+  /** Density g/mL — volume↔mass bridge for the unit resolver. */
+  densityGPerMl: string | null;
   /** Primary purchase packaging label (case, bag) — ordering/receiving only. */
   purchaseUnit: string | null;
   /** Kitchen units per purchase package (also the pack-cost helper). */

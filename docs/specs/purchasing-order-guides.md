@@ -165,6 +165,15 @@ the supplier's term key to a human label, e.g. `net_30` → "Net 30 days"). The 
 out of the top-right header, and the delivery date moved out of the supplier block, into here.
 The free-text notes box at the foot is labeled **PO Notes**.
 
+### Shared unit resolver (2026-07-23)
+
+The 6-step unit resolution that prices PO lines and depletes stock now lives in
+`packages/shared/src/utils/unitResolution.ts` as a pure function;
+`unitConversionService` delegates its math phase to it, and the recipe editor
+(`MenuItemFormModal`) consumes the same function for live line costs and its
+resolvable-units dropdown. One resolver, one test suite (16 shared vectors + the
+original 10 service tests) — the client can no longer drift from depletion math.
+
 The PDF is named after the PO reference (`<poNumber>.pdf`, e.g. `PO-MRUH46AZ.pdf`) for both the
 download (`generatePOPdf` now returns `{ buffer, poNumber }`; the client names the file from the
 PO's number) and the email attachment. In the line-items table, a line ordered by the pack shows
