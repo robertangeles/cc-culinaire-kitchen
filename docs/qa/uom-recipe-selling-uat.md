@@ -1,15 +1,45 @@
 # UAT Checklist — Kitchen-Unit Model + Recipe-Based Selling
 
-> **Status 2026-07-19:** Sections **A (catalog)** + **B (stock take)** signed off ✅. **B3 (stock-take HQ review, PR #84 — variance, variance cost, review gating, History)** verified via browser QA and shipped to prod ✅ (merge `5e19857`). C–H + I (storage areas) pending.
-> Fixture live: Chicken 10 kg, Flour 25 kg, Shiraz 24 bottles per location (the 4-bottle
-> foh_operations test entry was reversed). NEXT: after the storage-areas build
-> (`docs/specs/storage-areas-count-sheets.md`) this checklist gains an **I. Storage areas**
-> section (area counts sum to venue, movement log, guardrail, spot check). Until the guardrail
-> ships: do NOT log bar restocks as Internal usage — stock stays at the site until sold/wasted.
+## ▶ RESUME HERE — 2026-07-23 (machine switch: HEPHAESTUS → ARCHOS)
+
+**Signed off:** A (catalog) ✅ · B + B3 (stock take, HQ review — shipped to prod, merge `5e19857`) ✅ · I (storage areas) ✅
+**Not yet walked:** **C** (purchasing) · **C-guides** (order guides) · **D** (recipes) ← *you are here* · E · F · G · H
+
+**Next action: walk Section D (D1–D9).** D is fully seeded and the code is on the branch.
+
+### Getting running on ARCHOS
+
+```bash
+git checkout feature/ck-web/purchasing-order-guides-p1
+git pull                                # HEAD should be 34601f0 or later
+pnpm install
+pnpm --filter @culinaire/shared build   # ← REQUIRED: server/client import from dist/
+pnpm dev                                # backend 3009, frontend 5179
+```
+
+The `shared build` step is not optional — the recipe resolver lives in `@culinaire/shared`
+and the server resolves it from `dist/`. Skip it and you get *"resolveQtyToKitchen is not a
+function"* at runtime even though `tsc` passes.
+
+**Dev DB is remote and shared** (`dpg-d9cqp5…render.com` / `culinaire_kitchen_postgresdb_oqph`).
+If ARCHOS's `DEV_DATABASE_URL` names that same host, all fixture data below is already
+there — nothing to re-seed. If it points elsewhere, the two new dev-only columns
+(`ingredient.density_g_per_ml`, `menu_item.servings_per_sale`) and the seeded costs must be
+applied first.
+
+### Branch state
+Two commits ahead of `main`, both pushed, **nothing merged**:
+`2ebb3b9` supplier PO email + org/supplier contact fields + PO PDF rework ·
+`34601f0` shared unit resolver + density bridge + yield-vs-sales-unit costing.
+Prod still needs `density_g_per_ml` + `servings_per_sale` at deploy (the three PO columns
+are already applied there).
+
+---
 
 Manual acceptance test for `feature/ck-web/uom-and-recipe-selling`. The automated suite
-(576 server + 31 real-DB E2E + 66 client tests) covers the logic; this is the human
-click-through. Mark each row **Pass** / **Fail**.
+(576 server + 31 real-DB E2E + 66 client tests, plus 85 shared-package tests covering the
+unit resolver + density library) covers the logic; this is the human click-through.
+Mark each row **Pass** / **Fail**.
 
 **The model under test (your words):** every item has ONE kitchen unit it's counted in
 (wine = bottle, flour = g, napkins = each). Packaging (case, bag) exists only at ordering +
@@ -23,16 +53,43 @@ bottle-counted item (1 bottle = 750 mL). FOH consumables sell directly — no re
 
 ## Fixture (already seeded — say "re-seed UAT" to reset)
 
-| Item | Type | Kitchen unit | Contains | Purchased as | Stock |
-|---|---|---|---|---|---|
-| Belicard Blanc Chardonnay | FOH Consumable | **bottle** | 750 mL | case of 12 | **8 bottles** @ $15 |
-| Sancerre (+ 15 other wines) | FOH Consumable | **bottle** | 750 mL | by the bottle | 0.7 bottles (the open one) |
-| Baker's Flour (T55) | Ingredient | **g** | — | 25 kg bag | 12,500 g |
-| Napkins (cocktail) | Op Supply | **each** | — | case of 500 | 350 |
-| San Pellegrino (can) | FOH Consumable | **each** | — | case of 24 | 24 |
+Verified against the dev DB on 2026-07-23. **Note:** the flour rows below were corrected —
+Baker's Flour is counted in **kg** (not g) and comes in a **12.5 kg** bag (not 25 kg).
 
-Menu items: **Glass — Belicard** ($12, recipe 150 mL) · **Bottle — Belicard** ($55, 750 mL) ·
-**Kir Royale** ($18, 100 mL + a free-text line).
+| Item | Type | Kitchen unit | Contains | Purchased as | Cost |
+|---|---|---|---|---|---|
+| Belicard Blanc Chardonnay | FOH Consumable | **bottle** | 750 mL | case of 12 | $15.00/bottle |
+| Sancerre (+ 15 other wines) | FOH Consumable | **bottle** | 750 mL | by the bottle | — |
+| Baker's Flour (T55) | Ingredient | **kg** | — | bag of 12.5 kg | $3.04/kg |
+| Plain Flour | Ingredient | **kg** | — | bag of 12.5 kg | $1.40/kg |
+| Butter | Ingredient | **kg** | — | — | $11.00/kg |
+| Eggs | Ingredient | **each** | — | — | $0.52/each |
+| Full Cream Milk | Ingredient | **l** | — | — | $1.65/L · **density 1.03** |
+| Napkins (cocktail) | Op Supply | **each** | — | case of 500 | $0.03/each |
+| San Pellegrino (can) | FOH Consumable | **each** | — | case of 24 | $1.20/each |
+
+**Catalog-wide (seeded 2026-07-23):** 115 active ingredients, **0 uncosted** — costs are
+AUD foodservice estimates researched per kitchen unit, so every recipe line can price.
+**17 liquids carry a density** (milks 1.02–1.03, cream 1.01, condensed 1.29, juices 1.045,
+ice creams 0.55) enabling weighed liquid lines. New for the brioche walk: **Instant Dry
+Yeast** ($12.50/kg), **Vanilla Extract** ($180/L, density 1.05), **Sesame Seeds** ($7.50/kg).
+
+**Custom unit conversions on file:** `Eggs g → 0.02 each` (1 large egg = 50 g shelled) ·
+`Sancerre each → 750`. These drive UAT **D6**.
+
+**Menu items:**
+
+| Item | Price | Servings (yield) | Price covers | Food cost % |
+|---|---|---|---|---|
+| Glass — Belicard | $12 | 1 | 1 | 25.0% |
+| Bottle — Belicard | $55 | 1 | 1 | 27.3% |
+| Kir Royale | $18 | 1 | 1 | 11.1% (100 mL + a free-text line) |
+| **Brioche Buns (12 × 75 g)** | $15 | **12** | **12** (pack pricing) | **46.7%** |
+
+The Brioche is the Section D worked example: 10 ingredient lines all entered in grams,
+batch $6.37 → $0.58/bun → $7.01 per 12-pack sale → $7.99 margin. Its milk and vanilla lines
+resolve through the **density bridge**, its eggs line through a **custom conversion** — the
+three mechanisms D6–D9 exercise.
 
 ---
 
