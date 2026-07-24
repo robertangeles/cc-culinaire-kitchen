@@ -240,7 +240,7 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
         id: crypto.randomUUID(),
         ingredientId: ing.ingredientId,
         ingredientName: ing.ingredientName,
-        orderedQty: ing.reorderQty ?? "1",
+        orderedQty: "1",
         // Order in the purchase packaging (case/bag) when the item has one;
         // receiving converts to kitchen units at the boundary.
         orderedUnit: ing.purchaseUnit || ing.baseUnit,

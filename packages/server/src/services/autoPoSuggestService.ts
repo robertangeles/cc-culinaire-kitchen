@@ -8,13 +8,12 @@
  * page and decide which supplier to call. No PO is created automatically;
  * this is a static reorder list.
  *
- * Reorder qty rule:
- *   shortfall = par_level - current_qty            (ignored if ≤ 0)
- *   suggested = max(shortfall, reorder_qty ?? 0)   (use the larger of the
- *               two so we don't suggest a wasteful tiny order when reorder
- *               quantities are configured)
+ * Order-to-par rule:
+ *   suggested = max(par_level - current_qty, 0)     (ignored if ≤ 0)
+ * then expressed in whole purchase packages. The internal reorder_qty floor
+ * was retired 2026-07-24 (it overshot par; not a restaurant concept).
  *
- * Per-location overrides on `location_ingredient` win over org defaults
+ * Per-location par override on `location_ingredient` wins over the org default
  * on `ingredient`.
  */
 
@@ -29,7 +28,6 @@ export interface AutoPoLine {
   baseUnit: string;
   currentQty: number;
   parLevel: number;
-  reorderQty: number | null;
   shortfall: number;
   suggestedQty: number;
   /** Purchase packaging: order in this unit when set (case of 12 bottles). */
@@ -64,7 +62,6 @@ interface AutoPoRow extends Record<string, unknown> {
   base_unit: string;
   current_qty: string | null;
   par_level: string | null;
-  reorder_qty: string | null;
   purchase_unit: string | null;
   pack_qty: string | null;
   preferred_unit_cost: string | null;
@@ -75,8 +72,8 @@ interface AutoPoRow extends Record<string, unknown> {
 export async function getAutoPoSuggestions(
   storeLocationId: string,
 ): Promise<AutoPoResult> {
-  // One query: stock_level (current) ⊕ location_ingredient (par/reorder
-  // override) ⊕ ingredient (org defaults + preferred supplier denorm).
+  // One query: stock_level (current) ⊕ location_ingredient (par override)
+  // ⊕ ingredient (org defaults + preferred supplier denorm).
   // Filter to rows where current_qty ≤ effective par_level.
   const rows = await db.execute<AutoPoRow>(sql`
     SELECT
@@ -86,7 +83,6 @@ export async function getAutoPoSuggestions(
       i.base_unit,
       sl.current_qty,
       COALESCE(li.par_level, i.par_level) AS par_level,
-      COALESCE(li.reorder_qty, i.reorder_qty) AS reorder_qty,
       i.purchase_unit,
       i.pack_qty,
       i.preferred_unit_cost,
@@ -124,12 +120,11 @@ export async function getAutoPoSuggestions(
   for (const r of rows) {
     const currentQty = parseFloat(r.current_qty ?? "0") || 0;
     const parLevel = parseFloat(r.par_level ?? "0") || 0;
-    const reorderQty = r.reorder_qty != null ? parseFloat(r.reorder_qty) : null;
     const shortfall = Math.max(parLevel - currentQty, 0);
 
     if (shortfall <= 0) continue; // belt + braces; the WHERE already filtered
 
-    const suggestedQtyVal = suggestedOrderQty(parLevel, currentQty, reorderQty);
+    const suggestedQtyVal = suggestedOrderQty(parLevel, currentQty);
     const preferredUnitCost =
       r.preferred_unit_cost != null ? parseFloat(r.preferred_unit_cost) : null;
     const estimatedCost =
@@ -157,7 +152,6 @@ export async function getAutoPoSuggestions(
       baseUnit: r.base_unit,
       currentQty,
       parLevel,
-      reorderQty,
       shortfall: Number(shortfall.toFixed(3)),
       suggestedQty: Number(suggestedQtyVal.toFixed(3)),
       purchaseUnit: r.purchase_unit,

@@ -129,7 +129,7 @@ Rob = org admin, holds `inventory:hq`. Verified live at localhost:5179 against t
 |---|---|---|---|
 | C1 | New PO → add Belicard | Unit defaults to **case (12 bottle)**; dropdown offers case / bottle; cost label reads **per case** | ☐ |
 | C2 | Order **2 case @ $60**, submit, receive fully | Stock **+24 bottles**; line total $120 | ☐ |
-| C3 | Auto-PO suggestions (set flour par above stock first) | Suggestion reads in **bags** (whole packages, rounded up), e.g. "1 bag (25000 g)" | ☐ |
+| C3 | Auto-PO suggestions (set flour par above stock first) | Suggestion reads in **bags** (whole packages, rounded up) and is **pure order-to-par**: `ceil((par − on-hand) ÷ pack)`. `reorder_qty` was retired 2026-07-24 — it no longer overshoots par. Plain Flour par 25 kg, 0 on hand, 12.5 kg bag → **2 bags** (not 4). If you see 4, the retired reorder floor is back | ☐ |
 | C4 | Receive a PO line via the legacy per-line receive with unit **case** | Stock rises by cases × 12 — never by the raw "2" (this was a live bug, now fixed) | ☐ |
 
 ### C-guides. Order guides + order-to-par (Purchasing P1, 2026-07-20)
