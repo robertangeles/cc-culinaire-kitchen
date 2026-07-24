@@ -183,13 +183,13 @@ every later row pass vacuously — which looks like success and proves nothing.
 
 | # | Steps | Expected | Result |
 |---|---|---|---|
-| C9 | Purchasing → Orders → **New Purchase Order** → click the **Weekly Wine** pill | Supplier auto-selects. Lines prefill with no typing. Belicard: shortfall 8 − 6.5 = 1.5 bottles → qty field **1**, unit **case** (`ceil(1.5 ÷ 12)`). The qty must never show the raw bottle shortfall against a "case" unit | ☐ |
-| C10 | Read the Belicard line | Par context reads **"On hand 6.5 / par 8 · below par"** in **bottles**; the qty above it is in **cases**. Counting unit for context, buying unit for the order — the operator computes nothing | ☐ |
-| C11 | Change Belicard qty to **5**, then click its **TO PAR** chip | Snaps back to the prefill (**1 case**). The chip tooltip shows the same value + unit | ☐ |
-| C12 | Zero out a line, then click **Order everything to par** | Every guide line re-snaps to its prefill at once, including the one you zeroed | ☐ |
-| C13 | Read the Belicard line's supplier-minimum warning | With minimum_order_qty = 2 (prep step 2) and a prefilled **1** in the field, inline amber **"Supplier minimum is 2"** shows. Raising the qty to 2 clears it. It **warns, never blocks** — saving still works below the minimum. Note whether the minimum reads sensibly against a **case** qty (the watch item above) | ☐ |
-| C14 | Add an item **already at or above par** to the guide, reopen the PO | Shows in the list at qty **0** (visible, not hidden — the operator should see it was considered) but is **excluded** from the saved PO. Check the created PO's line count | ☐ |
-| C15 | Save the PO, then open it from the Orders list | Only the non-zero lines are on it. Line total = qty × **per-case** cost (e.g. 1 case × $180 if a bottle is $15), not qty × per-bottle | ☐ |
+| C9 | Purchasing → Orders → **New Purchase Order** → click the **Weekly Wine** pill | Supplier auto-selects. Lines prefill with no typing. Belicard: shortfall 8 − 6.5 = 1.5 bottles → qty field **1**, unit **case** (`ceil(1.5 ÷ 12)`). The qty must never show the raw bottle shortfall against a "case" unit | ✅ |
+| C10 | Read the Belicard line | Par context reads **"On hand 6.5 / par 8 · below par"** in **bottles**; the qty above it is in **cases**. Counting unit for context, buying unit for the order — the operator computes nothing | ✅ |
+| C11 | Change Belicard qty to **5**, then click its **TO PAR** chip | Snaps back to the prefill (**1 case**). The chip tooltip shows the same value + unit | ✅ |
+| C12 | Zero out a line, then click **Order everything to par** | Every guide line re-snaps to its prefill at once, including the one you zeroed | ✅ |
+| C13 | Read the Belicard line's supplier-minimum warning | With minimum_order_qty = 2 (prep step 2) and a prefilled **1** in the field, inline amber **"Supplier minimum is 2"** shows. Raising the qty to 2 clears it. It **warns, never blocks** — saving still works below the minimum. Note whether the minimum reads sensibly against a **case** qty (the watch item above) | ✅ |
+| C14 | Add an item **already at or above par** to the guide, reopen the PO | Shows in the list at qty **0** (visible, not hidden — the operator should see it was considered) but is **excluded** from the saved PO. Check the created PO's line count | ✅ |
+| C15 | Save the PO, then open it from the Orders list | Only the non-zero lines are on it. Line total = qty × **per-case** cost (e.g. 1 case × $180 if a bottle is $15), not qty × per-bottle | ✅ |
 
 #### Regressions — bugs this build fixed
 
