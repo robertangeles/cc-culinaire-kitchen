@@ -173,15 +173,23 @@ every later row pass vacuously — which looks like success and proves nothing.
 
 #### The core flow — order to par
 
+> **Read first (corrected 2026-07-24).** Belicard is **counted in bottles** but **bought by the case of 12**.
+> Order-to-par computes the shortfall in the counting unit (bottles) and then prefills the qty field in the
+> **purchase unit (cases)**, rounded up: `qty = ceil((par − on hand) ÷ 12)`. So a 1.5-bottle shortfall
+> prefills as **1 case**, and the qty field's unit label reads **case**, while the line's par context still
+> reads in bottles. This is the packaged-unit fix — if the field prefills "1.5" against a unit of "case",
+> the bug is back. Watch item: the **supplier minimum** (C13) is compared against the qty field, which is in
+> cases here — confirm the minimum is expressed in the same unit, not bottles.
+
 | # | Steps | Expected | Result |
 |---|---|---|---|
-| C9 | Purchasing → Orders → **New Purchase Order** → click the **Weekly Wine** pill | Supplier auto-selects. Lines prefill with no typing. Belicard qty = **par − on hand = 8 − 6.5 = 1.5** | ☐ |
-| C10 | Read the Belicard line | Reads **"On hand 6.5 / par 8 · below par"**. The par context is the whole point — an operator must not have to compute the quantity | ☐ |
-| C11 | Change Belicard qty to **1**, then click its **TO PAR** chip | Snaps back to **1.5** | ☐ |
-| C12 | Zero out a line, then click **Order everything to par** | Every guide line re-snaps at once, including the one you zeroed | ☐ |
-| C13 | Set Belicard qty to **1** (below the minimum you set in prep step 2) | Inline amber **"Supplier minimum is 2"** under the qty. It **warns but does not block** — an operator may knowingly under-order. Saving still works | ☐ |
+| C9 | Purchasing → Orders → **New Purchase Order** → click the **Weekly Wine** pill | Supplier auto-selects. Lines prefill with no typing. Belicard: shortfall 8 − 6.5 = 1.5 bottles → qty field **1**, unit **case** (`ceil(1.5 ÷ 12)`). The qty must never show the raw bottle shortfall against a "case" unit | ☐ |
+| C10 | Read the Belicard line | Par context reads **"On hand 6.5 / par 8 · below par"** in **bottles**; the qty above it is in **cases**. Counting unit for context, buying unit for the order — the operator computes nothing | ☐ |
+| C11 | Change Belicard qty to **5**, then click its **TO PAR** chip | Snaps back to the prefill (**1 case**). The chip tooltip shows the same value + unit | ☐ |
+| C12 | Zero out a line, then click **Order everything to par** | Every guide line re-snaps to its prefill at once, including the one you zeroed | ☐ |
+| C13 | Read the Belicard line's supplier-minimum warning | With minimum_order_qty = 2 (prep step 2) and a prefilled **1** in the field, inline amber **"Supplier minimum is 2"** shows. Raising the qty to 2 clears it. It **warns, never blocks** — saving still works below the minimum. Note whether the minimum reads sensibly against a **case** qty (the watch item above) | ☐ |
 | C14 | Add an item **already at or above par** to the guide, reopen the PO | Shows in the list at qty **0** (visible, not hidden — the operator should see it was considered) but is **excluded** from the saved PO. Check the created PO's line count | ☐ |
-| C15 | Save the PO, then open it from the Orders list | Only the non-zero lines are on it. Totals match qty × unit cost | ☐ |
+| C15 | Save the PO, then open it from the Orders list | Only the non-zero lines are on it. Line total = qty × **per-case** cost (e.g. 1 case × $180 if a bottle is $15), not qty × per-bottle | ☐ |
 
 #### Regressions — bugs this build fixed
 
@@ -216,6 +224,15 @@ by `purchasing:submit`, the same tier as Submit and the PDF download.
 | C26 | Point a SENT PO at a supplier with **no contact email**, click Send to supplier | Plain message: *"This supplier has no contact email on file. Add one in Suppliers…"* — no error, PO unchanged, not marked emailed | ☐ |
 | C27 | On a server with **no email configured** (no `RESEND_API_KEY`), click Send to supplier | Plain message: *"Email isn't set up on this server yet…"* — PO unchanged, not marked emailed. (This machine **has** Resend configured via the process env, so expect a real send instead) | ☐ |
 | C28 | Hit `POST /purchase-orders/:id/send-email` as a user **without** `purchasing:submit` | **403**. The button is shown (matching the Submit button's pattern — server is the boundary), but the action is refused server-side | ☐ |
+
+#### This session's UI fixes (2026-07-24) — verify, don't re-report
+
+| # | Steps | Expected | Result |
+|---|---|---|---|
+| C29 | Open **New Purchase Order** without picking a guide and without typing in search | A prompt ("Pick a guide above…" or "Choose a supplier, or search…"), **not** a dump of the whole catalogue with Par/Min Ord/Unit Cost all "—". The item list appears only once you search or pick a supplier | ☐ |
+| C30 | Look at the line-item picker | **No category chips** (Bakery / Dairy / Dry Goods…). Search box only. Category browsing was removed — nobody orders by category | ☐ |
+| C31 | Expand a **SENT** PO and read the line's status badge | Reads **"Awaiting delivery"** (or Part received / Received), **never "Draft"**. A line badge saying Draft on a sent order was a real bug — it read as "not sent yet" | ☐ |
+| C32 | Expand a PO; if detail fails to load (e.g. mid dev-server restart) | A specific message (session expired / no access / server error + Try again), **not** the old generic "Failed to load details." | ☐ |
 
 #### Known gaps (found while writing this checklist — not bugs in the build)
 
