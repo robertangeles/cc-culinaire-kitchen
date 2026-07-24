@@ -597,6 +597,7 @@ export function useIngredientSuppliers(ingredientId: string | null) {
     costPerUnit?: string | null;
     supplierItemCode?: string | null;
     preferredInd?: boolean;
+    minimumOrderQty?: string | null;
   }) => {
     if (!ingredientId) return;
     const res = await fetch(`${API}/ingredients/${ingredientId}/suppliers/${supplierId}`, {

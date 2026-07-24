@@ -236,10 +236,10 @@ by `purchasing:submit`, the same tier as Submit and the PDF download.
 
 #### Known gaps (found while writing this checklist — not bugs in the build)
 
-- **No UI to set a supplier minimum.** `minimum_order_qty` is displayed in the Min Ord column and
-  drives the C13 warning, but the only write path is `PATCH /inventory/ingredients/:id/suppliers/:supId`
-  — no client component calls it. The warning can't be configured by an operator, only by import
-  or curl. Worth a small editor in the supplier-link UI.
+- ~~**No UI to set a supplier minimum.**~~ **FIXED 2026-07-24.** Inventory → Catalog → edit an item →
+  **Suppliers** section now has a **Min order** field: on the "Add Supplier" row for new links, and an
+  inline editable box on each existing supplier row (commits on blur). Sets `minimum_order_qty`
+  through the existing `PATCH/POST .../suppliers` routes (verified 200/401). No more curl needed.
 - **Pars are hand-entered only.** Forecast-suggested pars are deferred to P2 (org 2 has no
   `consumption_log` history to forecast from). The bulk editor speeds up entry; it doesn't
   invent pars.

@@ -404,6 +404,7 @@ function EditIngredientModal({
   const [newSupId, setNewSupId] = useState("");
   const [newSupCost, setNewSupCost] = useState("");
   const [newSupSku, setNewSupSku] = useState("");
+  const [newSupMoq, setNewSupMoq] = useState("");
   const [name, setName] = useState(ingredient.ingredientName);
   const [editItemType, setEditItemType] = useState<ItemTypeKey>((ingredient.itemType as ItemTypeKey) || "KITCHEN_INGREDIENT");
   const [editFifo, setEditFifo] = useState<FifoModeKey>((ingredient.fifoApplicable as FifoModeKey) || FIFO_DEFAULTS[(ingredient.itemType as ItemTypeKey) || "KITCHEN_INGREDIENT"]);
@@ -712,6 +713,21 @@ function EditIngredientModal({
                           ${s.packCost ? Number(s.packCost).toFixed(2) : Number(s.costPerUnit).toFixed(4)}
                         </span>
                       )}
+                      {/* Supplier's minimum order — commits on blur. This is the
+                          only place it can be set; the PO screen just reads it. */}
+                      <input
+                        key={`moq-${s.supplierId}-${s.minimumOrderQty ?? ""}`}
+                        type="text"
+                        defaultValue={s.minimumOrderQty ?? ""}
+                        onBlur={(e) => {
+                          const v = e.target.value.trim();
+                          if (v === (s.minimumOrderQty ?? "")) return;
+                          updateLink(s.supplierId, { minimumOrderQty: v || null });
+                        }}
+                        placeholder="min"
+                        title="Minimum order quantity for this supplier"
+                        className="w-14 px-1.5 py-1 rounded bg-[#0A0A0A] border border-[#2A2A2A] text-[11px] text-white placeholder-[#555] text-right tabular-nums focus:outline-none focus:border-[#D4A574]/40"
+                      />
                       <button
                         onClick={() => removeLink(s.supplierId)}
                         className="p-0.5 rounded hover:bg-red-500/10 text-[#666] hover:text-red-400 transition-colors"
@@ -757,6 +773,12 @@ function EditIngredientModal({
                   placeholder="SKU"
                   className="w-20 px-2 py-1.5 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-xs text-white placeholder-[#666] focus:outline-none"
                 />
+                <input
+                  type="text" value={newSupMoq} onChange={(e) => setNewSupMoq(e.target.value)}
+                  placeholder="Min order"
+                  title="Supplier's minimum order quantity, in the unit you order this in"
+                  className="w-20 px-2 py-1.5 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-xs text-white placeholder-[#666] focus:outline-none"
+                />
                 <button
                   onClick={async () => {
                     if (!newSupId) return;
@@ -764,9 +786,10 @@ function EditIngredientModal({
                       supplierId: newSupId,
                       costPerUnit: newSupCost || undefined,
                       supplierItemCode: newSupSku || undefined,
+                      minimumOrderQty: newSupMoq || undefined,
                       preferredInd: ingSuppliers.length === 0,
                     });
-                    setNewSupId(""); setNewSupCost(""); setNewSupSku("");
+                    setNewSupId(""); setNewSupCost(""); setNewSupSku(""); setNewSupMoq("");
                     setShowAddSupplier(false);
                   }}
                   disabled={!newSupId}
@@ -775,7 +798,7 @@ function EditIngredientModal({
                   Add
                 </button>
                 <button
-                  onClick={() => { setShowAddSupplier(false); setNewSupId(""); setNewSupCost(""); setNewSupSku(""); }}
+                  onClick={() => { setShowAddSupplier(false); setNewSupId(""); setNewSupCost(""); setNewSupSku(""); setNewSupMoq(""); }}
                   className="px-2 py-1.5 text-xs text-[#666] hover:text-white transition-colors"
                 >
                   Cancel
