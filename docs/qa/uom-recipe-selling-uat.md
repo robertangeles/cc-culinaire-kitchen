@@ -1,11 +1,16 @@
 # UAT Checklist — Kitchen-Unit Model + Recipe-Based Selling
 
-## ▶ RESUME HERE — 2026-07-23 (machine switch: HEPHAESTUS → ARCHOS)
+## ▶ RESUME HERE — 2026-07-31
+
+> **⚠️ UAT IS INCOMPLETE AND IS PRIORITY #1.** Nothing on this branch merges to `main`
+> until the rows below are walked. Do not start new feature work ahead of finishing this.
 
 **Signed off:** A (catalog) ✅ · B + B3 (stock take, HQ review — shipped to prod, merge `5e19857`) ✅ · I (storage areas) ✅
-**Not yet walked:** **C** (purchasing) · **C-guides** (order guides) · **D** (recipes) ← *you are here* · E · F · G · H
+**Partly walked:** **C** — C1–C4 ✅ (PO packaging + receive) · C9–C15 ✅ (order-to-par core flow)
+**Still to walk:** C5–C8 (guide setup) · C16–C32 (regressions, permissions, PO email, UI fixes) · **D** (recipes) · E · F · G · H
 
-**Next action: walk Section D (D1–D9).** D is fully seeded and the code is on the branch.
+**Next action: walk C5–C8**, then the C16+ blocks, then Section D (D1–D9). D is fully seeded
+and the code is on the branch.
 
 ### Getting running on ARCHOS
 
@@ -27,10 +32,9 @@ there — nothing to re-seed. If it points elsewhere, the two new dev-only colum
 (`ingredient.density_g_per_ml`, `menu_item.servings_per_sale`) and the seeded costs must be
 applied first.
 
-### Branch state
-Two commits ahead of `main`, both pushed, **nothing merged**:
-`2ebb3b9` supplier PO email + org/supplier contact fields + PO PDF rework ·
-`34601f0` shared unit resolver + density bridge + yield-vs-sales-unit costing.
+### Branch state (2026-07-31)
+`feature/ck-web/purchasing-order-guides-p1` is **33 commits ahead of `main`, all pushed,
+nothing merged**. Latest: `0c9aaac` supplier minimum-order editor in the ingredient catalog.
 Prod still needs `density_g_per_ml` + `servings_per_sale` at deploy (the three PO columns
 are already applied there).
 
