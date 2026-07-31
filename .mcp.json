@@ -3,6 +3,13 @@
     "context-mode": {
       "command": "npx",
       "args": ["-y", "context-mode"]
+    },
+    "render": {
+      "command": "npx",
+      "args": ["-y", "@niyogi/render-mcp", "start"],
+      "env": {
+        "RENDER_API_KEY": "${RENDER_API_KEY}"
+      }
     }
   }
 }
