@@ -15,7 +15,6 @@ export interface AutoPoLine {
   baseUnit: string;
   currentQty: number;
   parLevel: number;
-  reorderQty: number | null;
   shortfall: number;
   suggestedQty: number;
   purchaseUnit?: string | null;

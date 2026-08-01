@@ -404,6 +404,7 @@ function EditIngredientModal({
   const [newSupId, setNewSupId] = useState("");
   const [newSupCost, setNewSupCost] = useState("");
   const [newSupSku, setNewSupSku] = useState("");
+  const [newSupMoq, setNewSupMoq] = useState("");
   const [name, setName] = useState(ingredient.ingredientName);
   const [editItemType, setEditItemType] = useState<ItemTypeKey>((ingredient.itemType as ItemTypeKey) || "KITCHEN_INGREDIENT");
   const [editFifo, setEditFifo] = useState<FifoModeKey>((ingredient.fifoApplicable as FifoModeKey) || FIFO_DEFAULTS[(ingredient.itemType as ItemTypeKey) || "KITCHEN_INGREDIENT"]);
@@ -440,11 +441,9 @@ function EditIngredientModal({
     ? (parseFloat(cost) / parseFloat(editPackQty)).toFixed(4)
     : cost || null;
   const [par, setPar] = useState(ingredient.parLevel || "");
-  const [reorder, setReorder] = useState(ingredient.reorderQty || "");
-  // Par/reorder can be ENTERED in kitchen units or purchase packages ("2 bags");
-  // they are always STORED in kitchen units (stock comparisons need one unit).
+  // Par can be ENTERED in kitchen units or purchase packages ("2 bags");
+  // always STORED in kitchen units (stock comparisons need one unit).
   const [parEntryUnit, setParEntryUnit] = useState<"base" | "pack">("base");
-  const [reorderEntryUnit, setReorderEntryUnit] = useState<"base" | "pack">("base");
   const packFactor = purchaseUnit && editPackQty && parseFloat(editPackQty) > 0 ? parseFloat(editPackQty) : null;
   const canEnterInPacks = packFactor !== null;
   /** Convert an entered par/reorder value to kitchen units for saving. */
@@ -464,7 +463,6 @@ function EditIngredientModal({
       : `= ${(n / packFactor).toFixed(2)} ${purchaseUnit}`;
   };
   const parEcho = echoFor(par, parEntryUnit);
-  const reorderEcho = echoFor(reorder, reorderEntryUnit);
   const editModalCategories = getCategoriesForType(editItemType);
   const [deleteConfirm, setDeleteConfirm] = useState<"idle" | "checking" | "blocked" | "confirm">("idle");
   const [usageList, setUsageList] = useState<Array<{ menuItemId: string; menuItemName: string }>>([]);
@@ -668,46 +666,25 @@ function EditIngredientModal({
               <p className="text-[10px] text-[#D4A574] mt-1">= ${derivedUnitCost} per {unit}</p>
             )}
 
-            {/* Par + reorder live with purchasing: "when do I order, and how much". */}
-            <div className="mt-3 pt-3 border-t border-[#2A2A2A]/60 grid grid-cols-2 gap-2">
-              <div>
-                <label className="block text-[10px] uppercase tracking-wider text-[#666] mb-1">Par Level (min stock)</label>
-                <div className="flex items-center gap-1.5">
-                  <input type="text" value={par} onChange={(e) => setPar(e.target.value)}
-                    placeholder="0"
-                    className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none" />
-                  {canEnterInPacks ? (
-                    <select value={parEntryUnit} onChange={(e) => setParEntryUnit(e.target.value as "base" | "pack")}
-                      className="px-2 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-xs text-white focus:outline-none">
-                      <option value="base">{unit}</option>
-                      <option value="pack">{purchaseUnit}</option>
-                    </select>
-                  ) : (
-                    <span className="text-xs text-[#666]">{unit}</span>
-                  )}
-                </div>
-                {parEcho && <p className="text-[10px] text-[#D4A574] mt-1">{parEcho}</p>}
-                <p className="text-[10px] text-[#666] mt-1">Order when stock falls below this.</p>
+            {/* Par is the ordering lever: order back up to this level (order-to-par). */}
+            <div className="mt-3 pt-3 border-t border-[#2A2A2A]/60">
+              <label className="block text-[10px] uppercase tracking-wider text-[#666] mb-1">Par Level (target stock)</label>
+              <div className="flex items-center gap-1.5">
+                <input type="text" value={par} onChange={(e) => setPar(e.target.value)}
+                  placeholder="0"
+                  className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none" />
+                {canEnterInPacks ? (
+                  <select value={parEntryUnit} onChange={(e) => setParEntryUnit(e.target.value as "base" | "pack")}
+                    className="px-2 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-xs text-white focus:outline-none">
+                    <option value="base">{unit}</option>
+                    <option value="pack">{purchaseUnit}</option>
+                  </select>
+                ) : (
+                  <span className="text-xs text-[#666]">{unit}</span>
+                )}
               </div>
-              <div>
-                <label className="block text-[10px] uppercase tracking-wider text-[#666] mb-1">Reorder Qty</label>
-                <div className="flex items-center gap-1.5">
-                  <input type="text" value={reorder} onChange={(e) => setReorder(e.target.value)}
-                    placeholder="0"
-                    className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none" />
-                  {canEnterInPacks ? (
-                    <select value={reorderEntryUnit} onChange={(e) => setReorderEntryUnit(e.target.value as "base" | "pack")}
-                      className="px-2 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-xs text-white focus:outline-none">
-                      <option value="base">{unit}</option>
-                      <option value="pack">{purchaseUnit}</option>
-                    </select>
-                  ) : (
-                    <span className="text-xs text-[#666]">{unit}</span>
-                  )}
-                </div>
-                {reorderEcho && <p className="text-[10px] text-[#D4A574] mt-1">{reorderEcho}</p>}
-                <p className="text-[10px] text-[#666] mt-1">How much to order then.</p>
-              </div>
+              {parEcho && <p className="text-[10px] text-[#D4A574] mt-1">{parEcho}</p>}
+              <p className="text-[10px] text-[#666] mt-1">Orders top up to this level, rounded to whole packs.</p>
             </div>
           </div>
           {/* Suppliers */}
@@ -736,6 +713,21 @@ function EditIngredientModal({
                           ${s.packCost ? Number(s.packCost).toFixed(2) : Number(s.costPerUnit).toFixed(4)}
                         </span>
                       )}
+                      {/* Supplier's minimum order — commits on blur. This is the
+                          only place it can be set; the PO screen just reads it. */}
+                      <input
+                        key={`moq-${s.supplierId}-${s.minimumOrderQty ?? ""}`}
+                        type="text"
+                        defaultValue={s.minimumOrderQty ?? ""}
+                        onBlur={(e) => {
+                          const v = e.target.value.trim();
+                          if (v === (s.minimumOrderQty ?? "")) return;
+                          updateLink(s.supplierId, { minimumOrderQty: v || null });
+                        }}
+                        placeholder="min"
+                        title="Minimum order quantity for this supplier"
+                        className="w-14 px-1.5 py-1 rounded bg-[#0A0A0A] border border-[#2A2A2A] text-[11px] text-white placeholder-[#555] text-right tabular-nums focus:outline-none focus:border-[#D4A574]/40"
+                      />
                       <button
                         onClick={() => removeLink(s.supplierId)}
                         className="p-0.5 rounded hover:bg-red-500/10 text-[#666] hover:text-red-400 transition-colors"
@@ -781,6 +773,12 @@ function EditIngredientModal({
                   placeholder="SKU"
                   className="w-20 px-2 py-1.5 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-xs text-white placeholder-[#666] focus:outline-none"
                 />
+                <input
+                  type="text" value={newSupMoq} onChange={(e) => setNewSupMoq(e.target.value)}
+                  placeholder="Min order"
+                  title="Supplier's minimum order quantity, in the unit you order this in"
+                  className="w-20 px-2 py-1.5 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-xs text-white placeholder-[#666] focus:outline-none"
+                />
                 <button
                   onClick={async () => {
                     if (!newSupId) return;
@@ -788,9 +786,10 @@ function EditIngredientModal({
                       supplierId: newSupId,
                       costPerUnit: newSupCost || undefined,
                       supplierItemCode: newSupSku || undefined,
+                      minimumOrderQty: newSupMoq || undefined,
                       preferredInd: ingSuppliers.length === 0,
                     });
-                    setNewSupId(""); setNewSupCost(""); setNewSupSku("");
+                    setNewSupId(""); setNewSupCost(""); setNewSupSku(""); setNewSupMoq("");
                     setShowAddSupplier(false);
                   }}
                   disabled={!newSupId}
@@ -799,7 +798,7 @@ function EditIngredientModal({
                   Add
                 </button>
                 <button
-                  onClick={() => { setShowAddSupplier(false); setNewSupId(""); setNewSupCost(""); setNewSupSku(""); }}
+                  onClick={() => { setShowAddSupplier(false); setNewSupId(""); setNewSupCost(""); setNewSupSku(""); setNewSupMoq(""); }}
                   className="px-2 py-1.5 text-xs text-[#666] hover:text-white transition-colors"
                 >
                   Cancel
@@ -907,7 +906,6 @@ function EditIngredientModal({
                   description: desc || null,
                   unitCost: derivedUnitCost || null,
                   parLevel: toKitchen(par, parEntryUnit),
-                  reorderQty: toKitchen(reorder, reorderEntryUnit),
                   itemType: editItemType,
                   fifoApplicable: editFifo,
                   containsDairyInd: allergens.has("containsDairyInd"),
@@ -964,7 +962,6 @@ function AddIngredientForm({
   const [description, setDescription] = useState("");
   const [cost, setCost] = useState("");
   const [par, setPar] = useState("");
-  const [reorder, setReorder] = useState("");
   const [allergens, setAllergens] = useState<Set<AllergenKey>>(new Set());
   const [packQty, setPackQty] = useState("");
   const [supplierId, setSupplierId] = useState("");
@@ -1054,14 +1051,9 @@ function AddIngredientForm({
             = ${autoUnitCost} per {unit}
           </p>
         )}
-        <div className="grid grid-cols-2 gap-2">
-          <input type="text" value={par} onChange={(e) => setPar(e.target.value)}
-            placeholder="Min stock (par)"
-            className="px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none" />
-          <input type="text" value={reorder} onChange={(e) => setReorder(e.target.value)}
-            placeholder="Reorder qty"
-            className="px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none" />
-        </div>
+        <input type="text" value={par} onChange={(e) => setPar(e.target.value)}
+          placeholder="Par level (target stock)"
+          className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none" />
         <textarea value={description} onChange={(e) => setDescription(e.target.value)}
           placeholder="Description (optional)" rows={2}
           className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none resize-none" />
@@ -1107,7 +1099,7 @@ function AddIngredientForm({
                   ingredientName: name, ingredientCategory: category, baseUnit: unit,
                   packQty: packQty || undefined,
                   description: description || undefined, unitCost: autoUnitCost || cost || undefined,
-                  parLevel: par || undefined, reorderQty: reorder || undefined,
+                  parLevel: par || undefined,
                   itemType: itemType, fifoApplicable: fifo,
                   containsDairyInd: allergens.has("containsDairyInd"),
                   containsGlutenInd: allergens.has("containsGlutenInd"),

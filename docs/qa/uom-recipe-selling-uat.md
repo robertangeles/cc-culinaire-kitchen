@@ -2,36 +2,42 @@
 
 ## ▶ RESUME HERE — 2026-08-01 (machine switch: HEPHAESTUS → ARCHOS)
 
+> **⚠️ UAT IS INCOMPLETE AND IS PRIORITY #1.** Nothing on this branch merges to `main`
+> until the rows below are walked. Do not start new feature work ahead of finishing this.
+
 **Signed off:** A (catalog) ✅ · B + B3 (stock take, HQ review — shipped to prod, merge `5e19857`) ✅ · I (storage areas) ✅
-**Not yet walked:** **C** (purchasing) · **C-guides** (order guides) ← *you are here, mid-fix, see below* · D · E · F · G · H
+**Partly walked:** **C** — C1–C4 ✅ (PO packaging + receive) · C9–C15 ✅ (order-to-par core flow)
+**Still to walk:** C5–C8 (guide setup) · C16–C32 (regressions, permissions, PO email, UI fixes) · **D** (recipes) · E · F · G · H
 
-**Next action is NOT to walk C-guides yet.** Finish verifying today's receiving-flow fix
-first — it's written and unit-tested but not proven against a real race or a real browser.
-Full detail in `wiki/log.md` (2026-08-01 entry), short version:
+**Next action is NOT C5–C8 yet.** A HEPHAESTUS session (today) found and fixed real bugs in
+Purchasing → Receive while prepping for the rest of C — one of the fixes isn't proven yet.
+Verify it first (below), then resume at **C5–C8**, then C16+, then Section D.
 
-1. Prepped Purchasing for a realistic C-guides walk: seeded par/reorder/stock across the
-   full 115-item catalog at both Almost French locations (`scripts/seedCatalogParStock.ts`,
-   idempotent — safe to re-run, won't touch the hand-built fixture stock below).
-2. While opening deliveries in Receive, hit and fixed three compounding bugs in
-   `receivingService.startSession()`: (a) fresh sessions showed every line as "Unknown item"
-   — no ingredient join on that path, (b) a PO left mid-receive had **no way back in** —
-   fixed by resuming the existing session instead of rejecting, (c) **the actual root
-   cause of (b)**: two concurrent `startSession` calls for the same PO could both pass the
-   checks before either committed. Fixed with a transaction-scoped
-   `pg_advisory_xact_lock(hashtext(poId))`.
-3. Also reworked the Receiving checklist UI (user request): the 4 action pills are now
+**What HEPHAESTUS did today** (full detail in `wiki/log.md`, 2026-08-01 entry):
+
+1. Seeded par/reorder/stock across the full 115-item catalog at both Almost French locations
+   (`scripts/seedCatalogParStock.ts`, idempotent, doesn't touch the hand-built fixture stock
+   below). Note: `reorder_qty` was retired from ordering on 2026-07-24 (see C3) — the script
+   still writes it for completeness, but it's a dormant column now; only `par` and on-hand
+   stock actually drive order-to-par.
+2. Fixed three compounding bugs in `receivingService.startSession()`: (a) fresh sessions
+   showed every line as "Unknown item" — no ingredient join on that path, (b) a PO left
+   mid-receive had **no way back in** (fixed by resuming the existing session instead of
+   rejecting), (c) **the actual root cause of (b)**: two concurrent `startSession` calls for
+   the same PO could both pass the checks before either committed — fixed with a
+   transaction-scoped `pg_advisory_xact_lock(hashtext(poId))`.
+3. Reworked the Receiving checklist UI (user request): the 4 action pills are now
    always-visible on the right of each line instead of tap-to-expand, and each line shows
    cost/UOM/stock/par/total cost inline.
 
 **⚠️ Before touching Purchasing → Receive on ARCHOS:**
-- The race-condition fix (item 2c) has **only been unit-tested with a mocked DB** — the
-  planned real-concurrency test and a `/browse` live check were both interrupted before they
-  ran. Run them first: fire several concurrent `startSession` calls at the real dev DB for one
-  PO and confirm exactly one session results, then open Receive for real in a browser.
-- `PO-MRUH46AZ` may still have an **orphaned ACTIVE `receiving_session` row** blocking it
-  (session `26e24ce2` was active and uncancelled when work paused). Check for stray `ACTIVE`
-  rows on that PO before assuming it's clean — cancel via `receivingService.cancelSession()`,
-  not raw SQL, so the PO status resets correctly too.
+- Fix (2c) above has **only been unit-tested with a mocked DB** — the planned real-concurrency
+  test and a `/browse` live check were both interrupted before they ran on HEPHAESTUS. Run them
+  first: fire several concurrent `startSession` calls at the real dev DB for one PO and confirm
+  exactly one session results, then open Receive for real in a browser.
+- `PO-MRUH46AZ` may still have an **orphaned ACTIVE `receiving_session` row** blocking it.
+  Check for stray `ACTIVE` rows on that PO before assuming it's clean — cancel via
+  `receivingService.cancelSession()`, not raw SQL, so the PO status resets correctly too.
 
 ### Getting running on ARCHOS
 
@@ -53,12 +59,11 @@ catalog seed) is already there — nothing to re-seed. If it points elsewhere, t
 columns (`ingredient.density_g_per_ml`, `menu_item.servings_per_sale`), the seeded costs, and
 today's par/reorder/stock seed all need to be applied first.
 
-### Branch state
-Ahead of `main`, pushed, **nothing merged**:
-`2ebb3b9` supplier PO email + org/supplier contact fields + PO PDF rework ·
-`34601f0` shared unit resolver + density bridge + yield-vs-sales-unit costing ·
-`8910e60` UAT checklist made resume-ready · today's commits: catalog seed script, and the
-receiving session fixes + checklist UI rework described above.
+### Branch state (2026-08-01)
+`feature/ck-web/purchasing-order-guides-p1` is well ahead of `main`, all pushed, **nothing
+merged**. Notable recent commits: `0c9aaac` supplier minimum-order editor · `3c24822` retired
+`reorder_qty` from ordering (pure order-to-par) · today's (HEPHAESTUS): catalog seed script,
+and the receiving session fixes + checklist UI rework described above.
 Prod still needs `density_g_per_ml` + `servings_per_sale` at deploy (the three PO columns
 are already applied there).
 
@@ -155,10 +160,10 @@ Rob = org admin, holds `inventory:hq`. Verified live at localhost:5179 against t
 
 | # | Steps | Expected | Result |
 |---|---|---|---|
-| C1 | New PO → add Belicard | Unit defaults to **case (12 bottle)**; dropdown offers case / bottle; cost label reads **per case** | ☐ |
-| C2 | Order **2 case @ $60**, submit, receive fully | Stock **+24 bottles**; line total $120 | ☐ |
-| C3 | Auto-PO suggestions (set flour par above stock first) | Suggestion reads in **bags** (whole packages, rounded up), e.g. "1 bag (25000 g)" | ☐ |
-| C4 | Receive a PO line via the legacy per-line receive with unit **case** | Stock rises by cases × 12 — never by the raw "2" (this was a live bug, now fixed) | ☐ |
+| C1 | New PO → add Belicard | Unit defaults to **case (12 bottle)**; dropdown offers case / bottle; cost label reads **per case** | ✅ |
+| C2 | Order **2 case @ $60**, submit, receive fully | Stock **+24 bottles**; line total $120 | ✅ |
+| C3 | Auto-PO suggestions (set flour par above stock first) | Suggestion reads in **bags** (whole packages, rounded up) and is **pure order-to-par**: `ceil((par − on-hand) ÷ pack)`. `reorder_qty` was retired 2026-07-24 — it no longer overshoots par. Plain Flour par 25 kg, 0 on hand, 12.5 kg bag → **2 bags** (not 4). If you see 4, the retired reorder floor is back | ✅ |
+| C4 | Receive a PO line via the legacy per-line receive with unit **case** | Stock rises by cases × 12 — never by the raw "2" (this was a live bug, now fixed) | ✅ |
 
 ### C-guides. Order guides + order-to-par (Purchasing P1, 2026-07-20)
 
@@ -201,15 +206,23 @@ every later row pass vacuously — which looks like success and proves nothing.
 
 #### The core flow — order to par
 
+> **Read first (corrected 2026-07-24).** Belicard is **counted in bottles** but **bought by the case of 12**.
+> Order-to-par computes the shortfall in the counting unit (bottles) and then prefills the qty field in the
+> **purchase unit (cases)**, rounded up: `qty = ceil((par − on hand) ÷ 12)`. So a 1.5-bottle shortfall
+> prefills as **1 case**, and the qty field's unit label reads **case**, while the line's par context still
+> reads in bottles. This is the packaged-unit fix — if the field prefills "1.5" against a unit of "case",
+> the bug is back. Watch item: the **supplier minimum** (C13) is compared against the qty field, which is in
+> cases here — confirm the minimum is expressed in the same unit, not bottles.
+
 | # | Steps | Expected | Result |
 |---|---|---|---|
-| C9 | Purchasing → Orders → **New Purchase Order** → click the **Weekly Wine** pill | Supplier auto-selects. Lines prefill with no typing. Belicard qty = **par − on hand = 8 − 6.5 = 1.5** | ☐ |
-| C10 | Read the Belicard line | Reads **"On hand 6.5 / par 8 · below par"**. The par context is the whole point — an operator must not have to compute the quantity | ☐ |
-| C11 | Change Belicard qty to **1**, then click its **TO PAR** chip | Snaps back to **1.5** | ☐ |
-| C12 | Zero out a line, then click **Order everything to par** | Every guide line re-snaps at once, including the one you zeroed | ☐ |
-| C13 | Set Belicard qty to **1** (below the minimum you set in prep step 2) | Inline amber **"Supplier minimum is 2"** under the qty. It **warns but does not block** — an operator may knowingly under-order. Saving still works | ☐ |
-| C14 | Add an item **already at or above par** to the guide, reopen the PO | Shows in the list at qty **0** (visible, not hidden — the operator should see it was considered) but is **excluded** from the saved PO. Check the created PO's line count | ☐ |
-| C15 | Save the PO, then open it from the Orders list | Only the non-zero lines are on it. Totals match qty × unit cost | ☐ |
+| C9 | Purchasing → Orders → **New Purchase Order** → click the **Weekly Wine** pill | Supplier auto-selects. Lines prefill with no typing. Belicard: shortfall 8 − 6.5 = 1.5 bottles → qty field **1**, unit **case** (`ceil(1.5 ÷ 12)`). The qty must never show the raw bottle shortfall against a "case" unit | ✅ |
+| C10 | Read the Belicard line | Par context reads **"On hand 6.5 / par 8 · below par"** in **bottles**; the qty above it is in **cases**. Counting unit for context, buying unit for the order — the operator computes nothing | ✅ |
+| C11 | Change Belicard qty to **5**, then click its **TO PAR** chip | Snaps back to the prefill (**1 case**). The chip tooltip shows the same value + unit | ✅ |
+| C12 | Zero out a line, then click **Order everything to par** | Every guide line re-snaps to its prefill at once, including the one you zeroed | ✅ |
+| C13 | Read the Belicard line's supplier-minimum warning | With minimum_order_qty = 2 (prep step 2) and a prefilled **1** in the field, inline amber **"Supplier minimum is 2"** shows. Raising the qty to 2 clears it. It **warns, never blocks** — saving still works below the minimum. Note whether the minimum reads sensibly against a **case** qty (the watch item above) | ✅ |
+| C14 | Add an item **already at or above par** to the guide, reopen the PO | Shows in the list at qty **0** (visible, not hidden — the operator should see it was considered) but is **excluded** from the saved PO. Check the created PO's line count | ✅ |
+| C15 | Save the PO, then open it from the Orders list | Only the non-zero lines are on it. Line total = qty × **per-case** cost (e.g. 1 case × $180 if a bottle is $15), not qty × per-bottle | ✅ |
 
 #### Regressions — bugs this build fixed
 
@@ -245,12 +258,21 @@ by `purchasing:submit`, the same tier as Submit and the PDF download.
 | C27 | On a server with **no email configured** (no `RESEND_API_KEY`), click Send to supplier | Plain message: *"Email isn't set up on this server yet…"* — PO unchanged, not marked emailed. (This machine **has** Resend configured via the process env, so expect a real send instead) | ☐ |
 | C28 | Hit `POST /purchase-orders/:id/send-email` as a user **without** `purchasing:submit` | **403**. The button is shown (matching the Submit button's pattern — server is the boundary), but the action is refused server-side | ☐ |
 
+#### This session's UI fixes (2026-07-24) — verify, don't re-report
+
+| # | Steps | Expected | Result |
+|---|---|---|---|
+| C29 | Open **New Purchase Order** without picking a guide and without typing in search | A prompt ("Pick a guide above…" or "Choose a supplier, or search…"), **not** a dump of the whole catalogue with Par/Min Ord/Unit Cost all "—". The item list appears only once you search or pick a supplier | ☐ |
+| C30 | Look at the line-item picker | **No category chips** (Bakery / Dairy / Dry Goods…). Search box only. Category browsing was removed — nobody orders by category | ☐ |
+| C31 | Expand a **SENT** PO and read the line's status badge | Reads **"Awaiting delivery"** (or Part received / Received), **never "Draft"**. A line badge saying Draft on a sent order was a real bug — it read as "not sent yet" | ☐ |
+| C32 | Expand a PO; if detail fails to load (e.g. mid dev-server restart) | A specific message (session expired / no access / server error + Try again), **not** the old generic "Failed to load details." | ☐ |
+
 #### Known gaps (found while writing this checklist — not bugs in the build)
 
-- **No UI to set a supplier minimum.** `minimum_order_qty` is displayed in the Min Ord column and
-  drives the C13 warning, but the only write path is `PATCH /inventory/ingredients/:id/suppliers/:supId`
-  — no client component calls it. The warning can't be configured by an operator, only by import
-  or curl. Worth a small editor in the supplier-link UI.
+- ~~**No UI to set a supplier minimum.**~~ **FIXED 2026-07-24.** Inventory → Catalog → edit an item →
+  **Suppliers** section now has a **Min order** field: on the "Add Supplier" row for new links, and an
+  inline editable box on each existing supplier row (commits on blur). Sets `minimum_order_qty`
+  through the existing `PATCH/POST .../suppliers` routes (verified 200/401). No more curl needed.
 - **Pars are hand-entered only.** Forecast-suggested pars are deferred to P2 (org 2 has no
   `consumption_log` history to forecast from). The bulk editor speeds up entry; it doesn't
   invent pars.

@@ -86,42 +86,37 @@ describe("Formula F-PO-01: sumPOLineTotal", () => {
   });
 });
 
-describe("Formula F-PO-02: suggestedOrderQty", () => {
+describe("Formula F-PO-02: suggestedOrderQty (pure order-to-par)", () => {
+  // reorder_qty was retired 2026-07-24: the suggestion is now just par - on-hand.
   describe("Forward reconciliation", () => {
-    it("returns shortfall when it exceeds reorderQty", () => {
-      // par=50, current=12.5, reorder=20 → shortfall=37.5, max(37.5, 20)=37.5
-      expect(suggestedOrderQty(50, 12.5, 20)).toBe(37.5);
+    it("returns the par shortfall", () => {
+      // par=50, current=12.5 → 37.5
+      expect(suggestedOrderQty(50, 12.5)).toBe(37.5);
     });
 
-    it("returns reorderQty when it exceeds shortfall", () => {
-      // par=50, current=45, reorder=24 → shortfall=5, max(5, 24)=24
-      expect(suggestedOrderQty(50, 45, 24)).toBe(24);
-    });
-
-    it("uses shortfall alone when reorderQty is null", () => {
-      // par=30, current=10.5, reorder=null → shortfall=19.5
-      expect(suggestedOrderQty(30, 10.5, null)).toBe(19.5);
+    it("does not overshoot par (the retired reorder_qty floor is gone)", () => {
+      // par=50, current=45 → 5, never bumped up to some reorder minimum
+      expect(suggestedOrderQty(50, 45)).toBe(5);
     });
   });
 
   describe("Boundary conditions", () => {
     it("returns 0 when current >= par (no shortfall)", () => {
-      expect(suggestedOrderQty(50, 50, 10)).toBe(0);
-      expect(suggestedOrderQty(50, 55, 10)).toBe(0);
-    });
-
-    it("returns 0 when current equals par even with reorderQty", () => {
-      expect(suggestedOrderQty(100, 100, 50)).toBe(0);
+      expect(suggestedOrderQty(50, 50)).toBe(0);
+      expect(suggestedOrderQty(50, 55)).toBe(0);
     });
   });
 
   describe("Invariants", () => {
-    it("result >= shortfall whenever shortfall > 0", () => {
+    it("result equals the shortfall whenever shortfall > 0", () => {
       const par = 80;
       const current = 25.7;
-      const shortfall = par - current;
-      const result = suggestedOrderQty(par, current, 10);
-      expect(result).toBeGreaterThanOrEqual(shortfall);
+      const result = suggestedOrderQty(par, current);
+      expect(result).toBeCloseTo(par - current, 10);
+    });
+
+    it("never negative", () => {
+      expect(suggestedOrderQty(10, 999)).toBe(0);
     });
   });
 });

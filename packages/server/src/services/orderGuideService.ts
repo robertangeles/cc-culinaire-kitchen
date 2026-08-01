@@ -229,8 +229,6 @@ export async function getGuideItems(
       locParLevel: locationIngredient.parLevel,
       orgParLevel: ingredient.parLevel,
       suggestedParLevel: locationIngredient.suggestedParLevel,
-      locReorderQty: locationIngredient.reorderQty,
-      orgReorderQty: ingredient.reorderQty,
       preferredUnitCost: ingredient.preferredUnitCost,
       locUnitCost: locationIngredient.unitCost,
       orgUnitCost: ingredient.unitCost,
@@ -270,11 +268,10 @@ export async function getGuideItems(
   return rows.map((r) => {
     const onHand = Number(r.onHand ?? 0);
     const parLevel = num(r.locParLevel) ?? num(r.orgParLevel);
-    const reorderQty = num(r.locReorderQty) ?? num(r.orgReorderQty);
     const unitCost = num(r.preferredUnitCost) ?? num(r.locUnitCost) ?? num(r.orgUnitCost);
     const packQty = num(r.packQty);
-    // Kitchen units — what the shortfall actually is (25 kg), for display.
-    const shortfall = parLevel != null ? suggestedOrderQty(parLevel, onHand, reorderQty) : 0;
+    // Kitchen units — the par shortfall (25 kg), for display. Order-to-par only.
+    const shortfall = parLevel != null ? suggestedOrderQty(parLevel, onHand) : 0;
     return {
       ingredientId: r.ingredientId,
       ingredientName: r.ingredientName,
