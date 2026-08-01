@@ -24,17 +24,70 @@ import {
   purchaseOrder,
   purchaseOrderLine,
   ingredient,
+  locationIngredient,
+  stockLevel,
 } from "../db/schema.js";
 import * as fifoService from "./fifoService.js";
 import * as stockService from "./stockService.js";
 import * as notificationService from "./notificationService.js";
 import * as auditService from "./auditService.js";
+import type { DbOrTx } from "./auditService.js";
 import * as wacService from "./wacService.js";
 import { resolveToBase } from "./unitConversionService.js";
 import { validateTransition, RECEIVING_SESSION_TRANSITIONS } from "../utils/stateTransition.js";
 import pino from "pino";
 
 const logger = pino({ name: "receivingService" });
+
+/**
+ * Receiving lines joined to their ingredient (name/category/base unit) plus
+ * this location's par level and current stock on hand — the shape the
+ * client's ReceivingSessionData expects everywhere a session's lines are
+ * returned. Shared by startSession and getSession so the two paths can
+ * never drift apart again (they used to: startSession returned bare
+ * receiving_line rows with no ingredient join, so a freshly-started session
+ * showed every line as "Unknown item" until the page was reloaded).
+ *
+ * storeLocationId is resolved via receiving_session rather than taken as a
+ * param, so par/stock are always scoped to the session's own location.
+ */
+async function selectLinesWithIngredient(sessionId: string, dbOrTx: DbOrTx) {
+  return dbOrTx
+    .select({
+      receivingLineId: receivingLine.receivingLineId,
+      sessionId: receivingLine.sessionId,
+      poLineId: receivingLine.poLineId,
+      ingredientId: receivingLine.ingredientId,
+      orderedQty: receivingLine.orderedQty,
+      orderedUnit: receivingLine.orderedUnit,
+      receivedQty: receivingLine.receivedQty,
+      actualUnitCost: receivingLine.actualUnitCost,
+      status: receivingLine.status,
+      ingredientName: ingredient.ingredientName,
+      ingredientCategory: ingredient.ingredientCategory,
+      baseUnit: ingredient.baseUnit,
+      parLevel: locationIngredient.parLevel,
+      stockOnHand: stockLevel.currentQty,
+    })
+    .from(receivingLine)
+    .innerJoin(receivingSession, eq(receivingSession.sessionId, receivingLine.sessionId))
+    .leftJoin(ingredient, eq(receivingLine.ingredientId, ingredient.ingredientId))
+    .leftJoin(
+      locationIngredient,
+      and(
+        eq(locationIngredient.ingredientId, receivingLine.ingredientId),
+        eq(locationIngredient.storeLocationId, receivingSession.storeLocationId),
+      ),
+    )
+    .leftJoin(
+      stockLevel,
+      and(
+        eq(stockLevel.ingredientId, receivingLine.ingredientId),
+        eq(stockLevel.storeLocationId, receivingSession.storeLocationId),
+      ),
+    )
+    .where(eq(receivingLine.sessionId, sessionId));
+}
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -68,6 +121,16 @@ export async function startSession(
   orgId: number,
 ) {
   return db.transaction(async (tx) => {
+    // Transaction-scoped, per-PO lock (pg_advisory_xact_lock, auto-releases on
+    // commit/rollback — same primitive as utils/advisoryLock.ts, keyed per-PO
+    // here instead of a fixed job key). Without this, two concurrent starts for
+    // the same PO can both read po.status="SENT" and no ACTIVE session before
+    // either commits, and both create a session — the exact race that produced
+    // two ACTIVE rows for one PO and left it permanently stuck. A blocking lock
+    // serializes them: the second caller waits, then re-reads the now-committed
+    // state and correctly resumes instead of racing.
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${poId}))`);
+
     // Validate PO is in SENT status — AND org so callers cannot start receiving on another org's PO
     const [po] = await tx
       .select()
@@ -76,6 +139,21 @@ export async function startSession(
 
     if (!po) throw new Error("Purchase order not found");
     if (po.status !== "SENT") {
+      // A PO left in RECEIVING with no confirmed/cancelled session (tab closed,
+      // connection dropped, navigated away mid-receive) previously had NO way
+      // back — starting fresh always failed here, and the client only ever
+      // populates session state via a successful start, so there was no path
+      // to reach the existing session either and cancel it. Resume it instead.
+      if (po.status === "RECEIVING") {
+        const [activeSession] = await tx
+          .select()
+          .from(receivingSession)
+          .where(and(eq(receivingSession.poId, poId), eq(receivingSession.status, "ACTIVE")));
+        if (activeSession) {
+          const lines = await selectLinesWithIngredient(activeSession.sessionId, tx);
+          return { session: activeSession, lines };
+        }
+      }
       throw new Error(`Cannot start receiving on PO with status ${po.status}`);
     }
 
@@ -157,7 +235,8 @@ export async function startSession(
 
     logger.info({ sessionId: session.sessionId, poId, lineCount: receivingLines.length }, "Receiving session started");
 
-    return { session, lines: receivingLines };
+    const enrichedLines = await selectLinesWithIngredient(session.sessionId, tx);
+    return { session, lines: enrichedLines };
   });
 }
 
@@ -183,24 +262,7 @@ export async function getSession(sessionId: string, orgId: number) {
   if (!sessionRow) return null;
   const session = sessionRow.session;
 
-  const lines = await db
-    .select({
-      receivingLineId: receivingLine.receivingLineId,
-      sessionId: receivingLine.sessionId,
-      poLineId: receivingLine.poLineId,
-      ingredientId: receivingLine.ingredientId,
-      orderedQty: receivingLine.orderedQty,
-      orderedUnit: receivingLine.orderedUnit,
-      receivedQty: receivingLine.receivedQty,
-      actualUnitCost: receivingLine.actualUnitCost,
-      status: receivingLine.status,
-      ingredientName: ingredient.ingredientName,
-      ingredientCategory: ingredient.ingredientCategory,
-      baseUnit: ingredient.baseUnit,
-    })
-    .from(receivingLine)
-    .leftJoin(ingredient, eq(receivingLine.ingredientId, ingredient.ingredientId))
-    .where(eq(receivingLine.sessionId, sessionId));
+  const lines = await selectLinesWithIngredient(sessionId, db);
 
   // Get discrepancies for this session
   const discrepancies = await db

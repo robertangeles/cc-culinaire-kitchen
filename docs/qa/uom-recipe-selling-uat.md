@@ -1,17 +1,43 @@
 # UAT Checklist — Kitchen-Unit Model + Recipe-Based Selling
 
-## ▶ RESUME HERE — 2026-07-23 (machine switch: HEPHAESTUS → ARCHOS)
+## ▶ RESUME HERE — 2026-08-01 (machine switch: HEPHAESTUS → ARCHOS)
 
 **Signed off:** A (catalog) ✅ · B + B3 (stock take, HQ review — shipped to prod, merge `5e19857`) ✅ · I (storage areas) ✅
-**Not yet walked:** **C** (purchasing) · **C-guides** (order guides) · **D** (recipes) ← *you are here* · E · F · G · H
+**Not yet walked:** **C** (purchasing) · **C-guides** (order guides) ← *you are here, mid-fix, see below* · D · E · F · G · H
 
-**Next action: walk Section D (D1–D9).** D is fully seeded and the code is on the branch.
+**Next action is NOT to walk C-guides yet.** Finish verifying today's receiving-flow fix
+first — it's written and unit-tested but not proven against a real race or a real browser.
+Full detail in `wiki/log.md` (2026-08-01 entry), short version:
+
+1. Prepped Purchasing for a realistic C-guides walk: seeded par/reorder/stock across the
+   full 115-item catalog at both Almost French locations (`scripts/seedCatalogParStock.ts`,
+   idempotent — safe to re-run, won't touch the hand-built fixture stock below).
+2. While opening deliveries in Receive, hit and fixed three compounding bugs in
+   `receivingService.startSession()`: (a) fresh sessions showed every line as "Unknown item"
+   — no ingredient join on that path, (b) a PO left mid-receive had **no way back in** —
+   fixed by resuming the existing session instead of rejecting, (c) **the actual root
+   cause of (b)**: two concurrent `startSession` calls for the same PO could both pass the
+   checks before either committed. Fixed with a transaction-scoped
+   `pg_advisory_xact_lock(hashtext(poId))`.
+3. Also reworked the Receiving checklist UI (user request): the 4 action pills are now
+   always-visible on the right of each line instead of tap-to-expand, and each line shows
+   cost/UOM/stock/par/total cost inline.
+
+**⚠️ Before touching Purchasing → Receive on ARCHOS:**
+- The race-condition fix (item 2c) has **only been unit-tested with a mocked DB** — the
+  planned real-concurrency test and a `/browse` live check were both interrupted before they
+  ran. Run them first: fire several concurrent `startSession` calls at the real dev DB for one
+  PO and confirm exactly one session results, then open Receive for real in a browser.
+- `PO-MRUH46AZ` may still have an **orphaned ACTIVE `receiving_session` row** blocking it
+  (session `26e24ce2` was active and uncancelled when work paused). Check for stray `ACTIVE`
+  rows on that PO before assuming it's clean — cancel via `receivingService.cancelSession()`,
+  not raw SQL, so the PO status resets correctly too.
 
 ### Getting running on ARCHOS
 
 ```bash
 git checkout feature/ck-web/purchasing-order-guides-p1
-git pull                                # HEAD should be 34601f0 or later
+git pull                                # HEAD should be past 8910e60 (this resume commit)
 pnpm install
 pnpm --filter @culinaire/shared build   # ← REQUIRED: server/client import from dist/
 pnpm dev                                # backend 3009, frontend 5179
@@ -22,15 +48,17 @@ and the server resolves it from `dist/`. Skip it and you get *"resolveQtyToKitch
 function"* at runtime even though `tsc` passes.
 
 **Dev DB is remote and shared** (`dpg-d9cqp5…render.com` / `culinaire_kitchen_postgresdb_oqph`).
-If ARCHOS's `DEV_DATABASE_URL` names that same host, all fixture data below is already
-there — nothing to re-seed. If it points elsewhere, the two new dev-only columns
-(`ingredient.density_g_per_ml`, `menu_item.servings_per_sale`) and the seeded costs must be
-applied first.
+If ARCHOS's `DEV_DATABASE_URL` names that same host, all fixture data below (and today's
+catalog seed) is already there — nothing to re-seed. If it points elsewhere, the two dev-only
+columns (`ingredient.density_g_per_ml`, `menu_item.servings_per_sale`), the seeded costs, and
+today's par/reorder/stock seed all need to be applied first.
 
 ### Branch state
-Two commits ahead of `main`, both pushed, **nothing merged**:
+Ahead of `main`, pushed, **nothing merged**:
 `2ebb3b9` supplier PO email + org/supplier contact fields + PO PDF rework ·
-`34601f0` shared unit resolver + density bridge + yield-vs-sales-unit costing.
+`34601f0` shared unit resolver + density bridge + yield-vs-sales-unit costing ·
+`8910e60` UAT checklist made resume-ready · today's commits: catalog seed script, and the
+receiving session fixes + checklist UI rework described above.
 Prod still needs `density_g_per_ml` + `servings_per_sale` at deploy (the three PO columns
 are already applied there).
 

@@ -30,6 +30,18 @@ const txHistory: { wasCalled: boolean; callbackResult: unknown } = {
 // a thenable that yields rows[0..n]. Each call records its args for assertions.
 function makeQueryMock(rowsByCall: unknown[][] = [[]]) {
   let callIdx = 0;
+
+  // A join chain of any length/order (leftJoin/innerJoin, mixed, any count)
+  // before .where() — real Drizzle allows chaining joins freely, and
+  // selectLinesWithIngredient() chains innerJoin + multiple leftJoins.
+  // Reads the CURRENT row set without advancing callIdx, same as the
+  // original single-leftJoin behavior this replaces.
+  const makeJoinable = (): any => ({
+    where: vi.fn(async () => rowsByCall[callIdx] ?? []),
+    leftJoin: vi.fn(() => makeJoinable()),
+    innerJoin: vi.fn(() => makeJoinable()),
+  });
+
   const select = vi.fn(() => ({
     from: vi.fn(() => ({
       where: vi.fn(async () => {
@@ -37,9 +49,8 @@ function makeQueryMock(rowsByCall: unknown[][] = [[]]) {
         callIdx = Math.min(callIdx + 1, rowsByCall.length - 1);
         return rowsByCall[idx] ?? [];
       }),
-      leftJoin: vi.fn(() => ({
-        where: vi.fn(async () => rowsByCall[callIdx] ?? []),
-      })),
+      leftJoin: vi.fn(() => makeJoinable()),
+      innerJoin: vi.fn(() => makeJoinable()),
     })),
   }));
 
@@ -67,7 +78,11 @@ function makeQueryMock(rowsByCall: unknown[][] = [[]]) {
     where: vi.fn(async () => undefined),
   }));
 
-  return { select, insert, update, delete: del };
+  // startSession acquires a per-PO pg_advisory_xact_lock before its checks —
+  // the mock doesn't model real locking, just needs the call to resolve.
+  const execute = vi.fn(async () => [{ pg_advisory_xact_lock: undefined }]);
+
+  return { select, insert, update, delete: del, execute };
 }
 
 const dbTransaction = vi.fn(async (cb: (tx: unknown) => Promise<unknown>) => {
@@ -103,6 +118,8 @@ vi.mock("../db/schema.js", () => ({
   purchaseOrder: { poId: "po_id", status: "status", organisationId: "organisation_id", supplierId: "supplier_id", poNumber: "po_number" },
   purchaseOrderLine: { lineId: "line_id", ingredientId: "ingredient_id", orderedQty: "ordered_qty", orderedUnit: "ordered_unit", unitCost: "unit_cost", poId: "po_id" },
   ingredient: { ingredientId: "ingredient_id", ingredientName: "ingredient_name", ingredientCategory: "ingredient_category", baseUnit: "base_unit" },
+  locationIngredient: { ingredientId: "ingredient_id", storeLocationId: "store_location_id", parLevel: "par_level" },
+  stockLevel: { ingredientId: "ingredient_id", storeLocationId: "store_location_id", currentQty: "current_qty" },
   supplier: {},
 }));
 

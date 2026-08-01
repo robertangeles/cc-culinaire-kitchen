@@ -38,6 +38,8 @@ export interface ReceivingLine {
   ingredientName: string | null;
   ingredientCategory: string | null;
   baseUnit: string | null;
+  parLevel: string | null;
+  stockOnHand: string | null;
 }
 
 export interface ReceivingDiscrepancy {

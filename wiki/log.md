@@ -4,6 +4,70 @@ Append-only. Newest entry on top.
 
 ---
 
+## 2026-08-01 — Receiving session bugs (unknown item, stuck PO, race condition) + checklist UI rework
+
+- While walking Purchasing → Receive on `PO-MRUH46AZ`, found and fixed three compounding bugs in
+  `receivingService.startSession()`, in the order they surfaced:
+  1. **"Unknown item" on every freshly-started delivery** — `startSession` returned bare
+     `receiving_line` rows straight from `.returning()`, with no join to `ingredient`; the reload
+     path (`getSession`) DID join correctly, so the two paths silently disagreed. Fixed by
+     extracting a shared `selectLinesWithIngredient()` helper both now call, so they can't drift
+     apart again.
+  2. **Stuck PO with no way back in** — a receiving session left open (tab closed, navigated away
+     mid-receive, or just abandoned) put the PO in `RECEIVING` with genuinely no UI path to resume
+     or cancel it: starting fresh always threw `Cannot start receiving on PO with status
+     RECEIVING`, and the client only ever populates session state via a successful start. Fixed by
+     making `startSession` resume the existing active session instead of rejecting when it finds
+     one for a `RECEIVING` PO.
+  3. **Race condition (the actual root cause of #2)** — two concurrent `startSession` calls for
+     the same PO could both read `po.status = SENT` and "no active session" before either
+     committed, creating two ACTIVE sessions for one PO. Confirmed live twice — the second time
+     because a verification script raced a real browser attempt. Fixed with a transaction-scoped
+     `pg_advisory_xact_lock(hashtext(poId))` at the top of `startSession`, same primitive as
+     `utils/advisoryLock.ts`'s job-runner lock, keyed per-PO instead of a fixed job key. **Not yet
+     verified against a real concurrent load or a real browser** — session paused before that
+     could run; see the UAT doc's RESUME HERE block.
+- **UI rework** (user-requested, same session): `ReceivingChecklist.tsx`'s 4 action pills (All
+  Good/Short/Reject/Price Change) moved from a tap-to-expand 2×2 grid to always-visible on the
+  right of each line (icon-only below the `sm` breakpoint). Each line now also shows unit cost,
+  UOM, current stock on hand, par level, and total cost inline — required extending
+  `selectLinesWithIngredient()` to join `location_ingredient` + `stock_level` (scoped via
+  `receiving_session.store_location_id`, so the helper's signature didn't need to change).
+- Lesson: the mocked-transaction test harness in `receivingService.test.ts` modeled only a single
+  `.leftJoin()` and no `.innerJoin()` — had to make the mock's join chain generically composable
+  (any join type, any count, before `.where()`) to match what real Drizzle allows. Also had to add
+  `tx.execute()` to the mock for the new advisory-lock call.
+
+## 2026-08-01 — Seeded realistic par/reorder/stock across the Almost French Pâtisserie catalog
+
+- UAT for `feature/ck-web/purchasing-order-guides-p1` (checklist: `docs/qa/uom-recipe-selling-uat.md`)
+  needed to walk Section C/C-guides, but the catalog was mostly bare: Almost French Patisserie had
+  0/115 items with a par level set (only 7 had any stock_level row); Almost French Epicure had only
+  3/115 items configured at all. Order Guides, order-to-par, and dashboards were effectively empty
+  outside the ~7 hand-built fixture items.
+- **Ran one-off `scripts/seedCatalogParStock.ts`** (deterministic, hash-based — no `Math.random`, so
+  reruns are idempotent) against both locations: 230 `location_ingredient` par/reorder settings
+  written via `updateLocationIngredient()`, 220 new `stock_level` rows created via `addStock()`
+  where none existed. The 10 pre-existing fixture rows (Belicard, Sancerre, Eleventh Hour Barossa
+  Shiraz, San Pellegrino, Chicken, Napkins, Baker's Flour — whichever location already had them)
+  were left byte-for-byte untouched since the checklist's worked examples in Sections A/B/E/F/G/H
+  depend on those exact numbers.
+- **Decisions made with the user:** scope = Almost French Pâtisserie org only (not the Comfort Spoon
+  Co. demo org); par/reorder gets set on every item including the fixture ones (so C5's "type a par
+  value" UI step doesn't have to start from a totally blank catalog); Epicure gets the full 115-item
+  catalog, pars scaled to 55% of Patisserie's (satellite site) — **except** Baker's Flour/Chicken/
+  Eleventh Hour, which skip the scale-down because their preserved stock is identical at both
+  locations (25kg/10kg/24 bottles) and scaling par down while stock stayed constant made Epicure
+  read as absurdly overstocked.
+- **Known drift flagged, not silently patched:** Belicard's live stock has drifted to 16 bottles
+  (checklist documents 6.5 — some C-section testing clearly happened off the recorded checkboxes).
+  Rather than force the stale worked numbers, Belicard's par was deliberately set to 20 (reorder 36)
+  so it still lands meaningfully below-par for a real C9–C15 walkthrough. The checklist's literal
+  expected numbers there are now stale and need a manual update whenever C-guides is actually walked.
+- **Verified:** re-queried both locations post-write — 115/115 par set and 115/115 stock_level rows
+  at both Patisserie and Epicure (up from 0/112 and 0/3); Belicard spot-checked live (stock 16, par
+  20, reorder 36); `tsc --noEmit` clean; Comfort Spoon Co. (org 1) confirmed untouched.
+
 ## 2026-07-15 — Storage areas as count sheets, B1 (branch: feature/ck-web/storage-areas-and-movements)
 
 Built B1 of `docs/specs/storage-areas-count-sheets.md`: areas exist, items get assigned to

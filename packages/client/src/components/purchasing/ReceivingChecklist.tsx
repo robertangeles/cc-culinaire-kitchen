@@ -23,7 +23,6 @@ import {
   Loader2,
   WifiOff,
   PartyPopper,
-  ChevronDown,
 } from "lucide-react";
 
 interface Props {
@@ -134,11 +133,30 @@ export default function ReceivingChecklist({ po, onBack }: Props) {
   }, [cancelSession, onBack]);
 
   // ── Loading state ──────────────────────────────────────────────
-  if (isLoading || !sessionData) {
+  if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center py-20 animate-[fadeIn_200ms_ease-out]">
         <Loader2 className="size-8 text-[#D4A574] animate-spin mb-4" />
         <p className="text-[#999] text-sm">Loading delivery...</p>
+      </div>
+    );
+  }
+
+  // ── Session failed to start/load — show the real reason instead of
+  // spinning forever (isLoading is false but sessionData never populated).
+  if (!sessionData) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 px-6 text-center animate-[fadeIn_200ms_ease-out]">
+        <AlertTriangle className="size-8 text-red-400 mb-4" />
+        <p className="text-white text-sm font-medium mb-1">Couldn't open this delivery</p>
+        <p className="text-[#999] text-sm mb-6">{error ?? "Something went wrong."}</p>
+        <button
+          onClick={onBack}
+          className="px-4 py-2 rounded-lg bg-[#1E1E1E] border border-[#2A2A2A] text-white text-sm
+            hover:border-[#D4A574]/30 transition-colors"
+        >
+          Back to deliveries
+        </button>
       </div>
     );
   }
@@ -216,80 +234,84 @@ export default function ReceivingChecklist({ po, onBack }: Props) {
               }`}
               style={{ animationDelay: `${idx * 30}ms` }}
             >
-              {/* Line row — tap to toggle action sheet */}
-              <button
-                onClick={() => {
-                  if (isActive) {
-                    setActiveLineId(null);
-                    setActionType(null);
-                  } else {
-                    setActiveLineId(line.receivingLineId);
-                    setActionType(null);
-                  }
-                }}
-                className="w-full flex items-center gap-3 px-4 py-3 text-left"
-              >
+              {/* Line row — status, item + PO context, always-visible actions */}
+              <div className="flex items-center gap-3 px-4 py-3">
                 {/* Status icon */}
                 <div className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${config.bg}`}>
                   <Icon className={`size-4 ${config.color}`} />
                 </div>
 
-                {/* Item info */}
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm text-white font-medium truncate">
+                {/* Item info + PO context — flows as one wrapping line */}
+                <div className="flex-1 min-w-0 flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+                  <span className="text-sm text-white font-medium">
                     {line.ingredientName ?? "Unknown item"}
-                  </div>
-                  <div className="text-xs text-[#999]">
-                    {Number(line.orderedQty).toFixed(1)} {line.orderedUnit}
-                    {line.status !== "RECEIVED" && (
-                      <span className={`ml-2 ${config.color}`}>
-                        {config.label}: {Number(line.receivedQty).toFixed(1)}
-                      </span>
-                    )}
-                  </div>
+                  </span>
+                  <span className="text-xs text-[#999]">
+                    · {Number(line.orderedQty).toFixed(1)} {line.orderedUnit}
+                  </span>
+                  {line.actualUnitCost && (
+                    <span className="text-xs text-[#999]">
+                      · ${Number(line.actualUnitCost).toFixed(2)}/{line.orderedUnit}
+                    </span>
+                  )}
+                  <span className="text-xs text-[#999]">
+                    · Stock {line.stockOnHand !== null ? Number(line.stockOnHand).toFixed(1) : "—"}{line.baseUnit ?? ""}
+                  </span>
+                  <span className="text-xs text-[#999]">
+                    · Par {line.parLevel !== null ? Number(line.parLevel).toFixed(1) : "—"}{line.baseUnit ?? ""}
+                  </span>
+                  {line.actualUnitCost && (
+                    <span className="text-xs text-[#999]">
+                      · Total ${(Number(line.receivedQty) * Number(line.actualUnitCost)).toFixed(2)}
+                    </span>
+                  )}
+                  {line.status !== "RECEIVED" && (
+                    <span className={`text-xs ${config.color}`}>
+                      · {config.label}: {Number(line.receivedQty).toFixed(1)}
+                    </span>
+                  )}
                 </div>
 
-                {/* Expand indicator */}
-                <ChevronDown className={`size-4 text-[#666] transition-transform ${isActive ? "rotate-180" : ""}`} />
-              </button>
+                {/* Actions — always visible; icon-only below sm, labeled above it */}
+                <div className="shrink-0 flex items-center gap-1.5">
+                  <button
+                    onClick={() => handleActionSelect(line.receivingLineId, "RECEIVED")}
+                    title="All Good" aria-label="All Good"
+                    className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-xs font-medium
+                      bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 transition-all"
+                  >
+                    <CheckCircle2 className="size-4" /> <span className="hidden sm:inline">All Good</span>
+                  </button>
+                  <button
+                    onClick={() => handleActionSelect(line.receivingLineId, "SHORT")}
+                    title="Short" aria-label="Short"
+                    className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-xs font-medium
+                      bg-amber-500/15 text-amber-400 hover:bg-amber-500/25 transition-all"
+                  >
+                    <AlertTriangle className="size-4" /> <span className="hidden sm:inline">Short</span>
+                  </button>
+                  <button
+                    onClick={() => handleActionSelect(line.receivingLineId, "REJECTED")}
+                    title="Reject" aria-label="Reject"
+                    className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-xs font-medium
+                      bg-red-500/15 text-red-400 hover:bg-red-500/25 transition-all"
+                  >
+                    <XCircle className="size-4" /> <span className="hidden sm:inline">Reject</span>
+                  </button>
+                  <button
+                    onClick={() => handleActionSelect(line.receivingLineId, "PRICE_VARIANCE")}
+                    title="Price Change" aria-label="Price Change"
+                    className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-xs font-medium
+                      bg-blue-500/15 text-blue-400 hover:bg-blue-500/25 transition-all"
+                  >
+                    <DollarSign className="size-4" /> <span className="hidden sm:inline">Price Change</span>
+                  </button>
+                </div>
+              </div>
 
-              {/* Action sheet — slides up from the line */}
-              {isActive && (
+              {/* Follow-up sub-form — only for Short / Reject / Price Change */}
+              {isActive && actionType && (
                 <div className="border-t border-[#2A2A2A] px-4 py-3 animate-[fadeIn_150ms_ease-out]">
-                  {/* Action type selector */}
-                  {!actionType && (
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        onClick={() => handleActionSelect(line.receivingLineId, "RECEIVED")}
-                        className="flex items-center gap-2 px-3 py-2.5 rounded-lg text-xs font-medium
-                          bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 transition-all"
-                      >
-                        <CheckCircle2 className="size-4" /> All Good
-                      </button>
-                      <button
-                        onClick={() => handleActionSelect(line.receivingLineId, "SHORT")}
-                        className="flex items-center gap-2 px-3 py-2.5 rounded-lg text-xs font-medium
-                          bg-amber-500/15 text-amber-400 hover:bg-amber-500/25 transition-all"
-                      >
-                        <AlertTriangle className="size-4" /> Short
-                      </button>
-                      <button
-                        onClick={() => handleActionSelect(line.receivingLineId, "REJECTED")}
-                        className="flex items-center gap-2 px-3 py-2.5 rounded-lg text-xs font-medium
-                          bg-red-500/15 text-red-400 hover:bg-red-500/25 transition-all"
-                      >
-                        <XCircle className="size-4" /> Reject
-                      </button>
-                      <button
-                        onClick={() => handleActionSelect(line.receivingLineId, "PRICE_VARIANCE")}
-                        className="flex items-center gap-2 px-3 py-2.5 rounded-lg text-xs font-medium
-                          bg-blue-500/15 text-blue-400 hover:bg-blue-500/25 transition-all"
-                      >
-                        <DollarSign className="size-4" /> Price Change
-                      </button>
-                    </div>
-                  )}
-
                   {/* SHORT input */}
                   {actionType === "SHORT" && (
                     <div className="space-y-3">
