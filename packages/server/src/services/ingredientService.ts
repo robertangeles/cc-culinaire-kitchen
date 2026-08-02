@@ -1278,6 +1278,7 @@ export async function getIngredientTransactions(
   try {
     const trResult = await db.execute(sql`
       SELECT tl.line_id as id, tl.sent_qty as quantity, tl.sent_unit as unit,
+             t.transfer_id as "transferId",
              t.status as reason, t.sent_dttm as "occurredAt",
              u.user_name as "userName",
              sl_from.location_name as "fromLocation",
@@ -1318,11 +1319,50 @@ export async function getIngredientTransactions(
     movementRows = (mvResult as any).rows ?? mvResult ?? [];
   } catch { movementRows = []; }
 
+  // 6. Deliveries received. Stock's single largest INBOUND movement, and it was
+  // missing from this history entirely — a chef could receive 4 bags of flour,
+  // watch stock on hand jump, then open this panel and see "No activity on this
+  // day". Every other source here is a count, a usage, a loss, or a move; nothing
+  // recorded the arrival.
+  //
+  // Sourced from purchase_order_line rather than receiving_line because that is
+  // the row confirmReceipt stamps with received_qty / received_by_user_id /
+  // received_dttm, and it survives the receiving session being cleaned up.
+  // Quantity is reported in the ORDERED unit (e.g. "4 bag"), which is what the
+  // kitchen actually took delivery of; the base-unit equivalent is already
+  // visible in stock on hand.
+  let receiptRows: any[] = [];
+  try {
+    const rcResult = await db.execute(sql`
+      SELECT pol.line_id AS id,
+             pol.received_qty AS quantity,
+             COALESCE(pol.received_unit, pol.ordered_unit) AS unit,
+             pol.line_status AS "lineStatus",
+             po.po_id AS "poId",
+             po.po_number AS "poNumber",
+             s.supplier_name AS "supplierName",
+             pol.received_dttm AS "occurredAt",
+             u.user_name AS "userName"
+        FROM purchase_order_line pol
+        INNER JOIN purchase_order po ON po.po_id = pol.po_id
+        LEFT JOIN supplier s ON s.supplier_id = po.supplier_id
+        LEFT JOIN "user" u ON u.user_id = pol.received_by_user_id
+       WHERE pol.ingredient_id = ${ingredientId}
+         AND po.organisation_id = ${organisationId}
+         AND pol.received_dttm IS NOT NULL
+         AND pol.received_qty IS NOT NULL
+         AND pol.received_dttm >= ${startDate}::timestamptz
+         AND pol.received_dttm < ${endDate}::timestamptz
+    `);
+    receiptRows = (rcResult as any).rows ?? rcResult ?? [];
+  } catch { receiptRows = []; }
+
   // Merge all into unified TransactionEvent[]
   const transactions = [
     ...stockTakeRows.map((r: any) => ({
       id: r.id,
       type: "stock_take" as const,
+      link: null,
       quantity: String(r.quantity),
       unit: r.unit,
       reason: null,
@@ -1332,6 +1372,7 @@ export async function getIngredientTransactions(
     ...consumptionRows.map((r: any) => ({
       id: r.id,
       type: "transfer" as const,
+      link: null,
       quantity: String(r.quantity),
       unit: r.unit,
       reason: r.reason,
@@ -1341,6 +1382,7 @@ export async function getIngredientTransactions(
     ...wasteRows.map((r: any) => ({
       id: r.id || r.waste_log_id,
       type: "waste" as const,
+      link: null,
       quantity: String(r.quantity),
       unit: r.unit,
       reason: r.reason,
@@ -1350,6 +1392,11 @@ export async function getIngredientTransactions(
     ...transferRows.map((r: any) => ({
       id: r.id,
       type: "transfer_loc" as const,
+      // Transfers are the only other event with a real record-level destination:
+      // TransferList expands a specific transfer by id. Stock takes are HQ-gated
+      // (linking a chef into a 403 is worse than not linking), and area moves /
+      // usage have only entry forms, no browsable list to land on.
+      link: r.transferId ? `/inventory?tab=log&view=transfers&transfer=${r.transferId}` : null,
       quantity: String(r.quantity),
       unit: r.unit,
       reason: `${r.fromLocation} → ${r.toLocation}`,
@@ -1359,12 +1406,34 @@ export async function getIngredientTransactions(
     ...movementRows.map((r: any) => ({
       id: r.id,
       type: "movement" as const,
+      link: null,
       quantity: String(r.quantity),
       unit: r.unit,
       // Mirrors how transfer_loc formats its detail line.
       reason: `${r.fromArea} → ${r.toArea}`,
       userName: r.userName || "Unknown",
       occurredAt: r.occurredAt instanceof Date ? r.occurredAt.toISOString() : String(r.occurredAt),
+    })),
+    ...receiptRows.map((r: any) => ({
+      id: r.id,
+      type: "receipt" as const,
+      quantity: String(r.quantity),
+      unit: r.unit,
+      // Supplier + PO, so a chef can trace the number back to a delivery. A
+      // short or rejected line says so — otherwise a partial delivery would be
+      // indistinguishable from a full one.
+      reason: [
+        r.supplierName,
+        r.poNumber,
+        r.lineStatus && r.lineStatus !== "RECEIVED" ? String(r.lineStatus).toLowerCase() : null,
+      ]
+        .filter(Boolean)
+        .join(" · "),
+      userName: r.userName || "Unknown",
+      occurredAt: r.occurredAt instanceof Date ? r.occurredAt.toISOString() : String(r.occurredAt),
+      // Deep-link to the order this delivery came from. The other event types
+      // have no destination yet — see the audit before wiring any more.
+      link: r.poId ? `/purchasing?tab=orders&po=${r.poId}` : null,
     })),
   ].sort((a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime());
 

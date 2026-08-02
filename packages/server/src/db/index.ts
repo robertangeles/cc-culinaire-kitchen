@@ -10,6 +10,7 @@
 import { drizzle, type PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import * as schema from "./schema.js";
+import { isProductionProcess } from "../utils/envShim.js";
 
 /** Singleton Drizzle instance; initialized on first call to {@link getDb}. */
 let _db: PostgresJsDatabase<typeof schema> | null = null;
@@ -44,8 +45,9 @@ function hostOf(url: string | undefined): string {
  * @throws {Error} If a dev process points at prod, or at a remote host without opt-in.
  */
 export function assertSafeDbHost(connectionString: string): void {
-  if (process.env.NODE_ENV === "production") return;
-  if ((process.env.APP_ENV ?? "").toLowerCase() === "prod") return;
+  // Shared with the scheduled-jobs gate in index.ts — one definition of
+  // "is this production", so the two can never drift apart.
+  if (isProductionProcess()) return;
 
   const host = hostOf(connectionString);
   if (!host) return; // Unparseable URL — let postgres.js surface the real error.

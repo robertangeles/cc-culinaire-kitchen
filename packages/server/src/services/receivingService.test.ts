@@ -206,6 +206,36 @@ describe("receivingService — transaction + audit invariants", () => {
         organisationId: 7,
       });
     });
+
+    // The pre-lock race left POs SENT with a sibling session still ACTIVE
+    // (cancelSession resets the PO unconditionally). That combination used to
+    // throw "already in progress" with no path to the session at all.
+    it("resumes an ACTIVE session on a PO still marked SENT instead of throwing", async () => {
+      const po = { poId: "po-1", status: "SENT", organisationId: 7 };
+      const orphan = { sessionId: "session-orphan", poId: "po-1", status: "ACTIVE" };
+      const lines = [{ receivingLineId: "rl-1", ingredientName: "Belicard" }];
+
+      withTxRows([[po], [orphan], lines]);
+
+      const { startSession } = await import("./receivingService.js");
+      const result = await startSession("po-1", "loc-1", 42);
+
+      expect(result.session).toEqual(orphan);
+      expect(result.lines).toEqual(lines);
+      // Resuming must not mint a second session or log a spurious create.
+      expect(auditLogMock).not.toHaveBeenCalled();
+    });
+
+    it("rejects a PO in a terminal status when no ACTIVE session exists", async () => {
+      const po = { poId: "po-1", status: "RECEIVED", organisationId: 7 };
+
+      withTxRows([[po], []]);
+
+      const { startSession } = await import("./receivingService.js");
+      await expect(startSession("po-1", "loc-1", 42)).rejects.toThrow(
+        "Cannot start receiving on PO with status RECEIVED",
+      );
+    });
   });
 
   describe("cancelSession", () => {

@@ -433,13 +433,26 @@ function EditIngredientModal({
     ? (Number(ingredient.unitCost) * Number(ingredient.packQty)).toFixed(2)
     : ingredient.unitCost || "";
   const [cost, setCost] = useState(packCostInit);
+  // Has the operator actually touched the packaging/price inputs this session?
+  // See derivedUnitCost — without this, merely opening and saving rewrote the cost.
+  const [packagingTouched, setPackagingTouched] = useState(false);
 
   // Cost per kitchen unit: with packaging, the entered cost is per package
   // (÷ pack qty); buying loose, the entered cost IS per kitchen unit — a stale
   // pack qty must not divide it.
-  const derivedUnitCost = purchaseUnit && editPackQty && cost && parseFloat(editPackQty) > 0
-    ? (parseFloat(cost) / parseFloat(editPackQty)).toFixed(4)
-    : cost || null;
+  //
+  // Untouched inputs return the STORED cost verbatim. The pack price shown above
+  // is itself derived and rounded ($1.27/kg × 12.5 = $15.875 → "15.88"), so
+  // re-deriving the unit cost from it round-trips through that rounding and
+  // yields $1.2704. Because Save writes this value back to `unitCost`, opening an
+  // ingredient and saving it — changing nothing — silently rewrote the money
+  // column, and the per-kg figure here disagreed with the supplier row 4cm below.
+  const derivedUnitCost = (() => {
+    if (!packagingTouched && ingredient.unitCost) return String(ingredient.unitCost);
+    return purchaseUnit && editPackQty && cost && parseFloat(editPackQty) > 0
+      ? (parseFloat(cost) / parseFloat(editPackQty)).toFixed(4)
+      : cost || null;
+  })();
   const [par, setPar] = useState(ingredient.parLevel || "");
   // Par can be ENTERED in kitchen units or purchase packages ("2 bags");
   // always STORED in kitchen units (stock comparisons need one unit).
@@ -637,7 +650,7 @@ function EditIngredientModal({
               Deliveries convert to {unit} the moment they're received.
             </p>
             <div className="flex items-center gap-2 flex-wrap">
-              <select value={purchaseUnit} onChange={(e) => setPurchaseUnit(e.target.value)}
+              <select value={purchaseUnit} onChange={(e) => { setPackagingTouched(true); setPurchaseUnit(e.target.value); }}
                 className="px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white focus:outline-none">
                 <option value="">— by the {unit} —</option>
                 {UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
@@ -647,7 +660,7 @@ function EditIngredientModal({
               {purchaseUnit && (
                 <>
                   <span className="text-xs text-[#999]">of</span>
-                  <input type="text" value={editPackQty} onChange={(e) => setEditPackQty(e.target.value)}
+                  <input type="text" value={editPackQty} onChange={(e) => { setPackagingTouched(true); setEditPackQty(e.target.value); }}
                     placeholder="12"
                     className="w-20 px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none" />
                   <span className="text-xs text-[#999]">{unit}</span>
@@ -656,7 +669,7 @@ function EditIngredientModal({
               <span className="text-xs text-[#999]">@</span>
               <div className="relative">
                 <DollarSign className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-[#666]" />
-                <input type="text" value={cost} onChange={(e) => setCost(e.target.value)}
+                <input type="text" value={cost} onChange={(e) => { setPackagingTouched(true); setCost(e.target.value); }}
                   placeholder="0.00"
                   className="w-28 pl-8 pr-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none" />
               </div>
@@ -708,26 +721,54 @@ function EditIngredientModal({
                       )}
                     </div>
                     <div className="flex items-center gap-2 shrink-0 ml-2">
-                      {(s.packCost || s.costPerUnit) && (
-                        <span className="text-emerald-400 tabular-nums">
-                          ${s.packCost ? Number(s.packCost).toFixed(2) : Number(s.costPerUnit).toFixed(4)}
-                        </span>
-                      )}
+                      {/* ONE price per supplier: what they invoice you.
+                          With packaging declared that is the pack price
+                          ("$15.88 /bag"); bought loose it is the kitchen-unit
+                          price ("$3.80 /kg"). Either way it is the number on
+                          the docket.
+                          Deliberately NOT also showing a per-kg conversion here.
+                          It reads as useful (compare suppliers on a level unit)
+                          but is redundant in this schema: pack_qty/purchase_unit
+                          live on `ingredient`, not on the supplier link, so every
+                          supplier of an item shares one pack size and the pack
+                          prices already compare directly. PURCHASED AS shows the
+                          per-kg conversion a few cm above — printing it twice is
+                          what made these numbers confusing in the first place. */}
+                      {(s.packCost || s.costPerUnit) && (() => {
+                        const hasPack = s.packCost != null && purchaseUnit;
+                        const price = hasPack ? Number(s.packCost) : Number(s.costPerUnit);
+                        return (
+                          <span className="text-emerald-400 tabular-nums">
+                            ${hasPack ? price.toFixed(2) : price.toFixed(4)}
+                            <span className="text-emerald-400/60">
+                              {" "}/{hasPack ? purchaseUnit : unit}
+                            </span>
+                          </span>
+                        );
+                      })()}
                       {/* Supplier's minimum order — commits on blur. This is the
-                          only place it can be set; the PO screen just reads it. */}
-                      <input
-                        key={`moq-${s.supplierId}-${s.minimumOrderQty ?? ""}`}
-                        type="text"
-                        defaultValue={s.minimumOrderQty ?? ""}
-                        onBlur={(e) => {
-                          const v = e.target.value.trim();
-                          if (v === (s.minimumOrderQty ?? "")) return;
-                          updateLink(s.supplierId, { minimumOrderQty: v || null });
-                        }}
-                        placeholder="min"
-                        title="Minimum order quantity for this supplier"
-                        className="w-14 px-1.5 py-1 rounded bg-[#0A0A0A] border border-[#2A2A2A] text-[11px] text-white placeholder-[#555] text-right tabular-nums focus:outline-none focus:border-[#D4A574]/40"
-                      />
+                          only place it can be set; the PO screen just reads it.
+                          Labelled inline: an unlabelled number box gave no clue
+                          whether "3" meant 3 bags, 3 kg, or 3 days' lead time.
+                          It is counted in PURCHASE packs — ordering rounds the
+                          shortfall to whole packs, then applies this floor. */}
+                      <span className="flex items-center gap-1 text-[10px] text-[#666]">
+                        min
+                        <input
+                          key={`moq-${s.supplierId}-${s.minimumOrderQty ?? ""}`}
+                          type="text"
+                          defaultValue={s.minimumOrderQty ?? ""}
+                          onBlur={(e) => {
+                            const v = e.target.value.trim();
+                            if (v === (s.minimumOrderQty ?? "")) return;
+                            updateLink(s.supplierId, { minimumOrderQty: v || null });
+                          }}
+                          placeholder="—"
+                          title={`Minimum order quantity, in ${purchaseUnit || unit}s. Ordering warns below this but never blocks.`}
+                          className="w-12 px-1.5 py-1 rounded bg-[#0A0A0A] border border-[#2A2A2A] text-[11px] text-white placeholder-[#555] text-right tabular-nums focus:outline-none focus:border-[#D4A574]/40"
+                        />
+                        {purchaseUnit || unit}
+                      </span>
                       <button
                         onClick={() => removeLink(s.supplierId)}
                         className="p-0.5 rounded hover:bg-red-500/10 text-[#666] hover:text-red-400 transition-colors"

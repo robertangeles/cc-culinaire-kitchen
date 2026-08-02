@@ -138,38 +138,36 @@ export async function startSession(
       .where(and(eq(purchaseOrder.poId, poId), eq(purchaseOrder.organisationId, orgId)));
 
     if (!po) throw new Error("Purchase order not found");
-    if (po.status !== "SENT") {
-      // A PO left in RECEIVING with no confirmed/cancelled session (tab closed,
-      // connection dropped, navigated away mid-receive) previously had NO way
-      // back — starting fresh always failed here, and the client only ever
-      // populates session state via a successful start, so there was no path
-      // to reach the existing session either and cancel it. Resume it instead.
-      if (po.status === "RECEIVING") {
-        const [activeSession] = await tx
-          .select()
-          .from(receivingSession)
-          .where(and(eq(receivingSession.poId, poId), eq(receivingSession.status, "ACTIVE")));
-        if (activeSession) {
-          const lines = await selectLinesWithIngredient(activeSession.sessionId, tx);
-          return { session: activeSession, lines };
-        }
-      }
-      throw new Error(`Cannot start receiving on PO with status ${po.status}`);
-    }
 
-    // Check no active session exists
-    const [existing] = await tx
+    // Resume an existing ACTIVE session whatever the PO's status claims, because
+    // the two genuinely disagree in both directions and every disagreement used
+    // to be a dead end:
+    //  - PO RECEIVING + session ACTIVE — the normal interrupted receive (tab
+    //    closed, connection dropped, navigated away mid-receive).
+    //  - PO SENT + session ACTIVE — residue of the pre-lock race, which created
+    //    two sessions for one PO; cancelling either one resets the PO to SENT
+    //    (see cancelSession) while its sibling stays ACTIVE.
+    // The client only ever populates session state via a successful start, so
+    // throwing here left the operator with no path to the session at all — not
+    // to resume it, not to cancel it. Resume, repairing the PO status on the way.
+    const [activeSession] = await tx
       .select()
       .from(receivingSession)
-      .where(
-        and(
-          eq(receivingSession.poId, poId),
-          eq(receivingSession.status, "ACTIVE"),
-        ),
-      );
+      .where(and(eq(receivingSession.poId, poId), eq(receivingSession.status, "ACTIVE")));
 
-    if (existing) {
-      throw new Error("A receiving session is already in progress for this PO");
+    if (activeSession) {
+      if (po.status !== "RECEIVING") {
+        await tx
+          .update(purchaseOrder)
+          .set({ status: "RECEIVING", updatedDttm: new Date() })
+          .where(eq(purchaseOrder.poId, poId));
+      }
+      const lines = await selectLinesWithIngredient(activeSession.sessionId, tx);
+      return { session: activeSession, lines };
+    }
+
+    if (po.status !== "SENT") {
+      throw new Error(`Cannot start receiving on PO with status ${po.status}`);
     }
 
     // Create session
@@ -668,7 +666,7 @@ export async function confirmReceipt(sessionId: string, orgId: number) {
           <p><strong>Total Discrepancies:</strong> ${result.discrepancies.length}</p>
           <p><strong>Rejections:</strong> ${result.discrepancies.filter((d) => d.type === "REJECTED").length}</p>
           <p style="margin-top: 16px;">
-            <a href="${process.env.CLIENT_URL || "https://www.culinaire.kitchen"}/inventory?tab=purchase-orders&po=${result.poId}"
+            <a href="${process.env.CLIENT_URL || "https://www.culinaire.kitchen"}/purchasing?tab=orders&po=${result.poId}"
                style="background: linear-gradient(135deg, #D4A574, #C4956A); color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600;">
               View Details
             </a>

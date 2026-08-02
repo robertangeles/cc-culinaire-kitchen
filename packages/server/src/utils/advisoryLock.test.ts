@@ -38,15 +38,40 @@ describe.runIf(dbAvailable)("withAdvisoryLock (T15 single-runner guard)", () => 
   });
 
   // The core cross-instance guarantee: two overlapping runs → exactly one sends.
+  //
+  // Synchronised with an explicit handshake, NOT a sleep. The original version
+  // fired both calls via Promise.all and had the winner sleep 150ms, assuming
+  // that was long enough for the two transactions to overlap. Against a remote
+  // database that assumption breaks: opening the second transaction cost ~216ms
+  // (measured), so the first one committed and released BEFORE the second even
+  // began. Both then acquired legitimately, runs === 2, and the suite reported a
+  // lock failure that was really a test-timing failure. Gating on "the first
+  // caller is provably inside the lock" removes the race entirely and holds on
+  // any connection latency.
   it("only ONE of two concurrent callers runs; the other skips", async () => {
     let runs = 0;
-    const slow = async () => {
+    let firstIsInside!: () => void;
+    let releaseFirst!: () => void;
+    const inside = new Promise<void>((r) => (firstIsInside = r));
+    const gate = new Promise<void>((r) => (releaseFirst = r));
+
+    const holder = withAdvisoryLock(K, async () => {
       runs++;
-      await new Promise((r) => setTimeout(r, 150));
-    };
-    const results = await Promise.all([withAdvisoryLock(K, slow), withAdvisoryLock(K, slow)]);
+      firstIsInside();
+      await gate; // hold the lock open until the contender has had its turn
+    });
+
+    await inside; // the lock is now definitely held
+    const contender = await withAdvisoryLock(K, async () => {
+      runs++;
+    });
+
+    releaseFirst();
+    const first = await holder;
+
+    expect(contender).toBe(false); // second caller skipped
+    expect(first).toBe(true); // first caller ran
     expect(runs).toBe(1);
-    expect(results.filter(Boolean).length).toBe(1); // exactly one acquired
   });
 
   it("releases the lock after fn resolves (a later call re-acquires)", async () => {

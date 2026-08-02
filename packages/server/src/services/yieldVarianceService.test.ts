@@ -111,6 +111,61 @@ describe("getYieldVariance — error + empty states", () => {
     expect(result.theoretical).toBe(50);
     expect(result.actual).toBe(0);
   });
+
+  // Regression, 2026-08-02. The actual-cost SQL used
+  // COALESCE(preferred_unit_cost, 0), so an ingredient with no cost counted as
+  // free. preferred_unit_cost is trigger-maintained from
+  // ingredient_supplier.cost_per_unit and was NULL catalog-wide, so `actual`
+  // summed to $0 and every dish reported a 100% favourable variance — a
+  // confident, entirely fictional number. A missing cost must never read as a
+  // free ingredient; report the honest empty state instead.
+  it("returns uncosted (not a favourable variance) when any consumed ingredient has no cost", async () => {
+    setRows(
+      [{
+        menuItemId: "m1",
+        unitsSold: 10,
+        servings: 1,
+        periodStart: "2026-01-01",
+        periodEnd: "2026-01-31",
+      }],
+      [{ lineCost: "5.00" }],
+    );
+    // Plenty of logs, but 2 of them join to an ingredient with no cost at all.
+    mockExecuteRows.push({ actual_cost: "30.00", log_count: 25, uncosted_rows: 2 });
+
+    const { getYieldVariance } = await import("./yieldVarianceService.js");
+    const result = await getYieldVariance("m1");
+
+    expect(result.status).toBe("uncosted");
+    // theoretical is still honest and preserved …
+    expect(result.theoretical).toBe(50);
+    // … but the understated actual must NOT be published as a -40% variance.
+    expect(result.actual).toBe(0);
+    expect(result.variancePct).toBe(0);
+    expect(result.threshold).not.toBe("good");
+  });
+
+  it("costs normally when every consumed ingredient has a cost", async () => {
+    setRows(
+      [{
+        menuItemId: "m1",
+        unitsSold: 10,
+        servings: 1,
+        periodStart: "2026-01-01",
+        periodEnd: "2026-01-31",
+      }],
+      [{ lineCost: "5.00" }],
+    );
+    mockExecuteRows.push({ actual_cost: "55.00", log_count: 25, uncosted_rows: 0 });
+
+    const { getYieldVariance } = await import("./yieldVarianceService.js");
+    const result = await getYieldVariance("m1");
+
+    expect(result.status).toBe("ok");
+    expect(result.theoretical).toBe(50);
+    expect(result.actual).toBe(55);
+    expect(result.variance).toBe(5);
+  });
 });
 
 // ── Formula tests ───────────────────────────────────────────────────

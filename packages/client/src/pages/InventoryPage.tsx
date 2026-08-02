@@ -8,6 +8,8 @@
 import { useState, useMemo, useEffect } from "react";
 import { useAuth } from "../context/AuthContext.js";
 import { useLocation } from "../context/LocationContext.js";
+// Aliased: `useLocation` above is this app's store-location context, not the router's.
+import { useLocation as useRouterLocation } from "react-router";
 import { useHasPermission } from "../hooks/useHasPermission.js";
 import { useGuide } from "../context/GuideContext.js";
 import { usePendingReviews, useStockTakeHistory } from "../hooks/useInventory.js";
@@ -33,6 +35,36 @@ type InventoryTab = "dashboard" | "setup" | "stock-take" | "log" | "ingredients"
 // Review + History are HQ-only sub-views WITHIN Stock Take (not top-level).
 type StockTakeView = "count" | "review" | "history";
 
+const INVENTORY_TABS: InventoryTab[] = [
+  "dashboard", "setup", "stock-take", "log", "ingredients", "requests", "areas",
+];
+const TRANSFER_SUBVIEWS: TransferSubView[] = ["usage", "transfers", "movement"];
+
+/**
+ * Deep-link params, read once on mount.
+ *
+ * This page needs a sub-view level that /purchasing did not: a transfer lives at
+ * tab `log` → sub-view `transfers`, so `?tab=` alone cannot address it. Used by
+ * the ingredient Transaction History to open the transfer a row came from.
+ *
+ * Unknown values are ignored rather than applied, so a stale or hand-edited URL
+ * falls back to the normal default instead of rendering an empty tab.
+ */
+function readDeepLink(search: string): {
+  tab: InventoryTab | null;
+  view: TransferSubView | null;
+  transferId: string | null;
+} {
+  const p = new URLSearchParams(search);
+  const rawTab = p.get("tab");
+  const rawView = p.get("view");
+  return {
+    tab: INVENTORY_TABS.includes(rawTab as InventoryTab) ? (rawTab as InventoryTab) : null,
+    view: TRANSFER_SUBVIEWS.includes(rawView as TransferSubView) ? (rawView as TransferSubView) : null,
+    transferId: p.get("transfer"),
+  };
+}
+
 export function InventoryPage() {
   const { user, isGuest } = useAuth();
   const { selectedLocationId, isOrgAdmin } = useLocation();
@@ -42,8 +74,21 @@ export function InventoryPage() {
   // Par editing writes location_ingredient — same gate as the route (inventory:manage).
   // Hiding it isn't the security boundary, it just avoids showing a control that 403s.
   const canManageInventory = useHasPermission()("inventory:manage");
-  const [activeTab, setActiveTab] = useState<InventoryTab>("dashboard");
-  const [transferView, setTransferView] = useState<TransferSubView>("usage");
+  // Derived from the router's search string, NOT read once on mount. Navigating
+  // from /inventory to /inventory?tab=log&view=transfers does not remount this
+  // page, so a mount-only read left the URL updated and the page unchanged —
+  // clicking a transfer in an ingredient's history appeared to do nothing.
+  const { search } = useRouterLocation();
+  const deepLink = useMemo(() => readDeepLink(search), [search]);
+  const [activeTab, setActiveTab] = useState<InventoryTab>(deepLink.tab ?? "dashboard");
+  const [transferView, setTransferView] = useState<TransferSubView>(deepLink.view ?? "usage");
+
+  // Apply the deep link whenever the URL changes. Keyed on `search` so a manual
+  // tab click afterwards is not yanked back.
+  useEffect(() => {
+    if (deepLink.tab) setActiveTab(deepLink.tab);
+    if (deepLink.view) setTransferView(deepLink.view);
+  }, [deepLink]);
   const [stockTakeView, setStockTakeView] = useState<StockTakeView>("count");
   const [movementPrefill, setMovementPrefill] = useState<MovementPrefill | null>(null);
   const { setGuideKeyOverride } = useGuide();
@@ -254,7 +299,7 @@ export function InventoryPage() {
                   }}
                 />
               )}
-              {transferView === "transfers" && <TransferList />}
+              {transferView === "transfers" && <TransferList focusTransferId={deepLink.transferId} />}
               {transferView === "movement" && <StockMovementForm prefill={movementPrefill} />}
             </div>
           )}

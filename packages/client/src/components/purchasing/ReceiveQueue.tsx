@@ -8,11 +8,11 @@ import { useState, useCallback } from "react";
 import { useLocation } from "../../context/LocationContext.js";
 import { usePurchaseOrders, type PurchaseOrder } from "../../hooks/useInventory.js";
 import ReceivingChecklist from "./ReceivingChecklist.js";
-import { Package, Truck, Clock, Loader2 } from "lucide-react";
+import { Package, Truck, Clock, Loader2, Send } from "lucide-react";
 
-export default function ReceiveQueue() {
+export default function ReceiveQueue({ onChanged }: { onChanged?: () => void }) {
   const { selectedLocationId } = useLocation();
-  const { pos, isLoading, getDetail } = usePurchaseOrders(selectedLocationId);
+  const { pos, isLoading, getDetail, refresh } = usePurchaseOrders(selectedLocationId);
   const [receivePO, setReceivePO] = useState<PurchaseOrder | null>(null);
 
   const sentPOs = pos.filter((p) => p.status === "SENT" || p.status === "RECEIVING");
@@ -35,7 +35,14 @@ export default function ReceiveQueue() {
     return (
       <ReceivingChecklist
         po={receivePO}
-        onBack={() => setReceivePO(null)}
+        onBack={() => {
+          setReceivePO(null);
+          // Opening a delivery moves the PO to RECEIVING, and confirming moves it
+          // to RECEIVED/PARTIAL_RECEIVED — neither of which the queue sees without
+          // a refetch, so a received delivery lingered here until a page reload.
+          refresh();
+          onChanged?.();
+        }}
       />
     );
   }
@@ -105,6 +112,15 @@ export default function ReceiveQueue() {
                       </>
                     )}
                   </div>
+                  {(po.sentAt || po.createdByUserName) && (
+                    <div className="flex items-center gap-1 mt-1 text-xs text-[#666]">
+                      <Send className="size-3" />
+                      {po.sentAt
+                        ? `Sent ${new Date(po.sentAt).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" })}`
+                        : "Not sent yet"}
+                      {po.createdByUserName && <span>· ordered by {po.createdByUserName}</span>}
+                    </div>
+                  )}
                 </div>
                 <div className="text-right shrink-0">
                   {po.totalValue && (

@@ -119,12 +119,19 @@ export async function recompute(
 
   // Step 4: bulk recompute via UPDATE FROM (subquery aggregating fifo_batch).
   // One statement, one round-trip, regardless of how many pairs.
+  // Bound as an ISO string with an explicit cast, NOT as a Date. Raw sql``
+  // carries no column type information, so Drizzle hands the value straight to
+  // the postgres driver, which calls Buffer.byteLength() on it and throws
+  // ERR_INVALID_ARG_TYPE on a Date. The typed builder (.set({ x: new Date() }))
+  // is fine — only raw SQL needs this. Same pattern as the ::timestamptz date
+  // filters in ingredientService.
   const now = new Date();
+  const nowIso = now.toISOString();
   await tx.execute(sql`
     UPDATE location_ingredient li
        SET weighted_average_cost = sub.wac,
-           wac_last_recomputed_at = ${now},
-           updated_dttm = ${now}
+           wac_last_recomputed_at = ${nowIso}::timestamptz,
+           updated_dttm = ${nowIso}::timestamptz
       FROM (
         SELECT b.store_location_id,
                b.ingredient_id,

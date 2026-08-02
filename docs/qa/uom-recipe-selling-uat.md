@@ -1,6 +1,6 @@
 # UAT Checklist — Kitchen-Unit Model + Recipe-Based Selling
 
-## ▶ RESUME HERE — 2026-08-01 (machine switch: HEPHAESTUS → ARCHOS)
+## ▶ RESUME HERE — 2026-08-02 (ARCHOS)
 
 > **⚠️ UAT IS INCOMPLETE AND IS PRIORITY #1.** Nothing on this branch merges to `main`
 > until the rows below are walked. Do not start new feature work ahead of finishing this.
@@ -9,11 +9,52 @@
 **Partly walked:** **C** — C1–C4 ✅ (PO packaging + receive) · C9–C15 ✅ (order-to-par core flow)
 **Still to walk:** C5–C8 (guide setup) · C16–C32 (regressions, permissions, PO email, UI fixes) · **D** (recipes) · E · F · G · H
 
-**Next action is NOT C5–C8 yet.** A HEPHAESTUS session (today) found and fixed real bugs in
-Purchasing → Receive while prepping for the rest of C — one of the fixes isn't proven yet.
-Verify it first (below), then resume at **C5–C8**, then C16+, then Section D.
+**Purchasing → Receive is now fully walked in a real browser and is clear to use.**
+Both HEPHAESTUS open items are closed, and two further bugs surfaced during the walk
+were fixed. Resume at **C5–C8**, then C16+, then Section D.
 
-**What HEPHAESTUS did today** (full detail in `wiki/log.md`, 2026-08-01 entry):
+**A delivery is waiting for you: `PO-MSB3C4KL`** (PFD Food Services, $106, 2 lines —
+Plain Flour 4 bag @ $17.50, Chicken 3 kg @ $12.00) at Almost French Patisserie.
+
+**Closed on 2026-08-02 (ARCHOS):**
+
+1. ~~Advisory-lock fix (2c below) only mocked-DB tested~~ → **verified under real
+   concurrency.** Two simultaneous `startSession` calls against the real dev DB returned
+   the *same* session; no second row was created.
+2. ~~`PO-MRUH46AZ` may have an orphaned ACTIVE session~~ → **it did**, and it was the cause
+   of *"A receiving session is already in progress for this PO"*. Root cause: `cancelSession`
+   resets the PO to `SENT` unconditionally, so when the pre-lock race made two sessions,
+   cancelling one left the PO `SENT` with its sibling still `ACTIVE` — a state
+   `startSession` had no path out of, because its resume branch only handled
+   `status === "RECEIVING"`. It now looks the ACTIVE session up *before* branching on PO
+   status, so either direction of disagreement resumes and repairs the status.
+   `PO-MRUH46AZ` is now `RECEIVED` and clean.
+3. **`confirmReceipt` 500'd on every receipt** (*"Internal server error"*). `wacService.recompute`
+   interpolated a JS `Date` into a raw ``sql`` `` template; raw SQL carries no column type
+   info, so the driver called `Buffer.byteLength()` on it and threw `ERR_INVALID_ARG_TYPE`.
+   Now bound as `${nowIso}::timestamptz`, matching the existing convention in
+   `ingredientService`. Guarded by `wacService.test.ts`.
+4. **Stale Receive queue + tab badge.** Neither refetched after a receipt, so a confirmed
+   delivery lingered in the list and the badge kept counting it until a page reload.
+   `ReceiveQueue` now refreshes on exit and notifies `PurchasingPage` (which holds its own
+   `usePurchaseOrders` instance) via `onChanged`. The badge also counted only `SENT` while
+   the queue lists `SENT` *and* `RECEIVING`; both now agree.
+
+**Receipt history (new, 2026-08-02).** Chefs check a past delivery at **Purchasing → Orders →
+"Received" → expand the PO**. That view now leads with "Received by {name} | {date, time}" and
+its Cost column shows `$17.50 → $21.00` (red up / green down) whenever the price paid at the door
+differed from the ordered price — both were already in the database but neither was surfaced.
+Worth a look while walking C. **Still not reachable from history:** *why* a line was short or
+rejected (rejection reason/note/photos live on the receiving session, which has no UI path once
+confirmed), and credit notes (routes exist, no client UI). Both flagged for after UAT.
+
+**Verified end to end in the browser on 2026-08-02** (Purchasing → Receive → open →
+mark Short → Confirm): session resumed correctly across a full page reload with the Short
+action persisted, confirm returned 200, stock/WAC/FIFO all moved correctly
+(Plain Flour 166.8 → 216.8 kg; Chicken 15 → 17 kg @ WAC 12.0000; PO → `PARTIAL_RECEIVED`),
+and the queue and badge both cleared without a reload.
+
+**Historical — what HEPHAESTUS did on 2026-08-01** (full detail in `wiki/log.md`):
 
 1. Seeded par/reorder/stock across the full 115-item catalog at both Almost French locations
    (`scripts/seedCatalogParStock.ts`, idempotent, doesn't touch the hand-built fixture stock
@@ -29,15 +70,6 @@ Verify it first (below), then resume at **C5–C8**, then C16+, then Section D.
 3. Reworked the Receiving checklist UI (user request): the 4 action pills are now
    always-visible on the right of each line instead of tap-to-expand, and each line shows
    cost/UOM/stock/par/total cost inline.
-
-**⚠️ Before touching Purchasing → Receive on ARCHOS:**
-- Fix (2c) above has **only been unit-tested with a mocked DB** — the planned real-concurrency
-  test and a `/browse` live check were both interrupted before they ran on HEPHAESTUS. Run them
-  first: fire several concurrent `startSession` calls at the real dev DB for one PO and confirm
-  exactly one session results, then open Receive for real in a browser.
-- `PO-MRUH46AZ` may still have an **orphaned ACTIVE `receiving_session` row** blocking it.
-  Check for stray `ACTIVE` rows on that PO before assuming it's clean — cancel via
-  `receivingService.cancelSession()`, not raw SQL, so the PO status resets correctly too.
 
 ### Getting running on ARCHOS
 

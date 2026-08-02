@@ -186,8 +186,14 @@ export async function getPODetail(poId: string, orgId: number) {
       receivedQty: purchaseOrderLine.receivedQty,
       receivedUnit: purchaseOrderLine.receivedUnit,
       unitCost: purchaseOrderLine.unitCost,
+      // The price actually paid at the door. confirmReceipt has always written
+      // this, but it was never selected — so a price change recorded during
+      // receiving was invisible in history and the PO still showed the price
+      // the kitchen ordered at.
+      actualUnitCost: purchaseOrderLine.actualUnitCost,
       lineStatus: purchaseOrderLine.lineStatus,
       receivedByUserId: purchaseOrderLine.receivedByUserId,
+      receivedByUserName: user.userName,
       receivedDttm: purchaseOrderLine.receivedDttm,
       createdDttm: purchaseOrderLine.createdDttm,
       ingredientName: ingredient.ingredientName,
@@ -196,6 +202,7 @@ export async function getPODetail(poId: string, orgId: number) {
     })
     .from(purchaseOrderLine)
     .leftJoin(ingredient, eq(purchaseOrderLine.ingredientId, ingredient.ingredientId))
+    .leftJoin(user, eq(purchaseOrderLine.receivedByUserId, user.userId))
     .where(eq(purchaseOrderLine.poId, poId));
 
   return { ...po, lines };
@@ -254,7 +261,7 @@ export async function submitPO(poId: string, orgId: number, userId: number) {
         <p><strong>Total Value:</strong> $${totalValue.toFixed(2)}</p>
         <p><strong>Threshold:</strong> $${thresholdAmount?.toFixed(2)}</p>
         <p style="margin-top: 16px;">
-          <a href="${process.env.CLIENT_URL || "https://www.culinaire.kitchen"}/inventory?tab=purchase-orders&po=${poId}"
+          <a href="${process.env.CLIENT_URL || "https://www.culinaire.kitchen"}/purchasing?tab=orders&po=${poId}"
              style="background: linear-gradient(135deg, #D4A574, #C4956A); color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600;">
             Review &amp; Approve
           </a>
@@ -473,7 +480,7 @@ export async function rejectPO(
         <p><strong>Reason:</strong> ${reason.trim()}</p>
         <p style="margin-top: 16px;">The PO has been returned to Draft status. Please review and resubmit.</p>
         <p style="margin-top: 16px;">
-          <a href="${process.env.CLIENT_URL || "https://www.culinaire.kitchen"}/inventory?tab=purchase-orders&po=${poId}"
+          <a href="${process.env.CLIENT_URL || "https://www.culinaire.kitchen"}/purchasing?tab=orders&po=${poId}"
              style="background: linear-gradient(135deg, #D4A574, #C4956A); color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600;">
             Edit PO
           </a>

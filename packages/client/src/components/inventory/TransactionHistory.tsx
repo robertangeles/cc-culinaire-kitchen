@@ -25,7 +25,7 @@ export function TransactionHistory({ ingredientId, defaultExpanded = false }: Tr
     () => new Date().toISOString().slice(0, 7),
   );
 
-  const { transactions, transactionDates, isLoading } = useIngredientTransactions(
+  const { transactions, transactionDates, isLoading, error, refresh } = useIngredientTransactions(
     ingredientId,
     currentMonth,
   );
@@ -69,6 +69,8 @@ export function TransactionHistory({ ingredientId, defaultExpanded = false }: Tr
             onMonthChange={setCurrentMonth}
           />
           <TransactionDayList
+              error={error}
+              onRetry={refresh}
             transactions={dayTransactions}
             selectedDate={selectedDate}
             isLoading={isLoading}

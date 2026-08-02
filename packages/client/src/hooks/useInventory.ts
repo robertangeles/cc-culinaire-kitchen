@@ -1033,29 +1033,50 @@ export function useConsumptionLog(locationId: string | null) {
  */
 export interface TransactionEvent {
   id: string;
-  type: "stock_take" | "transfer" | "transfer_loc" | "waste" | "movement";
+  // "transfer" is consumption/usage (historical name, see TransactionDayList).
+  // "receipt" is a delivery received against a purchase order — stock's largest
+  // inbound movement, and absent from this union until 2026-08-02.
+  type: "stock_take" | "transfer" | "transfer_loc" | "waste" | "movement" | "receipt";
   quantity: string;
   unit: string;
   reason: string | null;
   userName: string;
   occurredAt: string;
+  /**
+   * Where this event came from, as an app route. Null when the event type has
+   * no destination to open — only receipts have one today (the purchase order).
+   */
+  link: string | null;
 }
 
 export function useIngredientTransactions(ingredientId: string | null, month: string) {
   const [transactions, setTransactions] = useState<TransactionEvent[]>([]);
   const [transactionDates, setTransactionDates] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(false);
+  /**
+   * A failed request used to leave `transactions` empty and silent, so the panel
+   * rendered "No activity on this day" — indistinguishable from an item that
+   * genuinely had no history. A backend restart, a dropped connection or an
+   * expired session all looked like "nothing ever happened to this ingredient",
+   * which is a lie about stock records. Surface the failure instead.
+   */
+  const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     if (!ingredientId) return;
     setIsLoading(true);
+    setError(null);
     try {
       const res = await fetch(`${API}/ingredients/${ingredientId}/transactions?month=${month}`, opts);
       if (res.ok) {
         const data = await res.json();
         setTransactions(data.transactions || []);
         setTransactionDates(new Set(data.transactionDates || []));
+      } else {
+        setError("Couldn't load history.");
       }
+    } catch {
+      setError("Couldn't load history.");
     } finally {
       setIsLoading(false);
     }
@@ -1063,7 +1084,7 @@ export function useIngredientTransactions(ingredientId: string | null, month: st
 
   useEffect(() => { refresh(); }, [refresh]);
 
-  return { transactions, transactionDates, isLoading };
+  return { transactions, transactionDates, isLoading, error, refresh };
 }
 
 // ─── usePurchaseOrders ──────────────────────────────────────────
@@ -1102,8 +1123,10 @@ export interface PurchaseOrderLine {
   receivedQty: string | null;
   receivedUnit: string | null;
   unitCost: string | null;
+  actualUnitCost: string | null;
   lineStatus: string;
   receivedByUserId: number | null;
+  receivedByUserName: string | null;
   receivedDttm: string | null;
   createdDttm: string;
   ingredientName: string | null;

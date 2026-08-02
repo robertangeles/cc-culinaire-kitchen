@@ -6,7 +6,7 @@
  * Entry point for the PO workflow tab.
  */
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { useLocation } from "../../context/LocationContext.js";
 import {
   usePurchaseOrders,
@@ -33,6 +33,7 @@ import {
   Clock,
   AlertTriangle,
   Mail,
+  PackageCheck,
 } from "lucide-react";
 
 /* ── Status badge config ──────────────────────────────────────── */
@@ -96,7 +97,12 @@ const FILTER_OPTIONS = [
 
 type View = "list" | "create" | "receive-new";
 
-export default function PurchaseOrderList() {
+/**
+ * `focusPoId` deep-links to a single order: expand it and scroll it into view.
+ * Supplied by PurchasingPage from `?po=` — see the readDeepLink docblock there
+ * for why those links were previously dead.
+ */
+export default function PurchaseOrderList({ focusPoId }: { focusPoId?: string | null } = {}) {
   const { selectedLocationId } = useLocation();
   const {
     pos, isLoading, refresh, submitPO, cancelPO,
@@ -147,6 +153,28 @@ export default function PurchaseOrderList() {
       }
     }
   }, [expandedId, detailCache, getDetail]);
+
+  /**
+   * Honour `?po=` once the orders have actually loaded — expand it and bring it
+   * into view. Guarded by a ref rather than by `expandedId` so that collapsing
+   * the order (or opening a different one) is not undone on the next render.
+   * If the id is not in this location's list, nothing happens: the link may be
+   * for another location, and silently expanding the wrong order would be worse
+   * than doing nothing.
+   */
+  const focusHandled = useRef(false);
+  useEffect(() => {
+    if (focusHandled.current || !focusPoId || pos.length === 0) return;
+    if (!pos.some((p) => p.poId === focusPoId)) return;
+    focusHandled.current = true;
+    toggleExpand(focusPoId);
+    // Let the expanded panel render before scrolling to it.
+    requestAnimationFrame(() => {
+      document
+        .querySelector(`[data-po-id="${focusPoId}"]`)
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+  }, [focusPoId, pos, toggleExpand]);
 
   const handleSubmit = useCallback(async (poId: string) => {
     try {
@@ -332,6 +360,7 @@ export default function PurchaseOrderList() {
           {filtered.map((po, idx) => (
             <div
               key={po.poId}
+              data-po-id={po.poId}
               className="rounded-xl bg-[#161616]/80 backdrop-blur-sm border border-[#2A2A2A]
                 hover:border-[#3A3A3A] transition-all
                 shadow-[0_2px_8px_rgba(0,0,0,0.3)]"
@@ -394,6 +423,24 @@ export default function PurchaseOrderList() {
                     </div>
                   ) : detailCache[po.poId]?.lines ? (
                     <>
+                      {/* Who signed for the delivery, and when. Every line of one
+                          receipt carries the same receiver and timestamp (both come
+                          from the receiving session), so the first received line
+                          speaks for the whole delivery. */}
+                      {(() => {
+                        const receipt = detailCache[po.poId].lines!.find((l) => l.receivedDttm);
+                        if (!receipt) return null;
+                        return (
+                          <div className="flex items-center gap-1.5 mb-3 text-xs text-[#999]">
+                            <PackageCheck className="size-3.5 text-emerald-400/80" />
+                            Received
+                            {receipt.receivedByUserName && <span>by <span className="text-[#CCC]">{receipt.receivedByUserName}</span></span>}
+                            <span className="text-[#333]">|</span>
+                            {new Date(receipt.receivedDttm!).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}
+                          </div>
+                        );
+                      })()}
+
                       {/* Lines table */}
                       <div className="overflow-x-auto">
                         <table className="w-full text-sm">
@@ -431,8 +478,21 @@ export default function PurchaseOrderList() {
                                 <td className="py-2 text-right text-[#CCC]">
                                   {line.receivedQty ? Number(line.receivedQty).toFixed(1) : "—"}
                                 </td>
-                                <td className="py-2 text-right text-[#CCC]">
+                                {/* Ordered price, plus what was actually paid when
+                                    receiving recorded a different one. Showing only
+                                    the ordered price hid every price change taken at
+                                    the door. */}
+                                <td className="py-2 text-right text-[#CCC] whitespace-nowrap">
                                   {line.unitCost ? `$${Number(line.unitCost).toFixed(2)}` : "—"}
+                                  {line.actualUnitCost != null
+                                    && Number(line.actualUnitCost) !== Number(line.unitCost ?? 0) && (
+                                    <span
+                                      className={`ml-1 ${Number(line.actualUnitCost) > Number(line.unitCost ?? 0) ? "text-red-400" : "text-emerald-400"}`}
+                                      title="Actual price paid at delivery"
+                                    >
+                                      → ${Number(line.actualUnitCost).toFixed(2)}
+                                    </span>
+                                  )}
                                 </td>
                                 <td className="py-2 text-center">
                                   <StatusBadge status={line.lineStatus} kind="line" />

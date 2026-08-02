@@ -334,7 +334,9 @@ function buildDigestHtml(data: DigestData): string {
 
       <!-- CTA -->
       <div style="text-align:center;margin:28px 0 16px;">
-        <a href="${CLIENT_URL}/waste" style="display:inline-block;background:linear-gradient(135deg,#D4A574,#b8834a);color:#0A0A0A;text-decoration:none;padding:12px 32px;border-radius:8px;font-weight:600;font-size:14px;">View Full Report</a>
+        <!-- /waste-intelligence, not /waste: the latter is not a route and the
+             weekly digest's only CTA landed every recipient on the 404 page. -->
+        <a href="${CLIENT_URL}/waste-intelligence" style="display:inline-block;background:linear-gradient(135deg,#D4A574,#b8834a);color:#0A0A0A;text-decoration:none;padding:12px 32px;border-radius:8px;font-weight:600;font-size:14px;">View Full Report</a>
       </div>
 
       <!-- Footer -->

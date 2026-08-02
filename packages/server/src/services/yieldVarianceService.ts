@@ -34,7 +34,7 @@ import {
 /** Below this many consumption_log rows for the period, refuse to compute. */
 const MIN_LOG_ROWS = 1;
 
-export type VarianceStatus = "ok" | "no-period" | "thin-data" | "no-recipe";
+export type VarianceStatus = "ok" | "no-period" | "thin-data" | "no-recipe" | "uncosted";
 export type VarianceThreshold = "good" | "warning" | "alert";
 
 export interface YieldVarianceResult {
@@ -111,15 +111,27 @@ export async function getYieldVariance(menuItemId: string): Promise<YieldVarianc
   const theoretical = perUnitRecipeCost * unitsSold;
 
   // Actual: sum KITCHEN-unit consumption (base_qty; legacy rows fall back to
-  // quantity) × ingredient.preferred_unit_cost (cost per kitchen unit)
+  // quantity) × the ingredient's cost per kitchen unit
   // WHERE menu_item_id = thisDish AND logged_at BETWEEN period.
+  //
+  // Cost falls back preferred_unit_cost → unit_cost, matching every other
+  // consumer (orderGuideService, menuIntelligenceService, saleService).
+  // Coalescing straight to 0 was silently wrong: preferred_unit_cost is
+  // trigger-maintained from ingredient_supplier.cost_per_unit and is NULL for
+  // any item whose supplier link has no price, so actual cost summed to $0 and
+  // every dish reported a 100% favourable variance — a plausible-looking number
+  // that is entirely fictional. Zero is not a cost; a missing cost must not
+  // masquerade as a free ingredient.
   const actualRows = await db.execute<{
     actual_cost: string | null;
     log_count: number | string;
+    uncosted_rows: number | string;
   }>(sql`
     SELECT
-      COALESCE(SUM(COALESCE(c.base_qty, c.quantity)::numeric * COALESCE(i.preferred_unit_cost, 0)::numeric), 0) AS actual_cost,
-      COUNT(*) AS log_count
+      COALESCE(SUM(COALESCE(c.base_qty, c.quantity)::numeric
+        * COALESCE(i.preferred_unit_cost, i.unit_cost, 0)::numeric), 0) AS actual_cost,
+      COUNT(*) AS log_count,
+      COUNT(*) FILTER (WHERE i.preferred_unit_cost IS NULL AND i.unit_cost IS NULL) AS uncosted_rows
     FROM consumption_log c
     JOIN ingredient i ON i.ingredient_id = c.ingredient_id
     WHERE c.menu_item_id = ${menuItemId}::uuid
@@ -127,12 +139,21 @@ export async function getYieldVariance(menuItemId: string): Promise<YieldVarianc
       AND c.logged_at <= ${periodEndDate.toISOString()}
   `);
 
-  const actualRow = actualRows[0] ?? { actual_cost: "0", log_count: 0 };
+  const actualRow = actualRows[0] ?? { actual_cost: "0", log_count: 0, uncosted_rows: 0 };
   const actual = parseFloat(String(actualRow.actual_cost ?? "0"));
   const consumptionLogCount = Number(actualRow.log_count ?? 0);
+  const uncostedRows = Number(actualRow.uncosted_rows ?? 0);
 
   if (consumptionLogCount < MIN_LOG_ROWS) {
     return { ...empty("thin-data"), theoretical };
+  }
+
+  // Any ingredient with no cost at all silently understates `actual`, which
+  // reads as a favourable variance the kitchen did not earn. Report the honest
+  // empty state instead of a confident wrong number — same principle as
+  // "thin-data" above.
+  if (uncostedRows > 0) {
+    return { ...empty("uncosted"), theoretical, consumptionLogCount };
   }
 
   const variance = actual - theoretical;

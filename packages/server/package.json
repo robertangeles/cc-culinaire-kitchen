@@ -12,6 +12,7 @@
     "db:seed": "tsx src/db/seed.ts",
     "db:deploy": "drizzle-kit push && tsx src/db/seed.ts",
     "db:studio": "drizzle-kit studio",
+    "db:check": "tsx src/scripts/checkCatalogIntegrity.ts",
     "clean": "rm -rf dist",
     "test": "vitest run",
     "lint": "eslint src/",

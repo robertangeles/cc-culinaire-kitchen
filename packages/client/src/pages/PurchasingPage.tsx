@@ -8,6 +8,8 @@
 import { useState, useMemo, useEffect } from "react";
 import { useAuth } from "../context/AuthContext.js";
 import { useLocation } from "../context/LocationContext.js";
+// Aliased: `useLocation` above is this app's store-location context, not the router's.
+import { useLocation as useRouterLocation } from "react-router";
 import { useGuide } from "../context/GuideContext.js";
 import { usePurchaseOrders } from "../hooks/useInventory.js";
 import PurchaseOrderList from "../components/inventory/PurchaseOrderList.js";
@@ -23,12 +25,49 @@ import { ShoppingCart, Package, Truck, ClipboardCheck, Settings, FileText, Spark
 
 type PurchasingTab = "orders" | "guides" | "suggestions" | "receive" | "suppliers" | "approvals" | "settings";
 
+const PURCHASING_TABS: PurchasingTab[] = [
+  "orders", "guides", "suggestions", "receive", "suppliers", "approvals", "settings",
+];
+
+/**
+ * Deep-link params, read once on mount.
+ *
+ * Notification emails and the in-app bell have always linked to a specific
+ * purchase order, but they pointed at `/inventory?tab=purchase-orders&po=…`:
+ * purchase orders moved to this page when purchasing split out of inventory,
+ * `purchase-orders` is not a tab key on either page, and no page read query
+ * params at all. So "Review & Approve" on an approval email, and "View Details"
+ * on a delivery-discrepancy alert, both dropped the reader on a dashboard with
+ * no indication which order they were sent about.
+ *
+ * Derived from the router's search string so a link clicked while already on
+ * this page still applies — same-route navigation updates the URL without
+ * remounting the component, which a mount-only read would ignore entirely.
+ */
+function readDeepLink(search: string): { tab: PurchasingTab | null; poId: string | null } {
+  const params = new URLSearchParams(search);
+  const rawTab = params.get("tab");
+  return {
+    tab: PURCHASING_TABS.includes(rawTab as PurchasingTab) ? (rawTab as PurchasingTab) : null,
+    poId: params.get("po"),
+  };
+}
+
 export function PurchasingPage() {
   const { user, isGuest } = useAuth();
   const { selectedLocationId, isOrgAdmin } = useLocation();
-  const [activeTab, setActiveTab] = useState<PurchasingTab>("orders");
+  // Derived from the router's search string, not read once on mount — a link
+  // clicked while already on this page changes the URL without remounting.
+  const { search } = useRouterLocation();
+  const deepLink = useMemo(() => readDeepLink(search), [search]);
+  // "orders" is both the default tab and where a `?po=` link belongs.
+  const [activeTab, setActiveTab] = useState<PurchasingTab>(deepLink.tab ?? "orders");
+
+  useEffect(() => {
+    if (deepLink.tab) setActiveTab(deepLink.tab);
+  }, [deepLink]);
   const { setGuideKeyOverride } = useGuide();
-  const { pos } = usePurchaseOrders(selectedLocationId);
+  const { pos, refresh: refreshPOs } = usePurchaseOrders(selectedLocationId);
 
   // Count pending approvals for badge
   const pendingApprovalCount = useMemo(
@@ -36,9 +75,11 @@ export function PurchasingPage() {
     [pos],
   );
 
-  // Count deliveries awaiting receipt
+  // Count deliveries awaiting receipt. Must match what ReceiveQueue actually
+  // lists (SENT *and* RECEIVING) — counting only SENT made a delivery someone
+  // had already opened disappear from the badge while still sitting in the tab.
   const awaitingReceiptCount = useMemo(
-    () => pos.filter((p) => p.status === "SENT").length,
+    () => pos.filter((p) => p.status === "SENT" || p.status === "RECEIVING").length,
     [pos],
   );
 
@@ -135,10 +176,14 @@ export function PurchasingPage() {
       {/* Scrollable tab content */}
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 animate-[fadeIn_150ms_ease-out]">
-          {activeTab === "orders" && <PurchaseOrderList />}
+          {activeTab === "orders" && <PurchaseOrderList focusPoId={deepLink.poId} />}
           {activeTab === "guides" && canManageGuides && <OrderGuideManager />}
           {activeTab === "suggestions" && <AutoPoSuggestionsTable />}
-          {activeTab === "receive" && <ReceiveQueue />}
+          {/* onChanged refreshes the page-level PO copy that feeds the tab badge —
+              ReceiveQueue owns a separate usePurchaseOrders instance, so its own
+              refresh leaves this one stale and the badge keeps counting a
+              delivery that has already been received. */}
+          {activeTab === "receive" && <ReceiveQueue onChanged={refreshPOs} />}
           {activeTab === "suppliers" && <SupplierManager />}
           {activeTab === "approvals" && <ApprovalQueue />}
           {activeTab === "settings" && <SpendThresholdSettings />}

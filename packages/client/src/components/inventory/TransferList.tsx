@@ -5,7 +5,7 @@
  * with status badges, action buttons, and drill-down to detail.
  */
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useLocation } from "../../context/LocationContext.js";
 import { useTransfers, useLocationIngredients, type Transfer, type LocationIngredient } from "../../hooks/useInventory.js";
 import {
@@ -63,9 +63,12 @@ function TransferRow({
   onEdit,
   sending,
   locationItems,
+  defaultExpanded = false,
 }: {
   transfer: Transfer;
   isIncoming: boolean;
+  /** Deep-linked target — open this row on mount and pull its detail. */
+  defaultExpanded?: boolean;
   onSend: (id: string) => void;
   onReceive: (id: string) => void;
   onCancel: (id: string) => void;
@@ -73,7 +76,7 @@ function TransferRow({
   sending: string | null;
   locationItems: LocationIngredient[];
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(defaultExpanded);
   const [detail, setDetail] = useState<any>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [showAddItems, setShowAddItems] = useState(false);
@@ -82,6 +85,23 @@ function TransferRow({
   const [addActiveCat, setAddActiveCat] = useState<string | null>(null);
   const isBusy = sending === transfer.transferId;
   const isEditable = transfer.status === "INITIATED" && !isIncoming;
+
+  const loadDetail = useCallback(async () => {
+    setLoadingDetail(true);
+    try {
+      const res = await fetch(`/api/inventory/transfers/${transfer.transferId}`, { credentials: "include" });
+      if (res.ok) setDetail(await res.json());
+    } catch { /* ignore */ }
+    setLoadingDetail(false);
+  }, [transfer.transferId]);
+
+  // A deep-linked row starts expanded, which means toggleExpand never ran — and
+  // the detail fetch used to live only inside it, so the panel opened straight
+  // onto "No details available". Fetch on mount for that case.
+  useEffect(() => {
+    if (defaultExpanded && !detail && !loadingDetail) void loadDetail();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [defaultExpanded]);
 
   async function toggleExpand() {
     // INITIATED outgoing → open full edit form
@@ -94,14 +114,7 @@ function TransferRow({
       return;
     }
     setExpanded(true);
-    if (!detail) {
-      setLoadingDetail(true);
-      try {
-        const res = await fetch(`/api/inventory/transfers/${transfer.transferId}`, { credentials: "include" });
-        if (res.ok) setDetail(await res.json());
-      } catch { /* ignore */ }
-      setLoadingDetail(false);
-    }
+    if (!detail) await loadDetail();
   }
 
   return (
@@ -346,7 +359,12 @@ function TransferRow({
 
 /* ── Main component ───────────────────────────────────────────── */
 
-export default function TransferList() {
+/**
+ * `focusTransferId` deep-links to one transfer, from the ingredient Transaction
+ * History. Supplied by InventoryPage from `?transfer=`. Applied to all three row
+ * lists (pending-incoming, outgoing, incoming) since the id could be in any.
+ */
+export default function TransferList({ focusTransferId }: { focusTransferId?: string | null } = {}) {
   const { selectedLocationId } = useLocation();
   const {
     transfers,
@@ -491,6 +509,7 @@ export default function TransferList() {
                     onEdit={handleEdit}
                     sending={sending}
                     locationItems={locationItems}
+                    defaultExpanded={!!focusTransferId && t.transferId === focusTransferId}
                   />
                 ))}
               </div>
@@ -518,6 +537,7 @@ export default function TransferList() {
                     onEdit={handleEdit}
                     sending={sending}
                     locationItems={locationItems}
+                    defaultExpanded={!!focusTransferId && t.transferId === focusTransferId}
                   />
                 ))}
               </div>
@@ -545,6 +565,7 @@ export default function TransferList() {
                     onEdit={handleEdit}
                     sending={sending}
                     locationItems={locationItems}
+                    defaultExpanded={!!focusTransferId && t.transferId === focusTransferId}
                   />
                 ))}
               </div>
