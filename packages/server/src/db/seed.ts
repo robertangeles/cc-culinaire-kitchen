@@ -536,6 +536,202 @@ A 1% reduction in food cost across your entire menu can save thousands per year.
 - Don't remove a Puzzle without trying to promote it first. Rename it, reposition it on the menu, or train your team to recommend it.
 - Your Stars are non-negotiable. If a Star ingredient's price spikes, absorb the cost — don't remove the dish.`,
     },
+    {
+      guideKey: "purchasing_orders",
+      title: "Purchase Orders Guide",
+      content: `# Purchase Orders
+
+Every order you place, from draft to delivered.
+
+## Why this matters
+
+A purchase order is the document you spend money against. It records what you asked for, what the supplier charged, and what actually turned up. When the numbers on this page and the numbers on the invoice disagree, this is where you find out why.
+
+## How to use
+
+1. **Filter by status** to find what you need — Draft, Pending, Sent, Receiving, Received, Cancelled
+2. **Click any order** to expand it and see every line: ordered, received, cost, and line status
+3. **New PO** builds an order by hand; **Reorder** on a past order clones it
+4. **Send it** and the supplier gets an email with the order attached as a PDF
+5. **Received orders** show who signed for the delivery and when, right above the lines
+
+## Pro tips
+
+- An order reads **Partial** only when goods are genuinely missing — short or rejected. A price change on a complete delivery stays **Received**
+- The Cost column shows the ordered price, and **$17.50 → $21.00** when the price actually paid was different. That arrow is your invoice discrepancy, visible without opening anything
+- Orders above your spend threshold route to **Approvals** instead of going straight out. Set that figure in Settings\``,
+    },
+    {
+      guideKey: "purchasing_guides",
+      title: "Order Guides Guide",
+      content: `# Order Guides
+
+The list you reorder from each week, one per supplier.
+
+## Why this matters
+
+Most kitchens order the same forty things from the same four suppliers every week. Hunting the full catalogue each time is slow and error-prone — you forget the flour and remember it on Saturday. An order guide is that weekly list, held ready, so you review and send instead of rebuilding it from scratch.
+
+## How to use
+
+1. **Name the guide** for what it is — "Weekly Dry Goods", "Tuesday Produce"
+2. **Pick the supplier** it belongs to. One guide, one supplier — that's who the order goes to
+3. **Create guide**, then add the items you buy from them regularly
+4. **Ordering fills it to par automatically** — you review the quantities and send
+
+## Pro tips
+
+- Build one guide per supplier per delivery day. "Bidfood Tuesday" and "Bidfood Friday" are two different lists
+- An item can sit in more than one guide. If two suppliers both sell your flour, put it in both and order from whoever's cheaper that week
+- Keep guides tight. A guide with ninety items is a catalogue, and you're back to hunting\``,
+    },
+    {
+      guideKey: "purchasing_suggestions",
+      title: "Suggestions Guide",
+      content: `# Order Suggestions
+
+Everything below par, grouped by the supplier who sells it.
+
+## Why this matters
+
+This is order-to-par: the kitchen decides how much of a thing it wants on the shelf, and the system works out the difference. No guessing, no "we always order six". If par is 25 kg and you have 16.8 kg, you need 8.2 kg — and it tells you, priced, grouped by who to ring.
+
+## How to use
+
+1. **Read the header** — items below par and the estimated total spend
+2. **Each block is one supplier.** On hand, par, suggested quantity and estimated cost, per line
+3. **Refresh** after a stock take or a delivery so the numbers reflect what's actually there
+4. **Take the list to a New PO** — the suggestion is the starting point, not the order
+
+## Pro tips
+
+- Suggestions round up to whole packs. You cannot buy 1.4 bags of flour, so it asks for 2
+- If a supplier has a minimum order, ordering below it shows an amber warning — it warns, it never blocks. Under-order deliberately if you want to
+- An item with no par set never appears here. If something keeps running out, set its par in the Catalogue
+- Items land under **Unassigned** when they have no preferred supplier. Set one on the item's supplier row\``,
+    },
+    {
+      guideKey: "purchasing_receive",
+      title: "Receiving Guide",
+      content: `# Receive Deliveries
+
+Check the delivery against the order, at the door.
+
+## Why this matters
+
+Receiving is the moment stock becomes real and money becomes committed. It's also the only moment you can catch a short delivery or a price rise — once the driver leaves, you're arguing from memory. Two minutes here is worth an hour of invoice reconciliation later.
+
+## How to use
+
+1. **Open the delivery** from the list — supplier, item count, value, and who ordered it
+2. **Every line starts as fully received.** You only touch the ones that are wrong
+3. **All Good** leaves it. **Short** takes the quantity that actually arrived. **Reject** takes none and asks why. **Price Change** records what they actually charged
+4. **Confirm Receipt** when the checklist matches the pallet
+
+## Pro tips
+
+- Confirm posts everything at once: stock on hand, a dated FIFO batch, and a recalculated weighted average cost. It is all-or-nothing — nothing lands until you confirm
+- Deliveries convert to your kitchen unit on the way in. Four bags of flour becomes 50 kg of stock, and the cost per bag becomes cost per kg
+- The back arrow **cancels** the receiving session and returns the order to Sent. It does not quietly save your progress
+- A rejection or a price change over 5% pages HQ automatically. You don't need to chase anyone\``,
+    },
+    {
+      guideKey: "purchasing_suppliers",
+      title: "Suppliers Guide",
+      content: `# Suppliers
+
+Who you buy from, and what they charge.
+
+## Why this matters
+
+Supplier records carry the details that make ordering work without a phone call: where the order goes, what a case costs, and how little they'll deliver. Get them right once and every order after that is faster.
+
+## How to use
+
+1. **Add** a supplier with their contact and ordering method — email orders go out automatically
+2. **Click a supplier** to expand their details and the locations they deliver to
+3. **Link items to suppliers** from the Catalogue, on each item's Suppliers row
+4. **Set the price and the minimum** on that row — it's the only place either can be set
+
+## Pro tips
+
+- The star marks the **preferred** supplier. That's the one Suggestions groups the item under, and the one whose price flows into costing
+- The price shown is what they invoice you: **$15.88 /bag** where the item has packaging, **$3.80 /kg** where you buy it loose
+- The minimum is counted in **packs**, not kilos. "min 3 bag" means three bags, not three kilograms
+- A supplier with no contact email can still hold prices — you just have to place the order yourself\``,
+    },
+    {
+      guideKey: "purchasing_approvals",
+      title: "Approvals Guide (HQ)",
+      content: `# Approvals
+
+Orders that need a second pair of eyes before they go out.
+
+## Why this matters
+
+A spend threshold is the difference between a kitchen that can order what it needs and a kitchen that can accidentally order $8,000 of scallops. Orders under the threshold go straight to the supplier; anything above waits here for someone accountable.
+
+## How to use
+
+1. **Review the queue** — each order shows the supplier, the location, the value, and how long it's been waiting
+2. **Expand it** to see exactly what was ordered before you decide
+3. **Approve** and it sends immediately. **Reject** and it returns to draft with your reason attached
+4. **Watch the waiting time** — it turns amber past 24 hours and red past 48
+
+## Pro tips
+
+- Rejecting isn't a dead end. The order goes back to the chef as a draft with your note, so they can trim it and resubmit
+- The threshold is per organisation, not per location. Change it in Settings
+- If nothing is queued, nobody is blocked. An empty Approvals tab is a good sign\``,
+    },
+    {
+      guideKey: "purchasing_settings",
+      title: "Purchasing Settings Guide (HQ)",
+      content: `# Purchasing Settings
+
+The spend threshold that decides what needs approval.
+
+## Why this matters
+
+One number controls how much autonomy your kitchens have. Set it too low and you approve orders all day; set it too high and a mistake ships before anyone sees it. It should sit just above a normal weekly order for your busiest site.
+
+## How to use
+
+1. **Set the threshold** in dollars
+2. **Save.** It applies to every order submitted from that moment on
+3. Orders **at or under** the threshold send straight to the supplier
+4. Orders **above** it wait in Approvals until an HQ admin decides
+
+## Pro tips
+
+- Look at a few weeks of real orders before choosing. Pick a figure that catches the unusual, not the routine
+- Changing the threshold doesn't touch orders already waiting for approval
+- A threshold of zero sends everything to Approvals. That's a valid choice for a new site, and an exhausting one for an established kitchen\``,
+    },
+    {
+      guideKey: "inventory_areas",
+      title: "Storage Areas Guide",
+      content: `# Storage Areas
+
+The shelves you actually walk when you count.
+
+## Why this matters
+
+A stock take is a physical walk: cool room, dry store, back bar. Counting in the same order as you walk is faster and you miss less. Areas organise that walk — but stock still belongs to the whole site. Moving a case from the store to the bar changes where it sits, never how much you have.
+
+## How to use
+
+1. **Add an area** for each place you actually count — "Dry Storage", "Cool Room", "Back Bar"
+2. **Assign items** to the area they live in
+3. **Stock takes follow your areas**, so counting matches the route you walk
+4. **Move Between Areas** (under Transfers) records a shelf-to-shelf move within the site
+
+## Pro tips
+
+- Name areas after physical places, not categories. "Cool Room" beats "Dairy" — you walk to a cool room, not to a dairy
+- An area move is not a loss and not a transfer between sites. Your total on hand is unchanged
+- Items don't need an area. Anything unassigned still counts, it just falls at the end of the walk\``,
+    },
   ];
 
   for (const g of defaultGuides) {
