@@ -71,10 +71,19 @@ interface AutoPoRow extends Record<string, unknown> {
 
 export async function getAutoPoSuggestions(
   storeLocationId: string,
+  organisationId: number,
 ): Promise<AutoPoResult> {
   // One query: stock_level (current) ⊕ location_ingredient (par override)
   // ⊕ ingredient (org defaults + preferred supplier denorm).
   // Filter to rows where current_qty ≤ effective par_level.
+  //
+  // The organisation filter is load-bearing, not defensive. stock_level and
+  // location_ingredient are LEFT JOINs, so an ingredient belonging to ANOTHER
+  // tenant — with no stock row at this location — scores current_qty = 0 and
+  // passes the below-par test on its own org-level par. Without this line the
+  // endpoint returned every organisation's catalogue: names, par levels, unit
+  // costs and preferred supplier, and inflated the estimated spend total with
+  // items the buyer does not own.
   const rows = await db.execute<AutoPoRow>(sql`
     SELECT
       i.ingredient_id,
@@ -96,7 +105,8 @@ export async function getAutoPoSuggestions(
       ON li.ingredient_id = i.ingredient_id
       AND li.store_location_id = ${storeLocationId}::uuid
     LEFT JOIN supplier s ON s.supplier_id = i.preferred_supplier_id
-    WHERE i.deleted_at IS NULL
+    WHERE i.organisation_id = ${organisationId}
+      AND i.deleted_at IS NULL
       AND COALESCE(li.par_level, i.par_level) IS NOT NULL
       AND COALESCE(li.par_level, i.par_level)::numeric > COALESCE(sl.current_qty, 0)::numeric
       AND (li.active_ind IS NULL OR li.active_ind = TRUE)
