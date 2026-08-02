@@ -57,6 +57,12 @@ function makeQueryMock(rowsByCall: unknown[][] = [[]]) {
   const insert = vi.fn(() => ({
     values: vi.fn(() => ({
       returning: vi.fn(async () => rowsByCall[callIdx] ?? []),
+      // wacService.recompute ensures a location_ingredient row exists via
+      // INSERT ... ON CONFLICT DO NOTHING before recomputing WAC. It only runs
+      // when a receipt actually moved stock, so tests whose lines all arrive at
+      // qty 0 never reached it — and the mock silently lacked the method until
+      // a test received real quantities.
+      onConflictDoNothing: vi.fn(async () => undefined),
     })),
   }));
 
@@ -362,6 +368,71 @@ describe("receivingService — transaction + audit invariants", () => {
 
       expect(notifyMock).not.toHaveBeenCalled();
       expect(result.isPerfectDelivery).toBe(true);
+    });
+
+    // Regression: ISSUE-001 — a price-change-only receipt was labelled "Partial"
+    // Found by /qa on 2026-08-02
+    // Report: .gstack/qa-reports/qa-report-localhost-2026-08-02.md
+    //
+    // PARTIAL_RECEIVED means goods are MISSING. The status was derived from
+    // "any discrepancy exists", so a PRICE_VARIANCE on a delivery that turned up
+    // complete flipped the order to Partial — telling the buyer to chase a
+    // supplier for stock already on the shelf. Quantity is the source of truth.
+    it("stays RECEIVED when the only discrepancy is a price change (full qty arrived)", async () => {
+      const session = { sessionId: "s-5", poId: "po-5", status: "ACTIVE", storeLocationId: "loc-1", receivedByUserId: 42, completedAt: null };
+      const po = { poId: "po-5", organisationId: 7, supplierId: "sup-1", poNumber: "PO-105" };
+      const line = {
+        receivingLineId: "rl-5", poLineId: "pl-5", ingredientId: "ing-5",
+        orderedQty: "2", receivedQty: "2", orderedUnit: "bag",
+        actualUnitCost: "21.00", status: "PRICE_VARIANCE",
+      };
+      const priceDisc = { receivingLineId: "rl-5", sessionId: "s-5", type: "PRICE_VARIANCE" };
+
+      withTxRows([[session], [po], [line], [priceDisc]]);
+
+      const { confirmReceipt } = await import("./receivingService.js");
+      const result = await confirmReceipt("s-5", 7);
+
+      expect(result.poStatus).toBe("RECEIVED");
+      // Still a discrepancy worth reporting — it just is not a partial receipt.
+      expect(result.discrepancyCount).toBe(1);
+      expect(result.isPerfectDelivery).toBe(false);
+    });
+
+    it("is PARTIAL_RECEIVED when less arrived than was ordered", async () => {
+      const session = { sessionId: "s-6", poId: "po-6", status: "ACTIVE", storeLocationId: "loc-1", receivedByUserId: 42, completedAt: null };
+      const po = { poId: "po-6", organisationId: 7, supplierId: "sup-1", poNumber: "PO-106" };
+      const line = {
+        receivingLineId: "rl-6", poLineId: "pl-6", ingredientId: "ing-6",
+        orderedQty: "3", receivedQty: "2", orderedUnit: "kg",
+        actualUnitCost: "12.00", status: "SHORT",
+      };
+      const shortDisc = { receivingLineId: "rl-6", sessionId: "s-6", type: "SHORT" };
+
+      withTxRows([[session], [po], [line], [shortDisc]]);
+
+      const { confirmReceipt } = await import("./receivingService.js");
+      const result = await confirmReceipt("s-6", 7);
+
+      expect(result.poStatus).toBe("PARTIAL_RECEIVED");
+    });
+
+    it("is PARTIAL_RECEIVED when a line was rejected outright", async () => {
+      const session = { sessionId: "s-7", poId: "po-7", status: "ACTIVE", storeLocationId: "loc-1", receivedByUserId: 42, completedAt: null };
+      const po = { poId: "po-7", organisationId: 7, supplierId: "sup-1", poNumber: "PO-107" };
+      const line = {
+        receivingLineId: "rl-7", poLineId: "pl-7", ingredientId: "ing-7",
+        orderedQty: "5", receivedQty: "0", orderedUnit: "kg",
+        actualUnitCost: "12.00", status: "REJECTED",
+      };
+      const rejDisc = { receivingLineId: "rl-7", sessionId: "s-7", type: "REJECTED" };
+
+      withTxRows([[session], [po], [line], [rejDisc]]);
+
+      const { confirmReceipt } = await import("./receivingService.js");
+      const result = await confirmReceipt("s-7", 7);
+
+      expect(result.poStatus).toBe("PARTIAL_RECEIVED");
     });
   });
 

@@ -565,9 +565,23 @@ export async function confirmReceipt(sessionId: string, orgId: number) {
       .set({ status: "COMPLETED", completedAt: new Date(), updatedDttm: new Date() })
       .where(eq(receivingSession.sessionId, sessionId));
 
-    // Update PO status
-    const hasDiscrepancies = discrepancies.length > 0;
-    const poStatus = hasDiscrepancies ? "PARTIAL_RECEIVED" : "RECEIVED";
+    // Update PO status.
+    //
+    // PARTIAL_RECEIVED means GOODS ARE MISSING, so only a discrepancy that
+    // reduces what arrived counts. A PRICE_VARIANCE or a SUBSTITUTION can be
+    // recorded on a delivery that turned up complete: treating "any discrepancy"
+    // as partial labelled a fully-received order "Partial" in the Orders list,
+    // telling the buyer to chase a supplier for goods already on the shelf.
+    // Quantity is the source of truth — a line is short if less arrived than was
+    // ordered, or it was rejected outright.
+    const shortfall = lines.some((l) => {
+      if (l.status === "REJECTED") return true;
+      const ordered = Number(l.orderedQty);
+      const received = Number(l.receivedQty);
+      if (!Number.isFinite(ordered) || !Number.isFinite(received)) return false;
+      return received < ordered;
+    });
+    const poStatus = shortfall ? "PARTIAL_RECEIVED" : "RECEIVED";
 
     await tx
       .update(purchaseOrder)
