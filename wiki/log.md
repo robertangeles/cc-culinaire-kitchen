@@ -844,3 +844,30 @@ Moved the approved, fully-reviewed plan for **the Brain** (per-user + per-org AI
   `storageAreaService.ts`, wired into `createStoreLocation` (transaction). Added idempotent
   `scripts/backfillDefaultStorageAreas.ts` for existing area-less locations.
 - Branch: `feature/ck-web/inventory-rename-and-storage-area-standards`.
+
+## 2026-08-04 — Purchasing P1 shipped to production
+
+- **Merged PR #86** (`d73f1d8`) — order guides, order-to-par suggestions, receiving, plus the QA
+  fixes and the catalog integrity gate. Render deploy **live** at 21:09:16, 0 errors in prod logs.
+- **Production schema migration.** Wrote a read-only verifier
+  (`packages/server/scripts/check-purchasing-p1-schema.ts`) that reports per table and column
+  whether a target DB has what the branch expects. Prod was missing `order_guide`,
+  `order_guide_item`, `ingredient.density_g_per_ml`, `menu_item.servings_per_sale` and all three
+  `location_ingredient.suggested_par_*` columns, plus 8 guide rows. Merging without this would
+  have broken the deploy, since `main` auto-deploys.
+- **Corrected a dangerous note in the PR description.** It had said `drizzle-kit push` should run
+  against production. It must not: push diffs the whole database and would have dropped
+  `knowledge_document.file_path` with 18 live rows. See [[schema-drift-may-2026]]. The sanctioned
+  path is a targeted, additive, idempotent script — `applyOrderGuideSchema.ts`, extended to cover
+  every missing object and given the dotenv/`applyEnvPrefix` bootstrap it lacked (without it
+  `APP_ENV` did not select a database at all).
+- **Backup first:** `pg_dump -Fc`, 63 MB, verified restorable (902 objects, 88 data tables).
+- **Audited `db:seed` before running it on prod:** 7 inserts, every one existence-guarded, zero
+  updates, zero deletes, zero credential writes — additive only. It also added 5 new `brain_*`
+  ranking/compaction settings (compaction off), which is expected but was not in the plan.
+- **CI fix.** `checkCatalogIntegrity.test.ts` hit a live DB from a bare `describe()`, so it passed
+  locally (`.env` supplies `DATABASE_URL`) and failed CI's unit job, which has none. Gated on DB
+  availability. Deliberately not moved to the integration job: that Postgres is an empty
+  throwaway where org 2 has no catalog, so all 8 checks would pass vacuously. Lesson #65.
+- **Final state:** lint, tsc, 890 tests (683 server / 122 client / 85 shared), build — all pass.
+  Prod verifier reads 0 missing.
