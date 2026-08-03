@@ -86,7 +86,6 @@ import {
   handleSubmitPO,
   handleReceiveLine,
   handleCancelPO,
-  handleGetSuggestions,
   handleApprovePO,
   handleRejectPO,
   handleClonePO,
@@ -95,7 +94,9 @@ import {
   handleSetLocationThreshold,
   handleRemoveLocationThreshold,
   handleDownloadPOPdf,
+  handleEmailPOToSupplier,
 } from "../controllers/purchaseOrderController.js";
+import * as orderGuideController from "../controllers/orderGuideController.js";
 import * as receivingController from "../controllers/receivingController.js";
 import * as notificationController from "../controllers/notificationController.js";
 import {
@@ -163,6 +164,15 @@ router.patch("/storage-areas/:areaId", requirePermission("inventory:manage"), ha
 router.delete("/storage-areas/:areaId", requirePermission("inventory:manage"), handleDeactivateArea);
 router.get("/storage-areas/:areaId/items", requirePermission("inventory:count"), handleListAreaItems);
 router.put("/storage-areas/:areaId/items", requirePermission("inventory:manage"), handleSetAreaItems);
+
+// Order guides (Purchasing P1) — the primary PO-creation surface. Ordering FROM
+// a guide needs purchasing:draft; managing guides is an inventory:manage action.
+router.get("/locations/:locId/order-guides", requirePermission("purchasing:draft"), orderGuideController.handleListGuides);
+router.post("/locations/:locId/order-guides", requirePermission("inventory:manage"), orderGuideController.handleCreateGuide);
+router.patch("/order-guides/:guideId", requirePermission("inventory:manage"), orderGuideController.handleUpdateGuide);
+router.delete("/order-guides/:guideId", requirePermission("inventory:manage"), orderGuideController.handleDeleteGuide);
+router.get("/order-guides/:guideId/items", requirePermission("purchasing:draft"), orderGuideController.handleGetGuideItems);
+router.put("/order-guides/:guideId/items", requirePermission("inventory:manage"), orderGuideController.handleSetGuideItems);
 
 // ─── Stock movements (area → area, ZERO stock effect) ─────────────
 // inventory:count, matching POST /consumption-logs: recording what physically
@@ -252,12 +262,12 @@ router.post("/forecasts/:id/ordered", requirePermission("inventory:manage"), for
 // Collection routes first (BEFORE /:id params)
 router.post("/purchase-orders", requirePermission("inventory:manage"), handleCreatePO);
 router.get("/purchase-orders", requirePermission("inventory:count"), handleListPOs);
-router.get("/purchase-orders/suggestions", requirePermission("inventory:manage"), handleGetSuggestions);
 
 // Parameterized PO routes
 router.get("/purchase-orders/:id", requirePermission("inventory:count"), handleGetPODetail);
 router.post("/purchase-orders/:id/submit", requirePermission("purchasing:submit"), handleSubmitPO);
 router.post("/purchase-orders/:id/approve", requirePermission("purchasing:approve"), handleApprovePO);
+router.post("/purchase-orders/:id/send-email", requirePermission("purchasing:submit"), handleEmailPOToSupplier);
 router.post("/purchase-orders/:id/reject", requirePermission("purchasing:approve"), handleRejectPO);
 router.post("/purchase-orders/:id/clone", requirePermission("purchasing:draft"), handleClonePO);
 router.get("/purchase-orders/:id/pdf", requirePermission("purchasing:submit"), handleDownloadPOPdf);

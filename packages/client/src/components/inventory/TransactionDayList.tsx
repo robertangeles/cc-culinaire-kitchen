@@ -5,7 +5,11 @@
  * Each row displays type icon, label, quantity, reason, user, and time.
  */
 
-import { ClipboardCheck, ArrowRightLeft, Trash2, Loader2, CalendarOff, Boxes } from "lucide-react";
+import { ClipboardCheck, ArrowRightLeft, Trash2, Loader2, CalendarOff, Boxes, PackageCheck, ChevronRight, AlertTriangle } from "lucide-react";
+// Router Link, not a bare <a>: a plain href does a full page reload, which
+// re-bootstraps auth + location context and briefly flashes the "Run the
+// Kitchen" onboarding gate. Client-side navigation keeps the contexts mounted.
+import { Link } from "react-router";
 
 // Single source of truth — this file used to keep its own copy of the type and
 // the two drifted apart. See the docblock there for what each type name means
@@ -21,6 +25,9 @@ const TYPE_CONFIG: Record<string, { label: string; icon: typeof ClipboardCheck; 
   // An area-to-area move. Deliberately NOT amber/red: nothing was used and
   // nothing left the site, so it must not read like a deduction.
   movement:     { label: "Area Move", icon: Boxes, color: "text-[#888]", bg: "bg-white/[0.04]", border: "border-white/10" },
+  // A delivery received against a PO — the one event here that ADDS stock, so
+  // it gets the strongest positive colour to read as inbound at a glance.
+  receipt:      { label: "Received", icon: PackageCheck, color: "text-emerald-400", bg: "bg-emerald-500/15", border: "border-emerald-500/25" },
 };
 
 const REASON_LABELS: Record<string, string> = {
@@ -41,6 +48,9 @@ interface TransactionDayListProps {
   transactions: TransactionEvent[];
   selectedDate: string;
   isLoading: boolean;
+  /** Set when the history request failed — must NOT render as "no activity". */
+  error?: string | null;
+  onRetry?: () => void;
 }
 
 function formatDateHeader(dateStr: string): string {
@@ -54,7 +64,7 @@ function formatTime(isoStr: string): string {
   return d.toLocaleTimeString("en-AU", { hour: "2-digit", minute: "2-digit" });
 }
 
-export function TransactionDayList({ transactions, selectedDate, isLoading }: TransactionDayListProps) {
+export function TransactionDayList({ transactions, selectedDate, isLoading, error, onRetry }: TransactionDayListProps) {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-6">
@@ -69,7 +79,21 @@ export function TransactionDayList({ transactions, selectedDate, isLoading }: Tr
         {formatDateHeader(selectedDate)}
       </p>
 
-      {transactions.length === 0 ? (
+      {error ? (
+        <div className="flex flex-col items-center gap-2 py-4 text-amber-400/90">
+          <AlertTriangle className="size-5" />
+          <span className="text-xs">{error}</span>
+          {onRetry && (
+            <button
+              type="button"
+              onClick={onRetry}
+              className="text-[10px] text-[#D4A574] hover:underline"
+            >
+              Try again
+            </button>
+          )}
+        </div>
+      ) : transactions.length === 0 ? (
         <div className="flex flex-col items-center gap-2 py-4 text-[#555]">
           <CalendarOff className="size-5" />
           <span className="text-xs">No activity on this day</span>
@@ -80,11 +104,14 @@ export function TransactionDayList({ transactions, selectedDate, isLoading }: Tr
             const cfg = TYPE_CONFIG[t.type] || TYPE_CONFIG.stock_take;
             const Icon = cfg.icon;
             const reasonLabel = t.reason ? (REASON_LABELS[t.reason] || t.reason) : null;
-            return (
-              <div
-                key={t.id}
-                className="bg-[#111]/60 border border-white/5 rounded-lg px-3 py-2"
-              >
+            const base = "bg-[#111]/60 border border-white/5 rounded-lg px-3 py-2";
+            // Only events that carry a destination become interactive. A row
+            // that looks clickable and does nothing is worse than a plain one,
+            // so the affordance appears strictly where `link` is set. Rendered
+            // as two explicit branches rather than a dynamic element type —
+            // a `Link | "div"` union cannot be typed against one prop bag.
+            const body = (
+              <>
                 {/* Line 1: type + quantity */}
                 <div className="flex items-center gap-2">
                   <Icon className={`size-3 ${cfg.color} shrink-0`} />
@@ -98,8 +125,21 @@ export function TransactionDayList({ transactions, selectedDate, isLoading }: Tr
                   <span>{t.userName}</span>
                   <span className="text-[#444]">·</span>
                   <span className="tabular-nums">{formatTime(t.occurredAt)}</span>
+                  {t.link && <ChevronRight className="size-3 ml-auto text-[#555]" />}
                 </div>
-              </div>
+              </>
+            );
+            return t.link ? (
+              <Link
+                key={t.id}
+                to={t.link}
+                title="Open the record this entry came from"
+                className={`block ${base} cursor-pointer transition-all hover:bg-[#161616] hover:border-[#D4A574]/30 focus:outline-none focus:border-[#D4A574]/50`}
+              >
+                {body}
+              </Link>
+            ) : (
+              <div key={t.id} className={base}>{body}</div>
             );
           })}
         </div>

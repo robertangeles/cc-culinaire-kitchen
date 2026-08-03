@@ -337,3 +337,11 @@ Afterwards:
 
 Also uncommitted on purpose: `data/imports/` (supplier catalog import batches — separate
 workstream, keep out of this feature branch).
+
+## AI-Native Purchasing — deferred from eng-review (2026-07-20)
+- **P2** AI-suggest-par from usage (blocked on real consumption_log/depletion history)
+- **P2** order-from-stocktake (one-tap draft PO from last count; add multi-group guard)
+- **P2** price memory + change alerts; supplier-minimum already in P1
+- **P3** natural-language ordering; invoice/credit-note OCR reconciliation
+- **P2** server-side catalog search/pagination (catalog is now a fallback)
+- **P2** cross-supplier order guides (schema is forward-compatible)

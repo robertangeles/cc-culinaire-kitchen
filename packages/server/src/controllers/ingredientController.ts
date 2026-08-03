@@ -57,6 +57,9 @@ const CreateIngredientSchema = z.object({
     (v) => !isNaN(Number(v)) && Number(v) > 0, "Must be a positive number",
   ).nullable().optional(),
   contentUnit: z.string().max(20).nullable().optional(),
+  densityGPerMl: z.string().refine(
+    (v) => !isNaN(Number(v)) && Number(v) > 0, "Must be a positive number",
+  ).nullable().optional(),
   purchaseUnit: z.string().max(20).nullable().optional(),
   packQty: z.string().refine(
     (v) => !isNaN(Number(v)) && Number(v) > 0, "Must be a positive number",
@@ -89,6 +92,9 @@ const UpdateIngredientSchema = z.object({
     (v) => !isNaN(Number(v)) && Number(v) > 0, "Must be a positive number",
   ).nullable().optional(),
   contentUnit: z.string().max(20).nullable().optional(),
+  densityGPerMl: z.string().refine(
+    (v) => !isNaN(Number(v)) && Number(v) > 0, "Must be a positive number",
+  ).nullable().optional(),
   purchaseUnit: z.string().max(20).nullable().optional(),
   packQty: z.string().refine(
     (v) => !isNaN(Number(v)) && Number(v) > 0, "Must be a positive number",
@@ -154,6 +160,7 @@ const CreateSupplierSchema = z.object({
   contactName: z.string().max(200).optional(),
   contactEmail: z.string().email().max(255).optional(),
   contactPhone: z.string().max(50).optional(),
+  website: z.string().max(500).optional(),
   addressLine1: z.string().max(200).optional(),
   addressLine2: z.string().max(200).optional(),
   suburb: z.string().max(100).optional(),
@@ -178,6 +185,7 @@ const UpdateSupplierSchema = z.object({
   contactName: z.string().max(200).nullable().optional(),
   contactEmail: z.string().email().max(255).nullable().optional(),
   contactPhone: z.string().max(50).nullable().optional(),
+  website: z.string().max(500).nullable().optional(),
   addressLine1: z.string().max(200).nullable().optional(),
   addressLine2: z.string().max(200).nullable().optional(),
   suburb: z.string().max(100).nullable().optional(),

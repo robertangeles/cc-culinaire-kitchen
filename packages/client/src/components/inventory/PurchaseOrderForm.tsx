@@ -13,6 +13,9 @@ import {
   usePurchaseOrders,
   type LocationIngredient,
 } from "../../hooks/useInventory.js";
+import { useOrderGuides, useOrderGuideItems } from "../../hooks/useOrderGuides.js";
+import type { OrderGuideSummary, OrderGuideItemView } from "@culinaire/shared";
+import { costForOrderedUnit } from "@culinaire/shared";
 import {
   ArrowLeft,
   Plus,
@@ -22,7 +25,48 @@ import {
   Save,
   Loader2,
   ShoppingCart,
+  BookOpen,
+  Sparkles,
 } from "lucide-react";
+
+/**
+ * The number that belongs in the ORDER QTY field.
+ *
+ * That field is labelled with purchaseUnit (bag, case), so it takes packages.
+ * suggestedOrderQty is the shortfall in the KITCHEN unit (kg, bottle) — using
+ * it here orders packQty times too much: 25 kg of flour became "50 bag".
+ */
+function orderQtyFor(gi: OrderGuideItemView): number {
+  return gi.suggestedPackages ?? gi.suggestedOrderQty;
+}
+
+/**
+ * The number that belongs in the COST field, which is labelled
+ * "$ per {orderedUnit}". Stored costs are per KITCHEN unit, so a packaged item
+ * needs the pack cost — otherwise the order is understated AND receiving
+ * divides the already-per-kg figure again, valuing stock at cost/packQty.
+ */
+function costFor(gi: OrderGuideItemView): string {
+  if (gi.unitCost == null) return "";
+  return String(gi.packUnitCost ?? gi.unitCost);
+}
+
+/** Same conversion for the catalogue fallback, whose costs are also per kitchen unit. */
+function costForCatalogLine(
+  ing: { locationUnitCost?: string | null; orgUnitCost?: string | null; packQty?: string | null; purchaseUnit?: string | null },
+  orderedUnit: string,
+): string {
+  const base = ing.locationUnitCost ?? ing.orgUnitCost;
+  if (base == null || base === "") return "";
+  return String(
+    costForOrderedUnit(
+      Number(base),
+      ing.packQty != null ? Number(ing.packQty) : null,
+      ing.purchaseUnit ?? null,
+      orderedUnit,
+    ),
+  );
+}
 
 /* ── Types ────────────────────────────────────────────────────── */
 
@@ -53,10 +97,68 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
   const [expectedDate, setExpectedDate] = useState("");
   const [lines, setLines] = useState<LineItem[]>([]);
   const [search, setSearch] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [supplierIngredientIds, setSupplierIngredientIds] = useState<Set<string> | null>(null);
+
+  // ── Order guides: the default way in ───────────────────────────
+  // Picking a guide fills the draft from the operator's regular list with every
+  // quantity already at par - on-hand, so the screen opens as a correct draft
+  // instead of an empty form. The catalog below stays as the fallback.
+  const [selectedGuideId, setSelectedGuideId] = useState<string | null>(null);
+  const [pendingGuideApply, setPendingGuideApply] = useState(false);
+  const { guides } = useOrderGuides(selectedLocationId);
+  const { items: guideItems } = useOrderGuideItems(selectedGuideId, selectedLocationId);
+
+  const guideItemById = useMemo(
+    () => new Map(guideItems.map((g) => [g.ingredientId, g])),
+    [guideItems],
+  );
+
+  const applyGuide = useCallback((guide: OrderGuideSummary) => {
+    setSelectedGuideId(guide.orderGuideId);
+    setSupplierId(guide.supplierId);
+    setPendingGuideApply(true);
+    setError(null);
+  }, []);
+
+  useEffect(() => {
+    if (!pendingGuideApply || guideItems.length === 0) return;
+    setLines(
+      guideItems.map((gi) => ({
+        id: crypto.randomUUID(),
+        ingredientId: gi.ingredientId,
+        ingredientName: gi.ingredientName,
+        // Already at par -> 0; the operator sees the row but it won't be ordered.
+        orderedQty: String(orderQtyFor(gi)),
+        orderedUnit: gi.purchaseUnit || gi.baseUnit,
+        unitCost: costFor(gi),
+      })),
+    );
+    setPendingGuideApply(false);
+  }, [pendingGuideApply, guideItems]);
+
+  /** Snap every guide-backed line to its par shortfall in one tap. */
+  const orderEverythingToPar = useCallback(() => {
+    setLines((prev) =>
+      prev.map((l) => {
+        const gi = guideItemById.get(l.ingredientId);
+        return gi ? { ...l, orderedQty: String(orderQtyFor(gi)) } : l;
+      }),
+    );
+  }, [guideItemById]);
+
+  /** Snap one line back to its par shortfall. */
+  const setLineToPar = useCallback(
+    (lineId: string, ingredientId: string) => {
+      const gi = guideItemById.get(ingredientId);
+      if (!gi) return;
+      setLines((prev) =>
+        prev.map((l) => (l.id === lineId ? { ...l, orderedQty: String(orderQtyFor(gi)) } : l)),
+      );
+    },
+    [guideItemById],
+  );
 
   // Fetch ingredient IDs linked to the selected supplier
   useEffect(() => {
@@ -79,52 +181,55 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
     })();
   }, [supplierId]);
 
-  // Available categories from the ingredient list (filtered by supplier if selected)
+  // Scope the picker to what this supplier actually sells.
   const supplierFilteredIngredients = useMemo(() => {
     if (!supplierIngredientIds) return ingredients;
     return ingredients.filter((i) => supplierIngredientIds.has(i.ingredientId));
   }, [ingredients, supplierIngredientIds]);
 
-  const categories = useMemo(() => {
-    const cats = [...new Set(supplierFilteredIngredients.map((i) => i.ingredientCategory))].sort();
-    return cats;
-  }, [supplierFilteredIngredients]);
-
-  const CATEGORY_LABELS: Record<string, string> = {
-    proteins: "Proteins",
-    dairy: "Dairy",
-    produce: "Produce",
-    dry_goods: "Dry Goods",
-    beverages: "Beverages",
-    frozen: "Frozen",
-    bakery: "Bakery",
-    condiments: "Condiments",
-    spirits: "Spirits",
-    packaging: "Packaging",
-    cleaning: "Cleaning",
-    admin: "Admin",
-    other: "Other",
-  };
-
-  // Filter ingredients: by category + search text, exclude already-added
+  // Filter ingredients: search text, exclude already-added
   const addedIds = useMemo(() => new Set(lines.map((l) => l.ingredientId)), [lines]);
+
+  // Debounce the picker filter — otherwise every keystroke re-scans the whole
+  // catalogue, which stutters once a location carries a few hundred items.
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 150);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  /**
+   * The catalogue is the FALLBACK path and only ever appears on an explicit
+   * search. Not on supplier selection: picking a guide sets the supplier, so
+   * gating on it re-opened the whole matrix underneath the guide — the exact
+   * thing this gate exists to prevent. Scoping the dump to one supplier still
+   * leaves a dump.
+   */
+  const hasPickerIntent = search.trim().length > 0;
 
   const filteredIngredients = useMemo(() => {
     let result = supplierFilteredIngredients.filter((i) => !addedIds.has(i.ingredientId));
 
-    // Category filter
-    if (selectedCategory !== "all") {
-      result = result.filter((i) => i.ingredientCategory === selectedCategory);
-    }
-
     // Search filter
-    if (search.trim()) {
-      const q = search.toLowerCase();
+    const q = debouncedSearch.trim().toLowerCase();
+    if (q) {
       result = result.filter((i) => i.ingredientName.toLowerCase().includes(q));
     }
 
     return result;
-  }, [ingredients, addedIds, selectedCategory, search]);
+  }, [supplierFilteredIngredients, addedIds, debouncedSearch]);
+
+  /**
+   * Cap what actually goes into the DOM. The catalogue is the FALLBACK path now
+   * (order guides are the primary surface), so narrowing by search is a better
+   * trade than shipping a virtualiser dependency for a secondary screen.
+   */
+  const MAX_PICKER_ROWS = 100;
+  const visibleIngredients = useMemo(
+    () => filteredIngredients.slice(0, MAX_PICKER_ROWS),
+    [filteredIngredients],
+  );
+  const hiddenIngredientCount = filteredIngredients.length - visibleIngredients.length;
 
   const addLine = useCallback((ing: LocationIngredient) => {
     // Duplicate guard
@@ -135,11 +240,13 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
         id: crypto.randomUUID(),
         ingredientId: ing.ingredientId,
         ingredientName: ing.ingredientName,
-        orderedQty: ing.reorderQty ?? "1",
+        orderedQty: "1",
         // Order in the purchase packaging (case/bag) when the item has one;
         // receiving converts to kitchen units at the boundary.
         orderedUnit: ing.purchaseUnit || ing.baseUnit,
-        unitCost: ing.locationUnitCost ?? ing.orgUnitCost ?? "",
+        // Stored costs are per kitchen unit; this line is priced per ordered
+        // unit. Same conversion the guide path uses.
+        unitCost: costForCatalogLine(ing, ing.purchaseUnit || ing.baseUnit),
       },
     ]);
     setSearch("");
@@ -151,6 +258,24 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
     );
   }, []);
 
+  /**
+   * Switching a line between the package and the kitchen unit must re-price it.
+   * The cost field is labelled "$ per {orderedUnit}", so leaving the old number
+   * behind changes what the line total means without changing what it says.
+   */
+  const changeLineUnit = useCallback(
+    (id: string, unit: string, ing?: { locationUnitCost?: string | null; orgUnitCost?: string | null; packQty?: string | null; purchaseUnit?: string | null }) => {
+      setLines((prev) =>
+        prev.map((l) =>
+          l.id === id
+            ? { ...l, orderedUnit: unit, unitCost: ing ? costForCatalogLine(ing, unit) : l.unitCost }
+            : l,
+        ),
+      );
+    },
+    [],
+  );
+
   const removeLine = useCallback((id: string) => {
     setLines((prev) => prev.filter((l) => l.id !== id));
   }, []);
@@ -160,13 +285,21 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
     if (!supplierId) { setError("Select a supplier"); return; }
     if (lines.length === 0) { setError("Add at least one item"); return; }
 
+    // Guide rows already at par sit at 0 so the operator can still see and bump
+    // them — they just don't become PO lines.
+    const orderable = lines.filter((l) => (Number(l.orderedQty) || 0) > 0);
+    if (orderable.length === 0) {
+      setError("Nothing to order yet — set a quantity on at least one item");
+      return;
+    }
+
     setError(null);
     setIsSaving(true);
     try {
       const po = await createPO({
         storeLocationId: selectedLocationId,
         supplierId,
-        lines: lines.map((l) => ({
+        lines: orderable.map((l) => ({
           ingredientId: l.ingredientId,
           orderedQty: l.orderedQty,
           orderedUnit: l.orderedUnit,
@@ -215,8 +348,9 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
       {/* Supplier + date row */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="md:col-span-2">
-          <label className="block text-xs text-[#999] mb-1">Supplier *</label>
+          <label htmlFor="po-supplier" className="block text-xs text-[#999] mb-1">Supplier *</label>
           <select
+            id="po-supplier"
             value={supplierId}
             onChange={(e) => setSupplierId(e.target.value)}
             className="w-full px-3 py-2 rounded-lg text-sm bg-[#1A1A1A] text-white
@@ -260,45 +394,65 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
         />
       </div>
 
-      {/* Add items */}
-      <div className="rounded-xl bg-[#161616]/80 backdrop-blur-sm border border-[#2A2A2A] p-4">
-        <h3 className="text-sm font-medium text-white mb-3">Line Items</h3>
-
-        {/* Category tabs + search */}
-        <div className="space-y-3 mb-3">
-          {/* Category pills */}
-          <div className="flex gap-1 flex-wrap">
-            <button
-              onClick={() => setSelectedCategory("all")}
-              className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
-                selectedCategory === "all"
-                  ? "bg-[#D4A574]/20 text-[#D4A574] border border-[#D4A574]/30"
-                  : "bg-[#1A1A1A] text-[#999] border border-transparent hover:text-white"
-              }`}
-            >
-              All ({supplierFilteredIngredients.filter(i => !addedIds.has(i.ingredientId)).length})
-            </button>
-            {categories.map((cat) => {
-              const count = supplierFilteredIngredients.filter(
-                (i) => i.ingredientCategory === cat && !addedIds.has(i.ingredientId),
-              ).length;
-              if (count === 0) return null;
+      {/* Order guides — the default way in. Pick the regular list and the draft
+          arrives already filled to par; the catalog below stays as the fallback. */}
+      {guides.length > 0 && (
+        <div className="rounded-xl bg-[#161616]/80 backdrop-blur-sm border border-[#2A2A2A] p-4">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <h3 className="text-sm font-medium text-white flex items-center gap-2">
+              <BookOpen className="size-4 text-[#D4A574]" />
+              Order Guide
+            </h3>
+            {selectedGuideId && lines.length > 0 && (
+              <button
+                type="button"
+                onClick={orderEverythingToPar}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold
+                  bg-gradient-to-r from-[#D4A574] to-[#C4956A] text-[#0A0A0A]
+                  shadow-[0_0_12px_rgba(212,165,116,0.25)] hover:brightness-110 transition-all"
+              >
+                <Sparkles className="size-3.5" />
+                Order everything to par
+              </button>
+            )}
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            {guides.map((g) => {
+              const active = g.orderGuideId === selectedGuideId;
               return (
                 <button
-                  key={cat}
-                  onClick={() => setSelectedCategory(cat)}
-                  className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
-                    selectedCategory === cat
-                      ? "bg-[#D4A574]/20 text-[#D4A574] border border-[#D4A574]/30"
-                      : "bg-[#1A1A1A] text-[#999] border border-transparent hover:text-white"
+                  key={g.orderGuideId}
+                  type="button"
+                  onClick={() => applyGuide(g)}
+                  className={`px-3 py-2 rounded-xl text-left transition-all border ${
+                    active
+                      ? "bg-[#D4A574]/15 border-[#D4A574]/40 shadow-[0_0_10px_rgba(212,165,116,0.15)]"
+                      : "bg-[#1A1A1A] border-[#2A2A2A] hover:border-[#3A3A3A]"
                   }`}
                 >
-                  {CATEGORY_LABELS[cat] ?? cat} ({count})
+                  <span
+                    className={`block text-xs font-medium ${active ? "text-[#D4A574]" : "text-white"}`}
+                  >
+                    {g.name}
+                  </span>
+                  <span className="block text-[10px] text-[#777] mt-0.5">
+                    {g.supplierName} · {g.itemCount} item{g.itemCount === 1 ? "" : "s"}
+                  </span>
                 </button>
               );
             })}
           </div>
+        </div>
+      )}
 
+      {/* Add items */}
+      <div className="rounded-xl bg-[#161616]/80 backdrop-blur-sm border border-[#2A2A2A] p-4">
+        <h3 className="text-sm font-medium text-white mb-3">Line Items</h3>
+
+        {/* Search. Category pills used to sit here: nobody orders by browsing
+            "Condiments" — you order from a supplier, off a list. Supplier scope
+            plus type-to-find covers the fallback path. */}
+        <div className="space-y-3 mb-3">
           {/* Search */}
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-[#666]" />
@@ -315,8 +469,15 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
           </div>
         </div>
 
-        {/* Browseable item list */}
-        {filteredIngredients.length > 0 && (
+        {/* Browseable item list.
+            Gated on intent. With no supplier and no search this table rendered
+            the WHOLE catalogue — 63 rows whose Par / Min Ord / Unit Cost were
+            all "—", because none of those resolve until a supplier or location
+            item is in play. A wall of dashes reads as "this product has no
+            data", which is the opposite of true and was the original complaint
+            that kicked off this whole rework. The columns are worth showing;
+            showing them empty, unprompted, is not. */}
+        {hasPickerIntent && filteredIngredients.length > 0 && (
           <div className="max-h-48 overflow-y-auto rounded-lg border border-[#2A2A2A] bg-[#0A0A0A]/50 mb-3">
             {/* Column headers */}
             <div className="sticky top-0 flex items-center gap-3 px-3 py-1.5 text-[10px] uppercase tracking-wider text-[#666] bg-[#141414] border-b border-[#2A2A2A]">
@@ -325,10 +486,13 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
               <div className="w-12 text-center">UOM</div>
               <div className="w-14 text-right">Stock</div>
               <div className="w-14 text-right">Par</div>
+              {/* The supplier's REAL minimum_order_qty. This heading used to render
+                  location_ingredient.reorder_qty (the internal reorder trigger), which
+                  read as a supplier constraint and misled the buyer. */}
               <div className="w-14 text-right">Min Ord</div>
               <div className="w-16 text-right">Unit Cost</div>
             </div>
-            {filteredIngredients.map((ing) => {
+            {visibleIngredients.map((ing) => {
               const stock = Number(ing.currentQty ?? 0);
               const par = Number(ing.parLevel ?? ing.orgParLevel ?? 0);
               const isLow = par > 0 && stock < par;
@@ -355,7 +519,7 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
                     {par > 0 ? par.toFixed(1) : "—"}
                   </div>
                   <div className="w-14 text-right text-xs text-[#555] shrink-0">
-                    {ing.reorderQty ? Number(ing.reorderQty).toFixed(1) : "—"}
+                    {ing.supplierMinOrderQty ? Number(ing.supplierMinOrderQty).toFixed(1) : "—"}
                   </div>
                   <div className="w-16 text-right text-xs text-[#666] shrink-0">
                     {(ing.locationUnitCost || ing.orgUnitCost)
@@ -365,24 +529,42 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
                 </button>
               );
             })}
+            {hiddenIngredientCount > 0 && (
+              <p className="px-3 py-2 text-[11px] text-[#666] text-center border-t border-[#1A1A1A]">
+                +{hiddenIngredientCount} more — keep typing to narrow it down
+              </p>
+            )}
           </div>
         )}
-        {filteredIngredients.length === 0 && search.trim() && (
+        {hasPickerIntent && filteredIngredients.length === 0 && search.trim() && (
           <p className="text-xs text-[#666] mb-3 text-center py-4">No items match your search.</p>
         )}
 
         {/* Lines */}
         {lines.length === 0 ? (
-          <div className="text-center py-8 text-[#666] text-sm">
-            Search and add items above
+          <div className="text-center py-8 text-sm">
+            {guides.length > 0 ? (
+              <>
+                <p className="text-[#999]">Pick a guide above to fill this order to par.</p>
+                <p className="text-[#666] text-xs mt-1">
+                  Or choose a supplier and search to build it by hand.
+                </p>
+              </>
+            ) : (
+              <p className="text-[#666]">Choose a supplier, or search for an item to add.</p>
+            )}
           </div>
         ) : (
           <div className="space-y-2">
             {lines.map((line) => {
               // Find the ingredient to get stock context
               const ing = ingredients.find((i) => i.ingredientId === line.ingredientId);
-              const stock = Number(ing?.currentQty ?? 0);
-              const par = Number(ing?.parLevel ?? ing?.orgParLevel ?? 0);
+              // A guide line carries the location's authoritative on-hand/par
+              // (the server resolved loc -> org fallback already), so prefer it
+              // and don't render a second copy of the same two numbers below.
+              const gLine = guideItemById.get(line.ingredientId);
+              const stock = Number(gLine?.onHand ?? ing?.currentQty ?? 0);
+              const par = Number(gLine?.parLevel ?? ing?.parLevel ?? ing?.orgParLevel ?? 0);
 
               return (
                 <div
@@ -400,6 +582,9 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
                         {par > 0 && (
                           <span className="text-[#666]">Par: {par.toFixed(1)}</span>
                         )}
+                        {par > 0 && stock < par && (
+                          <span className="text-[#D4A574]">below par</span>
+                        )}
                       </div>
                     </div>
                     <button
@@ -414,22 +599,52 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
                   <div className="grid grid-cols-4 gap-2">
                     <div>
                       <label className="block text-[10px] uppercase tracking-wider text-[#666] mb-1">Order Qty</label>
-                      <input
-                        type="number"
-                        value={line.orderedQty}
-                        onChange={(e) => updateLine(line.id, "orderedQty", e.target.value)}
-                        min="0.01"
-                        step="0.1"
-                        className="w-full px-2 py-1.5 rounded-lg text-sm bg-[#0A0A0A] text-white
-                          border border-[#2A2A2A] focus:border-[#D4A574]/40
-                          focus:shadow-[0_0_8px_rgba(212,165,116,0.12)] outline-none"
-                      />
+                      <div className="flex gap-1">
+                        <input
+                          type="number"
+                          value={line.orderedQty}
+                          onChange={(e) => updateLine(line.id, "orderedQty", e.target.value)}
+                          min="0"
+                          step="0.1"
+                          className="w-full min-w-0 px-2 py-1.5 rounded-lg text-sm bg-[#0A0A0A] text-white
+                            border border-[#2A2A2A] focus:border-[#D4A574]/40
+                            focus:shadow-[0_0_8px_rgba(212,165,116,0.12)] outline-none"
+                        />
+                        {guideItemById.has(line.ingredientId) && (
+                          <button
+                            type="button"
+                            onClick={() => setLineToPar(line.id, line.ingredientId)}
+                            title={`Set to par (${orderQtyFor(guideItemById.get(line.ingredientId)!)} ${line.orderedUnit})`}
+                            className="shrink-0 px-2 rounded-lg text-[10px] font-semibold tracking-wide
+                              text-[#D4A574] border border-[#D4A574]/30 bg-[#D4A574]/10
+                              hover:bg-[#D4A574]/20 transition-all"
+                          >
+                            TO PAR
+                          </button>
+                        )}
+                      </div>
+                      {(() => {
+                        const gi = guideItemById.get(line.ingredientId);
+                        if (!gi) return null;
+                        const qty = Number(line.orderedQty) || 0;
+                        // The supplier's real minimum_order_qty — warn, don't block:
+                        // the operator may knowingly under-order and take the call.
+                        const belowMin =
+                          gi.supplierMinOrderQty != null && qty > 0 && qty < gi.supplierMinOrderQty;
+                        // On-hand / par / below-par already read on the header
+                        // line above — don't print them twice.
+                        return belowMin ? (
+                          <p className="mt-0.5 text-[10px] text-amber-400">
+                            Supplier minimum is {gi.supplierMinOrderQty}
+                          </p>
+                        ) : null;
+                      })()}
                     </div>
                     <div>
                       <label className="block text-[10px] uppercase tracking-wider text-[#666] mb-1">Unit</label>
                       <select
                         value={line.orderedUnit}
-                        onChange={(e) => updateLine(line.id, "orderedUnit", e.target.value)}
+                        onChange={(e) => changeLineUnit(line.id, e.target.value, ing)}
                         className="w-full px-2 py-1.5 rounded-lg text-sm bg-[#0A0A0A] text-white
                           border border-[#2A2A2A] focus:border-[#D4A574]/40
                           focus:shadow-[0_0_8px_rgba(212,165,116,0.12)] outline-none"

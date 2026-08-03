@@ -49,4 +49,12 @@ ALTER TABLE menu_item ADD COLUMN IF NOT EXISTS linked_ingredient_id uuid REFEREN
 CREATE UNIQUE INDEX IF NOT EXISTS idx_menu_item_linked_ingredient
   ON menu_item (user_id, linked_ingredient_id) WHERE linked_ingredient_id IS NOT NULL;
 
+-- Unit resolver + yield-vs-sales-unit costing (commit 34601f0 — shipped to the
+-- Drizzle schema without a migration; added here so the uom migration is complete).
+-- density_g_per_ml: volume<->mass bridge for the shared unit resolver.
+ALTER TABLE ingredient ADD COLUMN IF NOT EXISTS density_g_per_ml numeric(6,4);
+-- servings_per_sale: how many yield portions one sale (the selling_price) covers.
+-- NOT NULL DEFAULT 1 backfills every existing row to "sold by the serving" (prior behaviour).
+ALTER TABLE menu_item ADD COLUMN IF NOT EXISTS servings_per_sale integer NOT NULL DEFAULT 1;
+
 COMMIT;

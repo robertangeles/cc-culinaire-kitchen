@@ -94,14 +94,19 @@ function ChatOnlySidebar() {
   return <ConversationSidebar />;
 }
 
-/** Shows GuideSidebar on Intelligence + Inventory routes. */
+/** Shows GuideSidebar on Intelligence + Inventory + Purchasing routes. */
 function IntelligenceGuideSidebar() {
   const { pathname } = useLocation();
   const hasGuide =
     pathname.startsWith("/waste-intelligence") ||
     pathname.startsWith("/kitchen-copilot") ||
     pathname.startsWith("/menu-intelligence") ||
-    pathname.startsWith("/inventory");
+    pathname.startsWith("/inventory") ||
+    // Purchasing was missing. PurchasingPage sets a guide key for every tab
+    // (`purchasing_orders`, `purchasing_receive`, ...) but no sidebar rendered
+    // to consume it, so those guides were unreachable no matter what the
+    // database held.
+    pathname.startsWith("/purchasing");
   if (!hasGuide) return null;
   return <GuideSidebar />;
 }

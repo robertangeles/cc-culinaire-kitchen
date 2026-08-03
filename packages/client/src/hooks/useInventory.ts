@@ -23,6 +23,8 @@ export interface Ingredient {
   /** Content equivalence: 1 kitchen unit contains contentQty contentUnit (1 bottle = 750 ml). */
   contentQty: string | null;
   contentUnit: string | null;
+  /** Density g/mL — volume↔mass bridge for the unit resolver. */
+  densityGPerMl: string | null;
   /** Primary purchase packaging label (case, bag) — ordering/receiving only. */
   purchaseUnit: string | null;
   /** Kitchen units per purchase package (also the pack-cost helper). */
@@ -76,6 +78,8 @@ export interface LocationIngredient {
   // Supplier
   supplierId: string | null;
   supplierName: string | null;
+  /** The supplier's real minimum order quantity — NOT the internal reorder trigger. */
+  supplierMinOrderQty: string | null;
   // Stock
   currentQty: string | null;
   lastCountedDttm: string | null;
@@ -93,6 +97,7 @@ export interface Supplier {
   contactName: string | null;
   contactEmail: string | null;
   contactPhone: string | null;
+  website: string | null;
   addressLine1: string | null;
   addressLine2: string | null;
   suburb: string | null;
@@ -440,6 +445,37 @@ export function useStockMovements(locationId: string | null) {
 
 // ─── useLocationIngredients ───────────────────────────────────────
 
+/**
+ * Share an in-flight location-ingredients request between concurrent callers.
+ *
+ * The PO list and the PO form both mount at once and both need this list, so each
+ * was firing its own identical GET. This is NOT a cache — the entry is dropped the
+ * moment the request settles, so any later refresh still hits the server. It only
+ * collapses the simultaneous duplicates.
+ */
+const inFlightLocationIngredients = new Map<string, Promise<LocationIngredient[] | null>>();
+
+function fetchLocationIngredients(locationId: string): Promise<LocationIngredient[] | null> {
+  const existing = inFlightLocationIngredients.get(locationId);
+  if (existing) return existing;
+
+  const request = (async (): Promise<LocationIngredient[] | null> => {
+    try {
+      const res = await fetch(`${API}/locations/${locationId}/ingredients`, opts);
+      // null = "leave what's on screen alone" (matches the previous behaviour of
+      // only calling setItems on a successful response).
+      if (!res.ok) return null;
+      return (await res.json()) as LocationIngredient[];
+    } catch {
+      return null;
+    }
+  })();
+
+  inFlightLocationIngredients.set(locationId, request);
+  void request.finally(() => inFlightLocationIngredients.delete(locationId));
+  return request;
+}
+
 export function useLocationIngredients(locationId: string | null) {
   const [items, setItems] = useState<LocationIngredient[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -448,8 +484,8 @@ export function useLocationIngredients(locationId: string | null) {
     if (!locationId) return;
     setIsLoading(true);
     try {
-      const res = await fetch(`${API}/locations/${locationId}/ingredients`, opts);
-      if (res.ok) setItems(await res.json());
+      const data = await fetchLocationIngredients(locationId);
+      if (data) setItems(data);
     } finally {
       setIsLoading(false);
     }
@@ -561,6 +597,7 @@ export function useIngredientSuppliers(ingredientId: string | null) {
     costPerUnit?: string | null;
     supplierItemCode?: string | null;
     preferredInd?: boolean;
+    minimumOrderQty?: string | null;
   }) => {
     if (!ingredientId) return;
     const res = await fetch(`${API}/ingredients/${ingredientId}/suppliers/${supplierId}`, {
@@ -643,6 +680,7 @@ export function useSuppliers() {
     contactName?: string;
     contactEmail?: string;
     contactPhone?: string;
+    website?: string;
     leadTimeDays?: number;
     minimumOrderValue?: string;
     notes?: string;
@@ -995,29 +1033,50 @@ export function useConsumptionLog(locationId: string | null) {
  */
 export interface TransactionEvent {
   id: string;
-  type: "stock_take" | "transfer" | "transfer_loc" | "waste" | "movement";
+  // "transfer" is consumption/usage (historical name, see TransactionDayList).
+  // "receipt" is a delivery received against a purchase order — stock's largest
+  // inbound movement, and absent from this union until 2026-08-02.
+  type: "stock_take" | "transfer" | "transfer_loc" | "waste" | "movement" | "receipt";
   quantity: string;
   unit: string;
   reason: string | null;
   userName: string;
   occurredAt: string;
+  /**
+   * Where this event came from, as an app route. Null when the event type has
+   * no destination to open — only receipts have one today (the purchase order).
+   */
+  link: string | null;
 }
 
 export function useIngredientTransactions(ingredientId: string | null, month: string) {
   const [transactions, setTransactions] = useState<TransactionEvent[]>([]);
   const [transactionDates, setTransactionDates] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(false);
+  /**
+   * A failed request used to leave `transactions` empty and silent, so the panel
+   * rendered "No activity on this day" — indistinguishable from an item that
+   * genuinely had no history. A backend restart, a dropped connection or an
+   * expired session all looked like "nothing ever happened to this ingredient",
+   * which is a lie about stock records. Surface the failure instead.
+   */
+  const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     if (!ingredientId) return;
     setIsLoading(true);
+    setError(null);
     try {
       const res = await fetch(`${API}/ingredients/${ingredientId}/transactions?month=${month}`, opts);
       if (res.ok) {
         const data = await res.json();
         setTransactions(data.transactions || []);
         setTransactionDates(new Set(data.transactionDates || []));
+      } else {
+        setError("Couldn't load history.");
       }
+    } catch {
+      setError("Couldn't load history.");
     } finally {
       setIsLoading(false);
     }
@@ -1025,7 +1084,7 @@ export function useIngredientTransactions(ingredientId: string | null, month: st
 
   useEffect(() => { refresh(); }, [refresh]);
 
-  return { transactions, transactionDates, isLoading };
+  return { transactions, transactionDates, isLoading, error, refresh };
 }
 
 // ─── usePurchaseOrders ──────────────────────────────────────────
@@ -1041,6 +1100,7 @@ export interface PurchaseOrder {
   submittedAt: string | null;
   approvedAt: string | null;
   sentAt: string | null;
+  supplierEmailedAt: string | null;
   createdDttm: string;
   updatedDttm: string;
   storeLocationId: string;
@@ -1049,6 +1109,7 @@ export interface PurchaseOrder {
   supplierName: string | null;
   locationName: string | null;
   createdByUserName: string | null;
+  supplierOrderingMethod: string | null;
   lineCount: number;
   lines?: PurchaseOrderLine[];
 }
@@ -1062,27 +1123,15 @@ export interface PurchaseOrderLine {
   receivedQty: string | null;
   receivedUnit: string | null;
   unitCost: string | null;
+  actualUnitCost: string | null;
   lineStatus: string;
   receivedByUserId: number | null;
+  receivedByUserName: string | null;
   receivedDttm: string | null;
   createdDttm: string;
   ingredientName: string | null;
   baseUnit: string | null;
   ingredientCategory: string | null;
-}
-
-export interface POSuggestionGroup {
-  supplierId: string | null;
-  supplierName: string | null;
-  items: {
-    ingredientId: string;
-    ingredientName: string;
-    ingredientCategory: string;
-    baseUnit: string;
-    parLevel: string | null;
-    reorderQty: string | null;
-    currentQty: string | null;
-  }[];
 }
 
 export function usePurchaseOrders(locationId: string | null) {
@@ -1103,9 +1152,21 @@ export function usePurchaseOrders(locationId: string | null) {
   useEffect(() => { refresh(); }, [refresh]);
 
   const getDetail = useCallback(async (poId: string) => {
-    const res = await fetch(`${API}/purchase-orders/${poId}`, opts);
+    // Every failure used to collapse to `null`, so the UI could only ever say
+    // "Failed to load details." — a 403, a 500 and the dev server restarting
+    // under you were indistinguishable. Say which one it was.
+    let res: Response;
+    try {
+      res = await fetch(`${API}/purchase-orders/${poId}`, opts);
+    } catch {
+      throw new Error("Can't reach the server. Check your connection and try again.");
+    }
     if (res.ok) return res.json() as Promise<PurchaseOrder>;
-    return null;
+    if (res.status === 401) throw new Error("Your session expired. Sign in again.");
+    if (res.status === 403) throw new Error("You don't have access to this purchase order.");
+    if (res.status === 404) throw new Error("This purchase order no longer exists.");
+    if (res.status >= 500) throw new Error(`The server couldn't load this order (${res.status}). Try again in a moment.`);
+    throw new Error(`Couldn't load this order (${res.status}).`);
   }, []);
 
   const createPO = useCallback(async (data: {
@@ -1166,12 +1227,6 @@ export function usePurchaseOrders(locationId: string | null) {
     return res.json();
   }, [refresh]);
 
-  const getSuggestions = useCallback(async (locId: string) => {
-    const res = await fetch(`${API}/purchase-orders/suggestions?storeLocationId=${locId}`, opts);
-    if (res.ok) return res.json() as Promise<POSuggestionGroup[]>;
-    return [];
-  }, []);
-
   const approvePO = useCallback(async (poId: string) => {
     const res = await fetch(`${API}/purchase-orders/${poId}/approve`, {
       ...jsonOpts, method: "POST",
@@ -1208,21 +1263,36 @@ export function usePurchaseOrders(locationId: string | null) {
     return res.json() as Promise<PurchaseOrder & { skippedItems: string[] }>;
   }, [refresh]);
 
-  const downloadPdf = useCallback(async (poId: string) => {
+  const downloadPdf = useCallback(async (poId: string, poNumber?: string) => {
     const res = await fetch(`${API}/purchase-orders/${poId}/pdf`, opts);
     if (!res.ok) throw new Error("Failed to download PDF");
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `PO-${poId.slice(0, 8)}.pdf`;
+    a.download = `${poNumber ?? `PO-${poId.slice(0, 8)}`}.pdf`;
     a.click();
     URL.revokeObjectURL(url);
   }, []);
 
+  const emailPOToSupplier = useCallback(async (poId: string) => {
+    const res = await fetch(`${API}/purchase-orders/${poId}/send-email`, {
+      ...jsonOpts, method: "POST",
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || "Couldn't email the supplier.");
+    }
+    await refresh();
+    return res.json() as Promise<
+      | { emailed: true; emailedAt: string; to: string }
+      | { emailed: false; reason: "no_supplier_email" | "email_not_configured" | "not_email_supplier"; message: string }
+    >;
+  }, [refresh]);
+
   return {
     pos, isLoading, refresh, getDetail, createPO, submitPO, cancelPO,
-    receiveLine, getSuggestions, approvePO, rejectPO, clonePO, downloadPdf,
+    receiveLine, approvePO, rejectPO, clonePO, downloadPdf, emailPOToSupplier,
   };
 }
 

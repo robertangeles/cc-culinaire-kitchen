@@ -23,6 +23,7 @@ export async function createOrganisation(
     name: string;
     website?: string;
     email?: string;
+    phone?: string;
     facebook?: string;
     instagram?: string;
     tiktok?: string;
@@ -50,6 +51,7 @@ export async function createOrganisation(
       organisationName: data.name,
       organisationWebsite: data.website ?? null,
       organisationEmail: data.email ?? null,
+      organisationPhone: data.phone ?? null,
       organisationFacebook: data.facebook ?? null,
       organisationInstagram: data.instagram ?? null,
       organisationTiktok: data.tiktok ?? null,
@@ -146,6 +148,7 @@ export async function getUserOrganisation(userId: number) {
       organisationPostcode: organisation.organisationPostcode,
       organisationWebsite: organisation.organisationWebsite,
       organisationEmail: organisation.organisationEmail,
+      organisationPhone: organisation.organisationPhone,
       organisationFacebook: organisation.organisationFacebook,
       organisationInstagram: organisation.organisationInstagram,
       organisationTiktok: organisation.organisationTiktok,
@@ -175,6 +178,7 @@ export async function updateOrganisation(
     name: string;
     website?: string;
     email?: string;
+    phone?: string;
     facebook?: string;
     instagram?: string;
     tiktok?: string;
@@ -203,6 +207,7 @@ export async function updateOrganisation(
       organisationName: data.name,
       organisationWebsite: data.website ?? null,
       organisationEmail: data.email ?? null,
+      organisationPhone: data.phone ?? null,
       organisationFacebook: data.facebook ?? null,
       organisationInstagram: data.instagram ?? null,
       organisationTiktok: data.tiktok ?? null,

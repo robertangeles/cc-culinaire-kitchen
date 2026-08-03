@@ -426,3 +426,57 @@ export async function sendRecipeEmail(
   logger.info({ to, recipeName: recipeData.name }, "Recipe email sent");
   return { sent: true };
 }
+
+export interface PurchaseOrderEmailData {
+  poNumber: string;
+  supplierName: string;
+  orgName: string;
+  locationName: string;
+  expectedDeliveryDate: string | null;
+}
+
+/**
+ * Emails a finalised purchase order to the supplier, with the generated PO
+ * PDF attached. Returns { sent:false } (never throws) when email is not
+ * configured so the caller can flag it without failing the request.
+ */
+export async function sendPurchaseOrderEmail(
+  to: string,
+  po: PurchaseOrderEmailData,
+  pdfBuffer: Buffer,
+): Promise<{ sent: boolean; error?: string; notConfigured?: boolean }> {
+  const client = getResend();
+  if (!client) return { sent: false, notConfigured: true, error: "Email service not configured" };
+
+  const html = `
+    <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:640px;margin:0 auto;padding:24px;">
+      <h1 style="color:#292524;font-size:22px;margin:0 0 4px;">Purchase Order ${po.poNumber}</h1>
+      <p style="color:#78716c;font-size:14px;margin:0 0 20px;">From ${po.orgName} — ${po.locationName}</p>
+      <p style="color:#44403c;font-size:14px;margin:0 0 16px;">Hello ${po.supplierName},</p>
+      <p style="color:#57534e;font-size:14px;line-height:1.6;margin:0 0 20px;">
+        Please find our purchase order attached as a PDF.
+      </p>
+      ${po.expectedDeliveryDate ? `<p style="color:#57534e;font-size:14px;margin:0 0 8px;"><strong>Requested delivery:</strong> ${po.expectedDeliveryDate}</p>` : ""}
+      <hr style="border:none;border-top:1px solid #e7e5e4;margin:24px 0;" />
+      <p style="color:#a8a29e;font-size:12px;text-align:center;">
+        Sent via <a href="${CLIENT_URL}" style="color:#b45309;text-decoration:none;">CulinAIre Kitchen</a>
+      </p>
+    </div>
+  `;
+
+  const { error } = await client.emails.send({
+    from: FROM_EMAIL,
+    to,
+    subject: `Purchase Order ${po.poNumber} — ${po.orgName}`,
+    html,
+    attachments: [{ filename: `${po.poNumber}.pdf`, content: pdfBuffer }],
+  });
+
+  if (error) {
+    logger.error({ error, to, poNumber: po.poNumber }, "Failed to send purchase order email");
+    return { sent: false, error: error.message };
+  }
+
+  logger.info({ to, poNumber: po.poNumber }, "Purchase order email sent");
+  return { sent: true };
+}

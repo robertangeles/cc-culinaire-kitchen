@@ -10,7 +10,7 @@
  * On receive, creates FIFO batches and updates stock levels.
  */
 
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc, sql, inArray } from "drizzle-orm";
 import { db } from "../db/index.js";
 import {
   purchaseOrder,
@@ -22,10 +22,13 @@ import {
   storeLocation,
   user,
   locationIngredient,
+  organisation,
 } from "../db/schema.js";
 import { validateTransition, PO_TRANSITIONS } from "../utils/stateTransition.js";
 import * as thresholdService from "./thresholdService.js";
 import * as notificationService from "./notificationService.js";
+import * as pdfService from "./pdfService.js";
+import * as emailService from "./emailService.js";
 import { resolveToBase } from "./unitConversionService.js";
 import pino from "pino";
 
@@ -120,6 +123,7 @@ export async function listPOs(orgId: number, opts: ListPOOpts = {}) {
       submittedAt: purchaseOrder.submittedAt,
       approvedAt: purchaseOrder.approvedAt,
       sentAt: purchaseOrder.sentAt,
+      supplierEmailedAt: purchaseOrder.supplierEmailedAt,
       createdDttm: purchaseOrder.createdDttm,
       updatedDttm: purchaseOrder.updatedDttm,
       storeLocationId: purchaseOrder.storeLocationId,
@@ -128,6 +132,7 @@ export async function listPOs(orgId: number, opts: ListPOOpts = {}) {
       supplierName: supplier.supplierName,
       locationName: storeLocation.locationName,
       createdByUserName: user.userName,
+      supplierOrderingMethod: supplier.orderingMethod,
       lineCount: sql<number>`(SELECT count(*) FROM purchase_order_line pol WHERE pol.po_id = ${purchaseOrder.poId})::int`,
     })
     .from(purchaseOrder)
@@ -153,6 +158,7 @@ export async function getPODetail(poId: string, orgId: number) {
       status: purchaseOrder.status,
       notes: purchaseOrder.notes,
       expectedDeliveryDate: purchaseOrder.expectedDeliveryDate,
+      supplierEmailedAt: purchaseOrder.supplierEmailedAt,
       createdDttm: purchaseOrder.createdDttm,
       updatedDttm: purchaseOrder.updatedDttm,
       storeLocationId: purchaseOrder.storeLocationId,
@@ -180,8 +186,14 @@ export async function getPODetail(poId: string, orgId: number) {
       receivedQty: purchaseOrderLine.receivedQty,
       receivedUnit: purchaseOrderLine.receivedUnit,
       unitCost: purchaseOrderLine.unitCost,
+      // The price actually paid at the door. confirmReceipt has always written
+      // this, but it was never selected — so a price change recorded during
+      // receiving was invisible in history and the PO still showed the price
+      // the kitchen ordered at.
+      actualUnitCost: purchaseOrderLine.actualUnitCost,
       lineStatus: purchaseOrderLine.lineStatus,
       receivedByUserId: purchaseOrderLine.receivedByUserId,
+      receivedByUserName: user.userName,
       receivedDttm: purchaseOrderLine.receivedDttm,
       createdDttm: purchaseOrderLine.createdDttm,
       ingredientName: ingredient.ingredientName,
@@ -190,6 +202,7 @@ export async function getPODetail(poId: string, orgId: number) {
     })
     .from(purchaseOrderLine)
     .leftJoin(ingredient, eq(purchaseOrderLine.ingredientId, ingredient.ingredientId))
+    .leftJoin(user, eq(purchaseOrderLine.receivedByUserId, user.userId))
     .where(eq(purchaseOrderLine.poId, poId));
 
   return { ...po, lines };
@@ -248,7 +261,7 @@ export async function submitPO(poId: string, orgId: number, userId: number) {
         <p><strong>Total Value:</strong> $${totalValue.toFixed(2)}</p>
         <p><strong>Threshold:</strong> $${thresholdAmount?.toFixed(2)}</p>
         <p style="margin-top: 16px;">
-          <a href="${process.env.CLIENT_URL || "https://www.culinaire.kitchen"}/inventory?tab=purchase-orders&po=${poId}"
+          <a href="${process.env.CLIENT_URL || "https://www.culinaire.kitchen"}/purchasing?tab=orders&po=${poId}"
              style="background: linear-gradient(135deg, #D4A574, #C4956A); color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600;">
             Review &amp; Approve
           </a>
@@ -321,6 +334,87 @@ export async function approvePO(poId: string, orgId: number, userId: number) {
   return updated;
 }
 
+// ─── emailPOToSupplier ───────────────────────────────────────────
+
+/**
+ * Emails a SENT purchase order to its supplier with the PO PDF attached.
+ * Explicit operator action — separate from the internal SENT status flip.
+ * Never throws for expected states: a supplier with no email on file, or an
+ * unconfigured email transport, is reported back so the UI can flag it.
+ */
+export async function emailPOToSupplier(poId: string, orgId: number) {
+  const [po] = await db
+    .select({
+      poNumber: purchaseOrder.poNumber,
+      status: purchaseOrder.status,
+      expectedDeliveryDate: purchaseOrder.expectedDeliveryDate,
+      supplierName: supplier.supplierName,
+      contactEmail: supplier.contactEmail,
+      orderingMethod: supplier.orderingMethod,
+      locationName: storeLocation.locationName,
+      orgName: organisation.organisationName,
+    })
+    .from(purchaseOrder)
+    .leftJoin(supplier, eq(purchaseOrder.supplierId, supplier.supplierId))
+    .leftJoin(storeLocation, eq(purchaseOrder.storeLocationId, storeLocation.storeLocationId))
+    .leftJoin(organisation, eq(purchaseOrder.organisationId, organisation.organisationId))
+    .where(and(eq(purchaseOrder.poId, poId), eq(purchaseOrder.organisationId, orgId)));
+
+  if (!po) throw new Error("Purchase order not found");
+
+  // Only a finalised (SENT) PO can be emailed to a supplier.
+  if (po.status !== "SENT") {
+    throw new Error("Only a sent purchase order can be emailed to the supplier");
+  }
+
+  // This action is for suppliers ordered via email. Phone/portal suppliers are
+  // not emailed — flag it rather than sending an unwanted email.
+  if (po.orderingMethod !== "email") {
+    return { emailed: false as const, reason: "not_email_supplier" as const };
+  }
+
+  // Skip-and-flag: no supplier email on file → do not send, report back.
+  if (!po.contactEmail) {
+    return { emailed: false as const, reason: "no_supplier_email" as const };
+  }
+
+  // The full order (line items, totals, notes) lives in the attached PDF; the
+  // email body is a brief cover note, so no line-items query is needed here.
+  const { buffer: pdfBuffer } = await pdfService.generatePOPdf(poId, orgId);
+
+  const result = await emailService.sendPurchaseOrderEmail(
+    po.contactEmail,
+    {
+      poNumber: po.poNumber,
+      supplierName: po.supplierName ?? "there",
+      orgName: po.orgName ?? "CulinAIre Kitchen",
+      locationName: po.locationName ?? "",
+      expectedDeliveryDate: po.expectedDeliveryDate
+        ? po.expectedDeliveryDate.toISOString().slice(0, 10)
+        : null,
+    },
+    pdfBuffer,
+  );
+
+  // Transport not set up (e.g. local dev without RESEND_API_KEY) → flag, don't crash.
+  if (result.notConfigured) {
+    return { emailed: false as const, reason: "email_not_configured" as const };
+  }
+  // Genuine send failure (Resend returned an error) → surface it.
+  if (!result.sent) {
+    throw new Error(result.error ?? "Failed to send supplier email");
+  }
+
+  const now = new Date();
+  await db
+    .update(purchaseOrder)
+    .set({ supplierEmailedAt: now, updatedDttm: now })
+    .where(eq(purchaseOrder.poId, poId));
+
+  logger.info({ poId, to: po.contactEmail }, "PO emailed to supplier");
+  return { emailed: true as const, emailedAt: now, to: po.contactEmail };
+}
+
 // ─── rejectPO ────────────────────────────────────────────────────
 
 export async function rejectPO(
@@ -386,7 +480,7 @@ export async function rejectPO(
         <p><strong>Reason:</strong> ${reason.trim()}</p>
         <p style="margin-top: 16px;">The PO has been returned to Draft status. Please review and resubmit.</p>
         <p style="margin-top: 16px;">
-          <a href="${process.env.CLIENT_URL || "https://www.culinaire.kitchen"}/inventory?tab=purchase-orders&po=${poId}"
+          <a href="${process.env.CLIENT_URL || "https://www.culinaire.kitchen"}/purchasing?tab=orders&po=${poId}"
              style="background: linear-gradient(135deg, #D4A574, #C4956A); color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600;">
             Edit PO
           </a>
@@ -428,32 +522,39 @@ export async function clonePO(
   const skippedItems: string[] = [];
   const adjustedLines: CreatePOLineInput[] = [];
 
+  // Batch-load current stock + par for every source line at this location in two
+  // queries, not two per line (P1 T12 — a clone of a 500-line PO was ~1,000 queries).
+  const lineIngredientIds = source.lines.map((l) => l.ingredientId);
+  const [stockRows, parRows] = lineIngredientIds.length
+    ? await Promise.all([
+        db
+          .select({ ingredientId: stockLevel.ingredientId, currentQty: stockLevel.currentQty })
+          .from(stockLevel)
+          .where(
+            and(
+              eq(stockLevel.storeLocationId, locationId),
+              inArray(stockLevel.ingredientId, lineIngredientIds),
+            ),
+          ),
+        db
+          .select({ ingredientId: locationIngredient.ingredientId, parLevel: locationIngredient.parLevel })
+          .from(locationIngredient)
+          .where(
+            and(
+              eq(locationIngredient.storeLocationId, locationId),
+              inArray(locationIngredient.ingredientId, lineIngredientIds),
+              eq(locationIngredient.activeInd, true),
+            ),
+          ),
+      ])
+    : [[], []];
+  const stockByIngredient = new Map(stockRows.map((r) => [r.ingredientId, r.currentQty]));
+  const parByIngredient = new Map(parRows.map((r) => [r.ingredientId, r.parLevel]));
+
   for (const line of source.lines) {
-    // Get current stock at this location
-    const [stock] = await db
-      .select({ currentQty: stockLevel.currentQty })
-      .from(stockLevel)
-      .where(
-        and(
-          eq(stockLevel.storeLocationId, locationId),
-          eq(stockLevel.ingredientId, line.ingredientId),
-        ),
-      );
-
-    // Get par level for this item at this location
-    const [locIng] = await db
-      .select({ parLevel: locationIngredient.parLevel })
-      .from(locationIngredient)
-      .where(
-        and(
-          eq(locationIngredient.storeLocationId, locationId),
-          eq(locationIngredient.ingredientId, line.ingredientId),
-          eq(locationIngredient.activeInd, true),
-        ),
-      );
-
-    const currentQty = stock ? Number(stock.currentQty) : 0;
-    const parLevel = locIng?.parLevel ? Number(locIng.parLevel) : null;
+    const currentQty = Number(stockByIngredient.get(line.ingredientId) ?? 0);
+    const parRaw = parByIngredient.get(line.ingredientId);
+    const parLevel = parRaw != null ? Number(parRaw) : null;
 
     // Calculate suggested qty: par level - current stock, or original qty if no par
     let suggestedQty: number;
@@ -636,60 +737,6 @@ export async function cancelPO(poId: string, orgId: number, userId: number) {
   return updated;
 }
 
-// ─── getSuggestions ───────────────────────────────────────────────
-
-export async function getSuggestions(locationId: string, orgId: number) {
-  // Find items where current stock < par level, grouped by preferred supplier
-  const rows = await db
-    .select({
-      ingredientId: ingredient.ingredientId,
-      ingredientName: ingredient.ingredientName,
-      ingredientCategory: ingredient.ingredientCategory,
-      baseUnit: ingredient.baseUnit,
-      parLevel: locationIngredient.parLevel,
-      reorderQty: locationIngredient.reorderQty,
-      currentQty: stockLevel.currentQty,
-      supplierId: supplier.supplierId,
-      supplierName: supplier.supplierName,
-    })
-    .from(locationIngredient)
-    .innerJoin(ingredient, eq(locationIngredient.ingredientId, ingredient.ingredientId))
-    .leftJoin(
-      stockLevel,
-      and(
-        eq(stockLevel.ingredientId, ingredient.ingredientId),
-        eq(stockLevel.storeLocationId, locationId),
-      ),
-    )
-    .leftJoin(supplier, eq(locationIngredient.supplierId, supplier.supplierId))
-    .where(
-      and(
-        eq(locationIngredient.storeLocationId, locationId),
-        eq(locationIngredient.activeInd, true),
-        eq(ingredient.organisationId, orgId),
-        sql`COALESCE(${stockLevel.currentQty}::numeric, 0) < COALESCE(${locationIngredient.parLevel}::numeric, 0)`,
-        sql`${locationIngredient.parLevel} IS NOT NULL AND ${locationIngredient.parLevel}::numeric > 0`,
-      ),
-    );
-
-  // Group by supplier
-  const grouped: Record<string, {
-    supplierId: string | null;
-    supplierName: string | null;
-    items: typeof rows;
-  }> = {};
-
-  for (const row of rows) {
-    const key = row.supplierId ?? "unassigned";
-    if (!grouped[key]) {
-      grouped[key] = {
-        supplierId: row.supplierId,
-        supplierName: row.supplierName,
-        items: [],
-      };
-    }
-    grouped[key].items.push(row);
-  }
-
-  return Object.values(grouped);
-}
+// getSuggestions removed (Purchasing P1, T3): superseded by autoPoSuggestService,
+// which is the live "items below par" engine the Suggestions tab and order guides
+// both use. This older per-location variant was called by no live component.

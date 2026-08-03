@@ -173,6 +173,7 @@ const menuItemSchema = z.object({
   category: z.string().min(1).max(100),
   sellingPrice: z.string().regex(/^\d+(\.\d{1,2})?$/, "Invalid price"),
   servings: z.number().int().min(1).max(999).optional().default(1),
+  servingsPerSale: z.number().int().min(1).max(999).optional().default(1),
   qFactorPct: z.string().regex(/^\d+(\.\d{1,2})?$/).optional().default("0"),
 });
 
@@ -217,6 +218,7 @@ const updateMenuItemSchema = z.object({
   category: z.string().min(1).max(50).optional(),
   sellingPrice: z.string().regex(/^\d+(\.\d{1,2})?$/, "Invalid price").optional(),
   servings: z.number().int().min(1).max(999).optional(),
+  servingsPerSale: z.number().int().min(1).max(999).optional(),
   qFactorPct: z.string().regex(/^\d+(\.\d{1,2})?$/).optional(),
   unitsSold: z.number().int().min(0).optional(),
 });

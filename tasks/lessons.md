@@ -503,3 +503,163 @@ port 5433 (`sudo pg_ctlcluster 16 main start`) — CI's exact Postgres version. 
 reproduce the CI `db:push` path locally instead of theorising about version skew. Pointed
 at a fresh pg16 DB with `DEV_DATABASE_URL` set, `db:push` completes cleanly (exit 0) and
 builds all tables with CHECKs enforcing. Stop it again when done.
+
+---
+
+## #57 — Raw `sql\`\`` templates silently break on JS `Date` (2026-08-02)
+
+- **Problem**: Every delivery receipt 500'd with *"Internal server error"*. The real error was
+  `TypeError [ERR_INVALID_ARG_TYPE]: The "string" argument must be of type string ... Received an
+  instance of Date`, thrown by the `postgres` driver's `Buffer.byteLength()`. Cause:
+  `wacService.recompute` did ``sql`... updated_dttm = ${now}` `` with `now = new Date()`.
+- **Fix**: Bind `${now.toISOString()}::timestamptz`. Raw `sql` carries no column type
+  information, so Drizzle passes the value through untyped; the typed builder
+  (`.set({ updatedDttm: new Date() })`) knows the column is a timestamp and serialises correctly.
+- **Rule**: Never interpolate a `Date` into a raw `sql` template. Use an ISO string with an
+  explicit `::timestamptz` cast, or `now()` in SQL. Reach for the typed builder when you can.
+  When fixing one instance, sweep the repo for the whole class — the bug is invisible until the
+  statement actually executes, and unit tests with mocked transactions will not catch it.
+
+## #58 — A fix that guards one direction of a two-way inconsistency is half a fix (2026-08-02)
+
+- **Problem**: `startSession` was fixed on 2026-08-01 to resume an ACTIVE receiving session when
+  the PO read `RECEIVING`. The DB also produces the inverse — PO `SENT` with an ACTIVE session,
+  because `cancelSession` resets the PO unconditionally — and that state still dead-ended on
+  *"A receiving session is already in progress for this PO"* with no UI path to resume OR cancel.
+- **Fix**: Look the ACTIVE session up *before* branching on PO status, so either direction of
+  disagreement resumes and repairs the status.
+- **Rule**: When two columns can disagree, enumerate BOTH directions of the disagreement before
+  calling it fixed. Fixing the direction the bug report happened to show leaves the mirror image
+  live — and it will surface later looking like a brand-new bug.
+
+## #59 — Sibling hook instances hold independent copies of the same data (2026-08-02)
+
+- **Problem**: After confirming a receipt the queue emptied but the "Receive" tab badge kept
+  counting the delivery. `PurchasingPage` and `ReceiveQueue` each call `usePurchaseOrders()`, so
+  each owns a separate `pos` array; refreshing one leaves the other stale.
+- **Fix**: `ReceiveQueue` takes an `onChanged` prop and calls it on exit so the parent refreshes
+  its own copy.
+- **Rule**: Calling the same fetching hook in a parent and a child creates two independent caches,
+  not one shared one. Either lift the data to the common ancestor and pass it down, or give the
+  child an explicit change callback. Verify in a browser — this class of bug is invisible to unit
+  tests and to API-level checks.
+
+## #60 — Mocked tests verify code shape, not system state (2026-08-02)
+
+- **Problem**: In one session, five defects surfaced that 660 passing tests had not caught:
+  `confirmReceipt` 500'd on *every* receipt (Date bound into raw SQL); a PO sat `SENT` with an
+  orphaned ACTIVE receiving session; two ACTIVE sessions existed for one PO; `preferred_unit_cost`
+  was NULL catalog-wide so yield variance computed $0 and reported a fictional 100% favourable
+  variance for every dish; 108 of 110 stocked items had no FIFO cost layer. The user's reaction —
+  "your tests never do regression and now we are wasting time surfacing these gremlins" — was
+  correct. Every one of those is invisible to a test that mocks the database, because a mock
+  asserts what the code *does with a fake*, never what the live system *is*.
+- **Fix**: `scripts/checkCatalogIntegrity.ts` — 8 invariant checks that run pure SQL against a
+  REAL database, plus `checkCatalogIntegrity.test.ts` which fails on any `error`-severity
+  violation. Each check states its invariant AND names the incident it prevents, so a future
+  failure explains itself instead of being a puzzle. `warn` severity exists for
+  legitimately-degraded states so nobody learns to ignore a red test. Exposed as
+  `pnpm --filter @culinaire/server db:check` for use as a pre-deploy gate.
+- **Rule**: For anything backed by a database, a mocked unit test is necessary but never
+  sufficient. Every invariant that *should* be impossible to violate needs a real-DB assertion,
+  and that check must be proven to FIRE — inject the violation inside a transaction and roll it
+  back. A check that has only ever passed is not a check, it is decoration. Prefer one honest
+  SELECT over a hundred mocked expectations.
+
+## #61 — A missing cost must never read as a free ingredient (2026-08-02)
+
+- **Problem**: `yieldVarianceService` summed actual cost with
+  `COALESCE(i.preferred_unit_cost, 0)`. That column is trigger-maintained and was NULL for the
+  whole catalog, so actual cost was $0 and every dish reported a 100% favourable variance — a
+  plausible-looking number that was entirely fictional. Every sibling consumer
+  (`orderGuideService`, `menuIntelligenceService`, `saleService`) correctly coalesced to
+  `unit_cost`; this one path coalesced to zero.
+- **Fix**: Fall back `preferred_unit_cost → unit_cost`, and count rows where BOTH are null. If any
+  exist, return a new `"uncosted"` status rather than publishing an understated variance —
+  matching the existing `"thin-data"` philosophy of an honest empty state over a confident wrong
+  number.
+- **Rule**: `COALESCE(x, 0)` on a money column is a bug unless zero is genuinely a valid price.
+  Missing data must degrade to a visible empty state, never to a number that looks like an answer.
+  When adding a fallback chain, grep how every sibling consumer resolves the same field — an
+  inconsistent chain is the tell.
+
+## #62 — "Flaky tests" were two concrete bugs plus one real isolation defect (2026-08-02)
+
+- **Problem**: 6 real-DB tests failed intermittently and had been written off as flaky. Treating
+  them as noise hid three unrelated causes.
+- **Cause 1 — timeout vs latency.** 5 of 6 failures were `Test timed out in 5000ms`. The dev
+  database moved from local Postgres to a remote Render instance; every query now pays ~200ms+
+  network latency, and vitest's 5s default was sized for local. Fixed by `testTimeout`/
+  `hookTimeout` of 30s, and by correcting the vitest config comment that still claimed "one local
+  Postgres". Mocked tests are unaffected — they finish in ms either way.
+- **Cause 2 — a sleep standing in for synchronisation.** `advisoryLock.test.ts` fired two
+  `withAdvisoryLock` calls via `Promise.all` and had the winner sleep 150ms, assuming the two
+  transactions would overlap. A probe measured the second transaction opening **216ms** after the
+  first: the first committed and released before the second began, so both acquired legitimately
+  and `runs === 2`. The lock was never broken — the test was. Replaced the sleep with an explicit
+  handshake (the contender only attempts once the holder is provably inside the lock).
+- **Cause 3 — a live dev server was racing the test suite.** `brainIntegration.test.ts` failed
+  intermittently (~40%) only in full-suite runs; alone it passed 23/23 every time. The failing
+  assertion was `expected 0 to be greater than 0` — the test counted the pending `brain_memory`
+  rows IT had just seeded and found none. Root cause: `pnpm dev` runs `runBrainWorkerTick()` every
+  **15 seconds** (`BRAIN_WORKER_INTERVAL_MS`) against the same shared remote dev database. The
+  server claimed and embedded the test's rows mid-run. That explains the rate (whether a 15s tick
+  landed in the window), the moving target, and why isolation passed.
+  Fixed by gating all 10 scheduled jobs behind `isProductionProcess()` — ON in production, OFF
+  otherwise, `ENABLE_SCHEDULED_JOBS=1` to override. Proven: a hand-inserted pending row stayed
+  `pending`/`attempt_count=0` for 40s with the dev server live (previously claimed within 15s),
+  then **5 consecutive full-suite runs at 674/674**.
+- **A wrong fix shipped first, and only a baseline caught it.** I had hypothesised foreign pending
+  rows and written a helper to park them. Measured: the paired repro went from **29/29 passing to
+  4 failures**. Reverted. I only knew because I re-ran the same command with the change stashed
+  instead of trusting that the file passed in isolation.
+- **Rule**: Never label a test "flaky" and move on — it is a defect report with the stack trace
+  missing. Ask "what else writes to this database?" before touching the test: a dev server,
+  scheduled job, or colleague's session competing on shared state produces textbook
+  "flakiness" that no amount of test-side work will fix. Timed background jobs must never run
+  against a shared dev database by default. And ALWAYS baseline a fix by stashing it and re-running
+  the same command — a fix that only ever made things worse is indistinguishable from one that
+  worked, if you never measure the before. Run it in isolation first: still failing means a real bug, passing means shared state
+  or timing. And never synchronise a concurrency test with a sleep; sleeps encode an assumption
+  about latency that a slower environment silently invalidates, converting a passing test into a
+  lie about what the code guarantees. Measure the timing before assuming the product is at fault.
+
+## #63 — Never `git checkout --` a file that holds other uncommitted work (2026-08-02)
+
+- **Problem**: I made a premature edit to `PurchaseOrderList.tsx`, was told to audit before
+  changing anything, and reverted with `git checkout -- <file>`. That file also held two
+  *earlier* uncommitted changes from the same session — a receipt header and an actual-cost
+  arrow — and both were destroyed. It surfaced only because a verification screenshot showed a
+  feature that had worked an hour earlier was missing.
+- **Fix**: Restored both blocks by hand and re-verified in the browser.
+- **Rule**: `git checkout -- <file>` discards EVERYTHING uncommitted in that file, not just the
+  last edit. Before reverting, check `git diff <file>` for other work. Undo a single edit with a
+  targeted reverse-edit instead. And commit working increments — a restore point I had flagged
+  as overdue several times would have made this a non-event.
+
+## #64 — Assert counts in codemod scripts; a failed assert is a feature (2026-08-02)
+
+- **Problem/Fix**: A script wiring a prop into `<TransferRow>` asserted 2 call sites. There were
+  3. The assert threw before the write, so the file was left untouched instead of two-thirds
+  patched — which would have typechecked in some shapes and shipped a row that silently ignored
+  the deep-link.
+- **Rule**: Every scripted multi-site edit asserts the expected occurrence count BEFORE writing,
+  and writes only after every replacement succeeds. A wrong count is information, not an
+  obstacle — it means the mental model of the file was wrong.
+
+## #65 — A real-DB test with no availability gate fails CI on infrastructure, not on truth (2026-08-04)
+
+- **Problem**: `checkCatalogIntegrity.test.ts` called `runIntegrityChecks()` against a live
+  database from a bare `describe(...)`. It passed locally because `.env` supplies
+  `DATABASE_URL`, and failed CI's unit job — which has no database — with
+  `DATABASE_URL environment variable is required`. Green locally, red on the PR.
+- **Fix**: Gated it on a reachable database (`describe.runIf(dbAvailable)`), matching every
+  other real-DB test in the repo. Verified both directions: 2 passed with a DB, 2 skipped and
+  0 failed without one.
+- **Rule**: A test that touches a real database is gated on that database being reachable, or
+  it is mocked. There is no third option. Before adding one, ask where it can *meaningfully*
+  run — moving this into the integration job would have been worse than skipping, because that
+  job's Postgres is an empty throwaway where org 2 has no catalog and all 8 checks would pass
+  vacuously. A gate that skips honestly beats a green test that proves nothing.
+- **Also**: "passes locally" is not evidence about CI when the two have different environments.
+  The difference *is* the test surface.

@@ -24,17 +24,70 @@ import {
   purchaseOrder,
   purchaseOrderLine,
   ingredient,
+  locationIngredient,
+  stockLevel,
 } from "../db/schema.js";
 import * as fifoService from "./fifoService.js";
 import * as stockService from "./stockService.js";
 import * as notificationService from "./notificationService.js";
 import * as auditService from "./auditService.js";
+import type { DbOrTx } from "./auditService.js";
 import * as wacService from "./wacService.js";
 import { resolveToBase } from "./unitConversionService.js";
 import { validateTransition, RECEIVING_SESSION_TRANSITIONS } from "../utils/stateTransition.js";
 import pino from "pino";
 
 const logger = pino({ name: "receivingService" });
+
+/**
+ * Receiving lines joined to their ingredient (name/category/base unit) plus
+ * this location's par level and current stock on hand — the shape the
+ * client's ReceivingSessionData expects everywhere a session's lines are
+ * returned. Shared by startSession and getSession so the two paths can
+ * never drift apart again (they used to: startSession returned bare
+ * receiving_line rows with no ingredient join, so a freshly-started session
+ * showed every line as "Unknown item" until the page was reloaded).
+ *
+ * storeLocationId is resolved via receiving_session rather than taken as a
+ * param, so par/stock are always scoped to the session's own location.
+ */
+async function selectLinesWithIngredient(sessionId: string, dbOrTx: DbOrTx) {
+  return dbOrTx
+    .select({
+      receivingLineId: receivingLine.receivingLineId,
+      sessionId: receivingLine.sessionId,
+      poLineId: receivingLine.poLineId,
+      ingredientId: receivingLine.ingredientId,
+      orderedQty: receivingLine.orderedQty,
+      orderedUnit: receivingLine.orderedUnit,
+      receivedQty: receivingLine.receivedQty,
+      actualUnitCost: receivingLine.actualUnitCost,
+      status: receivingLine.status,
+      ingredientName: ingredient.ingredientName,
+      ingredientCategory: ingredient.ingredientCategory,
+      baseUnit: ingredient.baseUnit,
+      parLevel: locationIngredient.parLevel,
+      stockOnHand: stockLevel.currentQty,
+    })
+    .from(receivingLine)
+    .innerJoin(receivingSession, eq(receivingSession.sessionId, receivingLine.sessionId))
+    .leftJoin(ingredient, eq(receivingLine.ingredientId, ingredient.ingredientId))
+    .leftJoin(
+      locationIngredient,
+      and(
+        eq(locationIngredient.ingredientId, receivingLine.ingredientId),
+        eq(locationIngredient.storeLocationId, receivingSession.storeLocationId),
+      ),
+    )
+    .leftJoin(
+      stockLevel,
+      and(
+        eq(stockLevel.ingredientId, receivingLine.ingredientId),
+        eq(stockLevel.storeLocationId, receivingSession.storeLocationId),
+      ),
+    )
+    .where(eq(receivingLine.sessionId, sessionId));
+}
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -68,6 +121,16 @@ export async function startSession(
   orgId: number,
 ) {
   return db.transaction(async (tx) => {
+    // Transaction-scoped, per-PO lock (pg_advisory_xact_lock, auto-releases on
+    // commit/rollback — same primitive as utils/advisoryLock.ts, keyed per-PO
+    // here instead of a fixed job key). Without this, two concurrent starts for
+    // the same PO can both read po.status="SENT" and no ACTIVE session before
+    // either commits, and both create a session — the exact race that produced
+    // two ACTIVE rows for one PO and left it permanently stuck. A blocking lock
+    // serializes them: the second caller waits, then re-reads the now-committed
+    // state and correctly resumes instead of racing.
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${poId}))`);
+
     // Validate PO is in SENT status — AND org so callers cannot start receiving on another org's PO
     const [po] = await tx
       .select()
@@ -75,23 +138,36 @@ export async function startSession(
       .where(and(eq(purchaseOrder.poId, poId), eq(purchaseOrder.organisationId, orgId)));
 
     if (!po) throw new Error("Purchase order not found");
-    if (po.status !== "SENT") {
-      throw new Error(`Cannot start receiving on PO with status ${po.status}`);
-    }
 
-    // Check no active session exists
-    const [existing] = await tx
+    // Resume an existing ACTIVE session whatever the PO's status claims, because
+    // the two genuinely disagree in both directions and every disagreement used
+    // to be a dead end:
+    //  - PO RECEIVING + session ACTIVE — the normal interrupted receive (tab
+    //    closed, connection dropped, navigated away mid-receive).
+    //  - PO SENT + session ACTIVE — residue of the pre-lock race, which created
+    //    two sessions for one PO; cancelling either one resets the PO to SENT
+    //    (see cancelSession) while its sibling stays ACTIVE.
+    // The client only ever populates session state via a successful start, so
+    // throwing here left the operator with no path to the session at all — not
+    // to resume it, not to cancel it. Resume, repairing the PO status on the way.
+    const [activeSession] = await tx
       .select()
       .from(receivingSession)
-      .where(
-        and(
-          eq(receivingSession.poId, poId),
-          eq(receivingSession.status, "ACTIVE"),
-        ),
-      );
+      .where(and(eq(receivingSession.poId, poId), eq(receivingSession.status, "ACTIVE")));
 
-    if (existing) {
-      throw new Error("A receiving session is already in progress for this PO");
+    if (activeSession) {
+      if (po.status !== "RECEIVING") {
+        await tx
+          .update(purchaseOrder)
+          .set({ status: "RECEIVING", updatedDttm: new Date() })
+          .where(eq(purchaseOrder.poId, poId));
+      }
+      const lines = await selectLinesWithIngredient(activeSession.sessionId, tx);
+      return { session: activeSession, lines };
+    }
+
+    if (po.status !== "SENT") {
+      throw new Error(`Cannot start receiving on PO with status ${po.status}`);
     }
 
     // Create session
@@ -157,7 +233,8 @@ export async function startSession(
 
     logger.info({ sessionId: session.sessionId, poId, lineCount: receivingLines.length }, "Receiving session started");
 
-    return { session, lines: receivingLines };
+    const enrichedLines = await selectLinesWithIngredient(session.sessionId, tx);
+    return { session, lines: enrichedLines };
   });
 }
 
@@ -183,24 +260,7 @@ export async function getSession(sessionId: string, orgId: number) {
   if (!sessionRow) return null;
   const session = sessionRow.session;
 
-  const lines = await db
-    .select({
-      receivingLineId: receivingLine.receivingLineId,
-      sessionId: receivingLine.sessionId,
-      poLineId: receivingLine.poLineId,
-      ingredientId: receivingLine.ingredientId,
-      orderedQty: receivingLine.orderedQty,
-      orderedUnit: receivingLine.orderedUnit,
-      receivedQty: receivingLine.receivedQty,
-      actualUnitCost: receivingLine.actualUnitCost,
-      status: receivingLine.status,
-      ingredientName: ingredient.ingredientName,
-      ingredientCategory: ingredient.ingredientCategory,
-      baseUnit: ingredient.baseUnit,
-    })
-    .from(receivingLine)
-    .leftJoin(ingredient, eq(receivingLine.ingredientId, ingredient.ingredientId))
-    .where(eq(receivingLine.sessionId, sessionId));
+  const lines = await selectLinesWithIngredient(sessionId, db);
 
   // Get discrepancies for this session
   const discrepancies = await db
@@ -505,9 +565,23 @@ export async function confirmReceipt(sessionId: string, orgId: number) {
       .set({ status: "COMPLETED", completedAt: new Date(), updatedDttm: new Date() })
       .where(eq(receivingSession.sessionId, sessionId));
 
-    // Update PO status
-    const hasDiscrepancies = discrepancies.length > 0;
-    const poStatus = hasDiscrepancies ? "PARTIAL_RECEIVED" : "RECEIVED";
+    // Update PO status.
+    //
+    // PARTIAL_RECEIVED means GOODS ARE MISSING, so only a discrepancy that
+    // reduces what arrived counts. A PRICE_VARIANCE or a SUBSTITUTION can be
+    // recorded on a delivery that turned up complete: treating "any discrepancy"
+    // as partial labelled a fully-received order "Partial" in the Orders list,
+    // telling the buyer to chase a supplier for goods already on the shelf.
+    // Quantity is the source of truth — a line is short if less arrived than was
+    // ordered, or it was rejected outright.
+    const shortfall = lines.some((l) => {
+      if (l.status === "REJECTED") return true;
+      const ordered = Number(l.orderedQty);
+      const received = Number(l.receivedQty);
+      if (!Number.isFinite(ordered) || !Number.isFinite(received)) return false;
+      return received < ordered;
+    });
+    const poStatus = shortfall ? "PARTIAL_RECEIVED" : "RECEIVED";
 
     await tx
       .update(purchaseOrder)
@@ -606,7 +680,7 @@ export async function confirmReceipt(sessionId: string, orgId: number) {
           <p><strong>Total Discrepancies:</strong> ${result.discrepancies.length}</p>
           <p><strong>Rejections:</strong> ${result.discrepancies.filter((d) => d.type === "REJECTED").length}</p>
           <p style="margin-top: 16px;">
-            <a href="${process.env.CLIENT_URL || "https://www.culinaire.kitchen"}/inventory?tab=purchase-orders&po=${result.poId}"
+            <a href="${process.env.CLIENT_URL || "https://www.culinaire.kitchen"}/purchasing?tab=orders&po=${result.poId}"
                style="background: linear-gradient(135deg, #D4A574, #C4956A); color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600;">
               View Details
             </a>

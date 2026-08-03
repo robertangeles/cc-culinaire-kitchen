@@ -4,6 +4,294 @@ Append-only. Newest entry on top.
 
 ---
 
+## 2026-08-02 — Receiving walked end to end in a browser: 3 more bugs fixed, HEPHAESTUS open items closed
+
+- **`startSession` still dead-ended on the mirror-image inconsistent state.** The 2026-08-01 fix
+  resumed an ACTIVE session only when the PO read `RECEIVING`. The DB also produces the inverse —
+  PO `SENT` with an ACTIVE session — because `cancelSession` resets the PO to `SENT`
+  unconditionally, so cancelling one half of a pre-lock race pair leaves its sibling ACTIVE.
+  `PO-MRUH46AZ` was sitting in exactly that state (5 sessions: 4 CANCELLED + 1 ACTIVE, the race
+  pair 10 ms apart at `05:12:46.842` / `.852`), which is what threw *"A receiving session is
+  already in progress for this PO"*. Fixed by looking the ACTIVE session up **before** branching
+  on PO status, so either direction of disagreement resumes and repairs the status on the way.
+  The dead-end throw is gone. Lesson: a fix that guards one direction of a two-way inconsistency
+  is half a fix — enumerate both.
+- **Every delivery receipt 500'd** (*"Internal server error"* on Confirm Receipt). Root cause was
+  NOT in receiving at all: `wacService.recompute` interpolated a JS `Date` into a raw ``sql`` ``
+  template. Raw SQL carries no column type information, so Drizzle handed the Date straight to
+  the `postgres` driver, which called `Buffer.byteLength()` on it →
+  `ERR_INVALID_ARG_TYPE: ... Received an instance of Date`. Drizzle's *typed* builder
+  (`.set({ x: new Date() })`) serialises Dates correctly, which is why every other write in the
+  flow worked and only this one statement broke. Now bound as `${nowIso}::timestamptz`, matching
+  the convention already used by the raw date filters in `ingredientService`. Swept the whole
+  server for the same class — `wacService` was the only offender; every other date-ish
+  interpolation is either a Drizzle column reference or an ISO string with an explicit cast.
+- **Stale Receive queue and tab badge.** Neither refetched after a receipt: `onBack` only cleared
+  local state, so a confirmed delivery stayed in the list, and `PurchasingPage` holds its *own*
+  `usePurchaseOrders` instance so the badge kept its own stale copy. `ReceiveQueue` now refreshes
+  on exit and notifies the parent via an `onChanged` prop. Also: the badge counted only `SENT`
+  while the queue lists `SENT` *and* `RECEIVING`, so an in-progress delivery vanished from the
+  badge while still sitting in the tab — both now agree.
+- **Closed both HEPHAESTUS open items.** The `pg_advisory_xact_lock` fix is now verified under
+  real concurrency (two simultaneous `startSession` calls against the real dev DB returned the
+  same session, no second row), and the orphaned `PO-MRUH46AZ` session is resolved — it is
+  `RECEIVED` and clean.
+- **Full browser walk** (Purchasing → Receive → open → mark Short → Confirm) on a real PO:
+  session resumed across a full page reload with the Short action persisted (line showed
+  "Short: 2.0", total recalculated, "1 issue" badges), confirm returned 200, and stock/WAC/FIFO
+  all moved correctly — Plain Flour 166.8 → 216.8 kg, Chicken 15 → 17 kg @ WAC 12.0000, PO →
+  `PARTIAL_RECEIVED`, queue and badge both cleared without a reload.
+- Added `wacService.test.ts` (no coverage existed) asserting no `Date` is ever bound into a raw
+  sql template and that the timestamp binds as ISO 8601; plus two `receivingService` tests for
+  the resume path and the terminal-status rejection. All four fail without their fix.
+- Left alone deliberately: `cancelSession` resetting the PO unconditionally is now unreachable-
+  harmful, since the advisory lock prevents sibling sessions from existing at all.
+
+### Deep-links were dead across every notification path; history rows now navigate
+
+- **Audit first, on the user's instruction** — I had started coding a fix before inventorying the
+  current state and was pulled up on it. The audit found more than the original question:
+  | Link | Emitted by | Problem |
+  |---|---|---|
+  | `/inventory?tab=purchase-orders&po=` | PO approval email ×2, discrepancy alert email, notification bell | Route ignored query params entirely; POs had moved to `/purchasing`; `purchase-orders` was not a tab key on either page |
+  | `/waste` | weekly waste digest | **Route does not exist** — the digest's only CTA landed every recipient on NotFoundPage |
+  Only `ResetPasswordPage` and `VerifyEmailPage` read query params anywhere in the app.
+- **Fixed:** `/purchasing` and `/inventory` now read deep-link params (`?tab=`, `?po=`; and for
+  inventory a sub-view level, `?view=`/`?transfer=`, since a transfer lives at tab `log` →
+  sub-view `transfers`). Unknown values are ignored rather than applied, so a stale URL falls back
+  to the default instead of rendering an empty tab. All 5 links corrected.
+- **History rows are now clickable** where a destination exists. `TransactionEvent` gained a
+  generic `link: string | null` decided server-side; the UI renders a chevron and hover state
+  strictly where it is set, so no row ever looks interactive and does nothing.
+- **Audit of the other event types** (what shipped and what deliberately did not):
+  - `receipt` → `/purchasing?tab=orders&po=` ✅
+  - `transfer_loc` → `/inventory?tab=log&view=transfers&transfer=` ✅
+  - `stock_take` — destination is HQ-only (`inventory:hq`); linking a chef into a 403 is worse
+    than no link. Needs a permission-aware link. **Not built.**
+  - `movement`, `transfer` (usage) — only entry FORMS exist, no browsable list to land on.
+    Linking would drop the user on a blank form. **Needs a list built first.**
+- **Two bugs found by verifying rather than assuming:** a deep-linked transfer row opened straight
+  onto "No details available" (the detail fetch lived inside `toggleExpand`, which never runs when
+  a row starts expanded — now fetched on mount); and my own script asserted 2 TransferRow call
+  sites when there are 3, which aborted the edit before writing rather than silently half-applying.
+- **Process failure worth recording:** I ran `git checkout --` on `PurchaseOrderList.tsx` to undo
+  one premature edit and destroyed two *other* uncommitted changes in that file from earlier the
+  same session (the receipt header and the actual-cost arrow). Caught only because a verification
+  screenshot showed the header missing. Restored and re-verified. Reverting a whole file to undo
+  part of it is unsafe while other work in it is uncommitted.
+
+### The "flaky brain tests" were a live dev server racing the suite — scheduled jobs now gated
+
+- Six real-DB tests had been failing intermittently and written off as flaky. Three distinct causes:
+  1. **Five were `Test timed out in 5000ms`.** The dev DB moved from local Postgres to remote
+     Render; every query now pays ~200ms+ latency and vitest's 5s default was sized for local.
+     (The config comment still claimed "one local Postgres".) Raised `testTimeout`/`hookTimeout`
+     to 30s. Mocked tests are unaffected — they finish in ms either way.
+  2. **One was a sleep pretending to be synchronisation.** `advisoryLock.test.ts` fired two calls
+     via `Promise.all` and had the winner sleep 150ms. A probe measured the second transaction
+     opening **216ms** later — the first committed and released before the second began, so both
+     acquired legitimately and `runs === 2`. The lock was never broken; the test was. Replaced with
+     an explicit handshake.
+  3. **The residual intermittent was `pnpm dev` itself.** The failing assertion was
+     `expected 0 to be greater than 0` — the test counted the pending `brain_memory` rows it had
+     just seeded and found none. The dev server runs `runBrainWorkerTick()` **every 15 seconds**
+     against the same shared dev database and had claimed and embedded them mid-test.
+- **Fix:** all 10 scheduled jobs now gate on `isProductionProcess()` — ON in production, OFF
+  everywhere else, `ENABLE_SCHEDULED_JOBS=1` to override. Safe because that predicate is the same
+  one `assertSafeDbHost` uses as its prod hard rail: a production deploy satisfying neither
+  `NODE_ENV=production` nor `APP_ENV=prod` could not connect to its own database at all, so this
+  cannot silently disable prod jobs. Extracted to `envShim` as one definition with 5 unit tests
+  covering both directions, including near-misses (`NODE_ENV=prod`, `APP_ENV=production`).
+- **Proven, not asserted:** a hand-inserted pending row stayed `pending` / `attempt_count=0` for
+  40s with the dev server live (previously claimed within 15s), then **5 consecutive full-suite
+  runs at 674/674**. Was ~40% failure across 7 runs.
+- **One wrong fix shipped first and was caught by baselining.** I hypothesised foreign pending rows
+  and wrote a helper to park them for each suite. Measured: the paired repro went from 29/29
+  passing to 4 failures. Reverted. The only reason I knew is that I re-ran the same command with
+  the change stashed rather than trusting that the file passed in isolation.
+
+### Real-DB integrity checks — closing the blind spot that let five defects through
+
+- **The user's criticism was correct**: five defects surfaced in one session while 660 tests
+  stayed green. The common cause is not five separate oversights — it is that every test mocks
+  the database, so the suite verifies what code does with a fake and never what the live system
+  actually is. A mock cannot see a PO that is `SENT` while holding an ACTIVE receiving session.
+- **`scripts/checkCatalogIntegrity.ts`** — 8 invariant checks, pure SQL, run against a real DB:
+  1. `po-status-matches-receiving-session` — a PO is RECEIVING iff it has an ACTIVE session
+  2. `one-active-session-per-po` — the pre-advisory-lock race
+  3. `every-ingredient-has-a-cost`
+  4. `preferred-supplier-link-has-cost` — the trigger's only input
+  5. `preferred-cost-matches-trigger-source` — **the drift check the schema promised in
+     `serverIndex` and which was never actually written**
+  6. `received-po-lines-have-actual-cost`
+  7. `stock-never-negative` — `deductStock` decrements with no floor
+  8. `fifo-batches-cover-stock-on-hand` (warn)
+  Each check states its invariant AND names the incident it prevents, so a future failure
+  explains itself. `warn` severity keeps a legitimately-degraded state (uncosted opening stock)
+  from training anyone to ignore red. Exposed as `pnpm --filter @culinaire/server db:check`.
+- **Proven to fire, not just to pass.** Injected both a `SENT`-PO-with-ACTIVE-session and a
+  `preferred_unit_cost` drift inside a transaction, confirmed each check returned exactly one
+  offender, then rolled back. A check that has only ever passed is decoration.
+- **`checkCatalogIntegrity.test.ts`** fails CI on any `error`-severity violation, asserts at
+  least 8 checks exist (so the suite cannot pass vacuously if checks are deleted), and prints the
+  invariant + prevented incident in the failure message.
+- **Result: 7/8 pass, 0 errors, 1 warn** (222 rows of seeded opening stock with no FIFO layer —
+  known and expected until an opening-cost backfill runs).
+
+### Yield variance was reporting a fictional 100% favourable variance on every dish
+
+- `yieldVarianceService` summed actual cost with `COALESCE(i.preferred_unit_cost, 0)`. That column
+  is trigger-maintained from `ingredient_supplier.cost_per_unit`, which was NULL catalog-wide, so
+  actual cost summed to **$0** and every dish looked 100% under theoretical. Every sibling
+  consumer (`orderGuideService`, `menuIntelligenceService`, `saleService`) coalesces to
+  `unit_cost`; only this path coalesced to zero.
+- Fixed to fall back `preferred_unit_cost → unit_cost`, and to count rows where both are null. Any
+  such row now returns a new `"uncosted"` status instead of publishing an understated variance —
+  same honest-empty-state philosophy as the existing `"thin-data"`. Two regression tests added;
+  the `uncosted` one fails without the fix (verified by stashing).
+
+### preferred_unit_cost was starved, not broken — fed via its trigger
+
+- The column is owned by `fn_recompute_preferred_supplier_cost`, which copies `cost_per_unit` from
+  the ingredient's preferred `ingredient_supplier` row. 92 ingredients had `preferred_supplier_id`
+  populated but 0 had a cost — proving the trigger fired 94 times and cached NULL each time,
+  because the 2026-07-14 import created link rows with `(ingredient_id, supplier_id,
+  preferred_ind)` and no price.
+- `seedCatalogCosts.ts` now also writes `ingredient_supplier.cost_per_unit` (94 links) and lets
+  the trigger cascade — app code still never touches `preferred_unit_cost`, per the schema's
+  explicit instruction. `preferred_unit_cost` went 0 → 92 populated with no direct write, which
+  also closes the "no per-supplier pricing" gap.
+
+### Catalog costs researched and given provenance for the first time
+
+- **The catalog's pricing had no recorded provenance.** Asked whether a cost-research pass had
+  ever run, the answer was no. The 2026-07-14 supplier-catalog import
+  (`data/imports/pfd-batch-01.csv` + `import-batch-01.sql`) carried names, categories, units and
+  94 supplier links but **zero prices** — `unit_cost` appears 0 times in that SQL. Yet 107 items
+  had a cost stamped that same day by a step whose artifacts were never committed. Only the 17
+  wines had real provenance (`wine-batch-02.csv`, actual bottle prices from the venue's wine list).
+  Nothing yesterday touched costs either: `seedCatalogParStock.ts` mentions `unit_cost` 0 times.
+- **New `scripts/seedCatalogCosts.ts`** — 98 non-wine items priced against AU foodservice
+  listings, ex-GST, per kitchen unit, dry-run by default, idempotent (verified: re-run reports
+  0 changes). Every row carries a provenance tag — `sourced` (7, a live supplier listing read and
+  URL cited), `benchmark` (15, derived from a sourced anchor with the derivation written out),
+  `retained` (76, checked against research and already defensible). 11 source URLs are listed in
+  the file header. Wines are deliberately never touched.
+- **Pricing tier matters and the catalog told us which one.** T55 flour, Guérande salt and
+  Billecart-Salmon mark this as a premium French pâtisserie, so specialty pastry items price at
+  professional tier (Callebaut couverture, Cacao Barry cocoa) while staples price at bulk
+  foodservice tier. Mixing tiers is what a real patisserie invoice looks like.
+- **22 costs changed. The big ones were genuinely wrong:**
+  - **Dark Chocolate $19.50 → $39.80/kg.** The old figure was *compound* pricing on an item a
+    pâtisserie buys as couverture. Milk and white followed (+128%, +146%).
+  - **Cocoa Powder $16.50 → $66.00/kg.** Two independent AU listings agree within 2%
+    ($67.50 Bargain Foods, $65.99 Paragon) for Cacao Barry Extra Brute.
+  - **Vanilla Extract $180 → $64.00/L**, the only large *reduction* — sourced from a real
+    foodservice 5L at $320.
+  - Sourced items that merely confirmed the existing number: Eggs $0.52 → $0.54, Chicken
+    $12.99 → $12.00, Plain Flour $1.40 → $1.27.
+- **Research caught one of my own bad guesses.** An early benchmark put Guérande Salt at
+  $24.00/kg (+153%). Sourcing it found $10.50/kg — the $24 was *fleur de sel* pricing, not
+  *sel gris*, and would have overstated it 2.3x. The pre-existing $9.50 was nearly right.
+  Lesson: benchmark-by-category is exactly where a plausible-sounding number goes wrong; the
+  items worth sourcing are the ones where the benchmark implies a big move.
+- Written to `ingredient.unit_cost`, which is the live field: resolution is
+  `preferred_unit_cost` → `location_ingredient.unit_cost` → `ingredient.unit_cost`, and
+  `preferred_unit_cost` is unset across all 115 rows.
+
+### Receipt history — chefs can now see who received a delivery and what it actually cost
+
+- Asked "how will chefs check the history", the honest answer was: **Purchasing → Orders →
+  Received → expand**, and that view was missing most of the receipt. Two gaps were data that
+  already existed and simply was not plumbed:
+  - **`actual_unit_cost` was never selected by `getPODetail`.** `confirmReceipt` has always
+    written it, but the history table rendered `unitCost` — the price the kitchen *ordered* at.
+    Any price change taken at the door was invisible, which made receiving look like it had done
+    nothing. The Cost column now shows `$17.50 → $21.00`, red when the price went up, green when
+    it went down, and stays a single plain figure when actual matches ordered.
+  - **Who received it and when was never rendered.** `receivedByUserId` / `receivedDttm` already
+    reached the client; the only mention of either in the whole client was a type declaration.
+    The expanded PO now leads with "Received by {name} | {date, time}", joined through
+    `user.userName` on the line's receiver. A receipt is one session event — every line carries
+    the same receiver and timestamp — so the first received line speaks for the delivery.
+- **Verified live** on a purpose-built receipt: created a PO via the API, received it with a
+  `PRICE_VARIANCE` of $17.50 → $21.00 (+20%, correctly recorded as `varianceAmount 3.5`,
+  `variancePct 20.0`), confirmed, then read it back in the browser — the arrow, the red colour,
+  and the "Received by Rob Angeles - CulinAIre | Aug 2, 2026, 11:11 AM" header all render, and a
+  clean receipt with no variance shows a plain cost with no arrow.
+- **Still missing, deliberately not built** (bigger than a plumbing fix, flagged for after UAT):
+  1. **No path to *why* a line was short or rejected.** Rejection reason/note, shortage qty,
+     variance %, and photos live in `receiving_discrepancy` / `discrepancy_photo`, reachable only
+     via `GET /receiving/sessions/:sessionId`. The session id is never surfaced after confirm and
+     `useReceiving.loadSession` is **never called by any component**, so the badge says `SHORT`
+     and the reason is unreachable. Needs a new "get the completed session for this PO" endpoint.
+  2. **Credit notes are backend-only.** `POST/GET /credit-notes` exist with zero client
+     references.
+
+## 2026-08-01 — Receiving session bugs (unknown item, stuck PO, race condition) + checklist UI rework
+
+- While walking Purchasing → Receive on `PO-MRUH46AZ`, found and fixed three compounding bugs in
+  `receivingService.startSession()`, in the order they surfaced:
+  1. **"Unknown item" on every freshly-started delivery** — `startSession` returned bare
+     `receiving_line` rows straight from `.returning()`, with no join to `ingredient`; the reload
+     path (`getSession`) DID join correctly, so the two paths silently disagreed. Fixed by
+     extracting a shared `selectLinesWithIngredient()` helper both now call, so they can't drift
+     apart again.
+  2. **Stuck PO with no way back in** — a receiving session left open (tab closed, navigated away
+     mid-receive, or just abandoned) put the PO in `RECEIVING` with genuinely no UI path to resume
+     or cancel it: starting fresh always threw `Cannot start receiving on PO with status
+     RECEIVING`, and the client only ever populates session state via a successful start. Fixed by
+     making `startSession` resume the existing active session instead of rejecting when it finds
+     one for a `RECEIVING` PO.
+  3. **Race condition (the actual root cause of #2)** — two concurrent `startSession` calls for
+     the same PO could both read `po.status = SENT` and "no active session" before either
+     committed, creating two ACTIVE sessions for one PO. Confirmed live twice — the second time
+     because a verification script raced a real browser attempt. Fixed with a transaction-scoped
+     `pg_advisory_xact_lock(hashtext(poId))` at the top of `startSession`, same primitive as
+     `utils/advisoryLock.ts`'s job-runner lock, keyed per-PO instead of a fixed job key. **Not yet
+     verified against a real concurrent load or a real browser** — session paused before that
+     could run; see the UAT doc's RESUME HERE block.
+- **UI rework** (user-requested, same session): `ReceivingChecklist.tsx`'s 4 action pills (All
+  Good/Short/Reject/Price Change) moved from a tap-to-expand 2×2 grid to always-visible on the
+  right of each line (icon-only below the `sm` breakpoint). Each line now also shows unit cost,
+  UOM, current stock on hand, par level, and total cost inline — required extending
+  `selectLinesWithIngredient()` to join `location_ingredient` + `stock_level` (scoped via
+  `receiving_session.store_location_id`, so the helper's signature didn't need to change).
+- Lesson: the mocked-transaction test harness in `receivingService.test.ts` modeled only a single
+  `.leftJoin()` and no `.innerJoin()` — had to make the mock's join chain generically composable
+  (any join type, any count, before `.where()`) to match what real Drizzle allows. Also had to add
+  `tx.execute()` to the mock for the new advisory-lock call.
+
+## 2026-08-01 — Seeded realistic par/reorder/stock across the Almost French Pâtisserie catalog
+
+- UAT for `feature/ck-web/purchasing-order-guides-p1` (checklist: `docs/qa/uom-recipe-selling-uat.md`)
+  needed to walk Section C/C-guides, but the catalog was mostly bare: Almost French Patisserie had
+  0/115 items with a par level set (only 7 had any stock_level row); Almost French Epicure had only
+  3/115 items configured at all. Order Guides, order-to-par, and dashboards were effectively empty
+  outside the ~7 hand-built fixture items.
+- **Ran one-off `scripts/seedCatalogParStock.ts`** (deterministic, hash-based — no `Math.random`, so
+  reruns are idempotent) against both locations: 230 `location_ingredient` par/reorder settings
+  written via `updateLocationIngredient()`, 220 new `stock_level` rows created via `addStock()`
+  where none existed. The 10 pre-existing fixture rows (Belicard, Sancerre, Eleventh Hour Barossa
+  Shiraz, San Pellegrino, Chicken, Napkins, Baker's Flour — whichever location already had them)
+  were left byte-for-byte untouched since the checklist's worked examples in Sections A/B/E/F/G/H
+  depend on those exact numbers.
+- **Decisions made with the user:** scope = Almost French Pâtisserie org only (not the Comfort Spoon
+  Co. demo org); par/reorder gets set on every item including the fixture ones (so C5's "type a par
+  value" UI step doesn't have to start from a totally blank catalog); Epicure gets the full 115-item
+  catalog, pars scaled to 55% of Patisserie's (satellite site) — **except** Baker's Flour/Chicken/
+  Eleventh Hour, which skip the scale-down because their preserved stock is identical at both
+  locations (25kg/10kg/24 bottles) and scaling par down while stock stayed constant made Epicure
+  read as absurdly overstocked.
+- **Known drift flagged, not silently patched:** Belicard's live stock has drifted to 16 bottles
+  (checklist documents 6.5 — some C-section testing clearly happened off the recorded checkboxes).
+  Rather than force the stale worked numbers, Belicard's par was deliberately set to 20 (reorder 36)
+  so it still lands meaningfully below-par for a real C9–C15 walkthrough. The checklist's literal
+  expected numbers there are now stale and need a manual update whenever C-guides is actually walked.
+- **Verified:** re-queried both locations post-write — 115/115 par set and 115/115 stock_level rows
+  at both Patisserie and Epicure (up from 0/112 and 0/3); Belicard spot-checked live (stock 16, par
+  20, reorder 36); `tsc --noEmit` clean; Comfort Spoon Co. (org 1) confirmed untouched.
+
 ## 2026-07-15 — Storage areas as count sheets, B1 (branch: feature/ck-web/storage-areas-and-movements)
 
 Built B1 of `docs/specs/storage-areas-count-sheets.md`: areas exist, items get assigned to

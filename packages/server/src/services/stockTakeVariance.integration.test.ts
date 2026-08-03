@@ -1,4 +1,21 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { config } from "dotenv";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { applyEnvPrefix } from "../utils/envShim.js";
+
+// Load .env before the first query. Every other real-DB suite in this repo does
+// this; these four did not, so they threw "DATABASE_URL environment variable is
+// required" anywhere DATABASE_URL was not already exported — i.e. everywhere
+// except the dedicated CI Postgres job. The result was 63 tests, including the
+// entire tenant-isolation boundary suite, that no developer could run before
+// pushing. Safe in CI too: dotenv never overrides an already-set variable, and
+// applyEnvPrefix copies the same value CI already provides.
+//
+// `db` is a lazy proxy that connects on first use, not on import, so running
+// this after the import statements is early enough.
+config({ path: resolve(dirname(fileURLToPath(import.meta.url)), "../../../../.env") });
+applyEnvPrefix();
 import { eq, and, inArray } from "drizzle-orm";
 import { db } from "../db/index.js";
 import {

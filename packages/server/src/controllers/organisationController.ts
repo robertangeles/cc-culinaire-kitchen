@@ -37,6 +37,7 @@ const CreateOrgSchema = z.object({
   name: z.string().min(1).max(200),
   website: z.string().max(500).optional(),
   email: z.string().email().optional(),
+  phone: z.string().max(50).optional(),
   ...socialMediaFields,
 });
 
@@ -65,6 +66,7 @@ const UpdateOrgSchema = z.object({
   name: z.string().min(1).max(200),
   website: z.string().max(500).optional(),
   email: z.string().email().optional().or(z.literal("")),
+  phone: z.string().max(50).optional(),
   ...socialMediaFields,
 });
 

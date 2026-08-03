@@ -31,3 +31,20 @@ export function applyEnvPrefix(): void {
     }
   }
 }
+
+/**
+ * Is this a production process?
+ *
+ * The single definition of that question. `assertSafeDbHost` (db/index.ts) uses
+ * it as the hard rail that lets a prod process reach the prod database host — so
+ * production MUST satisfy this predicate, otherwise the server could not connect
+ * to its own database at all. That makes it safe to key production-only
+ * behaviour (e.g. scheduled background jobs) off it without risking a silent
+ * production outage.
+ */
+export function isProductionProcess(): boolean {
+  return (
+    process.env.NODE_ENV === "production" ||
+    (process.env.APP_ENV ?? "").toLowerCase() === "prod"
+  );
+}

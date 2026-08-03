@@ -6,7 +6,7 @@
  * Entry point for the PO workflow tab.
  */
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { useLocation } from "../../context/LocationContext.js";
 import {
   usePurchaseOrders,
@@ -32,6 +32,8 @@ import {
   Download,
   Clock,
   AlertTriangle,
+  Mail,
+  PackageCheck,
 } from "lucide-react";
 
 /* ── Status badge config ──────────────────────────────────────── */
@@ -48,8 +50,30 @@ const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }>
   CANCELLED:          { bg: "bg-red-500/15",          text: "text-red-400",    label: "Cancelled" },
 };
 
-function StatusBadge({ status }: { status: string }) {
-  const s = STATUS_STYLES[status] ?? STATUS_STYLES.DRAFT;
+/**
+ * A LINE's status is a different vocabulary from the ORDER's — PENDING /
+ * PARTIAL / RECEIVED, not DRAFT / SENT / RECEIVING. Rendering lines through
+ * STATUS_STYLES meant PENDING missed every key and fell through to the DRAFT
+ * default, so a line on a SENT order read "Draft". On a purchase order that is
+ * not a cosmetic slip: it says the order hasn't gone out when it has.
+ */
+const LINE_STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
+  PENDING:            { bg: "bg-blue-500/15",     text: "text-blue-400",    label: "Awaiting delivery" },
+  PARTIAL:            { bg: "bg-sky-500/15",      text: "text-sky-400",     label: "Part received" },
+  PARTIALLY_RECEIVED: { bg: "bg-sky-500/15",      text: "text-sky-400",     label: "Part received" },
+  RECEIVED:           { bg: "bg-emerald-500/15",  text: "text-emerald-400", label: "Received" },
+  CANCELLED:          { bg: "bg-red-500/15",      text: "text-red-400",     label: "Cancelled" },
+};
+
+/**
+ * Falls back to showing the raw status rather than guessing a label. Silently
+ * defaulting to "Draft" is how an unmapped value got to claim the opposite of
+ * the truth; an unstyled but honest badge is always better on a document
+ * someone spends money against.
+ */
+export function StatusBadge({ status, kind = "order" }: { status: string; kind?: "order" | "line" }) {
+  const map = kind === "line" ? LINE_STATUS_STYLES : STATUS_STYLES;
+  const s = map[status] ?? { bg: "bg-[#333]/60", text: "text-[#999]", label: status };
   return (
     <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${s.bg} ${s.text}`}>
       {s.label}
@@ -73,11 +97,16 @@ const FILTER_OPTIONS = [
 
 type View = "list" | "create" | "receive-new";
 
-export default function PurchaseOrderList() {
+/**
+ * `focusPoId` deep-links to a single order: expand it and scroll it into view.
+ * Supplied by PurchasingPage from `?po=` — see the readDeepLink docblock there
+ * for why those links were previously dead.
+ */
+export default function PurchaseOrderList({ focusPoId }: { focusPoId?: string | null } = {}) {
   const { selectedLocationId } = useLocation();
   const {
     pos, isLoading, refresh, submitPO, cancelPO,
-    approvePO, rejectPO, clonePO, downloadPdf, getDetail,
+    approvePO, rejectPO, clonePO, downloadPdf, emailPOToSupplier, getDetail,
   } = usePurchaseOrders(selectedLocationId);
   const { items: ingredients } = useLocationIngredients(selectedLocationId);
   const ingMap = useMemo(() => {
@@ -91,6 +120,7 @@ export default function PurchaseOrderList() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [detailCache, setDetailCache] = useState<Record<string, PurchaseOrder>>({});
   const [loadingDetail, setLoadingDetail] = useState<string | null>(null);
+  const [detailError, setDetailError] = useState<Record<string, string | null>>({});
   const [receivePO, setReceivePO] = useState<PurchaseOrder | null>(null);
   const [rejectModalPO, setRejectModalPO] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState("");
@@ -107,11 +137,44 @@ export default function PurchaseOrderList() {
     setExpandedId(poId);
     if (!detailCache[poId]) {
       setLoadingDetail(poId);
-      const detail = await getDetail(poId);
-      if (detail) setDetailCache((prev) => ({ ...prev, [poId]: detail }));
-      setLoadingDetail(null);
+      setDetailError((prev) => ({ ...prev, [poId]: null }));
+      try {
+        const detail = await getDetail(poId);
+        if (detail) setDetailCache((prev) => ({ ...prev, [poId]: detail }));
+      } catch (e) {
+        setDetailError((prev) => ({
+          ...prev,
+          [poId]: e instanceof Error ? e.message : "Couldn't load this order.",
+        }));
+      } finally {
+        // finally, not a trailing statement: a throw used to skip this and
+        // leave the spinner turning forever.
+        setLoadingDetail(null);
+      }
     }
   }, [expandedId, detailCache, getDetail]);
+
+  /**
+   * Honour `?po=` once the orders have actually loaded — expand it and bring it
+   * into view. Guarded by a ref rather than by `expandedId` so that collapsing
+   * the order (or opening a different one) is not undone on the next render.
+   * If the id is not in this location's list, nothing happens: the link may be
+   * for another location, and silently expanding the wrong order would be worse
+   * than doing nothing.
+   */
+  const focusHandled = useRef(false);
+  useEffect(() => {
+    if (focusHandled.current || !focusPoId || pos.length === 0) return;
+    if (!pos.some((p) => p.poId === focusPoId)) return;
+    focusHandled.current = true;
+    toggleExpand(focusPoId);
+    // Let the expanded panel render before scrolling to it.
+    requestAnimationFrame(() => {
+      document
+        .querySelector(`[data-po-id="${focusPoId}"]`)
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+  }, [focusPoId, pos, toggleExpand]);
 
   const handleSubmit = useCallback(async (poId: string) => {
     try {
@@ -186,19 +249,37 @@ export default function PurchaseOrderList() {
     }
   }, [clonePO, selectedLocationId]);
 
-  const handleDownloadPdf = useCallback(async (poId: string) => {
+  const handleDownloadPdf = useCallback(async (poId: string, poNumber: string) => {
     try {
-      await downloadPdf(poId);
+      await downloadPdf(poId, poNumber);
     } catch (err: any) {
       alert(err.message);
     }
   }, [downloadPdf]);
 
+  const handleSendEmail = useCallback(async (poId: string) => {
+    try {
+      const result = await emailPOToSupplier(poId);
+      if (result.emailed) {
+        alert(`Order emailed to the supplier (${result.to}).`);
+      } else {
+        // No supplier email on file, or email not set up on this server.
+        alert(result.message);
+      }
+    } catch (err: any) {
+      alert(err.message);
+    }
+  }, [emailPOToSupplier]);
+
   const handleStartReceiving = useCallback(async (poId: string) => {
-    const detail = detailCache[poId] ?? await getDetail(poId);
-    if (detail) {
-      setReceivePO(detail);
-      setView("receive-new");
+    try {
+      const detail = detailCache[poId] ?? await getDetail(poId);
+      if (detail) {
+        setReceivePO(detail);
+        setView("receive-new");
+      }
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Couldn't open this delivery.");
     }
   }, [detailCache, getDetail]);
 
@@ -279,6 +360,7 @@ export default function PurchaseOrderList() {
           {filtered.map((po, idx) => (
             <div
               key={po.poId}
+              data-po-id={po.poId}
               className="rounded-xl bg-[#161616]/80 backdrop-blur-sm border border-[#2A2A2A]
                 hover:border-[#3A3A3A] transition-all
                 shadow-[0_2px_8px_rgba(0,0,0,0.3)]"
@@ -341,6 +423,24 @@ export default function PurchaseOrderList() {
                     </div>
                   ) : detailCache[po.poId]?.lines ? (
                     <>
+                      {/* Who signed for the delivery, and when. Every line of one
+                          receipt carries the same receiver and timestamp (both come
+                          from the receiving session), so the first received line
+                          speaks for the whole delivery. */}
+                      {(() => {
+                        const receipt = detailCache[po.poId].lines!.find((l) => l.receivedDttm);
+                        if (!receipt) return null;
+                        return (
+                          <div className="flex items-center gap-1.5 mb-3 text-xs text-[#999]">
+                            <PackageCheck className="size-3.5 text-emerald-400/80" />
+                            Received
+                            {receipt.receivedByUserName && <span>by <span className="text-[#CCC]">{receipt.receivedByUserName}</span></span>}
+                            <span className="text-[#333]">|</span>
+                            {new Date(receipt.receivedDttm!).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}
+                          </div>
+                        );
+                      })()}
+
                       {/* Lines table */}
                       <div className="overflow-x-auto">
                         <table className="w-full text-sm">
@@ -378,11 +478,24 @@ export default function PurchaseOrderList() {
                                 <td className="py-2 text-right text-[#CCC]">
                                   {line.receivedQty ? Number(line.receivedQty).toFixed(1) : "—"}
                                 </td>
-                                <td className="py-2 text-right text-[#CCC]">
+                                {/* Ordered price, plus what was actually paid when
+                                    receiving recorded a different one. Showing only
+                                    the ordered price hid every price change taken at
+                                    the door. */}
+                                <td className="py-2 text-right text-[#CCC] whitespace-nowrap">
                                   {line.unitCost ? `$${Number(line.unitCost).toFixed(2)}` : "—"}
+                                  {line.actualUnitCost != null
+                                    && Number(line.actualUnitCost) !== Number(line.unitCost ?? 0) && (
+                                    <span
+                                      className={`ml-1 ${Number(line.actualUnitCost) > Number(line.unitCost ?? 0) ? "text-red-400" : "text-emerald-400"}`}
+                                      title="Actual price paid at delivery"
+                                    >
+                                      → ${Number(line.actualUnitCost).toFixed(2)}
+                                    </span>
+                                  )}
                                 </td>
                                 <td className="py-2 text-center">
-                                  <StatusBadge status={line.lineStatus} />
+                                  <StatusBadge status={line.lineStatus} kind="line" />
                                 </td>
                               </tr>
                               );
@@ -449,19 +562,37 @@ export default function PurchaseOrderList() {
                           </>
                         )}
                         {po.status === "SENT" && (
-                          <button
-                            onClick={() => handleStartReceiving(po.poId)}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium
-                              bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 transition-all"
-                          >
-                            <Truck className="size-3" /> Receive Delivery
-                          </button>
+                          <>
+                            <button
+                              onClick={() => handleStartReceiving(po.poId)}
+                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium
+                                bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 transition-all"
+                            >
+                              <Truck className="size-3" /> Receive Delivery
+                            </button>
+                            {po.supplierOrderingMethod === "email" && (
+                              <>
+                                <button
+                                  onClick={() => handleSendEmail(po.poId)}
+                                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium
+                                    bg-[#D4A574]/10 text-[#D4A574] hover:bg-[#D4A574]/20 transition-all"
+                                >
+                                  <Mail className="size-3" /> {po.supplierEmailedAt ? "Resend to supplier" : "Send to supplier"}
+                                </button>
+                                {po.supplierEmailedAt && (
+                                  <span className="flex items-center gap-1 text-[11px] text-emerald-400/80">
+                                    <Check className="size-3" /> Emailed {new Date(po.supplierEmailedAt).toLocaleDateString()}
+                                  </span>
+                                )}
+                              </>
+                            )}
+                          </>
                         )}
                         {/* Common actions for non-terminal statuses */}
                         {!["RECEIVED", "PARTIAL_RECEIVED", "PARTIALLY_RECEIVED", "CANCELLED"].includes(po.status) && (
                           <>
                             <button
-                              onClick={() => handleDownloadPdf(po.poId)}
+                              onClick={() => handleDownloadPdf(po.poId, po.poNumber)}
                               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium
                                 bg-[#1E1E1E] text-[#999] hover:text-white transition-all"
                             >
@@ -481,7 +612,17 @@ export default function PurchaseOrderList() {
                       </div>
                     </>
                   ) : (
-                    <p className="text-[#999] text-sm py-2">Failed to load details.</p>
+                    <div className="py-2">
+                      <p className="text-[#999] text-sm">
+                        {detailError[po.poId] ?? "Couldn't load this order."}
+                      </p>
+                      <button
+                        onClick={() => { setExpandedId(null); toggleExpand(po.poId); }}
+                        className="mt-2 text-xs text-[#D4A574] hover:underline"
+                      >
+                        Try again
+                      </button>
+                    </div>
                   )}
                 </div>
               )}

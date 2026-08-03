@@ -85,6 +85,10 @@ jobs:
     env:
       APP_ENV: dev
       TENANT_IT: "1"
+      # UOM_IT gates uomAndSelling.integration.test.ts — 31 tests over packaging
+      # conversion, content equivalence and unit families. The flag was never set
+      # anywhere, in CI or locally, so those tests had never executed. They pass.
+      UOM_IT: "1"
       DATABASE_URL: postgresql://ci:ci@localhost:5432/culinaire_it
       DEV_DATABASE_URL: postgresql://ci:ci@localhost:5432/culinaire_it
 

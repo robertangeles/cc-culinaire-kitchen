@@ -9,6 +9,7 @@
 import type { Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import { getAutoPoSuggestions } from "../services/autoPoSuggestService.js";
+import { getUserLocationContext } from "../services/locationContextService.js";
 
 const querySchema = z.object({
   storeLocationId: z.string().uuid("storeLocationId must be a UUID"),
@@ -24,7 +25,15 @@ export async function handleGetAutoPoSuggestions(
       res.status(400).json({ error: parsed.error.issues[0].message });
       return;
     }
-    const result = await getAutoPoSuggestions(parsed.data.storeLocationId);
+    // Scope to the caller's organisation — see the service docblock for why
+    // omitting this exposed every tenant's catalogue.
+    const ctx = await getUserLocationContext(req.user!.sub);
+    const orgId = ctx.locations[0]?.organisationId ?? ctx.organisationId;
+    if (orgId === null) {
+      res.status(400).json({ error: "You are not a member of any organisation" });
+      return;
+    }
+    const result = await getAutoPoSuggestions(parsed.data.storeLocationId, orgId);
     res.json(result);
   } catch (err) {
     next(err);

@@ -36,6 +36,8 @@ interface LocationContextValue {
   isOrgAdmin: boolean;
   /** Whether user has at least one location */
   hasLocationAccess: boolean;
+  /** True only once a location-context response has actually been received. */
+  isResolved: boolean;
   /** Loading state */
   isLoading: boolean;
   /** Switch to a different location */
@@ -51,21 +53,49 @@ interface LocationContextValue {
 const LocationContext = createContext<LocationContextValue | null>(null);
 
 export function LocationProvider({ children }: { children: ReactNode }) {
-  const { isAuthenticated, isGuest } = useAuth();
+  const { isAuthenticated, isGuest, isLoading: isAuthLoading } = useAuth();
 
   const [locations, setLocations] = useState<StoreLocation[]>([]);
   const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null);
   const [isOrgAdmin, setIsOrgAdmin] = useState(false);
   const [hasLocationAccess, setHasLocationAccess] = useState(false);
+  /**
+   * Have we actually received an answer about location access?
+   *
+   * `hasLocationAccess === false` used to mean two different things: "we asked
+   * and you have none" and "we never got an answer". LocationGate could not tell
+   * them apart, so any moment where the answer was unknown rendered the
+   * "Run the Kitchen — enter your organisation key" onboarding screen at users
+   * who already had a location. That happens routinely: /api/auth/me 401s
+   * transiently on a cold load before succeeding, and the location request can
+   * fail outright. Only a successful response sets this true.
+   */
+  const [isResolved, setIsResolved] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [staleSwitchMessage, setStaleSwitchMessage] = useState<string | null>(null);
 
   const fetchLocations = useCallback(async () => {
+    // Auth still resolving — we do NOT yet know whether this user has a
+    // location. Stay in the loading state instead of answering "no access".
+    // Without this, a full page load briefly reported hasLocationAccess=false
+    // with isLoading=false, so LocationGate flashed the "Run the Kitchen"
+    // onboarding screen (asking for an organisation key) at users who already
+    // had a location. It corrected itself a moment later once auth resolved,
+    // which made it read as a random, annoying splash.
+    if (isAuthLoading) {
+      setIsLoading(true);
+      return;
+    }
     if (!isAuthenticated || isGuest) {
       setLocations([]);
       setSelectedLocationId(null);
       setIsOrgAdmin(false);
       setHasLocationAccess(false);
+      // Resolved on purpose: auth has FINISHED (checked above) and this user is
+      // not signed in, so "no location access" is a real answer, not an unknown.
+      // Without this the gate would spin forever when auth bootstrap ends with
+      // no user — trading a wrong screen for a hung one.
+      setIsResolved(true);
       setIsLoading(false);
       return;
     }
@@ -75,6 +105,9 @@ export function LocationProvider({ children }: { children: ReactNode }) {
         credentials: "include",
       });
       if (!res.ok) {
+        // Deliberately NOT resolved: a 401 here is usually a cold-start race,
+        // not a real answer. Leaving isResolved false keeps the gate on its
+        // spinner instead of falsely claiming the user has no location.
         setIsLoading(false);
         return;
       }
@@ -83,12 +116,13 @@ export function LocationProvider({ children }: { children: ReactNode }) {
       setSelectedLocationId(data.selectedLocationId ?? null);
       setIsOrgAdmin(data.isOrgAdmin ?? false);
       setHasLocationAccess(data.hasLocationAccess ?? false);
+      setIsResolved(true);
     } catch {
       // Silent fail — non-critical for initial load
     } finally {
       setIsLoading(false);
     }
-  }, [isAuthenticated, isGuest]);
+  }, [isAuthenticated, isGuest, isAuthLoading]);
 
   useEffect(() => {
     fetchLocations();
@@ -140,6 +174,7 @@ export function LocationProvider({ children }: { children: ReactNode }) {
         selectedLocationId,
         isOrgAdmin,
         hasLocationAccess,
+        isResolved,
         isLoading,
         switchLocation,
         refreshLocations: fetchLocations,

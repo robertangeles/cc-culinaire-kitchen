@@ -20,8 +20,10 @@ import {
   storeLocation,
   user,
   fifoBatch,
+  locationIngredient,
 } from "../db/schema.js";
 import { resolveToBase } from "./unitConversionService.js";
+import * as wacService from "./wacService.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -312,9 +314,19 @@ export async function confirmReceived(
     // Add stock at destination
     await addStockLevel(transfer.toLocationId, line.ingredientId, baseReceivedQty);
 
-    // Create FIFO batch at destination
-    // Look up source batch for arrival date if exists
+    // Create FIFO batch at destination.
+    //
+    // Carry BOTH the arrival date and the unit cost across. The date was
+    // already copied so FIFO age survives the move; the cost was not, so a
+    // transfer silently created stock worth nothing at the destination and the
+    // receiving site's WAC could never be computed. Stock does not become
+    // cheaper by being driven to another kitchen.
+    //
+    // Cost source, in order: the specific source batch the line drew from, then
+    // the source location's weighted average — which is what the stock leaving
+    // that site is actually worth.
     let arrivalDate = new Date();
+    let unitCost: string | null = null;
     if (line.fifoBatchId) {
       const [srcBatch] = await db
         .select()
@@ -322,7 +334,20 @@ export async function confirmReceived(
         .where(eq(fifoBatch.batchId, line.fifoBatchId));
       if (srcBatch) {
         arrivalDate = srcBatch.arrivalDate;
+        unitCost = srcBatch.unitCost;
       }
+    }
+    if (unitCost === null) {
+      const [srcLi] = await db
+        .select({ wac: locationIngredient.weightedAverageCost })
+        .from(locationIngredient)
+        .where(
+          and(
+            eq(locationIngredient.storeLocationId, transfer.fromLocationId),
+            eq(locationIngredient.ingredientId, line.ingredientId),
+          ),
+        );
+      unitCost = srcLi?.wac ?? null;
     }
 
     await db.insert(fifoBatch).values({
@@ -331,7 +356,18 @@ export async function confirmReceived(
       arrivalDate,
       quantityRemaining: String(baseReceivedQty),
       originalQuantity: String(baseReceivedQty),
+      unitCost,
       sourceTransferId: transferId,
+    });
+
+    // The destination now holds a new cost layer, so its weighted average is
+    // stale until recomputed. Nothing else in this flow does it.
+    await wacService.recompute({
+      pairs: [{ storeLocationId: transfer.toLocationId, ingredientId: line.ingredientId }],
+      actorUserId: userId,
+      organisationId: orgId,
+      trigger: "manual",
+      triggerEntityId: transferId,
     });
 
     // Update the line

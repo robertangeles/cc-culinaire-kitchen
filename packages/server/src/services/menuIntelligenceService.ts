@@ -38,6 +38,7 @@ export async function createMenuItem(userId: number, data: {
   category: string;
   sellingPrice: string;
   servings?: number;
+  servingsPerSale?: number;
   qFactorPct?: string;
 }) {
   const [userRow] = await db
@@ -52,6 +53,7 @@ export async function createMenuItem(userId: number, data: {
     category: data.category,
     sellingPrice: data.sellingPrice,
     servings: data.servings ?? 1,
+    servingsPerSale: data.servingsPerSale ?? 1,
     qFactorPct: data.qFactorPct ?? "0",
   }).returning();
 
@@ -101,6 +103,7 @@ export async function updateMenuItem(menuItemId: string, userId: number, data: P
   category: string;
   sellingPrice: string;
   servings: number;
+  servingsPerSale: number;
   qFactorPct: string;
   unitsSold: number;
   periodStart: string;
@@ -111,6 +114,7 @@ export async function updateMenuItem(menuItemId: string, userId: number, data: P
   if (data.category !== undefined) setValues.category = data.category;
   if (data.sellingPrice !== undefined) setValues.sellingPrice = data.sellingPrice;
   if (data.servings !== undefined) setValues.servings = data.servings;
+  if (data.servingsPerSale !== undefined) setValues.servingsPerSale = data.servingsPerSale;
   if (data.qFactorPct !== undefined) setValues.qFactorPct = data.qFactorPct;
   if (data.unitsSold !== undefined) setValues.unitsSold = data.unitsSold;
   if (data.periodStart !== undefined) setValues.periodStart = data.periodStart;
@@ -118,6 +122,17 @@ export async function updateMenuItem(menuItemId: string, userId: number, data: P
 
   await db.update(menuItem).set(setValues)
     .where(and(eq(menuItem.menuItemId, menuItemId), eq(menuItem.userId, userId)));
+
+  // Stored food_cost / food_cost_pct / contribution_margin depend on price,
+  // servings, sales-unit size, and Q — refresh them when any of those change.
+  // (Previously only ingredient edits recalculated, so a price change could
+  // leave stale margins until the next recipe touch.)
+  const costRelevantChange =
+    data.sellingPrice !== undefined || data.servings !== undefined ||
+    data.servingsPerSale !== undefined || data.qFactorPct !== undefined;
+  if (costRelevantChange) {
+    await recalculateItemCosts(menuItemId);
+  }
 
   // Brain memory (spec T12): only capture SEMANTIC menu changes (name/category/
   // price). Nightly analytics writes (unitsSold, period dates) must NOT create a
@@ -297,7 +312,15 @@ export async function getIngredients(menuItemId: string) {
     baseUnit: ingredient.baseUnit,
     contentQty: ingredient.contentQty,
     contentUnit: ingredient.contentUnit,
-    catalogUnitCost: ingredient.preferredUnitCost,
+    densityGPerMl: ingredient.densityGPerMl,
+    // Purchase packaging (resolver step 2) + provenance age for the recipe editor.
+    purchaseUnit: ingredient.purchaseUnit,
+    packQty: ingredient.packQty,
+    costUpdatedAt: ingredient.updatedDttm,
+    // T10 unified cost chain: preferred supplier cost, else org WAC — the same
+    // fallback the ingredient picker applies (preferred alone is null for orgs
+    // whose costs come from receiving, which froze linked rows at $0).
+    catalogUnitCost: sql<string | null>`coalesce(${ingredient.preferredUnitCost}, ${ingredient.unitCost})`,
   }).from(menuItemIngredient)
     .leftJoin(ingredient, eq(menuItemIngredient.ingredientId, ingredient.ingredientId))
     .where(eq(menuItemIngredient.menuItemId, menuItemId))
@@ -448,6 +471,7 @@ async function recalculateItemCosts(menuItemId: string) {
   const [item] = await db.select({
     sellingPrice: menuItem.sellingPrice,
     servings: menuItem.servings,
+    servingsPerSale: menuItem.servingsPerSale,
     qFactorPct: menuItem.qFactorPct,
   }).from(menuItem).where(eq(menuItem.menuItemId, menuItemId)).limit(1);
 
@@ -456,7 +480,11 @@ async function recalculateItemCosts(menuItemId: string) {
   const servings = item.servings ?? 1;
   const perServing = servings > 1 ? totalIngredientCost / servings : totalIngredientCost;
   const qFactor = parseFloat(item.qFactorPct ?? "0");
-  const foodCost = qFactor > 0 ? perServing * (1 + qFactor / 100) : perServing;
+  const perServingWithQ = qFactor > 0 ? perServing * (1 + qFactor / 100) : perServing;
+  // Yield ≠ sales unit (meez pattern): servings is what the batch MAKES;
+  // servings_per_sale is how many of them one sale (the price) covers.
+  // food_cost is stored per SALE so it always pairs with selling_price.
+  const foodCost = perServingWithQ * (item.servingsPerSale ?? 1);
   const sellingPrice = parseFloat(item.sellingPrice);
   const foodCostPct = sellingPrice > 0 ? (foodCost / sellingPrice) * 100 : 0;
   const contributionMargin = sellingPrice - foodCost;

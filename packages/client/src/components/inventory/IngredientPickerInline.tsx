@@ -32,6 +32,15 @@ export interface PickedIngredient {
   ingredientName: string;
   baseUnit: string;
   preferredUnitCost: string | null;
+  /** Catalog WAC ($/kitchen unit) — the T10 fallback when no preferred cost is set. */
+  unitCost: string | null;
+  /** Purchase packaging (unit-resolver step 2): label + kitchen units per pack. */
+  purchaseUnit?: string | null;
+  packQty?: string | null;
+  /** Density g/mL — the resolver's volume↔mass bridge. */
+  densityGPerMl?: string | null;
+  /** Catalog row's last update — cost provenance age in the recipe editor. */
+  updatedDttm?: string | null;
 }
 
 interface CatalogRow {
@@ -39,9 +48,14 @@ interface CatalogRow {
   ingredientName: string;
   baseUnit: string;
   preferredUnitCost: string | null;
+  unitCost: string | null;
   ingredientCategory: string | null;
   contentQty?: string | null;
   contentUnit?: string | null;
+  purchaseUnit?: string | null;
+  packQty?: string | null;
+  densityGPerMl?: string | null;
+  updatedDttm?: string | null;
 }
 
 interface IngredientPickerInlineProps {
@@ -107,15 +121,7 @@ export function IngredientPickerInline({
           setResults([]);
           return;
         }
-        const rows = (await res.json()) as Array<{
-          ingredientId: string;
-          ingredientName: string;
-          baseUnit: string;
-          preferredUnitCost: string | null;
-          ingredientCategory: string | null;
-          contentQty?: string | null;
-          contentUnit?: string | null;
-        }>;
+        const rows = (await res.json()) as CatalogRow[];
         setResults(rows.slice(0, 8));
         setHighlight(0);
       } catch {
@@ -168,8 +174,13 @@ export function IngredientPickerInline({
             ingredientName: row.ingredientName,
             baseUnit: row.baseUnit,
             preferredUnitCost: row.preferredUnitCost,
+            unitCost: row.unitCost,
             contentQty: row.contentQty ?? null,
             contentUnit: row.contentUnit ?? null,
+            purchaseUnit: row.purchaseUnit ?? null,
+            packQty: row.packQty ?? null,
+            densityGPerMl: row.densityGPerMl ?? null,
+            updatedDttm: row.updatedDttm ?? null,
           });
           setIsOpen(false);
           setQuery("");
@@ -312,8 +323,13 @@ export function IngredientPickerInline({
                   ingredientName: r.ingredientName,
                   baseUnit: r.baseUnit,
                   preferredUnitCost: r.preferredUnitCost,
+                  unitCost: r.unitCost,
                   contentQty: r.contentQty ?? null,
                   contentUnit: r.contentUnit ?? null,
+                  purchaseUnit: r.purchaseUnit ?? null,
+                  packQty: r.packQty ?? null,
+                  densityGPerMl: r.densityGPerMl ?? null,
+                  updatedDttm: r.updatedDttm ?? null,
                 });
                 setIsOpen(false);
                 setQuery("");
@@ -328,8 +344,8 @@ export function IngredientPickerInline({
               <Link2 className="size-3 text-emerald-400 shrink-0" aria-hidden />
               <span className="truncate text-[#FAFAFA]">{r.ingredientName}</span>
               <span className="ml-auto text-[10px] text-[#999] tabular-nums shrink-0 pl-2">
-                {r.preferredUnitCost
-                  ? `$${parseFloat(r.preferredUnitCost).toFixed(2)}/${r.baseUnit}`
+                {(r.preferredUnitCost ?? r.unitCost)
+                  ? `$${parseFloat((r.preferredUnitCost ?? r.unitCost)!).toFixed(2)}/${r.baseUnit}`
                   : r.baseUnit}
               </span>
             </button>

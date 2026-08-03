@@ -9,7 +9,7 @@ import { join, dirname, resolve } from "path";
 import { fileURLToPath } from "url";
 import { config } from "dotenv";
 config({ path: resolve(dirname(fileURLToPath(import.meta.url)), "../../../.env") });
-import { applyEnvPrefix } from "./utils/envShim.js";
+import { applyEnvPrefix, isProductionProcess } from "./utils/envShim.js";
 applyEnvPrefix();
 
 import { healthRouter } from "./routes/health.js";
@@ -419,6 +419,50 @@ hydrateEnvFromCredentials().then(() => {
         log.warn({ err }, "site_page seed failed (non-fatal)");
       });
 
+      /**
+       * Scheduled background jobs — gated.
+       *
+       * These mutate shared state on a timer. In development the dev database is
+       * a SHARED remote instance, so a running `pnpm dev` silently competes with
+       * anything else using that database. Concretely: the brain worker ticks
+       * every 15s, claims the `brain_memory` rows an integration test just
+       * seeded, embeds them, and the test then asserts on a queue that is already
+       * empty. That produced a ~40% intermittent failure rate across
+       * brainIntegration.test.ts — a different test each time, always green when
+       * the file ran alone — which read as "flaky tests" for weeks. Nothing was
+       * flaky: a live writer was racing the suite.
+       *
+       * Default ON in production, OFF everywhere else. `isProductionProcess()` is
+       * the same predicate `assertSafeDbHost` uses as its hard rail, and
+       * production must satisfy it to connect to its own database at all — so
+       * this cannot silently disable prod jobs. Set ENABLE_SCHEDULED_JOBS=1 to
+       * run them locally (e.g. to dogfood digests), knowing it will race tests.
+       */
+      const scheduledJobsEnabled = (() => {
+        const raw = (process.env.ENABLE_SCHEDULED_JOBS ?? "").toLowerCase();
+        if (raw === "1" || raw === "true") return true;
+        if (raw === "0" || raw === "false") return false;
+        return isProductionProcess();
+      })();
+
+      type Timer = ReturnType<typeof setInterval> | undefined;
+      const everyMs = (fn: () => void, ms: number): Timer =>
+        scheduledJobsEnabled ? setInterval(fn, ms) : undefined;
+      const afterMs = (fn: () => void, ms: number): void => {
+        if (scheduledJobsEnabled) setTimeout(fn, ms);
+      };
+      const runNow = (fn: () => void): void => {
+        if (scheduledJobsEnabled) fn();
+      };
+
+      if (!scheduledJobsEnabled) {
+        log.warn(
+          "Scheduled background jobs are DISABLED (non-production default). They mutate " +
+            "shared state on a timer and race anything else using this database, including " +
+            "the integration test suite. Set ENABLE_SCHEDULED_JOBS=1 to run them here.",
+        );
+      }
+
       // Periodic guest session cleanup (runs once on start, then every hour)
       async function runGuestCleanup() {
         try {
@@ -429,8 +473,8 @@ hydrateEnvFromCredentials().then(() => {
           log.error(err, "Guest session cleanup failed");
         }
       }
-      runGuestCleanup();
-      const cleanupInterval = setInterval(runGuestCleanup, 60 * 60 * 1000);
+      runNow(runGuestCleanup);
+      const cleanupInterval = everyMs(runGuestCleanup, 60 * 60 * 1000);
 
       // Periodic archived recipe purge (runs once on start, then every hour)
       async function runRecipePurge() {
@@ -442,8 +486,8 @@ hydrateEnvFromCredentials().then(() => {
           log.error(err, "Recipe archive purge failed");
         }
       }
-      runRecipePurge();
-      const purgeInterval = setInterval(runRecipePurge, 60 * 60 * 1000);
+      runNow(runRecipePurge);
+      const purgeInterval = everyMs(runRecipePurge, 60 * 60 * 1000);
 
       // Mobile feedback email retry — every 5 min. Async by design (per
       // needs-frontend.md): the POST returns 201 the moment the row is
@@ -458,8 +502,8 @@ hydrateEnvFromCredentials().then(() => {
       }
       // Defer the first run by 30 s so the server is fully warm before
       // we start hitting Resend.
-      setTimeout(runFeedbackEmailRetry, 30_000);
-      const feedbackEmailInterval = setInterval(runFeedbackEmailRetry, 5 * 60 * 1000);
+      afterMs(runFeedbackEmailRetry, 30_000);
+      const feedbackEmailInterval = everyMs(runFeedbackEmailRetry, 5 * 60 * 1000);
 
       // Brain embedding worker — claims pending brain_memory rows and embeds
       // them (SKIP LOCKED claim, attempt backoff). Inert while the
@@ -472,8 +516,8 @@ hydrateEnvFromCredentials().then(() => {
           log.error({ err }, "Brain worker tick failed");
         }
       }
-      setTimeout(runBrainWorker, 20_000);
-      const brainWorkerInterval = setInterval(runBrainWorker, BRAIN_WORKER_INTERVAL_MS);
+      afterMs(runBrainWorker, 20_000);
+      const brainWorkerInterval = everyMs(runBrainWorker, BRAIN_WORKER_INTERVAL_MS);
 
       // Brain capture-health alert — pushes an in-app + email alert to
       // Administrators when the capture error rate says capture is broken
@@ -487,7 +531,7 @@ hydrateEnvFromCredentials().then(() => {
           log.error({ err }, "Brain capture-health check failed");
         }
       }
-      const captureHealthInterval = setInterval(runCaptureHealthCheck, 5 * 60 * 1000);
+      const captureHealthInterval = everyMs(runCaptureHealthCheck, 5 * 60 * 1000);
 
       // Weekly digests — Sunday 8 PM (checked every minute). Two guards (spec T15):
       // the in-memory `last*DigestRun` key dedups within the hour on THIS instance,
@@ -495,7 +539,7 @@ hydrateEnvFromCredentials().then(() => {
       // horizontally-scaled deploy. Both are required — the lock alone would let the
       // same instance's next tick re-fire once it releases.
       let lastWasteDigestRun = "";
-      const wasteDigestInterval = setInterval(async () => {
+      const wasteDigestInterval = everyMs(() => void (async () => {
         const now = new Date();
         const key = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}-${now.getHours()}`;
         if (now.getDay() === 0 && now.getHours() === 20 && lastWasteDigestRun !== key) {
@@ -506,11 +550,11 @@ hydrateEnvFromCredentials().then(() => {
             log.error({ err }, "Weekly waste digest failed");
           }
         }
-      }, 60_000);
+      })(), 60_000);
 
       // Weekly Brain org digest — Sunday 8 PM (spec T15), same dual-guard pattern.
       let lastBrainDigestRun = "";
-      const brainDigestInterval = setInterval(async () => {
+      const brainDigestInterval = everyMs(() => void (async () => {
         const now = new Date();
         const key = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}-${now.getHours()}`;
         if (now.getDay() === 0 && now.getHours() === 20 && lastBrainDigestRun !== key) {
@@ -521,12 +565,12 @@ hydrateEnvFromCredentials().then(() => {
             log.error({ err }, "Weekly Brain digest failed");
           }
         }
-      }, 60_000);
+      })(), 60_000);
 
       // Nightly Brain corpus snapshot — 03:00 daily (Phase 3 analytics prep). Same
       // dual-guard pattern; the day-keyed in-memory guard fires it once per day.
       let lastCorpusSnapshotRun = "";
-      const corpusSnapshotInterval = setInterval(async () => {
+      const corpusSnapshotInterval = everyMs(() => void (async () => {
         const now = new Date();
         const key = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}`;
         if (now.getHours() === 3 && lastCorpusSnapshotRun !== key) {
@@ -537,12 +581,12 @@ hydrateEnvFromCredentials().then(() => {
             log.error({ err }, "Brain corpus snapshot failed");
           }
         }
-      }, 60_000);
+      })(), 60_000);
 
       // Nightly Brain compaction — 03:30 daily (Phase 3 T16), after the snapshot.
       // No-op unless brain_compaction_enabled + a positive cap; same dual-guard.
       let lastCompactionRun = "";
-      const compactionInterval = setInterval(async () => {
+      const compactionInterval = everyMs(() => void (async () => {
         const now = new Date();
         const key = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}`;
         if (now.getHours() === 3 && now.getMinutes() >= 30 && lastCompactionRun !== key) {
@@ -555,12 +599,12 @@ hydrateEnvFromCredentials().then(() => {
             log.error({ err }, "Brain compaction failed");
           }
         }
-      }, 60_000);
+      })(), 60_000);
 
       // Daily Brain nudges — 09:00 (Phase 3 T17), a reasonable operator hour.
       // No-op unless brain_nudges_enabled; per-user opt-in + rate-limit inside.
       let lastNudgeRun = "";
-      const nudgeInterval = setInterval(async () => {
+      const nudgeInterval = everyMs(() => void (async () => {
         const now = new Date();
         const key = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}`;
         if (now.getHours() === 9 && lastNudgeRun !== key) {
@@ -573,7 +617,7 @@ hydrateEnvFromCredentials().then(() => {
             log.error({ err }, "Brain nudges failed");
           }
         }
-      }, 60_000);
+      })(), 60_000);
 
       // Graceful shutdown: close server and release port on termination signals
       function shutdown(signal: string) {

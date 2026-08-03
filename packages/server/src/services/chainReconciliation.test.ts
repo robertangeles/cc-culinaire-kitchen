@@ -43,7 +43,7 @@ describe("Chain 1: Forecast → Auto-PO → Stock Balance", () => {
 
     // Step 2: Auto-PO suggestion
     const currentQty = startStock - totalConsumed; // 70 kg remaining
-    const suggested = suggestedOrderQty(parLevel, currentQty, null);
+    const suggested = suggestedOrderQty(parLevel, currentQty);
     expect(suggested).toBe(10); // shortfall = 80 - 70 = 10
 
     // Step 3: PO line cost
@@ -58,23 +58,17 @@ describe("Chain 1: Forecast → Auto-PO → Stock Balance", () => {
     expect(stockAfterReceiving).toBeGreaterThanOrEqual(parLevel);
   });
 
-  it("should prefer reorderQty when it exceeds shortfall", () => {
+  it("orders exactly to par — the retired reorder_qty no longer overshoots", () => {
     const parLevel = 80;
     const currentQty = 70; // shortfall = 10
-    const reorderQty = 25; // supplier minimum case size
 
-    // suggestedOrderQty returns max(shortfall, reorderQty)
-    const suggested = suggestedOrderQty(parLevel, currentQty, reorderQty);
-    expect(suggested).toBe(25); // reorder > shortfall
+    // Pure order-to-par: 10, never bumped up to a reorder minimum (retired 2026-07-24).
+    const suggested = suggestedOrderQty(parLevel, currentQty);
+    expect(suggested).toBe(10);
 
-    const preferredCost = 8.0;
-    const lineCost = estimatedLineCost(suggested, preferredCost);
-    expect(lineCost).toBe(200); // 25 × 8
-
-    // After receiving with reorderQty, stock exceeds par
+    // Receiving the suggestion lands exactly at par, never above.
     const stockAfterReceiving = currentQty + suggested;
-    expect(stockAfterReceiving).toBe(95); // 70 + 25
-    expect(stockAfterReceiving).toBeGreaterThanOrEqual(parLevel);
+    expect(stockAfterReceiving).toBe(parLevel);
   });
 
   it("should produce zero order when stock is at or above par", () => {
@@ -85,7 +79,7 @@ describe("Chain 1: Forecast → Auto-PO → Stock Balance", () => {
     expect(daysLeft).toBe(600); // floor(100 / (5/30)) = floor(600) = 600
 
     // Stock is above par — no order needed
-    const suggested = suggestedOrderQty(80, 100, null);
+    const suggested = suggestedOrderQty(80, 100);
     expect(suggested).toBe(0);
 
     const lineCost = estimatedLineCost(suggested, 12.5);
@@ -101,7 +95,7 @@ describe("Chain 1: Forecast → Auto-PO → Stock Balance", () => {
     expect(daysLeft).toBe(0);
 
     // PO chain still works — shortfall is independent of forecast
-    const suggested = suggestedOrderQty(80, 50, null);
+    const suggested = suggestedOrderQty(80, 50);
     expect(suggested).toBe(30);
 
     const lineCost = estimatedLineCost(suggested, 4.0);
@@ -121,7 +115,7 @@ describe("Chain 1: Forecast → Auto-PO → Stock Balance", () => {
     const startStock = 50;
     const remaining = startStock - consumed90; // ~29 kg
 
-    const suggested = suggestedOrderQty(40, remaining, null);
+    const suggested = suggestedOrderQty(40, remaining);
     // shortfall = 40 - 29 = 11
     expect(suggested).toBeGreaterThan(0);
 
@@ -198,14 +192,15 @@ describe("Chain 2: Stock Take → Forecast Recalculation", () => {
 
     // After stock take, forecast with corrected stock
     const rate = dailyUsageRate(10, 30); // 0.333 kg/day
-    const reorderQty = suggestedReorderQty(rate, 14); // 2 weeks buffer
-    expect(reorderQty).toBe(Math.ceil(rate * 14)); // ceil(4.667) = 5
+    // forecastMath.suggestedReorderQty is a separate forecast helper (rate x buffer
+    // days), unrelated to the retired manual reorder_qty floor.
+    const forecastReorder = suggestedReorderQty(rate, 14); // 2 weeks buffer
+    expect(forecastReorder).toBe(Math.ceil(rate * 14)); // ceil(4.667) = 5
 
-    // PO suggestion based on corrected stock
+    // PO suggestion is pure order-to-par with the corrected stock.
     const parLevel = 40;
-    const suggested = suggestedOrderQty(parLevel, counted, reorderQty);
-    // shortfall = 40 - 20 = 20, reorderQty = 5 → max(20, 5) = 20
-    expect(suggested).toBe(20);
+    const suggested = suggestedOrderQty(parLevel, counted);
+    expect(suggested).toBe(20); // shortfall = 40 - 20 = 20
 
     const stockAfter = counted + suggested;
     expect(stockAfter).toBeGreaterThanOrEqual(parLevel);

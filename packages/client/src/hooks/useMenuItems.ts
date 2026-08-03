@@ -15,6 +15,8 @@ export interface MenuItem {
   category: string;
   sellingPrice: number;
   servings: number;
+  /** Sales-unit size: how many servings one sale (the price) covers. 12-pack = 12. */
+  servingsPerSale: number;
   qFactorPct: number;
   foodCost: number;
   foodCostPct: number;
@@ -46,6 +48,13 @@ export interface MenuIngredient {
   /** Content equivalence: 1 kitchen unit contains contentQty contentUnit (1 bottle = 750 ml). */
   contentQty?: string | null;
   contentUnit?: string | null;
+  /** Density in g/mL — volume↔mass bridge for the unit resolver. */
+  densityGPerMl?: string | null;
+  /** Purchase packaging (unit-resolver step 2): label + kitchen units per pack. */
+  purchaseUnit?: string | null;
+  packQty?: string | null;
+  /** Catalog row's last update — cost provenance age in the recipe editor. */
+  costUpdatedAt?: string | null;
   unitCost: string;
   /** The linked catalog ingredient's current per-unit cost. Used as a fallback
    *  when the stored unitCost is 0/empty so a linked row never shows $0. */
@@ -71,6 +80,7 @@ export function useMenuItems(category?: string) {
         ...i,
         sellingPrice: parseFloat(i.sellingPrice ?? "0"),
         servings: i.servings ?? 1,
+        servingsPerSale: i.servingsPerSale ?? 1,
         qFactorPct: parseFloat(i.qFactorPct ?? "0"),
         foodCost: parseFloat(i.foodCost ?? "0"),
         foodCostPct: parseFloat(i.foodCostPct ?? "0"),
@@ -86,7 +96,7 @@ export function useMenuItems(category?: string) {
 
   useEffect(() => { fetchItems(); }, [fetchItems]);
 
-  const createItem = useCallback(async (data: { name: string; category: string; sellingPrice: string; servings?: number; qFactorPct?: string }): Promise<MenuItem> => {
+  const createItem = useCallback(async (data: { name: string; category: string; sellingPrice: string; servings?: number; servingsPerSale?: number; qFactorPct?: string }): Promise<MenuItem> => {
     const res = await fetch(`${API}/api/menu/items`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },

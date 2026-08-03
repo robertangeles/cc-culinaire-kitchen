@@ -31,20 +31,27 @@ export function sumPOLineTotal(
 /**
  * Calculate the suggested order quantity for an ingredient below par.
  *
- *   shortfall = parLevel - currentQty
- *   suggested = max(shortfall, reorderQty ?? 0)
+ *   suggested = max(parLevel - currentQty, 0)   (pure order-to-par)
  *
  * Returns 0 if currentQty >= parLevel (no shortfall).
+ *
+ * This is the culinary-native model: order back up to par, then round to whole
+ * purchase packs, then respect the supplier minimum. The old internal
+ * `reorder_qty` floor (max(shortfall, reorderQty)) was retired 2026-07-24 — it
+ * silently overshot par (par 25 + reorder 50 → ordered 50, not 25), a concept
+ * restaurants don't use. "How much" is now par; "in what multiples" is pack
+ * size; "at least how much" is the supplier's minimum_order_qty.
  */
-export function suggestedOrderQty(
-  parLevel: number,
-  currentQty: number,
-  reorderQty: number | null,
-): number {
-  const shortfall = Math.max(parLevel - currentQty, 0);
-  if (shortfall <= 0) return 0;
-  return Math.max(shortfall, reorderQty ?? 0);
+export function suggestedOrderQty(parLevel: number, currentQty: number): number {
+  return Math.max(parLevel - currentQty, 0);
 }
+
+/**
+ * Kitchen unit <-> package conversions live in @culinaire/shared so the client
+ * uses the SAME implementation. Re-exported here because callers reach for them
+ * next to suggestedOrderQty. See utils/packaging.ts for why.
+ */
+export { toPurchasePackages, toPackCost, costForOrderedUnit } from "@culinaire/shared";
 
 /**
  * Estimate the line cost for a suggested order.

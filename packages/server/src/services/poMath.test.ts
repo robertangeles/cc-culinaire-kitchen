@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   sumPOLineTotal,
   suggestedOrderQty,
+  toPurchasePackages,
   estimatedLineCost,
   shouldRouteToHQ,
 } from "./poMath.js";
@@ -85,42 +86,102 @@ describe("Formula F-PO-01: sumPOLineTotal", () => {
   });
 });
 
-describe("Formula F-PO-02: suggestedOrderQty", () => {
+describe("Formula F-PO-02: suggestedOrderQty (pure order-to-par)", () => {
+  // reorder_qty was retired 2026-07-24: the suggestion is now just par - on-hand.
   describe("Forward reconciliation", () => {
-    it("returns shortfall when it exceeds reorderQty", () => {
-      // par=50, current=12.5, reorder=20 → shortfall=37.5, max(37.5, 20)=37.5
-      expect(suggestedOrderQty(50, 12.5, 20)).toBe(37.5);
+    it("returns the par shortfall", () => {
+      // par=50, current=12.5 → 37.5
+      expect(suggestedOrderQty(50, 12.5)).toBe(37.5);
     });
 
-    it("returns reorderQty when it exceeds shortfall", () => {
-      // par=50, current=45, reorder=24 → shortfall=5, max(5, 24)=24
-      expect(suggestedOrderQty(50, 45, 24)).toBe(24);
-    });
-
-    it("uses shortfall alone when reorderQty is null", () => {
-      // par=30, current=10.5, reorder=null → shortfall=19.5
-      expect(suggestedOrderQty(30, 10.5, null)).toBe(19.5);
+    it("does not overshoot par (the retired reorder_qty floor is gone)", () => {
+      // par=50, current=45 → 5, never bumped up to some reorder minimum
+      expect(suggestedOrderQty(50, 45)).toBe(5);
     });
   });
 
   describe("Boundary conditions", () => {
     it("returns 0 when current >= par (no shortfall)", () => {
-      expect(suggestedOrderQty(50, 50, 10)).toBe(0);
-      expect(suggestedOrderQty(50, 55, 10)).toBe(0);
-    });
-
-    it("returns 0 when current equals par even with reorderQty", () => {
-      expect(suggestedOrderQty(100, 100, 50)).toBe(0);
+      expect(suggestedOrderQty(50, 50)).toBe(0);
+      expect(suggestedOrderQty(50, 55)).toBe(0);
     });
   });
 
   describe("Invariants", () => {
-    it("result >= shortfall whenever shortfall > 0", () => {
+    it("result equals the shortfall whenever shortfall > 0", () => {
       const par = 80;
       const current = 25.7;
-      const shortfall = par - current;
-      const result = suggestedOrderQty(par, current, 10);
-      expect(result).toBeGreaterThanOrEqual(shortfall);
+      const result = suggestedOrderQty(par, current);
+      expect(result).toBeCloseTo(par - current, 10);
+    });
+
+    it("never negative", () => {
+      expect(suggestedOrderQty(10, 999)).toBe(0);
+    });
+  });
+});
+
+describe("Formula F-PO-04: toPurchasePackages", () => {
+  describe("Forward reconciliation", () => {
+    it("converts the live bug: 25 kg of flour in 12.5 kg bags is 2 bags, not 50", () => {
+      expect(toPurchasePackages(25, 12.5, "bag")).toBe(2);
+    });
+
+    it("24 bottles short, case of 12 -> 2 cases", () => {
+      expect(toPurchasePackages(24, 12, "case")).toBe(2);
+    });
+  });
+
+  describe("Boundary conditions", () => {
+    it("rounds UP — you cannot buy part of a bag", () => {
+      expect(toPurchasePackages(13, 12.5, "bag")).toBe(2);
+      expect(toPurchasePackages(0.1, 12.5, "bag")).toBe(1);
+    });
+
+    it("exact multiples do not round up a spare package", () => {
+      expect(toPurchasePackages(25, 12.5, "bag")).toBe(2);
+      expect(toPurchasePackages(12.5, 12.5, "bag")).toBe(1);
+    });
+
+    it("nothing needed -> nothing ordered", () => {
+      expect(toPurchasePackages(0, 12.5, "bag")).toBe(0);
+    });
+
+    it("returns null when the item has no packaging (order in the kitchen unit)", () => {
+      expect(toPurchasePackages(25, null, null)).toBeNull();
+      expect(toPurchasePackages(25, 12.5, null)).toBeNull();
+      expect(toPurchasePackages(25, null, "bag")).toBeNull();
+    });
+
+    it("guards a zero/negative pack size instead of dividing by it", () => {
+      expect(toPurchasePackages(25, 0, "bag")).toBeNull();
+      expect(toPurchasePackages(25, -5, "bag")).toBeNull();
+    });
+  });
+
+  describe("Invariants", () => {
+    it("packages x packSize always covers the shortfall", () => {
+      for (const [qty, pack] of [
+        [25, 12.5],
+        [24, 12],
+        [13, 12.5],
+        [1, 500],
+        [999, 7],
+      ] as const) {
+        const packs = toPurchasePackages(qty, pack, "case")!;
+        expect(packs * pack).toBeGreaterThanOrEqual(qty);
+      }
+    });
+
+    it("never over-orders by a full package or more", () => {
+      for (const [qty, pack] of [
+        [25, 12.5],
+        [13, 12.5],
+        [999, 7],
+      ] as const) {
+        const packs = toPurchasePackages(qty, pack, "case")!;
+        expect(packs * pack - qty).toBeLessThan(pack);
+      }
     });
   });
 });

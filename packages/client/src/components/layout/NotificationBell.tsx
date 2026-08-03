@@ -8,6 +8,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useNotifications, type AppNotification } from "../../hooks/useNotifications.js";
 import { Bell, Check, X, FileText, AlertTriangle, Clock, Sparkles, Brain } from "lucide-react";
+import { useNavigate } from "react-router";
 
 const TYPE_CONFIG: Record<string, { icon: typeof Bell; color: string; label: string }> = {
   APPROVAL_REQUIRED: { icon: FileText,      color: "text-amber-400",   label: "Approval needed" },
@@ -30,6 +31,7 @@ function timeAgo(dateStr: string): string {
 }
 
 export default function NotificationBell() {
+  const navigate = useNavigate();
   const { notifications, unreadCount, refreshList, markAsRead, dismiss } = useNotifications();
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -54,7 +56,9 @@ export default function NotificationBell() {
     markAsRead(n.notificationId);
     // Navigate to related entity if applicable
     if (n.relatedEntityType === "purchase_order" && n.relatedEntityId) {
-      window.location.href = `/inventory?tab=purchase-orders&po=${n.relatedEntityId}`;
+      // navigate(), not window.location: a full reload re-bootstraps auth +
+      // location context and flashes the "Run the Kitchen" gate on the way.
+      navigate(`/purchasing?tab=orders&po=${n.relatedEntityId}`);
     }
     setIsOpen(false);
   };

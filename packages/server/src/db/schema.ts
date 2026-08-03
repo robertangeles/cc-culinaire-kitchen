@@ -313,6 +313,7 @@ export const organisation = pgTable("organisation", {
   organisationPostcode: varchar("organisation_postcode", { length: 20 }),
   organisationWebsite: varchar("organisation_website", { length: 500 }),
   organisationEmail: varchar("organisation_email", { length: 255 }),
+  organisationPhone: varchar("organisation_phone", { length: 50 }),
   // PII encryption columns
   orgNameEnc: text("org_name_enc"),
   orgNameIv: varchar("org_name_iv", { length: 24 }),
@@ -788,6 +789,13 @@ export const menuItem = pgTable("menu_item", {
   category: varchar("category", { length: 100 }).notNull(),
   sellingPrice: numeric("selling_price", { precision: 10, scale: 2 }).notNull(),
   servings: integer("servings").notNull().default(1),
+  /**
+   * Sales-unit size: how many servings one sale (the selling_price) covers.
+   * Yield stays the kitchen truth in `servings` (batch makes 12 buns); a
+   * 12-pack sold for $15 sets servings_per_sale = 12. Default 1 = sold by the
+   * serving — the historical behavior. (meez pattern: yield ≠ portion.)
+   */
+  servingsPerSale: integer("servings_per_sale").notNull().default(1),
   qFactorPct: numeric("q_factor_pct", { precision: 5, scale: 2 }).notNull().default("0"),
   foodCost: numeric("food_cost", { precision: 10, scale: 2 }),
   foodCostPct: numeric("food_cost_pct", { precision: 5, scale: 2 }),
@@ -1339,6 +1347,13 @@ export const ingredient = pgTable(
     contentQty: numeric("content_qty", { precision: 10, scale: 3 }),
     contentUnit: varchar("content_unit", { length: 20 }),
     /**
+     * Density in g/mL (specific gravity) — the industry-standard volume↔mass
+     * bridge (milk 1.03, oil 0.92). When set, the unit resolver converts a
+     * weighed entry against a volume-counted item (95 g milk → 0.0922 L) and
+     * vice versa; pâtisserie weighs everything, including liquids.
+     */
+    densityGPerMl: numeric("density_g_per_ml", { precision: 6, scale: 4 }),
+    /**
      * Primary purchase packaging label ('case', 'bag', 'carton'). Packaging
      * exists ONLY at ordering + receiving — it converts to kitchen units at
      * the moment of receiving and never touches the stock count. `pack_qty`
@@ -1414,6 +1429,7 @@ export const supplier = pgTable(
     contactName: varchar("contact_name", { length: 200 }),
     contactEmail: varchar("contact_email", { length: 255 }),
     contactPhone: varchar("contact_phone", { length: 50 }),
+    website: varchar("website", { length: 500 }),
     // Postal/physical address — mirrors organisation & store_location.
     addressLine1: varchar("address_line_1", { length: 200 }),
     addressLine2: varchar("address_line_2", { length: 200 }),
@@ -1539,6 +1555,17 @@ export const locationIngredient = pgTable(
     weightedAverageCost: numeric("weighted_average_cost", { precision: 10, scale: 4 }),
     /** When the WAC was last recomputed. NULL until the first receiving. */
     wacLastRecomputedAt: timestamp("wac_last_recomputed_at", { withTimezone: true }),
+    /**
+     * Purchasing P1 (order guides): a par level SUGGESTED by the system
+     * (usage forecast in P2, never AI-computed in P1). Kept separate from
+     * `parLevel` so a suggestion never clobbers the operator's hand-set par —
+     * the bulk par editor previews this and the operator accepts it into
+     * `parLevel`. NULL until a suggestion exists. The ordering engine reads
+     * ONLY `parLevel`, never this column.
+     */
+    suggestedParLevel: numeric("suggested_par_level"),
+    suggestedParSource: varchar("suggested_par_source", { length: 30 }),
+    suggestedParAt: timestamp("suggested_par_at", { withTimezone: true }),
     createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
     updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
   },
@@ -2050,6 +2077,9 @@ export const purchaseOrder = pgTable(
     submittedAt: timestamp("submitted_at", { withTimezone: true }),
     approvedAt: timestamp("approved_at", { withTimezone: true }),
     sentAt: timestamp("sent_at", { withTimezone: true }),
+    // Set when the PO is emailed to the supplier (explicit "Send to supplier"
+    // action). Distinct from sentAt, which is the internal SENT status flip.
+    supplierEmailedAt: timestamp("supplier_emailed_at", { withTimezone: true }),
     createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
     updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
   },
@@ -2084,6 +2114,68 @@ export const purchaseOrderLine = pgTable(
   (table) => [
     index("idx_po_line_po").on(table.poId),
     index("idx_po_line_ingredient").on(table.ingredientId),
+  ],
+);
+
+/**
+ * Purchasing P1: an `order_guide` is a reusable, per-supplier ordering list an
+ * operator works from every week — the primary PO-creation surface (the manual
+ * catalog is a fallback). Lines reference `ingredient_id`; cost / pack size /
+ * supplier minimum are resolved LIVE from `ingredient_supplier` / `ingredient`
+ * at render + order time, so a guide never holds stale prices (2NF).
+ *
+ * `store_location_id` is NULLABLE: NULL = an org-wide guide shared across
+ * locations, a value = location-specific. P1 ships location-scoped behavior;
+ * the nullable column makes shareable guides a later flag flip, not a migration.
+ *
+ * OLTP, 2NF. Cross-supplier guides later: drop `supplier_id`, move it onto
+ * `order_guide_item`.
+ */
+export const orderGuide = pgTable(
+  "order_guide",
+  {
+    orderGuideId: uuid("order_guide_id").defaultRandom().primaryKey(),
+    organisationId: integer("organisation_id").notNull().references(() => organisation.organisationId),
+    storeLocationId: uuid("store_location_id").references(() => storeLocation.storeLocationId),
+    supplierId: uuid("supplier_id").notNull().references(() => supplier.supplierId),
+    name: varchar("name", { length: 100 }).notNull(),
+    activeInd: boolean("active_ind").notNull().default(true),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdByUserId: integer("created_by_user_id").notNull().references(() => user.userId),
+    createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
+    updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // "list guides for this location (or org-wide) at this org", ordered by sortOrder
+    index("idx_order_guide_org_location").on(table.organisationId, table.storeLocationId),
+    // FK index: "get all guides for a supplier"
+    index("idx_order_guide_supplier").on(table.supplierId),
+  ],
+);
+
+/**
+ * A row in an `order_guide`: one ingredient the operator regularly orders from
+ * that guide's supplier, with an optional remembered default order quantity and
+ * purchase unit. Order-to-par overrides the default at draft time. `sort_order`
+ * gives the operator's chosen shelf-to-sheet walk order.
+ */
+export const orderGuideItem = pgTable(
+  "order_guide_item",
+  {
+    orderGuideItemId: uuid("order_guide_item_id").defaultRandom().primaryKey(),
+    orderGuideId: uuid("order_guide_id").notNull().references(() => orderGuide.orderGuideId),
+    ingredientId: uuid("ingredient_id").notNull().references(() => ingredient.ingredientId),
+    defaultOrderQty: numeric("default_order_qty"),
+    defaultPurchaseUnit: varchar("default_purchase_unit", { length: 20 }),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
+    updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // One row per ingredient per guide (leading column also serves "list a guide's items")
+    uniqueIndex("idx_order_guide_item_unique").on(table.orderGuideId, table.ingredientId),
+    // FK index: "which guides contain this ingredient"
+    index("idx_order_guide_item_ingredient").on(table.ingredientId),
   ],
 );
 

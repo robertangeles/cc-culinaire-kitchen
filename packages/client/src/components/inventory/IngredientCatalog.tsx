@@ -5,7 +5,7 @@
  * view items on the right. Click a row to open the edit modal.
  */
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   useIngredients,
   useSuppliers,
@@ -29,7 +29,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { TransactionHistory } from "./TransactionHistory.js";
-import { CATEGORIES, ITEM_TYPES, ITEM_TYPE_KEYS, FIFO_MODES, FIFO_DEFAULTS, getCategoriesForType, type ItemTypeKey, type FifoModeKey } from "@culinaire/shared";
+import { CATEGORIES, ITEM_TYPES, ITEM_TYPE_KEYS, FIFO_MODES, FIFO_DEFAULTS, getCategoriesForType, suggestDensity, type ItemTypeKey, type FifoModeKey } from "@culinaire/shared";
 
 const UNITS = [
   "kg", "g", "mg",
@@ -404,6 +404,7 @@ function EditIngredientModal({
   const [newSupId, setNewSupId] = useState("");
   const [newSupCost, setNewSupCost] = useState("");
   const [newSupSku, setNewSupSku] = useState("");
+  const [newSupMoq, setNewSupMoq] = useState("");
   const [name, setName] = useState(ingredient.ingredientName);
   const [editItemType, setEditItemType] = useState<ItemTypeKey>((ingredient.itemType as ItemTypeKey) || "KITCHEN_INGREDIENT");
   const [editFifo, setEditFifo] = useState<FifoModeKey>((ingredient.fifoApplicable as FifoModeKey) || FIFO_DEFAULTS[(ingredient.itemType as ItemTypeKey) || "KITCHEN_INGREDIENT"]);
@@ -413,6 +414,17 @@ function EditIngredientModal({
   // Content equivalence: 1 kitchen unit contains [contentQty] [contentUnit].
   const [contentQty, setContentQty] = useState(ingredient.contentQty || "");
   const [contentUnit, setContentUnit] = useState(ingredient.contentUnit || "");
+  // Density g/mL — the volume↔mass bridge (weigh liquids in recipes).
+  const [density, setDensity] = useState(ingredient.densityGPerMl || "");
+  // Auto-suggest for volume-counted liquids from the shared density library —
+  // a prefill only, never overwrites a value the operator typed.
+  useEffect(() => {
+    if (density !== "") return;
+    if (!["ml", "l"].includes(unit.toLowerCase())) return;
+    const suggested = suggestDensity(name);
+    if (suggested) setDensity(String(suggested));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [name, unit]);
   // Purchase packaging: bought as [purchaseUnit] of [packQty] kitchen units.
   const [purchaseUnit, setPurchaseUnit] = useState(ingredient.purchaseUnit || "");
   const [editPackQty, setEditPackQty] = useState(ingredient.packQty || "");
@@ -421,19 +433,30 @@ function EditIngredientModal({
     ? (Number(ingredient.unitCost) * Number(ingredient.packQty)).toFixed(2)
     : ingredient.unitCost || "";
   const [cost, setCost] = useState(packCostInit);
+  // Has the operator actually touched the packaging/price inputs this session?
+  // See derivedUnitCost — without this, merely opening and saving rewrote the cost.
+  const [packagingTouched, setPackagingTouched] = useState(false);
 
   // Cost per kitchen unit: with packaging, the entered cost is per package
   // (÷ pack qty); buying loose, the entered cost IS per kitchen unit — a stale
   // pack qty must not divide it.
-  const derivedUnitCost = purchaseUnit && editPackQty && cost && parseFloat(editPackQty) > 0
-    ? (parseFloat(cost) / parseFloat(editPackQty)).toFixed(4)
-    : cost || null;
+  //
+  // Untouched inputs return the STORED cost verbatim. The pack price shown above
+  // is itself derived and rounded ($1.27/kg × 12.5 = $15.875 → "15.88"), so
+  // re-deriving the unit cost from it round-trips through that rounding and
+  // yields $1.2704. Because Save writes this value back to `unitCost`, opening an
+  // ingredient and saving it — changing nothing — silently rewrote the money
+  // column, and the per-kg figure here disagreed with the supplier row 4cm below.
+  const derivedUnitCost = (() => {
+    if (!packagingTouched && ingredient.unitCost) return String(ingredient.unitCost);
+    return purchaseUnit && editPackQty && cost && parseFloat(editPackQty) > 0
+      ? (parseFloat(cost) / parseFloat(editPackQty)).toFixed(4)
+      : cost || null;
+  })();
   const [par, setPar] = useState(ingredient.parLevel || "");
-  const [reorder, setReorder] = useState(ingredient.reorderQty || "");
-  // Par/reorder can be ENTERED in kitchen units or purchase packages ("2 bags");
-  // they are always STORED in kitchen units (stock comparisons need one unit).
+  // Par can be ENTERED in kitchen units or purchase packages ("2 bags");
+  // always STORED in kitchen units (stock comparisons need one unit).
   const [parEntryUnit, setParEntryUnit] = useState<"base" | "pack">("base");
-  const [reorderEntryUnit, setReorderEntryUnit] = useState<"base" | "pack">("base");
   const packFactor = purchaseUnit && editPackQty && parseFloat(editPackQty) > 0 ? parseFloat(editPackQty) : null;
   const canEnterInPacks = packFactor !== null;
   /** Convert an entered par/reorder value to kitchen units for saving. */
@@ -453,7 +476,6 @@ function EditIngredientModal({
       : `= ${(n / packFactor).toFixed(2)} ${purchaseUnit}`;
   };
   const parEcho = echoFor(par, parEntryUnit);
-  const reorderEcho = echoFor(reorder, reorderEntryUnit);
   const editModalCategories = getCategoriesForType(editItemType);
   const [deleteConfirm, setDeleteConfirm] = useState<"idle" | "checking" | "blocked" | "confirm">("idle");
   const [usageList, setUsageList] = useState<Array<{ menuItemId: string; menuItemName: string }>>([]);
@@ -593,6 +615,32 @@ function EditIngredientModal({
             </div>
           )}
 
+          {/* Density — the volume↔mass bridge (specific gravity). Pâtisserie
+              weighs everything, including liquids: with a density set, a recipe
+              can say "95 g milk" against a litre-counted item and cost it. */}
+          {(["ml", "l", "mg", "g", "kg"].includes(unit.toLowerCase()) ||
+            ["ml", "l"].includes(contentUnit.toLowerCase())) && (
+            <div>
+              <label className="block text-[10px] uppercase tracking-wider text-[#666] mb-1">Density (g per mL)</label>
+              <div className="flex items-center gap-2">
+                <input type="text" value={density} onChange={(e) => setDensity(e.target.value)}
+                  placeholder="e.g. 1.03"
+                  className="w-24 px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none" />
+                {!density && suggestDensity(name) && (
+                  <button type="button" onClick={() => setDensity(String(suggestDensity(name)))}
+                    className="text-[10px] text-[#D4A574] hover:underline">
+                    use {suggestDensity(name)}
+                  </button>
+                )}
+              </div>
+              <p className="text-[10px] text-[#666] mt-1">
+                Lets recipes weigh this liquid (95 g milk → 0.092 L) or measure a weighed item by
+                volume. Milk 1.03 · cream 1.01 · oil 0.92 · honey 1.42. Leave empty to keep strict
+                unit families.
+              </p>
+            </div>
+          )}
+
 
           {/* Purchase packaging — exists ONLY at ordering + receiving */}
           <div className="rounded-xl border border-[#2A2A2A] bg-[#111]/70 p-3">
@@ -602,7 +650,7 @@ function EditIngredientModal({
               Deliveries convert to {unit} the moment they're received.
             </p>
             <div className="flex items-center gap-2 flex-wrap">
-              <select value={purchaseUnit} onChange={(e) => setPurchaseUnit(e.target.value)}
+              <select value={purchaseUnit} onChange={(e) => { setPackagingTouched(true); setPurchaseUnit(e.target.value); }}
                 className="px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white focus:outline-none">
                 <option value="">— by the {unit} —</option>
                 {UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
@@ -612,7 +660,7 @@ function EditIngredientModal({
               {purchaseUnit && (
                 <>
                   <span className="text-xs text-[#999]">of</span>
-                  <input type="text" value={editPackQty} onChange={(e) => setEditPackQty(e.target.value)}
+                  <input type="text" value={editPackQty} onChange={(e) => { setPackagingTouched(true); setEditPackQty(e.target.value); }}
                     placeholder="12"
                     className="w-20 px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none" />
                   <span className="text-xs text-[#999]">{unit}</span>
@@ -621,7 +669,7 @@ function EditIngredientModal({
               <span className="text-xs text-[#999]">@</span>
               <div className="relative">
                 <DollarSign className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-[#666]" />
-                <input type="text" value={cost} onChange={(e) => setCost(e.target.value)}
+                <input type="text" value={cost} onChange={(e) => { setPackagingTouched(true); setCost(e.target.value); }}
                   placeholder="0.00"
                   className="w-28 pl-8 pr-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none" />
               </div>
@@ -631,46 +679,25 @@ function EditIngredientModal({
               <p className="text-[10px] text-[#D4A574] mt-1">= ${derivedUnitCost} per {unit}</p>
             )}
 
-            {/* Par + reorder live with purchasing: "when do I order, and how much". */}
-            <div className="mt-3 pt-3 border-t border-[#2A2A2A]/60 grid grid-cols-2 gap-2">
-              <div>
-                <label className="block text-[10px] uppercase tracking-wider text-[#666] mb-1">Par Level (min stock)</label>
-                <div className="flex items-center gap-1.5">
-                  <input type="text" value={par} onChange={(e) => setPar(e.target.value)}
-                    placeholder="0"
-                    className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none" />
-                  {canEnterInPacks ? (
-                    <select value={parEntryUnit} onChange={(e) => setParEntryUnit(e.target.value as "base" | "pack")}
-                      className="px-2 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-xs text-white focus:outline-none">
-                      <option value="base">{unit}</option>
-                      <option value="pack">{purchaseUnit}</option>
-                    </select>
-                  ) : (
-                    <span className="text-xs text-[#666]">{unit}</span>
-                  )}
-                </div>
-                {parEcho && <p className="text-[10px] text-[#D4A574] mt-1">{parEcho}</p>}
-                <p className="text-[10px] text-[#666] mt-1">Order when stock falls below this.</p>
+            {/* Par is the ordering lever: order back up to this level (order-to-par). */}
+            <div className="mt-3 pt-3 border-t border-[#2A2A2A]/60">
+              <label className="block text-[10px] uppercase tracking-wider text-[#666] mb-1">Par Level (target stock)</label>
+              <div className="flex items-center gap-1.5">
+                <input type="text" value={par} onChange={(e) => setPar(e.target.value)}
+                  placeholder="0"
+                  className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none" />
+                {canEnterInPacks ? (
+                  <select value={parEntryUnit} onChange={(e) => setParEntryUnit(e.target.value as "base" | "pack")}
+                    className="px-2 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-xs text-white focus:outline-none">
+                    <option value="base">{unit}</option>
+                    <option value="pack">{purchaseUnit}</option>
+                  </select>
+                ) : (
+                  <span className="text-xs text-[#666]">{unit}</span>
+                )}
               </div>
-              <div>
-                <label className="block text-[10px] uppercase tracking-wider text-[#666] mb-1">Reorder Qty</label>
-                <div className="flex items-center gap-1.5">
-                  <input type="text" value={reorder} onChange={(e) => setReorder(e.target.value)}
-                    placeholder="0"
-                    className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none" />
-                  {canEnterInPacks ? (
-                    <select value={reorderEntryUnit} onChange={(e) => setReorderEntryUnit(e.target.value as "base" | "pack")}
-                      className="px-2 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-xs text-white focus:outline-none">
-                      <option value="base">{unit}</option>
-                      <option value="pack">{purchaseUnit}</option>
-                    </select>
-                  ) : (
-                    <span className="text-xs text-[#666]">{unit}</span>
-                  )}
-                </div>
-                {reorderEcho && <p className="text-[10px] text-[#D4A574] mt-1">{reorderEcho}</p>}
-                <p className="text-[10px] text-[#666] mt-1">How much to order then.</p>
-              </div>
+              {parEcho && <p className="text-[10px] text-[#D4A574] mt-1">{parEcho}</p>}
+              <p className="text-[10px] text-[#666] mt-1">Orders top up to this level, rounded to whole packs.</p>
             </div>
           </div>
           {/* Suppliers */}
@@ -694,11 +721,54 @@ function EditIngredientModal({
                       )}
                     </div>
                     <div className="flex items-center gap-2 shrink-0 ml-2">
-                      {(s.packCost || s.costPerUnit) && (
-                        <span className="text-emerald-400 tabular-nums">
-                          ${s.packCost ? Number(s.packCost).toFixed(2) : Number(s.costPerUnit).toFixed(4)}
-                        </span>
-                      )}
+                      {/* ONE price per supplier: what they invoice you.
+                          With packaging declared that is the pack price
+                          ("$15.88 /bag"); bought loose it is the kitchen-unit
+                          price ("$3.80 /kg"). Either way it is the number on
+                          the docket.
+                          Deliberately NOT also showing a per-kg conversion here.
+                          It reads as useful (compare suppliers on a level unit)
+                          but is redundant in this schema: pack_qty/purchase_unit
+                          live on `ingredient`, not on the supplier link, so every
+                          supplier of an item shares one pack size and the pack
+                          prices already compare directly. PURCHASED AS shows the
+                          per-kg conversion a few cm above — printing it twice is
+                          what made these numbers confusing in the first place. */}
+                      {(s.packCost || s.costPerUnit) && (() => {
+                        const hasPack = s.packCost != null && purchaseUnit;
+                        const price = hasPack ? Number(s.packCost) : Number(s.costPerUnit);
+                        return (
+                          <span className="text-emerald-400 tabular-nums">
+                            ${hasPack ? price.toFixed(2) : price.toFixed(4)}
+                            <span className="text-emerald-400/60">
+                              {" "}/{hasPack ? purchaseUnit : unit}
+                            </span>
+                          </span>
+                        );
+                      })()}
+                      {/* Supplier's minimum order — commits on blur. This is the
+                          only place it can be set; the PO screen just reads it.
+                          Labelled inline: an unlabelled number box gave no clue
+                          whether "3" meant 3 bags, 3 kg, or 3 days' lead time.
+                          It is counted in PURCHASE packs — ordering rounds the
+                          shortfall to whole packs, then applies this floor. */}
+                      <span className="flex items-center gap-1 text-[10px] text-[#666]">
+                        min
+                        <input
+                          key={`moq-${s.supplierId}-${s.minimumOrderQty ?? ""}`}
+                          type="text"
+                          defaultValue={s.minimumOrderQty ?? ""}
+                          onBlur={(e) => {
+                            const v = e.target.value.trim();
+                            if (v === (s.minimumOrderQty ?? "")) return;
+                            updateLink(s.supplierId, { minimumOrderQty: v || null });
+                          }}
+                          placeholder="—"
+                          title={`Minimum order quantity, in ${purchaseUnit || unit}s. Ordering warns below this but never blocks.`}
+                          className="w-12 px-1.5 py-1 rounded bg-[#0A0A0A] border border-[#2A2A2A] text-[11px] text-white placeholder-[#555] text-right tabular-nums focus:outline-none focus:border-[#D4A574]/40"
+                        />
+                        {purchaseUnit || unit}
+                      </span>
                       <button
                         onClick={() => removeLink(s.supplierId)}
                         className="p-0.5 rounded hover:bg-red-500/10 text-[#666] hover:text-red-400 transition-colors"
@@ -744,6 +814,12 @@ function EditIngredientModal({
                   placeholder="SKU"
                   className="w-20 px-2 py-1.5 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-xs text-white placeholder-[#666] focus:outline-none"
                 />
+                <input
+                  type="text" value={newSupMoq} onChange={(e) => setNewSupMoq(e.target.value)}
+                  placeholder="Min order"
+                  title="Supplier's minimum order quantity, in the unit you order this in"
+                  className="w-20 px-2 py-1.5 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-xs text-white placeholder-[#666] focus:outline-none"
+                />
                 <button
                   onClick={async () => {
                     if (!newSupId) return;
@@ -751,9 +827,10 @@ function EditIngredientModal({
                       supplierId: newSupId,
                       costPerUnit: newSupCost || undefined,
                       supplierItemCode: newSupSku || undefined,
+                      minimumOrderQty: newSupMoq || undefined,
                       preferredInd: ingSuppliers.length === 0,
                     });
-                    setNewSupId(""); setNewSupCost(""); setNewSupSku("");
+                    setNewSupId(""); setNewSupCost(""); setNewSupSku(""); setNewSupMoq("");
                     setShowAddSupplier(false);
                   }}
                   disabled={!newSupId}
@@ -762,7 +839,7 @@ function EditIngredientModal({
                   Add
                 </button>
                 <button
-                  onClick={() => { setShowAddSupplier(false); setNewSupId(""); setNewSupCost(""); setNewSupSku(""); }}
+                  onClick={() => { setShowAddSupplier(false); setNewSupId(""); setNewSupCost(""); setNewSupSku(""); setNewSupMoq(""); }}
                   className="px-2 py-1.5 text-xs text-[#666] hover:text-white transition-colors"
                 >
                   Cancel
@@ -864,12 +941,12 @@ function EditIngredientModal({
                   // when there IS a package — never save stale leftovers.
                   contentQty: MEASURED_UNITS.includes(unit) ? null : contentQty || null,
                   contentUnit: MEASURED_UNITS.includes(unit) ? null : contentUnit || null,
+                  densityGPerMl: density || null,
                   purchaseUnit: purchaseUnit || null,
                   packQty: purchaseUnit ? editPackQty || null : null,
                   description: desc || null,
                   unitCost: derivedUnitCost || null,
                   parLevel: toKitchen(par, parEntryUnit),
-                  reorderQty: toKitchen(reorder, reorderEntryUnit),
                   itemType: editItemType,
                   fifoApplicable: editFifo,
                   containsDairyInd: allergens.has("containsDairyInd"),
@@ -926,7 +1003,6 @@ function AddIngredientForm({
   const [description, setDescription] = useState("");
   const [cost, setCost] = useState("");
   const [par, setPar] = useState("");
-  const [reorder, setReorder] = useState("");
   const [allergens, setAllergens] = useState<Set<AllergenKey>>(new Set());
   const [packQty, setPackQty] = useState("");
   const [supplierId, setSupplierId] = useState("");
@@ -1016,14 +1092,9 @@ function AddIngredientForm({
             = ${autoUnitCost} per {unit}
           </p>
         )}
-        <div className="grid grid-cols-2 gap-2">
-          <input type="text" value={par} onChange={(e) => setPar(e.target.value)}
-            placeholder="Min stock (par)"
-            className="px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none" />
-          <input type="text" value={reorder} onChange={(e) => setReorder(e.target.value)}
-            placeholder="Reorder qty"
-            className="px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none" />
-        </div>
+        <input type="text" value={par} onChange={(e) => setPar(e.target.value)}
+          placeholder="Par level (target stock)"
+          className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none" />
         <textarea value={description} onChange={(e) => setDescription(e.target.value)}
           placeholder="Description (optional)" rows={2}
           className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none resize-none" />
@@ -1069,7 +1140,7 @@ function AddIngredientForm({
                   ingredientName: name, ingredientCategory: category, baseUnit: unit,
                   packQty: packQty || undefined,
                   description: description || undefined, unitCost: autoUnitCost || cost || undefined,
-                  parLevel: par || undefined, reorderQty: reorder || undefined,
+                  parLevel: par || undefined,
                   itemType: itemType, fifoApplicable: fifo,
                   containsDairyInd: allergens.has("containsDairyInd"),
                   containsGlutenInd: allergens.has("containsGlutenInd"),

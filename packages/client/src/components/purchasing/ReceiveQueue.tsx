@@ -8,25 +8,41 @@ import { useState, useCallback } from "react";
 import { useLocation } from "../../context/LocationContext.js";
 import { usePurchaseOrders, type PurchaseOrder } from "../../hooks/useInventory.js";
 import ReceivingChecklist from "./ReceivingChecklist.js";
-import { Package, Truck, Clock, Loader2 } from "lucide-react";
+import { Package, Truck, Clock, Loader2, Send } from "lucide-react";
 
-export default function ReceiveQueue() {
+export default function ReceiveQueue({ onChanged }: { onChanged?: () => void }) {
   const { selectedLocationId } = useLocation();
-  const { pos, isLoading, getDetail } = usePurchaseOrders(selectedLocationId);
+  const { pos, isLoading, getDetail, refresh } = usePurchaseOrders(selectedLocationId);
   const [receivePO, setReceivePO] = useState<PurchaseOrder | null>(null);
 
   const sentPOs = pos.filter((p) => p.status === "SENT" || p.status === "RECEIVING");
 
+  const [startError, setStartError] = useState<string | null>(null);
+
   const handleStartReceiving = useCallback(async (poId: string) => {
-    const detail = await getDetail(poId);
-    if (detail) setReceivePO(detail);
+    setStartError(null);
+    try {
+      const detail = await getDetail(poId);
+      if (detail) setReceivePO(detail);
+    } catch (e) {
+      // getDetail reports the real reason now; silently swallowing it left the
+      // operator tapping a button that appeared to do nothing.
+      setStartError(e instanceof Error ? e.message : "Couldn't open this delivery.");
+    }
   }, [getDetail]);
 
   if (receivePO) {
     return (
       <ReceivingChecklist
         po={receivePO}
-        onBack={() => setReceivePO(null)}
+        onBack={() => {
+          setReceivePO(null);
+          // Opening a delivery moves the PO to RECEIVING, and confirming moves it
+          // to RECEIVED/PARTIAL_RECEIVED — neither of which the queue sees without
+          // a refetch, so a received delivery lingered here until a page reload.
+          refresh();
+          onChanged?.();
+        }}
       />
     );
   }
@@ -39,6 +55,12 @@ export default function ReceiveQueue() {
           Deliveries to Receive
         </h2>
       </div>
+
+      {startError && (
+        <p className="text-sm text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+          {startError}
+        </p>
+      )}
 
       {isLoading ? (
         <div className="flex items-center justify-center py-16">
@@ -90,6 +112,15 @@ export default function ReceiveQueue() {
                       </>
                     )}
                   </div>
+                  {(po.sentAt || po.createdByUserName) && (
+                    <div className="flex items-center gap-1 mt-1 text-xs text-[#666]">
+                      <Send className="size-3" />
+                      {po.sentAt
+                        ? `Sent ${new Date(po.sentAt).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" })}`
+                        : "Not sent yet"}
+                      {po.createdByUserName && <span>· ordered by {po.createdByUserName}</span>}
+                    </div>
+                  )}
                 </div>
                 <div className="text-right shrink-0">
                   {po.totalValue && (
