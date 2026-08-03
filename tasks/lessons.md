@@ -646,3 +646,20 @@ builds all tables with CHECKs enforcing. Stop it again when done.
 - **Rule**: Every scripted multi-site edit asserts the expected occurrence count BEFORE writing,
   and writes only after every replacement succeeds. A wrong count is information, not an
   obstacle — it means the mental model of the file was wrong.
+
+## #65 — A real-DB test with no availability gate fails CI on infrastructure, not on truth (2026-08-04)
+
+- **Problem**: `checkCatalogIntegrity.test.ts` called `runIntegrityChecks()` against a live
+  database from a bare `describe(...)`. It passed locally because `.env` supplies
+  `DATABASE_URL`, and failed CI's unit job — which has no database — with
+  `DATABASE_URL environment variable is required`. Green locally, red on the PR.
+- **Fix**: Gated it on a reachable database (`describe.runIf(dbAvailable)`), matching every
+  other real-DB test in the repo. Verified both directions: 2 passed with a DB, 2 skipped and
+  0 failed without one.
+- **Rule**: A test that touches a real database is gated on that database being reachable, or
+  it is mocked. There is no third option. Before adding one, ask where it can *meaningfully*
+  run — moving this into the integration job would have been worse than skipping, because that
+  job's Postgres is an empty throwaway where org 2 has no catalog and all 8 checks would pass
+  vacuously. A gate that skips honestly beats a green test that proves nothing.
+- **Also**: "passes locally" is not evidence about CI when the two have different environments.
+  The difference *is* the test surface.

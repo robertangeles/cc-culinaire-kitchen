@@ -1,5 +1,15 @@
 import { describe, it, expect } from "vitest";
-import { runIntegrityChecks } from "./checkCatalogIntegrity.js";
+import { config } from "dotenv";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+config({ path: resolve(dirname(fileURLToPath(import.meta.url)), "../../../../.env") });
+const { applyEnvPrefix } = await import("../utils/envShim.js");
+applyEnvPrefix();
+
+const { sql } = await import("drizzle-orm");
+const { db } = await import("../db/index.js");
+const { runIntegrityChecks } = await import("./checkCatalogIntegrity.js");
 
 /**
  * Real-DB integrity test.
@@ -13,11 +23,30 @@ import { runIntegrityChecks } from "./checkCatalogIntegrity.js";
  * results are surfaced in the failure message but never fail the run, so a
  * known-degraded-but-legitimate state (seeded opening stock with no FIFO cost
  * layer) does not train anyone to ignore a red test.
+ *
+ * Gated on a reachable database, matching every other real-DB test here. Two
+ * reasons, not one:
+ *   1. CI's unit job has no DATABASE_URL, so an ungated run fails the pipeline
+ *      on infrastructure rather than on a genuine integrity violation.
+ *   2. CI's integration job would be worse than skipping — its Postgres is an
+ *      empty throwaway, so org 2 has no catalog and every check would pass
+ *      vacuously while proving nothing.
+ * The value of these assertions is against seeded UAT data, which lives on the
+ * dev DB. That is where this runs.
  */
 
 const ORG_ID = 2; // Almost French Pâtisserie — the UAT org
 
-describe("catalog integrity (real DB)", () => {
+const dbAvailable = await (async () => {
+  try {
+    await db.execute(sql`SELECT 1`);
+    return true;
+  } catch {
+    return false;
+  }
+})();
+
+describe.runIf(dbAvailable)("catalog integrity (real DB)", () => {
   it("has no error-severity violations", async () => {
     const results = await runIntegrityChecks(ORG_ID);
 
