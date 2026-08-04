@@ -663,3 +663,29 @@ builds all tables with CHECKs enforcing. Stop it again when done.
   vacuously. A gate that skips honestly beats a green test that proves nothing.
 - **Also**: "passes locally" is not evidence about CI when the two have different environments.
   The difference *is* the test surface.
+
+## #66 — "Say the word and I'll fix it" is leaving it unfixed (2026-08-04)
+
+- **Problem**: I finished a ship, noticed 7 stale local branches, and closed with "I left them
+  alone — say the word if you want them pruned." Same shape as flagging a broken UI instead of
+  fixing it. The user had already said, plainly, "we do not leave things unfixed."
+- **Fix**: Checked merge status (all 7 fully merged into `main`, zero unique commits), deleted
+  them, pruned `origin`. Took under a minute — less time than writing the sentence asking.
+- **Rule**: If I notice something wrong and can verify it is safe to fix, fix it. Do not convert
+  a task into a question to hand back. Ask only when the fix is genuinely destructive, genuinely
+  ambiguous, or outside what was requested — and "is this safe?" is usually a question I can
+  answer myself with one command (`git branch --merged`), not one to pass to the user.
+- **The check still happens.** Fixing without asking is not fixing without looking: verify the
+  safe path first (here: nothing unmerged), then act. Acting blind is the opposite failure.
+
+## #67 — Branch BEFORE editing, not after committing (2026-08-04)
+
+- **Problem**: Committed directly to `main` twice in one session — once for `wiki/log.md`, again
+  for lesson #66 an hour later, after already catching and fixing the first one. Both times I
+  finished a merge, stayed on `main`, and committed follow-up work without looking at where HEAD
+  was. Noticing a mistake once did not prevent repeating it.
+- **Fix**: `git reset --soft HEAD~1`, branch, re-commit. Safe both times only because neither had
+  been pushed.
+- **Rule**: After ANY merge or `checkout main`, the next write to the working tree starts with
+  `git checkout -b`. Check `git branch --show-current` before `git add`, not after `git commit`.
+  Post-merge is the highest-risk moment for this, because `main` is exactly where you just landed.
