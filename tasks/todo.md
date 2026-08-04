@@ -221,8 +221,47 @@ _Nothing confirmed outstanding. New work to be defined._
 - [ ] Culinary Ratio Engine
 - [ ] Food Cost Calculator (per dish, per menu)
 - [ ] Supplier portal (external supplier access to POs)
-- [ ] Compliance / HACCP logging
-- [ ] Rostering / Staff scheduling
+- [ ] Compliance / HACCP logging — folded into Staff Compliance Vault below (venue-level docs, E3)
+- [ ] Rostering / Staff scheduling — CEO-reviewed 2026-08-04, see below
+
+---
+
+## Staff Compliance Vault + Rostering — CEO reviewed 2026-08-04, awaiting eng review
+
+Plan: `~/.claude/plans/1-problem-statement-cheerful-gosling.md` (SELECTIVE EXPANSION,
+approach C — full 3-phase spec). 18 implementation tasks, 12 decisions settled.
+Task JSONL for `/autoplan`:
+`~/.gstack/projects/robertangeles-cc-culinaire-kitchen/tasks-ceo-review-20260804-222111.jsonl`
+
+**Blocked on `/plan-eng-review`** — the required gate. The 2026-07-20 eng review predates
+this plan entirely.
+
+Three items the review deferred rather than built:
+
+- [ ] **P1 — Name an owner for `award_rule` authorship.** BLOCKS PHASE 2 SHIP.
+  MA000009 varies several times a year (1 July wage reviews, FWC variations,
+  casual-conversion and loading changes). Encoding it correctly needs industrial-relations
+  competence, not calendar diligence, and nobody on this project is currently named as able
+  to author those rows. Advisory-only status and rule versioning protect the codebase from
+  being blamed for a stale rule; they do not supply the expertise. The answer may be "engage
+  an adviser," which is an unbudgeted cost — which is exactly why it needs deciding before
+  Phase 2, not during it. Effort: S.
+
+- [ ] **P2 — Labour cost joined to menu costing (E4).** Roll roster hours × award rate per
+  shift and attribute to menu items via recorded sales, so Menu Intelligence can report
+  "food $4.20 + labour $2.80" instead of food cost % alone. This is the 10x play: the
+  platform already computes food cost per menu item, and no roster tool can compute the
+  labour half. Deferred because it makes the Award engine load-bearing for costing accuracy
+  rather than just warnings — wait until `award_rule` has run in production for one cycle.
+  Effort: L (human ~1.5w) → M with CC. Depends on: Phase 2 shipped.
+
+- [ ] **P2 — Write the mobile compliance contract into `web-needs.md`.** Decision 7 shipped
+  the module web-only, so the two most phone-native actions in it — a staff member
+  photographing a certificate, and a staff member accepting a public-holiday shift — have no
+  native path. Record the contract (document upload, own-documents view, roster view, s.114
+  consent response, push payload shapes) in `../cc-culinaire-shared-context/web-needs.md`,
+  which this repo owns, so mobile is not guessing. Effort: S.
+  Depends on: Phase 1 + 2 schema settled.
 
 ---
 
