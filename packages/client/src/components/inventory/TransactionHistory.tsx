@@ -44,17 +44,17 @@ export function TransactionHistory({ ingredientId, defaultExpanded = false }: Tr
         className="w-full cursor-pointer hover:bg-white/5 rounded-lg px-3 py-2 flex items-center justify-between transition-all"
       >
         <div className="flex items-center gap-2">
-          <History className="size-3.5 text-[#D4A574]" />
+          <History className="size-3.5 text-gold" />
           <span className="text-xs font-medium text-white">Transaction History</span>
           {transactions.length > 0 && (
-            <span className="px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-[#D4A574]/15 text-[#D4A574] tabular-nums">
+            <span className="px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-gold/15 text-gold tabular-nums">
               {transactions.length}
             </span>
           )}
         </div>
         {expanded
-          ? <ChevronDown className="size-3.5 text-[#666]" />
-          : <ChevronRight className="size-3.5 text-[#666]" />
+          ? <ChevronDown className="size-3.5 text-dark-500" />
+          : <ChevronRight className="size-3.5 text-dark-500" />
         }
       </button>
 

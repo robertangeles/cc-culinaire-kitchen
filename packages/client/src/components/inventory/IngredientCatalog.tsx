@@ -69,7 +69,7 @@ const STATUS_LABEL: Record<string, { text: string; className: string }> = {
   healthy: { text: "OK", className: "text-emerald-400" },
   low: { text: "Low", className: "text-amber-400" },
   critical: { text: "Crit", className: "text-red-400" },
-  none: { text: "—", className: "text-[#666]" },
+  none: { text: "—", className: "text-dark-500" },
 };
 
 export function IngredientCatalog() {
@@ -152,19 +152,19 @@ export function IngredientCatalog() {
       {/* Toolbar */}
       <div className="flex items-center gap-3">
         <div className="relative flex-1 max-w-xs">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-[#666]" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-dark-500" />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search items..."
-            className="w-full pl-10 pr-4 py-1.5 rounded-lg bg-[#161616] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none focus:border-[#D4A574]/50 transition-all"
+            className="w-full pl-10 pr-4 py-1.5 rounded-lg bg-dark-50 border border-dark-200 text-sm text-white placeholder-dark-500 focus:outline-none focus:border-gold/50 transition-all"
           />
         </div>
         <select
           value={typeFilter}
           onChange={(e) => handleTypeFilterChange(e.target.value)}
-          className="px-3 py-1.5 rounded-lg bg-[#161616] border border-[#2A2A2A] text-sm text-white appearance-none cursor-pointer focus:outline-none"
+          className="px-3 py-1.5 rounded-lg bg-dark-50 border border-dark-200 text-sm text-white appearance-none cursor-pointer focus:outline-none"
         >
           <option value="all">All Types</option>
           <option value="KITCHEN_INGREDIENT">Kitchen</option>
@@ -174,7 +174,7 @@ export function IngredientCatalog() {
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className="px-3 py-1.5 rounded-lg bg-[#161616] border border-[#2A2A2A] text-sm text-white appearance-none cursor-pointer focus:outline-none"
+          className="px-3 py-1.5 rounded-lg bg-dark-50 border border-dark-200 text-sm text-white appearance-none cursor-pointer focus:outline-none"
         >
           <option value="">All Status</option>
           <option value="low">Low</option>
@@ -183,14 +183,14 @@ export function IngredientCatalog() {
         <select
           value={allergenFilter || ""}
           onChange={(e) => setAllergenFilter((e.target.value || null) as AllergenKey | null)}
-          className="px-3 py-1.5 rounded-lg bg-[#161616] border border-[#2A2A2A] text-sm text-white appearance-none cursor-pointer focus:outline-none"
+          className="px-3 py-1.5 rounded-lg bg-dark-50 border border-dark-200 text-sm text-white appearance-none cursor-pointer focus:outline-none"
         >
           <option value="">Allergens</option>
           {ALLERGEN_DEFS.map((a) => <option key={a.key} value={a.key}>{a.label}</option>)}
         </select>
         <button
           onClick={() => { setShowAdd(true); setError(null); }}
-          className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-gradient-to-r from-[#D4A574] to-[#C4956A] text-[#0A0A0A] text-sm font-semibold hover:shadow-[0_0_12px_rgba(212,165,116,0.2)] transition-all active:scale-[0.98]"
+          className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-gradient-to-r from-gold to-gold-hover text-dark text-sm font-semibold hover:shadow-[0_0_12px_rgba(212,165,116,0.2)] transition-all active:scale-[0.98]"
         >
           <Plus className="size-4" />
           Add
@@ -249,15 +249,15 @@ export function IngredientCatalog() {
 
       {isLoading && (
         <div className="flex items-center justify-center py-16">
-          <Loader2 className="size-6 text-[#D4A574] animate-spin" />
+          <Loader2 className="size-6 text-gold animate-spin" />
         </div>
       )}
 
       {/* Two-column layout: sidebar + table */}
       {!isLoading && (
-        <div className="flex rounded-xl border border-[#1E1E1E] overflow-hidden max-h-[calc(100vh-280px)]">
+        <div className="flex rounded-xl border border-dark-100 overflow-hidden max-h-[calc(100vh-280px)]">
           {/* Category sidebar */}
-          <div className="flex-shrink-0 w-52 bg-[#0A0A0A] border-r border-[#1E1E1E] overflow-y-auto">
+          <div className="flex-shrink-0 w-52 bg-dark border-r border-dark-100 overflow-y-auto">
             {availableCategories.map((cat) => {
               const counts = categoryCounts[cat.key];
               const total = counts?.total || 0;
@@ -271,15 +271,15 @@ export function IngredientCatalog() {
                   onClick={() => setSelectedCategory(cat.key)}
                   className={`w-full flex items-center justify-between px-3 py-2 text-left text-sm transition-colors ${
                     isActive
-                      ? "bg-[#1E1E1E] text-white border-l-2 border-[#D4A574]"
-                      : "text-[#888] hover:text-white hover:bg-[#161616] border-l-2 border-transparent"
+                      ? "bg-dark-100 text-white border-l-2 border-gold"
+                      : "text-[#888] hover:text-white hover:bg-dark-50 border-l-2 border-transparent"
                   }`}
                 >
                   <span className="truncate">{cat.label}</span>
                   <span className="flex items-center gap-1.5 shrink-0 ml-2">
                     {hasCritical && <span className="size-1.5 rounded-full bg-red-400" />}
                     {!hasCritical && hasLow && <span className="size-1.5 rounded-full bg-amber-400" />}
-                    <span className={`text-xs tabular-nums ${isActive ? "text-[#999]" : "text-[#555]"}`}>
+                    <span className={`text-xs tabular-nums ${isActive ? "text-dark-600" : "text-[#555]"}`}>
                       {total}
                     </span>
                   </span>
@@ -291,7 +291,7 @@ export function IngredientCatalog() {
           {/* Item table */}
           <div className="flex-1 min-w-0 bg-[#111] overflow-y-auto">
             {/* Table header */}
-            <div className="sticky top-0 z-10 grid grid-cols-12 gap-1 px-4 py-1.5 text-[10px] text-[#666] uppercase tracking-wider border-b border-[#1E1E1E] bg-[#111]">
+            <div className="sticky top-0 z-10 grid grid-cols-12 gap-1 px-4 py-1.5 text-[10px] text-dark-500 uppercase tracking-wider border-b border-dark-100 bg-[#111]">
               <div className="col-span-4">Name</div>
               <div className="col-span-1">UOM</div>
               <div className="col-span-2 text-right">Cost</div>
@@ -302,11 +302,11 @@ export function IngredientCatalog() {
 
             {filtered.length === 0 && (
               <div className="text-center py-12">
-                <Utensils className="size-8 mx-auto text-[#D4A574] mb-3" />
+                <Utensils className="size-8 mx-auto text-gold mb-3" />
                 <p className="text-sm text-white font-medium mb-1">
                   {search ? "No matching items" : "No items in this category"}
                 </p>
-                <p className="text-xs text-[#999]">
+                <p className="text-xs text-dark-600">
                   {search ? "Try a different search." : "Add your first item."}
                 </p>
               </div>
@@ -332,8 +332,8 @@ export function IngredientCatalog() {
                   className="w-full grid grid-cols-12 gap-1 px-4 py-1.5 text-sm hover:bg-[#1A1A1A] cursor-pointer transition-colors text-left items-center"
                 >
                   <div className="col-span-4 text-white truncate">{ing.ingredientName}</div>
-                  <div className="col-span-1 text-[#666]">{ing.baseUnit}</div>
-                  <div className="col-span-2 text-right text-[#999] font-mono tabular-nums">
+                  <div className="col-span-1 text-dark-500">{ing.baseUnit}</div>
+                  <div className="col-span-2 text-right text-dark-600 font-mono tabular-nums">
                     {cost
                       ? `$${(ing.packQty ? (Number(cost) * Number(ing.packQty)).toFixed(2) : Number(cost).toFixed(2))}`
                       : "—"}
@@ -341,7 +341,7 @@ export function IngredientCatalog() {
                   <div className={`col-span-2 text-right font-mono tabular-nums ${isLowStock ? "text-amber-400" : "text-white"}`}>
                     {qty !== null ? fmtStock(qty) : "—"}
                   </div>
-                  <div className="col-span-1 text-right text-[#666] font-mono tabular-nums">
+                  <div className="col-span-1 text-right text-dark-500 font-mono tabular-nums">
                     {par !== null ? fmtStock(par) : "—"}
                   </div>
                   <div className={`col-span-2 text-right text-xs font-medium ${sl.className}`}>
@@ -354,7 +354,7 @@ export function IngredientCatalog() {
         </div>
       )}
 
-      <p className="text-xs text-[#666] text-center">{filtered.length} items</p>
+      <p className="text-xs text-dark-500 text-center">{filtered.length} items</p>
 
       {/* Edit modal */}
       {editIngredient && (
@@ -495,13 +495,13 @@ function EditIngredientModal({
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-[fadeIn_150ms_ease-out]"
     >
       <div
-        className="w-full max-w-4xl max-h-[90vh] overflow-hidden flex rounded-2xl bg-[#161616] border border-[#2A2A2A] shadow-2xl animate-[scaleIn_200ms_ease-out]"
+        className="w-full max-w-4xl max-h-[90vh] overflow-hidden flex rounded-2xl bg-dark-50 border border-dark-200 shadow-2xl animate-[scaleIn_200ms_ease-out]"
       >
         {/* Left panel — edit form */}
         <div className="flex-1 min-w-0 overflow-y-auto p-6">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-base font-semibold text-white">Edit Ingredient</h3>
-          <button onClick={onClose} className="p-1 rounded-lg hover:bg-[#2A2A2A] text-[#999] hover:text-white transition-all">
+          <button onClick={onClose} className="p-1 rounded-lg hover:bg-dark-200 text-dark-600 hover:text-white transition-all">
             <X className="size-4" />
           </button>
         </div>
@@ -510,15 +510,15 @@ function EditIngredientModal({
           <input
             type="text" value={name} onChange={(e) => setName(e.target.value)}
             placeholder="Item name" autoFocus
-            className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white focus:outline-none focus:border-[#D4A574]/50"
+            className="w-full px-3 py-2 rounded-lg bg-dark border border-dark-200 text-sm text-white focus:outline-none focus:border-gold/50"
           />
           <textarea value={desc} onChange={(e) => setDesc(e.target.value)}
             placeholder="Description" rows={2}
-            className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none resize-none" />
+            className="w-full px-3 py-2 rounded-lg bg-dark border border-dark-200 text-sm text-white placeholder-dark-500 focus:outline-none resize-none" />
 
           {/* Item type selector */}
           <div>
-            <p className="text-[10px] text-[#666] uppercase tracking-wider mb-1.5">Item Type</p>
+            <p className="text-[10px] text-dark-500 uppercase tracking-wider mb-1.5">Item Type</p>
             <div className="flex gap-2">
               {ITEM_TYPE_KEYS.map((tk) => {
                 const its = ITEM_TYPES[tk];
@@ -535,7 +535,7 @@ function EditIngredientModal({
                     className={`flex-1 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
                       editItemType === tk
                         ? `${its.bgClass} ${its.textClass} ${its.borderClass}`
-                        : "bg-[#0A0A0A] text-[#666] border-[#2A2A2A] hover:border-[#3A3A3A]"
+                        : "bg-dark text-dark-500 border-dark-200 hover:border-dark-300"
                     }`}
                   >
                     {its.label}
@@ -547,12 +547,12 @@ function EditIngredientModal({
 
           {/* Allergen toggles */}
           <div>
-            <p className="text-[10px] text-[#666] uppercase tracking-wider mb-1.5">Allergens</p>
+            <p className="text-[10px] text-dark-500 uppercase tracking-wider mb-1.5">Allergens</p>
             <div className="flex flex-wrap gap-1.5">
               {ALLERGEN_DEFS.map((a) => (
                 <button key={a.key} type="button" onClick={() => toggleAllergen(a.key)}
                   className={`px-2 py-0.5 rounded-full text-[10px] font-medium border transition-all ${
-                    allergens.has(a.key) ? a.color : "bg-[#0A0A0A] text-[#666] border-[#2A2A2A]"
+                    allergens.has(a.key) ? a.color : "bg-dark text-dark-500 border-dark-200"
                   }`}>
                   {a.label}
                 </button>
@@ -562,9 +562,9 @@ function EditIngredientModal({
 
           {/* FIFO mode */}
           <div>
-            <p className="text-[10px] text-[#666] uppercase tracking-wider mb-1.5">FIFO Mode</p>
+            <p className="text-[10px] text-dark-500 uppercase tracking-wider mb-1.5">FIFO Mode</p>
             <select value={editFifo} onChange={(e) => setEditFifo(e.target.value as FifoModeKey)}
-              className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white focus:outline-none">
+              className="w-full px-3 py-2 rounded-lg bg-dark border border-dark-200 text-sm text-white focus:outline-none">
               {(Object.keys(FIFO_MODES) as FifoModeKey[]).map((fk) => (
                 <option key={fk} value={fk}>{FIFO_MODES[fk].label} — {FIFO_MODES[fk].description}</option>
               ))}
@@ -573,19 +573,19 @@ function EditIngredientModal({
 
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="block text-[10px] uppercase tracking-wider text-[#666] mb-1">Category</label>
+              <label className="block text-[10px] uppercase tracking-wider text-dark-500 mb-1">Category</label>
               <select value={cat} onChange={(e) => setCat(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white focus:outline-none">
+                className="w-full px-3 py-2 rounded-lg bg-dark border border-dark-200 text-sm text-white focus:outline-none">
                 {editModalCategories.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
               </select>
             </div>
             <div>
-              <label className="block text-[10px] uppercase tracking-wider text-[#666] mb-1">Counted in</label>
+              <label className="block text-[10px] uppercase tracking-wider text-dark-500 mb-1">Counted in</label>
               <select value={unit} onChange={(e) => setUnit(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white focus:outline-none">
+                className="w-full px-3 py-2 rounded-lg bg-dark border border-dark-200 text-sm text-white focus:outline-none">
                 {UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
               </select>
-              <p className="text-[10px] text-[#666] mt-1">How you count it at stocktake — bottles, kg, each. All stock numbers use this.</p>
+              <p className="text-[10px] text-dark-500 mt-1">How you count it at stocktake — bottles, kg, each. All stock numbers use this.</p>
             </div>
           </div>
 
@@ -594,21 +594,21 @@ function EditIngredientModal({
               units (kg/mL): those are already measurements. */}
           {!MEASURED_UNITS.includes(unit) && (
             <div>
-              <label className="block text-[10px] uppercase tracking-wider text-[#666] mb-1">
+              <label className="block text-[10px] uppercase tracking-wider text-dark-500 mb-1">
                 {["each", "dozen", "portion"].includes(unit) ? "Unit size" : `${unit} size`}
               </label>
               <div className="flex items-center gap-2">
-                <span className="text-xs text-[#999]">1 {unit} =</span>
+                <span className="text-xs text-dark-600">1 {unit} =</span>
                 <input type="text" value={contentQty} onChange={(e) => setContentQty(e.target.value)}
                   placeholder="750"
-                  className="w-24 px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none" />
+                  className="w-24 px-3 py-2 rounded-lg bg-dark border border-dark-200 text-sm text-white placeholder-dark-500 focus:outline-none" />
                 <select value={contentUnit} onChange={(e) => setContentUnit(e.target.value)}
-                  className="px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white focus:outline-none">
+                  className="px-3 py-2 rounded-lg bg-dark border border-dark-200 text-sm text-white focus:outline-none">
                   <option value="">unit…</option>
                   {MEASURED_UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
                 </select>
               </div>
-              <p className="text-[10px] text-[#666] mt-1">
+              <p className="text-[10px] text-dark-500 mt-1">
                 e.g. a 750 mL bottle — recipes can then pour by the mL and a 150 mL glass uses 0.2 {unit}s.
                 Leave empty if recipes only ever use whole {unit}s.
               </p>
@@ -621,19 +621,19 @@ function EditIngredientModal({
           {(["ml", "l", "mg", "g", "kg"].includes(unit.toLowerCase()) ||
             ["ml", "l"].includes(contentUnit.toLowerCase())) && (
             <div>
-              <label className="block text-[10px] uppercase tracking-wider text-[#666] mb-1">Density (g per mL)</label>
+              <label className="block text-[10px] uppercase tracking-wider text-dark-500 mb-1">Density (g per mL)</label>
               <div className="flex items-center gap-2">
                 <input type="text" value={density} onChange={(e) => setDensity(e.target.value)}
                   placeholder="e.g. 1.03"
-                  className="w-24 px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none" />
+                  className="w-24 px-3 py-2 rounded-lg bg-dark border border-dark-200 text-sm text-white placeholder-dark-500 focus:outline-none" />
                 {!density && suggestDensity(name) && (
                   <button type="button" onClick={() => setDensity(String(suggestDensity(name)))}
-                    className="text-[10px] text-[#D4A574] hover:underline">
+                    className="text-[10px] text-gold hover:underline">
                     use {suggestDensity(name)}
                   </button>
                 )}
               </div>
-              <p className="text-[10px] text-[#666] mt-1">
+              <p className="text-[10px] text-dark-500 mt-1">
                 Lets recipes weigh this liquid (95 g milk → 0.092 L) or measure a weighed item by
                 volume. Milk 1.03 · cream 1.01 · oil 0.92 · honey 1.42. Leave empty to keep strict
                 unit families.
@@ -643,15 +643,15 @@ function EditIngredientModal({
 
 
           {/* Purchase packaging — exists ONLY at ordering + receiving */}
-          <div className="rounded-xl border border-[#2A2A2A] bg-[#111]/70 p-3">
-            <label className="block text-[10px] uppercase tracking-wider text-[#D4A574]/70 mb-1">Purchased as</label>
-            <p className="text-[10px] text-[#666] mb-1.5">
+          <div className="rounded-xl border border-dark-200 bg-[#111]/70 p-3">
+            <label className="block text-[10px] uppercase tracking-wider text-gold/70 mb-1">Purchased as</label>
+            <p className="text-[10px] text-dark-500 mb-1.5">
               How the supplier delivers it — a case of 12, a 25 kg bag, or loose by the {unit}.
               Deliveries convert to {unit} the moment they're received.
             </p>
             <div className="flex items-center gap-2 flex-wrap">
               <select value={purchaseUnit} onChange={(e) => { setPackagingTouched(true); setPurchaseUnit(e.target.value); }}
-                className="px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white focus:outline-none">
+                className="px-3 py-2 rounded-lg bg-dark border border-dark-200 text-sm text-white focus:outline-none">
                 <option value="">— by the {unit} —</option>
                 {UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
               </select>
@@ -659,52 +659,52 @@ function EditIngredientModal({
                   of 12 bottles). Buying loose by the kitchen unit hides it. */}
               {purchaseUnit && (
                 <>
-                  <span className="text-xs text-[#999]">of</span>
+                  <span className="text-xs text-dark-600">of</span>
                   <input type="text" value={editPackQty} onChange={(e) => { setPackagingTouched(true); setEditPackQty(e.target.value); }}
                     placeholder="12"
-                    className="w-20 px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none" />
-                  <span className="text-xs text-[#999]">{unit}</span>
+                    className="w-20 px-3 py-2 rounded-lg bg-dark border border-dark-200 text-sm text-white placeholder-dark-500 focus:outline-none" />
+                  <span className="text-xs text-dark-600">{unit}</span>
                 </>
               )}
-              <span className="text-xs text-[#999]">@</span>
+              <span className="text-xs text-dark-600">@</span>
               <div className="relative">
-                <DollarSign className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-[#666]" />
+                <DollarSign className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-dark-500" />
                 <input type="text" value={cost} onChange={(e) => { setPackagingTouched(true); setCost(e.target.value); }}
                   placeholder="0.00"
-                  className="w-28 pl-8 pr-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none" />
+                  className="w-28 pl-8 pr-3 py-2 rounded-lg bg-dark border border-dark-200 text-sm text-white placeholder-dark-500 focus:outline-none" />
               </div>
-              <span className="text-[10px] text-[#666]">{purchaseUnit ? `per ${purchaseUnit}` : `per ${unit}`}</span>
+              <span className="text-[10px] text-dark-500">{purchaseUnit ? `per ${purchaseUnit}` : `per ${unit}`}</span>
             </div>
             {purchaseUnit && editPackQty && derivedUnitCost && (
-              <p className="text-[10px] text-[#D4A574] mt-1">= ${derivedUnitCost} per {unit}</p>
+              <p className="text-[10px] text-gold mt-1">= ${derivedUnitCost} per {unit}</p>
             )}
 
             {/* Par is the ordering lever: order back up to this level (order-to-par). */}
-            <div className="mt-3 pt-3 border-t border-[#2A2A2A]/60">
-              <label className="block text-[10px] uppercase tracking-wider text-[#666] mb-1">Par Level (target stock)</label>
+            <div className="mt-3 pt-3 border-t border-dark-200/60">
+              <label className="block text-[10px] uppercase tracking-wider text-dark-500 mb-1">Par Level (target stock)</label>
               <div className="flex items-center gap-1.5">
                 <input type="text" value={par} onChange={(e) => setPar(e.target.value)}
                   placeholder="0"
-                  className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none" />
+                  className="w-full px-3 py-2 rounded-lg bg-dark border border-dark-200 text-sm text-white placeholder-dark-500 focus:outline-none" />
                 {canEnterInPacks ? (
                   <select value={parEntryUnit} onChange={(e) => setParEntryUnit(e.target.value as "base" | "pack")}
-                    className="px-2 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-xs text-white focus:outline-none">
+                    className="px-2 py-2 rounded-lg bg-dark border border-dark-200 text-xs text-white focus:outline-none">
                     <option value="base">{unit}</option>
                     <option value="pack">{purchaseUnit}</option>
                   </select>
                 ) : (
-                  <span className="text-xs text-[#666]">{unit}</span>
+                  <span className="text-xs text-dark-500">{unit}</span>
                 )}
               </div>
-              {parEcho && <p className="text-[10px] text-[#D4A574] mt-1">{parEcho}</p>}
-              <p className="text-[10px] text-[#666] mt-1">Orders top up to this level, rounded to whole packs.</p>
+              {parEcho && <p className="text-[10px] text-gold mt-1">{parEcho}</p>}
+              <p className="text-[10px] text-dark-500 mt-1">Orders top up to this level, rounded to whole packs.</p>
             </div>
           </div>
           {/* Suppliers */}
-          <div className="rounded-xl border border-[#2A2A2A] bg-[#111]/70 p-3">
-            <p className="text-[10px] text-[#D4A574]/70 uppercase tracking-wider mb-1.5">Suppliers</p>
+          <div className="rounded-xl border border-dark-200 bg-[#111]/70 p-3">
+            <p className="text-[10px] text-gold/70 uppercase tracking-wider mb-1.5">Suppliers</p>
             {ingSuppliers.length > 0 ? (
-              <div className="rounded-lg border border-[#2A2A2A] divide-y divide-[#2A2A2A]/30">
+              <div className="rounded-lg border border-dark-200 divide-y divide-dark-200/30">
                 {ingSuppliers.map((s) => (
                   <div key={s.supplierId} className="flex items-center justify-between px-3 py-2 text-xs">
                     <div className="flex items-center gap-2 min-w-0">
@@ -713,11 +713,11 @@ function EditIngredientModal({
                         title={s.preferredInd ? "Preferred supplier" : "Set as preferred"}
                         className="shrink-0"
                       >
-                        <Star className={`size-3.5 ${s.preferredInd ? "text-[#D4A574] fill-[#D4A574]" : "text-[#666]"}`} />
+                        <Star className={`size-3.5 ${s.preferredInd ? "text-gold fill-gold" : "text-dark-500"}`} />
                       </button>
                       <span className="text-white truncate">{s.supplierName}</span>
                       {s.supplierItemCode && (
-                        <span className="text-[#666] shrink-0">SKU: {s.supplierItemCode}</span>
+                        <span className="text-dark-500 shrink-0">SKU: {s.supplierItemCode}</span>
                       )}
                     </div>
                     <div className="flex items-center gap-2 shrink-0 ml-2">
@@ -752,7 +752,7 @@ function EditIngredientModal({
                           whether "3" meant 3 bags, 3 kg, or 3 days' lead time.
                           It is counted in PURCHASE packs — ordering rounds the
                           shortfall to whole packs, then applies this floor. */}
-                      <span className="flex items-center gap-1 text-[10px] text-[#666]">
+                      <span className="flex items-center gap-1 text-[10px] text-dark-500">
                         min
                         <input
                           key={`moq-${s.supplierId}-${s.minimumOrderQty ?? ""}`}
@@ -765,13 +765,13 @@ function EditIngredientModal({
                           }}
                           placeholder="—"
                           title={`Minimum order quantity, in ${purchaseUnit || unit}s. Ordering warns below this but never blocks.`}
-                          className="w-12 px-1.5 py-1 rounded bg-[#0A0A0A] border border-[#2A2A2A] text-[11px] text-white placeholder-[#555] text-right tabular-nums focus:outline-none focus:border-[#D4A574]/40"
+                          className="w-12 px-1.5 py-1 rounded bg-dark border border-dark-200 text-[11px] text-white placeholder-[#555] text-right tabular-nums focus:outline-none focus:border-gold/40"
                         />
                         {purchaseUnit || unit}
                       </span>
                       <button
                         onClick={() => removeLink(s.supplierId)}
-                        className="p-0.5 rounded hover:bg-red-500/10 text-[#666] hover:text-red-400 transition-colors"
+                        className="p-0.5 rounded hover:bg-red-500/10 text-dark-500 hover:text-red-400 transition-colors"
                       >
                         <Trash2 className="size-3" />
                       </button>
@@ -780,14 +780,14 @@ function EditIngredientModal({
                 ))}
               </div>
             ) : (
-              <p className="text-xs text-[#666]">No suppliers assigned</p>
+              <p className="text-xs text-dark-500">No suppliers assigned</p>
             )}
 
             {/* Add supplier inline */}
             {!showAddSupplier ? (
               <button
                 onClick={() => setShowAddSupplier(true)}
-                className="mt-2 flex items-center gap-1 text-xs text-[#D4A574] hover:text-white transition-colors"
+                className="mt-2 flex items-center gap-1 text-xs text-gold hover:text-white transition-colors"
               >
                 <Plus className="size-3" /> Add Supplier
               </button>
@@ -796,7 +796,7 @@ function EditIngredientModal({
                 <select
                   value={newSupId}
                   onChange={(e) => setNewSupId(e.target.value)}
-                  className="flex-1 min-w-[120px] px-2 py-1.5 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-xs text-white focus:outline-none"
+                  className="flex-1 min-w-[120px] px-2 py-1.5 rounded-lg bg-dark border border-dark-200 text-xs text-white focus:outline-none"
                 >
                   <option value="">Select supplier...</option>
                   {allSuppliers
@@ -807,18 +807,18 @@ function EditIngredientModal({
                 <input
                   type="text" value={newSupCost} onChange={(e) => setNewSupCost(e.target.value)}
                   placeholder="Cost"
-                  className="w-20 px-2 py-1.5 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-xs text-white placeholder-[#666] focus:outline-none"
+                  className="w-20 px-2 py-1.5 rounded-lg bg-dark border border-dark-200 text-xs text-white placeholder-dark-500 focus:outline-none"
                 />
                 <input
                   type="text" value={newSupSku} onChange={(e) => setNewSupSku(e.target.value)}
                   placeholder="SKU"
-                  className="w-20 px-2 py-1.5 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-xs text-white placeholder-[#666] focus:outline-none"
+                  className="w-20 px-2 py-1.5 rounded-lg bg-dark border border-dark-200 text-xs text-white placeholder-dark-500 focus:outline-none"
                 />
                 <input
                   type="text" value={newSupMoq} onChange={(e) => setNewSupMoq(e.target.value)}
                   placeholder="Min order"
                   title="Supplier's minimum order quantity, in the unit you order this in"
-                  className="w-20 px-2 py-1.5 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-xs text-white placeholder-[#666] focus:outline-none"
+                  className="w-20 px-2 py-1.5 rounded-lg bg-dark border border-dark-200 text-xs text-white placeholder-dark-500 focus:outline-none"
                 />
                 <button
                   onClick={async () => {
@@ -834,13 +834,13 @@ function EditIngredientModal({
                     setShowAddSupplier(false);
                   }}
                   disabled={!newSupId}
-                  className="px-2 py-1.5 rounded-lg bg-[#D4A574]/20 text-[#D4A574] text-xs font-medium disabled:opacity-50 hover:bg-[#D4A574]/30 transition-colors"
+                  className="px-2 py-1.5 rounded-lg bg-gold/20 text-gold text-xs font-medium disabled:opacity-50 hover:bg-gold/30 transition-colors"
                 >
                   Add
                 </button>
                 <button
                   onClick={() => { setShowAddSupplier(false); setNewSupId(""); setNewSupCost(""); setNewSupSku(""); setNewSupMoq(""); }}
-                  className="px-2 py-1.5 text-xs text-[#666] hover:text-white transition-colors"
+                  className="px-2 py-1.5 text-xs text-dark-500 hover:text-white transition-colors"
                 >
                   Cancel
                 </button>
@@ -850,9 +850,9 @@ function EditIngredientModal({
 
           {/* Cross-location stock (read-only) */}
           {levels.length > 0 && (
-            <div className="rounded-xl border border-[#2A2A2A] bg-[#111]/70 p-3">
-              <p className="text-[10px] text-[#D4A574]/70 uppercase tracking-wider mb-1.5">Stock Across Locations</p>
-              <div className="rounded-lg border border-[#2A2A2A] divide-y divide-[#2A2A2A]/30">
+            <div className="rounded-xl border border-dark-200 bg-[#111]/70 p-3">
+              <p className="text-[10px] text-gold/70 uppercase tracking-wider mb-1.5">Stock Across Locations</p>
+              <div className="rounded-lg border border-dark-200 divide-y divide-dark-200/30">
                 {levels.map((l) => {
                   const qty = Number(l.currentQty || 0);
                   const hasStock = l.currentQty != null;
@@ -861,12 +861,12 @@ function EditIngredientModal({
                   return (
                     <div key={l.storeLocationId} className="flex items-center justify-between px-3 py-1.5 text-xs">
                       <span className="text-white">{l.locationName}</span>
-                      <span className={`tabular-nums ${isLow ? "text-red-400" : hasStock ? "text-[#E5E5E5]" : "text-[#666]"}`}>
+                      <span className={`tabular-nums ${isLow ? "text-red-400" : hasStock ? "text-[#E5E5E5]" : "text-dark-500"}`}>
                         {hasStock
                           ? `${qty % 1 === 0 ? qty.toString() : qty.toFixed(1)} ${unit}`
                           : "Not counted yet"}
                         {hasStock && parQty != null && (
-                          <span className="text-[#666] ml-1.5">(par: {parQty % 1 === 0 ? parQty.toString() : parQty.toFixed(1)})</span>
+                          <span className="text-dark-500 ml-1.5">(par: {parQty % 1 === 0 ? parQty.toString() : parQty.toFixed(1)})</span>
                         )}
                       </span>
                     </div>
@@ -884,10 +884,10 @@ function EditIngredientModal({
             <p className="text-red-400 font-medium mb-1">
               Cannot delete — used by {usageList.length} menu item{usageList.length > 1 ? "s" : ""}:
             </p>
-            <ul className="text-[#999] ml-3 list-disc">
+            <ul className="text-dark-600 ml-3 list-disc">
               {usageList.map((u) => <li key={u.menuItemId}>{u.menuItemName}</li>)}
             </ul>
-            <button onClick={() => setDeleteConfirm("idle")} className="mt-2 text-[#666] underline text-[10px]">Dismiss</button>
+            <button onClick={() => setDeleteConfirm("idle")} className="mt-2 text-dark-500 underline text-[10px]">Dismiss</button>
           </div>
         )}
         {deleteConfirm === "confirm" && (
@@ -899,12 +899,12 @@ function EditIngredientModal({
             >
               Yes, delete
             </button>
-            <button onClick={() => setDeleteConfirm("idle")} className="text-xs text-[#666]">Cancel</button>
+            <button onClick={() => setDeleteConfirm("idle")} className="text-xs text-dark-500">Cancel</button>
           </div>
         )}
 
         {/* Actions */}
-        <div className="flex justify-between mt-5 pt-4 border-t border-[#2A2A2A]">
+        <div className="flex justify-between mt-5 pt-4 border-t border-dark-200">
           <button
             type="button"
             onClick={async () => {
@@ -925,7 +925,7 @@ function EditIngredientModal({
           </button>
           <div className="flex gap-2">
           <button onClick={onClose}
-            className="px-4 py-2 rounded-xl text-sm text-[#999] hover:text-white transition-colors">
+            className="px-4 py-2 rounded-xl text-sm text-dark-600 hover:text-white transition-colors">
             Cancel
           </button>
           <button
@@ -961,7 +961,7 @@ function EditIngredientModal({
               }
             }}
             disabled={!name.trim() || saving}
-            className="flex items-center gap-1.5 px-5 py-2 rounded-xl bg-gradient-to-r from-[#D4A574] to-[#C4956A] text-[#0A0A0A] text-sm font-semibold disabled:opacity-50 active:scale-[0.98] transition-all"
+            className="flex items-center gap-1.5 px-5 py-2 rounded-xl bg-gradient-to-r from-gold to-gold-hover text-dark text-sm font-semibold disabled:opacity-50 active:scale-[0.98] transition-all"
           >
             {saving ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
             Save
@@ -971,7 +971,7 @@ function EditIngredientModal({
       </div>
 
         {/* Right panel — transaction history */}
-        <div className="w-80 flex-shrink-0 border-l border-[#2A2A2A] overflow-y-auto"
+        <div className="w-80 flex-shrink-0 border-l border-dark-200 overflow-y-auto"
           style={{ background: "linear-gradient(180deg, rgba(20,23,28,0.99), rgba(14,16,20,0.99))" }}
         >
           <TransactionHistory ingredientId={ingredient.ingredientId} defaultExpanded />
@@ -1021,16 +1021,16 @@ function AddIngredientForm({
   };
 
   return (
-    <div className="p-5 rounded-xl bg-[#161616] border border-[#D4A574]/20 animate-[scaleIn_200ms_ease-out]">
+    <div className="p-5 rounded-xl bg-dark-50 border border-gold/20 animate-[scaleIn_200ms_ease-out]">
       <h4 className="text-sm font-semibold text-white mb-3">New Ingredient</h4>
       <div className="space-y-3">
         <input type="text" value={name} onChange={(e) => setName(e.target.value)}
           placeholder="Item name" autoFocus
-          className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none focus:border-[#D4A574]/50" />
+          className="w-full px-3 py-2 rounded-lg bg-dark border border-dark-200 text-sm text-white placeholder-dark-500 focus:outline-none focus:border-gold/50" />
 
         {/* Item type selector */}
         <div>
-          <p className="text-[10px] text-[#666] uppercase tracking-wider mb-1.5">Item Type</p>
+          <p className="text-[10px] text-dark-500 uppercase tracking-wider mb-1.5">Item Type</p>
           <div className="flex gap-2">
             {ITEM_TYPE_KEYS.map((tk) => {
               const its = ITEM_TYPES[tk];
@@ -1047,7 +1047,7 @@ function AddIngredientForm({
                   className={`flex-1 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
                     itemType === tk
                       ? `${its.bgClass} ${its.textClass} ${its.borderClass}`
-                      : "bg-[#0A0A0A] text-[#666] border-[#2A2A2A] hover:border-[#3A3A3A]"
+                      : "bg-dark text-dark-500 border-dark-200 hover:border-dark-300"
                   }`}
                 >
                   {its.label}
@@ -1059,9 +1059,9 @@ function AddIngredientForm({
 
         {/* FIFO mode */}
         <div>
-          <p className="text-[10px] text-[#666] uppercase tracking-wider mb-1.5">FIFO Mode</p>
+          <p className="text-[10px] text-dark-500 uppercase tracking-wider mb-1.5">FIFO Mode</p>
           <select value={fifo} onChange={(e) => setFifo(e.target.value as FifoModeKey)}
-            className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white focus:outline-none">
+            className="w-full px-3 py-2 rounded-lg bg-dark border border-dark-200 text-sm text-white focus:outline-none">
             {(Object.keys(FIFO_MODES) as FifoModeKey[]).map((fk) => (
               <option key={fk} value={fk}>{FIFO_MODES[fk].label} — {FIFO_MODES[fk].description}</option>
             ))}
@@ -1070,40 +1070,40 @@ function AddIngredientForm({
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           <select value={category} onChange={(e) => setCategory(e.target.value)}
-            className="px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white focus:outline-none">
+            className="px-3 py-2 rounded-lg bg-dark border border-dark-200 text-sm text-white focus:outline-none">
             {addFormCategories.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
           </select>
           <input type="text" value={packQty} onChange={(e) => setPackQty(e.target.value)}
             placeholder="Quantity"
-            className="px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none" />
+            className="px-3 py-2 rounded-lg bg-dark border border-dark-200 text-sm text-white placeholder-dark-500 focus:outline-none" />
           <select value={unit} onChange={(e) => setUnit(e.target.value)}
-            className="px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white focus:outline-none">
+            className="px-3 py-2 rounded-lg bg-dark border border-dark-200 text-sm text-white focus:outline-none">
             {UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
           </select>
           <div className="relative">
-            <DollarSign className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-[#666]" />
+            <DollarSign className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-dark-500" />
             <input type="text" value={cost} onChange={(e) => setCost(e.target.value)}
               placeholder={packQty ? "Cost" : "Cost/unit"}
-              className="w-full pl-8 pr-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none" />
+              className="w-full pl-8 pr-3 py-2 rounded-lg bg-dark border border-dark-200 text-sm text-white placeholder-dark-500 focus:outline-none" />
           </div>
         </div>
         {autoUnitCost && (
-          <p className="text-[10px] text-[#D4A574]">
+          <p className="text-[10px] text-gold">
             = ${autoUnitCost} per {unit}
           </p>
         )}
         <input type="text" value={par} onChange={(e) => setPar(e.target.value)}
           placeholder="Par level (target stock)"
-          className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none" />
+          className="w-full px-3 py-2 rounded-lg bg-dark border border-dark-200 text-sm text-white placeholder-dark-500 focus:outline-none" />
         <textarea value={description} onChange={(e) => setDescription(e.target.value)}
           placeholder="Description (optional)" rows={2}
-          className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none resize-none" />
+          className="w-full px-3 py-2 rounded-lg bg-dark border border-dark-200 text-sm text-white placeholder-dark-500 focus:outline-none resize-none" />
 
         {suppliers.length > 0 && (
           <div>
-            <p className="text-[10px] text-[#666] uppercase tracking-wider mb-1.5">Supplier (optional)</p>
+            <p className="text-[10px] text-dark-500 uppercase tracking-wider mb-1.5">Supplier (optional)</p>
             <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white focus:outline-none">
+              className="w-full px-3 py-2 rounded-lg bg-dark border border-dark-200 text-sm text-white focus:outline-none">
               <option value="">No supplier</option>
               {suppliers.filter((s) => s.activeInd).map((s) => (
                 <option key={s.supplierId} value={s.supplierId}>{s.supplierName}</option>
@@ -1113,12 +1113,12 @@ function AddIngredientForm({
         )}
 
         <div>
-          <p className="text-[10px] text-[#666] uppercase tracking-wider mb-1.5">Allergens</p>
+          <p className="text-[10px] text-dark-500 uppercase tracking-wider mb-1.5">Allergens</p>
           <div className="flex flex-wrap gap-1.5">
             {ALLERGEN_DEFS.map((a) => (
               <button key={a.key} type="button" onClick={() => toggleAllergen(a.key)}
                 className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${
-                  allergens.has(a.key) ? a.color : "bg-[#0A0A0A] text-[#666] border-[#2A2A2A] hover:border-[#3A3A3A]"
+                  allergens.has(a.key) ? a.color : "bg-dark text-dark-500 border-dark-200 hover:border-dark-300"
                 }`}>
                 {a.label}
               </button>
@@ -1127,7 +1127,7 @@ function AddIngredientForm({
         </div>
       </div>
       <div className="flex justify-end gap-2 mt-4">
-        <button onClick={onCancel} className="px-3 py-1.5 rounded-lg text-sm text-[#999] hover:text-white transition-colors">
+        <button onClick={onCancel} className="px-3 py-1.5 rounded-lg text-sm text-dark-600 hover:text-white transition-colors">
           Cancel
         </button>
         <button
@@ -1160,7 +1160,7 @@ function AddIngredientForm({
             }
           }}
           disabled={!name.trim() || saving}
-          className="flex items-center gap-1.5 px-5 py-1.5 rounded-lg bg-gradient-to-r from-[#D4A574] to-[#C4956A] text-[#0A0A0A] text-sm font-semibold disabled:opacity-50 active:scale-[0.98] transition-all"
+          className="flex items-center gap-1.5 px-5 py-1.5 rounded-lg bg-gradient-to-r from-gold to-gold-hover text-dark text-sm font-semibold disabled:opacity-50 active:scale-[0.98] transition-all"
         >
           {saving ? <Loader2 className="size-3.5 animate-spin" /> : <Plus className="size-3.5" />}
           Add

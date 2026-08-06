@@ -42,25 +42,25 @@ function ToastItem({ notification, onDismiss }: { notification: BenchNotificatio
         notification.onClick?.();
         onDismiss(notification.id);
       }}
-      className="bg-[#1E1E1E] rounded-xl shadow-xl shadow-black/40 border border-[#D4A574]/20 p-4 flex items-start gap-3 cursor-pointer hover:bg-[#2A2A2A] transition-colors animate-slide-in"
+      className="bg-dark-100 rounded-xl shadow-xl shadow-black/40 border border-gold/20 p-4 flex items-start gap-3 cursor-pointer hover:bg-dark-200 transition-colors animate-slide-in"
     >
       {notification.userPhotoPath ? (
         <img src={notification.userPhotoPath} alt={notification.userName} className="size-9 rounded-full object-cover flex-shrink-0" />
       ) : (
-        <div className="size-9 rounded-full bg-[#D4A574]/15 flex items-center justify-center flex-shrink-0">
-          <span className="text-sm font-semibold text-[#D4A574]">{notification.userName.charAt(0).toUpperCase()}</span>
+        <div className="size-9 rounded-full bg-gold/15 flex items-center justify-center flex-shrink-0">
+          <span className="text-sm font-semibold text-gold">{notification.userName.charAt(0).toUpperCase()}</span>
         </div>
       )}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1">
-          <MessageCircle className="size-3 text-[#D4A574]" />
+          <MessageCircle className="size-3 text-gold" />
           <span className="text-sm font-semibold text-[#FAFAFA]">{notification.userName}</span>
         </div>
         <p className="text-sm text-[#E5E5E5] truncate mt-0.5">{notification.message}</p>
       </div>
       <button
         onClick={(e) => { e.stopPropagation(); onDismiss(notification.id); }}
-        className="p-0.5 rounded hover:bg-[#2A2A2A] text-[#666666] flex-shrink-0"
+        className="p-0.5 rounded hover:bg-dark-200 text-dark-500 flex-shrink-0"
       >
         <X className="size-3" />
       </button>

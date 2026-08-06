@@ -56,20 +56,20 @@ export function CatalogRequestQueue() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-16">
-        <Loader2 className="size-6 text-[#D4A574] animate-spin" />
+        <Loader2 className="size-6 text-gold animate-spin" />
       </div>
     );
   }
 
   if (requests.length === 0) {
     return (
-      <div className="text-center py-16 rounded-xl bg-[#161616] border border-[#2A2A2A]">
+      <div className="text-center py-16 rounded-xl bg-dark-50 border border-dark-200">
         <div className="relative inline-block mb-4">
           <Check className="size-10 text-emerald-400" />
           <div className="absolute inset-0 rounded-full bg-emerald-400/10 blur-xl" />
         </div>
         <p className="text-sm text-white font-medium mb-1">No pending requests</p>
-        <p className="text-xs text-[#999]">
+        <p className="text-xs text-dark-600">
           All catalog requests have been reviewed. Check back later.
         </p>
       </div>
@@ -79,11 +79,11 @@ export function CatalogRequestQueue() {
   return (
     <div className="space-y-3 animate-[fadeInUp_200ms_ease-out]">
       <div className="flex items-center gap-2 mb-2">
-        <FileQuestion className="size-4 text-[#D4A574]" />
+        <FileQuestion className="size-4 text-gold" />
         <h3 className="text-sm font-semibold text-white">
           Pending Requests
         </h3>
-        <span className="px-2 py-0.5 rounded-full bg-[#D4A574]/15 text-[#D4A574] text-[10px] font-semibold">
+        <span className="px-2 py-0.5 rounded-full bg-gold/15 text-gold text-[10px] font-semibold">
           {requests.length}
         </span>
       </div>
@@ -102,7 +102,7 @@ export function CatalogRequestQueue() {
             <div className="flex items-start justify-between gap-3 mb-2">
               <div className="min-w-0">
                 <div className="flex items-center gap-2 mb-1">
-                  <Package className="size-4 text-[#999] shrink-0" />
+                  <Package className="size-4 text-dark-600 shrink-0" />
                   <span className="text-base font-semibold text-white truncate">
                     {req.ingredientName}
                   </span>
@@ -110,7 +110,7 @@ export function CatalogRequestQueue() {
                     {its.label}
                   </span>
                 </div>
-                <div className="flex flex-wrap items-center gap-3 text-xs text-[#999]">
+                <div className="flex flex-wrap items-center gap-3 text-xs text-dark-600">
                   <span>
                     Requested by: <span className="text-[#ccc]">{req.requestedByUserId.slice(0, 8)}...</span>
                   </span>
@@ -149,14 +149,14 @@ export function CatalogRequestQueue() {
 
             {/* Detail chips */}
             <div className="flex flex-wrap gap-2 text-xs">
-              <span className="px-2 py-0.5 rounded bg-[#1E1E1E] text-[#999]">
+              <span className="px-2 py-0.5 rounded bg-dark-100 text-dark-600">
                 Category: {CATEGORY_LABELS[req.ingredientCategory] || req.ingredientCategory}
               </span>
-              <span className="px-2 py-0.5 rounded bg-[#1E1E1E] text-[#999]">
+              <span className="px-2 py-0.5 rounded bg-dark-100 text-dark-600">
                 Unit: {req.baseUnit}
               </span>
               {req.countedQty && (
-                <span className="px-2 py-0.5 rounded bg-[#1E1E1E] text-[#999]">
+                <span className="px-2 py-0.5 rounded bg-dark-100 text-dark-600">
                   Counted: {Number(req.countedQty).toFixed(1)}
                 </span>
               )}
@@ -204,14 +204,14 @@ function ApproveForm({
   const [error, setError] = useState<string | null>(null);
 
   return (
-    <div className="mt-3 p-3 rounded-lg bg-[#0A0A0A] border border-emerald-500/20 animate-[fadeIn_150ms_ease-out]">
+    <div className="mt-3 p-3 rounded-lg bg-dark border border-emerald-500/20 animate-[fadeIn_150ms_ease-out]">
       <p className="text-[10px] text-emerald-400 uppercase tracking-wider font-semibold mb-2">
         Confirm Approval
       </p>
       <div className="space-y-2">
         {/* Item type selector */}
         <div>
-          <p className="text-[10px] text-[#666] uppercase tracking-wider mb-1">Item Type</p>
+          <p className="text-[10px] text-dark-500 uppercase tracking-wider mb-1">Item Type</p>
           <div className="flex gap-2">
             {ITEM_TYPE_KEYS.map((tk) => {
               const its = ITEM_TYPES[tk];
@@ -221,7 +221,7 @@ function ApproveForm({
                   className={`flex-1 px-2 py-1 rounded-lg text-[10px] font-medium border transition-all ${
                     itemType === tk
                       ? `${its.bgClass} ${its.textClass} ${its.borderClass}`
-                      : "bg-[#111] text-[#666] border-[#2A2A2A] hover:border-[#3A3A3A]"
+                      : "bg-[#111] text-dark-500 border-dark-200 hover:border-dark-300"
                   }`}
                 >
                   {its.label}
@@ -233,16 +233,16 @@ function ApproveForm({
 
         <div className="grid grid-cols-2 gap-2">
           <div>
-            <p className="text-[10px] text-[#666] uppercase tracking-wider mb-1">Category</p>
+            <p className="text-[10px] text-dark-500 uppercase tracking-wider mb-1">Category</p>
             <select value={category} onChange={(e) => setCategory(e.target.value)}
-              className="w-full px-2 py-1.5 rounded-lg bg-[#111] border border-[#2A2A2A] text-xs text-white focus:outline-none">
+              className="w-full px-2 py-1.5 rounded-lg bg-[#111] border border-dark-200 text-xs text-white focus:outline-none">
               {CATEGORIES.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
             </select>
           </div>
           <div>
-            <p className="text-[10px] text-[#666] uppercase tracking-wider mb-1">Base Unit</p>
+            <p className="text-[10px] text-dark-500 uppercase tracking-wider mb-1">Base Unit</p>
             <select value={baseUnit} onChange={(e) => setBaseUnit(e.target.value)}
-              className="w-full px-2 py-1.5 rounded-lg bg-[#111] border border-[#2A2A2A] text-xs text-white focus:outline-none">
+              className="w-full px-2 py-1.5 rounded-lg bg-[#111] border border-dark-200 text-xs text-white focus:outline-none">
               {UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
             </select>
           </div>
@@ -252,7 +252,7 @@ function ApproveForm({
 
         <div className="flex justify-end gap-2 pt-1">
           <button onClick={onCancel}
-            className="px-3 py-1 rounded-lg text-xs text-[#999] hover:text-white transition-colors">
+            className="px-3 py-1 rounded-lg text-xs text-dark-600 hover:text-white transition-colors">
             Cancel
           </button>
           <button
@@ -303,7 +303,7 @@ function RejectForm({
   const [error, setError] = useState<string | null>(null);
 
   return (
-    <div className="mt-3 p-3 rounded-lg bg-[#0A0A0A] border border-red-500/20 animate-[fadeIn_150ms_ease-out]">
+    <div className="mt-3 p-3 rounded-lg bg-dark border border-red-500/20 animate-[fadeIn_150ms_ease-out]">
       <p className="text-[10px] text-red-400 uppercase tracking-wider font-semibold mb-2">
         Rejection Reason
       </p>
@@ -313,14 +313,14 @@ function RejectForm({
         placeholder="Provide a reason for rejecting this request..."
         rows={2}
         autoFocus
-        className="w-full px-3 py-2 rounded-lg bg-[#111] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none focus:border-red-500/30 resize-none"
+        className="w-full px-3 py-2 rounded-lg bg-[#111] border border-dark-200 text-sm text-white placeholder-dark-500 focus:outline-none focus:border-red-500/30 resize-none"
       />
 
       {error && <p className="text-xs text-red-400 mt-1">{error}</p>}
 
       <div className="flex justify-end gap-2 mt-2">
         <button onClick={onCancel}
-          className="px-3 py-1 rounded-lg text-xs text-[#999] hover:text-white transition-colors">
+          className="px-3 py-1 rounded-lg text-xs text-dark-600 hover:text-white transition-colors">
           Cancel
         </button>
         <button

@@ -129,7 +129,7 @@ export function LocationHoursEditor({
                   : "bg-dark-50 border-dark-200"
               }`}
             style={{
-              borderLeftColor: h.isClosed ? undefined : "#D4A574",
+              borderLeftColor: h.isClosed ? undefined : "var(--color-gold)",
               borderLeftWidth: h.isClosed ? undefined : "2px",
             }}
           >

@@ -148,7 +148,7 @@ export function FeatureShowcase() {
                     variants={cardVariants}
                     whileHover={{
                       y: -3,
-                      borderColor: "rgba(212,165,116,0.25)",
+                      borderColor: "var(--color-border-gold)",
                     }}
                     className="rounded-xl border border-dark-200 bg-dark-100 p-6 transition-shadow duration-200 hover:shadow-[0_0_20px_rgba(212,165,116,0.06)]"
                   >

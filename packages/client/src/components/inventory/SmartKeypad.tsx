@@ -54,9 +54,9 @@ export function SmartKeypad({ unit, initialValue, isSaving, onSave, onCancel }: 
     <div className="max-w-sm mx-auto animate-[scaleIn_200ms_ease-out]">
       {/* Display */}
       <div className="mb-6 text-center">
-        <div className="inline-flex items-baseline gap-2 px-6 py-4 rounded-2xl bg-[#161616] border border-[#2A2A2A] min-w-[200px]">
+        <div className="inline-flex items-baseline gap-2 px-6 py-4 rounded-2xl bg-dark-50 border border-dark-200 min-w-[200px]">
           <span className="text-4xl font-bold text-white tabular-nums">{display}</span>
-          <span className="text-lg text-[#999]">{unit}</span>
+          <span className="text-lg text-dark-600">{unit}</span>
         </div>
       </div>
 
@@ -68,8 +68,8 @@ export function SmartKeypad({ unit, initialValue, isSaving, onSave, onCancel }: 
             onClick={() => handleQuick(q)}
             className={`px-3 py-2 rounded-lg text-sm font-medium transition-all active:scale-95 ${
               numValue === q
-                ? "bg-[#D4A574] text-[#0A0A0A]"
-                : "bg-[#1E1E1E] text-[#999] hover:text-white border border-[#2A2A2A] hover:border-[#3A3A3A]"
+                ? "bg-gold text-dark"
+                : "bg-dark-100 text-dark-600 hover:text-white border border-dark-200 hover:border-dark-300"
             }`}
           >
             {q}
@@ -81,25 +81,25 @@ export function SmartKeypad({ unit, initialValue, isSaving, onSave, onCancel }: 
       <div className="flex items-center justify-center gap-4 mb-4">
         <button
           onClick={() => handleStep(-1)}
-          className="w-14 h-14 rounded-xl bg-[#1E1E1E] border border-[#2A2A2A] flex items-center justify-center text-white hover:bg-[#2A2A2A] active:scale-95 transition-all"
+          className="w-14 h-14 rounded-xl bg-dark-100 border border-dark-200 flex items-center justify-center text-white hover:bg-dark-200 active:scale-95 transition-all"
         >
           <Minus className="size-5" />
         </button>
         <button
           onClick={() => handleStep(-0.5)}
-          className="w-12 h-12 rounded-xl bg-[#1E1E1E] border border-[#2A2A2A] flex items-center justify-center text-[#999] text-sm hover:bg-[#2A2A2A] active:scale-95 transition-all"
+          className="w-12 h-12 rounded-xl bg-dark-100 border border-dark-200 flex items-center justify-center text-dark-600 text-sm hover:bg-dark-200 active:scale-95 transition-all"
         >
           -½
         </button>
         <button
           onClick={() => handleStep(0.5)}
-          className="w-12 h-12 rounded-xl bg-[#1E1E1E] border border-[#2A2A2A] flex items-center justify-center text-[#999] text-sm hover:bg-[#2A2A2A] active:scale-95 transition-all"
+          className="w-12 h-12 rounded-xl bg-dark-100 border border-dark-200 flex items-center justify-center text-dark-600 text-sm hover:bg-dark-200 active:scale-95 transition-all"
         >
           +½
         </button>
         <button
           onClick={() => handleStep(1)}
-          className="w-14 h-14 rounded-xl bg-[#1E1E1E] border border-[#2A2A2A] flex items-center justify-center text-white hover:bg-[#2A2A2A] active:scale-95 transition-all"
+          className="w-14 h-14 rounded-xl bg-dark-100 border border-dark-200 flex items-center justify-center text-white hover:bg-dark-200 active:scale-95 transition-all"
         >
           <Plus className="size-5" />
         </button>
@@ -115,9 +115,9 @@ export function SmartKeypad({ unit, initialValue, isSaving, onSave, onCancel }: 
               else handleDigit(key);
             }}
             onDoubleClick={() => { if (key === "del") handleClear(); }}
-            className="h-14 rounded-xl bg-[#1E1E1E] border border-[#2A2A2A] flex items-center justify-center text-lg font-medium text-white hover:bg-[#2A2A2A] active:scale-95 transition-all"
+            className="h-14 rounded-xl bg-dark-100 border border-dark-200 flex items-center justify-center text-lg font-medium text-white hover:bg-dark-200 active:scale-95 transition-all"
           >
-            {key === "del" ? <Delete className="size-5 text-[#999]" /> : key}
+            {key === "del" ? <Delete className="size-5 text-dark-600" /> : key}
           </button>
         ))}
       </div>
@@ -126,7 +126,7 @@ export function SmartKeypad({ unit, initialValue, isSaving, onSave, onCancel }: 
       <div className="flex gap-3">
         <button
           onClick={onCancel}
-          className="flex-1 h-14 rounded-xl bg-[#1E1E1E] border border-[#2A2A2A] flex items-center justify-center gap-2 text-[#999] hover:text-white transition-colors active:scale-[0.98]"
+          className="flex-1 h-14 rounded-xl bg-dark-100 border border-dark-200 flex items-center justify-center gap-2 text-dark-600 hover:text-white transition-colors active:scale-[0.98]"
         >
           <X className="size-5" />
           Cancel
@@ -134,7 +134,7 @@ export function SmartKeypad({ unit, initialValue, isSaving, onSave, onCancel }: 
         <button
           onClick={() => onSave(numValue)}
           disabled={isSaving}
-          className="flex-[2] h-14 rounded-xl bg-gradient-to-r from-[#D4A574] to-[#C4956A] flex items-center justify-center gap-2 text-[#0A0A0A] font-semibold hover:shadow-[0_0_16px_rgba(212,165,116,0.3)] transition-all active:scale-[0.98] disabled:opacity-50"
+          className="flex-[2] h-14 rounded-xl bg-gradient-to-r from-gold to-gold-hover flex items-center justify-center gap-2 text-dark font-semibold hover:shadow-[0_0_16px_rgba(212,165,116,0.3)] transition-all active:scale-[0.98] disabled:opacity-50"
         >
           {isSaving ? (
             <Loader2 className="size-5 animate-spin" />

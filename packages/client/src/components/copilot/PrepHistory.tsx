@@ -64,7 +64,7 @@ const STATION_COLORS: Record<string, string> = {
   patissier: "#EC4899",
   prep: "#8B5CF6",
   sauce: "#F97316",
-  default: "#D4A574",
+  default: "var(--color-gold)",
 };
 
 function getStationColor(station: string | null): string {
@@ -184,7 +184,7 @@ export function PrepHistory({ teamView }: Props) {
   if (loading) {
     return (
       <div className="flex justify-center py-16">
-        <Loader2 className="size-8 animate-spin text-[#D4A574]" />
+        <Loader2 className="size-8 animate-spin text-gold" />
       </div>
     );
   }
@@ -200,9 +200,9 @@ export function PrepHistory({ teamView }: Props) {
   if (sessions.length === 0) {
     return (
       <div className="text-center py-16">
-        <Calendar className="size-10 mx-auto text-[#666666] mb-3" />
-        <p className="text-[#999999]">No prep sessions yet.</p>
-        <p className="text-sm text-[#666666] mt-1">
+        <Calendar className="size-10 mx-auto text-dark-500 mb-3" />
+        <p className="text-dark-600">No prep sessions yet.</p>
+        <p className="text-sm text-dark-500 mt-1">
           Complete your first prep session to build your history.
         </p>
       </div>
@@ -228,22 +228,22 @@ export function PrepHistory({ teamView }: Props) {
         return (
           <div
             key={session.prepSessionId}
-            className="bg-[#161616] rounded-xl border border-[#2A2A2A] overflow-hidden transition-all duration-300"
+            className="bg-dark-50 rounded-xl border border-dark-200 overflow-hidden transition-all duration-300"
           >
             {/* Summary row */}
             <button
               onClick={() => toggleExpand(session.prepSessionId)}
-              className="w-full flex items-center gap-4 p-4 text-left hover:bg-[#1E1E1E]/50 transition-colors min-h-[44px]"
+              className="w-full flex items-center gap-4 p-4 text-left hover:bg-dark-100/50 transition-colors min-h-[44px]"
             >
               {isExpanded ? (
-                <ChevronDown className="size-4 text-[#D4A574] shrink-0" />
+                <ChevronDown className="size-4 text-gold shrink-0" />
               ) : (
-                <ChevronRight className="size-4 text-[#666666] shrink-0" />
+                <ChevronRight className="size-4 text-dark-500 shrink-0" />
               )}
 
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium text-white">{dateLabel}</p>
-                <p className="text-xs text-[#666666]">
+                <p className="text-xs text-dark-500">
                   {session.expectedCovers != null
                     ? `${session.expectedCovers} expected`
                     : ""}
@@ -258,10 +258,10 @@ export function PrepHistory({ teamView }: Props) {
               </div>
 
               <div className="w-24 shrink-0">
-                <div className="flex items-center justify-between text-xs text-[#999999] mb-1">
+                <div className="flex items-center justify-between text-xs text-dark-600 mb-1">
                   <span>{completionPct}%</span>
                 </div>
-                <div className="w-full bg-[#1E1E1E] rounded-full h-2 overflow-hidden">
+                <div className="w-full bg-dark-100 rounded-full h-2 overflow-hidden">
                   <div
                     className="h-2 rounded-full transition-all duration-500"
                     style={{
@@ -270,7 +270,7 @@ export function PrepHistory({ teamView }: Props) {
                         completionPct === 100
                           ? "linear-gradient(90deg, #22c55e, #16a34a)"
                           : completionPct > 50
-                            ? "linear-gradient(90deg, #D4A574, #C4956A)"
+                            ? "linear-gradient(90deg, var(--color-gold), var(--color-gold-hover))"
                             : "linear-gradient(90deg, #EF4444, #DC2626)",
                     }}
                   />
@@ -278,12 +278,12 @@ export function PrepHistory({ teamView }: Props) {
               </div>
 
               <div className="text-right shrink-0">
-                <p className="text-xs text-[#999999]">
+                <p className="text-xs text-dark-600">
                   <span
                     className={
                       completionPct === 100
                         ? "text-green-400"
-                        : "text-[#D4A574]"
+                        : "text-gold"
                     }
                   >
                     {done}
@@ -291,7 +291,7 @@ export function PrepHistory({ teamView }: Props) {
                   {" / "}
                   {total}
                   {skipped > 0 && (
-                    <span className="text-[#666666]">
+                    <span className="text-dark-500">
                       {" "}
                       ({skipped} skipped)
                     </span>
@@ -368,16 +368,16 @@ function ExpandedSession({
 
   if (isLoading) {
     return (
-      <div className="border-t border-[#2A2A2A] flex justify-center py-8">
-        <Loader2 className="size-5 animate-spin text-[#D4A574]" />
+      <div className="border-t border-dark-200 flex justify-center py-8">
+        <Loader2 className="size-5 animate-spin text-gold" />
       </div>
     );
   }
 
   if (!grouped || !stats) {
     return (
-      <div className="border-t border-[#2A2A2A] px-4 py-6">
-        <p className="text-sm text-[#666666] text-center">
+      <div className="border-t border-dark-200 px-4 py-6">
+        <p className="text-sm text-dark-500 text-center">
           No tasks recorded for this session.
         </p>
       </div>
@@ -385,9 +385,9 @@ function ExpandedSession({
   }
 
   return (
-    <div className="border-t border-[#2A2A2A]">
+    <div className="border-t border-dark-200">
       {/* Summary strip */}
-      <div className="px-4 py-3 bg-[#0A0A0A]/50 flex flex-wrap items-center gap-4 text-xs text-[#999999]">
+      <div className="px-4 py-3 bg-dark/50 flex flex-wrap items-center gap-4 text-xs text-dark-600">
         <span className="flex items-center gap-1.5">
           <Check className="size-3.5 text-green-500" />
           <span className="text-green-400 font-medium">
@@ -397,14 +397,14 @@ function ExpandedSession({
           {stats.skipped > 0 && (
             <>
               <span className="text-[#333333] mx-1">·</span>
-              <span className="text-[#666666]">{stats.skipped} skipped</span>
+              <span className="text-dark-500">{stats.skipped} skipped</span>
             </>
           )}
         </span>
 
         {stats.totalPrepMin > 0 && (
           <span className="flex items-center gap-1.5">
-            <Clock className="size-3.5 text-[#D4A574]" />
+            <Clock className="size-3.5 text-gold" />
             {stats.totalPrepMin >= 60
               ? `${Math.floor(stats.totalPrepMin / 60)}h ${stats.totalPrepMin % 60}m`
               : `${stats.totalPrepMin}m`}{" "}
@@ -414,21 +414,21 @@ function ExpandedSession({
 
         {stats.assignees.size > 0 && (
           <span className="flex items-center gap-1.5">
-            <Users className="size-3.5 text-[#D4A574]" />
+            <Users className="size-3.5 text-gold" />
             {stats.assignees.size}{" "}
             {stats.assignees.size === 1 ? "cook" : "cooks"}
           </span>
         )}
 
         <span className="flex items-center gap-1.5">
-          <Flame className="size-3.5 text-[#D4A574]" />
+          <Flame className="size-3.5 text-gold" />
           {stats.stations.size}{" "}
           {stats.stations.size === 1 ? "station" : "stations"}
         </span>
       </div>
 
       {/* Station groups */}
-      <div className="divide-y divide-[#2A2A2A]/50">
+      <div className="divide-y divide-dark-200/50">
         {grouped.map(([station, stationTasks]) => {
           const color = getStationColor(station);
           const stationDone = stationTasks.filter(
@@ -452,7 +452,7 @@ function ExpandedSession({
                   >
                     {formatStation(station)}
                   </span>
-                  <span className="text-[10px] text-[#444444]">
+                  <span className="text-[10px] text-dark-400">
                     {stationDone}/{stationTasks.length}
                   </span>
                 </div>
@@ -486,7 +486,7 @@ function TaskRow({ task }: { task: HistoryTask }) {
       className={`flex items-center gap-2.5 py-1.5 rounded-lg px-2 -mx-2 text-sm transition-colors ${
         isInactive
           ? "opacity-50 hover:opacity-70"
-          : "hover:bg-[#1E1E1E]/50"
+          : "hover:bg-dark-100/50"
       }`}
     >
       {/* Status icon */}
@@ -504,7 +504,7 @@ function TaskRow({ task }: { task: HistoryTask }) {
           isDone
             ? "line-through text-[#888888]"
             : isSkipped
-              ? "text-[#666666]"
+              ? "text-dark-500"
               : "text-[#E5E5E5]"
         }`}
       >
@@ -526,7 +526,7 @@ function TaskRow({ task }: { task: HistoryTask }) {
 
       {/* Assignee */}
       {task.assignedTo && (
-        <span className="text-[10px] text-[#D4A574] bg-[#D4A574]/10 px-1.5 py-0.5 rounded shrink-0">
+        <span className="text-[10px] text-gold bg-gold/10 px-1.5 py-0.5 rounded shrink-0">
           {task.assignedTo}
         </span>
       )}

@@ -46,7 +46,7 @@ export function CompletionRing({
           cy={size / 2}
           r={radius}
           fill="none"
-          stroke="#2A2A2A"
+          stroke="var(--color-dark-200)"
           strokeWidth={strokeWidth}
         />
         {/* Progress ring */}

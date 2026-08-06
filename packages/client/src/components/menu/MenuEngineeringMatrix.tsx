@@ -14,18 +14,18 @@ import type { MenuItem } from "../../hooks/useMenuItems.js";
 /* ---- Dot colors per classification ---- */
 
 const DOT_COLORS: Record<string, string> = {
-  star: "#D4A574",
+  star: "var(--color-gold)",
   plowhorse: "#3B82F6",
   puzzle: "#A855F7",
-  dog: "#666666",
-  unclassified: "#444444",
+  dog: "var(--color-dark-500)",
+  unclassified: "var(--color-dark-400)",
 };
 
 const QUADRANT_SUMMARY = [
-  { key: "star", label: "Stars", color: "text-[#D4A574]", bg: "bg-[#D4A574]/15" },
+  { key: "star", label: "Stars", color: "text-gold", bg: "bg-gold/15" },
   { key: "plowhorse", label: "Plowhorses", color: "text-blue-400", bg: "bg-blue-500/15" },
   { key: "puzzle", label: "Puzzles", color: "text-purple-400", bg: "bg-purple-500/15" },
-  { key: "dog", label: "Dogs", color: "text-[#666666]", bg: "bg-[#2A2A2A]" },
+  { key: "dog", label: "Dogs", color: "text-dark-500", bg: "bg-dark-200" },
 ] as const;
 
 interface MenuEngineeringMatrixProps {
@@ -76,19 +76,19 @@ export function MenuEngineeringMatrix({
   if (loading && items.length === 0) {
     return (
       <div className="flex items-center justify-center py-20">
-        <Loader2 className="size-6 animate-spin text-[#D4A574]" />
+        <Loader2 className="size-6 animate-spin text-gold" />
       </div>
     );
   }
 
   if (classified.length < 2) {
     return (
-      <div className="bg-[#161616] rounded-2xl border border-[#2A2A2A] p-12 text-center">
+      <div className="bg-dark-50 rounded-2xl border border-dark-200 p-12 text-center">
         <BarChart3 className="size-12 mx-auto mb-4 text-[#333333]" />
         <h3 className="text-lg font-semibold text-[#FAFAFA] mb-2">
           Not enough data
         </h3>
-        <p className="text-sm text-[#666666] max-w-md mx-auto">
+        <p className="text-sm text-dark-500 max-w-md mx-auto">
           Add menu items with sales data to see the engineering matrix. At least
           2 items with units sold are needed.
         </p>
@@ -111,7 +111,7 @@ export function MenuEngineeringMatrix({
   return (
     <div className="space-y-4">
       {/* Matrix container */}
-      <div className="bg-[#161616] rounded-2xl border border-[#2A2A2A] p-4 sm:p-6">
+      <div className="bg-dark-50 rounded-2xl border border-dark-200 p-4 sm:p-6">
         <h3 className="text-sm font-semibold text-[#FAFAFA] mb-4">
           Menu Engineering Matrix
         </h3>
@@ -119,7 +119,7 @@ export function MenuEngineeringMatrix({
         {/* Chart area */}
         <div className="relative">
           {/* Y-axis label */}
-          <div className="absolute -left-1 top-1/2 -translate-y-1/2 -rotate-90 text-[10px] text-[#666666] whitespace-nowrap select-none">
+          <div className="absolute -left-1 top-1/2 -translate-y-1/2 -rotate-90 text-[10px] text-dark-500 whitespace-nowrap select-none">
             Profitability (Contribution Margin)
           </div>
 
@@ -143,7 +143,7 @@ export function MenuEngineeringMatrix({
               />
               {/* Top-right: Stars */}
               <div
-                className="absolute bg-[#D4A574]/5"
+                className="absolute bg-gold/5"
                 style={{
                   left: `${avgXPct}%`,
                   top: 0,
@@ -153,7 +153,7 @@ export function MenuEngineeringMatrix({
               />
               {/* Bottom-left: Dogs */}
               <div
-                className="absolute bg-[#2A2A2A]/30"
+                className="absolute bg-dark-200/30"
                 style={{
                   left: 0,
                   top: `${avgYPct}%`,
@@ -191,13 +191,13 @@ export function MenuEngineeringMatrix({
               Puzzles
             </div>
             <div
-              className="absolute text-[10px] sm:text-xs text-[#D4A574]/60 font-medium select-none"
+              className="absolute text-[10px] sm:text-xs text-gold/60 font-medium select-none"
               style={{ right: 8, top: 8 }}
             >
               Stars
             </div>
             <div
-              className="absolute text-[10px] sm:text-xs text-[#666666]/60 font-medium select-none"
+              className="absolute text-[10px] sm:text-xs text-dark-500/60 font-medium select-none"
               style={{ left: 8, bottom: 8 }}
             >
               Dogs
@@ -233,19 +233,19 @@ export function MenuEngineeringMatrix({
                 >
                   {/* Dot */}
                   <div
-                    className="size-4 rounded-full border-2 border-[#161616]"
+                    className="size-4 rounded-full border-2 border-dark-50"
                     style={{ backgroundColor: color }}
                   />
 
                   {/* Tooltip */}
                   {isHovered && (
                     <div
-                      className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-[#0A0A0A] border border-[#2A2A2A] rounded-lg shadow-xl whitespace-nowrap z-30 pointer-events-none"
+                      className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-dark border border-dark-200 rounded-lg shadow-xl whitespace-nowrap z-30 pointer-events-none"
                     >
                       <p className="text-xs font-semibold text-[#FAFAFA]">
                         {item.name}
                       </p>
-                      <p className="text-[10px] text-[#999999]">
+                      <p className="text-[10px] text-dark-600">
                         CM: ${item.contributionMargin.toFixed(2)} | Mix:{" "}
                         {item.menuMixPct.toFixed(1)}%
                       </p>
@@ -254,7 +254,7 @@ export function MenuEngineeringMatrix({
                         style={{
                           borderLeft: "4px solid transparent",
                           borderRight: "4px solid transparent",
-                          borderTop: "4px solid #2A2A2A",
+                          borderTop: "4px solid var(--color-dark-200)",
                         }}
                       />
                     </div>
@@ -264,17 +264,17 @@ export function MenuEngineeringMatrix({
             })}
 
             {/* Border */}
-            <div className="absolute inset-0 rounded-xl border border-[#2A2A2A] pointer-events-none" />
+            <div className="absolute inset-0 rounded-xl border border-dark-200 pointer-events-none" />
           </div>
 
           {/* X-axis label */}
-          <div className="text-center mt-2 text-[10px] text-[#666666] select-none">
+          <div className="text-center mt-2 text-[10px] text-dark-500 select-none">
             Popularity (Menu Mix %)
           </div>
         </div>
 
         {/* Legend */}
-        <div className="flex flex-wrap justify-center gap-4 mt-4 text-xs text-[#999999]">
+        <div className="flex flex-wrap justify-center gap-4 mt-4 text-xs text-dark-600">
           {Object.entries(DOT_COLORS)
             .filter(([k]) => k !== "unclassified")
             .map(([key, color]) => (

@@ -53,8 +53,8 @@ export function LocationDashboard({
   if (!locationId) {
     return (
       <div className="text-center py-16">
-        <Package className="size-12 mx-auto text-[#666] mb-3" />
-        <p className="text-[#999]">Select a location to view inventory</p>
+        <Package className="size-12 mx-auto text-dark-500 mb-3" />
+        <p className="text-dark-600">Select a location to view inventory</p>
       </div>
     );
   }
@@ -62,7 +62,7 @@ export function LocationDashboard({
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-16">
-        <Loader2 className="size-6 text-[#D4A574] animate-spin" />
+        <Loader2 className="size-6 text-gold animate-spin" />
       </div>
     );
   }
@@ -156,12 +156,12 @@ export function LocationDashboard({
                     <div className="flex items-center gap-2">
                       <AlertTriangle className="size-3.5 text-red-400" />
                       <span className="text-xs font-semibold text-red-400">Critical — Reorder Now</span>
-                      <span className="text-[10px] text-[#666]">{criticalItems.length} items</span>
+                      <span className="text-[10px] text-dark-500">{criticalItems.length} items</span>
                     </div>
                     {showCritical ? (
-                      <ChevronUp className="size-3.5 text-[#666]" />
+                      <ChevronUp className="size-3.5 text-dark-500" />
                     ) : (
-                      <ChevronDown className="size-3.5 text-[#666]" />
+                      <ChevronDown className="size-3.5 text-dark-500" />
                     )}
                   </button>
                   {showCritical && (
@@ -180,12 +180,12 @@ export function LocationDashboard({
                     <div className="flex items-center gap-2">
                       <AlertTriangle className="size-3.5 text-amber-400" />
                       <span className="text-xs font-semibold text-amber-400">Low Stock — Monitor</span>
-                      <span className="text-[10px] text-[#666]">{lowItems.length} items</span>
+                      <span className="text-[10px] text-dark-500">{lowItems.length} items</span>
                     </div>
                     {showLow ? (
-                      <ChevronUp className="size-3.5 text-[#666]" />
+                      <ChevronUp className="size-3.5 text-dark-500" />
                     ) : (
-                      <ChevronDown className="size-3.5 text-[#666]" />
+                      <ChevronDown className="size-3.5 text-dark-500" />
                     )}
                   </button>
                   {showLow && (
@@ -209,17 +209,17 @@ export function LocationDashboard({
       {/* Active session + last count — compact */}
       <div className="flex flex-wrap gap-3">
         {data.activeSession && (
-          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#D4A574]/10 border border-[#D4A574]/20 text-xs">
-            <Clock className="size-3.5 text-[#D4A574]" />
+          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gold/10 border border-gold/20 text-xs">
+            <Clock className="size-3.5 text-gold" />
             <span className="text-white font-medium">Stock take in progress</span>
-            <span className="text-[#999]">
+            <span className="text-dark-600">
               {data.activeSession.categories.filter((c) => c.categoryStatus === "SUBMITTED").length}
               /{data.activeSession.categories.length} submitted
             </span>
           </div>
         )}
         {data.lastCompletedSession && (
-          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#161616] border border-[#2A2A2A] text-xs text-[#666]">
+          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-dark-50 border border-dark-200 text-xs text-dark-500">
             <CheckCircle2 className="size-3.5" />
             Last count: {new Date(data.lastCompletedSession.closedDttm!).toLocaleDateString()}
           </div>
@@ -246,10 +246,10 @@ export function LocationDashboard({
 
       {/* Empty state */}
       {data.stockLevels.length === 0 && (
-        <div className="text-center py-12 rounded-xl bg-[#161616] border border-[#2A2A2A]">
-          <Package className="size-10 mx-auto text-[#D4A574] mb-3" />
+        <div className="text-center py-12 rounded-xl bg-dark-50 border border-dark-200">
+          <Package className="size-10 mx-auto text-gold mb-3" />
           <h3 className="text-base font-semibold text-white mb-1">No inventory data yet</h3>
-          <p className="text-xs text-[#999]">Run your first stock take to see data here.</p>
+          <p className="text-xs text-dark-600">Run your first stock take to see data here.</p>
         </div>
       )}
     </div>
@@ -282,14 +282,14 @@ function OrgSummaryTable({
   );
 
   return (
-    <div className="rounded-xl border border-[#2A2A2A] overflow-hidden">
-      <div className="px-4 py-3 bg-[#161616] border-b border-[#2A2A2A] flex items-center gap-2">
-        <MapPin className="size-4 text-[#D4A574]" />
+    <div className="rounded-xl border border-dark-200 overflow-hidden">
+      <div className="px-4 py-3 bg-dark-50 border-b border-dark-200 flex items-center gap-2">
+        <MapPin className="size-4 text-gold" />
         <span className="text-xs font-semibold text-white uppercase tracking-wider">All Locations</span>
       </div>
-      <div className="divide-y divide-[#2A2A2A]/50">
+      <div className="divide-y divide-dark-200/50">
         {/* Header */}
-        <div className="hidden sm:grid grid-cols-6 gap-2 px-4 py-2 text-[10px] text-[#666] uppercase tracking-wider">
+        <div className="hidden sm:grid grid-cols-6 gap-2 px-4 py-2 text-[10px] text-dark-500 uppercase tracking-wider">
           <div className="col-span-2">Location</div>
           <div className="text-right">Items</div>
           <div className="text-right">Low</div>
@@ -302,8 +302,8 @@ function OrgSummaryTable({
             onClick={() => onSelectLocation(loc.storeLocationId)}
             className={`w-full grid grid-cols-3 sm:grid-cols-6 gap-2 px-4 py-2.5 transition-colors text-left ${
               selectedLocationId === loc.storeLocationId
-                ? "bg-[#D4A574]/10 border-l-2 border-l-[#D4A574]"
-                : "hover:bg-[#1E1E1E]/50"
+                ? "bg-gold/10 border-l-2 border-l-gold"
+                : "hover:bg-dark-100/50"
             }`}
           >
             <div className="col-span-3 sm:col-span-2 flex items-center gap-2">
@@ -312,16 +312,16 @@ function OrgSummaryTable({
               }`} />
               <span className="text-sm text-white truncate">{loc.locationName}</span>
               {loc.lastCountDttm && (
-                <span className="text-[10px] text-[#666] shrink-0 hidden sm:inline">
+                <span className="text-[10px] text-dark-500 shrink-0 hidden sm:inline">
                   {formatTimeAgo(loc.lastCountDttm)}
                 </span>
               )}
             </div>
             <div className="text-right text-sm text-white tabular-nums">{loc.totalItems}</div>
-            <div className={`text-right text-sm tabular-nums ${loc.lowStock > 0 ? "text-amber-400" : "text-[#666]"}`}>
+            <div className={`text-right text-sm tabular-nums ${loc.lowStock > 0 ? "text-amber-400" : "text-dark-500"}`}>
               {loc.lowStock}
             </div>
-            <div className={`text-right text-sm tabular-nums ${loc.critical > 0 ? "text-red-400" : "text-[#666]"}`}>
+            <div className={`text-right text-sm tabular-nums ${loc.critical > 0 ? "text-red-400" : "text-dark-500"}`}>
               {loc.critical}
             </div>
             <div className="text-right text-sm text-emerald-400 tabular-nums hidden sm:block">
@@ -330,13 +330,13 @@ function OrgSummaryTable({
           </button>
         ))}
         {/* Totals row */}
-        <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 px-4 py-2.5 bg-[#161616]">
-          <div className="col-span-3 sm:col-span-2 text-xs text-[#999] font-medium">Total</div>
+        <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 px-4 py-2.5 bg-dark-50">
+          <div className="col-span-3 sm:col-span-2 text-xs text-dark-600 font-medium">Total</div>
           <div className="text-right text-xs text-white font-medium tabular-nums">{totals.items}</div>
-          <div className={`text-right text-xs font-medium tabular-nums ${totals.low > 0 ? "text-amber-400" : "text-[#666]"}`}>
+          <div className={`text-right text-xs font-medium tabular-nums ${totals.low > 0 ? "text-amber-400" : "text-dark-500"}`}>
             {totals.low}
           </div>
-          <div className={`text-right text-xs font-medium tabular-nums ${totals.critical > 0 ? "text-red-400" : "text-[#666]"}`}>
+          <div className={`text-right text-xs font-medium tabular-nums ${totals.critical > 0 ? "text-red-400" : "text-dark-500"}`}>
             {totals.critical}
           </div>
           <div className="text-right text-xs text-emerald-400 font-medium tabular-nums hidden sm:block">
@@ -368,22 +368,22 @@ function DrillDownView({
   }
 
   return (
-    <div className="rounded-xl border border-[#D4A574]/20 bg-[#161616] overflow-hidden animate-[fadeIn_150ms_ease-out]">
-      <div className="px-4 py-3 bg-[#D4A574]/5 border-b border-[#D4A574]/20 flex items-center justify-between">
+    <div className="rounded-xl border border-gold/20 bg-dark-50 overflow-hidden animate-[fadeIn_150ms_ease-out]">
+      <div className="px-4 py-3 bg-gold/5 border-b border-gold/20 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <MapPin className="size-4 text-[#D4A574]" />
+          <MapPin className="size-4 text-gold" />
           <span className="text-sm font-semibold text-white">{locationName}</span>
-          <span className="text-xs text-[#999]">
+          <span className="text-xs text-dark-600">
             {items.length} items · ${totalValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}
           </span>
         </div>
-        <button onClick={onClose} className="text-xs text-[#999] hover:text-white transition-colors">
+        <button onClick={onClose} className="text-xs text-dark-600 hover:text-white transition-colors">
           Close
         </button>
       </div>
 
       {critItems.length > 0 && (
-        <div className="px-4 py-2 border-b border-[#2A2A2A]/50">
+        <div className="px-4 py-2 border-b border-dark-200/50">
           <p className="text-[10px] text-red-400 font-semibold uppercase tracking-wider mb-1">Critical</p>
           {critItems.map((item) => (
             <div key={item.ingredientId} className="flex justify-between text-xs py-0.5">
@@ -395,7 +395,7 @@ function DrillDownView({
       )}
 
       {lowItems.length > 0 && (
-        <div className="px-4 py-2 border-b border-[#2A2A2A]/50">
+        <div className="px-4 py-2 border-b border-dark-200/50">
           <p className="text-[10px] text-amber-400 font-semibold uppercase tracking-wider mb-1">Low Stock</p>
           {lowItems.map((item) => (
             <div key={item.ingredientId} className="flex justify-between text-xs py-0.5">
@@ -407,8 +407,8 @@ function DrillDownView({
       )}
 
       {/* Stock table */}
-      <div className="divide-y divide-[#2A2A2A]/30">
-        <div className="hidden sm:grid grid-cols-5 gap-1 px-4 py-1.5 text-[10px] text-[#666] uppercase tracking-wider">
+      <div className="divide-y divide-dark-200/30">
+        <div className="hidden sm:grid grid-cols-5 gap-1 px-4 py-1.5 text-[10px] text-dark-500 uppercase tracking-wider">
           <div className="col-span-2">Item</div>
           <div className="text-right">Stock</div>
           <div className="text-right">Par</div>
@@ -416,17 +416,17 @@ function DrillDownView({
         </div>
         {items.map((item) => {
           const status = getStockStatus(item);
-          const statusColor = status === "critical" ? "text-red-400" : status === "low" ? "text-amber-400" : "text-[#999]";
+          const statusColor = status === "critical" ? "text-red-400" : status === "low" ? "text-amber-400" : "text-dark-600";
           return (
-            <div key={item.ingredientId} className="grid grid-cols-5 gap-1 px-4 py-1.5 text-xs hover:bg-[#1E1E1E]/30 transition-colors">
+            <div key={item.ingredientId} className="grid grid-cols-5 gap-1 px-4 py-1.5 text-xs hover:bg-dark-100/30 transition-colors">
               <div className="col-span-2 text-white truncate">{item.ingredientName}</div>
               <div className={`text-right tabular-nums ${statusColor}`}>
                 {item.currentQty ? `${Number(item.currentQty).toFixed(1)} ${item.baseUnit}` : "—"}
               </div>
-              <div className="text-right text-[#666] tabular-nums">
+              <div className="text-right text-dark-500 tabular-nums">
                 {item.parLevel ? Number(item.parLevel).toFixed(0) : "—"}
               </div>
-              <div className="text-right text-[#666] tabular-nums">
+              <div className="text-right text-dark-500 tabular-nums">
                 {item.locationUnitCost || item.orgUnitCost
                   ? `$${Number(item.locationUnitCost || item.orgUnitCost).toFixed(2)}`
                   : "—"}
@@ -443,7 +443,7 @@ function DrillDownView({
 
 function StockAlertList({ items }: { items: LocationIngredient[] }) {
   return (
-    <div className="divide-y divide-[#2A2A2A]/30">
+    <div className="divide-y divide-dark-200/30">
       {items.map((item) => {
         const qty = Number(item.currentQty || 0);
         const par = Number(item.parLevel || 0);
@@ -453,12 +453,12 @@ function StockAlertList({ items }: { items: LocationIngredient[] }) {
           <div key={item.ingredientId} className="flex items-center justify-between px-4 py-1.5 text-xs">
             <div className="flex items-center gap-2 min-w-0">
               <span className="text-white truncate">{item.ingredientName}</span>
-              <span className="text-[10px] text-[#666] shrink-0">
+              <span className="text-[10px] text-dark-500 shrink-0">
                 {qty.toFixed(1)} {item.baseUnit} / par {par}
               </span>
             </div>
             {atRisk > 0 && (
-              <span className="text-[10px] text-[#999] shrink-0 ml-2">
+              <span className="text-[10px] text-dark-600 shrink-0 ml-2">
                 ${atRisk.toFixed(0)} at risk
               </span>
             )}
@@ -476,9 +476,9 @@ function ValueBreakdown({ valueByCat, total }: { valueByCat: Map<string, number>
   const maxVal = sorted[0]?.[1] || 1;
 
   return (
-    <div className="p-4 rounded-xl bg-[#161616] border border-[#2A2A2A]">
+    <div className="p-4 rounded-xl bg-dark-50 border border-dark-200">
       <div className="flex items-center justify-between mb-3">
-        <span className="text-[10px] text-[#999] uppercase tracking-wider">Value by Category</span>
+        <span className="text-[10px] text-dark-600 uppercase tracking-wider">Value by Category</span>
         <span className="text-sm font-bold text-white">
           ${total.toLocaleString(undefined, { maximumFractionDigits: 0 })}
         </span>
@@ -489,16 +489,16 @@ function ValueBreakdown({ valueByCat, total }: { valueByCat: Map<string, number>
           const barWidth = (val / maxVal) * 100;
           return (
             <div key={cat} className="flex items-center gap-2">
-              <span className="text-[10px] text-[#999] w-16 truncate">
+              <span className="text-[10px] text-dark-600 w-16 truncate">
                 {CATEGORY_LABELS[cat] || cat}
               </span>
-              <div className="flex-1 h-1.5 rounded-full bg-[#2A2A2A] overflow-hidden">
+              <div className="flex-1 h-1.5 rounded-full bg-dark-200 overflow-hidden">
                 <div
                   className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-emerald-400"
                   style={{ width: `${barWidth}%` }}
                 />
               </div>
-              <span className="text-[10px] text-[#666] w-16 text-right tabular-nums">
+              <span className="text-[10px] text-dark-500 w-16 text-right tabular-nums">
                 ${val.toLocaleString(undefined, { maximumFractionDigits: 0 })} ({pct.toFixed(0)}%)
               </span>
             </div>

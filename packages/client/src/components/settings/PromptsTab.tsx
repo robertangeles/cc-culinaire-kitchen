@@ -42,14 +42,14 @@ export function PromptsTab() {
   return (
     <div className="flex h-full">
       {/* Left sidebar — prompt list */}
-      <div className="w-64 flex-shrink-0 border-r border-[#2A2A2A] flex flex-col">
-        <div className="px-4 py-4 border-b border-[#2A2A2A] flex items-center justify-between">
+      <div className="w-64 flex-shrink-0 border-r border-dark-200 flex flex-col">
+        <div className="px-4 py-4 border-b border-dark-200 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-[#E5E5E5] uppercase tracking-wider">
             Prompts
           </h2>
           <button
             onClick={() => setShowCreate(true)}
-            className="p-1 text-[#999999] hover:text-[#D4A574] hover:bg-[#D4A574]/10 rounded transition-colors"
+            className="p-1 text-dark-600 hover:text-gold hover:bg-gold/10 rounded transition-colors"
             title="New Prompt"
           >
             <Plus className="size-4" />
@@ -57,7 +57,7 @@ export function PromptsTab() {
         </div>
 
         {listLoading ? (
-          <div className="flex items-center justify-center py-8 text-[#999999]">
+          <div className="flex items-center justify-center py-8 text-dark-600">
             <Loader2 className="size-4 animate-spin mr-2" />
             <span className="text-sm">Loading...</span>
           </div>
@@ -77,7 +77,7 @@ export function PromptsTab() {
               />
             ))}
             {prompts.length === 0 && (
-              <p className="px-4 py-8 text-sm text-[#999999] text-center">
+              <p className="px-4 py-8 text-sm text-dark-600 text-center">
                 No prompts found
               </p>
             )}
@@ -100,7 +100,7 @@ export function PromptsTab() {
         ) : activeName ? (
           <PromptEditor name={activeName} />
         ) : (
-          <div className="flex items-center justify-center h-full text-[#999999] text-sm">
+          <div className="flex items-center justify-center h-full text-dark-600 text-sm">
             <FileText className="size-5 mr-2" />
             Select a prompt to edit
           </div>
@@ -133,16 +133,16 @@ function PromptListItem({ prompt, isActive, onClick }: PromptListItemProps) {
       onClick={onClick}
       className={`w-full text-left px-4 py-2.5 transition-colors ${
         isActive
-          ? "bg-[#D4A574]/10 border-r-2 border-[#D4A574] text-[#FAFAFA]"
-          : "text-[#E5E5E5] hover:bg-[#0A0A0A] hover:text-[#FAFAFA]"
+          ? "bg-gold/10 border-r-2 border-gold text-[#FAFAFA]"
+          : "text-[#E5E5E5] hover:bg-dark hover:text-[#FAFAFA]"
       }`}
     >
       <span className="block text-sm font-medium truncate">{prompt.promptName}</span>
       {prompt.promptKey && (
-        <span className="block text-xs text-[#999999] truncate">{prompt.promptKey}</span>
+        <span className="block text-xs text-dark-600 truncate">{prompt.promptKey}</span>
       )}
       {prompt.modelId && (
-        <span className="flex items-center gap-1 text-[10px] text-[#D4A574] mt-0.5">
+        <span className="flex items-center gap-1 text-[10px] text-gold mt-0.5">
           <Bot className="size-3" />
           {prompt.modelId.split("/")[1] ?? prompt.modelId}
         </span>
@@ -191,7 +191,7 @@ function PromptEditor({ name }: PromptEditorProps) {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-full text-[#999999]">
+      <div className="flex items-center justify-center h-full text-dark-600">
         <Loader2 className="size-5 animate-spin mr-2" />
         Loading prompt...
       </div>
@@ -201,19 +201,19 @@ function PromptEditor({ name }: PromptEditorProps) {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="px-8 py-6 border-b border-[#2A2A2A]">
+      <div className="px-8 py-6 border-b border-dark-200">
         <h1 className="text-xl font-semibold text-[#FAFAFA]">{name}</h1>
-        <p className="mt-1 text-sm text-[#999999]">
+        <p className="mt-1 text-sm text-dark-600">
           Edit the prompt content below. Changes are saved with version history.
         </p>
       </div>
 
       {/* AI model section */}
-      <div className="px-8 py-3 border-b border-[#2A2A2A]">
+      <div className="px-8 py-3 border-b border-dark-200">
         <label className="block text-sm font-medium text-[#E5E5E5] mb-1">
           AI Model
         </label>
-        <p className="text-xs text-[#999999] mb-2">
+        <p className="text-xs text-dark-600 mb-2">
           Override which model this prompt uses. &ldquo;Global Default&rdquo; uses the system-wide model.
         </p>
         <ModelSelector
@@ -229,19 +229,19 @@ function PromptEditor({ name }: PromptEditorProps) {
         <textarea
           value={content}
           onChange={(e) => setContent(e.target.value)}
-          className="w-full h-full resize-none rounded-lg border border-[#2A2A2A] bg-[#161616] px-4 py-3 font-mono text-sm text-[#FAFAFA] leading-relaxed focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-transparent"
+          className="w-full h-full resize-none rounded-lg border border-dark-200 bg-dark-50 px-4 py-3 font-mono text-sm text-[#FAFAFA] leading-relaxed focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-transparent"
           placeholder="Enter prompt content..."
           spellCheck={false}
         />
       </div>
 
       {/* Bottom bar */}
-      <div className="px-8 py-4 border-t border-[#2A2A2A] bg-[#0A0A0A] flex items-center justify-between">
+      <div className="px-8 py-4 border-t border-dark-200 bg-dark flex items-center justify-between">
         <div className="flex items-center gap-3">
           <button
             onClick={reset}
             disabled={isSaving}
-            className="flex items-center gap-2 px-4 py-2 text-sm text-[#E5E5E5] bg-[#161616] border border-[#2A2A2A] rounded-lg hover:bg-[#0A0A0A] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="flex items-center gap-2 px-4 py-2 text-sm text-[#E5E5E5] bg-dark-50 border border-dark-200 rounded-lg hover:bg-dark disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             <RotateCcw className="size-4" />
             Reset to Default
@@ -249,13 +249,13 @@ function PromptEditor({ name }: PromptEditorProps) {
           <button
             onClick={() => setShowVersions(true)}
             disabled={isSaving}
-            className="flex items-center gap-2 px-4 py-2 text-sm text-[#E5E5E5] bg-[#161616] border border-[#2A2A2A] rounded-lg hover:bg-[#0A0A0A] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="flex items-center gap-2 px-4 py-2 text-sm text-[#E5E5E5] bg-dark-50 border border-dark-200 rounded-lg hover:bg-dark disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             <History className="size-4" />
             Version History
           </button>
           {isDirty && (
-            <span className="text-xs text-[#D4A574] font-medium">
+            <span className="text-xs text-gold font-medium">
               Unsaved changes
             </span>
           )}
@@ -278,7 +278,7 @@ function PromptEditor({ name }: PromptEditorProps) {
           <button
             onClick={save}
             disabled={isSaving || !isDirty}
-            className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-white bg-[#D4A574] rounded-lg hover:bg-[#C4956A] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-white bg-gold rounded-lg hover:bg-gold-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {isSaving ? (
               <Loader2 className="size-4 animate-spin" />
@@ -352,16 +352,16 @@ function CreatePromptForm({ onCreated, onCancel, create }: CreatePromptFormProps
 
   return (
     <div className="flex flex-col h-full">
-      <div className="px-8 py-6 border-b border-[#2A2A2A] flex items-center justify-between">
+      <div className="px-8 py-6 border-b border-dark-200 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold text-[#FAFAFA]">New Prompt</h1>
-          <p className="mt-1 text-sm text-[#999999]">
+          <p className="mt-1 text-sm text-dark-600">
             Create a new prompt template for the AI chatbot.
           </p>
         </div>
         <button
           onClick={onCancel}
-          className="p-1 text-[#999999] hover:text-[#E5E5E5] transition-colors"
+          className="p-1 text-dark-600 hover:text-[#E5E5E5] transition-colors"
         >
           <X className="size-5" />
         </button>
@@ -386,19 +386,19 @@ function CreatePromptForm({ onCreated, onCancel, create }: CreatePromptFormProps
               onChange={(e) => setName(e.target.value)}
               required
               placeholder="e.g. Technique Guide"
-              className="w-full rounded-lg border border-[#2A2A2A] px-3 py-2 text-sm text-[#FAFAFA] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-transparent"
+              className="w-full rounded-lg border border-dark-200 px-3 py-2 text-sm text-[#FAFAFA] focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-transparent"
               autoFocus
             />
             {previewKey && (
-              <p className="mt-1 text-xs text-[#999999]">
-                Key: <code className="bg-[#1E1E1E] px-1 rounded">{previewKey}</code>
+              <p className="mt-1 text-xs text-dark-600">
+                Key: <code className="bg-dark-100 px-1 rounded">{previewKey}</code>
               </p>
             )}
           </div>
 
           <div>
             <label className="block text-sm font-medium text-[#E5E5E5] mb-1">
-              AI Model <span className="text-[#999999] font-normal">(optional)</span>
+              AI Model <span className="text-dark-600 font-normal">(optional)</span>
             </label>
             <ModelSelector
               value={newModelId}
@@ -418,12 +418,12 @@ function CreatePromptForm({ onCreated, onCancel, create }: CreatePromptFormProps
             onChange={(e) => setContent(e.target.value)}
             required
             placeholder="Enter the prompt content..."
-            className="w-full h-[calc(100%-24px)] resize-none rounded-lg border border-[#2A2A2A] bg-[#161616] px-4 py-3 font-mono text-sm text-[#FAFAFA] leading-relaxed focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-transparent"
+            className="w-full h-[calc(100%-24px)] resize-none rounded-lg border border-dark-200 bg-dark-50 px-4 py-3 font-mono text-sm text-[#FAFAFA] leading-relaxed focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-transparent"
             spellCheck={false}
           />
         </div>
 
-        <div className="px-8 py-4 border-t border-[#2A2A2A] bg-[#0A0A0A] flex items-center justify-end gap-3">
+        <div className="px-8 py-4 border-t border-dark-200 bg-dark flex items-center justify-end gap-3">
           <button
             type="button"
             onClick={onCancel}
@@ -434,7 +434,7 @@ function CreatePromptForm({ onCreated, onCancel, create }: CreatePromptFormProps
           <button
             type="submit"
             disabled={isCreating || !name.trim() || !content.trim()}
-            className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-white bg-[#D4A574] rounded-lg hover:bg-[#C4956A] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-white bg-gold rounded-lg hover:bg-gold-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {isCreating ? (
               <Loader2 className="size-4 animate-spin" />

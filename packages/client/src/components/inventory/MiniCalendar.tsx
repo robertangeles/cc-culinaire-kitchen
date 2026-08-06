@@ -90,14 +90,14 @@ export function MiniCalendar({
       <div className="flex items-center justify-between mb-3">
         <button
           onClick={() => onMonthChange(getPrevMonth(month))}
-          className="p-1 rounded-lg hover:bg-white/5 text-[#999] hover:text-white transition-all"
+          className="p-1 rounded-lg hover:bg-white/5 text-dark-600 hover:text-white transition-all"
         >
           <ChevronLeft className="size-4" />
         </button>
         <span className="text-sm font-medium text-white">{formatMonthLabel(month)}</span>
         <button
           onClick={() => onMonthChange(getNextMonth(month))}
-          className="p-1 rounded-lg hover:bg-white/5 text-[#999] hover:text-white transition-all"
+          className="p-1 rounded-lg hover:bg-white/5 text-dark-600 hover:text-white transition-all"
         >
           <ChevronRight className="size-4" />
         </button>
@@ -106,7 +106,7 @@ export function MiniCalendar({
       {/* Day headers */}
       <div className="grid grid-cols-7 gap-0.5 mb-1">
         {DAY_HEADERS.map((d) => (
-          <div key={d} className="text-center text-[10px] text-[#666] font-medium py-1">
+          <div key={d} className="text-center text-[10px] text-dark-500 font-medium py-1">
             {d}
           </div>
         ))}
@@ -134,11 +134,11 @@ export function MiniCalendar({
                   : "hover:bg-white/5 cursor-pointer"
                 }
                 ${isSelected && isCurrentMonth
-                  ? "bg-[#D4A574]/20 text-[#D4A574] font-semibold"
+                  ? "bg-gold/20 text-gold font-semibold"
                   : ""
                 }
                 ${isToday && !isSelected && isCurrentMonth
-                  ? "border border-[#D4A574]/40 text-white"
+                  ? "border border-gold/40 text-white"
                   : ""
                 }
                 ${!isSelected && !isToday && isCurrentMonth && !isFuture
@@ -149,7 +149,7 @@ export function MiniCalendar({
             >
               {day}
               {hasTransactions && isCurrentMonth && (
-                <span className="absolute bottom-0.5 w-1 h-1 rounded-full bg-[#D4A574]" />
+                <span className="absolute bottom-0.5 w-1 h-1 rounded-full bg-gold" />
               )}
             </button>
           );

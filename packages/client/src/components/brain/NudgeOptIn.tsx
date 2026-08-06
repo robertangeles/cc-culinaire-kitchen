@@ -48,12 +48,12 @@ export function NudgeOptIn() {
   if (optIn === null) return null; // don't flash before the current value is known
 
   return (
-    <div className="mt-8 flex items-start justify-between gap-4 rounded-xl border border-[#1E1E1E] bg-[#111111] px-4 py-3">
+    <div className="mt-8 flex items-start justify-between gap-4 rounded-xl border border-dark-100 bg-[#111111] px-4 py-3">
       <div className="flex items-start gap-2.5">
-        <Bell className="mt-0.5 size-4 flex-shrink-0 text-[#D4A574]" aria-hidden="true" />
+        <Bell className="mt-0.5 size-4 flex-shrink-0 text-gold" aria-hidden="true" />
         <div>
           <p className="text-sm text-[#E5E5E5]">Proactive nudges</p>
-          <p className="mt-0.5 text-xs text-[#999999]">
+          <p className="mt-0.5 text-xs text-dark-600">
             Get the occasional actionable suggestion from your kitchen's recent activity, in your
             notifications. Off by default; never interrupts.
           </p>
@@ -66,8 +66,8 @@ export function NudgeOptIn() {
         aria-label="Toggle proactive nudges"
         onClick={toggle}
         disabled={saving}
-        className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4A574]/60 disabled:opacity-50 ${
-          optIn ? "bg-[#D4A574]" : "bg-[#333333]"
+        className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60 disabled:opacity-50 ${
+          optIn ? "bg-gold" : "bg-[#333333]"
         }`}
       >
         <span
@@ -75,7 +75,7 @@ export function NudgeOptIn() {
             optIn ? "translate-x-6" : "translate-x-1"
           }`}
         >
-          {saving && <Loader2 className="size-3 animate-spin text-[#666]" />}
+          {saving && <Loader2 className="size-3 animate-spin text-dark-500" />}
         </span>
       </button>
     </div>

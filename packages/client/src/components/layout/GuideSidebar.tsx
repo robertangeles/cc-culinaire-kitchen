@@ -38,40 +38,40 @@ function getInitialCollapsed(): boolean {
 /** Custom markdown component styles for guide content. */
 const mdComponents: Components = {
   h1: ({ children }) => (
-    <h1 className="text-lg font-semibold text-[#D4A574] mt-4 mb-2">{children}</h1>
+    <h1 className="text-lg font-semibold text-gold mt-4 mb-2">{children}</h1>
   ),
   h2: ({ children }) => (
-    <h2 className="text-base font-semibold text-[#D4A574] mt-4 mb-2">{children}</h2>
+    <h2 className="text-base font-semibold text-gold mt-4 mb-2">{children}</h2>
   ),
   h3: ({ children }) => (
-    <h3 className="text-sm font-semibold text-[#D4A574] mt-3 mb-1">{children}</h3>
+    <h3 className="text-sm font-semibold text-gold mt-3 mb-1">{children}</h3>
   ),
   p: ({ children }) => (
     <p className="text-[#E5E5E5] text-sm leading-relaxed mb-2">{children}</p>
   ),
   strong: ({ children }) => <strong className="text-white font-semibold">{children}</strong>,
   ul: ({ children }) => (
-    <ul className="text-[#E5E5E5] text-sm list-disc ml-4 mb-2 marker:text-[#D4A574]">{children}</ul>
+    <ul className="text-[#E5E5E5] text-sm list-disc ml-4 mb-2 marker:text-gold">{children}</ul>
   ),
   ol: ({ children }) => (
-    <ol className="text-[#E5E5E5] text-sm list-decimal ml-4 mb-2 marker:text-[#D4A574]">{children}</ol>
+    <ol className="text-[#E5E5E5] text-sm list-decimal ml-4 mb-2 marker:text-gold">{children}</ol>
   ),
   li: ({ children }) => <li className="mb-1 leading-relaxed">{children}</li>,
   code: ({ children, className }) => {
     // Block code vs inline code
     if (className) {
       return (
-        <code className="block bg-[#1E1E1E] text-[#D4A574] rounded p-2 text-xs overflow-x-auto mb-2">
+        <code className="block bg-dark-100 text-gold rounded p-2 text-xs overflow-x-auto mb-2">
           {children}
         </code>
       );
     }
     return (
-      <code className="bg-[#1E1E1E] text-[#D4A574] rounded px-1 text-xs">{children}</code>
+      <code className="bg-dark-100 text-gold rounded px-1 text-xs">{children}</code>
     );
   },
   a: ({ children, href }) => (
-    <a href={href} className="text-[#D4A574] underline hover:text-[#C4956A]" target="_blank" rel="noreferrer">
+    <a href={href} className="text-gold underline hover:text-gold-hover" target="_blank" rel="noreferrer">
       {children}
     </a>
   ),
@@ -213,7 +213,7 @@ export function GuideSidebar() {
         <div className="flex-1 overflow-y-auto px-4 py-3 min-h-0">
           {loading ? (
             <div className="flex items-center justify-center h-32">
-              <Loader2 className="size-5 animate-spin text-[#D4A574]" />
+              <Loader2 className="size-5 animate-spin text-gold" />
             </div>
           ) : error ? (
             <p className="text-sm text-red-400">{error}</p>
@@ -222,7 +222,7 @@ export function GuideSidebar() {
               {content}
             </ReactMarkdown>
           ) : (
-            <p className="text-sm text-[#666666] italic">No guide content available yet.</p>
+            <p className="text-sm text-dark-500 italic">No guide content available yet.</p>
           )}
         </div>
       </aside>

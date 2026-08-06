@@ -103,7 +103,7 @@ export function SiteSettingsTab() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-full text-[#999999]">
+      <div className="flex items-center justify-center h-full text-dark-600">
         <Loader2 className="size-5 animate-spin mr-2" />
         Loading settings...
       </div>
@@ -113,9 +113,9 @@ export function SiteSettingsTab() {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="px-8 py-6 border-b border-[#2A2A2A]">
+      <div className="px-8 py-6 border-b border-dark-200">
         <h1 className="text-xl font-semibold text-[#FAFAFA]">Site Settings</h1>
-        <p className="mt-1 text-sm text-[#999999]">
+        <p className="mt-1 text-sm text-dark-600">
           Configure page metadata, branding assets, and footer content.
         </p>
       </div>
@@ -132,7 +132,7 @@ export function SiteSettingsTab() {
             value={form.page_title}
             onChange={(e) => updateField("page_title", e.target.value)}
             placeholder="CulinAIre Kitchen"
-            className="w-full rounded-lg border border-[#2A2A2A] px-3 py-2 text-sm text-[#FAFAFA] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-transparent"
+            className="w-full rounded-lg border border-dark-200 px-3 py-2 text-sm text-[#FAFAFA] focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-transparent"
           />
         </div>
 
@@ -141,7 +141,7 @@ export function SiteSettingsTab() {
           <label className="block text-sm font-medium text-[#E5E5E5] mb-1.5">
             Title Separator
           </label>
-          <p className="text-xs text-[#999999] mb-2">
+          <p className="text-xs text-dark-600 mb-2">
             Character(s) between the page title and tagline in the browser tab.
           </p>
           <input
@@ -149,7 +149,7 @@ export function SiteSettingsTab() {
             value={form.title_separator}
             onChange={(e) => updateField("title_separator", e.target.value)}
             placeholder="|"
-            className="w-24 rounded-lg border border-[#2A2A2A] px-3 py-2 text-sm text-[#FAFAFA] text-center focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-transparent"
+            className="w-24 rounded-lg border border-dark-200 px-3 py-2 text-sm text-[#FAFAFA] text-center focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-transparent"
           />
         </div>
 
@@ -163,14 +163,14 @@ export function SiteSettingsTab() {
             value={form.tagline}
             onChange={(e) => updateField("tagline", e.target.value)}
             placeholder="Your AI Culinary Knowledge Engine"
-            className="w-full rounded-lg border border-[#2A2A2A] px-3 py-2 text-sm text-[#FAFAFA] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-transparent"
+            className="w-full rounded-lg border border-dark-200 px-3 py-2 text-sm text-[#FAFAFA] focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-transparent"
           />
         </div>
 
         {/* Title Preview */}
         {(form.page_title || form.tagline) && (
-          <div className="rounded-lg border border-[#2A2A2A] bg-[#0A0A0A] px-4 py-3">
-            <span className="text-xs font-medium text-[#999999] block mb-1">
+          <div className="rounded-lg border border-dark-200 bg-dark px-4 py-3">
+            <span className="text-xs font-medium text-dark-600 block mb-1">
               Browser Tab Preview
             </span>
             <span className="text-sm text-[#FAFAFA]">
@@ -191,7 +191,7 @@ export function SiteSettingsTab() {
             onChange={(e) => updateField("meta_description", e.target.value)}
             placeholder="AI-powered culinary knowledge engine for chefs and food professionals."
             rows={2}
-            className="w-full rounded-lg border border-[#2A2A2A] px-3 py-2 text-sm text-[#FAFAFA] resize-none focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-transparent"
+            className="w-full rounded-lg border border-dark-200 px-3 py-2 text-sm text-[#FAFAFA] resize-none focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-transparent"
           />
         </div>
 
@@ -203,7 +203,7 @@ export function SiteSettingsTab() {
           <select
             value={form.robots_meta}
             onChange={(e) => updateField("robots_meta", e.target.value)}
-            className="w-full rounded-lg border border-[#2A2A2A] px-3 py-2 text-sm text-[#FAFAFA] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-transparent"
+            className="w-full rounded-lg border border-dark-200 px-3 py-2 text-sm text-[#FAFAFA] focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-transparent"
           >
             {ROBOTS_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>
@@ -239,7 +239,7 @@ export function SiteSettingsTab() {
             value={form.footer_text}
             onChange={(e) => updateField("footer_text", e.target.value)}
             placeholder="© 2026 CulinAIre Kitchen"
-            className="w-full rounded-lg border border-[#2A2A2A] px-3 py-2 text-sm text-[#FAFAFA] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-transparent"
+            className="w-full rounded-lg border border-dark-200 px-3 py-2 text-sm text-[#FAFAFA] focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-transparent"
           />
         </div>
 
@@ -250,12 +250,12 @@ export function SiteSettingsTab() {
           </h2>
 
           {/* Default free sessions for guest users */}
-          <div className="flex items-center justify-between rounded-lg border border-[#2A2A2A] bg-[#161616] px-4 py-3">
+          <div className="flex items-center justify-between rounded-lg border border-dark-200 bg-dark-50 px-4 py-3">
             <div>
               <div className="text-sm font-medium text-[#FAFAFA]">
                 Default Guest Sessions
               </div>
-              <p className="text-xs text-[#999999] mt-0.5">
+              <p className="text-xs text-dark-600 mt-0.5">
                 Number of free chat sessions available to unauthenticated guest users.
               </p>
             </div>
@@ -265,17 +265,17 @@ export function SiteSettingsTab() {
               max="1000"
               value={form.default_guest_sessions}
               onChange={(e) => updateField("default_guest_sessions", e.target.value)}
-              className="w-20 rounded-lg border border-[#2A2A2A] bg-[#0A0A0A] px-3 py-1.5 text-sm text-[#FAFAFA] text-right focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-transparent"
+              className="w-20 rounded-lg border border-dark-200 bg-dark px-3 py-1.5 text-sm text-[#FAFAFA] text-right focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-transparent"
             />
           </div>
 
           {/* Default free sessions for registered users */}
-          <div className="flex items-center justify-between rounded-lg border border-[#2A2A2A] bg-[#161616] px-4 py-3">
+          <div className="flex items-center justify-between rounded-lg border border-dark-200 bg-dark-50 px-4 py-3">
             <div>
               <div className="text-sm font-medium text-[#FAFAFA]">
                 Default Registered User Sessions
               </div>
-              <p className="text-xs text-[#999999] mt-0.5">
+              <p className="text-xs text-dark-600 mt-0.5">
                 Number of free chat sessions granted to newly registered users.
               </p>
             </div>
@@ -285,17 +285,17 @@ export function SiteSettingsTab() {
               max="1000"
               value={form.default_registered_sessions}
               onChange={(e) => updateField("default_registered_sessions", e.target.value)}
-              className="w-20 rounded-lg border border-[#2A2A2A] bg-[#0A0A0A] px-3 py-1.5 text-sm text-[#FAFAFA] text-right focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-transparent"
+              className="w-20 rounded-lg border border-dark-200 bg-dark px-3 py-1.5 text-sm text-[#FAFAFA] text-right focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-transparent"
             />
           </div>
 
           {/* Idle session cleanup hours */}
-          <div className="flex items-center justify-between rounded-lg border border-[#2A2A2A] bg-[#161616] px-4 py-3">
+          <div className="flex items-center justify-between rounded-lg border border-dark-200 bg-dark-50 px-4 py-3">
             <div>
               <div className="text-sm font-medium text-[#FAFAFA]">
                 Guest Session Idle Timeout (hours)
               </div>
-              <p className="text-xs text-[#999999] mt-0.5">
+              <p className="text-xs text-dark-600 mt-0.5">
                 Guest sessions inactive for longer than this are automatically
                 deleted, freeing up the per-IP session limit.
               </p>
@@ -308,17 +308,17 @@ export function SiteSettingsTab() {
               onChange={(e) =>
                 updateField("guest_session_idle_hours", e.target.value)
               }
-              className="w-20 rounded-lg border border-[#2A2A2A] bg-[#0A0A0A] px-3 py-1.5 text-sm text-[#FAFAFA] text-right focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-transparent"
+              className="w-20 rounded-lg border border-dark-200 bg-dark px-3 py-1.5 text-sm text-[#FAFAFA] text-right focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-transparent"
             />
           </div>
 
           {/* Recipes per page */}
-          <div className="flex items-center justify-between rounded-lg border border-[#2A2A2A] bg-[#161616] px-4 py-3">
+          <div className="flex items-center justify-between rounded-lg border border-dark-200 bg-dark-50 px-4 py-3">
             <div>
               <div className="text-sm font-medium text-[#FAFAFA]">
                 Recipes Per Page
               </div>
-              <p className="text-xs text-[#999999] mt-0.5">
+              <p className="text-xs text-dark-600 mt-0.5">
                 Number of recipe cards shown before &ldquo;Load More&rdquo; on Kitchen Shelf and My Shelf.
               </p>
             </div>
@@ -328,14 +328,14 @@ export function SiteSettingsTab() {
               max="100"
               value={form.recipes_per_page}
               onChange={(e) => updateField("recipes_per_page", e.target.value)}
-              className="w-20 rounded-lg border border-[#2A2A2A] bg-[#0A0A0A] px-3 py-1.5 text-sm text-[#FAFAFA] text-right focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-transparent"
+              className="w-20 rounded-lg border border-dark-200 bg-dark px-3 py-1.5 text-sm text-[#FAFAFA] text-right focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-transparent"
             />
           </div>
         </div>
       </div>
 
       {/* Bottom bar */}
-      <div className="px-8 py-4 border-t border-[#2A2A2A] bg-[#0A0A0A] flex items-center justify-end gap-3">
+      <div className="px-8 py-4 border-t border-dark-200 bg-dark flex items-center justify-end gap-3">
         {error && (
           <span className="flex items-center gap-1.5 text-sm text-red-400">
             <AlertCircle className="size-4" />
@@ -351,7 +351,7 @@ export function SiteSettingsTab() {
         <button
           onClick={handleSave}
           disabled={isSaving}
-          className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-white bg-[#D4A574] rounded-lg hover:bg-[#C4956A] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-white bg-gold rounded-lg hover:bg-gold-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           {isSaving ? (
             <Loader2 className="size-4 animate-spin" />
@@ -388,7 +388,7 @@ function FileUploadField({
       </label>
       <div className="flex items-center gap-4">
         {/* Preview */}
-        <div className="size-12 rounded-lg border border-[#2A2A2A] bg-[#0A0A0A] flex items-center justify-center overflow-hidden">
+        <div className="size-12 rounded-lg border border-dark-200 bg-dark flex items-center justify-center overflow-hidden">
           {currentPath ? (
             <img
               src={currentPath}
@@ -396,7 +396,7 @@ function FileUploadField({
               className="size-full object-contain"
             />
           ) : (
-            <Image className="size-5 text-[#666666]" />
+            <Image className="size-5 text-dark-500" />
           )}
         </div>
 
@@ -404,14 +404,14 @@ function FileUploadField({
         <button
           type="button"
           onClick={() => inputRef.current?.click()}
-          className="flex items-center gap-2 px-3 py-2 text-sm text-[#E5E5E5] bg-[#161616] border border-[#2A2A2A] rounded-lg hover:bg-[#0A0A0A] transition-colors"
+          className="flex items-center gap-2 px-3 py-2 text-sm text-[#E5E5E5] bg-dark-50 border border-dark-200 rounded-lg hover:bg-dark transition-colors"
         >
           <Upload className="size-4" />
           Upload
         </button>
 
         {currentPath && (
-          <span className="text-xs text-[#999999] truncate max-w-48">
+          <span className="text-xs text-dark-600 truncate max-w-48">
             {currentPath}
           </span>
         )}

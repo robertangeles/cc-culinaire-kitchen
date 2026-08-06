@@ -103,24 +103,24 @@ export function BenchMessageInput({ onSend, onTyping, disabled, placeholder, onl
   }
 
   return (
-    <form onSubmit={handleSubmit} className="border-t border-[#2A2A2A] bg-[#161616] px-4 py-4 relative">
+    <form onSubmit={handleSubmit} className="border-t border-dark-200 bg-dark-50 px-4 py-4 relative">
       {/* @mention autocomplete dropdown */}
       {mentionResults.length > 0 && mentionQuery !== null && (
-        <div className="absolute bottom-full left-4 right-4 mb-1 bg-[#1E1E1E] rounded-lg shadow-lg border border-[#2A2A2A] py-1 z-20 max-h-48 overflow-y-auto">
+        <div className="absolute bottom-full left-4 right-4 mb-1 bg-dark-100 rounded-lg shadow-lg border border-dark-200 py-1 z-20 max-h-48 overflow-y-auto">
           {mentionResults.map((u, i) => (
             <button
               key={u.userId}
               type="button"
               onClick={() => insertMention(u.userName)}
               className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm transition-colors ${
-                i === mentionIndex ? "bg-[#D4A574]/15 text-[#D4A574]" : "text-[#E5E5E5] hover:bg-[#2A2A2A]"
+                i === mentionIndex ? "bg-gold/15 text-gold" : "text-[#E5E5E5] hover:bg-dark-200"
               }`}
             >
               {u.userPhotoPath ? (
                 <img src={u.userPhotoPath} alt={u.userName} className="size-6 rounded-full object-cover" />
               ) : (
-                <div className="size-6 rounded-full bg-[#D4A574]/15 flex items-center justify-center">
-                  <span className="text-xs font-semibold text-[#D4A574]">{u.userName.charAt(0).toUpperCase()}</span>
+                <div className="size-6 rounded-full bg-gold/15 flex items-center justify-center">
+                  <span className="text-xs font-semibold text-gold">{u.userName.charAt(0).toUpperCase()}</span>
                 </div>
               )}
               <span className="font-medium">{u.userName}</span>
@@ -138,13 +138,13 @@ export function BenchMessageInput({ onSend, onTyping, disabled, placeholder, onl
           onKeyDown={handleKeyDown}
           disabled={disabled}
           placeholder={placeholder ?? "Type a message... Use @ to mention someone"}
-          className="flex-1 px-4 py-3.5 text-base border border-[#2A2A2A] rounded-xl bg-[#0A0A0A] text-white placeholder-[#555555] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-[#D4A574]/50 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex-1 px-4 py-3.5 text-base border border-dark-200 rounded-xl bg-dark text-white placeholder-[#555555] focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-gold/50 disabled:opacity-50 disabled:cursor-not-allowed"
           autoComplete="off"
         />
         <button
           type="submit"
           disabled={!text.trim() || disabled}
-          className="p-3 rounded-xl bg-[#D4A574] text-[#0A0A0A] hover:bg-[#C4956A] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          className="p-3 rounded-xl bg-gold text-dark hover:bg-gold-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
           <Send className="size-5" />
         </button>

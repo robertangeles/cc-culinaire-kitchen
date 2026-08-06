@@ -333,11 +333,11 @@ export function ChatContainer({
             <div className="flex items-center justify-between">
               <span>You've used all your free sessions.</span>
               {isGuest ? (
-                <Link to="/register" className="ml-2 font-medium text-[#D4A574] hover:text-[#C4956A] underline">
+                <Link to="/register" className="ml-2 font-medium text-gold hover:text-gold-hover underline">
                   Register for free to continue
                 </Link>
               ) : (
-                <Link to="/profile" className="ml-2 font-medium text-[#D4A574] hover:text-[#C4956A] underline">
+                <Link to="/profile" className="ml-2 font-medium text-gold hover:text-gold-hover underline">
                   Upgrade to continue
                 </Link>
               )}
@@ -347,7 +347,7 @@ export function ChatContainer({
               <span>Your session expired.</span>
               <button
                 onClick={() => window.location.reload()}
-                className="ml-2 font-medium text-[#D4A574] hover:text-[#C4956A] underline"
+                className="ml-2 font-medium text-gold hover:text-gold-hover underline"
               >
                 Refresh to continue
               </button>

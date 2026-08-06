@@ -118,14 +118,14 @@ function TransferRow({
   }
 
   return (
-    <div className="rounded-xl bg-[#111]/60 border border-white/5 hover:border-[#D4A574]/15 transition-all overflow-hidden">
+    <div className="rounded-xl bg-[#111]/60 border border-white/5 hover:border-gold/15 transition-all overflow-hidden">
       {/* Header row — clickable */}
       <button
         onClick={toggleExpand}
         className="w-full flex items-center justify-between gap-4 px-4 py-3 text-left hover:bg-white/[0.02] transition-colors"
       >
         <div className="flex items-center gap-3 min-w-0 flex-1">
-          <ChevronRight size={14} className={`text-[#666] transition-transform shrink-0 ${expanded ? "rotate-90" : ""}`} />
+          <ChevronRight size={14} className={`text-dark-500 transition-transform shrink-0 ${expanded ? "rotate-90" : ""}`} />
           <div className="flex items-center gap-1.5 text-sm text-[#ccc] truncate">
             <span className="font-medium text-white truncate">
               {transfer.fromLocationName || "Unknown"}
@@ -153,15 +153,15 @@ function TransferRow({
         <div className="border-t border-white/5 px-4 py-3 space-y-3 animate-[fadeIn_150ms_ease-out]">
           {loadingDetail ? (
             <div className="flex items-center justify-center py-4">
-              <Loader2 size={16} className="animate-spin text-[#D4A574]" />
+              <Loader2 size={16} className="animate-spin text-gold" />
             </div>
           ) : detail?.lines ? (
             <>
               {/* Line items */}
-              <div className="rounded-lg border border-[#1E1E1E] divide-y divide-[#1E1E1E]">
+              <div className="rounded-lg border border-dark-100 divide-y divide-dark-100">
                 <div className="flex items-center justify-between px-3 py-1.5 bg-white/[0.02]">
-                  <span className="text-[10px] text-[#666] uppercase tracking-wider">Item</span>
-                  <span className="text-[10px] text-[#666] uppercase tracking-wider">Quantity</span>
+                  <span className="text-[10px] text-dark-500 uppercase tracking-wider">Item</span>
+                  <span className="text-[10px] text-dark-500 uppercase tracking-wider">Quantity</span>
                 </div>
                 {(detail.lines as any[]).map((line: any) => (
                   <div key={line.lineId} className="flex items-center justify-between px-3 py-2">
@@ -174,7 +174,7 @@ function TransferRow({
                           min="0.01"
                           step="any"
                           onChange={(e) => { line.sentQty = e.target.value; }}
-                          className="w-20 px-2 py-1 rounded-md bg-[#161616] border border-[#2A2A2A] text-white text-sm text-right focus:outline-none focus:border-[#D4A574]/40 transition-colors"
+                          className="w-20 px-2 py-1 rounded-md bg-dark-50 border border-dark-200 text-white text-sm text-right focus:outline-none focus:border-gold/40 transition-colors"
                         />
                         <span className="text-xs text-[#888]">{line.sentUnit}</span>
                       </div>
@@ -193,7 +193,7 @@ function TransferRow({
                   {!showAddItems ? (
                     <button
                       onClick={(e) => { e.stopPropagation(); setShowAddItems(true); }}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#D4A574]/10 text-[#D4A574] text-xs font-medium hover:bg-[#D4A574]/20 transition-colors border border-[#D4A574]/20"
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gold/10 text-gold text-xs font-medium hover:bg-gold/20 transition-colors border border-gold/20"
                     >
                       <Plus size={14} />
                       Add More Items
@@ -214,13 +214,13 @@ function TransferRow({
                         value={addSearchQuery}
                         onChange={(e) => setAddSearchQuery(e.target.value)}
                         placeholder="Filter items..."
-                        className="w-full px-3 py-1.5 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-white text-sm focus:outline-none focus:border-[#D4A574]/30 placeholder:text-[#555]"
+                        className="w-full px-3 py-1.5 rounded-lg bg-dark border border-dark-200 text-white text-sm focus:outline-none focus:border-gold/30 placeholder:text-[#555]"
                       />
 
                       {/* Category tabs */}
                       <div className="flex flex-wrap gap-1">
                         <button onClick={() => setAddActiveCat(null)}
-                          className={`px-2 py-0.5 rounded-full text-[10px] font-medium border transition-colors ${!addActiveCat ? "bg-[#D4A574]/15 text-[#D4A574] border-[#D4A574]/30" : "bg-white/[0.03] text-[#888] border-white/5 hover:text-[#ccc]"}`}
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-medium border transition-colors ${!addActiveCat ? "bg-gold/15 text-gold border-gold/30" : "bg-white/[0.03] text-[#888] border-white/5 hover:text-[#ccc]"}`}
                         >All</button>
                         {(() => {
                           const available = locationItems.filter((i) => i.activeInd !== false && Number(i.currentQty || 0) > 0 && !(detail.lines as any[]).some((l: any) => l.ingredientId === i.ingredientId));
@@ -230,7 +230,7 @@ function TransferRow({
                             const count = available.filter(i => i.ingredientCategory === cat).length;
                             return (
                               <button key={cat} onClick={() => setAddActiveCat(addActiveCat === cat ? null : cat)}
-                                className={`px-2 py-0.5 rounded-full text-[10px] font-medium border transition-colors ${addActiveCat === cat ? "bg-[#D4A574]/15 text-[#D4A574] border-[#D4A574]/30" : "bg-white/[0.03] text-[#888] border-white/5 hover:text-[#ccc]"}`}
+                                className={`px-2 py-0.5 rounded-full text-[10px] font-medium border transition-colors ${addActiveCat === cat ? "bg-gold/15 text-gold border-gold/30" : "bg-white/[0.03] text-[#888] border-white/5 hover:text-[#ccc]"}`}
                               >{label} ({count})</button>
                             );
                           });
@@ -238,10 +238,10 @@ function TransferRow({
                       </div>
 
                       {/* Item list grouped by category */}
-                      <div className="max-h-48 overflow-y-auto rounded-lg border border-[#1E1E1E]">
-                        <div className="flex items-center justify-between px-3 py-1 bg-white/[0.02] border-b border-[#1E1E1E]">
-                          <span className="text-[9px] text-[#666] uppercase tracking-wider">Item</span>
-                          <span className="text-[9px] text-[#666] uppercase tracking-wider">Current Stock</span>
+                      <div className="max-h-48 overflow-y-auto rounded-lg border border-dark-100">
+                        <div className="flex items-center justify-between px-3 py-1 bg-white/[0.02] border-b border-dark-100">
+                          <span className="text-[9px] text-dark-500 uppercase tracking-wider">Item</span>
+                          <span className="text-[9px] text-dark-500 uppercase tracking-wider">Current Stock</span>
                         </div>
                         {(() => {
                           const available = locationItems
@@ -255,12 +255,12 @@ function TransferRow({
                             if (!grouped.has(cat)) grouped.set(cat, []);
                             grouped.get(cat)!.push(item);
                           }
-                          if (grouped.size === 0) return <p className="px-3 py-3 text-xs text-[#666] text-center">No items available</p>;
+                          if (grouped.size === 0) return <p className="px-3 py-3 text-xs text-dark-500 text-center">No items available</p>;
                           return [...grouped.entries()].map(([cat, items]) => {
                             const catLabel = cat.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
                             return (
                               <div key={cat}>
-                                <div className="px-3 py-1 bg-white/[0.02] text-[9px] text-[#666] uppercase tracking-wider font-medium border-t border-[#1E1E1E]">{catLabel}</div>
+                                <div className="px-3 py-1 bg-white/[0.02] text-[9px] text-dark-500 uppercase tracking-wider font-medium border-t border-dark-100">{catLabel}</div>
                                 {items.map(item => {
                                   const stock = Number(item.currentQty || 0);
                                   return (
@@ -280,7 +280,7 @@ function TransferRow({
                                         } finally { setAddingItems(false); }
                                       }}
                                       disabled={addingItems}
-                                      className="w-full flex items-center justify-between px-3 py-1.5 text-sm text-[#ccc] hover:bg-[#D4A574]/5 transition-colors"
+                                      className="w-full flex items-center justify-between px-3 py-1.5 text-sm text-[#ccc] hover:bg-gold/5 transition-colors"
                                     >
                                       <span>{item.ingredientName}</span>
                                       <span className="text-[10px] text-[#888] tabular-nums">{stock.toFixed(1)} {item.baseUnit}</span>
@@ -300,14 +300,14 @@ function TransferRow({
               {/* Notes — editable when INITIATED */}
               {isEditable ? (
                 <div>
-                  <label className="text-[10px] text-[#666] uppercase tracking-wider">Notes</label>
+                  <label className="text-[10px] text-dark-500 uppercase tracking-wider">Notes</label>
                   <input
                     type="text"
                     defaultValue={detail.notes || ""}
                     onChange={(e) => { detail.notes = e.target.value; }}
                     placeholder="Add a note..."
                     onClick={(e) => e.stopPropagation()}
-                    className="w-full mt-1 px-3 py-1.5 rounded-lg bg-[#161616] border border-[#2A2A2A] text-white text-sm focus:outline-none focus:border-[#D4A574]/40 transition-colors placeholder:text-[#555]"
+                    className="w-full mt-1 px-3 py-1.5 rounded-lg bg-dark-50 border border-dark-200 text-white text-sm focus:outline-none focus:border-gold/40 transition-colors placeholder:text-[#555]"
                   />
                 </div>
               ) : detail.notes ? (
@@ -320,7 +320,7 @@ function TransferRow({
                   <button
                     onClick={(e) => { e.stopPropagation(); onSend(transfer.transferId); }}
                     disabled={isBusy}
-                    className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-gradient-to-r from-[#D4A574] to-[#C4956A] text-[#0A0A0A] text-sm font-semibold hover:shadow-[0_0_12px_rgba(212,165,116,0.2)] active:scale-[0.98] transition-all disabled:opacity-50"
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-gradient-to-r from-gold to-gold-hover text-dark text-sm font-semibold hover:shadow-[0_0_12px_rgba(212,165,116,0.2)] active:scale-[0.98] transition-all disabled:opacity-50"
                   >
                     {isBusy ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
                     Confirm Send
@@ -349,7 +349,7 @@ function TransferRow({
               )}
             </>
           ) : (
-            <p className="text-xs text-[#666] text-center py-2">No details available</p>
+            <p className="text-xs text-dark-500 text-center py-2">No details available</p>
           )}
         </div>
       )}
@@ -475,7 +475,7 @@ export default function TransferList({ focusTransferId }: { focusTransferId?: st
         </div>
         <button
           onClick={() => setShowForm(true)}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-[#D4A574] to-[#C4956A] text-[#0A0A0A] text-sm font-semibold hover:shadow-[0_0_12px_rgba(212,165,116,0.2)] active:scale-[0.98] transition-all"
+          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-gold to-gold-hover text-dark text-sm font-semibold hover:shadow-[0_0_12px_rgba(212,165,116,0.2)] active:scale-[0.98] transition-all"
         >
           <Plus size={16} />
           New Transfer

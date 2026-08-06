@@ -87,7 +87,7 @@ function getChipLabel(
 const SEGMENT_BG: Record<StatusKey, string> = {
   complete: "bg-emerald-500",
   warning: "bg-amber-500",
-  not_started: "bg-[#2A2A2A]",
+  not_started: "bg-dark-200",
   in_progress: "bg-sky-500",
 };
 
@@ -97,7 +97,7 @@ const CHIP_STYLES: Record<StatusKey, string> = {
   warning:
     "bg-amber-500/10 text-amber-400 border-amber-500/20 hover:bg-amber-500/20",
   not_started:
-    "bg-[#1E1E1E] text-[#666] border-[#2A2A2A] hover:bg-[#2A2A2A]",
+    "bg-dark-100 text-dark-500 border-dark-200 hover:bg-dark-200",
   in_progress:
     "bg-sky-500/10 text-sky-400 border-sky-500/20 hover:bg-sky-500/20",
 };
@@ -140,7 +140,7 @@ export function SetupProgress({ setupProgress, onNavigate }: SetupProgressProps)
         {allComplete && (
           <button
             onClick={() => setDismissed(true)}
-            className="p-1 rounded-md text-[#666] hover:text-white hover:bg-white/5 transition-colors"
+            className="p-1 rounded-md text-dark-500 hover:text-white hover:bg-white/5 transition-colors"
             title="Dismiss"
           >
             <X className="size-4" />
@@ -176,7 +176,7 @@ export function SetupProgress({ setupProgress, onNavigate }: SetupProgressProps)
         {/* Legend toggle */}
         <button
           onClick={() => setLegendOpen((prev) => !prev)}
-          className="flex items-center gap-1 ml-1 text-[10px] text-[#555] hover:text-[#999] transition-colors"
+          className="flex items-center gap-1 ml-1 text-[10px] text-[#555] hover:text-dark-600 transition-colors"
         >
           <HelpCircle className="size-3" />
           <span>What do these mean?</span>
@@ -186,7 +186,7 @@ export function SetupProgress({ setupProgress, onNavigate }: SetupProgressProps)
 
       {/* Collapsible legend */}
       {legendOpen && (
-        <div className="bg-[#0A0A0A] border border-[#2A2A2A] rounded-lg p-3 mt-2.5 grid grid-cols-2 sm:grid-cols-4 gap-2 animate-in slide-in-from-top-2 duration-200">
+        <div className="bg-dark border border-dark-200 rounded-lg p-3 mt-2.5 grid grid-cols-2 sm:grid-cols-4 gap-2 animate-in slide-in-from-top-2 duration-200">
           {(Object.keys(STATUS_LEGEND) as StatusKey[]).map((key) => {
             const entry = STATUS_LEGEND[key];
             return (
@@ -194,7 +194,7 @@ export function SetupProgress({ setupProgress, onNavigate }: SetupProgressProps)
                 <span className={`text-xs ${ICON_COLORS[key]}`}>
                   {entry.icon}
                 </span>
-                <span className="text-[10px] text-[#999]">{entry.label}</span>
+                <span className="text-[10px] text-dark-600">{entry.label}</span>
               </div>
             );
           })}

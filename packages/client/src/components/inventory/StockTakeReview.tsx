@@ -95,36 +95,36 @@ export function StockTakeReview({ session, onActionComplete, readOnly = false }:
   return (
     <div className="space-y-6 animate-[fadeInUp_200ms_ease-out]">
       {/* Session context header */}
-      <div className="p-5 rounded-xl bg-[#161616] border border-[#2A2A2A]">
+      <div className="p-5 rounded-xl bg-dark-50 border border-dark-200">
         <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 rounded-xl bg-[#D4A574]/10 flex items-center justify-center">
-            <ShieldCheck className="size-5 text-[#D4A574]" />
+          <div className="w-10 h-10 rounded-xl bg-gold/10 flex items-center justify-center">
+            <ShieldCheck className="size-5 text-gold" />
           </div>
           <div>
             <h3 className="text-base font-semibold text-white">Stock Take Review</h3>
-            <p className="text-xs text-[#999]">Review counts before approving</p>
+            <p className="text-xs text-dark-600">Review counts before approving</p>
           </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
           <div className="flex items-center gap-2">
-            <MapPin className="size-4 text-[#D4A574]" />
+            <MapPin className="size-4 text-gold" />
             <div>
-              <p className="text-xs text-[#666]">Location</p>
+              <p className="text-xs text-dark-500">Location</p>
               <p className="text-white font-medium">{location?.locationName ?? "Unknown"}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <User className="size-4 text-[#D4A574]" />
+            <User className="size-4 text-gold" />
             <div>
-              <p className="text-xs text-[#666]">Opened by</p>
+              <p className="text-xs text-dark-500">Opened by</p>
               <p className="text-white font-medium">{session.openedByUserName ?? `User #${session.openedByUserId}`}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Clock className="size-4 text-[#D4A574]" />
+            <Clock className="size-4 text-gold" />
             <div>
-              <p className="text-xs text-[#666]">Submitted</p>
+              <p className="text-xs text-dark-500">Submitted</p>
               <p className="text-white font-medium">
                 {session.submittedDttm
                   ? new Date(session.submittedDttm).toLocaleString()
@@ -135,16 +135,16 @@ export function StockTakeReview({ session, onActionComplete, readOnly = false }:
         </div>
 
         {/* Summary stats */}
-        <div className="flex gap-4 mt-4 pt-4 border-t border-[#2A2A2A]">
-          <span className="text-xs text-[#999]">
+        <div className="flex gap-4 mt-4 pt-4 border-t border-dark-200">
+          <span className="text-xs text-dark-600">
             <span className="text-white font-medium">{submittedCats.length}</span> categor{submittedCats.length === 1 ? "y" : "ies"} counted
           </span>
           {notStartedCats.length > 0 && (
-            <span className="text-xs text-[#666]">
+            <span className="text-xs text-dark-500">
               {notStartedCats.length} skipped
             </span>
           )}
-          <span className="text-xs text-[#999]">
+          <span className="text-xs text-dark-600">
             <span className="text-white font-medium">
               {submittedCats.reduce((sum, c) => sum + (c.lineCount ?? 0), 0)}
             </span> total items
@@ -201,15 +201,15 @@ export function StockTakeReview({ session, onActionComplete, readOnly = false }:
       {/* Flag modal */}
       {flagModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-[fadeIn_150ms_ease-out]">
-          <div className="w-full max-w-md p-6 rounded-2xl bg-[#161616] border border-[#2A2A2A] shadow-2xl animate-[scaleIn_200ms_ease-out]">
+          <div className="w-full max-w-md p-6 rounded-2xl bg-dark-50 border border-dark-200 shadow-2xl animate-[scaleIn_200ms_ease-out]">
             <h4 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
               <Flag className="size-5 text-red-400" />
               Flag Categories for Recount
             </h4>
-            <p className="text-xs text-[#999] mb-4">Select which categories need recounting.</p>
+            <p className="text-xs text-dark-600 mb-4">Select which categories need recounting.</p>
             <div className="space-y-2 mb-4">
               {submittedCats.map((cat) => (
-                <label key={cat.categoryId} className="flex items-center gap-3 p-2 rounded-lg hover:bg-[#1E1E1E] cursor-pointer transition-colors">
+                <label key={cat.categoryId} className="flex items-center gap-3 p-2 rounded-lg hover:bg-dark-100 cursor-pointer transition-colors">
                   <input
                     type="checkbox"
                     checked={flaggedCats.has(cat.categoryName)}
@@ -219,7 +219,7 @@ export function StockTakeReview({ session, onActionComplete, readOnly = false }:
                       else next.delete(cat.categoryName);
                       setFlaggedCats(next);
                     }}
-                    className="rounded border-[#3A3A3A] bg-[#0A0A0A] text-[#D4A574] focus:ring-[#D4A574]/50"
+                    className="rounded border-dark-300 bg-dark text-gold focus:ring-gold/50"
                   />
                   <span className="text-sm text-white">
                     {CATEGORY_LABELS[cat.categoryName] || cat.categoryName}
@@ -232,12 +232,12 @@ export function StockTakeReview({ session, onActionComplete, readOnly = false }:
               onChange={(e) => setFlagReason(e.target.value)}
               placeholder="Reason for flagging (required)..."
               rows={3}
-              className="w-full px-3 py-2 rounded-xl bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none focus:border-red-500/50 resize-none mb-4"
+              className="w-full px-3 py-2 rounded-xl bg-dark border border-dark-200 text-sm text-white placeholder-dark-500 focus:outline-none focus:border-red-500/50 resize-none mb-4"
             />
             <div className="flex justify-end gap-3">
               <button
                 onClick={() => { setFlagModalOpen(false); setFlaggedCats(new Set()); setFlagReason(""); }}
-                className="px-4 py-2 rounded-xl text-sm text-[#999] hover:text-white transition-colors"
+                className="px-4 py-2 rounded-xl text-sm text-dark-600 hover:text-white transition-colors"
               >
                 Cancel
               </button>
@@ -288,22 +288,22 @@ function CategoryReviewCard({
     <div className={`rounded-xl border overflow-hidden transition-all ${
       hasVarianceIssues
         ? "bg-amber-500/5 border-amber-500/20"
-        : "bg-[#161616] border-[#2A2A2A]"
+        : "bg-dark-50 border-dark-200"
     }`}>
       {/* Header — clickable to expand */}
       <button
         onClick={onToggle}
-        className="w-full flex items-center justify-between p-4 hover:bg-[#1E1E1E]/50 transition-colors"
+        className="w-full flex items-center justify-between p-4 hover:bg-dark-100/50 transition-colors"
       >
         <div className="flex items-center gap-3">
           {isExpanded
-            ? <ChevronDown className="size-4 text-[#999]" />
-            : <ChevronRight className="size-4 text-[#999]" />
+            ? <ChevronDown className="size-4 text-dark-600" />
+            : <ChevronRight className="size-4 text-dark-600" />
           }
           <h4 className="text-sm font-medium text-white">
             {CATEGORY_LABELS[category.categoryName] || category.categoryName}
           </h4>
-          <span className="text-xs text-[#666]">{category.lineCount ?? lines.length} items</span>
+          <span className="text-xs text-dark-500">{category.lineCount ?? lines.length} items</span>
           {hasVarianceIssues && (
             <span className="flex items-center gap-1 text-xs text-amber-400">
               <AlertTriangle className="size-3" />
@@ -312,7 +312,7 @@ function CategoryReviewCard({
           )}
         </div>
         {category.claimedByUserId && (
-          <span className="text-xs text-[#666] flex items-center gap-1">
+          <span className="text-xs text-dark-500 flex items-center gap-1">
             <User className="size-3" />
             {category.claimedByUserName ?? `#${category.claimedByUserId}`}
           </span>
@@ -321,17 +321,17 @@ function CategoryReviewCard({
 
       {/* Expanded line items */}
       {isExpanded && (
-        <div className="border-t border-[#2A2A2A]">
+        <div className="border-t border-dark-200">
           {isLoading ? (
             <div className="flex items-center justify-center py-6">
-              <Loader2 className="size-5 text-[#D4A574] animate-spin" />
+              <Loader2 className="size-5 text-gold animate-spin" />
             </div>
           ) : lines.length === 0 ? (
-            <p className="text-xs text-[#666] text-center py-6">No items counted</p>
+            <p className="text-xs text-dark-500 text-center py-6">No items counted</p>
           ) : (
-            <div className="divide-y divide-[#2A2A2A]/50">
+            <div className="divide-y divide-dark-200/50">
               {/* Column headers */}
-              <div className="grid grid-cols-12 gap-2 px-4 py-2 text-[10px] text-[#666] uppercase tracking-wider">
+              <div className="grid grid-cols-12 gap-2 px-4 py-2 text-[10px] text-dark-500 uppercase tracking-wider">
                 <div className="col-span-3">Ingredient</div>
                 <div className="col-span-1 text-right">Counted</div>
                 <div className="col-span-1 text-right">Expected</div>
@@ -362,25 +362,25 @@ function LineItemRow({ line }: { line: StockTakeLine }) {
 
   return (
     <div className={`px-4 py-2.5 text-sm ${
-      isHigh ? "bg-amber-500/5" : "hover:bg-[#1E1E1E]/30"
+      isHigh ? "bg-amber-500/5" : "hover:bg-dark-100/30"
     } transition-colors`}>
       {/* Desktop: grid layout */}
       <div className="hidden sm:grid grid-cols-12 gap-2">
         <div className="col-span-3 text-white truncate">
           {line.ingredientName ?? line.ingredientId.slice(0, 8)}
-          <span className="text-[10px] text-[#666] ml-1">{line.countedUnit}</span>
+          <span className="text-[10px] text-dark-500 ml-1">{line.countedUnit}</span>
         </div>
         <div className="col-span-1 text-right text-white font-medium tabular-nums">
           {Number(line.countedQty).toFixed(1)}
         </div>
-        <div className="col-span-1 text-right text-[#999] tabular-nums">
+        <div className="col-span-1 text-right text-dark-600 tabular-nums">
           {line.expectedQty ? Number(line.expectedQty).toFixed(1) : "—"}
         </div>
         <div className={`col-span-2 text-right tabular-nums flex items-center justify-end gap-1 ${
-          variance === null ? "text-[#666]"
+          variance === null ? "text-dark-500"
             : variance > 0 ? "text-emerald-400"
             : variance < 0 ? "text-red-400"
-            : "text-[#999]"
+            : "text-dark-600"
         }`}>
           {variance !== null ? (
             <>
@@ -393,14 +393,14 @@ function LineItemRow({ line }: { line: StockTakeLine }) {
           ) : "—"}
         </div>
         <div className={`col-span-2 text-right tabular-nums ${
-          varianceCost === null ? "text-[#666]"
+          varianceCost === null ? "text-dark-500"
             : varianceCost > 0 ? "text-emerald-400"
             : varianceCost < 0 ? "text-red-400"
-            : "text-[#999]"
+            : "text-dark-600"
         }`}>
           {varianceCost !== null ? fmtCost(varianceCost) : "—"}
         </div>
-        <div className="col-span-3 flex items-center justify-end gap-1 text-[10px] text-[#666]">
+        <div className="col-span-3 flex items-center justify-end gap-1 text-[10px] text-dark-500">
           <span className="truncate min-w-0">{line.countedByUserName ?? `#${line.countedByUserId}`}</span>
           <span className="shrink-0 whitespace-nowrap">
             · {new Date(line.countedDttm).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
@@ -417,18 +417,18 @@ function LineItemRow({ line }: { line: StockTakeLine }) {
             {Number(line.countedQty).toFixed(1)} {line.countedUnit}
           </span>
         </div>
-        <div className="flex justify-between text-[10px] text-[#666]">
+        <div className="flex justify-between text-[10px] text-dark-500">
           <span>{line.countedByUserName ?? `#${line.countedByUserId}`} · {new Date(line.countedDttm).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
           {variance !== null && (
-            <span className={variance > 0 ? "text-emerald-400" : variance < 0 ? "text-red-400" : "text-[#999]"}>
+            <span className={variance > 0 ? "text-emerald-400" : variance < 0 ? "text-red-400" : "text-dark-600"}>
               {variance > 0 ? "+" : ""}{variance.toFixed(1)} ({variancePct?.toFixed(0)}%)
             </span>
           )}
         </div>
         {varianceCost !== null && (
           <div className="flex justify-between text-[10px]">
-            <span className="text-[#666]">Variance cost</span>
-            <span className={varianceCost > 0 ? "text-emerald-400" : varianceCost < 0 ? "text-red-400" : "text-[#999]"}>
+            <span className="text-dark-500">Variance cost</span>
+            <span className={varianceCost > 0 ? "text-emerald-400" : varianceCost < 0 ? "text-red-400" : "text-dark-600"}>
               {fmtCost(varianceCost)}
             </span>
           </div>

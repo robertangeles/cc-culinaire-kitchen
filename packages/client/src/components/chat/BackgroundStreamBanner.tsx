@@ -35,7 +35,7 @@ export function BackgroundStreamBanner() {
             className={`flex items-center justify-between px-4 py-2 text-sm border-b ${
               isError
                 ? "bg-red-900/30 border-red-800/50 text-red-300"
-                : "bg-[#D4A574]/10 border-[#D4A574]/20 text-[#D4A574]"
+                : "bg-gold/10 border-gold/20 text-gold"
             }`}
           >
             <div className="flex items-center gap-2">
@@ -52,14 +52,14 @@ export function BackgroundStreamBanner() {
                   onClick={() => {
                     navigate(`/chat/${convId}`);
                   }}
-                  className="px-3 py-1 text-xs font-medium text-[#0A0A0A] bg-[#D4A574] rounded-xl hover:bg-[#C4956A] transition-colors"
+                  className="px-3 py-1 text-xs font-medium text-dark bg-gold rounded-xl hover:bg-gold-hover transition-colors"
                 >
                   View
                 </button>
               )}
               <button
                 onClick={() => dismissStream(convId)}
-                className="p-1 text-[#666666] hover:text-[#999999] transition-colors"
+                className="p-1 text-dark-500 hover:text-dark-600 transition-colors"
                 title="Dismiss"
               >
                 <X className="size-3.5" />

@@ -223,16 +223,16 @@ export function KitchenCopilotPage() {
   // Guest users see sign-up prompt
   if (isGuest || !user) {
     return (
-      <div className="flex-1 overflow-y-auto bg-[#0A0A0A]">
+      <div className="flex-1 overflow-y-auto bg-dark">
         <div className="min-h-full flex flex-col items-center justify-center p-6 md:p-10">
-          <ClipboardList className="size-12 mx-auto mb-4 text-[#D4A574]" />
+          <ClipboardList className="size-12 mx-auto mb-4 text-gold" />
           <h1 className="text-2xl md:text-3xl font-bold text-white mb-2">Prep</h1>
-          <p className="text-[#999999] mb-6 text-center max-w-md">
+          <p className="text-dark-600 mb-6 text-center max-w-md">
             Sign up to plan your kitchen prep, track cross-usage, and identify high-impact dishes.
           </p>
           <Link
             to="/register"
-            className="inline-flex items-center gap-2 px-6 py-3 bg-[#D4A574] hover:bg-[#C4956A] text-white font-medium rounded-lg transition-colors"
+            className="inline-flex items-center gap-2 px-6 py-3 bg-gold hover:bg-gold-hover text-white font-medium rounded-lg transition-colors"
           >
             <LogIn className="size-4" />
             Sign Up to Plan Your Kitchen Prep
@@ -243,13 +243,13 @@ export function KitchenCopilotPage() {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto bg-[#0A0A0A]">
+    <div className="flex-1 overflow-y-auto bg-dark">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="text-center mb-8">
-          <ClipboardList className="size-10 mx-auto mb-3 text-[#D4A574]" />
+          <ClipboardList className="size-10 mx-auto mb-3 text-gold" />
           <h1 className="text-2xl md:text-3xl font-bold text-white">Prep</h1>
-          <p className="text-[#999999] mt-2">
+          <p className="text-dark-600 mt-2">
             {orgContext?.hasOrg && orgContext.orgName
               ? `${orgContext.orgName} Kitchen`
               : `${getGreeting()}, Chef. Here's your prep plan for ${getTodayDate()}.`}
@@ -263,8 +263,8 @@ export function KitchenCopilotPage() {
               onClick={() => setTeamView(false)}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors min-h-[44px] ${
                 !teamView
-                  ? "bg-[#D4A574] text-white"
-                  : "bg-[#161616] text-[#999999] hover:text-white hover:bg-[#1E1E1E]"
+                  ? "bg-gold text-white"
+                  : "bg-dark-50 text-dark-600 hover:text-white hover:bg-dark-100"
               }`}
             >
               My Data
@@ -273,14 +273,14 @@ export function KitchenCopilotPage() {
               onClick={() => setTeamView(true)}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors min-h-[44px] ${
                 teamView
-                  ? "bg-[#D4A574] text-white"
-                  : "bg-[#161616] text-[#999999] hover:text-white hover:bg-[#1E1E1E]"
+                  ? "bg-gold text-white"
+                  : "bg-dark-50 text-dark-600 hover:text-white hover:bg-dark-100"
               }`}
             >
               Team Data{orgContext.memberCount > 0 ? ` (${orgContext.memberCount})` : ""}
             </button>
             {orgContext.isOrgAdmin && (
-              <span className="ml-1 inline-flex items-center gap-1 px-2 py-1 bg-[#D4A574]/20 border border-[#D4A574]/30 rounded text-xs text-[#D4A574] font-medium">
+              <span className="ml-1 inline-flex items-center gap-1 px-2 py-1 bg-gold/20 border border-gold/30 rounded text-xs text-gold font-medium">
                 <Shield className="size-3" />
                 Admin
               </span>
@@ -296,8 +296,8 @@ export function KitchenCopilotPage() {
               onClick={() => setActiveTab(tab.key)}
               className={`px-5 py-2.5 rounded-full text-sm font-medium transition-colors min-h-[44px] ${
                 activeTab === tab.key
-                  ? "bg-[#D4A574] text-white"
-                  : "bg-[#161616] text-[#999999] hover:text-white hover:bg-[#1E1E1E]"
+                  ? "bg-gold text-white"
+                  : "bg-dark-50 text-dark-600 hover:text-white hover:bg-dark-100"
               }`}
             >
               {tab.label}
@@ -318,25 +318,25 @@ export function KitchenCopilotPage() {
             {/* State: loading */}
             {copilotState === "loading" && (
               <div className="flex justify-center py-16">
-                <Loader2 className="size-8 animate-spin text-[#D4A574]" />
+                <Loader2 className="size-8 animate-spin text-gold" />
               </div>
             )}
 
             {/* State: no-session */}
             {copilotState === "no-session" && (
               <div className="text-center py-16">
-                <ChefHat className="size-12 mx-auto text-[#D4A574] mb-4" />
+                <ChefHat className="size-12 mx-auto text-gold mb-4" />
                 <h2 className="text-xl font-bold text-white mb-2">
                   Ready to plan today&apos;s prep?
                 </h2>
-                <p className="text-[#999999] mb-6 max-w-md mx-auto">
+                <p className="text-dark-600 mb-6 max-w-md mx-auto">
                   Select dishes from your menu, set portion counts, and let the Copilot
                   generate a prioritized prep list for your kitchen.
                 </p>
                 <button
                   onClick={createSession}
                   disabled={creatingSession}
-                  className="inline-flex items-center gap-2 px-8 py-4 bg-[#D4A574] hover:bg-[#C4956A] disabled:bg-[#2A2A2A] disabled:cursor-not-allowed text-[#0A0A0A] font-semibold rounded-xl text-lg transition-colors min-h-[44px]"
+                  className="inline-flex items-center gap-2 px-8 py-4 bg-gold hover:bg-gold-hover disabled:bg-dark-200 disabled:cursor-not-allowed text-dark font-semibold rounded-xl text-lg transition-colors min-h-[44px]"
                 >
                   {creatingSession ? (
                     <Loader2 className="size-5 animate-spin" />

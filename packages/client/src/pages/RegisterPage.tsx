@@ -77,30 +77,30 @@ export function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#0A0A0A] px-4 py-8">
+    <div className="min-h-screen flex items-center justify-center bg-dark px-4 py-8">
       <div className="w-full max-w-md animate-fade-in-up">
         {/* Branding */}
         <div className="text-center mb-8">
           <div
-            className="inline-flex items-center justify-center rounded-2xl mb-4 overflow-hidden drop-shadow-[0_0_30px_rgba(212,165,116,0.15)]"
+            className="inline-flex items-center justify-center rounded-2xl mb-4 overflow-hidden drop-shadow-[0_0_30px_var(--color-gold-muted)]"
             style={{ width: 120, height: 120 }}
           >
             {settingsLoading ? (
-              <div className="size-full bg-[#1E1E1E] animate-pulse rounded-2xl" />
+              <div className="size-full bg-dark-100 animate-pulse rounded-2xl" />
             ) : logoPath ? (
               <img src={logoPath} alt={pageTitle} className="size-full object-contain" />
             ) : (
-              <div className="size-full bg-[#D4A574] flex items-center justify-center">
-                <ChefHat className="size-14 text-[#0A0A0A]" />
+              <div className="size-full bg-gold flex items-center justify-center">
+                <ChefHat className="size-14 text-dark" />
               </div>
             )}
           </div>
           <h1 className="text-2xl font-semibold tracking-tight text-[#FAFAFA]">{pageTitle}</h1>
-          <p className="text-[#666666] text-sm mt-1">Create your account</p>
+          <p className="text-dark-500 text-sm mt-1">Create your account</p>
         </div>
 
         {/* Registration Form */}
-        <form onSubmit={handleSubmit} className="bg-[#161616] rounded-2xl shadow-2xl shadow-black/50 border border-[#2A2A2A] p-8 space-y-5">
+        <form onSubmit={handleSubmit} className="bg-dark-50 rounded-2xl shadow-2xl shadow-black/50 border border-dark-200 p-8 space-y-5">
           {error && (
             <div className="flex items-center gap-2 text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">
               <AlertCircle className="size-4 flex-shrink-0" />
@@ -116,7 +116,7 @@ export function RegisterPage() {
           )}
 
           <div>
-            <label htmlFor="name" className="block text-sm font-medium text-[#999999] mb-2">
+            <label htmlFor="name" className="block text-sm font-medium text-dark-600 mb-2">
               Name
             </label>
             <input
@@ -126,13 +126,13 @@ export function RegisterPage() {
               onChange={(e) => setName(e.target.value)}
               required
               autoComplete="name"
-              className="w-full rounded-xl border border-[#2A2A2A] bg-[#0A0A0A] px-4 py-3 text-white placeholder-[#444444] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-[#D4A574] transition-colors"
+              className="w-full rounded-xl border border-dark-200 bg-dark px-4 py-3 text-white placeholder-dark-400 focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-gold transition-colors"
               placeholder="Your full name"
             />
           </div>
 
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-[#999999] mb-2">
+            <label htmlFor="email" className="block text-sm font-medium text-dark-600 mb-2">
               Email
             </label>
             <input
@@ -142,13 +142,13 @@ export function RegisterPage() {
               onChange={(e) => setEmail(e.target.value)}
               required
               autoComplete="email"
-              className="w-full rounded-xl border border-[#2A2A2A] bg-[#0A0A0A] px-4 py-3 text-white placeholder-[#444444] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-[#D4A574] transition-colors"
+              className="w-full rounded-xl border border-dark-200 bg-dark px-4 py-3 text-white placeholder-dark-400 focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-gold transition-colors"
               placeholder="you@example.com"
             />
           </div>
 
           <div>
-            <label htmlFor="password" className="block text-sm font-medium text-[#999999] mb-2">
+            <label htmlFor="password" className="block text-sm font-medium text-dark-600 mb-2">
               Password
             </label>
             <div className="relative">
@@ -159,13 +159,13 @@ export function RegisterPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 autoComplete="new-password"
-                className="w-full rounded-xl border border-[#2A2A2A] bg-[#0A0A0A] px-4 py-3 pr-11 text-white placeholder-[#444444] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-[#D4A574] transition-colors"
+                className="w-full rounded-xl border border-dark-200 bg-dark px-4 py-3 pr-11 text-white placeholder-dark-400 focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-gold transition-colors"
                 placeholder="Enter a strong password"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword((v) => !v)}
-                className="absolute inset-y-0 right-0 flex items-center px-3 text-[#666666] hover:text-[#999999]"
+                className="absolute inset-y-0 right-0 flex items-center px-3 text-dark-500 hover:text-dark-600"
                 tabIndex={-1}
                 aria-label={showPassword ? "Hide password" : "Show password"}
               >
@@ -176,7 +176,7 @@ export function RegisterPage() {
           </div>
 
           <div>
-            <label htmlFor="confirmPassword" className="block text-sm font-medium text-[#999999] mb-2">
+            <label htmlFor="confirmPassword" className="block text-sm font-medium text-dark-600 mb-2">
               Confirm Password
             </label>
             <div className="relative">
@@ -187,13 +187,13 @@ export function RegisterPage() {
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
                 autoComplete="new-password"
-                className="w-full rounded-xl border border-[#2A2A2A] bg-[#0A0A0A] px-4 py-3 pr-11 text-white placeholder-[#444444] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-[#D4A574] transition-colors"
+                className="w-full rounded-xl border border-dark-200 bg-dark px-4 py-3 pr-11 text-white placeholder-dark-400 focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-gold transition-colors"
                 placeholder="Re-enter your password"
               />
               <button
                 type="button"
                 onClick={() => setShowConfirmPassword((v) => !v)}
-                className="absolute inset-y-0 right-0 flex items-center px-3 text-[#666666] hover:text-[#999999]"
+                className="absolute inset-y-0 right-0 flex items-center px-3 text-dark-500 hover:text-dark-600"
                 tabIndex={-1}
                 aria-label={showConfirmPassword ? "Hide password" : "Show password"}
               >
@@ -225,7 +225,7 @@ export function RegisterPage() {
               password !== confirmPassword ||
               !turnstileToken
             }
-            className="w-full flex items-center justify-center gap-2 py-3 text-base font-semibold text-[#0A0A0A] bg-[#D4A574] rounded-xl hover:bg-[#C4956A] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="w-full flex items-center justify-center gap-2 py-3 text-base font-semibold text-dark bg-gold rounded-xl hover:bg-gold-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {isSubmitting && <Loader2 className="size-4 animate-spin" />}
             Create Account
@@ -234,9 +234,9 @@ export function RegisterPage() {
           <OAuthButtons />
         </form>
 
-        <p className="text-center text-sm text-[#666666] mt-6">
+        <p className="text-center text-sm text-dark-500 mt-6">
           Already have an account?{" "}
-          <Link to="/login" className="text-[#D4A574] hover:text-[#C4956A] font-medium transition-colors">
+          <Link to="/login" className="text-gold hover:text-gold-hover font-medium transition-colors">
             Sign in
           </Link>
         </p>

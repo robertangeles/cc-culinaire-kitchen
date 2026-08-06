@@ -52,12 +52,12 @@ export function MenuCsvUpload({ onComplete }: MenuCsvUploadProps) {
       <h3 className="text-sm font-semibold text-[#FAFAFA] mb-2">
         Import Sales Data (CSV)
       </h3>
-      <p className="text-xs text-[#666666] mb-3">
+      <p className="text-xs text-dark-500 mb-3">
         Upload a CSV with columns for item name and units sold. The system will
         match items by name.
       </p>
       <div className="flex flex-wrap items-center gap-3">
-        <label className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium text-[#D4A574] bg-[#D4A574]/10 rounded-xl border border-[#D4A574]/20 hover:bg-[#D4A574]/20 cursor-pointer transition-colors min-h-[44px]">
+        <label className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium text-gold bg-gold/10 rounded-xl border border-gold/20 hover:bg-gold/20 cursor-pointer transition-colors min-h-[44px]">
           {uploading ? (
             <Loader2 className="size-4 animate-spin" />
           ) : (
@@ -80,7 +80,7 @@ export function MenuCsvUpload({ onComplete }: MenuCsvUploadProps) {
               {result.updated} items updated
             </span>
             {result.notFound.length > 0 && (
-              <span className="text-[#666666]">
+              <span className="text-dark-500">
                 ({result.notFound.length} not matched)
               </span>
             )}
@@ -93,7 +93,7 @@ export function MenuCsvUpload({ onComplete }: MenuCsvUploadProps) {
         )}
       </div>
       {result?.notFound && result.notFound.length > 0 && (
-        <div className="mt-2 text-xs text-[#666666]">
+        <div className="mt-2 text-xs text-dark-500">
           Not matched: {result.notFound.join(", ")}
         </div>
       )}

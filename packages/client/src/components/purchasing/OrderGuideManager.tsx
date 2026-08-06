@@ -122,8 +122,8 @@ export default function OrderGuideManager() {
 
   if (!selectedLocationId) {
     return (
-      <div className="rounded-xl bg-[#161616]/80 border border-[#2A2A2A] p-6 text-center">
-        <p className="text-[#999] text-sm">Pick a location to manage its order guides.</p>
+      <div className="rounded-xl bg-dark-50/80 border border-dark-200 p-6 text-center">
+        <p className="text-dark-600 text-sm">Pick a location to manage its order guides.</p>
       </div>
     );
   }
@@ -131,9 +131,9 @@ export default function OrderGuideManager() {
   return (
     <div className="space-y-4 animate-[fadeInUp_200ms_ease-out]">
       {/* Create */}
-      <div className="rounded-xl bg-[#161616]/80 backdrop-blur-sm border border-[#2A2A2A] p-4">
+      <div className="rounded-xl bg-dark-50/80 backdrop-blur-sm border border-dark-200 p-4">
         <h3 className="text-sm font-medium text-white flex items-center gap-2 mb-1">
-          <BookOpen className="size-4 text-[#D4A574]" />
+          <BookOpen className="size-4 text-gold" />
           Order Guides
         </h3>
         <p className="text-xs text-[#777] mb-3">
@@ -147,15 +147,15 @@ export default function OrderGuideManager() {
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
             placeholder="Guide name (e.g. Weekly Dry Goods)"
-            className="px-3 py-2 rounded-lg text-sm bg-[#0A0A0A] text-white border border-[#2A2A2A]
-              focus:border-[#D4A574]/40 outline-none placeholder:text-[#555]"
+            className="px-3 py-2 rounded-lg text-sm bg-dark text-white border border-dark-200
+              focus:border-gold/40 outline-none placeholder:text-[#555]"
           />
           <select
             value={newSupplierId}
             onChange={(e) => setNewSupplierId(e.target.value)}
             aria-label="Supplier"
-            className="px-3 py-2 rounded-lg text-sm bg-[#0A0A0A] text-white border border-[#2A2A2A]
-              focus:border-[#D4A574]/40 outline-none"
+            className="px-3 py-2 rounded-lg text-sm bg-dark text-white border border-dark-200
+              focus:border-gold/40 outline-none"
           >
             <option value="">Select supplier…</option>
             {suppliers.map((s) => (
@@ -168,7 +168,7 @@ export default function OrderGuideManager() {
             onClick={handleCreate}
             disabled={isCreating}
             className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium
-              bg-gradient-to-r from-[#D4A574] to-[#C4956A] text-[#0A0A0A]
+              bg-gradient-to-r from-gold to-gold-hover text-dark
               hover:shadow-[0_0_12px_rgba(212,165,116,0.2)] disabled:opacity-50 transition-all"
           >
             {isCreating ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
@@ -179,16 +179,16 @@ export default function OrderGuideManager() {
       </div>
 
       {/* Existing guides */}
-      <div className="rounded-xl bg-[#161616]/80 backdrop-blur-sm border border-[#2A2A2A] p-4">
+      <div className="rounded-xl bg-dark-50/80 backdrop-blur-sm border border-dark-200 p-4">
         {loading ? (
-          <div className="py-6 text-center text-[#999] text-sm flex items-center justify-center gap-2">
+          <div className="py-6 text-center text-dark-600 text-sm flex items-center justify-center gap-2">
             <Loader2 className="size-4 animate-spin" /> Loading guides…
           </div>
         ) : error ? (
           <p className="text-sm text-red-400">{error}</p>
         ) : guides.length === 0 ? (
           <div className="py-8 text-center">
-            <BookOpen className="size-8 mx-auto text-[#D4A574]/40 mb-2" />
+            <BookOpen className="size-8 mx-auto text-gold/40 mb-2" />
             <p className="text-white text-sm font-medium">No order guides yet</p>
             <p className="text-[#777] text-xs mt-1 max-w-sm mx-auto">
               Create one above for a supplier you order from regularly. Then ordering becomes
@@ -204,8 +204,8 @@ export default function OrderGuideManager() {
                   key={g.orderGuideId}
                   className={`flex items-center gap-2 px-3 py-2 rounded-xl border transition-all ${
                     active
-                      ? "bg-[#D4A574]/15 border-[#D4A574]/40"
-                      : "bg-[#1A1A1A] border-[#2A2A2A] hover:border-[#3A3A3A]"
+                      ? "bg-gold/15 border-gold/40"
+                      : "bg-[#1A1A1A] border-dark-200 hover:border-dark-300"
                   }`}
                 >
                   <button
@@ -213,7 +213,7 @@ export default function OrderGuideManager() {
                     className="text-left"
                   >
                     <span
-                      className={`block text-xs font-medium ${active ? "text-[#D4A574]" : "text-white"}`}
+                      className={`block text-xs font-medium ${active ? "text-gold" : "text-white"}`}
                     >
                       {g.name}
                     </span>
@@ -232,7 +232,7 @@ export default function OrderGuideManager() {
                       }
                     }}
                     aria-label={`Remove ${g.name}`}
-                    className="p-1 rounded-lg text-[#666] hover:text-red-400 hover:bg-red-500/10 transition-all"
+                    className="p-1 rounded-lg text-dark-500 hover:text-red-400 hover:bg-red-500/10 transition-all"
                   >
                     <X className="size-3.5" />
                   </button>
@@ -245,7 +245,7 @@ export default function OrderGuideManager() {
 
       {/* Item editor */}
       {selectedGuide && (
-        <div className="rounded-xl bg-[#161616]/80 backdrop-blur-sm border border-[#2A2A2A] p-4">
+        <div className="rounded-xl bg-dark-50/80 backdrop-blur-sm border border-dark-200 p-4">
           <div className="flex items-center justify-between gap-3 mb-3">
             <h4 className="text-sm font-medium text-white">
               {selectedGuide.name}{" "}
@@ -255,7 +255,7 @@ export default function OrderGuideManager() {
               onClick={handleSaveItems}
               disabled={isSaving}
               className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold
-                bg-gradient-to-r from-[#D4A574] to-[#C4956A] text-[#0A0A0A]
+                bg-gradient-to-r from-gold to-gold-hover text-dark
                 hover:shadow-[0_0_12px_rgba(212,165,116,0.2)] disabled:opacity-50 transition-all"
             >
               {isSaving ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
@@ -269,7 +269,7 @@ export default function OrderGuideManager() {
               Nothing on this guide yet — add the items you order from {selectedGuide.supplierName}.
             </p>
           ) : (
-            <div className="rounded-lg border border-[#2A2A2A] bg-[#0A0A0A]/50 mb-3">
+            <div className="rounded-lg border border-dark-200 bg-dark/50 mb-3">
               {draft.map((d, idx) => (
                 <div
                   key={d.ingredientId}
@@ -281,7 +281,7 @@ export default function OrderGuideManager() {
                     onClick={() => move(idx, -1)}
                     disabled={idx === 0}
                     aria-label={`Move ${d.ingredientName} up`}
-                    className="p-1 rounded text-[#666] hover:text-white disabled:opacity-25 transition-all"
+                    className="p-1 rounded text-dark-500 hover:text-white disabled:opacity-25 transition-all"
                   >
                     <ChevronUp className="size-3.5" />
                   </button>
@@ -289,7 +289,7 @@ export default function OrderGuideManager() {
                     onClick={() => move(idx, 1)}
                     disabled={idx === draft.length - 1}
                     aria-label={`Move ${d.ingredientName} down`}
-                    className="p-1 rounded text-[#666] hover:text-white disabled:opacity-25 transition-all"
+                    className="p-1 rounded text-dark-500 hover:text-white disabled:opacity-25 transition-all"
                   >
                     <ChevronDown className="size-3.5" />
                   </button>
@@ -298,7 +298,7 @@ export default function OrderGuideManager() {
                       setDraft((prev) => prev.filter((x) => x.ingredientId !== d.ingredientId))
                     }
                     aria-label={`Remove ${d.ingredientName}`}
-                    className="p-1 rounded text-[#666] hover:text-red-400 transition-all"
+                    className="p-1 rounded text-dark-500 hover:text-red-400 transition-all"
                   >
                     <Trash2 className="size-3.5" />
                   </button>
@@ -309,18 +309,18 @@ export default function OrderGuideManager() {
 
           {/* Add items */}
           <div className="relative mb-2">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-[#666]" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-dark-500" />
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Add an item…"
-              className="w-full pl-9 pr-3 py-2 rounded-lg text-sm bg-[#0A0A0A] text-white
-                border border-[#2A2A2A] focus:border-[#D4A574]/40 outline-none placeholder:text-[#555]"
+              className="w-full pl-9 pr-3 py-2 rounded-lg text-sm bg-dark text-white
+                border border-dark-200 focus:border-gold/40 outline-none placeholder:text-[#555]"
             />
           </div>
           {addable.length > 0 && (
-            <div className="max-h-40 overflow-y-auto rounded-lg border border-[#2A2A2A] bg-[#0A0A0A]/50">
+            <div className="max-h-40 overflow-y-auto rounded-lg border border-dark-200 bg-dark/50">
               {addable.map((c) => (
                 <button
                   key={c.ingredientId}
@@ -330,12 +330,12 @@ export default function OrderGuideManager() {
                       { ingredientId: c.ingredientId, ingredientName: c.ingredientName },
                     ])
                   }
-                  className="w-full text-left px-3 py-2 text-sm hover:bg-[#1E1E1E] transition-colors
+                  className="w-full text-left px-3 py-2 text-sm hover:bg-dark-100 transition-colors
                     border-b border-[#1A1A1A] last:border-0 flex items-center gap-2"
                 >
-                  <Plus className="size-3.5 text-[#D4A574] shrink-0" />
+                  <Plus className="size-3.5 text-gold shrink-0" />
                   <span className="text-white truncate">{c.ingredientName}</span>
-                  <span className="ml-auto text-[10px] text-[#666]">{c.baseUnit}</span>
+                  <span className="ml-auto text-[10px] text-dark-500">{c.baseUnit}</span>
                 </button>
               ))}
             </div>
@@ -343,7 +343,7 @@ export default function OrderGuideManager() {
         </div>
       )}
 
-      {notice && <p className="text-xs text-[#999]">{notice}</p>}
+      {notice && <p className="text-xs text-dark-600">{notice}</p>}
     </div>
   );
 }

@@ -83,35 +83,35 @@ export function KitchenWizard({ onComplete, onSkip }: KitchenWizardProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-[#161616] rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
+      <div className="bg-dark-50 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
         {/* Header */}
-        <div className="bg-[#0A0A0A] px-6 py-5">
+        <div className="bg-dark px-6 py-5">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <ChefHat className="size-6 text-[#D4A574]" />
+              <ChefHat className="size-6 text-gold" />
               <div>
                 <h2 className="text-white font-semibold text-lg">My Kitchen Setup</h2>
-                <p className="text-[#999999] text-xs">Step {step + 1} of {TOTAL_STEPS}</p>
+                <p className="text-dark-600 text-xs">Step {step + 1} of {TOTAL_STEPS}</p>
               </div>
             </div>
             <button
               onClick={onSkip}
-              className="text-[#999999] hover:text-white transition-colors"
+              className="text-dark-600 hover:text-white transition-colors"
               aria-label="Skip onboarding"
             >
               <X className="size-5" />
             </button>
           </div>
-          <p className="text-[#999999] text-xs mt-3 leading-relaxed">
+          <p className="text-dark-600 text-xs mt-3 leading-relaxed">
             These questions help CulinAIre personalise your experience — recipes, prep plans, and recommendations
             are tailored to your skill level, cuisine style, and kitchen setup. You can update these anytime in your Profile.
           </p>
         </div>
 
         {/* Progress bar */}
-        <div className="h-1 bg-[#2A2A2A]">
+        <div className="h-1 bg-dark-200">
           <div
-            className="h-1 bg-[#D4A574]/100 transition-all duration-300"
+            className="h-1 bg-gold/100 transition-all duration-300"
             style={{ width: `${((step + 1) / TOTAL_STEPS) * 100}%` }}
           />
         </div>
@@ -119,7 +119,7 @@ export function KitchenWizard({ onComplete, onSkip }: KitchenWizardProps) {
         {/* Step content */}
         <div className="px-6 py-6 min-h-[320px]">
           {optionsLoading ? (
-            <div className="flex items-center justify-center h-[280px] text-[#999999]">
+            <div className="flex items-center justify-center h-[280px] text-dark-600">
               <Loader2 className="size-5 animate-spin mr-2" />
               Loading options…
             </div>
@@ -131,7 +131,7 @@ export function KitchenWizard({ onComplete, onSkip }: KitchenWizardProps) {
                   <h3 className="font-semibold text-[#FAFAFA] text-base mb-1">
                     What best describes your skill level?
                   </h3>
-                  <p className="text-[#999999] text-sm mb-4">
+                  <p className="text-dark-600 text-sm mb-4">
                     CulinAIre will tailor explanations and technique depth to match you.
                   </p>
                   <div className="space-y-2">
@@ -141,19 +141,19 @@ export function KitchenWizard({ onComplete, onSkip }: KitchenWizardProps) {
                         onClick={() => setData((d) => ({ ...d, skillLevel: level.optionValue }))}
                         className={`w-full text-left px-4 py-3 rounded-lg border-2 transition-colors ${
                           data.skillLevel === level.optionValue
-                            ? "border-[#D4A574] bg-[#D4A574]/10"
-                            : "border-[#2A2A2A] hover:border-[#2A2A2A] bg-[#161616]"
+                            ? "border-gold bg-gold/10"
+                            : "border-dark-200 hover:border-dark-200 bg-dark-50"
                         }`}
                       >
                         <div className="flex items-center justify-between">
                           <div>
                             <p className="font-medium text-[#FAFAFA] text-sm">{level.optionLabel}</p>
                             {level.optionDescription && (
-                              <p className="text-[#999999] text-xs">{level.optionDescription}</p>
+                              <p className="text-dark-600 text-xs">{level.optionDescription}</p>
                             )}
                           </div>
                           {data.skillLevel === level.optionValue && (
-                            <Check className="size-4 text-[#D4A574] shrink-0" />
+                            <Check className="size-4 text-gold shrink-0" />
                           )}
                         </div>
                       </button>
@@ -168,7 +168,7 @@ export function KitchenWizard({ onComplete, onSkip }: KitchenWizardProps) {
                   <h3 className="font-semibold text-[#FAFAFA] text-base mb-1">
                     What cuisine styles interest you most?
                   </h3>
-                  <p className="text-[#999999] text-sm mb-4">
+                  <p className="text-dark-600 text-sm mb-4">
                     Select all that apply — CulinAIre will lean towards these when generating recipes.
                   </p>
                   <div className="flex flex-wrap gap-2">
@@ -183,8 +183,8 @@ export function KitchenWizard({ onComplete, onSkip }: KitchenWizardProps) {
                         }
                         className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${
                           data.cuisinePreferences.includes(opt.optionLabel)
-                            ? "bg-[#D4A574]/100 border-[#D4A574] text-white"
-                            : "bg-[#161616] border-[#2A2A2A] text-[#E5E5E5] hover:border-[#D4A574]/40"
+                            ? "bg-gold/100 border-gold text-white"
+                            : "bg-dark-50 border-dark-200 text-[#E5E5E5] hover:border-gold/40"
                         }`}
                       >
                         {opt.optionLabel}
@@ -200,7 +200,7 @@ export function KitchenWizard({ onComplete, onSkip }: KitchenWizardProps) {
                   <h3 className="font-semibold text-[#FAFAFA] text-base mb-1">
                     Any dietary restrictions to always respect?
                   </h3>
-                  <p className="text-[#999999] text-sm mb-4">
+                  <p className="text-dark-600 text-sm mb-4">
                     CulinAIre will factor these into every recipe and suggestion.
                   </p>
                   <div className="flex flex-wrap gap-2">
@@ -215,8 +215,8 @@ export function KitchenWizard({ onComplete, onSkip }: KitchenWizardProps) {
                         }
                         className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${
                           data.dietaryRestrictions.includes(opt.optionLabel)
-                            ? "bg-[#D4A574]/100 border-[#D4A574] text-white"
-                            : "bg-[#161616] border-[#2A2A2A] text-[#E5E5E5] hover:border-[#D4A574]/40"
+                            ? "bg-gold/100 border-gold text-white"
+                            : "bg-dark-50 border-dark-200 text-[#E5E5E5] hover:border-gold/40"
                         }`}
                       >
                         {opt.optionLabel}
@@ -232,7 +232,7 @@ export function KitchenWizard({ onComplete, onSkip }: KitchenWizardProps) {
                   <h3 className="font-semibold text-[#FAFAFA] text-base mb-1">
                     What equipment do you have access to?
                   </h3>
-                  <p className="text-[#999999] text-sm mb-4">
+                  <p className="text-dark-600 text-sm mb-4">
                     CulinAIre will only suggest techniques your kitchen can execute.
                   </p>
                   <div className="flex flex-wrap gap-2">
@@ -247,8 +247,8 @@ export function KitchenWizard({ onComplete, onSkip }: KitchenWizardProps) {
                         }
                         className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${
                           data.kitchenEquipment.includes(opt.optionLabel)
-                            ? "bg-[#D4A574]/100 border-[#D4A574] text-white"
-                            : "bg-[#161616] border-[#2A2A2A] text-[#E5E5E5] hover:border-[#D4A574]/40"
+                            ? "bg-gold/100 border-gold text-white"
+                            : "bg-dark-50 border-dark-200 text-[#E5E5E5] hover:border-gold/40"
                         }`}
                       >
                         {opt.optionLabel}
@@ -264,7 +264,7 @@ export function KitchenWizard({ onComplete, onSkip }: KitchenWizardProps) {
                   <h3 className="font-semibold text-[#FAFAFA] text-base mb-1">
                     What type of kitchen do you work in?
                   </h3>
-                  <p className="text-[#999999] text-sm mb-4">
+                  <p className="text-dark-600 text-sm mb-4">
                     Tell us about your kitchen — this helps us generate recipes tailored to your establishment's style and needs.
                   </p>
                   <div className="flex flex-wrap gap-2">
@@ -279,8 +279,8 @@ export function KitchenWizard({ onComplete, onSkip }: KitchenWizardProps) {
                         }
                         className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${
                           data.establishmentType === opt.value
-                            ? "bg-[#D4A574]/100 border-[#D4A574] text-white"
-                            : "bg-[#161616] border-[#2A2A2A] text-[#E5E5E5] hover:border-[#D4A574]/40"
+                            ? "bg-gold/100 border-gold text-white"
+                            : "bg-dark-50 border-dark-200 text-[#E5E5E5] hover:border-gold/40"
                         }`}
                       >
                         {opt.label}
@@ -296,7 +296,7 @@ export function KitchenWizard({ onComplete, onSkip }: KitchenWizardProps) {
                   <h3 className="font-semibold text-[#FAFAFA] text-base mb-1">
                     What does your menu need right now?
                   </h3>
-                  <p className="text-[#999999] text-sm mb-4">
+                  <p className="text-dark-600 text-sm mb-4">
                     Pick up to 3 — we'll prioritise recipes that fill these gaps.
                   </p>
                   <div className="flex flex-wrap gap-2">
@@ -316,10 +316,10 @@ export function KitchenWizard({ onComplete, onSkip }: KitchenWizardProps) {
                           disabled={atMax}
                           className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${
                             isSelected
-                              ? "bg-[#D4A574]/100 border-[#D4A574] text-white"
+                              ? "bg-gold/100 border-gold text-white"
                               : atMax
-                                ? "bg-[#1E1E1E] border-[#2A2A2A] text-[#999999] cursor-not-allowed"
-                                : "bg-[#161616] border-[#2A2A2A] text-[#E5E5E5] hover:border-[#D4A574]/40"
+                                ? "bg-dark-100 border-dark-200 text-dark-600 cursor-not-allowed"
+                                : "bg-dark-50 border-dark-200 text-[#E5E5E5] hover:border-gold/40"
                           }`}
                         >
                           {opt.label}
@@ -328,7 +328,7 @@ export function KitchenWizard({ onComplete, onSkip }: KitchenWizardProps) {
                     })}
                   </div>
                   {data.menuNeeds.length > 0 && (
-                    <p className="text-xs text-[#999999] mt-2">
+                    <p className="text-xs text-dark-600 mt-2">
                       {data.menuNeeds.length}/3 selected
                     </p>
                   )}
@@ -342,7 +342,7 @@ export function KitchenWizard({ onComplete, onSkip }: KitchenWizardProps) {
         <div className="px-6 pb-6 flex items-center justify-between">
           <button
             onClick={step === 0 ? onSkip : () => setStep((s) => s - 1)}
-            className="flex items-center gap-1.5 text-sm text-[#999999] hover:text-[#E5E5E5] transition-colors"
+            className="flex items-center gap-1.5 text-sm text-dark-600 hover:text-[#E5E5E5] transition-colors"
           >
             {step === 0 ? (
               "Skip for now"
@@ -358,7 +358,7 @@ export function KitchenWizard({ onComplete, onSkip }: KitchenWizardProps) {
             <button
               onClick={() => setStep((s) => s + 1)}
               disabled={!canAdvance()}
-              className="flex items-center gap-1.5 px-5 py-2 rounded-lg bg-[#D4A574] text-white text-sm font-medium hover:bg-[#C4956A] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              className="flex items-center gap-1.5 px-5 py-2 rounded-lg bg-gold text-white text-sm font-medium hover:bg-gold-hover transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               Next
               <ArrowRight className="size-4" />
@@ -367,7 +367,7 @@ export function KitchenWizard({ onComplete, onSkip }: KitchenWizardProps) {
             <button
               onClick={handleFinish}
               disabled={saving}
-              className="flex items-center gap-1.5 px-5 py-2 rounded-lg bg-[#D4A574] text-white text-sm font-medium hover:bg-[#C4956A] transition-colors disabled:opacity-50"
+              className="flex items-center gap-1.5 px-5 py-2 rounded-lg bg-gold text-white text-sm font-medium hover:bg-gold-hover transition-colors disabled:opacity-50"
             >
               {saving ? "Saving..." : "Finish Setup"}
               {!saving && <Check className="size-4" />}

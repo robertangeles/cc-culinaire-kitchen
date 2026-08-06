@@ -93,16 +93,16 @@ export function SupplierManager() {
       {/* Toolbar */}
       <div className="flex gap-2">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-[#666]" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-dark-500" />
           <input
             type="text" value={search} onChange={(e) => setSearch(e.target.value)}
             placeholder="Search suppliers..."
-            className="w-full pl-10 pr-4 py-2 rounded-xl bg-[#161616] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none focus:border-[#D4A574]/50 transition-all"
+            className="w-full pl-10 pr-4 py-2 rounded-xl bg-dark-50 border border-dark-200 text-sm text-white placeholder-dark-500 focus:outline-none focus:border-gold/50 transition-all"
           />
         </div>
         <button
           onClick={() => { setShowAdd(true); setError(null); }}
-          className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-[#D4A574] to-[#C4956A] text-[#0A0A0A] text-sm font-semibold hover:shadow-[0_0_12px_rgba(212,165,116,0.2)] transition-all active:scale-[0.98]"
+          className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-gold to-gold-hover text-dark text-sm font-semibold hover:shadow-[0_0_12px_rgba(212,165,116,0.2)] transition-all active:scale-[0.98]"
         >
           <Plus className="size-4" /> Add
         </button>
@@ -123,24 +123,24 @@ export function SupplierManager() {
 
       {isLoading && (
         <div className="flex items-center justify-center py-16">
-          <Loader2 className="size-6 text-[#D4A574] animate-spin" />
+          <Loader2 className="size-6 text-gold animate-spin" />
         </div>
       )}
 
       {!isLoading && filtered.length === 0 && (
-        <div className="text-center py-12 rounded-xl bg-[#161616] border border-[#2A2A2A]">
-          <Truck className="size-8 mx-auto text-[#D4A574] mb-3" />
+        <div className="text-center py-12 rounded-xl bg-dark-50 border border-dark-200">
+          <Truck className="size-8 mx-auto text-gold mb-3" />
           <p className="text-sm text-white font-medium mb-1">
             {search ? "No matching suppliers" : "No suppliers yet"}
           </p>
-          <p className="text-xs text-[#999]">Add your first supplier to get started.</p>
+          <p className="text-xs text-dark-600">Add your first supplier to get started.</p>
         </div>
       )}
 
       {/* Supplier table */}
       {!isLoading && filtered.length > 0 && (
-        <div className="rounded-xl border border-[#2A2A2A] overflow-hidden">
-          <div className="hidden sm:grid grid-cols-12 gap-1 px-4 py-2 text-[10px] text-[#666] uppercase tracking-wider bg-[#161616] border-b border-[#2A2A2A]">
+        <div className="rounded-xl border border-dark-200 overflow-hidden">
+          <div className="hidden sm:grid grid-cols-12 gap-1 px-4 py-2 text-[10px] text-dark-500 uppercase tracking-wider bg-dark-50 border-b border-dark-200">
             <div className="col-span-3">Supplier</div>
             <div className="col-span-2">Category</div>
             <div className="col-span-2">Contact</div>
@@ -155,37 +155,37 @@ export function SupplierManager() {
             const isEditing = editSupplierId === sup.supplierId;
 
             return (
-              <div key={sup.supplierId} className="border-b border-[#2A2A2A]/30 last:border-b-0">
+              <div key={sup.supplierId} className="border-b border-dark-200/30 last:border-b-0">
                 {/* Compact row */}
                 <div className={`grid grid-cols-12 gap-1 px-4 py-2.5 text-sm items-center transition-colors ${
-                  isExpanded ? "bg-[#1E1E1E]/50" : "hover:bg-[#1E1E1E]/30"
+                  isExpanded ? "bg-dark-100/50" : "hover:bg-dark-100/30"
                 }`}>
                   <button
                     onClick={() => setExpandedId(isExpanded ? null : sup.supplierId)}
                     className="col-span-3 flex items-center gap-1.5 text-left truncate"
                   >
-                    {isExpanded ? <ChevronDown className="size-3 text-[#666] shrink-0" /> : <ChevronRight className="size-3 text-[#666] shrink-0" />}
+                    {isExpanded ? <ChevronDown className="size-3 text-dark-500 shrink-0" /> : <ChevronRight className="size-3 text-dark-500 shrink-0" />}
                     <span className="text-white truncate">{sup.supplierName}</span>
                   </button>
-                  <div className="col-span-2 text-xs text-[#999] hidden sm:block truncate">
+                  <div className="col-span-2 text-xs text-dark-600 hidden sm:block truncate">
                     {sup.supplierCategory ? CAT_LABELS[sup.supplierCategory] || sup.supplierCategory : "—"}
                   </div>
-                  <div className="col-span-2 text-xs text-[#999] hidden sm:block truncate">
+                  <div className="col-span-2 text-xs text-dark-600 hidden sm:block truncate">
                     {sup.contactName || "—"}
                   </div>
-                  <div className="col-span-1 text-xs text-[#999] tabular-nums hidden sm:block">
+                  <div className="col-span-1 text-xs text-dark-600 tabular-nums hidden sm:block">
                     {sup.leadTimeDays ? `${sup.leadTimeDays}d` : "—"}
                   </div>
-                  <div className="col-span-2 text-xs text-[#999] hidden sm:block truncate">
+                  <div className="col-span-2 text-xs text-dark-600 hidden sm:block truncate">
                     {sup.paymentTerms ? PAY_LABELS[sup.paymentTerms] || sup.paymentTerms : "—"}
                   </div>
-                  <div className="col-span-1 text-xs text-[#999] hidden sm:block truncate">
+                  <div className="col-span-1 text-xs text-dark-600 hidden sm:block truncate">
                     {sup.orderingMethod ? ORD_LABELS[sup.orderingMethod] || sup.orderingMethod : "—"}
                   </div>
                   <div className="col-span-1 flex justify-end">
                     <button
                       onClick={(e) => { e.stopPropagation(); setEditSupplierId(isEditing ? null : sup.supplierId); }}
-                      className="p-1 rounded-lg hover:bg-[#2A2A2A] text-[#666] hover:text-white transition-all"
+                      className="p-1 rounded-lg hover:bg-dark-200 text-dark-500 hover:text-white transition-all"
                     >
                       <Edit3 className="size-3" />
                     </button>
@@ -199,7 +199,7 @@ export function SupplierManager() {
 
                 {/* Edit form */}
                 {isEditing && (
-                  <div className="border-t border-[#D4A574]/20">
+                  <div className="border-t border-gold/20">
                     <SupplierForm
                       title="Edit Supplier"
                       initial={sup}
@@ -224,7 +224,7 @@ export function SupplierManager() {
         </div>
       )}
 
-      <p className="text-xs text-[#666] text-center">{filtered.length} suppliers</p>
+      <p className="text-xs text-dark-500 text-center">{filtered.length} suppliers</p>
     </div>
   );
 }
@@ -235,46 +235,46 @@ function SupplierDetail({ supplier: sup }: { supplier: Supplier }) {
   const deliveryDays = sup.deliveryDays ? sup.deliveryDays.split(",") : [];
 
   return (
-    <div className="px-4 py-3 bg-[#0A0A0A]/50 border-t border-[#2A2A2A]/30 space-y-3 animate-[fadeIn_150ms_ease-out]">
+    <div className="px-4 py-3 bg-dark/50 border-t border-dark-200/30 space-y-3 animate-[fadeIn_150ms_ease-out]">
       {/* Contact row */}
       <div className="flex flex-wrap gap-4 text-xs">
         {sup.contactEmail && (
-          <span className="flex items-center gap-1.5 text-[#999]"><Mail className="size-3" /> {sup.contactEmail}</span>
+          <span className="flex items-center gap-1.5 text-dark-600"><Mail className="size-3" /> {sup.contactEmail}</span>
         )}
         {sup.contactPhone && (
-          <span className="flex items-center gap-1.5 text-[#999]"><Phone className="size-3" /> {sup.contactPhone}</span>
+          <span className="flex items-center gap-1.5 text-dark-600"><Phone className="size-3" /> {sup.contactPhone}</span>
         )}
         {sup.currency && sup.currency !== "AUD" && (
-          <span className="flex items-center gap-1.5 text-[#999]"><Globe className="size-3" /> {sup.currency}</span>
+          <span className="flex items-center gap-1.5 text-dark-600"><Globe className="size-3" /> {sup.currency}</span>
         )}
       </div>
 
       {/* Operational row */}
       <div className="flex flex-wrap gap-4 text-xs">
         {sup.leadTimeDays != null && (
-          <span className="flex items-center gap-1.5 text-[#999]"><Clock className="size-3" /> {sup.leadTimeDays} day lead time</span>
+          <span className="flex items-center gap-1.5 text-dark-600"><Clock className="size-3" /> {sup.leadTimeDays} day lead time</span>
         )}
         {sup.minimumOrderValue && (
-          <span className="flex items-center gap-1.5 text-[#999]"><DollarSign className="size-3" /> ${Number(sup.minimumOrderValue).toFixed(2)} min order</span>
+          <span className="flex items-center gap-1.5 text-dark-600"><DollarSign className="size-3" /> ${Number(sup.minimumOrderValue).toFixed(2)} min order</span>
         )}
         {sup.orderingMethod && (
-          <span className="flex items-center gap-1.5 text-[#999]"><ShoppingCart className="size-3" /> Order via {ORD_LABELS[sup.orderingMethod] || sup.orderingMethod}</span>
+          <span className="flex items-center gap-1.5 text-dark-600"><ShoppingCart className="size-3" /> Order via {ORD_LABELS[sup.orderingMethod] || sup.orderingMethod}</span>
         )}
         {sup.paymentTerms && (
-          <span className="flex items-center gap-1.5 text-[#999]"><CreditCard className="size-3" /> {PAY_LABELS[sup.paymentTerms] || sup.paymentTerms}</span>
+          <span className="flex items-center gap-1.5 text-dark-600"><CreditCard className="size-3" /> {PAY_LABELS[sup.paymentTerms] || sup.paymentTerms}</span>
         )}
       </div>
 
       {/* Delivery days */}
       {deliveryDays.length > 0 && (
         <div className="flex items-center gap-2">
-          <CalendarDays className="size-3 text-[#666]" />
+          <CalendarDays className="size-3 text-dark-500" />
           <div className="flex gap-1">
             {DAY_CHIPS.map((d) => (
               <span key={d.key} className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
                 deliveryDays.includes(d.key)
-                  ? "bg-[#D4A574]/20 text-[#D4A574] border border-[#D4A574]/30"
-                  : "text-[#444]"
+                  ? "bg-gold/20 text-gold border border-gold/30"
+                  : "text-dark-400"
               }`}>
                 {d.label}
               </span>
@@ -284,7 +284,7 @@ function SupplierDetail({ supplier: sup }: { supplier: Supplier }) {
       )}
 
       {/* Notes */}
-      {sup.notes && <p className="text-xs text-[#666] italic">{sup.notes}</p>}
+      {sup.notes && <p className="text-xs text-dark-500 italic">{sup.notes}</p>}
     </div>
   );
 }
@@ -374,30 +374,30 @@ function SupplierForm({
   };
 
   return (
-    <div className="p-5 bg-[#161616] border border-[#D4A574]/20 rounded-xl animate-[scaleIn_200ms_ease-out]">
+    <div className="p-5 bg-dark-50 border border-gold/20 rounded-xl animate-[scaleIn_200ms_ease-out]">
       <h4 className="text-sm font-semibold text-white mb-4">{title}</h4>
 
       <div className="space-y-3">
         {/* Row 1: Name + Category + Currency */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="sm:col-span-1">
-            <label className="text-[10px] text-[#666] uppercase tracking-wider block mb-1">Supplier Name</label>
+            <label className="text-[10px] text-dark-500 uppercase tracking-wider block mb-1">Supplier Name</label>
             <input type="text" value={name} onChange={(e) => setName(e.target.value)}
               placeholder="e.g. Sysco Foods" autoFocus
-              className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none focus:border-[#D4A574]/50" />
+              className="w-full px-3 py-2 rounded-lg bg-dark border border-dark-200 text-sm text-white placeholder-dark-500 focus:outline-none focus:border-gold/50" />
           </div>
           <div>
-            <label className="text-[10px] text-[#666] uppercase tracking-wider block mb-1">Category</label>
+            <label className="text-[10px] text-dark-500 uppercase tracking-wider block mb-1">Category</label>
             <select value={category} onChange={(e) => setCategory(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white focus:outline-none">
+              className="w-full px-3 py-2 rounded-lg bg-dark border border-dark-200 text-sm text-white focus:outline-none">
               <option value="">Select...</option>
               {SUPPLIER_CATEGORIES.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
             </select>
           </div>
           <div>
-            <label className="text-[10px] text-[#666] uppercase tracking-wider block mb-1">Currency</label>
+            <label className="text-[10px] text-dark-500 uppercase tracking-wider block mb-1">Currency</label>
             <select value={currency} onChange={(e) => setCurrency(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white focus:outline-none">
+              className="w-full px-3 py-2 rounded-lg bg-dark border border-dark-200 text-sm text-white focus:outline-none">
               {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
@@ -406,107 +406,107 @@ function SupplierForm({
         {/* Row 2: Contact */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div>
-            <label className="text-[10px] text-[#666] uppercase tracking-wider block mb-1">Contact Person</label>
+            <label className="text-[10px] text-dark-500 uppercase tracking-wider block mb-1">Contact Person</label>
             <input type="text" value={contactName} onChange={(e) => setContactName(e.target.value)}
               placeholder="e.g. John Smith"
-              className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none" />
+              className="w-full px-3 py-2 rounded-lg bg-dark border border-dark-200 text-sm text-white placeholder-dark-500 focus:outline-none" />
           </div>
           <div>
-            <label className="text-[10px] text-[#666] uppercase tracking-wider block mb-1">Email</label>
+            <label className="text-[10px] text-dark-500 uppercase tracking-wider block mb-1">Email</label>
             <input type="email" value={contactEmail} onChange={(e) => setContactEmail(e.target.value)}
               placeholder="e.g. john@sysco.com"
-              className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none" />
+              className="w-full px-3 py-2 rounded-lg bg-dark border border-dark-200 text-sm text-white placeholder-dark-500 focus:outline-none" />
           </div>
           <div>
-            <label className="text-[10px] text-[#666] uppercase tracking-wider block mb-1">Phone</label>
+            <label className="text-[10px] text-dark-500 uppercase tracking-wider block mb-1">Phone</label>
             <input type="tel" value={contactPhone} onChange={(e) => setContactPhone(e.target.value)}
               placeholder="e.g. +61-3-9999-0000"
-              className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none" />
+              className="w-full px-3 py-2 rounded-lg bg-dark border border-dark-200 text-sm text-white placeholder-dark-500 focus:outline-none" />
           </div>
         </div>
 
         {/* Row 2a: Website */}
         <div>
-          <label className="text-[10px] text-[#666] uppercase tracking-wider block mb-1">Website</label>
+          <label className="text-[10px] text-dark-500 uppercase tracking-wider block mb-1">Website</label>
           <input type="url" value={website} onChange={(e) => setWebsite(e.target.value)}
             placeholder="e.g. https://sysco.com"
-            className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none" />
+            className="w-full px-3 py-2 rounded-lg bg-dark border border-dark-200 text-sm text-white placeholder-dark-500 focus:outline-none" />
         </div>
 
         {/* Row 2b: Address */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <label className="text-[10px] text-[#666] uppercase tracking-wider block mb-1">Address Line 1</label>
+            <label className="text-[10px] text-dark-500 uppercase tracking-wider block mb-1">Address Line 1</label>
             <input type="text" value={addressLine1} onChange={(e) => setAddressLine1(e.target.value)}
               placeholder="e.g. 12 Market St"
-              className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none" />
+              className="w-full px-3 py-2 rounded-lg bg-dark border border-dark-200 text-sm text-white placeholder-dark-500 focus:outline-none" />
           </div>
           <div>
-            <label className="text-[10px] text-[#666] uppercase tracking-wider block mb-1">Address Line 2</label>
+            <label className="text-[10px] text-dark-500 uppercase tracking-wider block mb-1">Address Line 2</label>
             <input type="text" value={addressLine2} onChange={(e) => setAddressLine2(e.target.value)}
               placeholder="e.g. Unit 4"
-              className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none" />
+              className="w-full px-3 py-2 rounded-lg bg-dark border border-dark-200 text-sm text-white placeholder-dark-500 focus:outline-none" />
           </div>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div>
-            <label className="text-[10px] text-[#666] uppercase tracking-wider block mb-1">Suburb</label>
+            <label className="text-[10px] text-dark-500 uppercase tracking-wider block mb-1">Suburb</label>
             <input type="text" value={suburb} onChange={(e) => setSuburb(e.target.value)}
               placeholder="e.g. Richmond"
-              className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none" />
+              className="w-full px-3 py-2 rounded-lg bg-dark border border-dark-200 text-sm text-white placeholder-dark-500 focus:outline-none" />
           </div>
           <div>
-            <label className="text-[10px] text-[#666] uppercase tracking-wider block mb-1">State</label>
+            <label className="text-[10px] text-dark-500 uppercase tracking-wider block mb-1">State</label>
             <input type="text" value={stateProv} onChange={(e) => setStateProv(e.target.value)}
               placeholder="e.g. VIC"
-              className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none" />
+              className="w-full px-3 py-2 rounded-lg bg-dark border border-dark-200 text-sm text-white placeholder-dark-500 focus:outline-none" />
           </div>
           <div>
-            <label className="text-[10px] text-[#666] uppercase tracking-wider block mb-1">Postcode</label>
+            <label className="text-[10px] text-dark-500 uppercase tracking-wider block mb-1">Postcode</label>
             <input type="text" value={postcode} onChange={(e) => setPostcode(e.target.value)}
               placeholder="e.g. 3121"
-              className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none" />
+              className="w-full px-3 py-2 rounded-lg bg-dark border border-dark-200 text-sm text-white placeholder-dark-500 focus:outline-none" />
           </div>
           <div>
-            <label className="text-[10px] text-[#666] uppercase tracking-wider block mb-1">Country</label>
+            <label className="text-[10px] text-dark-500 uppercase tracking-wider block mb-1">Country</label>
             <input type="text" value={country} onChange={(e) => setCountry(e.target.value)}
               placeholder="e.g. Australia"
-              className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none" />
+              className="w-full px-3 py-2 rounded-lg bg-dark border border-dark-200 text-sm text-white placeholder-dark-500 focus:outline-none" />
           </div>
         </div>
 
         {/* Row 3: Order terms */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div>
-            <label className="text-[10px] text-[#666] uppercase tracking-wider block mb-1">Lead Time</label>
+            <label className="text-[10px] text-dark-500 uppercase tracking-wider block mb-1">Lead Time</label>
             <div className="relative">
               <input type="text" value={leadTime} onChange={(e) => setLeadTime(e.target.value)}
                 placeholder="e.g. 2"
-                className="w-full px-3 py-2 pr-14 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none" />
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#666]">days</span>
+                className="w-full px-3 py-2 pr-14 rounded-lg bg-dark border border-dark-200 text-sm text-white placeholder-dark-500 focus:outline-none" />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-dark-500">days</span>
             </div>
           </div>
           <div>
-            <label className="text-[10px] text-[#666] uppercase tracking-wider block mb-1">Minimum Order</label>
+            <label className="text-[10px] text-dark-500 uppercase tracking-wider block mb-1">Minimum Order</label>
             <div className="relative">
-              <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-[#666]" />
+              <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-dark-500" />
               <input type="text" value={minOrder} onChange={(e) => setMinOrder(e.target.value)}
                 placeholder="e.g. 150.00"
-                className="w-full pl-8 pr-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none" />
+                className="w-full pl-8 pr-3 py-2 rounded-lg bg-dark border border-dark-200 text-sm text-white placeholder-dark-500 focus:outline-none" />
             </div>
           </div>
           <div>
-            <label className="text-[10px] text-[#666] uppercase tracking-wider block mb-1">Payment Terms</label>
+            <label className="text-[10px] text-dark-500 uppercase tracking-wider block mb-1">Payment Terms</label>
             <select value={payment} onChange={(e) => setPayment(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white focus:outline-none">
+              className="w-full px-3 py-2 rounded-lg bg-dark border border-dark-200 text-sm text-white focus:outline-none">
               <option value="">Select...</option>
               {PAYMENT_TERMS.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
             </select>
           </div>
           <div>
-            <label className="text-[10px] text-[#666] uppercase tracking-wider block mb-1">Order Via</label>
+            <label className="text-[10px] text-dark-500 uppercase tracking-wider block mb-1">Order Via</label>
             <select value={ordering} onChange={(e) => setOrdering(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white focus:outline-none">
+              className="w-full px-3 py-2 rounded-lg bg-dark border border-dark-200 text-sm text-white focus:outline-none">
               <option value="">Select...</option>
               {ORDERING_METHODS.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
             </select>
@@ -515,14 +515,14 @@ function SupplierForm({
 
         {/* Row 4: Delivery days */}
         <div>
-          <label className="text-[10px] text-[#666] uppercase tracking-wider block mb-1">Delivery Days</label>
+          <label className="text-[10px] text-dark-500 uppercase tracking-wider block mb-1">Delivery Days</label>
           <div className="flex gap-1.5">
             {DAY_CHIPS.map((d) => (
               <button key={d.key} type="button" onClick={() => toggleDay(d.key)}
                 className={`px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-all ${
                   deliveryDays.has(d.key)
-                    ? "bg-[#D4A574]/20 text-[#D4A574] border-[#D4A574]/30"
-                    : "bg-[#0A0A0A] text-[#666] border-[#2A2A2A] hover:border-[#3A3A3A]"
+                    ? "bg-gold/20 text-gold border-gold/30"
+                    : "bg-dark text-dark-500 border-dark-200 hover:border-dark-300"
                 }`}>
                 {d.label}
               </button>
@@ -533,18 +533,18 @@ function SupplierForm({
         {/* Row 5: Locations served */}
         {locations.length > 1 && (
           <div>
-            <label className="text-[10px] text-[#666] uppercase tracking-wider block mb-1">
+            <label className="text-[10px] text-dark-500 uppercase tracking-wider block mb-1">
               Locations Served
               <span className="text-[#555] ml-1">(leave empty = all locations)</span>
             </label>
             <div className="flex flex-wrap gap-2">
               {locations.map((loc) => (
-                <label key={loc.storeLocationId} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] cursor-pointer hover:border-[#3A3A3A] transition-colors">
+                <label key={loc.storeLocationId} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-dark border border-dark-200 cursor-pointer hover:border-dark-300 transition-colors">
                   <input
                     type="checkbox"
                     checked={selectedLocs.has(loc.storeLocationId)}
                     onChange={() => toggleLoc(loc.storeLocationId)}
-                    className="rounded border-[#3A3A3A] bg-[#0A0A0A] text-[#D4A574] focus:ring-[#D4A574]/50"
+                    className="rounded border-dark-300 bg-dark text-gold focus:ring-gold/50"
                   />
                   <span className="text-xs text-white">{loc.locationName}</span>
                 </label>
@@ -555,16 +555,16 @@ function SupplierForm({
 
         {/* Row 6: Notes */}
         <div>
-          <label className="text-[10px] text-[#666] uppercase tracking-wider block mb-1">Notes</label>
+          <label className="text-[10px] text-dark-500 uppercase tracking-wider block mb-1">Notes</label>
           <textarea value={notes} onChange={(e) => setNotes(e.target.value)}
             placeholder="e.g. Premium seafood distributor, delivers Mon/Thu"
             rows={2}
-            className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none resize-none" />
+            className="w-full px-3 py-2 rounded-lg bg-dark border border-dark-200 text-sm text-white placeholder-dark-500 focus:outline-none resize-none" />
         </div>
       </div>
 
       {/* Actions */}
-      <div className="flex justify-between mt-4 pt-3 border-t border-[#2A2A2A]">
+      <div className="flex justify-between mt-4 pt-3 border-t border-dark-200">
         <div>
           {onDelete && (
             <button onClick={onDelete}
@@ -574,13 +574,13 @@ function SupplierForm({
           )}
         </div>
         <div className="flex gap-2">
-          <button onClick={onCancel} className="px-4 py-2 rounded-xl text-sm text-[#999] hover:text-white transition-colors">
+          <button onClick={onCancel} className="px-4 py-2 rounded-xl text-sm text-dark-600 hover:text-white transition-colors">
             Cancel
           </button>
           <button
             onClick={handleSave}
             disabled={!name.trim() || saving}
-            className="flex items-center gap-1.5 px-5 py-2 rounded-xl bg-gradient-to-r from-[#D4A574] to-[#C4956A] text-[#0A0A0A] text-sm font-semibold disabled:opacity-50 active:scale-[0.98] transition-all"
+            className="flex items-center gap-1.5 px-5 py-2 rounded-xl bg-gradient-to-r from-gold to-gold-hover text-dark text-sm font-semibold disabled:opacity-50 active:scale-[0.98] transition-all"
           >
             {saving ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
             Save

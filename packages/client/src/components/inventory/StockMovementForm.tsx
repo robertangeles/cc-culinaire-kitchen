@@ -111,7 +111,7 @@ export default function StockMovementForm({
   if (areasLoading) {
     return (
       <div className="flex items-center justify-center py-16">
-        <Loader2 className="size-6 animate-spin text-[#D4A574]" />
+        <Loader2 className="size-6 animate-spin text-gold" />
       </div>
     );
   }
@@ -119,9 +119,9 @@ export default function StockMovementForm({
   // Moving between areas is meaningless until there are areas to move between.
   if (areas.length < 2) {
     return (
-      <div className="text-center py-16 rounded-xl bg-[#161616] border border-[#2A2A2A]">
-        <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-[#D4A574]/10 border border-[#D4A574]/20 flex items-center justify-center shadow-[0_0_20px_rgba(212,165,116,0.1)]">
-          <Boxes className="size-7 text-[#D4A574]" />
+      <div className="text-center py-16 rounded-xl bg-dark-50 border border-dark-200">
+        <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-gold/10 border border-gold/20 flex items-center justify-center shadow-[0_0_20px_rgba(212,165,116,0.1)]">
+          <Boxes className="size-7 text-gold" />
         </div>
         <h3 className="text-base font-semibold text-white mb-1">
           {areas.length === 0 ? "No areas yet" : "You need a second area"}
@@ -159,11 +159,11 @@ export default function StockMovementForm({
                 placeholder="Search items..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-[#0A0A0A] border border-[#2A2A2A] rounded-lg pl-9 pr-4 py-2 text-sm text-white placeholder-[#555] focus:outline-none focus:border-[#D4A574]/30 transition-all"
+                className="w-full bg-dark border border-dark-200 rounded-lg pl-9 pr-4 py-2 text-sm text-white placeholder-[#555] focus:outline-none focus:border-gold/30 transition-all"
               />
             </div>
             {searchResults.length > 0 && (
-              <div className="mt-1 rounded-lg border border-[#2A2A2A] overflow-hidden">
+              <div className="mt-1 rounded-lg border border-dark-200 overflow-hidden">
                 {searchResults.map((i) => (
                   <button
                     key={i.ingredientId}
@@ -172,10 +172,10 @@ export default function StockMovementForm({
                       setSearchQuery("");
                       setTimeout(() => qtyRef.current?.focus(), 50);
                     }}
-                    className="w-full flex items-center justify-between px-3 py-2 text-sm text-[#ccc] hover:bg-[#D4A574]/5 transition-colors"
+                    className="w-full flex items-center justify-between px-3 py-2 text-sm text-[#ccc] hover:bg-gold/5 transition-colors"
                   >
                     <span>{i.ingredientName}</span>
-                    <span className="text-[10px] text-[#666]">
+                    <span className="text-[10px] text-dark-500">
                       {Number(i.currentQty ?? 0).toFixed(1)} {i.unitOverride || i.baseUnit} on site
                     </span>
                   </button>
@@ -184,12 +184,12 @@ export default function StockMovementForm({
             )}
           </div>
         ) : (
-          <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-[#D4A574]/5 border border-[#D4A574]/20">
+          <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-gold/5 border border-gold/20">
             <span className="text-sm text-white font-medium">{selectedItem.ingredientName}</span>
             <button
               onClick={clear}
               aria-label="Choose a different item"
-              className="text-[#666] hover:text-[#CCC] transition-colors"
+              className="text-dark-500 hover:text-[#CCC] transition-colors"
             >
               <X size={14} />
             </button>
@@ -213,7 +213,7 @@ export default function StockMovementForm({
                   placeholder="0.0"
                   value={quantity}
                   onChange={(e) => setQuantity(e.target.value)}
-                  className="w-28 bg-[#0A0A0A] border border-[#2A2A2A] rounded-lg px-3 py-2 text-sm text-white text-right placeholder-[#555] focus:outline-none focus:border-[#D4A574]/30 transition-all"
+                  className="w-28 bg-dark border border-dark-200 rounded-lg px-3 py-2 text-sm text-white text-right placeholder-[#555] focus:outline-none focus:border-gold/30 transition-all"
                 />
                 <span className="text-sm text-[#888]">{unit}</span>
               </div>
@@ -229,7 +229,7 @@ export default function StockMovementForm({
                   id="move-from"
                   value={fromAreaId}
                   onChange={(e) => setFromAreaId(e.target.value)}
-                  className="w-full bg-[#0A0A0A] border border-[#2A2A2A] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#D4A574]/30 transition-all"
+                  className="w-full bg-dark border border-dark-200 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-gold/30 transition-all"
                 >
                   <option value="">Choose...</option>
                   {areas.map((a) => (
@@ -239,7 +239,7 @@ export default function StockMovementForm({
                   ))}
                 </select>
               </div>
-              <ArrowRightLeft size={14} className="text-[#D4A574] mb-2.5 flex-shrink-0" />
+              <ArrowRightLeft size={14} className="text-gold mb-2.5 flex-shrink-0" />
               <div className="flex-1">
                 <label htmlFor="move-to" className="text-xs text-[#888] font-medium mb-1.5 block">
                   To
@@ -248,7 +248,7 @@ export default function StockMovementForm({
                   id="move-to"
                   value={toAreaId}
                   onChange={(e) => setToAreaId(e.target.value)}
-                  className="w-full bg-[#0A0A0A] border border-[#2A2A2A] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#D4A574]/30 transition-all"
+                  className="w-full bg-dark border border-dark-200 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-gold/30 transition-all"
                 >
                   <option value="">Choose...</option>
                   {areas
@@ -274,13 +274,13 @@ export default function StockMovementForm({
                 value={notes}
                 maxLength={500}
                 onChange={(e) => setNotes(e.target.value)}
-                className="w-full bg-[#0A0A0A] border border-[#2A2A2A] rounded-lg px-3 py-2 text-sm text-white placeholder-[#555] focus:outline-none focus:border-[#D4A574]/30 transition-all"
+                className="w-full bg-dark border border-dark-200 rounded-lg px-3 py-2 text-sm text-white placeholder-[#555] focus:outline-none focus:border-gold/30 transition-all"
               />
             </div>
 
             {error && <p className="text-xs text-red-400/90">{error}</p>}
 
-            <p className="text-[11px] text-[#666]">
+            <p className="text-[11px] text-dark-500">
               This doesn't change your stock — {selectedItem.ingredientName} stays on site until
               it's sold or wasted.
             </p>
@@ -288,7 +288,7 @@ export default function StockMovementForm({
             <button
               onClick={handleSubmit}
               disabled={saving || !quantity || !fromAreaId || !toAreaId}
-              className="w-full sm:w-auto bg-gradient-to-r from-[#D4A574] to-[#C4956A] text-[#0A0A0A] font-semibold rounded-xl px-6 py-2.5 text-sm transition-all hover:shadow-[0_0_20px_rgba(212,165,116,0.2)] hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-none flex items-center justify-center gap-2"
+              className="w-full sm:w-auto bg-gradient-to-r from-gold to-gold-hover text-dark font-semibold rounded-xl px-6 py-2.5 text-sm transition-all hover:shadow-[0_0_20px_rgba(212,165,116,0.2)] hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-none flex items-center justify-center gap-2"
             >
               {saving ? (
                 <>
@@ -305,23 +305,23 @@ export default function StockMovementForm({
 
       {/* Recent moves */}
       <div className="bg-[#111]/80 backdrop-blur-md border border-white/5 rounded-xl p-5">
-        <p className="text-[10px] text-[#D4A574]/70 uppercase tracking-wider mb-2">Recent moves</p>
+        <p className="text-[10px] text-gold/70 uppercase tracking-wider mb-2">Recent moves</p>
         {movements.length === 0 ? (
           <p className="text-xs text-[#555] text-center py-4">Nothing moved yet.</p>
         ) : (
-          <div className="rounded-lg border border-[#1E1E1E] divide-y divide-[#2A2A2A]/30">
+          <div className="rounded-lg border border-dark-100 divide-y divide-dark-200/30">
             {movements.slice(0, 10).map((m) => (
               <div key={m.stockMovementId} className="flex items-center gap-2 px-3 py-2 text-xs">
-                <ArrowRightLeft size={11} className="text-[#D4A574] flex-shrink-0" />
+                <ArrowRightLeft size={11} className="text-gold flex-shrink-0" />
                 <span className="text-[#E5E5E5] tabular-nums">
                   {Number(m.quantity) % 1 === 0 ? Number(m.quantity) : Number(m.quantity).toFixed(1)}
                 </span>
-                <span className="text-[#666]">{m.unit}</span>
+                <span className="text-dark-500">{m.unit}</span>
                 <span className="text-[#CCC] flex-1 truncate">{m.ingredientName}</span>
                 <span className="text-[#888] truncate">
                   {m.fromAreaName} → {m.toAreaName}
                 </span>
-                <span className="text-[#666] min-w-[4.5rem] text-right">{formatTime(m.movedAt)}</span>
+                <span className="text-dark-500 min-w-[4.5rem] text-right">{formatTime(m.movedAt)}</span>
               </div>
             ))}
           </div>

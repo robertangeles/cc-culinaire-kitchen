@@ -19,8 +19,8 @@ import { LocationChip } from "../location/LocationChip.js";
 const navLinkClass = ({ isActive }: { isActive: boolean }) =>
   `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-colors ${
     isActive
-      ? "bg-[#1E1E1E] text-white"
-      : "text-[#999999] hover:text-[#FAFAFA] hover:bg-[#161616]"
+      ? "bg-dark-100 text-white"
+      : "text-dark-600 hover:text-[#FAFAFA] hover:bg-dark-50"
   }`;
 
 /**
@@ -43,9 +43,9 @@ function SidebarGroup({
     <div className="mb-1">
       <button
         onClick={onToggle}
-        className="flex items-center gap-1.5 w-full px-3 py-1.5 text-xs font-medium text-[#666666] uppercase tracking-wider hover:text-[#999999] transition-colors"
+        className="flex items-center gap-1.5 w-full px-3 py-1.5 text-xs font-medium text-dark-500 uppercase tracking-wider hover:text-dark-600 transition-colors"
       >
-        {open ? <ChevronDown className="size-3 text-[#666666]" /> : <ChevronRight className="size-3 text-[#666666]" />}
+        {open ? <ChevronDown className="size-3 text-dark-500" /> : <ChevronRight className="size-3 text-dark-500" />}
         {label}
       </button>
       <div
@@ -134,13 +134,13 @@ export function Sidebar() {
 
   return (
     <aside
-      className="hidden md:flex w-64 h-full flex-col bg-[#0A0A0A] border-r border-[#1E1E1E] text-white"
+      className="hidden md:flex w-64 h-full flex-col bg-dark border-r border-dark-100 text-white"
       style={sidebarBg ? { backgroundColor: sidebarBg } : undefined}
     >
       {/* Branding — logo on top, title below, clickable to home */}
       <Link
         to="/chat/new"
-        className="flex flex-col items-center gap-2 px-4 py-5 border-b border-[#1E1E1E] hover:bg-[#161616] transition-colors"
+        className="flex flex-col items-center gap-2 px-4 py-5 border-b border-dark-100 hover:bg-dark-50 transition-colors"
       >
         {logoPath ? (
           <img
@@ -150,7 +150,7 @@ export function Sidebar() {
             style={{ width: 100, height: 100 }}
           />
         ) : (
-          <ChefHat className="size-12 text-[#D4A574]" />
+          <ChefHat className="size-12 text-gold" />
         )}
         <span className="font-semibold text-lg truncate text-center w-full text-[#FAFAFA] tracking-tight">{pageTitle}</span>
       </Link>
@@ -170,7 +170,7 @@ export function Sidebar() {
         <div className="px-3 pb-2">
           <Link
             to="/login"
-            className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium bg-[#D4A574] text-[#0A0A0A] hover:bg-[#C4956A] transition-colors"
+            className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium bg-gold text-dark hover:bg-gold-hover transition-colors"
           >
             Sign In
           </Link>
@@ -180,7 +180,7 @@ export function Sidebar() {
       )}
 
       {/* Footer */}
-      <div className="px-4 py-3 border-t border-[#1E1E1E] text-xs text-[#666666]">
+      <div className="px-4 py-3 border-t border-dark-100 text-xs text-dark-500">
         CulinAIre Kitchen v{__APP_VERSION__}
       </div>
     </aside>

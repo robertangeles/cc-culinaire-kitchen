@@ -25,9 +25,9 @@ const QUAD_CONFIG = [
     key: "stars" as const,
     label: "Stars",
     icon: Star,
-    bg: "bg-[#D4A574]/15",
-    text: "text-[#D4A574]",
-    border: "border-[#D4A574]/20",
+    bg: "bg-gold/15",
+    text: "text-gold",
+    border: "border-gold/20",
     desc: "High profit, high popularity",
   },
   {
@@ -52,8 +52,8 @@ const QUAD_CONFIG = [
     key: "dogs" as const,
     label: "Dogs",
     icon: XCircle,
-    bg: "bg-[#2A2A2A]",
-    text: "text-[#666666]",
+    bg: "bg-dark-200",
+    text: "text-dark-500",
     border: "border-[#333333]",
     desc: "Low profit, low popularity",
   },
@@ -69,19 +69,19 @@ export function MenuDashboard({ analysis, loading, onFilterDogs }: MenuDashboard
   if (loading && !analysis) {
     return (
       <div className="flex items-center justify-center py-20">
-        <Loader2 className="size-6 animate-spin text-[#D4A574]" />
+        <Loader2 className="size-6 animate-spin text-gold" />
       </div>
     );
   }
 
   if (!analysis || analysis.totalItems === 0) {
     return (
-      <div className="bg-[#161616] rounded-2xl border border-[#2A2A2A] p-12 text-center">
+      <div className="bg-dark-50 rounded-2xl border border-dark-200 p-12 text-center">
         <BarChart3 className="size-12 mx-auto mb-4 text-[#333333]" />
         <h3 className="text-lg font-semibold text-[#FAFAFA] mb-2">
           No menu data yet
         </h3>
-        <p className="text-sm text-[#666666] max-w-md mx-auto">
+        <p className="text-sm text-dark-500 max-w-md mx-auto">
           Add your first menu item to see engineering insights. Switch to the
           Menu Items tab to get started.
         </p>
@@ -119,11 +119,11 @@ export function MenuDashboard({ analysis, loading, onFilterDogs }: MenuDashboard
               <span className={`text-sm font-semibold ${text}`}>{label}</span>
             </div>
             <p className={`text-3xl font-bold ${text}`}>{analysis[key]}</p>
-            <p className="text-xs text-[#666666] mt-1">{desc}</p>
+            <p className="text-xs text-dark-500 mt-1">{desc}</p>
             {key === "dogs" && analysis.dogs > 0 && onFilterDogs && (
               <button
                 onClick={onFilterDogs}
-                className="text-xs text-[#D4A574] hover:text-[#C4956A] mt-2 transition-colors"
+                className="text-xs text-gold hover:text-gold-hover mt-2 transition-colors"
               >
                 Generate replacements &rarr;
               </button>
@@ -203,7 +203,7 @@ export function MenuDashboard({ analysis, loading, onFilterDogs }: MenuDashboard
                 ? `${leastPopular.menuMixPct.toFixed(1)}% mix`
                 : ""
             }
-            color="text-[#666666]"
+            color="text-dark-500"
           />
         </div>
       )}
@@ -225,10 +225,10 @@ function MetricCard({
   alert?: boolean;
 }) {
   return (
-    <div className="bg-[#161616] rounded-2xl border border-[#2A2A2A] p-4">
+    <div className="bg-dark-50 rounded-2xl border border-dark-200 p-4">
       <div className="flex items-center gap-2 mb-1">
-        <Icon className="size-4 text-[#666666]" />
-        <p className="text-xs text-[#666666]">{label}</p>
+        <Icon className="size-4 text-dark-500" />
+        <p className="text-xs text-dark-500">{label}</p>
       </div>
       <p
         className={`text-xl font-bold ${
@@ -256,14 +256,14 @@ function PerformerCard({
 }) {
   if (!item) return null;
   return (
-    <div className="bg-[#161616] rounded-2xl border border-[#2A2A2A] p-4 flex items-center gap-3">
+    <div className="bg-dark-50 rounded-2xl border border-dark-200 p-4 flex items-center gap-3">
       <div
-        className={`flex-shrink-0 size-10 rounded-xl bg-[#0A0A0A] flex items-center justify-center`}
+        className={`flex-shrink-0 size-10 rounded-xl bg-dark flex items-center justify-center`}
       >
         <Icon className={`size-5 ${color}`} />
       </div>
       <div className="min-w-0">
-        <p className="text-xs text-[#666666]">{label}</p>
+        <p className="text-xs text-dark-500">{label}</p>
         <p className="text-sm font-semibold text-[#FAFAFA] truncate">
           {item.name}
         </p>

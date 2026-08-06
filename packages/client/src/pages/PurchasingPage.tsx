@@ -109,27 +109,27 @@ export function PurchasingPage() {
 
   if (isGuest || !user) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-[#0A0A0A]">
+      <div className="flex-1 flex items-center justify-center bg-dark">
         <div className="text-center max-w-md px-6">
-          <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-[#1E1E1E] flex items-center justify-center">
-            <ShoppingCart className="size-8 text-[#D4A574]" />
+          <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-dark-100 flex items-center justify-center">
+            <ShoppingCart className="size-8 text-gold" />
           </div>
           <h2 className="text-xl font-semibold text-white mb-2">Purchasing</h2>
-          <p className="text-[#999] text-sm">Sign in to manage orders and deliveries.</p>
+          <p className="text-dark-600 text-sm">Sign in to manage orders and deliveries.</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex-1 flex flex-col bg-[#0A0A0A] overflow-hidden">
+    <div className="flex-1 flex flex-col bg-dark overflow-hidden">
       {/* Sticky header + tabs */}
-      <div className="flex-shrink-0 bg-[#0A0A0A] border-b border-[#1A1A1A] z-30">
+      <div className="flex-shrink-0 bg-dark border-b border-[#1A1A1A] z-30">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-4">
           <div className="mb-4 animate-[fadeInUp_200ms_ease-out]">
             <h1 className="text-2xl font-bold text-white flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#D4A574] to-[#C4956A] flex items-center justify-center shadow-[0_0_12px_rgba(212,165,116,0.2)]">
-                <ShoppingCart className="size-5 text-[#0A0A0A]" />
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-gold to-gold-hover flex items-center justify-center shadow-[0_0_12px_rgba(212,165,116,0.2)]">
+                <ShoppingCart className="size-5 text-dark" />
               </div>
               Purchasing
             </h1>
@@ -137,7 +137,7 @@ export function PurchasingPage() {
 
           <div className="flex items-center gap-3">
             <div
-              className="flex gap-1 p-1 rounded-xl bg-[#161616] border border-[#2A2A2A] w-fit"
+              className="flex gap-1 p-1 rounded-xl bg-dark-50 border border-dark-200 w-fit"
               role="tablist"
             >
               {tabs.map((tab) => {
@@ -151,15 +151,15 @@ export function PurchasingPage() {
                       onClick={() => setActiveTab(tab.key)}
                       className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                         isActive
-                          ? "bg-[#1E1E1E] text-white shadow-[0_0_8px_rgba(212,165,116,0.1)]"
-                          : "text-[#999] hover:text-white hover:bg-[#1E1E1E]/50"
+                          ? "bg-dark-100 text-white shadow-[0_0_8px_rgba(212,165,116,0.1)]"
+                          : "text-dark-600 hover:text-white hover:bg-dark-100/50"
                       }`}
                     >
                       <Icon className="size-4" />
                       {tab.label}
                       {(tab.badge ?? 0) > 0 && (
                         <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold min-w-[18px] text-center leading-none ${
-                          tab.key === "approvals" ? "bg-amber-500 text-[#0A0A0A]" : "bg-emerald-500 text-white"
+                          tab.key === "approvals" ? "bg-amber-500 text-dark" : "bg-emerald-500 text-white"
                         }`}>
                           {tab.badge}
                         </span>

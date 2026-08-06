@@ -68,30 +68,30 @@ export function BenchDmConversation({ thread, messages, loading, onSend, onBack 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-[#2A2A2A] bg-[#161616]">
-        <button onClick={onBack} className="p-1 rounded hover:bg-[#2A2A2A] text-[#999999]">
+      <div className="flex items-center gap-3 px-4 py-3 border-b border-dark-200 bg-dark-50">
+        <button onClick={onBack} className="p-1 rounded hover:bg-dark-200 text-dark-600">
           <ArrowLeft className="size-5" />
         </button>
         {thread.otherUserPhotoPath ? (
           <img src={thread.otherUserPhotoPath} alt={thread.otherUserName} className="size-9 rounded-full object-cover" />
         ) : (
-          <div className="size-9 rounded-full bg-[#D4A574]/15 flex items-center justify-center">
-            <span className="text-base font-semibold text-[#D4A574]">{thread.otherUserName.charAt(0).toUpperCase()}</span>
+          <div className="size-9 rounded-full bg-gold/15 flex items-center justify-center">
+            <span className="text-base font-semibold text-gold">{thread.otherUserName.charAt(0).toUpperCase()}</span>
           </div>
         )}
         <span className="text-[15px] font-semibold text-[#FAFAFA]">{thread.otherUserName}</span>
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto bg-[#0A0A0A]">
+      <div className="flex-1 overflow-y-auto bg-dark">
         {loading ? (
           <div className="flex items-center justify-center h-full">
-            <Loader2 className="size-5 animate-spin text-[#D4A574]" />
+            <Loader2 className="size-5 animate-spin text-gold" />
           </div>
         ) : messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center px-4">
-            <p className="text-base text-[#999999] font-medium mb-1">Start the conversation</p>
-            <p className="text-sm text-[#666666]">Say hello to {thread.otherUserName}!</p>
+            <p className="text-base text-dark-600 font-medium mb-1">Start the conversation</p>
+            <p className="text-sm text-dark-500">Say hello to {thread.otherUserName}!</p>
           </div>
         ) : (
           <div className="py-4">

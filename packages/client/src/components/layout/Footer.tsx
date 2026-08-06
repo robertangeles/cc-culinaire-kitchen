@@ -25,7 +25,7 @@ export function Footer() {
   if (OPS_ROUTES.some((r) => pathname.startsWith(r))) return null;
 
   return (
-    <footer className="border-t border-[#2A2A2A] bg-[#0A0A0A] px-4 py-3 text-center text-xs text-[#999999]">
+    <footer className="border-t border-dark-200 bg-dark px-4 py-3 text-center text-xs text-dark-600">
       {footerText}
     </footer>
   );

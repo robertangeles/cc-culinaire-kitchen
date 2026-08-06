@@ -84,7 +84,7 @@ const DOMAIN_CATEGORY_MAP: Record<string, string> = {
 /* ---- Domain badge styling ---- */
 
 const DOMAIN_BADGE: Record<string, { label: string; bg: string; text: string }> = {
-  recipe: { label: "Recipe Lab", bg: "bg-[#D4A574]/20", text: "text-[#D4A574]" },
+  recipe: { label: "Recipe Lab", bg: "bg-gold/20", text: "text-gold" },
   patisserie: { label: "Patisserie", bg: "bg-pink-500/20", text: "text-pink-400" },
   spirits: { label: "Spirits", bg: "bg-blue-500/20", text: "text-blue-400" },
 };
@@ -580,15 +580,15 @@ export function MenuItemFormModal({
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
 
       {/* Modal */}
-      <div className="relative w-full max-w-4xl max-h-[90vh] overflow-y-auto bg-[#161616] rounded-2xl border border-[#2A2A2A] shadow-2xl">
+      <div className="relative w-full max-w-4xl max-h-[90vh] overflow-y-auto bg-dark-50 rounded-2xl border border-dark-200 shadow-2xl">
         {/* Header */}
-        <div className="sticky top-0 z-10 bg-[#161616] border-b border-[#2A2A2A] px-6 py-4 flex items-center justify-between rounded-t-2xl">
+        <div className="sticky top-0 z-10 bg-dark-50 border-b border-dark-200 px-6 py-4 flex items-center justify-between rounded-t-2xl">
           <h2 className="text-lg font-bold text-[#FAFAFA]">
             {isEdit ? "Edit Menu Item" : "Add Menu Item"}
           </h2>
           <button
             onClick={onClose}
-            className="p-2 rounded-lg hover:bg-[#2A2A2A] text-[#666666] hover:text-[#FAFAFA] transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
+            className="p-2 rounded-lg hover:bg-dark-200 text-dark-500 hover:text-[#FAFAFA] transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
           >
             <X className="size-5" />
           </button>
@@ -597,14 +597,14 @@ export function MenuItemFormModal({
         <div className="px-6 py-5 space-y-6">
           {/* Mode toggle — only for new items */}
           {!isEdit && !importedFromRecipe && (
-            <div className="flex gap-1 p-1 bg-[#0A0A0A] rounded-xl border border-[#2A2A2A]">
+            <div className="flex gap-1 p-1 bg-dark rounded-xl border border-dark-200">
               <button
                 type="button"
                 onClick={() => setMode("import")}
                 className={`flex items-center gap-2 flex-1 px-4 py-2.5 text-sm font-medium rounded-lg transition-colors ${
                   mode === "import"
-                    ? "bg-[#D4A574] text-[#0A0A0A]"
-                    : "bg-[#1E1E1E] text-[#999999] hover:text-[#FAFAFA]"
+                    ? "bg-gold text-dark"
+                    : "bg-dark-100 text-dark-600 hover:text-[#FAFAFA]"
                 }`}
               >
                 <BookOpen className="size-4" />
@@ -615,8 +615,8 @@ export function MenuItemFormModal({
                 onClick={() => setMode("scratch")}
                 className={`flex items-center gap-2 flex-1 px-4 py-2.5 text-sm font-medium rounded-lg transition-colors ${
                   mode === "scratch"
-                    ? "bg-[#D4A574] text-[#0A0A0A]"
-                    : "bg-[#1E1E1E] text-[#999999] hover:text-[#FAFAFA]"
+                    ? "bg-gold text-dark"
+                    : "bg-dark-100 text-dark-600 hover:text-[#FAFAFA]"
                 }`}
               >
                 <PenTool className="size-4" />
@@ -630,21 +630,21 @@ export function MenuItemFormModal({
             <div className="space-y-4">
               {/* Search bar */}
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-[#666666]" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-dark-500" />
                 <input
                   type="text"
                   value={importSearch}
                   onChange={(e) => setImportSearch(e.target.value)}
                   placeholder="Search recipes..."
-                  className="w-full pl-10 pr-4 py-2.5 text-sm bg-[#0A0A0A] border border-[#2A2A2A] rounded-xl text-[#FAFAFA] placeholder-[#666666] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-[#D4A574]/50 min-h-[44px]"
+                  className="w-full pl-10 pr-4 py-2.5 text-sm bg-dark border border-dark-200 rounded-xl text-[#FAFAFA] placeholder-dark-500 focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-gold/50 min-h-[44px]"
                 />
               </div>
 
               {/* Recipe list */}
               {importLoading && (
                 <div className="flex items-center justify-center py-8">
-                  <Loader2 className="size-5 animate-spin text-[#D4A574]" />
-                  <span className="ml-2 text-sm text-[#999999]">Loading recipes...</span>
+                  <Loader2 className="size-5 animate-spin text-gold" />
+                  <span className="ml-2 text-sm text-dark-600">Loading recipes...</span>
                 </div>
               )}
 
@@ -656,7 +656,7 @@ export function MenuItemFormModal({
 
               {!importLoading && !importError && filteredRecipes.length === 0 && (
                 <div className="text-center py-8">
-                  <p className="text-sm text-[#666666]">
+                  <p className="text-sm text-dark-500">
                     {importRecipes.length === 0
                       ? "No saved recipes found. Create recipes in the Recipe Lab first."
                       : "No recipes match your search."}
@@ -665,17 +665,17 @@ export function MenuItemFormModal({
               )}
 
               {!importLoading && groupedRecipes.length > 0 && (
-                <div className="bg-[#0A0A0A] border border-[#2A2A2A] rounded-xl max-h-[300px] overflow-y-auto">
+                <div className="bg-dark border border-dark-200 rounded-xl max-h-[300px] overflow-y-auto">
                   {groupedRecipes.map(([domain, recipes]) => {
                     const badge = DOMAIN_BADGE[domain] ?? {
                       label: domain,
-                      bg: "bg-[#2A2A2A]",
-                      text: "text-[#999999]",
+                      bg: "bg-dark-200",
+                      text: "text-dark-600",
                     };
                     return (
                       <div key={domain}>
                         {/* Domain header */}
-                        <div className="sticky top-0 bg-[#0A0A0A] px-4 py-2 border-b border-[#2A2A2A]">
+                        <div className="sticky top-0 bg-dark px-4 py-2 border-b border-dark-200">
                           <span
                             className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded ${badge.bg} ${badge.text}`}
                           >
@@ -688,20 +688,20 @@ export function MenuItemFormModal({
                             key={recipe.recipeId}
                             type="button"
                             onClick={() => handleSelectRecipe(recipe)}
-                            className="w-full text-left hover:bg-[#1E1E1E] px-4 py-3 cursor-pointer transition-colors border-b border-[#2A2A2A]/50 last:border-b-0"
+                            className="w-full text-left hover:bg-dark-100 px-4 py-3 cursor-pointer transition-colors border-b border-dark-200/50 last:border-b-0"
                           >
                             <div className="flex items-center justify-between">
                               <div className="flex-1 min-w-0">
                                 <p className="text-sm text-[#FAFAFA] font-medium truncate">
                                   {recipe.title}
                                   {recipe.ownerName && (
-                                    <span className="text-[#666666] font-normal ml-1.5">
+                                    <span className="text-dark-500 font-normal ml-1.5">
                                       (by {recipe.ownerName})
                                     </span>
                                   )}
                                 </p>
                               </div>
-                              <span className="ml-3 text-xs text-[#666666] whitespace-nowrap">
+                              <span className="ml-3 text-xs text-dark-500 whitespace-nowrap">
                                 {recipe.ingredients.length} ingredient{recipe.ingredients.length !== 1 ? "s" : ""}
                               </span>
                             </div>
@@ -720,7 +720,7 @@ export function MenuItemFormModal({
             <form onSubmit={handleSubmit} className="space-y-6">
               {/* Import banner */}
               {importedFromRecipe && (
-                <div className="bg-[#D4A574]/10 border border-[#D4A574]/20 text-[#D4A574] rounded-xl p-3 text-sm">
+                <div className="bg-gold/10 border border-gold/20 text-gold rounded-xl p-3 text-sm">
                   Ingredients imported — link each to a Catalog item, then set your selling price
                 </div>
               )}
@@ -735,7 +735,7 @@ export function MenuItemFormModal({
               {/* Basic fields */}
               <div className="space-y-4">
                 <div>
-                  <label className="block text-xs font-medium text-[#999999] mb-1.5">
+                  <label className="block text-xs font-medium text-dark-600 mb-1.5">
                     Item Name *
                   </label>
                   <input
@@ -744,20 +744,20 @@ export function MenuItemFormModal({
                     onChange={(e) => setName(e.target.value)}
                     placeholder="e.g. Pan-Seared Salmon"
                     required
-                    className="w-full px-4 py-2.5 text-sm bg-[#0A0A0A] border border-[#2A2A2A] rounded-xl text-[#FAFAFA] placeholder-[#666666] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-[#D4A574]/50 min-h-[44px]"
+                    className="w-full px-4 py-2.5 text-sm bg-dark border border-dark-200 rounded-xl text-[#FAFAFA] placeholder-dark-500 focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-gold/50 min-h-[44px]"
                   />
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-medium text-[#999999] mb-1.5">
+                    <label className="block text-xs font-medium text-dark-600 mb-1.5">
                       Category *
                     </label>
                     <select
                       value={category}
                       onChange={(e) => setCategory(e.target.value)}
                       required
-                      className="w-full px-4 py-2.5 text-sm bg-[#0A0A0A] border border-[#2A2A2A] rounded-xl text-[#FAFAFA] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-[#D4A574]/50 min-h-[44px]"
+                      className="w-full px-4 py-2.5 text-sm bg-dark border border-dark-200 rounded-xl text-[#FAFAFA] focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-gold/50 min-h-[44px]"
                     >
                       <option value="">Select category...</option>
                       {allCategories.map((c) => (
@@ -773,13 +773,13 @@ export function MenuItemFormModal({
                         value={customCategory}
                         onChange={(e) => setCustomCategory(e.target.value)}
                         placeholder="Enter category name"
-                        className="mt-2 w-full px-4 py-2.5 text-sm bg-[#0A0A0A] border border-[#2A2A2A] rounded-xl text-[#FAFAFA] placeholder-[#666666] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-[#D4A574]/50 min-h-[44px]"
+                        className="mt-2 w-full px-4 py-2.5 text-sm bg-dark border border-dark-200 rounded-xl text-[#FAFAFA] placeholder-dark-500 focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-gold/50 min-h-[44px]"
                       />
                     )}
                   </div>
 
                   <div>
-                    <label className="block text-xs font-medium text-[#999999] mb-1.5">
+                    <label className="block text-xs font-medium text-dark-600 mb-1.5">
                       Selling Price ($) *
                     </label>
                     <input
@@ -790,10 +790,10 @@ export function MenuItemFormModal({
                       onChange={(e) => setSellingPrice(e.target.value)}
                       placeholder="0.00"
                       required
-                      className="w-full px-4 py-2.5 text-sm bg-[#0A0A0A] border border-[#2A2A2A] rounded-xl text-[#FAFAFA] placeholder-[#666666] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-[#D4A574]/50 min-h-[44px]"
+                      className="w-full px-4 py-2.5 text-sm bg-dark border border-dark-200 rounded-xl text-[#FAFAFA] placeholder-dark-500 focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-gold/50 min-h-[44px]"
                     />
                     <div className="flex items-center gap-2 mt-1.5">
-                      <span className="text-[10px] text-[#666666]">Price covers</span>
+                      <span className="text-[10px] text-dark-500">Price covers</span>
                       <input
                         type="number"
                         step="1"
@@ -801,9 +801,9 @@ export function MenuItemFormModal({
                         max="999"
                         value={servingsPerSale}
                         onChange={(e) => setServingsPerSale(Math.max(1, parseInt(e.target.value, 10) || 1))}
-                        className="w-14 px-2 py-1 text-xs bg-[#0A0A0A] border border-[#2A2A2A] rounded-lg text-[#FAFAFA] text-center focus:outline-none focus:ring-1 focus:ring-[#D4A574]/50"
+                        className="w-14 px-2 py-1 text-xs bg-dark border border-dark-200 rounded-lg text-[#FAFAFA] text-center focus:outline-none focus:ring-1 focus:ring-gold/50"
                       />
-                      <span className="text-[10px] text-[#666666]">
+                      <span className="text-[10px] text-dark-500">
                         serving{servingsPerSale === 1 ? "" : "s"}{servingsPerSale > 1 ? " (pack pricing)" : " (sold singly)"}
                       </span>
                     </div>
@@ -812,7 +812,7 @@ export function MenuItemFormModal({
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
-                    <label className="block text-xs font-medium text-[#999999] mb-1.5">
+                    <label className="block text-xs font-medium text-dark-600 mb-1.5">
                       Servings per Recipe
                     </label>
                     <input
@@ -821,14 +821,14 @@ export function MenuItemFormModal({
                       step="1"
                       value={servings}
                       onChange={(e) => setServings(Math.max(1, parseInt(e.target.value) || 1))}
-                      className="w-full px-4 py-2.5 text-sm bg-[#0A0A0A] border border-[#2A2A2A] rounded-xl text-[#FAFAFA] placeholder-[#666666] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-[#D4A574]/50 min-h-[44px]"
+                      className="w-full px-4 py-2.5 text-sm bg-dark border border-dark-200 rounded-xl text-[#FAFAFA] placeholder-dark-500 focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-gold/50 min-h-[44px]"
                     />
-                    <p className="mt-1 text-[10px] text-[#666666]">
+                    <p className="mt-1 text-[10px] text-dark-500">
                       How many plates does this recipe produce?
                     </p>
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-[#999999] mb-1.5">
+                    <label className="block text-xs font-medium text-dark-600 mb-1.5">
                       Q Factor %
                     </label>
                     <input
@@ -839,14 +839,14 @@ export function MenuItemFormModal({
                       value={qFactorPct}
                       onChange={(e) => setQFactorPct(e.target.value)}
                       placeholder="0"
-                      className="w-full px-4 py-2.5 text-sm bg-[#0A0A0A] border border-[#2A2A2A] rounded-xl text-[#FAFAFA] placeholder-[#666666] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-[#D4A574]/50 min-h-[44px]"
+                      className="w-full px-4 py-2.5 text-sm bg-dark border border-dark-200 rounded-xl text-[#FAFAFA] placeholder-dark-500 focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-gold/50 min-h-[44px]"
                     />
-                    <p className="mt-1 text-[10px] text-[#666666]">
+                    <p className="mt-1 text-[10px] text-dark-500">
                       Waste, condiments, disposables buffer (typically 5-10%)
                     </p>
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-[#999999] mb-1.5">
+                    <label className="block text-xs font-medium text-dark-600 mb-1.5">
                       Units Sold
                     </label>
                     <input
@@ -855,9 +855,9 @@ export function MenuItemFormModal({
                       value={unitsSold}
                       onChange={(e) => setUnitsSold(parseInt(e.target.value) || 0)}
                       placeholder="0"
-                      className="w-full px-4 py-2.5 text-sm bg-[#0A0A0A] border border-[#2A2A2A] rounded-xl text-[#FAFAFA] placeholder-[#666666] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-[#D4A574]/50 min-h-[44px]"
+                      className="w-full px-4 py-2.5 text-sm bg-dark border border-dark-200 rounded-xl text-[#FAFAFA] placeholder-dark-500 focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-gold/50 min-h-[44px]"
                     />
-                    <p className="mt-1 text-[10px] text-[#666666]">
+                    <p className="mt-1 text-[10px] text-dark-500">
                       From POS or manual entry
                     </p>
                   </div>
@@ -873,7 +873,7 @@ export function MenuItemFormModal({
                   <button
                     type="button"
                     onClick={addIngredientRow}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[#D4A574] bg-[#D4A574]/10 rounded-lg border border-[#D4A574]/20 hover:bg-[#D4A574]/20 transition-colors min-h-[36px]"
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gold bg-gold/10 rounded-lg border border-gold/20 hover:bg-gold/20 transition-colors min-h-[36px]"
                   >
                     <Plus className="size-3" />
                     Add Ingredient
@@ -884,7 +884,7 @@ export function MenuItemFormModal({
                   <div className="space-y-2">
                     {/* Header row */}
                     <div
-                      className="grid gap-2 text-[10px] uppercase text-[#666666] font-medium px-1"
+                      className="grid gap-2 text-[10px] uppercase text-dark-500 font-medium px-1"
                       style={{ gridTemplateColumns: "1fr 80px 70px 85px 65px 80px 36px" }}
                     >
                       <div>Name</div>
@@ -999,7 +999,7 @@ export function MenuItemFormModal({
                               }
                             />
                             {row.note && (
-                              <div className="mt-1 px-2 py-1 text-[10px] text-[#999] italic truncate" title={row.note}>
+                              <div className="mt-1 px-2 py-1 text-[10px] text-dark-600 italic truncate" title={row.note}>
                                 {row.note}
                               </div>
                             )}
@@ -1018,7 +1018,7 @@ export function MenuItemFormModal({
                               )
                             }
                             placeholder="0"
-                            className="w-full px-2 py-2 text-xs bg-[#0A0A0A] border border-[#2A2A2A] rounded-lg text-[#FAFAFA] placeholder-[#666666] focus:outline-none focus:ring-1 focus:ring-[#D4A574]/50 min-h-[36px]"
+                            className="w-full px-2 py-2 text-xs bg-dark border border-dark-200 rounded-lg text-[#FAFAFA] placeholder-dark-500 focus:outline-none focus:ring-1 focus:ring-gold/50 min-h-[36px]"
                           />
                           <select
                             value={row.unit}
@@ -1030,7 +1030,7 @@ export function MenuItemFormModal({
                                 e.target.value
                               )
                             }
-                            className="w-full px-1.5 py-2 text-xs bg-[#0A0A0A] border border-[#2A2A2A] rounded-lg text-[#FAFAFA] focus:outline-none focus:ring-1 focus:ring-[#D4A574]/50 min-h-[36px]"
+                            className="w-full px-1.5 py-2 text-xs bg-dark border border-dark-200 rounded-lg text-[#FAFAFA] focus:outline-none focus:ring-1 focus:ring-gold/50 min-h-[36px]"
                           >
                             {rowUnits.map((u) => (
                               <option key={u} value={u}>
@@ -1057,7 +1057,7 @@ export function MenuItemFormModal({
                                 )
                               }
                               placeholder="0.00"
-                              className="w-full px-2 py-2 text-xs bg-[#0A0A0A] border border-[#2A2A2A] rounded-lg text-[#FAFAFA] placeholder-[#666666] focus:outline-none focus:ring-1 focus:ring-[#D4A574]/50 min-h-[36px]"
+                              className="w-full px-2 py-2 text-xs bg-dark border border-dark-200 rounded-lg text-[#FAFAFA] placeholder-dark-500 focus:outline-none focus:ring-1 focus:ring-gold/50 min-h-[36px]"
                             />
                           </div>
                           <input
@@ -1081,12 +1081,12 @@ export function MenuItemFormModal({
                                 updateIngredient(row.tempId, "yieldPct", String(clamped));
                               }
                             }}
-                            className="w-full px-1.5 py-2 text-xs bg-[#0A0A0A] border border-[#2A2A2A] rounded-lg text-[#FAFAFA] focus:outline-none focus:ring-1 focus:ring-[#D4A574]/50 min-h-[36px] text-center"
+                            className="w-full px-1.5 py-2 text-xs bg-dark border border-dark-200 rounded-lg text-[#FAFAFA] focus:outline-none focus:ring-1 focus:ring-gold/50 min-h-[36px] text-center"
                           />
                           <button
                             type="button"
                             onClick={() => setExpandedCostRow(expandedCostRow === row.tempId ? null : row.tempId)}
-                            className="text-xs text-[#999999] font-mono min-h-[36px] flex items-center justify-end hover:text-[#D4A574] transition-colors cursor-pointer"
+                            className="text-xs text-dark-600 font-mono min-h-[36px] flex items-center justify-end hover:text-gold transition-colors cursor-pointer"
                             title={
                               noCost
                                 ? "No cost yet — receive a PO or set a supplier cost"
@@ -1098,13 +1098,13 @@ export function MenuItemFormModal({
                           <button
                             type="button"
                             onClick={() => removeIngredientRow(row.tempId)}
-                            className="p-1.5 rounded-lg hover:bg-[#2A2A2A] text-[#666666] hover:text-red-400 transition-colors flex items-center justify-center min-h-[36px]"
+                            className="p-1.5 rounded-lg hover:bg-dark-200 text-dark-500 hover:text-red-400 transition-colors flex items-center justify-center min-h-[36px]"
                           >
                             <Trash2 className="size-3.5" />
                           </button>
                         </div>
                         {breakdown && (
-                          <div className="px-2 pb-1 text-[10px] text-[#D4A574]/80 font-mono">
+                          <div className="px-2 pb-1 text-[10px] text-gold/80 font-mono">
                             {breakdown}
                           </div>
                         )}
@@ -1120,7 +1120,7 @@ export function MenuItemFormModal({
                 )}
 
                 {ingredients.length === 0 && (
-                  <p className="text-xs text-[#666666] py-4 text-center">
+                  <p className="text-xs text-dark-500 py-4 text-center">
                     No ingredients added yet. Click "Add Ingredient" to build the
                     cost breakdown.
                   </p>
@@ -1128,34 +1128,34 @@ export function MenuItemFormModal({
               </div>
 
               {/* Cost summary */}
-              <div className="bg-[#0A0A0A] rounded-xl border border-[#2A2A2A] p-4">
+              <div className="bg-dark rounded-xl border border-dark-200 p-4">
                 <div className="flex items-center gap-2 mb-3">
-                  <DollarSign className="size-4 text-[#D4A574]" />
+                  <DollarSign className="size-4 text-gold" />
                   <h4 className="text-sm font-semibold text-[#FAFAFA]">
                     Cost Summary
                   </h4>
                 </div>
                 <div className="grid grid-cols-4 gap-4">
                   <div>
-                    <p className="text-[10px] uppercase text-[#666666] mb-0.5">
+                    <p className="text-[10px] uppercase text-dark-500 mb-0.5">
                       Batch Cost
                     </p>
                     <p className="text-lg font-bold text-[#FAFAFA]">
                       ${totalBatchCost.toFixed(2)}
                     </p>
-                    <p className="text-[10px] text-[#666666]">
+                    <p className="text-[10px] text-dark-500">
                       Sum of {ingredients.length} ingredient line{ingredients.length === 1 ? "" : "s"}
                     </p>
                   </div>
                   <div>
-                    <p className="text-[10px] uppercase text-[#666666] mb-0.5">
+                    <p className="text-[10px] uppercase text-dark-500 mb-0.5">
                       Food Cost / Serving
                     </p>
                     <p className="text-lg font-bold text-[#FAFAFA]">
                       ${foodCostWithQ.toFixed(2)}
                     </p>
                     {(servings > 1 || qPct > 0) && (
-                      <p className="text-[10px] text-[#666666]">
+                      <p className="text-[10px] text-dark-500">
                         {servings > 1 && <>÷ {servings} servings</>}
                         {servings > 1 && qPct > 0 && " · "}
                         {qPct > 0 && <>+{qPct}% Q Factor</>}
@@ -1163,7 +1163,7 @@ export function MenuItemFormModal({
                     )}
                   </div>
                   <div>
-                    <p className="text-[10px] uppercase text-[#666666] mb-0.5">
+                    <p className="text-[10px] uppercase text-dark-500 mb-0.5">
                       Food Cost %
                     </p>
                     <p
@@ -1174,13 +1174,13 @@ export function MenuItemFormModal({
                       {foodCostPct.toFixed(1)}%
                     </p>
                     {salePack > 1 && (
-                      <p className="text-[10px] text-[#666666]">
+                      <p className="text-[10px] text-dark-500">
                         ${foodCostPerSale.toFixed(2)} per sale of {salePack}
                       </p>
                     )}
                   </div>
                   <div>
-                    <p className="text-[10px] uppercase text-[#666666] mb-0.5">
+                    <p className="text-[10px] uppercase text-dark-500 mb-0.5">
                       Contribution Margin
                     </p>
                     <p
@@ -1191,7 +1191,7 @@ export function MenuItemFormModal({
                       ${contributionMargin.toFixed(2)}
                     </p>
                     {salePack > 1 && (
-                      <p className="text-[10px] text-[#666666]">
+                      <p className="text-[10px] text-dark-500">
                         per sale of {salePack} servings
                       </p>
                     )}
@@ -1204,14 +1204,14 @@ export function MenuItemFormModal({
                 <button
                   type="button"
                   onClick={onClose}
-                  className="px-5 py-2.5 text-sm font-medium text-[#999999] bg-[#0A0A0A] border border-[#2A2A2A] rounded-xl hover:bg-[#1E1E1E] hover:text-[#FAFAFA] transition-colors min-h-[44px]"
+                  className="px-5 py-2.5 text-sm font-medium text-dark-600 bg-dark border border-dark-200 rounded-xl hover:bg-dark-100 hover:text-[#FAFAFA] transition-colors min-h-[44px]"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={saving}
-                  className="flex items-center gap-2 px-6 py-2.5 text-sm font-medium bg-[#D4A574] hover:bg-[#C4956A] text-white rounded-xl transition-colors disabled:opacity-50 min-h-[44px]"
+                  className="flex items-center gap-2 px-6 py-2.5 text-sm font-medium bg-gold hover:bg-gold-hover text-white rounded-xl transition-colors disabled:opacity-50 min-h-[44px]"
                 >
                   {saving && <Loader2 className="size-4 animate-spin" />}
                   {isEdit ? "Update Item" : "Save Item"}

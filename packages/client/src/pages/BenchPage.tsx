@@ -141,21 +141,21 @@ function BenchContent() {
   const isReadOnly = !user || isGuest;
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden bg-[#0A0A0A]">
+    <div className="flex-1 flex flex-col overflow-hidden bg-dark">
       {/* DM notification toasts */}
       <BenchNotificationToast notifications={notifications} onDismiss={dismissNotification} />
 
       {/* Header */}
-      <div className="bg-[#161616] border-b border-[#2A2A2A] px-4 py-3">
+      <div className="bg-dark-50 border-b border-dark-200 px-4 py-3">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-lg font-bold text-[#FAFAFA]">The Bench</h1>
-            <p className="text-xs text-[#999999]">Where the kitchen talks</p>
+            <p className="text-xs text-dark-600">Where the kitchen talks</p>
           </div>
           {!isReadOnly && (
             <div className="flex items-center gap-1">
-              <span className={`size-2 rounded-full ${connected ? "bg-emerald-400" : "bg-[#666666]"}`} />
-              <span className="text-xs text-[#666666]">
+              <span className={`size-2 rounded-full ${connected ? "bg-emerald-400" : "bg-dark-500"}`} />
+              <span className="text-xs text-dark-500">
                 {connected ? "Connected" : "Connecting..."}
               </span>
             </div>
@@ -168,8 +168,8 @@ function BenchContent() {
             onClick={() => setTab("everyone")}
             className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors ${
               tab === "everyone"
-                ? "bg-[#D4A574] text-[#0A0A0A]"
-                : "text-[#999999] hover:bg-[#1E1E1E] hover:text-[#E5E5E5]"
+                ? "bg-gold text-dark"
+                : "text-dark-600 hover:bg-dark-100 hover:text-[#E5E5E5]"
             }`}
           >
             <Users className="size-4" />
@@ -180,8 +180,8 @@ function BenchContent() {
               onClick={() => setTab("my-kitchen")}
               className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors ${
                 tab === "my-kitchen"
-                  ? "bg-[#D4A574] text-[#0A0A0A]"
-                  : "text-[#999999] hover:bg-[#1E1E1E] hover:text-[#E5E5E5]"
+                  ? "bg-gold text-dark"
+                  : "text-dark-600 hover:bg-dark-100 hover:text-[#E5E5E5]"
               }`}
             >
               <Building2 className="size-4" />
@@ -193,8 +193,8 @@ function BenchContent() {
               onClick={() => setTab("messages")}
               className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors ${
                 tab === "messages"
-                  ? "bg-[#D4A574] text-[#0A0A0A]"
-                  : "text-[#999999] hover:bg-[#1E1E1E] hover:text-[#E5E5E5]"
+                  ? "bg-gold text-dark"
+                  : "text-dark-600 hover:bg-dark-100 hover:text-[#E5E5E5]"
               }`}
             >
               <MessageCircle className="size-4" />
@@ -215,7 +215,7 @@ function BenchContent() {
             onBack={dm.closeThread}
           />
         ) : (
-          <div className="flex-1 overflow-y-auto bg-[#0A0A0A]">
+          <div className="flex-1 overflow-y-auto bg-dark">
             <BenchDmThreadList
               threads={dm.threads}
               loading={dm.loadingThreads}
@@ -259,11 +259,11 @@ function BenchContent() {
 
       {/* Input or registration prompt */}
       {isReadOnly ? (
-        <div className="border-t border-[#2A2A2A] bg-[#161616] px-4 py-4 text-center">
-          <p className="text-sm text-[#999999] mb-2">Sign in to join the conversation</p>
+        <div className="border-t border-dark-200 bg-dark-50 px-4 py-4 text-center">
+          <p className="text-sm text-dark-600 mb-2">Sign in to join the conversation</p>
           <Link
             to="/login"
-            className="inline-flex items-center gap-2 px-4 py-2 bg-[#D4A574] text-[#0A0A0A] text-sm font-medium rounded-xl hover:bg-[#C4956A] transition-colors"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-gold text-dark text-sm font-medium rounded-xl hover:bg-gold-hover transition-colors"
           >
             <LogIn className="size-4" />
             Sign In

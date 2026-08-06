@@ -81,7 +81,7 @@ export function BenchMessageItem({ message, onDelete, onEdit, onReaction, onRemo
   }
 
   return (
-    <div className="group relative flex gap-3.5 px-4 py-3 hover:bg-[#1E1E1E]/80 transition-colors">
+    <div className="group relative flex gap-3.5 px-4 py-3 hover:bg-dark-100/80 transition-colors">
       {/* Avatar */}
       {message.userPhotoPath ? (
         <img
@@ -90,8 +90,8 @@ export function BenchMessageItem({ message, onDelete, onEdit, onReaction, onRemo
           className="size-10 rounded-full object-cover flex-shrink-0 mt-0.5"
         />
       ) : (
-        <div className="size-10 rounded-full bg-[#D4A574]/15 flex items-center justify-center flex-shrink-0 mt-0.5">
-          <span className="text-base font-semibold text-[#D4A574]">
+        <div className="size-10 rounded-full bg-gold/15 flex items-center justify-center flex-shrink-0 mt-0.5">
+          <span className="text-base font-semibold text-gold">
             {message.userName.charAt(0).toUpperCase()}
           </span>
         </div>
@@ -103,7 +103,7 @@ export function BenchMessageItem({ message, onDelete, onEdit, onReaction, onRemo
           {!isOwn && onStartDm ? (
             <button
               onClick={() => onStartDm(message.userId)}
-              className="text-[15px] font-semibold text-[#FAFAFA] hover:text-[#D4A574] transition-colors"
+              className="text-[15px] font-semibold text-[#FAFAFA] hover:text-gold transition-colors"
               title={`Message ${message.userName}`}
             >
               {message.userName}
@@ -111,8 +111,8 @@ export function BenchMessageItem({ message, onDelete, onEdit, onReaction, onRemo
           ) : (
             <span className="text-[15px] font-semibold text-[#FAFAFA]">{message.userName}</span>
           )}
-          <span className="text-xs text-[#666666] ml-1">{formatTime(message.createdDttm)}</span>
-          {message.editedInd && <span className="text-xs text-[#666666] italic">(edited)</span>}
+          <span className="text-xs text-dark-500 ml-1">{formatTime(message.createdDttm)}</span>
+          {message.editedInd && <span className="text-xs text-dark-500 italic">(edited)</span>}
         </div>
 
         {/* Message body or edit input */}
@@ -125,19 +125,19 @@ export function BenchMessageItem({ message, onDelete, onEdit, onReaction, onRemo
               onChange={(e) => setEditText(e.target.value)}
               onKeyDown={handleEditKeyDown}
               maxLength={5000}
-              className="flex-1 px-3 py-1.5 text-sm text-white border border-[#D4A574]/50 rounded-lg bg-[#0A0A0A] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50"
+              className="flex-1 px-3 py-1.5 text-sm text-white border border-gold/50 rounded-lg bg-dark focus:outline-none focus:ring-2 focus:ring-gold/50"
             />
             <button onClick={saveEdit} className="p-1 rounded hover:bg-emerald-500/10 text-emerald-400" title="Save">
               <Check className="size-4" />
             </button>
-            <button onClick={cancelEdit} className="p-1 rounded hover:bg-[#2A2A2A] text-[#666666]" title="Cancel (Esc)">
+            <button onClick={cancelEdit} className="p-1 rounded hover:bg-dark-200 text-dark-500" title="Cancel (Esc)">
               <X className="size-4" />
             </button>
           </div>
         ) : message.messageType === "recipe_share" && message.recipeSlug ? (
           <Link
             to={`/kitchen-shelf/${message.recipeSlug}`}
-            className="mt-1 block bg-[#D4A574]/10 border border-[#D4A574]/20 rounded-lg p-3 hover:bg-[#D4A574]/15 transition-colors max-w-md"
+            className="mt-1 block bg-gold/10 border border-gold/20 rounded-lg p-3 hover:bg-gold/15 transition-colors max-w-md"
           >
             <div className="flex gap-3">
               {message.recipeImageUrl && (
@@ -148,11 +148,11 @@ export function BenchMessageItem({ message, onDelete, onEdit, onReaction, onRemo
                 />
               )}
               <div className="min-w-0">
-                <p className="text-sm font-semibold text-[#D4A574] truncate">
+                <p className="text-sm font-semibold text-gold truncate">
                   {message.recipeTitle ?? "Shared Recipe"}
                 </p>
                 {message.messageBody && (
-                  <p className="text-xs text-[#999999] line-clamp-2 mt-0.5">{message.messageBody}</p>
+                  <p className="text-xs text-dark-600 line-clamp-2 mt-0.5">{message.messageBody}</p>
                 )}
               </div>
             </div>
@@ -178,8 +178,8 @@ export function BenchMessageItem({ message, onDelete, onEdit, onReaction, onRemo
                   }}
                   className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border transition-colors ${
                     hasReacted
-                      ? "bg-[#D4A574]/15 border-[#D4A574]/30 text-[#D4A574]"
-                      : "bg-[#1E1E1E] border-[#2A2A2A] text-[#999999] hover:border-[#D4A574]/30"
+                      ? "bg-gold/15 border-gold/30 text-gold"
+                      : "bg-dark-100 border-dark-200 text-dark-600 hover:border-gold/30"
                   }`}
                 >
                   <span>{EMOJI_MAP[r.emoji] ?? r.emoji}</span>
@@ -196,7 +196,7 @@ export function BenchMessageItem({ message, onDelete, onEdit, onReaction, onRemo
         <div className="flex items-start gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
           <button
             onClick={() => setShowReactions(!showReactions)}
-            className="p-1 rounded hover:bg-[#2A2A2A] text-[#666666] hover:text-[#E5E5E5] transition-colors"
+            className="p-1 rounded hover:bg-dark-200 text-dark-500 hover:text-[#E5E5E5] transition-colors"
             title="React"
           >
             <SmilePlus className="size-4" />
@@ -204,7 +204,7 @@ export function BenchMessageItem({ message, onDelete, onEdit, onReaction, onRemo
           {isOwn && onEdit && message.messageType === "text" && (
             <button
               onClick={startEdit}
-              className="p-1 rounded hover:bg-[#2A2A2A] text-[#666666] hover:text-[#E5E5E5] transition-colors"
+              className="p-1 rounded hover:bg-dark-200 text-dark-500 hover:text-[#E5E5E5] transition-colors"
               title="Edit"
             >
               <Pencil className="size-4" />
@@ -213,7 +213,7 @@ export function BenchMessageItem({ message, onDelete, onEdit, onReaction, onRemo
           {(isOwn || user?.roles?.includes("Administrator")) && onDelete && (
             <button
               onClick={() => onDelete(message.messageId)}
-              className="p-1 rounded hover:bg-[#2A2A2A] text-[#666666] hover:text-red-400 transition-colors"
+              className="p-1 rounded hover:bg-dark-200 text-dark-500 hover:text-red-400 transition-colors"
               title="Delete"
             >
               <Trash2 className="size-4" />
@@ -224,7 +224,7 @@ export function BenchMessageItem({ message, onDelete, onEdit, onReaction, onRemo
 
       {/* Emoji picker popup */}
       {showReactions && (
-        <div className="absolute right-12 top-8 bg-[#1E1E1E] rounded-lg shadow-lg border border-[#2A2A2A] p-2 flex gap-1 z-10">
+        <div className="absolute right-12 top-8 bg-dark-100 rounded-lg shadow-lg border border-dark-200 p-2 flex gap-1 z-10">
           {EMOJI_SET.map((e) => (
             <button
               key={e.key}
@@ -232,7 +232,7 @@ export function BenchMessageItem({ message, onDelete, onEdit, onReaction, onRemo
                 onReaction?.(message.messageId, e.key);
                 setShowReactions(false);
               }}
-              className="p-1.5 rounded hover:bg-[#2A2A2A] text-lg transition-colors"
+              className="p-1.5 rounded hover:bg-dark-200 text-lg transition-colors"
               title={e.key}
             >
               {e.display}

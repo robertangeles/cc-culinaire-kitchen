@@ -30,7 +30,7 @@ export function WelcomeScreen({ onSelectPrompt }: WelcomeScreenProps) {
     <div className="flex-1 flex flex-col items-center justify-center px-4 py-12">
       <div className="text-center mb-10">
         <div
-          className={`inline-flex items-center justify-center rounded-2xl mb-4 overflow-hidden ${logoPath ? "" : "bg-[#D4A574]/20"}`}
+          className={`inline-flex items-center justify-center rounded-2xl mb-4 overflow-hidden ${logoPath ? "" : "bg-gold/20"}`}
           style={{ width: 100, height: 100 }}
         >
           {logoPath ? (
@@ -40,13 +40,13 @@ export function WelcomeScreen({ onSelectPrompt }: WelcomeScreenProps) {
               className="size-full object-contain"
             />
           ) : (
-            <ChefHat className="size-10 text-[#D4A574]" />
+            <ChefHat className="size-10 text-gold" />
           )}
         </div>
         <h1 className="text-3xl font-bold text-[#FAFAFA] mb-2">
           {heading}
         </h1>
-        <p className="text-[#999999] text-lg">
+        <p className="text-dark-600 text-lg">
           {subtitle}
         </p>
       </div>
@@ -56,7 +56,7 @@ export function WelcomeScreen({ onSelectPrompt }: WelcomeScreenProps) {
           <button
             key={prompt}
             onClick={() => onSelectPrompt(prompt)}
-            className="text-left rounded-xl border border-[#2A2A2A] bg-[#161616] px-4 py-3 text-sm text-[#E5E5E5] hover:border-[#D4A574]/40 hover:bg-[#1E1E1E] transition-colors"
+            className="text-left rounded-xl border border-dark-200 bg-dark-50 px-4 py-3 text-sm text-[#E5E5E5] hover:border-gold/40 hover:bg-dark-100 transition-colors"
           >
             {prompt}
           </button>

@@ -33,8 +33,8 @@ const CLASS_BADGES: Record<
 > = {
   star: {
     label: "Star",
-    bg: "bg-[#D4A574]/15",
-    text: "text-[#D4A574]",
+    bg: "bg-gold/15",
+    text: "text-gold",
     icon: Star,
   },
   plowhorse: {
@@ -51,14 +51,14 @@ const CLASS_BADGES: Record<
   },
   dog: {
     label: "Dog",
-    bg: "bg-[#2A2A2A]",
-    text: "text-[#666666]",
+    bg: "bg-dark-200",
+    text: "text-dark-500",
     icon: XCircle,
   },
   unclassified: {
     label: "\u2014",
-    bg: "bg-[#2A2A2A]",
-    text: "text-[#666666]",
+    bg: "bg-dark-200",
+    text: "text-dark-500",
     icon: HelpCircle,
   },
 };
@@ -188,7 +188,7 @@ export function MenuItemList({
   if (loading && items.length === 0) {
     return (
       <div className="flex items-center justify-center py-20">
-        <Loader2 className="size-6 animate-spin text-[#D4A574]" />
+        <Loader2 className="size-6 animate-spin text-gold" />
       </div>
     );
   }
@@ -211,18 +211,18 @@ export function MenuItemList({
       {/* Search + Add button + category pills */}
       <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
         <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-[#666666]" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-dark-500" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search menu items..."
-            className="w-full pl-10 pr-4 py-2.5 text-sm bg-[#0A0A0A] border border-[#2A2A2A] rounded-xl text-[#FAFAFA] placeholder-[#666666] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-[#D4A574]/50 min-h-[44px]"
+            className="w-full pl-10 pr-4 py-2.5 text-sm bg-dark border border-dark-200 rounded-xl text-[#FAFAFA] placeholder-dark-500 focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-gold/50 min-h-[44px]"
           />
         </div>
         <button
           onClick={onAdd}
-          className="flex items-center gap-2 px-5 py-2.5 text-sm font-medium bg-[#D4A574] hover:bg-[#C4956A] text-white rounded-xl transition-colors min-h-[44px]"
+          className="flex items-center gap-2 px-5 py-2.5 text-sm font-medium bg-gold hover:bg-gold-hover text-white rounded-xl transition-colors min-h-[44px]"
         >
           <Plus className="size-4" />
           Add Menu Item
@@ -236,8 +236,8 @@ export function MenuItemList({
             onClick={() => setCategoryFilter("")}
             className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors min-h-[36px] ${
               !categoryFilter
-                ? "bg-[#D4A574] text-white"
-                : "bg-[#161616] text-[#999999] hover:text-[#E5E5E5] hover:bg-[#1E1E1E] border border-[#2A2A2A]"
+                ? "bg-gold text-white"
+                : "bg-dark-50 text-dark-600 hover:text-[#E5E5E5] hover:bg-dark-100 border border-dark-200"
             }`}
           >
             All
@@ -250,8 +250,8 @@ export function MenuItemList({
               }
               className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors min-h-[36px] ${
                 categoryFilter === cat
-                  ? "bg-[#D4A574] text-white"
-                  : "bg-[#161616] text-[#999999] hover:text-[#E5E5E5] hover:bg-[#1E1E1E] border border-[#2A2A2A]"
+                  ? "bg-gold text-white"
+                  : "bg-dark-50 text-dark-600 hover:text-[#E5E5E5] hover:bg-dark-100 border border-dark-200"
               }`}
             >
               {cat}
@@ -266,8 +266,8 @@ export function MenuItemList({
           onClick={() => setClassFilter("")}
           className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors min-h-[32px] ${
             !classFilter
-              ? "bg-[#2A2A2A] text-[#E5E5E5]"
-              : "bg-[#161616] text-[#666666] hover:text-[#999999] border border-[#2A2A2A]"
+              ? "bg-dark-200 text-[#E5E5E5]"
+              : "bg-dark-50 text-dark-500 hover:text-dark-600 border border-dark-200"
           }`}
         >
           All Classes
@@ -281,7 +281,7 @@ export function MenuItemList({
               className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors min-h-[32px] ${
                 classFilter === cls
                   ? `${cfg.bg} ${cfg.text}`
-                  : "bg-[#161616] text-[#666666] hover:text-[#999999] border border-[#2A2A2A]"
+                  : "bg-dark-50 text-dark-500 hover:text-dark-600 border border-dark-200"
               }`}
             >
               {cfg.label}
@@ -291,16 +291,16 @@ export function MenuItemList({
       </div>
 
       {/* Table */}
-      <div className="bg-[#161616] rounded-2xl border border-[#2A2A2A] overflow-hidden">
+      <div className="bg-dark-50 rounded-2xl border border-dark-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-[#2A2A2A]">
+              <tr className="border-b border-dark-200">
                 {COLUMNS.map(([key, label]) => (
                   <th
                     key={key}
                     onClick={() => toggleSort(key)}
-                    className="px-4 py-3 text-left text-xs font-medium text-[#666666] uppercase cursor-pointer hover:text-[#999999] select-none transition-colors"
+                    className="px-4 py-3 text-left text-xs font-medium text-dark-500 uppercase cursor-pointer hover:text-dark-600 select-none transition-colors"
                   >
                     <span className="flex items-center gap-1">
                       {label} <SortIcon col={key} />
@@ -308,14 +308,14 @@ export function MenuItemList({
                   </th>
                 ))}
                 {hasWasteData && (
-                  <th className="px-4 py-3 text-left text-xs font-medium text-[#666666] uppercase select-none">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-dark-500 uppercase select-none">
                     Waste
                   </th>
                 )}
                 <th className="px-4 py-3 w-24" />
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#2A2A2A]/50">
+            <tbody className="divide-y divide-dark-200/50">
               {filtered.map((item) => {
                 const badge =
                   CLASS_BADGES[item.classification] ??
@@ -328,13 +328,13 @@ export function MenuItemList({
                 return (
                   <tr
                     key={item.menuItemId}
-                    className="hover:bg-[#1E1E1E] transition-colors"
+                    className="hover:bg-dark-100 transition-colors"
                   >
                     <td className="px-4 py-3 font-medium text-[#FAFAFA]">
                       <div>{item.name}</div>
                       <AllergenBadges item={item} className="mt-1 flex flex-wrap items-center gap-1" />
                     </td>
-                    <td className="px-4 py-3 text-[#999999]">
+                    <td className="px-4 py-3 text-dark-600">
                       {item.category}
                     </td>
                     <td className="px-4 py-3 text-[#FAFAFA]">
@@ -362,7 +362,7 @@ export function MenuItemList({
                     <td className="px-4 py-3 text-[#FAFAFA]">
                       ${item.contributionMargin.toFixed(2)}
                     </td>
-                    <td className="px-4 py-3 text-[#999999]">
+                    <td className="px-4 py-3 text-dark-600">
                       {item.unitsSold}
                     </td>
                     <td className="px-4 py-3">
@@ -410,7 +410,7 @@ export function MenuItemList({
                                 `/recipes?replaceDog=true&category=${encodeURIComponent(item.category)}&targetFoodCostPct=${target}`
                               );
                             }}
-                            className="p-2 rounded-lg hover:bg-[#D4A574]/10 text-[#D4A574] hover:text-[#C4956A] transition-colors min-h-[36px] min-w-[36px] flex items-center justify-center"
+                            className="p-2 rounded-lg hover:bg-gold/10 text-gold hover:text-gold-hover transition-colors min-h-[36px] min-w-[36px] flex items-center justify-center"
                             title="Generate replacement recipe"
                           >
                             <Sparkles className="size-4" />
@@ -421,7 +421,7 @@ export function MenuItemList({
                             e.stopPropagation();
                             onEdit(item);
                           }}
-                          className="p-2 rounded-lg hover:bg-[#2A2A2A] text-[#666666] hover:text-[#D4A574] transition-colors min-h-[36px] min-w-[36px] flex items-center justify-center"
+                          className="p-2 rounded-lg hover:bg-dark-200 text-dark-500 hover:text-gold transition-colors min-h-[36px] min-w-[36px] flex items-center justify-center"
                           title="Edit"
                         >
                           <Pencil className="size-4" />
@@ -432,7 +432,7 @@ export function MenuItemList({
                             handleDelete(item.menuItemId);
                           }}
                           disabled={deletingId === item.menuItemId}
-                          className="p-2 rounded-lg hover:bg-[#2A2A2A] text-[#666666] hover:text-red-400 transition-colors min-h-[36px] min-w-[36px] flex items-center justify-center disabled:opacity-50"
+                          className="p-2 rounded-lg hover:bg-dark-200 text-dark-500 hover:text-red-400 transition-colors min-h-[36px] min-w-[36px] flex items-center justify-center disabled:opacity-50"
                           title="Delete"
                         >
                           {deletingId === item.menuItemId ? (
@@ -450,7 +450,7 @@ export function MenuItemList({
                 <tr>
                   <td
                     colSpan={hasWasteData ? 11 : 10}
-                    className="px-4 py-12 text-center text-[#666666]"
+                    className="px-4 py-12 text-center text-dark-500"
                   >
                     {items.length === 0
                       ? "No menu items yet. Start building your menu to unlock engineering insights."

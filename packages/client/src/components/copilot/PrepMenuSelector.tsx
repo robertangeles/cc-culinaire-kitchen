@@ -68,10 +68,10 @@ interface Props {
 /* ------------------------------------------------------------------ */
 
 const CLASSIFICATION_BADGE: Record<string, { bg: string; text: string }> = {
-  Star: { bg: "bg-[#D4A574]/15", text: "text-[#D4A574]" },
+  Star: { bg: "bg-gold/15", text: "text-gold" },
   Plowhorse: { bg: "bg-blue-500/15", text: "text-blue-400" },
   Puzzle: { bg: "bg-purple-500/15", text: "text-purple-400" },
-  Dog: { bg: "bg-[#2A2A2A]", text: "text-[#666666]" },
+  Dog: { bg: "bg-dark-200", text: "text-dark-500" },
 };
 
 /* ------------------------------------------------------------------ */
@@ -375,7 +375,7 @@ export function PrepMenuSelector({ sessionId, onGenerated }: Props) {
   if (loadingMenu) {
     return (
       <div className="flex justify-center py-16">
-        <Loader2 className="size-8 animate-spin text-[#D4A574]" />
+        <Loader2 className="size-8 animate-spin text-gold" />
       </div>
     );
   }
@@ -394,24 +394,24 @@ export function PrepMenuSelector({ sessionId, onGenerated }: Props) {
   /*  Render                                                           */
   /* ---------------------------------------------------------------- */
   return (
-    <div className="bg-[#161616] rounded-2xl border border-[#2A2A2A] p-6">
+    <div className="bg-dark-50 rounded-2xl border border-dark-200 p-6">
       {/* Header */}
       <div className="text-center mb-6">
         <h2 className="text-xl md:text-2xl font-bold text-white">
           What&apos;s on the menu today?
         </h2>
-        <p className="text-[#999999] text-sm mt-1">
+        <p className="text-dark-600 text-sm mt-1">
           Forecast your covers, fine-tune per dish, and build a scaled prep list
         </p>
       </div>
 
       {/* Forecast covers → suggested portions */}
       {menuData.hasMenuItems && (
-        <div className="bg-[#0A0A0A] border border-[#2A2A2A] rounded-xl p-4 mb-4 space-y-3">
+        <div className="bg-dark border border-dark-200 rounded-xl p-4 mb-4 space-y-3">
           <div className="flex flex-col sm:flex-row sm:items-center gap-3">
             <div className="flex items-center gap-2">
-              <Users className="size-4 text-[#D4A574]" />
-              <label htmlFor="forecast-covers" className="text-sm text-[#999999] whitespace-nowrap">
+              <Users className="size-4 text-gold" />
+              <label htmlFor="forecast-covers" className="text-sm text-dark-600 whitespace-nowrap">
                 Forecast covers
               </label>
             </div>
@@ -425,10 +425,10 @@ export function PrepMenuSelector({ sessionId, onGenerated }: Props) {
                 if (e.key === "Enter") handleSuggest();
               }}
               placeholder="e.g. 80"
-              className="w-28 px-3 py-2 bg-[#161616] border border-[#2A2A2A] rounded-xl text-white text-sm text-center placeholder-[#666666] focus:ring-2 focus:ring-[#D4A574]/50 focus:border-transparent min-h-[44px]"
+              className="w-28 px-3 py-2 bg-dark-50 border border-dark-200 rounded-xl text-white text-sm text-center placeholder-dark-500 focus:ring-2 focus:ring-gold/50 focus:border-transparent min-h-[44px]"
             />
             <div className="flex items-center gap-2">
-              <label htmlFor="buffer-pct" className="text-sm text-[#999999] whitespace-nowrap">
+              <label htmlFor="buffer-pct" className="text-sm text-dark-600 whitespace-nowrap">
                 Buffer
               </label>
               <div className="relative">
@@ -439,15 +439,15 @@ export function PrepMenuSelector({ sessionId, onGenerated }: Props) {
                   max={100}
                   value={bufferPct}
                   onChange={(e) => setBufferPct(e.target.value)}
-                  className="w-20 px-3 py-2 pr-7 bg-[#161616] border border-[#2A2A2A] rounded-xl text-white text-sm text-center placeholder-[#666666] focus:ring-2 focus:ring-[#D4A574]/50 focus:border-transparent min-h-[44px]"
+                  className="w-20 px-3 py-2 pr-7 bg-dark-50 border border-dark-200 rounded-xl text-white text-sm text-center placeholder-dark-500 focus:ring-2 focus:ring-gold/50 focus:border-transparent min-h-[44px]"
                 />
-                <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-[#666666]">%</span>
+                <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-dark-500">%</span>
               </div>
             </div>
             <button
               onClick={handleSuggest}
               disabled={suggesting}
-              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-[#D4A574]/15 text-[#D4A574] hover:bg-[#D4A574]/25 disabled:opacity-50 rounded-xl text-sm font-medium transition-colors min-h-[44px]"
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-gold/15 text-gold hover:bg-gold/25 disabled:opacity-50 rounded-xl text-sm font-medium transition-colors min-h-[44px]"
             >
               {suggesting ? <Loader2 className="size-4 animate-spin" /> : <Wand2 className="size-4" />}
               Suggest portions
@@ -457,29 +457,29 @@ export function PrepMenuSelector({ sessionId, onGenerated }: Props) {
           <div className="flex items-start gap-2">
             <button
               onClick={() => setShowFormula((v) => !v)}
-              className="text-xs text-[#666666] hover:text-[#D4A574] transition-colors underline underline-offset-2 shrink-0"
+              className="text-xs text-dark-500 hover:text-gold transition-colors underline underline-offset-2 shrink-0"
             >
               {showFormula ? "Hide" : "How it works"}
             </button>
-            <span className="text-xs text-[#666666] sm:ml-auto">
+            <span className="text-xs text-dark-500 sm:ml-auto">
               {anyHistory
                 ? "Seeded from your sales mix — adjust as needed"
                 : "Even split (no sales history yet) — adjust as needed"}
             </span>
           </div>
           {showFormula && (
-            <div className="bg-[#161616]/60 border border-[#2A2A2A] rounded-xl p-4 text-xs text-[#999999] space-y-2">
+            <div className="bg-dark-50/60 border border-dark-200 rounded-xl p-4 text-xs text-dark-600 space-y-2">
               <p className="text-[#E5E5E5] font-medium">Per dish, we suggest:</p>
               <p>
-                <span className="text-[#D4A574]">Covers</span> you entered
+                <span className="text-gold">Covers</span> you entered
                 {" × "}
-                <span className="text-[#D4A574]">course rate</span> (how many of that course each guest orders — e.g. entrees = 1.0, desserts = 0.4)
+                <span className="text-gold">course rate</span> (how many of that course each guest orders — e.g. entrees = 1.0, desserts = 0.4)
                 {" × "}
-                <span className="text-[#D4A574]">item share</span> (this dish&apos;s slice of its category — even split if no sales history, or your actual sales mix)
+                <span className="text-gold">item share</span> (this dish&apos;s slice of its category — even split if no sales history, or your actual sales mix)
                 {" × "}
-                <span className="text-[#D4A574]">buffer</span> ({bufferPct || 25}% extra to prep for the rush).
+                <span className="text-gold">buffer</span> ({bufferPct || 25}% extra to prep for the rush).
               </p>
-              <p className="text-[#666666]">
+              <p className="text-dark-500">
                 Example: 50 covers × 1.0 (entree) × 100% (only entree on the menu) × {parseInt(bufferPct, 10) || 25}% buffer = {Math.round(50 * 1.0 * 1.0 * (1 + (parseInt(bufferPct, 10) || 25) / 100))} portions. You can always adjust the number — your override wins.
               </p>
             </div>
@@ -496,13 +496,13 @@ export function PrepMenuSelector({ sessionId, onGenerated }: Props) {
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 mb-6">
         {/* Source toggle — only when menu items exist */}
         {menuData.hasMenuItems && (
-          <div className="flex rounded-xl overflow-hidden border border-[#2A2A2A]">
+          <div className="flex rounded-xl overflow-hidden border border-dark-200">
             <button
               onClick={() => setSource("menu")}
               className={`px-4 py-2.5 text-sm font-medium transition-colors min-h-[44px] ${
                 source === "menu"
-                  ? "bg-[#D4A574] text-[#0A0A0A]"
-                  : "bg-[#0A0A0A] text-[#999999] hover:text-white"
+                  ? "bg-gold text-dark"
+                  : "bg-dark text-dark-600 hover:text-white"
               }`}
             >
               Menu Items
@@ -511,8 +511,8 @@ export function PrepMenuSelector({ sessionId, onGenerated }: Props) {
               onClick={() => setSource("recipes")}
               className={`px-4 py-2.5 text-sm font-medium transition-colors min-h-[44px] ${
                 source === "recipes"
-                  ? "bg-[#D4A574] text-[#0A0A0A]"
-                  : "bg-[#0A0A0A] text-[#999999] hover:text-white"
+                  ? "bg-gold text-dark"
+                  : "bg-dark text-dark-600 hover:text-white"
               }`}
             >
               My Recipes
@@ -524,7 +524,7 @@ export function PrepMenuSelector({ sessionId, onGenerated }: Props) {
         <button
           onClick={loadPreviousSelections}
           disabled={loadingPrevious}
-          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-[#1E1E1E] text-[#999999] hover:text-white rounded-xl text-sm transition-colors min-h-[44px]"
+          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-dark-100 text-dark-600 hover:text-white rounded-xl text-sm transition-colors min-h-[44px]"
         >
           {loadingPrevious ? (
             <Loader2 className="size-4 animate-spin" />
@@ -536,21 +536,21 @@ export function PrepMenuSelector({ sessionId, onGenerated }: Props) {
 
         {/* Search */}
         <div className="flex-1 relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-[#666666]" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-dark-500" />
           <input
             type="text"
             placeholder="Search dishes..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 bg-[#0A0A0A] border border-[#2A2A2A] rounded-xl text-white text-sm placeholder-[#666666] focus:ring-2 focus:ring-[#D4A574]/50 focus:border-transparent min-h-[44px]"
+            className="w-full pl-10 pr-4 py-2.5 bg-dark border border-dark-200 rounded-xl text-white text-sm placeholder-dark-500 focus:ring-2 focus:ring-gold/50 focus:border-transparent min-h-[44px]"
           />
         </div>
       </div>
 
       {/* Recipes-only banner */}
       {!menuData.hasMenuItems && (
-        <div className="bg-[#D4A574]/10 border border-[#D4A574]/20 rounded-xl p-4 mb-6">
-          <p className="text-sm text-[#D4A574]">
+        <div className="bg-gold/10 border border-gold/20 rounded-xl p-4 mb-6">
+          <p className="text-sm text-gold">
             Set up your menu in Menu &amp; Costing for classification badges and cost data.
           </p>
         </div>
@@ -561,7 +561,7 @@ export function PrepMenuSelector({ sessionId, onGenerated }: Props) {
         {source === "menu" && menuData.hasMenuItems ? (
           /* ---------- Menu Items grouped by category ---------- */
           filteredMenuGroups.length === 0 ? (
-            <p className="text-center text-[#666666] py-8 text-sm">
+            <p className="text-center text-dark-500 py-8 text-sm">
               No dishes match your search.
             </p>
           ) : (
@@ -575,14 +575,14 @@ export function PrepMenuSelector({ sessionId, onGenerated }: Props) {
                     className="flex items-center gap-2 w-full text-left mb-2 group"
                   >
                     {isCollapsed ? (
-                      <ChevronRight className="size-4 text-[#666666]" />
+                      <ChevronRight className="size-4 text-dark-500" />
                     ) : (
-                      <ChevronDown className="size-4 text-[#666666]" />
+                      <ChevronDown className="size-4 text-dark-500" />
                     )}
-                    <span className="text-xs uppercase tracking-wider text-[#666666] font-semibold">
+                    <span className="text-xs uppercase tracking-wider text-dark-500 font-semibold">
                       {category}
                     </span>
-                    <span className="text-xs text-[#666666]">({items.length})</span>
+                    <span className="text-xs text-dark-500">({items.length})</span>
                   </button>
 
                   {!isCollapsed && (
@@ -596,7 +596,7 @@ export function PrepMenuSelector({ sessionId, onGenerated }: Props) {
                           <div
                             key={mi.menuItemId}
                             className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors ${
-                              isSelected ? "bg-[#D4A574]/10" : "hover:bg-[#0A0A0A]"
+                              isSelected ? "bg-gold/10" : "hover:bg-dark"
                             }`}
                           >
                             {/* Checkbox */}
@@ -604,13 +604,13 @@ export function PrepMenuSelector({ sessionId, onGenerated }: Props) {
                               onClick={() => toggleItem(key)}
                               className={`shrink-0 size-5 rounded border-2 flex items-center justify-center transition-colors min-h-[44px] min-w-[44px] ${
                                 isSelected
-                                  ? "bg-[#D4A574] border-[#D4A574]"
-                                  : "bg-[#0A0A0A] border-[#2A2A2A] hover:border-[#D4A574]"
+                                  ? "bg-gold border-gold"
+                                  : "bg-dark border-dark-200 hover:border-gold"
                               }`}
                               aria-label={isSelected ? `Deselect ${mi.name}` : `Select ${mi.name}`}
                             >
                               {isSelected && (
-                                <svg className="size-3 text-[#0A0A0A]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                <svg className="size-3 text-dark" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                                   <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                                 </svg>
                               )}
@@ -632,7 +632,7 @@ export function PrepMenuSelector({ sessionId, onGenerated }: Props) {
 
                             {/* Food cost badge */}
                             {mi.foodCostPct != null && (
-                              <span className="shrink-0 text-xs px-2 py-0.5 rounded-full bg-[#1E1E1E] text-[#999999]">
+                              <span className="shrink-0 text-xs px-2 py-0.5 rounded-full bg-dark-100 text-dark-600">
                                 {Number(mi.foodCostPct).toFixed(1)}% cost
                               </span>
                             )}
@@ -643,7 +643,7 @@ export function PrepMenuSelector({ sessionId, onGenerated }: Props) {
                                 className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
                                   basisByKey.get(key) === "historical"
                                     ? "bg-green-500/15 text-green-400"
-                                    : "bg-[#D4A574]/15 text-[#D4A574]"
+                                    : "bg-gold/15 text-gold"
                                 }`}
                                 title={
                                   basisByKey.get(key) === "historical"
@@ -663,7 +663,7 @@ export function PrepMenuSelector({ sessionId, onGenerated }: Props) {
                                 value={portions}
                                 onChange={(e) => setPortions(key, Number(e.target.value) || 0)}
                                 onClick={(e) => e.stopPropagation()}
-                                className="w-20 px-3 py-1.5 bg-[#0A0A0A] border border-[#2A2A2A] rounded-xl text-center text-white text-sm focus:ring-2 focus:ring-[#D4A574]/50 focus:border-transparent min-h-[44px]"
+                                className="w-20 px-3 py-1.5 bg-dark border border-dark-200 rounded-xl text-center text-white text-sm focus:ring-2 focus:ring-gold/50 focus:border-transparent min-h-[44px]"
                                 aria-label={`Portions for ${mi.name}`}
                               />
                             )}
@@ -679,7 +679,7 @@ export function PrepMenuSelector({ sessionId, onGenerated }: Props) {
         ) : (
           /* ---------- Recipes grouped by domain ---------- */
           filteredRecipeGroups.length === 0 ? (
-            <p className="text-center text-[#666666] py-8 text-sm">
+            <p className="text-center text-dark-500 py-8 text-sm">
               No recipes match your search.
             </p>
           ) : (
@@ -693,14 +693,14 @@ export function PrepMenuSelector({ sessionId, onGenerated }: Props) {
                     className="flex items-center gap-2 w-full text-left mb-2 group"
                   >
                     {isCollapsed ? (
-                      <ChevronRight className="size-4 text-[#666666]" />
+                      <ChevronRight className="size-4 text-dark-500" />
                     ) : (
-                      <ChevronDown className="size-4 text-[#666666]" />
+                      <ChevronDown className="size-4 text-dark-500" />
                     )}
-                    <span className="text-xs uppercase tracking-wider text-[#666666] font-semibold">
+                    <span className="text-xs uppercase tracking-wider text-dark-500 font-semibold">
                       {domain}
                     </span>
-                    <span className="text-xs text-[#666666]">({recipes.length})</span>
+                    <span className="text-xs text-dark-500">({recipes.length})</span>
                   </button>
 
                   {!isCollapsed && (
@@ -714,7 +714,7 @@ export function PrepMenuSelector({ sessionId, onGenerated }: Props) {
                           <div
                             key={r.recipeId}
                             className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors ${
-                              isSelected ? "bg-[#D4A574]/10" : "hover:bg-[#0A0A0A]"
+                              isSelected ? "bg-gold/10" : "hover:bg-dark"
                             }`}
                           >
                             {/* Checkbox */}
@@ -722,13 +722,13 @@ export function PrepMenuSelector({ sessionId, onGenerated }: Props) {
                               onClick={() => toggleItem(key)}
                               className={`shrink-0 size-5 rounded border-2 flex items-center justify-center transition-colors min-h-[44px] min-w-[44px] ${
                                 isSelected
-                                  ? "bg-[#D4A574] border-[#D4A574]"
-                                  : "bg-[#0A0A0A] border-[#2A2A2A] hover:border-[#D4A574]"
+                                  ? "bg-gold border-gold"
+                                  : "bg-dark border-dark-200 hover:border-gold"
                               }`}
                               aria-label={isSelected ? `Deselect ${r.title}` : `Select ${r.title}`}
                             >
                               {isSelected && (
-                                <svg className="size-3 text-[#0A0A0A]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                <svg className="size-3 text-dark" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                                   <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                                 </svg>
                               )}
@@ -747,7 +747,7 @@ export function PrepMenuSelector({ sessionId, onGenerated }: Props) {
                                 value={portions}
                                 onChange={(e) => setPortions(key, Number(e.target.value) || 0)}
                                 onClick={(e) => e.stopPropagation()}
-                                className="w-20 px-3 py-1.5 bg-[#0A0A0A] border border-[#2A2A2A] rounded-xl text-center text-white text-sm focus:ring-2 focus:ring-[#D4A574]/50 focus:border-transparent min-h-[44px]"
+                                className="w-20 px-3 py-1.5 bg-dark border border-dark-200 rounded-xl text-center text-white text-sm focus:ring-2 focus:ring-gold/50 focus:border-transparent min-h-[44px]"
                                 aria-label={`Portions for ${r.title}`}
                               />
                             )}
@@ -771,8 +771,8 @@ export function PrepMenuSelector({ sessionId, onGenerated }: Props) {
       )}
 
       {/* Sticky footer */}
-      <div className="border-t border-[#2A2A2A] pt-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-        <p className="text-sm text-[#999999]">
+      <div className="border-t border-dark-200 pt-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+        <p className="text-sm text-dark-600">
           {selectedCount > 0
             ? `${selectedCount} dish${selectedCount !== 1 ? "es" : ""} selected`
             : "No dishes selected"}
@@ -780,7 +780,7 @@ export function PrepMenuSelector({ sessionId, onGenerated }: Props) {
         <button
           onClick={generatePrepList}
           disabled={generating || selectedCount === 0}
-          className="inline-flex items-center gap-2 px-6 py-3 bg-[#D4A574] hover:bg-[#C4956A] disabled:bg-[#2A2A2A] disabled:text-[#666666] disabled:cursor-not-allowed text-[#0A0A0A] font-semibold rounded-xl transition-colors min-h-[44px]"
+          className="inline-flex items-center gap-2 px-6 py-3 bg-gold hover:bg-gold-hover disabled:bg-dark-200 disabled:text-dark-500 disabled:cursor-not-allowed text-dark font-semibold rounded-xl transition-colors min-h-[44px]"
         >
           {generating ? (
             <Loader2 className="size-5 animate-spin" />

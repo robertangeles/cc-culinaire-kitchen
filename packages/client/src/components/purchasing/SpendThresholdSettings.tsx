@@ -46,7 +46,7 @@ export default function SpendThresholdSettings() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-16">
-        <Loader2 className="size-6 text-[#D4A574] animate-spin" />
+        <Loader2 className="size-6 text-gold animate-spin" />
       </div>
     );
   }
@@ -55,12 +55,12 @@ export default function SpendThresholdSettings() {
     <div className="space-y-6 animate-[fadeInUp_200ms_ease-out]">
       <div className="flex items-center gap-2">
         <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-          <Settings className="size-5 text-[#D4A574]" />
+          <Settings className="size-5 text-gold" />
           Spend Thresholds
         </h2>
       </div>
 
-      <p className="text-sm text-[#999]">
+      <p className="text-sm text-dark-600">
         POs below the threshold are sent directly to the supplier. POs at or above the threshold require HQ approval before sending.
       </p>
 
@@ -71,18 +71,18 @@ export default function SpendThresholdSettings() {
       )}
 
       {/* Org default */}
-      <div className="rounded-xl bg-[#161616]/80 backdrop-blur-sm border border-[#2A2A2A] p-4">
+      <div className="rounded-xl bg-dark-50/80 backdrop-blur-sm border border-dark-200 p-4">
         <h3 className="text-sm font-medium text-white mb-3">Organisation Default</h3>
         <div className="flex items-center gap-3">
           <div className="flex-1">
-            <label className="block text-[10px] uppercase tracking-wider text-[#666] mb-1">Current Threshold</label>
-            <div className="text-lg font-semibold text-[#D4A574]">
+            <label className="block text-[10px] uppercase tracking-wider text-dark-500 mb-1">Current Threshold</label>
+            <div className="text-lg font-semibold text-gold">
               {data?.orgDefault ? `$${data.orgDefault.toFixed(2)}` : "Not set (all POs go direct)"}
             </div>
           </div>
           <div className="flex items-center gap-2">
             <div className="relative">
-              <DollarSign className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-[#666]" />
+              <DollarSign className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-dark-500" />
               <input
                 type="number"
                 value={orgAmount}
@@ -90,14 +90,14 @@ export default function SpendThresholdSettings() {
                 placeholder="Amount"
                 min="0"
                 step="10"
-                className="w-32 pl-8 pr-3 py-2 rounded-lg text-sm bg-[#0A0A0A] text-white
-                  border border-[#2A2A2A] focus:border-[#D4A574]/40 outline-none placeholder:text-[#555]"
+                className="w-32 pl-8 pr-3 py-2 rounded-lg text-sm bg-dark text-white
+                  border border-dark-200 focus:border-gold/40 outline-none placeholder:text-[#555]"
               />
             </div>
             <button
               onClick={handleSetOrg}
               className="px-4 py-2 rounded-lg text-sm font-medium
-                bg-gradient-to-r from-[#D4A574] to-[#C4956A] text-[#0A0A0A]
+                bg-gradient-to-r from-gold to-gold-hover text-dark
                 hover:shadow-[0_0_12px_rgba(212,165,116,0.3)] transition-all"
             >
               Update
@@ -107,9 +107,9 @@ export default function SpendThresholdSettings() {
       </div>
 
       {/* Location overrides */}
-      <div className="rounded-xl bg-[#161616]/80 backdrop-blur-sm border border-[#2A2A2A] p-4">
+      <div className="rounded-xl bg-dark-50/80 backdrop-blur-sm border border-dark-200 p-4">
         <h3 className="text-sm font-medium text-white mb-3">Location Overrides</h3>
-        <p className="text-xs text-[#666] mb-3">
+        <p className="text-xs text-dark-500 mb-3">
           Override the org default for specific locations. A commissary with higher volume gets a higher threshold.
         </p>
 
@@ -118,13 +118,13 @@ export default function SpendThresholdSettings() {
             {data.locationOverrides.map((o) => {
               const loc = locations.find((l) => l.storeLocationId === o.storeLocationId);
               return (
-                <div key={o.thresholdId} className="flex items-center justify-between px-3 py-2 rounded-lg bg-[#0A0A0A]/50 border border-[#1A1A1A]">
+                <div key={o.thresholdId} className="flex items-center justify-between px-3 py-2 rounded-lg bg-dark/50 border border-[#1A1A1A]">
                   <span className="text-sm text-white">{loc?.locationName ?? "Unknown"}</span>
                   <div className="flex items-center gap-3">
-                    <span className="text-sm font-medium text-[#D4A574]">${o.thresholdAmount.toFixed(2)}</span>
+                    <span className="text-sm font-medium text-gold">${o.thresholdAmount.toFixed(2)}</span>
                     <button
                       onClick={() => o.storeLocationId && removeLocationOverride(o.storeLocationId)}
-                      className="p-1 rounded text-[#666] hover:text-red-400 transition-colors"
+                      className="p-1 rounded text-dark-500 hover:text-red-400 transition-colors"
                     >
                       <Trash2 className="size-3.5" />
                     </button>
@@ -134,7 +134,7 @@ export default function SpendThresholdSettings() {
             })}
           </div>
         ) : (
-          <p className="text-xs text-[#666] mb-4">No location overrides — all locations use the org default.</p>
+          <p className="text-xs text-dark-500 mb-4">No location overrides — all locations use the org default.</p>
         )}
 
         {/* Add override */}
@@ -142,8 +142,8 @@ export default function SpendThresholdSettings() {
           <select
             value={locId}
             onChange={(e) => setLocId(e.target.value)}
-            className="flex-1 px-3 py-2 rounded-lg text-sm bg-[#0A0A0A] text-white
-              border border-[#2A2A2A] focus:border-[#D4A574]/40 outline-none"
+            className="flex-1 px-3 py-2 rounded-lg text-sm bg-dark text-white
+              border border-dark-200 focus:border-gold/40 outline-none"
           >
             <option value="">Select location...</option>
             {locations.map((l) => (
@@ -151,7 +151,7 @@ export default function SpendThresholdSettings() {
             ))}
           </select>
           <div className="relative">
-            <DollarSign className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-[#666]" />
+            <DollarSign className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-dark-500" />
             <input
               type="number"
               value={locAmount}
@@ -159,15 +159,15 @@ export default function SpendThresholdSettings() {
               placeholder="Amount"
               min="0"
               step="10"
-              className="w-28 pl-8 pr-3 py-2 rounded-lg text-sm bg-[#0A0A0A] text-white
-                border border-[#2A2A2A] focus:border-[#D4A574]/40 outline-none placeholder:text-[#555]"
+              className="w-28 pl-8 pr-3 py-2 rounded-lg text-sm bg-dark text-white
+                border border-dark-200 focus:border-gold/40 outline-none placeholder:text-[#555]"
             />
           </div>
           <button
             onClick={handleSetLocation}
             className="flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium
-              bg-[#1E1E1E] text-[#D4A574] border border-[#D4A574]/20
-              hover:border-[#D4A574]/40 transition-all"
+              bg-dark-100 text-gold border border-gold/20
+              hover:border-gold/40 transition-all"
           >
             <Plus className="size-3.5" /> Add
           </button>
