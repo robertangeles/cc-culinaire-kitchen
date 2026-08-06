@@ -9,7 +9,6 @@
  */
 
 import { test, expect, type Page } from "@playwright/test";
-import { loginAsTestUser } from "./_helpers/login";
 
 async function openOrdersTab(page: Page) {
   // Purchasing is its own route since the sidebar restructure (commit 9d77f81).
@@ -36,7 +35,6 @@ async function expandFirstRowWithBadge(page: Page, badgeText: string) {
 
 test.describe("Purchasing & Receiving v1", () => {
   test.beforeEach(async ({ page }) => {
-    await loginAsTestUser(page);
     await openOrdersTab(page);
   });
 

@@ -36,7 +36,7 @@ const PENDING = [
 ];
 
 function mockFetch() {
-  return vi.fn(async (url: string, init?: RequestInit) => {
+  return vi.fn(async (url: string, _init?: RequestInit) => {
     if (url.includes("/pending")) {
       return { ok: true, json: async () => PENDING } as Response;
     }
