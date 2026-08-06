@@ -58,8 +58,7 @@ export const SIGNED_URL_TTL_SECONDS = 120;
  * middleware/upload.ts allows it for images: an SVG is an XML document that can
  * carry script, and these files are served back to managers.
  */
-const ALLOWED_MIME = ["application/pdf", "image/jpeg", "image/png"] as const;
-export type AllowedMime = (typeof ALLOWED_MIME)[number];
+export type AllowedMime = "application/pdf" | "image/jpeg" | "image/png";
 
 /** Raised when storage cannot proceed. `status` is what the route should return. */
 export class DocumentStorageError extends Error {

@@ -159,7 +159,7 @@ export async function runIfClaimed(opts: RunIfClaimedOptions): Promise<boolean> 
   const now = (opts.now ?? (() => new Date()))();
   if (!opts.due(now)) return false;
 
-  let claimed = false;
+  let claimed: boolean;
   try {
     claimed = await claimDailyRun(opts.job, opts.period(now));
   } catch (err) {
