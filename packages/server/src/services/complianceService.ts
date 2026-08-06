@@ -484,23 +484,59 @@ export async function getComplianceDashboard(orgId: number): Promise<ComplianceD
     .from(userOrganisation)
     .where(eq(userOrganisation.organisationId, orgId));
 
+  // The status counts are taken over the SAME resolved set listStaffCompliance
+  // renders: the BEST document per (staff member, required type), not every raw
+  // row. Counting raw rows here was a real reconciliation bug — a staff member
+  // who renewed an expired certificate still has the superseded row on file, so
+  // the tile read "Expired: 1" while the table underneath showed nobody expired.
+  // That is exactly the headline-vs-table disagreement this screen was designed
+  // to prevent, and renewing a certificate is the normal case, not an edge one.
+  //
+  // Venue documents and the contractor headcount are NOT per-required-type, so
+  // they stay counted over the raw table.
   const [docRow] = (await db.execute(sql`
+    WITH resolved AS (
+      SELECT cd.verification_status, cd.expiry_date
+      FROM "user" u
+      JOIN user_organisation uo
+        ON uo.user_id = u.user_id AND uo.organisation_id = ${orgId}
+      JOIN organisation_required_document ord
+        ON ord.organisation_id = ${orgId}
+      LEFT JOIN LATERAL (
+        SELECT cd2.verification_status, cd2.expiry_date
+        FROM compliance_document cd2
+        WHERE cd2.user_id = u.user_id
+          AND cd2.organisation_id = ${orgId}
+          AND cd2.document_type = ord.document_type
+          AND cd2.verification_status <> 'Archived'
+        ORDER BY
+          CASE
+            WHEN cd2.verification_status = 'Verified'
+             AND (cd2.expiry_date IS NULL OR cd2.expiry_date >= CURRENT_DATE) THEN 0
+            WHEN cd2.verification_status = 'Pending' THEN 1
+            ELSE 2
+          END,
+          cd2.expiry_date DESC NULLS FIRST
+        LIMIT 1
+      ) cd ON true
+    )
     SELECT
-      count(*) FILTER (
-        WHERE verification_status = 'Verified' AND (expiry_date IS NULL OR expiry_date >= CURRENT_DATE)
-      )::int AS all_current,
-      count(*) FILTER (
-        WHERE verification_status = 'Verified' AND expiry_date >= CURRENT_DATE AND expiry_date <= CURRENT_DATE + 30
-      )::int AS expiring_within_30_days,
-      count(*) FILTER (
-        WHERE verification_status NOT IN ('Archived', 'Rejected') AND expiry_date < CURRENT_DATE
-      )::int AS expired,
-      count(*) FILTER (WHERE subject_store_location_id IS NOT NULL)::int AS venue_document_count,
-      count(DISTINCT user_id) FILTER (
-        WHERE engagement_type = 'contractor' AND user_id IS NOT NULL
-      )::int AS contractor_count
-    FROM compliance_document
-    WHERE organisation_id = ${orgId}
+      (SELECT count(*) FILTER (
+         WHERE verification_status = 'Verified' AND (expiry_date IS NULL OR expiry_date >= CURRENT_DATE)
+       )::int FROM resolved) AS all_current,
+      (SELECT count(*) FILTER (
+         WHERE verification_status = 'Verified' AND expiry_date >= CURRENT_DATE AND expiry_date <= CURRENT_DATE + 30
+       )::int FROM resolved) AS expiring_within_30_days,
+      (SELECT count(*) FILTER (
+         WHERE verification_status IS NOT NULL
+           AND verification_status NOT IN ('Archived', 'Rejected')
+           AND expiry_date < CURRENT_DATE
+       )::int FROM resolved) AS expired,
+      (SELECT count(*) FILTER (WHERE subject_store_location_id IS NOT NULL)::int
+         FROM compliance_document WHERE organisation_id = ${orgId}) AS venue_document_count,
+      (SELECT count(DISTINCT user_id) FILTER (
+         WHERE engagement_type = 'contractor' AND user_id IS NOT NULL
+       )::int FROM compliance_document WHERE organisation_id = ${orgId}) AS contractor_count
   `)) as unknown as Array<{
     all_current: number;
     expiring_within_30_days: number;
