@@ -56,6 +56,8 @@ import { snapshotCorpus } from "./services/brainAnalyticsService.js";
 import { compactAll } from "./services/brainCompactionService.js";
 import { runNudges } from "./services/brainNudgeService.js";
 import { runIfClaimed, dayKey, dayHourKey } from "./utils/dailyRunClaim.js";
+import { runExpiryScan } from "./services/complianceExpiryJob.js";
+import { purgeExpiredRetention, pruneAccessLog } from "./services/complianceRetentionService.js";
 import { brainRouter } from "./routes/brain.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -169,6 +171,7 @@ app.use("/api/store-locations", storeLocationsRouter);
 app.use("/api/inventory", inventoryRouter);
 app.use("/api/internal", internalRouter);
 app.use("/api/notifications", notificationsRouter);
+app.use("/api/compliance", complianceRouter);
 app.use("/api/brain", brainRouter);
 
 // Location context routes are now inside usersRouter (before /:id params)
@@ -209,6 +212,7 @@ import storeLocationsRouter from "./routes/storeLocations.js";
 import inventoryRouter from "./routes/inventory.js";
 import internalRouter from "./routes/internal.js";
 import notificationsRouter from "./routes/notifications.js";
+import complianceRouter from "./routes/compliance.js";
 
 app.get("/kitchen-shelf/:slug", async (req, res, next) => {
   // Only handle HTML requests (not API calls or assets)
@@ -590,6 +594,39 @@ hydrateEnvFromCredentials().then(() => {
         log,
       }), 60_000);
 
+      // Daily compliance expiry scan — 06:00, so warnings land before service.
+      // Minute-tick + hour gate rather than a 24h interval: Render restarts the
+      // process on every deploy, which would reset a long timer and mean the
+      // scan effectively never runs. The claim inside runIfClaimed is the mutex,
+      // the restart-safe day guard AND the heartbeat GET /api/compliance/stats
+      // reads to prove the job is alive.
+      const complianceExpiryInterval = everyMs(() => void runIfClaimed({
+        job: "compliance_expiry_scan",
+        due: (now) => now.getHours() === 6,
+        period: dayKey,
+        run: async () => {
+          const r = await runExpiryScan();
+          log.info({ ...r }, "Compliance expiry scan complete");
+        },
+        log,
+      }), 60_000);
+
+      // Retention — 04:00 daily, before the venue opens. Purges documents whose
+      // window has elapsed (destroying the Cloudinary object as well as the row,
+      // or the blob is stranded where no policy reaches it) and prunes the
+      // access log, which records PII access on every view and grows unbounded.
+      const complianceRetentionInterval = everyMs(() => void runIfClaimed({
+        job: "compliance_retention",
+        due: (now) => now.getHours() === 4,
+        period: dayKey,
+        run: async () => {
+          const purge = await purgeExpiredRetention();
+          const pruned = await pruneAccessLog();
+          log.info({ ...purge, accessLogPruned: pruned }, "Compliance retention complete");
+        },
+        log,
+      }), 60_000);
+
       // Graceful shutdown: close server and release port on termination signals
       function shutdown(signal: string) {
         log.info(`${signal} received — shutting down`);
@@ -600,6 +637,8 @@ hydrateEnvFromCredentials().then(() => {
         clearInterval(corpusSnapshotInterval);
         clearInterval(compactionInterval);
         clearInterval(nudgeInterval);
+        clearInterval(complianceExpiryInterval);
+        clearInterval(complianceRetentionInterval);
         clearInterval(feedbackEmailInterval);
         clearInterval(brainWorkerInterval);
         clearInterval(captureHealthInterval);
