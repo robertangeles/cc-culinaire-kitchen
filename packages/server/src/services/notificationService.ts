@@ -30,7 +30,8 @@ export type NotificationType =
   | "DELIVERY_OVERDUE"
   | "BRAIN_CAPTURE_ERROR"
   | "BRAIN_DIGEST"
-  | "BRAIN_NUDGE";
+  | "BRAIN_NUDGE"
+  | "DOCUMENT_EXPIRY_ALERT";
 
 export type NotificationChannel = "IN_APP" | "EMAIL";
 
@@ -248,8 +249,20 @@ export async function notifyHQAdmins(
   relatedEntityId: string,
   emailSubject: string,
   emailBody: string,
+  /**
+   * Which permission identifies the right recipients.
+   *
+   * Defaults to `purchasing:approve` because this helper was written for
+   * purchase-order approvals and every existing caller relies on that. It is a
+   * parameter now because the recipient set is domain-specific: a compliance
+   * expiry alert must reach whoever holds `compliance:verify`, not whoever can
+   * approve a purchase order. Sending it to the PO approvers means the people
+   * who own the workflow never hear about an expiring certificate, and people
+   * who do not own it get noise.
+   */
+  recipientPermission: string = "purchasing:approve",
 ) {
-  const admins = await getUsersWithPermission(orgId, "purchasing:approve");
+  const admins = await getUsersWithPermission(orgId, recipientPermission);
 
   logger.info(
     { orgId, adminCount: admins.length, type },
