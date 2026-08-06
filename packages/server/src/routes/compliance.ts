@@ -20,6 +20,7 @@ import {
   handleGetDocument,
   handleListStaffDocuments,
   handleGetDashboard,
+  handleListStaffCompliance,
   handleGetStats,
   handleListPending,
   handleVerifyDocument,
@@ -49,6 +50,7 @@ router.get(
 // ─── Dashboard ──────────────────────────────────────────────────
 
 router.get("/dashboard", requirePermission("compliance:read-all"), handleGetDashboard);
+router.get("/staff", requirePermission("compliance:read-all"), handleListStaffCompliance);
 router.get("/stats", requirePermission("compliance:read-all"), handleGetStats);
 
 // ─── Verification queue ─────────────────────────────────────────

@@ -62,6 +62,7 @@ const ROUTES: Array<{ method: string; path: string; permission: string }> = [
   { method: "GET", path: "/documents/:id", permission: "compliance:read-own" },
   { method: "GET", path: "/staff/:userId/documents", permission: "compliance:read-all" },
   { method: "GET", path: "/dashboard", permission: "compliance:read-all" },
+  { method: "GET", path: "/staff", permission: "compliance:read-all" },
   { method: "GET", path: "/stats", permission: "compliance:read-all" },
   { method: "GET", path: "/pending", permission: "compliance:verify" },
   { method: "POST", path: "/documents/:id/verify", permission: "compliance:verify" },

@@ -350,6 +350,134 @@ export interface ComplianceDashboard {
  * loop (this codebase has already paid for that bug once, in
  * prepService.generateTasksFromSelections).
  */
+/** One document type's status for one staff member, as the dashboard table renders it. */
+export interface StaffDocumentStatus {
+  documentType: string;
+  status: "compliant" | "expiring" | "expired" | "pending" | "rejected" | "na";
+  expiryDate: string | null;
+}
+
+/** One row of the staff compliance matrix. */
+export interface StaffComplianceRow {
+  userId: number;
+  name: string;
+  role: string;
+  documents: StaffDocumentStatus[];
+}
+
+/**
+ * Every staff member in the org against every document type the org requires,
+ * with the status of each.
+ *
+ * ONE query, deliberately. The naive shape here is a loop over staff and then a
+ * loop over required types, which is ~500 queries at 30 staff on the module's
+ * most-loaded screen. This codebase already carries that bug once in
+ * prepService.generateTasksFromSelections.
+ *
+ * The status is computed in SQL against CURRENT_DATE rather than in JS, so it
+ * uses the SAME clock as getComplianceDashboard's aggregate. If one used the
+ * database's date and the other the server's, the headline ("24 of 25
+ * compliant") could disagree with the table beneath it across midnight or in a
+ * different process timezone — which is exactly the reconciliation bug the
+ * dashboard design calls out.
+ *
+ * A staff member may hold several documents of one type (an expired old one and
+ * a fresh replacement). The LATERAL picks the BEST: verified and current beats
+ * expiring, beats pending, beats expired/rejected, with the furthest expiry
+ * winning ties.
+ */
+export async function listStaffCompliance(orgId: number): Promise<StaffComplianceRow[]> {
+  const rows = (await db.execute(sql`
+    SELECT
+      u.user_id                                   AS user_id,
+      u.user_name                                 AS name,
+      COALESCE((
+        SELECT r.role_name FROM user_role ur
+        JOIN role r ON r.role_id = ur.role_id
+        WHERE ur.user_id = u.user_id
+        ORDER BY r.role_name
+        LIMIT 1
+      ), '')                                      AS role,
+      ord.document_type                           AS document_type,
+      cd.verification_status                      AS verification_status,
+      cd.expiry_date                              AS expiry_date
+    FROM "user" u
+    JOIN user_organisation uo
+      ON uo.user_id = u.user_id AND uo.organisation_id = ${orgId}
+    JOIN organisation_required_document ord
+      ON ord.organisation_id = ${orgId}
+    LEFT JOIN LATERAL (
+      SELECT cd2.verification_status, cd2.expiry_date
+      FROM compliance_document cd2
+      WHERE cd2.user_id = u.user_id
+        AND cd2.organisation_id = ${orgId}
+        AND cd2.document_type = ord.document_type
+        AND cd2.verification_status <> 'Archived'
+      ORDER BY
+        CASE
+          WHEN cd2.verification_status = 'Verified'
+           AND (cd2.expiry_date IS NULL OR cd2.expiry_date >= CURRENT_DATE) THEN 0
+          WHEN cd2.verification_status = 'Pending' THEN 1
+          ELSE 2
+        END,
+        cd2.expiry_date DESC NULLS FIRST
+      LIMIT 1
+    ) cd ON true
+    ORDER BY u.user_name, ord.document_type
+  `)) as unknown as Array<{
+    user_id: number;
+    name: string;
+    role: string;
+    document_type: string;
+    verification_status: string | null;
+    expiry_date: string | null;
+  }>;
+
+  const byUser = new Map<number, StaffComplianceRow>();
+  for (const r of rows) {
+    let row = byUser.get(r.user_id);
+    if (!row) {
+      row = { userId: r.user_id, name: r.name, role: r.role, documents: [] };
+      byUser.set(r.user_id, row);
+    }
+    row.documents.push({
+      documentType: r.document_type,
+      status: statusVariant(r.verification_status, r.expiry_date),
+      expiryDate: r.expiry_date,
+    });
+  }
+  return [...byUser.values()];
+}
+
+/**
+ * Map a stored verification status + expiry onto the pill variant the table
+ * renders. Pure, so the mapping is testable without a database.
+ *
+ * `null` status means the staff member has never uploaded this required type,
+ * which reads as "na" — visually distinct from a document that exists and has
+ * gone bad.
+ */
+export function statusVariant(
+  verificationStatus: string | null,
+  expiryDate: string | null,
+  today: string = new Date().toISOString().slice(0, 10),
+): StaffDocumentStatus["status"] {
+  if (!verificationStatus) return "na";
+  if (verificationStatus === "Rejected") return "rejected";
+  if (verificationStatus === "Orphaned") return "na";
+  if (verificationStatus === "Pending") return "pending";
+  if (verificationStatus === "Expired") return "expired";
+  if (verificationStatus === "Requires Renewal") return "expiring";
+
+  // Verified from here: the date decides.
+  if (!expiryDate) return "compliant";
+  if (expiryDate < today) return "expired";
+
+  const cutoff = new Date(today);
+  cutoff.setDate(cutoff.getDate() + 30);
+  return expiryDate <= cutoff.toISOString().slice(0, 10) ? "expiring" : "compliant";
+}
+
 export async function getComplianceDashboard(orgId: number): Promise<ComplianceDashboard> {
   const [staffRow] = await db
     .select({ n: sql<number>`count(DISTINCT ${userOrganisation.userId})::int` })

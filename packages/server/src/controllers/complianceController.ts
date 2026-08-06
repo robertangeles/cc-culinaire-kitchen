@@ -17,6 +17,7 @@ import {
   verifyDocument,
   rejectDocument,
   getComplianceDashboard,
+  listStaffCompliance,
   getComplianceStats,
   listPendingVerification,
   listExpiryRules,
@@ -188,6 +189,25 @@ export async function handleGetDashboard(
     const ctx = await resolveContext(req, res);
     if (!ctx) return;
     res.json(await getComplianceDashboard(ctx.orgId));
+  } catch (err) {
+    handleServiceError(err, res, next);
+  }
+}
+
+/**
+ * GET /api/compliance/staff — the per-staff, per-document-type matrix the
+ * dashboard table renders. Gated by compliance:read-all, and the org comes from
+ * the authenticated user, never a client-supplied id.
+ */
+export async function handleListStaffCompliance(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const ctx = await resolveContext(req, res);
+    if (!ctx) return;
+    res.json(await listStaffCompliance(ctx.orgId));
   } catch (err) {
     handleServiceError(err, res, next);
   }
