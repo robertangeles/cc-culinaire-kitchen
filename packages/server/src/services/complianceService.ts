@@ -428,7 +428,7 @@ export async function listStaffCompliance(orgId: number): Promise<StaffComplianc
     user_id: number;
     name: string;
     role: string;
-    document_type: string;
+    document_type: string | null;
     verification_status: string | null;
     expiry_date: string | null;
   }>;
@@ -440,11 +440,15 @@ export async function listStaffCompliance(orgId: number): Promise<StaffComplianc
       row = { userId: r.user_id, name: r.name, role: r.role, documents: [] };
       byUser.set(r.user_id, row);
     }
-    row.documents.push({
-      documentType: r.document_type,
-      status: statusVariant(r.verification_status, r.expiry_date),
-      expiryDate: r.expiry_date,
-    });
+    // document_type is null when the org has no required types configured. The
+    // staff member still belongs in the result; they just have nothing to show.
+    if (r.document_type !== null) {
+      row.documents.push({
+        documentType: r.document_type,
+        status: statusVariant(r.verification_status, r.expiry_date),
+        expiryDate: r.expiry_date,
+      });
+    }
   }
   return [...byUser.values()];
 }
@@ -500,7 +504,14 @@ export async function getComplianceDashboard(orgId: number): Promise<ComplianceD
       FROM "user" u
       JOIN user_organisation uo
         ON uo.user_id = u.user_id AND uo.organisation_id = ${orgId}
-      JOIN organisation_required_document ord
+      -- LEFT JOIN, not JOIN: an org that has not configured any required
+      -- document types must still return its staff. With an inner join the
+      -- whole matrix collapses to zero rows and the dashboard renders "No one
+      -- on the team yet" for an org that plainly has staff — a false statement,
+      -- and precisely the misleading-empty-state class the design warned about.
+      -- Staff then come back with an empty documents array, which the client
+      -- can distinguish from having no staff at all.
+      LEFT JOIN organisation_required_document ord
         ON ord.organisation_id = ${orgId}
       LEFT JOIN LATERAL (
         SELECT cd2.verification_status, cd2.expiry_date
