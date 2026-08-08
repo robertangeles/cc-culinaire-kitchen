@@ -3006,6 +3006,13 @@ export const complianceDocument = pgTable(
     issuingJurisdiction: varchar("issuing_jurisdiction", { length: 3 }),
     /** Cloudinary private public_id. NEVER a URL — URLs are minted per view. */
     storagePublicId: varchar("storage_public_id", { length: 255 }).notNull(),
+    /**
+     * Delivery format (pdf | jpg | png) from the server's magic-byte sniff at
+     * upload time — signedUrlForDocument needs it to mint a correctly-shaped
+     * Cloudinary URL. NULL for rows uploaded before this column existed; the
+     * format is not recoverable for those.
+     */
+    storageFormat: varchar("storage_format", { length: 10 }),
     /** Pending | Verified | Rejected | Expired | Requires Renewal | Archived | Orphaned */
     verificationStatus: varchar("verification_status", { length: 20 })
       .notNull()

@@ -33,7 +33,11 @@ function layerFor(method: string, path: string): Handler[] {
  * a gate responds; reaching the controller means every gate passed.
  */
 function runGates(handlers: Handler[], user: unknown): { status: number | null } {
-  const req = { user, params: {}, query: {}, body: {} } as unknown as Request;
+  // headers: {} matters for /documents/upload — its stack includes multer's
+  // upload.single(), which reads req.headers['content-type'] to decide
+  // whether to parse a body at all. A bare stub without `headers` throws
+  // before multer even gets to the "not multipart, skip" branch.
+  const req = { user, params: {}, query: {}, body: {}, headers: {} } as unknown as Request;
   let status: number | null = null;
   const res = {
     status(code: number) {
@@ -59,7 +63,9 @@ function runGates(handlers: Handler[], user: unknown): { status: number | null }
 const ROUTES: Array<{ method: string; path: string; permission: string }> = [
   { method: "GET", path: "/documents/mine", permission: "compliance:read-own" },
   { method: "POST", path: "/documents", permission: "compliance:read-own" },
+  { method: "POST", path: "/documents/upload", permission: "compliance:read-own" },
   { method: "GET", path: "/documents/:id", permission: "compliance:read-own" },
+  { method: "GET", path: "/documents/:id/view-url", permission: "compliance:read-own" },
   { method: "GET", path: "/staff/:userId/documents", permission: "compliance:read-all" },
   { method: "GET", path: "/dashboard", permission: "compliance:read-all" },
   { method: "GET", path: "/staff", permission: "compliance:read-all" },
@@ -144,6 +150,29 @@ describe("compliance routes — permission boundary", () => {
       expect(ALL_KEYS, `${r.method} ${r.path} uses an unknown key`).toContain(r.permission);
     }
   });
+});
+
+/**
+ * GET /documents/:id/view-url accepts ANY of three permissions (an OR, not a
+ * single required key) — the ROUTES table above only exercises one
+ * representative permission per route, so it never proves the other two
+ * legs of the OR actually open the gate. A regression that narrowed the
+ * `requirePermission(...)` call to a single permission would still pass
+ * every ROUTES-table check (compliance:read-own would still work) and only
+ * show up here.
+ */
+describe("GET /documents/:id/view-url — any of the three view permissions opens the gate", () => {
+  it.each(["compliance:read-own", "compliance:read-all", "compliance:verify"])(
+    "passes with only %s",
+    (permission) => {
+      const { status } = runGates(layerFor("GET", "/documents/:id/view-url"), {
+        sub: 1,
+        roles: ["Subscriber"],
+        permissions: [permission],
+      });
+      expect(status).toBeNull();
+    },
+  );
 });
 
 /**

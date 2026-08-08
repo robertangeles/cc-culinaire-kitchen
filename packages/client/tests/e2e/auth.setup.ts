@@ -6,7 +6,14 @@ import { loginAsTestUser } from "./_helpers/login";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 /** Where the authenticated session is cached for every spec to reuse. */
-export const STORAGE_STATE = path.resolve(__dirname, "_artifacts/storageState.json");
+/**
+ * Deliberately OUTSIDE `_artifacts/` — that is Playwright's `outputDir`, and
+ * Playwright wipes it at the start of every run. Keeping the session there
+ * meant it was deleted before it could ever be reused, so every run had to log
+ * in again, and consecutive runs then collided on the single-use TOTP. Gitignored:
+ * this file is a live session.
+ */
+export const STORAGE_STATE = path.resolve(__dirname, "_auth/storageState.json");
 
 /**
  * Authenticate ONCE for the whole run and save the session.

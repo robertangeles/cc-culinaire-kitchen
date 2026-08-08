@@ -69,3 +69,8 @@ packages/client/test-results/
 
 # E2E credentials
 packages/client/.env.test
+packages/client/tests/e2e/_auth/
+
+# tesseract.js downloads its language model beside the server package the
+# first time documentOcrService runs. 5 MB, regenerable, never committed.
+*.traineddata

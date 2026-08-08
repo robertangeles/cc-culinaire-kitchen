@@ -10,6 +10,7 @@ import type { Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import pino from "pino";
 import { getUserLocationContext } from "../services/locationContextService.js";
+import { hasPermission } from "../middleware/auth.js";
 import {
   listDocumentsForUser,
   getDocument,
@@ -27,8 +28,31 @@ import {
   isOwnDocument,
   ComplianceError,
 } from "../services/complianceService.js";
+import {
+  storeDocument,
+  signedUrlForDocument,
+  DocumentStorageError,
+  type AllowedMime,
+} from "../services/documentStorageService.js";
+import { extractCertificateFields } from "../services/documentOcrService.js";
 
 const logger = pino({ name: "complianceController" });
+
+/** Every value compliance_document.storage_format can hold. */
+const STORAGE_FORMATS = ["pdf", "jpg", "png"] as const;
+type StorageFormat = (typeof STORAGE_FORMATS)[number];
+
+/** Cloudinary download-URL extension for each mime storeDocument's magic-byte sniff can return. */
+const FORMAT_BY_MIME: Record<AllowedMime, StorageFormat> = {
+  "application/pdf": "pdf",
+  "image/jpeg": "jpg",
+  "image/png": "png",
+};
+
+/** Exported for a direct unit test — a stored JPEG must resolve to "jpg", never the old hardcoded "pdf". */
+export function mimeToStorageFormat(mime: AllowedMime): StorageFormat {
+  return FORMAT_BY_MIME[mime];
+}
 
 const CreateDocumentSchema = z.object({
   documentType: z.string().min(1).max(40),
@@ -39,6 +63,12 @@ const CreateDocumentSchema = z.object({
   issuingAuthority: z.string().max(200).nullable().optional(),
   issuingJurisdiction: z.string().max(3).nullable().optional(),
   storagePublicId: z.string().min(1).max(255),
+  // Echoed back by the client from the /documents/upload response. Validated
+  // against the fixed enum rather than trusted as-is — a forged value only
+  // breaks that user's own preview (wrong extension on their own document's
+  // signed URL), not another tenant's data, so rejecting via the schema like
+  // every other field here is enough.
+  storageFormat: z.enum(STORAGE_FORMATS).nullable().optional(),
   storeLocationId: z.string().uuid().nullable().optional(),
   notes: z.string().max(2000).nullable().optional(),
 });
@@ -136,6 +166,40 @@ export async function handleCreateDocument(
   }
 }
 
+/**
+ * POST /api/compliance/documents/upload — stores the file (private Cloudinary,
+ * magic-byte sniffed) and best-effort OCRs it for form pre-fill. This is the
+ * pre-step before `POST /documents`, which persists the record; nothing here
+ * touches the database.
+ */
+export async function handleUploadDocument(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const ctx = await resolveContext(req, res);
+    if (!ctx) return;
+
+    if (!req.file) {
+      res.status(400).json({ error: "A file is required" });
+      return;
+    }
+
+    const { publicId, mime } = await storeDocument(req.file.buffer, ctx.orgId);
+    // Never throws — a miss just means the form falls back to manual entry.
+    const ocr = await extractCertificateFields(req.file.buffer);
+
+    res.json({ storagePublicId: publicId, storageFormat: mimeToStorageFormat(mime), ocr });
+  } catch (err) {
+    if (err instanceof DocumentStorageError) {
+      res.status(err.status).json({ error: err.message });
+      return;
+    }
+    next(err);
+  }
+}
+
 export async function handleGetDocument(
   req: Request,
   res: Response,
@@ -153,6 +217,61 @@ export async function handleGetDocument(
       return;
     }
     res.json(doc);
+  } catch (err) {
+    handleServiceError(err, res, next);
+  }
+}
+
+/**
+ * GET /api/compliance/documents/:id/view-url — mints a short-lived Cloudinary
+ * signed URL for one document. Called by both the staff self-view (own
+ * document) and the HQ verification queue (compliance:read-all / :verify).
+ *
+ * Ownership is not a permission, so it can't be expressed as a single
+ * requirePermission() at the router — the route accepts anyone holding ANY
+ * of the three perms, and this handler makes the real per-document decision.
+ */
+export async function handleGetDocumentViewUrl(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const ctx = await resolveContext(req, res);
+    if (!ctx) return;
+
+    // Cross-org id -> ComplianceError(404) via getDocument, caught below.
+    // Never 403 here: a guessed id from another tenant must not confirm
+    // the document exists.
+    const doc = await getDocument(ctx.orgId, req.params.id as string);
+
+    const granted =
+      isOwnDocument(doc, req.user!.sub) ||
+      hasPermission(req.user!, "compliance:read-all", "compliance:verify");
+
+    // Always call through — signedUrlForDocument writes the access-log row
+    // for denials too, which is the record that matters when investigating
+    // who went looking for someone else's document.
+    const url = await signedUrlForDocument({
+      complianceDocumentId: doc.complianceDocumentId,
+      publicId: doc.storagePublicId,
+      // doc.storageFormat is the SERVER's magic-byte sniff from upload time
+      // (mimeToStorageFormat), persisted by createDocument — never re-derived
+      // from the client. Rows uploaded before the storage_format column
+      // existed have no recoverable format; "pdf" is the fallback for those,
+      // since Cloudinary serves a real PDF as-is and wraps a stored JPG/PNG
+      // into a one-page PDF rather than erroring.
+      format: doc.storageFormat ?? "pdf",
+      actorUserId: req.user!.sub,
+      ipAddress: req.ip,
+      granted,
+    });
+
+    if (!granted) {
+      res.status(403).json({ error: "You don't have access to this document" });
+      return;
+    }
+    res.json({ url });
   } catch (err) {
     handleServiceError(err, res, next);
   }

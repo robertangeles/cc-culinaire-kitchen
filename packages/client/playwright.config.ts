@@ -39,7 +39,7 @@ export default defineConfig({
       name: "chromium",
       use: {
         ...devices["Desktop Chrome"],
-        storageState: "./tests/e2e/_artifacts/storageState.json",
+        storageState: "./tests/e2e/_auth/storageState.json",
       },
       dependencies: ["setup"],
     },

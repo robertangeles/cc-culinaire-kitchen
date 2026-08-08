@@ -137,3 +137,27 @@ export const authRateLimit = rateLimit({
   },
   message: { error: "Too many attempts — please wait a minute before trying again." },
 });
+
+/**
+ * Rate limiter for the compliance document view-url endpoint
+ * (`GET /api/compliance/documents/:id/view-url`).
+ *
+ * 30 requests per minute, keyed by authenticated user ID. Two costs to guard
+ * here, not one: each request mints a Cloudinary signed URL (a metered
+ * per-call cost, see documentStorageService.ts), and the endpoint is an
+ * id-enumeration surface — a denied guess still returns fast, so without a
+ * limit a caller with any compliance:read-* permission could sweep document
+ * ids cheaply. 30/min covers a manager working through a verification queue
+ * in one sitting with room to spare, while bounding both costs per caller.
+ */
+export const complianceDocumentViewRateLimit = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 30,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  keyGenerator: (req: Request) => {
+    if (req.user?.sub) return `compliance-view-user-${req.user.sub}`;
+    return req.ip ?? "unknown";
+  },
+  message: { error: "Too many document requests — please wait a moment before trying again." },
+});

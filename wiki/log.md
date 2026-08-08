@@ -4,6 +4,45 @@ Append-only. Newest entry on top.
 
 ---
 
+## 2026-08-07 — Documented the Staff Compliance Vault (Phase 1)
+
+- Wrote up `feature/ck-web/compliance-vault` (Phase 1 of the CEO-reviewed three-phase
+  compliance/rostering plan): one entity page, one concept page, two decision pages. Wiki-only
+  session — no source code touched.
+- [[staff-compliance-vault]] — the vault as a whole: schema (`compliance_document`,
+  `document_expiry_rule` + alert-day junction, `document_access_log`,
+  `organisation_required_document`), the tenancy model (`organisation_id` + nullable
+  `store_location_id`, no separate `venue_id`), the two subject CHECK constraints — including
+  why the venue-scope CHECK's `IS NOT NULL` term is load-bearing (Postgres only violates a
+  CHECK on FALSE; `NULL = uuid` passes), services/routes/permissions, and known limits stated
+  without euphemism: Phase 2 is *blocked*, not merely unbuilt, on naming an `award_rule` owner;
+  no admin UI exists yet for the expiry-rule editor; and the real Cloudinary upload/preview
+  path is untested against a live account because `documentStorageService.test.ts` mocks the
+  `cloudinary` module entirely.
+- [[document-storage-cloudinary-private]] — why `documentStorageService.ts` must never call
+  `middleware/upload.ts`'s `uploadFileBuffer` (silent fallback to an unauthenticated
+  `/uploads/` directory — a notifiable breach for a police check, one missing env var away,
+  nothing in the logs), the 120-second signed-URL TTL against Cloudinary's 1-hour default and
+  its "issue on click, never prefetch a list" consequence, encryption-at-rest as an accepted
+  deviation (Cloudinary holds the key, not us — "Cloudinary and us" is the honest answer to a
+  procurement question), and why `document_access_log` records denials, not just grants.
+- [[scheduled-job-daily-claim]] — the one-statement conditional `UPDATE` that is simultaneously
+  the cross-instance mutex, the restart-safe day guard, and the admin-visible heartbeat; why
+  `withAdvisoryLock` was rejected (its `fn` never receives `tx`, so it buys no atomicity — only
+  a pool connection held idle for an 18k-row scan); and why a JS variable was rejected (Render
+  redeploys reset it, so a deploy inside the run window re-fires the job).
+- [[compliance-expiry-engine]] — the pure `computeExpiryActions` decision tree
+  (`complianceExpiryMath.ts`), how `complianceExpiryJob.ts` wires it to notifications without
+  double-sending, and the dashboard's reconciliation fix: the headline aggregate and the
+  per-staff matrix both resolve to the SAME best-document-per-type (`LEFT JOIN LATERAL`,
+  verified-and-current beats pending beats everything else) against the SAME clock
+  (`CURRENT_DATE` in SQL, not `new Date()` in JS twice), so a renewed certificate can never make
+  "24 of 25 compliant" disagree with the table underneath it — a bug the design review's own
+  mockup was built to call out.
+- Added all four pages to `wiki/index.md` (Entities, Concepts, Decisions). Ran
+  `node scripts/wiki-graph.mjs build` and `pnpm wiki:lint` — see the task report for exact
+  output; no contradictions found with existing pages.
+
 ## 2026-08-02 — Receiving walked end to end in a browser: 3 more bugs fixed, HEPHAESTUS open items closed
 
 - **`startSession` still dead-ended on the mirror-image inconsistent state.** The 2026-08-01 fix

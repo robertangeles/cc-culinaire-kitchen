@@ -13,11 +13,15 @@
  */
 
 import { Router } from "express";
+import multer from "multer";
 import { authenticate, requirePermission } from "../middleware/auth.js";
+import { complianceDocumentViewRateLimit } from "../middleware/rateLimiter.js";
 import {
   handleListMyDocuments,
   handleCreateDocument,
+  handleUploadDocument,
   handleGetDocument,
+  handleGetDocumentViewUrl,
   handleListStaffDocuments,
   handleGetDashboard,
   handleListStaffCompliance,
@@ -34,13 +38,43 @@ import {
 const router = Router();
 router.use(authenticate);
 
+/**
+ * Memory storage only — documentStorageService.storeDocument() reads the
+ * buffer directly. NEVER route this through middleware/upload.ts's
+ * uploadFileBuffer(): that helper silently falls back to writing world-
+ * readable local disk when Cloudinary credentials are missing, which for a
+ * police check or Medicare card is a notifiable data breach (see
+ * documentStorageService.ts's header comment). 10 MB matches that module's
+ * image-upload convention — compliance certs are a photo or a one-page PDF,
+ * not the 100 MB knowledge-base document case.
+ */
+const documentUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+});
+
 // ─── Documents ────────────────────────────────────────────────────
 // Collection routes before parameterized ones — /documents/mine must not be
 // swallowed by /documents/:id.
 
 router.get("/documents/mine", requirePermission("compliance:read-own"), handleListMyDocuments);
 router.post("/documents", requirePermission("compliance:read-own"), handleCreateDocument);
+router.post(
+  "/documents/upload",
+  requirePermission("compliance:read-own"),
+  documentUpload.single("file"),
+  handleUploadDocument,
+);
 router.get("/documents/:id", requirePermission("compliance:read-own"), handleGetDocument);
+router.get(
+  "/documents/:id/view-url",
+  // Ownership (not just permission) decides access — see the handler.
+  // Broadest OR of every permission that could legitimately reach this
+  // route: self-view (read-own) and manager review (read-all / verify).
+  requirePermission("compliance:read-own", "compliance:read-all", "compliance:verify"),
+  complianceDocumentViewRateLimit,
+  handleGetDocumentViewUrl,
+);
 router.get(
   "/staff/:userId/documents",
   requirePermission("compliance:read-all"),

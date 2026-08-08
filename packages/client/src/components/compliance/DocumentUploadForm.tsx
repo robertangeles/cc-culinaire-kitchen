@@ -8,20 +8,17 @@
  * Fields OCR pre-fills carry the same gold-dot "read from photo" marker as
  * the manager's VerificationView — every field stays editable regardless.
  *
- * BACKEND GAP (flagged, not fixed here — out of this component's file
- * ownership): `POST /api/compliance/documents/upload` below is not wired in
- * routes/compliance.ts yet. It needs to: accept multipart `file`, call
- * documentStorageService.storeDocument() (private Cloudinary storage, magic-byte
- * sniffed — never middleware/upload.ts, see that module's header comment),
- * best-effort run documentOcrService.extractCertificateFields() on the buffer,
- * and return `{ storagePublicId: string, ocr: { documentNumber?, issueDate?,
- * expiryDate? } }`. `POST /api/compliance/documents` (the second call this
- * form makes, to actually create the record) already exists and is unaffected.
+ * `POST /api/compliance/documents/upload` stores the file (private Cloudinary,
+ * magic-byte sniffed) and returns `{ storagePublicId, storageFormat, ocr }`.
+ * `storageFormat` ("pdf" | "jpg" | "png") is echoed straight back on the
+ * `POST /api/compliance/documents` call below so the server can mint a
+ * correctly-shaped signed URL later — it is never guessed on the client.
  */
 
 import { useRef, useState } from "react";
 import { Camera, CheckCircle2, Loader2 } from "lucide-react";
 import { EmptyState } from "../ui/EmptyState.js";
+import { formatAuDate } from "@culinaire/shared";
 
 const API = import.meta.env.VITE_API_URL ?? "";
 
@@ -60,6 +57,7 @@ export function DocumentUploadForm({ onUploaded }: { onUploaded?: () => void }) 
   const [otherType, setOtherType] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [storagePublicId, setStoragePublicId] = useState<string | null>(null);
+  const [storageFormat, setStorageFormat] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [ocrFilled, setOcrFilled] = useState<Set<string>>(new Set());
@@ -82,6 +80,7 @@ export function DocumentUploadForm({ onUploaded }: { onUploaded?: () => void }) 
     setOtherType("");
     setFile(null);
     setStoragePublicId(null);
+    setStorageFormat(null);
     setUploadError(null);
     setOcrFilled(new Set());
     setDocumentNumber("");
@@ -98,6 +97,7 @@ export function DocumentUploadForm({ onUploaded }: { onUploaded?: () => void }) 
     if (!chosen) return;
     setFile(chosen);
     setStoragePublicId(null);
+    setStorageFormat(null);
     setUploadError(null);
     setOcrFilled(new Set());
     setUploading(true);
@@ -113,8 +113,9 @@ export function DocumentUploadForm({ onUploaded }: { onUploaded?: () => void }) 
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error ?? "Couldn't read that file. Try again.");
       }
-      const data: { storagePublicId: string; ocr?: OcrResult } = await res.json();
+      const data: { storagePublicId: string; storageFormat?: string; ocr?: OcrResult } = await res.json();
       setStoragePublicId(data.storagePublicId);
+      setStorageFormat(data.storageFormat ?? null);
 
       const filled = new Set<string>();
       if (data.ocr?.documentNumber) {
@@ -157,6 +158,7 @@ export function DocumentUploadForm({ onUploaded }: { onUploaded?: () => void }) 
           expiryDate: expiryDate || null,
           issuingJurisdiction: issuingJurisdiction || null,
           storagePublicId,
+          storageFormat,
         }),
       });
       if (!res.ok) {
@@ -256,6 +258,13 @@ export function DocumentUploadForm({ onUploaded }: { onUploaded?: () => void }) 
         />
       </div>
 
+      {/* A native date input renders in the BROWSER's locale, which we do not
+          control — the same field shows dd/mm/yyyy to a user in Melbourne and
+          mm/dd/yyyy to one whose browser is set to en-US. On an expiry date
+          that ambiguity is not cosmetic: 08/07/2026 is either 8 July or
+          7 August, four weeks apart, on the field that decides whether someone
+          is legal to work. The rendered value below each input is the
+          unambiguous long form, so what was entered is always readable. */}
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label htmlFor="issue-date" className="flex items-center gap-1.5 text-xs font-medium text-dark-600">
@@ -269,6 +278,9 @@ export function DocumentUploadForm({ onUploaded }: { onUploaded?: () => void }) 
             onChange={(e) => setIssueDate(e.target.value)}
             className={inputClass}
           />
+          {issueDate && (
+            <p className="mt-1 text-xs text-dark-600">{formatAuDate(issueDate)}</p>
+          )}
         </div>
         <div>
           <label htmlFor="expiry-date" className="flex items-center gap-1.5 text-xs font-medium text-dark-600">
@@ -282,6 +294,9 @@ export function DocumentUploadForm({ onUploaded }: { onUploaded?: () => void }) 
             onChange={(e) => setExpiryDate(e.target.value)}
             className={inputClass}
           />
+          {expiryDate && (
+            <p className="mt-1 text-xs text-dark-600">{formatAuDate(expiryDate)}</p>
+          )}
         </div>
       </div>
 

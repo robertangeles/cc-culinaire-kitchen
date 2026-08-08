@@ -41,6 +41,7 @@ const statements = [
     issuing_authority varchar(200),
     issuing_jurisdiction varchar(3),
     storage_public_id varchar(255) NOT NULL,
+    storage_format varchar(10),
     verification_status varchar(20) NOT NULL DEFAULT 'Pending',
     employment_end_date date,
     uploaded_by integer NOT NULL REFERENCES "user"(user_id),
@@ -92,6 +93,10 @@ const statements = [
   // Assignment gate + duplicate-upload guard. Partial so rows without a number
   // (or venue documents) do not collide.
   sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_compliance_document_unique ON compliance_document (user_id, document_type, document_number) WHERE user_id IS NOT NULL AND document_number IS NOT NULL`,
+  // This script already ran against dev before storage_format existed above, so
+  // the CREATE TABLE column list alone won't reach that copy — same pattern as
+  // store_location.iana_timezone below.
+  sql`ALTER TABLE compliance_document ADD COLUMN IF NOT EXISTS storage_format varchar(10)`,
 
   // -- document_expiry_rule ----------------------------------------------------
   sql`CREATE TABLE IF NOT EXISTS document_expiry_rule (

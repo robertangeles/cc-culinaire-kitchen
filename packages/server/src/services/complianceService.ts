@@ -116,6 +116,8 @@ export interface CreateDocumentInput {
   issuingAuthority?: string | null;
   issuingJurisdiction?: string | null;
   storagePublicId: string;
+  /** Delivery format (pdf|jpg|png) from the upload-time sniff, already validated by the controller. Null for pre-column rows. */
+  storageFormat?: string | null;
   storeLocationId?: string | null;
   notes?: string | null;
 }
@@ -211,6 +213,7 @@ export async function createDocument(orgId: number, input: CreateDocumentInput) 
         issuingAuthority: input.issuingAuthority ?? null,
         issuingJurisdiction: input.issuingJurisdiction ?? null,
         storagePublicId,
+        storageFormat: input.storageFormat ?? null,
         notes: input.notes ?? null,
         uploadedBy: input.uploadedBy,
       })
@@ -337,9 +340,19 @@ export async function listPendingVerification(orgId: number) {
 
 export interface ComplianceDashboard {
   totalStaff: number;
+  /**
+   * DOCUMENTS currently valid, not staff — one row per (staff, required type)
+   * that resolved to Verified and unexpired. The name reads like a headcount
+   * and is not one: an org can report `allCurrent: 2` while only ONE of its
+   * two staff is compliant. The UI headline deliberately derives its "N of M
+   * staff are compliant" line from the staff array instead, so the two can
+   * never disagree. Anything else reading this field (Antoine's compliance
+   * tool, Phase 2) must not treat it as a headcount.
+   */
   allCurrent: number;
   expiringWithin30Days: number;
   expired: number;
+  /** STAFF missing at least one org-required document type, verified and unexpired. */
   incompleteForRole: number;
   venueDocumentCount: number;
   contractorCount: number;

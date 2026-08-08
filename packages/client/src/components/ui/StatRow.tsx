@@ -24,11 +24,15 @@ export function StatRow({ entries }: StatRowProps) {
       {entries.map((entry, i) => {
         const content = (
           <>
-            <span className="font-semibold text-[#E5E5E5]">{entry.value}</span>{" "}
+            <span className="font-semibold text-[#E5E5E5]">{entry.value}</span>
             <span>{entry.label}</span>
           </>
         );
-        const linkClassName = "inline-flex min-h-11 items-center hover:text-gold transition-colors";
+        // gap-1, not a whitespace node between the spans: the wrapper is a
+        // flex container, and flex discards whitespace between its items —
+        // which is how this shipped reading "1expiring soon".
+        const linkClassName =
+          "inline-flex min-h-11 items-center gap-1 hover:text-gold transition-colors";
 
         if (entry.href) {
           return (
@@ -45,7 +49,7 @@ export function StatRow({ entries }: StatRowProps) {
           );
         }
         return (
-          <span key={i} className="inline-flex items-center">
+          <span key={i} className="inline-flex items-center gap-1">
             {content}
           </span>
         );

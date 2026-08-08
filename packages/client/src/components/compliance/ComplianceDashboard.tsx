@@ -185,10 +185,18 @@ export function ComplianceDashboard() {
 
       <StatRow
         entries={[
+          // The first two labels are adjectival and read correctly at any
+          // count; the last two are nouns, so they pluralise.
           { label: "expiring soon", value: state.totals.expiringWithin30Days },
           { label: "pending verification", value: state.pendingVerification },
-          { label: "venue documents", value: state.totals.venueDocumentCount },
-          { label: "contractors", value: state.totals.contractorCount },
+          {
+            label: state.totals.venueDocumentCount === 1 ? "venue document" : "venue documents",
+            value: state.totals.venueDocumentCount,
+          },
+          {
+            label: state.totals.contractorCount === 1 ? "contractor" : "contractors",
+            value: state.totals.contractorCount,
+          },
         ]}
       />
 

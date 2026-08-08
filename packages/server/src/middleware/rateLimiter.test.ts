@@ -35,10 +35,10 @@ describe("rateLimiter — chatRateLimit config", () => {
   it("constructs with 20 requests per 60 seconds", async () => {
     await import("./rateLimiter.js");
 
-    // Five limiters are constructed: chat + mobile prompt + mobile RAG +
-    // mobile feedback + auth. Assert call count first so we catch any future
-    // limiter being added or removed silently.
-    expect(mockRateLimit).toHaveBeenCalledTimes(5);
+    // Six limiters are constructed: chat + mobile prompt + mobile RAG +
+    // mobile feedback + auth + compliance document view. Assert call count
+    // first so we catch any future limiter being added or removed silently.
+    expect(mockRateLimit).toHaveBeenCalledTimes(6);
 
     const chatConfig = mockRateLimit.mock.calls[0][0] as Record<string, unknown>;
     expect(chatConfig.limit).toBe(20);
@@ -263,6 +263,45 @@ describe("rateLimiter — authRateLimit config", () => {
     await import("./rateLimiter.js");
 
     const config = mockRateLimit.mock.calls[4][0] as Record<string, unknown>;
+    expect(config.standardHeaders).toBe("draft-8");
+    expect(config.legacyHeaders).toBe(false);
+  });
+});
+
+describe("rateLimiter — complianceDocumentViewRateLimit config", () => {
+  beforeEach(() => {
+    mockRateLimit.mockClear();
+    vi.resetModules();
+  });
+
+  it("constructs with 30 requests per 60 seconds", async () => {
+    await import("./rateLimiter.js");
+
+    const config = mockRateLimit.mock.calls[5][0] as Record<string, unknown>;
+    expect(config.limit).toBe(30);
+    expect(config.windowMs).toBe(60 * 1000);
+  });
+
+  it("keys per user, so one caller cannot spend another's budget", async () => {
+    await import("./rateLimiter.js");
+
+    const config = mockRateLimit.mock.calls[5][0] as {
+      keyGenerator: (req: { user?: { sub: number }; ip?: string }) => string;
+    };
+    // Two costs ride on this key: a metered Cloudinary signed-URL call, and
+    // an id-enumeration sweep. Both are per-caller, so the bucket must be too.
+    expect(config.keyGenerator({ user: { sub: 7 }, ip: "203.0.113.7" })).toBe(
+      "compliance-view-user-7",
+    );
+    expect(config.keyGenerator({ user: { sub: 8 }, ip: "203.0.113.7" })).toBe(
+      "compliance-view-user-8",
+    );
+  });
+
+  it("returns standardised draft-8 rate limit headers", async () => {
+    await import("./rateLimiter.js");
+
+    const config = mockRateLimit.mock.calls[5][0] as Record<string, unknown>;
     expect(config.standardHeaders).toBe("draft-8");
     expect(config.legacyHeaders).toBe(false);
   });
