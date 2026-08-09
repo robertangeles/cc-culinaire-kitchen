@@ -1,5 +1,64 @@
 # CulinAIre Kitchen — TODO
 
+## Compliance Vault Phase 1 — follow-ups (2026-08-09)
+
+Found by a pre-push audit of `feature/ck-web/compliance-vault`. The critical one
+was fixed on that branch; everything below is real debt that does NOT gate the push.
+
+**Fixed already — recorded because the pattern will recur:**
+- `createDocument` trusted a client-supplied `storagePublicId` with no ownership
+  check. A staff member with baseline `compliance:read-own` could point their own
+  row at another organisation's Cloudinary asset and be issued a working signed
+  URL for someone else's police check; the retention purge would then delete the
+  victim's file. Closed by scoping the storage folder per org AND per user and
+  matching the whole id. Four boundary tests cover it, and all four were confirmed
+  to fail without the guard.
+
+**P1 — the audit PDF is built but unreachable.**
+`compliancePdfService.generateComplianceReportPdf` is written and unit-tested, and
+nothing calls it: no controller, no route, no UI. Phase 1 acceptance says "One-click
+audit PDF (E6)", so this is that promise unmet. Same built-but-unreachable class as
+the three gaps already fixed on this branch — worth treating as a recurring smell
+rather than a one-off.
+
+**P2 — expiry-scan integration test asserts a global count.**
+`compliance.integration.test.ts` asserts exact `{ scanned, notified, expired }`
+totals, and `runExpiryScan` is a deliberately cross-tenant daily scan with no org
+filter. It passes today only because the shared dev DB has no other compliance
+rows. The first real document anyone uploads with an expiry date breaks it locally,
+with no code regression. Scope the assertion to the fixture's own rows.
+
+**P2 — two routes with no caller.**
+`GET /api/compliance/documents/:id` and `GET /api/compliance/staff/:userId/documents`
+are registered and tested but nothing in the client calls them. Decide per route:
+wire a UI or delete it.
+
+**P2 — no retry on a failed document load.**
+`MyDocumentsList` pins itself to an error state with no retry, unlike
+`ComplianceDashboard` which offers one. A user holding only `compliance:read-own`
+sees a single tab, so they cannot even tab away and back to recover — a reload is
+their only option. Related: an unexplained intermittent where this error state
+appears during rapid back-to-back page loads; root cause never established, and the
+component renders correctly in isolation and under instrumented observation.
+
+**P3 — two unindexed foreign keys.**
+`compliance_document.uploaded_by` and `.verified_by` have no index, against this
+repo's own "every FK gets an index" rule. No query filters on them today. Cheap now,
+since the table has not shipped to prod.
+
+**P3 — no test for the permission backfill.**
+`backfillCompliancePermissions.computeMissingLinks` has no coverage, unlike the
+identical sibling `backfillNavPermissions`, which does. This script runs against
+production.
+
+**P3 — `ComplianceDashboard` fetches skip the `${API}` origin prefix**
+every sibling compliance component uses. Harmless while the client is same-origin;
+breaks the moment it is not.
+
+**Still blocked, unchanged:** Phase 2 rostering needs a named owner for `award_rule`
+authorship. That is an industrial-relations competence question, not an engineering
+one.
+
 ## ▶ START HERE — 2026-07-16
 
 Yesterday ended clean: **PR #76 (storage areas B1)** and **PR #77 (cleanup chore)** are both

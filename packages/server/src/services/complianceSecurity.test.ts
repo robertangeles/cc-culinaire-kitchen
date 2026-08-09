@@ -105,7 +105,7 @@ describe("upload validation — content wins, filename and declared MIME are ign
   it("storeDocument rejects an HTML-as-.png upload with 415, before touching storage", async () => {
     credsOk();
     const html = Buffer.from("<!DOCTYPE html><html><body>hi</body></html>");
-    await expect(storeDocument(html, 2)).rejects.toMatchObject({
+    await expect(storeDocument(html, 2, 5)).rejects.toMatchObject({
       status: 415,
       code: "UNSUPPORTED_MEDIA_TYPE",
     });
@@ -114,7 +114,7 @@ describe("upload validation — content wins, filename and declared MIME are ign
 
   it("rejects a zero-byte upload before even checking credentials", async () => {
     credsOk();
-    await expect(storeDocument(Buffer.alloc(0), 2)).rejects.toMatchObject({
+    await expect(storeDocument(Buffer.alloc(0), 2, 5)).rejects.toMatchObject({
       status: 400,
       code: "EMPTY_UPLOAD",
     });
@@ -127,8 +127,8 @@ describe("upload validation — content wins, filename and declared MIME are ign
 describe("storage failure mode — missing credentials never fall back to disk", () => {
   it("hard-fails 503 and writes nothing when credentials are entirely absent", async () => {
     credsMissing();
-    await expect(storeDocument(PDF_HEADER, 2)).rejects.toBeInstanceOf(DocumentStorageError);
-    await expect(storeDocument(PDF_HEADER, 2)).rejects.toMatchObject({
+    await expect(storeDocument(PDF_HEADER, 2, 5)).rejects.toBeInstanceOf(DocumentStorageError);
+    await expect(storeDocument(PDF_HEADER, 2, 5)).rejects.toMatchObject({
       status: 503,
       code: "STORAGE_UNCONFIGURED",
     });
@@ -140,7 +140,7 @@ describe("storage failure mode — missing credentials never fall back to disk",
     getCredential.mockImplementation((key: string) =>
       Promise.resolve(key === "CLOUDINARY_API_SECRET" ? undefined : "set"),
     );
-    await expect(storeDocument(PDF_HEADER, 2)).rejects.toMatchObject({
+    await expect(storeDocument(PDF_HEADER, 2, 5)).rejects.toMatchObject({
       status: 503,
       code: "STORAGE_UNCONFIGURED",
     });

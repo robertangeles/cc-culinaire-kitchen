@@ -186,7 +186,7 @@ export async function handleUploadDocument(
       return;
     }
 
-    const { publicId, mime } = await storeDocument(req.file.buffer, ctx.orgId);
+    const { publicId, mime } = await storeDocument(req.file.buffer, ctx.orgId, req.user!.sub);
     // Never throws — a miss just means the form falls back to manual entry.
     const ocr = await extractCertificateFields(req.file.buffer);
 

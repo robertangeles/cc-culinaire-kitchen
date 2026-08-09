@@ -30,6 +30,7 @@ import {
 } from "../db/schema.js";
 import * as auditService from "./auditService.js";
 import { readLastRun, dayKey } from "../utils/dailyRunClaim.js";
+import { complianceStorageFolder } from "./documentStorageService.js";
 
 export class ComplianceError extends Error {
   constructor(
@@ -197,6 +198,37 @@ export async function createDocument(orgId: number, input: CreateDocumentInput) 
 
   await assertUserInOrg(input.userId, orgId);
   if (input.storeLocationId) await assertLocationInOrg(input.storeLocationId, orgId);
+
+  // The storage id arrives from the CLIENT — it is echoed back from the
+  // /documents/upload response — so it gets the same org check every other
+  // referenced id above gets. Without this, the id is the one field a caller
+  // can point anywhere: set it to an asset in another organisation's folder
+  // and the resulting row still passes every existing tenant check, because
+  // organisationId and userId are written from the CALLER's context. The row
+  // is theirs, so signedUrlForDocument happily signs a working URL for someone
+  // else's police check. A public_id is not secret — it sits in the path of
+  // every signed URL ever issued for that document.
+  //
+  // Worse than a read: complianceRetentionService purges on this same field,
+  // so a forged row that ages into retention would destroy the victim's asset.
+  //
+  // Scoped to org AND user, so this also blocks a colleague in the same
+  // organisation claiming another colleague's document.
+  //
+  // Venue documents (subject_store_location_id) have no uploader-owned folder
+  // and cannot be created through this path today — it is self-upload only.
+  // Whoever adds that route must extend this check rather than skip it.
+  // A bare startsWith is not enough: public_ids are path-shaped, so
+  // ".../org-1/user-1/../user-2/x" starts with the right prefix and still
+  // walks out of the folder. Match the WHOLE id instead — the caller's folder
+  // followed by exactly one Cloudinary-generated segment.
+  const expectedFolder = complianceStorageFolder(orgId, input.userId);
+  const remainder = storagePublicId.startsWith(`${expectedFolder}/`)
+    ? storagePublicId.slice(expectedFolder.length + 1)
+    : null;
+  if (remainder === null || !/^[A-Za-z0-9_-]+$/.test(remainder)) {
+    throw new ComplianceError("That upload reference isn't valid", 400);
+  }
 
   try {
     const [created] = await db

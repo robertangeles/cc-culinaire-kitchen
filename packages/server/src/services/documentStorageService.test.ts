@@ -86,21 +86,31 @@ describe("sniffMime — content, never the client's declared type", () => {
 });
 
 describe("storeDocument", () => {
-  it("uploads with type:private into an org-scoped folder", async () => {
+  it("uploads with type:private into an org- and user-scoped folder", async () => {
     credsOk();
-    const res = await storeDocument(PDF, 2);
+    const res = await storeDocument(PDF, 2, 5);
     expect(res.publicId).toBe("culinaire/compliance/org-2/abc");
     expect(res.mime).toBe("application/pdf");
     const opts = uploadStream.mock.calls[0][0] as Record<string, unknown>;
     expect(opts.type).toBe("private");
-    expect(opts.folder).toBe("culinaire/compliance/org-2");
+    expect(opts.folder).toBe("culinaire/compliance/org-2/user-5");
   });
 
   it("scopes the folder per organisation", async () => {
     credsOk();
-    await storeDocument(PDF, 77);
+    await storeDocument(PDF, 77, 5);
     const opts = uploadStream.mock.calls[0][0] as Record<string, unknown>;
-    expect(opts.folder).toBe("culinaire/compliance/org-77");
+    expect(opts.folder).toBe("culinaire/compliance/org-77/user-5");
+  });
+
+  // The user segment is what lets createDocument prove a public_id belongs to
+  // the person claiming it. Org alone would still let a colleague in the same
+  // organisation claim another colleague's police check.
+  it("scopes the folder per user within the same organisation", async () => {
+    credsOk();
+    await storeDocument(PDF, 2, 9);
+    const opts = uploadStream.mock.calls[0][0] as Record<string, unknown>;
+    expect(opts.folder).toBe("culinaire/compliance/org-2/user-9");
   });
 
   // THE load-bearing test. middleware/upload.ts silently writes to a public
@@ -108,8 +118,8 @@ describe("storeDocument", () => {
   // with nothing written anywhere.
   it("HARD-FAILS 503 when credentials are missing — never falls back to disk", async () => {
     credsMissing();
-    await expect(storeDocument(PDF, 2)).rejects.toBeInstanceOf(DocumentStorageError);
-    await expect(storeDocument(PDF, 2)).rejects.toMatchObject({
+    await expect(storeDocument(PDF, 2, 5)).rejects.toBeInstanceOf(DocumentStorageError);
+    await expect(storeDocument(PDF, 2, 5)).rejects.toMatchObject({
       status: 503,
       code: "STORAGE_UNCONFIGURED",
     });
@@ -118,7 +128,7 @@ describe("storeDocument", () => {
 
   it("rejects an unsupported type with 415 before touching storage", async () => {
     credsOk();
-    await expect(storeDocument(SVG, 2)).rejects.toMatchObject({
+    await expect(storeDocument(SVG, 2, 5)).rejects.toMatchObject({
       status: 415,
       code: "UNSUPPORTED_MEDIA_TYPE",
     });
@@ -127,7 +137,7 @@ describe("storeDocument", () => {
 
   it("rejects a zero-byte upload with 400 before touching storage", async () => {
     credsOk();
-    await expect(storeDocument(Buffer.alloc(0), 2)).rejects.toMatchObject({
+    await expect(storeDocument(Buffer.alloc(0), 2, 5)).rejects.toMatchObject({
       status: 400,
       code: "EMPTY_UPLOAD",
     });
@@ -139,7 +149,7 @@ describe("storeDocument", () => {
     uploadStream.mockImplementation((_o: unknown, cb: (e: unknown, r: unknown) => void) => ({
       end: () => cb(new Error("cloudinary down"), null),
     }));
-    await expect(storeDocument(PDF, 2)).rejects.toMatchObject({
+    await expect(storeDocument(PDF, 2, 5)).rejects.toMatchObject({
       status: 502,
       code: "STORAGE_UPLOAD_FAILED",
     });

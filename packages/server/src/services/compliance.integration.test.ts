@@ -56,6 +56,19 @@ function addDays(dateStr: string, days: number): string {
   return new Date(Date.UTC(y, m - 1, d) + days * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 
+/**
+ * Build a storage id the way a real upload would.
+ *
+ * createDocument REJECTS any public_id outside the uploader's own
+ * `org-<id>/user-<id>/` folder — that guard is what stops a caller pointing
+ * their row at another tenant's (or a colleague's) Cloudinary asset. Fixtures
+ * therefore have to look like genuine upload results; an arbitrary string is
+ * exactly what the guard exists to refuse.
+ */
+function sp(orgId: number, userId: number, name: string): string {
+  return `culinaire/compliance/org-${orgId}/user-${userId}/${name}`;
+}
+
 describe.skipIf(!RUN)("compliance vault (real DB)", () => {
   // ── Group 1: document lifecycle — create, verify, reject, read-own ──────
   describe("document lifecycle", () => {
@@ -103,7 +116,7 @@ describe.skipIf(!RUN)("compliance vault (real DB)", () => {
         userId: staffA,
         uploadedBy: staffA,
         documentType: `${tag}-passport`,
-        storagePublicId: "sp-passport",
+        storagePublicId: sp(org1, staffA, "passport"),
       });
       expect(created.verificationStatus).toBe("Pending");
 
@@ -116,7 +129,7 @@ describe.skipIf(!RUN)("compliance vault (real DB)", () => {
         userId: staffA,
         uploadedBy: staffA,
         documentType: `${tag}-verify-type`,
-        storagePublicId: "sp-verify",
+        storagePublicId: sp(org1, staffA, "verify"),
       });
 
       const before = Date.now();
@@ -133,7 +146,7 @@ describe.skipIf(!RUN)("compliance vault (real DB)", () => {
         userId: staffA,
         uploadedBy: staffA,
         documentType: `${tag}-reject-type`,
-        storagePublicId: "sp-reject",
+        storagePublicId: sp(org1, staffA, "reject"),
       });
 
       await expect(rejectDocument(org1, doc.complianceDocumentId, staffB, "")).rejects.toMatchObject({
@@ -162,7 +175,7 @@ describe.skipIf(!RUN)("compliance vault (real DB)", () => {
         userId: staffA,
         uploadedBy: staffA,
         documentType: `${tag}-own-type`,
-        storagePublicId: "sp-own",
+        storagePublicId: sp(org1, staffA, "own"),
       });
 
       expect(isOwnDocument(own, staffA)).toBe(true);
@@ -177,6 +190,66 @@ describe.skipIf(!RUN)("compliance vault (real DB)", () => {
       await expect(getDocument(org2, own.complianceDocumentId)).rejects.toMatchObject({
         statusCode: 404,
       });
+    });
+
+    // The storage id is the ONE referenced id that arrives from the client —
+    // it is echoed back from the upload response — so it needs the same org
+    // check userId and storeLocationId already get.
+    //
+    // Without it, the attack is: read a public_id (they are not secret, every
+    // signed URL carries one in its path), POST a document row of your own
+    // pointing at it, and every existing tenant check passes, because the row's
+    // organisationId and userId are written from YOUR context. The row is
+    // yours, so the vault mints you a working signed URL for someone else's
+    // police check. The retention purge then deletes on the same field, so a
+    // forged row aging into retention would destroy the victim's real asset.
+    it("REFUSES a storage id from another organisation's folder", async () => {
+      await expect(
+        createDocument(org1, {
+          userId: staffA,
+          uploadedBy: staffA,
+          documentType: `${tag}-forged-cross-org`,
+          storagePublicId: sp(org2, staffA, "someone-elses-police-check"),
+        }),
+      ).rejects.toMatchObject({ statusCode: 400 });
+    });
+
+    // Org scoping alone would let this through, which is why the folder is
+    // scoped per user too: compliance:read-own must mean OWN, not "anyone's".
+    it("REFUSES a colleague's storage id from within the same organisation", async () => {
+      await expect(
+        createDocument(org1, {
+          userId: staffA,
+          uploadedBy: staffA,
+          documentType: `${tag}-forged-same-org`,
+          storagePublicId: sp(org1, staffB, "colleagues-medicare-card"),
+        }),
+      ).rejects.toMatchObject({ statusCode: 400 });
+    });
+
+    it("REFUSES an arbitrary string that is not an upload reference at all", async () => {
+      await expect(
+        createDocument(org1, {
+          userId: staffA,
+          uploadedBy: staffA,
+          documentType: `${tag}-forged-junk`,
+          storagePublicId: "sp-passport",
+        }),
+      ).rejects.toMatchObject({ statusCode: 400 });
+    });
+
+    // A prefix check is only safe if it cannot be walked out of. Cloudinary
+    // public_ids are path-shaped, so "org-1/user-1/../user-2/x" must not pass
+    // by starting with the right characters.
+    it("REFUSES a traversal that merely STARTS with the caller's folder", async () => {
+      await expect(
+        createDocument(org1, {
+          userId: staffA,
+          uploadedBy: staffA,
+          documentType: `${tag}-forged-traversal`,
+          storagePublicId: `${sp(org1, staffA, "")}../user-${staffB}/colleagues-doc`,
+        }),
+      ).rejects.toMatchObject({ statusCode: 400 });
     });
   });
 
@@ -217,7 +290,7 @@ describe.skipIf(!RUN)("compliance vault (real DB)", () => {
         userId: staffE,
         uploadedBy: staffE,
         documentType: typeCert,
-        storagePublicId: "sp-cert-old",
+        storagePublicId: sp(org3, staffE, "cert-old"),
         expiryDate: "2020-01-01",
       });
       await verifyDocument(org3, stale.complianceDocumentId, staffF);
@@ -226,7 +299,7 @@ describe.skipIf(!RUN)("compliance vault (real DB)", () => {
         userId: staffE,
         uploadedBy: staffE,
         documentType: typeCert,
-        storagePublicId: "sp-cert-new",
+        storagePublicId: sp(org3, staffE, "cert-new"),
         expiryDate: "2099-01-01",
       });
       await verifyDocument(org3, fresh.complianceDocumentId, staffF);

@@ -147,6 +147,25 @@ export async function isStorageConfigured(): Promise<boolean> {
 }
 
 /**
+ * Folder every compliance upload for one person lands in.
+ *
+ * Scoped by BOTH organisation and user, and exported so the create path can
+ * check a public_id against it rather than re-deriving the string. That check
+ * is the only thing standing between a caller and someone else's document:
+ * `POST /api/compliance/documents` takes the public_id from the client (it is
+ * echoed back from the upload response), so an unchecked value lets a caller
+ * point their own row at any asset whose id they have seen — and a public_id
+ * is not a secret, it sits in the path of every signed URL ever issued.
+ *
+ * Org alone would not be enough. It would stop the cross-tenant case and still
+ * let a colleague in the same organisation claim another colleague's police
+ * check, which `compliance:read-own` exists precisely to prevent.
+ */
+export function complianceStorageFolder(organisationId: number, userId: number): string {
+  return `culinaire/compliance/org-${organisationId}/user-${userId}`;
+}
+
+/**
  * Store a compliance document and return its Cloudinary `public_id`.
  *
  * Persist the returned id, never a URL — URLs are minted per view and expire.
@@ -154,6 +173,7 @@ export async function isStorageConfigured(): Promise<boolean> {
 export async function storeDocument(
   buffer: Buffer,
   organisationId: number,
+  userId: number,
 ): Promise<{ publicId: string; mime: AllowedMime }> {
   if (buffer.length === 0) {
     throw new DocumentStorageError("That file looks empty.", 400, "EMPTY_UPLOAD");
@@ -170,8 +190,9 @@ export async function storeDocument(
 
   await requireCloudinary();
 
-  // Org-scoped folder so one tenant's documents are never adjacent to another's.
-  const folder = `culinaire/compliance/org-${organisationId}`;
+  // Org- AND user-scoped, so one tenant's documents are never adjacent to
+  // another's and the create path can prove a public_id belongs to its uploader.
+  const folder = complianceStorageFolder(organisationId, userId);
 
   return new Promise((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream(
