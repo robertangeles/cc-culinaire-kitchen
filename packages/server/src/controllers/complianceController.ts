@@ -25,6 +25,7 @@ import {
   upsertExpiryRule,
   listRequiredDocuments,
   setRequiredDocuments,
+  getComplianceReportData,
   isOwnDocument,
   ComplianceError,
 } from "../services/complianceService.js";
@@ -35,6 +36,8 @@ import {
   type AllowedMime,
 } from "../services/documentStorageService.js";
 import { extractCertificateFields } from "../services/documentOcrService.js";
+import { generateComplianceReportPdf } from "../services/compliancePdfService.js";
+import { dayKey } from "../utils/dailyRunClaim.js";
 
 const logger = pino({ name: "complianceController" });
 
@@ -93,6 +96,12 @@ const ExpiryRuleSchema = z.object({
 
 const RequiredDocumentsSchema = z.object({
   documentTypes: z.array(z.string().min(1).max(40)).max(50),
+});
+
+const ReportQuerySchema = z.object({
+  // Omitted = org-wide export. Present-but-cross-org is checked downstream
+  // by getComplianceReportData, which 404s rather than 403s (see there).
+  storeLocationId: z.string().uuid().optional(),
 });
 
 function handleServiceError(err: unknown, res: Response, next: NextFunction): void {
@@ -482,6 +491,46 @@ export async function handleSetRequiredDocuments(
     );
     res.json(types);
   } catch (err) {
+    handleServiceError(err, res, next);
+  }
+}
+
+// ─── Report export ────────────────────────────────────────────────
+
+/**
+ * GET /api/compliance/report.pdf — the audit-ready export an inspector asks
+ * for on-site. Mirrors purchaseOrderController.handleDownloadPOPdf's
+ * response pattern (headers, filename, buffer).
+ */
+export async function handleDownloadComplianceReportPdf(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const ctx = await resolveContext(req, res);
+    if (!ctx) return;
+
+    const parsed = ReportQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      res.status(400).json({ error: "storeLocationId must be a valid id" });
+      return;
+    }
+
+    const data = await getComplianceReportData(ctx.orgId, parsed.data.storeLocationId);
+    const buffer = await generateComplianceReportPdf(data);
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="compliance-report-${dayKey(new Date())}.pdf"`,
+    );
+    res.send(buffer);
+  } catch (err) {
+    if (err instanceof Error && err.message.includes("timed out")) {
+      res.status(500).json({ error: "PDF generation timed out — please try again" });
+      return;
+    }
     handleServiceError(err, res, next);
   }
 }

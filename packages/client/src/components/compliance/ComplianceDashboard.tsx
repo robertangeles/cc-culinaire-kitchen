@@ -21,6 +21,7 @@ import { RotateCcw, Users } from "lucide-react";
 import { AnchorCard, type AnchorCardItem } from "../ui/AnchorCard.js";
 import { StatRow } from "../ui/StatRow.js";
 import { EmptyState } from "../ui/EmptyState.js";
+import { CompliancePdfDownloadButton } from "./CompliancePdfDownloadButton.js";
 import {
   StaffComplianceTable,
   getWorstStatus,
@@ -173,12 +174,15 @@ export function ComplianceDashboard() {
 
   return (
     <div className="space-y-8">
-      <div>
-        {/* h2, not h1 — CompliancePage's "Compliance" title is the page's h1. */}
-        <h2 className="text-2xl font-semibold text-[#FAFAFA] sm:text-3xl">
-          {compliantCount} of {state.staff.length} staff are compliant
-        </h2>
-        <div className="mt-3 h-px w-16 bg-gold" />
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          {/* h2, not h1 — CompliancePage's "Compliance" title is the page's h1. */}
+          <h2 className="text-2xl font-semibold text-[#FAFAFA] sm:text-3xl">
+            {compliantCount} of {state.staff.length} staff are compliant
+          </h2>
+          <div className="mt-3 h-px w-16 bg-gold" />
+        </div>
+        <CompliancePdfDownloadButton />
       </div>
 
       <AnchorCard items={anchorItems} allClearSubtext={nextExpirySubtext(state.staff)} />

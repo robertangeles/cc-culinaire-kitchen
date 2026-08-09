@@ -161,3 +161,27 @@ export const complianceDocumentViewRateLimit = rateLimit({
   },
   message: { error: "Too many document requests — please wait a moment before trying again." },
 });
+
+/**
+ * Rate limiter for the compliance report PDF export
+ * (`GET /api/compliance/report.pdf`).
+ *
+ * 10 requests per 5 minutes, keyed by authenticated user ID. Unlike the
+ * view-url limiter above (a cheap signed-URL mint), this renders a full PDF
+ * in memory via @react-pdf/renderer for every staff member and document type
+ * an org tracks — a real CPU + memory cost per call — so an unlimited
+ * endpoint is a trivial DoS. 10/5min covers an admin working through several
+ * venue-scoped exports in one audit-prep session with room to spare, while
+ * bounding a scripted hammering loop.
+ */
+export const complianceReportRateLimit = rateLimit({
+  windowMs: 5 * 60 * 1000,
+  limit: 10,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  keyGenerator: (req: Request) => {
+    if (req.user?.sub) return `compliance-report-user-${req.user.sub}`;
+    return req.ip ?? "unknown";
+  },
+  message: { error: "Too many report requests — please wait a few minutes before trying again." },
+});

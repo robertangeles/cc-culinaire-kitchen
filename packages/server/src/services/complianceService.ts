@@ -24,6 +24,7 @@ import {
   documentExpiryRule,
   documentExpiryRuleAlertDay,
   organisationRequiredDocument,
+  organisation,
   user,
   userOrganisation,
   storeLocation,
@@ -31,6 +32,11 @@ import {
 import * as auditService from "./auditService.js";
 import { readLastRun, dayKey } from "../utils/dailyRunClaim.js";
 import { complianceStorageFolder } from "./documentStorageService.js";
+import type {
+  ComplianceReportPdfData,
+  ComplianceReportStaffRow,
+  EngagementType,
+} from "./compliancePdfService.js";
 
 export class ComplianceError extends Error {
   constructor(
@@ -430,8 +436,21 @@ export interface StaffComplianceRow {
  * a fresh replacement). The LATERAL picks the BEST: verified and current beats
  * expiring, beats pending, beats expired/rejected, with the furthest expiry
  * winning ties.
+ *
+ * `storeLocationId` (optional) narrows the staff set to people assigned to
+ * that venue (`user_store_location`) — the compliance report's venue-scoped
+ * export. Status is still resolved from ALL of that person's documents
+ * org-wide: which venue they work at doesn't change whether their RSA is
+ * valid.
  */
-export async function listStaffCompliance(orgId: number): Promise<StaffComplianceRow[]> {
+export async function listStaffCompliance(
+  orgId: number,
+  storeLocationId?: string,
+): Promise<StaffComplianceRow[]> {
+  const locationFilter = storeLocationId
+    ? sql`JOIN user_store_location usl ON usl.user_id = u.user_id AND usl.store_location_id = ${storeLocationId}`
+    : sql``;
+
   const rows = (await db.execute(sql`
     SELECT
       u.user_id                                   AS user_id,
@@ -449,7 +468,21 @@ export async function listStaffCompliance(orgId: number): Promise<StaffComplianc
     FROM "user" u
     JOIN user_organisation uo
       ON uo.user_id = u.user_id AND uo.organisation_id = ${orgId}
-    JOIN organisation_required_document ord
+    ${locationFilter}
+    -- LEFT JOIN, not JOIN. An org that has configured no required document
+    -- types still has staff, and an inner join collapses the whole matrix to
+    -- zero rows — so the dashboard renders "No one on the team yet" for an org
+    -- that plainly has people, and every control gated behind a non-empty
+    -- staff list (the audit PDF export among them) disappears with it.
+    --
+    -- Zero required types is the DEFAULT state of a new org, not an edge case:
+    -- it is what every org looks like until an admin opens Settings →
+    -- Requirements for the first time.
+    --
+    -- The row handler below tolerates a null document_type for exactly this
+    -- reason: the staff member comes back with an empty documents array, which
+    -- the client can tell apart from having no staff at all.
+    LEFT JOIN organisation_required_document ord
       ON ord.organisation_id = ${orgId}
     LEFT JOIN LATERAL (
       SELECT cd2.verification_status, cd2.expiry_date
@@ -815,4 +848,125 @@ export async function setRequiredDocuments(
   });
 
   return listRequiredDocuments(orgId);
+}
+
+// ── Report PDF assembly ──────────────────────────────────────────────
+
+/**
+ * Most recent `engagement_type` per staff member. Not carried by
+ * `listStaffCompliance` — engagement_type lives on `compliance_document`
+ * (a snapshot per upload), not on the person — so the report needs this one
+ * extra, narrowly-scoped query rather than re-deriving the whole matrix.
+ * Falls back to "employee" (the schema default) for staff with nothing on
+ * file yet.
+ */
+async function getEngagementTypesByUser(
+  orgId: number,
+  userIds: number[],
+): Promise<Map<number, EngagementType>> {
+  if (userIds.length === 0) return new Map();
+
+  const rows = await db
+    .select({
+      userId: complianceDocument.userId,
+      engagementType: complianceDocument.engagementType,
+    })
+    .from(complianceDocument)
+    .where(
+      and(eq(complianceDocument.organisationId, orgId), inArray(complianceDocument.userId, userIds)),
+    )
+    .orderBy(desc(complianceDocument.uploadedAt));
+
+  const byUser = new Map<number, EngagementType>();
+  for (const row of rows) {
+    // First hit per user wins — rows are newest-uploaded first.
+    if (row.userId !== null && !byUser.has(row.userId)) {
+      byUser.set(row.userId, row.engagementType as EngagementType);
+    }
+  }
+  return byUser;
+}
+
+/**
+ * Maps a dashboard status variant to the report's plain-text label — the
+ * exact wording StaffComplianceTable.tsx shows, so the PDF an inspector is
+ * handed never disagrees with the live screen it was exported from. "na" is
+ * deliberately absent: compliancePdfService's own contract renders a missing
+ * key as "Missing", so that string lives in one place, not two.
+ */
+const REPORT_STATUS_LABELS: Record<Exclude<StaffDocumentStatus["status"], "na">, string> = {
+  compliant: "Compliant",
+  expiring: "Expiring",
+  expired: "Expired",
+  pending: "Pending",
+  rejected: "Rejected",
+};
+
+function toDocumentStatusRecord(docs: StaffDocumentStatus[]): Record<string, string> {
+  const record: Record<string, string> = {};
+  for (const doc of docs) {
+    if (doc.status === "na") continue;
+    record[doc.documentType] = REPORT_STATUS_LABELS[doc.status];
+  }
+  return record;
+}
+
+/**
+ * Assemble the data `compliancePdfService.generateComplianceReportPdf`
+ * renders — the audit-ready export an inspector asks for on-site. Reuses
+ * `listStaffCompliance` for the per-staff/per-document matrix and
+ * `listRequiredDocuments` for the column order rather than re-querying
+ * either.
+ *
+ * `storeLocationId` is org-scoped before use: a cross-org id throws
+ * ComplianceError(404), never a 403, so a guessed id from another tenant
+ * never confirms a venue exists. Omitted means an org-wide export
+ * (`venueName: null`).
+ */
+export async function getComplianceReportData(
+  orgId: number,
+  storeLocationId?: string,
+): Promise<ComplianceReportPdfData> {
+  const [org] = await db
+    .select({ organisationName: organisation.organisationName })
+    .from(organisation)
+    .where(eq(organisation.organisationId, orgId));
+
+  let venueName: string | null = null;
+  if (storeLocationId) {
+    const [loc] = await db
+      .select({ locationName: storeLocation.locationName })
+      .from(storeLocation)
+      .where(
+        and(
+          eq(storeLocation.storeLocationId, storeLocationId),
+          eq(storeLocation.organisationId, orgId),
+        ),
+      );
+    if (!loc) throw new ComplianceError("Location not found", 404);
+    venueName = loc.locationName;
+  }
+
+  const [documentTypes, staffRows] = await Promise.all([
+    listRequiredDocuments(orgId),
+    listStaffCompliance(orgId, storeLocationId),
+  ]);
+  const engagementByUser = await getEngagementTypesByUser(
+    orgId,
+    staffRows.map((row) => row.userId),
+  );
+
+  const staff: ComplianceReportStaffRow[] = staffRows.map((row) => ({
+    staffName: row.name,
+    role: row.role,
+    engagementType: engagementByUser.get(row.userId) ?? "employee",
+    documents: toDocumentStatusRecord(row.documents),
+  }));
+
+  return {
+    organisationName: org?.organisationName ?? "Unknown Organisation",
+    venueName,
+    documentTypes,
+    staff,
+  };
 }

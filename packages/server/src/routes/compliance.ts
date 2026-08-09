@@ -15,7 +15,7 @@
 import { Router } from "express";
 import multer from "multer";
 import { authenticate, requirePermission } from "../middleware/auth.js";
-import { complianceDocumentViewRateLimit } from "../middleware/rateLimiter.js";
+import { complianceDocumentViewRateLimit, complianceReportRateLimit } from "../middleware/rateLimiter.js";
 import {
   handleListMyDocuments,
   handleCreateDocument,
@@ -33,6 +33,7 @@ import {
   handleUpsertRule,
   handleListRequiredDocuments,
   handleSetRequiredDocuments,
+  handleDownloadComplianceReportPdf,
 } from "../controllers/complianceController.js";
 
 const router = Router();
@@ -86,6 +87,12 @@ router.get(
 router.get("/dashboard", requirePermission("compliance:read-all"), handleGetDashboard);
 router.get("/staff", requirePermission("compliance:read-all"), handleListStaffCompliance);
 router.get("/stats", requirePermission("compliance:read-all"), handleGetStats);
+router.get(
+  "/report.pdf",
+  requirePermission("compliance:read-all"),
+  complianceReportRateLimit,
+  handleDownloadComplianceReportPdf,
+);
 
 // ─── Verification queue ─────────────────────────────────────────
 

@@ -35,10 +35,11 @@ describe("rateLimiter — chatRateLimit config", () => {
   it("constructs with 20 requests per 60 seconds", async () => {
     await import("./rateLimiter.js");
 
-    // Six limiters are constructed: chat + mobile prompt + mobile RAG +
-    // mobile feedback + auth + compliance document view. Assert call count
-    // first so we catch any future limiter being added or removed silently.
-    expect(mockRateLimit).toHaveBeenCalledTimes(6);
+    // Seven limiters are constructed: chat + mobile prompt + mobile RAG +
+    // mobile feedback + auth + compliance document view + compliance report.
+    // Assert call count first so we catch any future limiter being added or
+    // removed silently.
+    expect(mockRateLimit).toHaveBeenCalledTimes(7);
 
     const chatConfig = mockRateLimit.mock.calls[0][0] as Record<string, unknown>;
     expect(chatConfig.limit).toBe(20);
@@ -302,6 +303,46 @@ describe("rateLimiter — complianceDocumentViewRateLimit config", () => {
     await import("./rateLimiter.js");
 
     const config = mockRateLimit.mock.calls[5][0] as Record<string, unknown>;
+    expect(config.standardHeaders).toBe("draft-8");
+    expect(config.legacyHeaders).toBe(false);
+  });
+});
+
+describe("rateLimiter — complianceReportRateLimit config", () => {
+  beforeEach(() => {
+    mockRateLimit.mockClear();
+    vi.resetModules();
+  });
+
+  it("constructs with 10 requests per 5 minutes", async () => {
+    await import("./rateLimiter.js");
+
+    const config = mockRateLimit.mock.calls[6][0] as Record<string, unknown>;
+    expect(config.limit).toBe(10);
+    expect(config.windowMs).toBe(5 * 60 * 1000);
+  });
+
+  it("keys per user, so one caller cannot spend another's budget", async () => {
+    await import("./rateLimiter.js");
+
+    const config = mockRateLimit.mock.calls[6][0] as {
+      keyGenerator: (req: { user?: { sub: number }; ip?: string }) => string;
+    };
+    // The cost here is a full in-memory PDF render, not a cheap signed-URL
+    // mint — the per-user key still matters for the same reason: a shared IP
+    // must not let one caller exhaust the budget for everyone behind it.
+    expect(config.keyGenerator({ user: { sub: 7 }, ip: "203.0.113.7" })).toBe(
+      "compliance-report-user-7",
+    );
+    expect(config.keyGenerator({ user: { sub: 8 }, ip: "203.0.113.7" })).toBe(
+      "compliance-report-user-8",
+    );
+  });
+
+  it("returns standardised draft-8 rate limit headers", async () => {
+    await import("./rateLimiter.js");
+
+    const config = mockRateLimit.mock.calls[6][0] as Record<string, unknown>;
     expect(config.standardHeaders).toBe("draft-8");
     expect(config.legacyHeaders).toBe(false);
   });

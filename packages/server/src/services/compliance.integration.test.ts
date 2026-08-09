@@ -339,6 +339,49 @@ describe.skipIf(!RUN)("compliance vault (real DB)", () => {
       expect(fPolice.status).toBe("na");
     });
 
+    // The state EVERY organisation is in until an admin first opens
+    // Settings -> Requirements. An inner join here collapses the whole matrix
+    // to zero rows, so the dashboard says "No one on the team yet" about an org
+    // that plainly has staff, and every control gated behind a non-empty staff
+    // list — the audit PDF export among them — vanishes with it.
+    //
+    // This is the test that should have existed the first time this was
+    // "fixed": the earlier attempt corrected getComplianceDashboard's join and
+    // left this one alone, and passed its verification only because seed data
+    // happened to be present, which gave the inner join rows to match.
+    it("returns staff even when the org has configured NO required document types", async () => {
+      const [{ userId: staffG }] = await db
+        .insert(user)
+        .values({ userName: "Compliance G", userEmail: `${tag}-g@it.test` })
+        .returning({ userId: user.userId });
+      const [{ id: org4 }] = await db
+        .insert(organisation)
+        .values({
+          organisationName: `${tag}-no-reqs`,
+          joinKey: `${tag}-jk4`,
+          createdBy: staffG,
+        })
+        .returning({ id: organisation.organisationId });
+      await db
+        .insert(userOrganisation)
+        .values({ userId: staffG, organisationId: org4, role: "member" });
+
+      try {
+        // Deliberately no setRequiredDocuments call — that is the whole point.
+        const rows = await listStaffCompliance(org4);
+
+        expect(rows).toHaveLength(1);
+        expect(rows[0].userId).toBe(staffG);
+        // Present, with nothing to show — which the client renders differently
+        // from having no staff at all.
+        expect(rows[0].documents).toEqual([]);
+      } finally {
+        await db.delete(userOrganisation).where(eq(userOrganisation.organisationId, org4));
+        await db.delete(organisation).where(eq(organisation.organisationId, org4));
+        await db.delete(user).where(eq(user.userId, staffG));
+      }
+    });
+
     it("dashboard counts reconcile with what the staff compliance table shows", async () => {
       const rows = await listStaffCompliance(org3);
       const mine = rows.filter((r) => r.userId === staffE || r.userId === staffF);
