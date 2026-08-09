@@ -1,5 +1,27 @@
 # CulinAIre Kitchen — TODO
 
+## Two live bugs on `main`, found by the reachability check (2026-08-09)
+
+Neither came from the compliance branch. Both are allowlisted in
+`scripts/check-reachability.mjs` purely so that check could go into CI without
+going red on day one — the allowlist entries should be deleted along with the bugs.
+
+**P1 — recipe-based selling is 404ing in production.**
+`packages/client/src/hooks/useSales.ts` declares `const API = "/api/menu-intelligence"`,
+but `index.ts` mounts `menuIntelligenceRouter` at `/api/menu`. Nothing anywhere
+mounts `/api/menu-intelligence`, and there is no proxy rewrite. All seven client
+paths match routes the server genuinely defines — only the base is wrong — so
+every call fails: record a sale, void a sale, import sales preview and commit,
+list consumables, per-item and per-location sales reads. `RecordSaleModal.tsx`
+is a production component that depends on it.
+Introduced by 43336f7 "Add kitchen-unit UOM model and recipe-based selling".
+Fix is one line. Wants its own branch and a manual check that recording a sale
+actually works afterwards.
+
+**P3 — `components/inventory/DeliveryReceiving.tsx` is 295 lines of dead code.**
+On main, imported by nothing. Either wire it or delete it; per CLAUDE.md it was
+flagged rather than removed, since it is unrelated to the branch that found it.
+
 ## Compliance Vault Phase 1 — follow-ups (2026-08-09)
 
 Found by a pre-push audit of `feature/ck-web/compliance-vault`. The critical one

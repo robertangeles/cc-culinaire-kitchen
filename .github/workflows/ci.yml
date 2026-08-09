@@ -48,6 +48,13 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      # Catches the class of defect the whole test suite is blind to: code that
+      # compiles, type-checks and passes its unit tests, and that no user can
+      # reach. Five of those shipped on the compliance-vault branch before this
+      # existed, each found by a person opening the running app.
+      - name: Reachability
+        run: pnpm check:reachability
+
       - name: Typecheck
         run: pnpm tsc:check
 
