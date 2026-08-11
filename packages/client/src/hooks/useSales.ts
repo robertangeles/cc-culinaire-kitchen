@@ -6,7 +6,11 @@
  * import (preview → commit). Plain-fetch, matching the app's hook style.
  */
 
-const API = "/api/menu-intelligence";
+// "/api/menu", not "/api/menu-intelligence". index.ts mounts
+// menuIntelligenceRouter at /api/menu, and nothing has ever been mounted at
+// /api/menu-intelligence — so every call in this file 404'd. The path suffixes
+// below were all correct; only this base was wrong.
+const API = "/api/menu";
 const opts = { credentials: "include" as const };
 const jsonOpts = { ...opts, headers: { "Content-Type": "application/json" } };
 
