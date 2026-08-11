@@ -60,21 +60,11 @@ const ALLOWED_ORPHANS = {
     { pattern: /components\/inventory\/DeliveryReceiving\.tsx$/, reason: "dead code, pending deletion" },
   ],
   /**
-   * Client paths knowingly pointing at nothing. This list should stay empty.
-   *
-   * The single entry is a LIVE BUG on main, not a design decision: useSales.ts
-   * declares `const API = "/api/menu-intelligence"` while index.ts mounts that
-   * router at `/api/menu`, so every recipe-based-selling call — record a sale,
-   * void a sale, import sales, list consumables — 404s. All seven suffixes
-   * match routes the server really defines; only the base is wrong.
-   *
-   * Allowlisted ONLY so this checker can go into CI without going in red on
-   * day one. The fix is one line, and it belongs on its own branch because it
-   * has nothing to do with the compliance vault. See tasks/todo.md.
+   * Client paths knowingly pointing at nothing. Empty, and it should stay that
+   * way — an entry here is a route the UI calls and the server does not serve,
+   * which is a 404 waiting for a user to find it.
    */
-  clientCalls: [
-    { pattern: /^\/api\/menu-intelligence\//, reason: "LIVE BUG: base should be /api/menu" },
-  ],
+  clientCalls: [],
 };
 
 // ── walking ───────────────────────────────────────────────────────────
