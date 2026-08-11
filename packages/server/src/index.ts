@@ -55,8 +55,9 @@ import { sendOrgDigests } from "./services/brainDigestService.js";
 import { snapshotCorpus } from "./services/brainAnalyticsService.js";
 import { compactAll } from "./services/brainCompactionService.js";
 import { runNudges } from "./services/brainNudgeService.js";
-import { withAdvisoryLock } from "./utils/advisoryLock.js";
-import { ADVISORY_LOCK_KEYS } from "./db/advisoryLockKeys.js";
+import { runIfClaimed, dayKey, dayHourKey } from "./utils/dailyRunClaim.js";
+import { runExpiryScan } from "./services/complianceExpiryJob.js";
+import { purgeExpiredRetention, pruneAccessLog } from "./services/complianceRetentionService.js";
 import { brainRouter } from "./routes/brain.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -170,6 +171,7 @@ app.use("/api/store-locations", storeLocationsRouter);
 app.use("/api/inventory", inventoryRouter);
 app.use("/api/internal", internalRouter);
 app.use("/api/notifications", notificationsRouter);
+app.use("/api/compliance", complianceRouter);
 app.use("/api/brain", brainRouter);
 
 // Location context routes are now inside usersRouter (before /:id params)
@@ -210,6 +212,7 @@ import storeLocationsRouter from "./routes/storeLocations.js";
 import inventoryRouter from "./routes/inventory.js";
 import internalRouter from "./routes/internal.js";
 import notificationsRouter from "./routes/notifications.js";
+import complianceRouter from "./routes/compliance.js";
 
 app.get("/kitchen-shelf/:slug", async (req, res, next) => {
   // Only handle HTML requests (not API calls or assets)
@@ -533,91 +536,96 @@ hydrateEnvFromCredentials().then(() => {
       }
       const captureHealthInterval = everyMs(runCaptureHealthCheck, 5 * 60 * 1000);
 
-      // Weekly digests — Sunday 8 PM (checked every minute). Two guards (spec T15):
-      // the in-memory `last*DigestRun` key dedups within the hour on THIS instance,
-      // and `withAdvisoryLock` ensures only ONE instance actually sends across a
-      // horizontally-scaled deploy. Both are required — the lock alone would let the
-      // same instance's next tick re-fire once it releases.
-      let lastWasteDigestRun = "";
-      const wasteDigestInterval = everyMs(() => void (async () => {
-        const now = new Date();
-        const key = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}-${now.getHours()}`;
-        if (now.getDay() === 0 && now.getHours() === 20 && lastWasteDigestRun !== key) {
-          lastWasteDigestRun = key;
-          try {
-            await withAdvisoryLock(ADVISORY_LOCK_KEYS.wasteDigest, sendWeeklyWasteDigests);
-          } catch (err) {
-            log.error({ err }, "Weekly waste digest failed");
-          }
-        }
-      })(), 60_000);
+      // Scheduled jobs below use `runIfClaimed` (utils/dailyRunClaim). It replaces
+      // the old dual guard — an in-memory `last*Run` string plus withAdvisoryLock —
+      // with ONE atomic conditional UPDATE on a `site_setting` row per job.
+      //
+      // Why the old shape was wrong on Render:
+      //   - the in-memory key is a JS variable, so a deploy inside the run window
+      //     resets it and the job re-fires (index.ts used to say so itself)
+      //   - withAdvisoryLock never passes its `tx` to `fn`, so `fn`'s writes were
+      //     never in that transaction anyway; the lock only held a pool connection
+      //     open for the whole run
+      //   - nothing recorded that a job had run, so a job dying silently was
+      //     invisible until a customer noticed a missing digest
+      //
+      // The claim is the mutex, the restart-safe guard AND the heartbeat.
+      const wasteDigestInterval = everyMs(() => void runIfClaimed({
+        job: "waste_digest",
+        due: (now) => now.getDay() === 0 && now.getHours() === 20,
+        period: dayHourKey,
+        run: sendWeeklyWasteDigests,
+        log,
+      }), 60_000);
 
-      // Weekly Brain org digest — Sunday 8 PM (spec T15), same dual-guard pattern.
-      let lastBrainDigestRun = "";
-      const brainDigestInterval = everyMs(() => void (async () => {
-        const now = new Date();
-        const key = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}-${now.getHours()}`;
-        if (now.getDay() === 0 && now.getHours() === 20 && lastBrainDigestRun !== key) {
-          lastBrainDigestRun = key;
-          try {
-            await withAdvisoryLock(ADVISORY_LOCK_KEYS.brainDigest, sendOrgDigests);
-          } catch (err) {
-            log.error({ err }, "Weekly Brain digest failed");
-          }
-        }
-      })(), 60_000);
+      const brainDigestInterval = everyMs(() => void runIfClaimed({
+        job: "brain_digest",
+        due: (now) => now.getDay() === 0 && now.getHours() === 20,
+        period: dayHourKey,
+        run: sendOrgDigests,
+        log,
+      }), 60_000);
 
-      // Nightly Brain corpus snapshot — 03:00 daily (Phase 3 analytics prep). Same
-      // dual-guard pattern; the day-keyed in-memory guard fires it once per day.
-      let lastCorpusSnapshotRun = "";
-      const corpusSnapshotInterval = everyMs(() => void (async () => {
-        const now = new Date();
-        const key = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}`;
-        if (now.getHours() === 3 && lastCorpusSnapshotRun !== key) {
-          lastCorpusSnapshotRun = key;
-          try {
-            await withAdvisoryLock(ADVISORY_LOCK_KEYS.brainCorpusSnapshot, snapshotCorpus);
-          } catch (err) {
-            log.error({ err }, "Brain corpus snapshot failed");
-          }
-        }
-      })(), 60_000);
+      const corpusSnapshotInterval = everyMs(() => void runIfClaimed({
+        job: "brain_corpus_snapshot",
+        due: (now) => now.getHours() === 3,
+        period: dayKey,
+        run: snapshotCorpus,
+        log,
+      }), 60_000);
 
       // Nightly Brain compaction — 03:30 daily (Phase 3 T16), after the snapshot.
-      // No-op unless brain_compaction_enabled + a positive cap; same dual-guard.
-      let lastCompactionRun = "";
-      const compactionInterval = everyMs(() => void (async () => {
-        const now = new Date();
-        const key = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}`;
-        if (now.getHours() === 3 && now.getMinutes() >= 30 && lastCompactionRun !== key) {
-          lastCompactionRun = key;
-          try {
-            await withAdvisoryLock(ADVISORY_LOCK_KEYS.brainCompaction, async () => {
-              await compactAll();
-            });
-          } catch (err) {
-            log.error({ err }, "Brain compaction failed");
-          }
-        }
-      })(), 60_000);
+      // No-op unless brain_compaction_enabled + a positive cap.
+      const compactionInterval = everyMs(() => void runIfClaimed({
+        job: "brain_compaction",
+        due: (now) => now.getHours() === 3 && now.getMinutes() >= 30,
+        period: dayKey,
+        run: async () => { await compactAll(); },
+        log,
+      }), 60_000);
 
       // Daily Brain nudges — 09:00 (Phase 3 T17), a reasonable operator hour.
       // No-op unless brain_nudges_enabled; per-user opt-in + rate-limit inside.
-      let lastNudgeRun = "";
-      const nudgeInterval = everyMs(() => void (async () => {
-        const now = new Date();
-        const key = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}`;
-        if (now.getHours() === 9 && lastNudgeRun !== key) {
-          lastNudgeRun = key;
-          try {
-            await withAdvisoryLock(ADVISORY_LOCK_KEYS.brainNudge, async () => {
-              await runNudges();
-            });
-          } catch (err) {
-            log.error({ err }, "Brain nudges failed");
-          }
-        }
-      })(), 60_000);
+      const nudgeInterval = everyMs(() => void runIfClaimed({
+        job: "brain_nudge",
+        due: (now) => now.getHours() === 9,
+        period: dayKey,
+        run: async () => { await runNudges(); },
+        log,
+      }), 60_000);
+
+      // Daily compliance expiry scan — 06:00, so warnings land before service.
+      // Minute-tick + hour gate rather than a 24h interval: Render restarts the
+      // process on every deploy, which would reset a long timer and mean the
+      // scan effectively never runs. The claim inside runIfClaimed is the mutex,
+      // the restart-safe day guard AND the heartbeat GET /api/compliance/stats
+      // reads to prove the job is alive.
+      const complianceExpiryInterval = everyMs(() => void runIfClaimed({
+        job: "compliance_expiry_scan",
+        due: (now) => now.getHours() === 6,
+        period: dayKey,
+        run: async () => {
+          const r = await runExpiryScan();
+          log.info({ ...r }, "Compliance expiry scan complete");
+        },
+        log,
+      }), 60_000);
+
+      // Retention — 04:00 daily, before the venue opens. Purges documents whose
+      // window has elapsed (destroying the Cloudinary object as well as the row,
+      // or the blob is stranded where no policy reaches it) and prunes the
+      // access log, which records PII access on every view and grows unbounded.
+      const complianceRetentionInterval = everyMs(() => void runIfClaimed({
+        job: "compliance_retention",
+        due: (now) => now.getHours() === 4,
+        period: dayKey,
+        run: async () => {
+          const purge = await purgeExpiredRetention();
+          const pruned = await pruneAccessLog();
+          log.info({ ...purge, accessLogPruned: pruned }, "Compliance retention complete");
+        },
+        log,
+      }), 60_000);
 
       // Graceful shutdown: close server and release port on termination signals
       function shutdown(signal: string) {
@@ -629,6 +637,8 @@ hydrateEnvFromCredentials().then(() => {
         clearInterval(corpusSnapshotInterval);
         clearInterval(compactionInterval);
         clearInterval(nudgeInterval);
+        clearInterval(complianceExpiryInterval);
+        clearInterval(complianceRetentionInterval);
         clearInterval(feedbackEmailInterval);
         clearInterval(brainWorkerInterval);
         clearInterval(captureHealthInterval);

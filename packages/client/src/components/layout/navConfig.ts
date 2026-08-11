@@ -22,6 +22,7 @@ import {
   ShoppingCart,
   BarChart3,
   ClipboardList,
+  ShieldCheck,
   Leaf,
   LayoutGrid,
   MessagesSquare,
@@ -126,6 +127,17 @@ export const NAV_SECTIONS: NavSection[] = [
         icon: Leaf,
         to: "/waste-intelligence",
         gate: { anyPermission: ["waste:read"] },
+      },
+      {
+        id: "compliance",
+        label: "Compliance",
+        icon: ShieldCheck,
+        to: "/compliance",
+        // read-own is included so a staff member who can only see their OWN
+        // documents still gets the nav entry. Hiding it would leave them no way
+        // to reach the upload flow at all. The server route is the security
+        // boundary; this list only decides what is visible.
+        gate: { anyPermission: ["compliance:read-own", "compliance:read-all", "compliance:verify", "compliance:manage-rules"] },
       },
     ],
   },

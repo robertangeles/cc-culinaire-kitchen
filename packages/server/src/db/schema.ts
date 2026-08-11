@@ -1196,6 +1196,16 @@ export const storeLocation = pgTable(
     storeKey: varchar("store_key", { length: 25 }).notNull().unique(),
     colorAccent: varchar("color_accent", { length: 7 }),
     photoPath: varchar("photo_path", { length: 500 }),
+    /**
+     * IANA zone, e.g. "Australia/Melbourne". Certificate expiry is a DATE, and
+     * "has it expired?" must be answered in the venue's local day — a Brisbane
+     * venue (no DST) and a Melbourne venue (DST) otherwise disagree about the
+     * same instant, so a certificate would flip a day early or late for half the
+     * customer base. Defaults to Melbourne; backfilled from `state`.
+     */
+    ianaTimezone: varchar("iana_timezone", { length: 50 })
+      .notNull()
+      .default("Australia/Melbourne"),
     isActiveInd: boolean("is_active_ind").notNull().default(true),
     inventoryActive: boolean("inventory_active").notNull().default(false),
     createdBy: integer("created_by").notNull().references(() => user.userId),
@@ -2934,5 +2944,256 @@ export const factBrainCorpus = pgTable(
     index("idx_fact_brain_corpus_user").on(table.userId),
     // Per-org density series.
     index("idx_fact_brain_corpus_org").on(table.organisationId),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// Staff Compliance Vault — Phase 1
+// ---------------------------------------------------------------------------
+
+/**
+ * The `compliance_document` table is the vault: one row per certificate or
+ * identity document held against a staff member OR a venue.
+ *
+ * TENANCY. Every row carries `organisation_id` (NOT NULL) plus a nullable
+ * `store_location_id`, matching `order_guide`: NULL = org-wide, a value =
+ * location-scoped. Never a bare `venue_id` — `store_location` IS the venue, and
+ * a second tenancy spine is exactly the bug class the July 2026 tenant-isolation
+ * audit spent 8 PRs closing.
+ *
+ * SUBJECT. A document belongs to EITHER a person (`user_id`) or a venue
+ * (`subject_store_location_id`), never both and never neither. Two CHECKs
+ * enforce that, and the second one's `IS NOT NULL` term is load-bearing:
+ * Postgres violates a CHECK only when it evaluates to FALSE, so `NULL = uuid`
+ * yields NULL and PASSES. Without that term a venue document filed under no
+ * venue — the exact row the constraint exists to forbid — would slip through.
+ *
+ * JURISDICTION. `issuing_jurisdiction` is where the document was ISSUED and is
+ * informational. The rule lookup and any roster block use the VENUE's state,
+ * because that is whose regulator turns up. A NSW RSA held by someone working a
+ * VIC venue is a real and legal situation.
+ *
+ * OLTP, 2NF — every non-key column depends solely on the PK. Alert-day lists and
+ * role requirements live in their own junction tables, never as arrays.
+ */
+export const complianceDocument = pgTable(
+  "compliance_document",
+  {
+    complianceDocumentId: uuid("compliance_document_id").defaultRandom().primaryKey(),
+    organisationId: integer("organisation_id")
+      .notNull()
+      .references(() => organisation.organisationId),
+    storeLocationId: uuid("store_location_id").references(() => storeLocation.storeLocationId),
+    /** Staff document subject. Mutually exclusive with subject_store_location_id. */
+    userId: integer("user_id").references(() => user.userId),
+    /** Venue document subject (liquor licence, food registration, insurance). */
+    subjectStoreLocationId: uuid("subject_store_location_id").references(
+      () => storeLocation.storeLocationId,
+    ),
+    documentType: varchar("document_type", { length: 40 }).notNull(),
+    /**
+     * employee | contractor | agency. Drives the retention window: the 7-year
+     * basis is a Fair Work EMPLOYMENT-records rule and does not automatically
+     * apply to contractors, whose documents also fall outside the Privacy Act
+     * employee-records exemption (s.7B(3)).
+     */
+    engagementType: varchar("engagement_type", { length: 20 }).notNull().default("employee"),
+    documentNumber: varchar("document_number", { length: 100 }),
+    issueDate: date("issue_date"),
+    /** NULL = no fixed expiry (Food Handler, Police Clearance, Resume). */
+    expiryDate: date("expiry_date"),
+    issuingAuthority: varchar("issuing_authority", { length: 200 }),
+    issuingJurisdiction: varchar("issuing_jurisdiction", { length: 3 }),
+    /** Cloudinary private public_id. NEVER a URL — URLs are minted per view. */
+    storagePublicId: varchar("storage_public_id", { length: 255 }).notNull(),
+    /**
+     * Delivery format (pdf | jpg | png) from the server's magic-byte sniff at
+     * upload time — signedUrlForDocument needs it to mint a correctly-shaped
+     * Cloudinary URL. NULL for rows uploaded before this column existed; the
+     * format is not recoverable for those.
+     */
+    storageFormat: varchar("storage_format", { length: 10 }),
+    /** Pending | Verified | Rejected | Expired | Requires Renewal | Archived | Orphaned */
+    verificationStatus: varchar("verification_status", { length: 20 })
+      .notNull()
+      .default("Pending"),
+    /** Drives the retention purge. NULL while the person is still engaged. */
+    employmentEndDate: date("employment_end_date"),
+    uploadedBy: integer("uploaded_by")
+      .notNull()
+      .references(() => user.userId),
+    uploadedAt: timestamp("uploaded_at", { withTimezone: true }).defaultNow().notNull(),
+    verifiedBy: integer("verified_by").references(() => user.userId),
+    verifiedAt: timestamp("verified_at", { withTimezone: true }),
+    /** Required when status is Rejected — the staff member has to know what to fix. */
+    rejectionReason: varchar("rejection_reason", { length: 500 }),
+    /** Manager-only free text. Sanitised before it can reach any model prompt. */
+    notes: text("notes"),
+    createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
+    updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // Exactly one subject: a person or a venue, never both, never neither.
+    check(
+      "chk_compliance_document_subject",
+      sql`num_nonnulls(${table.userId}, ${table.subjectStoreLocationId}) = 1`,
+    ),
+    // A venue document's owning location IS its subject. The IS NOT NULL term is
+    // required: without it, NULL = uuid yields NULL, which SATISFIES a CHECK.
+    check(
+      "chk_compliance_document_venue_scope",
+      sql`${table.subjectStoreLocationId} IS NULL
+          OR (${table.storeLocationId} IS NOT NULL
+              AND ${table.storeLocationId} = ${table.subjectStoreLocationId})`,
+    ),
+    // Daily expiry scan: "documents expiring in the alert window". Partial —
+    // null-expiry documents are never scanned, so they stay out of the index.
+    index("idx_compliance_document_expiry")
+      .on(table.expiryDate)
+      .where(sql`expiry_date IS NOT NULL`),
+    // Dashboard: "compliance counts for an org by status".
+    index("idx_compliance_document_org_status").on(
+      table.organisationId,
+      table.verificationStatus,
+    ),
+    // Dashboard tile: "documents for an org expiring in the next 30 days".
+    index("idx_compliance_document_org_expiry")
+      .on(table.organisationId, table.expiryDate)
+      .where(sql`expiry_date IS NOT NULL`),
+    // FK index: "all documents for one person".
+    index("idx_compliance_document_user").on(table.userId),
+    // FK index: "all documents for one venue".
+    index("idx_compliance_document_subject_location").on(table.subjectStoreLocationId),
+    // FK index: "all documents at one location".
+    index("idx_compliance_document_location").on(table.storeLocationId),
+    // Assignment gate + duplicate-upload guard. Partial so rows without a
+    // number (or venue documents) do not collide.
+    uniqueIndex("idx_compliance_document_unique")
+      .on(table.userId, table.documentType, table.documentNumber)
+      .where(sql`user_id IS NOT NULL AND document_number IS NOT NULL`),
+  ],
+);
+
+/**
+ * The `document_expiry_rule` table drives the notification engine: how long a
+ * document type stays valid in a given jurisdiction, and whether an expired one
+ * blocks rostering.
+ *
+ * Effective-dated and versioned. When a rule changes you close the old row with
+ * `effective_to` and insert a new one, so a roster published last year can still
+ * show the rule that applied AT THE TIME — which is what an audit asks for.
+ *
+ * OLTP, 2NF. Alert days are a junction table, never an array column.
+ */
+export const documentExpiryRule = pgTable(
+  "document_expiry_rule",
+  {
+    documentExpiryRuleId: uuid("document_expiry_rule_id").defaultRandom().primaryKey(),
+    documentType: varchar("document_type", { length: 40 }).notNull(),
+    /** NULL = applies nationally. */
+    jurisdiction: varchar("jurisdiction", { length: 3 }),
+    /** NULL = this document type never expires. */
+    validityPeriodYears: integer("validity_period_years"),
+    blockRosterOnExpiry: boolean("block_roster_on_expiry").notNull().default(false),
+    /** Turns a warning into a fix — deep link to the renewal course. */
+    trainingProviderUrl: varchar("training_provider_url", { length: 500 }),
+    effectiveFrom: date("effective_from").notNull(),
+    effectiveTo: date("effective_to"),
+    sourceCitation: varchar("source_citation", { length: 500 }),
+    notes: text("notes"),
+    createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
+    updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // Rule lookup: "the rule in force for this type and jurisdiction on date X".
+    index("idx_document_expiry_rule_lookup").on(
+      table.documentType,
+      table.jurisdiction,
+      table.effectiveFrom,
+    ),
+  ],
+);
+
+/**
+ * The `document_expiry_rule_alert_day` junction replaces what a spec would
+ * naturally write as `renewal_alert_days: integer[]`. An array is a repeating
+ * group (breaks 2NF) and cannot carry the FK index this project requires on
+ * every foreign key.
+ */
+export const documentExpiryRuleAlertDay = pgTable(
+  "document_expiry_rule_alert_day",
+  {
+    documentExpiryRuleId: uuid("document_expiry_rule_id")
+      .notNull()
+      .references(() => documentExpiryRule.documentExpiryRuleId, { onDelete: "cascade" }),
+    /** Days before expiry to notify, e.g. 90 / 60 / 30 / 7. */
+    daysBefore: integer("days_before").notNull(),
+  },
+  (table) => [
+    // Composite PK: one alert per rule per offset.
+    uniqueIndex("idx_document_expiry_rule_alert_day_pk").on(
+      table.documentExpiryRuleId,
+      table.daysBefore,
+    ),
+  ],
+);
+
+/**
+ * The `document_access_log` table is both a security control (§6 "document file
+ * access is logged") and the only way to reconstruct who saw what after the
+ * fact. DENIED reads are recorded too — those are the interesting ones.
+ *
+ * Pruned on its own schedule by the retention job; without that it grows
+ * unbounded on every document view.
+ */
+export const documentAccessLog = pgTable(
+  "document_access_log",
+  {
+    documentAccessLogId: uuid("document_access_log_id").defaultRandom().primaryKey(),
+    complianceDocumentId: uuid("compliance_document_id")
+      .notNull()
+      .references(() => complianceDocument.complianceDocumentId, { onDelete: "cascade" }),
+    actorUserId: integer("actor_user_id")
+      .notNull()
+      .references(() => user.userId),
+    /** granted | denied */
+    outcome: varchar("outcome", { length: 10 }).notNull(),
+    ipAddress: varchar("ip_address", { length: 45 }),
+    createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // FK index: "access history for one document".
+    index("idx_document_access_log_document").on(table.complianceDocumentId),
+    // FK index: "everything this user opened" — the breach-investigation query.
+    index("idx_document_access_log_actor").on(table.actorUserId),
+    // Retention prune: "access-log rows older than the statutory window".
+    index("idx_document_access_log_created").on(table.createdDttm),
+  ],
+);
+
+/**
+ * The `organisation_required_document` table records which document types an org
+ * expects of EVERY staff member, regardless of role.
+ *
+ * Phase 1's "incomplete document set" dashboard metric reads this. Phase 2's
+ * per-role `roster_role_document` narrows requirements on top WITHOUT replacing
+ * it — org-level stays the baseline everyone must meet. Without this table the
+ * Phase 1 metric has nothing to query, since roster tables do not exist yet.
+ */
+export const organisationRequiredDocument = pgTable(
+  "organisation_required_document",
+  {
+    organisationId: integer("organisation_id")
+      .notNull()
+      .references(() => organisation.organisationId),
+    documentType: varchar("document_type", { length: 40 }).notNull(),
+    createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // Composite PK: one requirement per org per document type.
+    uniqueIndex("idx_organisation_required_document_pk").on(
+      table.organisationId,
+      table.documentType,
+    ),
   ],
 );

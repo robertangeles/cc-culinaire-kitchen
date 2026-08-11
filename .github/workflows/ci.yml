@@ -48,6 +48,13 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      # Catches the class of defect the whole test suite is blind to: code that
+      # compiles, type-checks and passes its unit tests, and that no user can
+      # reach. Five of those shipped on the compliance-vault branch before this
+      # existed, each found by a person opening the running app.
+      - name: Reachability
+        run: pnpm check:reachability
+
       - name: Typecheck
         run: pnpm tsc:check
 
@@ -128,3 +135,16 @@ jobs:
       # move NEVER changes stock_level — needs a real DB to be worth anything.
       - name: Run storage-area integration tests
         run: pnpm --filter @culinaire/server exec vitest run src/services/storageAreas.integration.test.ts
+
+      # Compliance vault + daily-run-claim integration suites. vitest is invoked
+      # here by explicit filename, not by glob/discovery — a new *.integration
+      # test file is invisible to CI until it gets its own step below. If you're
+      # adding one, copy this pattern; don't assume it'll be picked up.
+      - name: Run compliance tenant-isolation integration tests
+        run: pnpm --filter @culinaire/server exec vitest run src/services/compliance.tenant.integration.test.ts
+
+      - name: Run compliance integration tests
+        run: pnpm --filter @culinaire/server exec vitest run src/services/compliance.integration.test.ts
+
+      - name: Run daily-run-claim integration tests
+        run: pnpm --filter @culinaire/server exec vitest run src/utils/dailyRunClaim.integration.test.ts

@@ -144,6 +144,11 @@ async function seed() {
     // The Brain — per-user AI memory (docs/specs/brain-memory.md)
     { permissionKey: "brain:read", permissionDescription: "View Your Brain — the memories CulinAIre has captured for you" },
     { permissionKey: "brain:manage", permissionDescription: "Delete and correct Brain memories (own memories; org admins also manage org-shared memories)" },
+    // Compliance Vault — staff document tracking and expiry
+    { permissionKey: "compliance:read-own", permissionDescription: "View and upload your own compliance documents" },
+    { permissionKey: "compliance:read-all", permissionDescription: "View compliance documents for all staff at your venue" },
+    { permissionKey: "compliance:verify", permissionDescription: "Approve or reject uploaded compliance documents" },
+    { permissionKey: "compliance:manage-rules", permissionDescription: "Manage expiry rules and organisation document requirements" },
   ];
 
   for (const p of defaultPermissions) {
@@ -170,6 +175,7 @@ async function seed() {
       "purchasing:draft", "purchasing:submit", "purchasing:approve", "purchasing:receive", "purchasing:credit",
       "menu:read", "waste:read", "prep:manage",
       "brain:read", "brain:manage",
+      "compliance:read-own", "compliance:read-all", "compliance:verify", "compliance:manage-rules",
     ],
     // Default tiers are solo operators (chef + owner in one) — they keep full module
     // access. Staff differentiation (BOH/FOH) is done via custom roles that omit these.
@@ -179,6 +185,7 @@ async function seed() {
       "chat:access", "org:create-organisation", "inventory:count", "purchasing:draft", "purchasing:receive",
       "menu:read", "waste:read", "prep:manage",
       "brain:read", "brain:manage",
+      "compliance:read-own",
     ],
     "Paid Subscriber": [
       "chat:access", "chat:unlimited", "org:create-organisation", "org:manage-organisation",
@@ -186,6 +193,7 @@ async function seed() {
       "purchasing:draft", "purchasing:submit", "purchasing:receive", "purchasing:credit",
       "menu:read", "waste:read", "prep:manage",
       "brain:read", "brain:manage",
+      "compliance:read-own", "compliance:read-all", "compliance:verify",
     ],
   };
 
