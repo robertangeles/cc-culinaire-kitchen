@@ -40,6 +40,7 @@ Categories: **entity** (named things) · **concept** (patterns) · **decision** 
 | [The Brain (per-user AI memory)](entities/the-brain.md) | Phase-1 memory layer: chat capture → embed worker → recall into every prompt; Your Brain page; flag-gated | 2026-07-05 |
 | [Store Locations System](entities/store-locations-system.md) | Multi-location subsystem under each Organisation (HQ, Branch, Commissary, Satellite) | 2026-04-29 |
 | [Prompt System](entities/prompt-system.md) | Prompt registry, runtime guard, versioning, mobile fetch endpoint | 2026-04-29 |
+| [Staff Compliance Vault](entities/staff-compliance-vault.md) | Phase 1 of 3: private vault for staff/venue compliance documents, verification queue, org-wide dashboard; Phase 2 (rostering) blocked on naming an `award_rule` owner | 2026-08-07 |
 
 ## Concepts
 | Page | Summary | Created |
@@ -57,6 +58,7 @@ Categories: **entity** (named things) · **concept** (patterns) · **decision** 
 | [Cloudflare Turnstile Bot Protection](concepts/turnstile-bot-protection.md) | Hard-enforced Turnstile on login/register/forgot-password; DB-managed keys via Settings → Integrations → Cloudflare; fail-closed verification | 2026-06-30 |
 | [Role-Aware Navigation](concepts/role-aware-navigation.md) | Data-driven, permission-filtered sidebar + kitchen-native rename; server+client enforcement of new `menu:read`/`waste:read`/`prep:manage`; ordered backfill rollout | 2026-07-01 |
 | [Brain Memory Plan](concepts/brain-memory-plan.md) | Approved plan for the per-user+per-org AI memory layer (the Brain); full spec in `docs/specs/brain-memory.md`. "Brief me on the current plan" → show that file | 2026-07-04 |
+| [Compliance Expiry Engine](concepts/compliance-expiry-engine.md) | Pure `computeExpiryActions` decision tree, the daily scan job, and how the dashboard aggregate + staff matrix resolve to the SAME best-document-per-type so headline and table can never disagree | 2026-08-07 |
 
 ## Decisions
 | Page | Summary | Created |
@@ -71,6 +73,8 @@ Categories: **entity** (named things) · **concept** (patterns) · **decision** 
 | [Tenant-Isolation Remediation (July 2026)](decisions/tenant-isolation-remediation.md) | Red-team fixed ~51 cross-tenant holes across 8 PRs; user-first-then-org model; prod forensic sweep found no breach; required real-DB CI gate | 2026-07-14 |
 | [Database Backup Location](decisions/db-backup-location.md) | Every DB backup goes in one home-relative folder `~/culinaire-prod-backups/` — consistent across machines, outside any repo, never committed | 2026-07-14 |
 | [Stock Model + Storage-Area Standards](decisions/stock-model-and-storage-areas.md) | Venue-level on-hand (areas = count sheets, not ledgers); POS depletes the venue pool; per-area balances deferred opt-in; module renamed "Stock Room" → "Inventory"; AU-worded default areas seeded per location | 2026-07-17 |
+| [Compliance Documents Store to Cloudinary Private, Never Local Disk](decisions/document-storage-cloudinary-private.md) | No local-disk fallback ever (the unauthenticated `/uploads/` hazard); 120s signed URLs, not Cloudinary's 1hr default; encryption at rest is Cloudinary's key, not ours; denied access attempts are logged too | 2026-08-07 |
+| [Daily-Run Claim Replaces Advisory Lock for Scheduled Jobs](decisions/scheduled-job-daily-claim.md) | One atomic conditional UPDATE is simultaneously the cross-instance mutex, restart-safe day guard, and admin heartbeat; rejects `withAdvisoryLock` (holds a pool connection for the whole scan) and a JS variable (doesn't survive a Render deploy) | 2026-08-07 |
 
 ## Synthesis
 | Page | Summary | Created |

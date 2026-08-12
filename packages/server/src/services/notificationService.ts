@@ -6,7 +6,7 @@
  * Polymorphic: type + JSONB payload for type-specific data.
  */
 
-import { eq, and, ne, desc, sql } from "drizzle-orm";
+import { and, desc, eq, gt, ne, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import {
   notification,
@@ -30,7 +30,8 @@ export type NotificationType =
   | "DELIVERY_OVERDUE"
   | "BRAIN_CAPTURE_ERROR"
   | "BRAIN_DIGEST"
-  | "BRAIN_NUDGE";
+  | "BRAIN_NUDGE"
+  | "DOCUMENT_EXPIRY_ALERT";
 
 export type NotificationChannel = "IN_APP" | "EMAIL";
 
@@ -248,8 +249,20 @@ export async function notifyHQAdmins(
   relatedEntityId: string,
   emailSubject: string,
   emailBody: string,
+  /**
+   * Which permission identifies the right recipients.
+   *
+   * Defaults to `purchasing:approve` because this helper was written for
+   * purchase-order approvals and every existing caller relies on that. It is a
+   * parameter now because the recipient set is domain-specific: a compliance
+   * expiry alert must reach whoever holds `compliance:verify`, not whoever can
+   * approve a purchase order. Sending it to the PO approvers means the people
+   * who own the workflow never hear about an expiring certificate, and people
+   * who do not own it get noise.
+   */
+  recipientPermission: string = "purchasing:approve",
 ) {
-  const admins = await getUsersWithPermission(orgId, "purchasing:approve");
+  const admins = await getUsersWithPermission(orgId, recipientPermission);
 
   logger.info(
     { orgId, adminCount: admins.length, type },
@@ -308,7 +321,21 @@ export async function hasRecentNotification(
         eq(notification.relatedEntityType, relatedEntityType),
         eq(notification.relatedEntityId, relatedEntityId),
         eq(notification.type, type),
-        sql`${notification.createdAt} > ${cutoff}`,
+        // `gt(column, date)` and NOT sql`${col} > ${cutoff}`.
+        //
+        // Interpolating a JS Date into a raw sql template hands the Date
+        // straight to the postgres.js bind step, which only accepts strings and
+        // buffers, so every call threw:
+        //   TypeError: The "string" argument must be of type string ...
+        //   Received an instance of Date
+        // Drizzle's `gt` knows the column is a timestamp and serialises it.
+        //
+        // This threw on EVERY call, and callers wrap it in a try/catch, so the
+        // failure was invisible: the compliance expiry scan caught it per
+        // document, logged, and silently sent no alert at all. A dedup helper
+        // that always throws does not merely fail to dedup — it suppresses the
+        // notification it was guarding.
+        gt(notification.createdAt, cutoff),
       ),
     );
 

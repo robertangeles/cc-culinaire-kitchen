@@ -9,7 +9,6 @@
 import { test } from "@playwright/test";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { loginAsTestUser } from "./_helpers/login";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SNAPSHOT_DIR = path.resolve(__dirname, "__snapshots__");
@@ -25,7 +24,6 @@ test.describe.configure({ mode: "serial" });
 
 test.describe("Purchase Orders — reference snapshots", () => {
   test.beforeEach(async ({ page }) => {
-    await loginAsTestUser(page);
     await gotoPoTab(page);
   });
 

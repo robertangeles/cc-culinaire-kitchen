@@ -12,7 +12,8 @@
     "lint": "turbo run lint",
     "tsc:check": "turbo run tsc:check",
     "test": "turbo run test",
-    "clean": "turbo run clean"
+    "clean": "turbo run clean",
+    "check:reachability": "node scripts/check-reachability.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

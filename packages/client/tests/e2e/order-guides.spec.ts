@@ -20,7 +20,6 @@
  */
 
 import { test, expect, type Page } from "@playwright/test";
-import { loginAsTestUser } from "./_helpers/login";
 
 async function openNewPoForm(page: Page) {
   await page.goto("/purchasing");
@@ -45,7 +44,6 @@ async function applyFirstGuide(page: Page) {
 
 test.describe("Guide-first ordering", () => {
   test.beforeEach(async ({ page }) => {
-    await loginAsTestUser(page);
     await openNewPoForm(page);
   });
 
