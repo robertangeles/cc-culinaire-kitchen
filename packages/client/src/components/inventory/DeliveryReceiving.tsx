@@ -21,7 +21,7 @@ import {
 /* ── Status helpers ──────────────────────────────────────────── */
 
 const LINE_STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
-  PENDING:  { bg: "bg-[#333]/60",      text: "text-[#999]",      label: "Pending" },
+  PENDING:  { bg: "bg-[#333]/60",      text: "text-dark-600",      label: "Pending" },
   RECEIVED: { bg: "bg-emerald-500/15",  text: "text-emerald-400", label: "Received" },
 };
 
@@ -106,16 +106,16 @@ export default function DeliveryReceiving({ po, onBack }: Props) {
       <div className="flex items-center gap-3">
         <button
           onClick={onBack}
-          className="p-2 rounded-lg text-[#999] hover:text-white hover:bg-[#1E1E1E] transition-all"
+          className="p-2 rounded-lg text-dark-600 hover:text-white hover:bg-dark-100 transition-all"
         >
           <ArrowLeft className="size-4" />
         </button>
         <div>
           <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-            <Truck className="size-5 text-[#D4A574]" />
+            <Truck className="size-5 text-gold" />
             Receive Delivery
           </h2>
-          <p className="text-xs text-[#999] mt-0.5">
+          <p className="text-xs text-dark-600 mt-0.5">
             {po.poNumber} &middot; {po.supplierName}
           </p>
         </div>
@@ -156,7 +156,7 @@ export default function DeliveryReceiving({ po, onBack }: Props) {
               className={`rounded-xl border p-4 transition-all ${
                 isReceived
                   ? "bg-emerald-500/5 border-emerald-500/15"
-                  : "bg-[#161616]/80 backdrop-blur-sm border-[#2A2A2A] hover:border-[#3A3A3A]"
+                  : "bg-dark-50/80 backdrop-blur-sm border-dark-200 hover:border-dark-300"
               }`}
               style={{ animationDelay: `${idx * 40}ms` }}
             >
@@ -168,14 +168,14 @@ export default function DeliveryReceiving({ po, onBack }: Props) {
                     </span>
                     <LineStatusBadge status={line.lineStatus} />
                   </div>
-                  <div className="text-xs text-[#999] mt-0.5">
+                  <div className="text-xs text-dark-600 mt-0.5">
                     {line.ingredientCategory} &middot; Base unit: {line.baseUnit}
                   </div>
                 </div>
 
                 {/* Ordered qty badge */}
                 <div className="text-right">
-                  <div className="text-xs text-[#666]">Ordered</div>
+                  <div className="text-xs text-dark-500">Ordered</div>
                   <div className="text-sm font-mono text-[#CCC]">
                     {Number(line.orderedQty).toFixed(1)} {line.orderedUnit}
                   </div>
@@ -186,14 +186,14 @@ export default function DeliveryReceiving({ po, onBack }: Props) {
                 /* Received summary */
                 <div className="flex items-center gap-4 text-sm">
                   <div>
-                    <span className="text-[#666] text-xs">Received:</span>{" "}
+                    <span className="text-dark-500 text-xs">Received:</span>{" "}
                     <span className={`font-mono ${hasDiscrepancy ? "text-amber-400" : "text-emerald-400"}`}>
                       {Number(line.receivedQty).toFixed(1)} {line.receivedUnit}
                     </span>
                   </div>
                   {line.unitCost && (
                     <div>
-                      <span className="text-[#666] text-xs">Cost:</span>{" "}
+                      <span className="text-dark-500 text-xs">Cost:</span>{" "}
                       <span className="text-[#CCC] font-mono">${Number(line.unitCost).toFixed(2)}</span>
                     </div>
                   )}
@@ -208,7 +208,7 @@ export default function DeliveryReceiving({ po, onBack }: Props) {
                 /* Receive form */
                 <div className="grid grid-cols-12 gap-2 items-end">
                   <div className="col-span-3">
-                    <label className="block text-[10px] text-[#666] mb-0.5">Received qty</label>
+                    <label className="block text-[10px] text-dark-500 mb-0.5">Received qty</label>
                     <input
                       type="number"
                       value={data?.receivedQty ?? ""}
@@ -216,17 +216,17 @@ export default function DeliveryReceiving({ po, onBack }: Props) {
                       min="0"
                       step="0.1"
                       className="w-full px-2 py-1.5 rounded-lg text-sm bg-[#1A1A1A] text-white
-                        border border-[#2A2A2A] focus:border-[#D4A574]/40
+                        border border-dark-200 focus:border-gold/40
                         focus:shadow-[0_0_6px_rgba(212,165,116,0.1)] outline-none"
                     />
                   </div>
                   <div className="col-span-3">
-                    <label className="block text-[10px] text-[#666] mb-0.5">Unit</label>
+                    <label className="block text-[10px] text-dark-500 mb-0.5">Unit</label>
                     <select
                       value={data?.receivedUnit ?? ""}
                       onChange={(e) => updateReceiveData(line.lineId, "receivedUnit", e.target.value)}
                       className="w-full px-2 py-1.5 rounded-lg text-sm bg-[#1A1A1A] text-white
-                        border border-[#2A2A2A] focus:border-[#D4A574]/40
+                        border border-dark-200 focus:border-gold/40
                         focus:shadow-[0_0_6px_rgba(212,165,116,0.1)] outline-none"
                     >
                       {/* Ordered unit (packaging) + the kitchen unit; server converts at receipt */}
@@ -237,7 +237,7 @@ export default function DeliveryReceiving({ po, onBack }: Props) {
                     </select>
                   </div>
                   <div className="col-span-3">
-                    <label className="block text-[10px] text-[#666] mb-0.5">Unit cost ($)</label>
+                    <label className="block text-[10px] text-dark-500 mb-0.5">Unit cost ($)</label>
                     <input
                       type="number"
                       value={data?.unitCost ?? ""}
@@ -245,7 +245,7 @@ export default function DeliveryReceiving({ po, onBack }: Props) {
                       min="0"
                       step="any"
                       className="w-full px-2 py-1.5 rounded-lg text-sm bg-[#1A1A1A] text-white
-                        border border-[#2A2A2A] focus:border-[#D4A574]/40
+                        border border-dark-200 focus:border-gold/40
                         focus:shadow-[0_0_6px_rgba(212,165,116,0.1)] outline-none"
                     />
                   </div>
@@ -274,8 +274,8 @@ export default function DeliveryReceiving({ po, onBack }: Props) {
 
       {/* Summary footer */}
       <div className="flex items-center justify-between px-4 py-3 rounded-xl
-        bg-[#161616]/60 border border-[#2A2A2A]">
-        <div className="text-sm text-[#999]">
+        bg-dark-50/60 border border-dark-200">
+        <div className="text-sm text-dark-600">
           <span className="text-emerald-400 font-medium">{receivedLines.length}</span>
           {" / "}
           <span className="text-white">{lines.length}</span>
@@ -284,8 +284,8 @@ export default function DeliveryReceiving({ po, onBack }: Props) {
         <button
           onClick={onBack}
           className="px-4 py-2 rounded-lg text-sm font-medium
-            bg-[#1E1E1E] text-white border border-[#2A2A2A]
-            hover:border-[#3A3A3A] transition-all"
+            bg-dark-100 text-white border border-dark-200
+            hover:border-dark-300 transition-all"
         >
           {allReceived ? "Done" : "Back to Orders"}
         </button>

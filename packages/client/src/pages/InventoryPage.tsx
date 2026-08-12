@@ -119,13 +119,13 @@ export function InventoryPage() {
 
   if (isGuest || !user) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-[#0A0A0A]">
+      <div className="flex-1 flex items-center justify-center bg-dark">
         <div className="text-center max-w-md px-6">
-          <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-[#1E1E1E] flex items-center justify-center">
-            <Package className="size-8 text-[#D4A574]" />
+          <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-dark-100 flex items-center justify-center">
+            <Package className="size-8 text-gold" />
           </div>
           <h2 className="text-xl font-semibold text-white mb-2">Inventory System</h2>
-          <p className="text-[#999] text-sm">Sign in to manage your kitchen inventory.</p>
+          <p className="text-dark-600 text-sm">Sign in to manage your kitchen inventory.</p>
         </div>
       </div>
     );
@@ -133,15 +133,15 @@ export function InventoryPage() {
 
 
   return (
-    <div className="flex-1 flex flex-col bg-[#0A0A0A] overflow-hidden">
+    <div className="flex-1 flex flex-col bg-dark overflow-hidden">
       {/* Sticky header + tabs */}
-      <div className="flex-shrink-0 bg-[#0A0A0A] border-b border-[#1A1A1A] z-30">
+      <div className="flex-shrink-0 bg-dark border-b border-[#1A1A1A] z-30">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-4">
           {/* Header */}
           <div className="mb-4 animate-[fadeInUp_200ms_ease-out]">
             <h1 className="text-2xl font-bold text-white flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#D4A574] to-[#C4956A] flex items-center justify-center shadow-[0_0_12px_rgba(212,165,116,0.2)]">
-                <Package className="size-5 text-[#0A0A0A]" />
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-gold to-gold-hover flex items-center justify-center shadow-[0_0_12px_rgba(212,165,116,0.2)]">
+                <Package className="size-5 text-dark" />
               </div>
               Inventory
             </h1>
@@ -150,7 +150,7 @@ export function InventoryPage() {
           {/* Tab bar + help button */}
           <div className="flex items-center gap-3">
             <div
-              className="flex gap-1 p-1 rounded-xl bg-[#161616] border border-[#2A2A2A] w-fit"
+              className="flex gap-1 p-1 rounded-xl bg-dark-50 border border-dark-200 w-fit"
               role="tablist"
             >
               {tabs.map((tab) => {
@@ -166,8 +166,8 @@ export function InventoryPage() {
                       onClick={() => setActiveTab(tab.key)}
                       className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                         isActive
-                          ? "bg-[#1E1E1E] text-white shadow-[0_0_8px_rgba(212,165,116,0.1)]"
-                          : "text-[#999] hover:text-white hover:bg-[#1E1E1E]/50"
+                          ? "bg-dark-100 text-white shadow-[0_0_8px_rgba(212,165,116,0.1)]"
+                          : "text-dark-600 hover:text-white hover:bg-dark-100/50"
                       }`}
                     >
                       <Icon className="size-4" />
@@ -209,17 +209,17 @@ export function InventoryPage() {
             <div className="space-y-4">
               {/* HQ users get Review + History as sub-views of Stock Take */}
               {canReview && (
-                <div className="flex gap-1 p-1 rounded-lg bg-[#161616] border border-[#2A2A2A] w-fit">
+                <div className="flex gap-1 p-1 rounded-lg bg-dark-50 border border-dark-200 w-fit">
                   <button
                     onClick={() => setStockTakeView("count")}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${stockTakeView === "count" ? "bg-[#1E1E1E] text-white shadow-[0_0_6px_rgba(212,165,116,0.1)]" : "text-[#888] hover:text-white"}`}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${stockTakeView === "count" ? "bg-dark-100 text-white shadow-[0_0_6px_rgba(212,165,116,0.1)]" : "text-[#888] hover:text-white"}`}
                   >
                     <ClipboardCheck className="size-3" />
                     Count
                   </button>
                   <button
                     onClick={() => setStockTakeView("review")}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${stockTakeView === "review" ? "bg-[#1E1E1E] text-white shadow-[0_0_6px_rgba(212,165,116,0.1)]" : "text-[#888] hover:text-white"}`}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${stockTakeView === "review" ? "bg-dark-100 text-white shadow-[0_0_6px_rgba(212,165,116,0.1)]" : "text-[#888] hover:text-white"}`}
                   >
                     <ShieldCheck className="size-3" />
                     Review
@@ -231,7 +231,7 @@ export function InventoryPage() {
                   </button>
                   <button
                     onClick={() => setStockTakeView("history")}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${stockTakeView === "history" ? "bg-[#1E1E1E] text-white shadow-[0_0_6px_rgba(212,165,116,0.1)]" : "text-[#888] hover:text-white"}`}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${stockTakeView === "history" ? "bg-dark-100 text-white shadow-[0_0_6px_rgba(212,165,116,0.1)]" : "text-[#888] hover:text-white"}`}
                   >
                     <History className="size-3" />
                     History
@@ -250,12 +250,12 @@ export function InventoryPage() {
           {activeTab === "log" && (
             <div className="space-y-4">
               {/* Sub-view toggle */}
-              <div className="flex gap-1 p-1 rounded-lg bg-[#161616] border border-[#2A2A2A] w-fit">
+              <div className="flex gap-1 p-1 rounded-lg bg-dark-50 border border-dark-200 w-fit">
                 <button
                   onClick={() => setTransferView("usage")}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
                     transferView === "usage"
-                      ? "bg-[#1E1E1E] text-white shadow-[0_0_6px_rgba(212,165,116,0.1)]"
+                      ? "bg-dark-100 text-white shadow-[0_0_6px_rgba(212,165,116,0.1)]"
                       : "text-[#888] hover:text-white"
                   }`}
                 >
@@ -266,7 +266,7 @@ export function InventoryPage() {
                   onClick={() => setTransferView("transfers")}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
                     transferView === "transfers"
-                      ? "bg-[#1E1E1E] text-white shadow-[0_0_6px_rgba(212,165,116,0.1)]"
+                      ? "bg-dark-100 text-white shadow-[0_0_6px_rgba(212,165,116,0.1)]"
                       : "text-[#888] hover:text-white"
                   }`}
                 >
@@ -281,7 +281,7 @@ export function InventoryPage() {
                   }}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
                     transferView === "movement"
-                      ? "bg-[#1E1E1E] text-white shadow-[0_0_6px_rgba(212,165,116,0.1)]"
+                      ? "bg-dark-100 text-white shadow-[0_0_6px_rgba(212,165,116,0.1)]"
                       : "text-[#888] hover:text-white"
                   }`}
                 >

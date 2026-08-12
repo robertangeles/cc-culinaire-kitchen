@@ -192,14 +192,14 @@ export function ModelSelector({ value, onChange, models, required, className }: 
         onKeyDown={handleKeyDown}
         aria-haspopup="listbox"
         aria-expanded={open}
-        className="w-full flex items-center justify-between gap-2 rounded-lg border border-[#2A2A2A] bg-[#0A0A0A] px-3 py-2.5 text-left transition-colors hover:border-[#3A3A3A] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-transparent"
+        className="w-full flex items-center justify-between gap-2 rounded-lg border border-dark-200 bg-dark px-3 py-2.5 text-left transition-colors hover:border-dark-300 focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-transparent"
       >
         <div className="min-w-0">
           <div className="text-sm font-medium text-[#FAFAFA] truncate">{triggerLabel}</div>
-          <div className="text-[11px] text-[#666666] truncate">{triggerSub}</div>
+          <div className="text-[11px] text-dark-500 truncate">{triggerSub}</div>
         </div>
         <ChevronDown
-          className={`size-4 text-[#666666] flex-shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
+          className={`size-4 text-dark-500 flex-shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
         />
       </button>
 
@@ -209,7 +209,7 @@ export function ModelSelector({ value, onChange, models, required, className }: 
           ref={listRef}
           role="listbox"
           aria-activedescendant={focusIdx >= 0 ? `model-opt-${focusIdx}` : undefined}
-          className="absolute z-50 mt-1 w-full max-h-80 overflow-y-auto rounded-lg border border-[#2A2A2A] bg-[#111111] shadow-xl shadow-black/40 backdrop-blur-sm"
+          className="absolute z-50 mt-1 w-full max-h-80 overflow-y-auto rounded-lg border border-dark-200 bg-[#111111] shadow-xl shadow-black/40 backdrop-blur-sm"
         >
           {/* Global Default option (hidden when required) */}
           {!required && (
@@ -222,14 +222,14 @@ export function ModelSelector({ value, onChange, models, required, className }: 
                 onHover={() => setFocusIdx(0)}
               >
                 <div className="flex items-center gap-2">
-                  <Sparkles className="size-4 text-[#D4A574]" />
+                  <Sparkles className="size-4 text-gold" />
                   <div>
                     <div className="text-sm font-medium text-[#FAFAFA]">Global Default</div>
-                    <div className="text-[11px] text-[#666666]">Uses the system-wide model</div>
+                    <div className="text-[11px] text-dark-500">Uses the system-wide model</div>
                   </div>
                 </div>
               </OptionRow>
-              <div className="border-t border-[#1E1E1E]" />
+              <div className="border-t border-dark-100" />
             </>
           )}
 
@@ -237,11 +237,11 @@ export function ModelSelector({ value, onChange, models, required, className }: 
           {groups.map((group) => (
             <div key={group.provider}>
               {/* Provider heading */}
-              <div className="sticky top-0 z-10 flex items-center gap-2 px-3 py-1.5 bg-[#0A0A0A]/90 backdrop-blur-sm border-b border-[#1E1E1E]">
-                <span className="text-[10px] font-semibold text-[#666666] uppercase tracking-wider">
+              <div className="sticky top-0 z-10 flex items-center gap-2 px-3 py-1.5 bg-dark/90 backdrop-blur-sm border-b border-dark-100">
+                <span className="text-[10px] font-semibold text-dark-500 uppercase tracking-wider">
                   {group.label}
                 </span>
-                <span className="text-[10px] text-[#444444]">{group.count}</span>
+                <span className="text-[10px] text-dark-400">{group.count}</span>
               </div>
 
               {/* Models in this provider */}
@@ -258,7 +258,7 @@ export function ModelSelector({ value, onChange, models, required, className }: 
                   >
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-medium text-[#E5E5E5]">{m.displayName}</div>
-                      <div className="flex items-center gap-2 mt-0.5 text-[11px] text-[#666666]">
+                      <div className="flex items-center gap-2 mt-0.5 text-[11px] text-dark-500">
                         {m.contextLength ? (
                           <span>{fmtCtx(m.contextLength)}</span>
                         ) : null}
@@ -309,12 +309,12 @@ function OptionRow({
       onMouseEnter={onHover}
       className={`flex items-center justify-between px-3 py-2 cursor-pointer transition-colors ${
         focused
-          ? "bg-[#1E1E1E]"
-          : "hover:bg-[#161616]"
-      } ${selected ? "bg-[#D4A574]/5" : ""}`}
+          ? "bg-dark-100"
+          : "hover:bg-dark-50"
+      } ${selected ? "bg-gold/5" : ""}`}
     >
       {children}
-      {selected && <Check className="size-4 text-[#D4A574] flex-shrink-0 ml-2" />}
+      {selected && <Check className="size-4 text-gold flex-shrink-0 ml-2" />}
     </div>
   );
 }

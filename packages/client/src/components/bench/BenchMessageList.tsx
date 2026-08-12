@@ -91,23 +91,23 @@ export function BenchMessageList({
     <div
       ref={containerRef}
       onScroll={handleScroll}
-      className="flex-1 overflow-y-auto bg-[#0A0A0A]"
+      className="flex-1 overflow-y-auto bg-dark"
     >
       {/* Channel info banner */}
       {channelBanner && (
-        <div className="mx-4 mt-4 mb-2 px-4 py-3 bg-[#161616] border border-[#2A2A2A] rounded-xl">
-          <p className="text-xs text-[#D4A574]">{channelBanner}</p>
+        <div className="mx-4 mt-4 mb-2 px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl">
+          <p className="text-xs text-gold">{channelBanner}</p>
         </div>
       )}
 
       {loading && messages.length === 0 ? (
         <div className="flex items-center justify-center h-full">
-          <Loader2 className="size-6 animate-spin text-[#D4A574]" />
+          <Loader2 className="size-6 animate-spin text-gold" />
         </div>
       ) : messages.length === 0 ? (
         <div className="flex flex-col items-center justify-center h-full text-center px-4">
-          <p className="text-[#999999] text-base font-medium mb-1">Start the conversation</p>
-          <p className="text-[#666666] text-sm">Be the first to share something with the team.</p>
+          <p className="text-dark-600 text-base font-medium mb-1">Start the conversation</p>
+          <p className="text-dark-500 text-sm">Be the first to share something with the team.</p>
         </div>
       ) : (
         <div className="py-4 flex flex-col gap-1">
@@ -115,7 +115,7 @@ export function BenchMessageList({
             <div className="text-center py-2">
               <button
                 onClick={onLoadMore}
-                className="text-xs text-[#D4A574] hover:text-[#C4956A]"
+                className="text-xs text-gold hover:text-gold-hover"
               >
                 Load older messages
               </button>
@@ -132,11 +132,11 @@ export function BenchMessageList({
               <div key={msg.messageId}>
                 {showSeparator && (
                   <div className="flex items-center gap-3 px-4 py-3">
-                    <div className="flex-1 h-px bg-[#2A2A2A]" />
-                    <span className="text-xs text-[#666666] font-medium">
+                    <div className="flex-1 h-px bg-dark-200" />
+                    <span className="text-xs text-dark-500 font-medium">
                       {formatDateSeparator(msg.createdDttm)}
                     </span>
-                    <div className="flex-1 h-px bg-[#2A2A2A]" />
+                    <div className="flex-1 h-px bg-dark-200" />
                   </div>
                 )}
                 <BenchMessageItem

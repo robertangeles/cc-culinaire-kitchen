@@ -100,15 +100,15 @@ export function MyShelfPage() {
   const hasMore = recipes.length < total;
 
   return (
-    <div className="flex-1 overflow-y-auto bg-[#0A0A0A]">
+    <div className="flex-1 overflow-y-auto bg-dark">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center gap-3 mb-2">
-            <BookMarked className="size-7 text-[#D4A574]" />
+            <BookMarked className="size-7 text-gold" />
             <h1 className="text-2xl font-bold text-[#FAFAFA]">My Shelf</h1>
           </div>
-          <p className="text-sm text-[#999999]">
+          <p className="text-sm text-dark-600">
             All your recipes in one place. Use the globe icon to share a recipe on The Kitchen Shelf.
           </p>
         </div>
@@ -116,15 +116,15 @@ export function MyShelfPage() {
         {/* Filters */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-6">
           {/* Domain filter */}
-          <div className="flex gap-1 bg-[#161616] rounded-lg p-1 border border-[#2A2A2A]">
+          <div className="flex gap-1 bg-dark-50 rounded-lg p-1 border border-dark-200">
             {DOMAIN_TABS.map((tab) => (
               <button
                 key={tab.value}
                 onClick={() => setDomainFilter(tab.value)}
                 className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
                   domainFilter === tab.value
-                    ? "bg-[#D4A574] text-[#0A0A0A]"
-                    : "text-[#999999] hover:text-[#E5E5E5]"
+                    ? "bg-gold text-dark"
+                    : "text-dark-600 hover:text-[#E5E5E5]"
                 }`}
               >
                 {tab.label}
@@ -134,20 +134,20 @@ export function MyShelfPage() {
 
           {/* Search */}
           <div className="relative ml-auto">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-[#666666]" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-dark-500" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search your recipes..."
-              className="pl-9 pr-3 py-1.5 text-sm rounded-xl border border-[#2A2A2A] bg-[#0A0A0A] text-white placeholder-[#444444] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-[#D4A574]/50 w-48 sm:w-56"
+              className="pl-9 pr-3 py-1.5 text-sm rounded-xl border border-dark-200 bg-dark text-white placeholder-dark-400 focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-gold/50 w-48 sm:w-56"
             />
           </div>
         </div>
 
         {/* Recipe count */}
         <div className="mb-4">
-          <span className="text-xs text-[#666666]">
+          <span className="text-xs text-dark-500">
             {filteredRecipes.length} {filteredRecipes.length === 1 ? "recipe" : "recipes"}
             {debouncedSearch && ` matching "${debouncedSearch}"`}
           </span>
@@ -156,15 +156,15 @@ export function MyShelfPage() {
         {/* Content */}
         {isLoading ? (
           <div className="flex items-center justify-center py-20">
-            <Loader2 className="size-6 animate-spin text-[#D4A574]" />
+            <Loader2 className="size-6 animate-spin text-gold" />
           </div>
         ) : filteredRecipes.length === 0 ? (
           <div className="text-center py-20">
-            <BookMarked className="size-12 text-[#666666] mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-[#999999] mb-2">
+            <BookMarked className="size-12 text-dark-500 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-dark-600 mb-2">
               {debouncedSearch ? "No matching recipes" : "No recipes yet"}
             </h3>
-            <p className="text-sm text-[#666666] max-w-sm mx-auto">
+            <p className="text-sm text-dark-500 max-w-sm mx-auto">
               {debouncedSearch
                 ? "Try a different search term."
                 : "Head to a Recipe Lab to create your first recipe. Every recipe you generate is automatically saved here."}
@@ -191,7 +191,7 @@ export function MyShelfPage() {
             <button
               onClick={loadMore}
               disabled={isLoadingMore}
-              className="w-full py-3 bg-[#1E1E1E] hover:bg-[#2A2A2A] text-[#E5E5E5] rounded-xl transition-colors text-sm font-medium disabled:opacity-50"
+              className="w-full py-3 bg-dark-100 hover:bg-dark-200 text-[#E5E5E5] rounded-xl transition-colors text-sm font-medium disabled:opacity-50"
             >
               {isLoadingMore ? (
                 <span className="flex items-center justify-center gap-2">
@@ -207,7 +207,7 @@ export function MyShelfPage() {
 
         {/* Showing X of Y */}
         {!isLoading && recipes.length > 0 && (
-          <p className="text-center text-sm text-[#666666] mt-3">
+          <p className="text-center text-sm text-dark-500 mt-3">
             Showing {recipes.length} of {total} recipes
           </p>
         )}

@@ -79,9 +79,9 @@ const TIER_CONFIG: {
   borderClass: string;
   icon: string;
 }[] = [
-  { key: "start_first", label: "Start With These", borderClass: "border-l-[#D4A574]", icon: "\uD83D\uDD25" },
-  { key: "then_these", label: "Next Up", borderClass: "border-l-[#999999]", icon: "" },
-  { key: "can_wait", label: "Can Wait", borderClass: "border-l-[#2A2A2A]", icon: "" },
+  { key: "start_first", label: "Start With These", borderClass: "border-l-gold", icon: "\uD83D\uDD25" },
+  { key: "then_these", label: "Next Up", borderClass: "border-l-dark-600", icon: "" },
+  { key: "can_wait", label: "Can Wait", borderClass: "border-l-dark-200", icon: "" },
 ];
 
 function fmtQty(value: number, unit: string): string {
@@ -320,9 +320,9 @@ export function PrepDashboard({ sessionData, onSessionUpdate, onEditSelections }
   if (!sessionData) {
     return (
       <div className="text-center py-16">
-        <ClipboardList className="size-10 mx-auto text-[#666666] mb-3" />
-        <p className="text-[#999999]">No prep session for today yet.</p>
-        <p className="text-sm text-[#666666] mt-1">Enter your expected covers above to get started.</p>
+        <ClipboardList className="size-10 mx-auto text-dark-500 mb-3" />
+        <p className="text-dark-600">No prep session for today yet.</p>
+        <p className="text-sm text-dark-500 mt-1">Enter your expected covers above to get started.</p>
       </div>
     );
   }
@@ -333,11 +333,11 @@ export function PrepDashboard({ sessionData, onSessionUpdate, onEditSelections }
       <div className="text-center py-16">
         <Check className="size-10 mx-auto text-green-500 mb-3" />
         <p className="text-[#E5E5E5] font-medium">Today&apos;s session is complete.</p>
-        <p className="text-sm text-[#666666] mt-1">
+        <p className="text-sm text-dark-500 mt-1">
           {doneTasks} of {totalTasks} tasks completed &middot;{" "}
           {session?.expectedCovers} expected &rarr; {session?.actualCovers ?? "?"} actual covers
         </p>
-        <p className="text-xs text-[#666666] mt-3">Check the History tab for full details.</p>
+        <p className="text-xs text-dark-500 mt-3">Check the History tab for full details.</p>
       </div>
     );
   }
@@ -353,11 +353,11 @@ export function PrepDashboard({ sessionData, onSessionUpdate, onEditSelections }
 
       {/* Waste alert banner (Connection 4: Waste -> Copilot) */}
       {wasteAlertItems.length > 0 && (
-        <div className="bg-[#D4A574]/10 border border-[#D4A574]/20 rounded-lg p-4 mb-4 flex items-start gap-3">
-          <AlertTriangle className="size-5 text-[#D4A574] shrink-0 mt-0.5" />
+        <div className="bg-gold/10 border border-gold/20 rounded-lg p-4 mb-4 flex items-start gap-3">
+          <AlertTriangle className="size-5 text-gold shrink-0 mt-0.5" />
           <div>
-            <p className="text-sm font-medium text-[#D4A574]">Watch your portions</p>
-            <p className="text-xs text-[#D4A574]/80 mt-0.5">
+            <p className="text-sm font-medium text-gold">Watch your portions</p>
+            <p className="text-xs text-gold/80 mt-0.5">
               <span className="font-semibold">{wasteAlertItems.join(" and ")}</span>
               {" "}
               {wasteAlertItems.length === 1 ? "is" : "are"} among your top waste items this month.
@@ -368,28 +368,28 @@ export function PrepDashboard({ sessionData, onSessionUpdate, onEditSelections }
       )}
 
       {/* Progress bar */}
-      <div className="bg-[#161616] rounded-xl p-5 border border-[#2A2A2A] mb-6">
+      <div className="bg-dark-50 rounded-xl p-5 border border-dark-200 mb-6">
         <div className="flex items-center justify-between mb-2">
           <span className="text-sm font-medium text-[#E5E5E5]">
             {doneTasks} of {totalTasks} tasks complete
           </span>
-          <span className="text-sm font-bold text-[#D4A574]">{progressPct}%</span>
+          <span className="text-sm font-bold text-gold">{progressPct}%</span>
         </div>
-        <div className="w-full bg-[#1E1E1E] rounded-full h-3">
+        <div className="w-full bg-dark-100 rounded-full h-3">
           <div
-            className="h-3 rounded-full bg-[#D4A574]/100 transition-all duration-500"
+            className="h-3 rounded-full bg-gold/100 transition-all duration-500"
             style={{ width: `${progressPct}%` }}
           />
         </div>
         <div className="flex items-center justify-between mt-2">
-          <p className="text-xs text-[#666666]">
+          <p className="text-xs text-dark-500">
             Expected covers: {session?.expectedCovers ?? "—"}
           </p>
           <div className="flex items-center gap-3">
             {onEditSelections && (
               <button
                 onClick={onEditSelections}
-                className="inline-flex items-center gap-1.5 text-xs text-[#D4A574] hover:text-[#C4956A] transition-colors"
+                className="inline-flex items-center gap-1.5 text-xs text-gold hover:text-gold-hover transition-colors"
               >
                 <Pencil className="size-3" />
                 Edit selections
@@ -397,7 +397,7 @@ export function PrepDashboard({ sessionData, onSessionUpdate, onEditSelections }
             )}
             <button
               onClick={handlePrint}
-              className="inline-flex items-center gap-1.5 text-xs text-[#999999] hover:text-white transition-colors"
+              className="inline-flex items-center gap-1.5 text-xs text-dark-600 hover:text-white transition-colors"
             >
               <Printer className="size-3" />
               Print
@@ -422,14 +422,14 @@ export function PrepDashboard({ sessionData, onSessionUpdate, onEditSelections }
               className="flex items-center gap-2 w-full text-left mb-3 group"
             >
               {isExpanded ? (
-                <ChevronDown className="size-4 text-[#666666]" />
+                <ChevronDown className="size-4 text-dark-500" />
               ) : (
-                <ChevronRight className="size-4 text-[#666666]" />
+                <ChevronRight className="size-4 text-dark-500" />
               )}
               <span className="text-sm font-semibold text-[#E5E5E5] group-hover:text-white transition-colors">
                 {tier.icon ? `${tier.icon} ` : ""}{tier.label}
               </span>
-              <span className="text-xs text-[#666666]">
+              <span className="text-xs text-dark-500">
                 ({tierDone}/{tierTasks.length})
               </span>
             </button>
@@ -445,7 +445,7 @@ export function PrepDashboard({ sessionData, onSessionUpdate, onEditSelections }
                   return (
                     <div key={task.prepTaskId}>
                       <div
-                        className={`bg-[#161616] rounded-xl px-3 py-2.5 border border-[#2A2A2A] border-l-4 ${tier.borderClass} flex items-center gap-2.5 transition-opacity ${
+                        className={`bg-dark-50 rounded-xl px-3 py-2.5 border border-dark-200 border-l-4 ${tier.borderClass} flex items-center gap-2.5 transition-opacity ${
                           dimmed ? "opacity-40" : ""
                         }`}
                       >
@@ -457,8 +457,8 @@ export function PrepDashboard({ sessionData, onSessionUpdate, onEditSelections }
                           disabled={updatingTask === task.prepTaskId}
                           className={`shrink-0 size-5 rounded border-2 flex items-center justify-center transition-colors ${
                             isDone
-                              ? "bg-[#D4A574] border-[#D4A574] text-white"
-                              : "border-[#2A2A2A] hover:border-[#D4A574]"
+                              ? "bg-gold border-gold text-white"
+                              : "border-dark-200 hover:border-gold"
                           }`}
                           aria-label={isDone ? "Mark as pending" : "Mark as done"}
                         >
@@ -475,17 +475,17 @@ export function PrepDashboard({ sessionData, onSessionUpdate, onEditSelections }
                         </span>
                         {task.onHandQty != null ? (
                           <span className={`text-sm whitespace-nowrap flex items-center gap-1.5 ${isDone ? "line-through" : ""}`}>
-                            <span className="font-medium text-[#D4A574]">
+                            <span className="font-medium text-gold">
                               {fmtQty(task.quantityNeeded, task.unit)} {task.unit}
                             </span>
-                            <span className={`text-[10px] ${task.prepNeeded != null && task.prepNeeded <= 0 ? "text-green-400/70" : "text-[#666666]"}`}>
+                            <span className={`text-[10px] ${task.prepNeeded != null && task.prepNeeded <= 0 ? "text-green-400/70" : "text-dark-500"}`}>
                               {task.prepNeeded != null && task.prepNeeded <= 0
                                 ? `In stock (${fmtQty(task.onHandQty, task.unit)} ${task.unit} on hand)`
                                 : `${fmtQty(task.onHandQty, task.unit)} ${task.unit} on hand`}
                             </span>
                           </span>
                         ) : (
-                          <span className={`text-sm text-[#D4A574] font-medium whitespace-nowrap ${isDone ? "line-through" : ""}`}>
+                          <span className={`text-sm text-gold font-medium whitespace-nowrap ${isDone ? "line-through" : ""}`}>
                             {fmtQty(task.quantityNeeded, task.unit)} {task.unit}
                           </span>
                         )}
@@ -493,19 +493,19 @@ export function PrepDashboard({ sessionData, onSessionUpdate, onEditSelections }
                         {/* Inline badges */}
                         <div className="flex items-center gap-1.5 ml-auto shrink-0">
                           {task.station && (
-                            <span className="inline-flex items-center gap-1 text-[10px] bg-[#1E1E1E] text-[#999999] px-1.5 py-0.5 rounded-full">
+                            <span className="inline-flex items-center gap-1 text-[10px] bg-dark-100 text-dark-600 px-1.5 py-0.5 rounded-full">
                               <MapPin className="size-2.5" />
                               {task.station}
                             </span>
                           )}
                           {task.prepTimeMinutes != null && (
-                            <span className="inline-flex items-center gap-1 text-[10px] bg-[#1E1E1E] text-[#999999] px-1.5 py-0.5 rounded-full">
+                            <span className="inline-flex items-center gap-1 text-[10px] bg-dark-100 text-dark-600 px-1.5 py-0.5 rounded-full">
                               <Clock className="size-2.5" />
                               {task.prepTimeMinutes}m
                             </span>
                           )}
                           {task.assignedTo && (
-                            <span className="inline-flex items-center gap-1 text-[10px] bg-[#D4A574]/15 text-[#D4A574] px-1.5 py-0.5 rounded-full">
+                            <span className="inline-flex items-center gap-1 text-[10px] bg-gold/15 text-gold px-1.5 py-0.5 rounded-full">
                               <User className="size-2.5" />
                               {task.assignedTo}
                             </span>
@@ -515,7 +515,7 @@ export function PrepDashboard({ sessionData, onSessionUpdate, onEditSelections }
                           {!isDone && !isSkipped && assigningTask !== task.prepTaskId && (
                             <button
                               onClick={() => { setAssigningTask(task.prepTaskId); setAssignName(task.assignedTo ?? ""); }}
-                              className="text-[10px] text-[#666666] hover:text-[#D4A574] transition-colors px-1"
+                              className="text-[10px] text-dark-500 hover:text-gold transition-colors px-1"
                             >
                               Assign
                             </button>
@@ -524,7 +524,7 @@ export function PrepDashboard({ sessionData, onSessionUpdate, onEditSelections }
                             <button
                               onClick={() => updateTaskStatus(task.prepTaskId, "skipped")}
                               disabled={updatingTask === task.prepTaskId}
-                              className="text-[10px] text-[#666666] hover:text-red-400 transition-colors px-1"
+                              className="text-[10px] text-dark-500 hover:text-red-400 transition-colors px-1"
                             >
                               Skip
                             </button>
@@ -533,7 +533,7 @@ export function PrepDashboard({ sessionData, onSessionUpdate, onEditSelections }
                             <button
                               onClick={() => updateTaskStatus(task.prepTaskId, "pending")}
                               disabled={updatingTask === task.prepTaskId}
-                              className="text-[10px] text-[#666666] hover:text-[#D4A574] transition-colors px-1"
+                              className="text-[10px] text-dark-500 hover:text-gold transition-colors px-1"
                             >
                               Undo
                             </button>
@@ -543,7 +543,7 @@ export function PrepDashboard({ sessionData, onSessionUpdate, onEditSelections }
 
                       {/* Dishes this ingredient is for (subtle, below the row) */}
                       {!dimmed && task.taskDescription.includes("for ") && (
-                        <p className="text-[10px] text-[#666666] pl-10 mt-0.5 mb-1 truncate">
+                        <p className="text-[10px] text-dark-500 pl-10 mt-0.5 mb-1 truncate">
                           {task.taskDescription.split("for ").slice(1).join("for ")}
                         </p>
                       )}
@@ -560,18 +560,18 @@ export function PrepDashboard({ sessionData, onSessionUpdate, onEditSelections }
                               if (e.key === "Enter") assignTask(task.prepTaskId, assignName);
                               if (e.key === "Escape") { setAssigningTask(null); setAssignName(""); }
                             }}
-                            className="flex-1 px-3 py-1.5 bg-[#1E1E1E] border border-[#2A2A2A] rounded-lg text-sm text-white focus:ring-2 focus:ring-[#D4A574]/50"
+                            className="flex-1 px-3 py-1.5 bg-dark-100 border border-dark-200 rounded-lg text-sm text-white focus:ring-2 focus:ring-gold/50"
                             autoFocus
                           />
                           <button
                             onClick={() => assignTask(task.prepTaskId, assignName)}
-                            className="px-3 py-1.5 bg-[#D4A574] hover:bg-[#C4956A] text-[#0A0A0A] text-xs font-medium rounded-lg"
+                            className="px-3 py-1.5 bg-gold hover:bg-gold-hover text-dark text-xs font-medium rounded-lg"
                           >
                             Save
                           </button>
                           <button
                             onClick={() => { setAssigningTask(null); setAssignName(""); }}
-                            className="px-3 py-1.5 bg-[#1E1E1E] hover:bg-[#2A2A2A] text-[#999999] text-xs rounded-lg"
+                            className="px-3 py-1.5 bg-dark-100 hover:bg-dark-200 text-dark-600 text-xs rounded-lg"
                           >
                             Cancel
                           </button>
@@ -587,21 +587,21 @@ export function PrepDashboard({ sessionData, onSessionUpdate, onEditSelections }
       })}
 
       {/* End session */}
-      <div className="mt-8 border-t border-[#2A2A2A] pt-6">
+      <div className="mt-8 border-t border-dark-200 pt-6">
         {!showEndForm ? (
           <button
             onClick={() => setShowEndForm(true)}
-            className="flex items-center gap-2 px-5 py-3 bg-[#161616] hover:bg-[#1E1E1E] text-[#E5E5E5] hover:text-white border border-[#2A2A2A] rounded-xl transition-colors min-h-[44px]"
+            className="flex items-center gap-2 px-5 py-3 bg-dark-50 hover:bg-dark-100 text-[#E5E5E5] hover:text-white border border-dark-200 rounded-xl transition-colors min-h-[44px]"
           >
             <X className="size-4" />
             End Session
           </button>
         ) : (
-          <div className="bg-[#0A0A0A]/80 backdrop-blur-sm rounded-2xl p-6 border border-[#2A2A2A] max-w-md shadow-lg shadow-black/20">
+          <div className="bg-dark/80 backdrop-blur-sm rounded-2xl p-6 border border-dark-200 max-w-md shadow-lg shadow-black/20">
             <p className="text-sm font-semibold text-white mb-1">
               Wrap up this prep session
             </p>
-            <p className="text-xs text-[#666666] mb-4">
+            <p className="text-xs text-dark-500 mb-4">
               Logging actual covers helps your next forecast — but it&apos;s optional.
             </p>
             <div className="flex items-center gap-3 mb-4">
@@ -612,13 +612,13 @@ export function PrepDashboard({ sessionData, onSessionUpdate, onEditSelections }
                 value={actualCovers}
                 onChange={(e) => setActualCovers(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") endSession(true); }}
-                className="flex-1 px-4 py-2.5 bg-[#161616] border border-[#2A2A2A] rounded-xl text-white text-sm placeholder-[#666666] focus:ring-2 focus:ring-[#D4A574]/50 focus:border-transparent min-h-[44px]"
+                className="flex-1 px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl text-white text-sm placeholder-dark-500 focus:ring-2 focus:ring-gold/50 focus:border-transparent min-h-[44px]"
               />
               {actualCovers && (
                 <button
                   onClick={() => endSession(true)}
                   disabled={endingSession}
-                  className="px-5 py-2.5 bg-[#D4A574] hover:bg-[#C4956A] disabled:opacity-50 text-[#0A0A0A] font-semibold rounded-xl transition-colors min-h-[44px] whitespace-nowrap"
+                  className="px-5 py-2.5 bg-gold hover:bg-gold-hover disabled:opacity-50 text-dark font-semibold rounded-xl transition-colors min-h-[44px] whitespace-nowrap"
                 >
                   {endingSession ? <Loader2 className="size-4 animate-spin" /> : "Save & End"}
                 </button>
@@ -628,13 +628,13 @@ export function PrepDashboard({ sessionData, onSessionUpdate, onEditSelections }
               <button
                 onClick={() => endSession(false)}
                 disabled={endingSession}
-                className="flex-1 px-4 py-2.5 bg-[#1E1E1E] hover:bg-[#2A2A2A] text-[#999999] hover:text-white text-sm font-medium rounded-xl transition-colors min-h-[44px]"
+                className="flex-1 px-4 py-2.5 bg-dark-100 hover:bg-dark-200 text-dark-600 hover:text-white text-sm font-medium rounded-xl transition-colors min-h-[44px]"
               >
                 End without logging
               </button>
               <button
                 onClick={() => { setShowEndForm(false); setActualCovers(""); }}
-                className="px-4 py-2.5 text-[#666666] hover:text-[#999999] text-sm transition-colors min-h-[44px]"
+                className="px-4 py-2.5 text-dark-500 hover:text-dark-600 text-sm transition-colors min-h-[44px]"
               >
                 Cancel
               </button>

@@ -64,7 +64,7 @@ interface StaffMember {
 }
 
 const inputClass =
-  "w-full px-3 py-2 text-sm rounded-lg bg-[#161616] border border-[#2A2A2A] text-white placeholder:text-[#666666] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 min-h-[44px]";
+  "w-full px-3 py-2 text-sm rounded-lg bg-dark-50 border border-dark-200 text-white placeholder:text-dark-500 focus:outline-none focus:ring-2 focus:ring-gold/50 min-h-[44px]";
 
 const COLOR_PALETTE = [
   "#FF6B35", "#FFD700", "#4ECDC4", "#5B8DEF",
@@ -360,10 +360,10 @@ export function StoreLocationsSection({ orgId }: { orgId: number }) {
   }
 
   return (
-    <div className="border-t border-[#2A2A2A] pt-4 mt-4">
+    <div className="border-t border-dark-200 pt-4 mt-4">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <MapPin className="size-4 text-[#999999]" />
+          <MapPin className="size-4 text-dark-600" />
           <h3 className="text-sm font-semibold text-[#E5E5E5]">
             Store Locations ({locations.length})
           </h3>
@@ -372,7 +372,7 @@ export function StoreLocationsSection({ orgId }: { orgId: number }) {
           type="button"
           onClick={() => setShowCreate(!showCreate)}
           className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg
-            bg-[#D4A574] text-[#0A0A0A] hover:bg-[#C4956A] transition-colors min-h-[32px]"
+            bg-gold text-dark hover:bg-gold-hover transition-colors min-h-[32px]"
         >
           <Plus className="size-3" />
           Add Location
@@ -387,22 +387,22 @@ export function StoreLocationsSection({ orgId }: { orgId: number }) {
 
       {/* Create form */}
       {showCreate && (
-        <form onSubmit={handleCreate} className="bg-[#1E1E1E] border border-[#2A2A2A] rounded-xl p-4 mb-4 space-y-3">
+        <form onSubmit={handleCreate} className="bg-dark-100 border border-dark-200 rounded-xl p-4 mb-4 space-y-3">
           <div className="flex items-center justify-between mb-1">
             <h4 className="text-sm font-medium text-[#E5E5E5]">New Store Location</h4>
-            <button type="button" onClick={() => setShowCreate(false)} className="text-[#666666] hover:text-[#999999]">
+            <button type="button" onClick={() => setShowCreate(false)} className="text-dark-500 hover:text-dark-600">
               <X className="size-4" />
             </button>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2">
-              <label className="block text-xs text-[#999999] mb-1">Kitchen Name *</label>
+              <label className="block text-xs text-dark-600 mb-1">Kitchen Name *</label>
               <input type="text" value={createName} onChange={(e) => setCreateName(e.target.value)} required className={inputClass} placeholder="e.g. Main Kitchen" />
             </div>
 
             <div className="col-span-2">
-              <label className="block text-xs text-[#999999] mb-1">Classification</label>
+              <label className="block text-xs text-dark-600 mb-1">Classification</label>
               <select
                 value={createClassification}
                 onChange={(e) => setCreateClassification(e.target.value)}
@@ -416,34 +416,34 @@ export function StoreLocationsSection({ orgId }: { orgId: number }) {
             </div>
 
             <div className="col-span-2">
-              <label className="block text-xs text-[#999999] mb-1">Address Line 1</label>
+              <label className="block text-xs text-dark-600 mb-1">Address Line 1</label>
               <input type="text" value={createAddress1} onChange={(e) => setCreateAddress1(e.target.value)} className={inputClass} />
             </div>
             <div className="col-span-2">
-              <label className="block text-xs text-[#999999] mb-1">Address Line 2</label>
+              <label className="block text-xs text-dark-600 mb-1">Address Line 2</label>
               <input type="text" value={createAddress2} onChange={(e) => setCreateAddress2(e.target.value)} className={inputClass} />
             </div>
             <div>
-              <label className="block text-xs text-[#999999] mb-1">Suburb / City</label>
+              <label className="block text-xs text-dark-600 mb-1">Suburb / City</label>
               <input type="text" value={createSuburb} onChange={(e) => setCreateSuburb(e.target.value)} className={inputClass} />
             </div>
             <div>
-              <label className="block text-xs text-[#999999] mb-1">State / Region</label>
+              <label className="block text-xs text-dark-600 mb-1">State / Region</label>
               <input type="text" value={createState} onChange={(e) => setCreateState(e.target.value)} className={inputClass} />
             </div>
             <div>
-              <label className="block text-xs text-[#999999] mb-1">Country</label>
+              <label className="block text-xs text-dark-600 mb-1">Country</label>
               <input type="text" value={createCountry} onChange={(e) => setCreateCountry(e.target.value)} className={inputClass} />
             </div>
             <div>
-              <label className="block text-xs text-[#999999] mb-1">Postcode</label>
+              <label className="block text-xs text-dark-600 mb-1">Postcode</label>
               <input type="text" value={createPostcode} onChange={(e) => setCreatePostcode(e.target.value)} className={inputClass} />
             </div>
           </div>
 
           {/* Color palette */}
           <div>
-            <label className="block text-xs text-[#999999] mb-2">Kitchen Color (optional)</label>
+            <label className="block text-xs text-dark-600 mb-2">Kitchen Color (optional)</label>
             <div className="flex gap-2 flex-wrap">
               {COLOR_PALETTE.map((color) => (
                 <button
@@ -451,7 +451,7 @@ export function StoreLocationsSection({ orgId }: { orgId: number }) {
                   type="button"
                   onClick={() => setCreateColor(createColor === color ? null : color)}
                   className={`w-7 h-7 rounded-lg transition-all duration-200
-                    ${createColor === color ? "ring-2 ring-white/40 scale-110" : "ring-1 ring-[#2A2A2A]"}`}
+                    ${createColor === color ? "ring-2 ring-white/40 scale-110" : "ring-1 ring-dark-200"}`}
                   style={{ backgroundColor: color }}
                 />
               ))}
@@ -462,7 +462,7 @@ export function StoreLocationsSection({ orgId }: { orgId: number }) {
             type="submit"
             disabled={creating || !createName.trim()}
             className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg
-              bg-[#D4A574] hover:bg-[#C4956A] text-[#0A0A0A] font-medium text-sm
+              bg-gold hover:bg-gold-hover text-dark font-medium text-sm
               disabled:opacity-50 disabled:cursor-not-allowed transition-colors min-h-[44px]"
           >
             {creating ? <Loader2 className="size-4 animate-spin" /> : "Create Location"}
@@ -473,28 +473,28 @@ export function StoreLocationsSection({ orgId }: { orgId: number }) {
       {/* Location list */}
       {loading ? (
         <div className="flex justify-center py-4">
-          <Loader2 className="size-5 animate-spin text-[#666666]" />
+          <Loader2 className="size-5 animate-spin text-dark-500" />
         </div>
       ) : locations.length === 0 ? (
         <div className="text-center py-6">
-          <MapPin className="size-8 mx-auto text-[#666666] mb-2" />
-          <p className="text-sm text-[#666666]">No store locations yet.</p>
-          <p className="text-xs text-[#666666] mt-1">Click &ldquo;Add Location&rdquo; to create your first kitchen.</p>
+          <MapPin className="size-8 mx-auto text-dark-500 mb-2" />
+          <p className="text-sm text-dark-500">No store locations yet.</p>
+          <p className="text-xs text-dark-500 mt-1">Click &ldquo;Add Location&rdquo; to create your first kitchen.</p>
         </div>
       ) : (
         <div className="space-y-2">
           {locations.map((loc) => {
             const isExpanded = expandedId === loc.storeLocationId;
-            const badge = CLASSIFICATION_BADGE[loc.classification] ?? "bg-[#1E1E1E] text-[#999999]";
+            const badge = CLASSIFICATION_BADGE[loc.classification] ?? "bg-dark-100 text-dark-600";
             const address = [loc.addressLine1, loc.suburb, loc.state].filter(Boolean).join(", ");
 
             return (
-              <div key={loc.storeLocationId} className="rounded-xl border border-[#2A2A2A] bg-[#1E1E1E] overflow-hidden">
+              <div key={loc.storeLocationId} className="rounded-xl border border-dark-200 bg-dark-100 overflow-hidden">
                 {/* Location header — clickable to expand */}
                 <button
                   type="button"
                   onClick={() => handleExpand(loc.storeLocationId)}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-[#2A2A2A]/50 transition-colors text-left"
+                  className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-dark-200/50 transition-colors text-left"
                 >
                   {/* Color stripe */}
                   {loc.colorAccent && (
@@ -502,8 +502,8 @@ export function StoreLocationsSection({ orgId }: { orgId: number }) {
                   )}
 
                   {/* Icon */}
-                  <div className="w-8 h-8 rounded-lg bg-[#161616] flex items-center justify-center shrink-0">
-                    <MapPin className="size-3.5 text-[#999999]" />
+                  <div className="w-8 h-8 rounded-lg bg-dark-50 flex items-center justify-center shrink-0">
+                    <MapPin className="size-3.5 text-dark-600" />
                   </div>
 
                   {/* Info */}
@@ -514,15 +514,15 @@ export function StoreLocationsSection({ orgId }: { orgId: number }) {
                         {CLASSIFICATION_LABELS[loc.classification] ?? loc.classification}
                       </span>
                     </div>
-                    {address && <p className="text-xs text-[#666666] truncate mt-0.5">{address}</p>}
+                    {address && <p className="text-xs text-dark-500 truncate mt-0.5">{address}</p>}
                   </div>
 
-                  {isExpanded ? <ChevronDown className="size-4 text-[#666666]" /> : <ChevronRight className="size-4 text-[#666666]" />}
+                  {isExpanded ? <ChevronDown className="size-4 text-dark-500" /> : <ChevronRight className="size-4 text-dark-500" />}
                 </button>
 
                 {/* Expanded panel */}
                 {isExpanded && (
-                  <div className="border-t border-[#2A2A2A] px-4 py-3">
+                  <div className="border-t border-dark-200 px-4 py-3">
                     {/* Sub-tabs */}
                     <div className="flex gap-1 mb-3">
                       {(["details", "staff", "hours", "key"] as const).map((tab) => (
@@ -532,8 +532,8 @@ export function StoreLocationsSection({ orgId }: { orgId: number }) {
                           onClick={() => setExpandedTab(tab)}
                           className={`px-3 py-1.5 text-xs rounded-lg transition-colors capitalize ${
                             expandedTab === tab
-                              ? "bg-[#D4A574] text-[#0A0A0A]"
-                              : "bg-[#161616] text-[#999999] hover:bg-[#2A2A2A]"
+                              ? "bg-gold text-dark"
+                              : "bg-dark-50 text-dark-600 hover:bg-dark-200"
                           }`}
                         >
                           {tab}
@@ -545,17 +545,17 @@ export function StoreLocationsSection({ orgId }: { orgId: number }) {
                     {expandedTab === "details" && (
                       detailLoading ? (
                         <div className="flex justify-center py-3">
-                          <Loader2 className="size-4 animate-spin text-[#666666]" />
+                          <Loader2 className="size-4 animate-spin text-dark-500" />
                         </div>
                       ) : editing && expandedDetail ? (
                         <div className="space-y-3">
                           <div className="grid grid-cols-2 gap-3">
                             <div className="col-span-2">
-                              <label className="block text-xs text-[#999999] mb-1">Kitchen Name</label>
+                              <label className="block text-xs text-dark-600 mb-1">Kitchen Name</label>
                               <input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} className={inputClass} />
                             </div>
                             <div className="col-span-2">
-                              <label className="block text-xs text-[#999999] mb-1">Classification</label>
+                              <label className="block text-xs text-dark-600 mb-1">Classification</label>
                               <select value={editClassification} onChange={(e) => setEditClassification(e.target.value)} className={inputClass}>
                                 <option value="hq">HQ</option>
                                 <option value="branch">Branch</option>
@@ -564,47 +564,47 @@ export function StoreLocationsSection({ orgId }: { orgId: number }) {
                               </select>
                             </div>
                             <div className="col-span-2">
-                              <label className="block text-xs text-[#999999] mb-1">Address Line 1</label>
+                              <label className="block text-xs text-dark-600 mb-1">Address Line 1</label>
                               <input type="text" value={editAddress1} onChange={(e) => setEditAddress1(e.target.value)} className={inputClass} />
                             </div>
                             <div className="col-span-2">
-                              <label className="block text-xs text-[#999999] mb-1">Address Line 2</label>
+                              <label className="block text-xs text-dark-600 mb-1">Address Line 2</label>
                               <input type="text" value={editAddress2} onChange={(e) => setEditAddress2(e.target.value)} className={inputClass} />
                             </div>
                             <div>
-                              <label className="block text-xs text-[#999999] mb-1">Suburb / City</label>
+                              <label className="block text-xs text-dark-600 mb-1">Suburb / City</label>
                               <input type="text" value={editSuburb} onChange={(e) => setEditSuburb(e.target.value)} className={inputClass} />
                             </div>
                             <div>
-                              <label className="block text-xs text-[#999999] mb-1">State / Region</label>
+                              <label className="block text-xs text-dark-600 mb-1">State / Region</label>
                               <input type="text" value={editState} onChange={(e) => setEditState(e.target.value)} className={inputClass} />
                             </div>
                             <div>
-                              <label className="block text-xs text-[#999999] mb-1">Country</label>
+                              <label className="block text-xs text-dark-600 mb-1">Country</label>
                               <input type="text" value={editCountry} onChange={(e) => setEditCountry(e.target.value)} className={inputClass} />
                             </div>
                             <div>
-                              <label className="block text-xs text-[#999999] mb-1">Postcode</label>
+                              <label className="block text-xs text-dark-600 mb-1">Postcode</label>
                               <input type="text" value={editPostcode} onChange={(e) => setEditPostcode(e.target.value)} className={inputClass} />
                             </div>
                           </div>
                           <div>
-                            <label className="block text-xs text-[#999999] mb-2">Kitchen Color</label>
+                            <label className="block text-xs text-dark-600 mb-2">Kitchen Color</label>
                             <div className="flex gap-2 flex-wrap">
                               {COLOR_PALETTE.map((color) => (
                                 <button key={color} type="button" onClick={() => setEditColor(editColor === color ? null : color)}
-                                  className={`w-6 h-6 rounded-md transition-all ${editColor === color ? "ring-2 ring-white/40 scale-110" : "ring-1 ring-[#2A2A2A]"}`}
+                                  className={`w-6 h-6 rounded-md transition-all ${editColor === color ? "ring-2 ring-white/40 scale-110" : "ring-1 ring-dark-200"}`}
                                   style={{ backgroundColor: color }} />
                               ))}
                             </div>
                           </div>
                           <div className="flex gap-2">
                             <button type="button" onClick={() => handleSaveEdit(loc.storeLocationId)} disabled={saving}
-                              className="px-3 py-1.5 text-xs font-medium rounded-lg bg-[#D4A574] text-[#0A0A0A] hover:bg-[#C4956A] disabled:opacity-50 transition-colors">
+                              className="px-3 py-1.5 text-xs font-medium rounded-lg bg-gold text-dark hover:bg-gold-hover disabled:opacity-50 transition-colors">
                               {saving ? <Loader2 className="size-3 animate-spin" /> : "Save"}
                             </button>
                             <button type="button" onClick={() => setEditing(false)}
-                              className="px-3 py-1.5 text-xs font-medium rounded-lg bg-[#1E1E1E] text-[#999999] border border-[#2A2A2A] hover:bg-[#2A2A2A] transition-colors">
+                              className="px-3 py-1.5 text-xs font-medium rounded-lg bg-dark-100 text-dark-600 border border-dark-200 hover:bg-dark-200 transition-colors">
                               Cancel
                             </button>
                           </div>
@@ -614,19 +614,19 @@ export function StoreLocationsSection({ orgId }: { orgId: number }) {
                           {expandedDetail && (
                             <>
                               <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
-                                <div><span className="text-[#666666]">Classification:</span> <span className="text-[#E5E5E5] ml-1">{CLASSIFICATION_LABELS[expandedDetail.classification]}</span></div>
+                                <div><span className="text-dark-500">Classification:</span> <span className="text-[#E5E5E5] ml-1">{CLASSIFICATION_LABELS[expandedDetail.classification]}</span></div>
                                 {expandedDetail.colorAccent && (
-                                  <div className="flex items-center gap-1"><span className="text-[#666666]">Color:</span> <div className="w-4 h-4 rounded ml-1" style={{ backgroundColor: expandedDetail.colorAccent }} /></div>
+                                  <div className="flex items-center gap-1"><span className="text-dark-500">Color:</span> <div className="w-4 h-4 rounded ml-1" style={{ backgroundColor: expandedDetail.colorAccent }} /></div>
                                 )}
-                                {expandedDetail.addressLine1 && <div className="col-span-2"><span className="text-[#666666]">Address:</span> <span className="text-[#E5E5E5] ml-1">{[expandedDetail.addressLine1, expandedDetail.addressLine2].filter(Boolean).join(", ")}</span></div>}
-                                {expandedDetail.suburb && <div><span className="text-[#666666]">Suburb:</span> <span className="text-[#E5E5E5] ml-1">{expandedDetail.suburb}</span></div>}
-                                {expandedDetail.state && <div><span className="text-[#666666]">State:</span> <span className="text-[#E5E5E5] ml-1">{expandedDetail.state}</span></div>}
-                                {expandedDetail.country && <div><span className="text-[#666666]">Country:</span> <span className="text-[#E5E5E5] ml-1">{expandedDetail.country}</span></div>}
-                                {expandedDetail.postcode && <div><span className="text-[#666666]">Postcode:</span> <span className="text-[#E5E5E5] ml-1">{expandedDetail.postcode}</span></div>}
+                                {expandedDetail.addressLine1 && <div className="col-span-2"><span className="text-dark-500">Address:</span> <span className="text-[#E5E5E5] ml-1">{[expandedDetail.addressLine1, expandedDetail.addressLine2].filter(Boolean).join(", ")}</span></div>}
+                                {expandedDetail.suburb && <div><span className="text-dark-500">Suburb:</span> <span className="text-[#E5E5E5] ml-1">{expandedDetail.suburb}</span></div>}
+                                {expandedDetail.state && <div><span className="text-dark-500">State:</span> <span className="text-[#E5E5E5] ml-1">{expandedDetail.state}</span></div>}
+                                {expandedDetail.country && <div><span className="text-dark-500">Country:</span> <span className="text-[#E5E5E5] ml-1">{expandedDetail.country}</span></div>}
+                                {expandedDetail.postcode && <div><span className="text-dark-500">Postcode:</span> <span className="text-[#E5E5E5] ml-1">{expandedDetail.postcode}</span></div>}
                               </div>
                               <div className="flex gap-2 pt-1">
                                 <button type="button" onClick={() => startEditing(expandedDetail)}
-                                  className="text-xs text-[#D4A574] hover:text-[#C4956A] font-medium transition-colors">
+                                  className="text-xs text-gold hover:text-gold-hover font-medium transition-colors">
                                   Edit Details
                                 </button>
                                 {expandedDetail.classification !== "hq" && (
@@ -647,23 +647,23 @@ export function StoreLocationsSection({ orgId }: { orgId: number }) {
                       <div className="space-y-3">
                         {staffLoading ? (
                           <div className="flex justify-center py-3">
-                            <Loader2 className="size-4 animate-spin text-[#666666]" />
+                            <Loader2 className="size-4 animate-spin text-dark-500" />
                           </div>
                         ) : (
                           <>
                             {/* Assigned staff */}
                             <div>
-                              <p className="text-xs text-[#999999] mb-2 font-medium">Assigned ({staff.length})</p>
+                              <p className="text-xs text-dark-600 mb-2 font-medium">Assigned ({staff.length})</p>
                               {staff.length === 0 ? (
-                                <p className="text-xs text-[#666666] py-1">No staff assigned yet.</p>
+                                <p className="text-xs text-dark-500 py-1">No staff assigned yet.</p>
                               ) : (
                                 <div className="space-y-1.5">
                                   {staff.map((s) => (
-                                    <div key={s.userId} className="flex items-center gap-2 text-xs bg-[#161616] rounded-lg px-2.5 py-2">
+                                    <div key={s.userId} className="flex items-center gap-2 text-xs bg-dark-50 rounded-lg px-2.5 py-2">
                                       {s.photoPath ? (
                                         <img src={s.photoPath} alt="" className="w-6 h-6 rounded-full object-cover" />
                                       ) : (
-                                        <div className="w-6 h-6 rounded-full bg-[#2A2A2A] flex items-center justify-center text-[10px] text-[#999999] font-bold">
+                                        <div className="w-6 h-6 rounded-full bg-dark-200 flex items-center justify-center text-[10px] text-dark-600 font-bold">
                                           {(s.displayName ?? "?")[0].toUpperCase()}
                                         </div>
                                       )}
@@ -671,7 +671,7 @@ export function StoreLocationsSection({ orgId }: { orgId: number }) {
                                       <button
                                         type="button"
                                         onClick={() => handleRemoveStaff(loc.storeLocationId, s.userId)}
-                                        className="text-[#666666] hover:text-red-400 transition-colors"
+                                        className="text-dark-500 hover:text-red-400 transition-colors"
                                         title="Remove from location"
                                       >
                                         <UserMinus className="size-3.5" />
@@ -688,23 +688,23 @@ export function StoreLocationsSection({ orgId }: { orgId: number }) {
                               const unassigned = orgMembers.filter((m) => !assignedIds.has(m.userId));
                               if (unassigned.length === 0) return null;
                               return (
-                                <div className="border-t border-[#2A2A2A] pt-3">
-                                  <p className="text-xs text-[#999999] mb-2 font-medium">Available to Assign ({unassigned.length})</p>
+                                <div className="border-t border-dark-200 pt-3">
+                                  <p className="text-xs text-dark-600 mb-2 font-medium">Available to Assign ({unassigned.length})</p>
                                   <div className="space-y-1.5">
                                     {unassigned.map((m) => (
-                                      <div key={m.userId} className="flex items-center gap-2 text-xs bg-[#161616] rounded-lg px-2.5 py-2">
+                                      <div key={m.userId} className="flex items-center gap-2 text-xs bg-dark-50 rounded-lg px-2.5 py-2">
                                         {m.photoPath ? (
                                           <img src={m.photoPath} alt="" className="w-6 h-6 rounded-full object-cover" />
                                         ) : (
-                                          <div className="w-6 h-6 rounded-full bg-[#2A2A2A] flex items-center justify-center text-[10px] text-[#999999] font-bold">
+                                          <div className="w-6 h-6 rounded-full bg-dark-200 flex items-center justify-center text-[10px] text-dark-600 font-bold">
                                             {(m.displayName ?? "?")[0].toUpperCase()}
                                           </div>
                                         )}
-                                        <span className="text-[#999999] flex-1">{m.displayName}</span>
+                                        <span className="text-dark-600 flex-1">{m.displayName}</span>
                                         <button
                                           type="button"
                                           onClick={() => handleAssignStaff(loc.storeLocationId, m.userId)}
-                                          className="flex items-center gap-1 text-[10px] text-[#D4A574] hover:text-[#C4956A] font-medium transition-colors"
+                                          className="flex items-center gap-1 text-[10px] text-gold hover:text-gold-hover font-medium transition-colors"
                                         >
                                           <UserPlus className="size-3" />
                                           Assign
@@ -729,28 +729,28 @@ export function StoreLocationsSection({ orgId }: { orgId: number }) {
                     {expandedTab === "key" && (
                       detailLoading ? (
                         <div className="flex justify-center py-3">
-                          <Loader2 className="size-4 animate-spin text-[#666666]" />
+                          <Loader2 className="size-4 animate-spin text-dark-500" />
                         </div>
                       ) : expandedDetail ? (
                         <div className="space-y-3">
-                          <div className="flex items-center gap-2 bg-[#161616] rounded-lg px-3 py-2.5">
-                            <Key className="size-4 text-[#D4A574] shrink-0" />
+                          <div className="flex items-center gap-2 bg-dark-50 rounded-lg px-3 py-2.5">
+                            <Key className="size-4 text-gold shrink-0" />
                             <code className="text-sm font-mono font-medium text-[#FAFAFA] flex-1">{expandedDetail.storeKey}</code>
                             <button
                               type="button"
                               onClick={() => handleCopyKey(expandedDetail.storeKey)}
-                              className="text-[#666666] hover:text-[#E5E5E5] transition-colors"
+                              className="text-dark-500 hover:text-[#E5E5E5] transition-colors"
                             >
                               {copiedKey === expandedDetail.storeKey ? <CheckCircle2 className="size-4 text-green-500" /> : <Copy className="size-4" />}
                             </button>
                           </div>
-                          <p className="text-xs text-[#666666]">
+                          <p className="text-xs text-dark-500">
                             Share this key with team members so they can join this location.
                           </p>
                           <button
                             type="button"
                             onClick={() => handleRegenerateKey(loc.storeLocationId)}
-                            className="flex items-center gap-1 text-xs text-[#D4A574] hover:text-[#C4956A] transition-colors"
+                            className="flex items-center gap-1 text-xs text-gold hover:text-gold-hover transition-colors"
                           >
                             <RefreshCw className="size-3" />
                             Regenerate Key

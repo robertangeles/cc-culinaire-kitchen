@@ -236,19 +236,19 @@ export function MenuIntelligencePage() {
   // Guest users see sign-up prompt
   if (isGuest || !user) {
     return (
-      <div className="flex-1 overflow-y-auto bg-[#0A0A0A]">
+      <div className="flex-1 overflow-y-auto bg-dark">
         <div className="min-h-full flex flex-col items-center justify-center p-6 md:p-10">
-          <BarChart3 className="size-12 mx-auto mb-4 text-[#D4A574]" />
+          <BarChart3 className="size-12 mx-auto mb-4 text-gold" />
           <h1 className="text-2xl md:text-3xl font-bold text-white mb-2">
             Menu &amp; Costing
           </h1>
-          <p className="text-[#999999] mb-6 text-center max-w-md">
+          <p className="text-dark-600 mb-6 text-center max-w-md">
             Sign up to analyze your menu performance, find your Stars, and fix
             your Dogs.
           </p>
           <Link
             to="/register"
-            className="inline-flex items-center gap-2 px-6 py-3 bg-[#D4A574] hover:bg-[#C4956A] text-white font-medium rounded-lg transition-colors min-h-[44px]"
+            className="inline-flex items-center gap-2 px-6 py-3 bg-gold hover:bg-gold-hover text-white font-medium rounded-lg transition-colors min-h-[44px]"
           >
             <LogIn className="size-4" />
             Sign Up to Analyze Your Menu
@@ -259,17 +259,17 @@ export function MenuIntelligencePage() {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto bg-[#0A0A0A]">
+    <div className="flex-1 overflow-y-auto bg-dark">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
-            <BarChart3 className="size-7 text-[#D4A574]" />
+            <BarChart3 className="size-7 text-gold" />
             <div>
               <h1 className="text-2xl font-bold text-[#FAFAFA]">
                 Menu &amp; Costing
               </h1>
-              <p className="text-sm text-[#999999]">
+              <p className="text-sm text-dark-600">
                 Analyze your menu. Find your Stars. Fix your Dogs.
               </p>
             </div>
@@ -277,7 +277,7 @@ export function MenuIntelligencePage() {
           <div className="flex items-center gap-2">
             <button
               onClick={() => setShowSale(true)}
-              className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-black bg-[#D4A574] rounded-xl hover:bg-[#c4956a] transition-colors min-h-[44px]"
+              className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-black bg-gold rounded-xl hover:bg-gold-hover transition-colors min-h-[44px]"
             >
               <ShoppingCart className="size-4" />
               Record sale
@@ -285,7 +285,7 @@ export function MenuIntelligencePage() {
             <button
               onClick={handleRecalculate}
               disabled={loading}
-              className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-[#D4A574] bg-[#D4A574]/10 rounded-xl border border-[#D4A574]/20 hover:bg-[#D4A574]/20 disabled:opacity-50 transition-colors min-h-[44px]"
+              className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-gold bg-gold/10 rounded-xl border border-gold/20 hover:bg-gold/20 disabled:opacity-50 transition-colors min-h-[44px]"
             >
               <RefreshCw
                 className={`size-4 ${loading ? "animate-spin" : ""}`}
@@ -303,8 +303,8 @@ export function MenuIntelligencePage() {
               onClick={() => { setActiveTab(tab.key); if (tab.key !== "items") setDogFilter(false); }}
               className={`px-5 py-2.5 rounded-full text-sm font-medium transition-colors min-h-[44px] ${
                 activeTab === tab.key
-                  ? "bg-[#D4A574] text-white"
-                  : "bg-[#161616] text-[#999999] hover:text-white hover:bg-[#1E1E1E]"
+                  ? "bg-gold text-white"
+                  : "bg-dark-50 text-dark-600 hover:text-white hover:bg-dark-100"
               }`}
             >
               {tab.label}
@@ -324,7 +324,7 @@ export function MenuIntelligencePage() {
               }}
             />
             {/* CSV upload below dashboard */}
-            <div className="bg-[#161616] rounded-2xl border border-[#2A2A2A] p-5">
+            <div className="bg-dark-50 rounded-2xl border border-dark-200 p-5">
               <MenuCsvUpload onComplete={handleRecalculate} />
             </div>
           </div>

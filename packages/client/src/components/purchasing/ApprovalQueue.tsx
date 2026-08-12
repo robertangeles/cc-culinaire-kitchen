@@ -51,21 +51,21 @@ export default function ApprovalQueue() {
   }
 
   function getWaitColor(hours: number | null) {
-    if (!hours) return "text-[#999]";
+    if (!hours) return "text-dark-600";
     if (hours > 48) return "text-red-400";
     if (hours > 24) return "text-amber-400";
-    return "text-[#999]";
+    return "text-dark-600";
   }
 
   return (
     <div className="space-y-4 animate-[fadeInUp_200ms_ease-out]">
       <div className="flex items-center gap-2">
         <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-          <ShieldCheck className="size-5 text-[#D4A574]" />
+          <ShieldCheck className="size-5 text-gold" />
           Pending Approvals
         </h2>
         {pendingPOs.length > 0 && (
-          <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-amber-500 text-[#0A0A0A]">
+          <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-amber-500 text-dark">
             {pendingPOs.length}
           </span>
         )}
@@ -73,16 +73,16 @@ export default function ApprovalQueue() {
 
       {isLoading ? (
         <div className="flex items-center justify-center py-16">
-          <Loader2 className="size-6 text-[#D4A574] animate-spin" />
+          <Loader2 className="size-6 text-gold animate-spin" />
         </div>
       ) : pendingPOs.length === 0 ? (
         <div className="text-center py-16 animate-[fadeIn_300ms_ease-out]">
-          <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-[#1E1E1E]/60 backdrop-blur-sm
-            flex items-center justify-center border border-[#2A2A2A]
-            shadow-[0_0_20px_rgba(212,165,116,0.08)]">
+          <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-dark-100/60 backdrop-blur-sm
+            flex items-center justify-center border border-dark-200
+            shadow-[0_0_20px_var(--color-gold-glow)]">
             <ShieldCheck className="size-8 text-emerald-400/60" />
           </div>
-          <p className="text-[#999] text-sm">No purchase orders awaiting approval.</p>
+          <p className="text-dark-600 text-sm">No purchase orders awaiting approval.</p>
         </div>
       ) : (
         <div className="space-y-2">
@@ -93,15 +93,15 @@ export default function ApprovalQueue() {
             return (
               <div
                 key={po.poId}
-                className="rounded-xl bg-[#161616]/80 backdrop-blur-sm border border-[#2A2A2A]
-                  hover:border-[#3A3A3A] transition-all"
+                className="rounded-xl bg-dark-50/80 backdrop-blur-sm border border-dark-200
+                  hover:border-dark-300 transition-all"
                 style={{ animationDelay: `${idx * 40}ms` }}
               >
                 <div className="flex items-center gap-4 px-4 py-4">
                   {/* Wait indicator */}
                   <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${
                     waitHours && waitHours > 48 ? "bg-red-500/15" :
-                    waitHours && waitHours > 24 ? "bg-amber-500/15" : "bg-[#1E1E1E]"
+                    waitHours && waitHours > 24 ? "bg-amber-500/15" : "bg-dark-100"
                   }`}>
                     {waitHours && waitHours > 24 ? (
                       <AlertTriangle className={`size-5 ${waitColor}`} />
@@ -115,7 +115,7 @@ export default function ApprovalQueue() {
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-mono font-medium text-white">{po.poNumber}</span>
                     </div>
-                    <div className="flex items-center gap-3 mt-0.5 text-xs text-[#999]">
+                    <div className="flex items-center gap-3 mt-0.5 text-xs text-dark-600">
                       <span>{po.supplierName}</span>
                       <span className="text-[#333]">|</span>
                       <span>{po.locationName}</span>
@@ -126,7 +126,7 @@ export default function ApprovalQueue() {
                       <div className={`flex items-center gap-1 mt-1 text-xs ${waitColor}`}>
                         <Clock className="size-3" />
                         Waiting {waitHours}h
-                        {po.createdByUserName && <span className="text-[#666]">· by {po.createdByUserName}</span>}
+                        {po.createdByUserName && <span className="text-dark-500">· by {po.createdByUserName}</span>}
                       </div>
                     )}
                   </div>
@@ -163,10 +163,10 @@ export default function ApprovalQueue() {
       {/* Reject modal */}
       {rejectingId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="bg-[#1E1E1E] border border-[#2A2A2A] rounded-xl p-6 w-full max-w-md
+          <div className="bg-dark-100 border border-dark-200 rounded-xl p-6 w-full max-w-md
             shadow-[0_8px_32px_rgba(0,0,0,0.5)] animate-[fadeInUp_200ms_ease-out]">
             <h3 className="text-white font-semibold mb-3">Reject Purchase Order</h3>
-            <p className="text-sm text-[#999] mb-4">
+            <p className="text-sm text-dark-600 mb-4">
               Provide a reason so the location can amend and resubmit.
             </p>
             <textarea
@@ -174,12 +174,12 @@ export default function ApprovalQueue() {
               onChange={(e) => setRejectReason(e.target.value)}
               placeholder="Reason for rejection..."
               rows={3}
-              className="w-full rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-white px-3 py-2 text-sm
-                focus:outline-none focus:border-[#D4A574]/50 placeholder:text-[#666]"
+              className="w-full rounded-lg bg-dark border border-dark-200 text-white px-3 py-2 text-sm
+                focus:outline-none focus:border-gold/50 placeholder:text-dark-500"
             />
             <div className="flex justify-end gap-2 mt-4">
               <button onClick={() => setRejectingId(null)}
-                className="px-4 py-2 rounded-lg text-sm text-[#999] hover:text-white transition-all">
+                className="px-4 py-2 rounded-lg text-sm text-dark-600 hover:text-white transition-all">
                 Cancel
               </button>
               <button onClick={handleReject} disabled={!rejectReason.trim()}

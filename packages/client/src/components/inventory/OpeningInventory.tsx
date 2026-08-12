@@ -195,7 +195,7 @@ export function OpeningInventory() {
         <h2 className="text-2xl font-bold text-white mb-2">
           Inventory Active!
         </h2>
-        <p className="text-sm text-[#999] max-w-md mx-auto mb-8">
+        <p className="text-sm text-dark-600 max-w-md mx-auto mb-8">
           Your opening inventory has been recorded. You can now track stock
           levels, run regular stock takes, and manage your inventory from the
           dashboard.
@@ -233,7 +233,7 @@ export function OpeningInventory() {
         <h3 className="text-lg font-semibold text-white mb-2">
           Ready to Begin
         </h3>
-        <p className="text-sm text-[#999] max-w-md mx-auto mb-8">
+        <p className="text-sm text-dark-600 max-w-md mx-auto mb-8">
           Start your opening count to activate inventory tracking for this
           location. Every category will be included.
         </p>
@@ -242,7 +242,7 @@ export function OpeningInventory() {
 
         <button
           onClick={startOpeningCount}
-          className="px-6 py-3 rounded-xl bg-gradient-to-r from-[#D4A574] to-[#C4956A] text-[#0A0A0A] font-semibold text-sm hover:shadow-[0_0_12px_rgba(212,165,116,0.2)] transition-all active:scale-[0.98]"
+          className="px-6 py-3 rounded-xl bg-gradient-to-r from-gold to-gold-hover text-dark font-semibold text-sm hover:shadow-[0_0_12px_rgba(212,165,116,0.2)] transition-all active:scale-[0.98]"
         >
           <Play className="inline-block mr-2 size-4" />
           Start Opening Inventory

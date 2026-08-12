@@ -13,7 +13,7 @@ export function KitchenOpsLayout({ children }: { children: ReactNode }) {
   return (
     <div className="flex-1 flex flex-col min-h-0">
       <KitchenOpsToolbar />
-      <div className="flex-1 overflow-y-auto overflow-x-hidden bg-[#0A0A0A]">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden bg-dark">
         <div className="min-h-full">
           {children}
         </div>

@@ -30,13 +30,13 @@ interface RecipeEditorProps {
 }
 
 const INPUT_CLS =
-  "w-full bg-[#0A0A0A] border border-[#2A2A2A] rounded-xl px-4 py-3 text-white placeholder-[#444444] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 transition-shadow text-sm";
-const LABEL_CLS = "block text-xs font-medium text-[#999999] mb-1.5";
+  "w-full bg-dark border border-dark-200 rounded-xl px-4 py-3 text-white placeholder-dark-400 focus:outline-none focus:ring-2 focus:ring-gold/50 transition-shadow text-sm";
+const LABEL_CLS = "block text-xs font-medium text-dark-600 mb-1.5";
 const SECTION_TITLE_CLS = "text-[#FAFAFA] font-semibold text-lg mb-3";
 const ADD_BTN_CLS =
-  "flex items-center gap-1 text-[#D4A574] hover:text-[#C4956A] text-sm font-medium transition-colors mt-2";
+  "flex items-center gap-1 text-gold hover:text-gold-hover text-sm font-medium transition-colors mt-2";
 const DEL_BTN_CLS =
-  "text-[#666666] hover:text-red-400 transition-colors shrink-0 p-1";
+  "text-dark-500 hover:text-red-400 transition-colors shrink-0 p-1";
 
 const DIFFICULTY_OPTIONS = ["beginner", "intermediate", "advanced", "expert"];
 
@@ -179,7 +179,7 @@ export function RecipeEditor({
   }, [data, changeDescription, onSave]);
 
   return (
-    <div className="bg-[#161616] rounded-2xl border border-[#2A2A2A] p-6 space-y-8">
+    <div className="bg-dark-50 rounded-2xl border border-dark-200 p-6 space-y-8">
       {/* ── Title & Meta ── */}
       <section>
         <h2 className={SECTION_TITLE_CLS}>Title & Details</h2>
@@ -320,7 +320,7 @@ export function RecipeEditor({
                 >
                   <ChevronUp className="size-4" />
                 </button>
-                <span className="text-xs font-semibold text-[#D4A574] w-6 text-center">
+                <span className="text-xs font-semibold text-gold w-6 text-center">
                   {step.step}
                 </span>
                 <button
@@ -387,7 +387,7 @@ export function RecipeEditor({
       <section>
         <button
           onClick={() => setShowAdditional(!showAdditional)}
-          className="flex items-center gap-2 text-[#FAFAFA] font-semibold text-lg hover:text-[#D4A574] transition-colors"
+          className="flex items-center gap-2 text-[#FAFAFA] font-semibold text-lg hover:text-gold transition-colors"
         >
           <ChevronRight
             className={`size-5 transition-transform ${showAdditional ? "rotate-90" : ""}`}
@@ -436,10 +436,10 @@ export function RecipeEditor({
       </section>
 
       {/* ── Sticky Actions Bar ── */}
-      <div className="sticky bottom-0 bg-[#161616] border-t border-[#2A2A2A] -mx-6 px-6 py-4 flex items-center justify-between gap-3 rounded-b-2xl">
+      <div className="sticky bottom-0 bg-dark-50 border-t border-dark-200 -mx-6 px-6 py-4 flex items-center justify-between gap-3 rounded-b-2xl">
         <button
           onClick={onCancel}
-          className="px-5 py-3 text-sm text-[#999999] hover:text-white transition-colors rounded-xl"
+          className="px-5 py-3 text-sm text-dark-600 hover:text-white transition-colors rounded-xl"
         >
           Cancel
         </button>
@@ -463,14 +463,14 @@ export function RecipeEditor({
               }
             }}
             disabled={regeneratingImage}
-            className="flex items-center gap-2 px-5 py-3 text-sm font-medium text-[#999999] border border-[#2A2A2A] hover:border-[#3A3A3A] hover:text-white rounded-xl transition-colors disabled:opacity-50"
+            className="flex items-center gap-2 px-5 py-3 text-sm font-medium text-dark-600 border border-dark-200 hover:border-dark-300 hover:text-white rounded-xl transition-colors disabled:opacity-50"
           >
             {regeneratingImage ? <Loader2 className="size-4 animate-spin" /> : <ImagePlus className="size-4" />}
             {imageRegenerated ? "Image Updated!" : "New Image"}
           </button>
           <button
             onClick={onOpenRefine}
-            className="flex items-center gap-2 px-5 py-3 text-sm font-medium text-[#D4A574] border border-[#D4A574]/30 hover:border-[#D4A574]/60 hover:bg-[#D4A574]/10 rounded-xl transition-colors"
+            className="flex items-center gap-2 px-5 py-3 text-sm font-medium text-gold border border-gold/30 hover:border-gold/60 hover:bg-gold/10 rounded-xl transition-colors"
           >
             <Sparkles className="size-4" />
             AI Refine
@@ -478,7 +478,7 @@ export function RecipeEditor({
           <button
             onClick={handleSave}
             disabled={saving}
-            className="flex items-center gap-2 px-6 py-3 text-sm font-semibold bg-[#D4A574] hover:bg-[#C4956A] text-[#0A0A0A] rounded-xl transition-colors disabled:opacity-50"
+            className="flex items-center gap-2 px-6 py-3 text-sm font-semibold bg-gold hover:bg-gold-hover text-dark rounded-xl transition-colors disabled:opacity-50"
           >
             {saving ? (
               <Loader2 className="size-4 animate-spin" />

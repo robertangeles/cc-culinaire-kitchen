@@ -144,7 +144,7 @@ export function UsersTab() {
       cancelled: "bg-red-900/40 text-red-400",
     };
     return (
-      <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${colors[status] ?? "bg-[#1E1E1E] text-[#E5E5E5]"}`}>
+      <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${colors[status] ?? "bg-dark-100 text-[#E5E5E5]"}`}>
         {status}
       </span>
     );
@@ -153,13 +153,13 @@ export function UsersTab() {
   return (
     <div className="flex flex-col h-full">
       {/* Sub-tab bar */}
-      <div className="flex gap-1 px-6 pt-5 pb-0 border-b border-[#2A2A2A]">
+      <div className="flex gap-1 px-6 pt-5 pb-0 border-b border-dark-200">
         <button
           onClick={() => setSubTab("users")}
           className={`px-4 py-2 text-sm font-medium rounded-t-lg border-b-2 transition-colors ${
             subTab === "users"
-              ? "border-[#D4A574] text-[#D4A574]"
-              : "border-transparent text-[#999999] hover:text-[#E5E5E5]"
+              ? "border-gold text-gold"
+              : "border-transparent text-dark-600 hover:text-[#E5E5E5]"
           }`}
         >
           User Management
@@ -168,8 +168,8 @@ export function UsersTab() {
           onClick={() => setSubTab("personalisation")}
           className={`px-4 py-2 text-sm font-medium rounded-t-lg border-b-2 transition-colors ${
             subTab === "personalisation"
-              ? "border-[#D4A574] text-[#D4A574]"
-              : "border-transparent text-[#999999] hover:text-[#E5E5E5]"
+              ? "border-gold text-gold"
+              : "border-transparent text-dark-600 hover:text-[#E5E5E5]"
           }`}
         >
           Personalisation
@@ -185,27 +185,27 @@ export function UsersTab() {
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-[#FAFAFA]">User Management</h2>
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-[#999999]" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-dark-600" />
           <input
             type="text"
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             placeholder="Search users..."
-            className="pl-9 pr-3 py-1.5 text-sm border border-[#2A2A2A] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50"
+            className="pl-9 pr-3 py-1.5 text-sm border border-dark-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gold/50"
           />
         </div>
       </div>
 
       {loading ? (
         <div className="flex justify-center py-12">
-          <Loader2 className="size-6 animate-spin text-[#999999]" />
+          <Loader2 className="size-6 animate-spin text-dark-600" />
         </div>
       ) : (
         <>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-[#2A2A2A] text-left text-[#999999]">
+                <tr className="border-b border-dark-200 text-left text-dark-600">
                   <th className="pb-2 font-medium">User</th>
                   <th className="pb-2 font-medium">Roles</th>
                   <th className="pb-2 font-medium">Organisation</th>
@@ -215,11 +215,11 @@ export function UsersTab() {
                   <th className="pb-2 font-medium">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#2A2A2A]">
+              <tbody className="divide-y divide-dark-200">
                 {users.map((u) => (
                   <tr
                     key={u.userId}
-                    className="hover:bg-[#0A0A0A] cursor-pointer"
+                    className="hover:bg-dark cursor-pointer"
                     onClick={() => setSelectedUser(u)}
                   >
                     <td className="py-3">
@@ -227,7 +227,7 @@ export function UsersTab() {
                         {u.userPhotoPath ? (
                           <img src={u.userPhotoPath} alt="" className="size-7 rounded-full object-cover" />
                         ) : (
-                          <div className="size-7 rounded-full bg-[#D4A574]/15 flex items-center justify-center text-xs font-medium text-[#D4A574]">
+                          <div className="size-7 rounded-full bg-gold/15 flex items-center justify-center text-xs font-medium text-gold">
                             {u.userName.charAt(0).toUpperCase()}
                           </div>
                         )}
@@ -240,7 +240,7 @@ export function UsersTab() {
                               <span title="Email not verified"><XCircle className="size-3.5 text-red-400" /></span>
                             )}
                           </div>
-                          <p className="text-xs text-[#999999]">{u.userEmail}</p>
+                          <p className="text-xs text-dark-600">{u.userEmail}</p>
                         </div>
                       </div>
                     </td>
@@ -249,7 +249,7 @@ export function UsersTab() {
                         {u.roles.map((r) => (
                           <span
                             key={r}
-                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs bg-[#1E1E1E] text-[#E5E5E5] cursor-pointer hover:bg-red-900/40 hover:text-red-400 transition-colors"
+                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs bg-dark-100 text-[#E5E5E5] cursor-pointer hover:bg-red-900/40 hover:text-red-400 transition-colors"
                             title={`Click to remove ${r}`}
                             onClick={() => handleRemoveRole(u.userId, r)}
                           >
@@ -257,7 +257,7 @@ export function UsersTab() {
                           </span>
                         ))}
                         <select
-                          className="text-xs border border-[#2A2A2A] rounded px-1 py-0.5 text-[#999999]"
+                          className="text-xs border border-dark-200 rounded px-1 py-0.5 text-dark-600"
                           value=""
                           onChange={(e) => {
                             if (e.target.value) handleAssignRole(u.userId, parseInt(e.target.value));
@@ -284,11 +284,11 @@ export function UsersTab() {
                             min={0}
                             value={sessionValue}
                             onChange={(e) => setSessionValue(parseInt(e.target.value) || 0)}
-                            className="w-16 text-sm border border-[#2A2A2A] rounded px-1 py-0.5"
+                            className="w-16 text-sm border border-dark-200 rounded px-1 py-0.5"
                           />
                           <button
                             onClick={() => handleSaveSessions(u.userId)}
-                            className="text-xs text-[#D4A574] hover:text-[#D4A574] font-medium"
+                            className="text-xs text-gold hover:text-gold font-medium"
                           >
                             Save
                           </button>
@@ -296,7 +296,7 @@ export function UsersTab() {
                       ) : (
                         <button
                           onClick={() => { setEditingSessions(u.userId); setSessionValue(u.freeSessions); }}
-                          className="text-[#E5E5E5] hover:text-[#D4A574] transition-colors"
+                          className="text-[#E5E5E5] hover:text-gold transition-colors"
                         >
                           {u.freeSessions}
                         </button>
@@ -344,7 +344,7 @@ export function UsersTab() {
 
           {/* Pagination */}
           {totalPages > 1 && (
-            <div className="flex items-center justify-between text-sm text-[#999999]">
+            <div className="flex items-center justify-between text-sm text-dark-600">
               <span>
                 {total} user{total !== 1 ? "s" : ""} total
               </span>

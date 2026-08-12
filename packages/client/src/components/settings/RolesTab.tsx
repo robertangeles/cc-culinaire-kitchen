@@ -134,7 +134,7 @@ export function RolesTab() {
   if (loading) {
     return (
       <div className="flex justify-center py-12">
-        <Loader2 className="size-6 animate-spin text-[#999999]" />
+        <Loader2 className="size-6 animate-spin text-dark-600" />
       </div>
     );
   }
@@ -145,7 +145,7 @@ export function RolesTab() {
         <h2 className="text-lg font-semibold text-[#FAFAFA]">Roles & Permissions</h2>
         <button
           onClick={() => setShowCreate(!showCreate)}
-          className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-white bg-[#D4A574] rounded-lg hover:bg-[#C4956A] transition-colors"
+          className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-white bg-gold rounded-lg hover:bg-gold-hover transition-colors"
         >
           <Plus className="size-4" />
           New Role
@@ -160,7 +160,7 @@ export function RolesTab() {
       )}
 
       {showCreate && (
-        <form onSubmit={handleCreate} className="bg-[#0A0A0A] rounded-xl p-4 space-y-3 border border-[#2A2A2A]">
+        <form onSubmit={handleCreate} className="bg-dark rounded-xl p-4 space-y-3 border border-dark-200">
           <div>
             <label className="block text-sm font-medium text-[#E5E5E5] mb-1">Role Name</label>
             <input
@@ -168,7 +168,7 @@ export function RolesTab() {
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               required
-              className="w-full rounded-lg border border-[#2A2A2A] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50"
+              className="w-full rounded-lg border border-dark-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gold/50"
             />
           </div>
           <div>
@@ -177,14 +177,14 @@ export function RolesTab() {
               type="text"
               value={newDesc}
               onChange={(e) => setNewDesc(e.target.value)}
-              className="w-full rounded-lg border border-[#2A2A2A] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50"
+              className="w-full rounded-lg border border-dark-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gold/50"
             />
           </div>
           <div className="flex gap-2">
             <button
               type="submit"
               disabled={creating}
-              className="px-3 py-1.5 text-sm font-medium text-white bg-[#D4A574] rounded-lg hover:bg-[#C4956A] disabled:opacity-50"
+              className="px-3 py-1.5 text-sm font-medium text-white bg-gold rounded-lg hover:bg-gold-hover disabled:opacity-50"
             >
               {creating && <Loader2 className="size-4 animate-spin inline mr-1" />}
               Create
@@ -206,7 +206,7 @@ export function RolesTab() {
           const isEditing = editingId === r.roleId;
 
           return (
-            <div key={r.roleId} className="bg-[#161616] rounded-xl border border-[#2A2A2A] p-4">
+            <div key={r.roleId} className="bg-dark-50 rounded-xl border border-dark-200 p-4">
               <div className="flex items-start justify-between mb-3">
                 {isEditing ? (
                   <div className="flex-1 space-y-2 mr-4">
@@ -214,21 +214,21 @@ export function RolesTab() {
                       type="text"
                       value={editName}
                       onChange={(e) => setEditName(e.target.value)}
-                      className="w-full rounded-lg border border-[#2A2A2A] px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50"
+                      className="w-full rounded-lg border border-dark-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-gold/50"
                     />
                     <input
                       type="text"
                       value={editDesc}
                       onChange={(e) => setEditDesc(e.target.value)}
                       placeholder="Description"
-                      className="w-full rounded-lg border border-[#2A2A2A] px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50"
+                      className="w-full rounded-lg border border-dark-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-gold/50"
                     />
                   </div>
                 ) : (
                   <div>
                     <h3 className="font-semibold text-[#FAFAFA]">{r.roleName}</h3>
                     {r.roleDescription && (
-                      <p className="text-sm text-[#999999]">{r.roleDescription}</p>
+                      <p className="text-sm text-dark-600">{r.roleDescription}</p>
                     )}
                   </div>
                 )}
@@ -243,7 +243,7 @@ export function RolesTab() {
                       </button>
                       <button
                         onClick={() => setEditingId(null)}
-                        className="p-1 text-[#999999] hover:bg-[#1E1E1E] rounded"
+                        className="p-1 text-dark-600 hover:bg-dark-100 rounded"
                       >
                         <X className="size-4" />
                       </button>
@@ -252,7 +252,7 @@ export function RolesTab() {
                     <>
                       <button
                         onClick={() => { setEditingId(r.roleId); setEditName(r.roleName); setEditDesc(r.roleDescription ?? ""); }}
-                        className="p-1 text-[#999999] hover:text-[#E5E5E5] hover:bg-[#1E1E1E] rounded"
+                        className="p-1 text-dark-600 hover:text-[#E5E5E5] hover:bg-dark-100 rounded"
                       >
                         <Pencil className="size-4" />
                       </button>
@@ -278,11 +278,11 @@ export function RolesTab() {
                       type="checkbox"
                       checked={permIds.includes(p.permissionId)}
                       onChange={() => handleTogglePermission(r.roleId, p.permissionId, permIds)}
-                      className="mt-0.5 rounded border-[#2A2A2A] text-[#D4A574] focus:ring-[#D4A574]/50"
+                      className="mt-0.5 rounded border-dark-200 text-gold focus:ring-gold/50"
                     />
                     <span>
                       <span className="block font-medium text-[#E5E5E5]">{p.permissionDescription ?? p.permissionKey}</span>
-                      <span className="block text-xs text-[#999999]">{p.permissionKey}</span>
+                      <span className="block text-xs text-dark-600">{p.permissionKey}</span>
                     </span>
                   </label>
                 ))}

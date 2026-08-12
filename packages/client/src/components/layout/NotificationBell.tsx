@@ -16,8 +16,8 @@ const TYPE_CONFIG: Record<string, { icon: typeof Bell; color: string; label: str
   PO_REJECTED:       { icon: X,              color: "text-red-400",     label: "PO rejected" },
   DISCREPANCY_ALERT: { icon: AlertTriangle,  color: "text-orange-400",  label: "Discrepancy" },
   DELIVERY_OVERDUE:  { icon: Clock,          color: "text-red-400",     label: "Delivery overdue" },
-  BRAIN_DIGEST:      { icon: Brain,          color: "text-[#D4A574]",   label: "Brain digest" },
-  BRAIN_NUDGE:       { icon: Sparkles,       color: "text-[#D4A574]",   label: "Nudge" },
+  BRAIN_DIGEST:      { icon: Brain,          color: "text-gold",   label: "Brain digest" },
+  BRAIN_NUDGE:       { icon: Sparkles,       color: "text-gold",   label: "Nudge" },
 };
 
 function timeAgo(dateStr: string): string {
@@ -68,14 +68,14 @@ export default function NotificationBell() {
       {/* Bell button */}
       <button
         onClick={handleOpen}
-        className="relative p-2 rounded-lg text-[#999] hover:text-white hover:bg-[#1E1E1E]
+        className="relative p-2 rounded-lg text-dark-600 hover:text-white hover:bg-dark-100
           transition-all"
         aria-label="Notifications"
       >
         <Bell className="size-5" />
         {unreadCount > 0 && (
           <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] flex items-center justify-center
-            rounded-full bg-[#D4A574] text-[#0A0A0A] text-[10px] font-bold px-1
+            rounded-full bg-gold text-dark text-[10px] font-bold px-1
             animate-[pulse_2s_ease-in-out_infinite]">
             {unreadCount > 99 ? "99+" : unreadCount}
           </span>
@@ -85,20 +85,20 @@ export default function NotificationBell() {
       {/* Dropdown */}
       {isOpen && (
         <div className="absolute right-0 top-full mt-2 w-80 max-h-96 overflow-y-auto
-          bg-[#1E1E1E]/95 backdrop-blur-md border border-[#2A2A2A] rounded-xl
+          bg-dark-100/95 backdrop-blur-md border border-dark-200 rounded-xl
           shadow-[0_8px_32px_rgba(0,0,0,0.5)] z-50
           animate-[fadeInUp_150ms_ease-out]">
-          <div className="px-4 py-3 border-b border-[#2A2A2A]">
+          <div className="px-4 py-3 border-b border-dark-200">
             <h3 className="text-sm font-semibold text-white">Notifications</h3>
           </div>
 
           {notifications.length === 0 ? (
             <div className="px-4 py-8 text-center">
               <Bell className="size-8 mx-auto text-[#333] mb-2" />
-              <p className="text-sm text-[#666]">No new notifications</p>
+              <p className="text-sm text-dark-500">No new notifications</p>
             </div>
           ) : (
-            <div className="divide-y divide-[#2A2A2A]">
+            <div className="divide-y divide-dark-200">
               {notifications.map((n) => {
                 const config = TYPE_CONFIG[n.type] ?? TYPE_CONFIG.APPROVAL_REQUIRED;
                 const Icon = config.icon;
@@ -107,7 +107,7 @@ export default function NotificationBell() {
                 return (
                   <div
                     key={n.notificationId}
-                    className="flex items-start gap-3 px-4 py-3 hover:bg-[#2A2A2A]/50
+                    className="flex items-start gap-3 px-4 py-3 hover:bg-dark-200/50
                       cursor-pointer transition-all"
                     onClick={() => handleNotificationClick(n)}
                   >
@@ -116,7 +116,7 @@ export default function NotificationBell() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="text-xs font-medium text-white">{config.label}</div>
-                      <div className="text-xs text-[#999] mt-0.5">
+                      <div className="text-xs text-dark-600 mt-0.5">
                         {payload.body ?? payload.summary ?? (
                           <span className="block truncate">
                             {payload.poNumber && `PO ${payload.poNumber}`}
@@ -125,14 +125,14 @@ export default function NotificationBell() {
                           </span>
                         )}
                       </div>
-                      <div className="text-[10px] text-[#666] mt-1">{timeAgo(n.createdAt)}</div>
+                      <div className="text-[10px] text-dark-500 mt-1">{timeAgo(n.createdAt)}</div>
                     </div>
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
                         dismiss(n.notificationId);
                       }}
-                      className="shrink-0 p-1 text-[#666] hover:text-white transition-all"
+                      className="shrink-0 p-1 text-dark-500 hover:text-white transition-all"
                     >
                       <X className="size-3" />
                     </button>

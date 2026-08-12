@@ -31,7 +31,7 @@ const QUICK_SUGGESTIONS = [
 ];
 
 const INPUT_CLS =
-  "w-full bg-[#0A0A0A] border border-[#2A2A2A] rounded-xl px-4 py-3 text-white placeholder-[#444444] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 transition-shadow text-sm";
+  "w-full bg-dark border border-dark-200 rounded-xl px-4 py-3 text-white placeholder-dark-400 focus:outline-none focus:ring-2 focus:ring-gold/50 transition-shadow text-sm";
 
 export function RecipeRefinePanel({
   recipeId,
@@ -113,12 +113,12 @@ export function RecipeRefinePanel({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-[#161616] rounded-2xl border border-[#2A2A2A] max-w-2xl w-full mx-auto p-6 max-h-[90vh] overflow-y-auto">
+      <div className="bg-dark-50 rounded-2xl border border-dark-200 max-w-2xl w-full mx-auto p-6 max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
-            <div className="size-10 rounded-xl bg-[#D4A574]/10 flex items-center justify-center">
-              <Sparkles className="size-5 text-[#D4A574]" />
+            <div className="size-10 rounded-xl bg-gold/10 flex items-center justify-center">
+              <Sparkles className="size-5 text-gold" />
             </div>
             <h2 className="text-xl font-semibold text-[#FAFAFA]">
               Refine Recipe with AI
@@ -126,7 +126,7 @@ export function RecipeRefinePanel({
           </div>
           <button
             onClick={onClose}
-            className="text-[#666666] hover:text-white transition-colors p-1"
+            className="text-dark-500 hover:text-white transition-colors p-1"
             aria-label="Close"
           >
             <X className="size-5" />
@@ -137,7 +137,7 @@ export function RecipeRefinePanel({
         {!result && !loading && (
           <>
             <div className="mb-4">
-              <label className="block text-xs font-medium text-[#999999] mb-1.5">
+              <label className="block text-xs font-medium text-dark-600 mb-1.5">
                 What would you like to change?
               </label>
               <input
@@ -161,7 +161,7 @@ export function RecipeRefinePanel({
                 <button
                   key={suggestion}
                   onClick={() => setInstruction(suggestion)}
-                  className="px-3 py-1.5 text-xs font-medium text-[#D4A574] bg-[#D4A574]/10 border border-[#D4A574]/20 rounded-full hover:bg-[#D4A574]/20 transition-colors"
+                  className="px-3 py-1.5 text-xs font-medium text-gold bg-gold/10 border border-gold/20 rounded-full hover:bg-gold/20 transition-colors"
                 >
                   {suggestion}
                 </button>
@@ -177,7 +177,7 @@ export function RecipeRefinePanel({
             <button
               onClick={handleRefine}
               disabled={!instruction.trim()}
-              className="w-full flex items-center justify-center gap-2 px-6 py-3 text-sm font-semibold bg-[#D4A574] hover:bg-[#C4956A] text-[#0A0A0A] rounded-xl transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              className="w-full flex items-center justify-center gap-2 px-6 py-3 text-sm font-semibold bg-gold hover:bg-gold-hover text-dark rounded-xl transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <Sparkles className="size-4" />
               Refine
@@ -188,8 +188,8 @@ export function RecipeRefinePanel({
         {/* Loading phase */}
         {loading && (
           <div className="flex flex-col items-center justify-center py-12 gap-4">
-            <Loader2 className="size-8 animate-spin text-[#D4A574]" />
-            <p className="text-sm text-[#999999]">
+            <Loader2 className="size-8 animate-spin text-gold" />
+            <p className="text-sm text-dark-600">
               AI is refining your recipe...
             </p>
           </div>
@@ -202,7 +202,7 @@ export function RecipeRefinePanel({
               <h3 className="text-sm font-semibold text-[#FAFAFA] mb-2">
                 Changes Summary
               </h3>
-              <div className="bg-[#0A0A0A] border border-[#2A2A2A] rounded-xl p-4">
+              <div className="bg-dark border border-dark-200 rounded-xl p-4">
                 <p className="text-sm text-[#E5E5E5] leading-relaxed whitespace-pre-line">
                   {result.changeSummary}
                 </p>
@@ -218,14 +218,14 @@ export function RecipeRefinePanel({
             <div className="flex items-center gap-3">
               <button
                 onClick={onClose}
-                className="px-5 py-3 text-sm text-[#999999] hover:text-white transition-colors rounded-xl"
+                className="px-5 py-3 text-sm text-dark-600 hover:text-white transition-colors rounded-xl"
               >
                 Cancel
               </button>
               <div className="flex-1" />
               <button
                 onClick={handleTryAgain}
-                className="flex items-center gap-2 px-5 py-3 text-sm font-medium text-[#D4A574] border border-[#D4A574]/30 hover:border-[#D4A574]/60 hover:bg-[#D4A574]/10 rounded-xl transition-colors"
+                className="flex items-center gap-2 px-5 py-3 text-sm font-medium text-gold border border-gold/30 hover:border-gold/60 hover:bg-gold/10 rounded-xl transition-colors"
               >
                 <RotateCcw className="size-4" />
                 Try Again
@@ -233,7 +233,7 @@ export function RecipeRefinePanel({
               <button
                 onClick={handleAccept}
                 disabled={accepting}
-                className="flex items-center gap-2 px-6 py-3 text-sm font-semibold bg-[#D4A574] hover:bg-[#C4956A] text-[#0A0A0A] rounded-xl transition-colors disabled:opacity-50"
+                className="flex items-center gap-2 px-6 py-3 text-sm font-semibold bg-gold hover:bg-gold-hover text-dark rounded-xl transition-colors disabled:opacity-50"
               >
                 {accepting ? (
                   <Loader2 className="size-4 animate-spin" />

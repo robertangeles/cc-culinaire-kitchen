@@ -22,14 +22,14 @@ export function LocationChip() {
 
   const content = (
     <>
-      <MapPin className="size-3.5 text-[#D4A574] shrink-0" />
+      <MapPin className="size-3.5 text-gold shrink-0" />
       <span className="flex-1 text-left truncate">{name}</span>
-      {canSwitch && <ChevronsUpDown className="size-3.5 text-[#666666] shrink-0" />}
+      {canSwitch && <ChevronsUpDown className="size-3.5 text-dark-500 shrink-0" />}
     </>
   );
 
   const baseClass =
-    "flex items-center gap-2 w-full px-3 py-2 rounded-xl text-xs font-medium text-[#CCCCCC] bg-[#141414] border border-[#1E1E1E]";
+    "flex items-center gap-2 w-full px-3 py-2 rounded-xl text-xs font-medium text-[#CCCCCC] bg-[#141414] border border-dark-100";
 
   if (!canSwitch) {
     return <div className={`${baseClass} mx-3 mt-3`} style={{ width: "auto" }}>{content}</div>;
@@ -40,7 +40,7 @@ export function LocationChip() {
       type="button"
       onClick={() => window.dispatchEvent(new CustomEvent(OPEN_LOCATION_SWITCHER_EVENT))}
       title="Switch kitchen (Ctrl+L)"
-      className={`${baseClass} mx-3 mt-3 hover:border-[#D4A574]/40 hover:text-white transition-colors`}
+      className={`${baseClass} mx-3 mt-3 hover:border-gold/40 hover:text-white transition-colors`}
       style={{ width: "auto" }}
     >
       {content}

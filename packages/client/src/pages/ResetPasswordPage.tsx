@@ -56,7 +56,7 @@ export function ResetPasswordPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#0A0A0A] px-4">
+    <div className="min-h-screen flex items-center justify-center bg-dark px-4">
       <div className="w-full max-w-md">
         {/* Header */}
         <div className="text-center mb-8">
@@ -64,16 +64,16 @@ export function ResetPasswordPage() {
             className="inline-flex items-center justify-center rounded-2xl mb-4 overflow-hidden"
             style={{ width: 80, height: 80 }}
           >
-            <div className="size-full bg-[#C4956A] flex items-center justify-center">
+            <div className="size-full bg-gold-hover flex items-center justify-center">
               <KeyRound className="size-10 text-white" />
             </div>
           </div>
           <h1 className="text-2xl font-bold text-[#FAFAFA]">Reset Password</h1>
-          <p className="text-[#999999] mt-1">Enter your new password below</p>
+          <p className="text-dark-600 mt-1">Enter your new password below</p>
         </div>
 
         {!token ? (
-          <div className="bg-[#161616] rounded-2xl shadow-lg shadow-black/20 border border-[#2A2A2A] p-6 space-y-4">
+          <div className="bg-dark-50 rounded-2xl shadow-lg shadow-black/20 border border-dark-200 p-6 space-y-4">
             <div className="flex items-center gap-2 text-sm text-red-400 bg-red-900/30 border border-red-700/40 rounded-lg px-3 py-2">
               <AlertCircle className="size-4 flex-shrink-0" />
               Invalid reset link.
@@ -81,13 +81,13 @@ export function ResetPasswordPage() {
 
             <Link
               to="/login"
-              className="block w-full text-center py-2.5 text-sm font-medium text-white bg-[#D4A574] rounded-lg hover:bg-[#C4956A] transition-colors"
+              className="block w-full text-center py-2.5 text-sm font-medium text-white bg-gold rounded-lg hover:bg-gold-hover transition-colors"
             >
               Back to Login
             </Link>
           </div>
         ) : success ? (
-          <div className="bg-[#161616] rounded-2xl shadow-lg shadow-black/20 border border-[#2A2A2A] p-6 space-y-4">
+          <div className="bg-dark-50 rounded-2xl shadow-lg shadow-black/20 border border-dark-200 p-6 space-y-4">
             <div className="flex items-center gap-2 text-sm text-green-400 bg-green-900/30 border border-green-700/40 rounded-lg px-3 py-2">
               <CheckCircle2 className="size-4 flex-shrink-0" />
               Password reset successfully!
@@ -95,13 +95,13 @@ export function ResetPasswordPage() {
 
             <Link
               to="/login"
-              className="block w-full text-center py-2.5 text-sm font-medium text-white bg-[#D4A574] rounded-lg hover:bg-[#C4956A] transition-colors"
+              className="block w-full text-center py-2.5 text-sm font-medium text-white bg-gold rounded-lg hover:bg-gold-hover transition-colors"
             >
               Back to Login
             </Link>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="bg-[#161616] rounded-2xl shadow-lg shadow-black/20 border border-[#2A2A2A] p-6 space-y-4">
+          <form onSubmit={handleSubmit} className="bg-dark-50 rounded-2xl shadow-lg shadow-black/20 border border-dark-200 p-6 space-y-4">
             {error && (
               <div className="flex items-center gap-2 text-sm text-red-400 bg-red-900/30 border border-red-700/40 rounded-lg px-3 py-2">
                 <AlertCircle className="size-4 flex-shrink-0" />
@@ -121,7 +121,7 @@ export function ResetPasswordPage() {
                 required
                 minLength={8}
                 autoComplete="new-password"
-                className="w-full rounded-lg border border-[#2A2A2A] px-3 py-2 text-sm text-[#FAFAFA] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-transparent"
+                className="w-full rounded-lg border border-dark-200 px-3 py-2 text-sm text-[#FAFAFA] focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-transparent"
                 placeholder="Enter new password"
               />
             </div>
@@ -138,7 +138,7 @@ export function ResetPasswordPage() {
                 required
                 minLength={8}
                 autoComplete="new-password"
-                className="w-full rounded-lg border border-[#2A2A2A] px-3 py-2 text-sm text-[#FAFAFA] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-transparent"
+                className="w-full rounded-lg border border-dark-200 px-3 py-2 text-sm text-[#FAFAFA] focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-transparent"
                 placeholder="Confirm new password"
               />
             </div>
@@ -146,7 +146,7 @@ export function ResetPasswordPage() {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full flex items-center justify-center gap-2 py-2.5 text-sm font-medium text-white bg-[#D4A574] rounded-lg hover:bg-[#C4956A] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="w-full flex items-center justify-center gap-2 py-2.5 text-sm font-medium text-white bg-gold rounded-lg hover:bg-gold-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {isSubmitting && <Loader2 className="size-4 animate-spin" />}
               Reset Password
@@ -154,8 +154,8 @@ export function ResetPasswordPage() {
           </form>
         )}
 
-        <p className="text-center text-sm text-[#999999] mt-4">
-          <Link to="/login" className="text-[#D4A574] hover:text-[#D4A574] font-medium">
+        <p className="text-center text-sm text-dark-600 mt-4">
+          <Link to="/login" className="text-gold hover:text-gold font-medium">
             Back to Login
           </Link>
         </p>

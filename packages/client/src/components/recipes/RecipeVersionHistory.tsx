@@ -32,7 +32,7 @@ interface RecipeVersionHistoryProps {
 }
 
 const CHANGE_TYPE_BADGES: Record<string, string> = {
-  Original: "bg-[#2A2A2A] text-[#999999]",
+  Original: "bg-dark-200 text-dark-600",
   Manual: "bg-blue-500/20 text-blue-400",
   AI: "bg-purple-500/20 text-purple-400",
   Revert: "bg-amber-500/20 text-amber-400",
@@ -160,12 +160,12 @@ export function RecipeVersionHistory({
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm">
-      <div className="bg-[#161616] rounded-l-2xl border-l border-t border-b border-[#2A2A2A] max-w-md w-full p-6 overflow-y-auto">
+      <div className="bg-dark-50 rounded-l-2xl border-l border-t border-b border-dark-200 max-w-md w-full p-6 overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
-            <div className="size-10 rounded-xl bg-[#D4A574]/10 flex items-center justify-center">
-              <Clock className="size-5 text-[#D4A574]" />
+            <div className="size-10 rounded-xl bg-gold/10 flex items-center justify-center">
+              <Clock className="size-5 text-gold" />
             </div>
             <h2 className="text-xl font-semibold text-[#FAFAFA]">
               Version History
@@ -173,7 +173,7 @@ export function RecipeVersionHistory({
           </div>
           <button
             onClick={onClose}
-            className="text-[#666666] hover:text-white transition-colors p-1"
+            className="text-dark-500 hover:text-white transition-colors p-1"
             aria-label="Close"
           >
             <X className="size-5" />
@@ -190,14 +190,14 @@ export function RecipeVersionHistory({
         {/* Loading */}
         {loading && (
           <div className="flex flex-col items-center justify-center py-12 gap-4">
-            <Loader2 className="size-8 animate-spin text-[#D4A574]" />
-            <p className="text-sm text-[#999999]">Loading versions...</p>
+            <Loader2 className="size-8 animate-spin text-gold" />
+            <p className="text-sm text-dark-600">Loading versions...</p>
           </div>
         )}
 
         {/* Empty */}
         {!loading && versions.length === 0 && !error && (
-          <p className="text-sm text-[#666666] text-center py-8">
+          <p className="text-sm text-dark-500 text-center py-8">
             No version history found.
           </p>
         )}
@@ -206,19 +206,19 @@ export function RecipeVersionHistory({
         {!loading && versions.length > 0 && (
           <div className="relative">
             {/* Timeline line */}
-            <div className="absolute left-[11px] top-2 bottom-2 w-0.5 bg-[#2A2A2A]" />
+            <div className="absolute left-[11px] top-2 bottom-2 w-0.5 bg-dark-200" />
 
             <div className="space-y-6">
               {versions.map((v) => (
                 <div key={v.versionId} className="relative pl-8">
                   {/* Timeline dot */}
-                  <div className="absolute left-0 top-1.5 size-6 rounded-full bg-[#D4A574] flex items-center justify-center">
-                    <span className="text-[10px] font-bold text-[#0A0A0A]">
+                  <div className="absolute left-0 top-1.5 size-6 rounded-full bg-gold flex items-center justify-center">
+                    <span className="text-[10px] font-bold text-dark">
                       {v.versionNumber}
                     </span>
                   </div>
 
-                  <div className="bg-[#0A0A0A] border border-[#2A2A2A] rounded-xl p-4">
+                  <div className="bg-dark border border-dark-200 rounded-xl p-4">
                     <div className="flex items-center gap-2 mb-1">
                       <span className="text-sm font-semibold text-[#FAFAFA]">
                         Version {v.versionNumber}
@@ -233,12 +233,12 @@ export function RecipeVersionHistory({
                       </span>
                     </div>
 
-                    <p className="text-xs text-[#666666] mb-2">
+                    <p className="text-xs text-dark-500 mb-2">
                       {formatDate(v.createdDttm)}
                     </p>
 
                     {v.changeDescription && (
-                      <p className="text-xs text-[#999999] mb-3 leading-relaxed">
+                      <p className="text-xs text-dark-600 mb-3 leading-relaxed">
                         {v.changeDescription}
                       </p>
                     )}
@@ -247,7 +247,7 @@ export function RecipeVersionHistory({
                       <button
                         onClick={() => handlePreview(v.versionId)}
                         disabled={previewLoading}
-                        className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-[#D4A574] border border-[#D4A574]/30 hover:border-[#D4A574]/60 hover:bg-[#D4A574]/10 rounded-lg transition-colors disabled:opacity-50"
+                        className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gold border border-gold/30 hover:border-gold/60 hover:bg-gold/10 rounded-lg transition-colors disabled:opacity-50"
                       >
                         {previewLoading &&
                         previewVersion?.versionId !== v.versionId ? (
@@ -278,7 +278,7 @@ export function RecipeVersionHistory({
                               </button>
                               <button
                                 onClick={() => setConfirmRevertId(null)}
-                                className="px-2 py-1.5 text-xs text-[#666666] hover:text-white transition-colors"
+                                className="px-2 py-1.5 text-xs text-dark-500 hover:text-white transition-colors"
                               >
                                 No
                               </button>
@@ -286,7 +286,7 @@ export function RecipeVersionHistory({
                           ) : (
                             <button
                               onClick={() => setConfirmRevertId(v.versionId)}
-                              className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-[#999999] hover:text-white border border-[#2A2A2A] hover:border-[#444444] rounded-lg transition-colors"
+                              className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-dark-600 hover:text-white border border-dark-200 hover:border-dark-400 rounded-lg transition-colors"
                             >
                               <RotateCcw className="size-3" />
                               Revert
@@ -298,8 +298,8 @@ export function RecipeVersionHistory({
 
                     {/* Preview area */}
                     {previewVersion?.versionId === v.versionId && (
-                      <div className="mt-3 pt-3 border-t border-[#2A2A2A]">
-                        <pre className="text-xs text-[#999999] whitespace-pre-wrap max-h-60 overflow-y-auto leading-relaxed">
+                      <div className="mt-3 pt-3 border-t border-dark-200">
+                        <pre className="text-xs text-dark-600 whitespace-pre-wrap max-h-60 overflow-y-auto leading-relaxed">
                           {JSON.stringify(previewVersion.recipeData, null, 2)}
                         </pre>
                       </div>

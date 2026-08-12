@@ -38,14 +38,14 @@ export function RecordSaleModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
       <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-[#141414] p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold text-white flex items-center gap-2"><ShoppingCart className="size-4 text-[#D4A574]" /> Record sale</h3>
-          <button onClick={onClose} className="text-[#666] hover:text-white"><X className="size-4" /></button>
+          <h3 className="text-sm font-semibold text-white flex items-center gap-2"><ShoppingCart className="size-4 text-gold" /> Record sale</h3>
+          <button onClick={onClose} className="text-dark-500 hover:text-white"><X className="size-4" /></button>
         </div>
 
-        <div className="flex gap-1 p-1 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] w-fit mb-4">
+        <div className="flex gap-1 p-1 rounded-lg bg-dark border border-dark-200 w-fit mb-4">
           {(["manual", "csv", "history"] as Tab[]).map((t) => (
             <button key={t} onClick={() => setTab(t)}
-              className={`px-3 py-1 text-xs rounded-md capitalize ${tab === t ? "bg-[#D4A574] text-black font-medium" : "text-[#ccc] hover:text-white"}`}>
+              className={`px-3 py-1 text-xs rounded-md capitalize ${tab === t ? "bg-gold text-black font-medium" : "text-[#ccc] hover:text-white"}`}>
               {t}
             </button>
           ))}
@@ -105,12 +105,12 @@ function ManualTab({ items, locationId, onDone }: { items: MenuItem[]; locationI
           <p className="text-xs text-amber-400 flex items-center gap-1.5"><AlertTriangle className="size-3.5" /> Oversold: {result.oversold.join(", ")} — reconcile with a count.</p>
         )}
         {result.skipped.length > 0 && (
-          <p className="text-xs text-[#999]">Skipped {result.skipped.length} line(s): {result.skipped.map((s) => s.ingredientName).join(", ")}</p>
+          <p className="text-xs text-dark-600">Skipped {result.skipped.length} line(s): {result.skipped.map((s) => s.ingredientName).join(", ")}</p>
         )}
         <ul className="text-xs text-[#ccc] list-disc ml-4">
           {result.depleted.map((d) => <li key={d.ingredientId}>{d.ingredientName}: −{d.baseQty} {d.baseUnit} (on hand {d.fohOnHand})</li>)}
         </ul>
-        <div className="flex justify-end"><button onClick={() => setResult(null)} className="px-3 py-1.5 text-xs rounded-lg bg-[#D4A574] text-black font-medium">Record another</button></div>
+        <div className="flex justify-end"><button onClick={() => setResult(null)} className="px-3 py-1.5 text-xs rounded-lg bg-gold text-black font-medium">Record another</button></div>
       </div>
     );
   }
@@ -118,9 +118,9 @@ function ManualTab({ items, locationId, onDone }: { items: MenuItem[]; locationI
   return (
     <div className="space-y-3">
       <div>
-        <label className="block text-[10px] uppercase tracking-wider text-[#666] mb-1">Item sold</label>
+        <label className="block text-[10px] uppercase tracking-wider text-dark-500 mb-1">Item sold</label>
         <select value={selection} onChange={(e) => setSelection(e.target.value)}
-          className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white">
+          className="w-full px-3 py-2 rounded-lg bg-dark border border-dark-200 text-sm text-white">
           {items.length > 0 && (
             <optgroup label="Menu items">
               {items.map((it) => <option key={it.menuItemId} value={`menu:${it.menuItemId}`}>{it.name}</option>)}
@@ -134,14 +134,14 @@ function ManualTab({ items, locationId, onDone }: { items: MenuItem[]; locationI
         </select>
       </div>
       <div>
-        <label className="block text-[10px] uppercase tracking-wider text-[#666] mb-1">Quantity sold</label>
+        <label className="block text-[10px] uppercase tracking-wider text-dark-500 mb-1">Quantity sold</label>
         <input value={qty} onChange={(e) => setQty(e.target.value)}
-          className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white" />
+          className="w-full px-3 py-2 rounded-lg bg-dark border border-dark-200 text-sm text-white" />
       </div>
       {error && <p className="text-xs text-red-400">{error}</p>}
       <div className="flex justify-end">
         <button onClick={submit} disabled={busy}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-[#D4A574] text-black font-medium disabled:opacity-60">
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-gold text-black font-medium disabled:opacity-60">
           {busy && <Loader2 className="size-3.5 animate-spin" />} Record sale
         </button>
       </div>
@@ -180,7 +180,7 @@ function CsvTab({ onDone }: { onDone: () => void }) {
 
   return (
     <div className="space-y-3">
-      <p className="text-xs text-[#999]">CSV rows: <code>menu item name, quantity[, soldAt]</code>. Preview matches names before anything depletes.</p>
+      <p className="text-xs text-dark-600">CSV rows: <code>menu item name, quantity[, soldAt]</code>. Preview matches names before anything depletes.</p>
       <label className="flex items-center gap-2 px-3 py-2 text-xs rounded-lg border border-dashed border-white/15 text-[#ccc] hover:text-white cursor-pointer w-fit">
         <Upload className="size-3.5" /> Choose CSV
         <input type="file" accept=".csv,text/csv" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); }} />
@@ -199,7 +199,7 @@ function CsvTab({ onDone }: { onDone: () => void }) {
       {preview && preview.matched.length > 0 && (
         <div className="flex justify-end">
           <button onClick={commit} disabled={busy}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-[#D4A574] text-black font-medium disabled:opacity-60">
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-gold text-black font-medium disabled:opacity-60">
             {busy && <Loader2 className="size-3.5 animate-spin" />} Import {preview.matched.length} sale(s)
           </button>
         </div>
@@ -222,18 +222,18 @@ function HistoryTab({ locationId, onDone }: { locationId: string | null; onDone:
     try { await voidSale(saleId); onDone(); load(); } catch { /* surfaced by reload */ }
   }
 
-  if (!locationId) return <p className="text-xs text-[#999]">Select a location to see its sales.</p>;
-  if (loading) return <div className="flex justify-center py-4"><Loader2 className="size-4 animate-spin text-[#666]" /></div>;
-  if (sales.length === 0) return <p className="text-xs text-[#999]">No sales recorded here yet.</p>;
+  if (!locationId) return <p className="text-xs text-dark-600">Select a location to see its sales.</p>;
+  if (loading) return <div className="flex justify-center py-4"><Loader2 className="size-4 animate-spin text-dark-500" /></div>;
+  if (sales.length === 0) return <p className="text-xs text-dark-600">No sales recorded here yet.</p>;
 
   return (
     <div className="space-y-1 max-h-72 overflow-y-auto">
       {sales.map((s) => (
         <div key={s.saleId} className="flex items-center justify-between text-xs px-2 py-1.5 rounded border border-white/5">
-          <span className={s.voidedAt ? "text-[#666] line-through" : "text-white"}>{s.menuItemName} ×{Number(s.qtySold)}</span>
-          <span className="text-[#666]">{new Date(s.soldAt).toLocaleDateString()}</span>
+          <span className={s.voidedAt ? "text-dark-500 line-through" : "text-white"}>{s.menuItemName} ×{Number(s.qtySold)}</span>
+          <span className="text-dark-500">{new Date(s.soldAt).toLocaleDateString()}</span>
           {s.voidedAt ? (
-            <span className="text-[#666]">voided</span>
+            <span className="text-dark-500">voided</span>
           ) : (
             <button onClick={() => doVoid(s.saleId)} className="flex items-center gap-1 text-red-400 hover:text-red-300"><RotateCcw className="size-3" /> void</button>
           )}

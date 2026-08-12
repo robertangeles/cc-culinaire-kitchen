@@ -118,7 +118,7 @@ export function AllergenBadges({
       ))}
       {overflow.length > 0 && (
         <span
-          className="inline-flex items-center px-1.5 py-0.5 text-[10px] uppercase tracking-wide rounded border text-[#999] bg-[#1E1E1E] border-[#2A2A2A]"
+          className="inline-flex items-center px-1.5 py-0.5 text-[10px] uppercase tracking-wide rounded border text-dark-600 bg-dark-100 border-dark-200"
           title={overflow.map((s) => s.label).join(", ")}
           aria-label={`Plus ${overflow.length} more allergens: ${overflow.map((s) => s.label).join(", ")}`}
         >

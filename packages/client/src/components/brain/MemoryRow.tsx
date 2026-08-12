@@ -15,7 +15,7 @@ import type { BrainMemory } from "../../hooks/useBrainMemories.js";
 // 44px touch target on mobile (spec ≥44px); tightens to 36px on desktop where a
 // mouse hovers the row to reveal the action (spec T14c / a11y DT4).
 const ACTION_BTN =
-  "flex-shrink-0 flex size-11 sm:size-9 items-center justify-center rounded-lg text-[#777777] transition-opacity motion-reduce:transition-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4A574]/60 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100";
+  "flex-shrink-0 flex size-11 sm:size-9 items-center justify-center rounded-lg text-[#777777] transition-opacity motion-reduce:transition-none focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100";
 
 export function MemoryRow({
   memory,
@@ -90,7 +90,7 @@ export function MemoryRow({
 
   return (
     <li
-      className={`group rounded-xl border border-[#1E1E1E] bg-[#111111] transition-opacity duration-300 motion-reduce:transition-none ${
+      className={`group rounded-xl border border-dark-100 bg-[#111111] transition-opacity duration-300 motion-reduce:transition-none ${
         isLeaving ? "opacity-0" : "opacity-100"
       } ${memory.isPinned ? "shadow-[0_0_12px_rgba(212,165,116,0.10)]" : ""}`}
     >
@@ -101,14 +101,14 @@ export function MemoryRow({
             onChange={(e) => setEditText(e.target.value)}
             rows={4}
             aria-label="Edit memory text"
-            className="w-full resize-y rounded-lg border border-[#1E1E1E] bg-[#0A0A0A] px-3 py-2 text-sm leading-relaxed text-[#E5E5E5] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4A574]/60"
+            className="w-full resize-y rounded-lg border border-dark-100 bg-dark px-3 py-2 text-sm leading-relaxed text-[#E5E5E5] focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
           />
           <div className="mt-2 flex items-center gap-2">
             <button
               type="button"
               onClick={handleSaveEdit}
               disabled={isSaving || !editText.trim()}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-[#D4A574] to-amber-600 px-3 py-1.5 text-xs font-medium text-[#0A0A0A] disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4A574]/60"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-gold to-amber-600 px-3 py-1.5 text-xs font-medium text-dark disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
             >
               {isSaving ? <Loader2 className="size-3.5 animate-spin" aria-hidden="true" /> : <Check className="size-3.5" aria-hidden="true" />}
               Save
@@ -120,7 +120,7 @@ export function MemoryRow({
                 setEditText(memory.body);
                 setActionError(null);
               }}
-              className="rounded-lg px-3 py-1.5 text-xs text-[#999999] hover:text-[#E5E5E5] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4A574]/60"
+              className="rounded-lg px-3 py-1.5 text-xs text-dark-600 hover:text-[#E5E5E5] focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
             >
               Cancel
             </button>
@@ -132,11 +132,11 @@ export function MemoryRow({
             type="button"
             onClick={() => setExpanded((e) => !e)}
             aria-expanded={expanded}
-            className="flex-1 min-w-0 text-left rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4A574]/60"
+            className="flex-1 min-w-0 text-left rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
           >
             <div className="flex items-center gap-1.5">
               {memory.isPinned && (
-                <Star className="size-3 flex-shrink-0 fill-[#D4A574] text-[#D4A574]" aria-label="Pinned" />
+                <Star className="size-3 flex-shrink-0 fill-gold text-gold" aria-label="Pinned" />
               )}
               <p className="text-sm text-[#E5E5E5] leading-snug break-words">{label}</p>
             </div>
@@ -147,13 +147,13 @@ export function MemoryRow({
                 authorName={memory.authorName}
               />
               {isShared && (
-                <span className="inline-flex items-center gap-1 rounded-full border border-[#D4A574]/20 bg-[#D4A574]/10 px-2 py-0.5 text-[10px] text-[#D4A574]">
+                <span className="inline-flex items-center gap-1 rounded-full border border-gold/20 bg-gold/10 px-2 py-0.5 text-[10px] text-gold">
                   <Share2 className="size-2.5" aria-hidden="true" />
                   shared
                 </span>
               )}
               {isLearning && (
-                <span className="inline-flex items-center gap-1 rounded-full border border-[#D4A574]/20 bg-[#D4A574]/10 px-2 py-0.5 text-[10px] text-[#D4A574]">
+                <span className="inline-flex items-center gap-1 rounded-full border border-gold/20 bg-gold/10 px-2 py-0.5 text-[10px] text-gold">
                   <Sparkles className="size-2.5" aria-hidden="true" />
                   learning…
                 </span>
@@ -171,12 +171,12 @@ export function MemoryRow({
               onClick={handlePin}
               disabled={busy === "pin"}
               aria-label={memory.isPinned ? "Unpin this memory" : "Pin this memory"}
-              className={`${ACTION_BTN} ${memory.isPinned ? "text-[#D4A574] sm:opacity-100" : "hover:text-[#D4A574] hover:bg-[#D4A574]/10"}`}
+              className={`${ACTION_BTN} ${memory.isPinned ? "text-gold sm:opacity-100" : "hover:text-gold hover:bg-gold/10"}`}
             >
               {busy === "pin" ? (
                 <Loader2 className="size-4 animate-spin" aria-hidden="true" />
               ) : (
-                <Star className={`size-4 ${memory.isPinned ? "fill-[#D4A574]" : ""}`} aria-hidden="true" />
+                <Star className={`size-4 ${memory.isPinned ? "fill-gold" : ""}`} aria-hidden="true" />
               )}
             </button>
 
@@ -188,7 +188,7 @@ export function MemoryRow({
                 setActionError(null);
               }}
               aria-label="Edit this memory"
-              className={`${ACTION_BTN} hover:text-[#D4A574] hover:bg-[#D4A574]/10`}
+              className={`${ACTION_BTN} hover:text-gold hover:bg-gold/10`}
             >
               <Pencil className="size-4" aria-hidden="true" />
             </button>
@@ -199,7 +199,7 @@ export function MemoryRow({
                 onClick={handleScope}
                 disabled={busy === "scope"}
                 aria-label={isShared ? "Un-share from your kitchen" : "Share with your kitchen"}
-                className={`${ACTION_BTN} ${isShared ? "text-[#D4A574] sm:opacity-100" : "hover:text-[#D4A574] hover:bg-[#D4A574]/10"}`}
+                className={`${ACTION_BTN} ${isShared ? "text-gold sm:opacity-100" : "hover:text-gold hover:bg-gold/10"}`}
               >
                 {busy === "scope" ? (
                   <Loader2 className="size-4 animate-spin" aria-hidden="true" />
@@ -228,7 +228,7 @@ export function MemoryRow({
       )}
 
       {expanded && !editing && (
-        <div className="border-t border-[#1E1E1E] px-4 py-3">
+        <div className="border-t border-dark-100 px-4 py-3">
           <p className="whitespace-pre-wrap text-sm leading-relaxed text-[#B5B5B5]">{memory.body}</p>
         </div>
       )}

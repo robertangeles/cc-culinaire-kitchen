@@ -71,7 +71,7 @@ export function TheBenchTab() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12 text-[#999999]">
+      <div className="flex items-center justify-center py-12 text-dark-600">
         <Loader2 className="size-5 animate-spin mr-2" />
         Loading bench settings...
       </div>
@@ -82,7 +82,7 @@ export function TheBenchTab() {
     <div className="space-y-6">
       <div>
         <h2 className="text-base font-semibold text-[#FAFAFA]">The Bench Settings</h2>
-        <p className="text-sm text-[#999999] mt-1">
+        <p className="text-sm text-dark-600 mt-1">
           Manage announcements and banner messages for the community chat.
         </p>
       </div>
@@ -104,7 +104,7 @@ export function TheBenchTab() {
         <label className="block text-sm font-medium text-[#E5E5E5] mb-1">
           Public Channel Banner
         </label>
-        <p className="text-xs text-[#999999] mb-2">
+        <p className="text-xs text-dark-600 mb-2">
           This message appears at the top of the "Everyone" channel. Use it for announcements, guidelines, or community updates.
         </p>
         <textarea
@@ -112,11 +112,11 @@ export function TheBenchTab() {
           onChange={(e) => setPublicBanner(e.target.value)}
           rows={3}
           maxLength={500}
-          className="w-full rounded-lg border border-[#2A2A2A] px-3 py-2 text-sm text-[#FAFAFA] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-transparent resize-none"
+          className="w-full rounded-lg border border-dark-200 px-3 py-2 text-sm text-[#FAFAFA] focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-transparent resize-none"
           placeholder="e.g., Welcome to The Bench! Share techniques, ask questions, and support your fellow chefs."
         />
         <div className="flex justify-end mt-1">
-          <span className={`text-xs ${publicBanner.length > 450 ? "text-[#D4A574]" : "text-[#999999]"}`}>
+          <span className={`text-xs ${publicBanner.length > 450 ? "text-gold" : "text-dark-600"}`}>
             {publicBanner.length}/500
           </span>
         </div>
@@ -127,7 +127,7 @@ export function TheBenchTab() {
         <label className="block text-sm font-medium text-[#E5E5E5] mb-1">
           Organisation Channel Banner
         </label>
-        <p className="text-xs text-[#999999] mb-2">
+        <p className="text-xs text-dark-600 mb-2">
           This message appears at the top of every organisation's "My Kitchen" channel.
         </p>
         <textarea
@@ -135,23 +135,23 @@ export function TheBenchTab() {
           onChange={(e) => setOrgBanner(e.target.value)}
           rows={3}
           maxLength={500}
-          className="w-full rounded-lg border border-[#2A2A2A] px-3 py-2 text-sm text-[#FAFAFA] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-transparent resize-none"
+          className="w-full rounded-lg border border-dark-200 px-3 py-2 text-sm text-[#FAFAFA] focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-transparent resize-none"
           placeholder="e.g., This is your team's private space. Coordinate service, share recipes, and plan menus."
         />
         <div className="flex justify-end mt-1">
-          <span className={`text-xs ${orgBanner.length > 450 ? "text-[#D4A574]" : "text-[#999999]"}`}>
+          <span className={`text-xs ${orgBanner.length > 450 ? "text-gold" : "text-dark-600"}`}>
             {orgBanner.length}/500
           </span>
         </div>
       </div>
 
       {/* Save button */}
-      <div className="flex justify-end pt-2 border-t border-[#2A2A2A]">
+      <div className="flex justify-end pt-2 border-t border-dark-200">
         <button
           type="button"
           onClick={handleSave}
           disabled={saving}
-          className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-white bg-[#D4A574] rounded-lg hover:bg-[#C4956A] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-white bg-gold rounded-lg hover:bg-gold-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           {saving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
           Save Bench Settings

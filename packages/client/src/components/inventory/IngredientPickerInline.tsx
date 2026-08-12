@@ -199,7 +199,7 @@ export function IngredientPickerInline({
   if (linkedId && !isOpen) {
     return (
       <div className="flex items-center gap-2">
-        <div className="flex-1 flex items-center gap-2 px-3 py-2 bg-[#1E1E1E] border border-[#2A2A2A] rounded-lg text-[#FAFAFA] text-sm">
+        <div className="flex-1 flex items-center gap-2 px-3 py-2 bg-dark-100 border border-dark-200 rounded-lg text-[#FAFAFA] text-sm">
           <Link2 className="size-3.5 text-emerald-400 shrink-0" aria-hidden />
           <span className="truncate">{displayName || "(unnamed)"}</span>
           {costStale && (
@@ -232,7 +232,7 @@ export function IngredientPickerInline({
             setTimeout(() => inputRef.current?.focus(), 0);
           }}
           disabled={disabled}
-          className="p-2 rounded-lg hover:bg-[#2A2A2A] text-[#999999] hover:text-[#FAFAFA] transition-colors min-h-[36px] min-w-[36px] flex items-center justify-center"
+          className="p-2 rounded-lg hover:bg-dark-200 text-dark-600 hover:text-[#FAFAFA] transition-colors min-h-[36px] min-w-[36px] flex items-center justify-center"
           aria-label="Change linked ingredient"
         >
           <Pencil className="size-3.5" />
@@ -253,13 +253,13 @@ export function IngredientPickerInline({
             setTimeout(() => inputRef.current?.focus(), 0);
           }}
           disabled={disabled}
-          className="flex-1 flex items-center gap-2 px-3 py-2 bg-[#1E1E1E] border border-[#2A2A2A] rounded-lg text-left hover:border-[#D4A574]/40 hover:bg-[#252525] transition-colors text-sm"
+          className="flex-1 flex items-center gap-2 px-3 py-2 bg-dark-100 border border-dark-200 rounded-lg text-left hover:border-gold/40 hover:bg-[#252525] transition-colors text-sm"
         >
           {showUnlinkedBadge && (
             <AlertTriangle className="size-3.5 text-amber-400 shrink-0" aria-hidden />
           )}
           <span className="truncate text-[#FAFAFA]">
-            {displayName || <span className="text-[#666]">Pick ingredient...</span>}
+            {displayName || <span className="text-dark-500">Pick ingredient...</span>}
           </span>
           {showUnlinkedBadge && (
             <span className="ml-auto text-[10px] uppercase tracking-wide text-amber-400 px-1.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/30">
@@ -276,7 +276,7 @@ export function IngredientPickerInline({
     <div ref={containerRef} className="relative">
       <div className="relative">
         <Search
-          className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-[#666] pointer-events-none"
+          className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-dark-500 pointer-events-none"
           aria-hidden
         />
         <input
@@ -294,7 +294,7 @@ export function IngredientPickerInline({
           onKeyDown={handleKey}
           placeholder="Search Catalog..."
           disabled={disabled}
-          className="w-full pl-9 pr-3 py-2 bg-[#1E1E1E] border border-[#D4A574]/40 rounded-lg text-[#FAFAFA] text-sm placeholder:text-[#666] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/30"
+          className="w-full pl-9 pr-3 py-2 bg-dark-100 border border-gold/40 rounded-lg text-[#FAFAFA] text-sm placeholder:text-dark-500 focus:outline-none focus:ring-2 focus:ring-gold/30"
           role="combobox"
           aria-expanded={isOpen}
           aria-controls="ingredient-picker-list"
@@ -304,14 +304,14 @@ export function IngredientPickerInline({
       {(loading || query.trim().length > 0) && (
         <div
           id="ingredient-picker-list"
-          className="absolute z-50 left-0 mt-1 min-w-[280px] w-max max-w-[400px] bg-[#161616]/95 backdrop-blur-xl border border-[#D4A574]/15 rounded-xl overflow-hidden max-h-[240px] overflow-y-auto"
+          className="absolute z-50 left-0 mt-1 min-w-[280px] w-max max-w-[400px] bg-dark-50/95 backdrop-blur-xl border border-gold/15 rounded-xl overflow-hidden max-h-[240px] overflow-y-auto"
           style={{ boxShadow: "0 8px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(42,42,42,0.5)" }}
         >
           {loading && (
-            <div className="px-3 py-2.5 text-xs text-[#999]">Searching...</div>
+            <div className="px-3 py-2.5 text-xs text-dark-600">Searching...</div>
           )}
           {!loading && results.length === 0 && query.trim().length > 0 && (
-            <div className="px-3 py-2.5 text-xs text-[#666]">No matches found.</div>
+            <div className="px-3 py-2.5 text-xs text-dark-500">No matches found.</div>
           )}
           {results.map((r, idx) => (
             <button
@@ -337,13 +337,13 @@ export function IngredientPickerInline({
               onMouseEnter={() => setHighlight(idx)}
               className={`w-full px-3 py-2 flex items-center gap-2 text-left text-xs transition-colors ${
                 idx === highlight
-                  ? "bg-[#D4A574]/12 border-l-2 border-l-[#D4A574]"
-                  : "hover:bg-[#1E1E1E] border-l-2 border-l-transparent"
+                  ? "bg-gold/12 border-l-2 border-l-gold"
+                  : "hover:bg-dark-100 border-l-2 border-l-transparent"
               }`}
             >
               <Link2 className="size-3 text-emerald-400 shrink-0" aria-hidden />
               <span className="truncate text-[#FAFAFA]">{r.ingredientName}</span>
-              <span className="ml-auto text-[10px] text-[#999] tabular-nums shrink-0 pl-2">
+              <span className="ml-auto text-[10px] text-dark-600 tabular-nums shrink-0 pl-2">
                 {(r.preferredUnitCost ?? r.unitCost)
                   ? `$${parseFloat((r.preferredUnitCost ?? r.unitCost)!).toFixed(2)}/${r.baseUnit}`
                   : r.baseUnit}
@@ -355,7 +355,7 @@ export function IngredientPickerInline({
             <button
               type="button"
               onClick={() => onCreateRequest(query.trim())}
-              className="w-full px-3 py-2 flex items-center gap-2 text-left text-xs text-[#D4A574] border-t border-[#2A2A2A] bg-[#0F0F0F] hover:bg-[#1A1A1A] transition-colors"
+              className="w-full px-3 py-2 flex items-center gap-2 text-left text-xs text-gold border-t border-dark-200 bg-[#0F0F0F] hover:bg-[#1A1A1A] transition-colors"
             >
               <Plus className="size-3.5" />
               <span className="truncate">Add to Catalog: &ldquo;{query.trim()}&rdquo;</span>
@@ -366,7 +366,7 @@ export function IngredientPickerInline({
 
       {!loading && query.trim().length === 0 && isOpen && (
         <div
-          className="absolute z-50 left-0 mt-1 min-w-[280px] bg-[#161616]/95 backdrop-blur-xl border border-[#2A2A2A] rounded-xl px-3 py-2.5 text-xs text-[#666]"
+          className="absolute z-50 left-0 mt-1 min-w-[280px] bg-dark-50/95 backdrop-blur-xl border border-dark-200 rounded-xl px-3 py-2.5 text-xs text-dark-500"
           style={{ boxShadow: "0 8px 32px rgba(0,0,0,0.5)" }}
         >
           Type to search the Catalog.

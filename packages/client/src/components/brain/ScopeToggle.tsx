@@ -24,7 +24,7 @@ export function ScopeToggle({
     <div
       role="tablist"
       aria-label="Memory scope"
-      className="inline-flex rounded-full border border-[#1E1E1E] bg-[#111111] p-0.5"
+      className="inline-flex rounded-full border border-dark-100 bg-[#111111] p-0.5"
     >
       {TABS.map((tab) => {
         const active = value === tab.key;
@@ -35,10 +35,10 @@ export function ScopeToggle({
             role="tab"
             aria-selected={active}
             onClick={() => onChange(tab.key)}
-            className={`rounded-full px-3 py-1 text-xs font-medium transition-colors motion-reduce:transition-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4A574]/60 ${
+            className={`rounded-full px-3 py-1 text-xs font-medium transition-colors motion-reduce:transition-none focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60 ${
               active
-                ? "bg-[#D4A574]/15 text-[#D4A574] shadow-[0_0_12px_rgba(212,165,116,0.15)]"
-                : "text-[#999999] hover:text-[#E5E5E5]"
+                ? "bg-gold/15 text-gold shadow-[0_0_12px_var(--color-gold-muted)]"
+                : "text-dark-600 hover:text-[#E5E5E5]"
             }`}
           >
             {tab.label}

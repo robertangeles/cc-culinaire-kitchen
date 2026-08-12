@@ -75,7 +75,7 @@ export function ChatInput({
     : "Ask about techniques, troubleshooting, ingredients...";
 
   return (
-    <div className="border-t border-[#2A2A2A] bg-[#161616] px-4 py-3">
+    <div className="border-t border-dark-200 bg-dark-50 px-4 py-3">
       <form
         onSubmit={onSubmit}
         className="mx-auto flex items-end gap-2"
@@ -88,8 +88,8 @@ export function ChatInput({
             onClick={onToggleWebSearch}
             className={`flex-shrink-0 size-11 rounded-xl flex items-center justify-center transition-colors ${
               webSearchEnabled
-                ? "bg-[#D4A574]/20 text-[#D4A574] hover:bg-[#D4A574]/30"
-                : "bg-[#1E1E1E] text-[#666666] hover:bg-[#2A2A2A] hover:text-[#999999]"
+                ? "bg-gold/20 text-gold hover:bg-gold/30"
+                : "bg-dark-100 text-dark-500 hover:bg-dark-200 hover:text-dark-600"
             }`}
             title={webSearchEnabled ? "Web search enabled" : "Web search disabled"}
           >
@@ -105,7 +105,7 @@ export function ChatInput({
             className={`flex-shrink-0 size-11 rounded-xl flex items-center justify-center transition-colors ${
               isImageMode
                 ? "bg-violet-500/20 text-violet-400 hover:bg-violet-500/30"
-                : "bg-[#1E1E1E] text-[#666666] hover:bg-[#2A2A2A] hover:text-[#999999]"
+                : "bg-dark-100 text-dark-500 hover:bg-dark-200 hover:text-dark-600"
             }`}
             title={isImageMode ? "Image generation mode" : "Switch to image generation"}
           >
@@ -119,10 +119,10 @@ export function ChatInput({
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
           rows={1}
-          className={`flex-1 resize-none rounded-xl border px-4 py-3 text-white placeholder-[#444444] focus:outline-none focus:ring-2 focus:border-transparent ${
+          className={`flex-1 resize-none rounded-xl border px-4 py-3 text-white placeholder-dark-400 focus:outline-none focus:ring-2 focus:border-transparent ${
             isImageMode
-              ? "border-violet-500/30 bg-[#0A0A0A] focus:ring-violet-500/50"
-              : "border-[#2A2A2A] bg-[#0A0A0A] focus:ring-[#D4A574]/50"
+              ? "border-violet-500/30 bg-dark focus:ring-violet-500/50"
+              : "border-dark-200 bg-dark focus:ring-gold/50"
           }`}
           style={textareaHeight ? { height: `${textareaHeight}px` } : undefined}
           disabled={isStreaming}
@@ -142,7 +142,7 @@ export function ChatInput({
             className={`flex-shrink-0 size-11 rounded-xl flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
               isImageMode
                 ? "bg-violet-600 hover:bg-violet-700 text-white"
-                : "bg-[#D4A574] hover:bg-[#C4956A] text-[#0A0A0A]"
+                : "bg-gold hover:bg-gold-hover text-dark"
             }`}
           >
             {isImageMode ? (

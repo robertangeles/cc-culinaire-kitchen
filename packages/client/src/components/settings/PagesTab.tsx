@@ -143,19 +143,19 @@ export function PagesTab({ surface = "web" }: PagesTabProps = {}) {
   return (
     <div className="flex h-full">
       {/* Left rail: page list */}
-      <div className="w-72 border-r border-[#2A2A2A] bg-[#0A0A0A] px-3 py-6 overflow-y-auto">
+      <div className="w-72 border-r border-dark-200 bg-dark px-3 py-6 overflow-y-auto">
         <div className="flex items-center justify-between px-3 mb-4">
-          <h2 className="text-sm font-semibold text-[#666] uppercase tracking-wider">Pages</h2>
+          <h2 className="text-sm font-semibold text-dark-500 uppercase tracking-wider">Pages</h2>
           <button
             onClick={startNew}
-            className="inline-flex items-center gap-1 text-xs text-[#D4A574] hover:text-[#E5C594] transition-colors"
+            className="inline-flex items-center gap-1 text-xs text-gold hover:text-[#E5C594] transition-colors"
           >
             <Plus className="size-3" /> New
           </button>
         </div>
 
         {loading ? (
-          <div className="px-3 py-4 text-[#666] inline-flex items-center gap-2 text-sm">
+          <div className="px-3 py-4 text-dark-500 inline-flex items-center gap-2 text-sm">
             <Loader2 className="size-4 animate-spin" /> Loading…
           </div>
         ) : error ? (
@@ -173,14 +173,14 @@ export function PagesTab({ surface = "web" }: PagesTabProps = {}) {
                   onClick={() => pickPage(p)}
                   className={`w-full text-left flex items-start gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
                     isActive
-                      ? "bg-[#1E1E1E] text-[#FAFAFA] shadow-[0_0_12px_rgba(212,165,116,0.15)] border border-[#D4A574]/30"
-                      : "text-[#999] hover:bg-[#1E1E1E]/60 hover:text-[#FAFAFA] border border-transparent"
+                      ? "bg-dark-100 text-[#FAFAFA] shadow-[0_0_12px_var(--color-gold-muted)] border border-gold/30"
+                      : "text-dark-600 hover:bg-dark-100/60 hover:text-[#FAFAFA] border border-transparent"
                   }`}
                 >
                   <FileText className="size-4 mt-0.5 shrink-0" />
                   <span className="flex-1 min-w-0">
                     <span className="block truncate">{p.title}</span>
-                    <span className="text-[10px] text-[#666] uppercase tracking-wide">/{p.slug}</span>
+                    <span className="text-[10px] text-dark-500 uppercase tracking-wide">/{p.slug}</span>
                   </span>
                   <span
                     className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium tracking-wide ${
@@ -195,10 +195,10 @@ export function PagesTab({ surface = "web" }: PagesTabProps = {}) {
               );
             })}
             {draft?.isNew && (
-              <div className="px-3 py-2 rounded-lg bg-[#1E1E1E] text-[#FAFAFA] border border-[#D4A574]/30 text-sm">
+              <div className="px-3 py-2 rounded-lg bg-dark-100 text-[#FAFAFA] border border-gold/30 text-sm">
                 <FileText className="size-4 inline-block mr-1.5" />
                 {draft.title || "New page"}
-                <span className="text-[10px] text-[#666] uppercase tracking-wide block">unsaved</span>
+                <span className="text-[10px] text-dark-500 uppercase tracking-wide block">unsaved</span>
               </div>
             )}
           </nav>
@@ -206,10 +206,10 @@ export function PagesTab({ surface = "web" }: PagesTabProps = {}) {
       </div>
 
       {/* Right pane: editor */}
-      <div className="flex-1 overflow-y-auto bg-[#0A0A0A] px-8 py-6">
+      <div className="flex-1 overflow-y-auto bg-dark px-8 py-6">
         {!draft ? (
-          <div className="text-center text-[#666] py-16">
-            <FileText className="size-10 mx-auto mb-3 text-[#D4A574]/40" />
+          <div className="text-center text-dark-500 py-16">
+            <FileText className="size-10 mx-auto mb-3 text-gold/40" />
             <p>Select a page to edit, or create a new one.</p>
           </div>
         ) : (
@@ -218,7 +218,7 @@ export function PagesTab({ surface = "web" }: PagesTabProps = {}) {
               <h1 className="text-xl font-bold text-white">
                 {draft.isNew ? "New page" : draft.title}
               </h1>
-              <p className="text-sm text-[#999] mt-1">
+              <p className="text-sm text-dark-600 mt-1">
                 Markdown is rendered exactly as shown in the preview pane. Public visitors only see published pages.
               </p>
             </header>
@@ -239,20 +239,20 @@ export function PagesTab({ surface = "web" }: PagesTabProps = {}) {
             {/* Title + slug + publish */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <label className="flex flex-col gap-1.5">
-                <span className="text-xs uppercase text-[#666] tracking-wide">Title</span>
+                <span className="text-xs uppercase text-dark-500 tracking-wide">Title</span>
                 <input
                   type="text"
                   value={draft.title}
                   maxLength={200}
                   onChange={(e) => setDraft({ ...draft, title: e.target.value })}
-                  className="px-3 py-2 rounded-lg bg-[#161616] border border-[#2A2A2A] text-white text-sm focus:outline-none focus:border-[#D4A574] focus:ring-1 focus:ring-[#D4A574]/40 transition-colors"
+                  className="px-3 py-2 rounded-lg bg-dark-50 border border-dark-200 text-white text-sm focus:outline-none focus:border-gold focus:ring-1 focus:ring-gold/40 transition-colors"
                   placeholder="Terms of Service"
                 />
               </label>
 
               <label className="flex flex-col gap-1.5">
-                <span className="text-xs uppercase text-[#666] tracking-wide">
-                  Slug {!draft.isNew && <span className="normal-case text-[10px] text-[#666]">(read-only)</span>}
+                <span className="text-xs uppercase text-dark-500 tracking-wide">
+                  Slug {!draft.isNew && <span className="normal-case text-[10px] text-dark-500">(read-only)</span>}
                 </span>
                 <input
                   type="text"
@@ -260,12 +260,12 @@ export function PagesTab({ surface = "web" }: PagesTabProps = {}) {
                   readOnly={!draft.isNew}
                   maxLength={80}
                   onChange={(e) => setDraft({ ...draft, slug: e.target.value.toLowerCase() })}
-                  className={`px-3 py-2 rounded-lg bg-[#161616] border text-sm focus:outline-none transition-colors ${
+                  className={`px-3 py-2 rounded-lg bg-dark-50 border text-sm focus:outline-none transition-colors ${
                     draft.isNew && slugError
                       ? "border-red-700/60 text-red-300"
                       : draft.isNew
-                      ? "border-[#2A2A2A] text-white focus:border-[#D4A574] focus:ring-1 focus:ring-[#D4A574]/40"
-                      : "border-[#2A2A2A] text-[#999] cursor-not-allowed"
+                      ? "border-dark-200 text-white focus:border-gold focus:ring-1 focus:ring-gold/40"
+                      : "border-dark-200 text-dark-600 cursor-not-allowed"
                   }`}
                   placeholder="about"
                 />
@@ -274,9 +274,9 @@ export function PagesTab({ surface = "web" }: PagesTabProps = {}) {
                 )}
                 {draft.isNew && !slugError && draft.slug && (
                   surface === "mobile" ? (
-                    <span className="text-xs text-[#666]">Mobile slug: <code>{draft.slug}</code> (fetched by the app)</span>
+                    <span className="text-xs text-dark-500">Mobile slug: <code>{draft.slug}</code> (fetched by the app)</span>
                   ) : (
-                    <span className="text-xs text-[#666]">Public URL: <code>/pages/{draft.slug}</code></span>
+                    <span className="text-xs text-dark-500">Public URL: <code>/pages/{draft.slug}</code></span>
                   )
                 )}
               </label>
@@ -287,7 +287,7 @@ export function PagesTab({ surface = "web" }: PagesTabProps = {}) {
                 type="checkbox"
                 checked={draft.publishedInd}
                 onChange={(e) => setDraft({ ...draft, publishedInd: e.target.checked })}
-                className="size-4 rounded border-[#2A2A2A] bg-[#161616] text-[#D4A574] focus:ring-[#D4A574]/40"
+                className="size-4 rounded border-dark-200 bg-dark-50 text-gold focus:ring-gold/40"
               />
               {surface === "mobile" ? (
                 <>Published — served to the mobile app for slug <code>{draft.slug || "your-slug"}</code></>
@@ -299,25 +299,25 @@ export function PagesTab({ surface = "web" }: PagesTabProps = {}) {
             {/* Editor + preview */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <div className="flex flex-col gap-1.5">
-                <span className="text-xs uppercase text-[#666] tracking-wide">Body (Markdown)</span>
+                <span className="text-xs uppercase text-dark-500 tracking-wide">Body (Markdown)</span>
                 <textarea
                   value={draft.bodyMd}
                   maxLength={100_000}
                   onChange={(e) => setDraft({ ...draft, bodyMd: e.target.value })}
-                  className="min-h-[420px] px-4 py-3 rounded-xl bg-[#161616] border border-[#2A2A2A] text-white text-sm font-mono leading-relaxed focus:outline-none focus:border-[#D4A574] focus:ring-1 focus:ring-[#D4A574]/40 transition-colors resize-y"
+                  className="min-h-[420px] px-4 py-3 rounded-xl bg-dark-50 border border-dark-200 text-white text-sm font-mono leading-relaxed focus:outline-none focus:border-gold focus:ring-1 focus:ring-gold/40 transition-colors resize-y"
                   placeholder="# Heading&#10;&#10;Body copy in markdown."
                 />
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <span className="text-xs uppercase text-[#666] tracking-wide">Live preview</span>
-                <div className="min-h-[420px] px-5 py-4 rounded-xl bg-[#0F0F0F] border border-[#2A2A2A] overflow-y-auto">
+                <span className="text-xs uppercase text-dark-500 tracking-wide">Live preview</span>
+                <div className="min-h-[420px] px-5 py-4 rounded-xl bg-[#0F0F0F] border border-dark-200 overflow-y-auto">
                   {draft.bodyMd.trim() ? (
-                    <div className="prose prose-invert prose-sm max-w-none prose-headings:text-[#FAFAFA] prose-p:text-[#E5E5E5] prose-strong:text-[#FAFAFA] prose-a:text-[#D4A574] prose-a:no-underline hover:prose-a:underline prose-li:text-[#E5E5E5] prose-code:text-[#D4A574] prose-code:bg-[#0A0A0A] prose-code:border prose-code:border-[#2A2A2A] prose-code:rounded prose-code:px-1 prose-code:py-0.5">
+                    <div className="prose prose-invert prose-sm max-w-none prose-headings:text-[#FAFAFA] prose-p:text-[#E5E5E5] prose-strong:text-[#FAFAFA] prose-a:text-gold prose-a:no-underline hover:prose-a:underline prose-li:text-[#E5E5E5] prose-code:text-gold prose-code:bg-dark prose-code:border prose-code:border-dark-200 prose-code:rounded prose-code:px-1 prose-code:py-0.5">
                       <ReactMarkdown remarkPlugins={[remarkGfm]}>{draft.bodyMd}</ReactMarkdown>
                     </div>
                   ) : (
-                    <p className="text-[#666] text-sm italic">Preview appears here as you type.</p>
+                    <p className="text-dark-500 text-sm italic">Preview appears here as you type.</p>
                   )}
                 </div>
               </div>
@@ -328,7 +328,7 @@ export function PagesTab({ surface = "web" }: PagesTabProps = {}) {
               <button
                 onClick={handleSave}
                 disabled={saving || (draft.isNew && !!slugError)}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-gradient-to-r from-[#D4A574] to-[#C4956A] text-[#0A0A0A] text-sm font-medium hover:from-[#E5C594] hover:to-[#D4A574] disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-[0_0_12px_rgba(212,165,116,0.2)]"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-gradient-to-r from-gold to-gold-hover text-dark text-sm font-medium hover:from-[#E5C594] hover:to-gold disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-[0_0_12px_rgba(212,165,116,0.2)]"
               >
                 {saving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
                 {saving ? "Saving…" : "Save"}
@@ -346,7 +346,7 @@ export function PagesTab({ surface = "web" }: PagesTabProps = {}) {
               )}
 
               {!draft.isNew && RESERVED_SLUGS.has(draft.slug) && (
-                <span className="text-xs text-[#666] italic">Reserved page — cannot be deleted</span>
+                <span className="text-xs text-dark-500 italic">Reserved page — cannot be deleted</span>
               )}
             </div>
           </div>

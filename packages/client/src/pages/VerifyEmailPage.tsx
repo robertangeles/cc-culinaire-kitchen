@@ -43,23 +43,23 @@ export function VerifyEmailPage() {
   }, [token]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#0A0A0A] px-4">
+    <div className="min-h-screen flex items-center justify-center bg-dark px-4">
       <div className="w-full max-w-md text-center">
         {status === "loading" && (
           <div className="space-y-4">
-            <Loader2 className="size-12 animate-spin text-[#D4A574] mx-auto" />
+            <Loader2 className="size-12 animate-spin text-gold mx-auto" />
             <p className="text-[#E5E5E5]">Verifying your email...</p>
           </div>
         )}
 
         {status === "success" && (
-          <div className="bg-[#161616] rounded-2xl shadow-lg shadow-black/20 border border-[#2A2A2A] p-8 space-y-4">
+          <div className="bg-dark-50 rounded-2xl shadow-lg shadow-black/20 border border-dark-200 p-8 space-y-4">
             <CheckCircle2 className="size-12 text-green-400 mx-auto" />
             <h2 className="text-xl font-bold text-[#FAFAFA]">Email Verified</h2>
             <p className="text-[#E5E5E5]">{message}</p>
             <Link
               to="/login"
-              className="inline-block mt-4 px-6 py-2.5 text-sm font-medium text-white bg-[#D4A574] rounded-lg hover:bg-[#C4956A] transition-colors"
+              className="inline-block mt-4 px-6 py-2.5 text-sm font-medium text-white bg-gold rounded-lg hover:bg-gold-hover transition-colors"
             >
               Go to Login
             </Link>
@@ -67,13 +67,13 @@ export function VerifyEmailPage() {
         )}
 
         {status === "error" && (
-          <div className="bg-[#161616] rounded-2xl shadow-lg shadow-black/20 border border-[#2A2A2A] p-8 space-y-4">
+          <div className="bg-dark-50 rounded-2xl shadow-lg shadow-black/20 border border-dark-200 p-8 space-y-4">
             <AlertCircle className="size-12 text-red-500 mx-auto" />
             <h2 className="text-xl font-bold text-[#FAFAFA]">Verification Failed</h2>
             <p className="text-[#E5E5E5]">{message}</p>
             <Link
               to="/login"
-              className="inline-block mt-4 px-6 py-2.5 text-sm font-medium text-white bg-[#D4A574] rounded-lg hover:bg-[#C4956A] transition-colors"
+              className="inline-block mt-4 px-6 py-2.5 text-sm font-medium text-white bg-gold rounded-lg hover:bg-gold-hover transition-colors"
             >
               Go to Login
             </Link>

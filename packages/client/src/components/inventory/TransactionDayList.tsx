@@ -19,7 +19,7 @@ import type { TransactionEvent } from "../../hooks/useInventory.js";
 
 const TYPE_CONFIG: Record<string, { label: string; icon: typeof ClipboardCheck; color: string; bg: string; border: string }> = {
   stock_take:   { label: "Counted", icon: ClipboardCheck, color: "text-emerald-400", bg: "bg-emerald-500/10", border: "border-emerald-500/20" },
-  transfer:     { label: "Usage", icon: ArrowRightLeft, color: "text-[#D4A574]", bg: "bg-[#D4A574]/10", border: "border-[#D4A574]/20" },
+  transfer:     { label: "Usage", icon: ArrowRightLeft, color: "text-gold", bg: "bg-gold/10", border: "border-gold/20" },
   transfer_loc: { label: "Location Transfer", icon: ArrowRightLeft, color: "text-sky-400", bg: "bg-sky-500/10", border: "border-sky-500/20" },
   waste:        { label: "Waste", icon: Trash2, color: "text-red-400", bg: "bg-red-500/10", border: "border-red-500/20" },
   // An area-to-area move. Deliberately NOT amber/red: nothing was used and
@@ -68,14 +68,14 @@ export function TransactionDayList({ transactions, selectedDate, isLoading, erro
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-6">
-        <Loader2 className="size-5 animate-spin text-[#D4A574]" />
+        <Loader2 className="size-5 animate-spin text-gold" />
       </div>
     );
   }
 
   return (
     <div className="space-y-2">
-      <p className="text-[10px] text-[#666] uppercase tracking-wider">
+      <p className="text-[10px] text-dark-500 uppercase tracking-wider">
         {formatDateHeader(selectedDate)}
       </p>
 
@@ -87,7 +87,7 @@ export function TransactionDayList({ transactions, selectedDate, isLoading, erro
             <button
               type="button"
               onClick={onRetry}
-              className="text-[10px] text-[#D4A574] hover:underline"
+              className="text-[10px] text-gold hover:underline"
             >
               Try again
             </button>
@@ -121,9 +121,9 @@ export function TransactionDayList({ transactions, selectedDate, isLoading, erro
                 {/* Line 2: reason + user + time */}
                 <div className="flex items-center gap-1.5 mt-1 text-[10px] text-[#777]">
                   {reasonLabel && <span>{reasonLabel}</span>}
-                  {reasonLabel && <span className="text-[#444]">·</span>}
+                  {reasonLabel && <span className="text-dark-400">·</span>}
                   <span>{t.userName}</span>
-                  <span className="text-[#444]">·</span>
+                  <span className="text-dark-400">·</span>
                   <span className="tabular-nums">{formatTime(t.occurredAt)}</span>
                   {t.link && <ChevronRight className="size-3 ml-auto text-[#555]" />}
                 </div>
@@ -134,7 +134,7 @@ export function TransactionDayList({ transactions, selectedDate, isLoading, erro
                 key={t.id}
                 to={t.link}
                 title="Open the record this entry came from"
-                className={`block ${base} cursor-pointer transition-all hover:bg-[#161616] hover:border-[#D4A574]/30 focus:outline-none focus:border-[#D4A574]/50`}
+                className={`block ${base} cursor-pointer transition-all hover:bg-dark-50 hover:border-gold/30 focus:outline-none focus:border-gold/50`}
               >
                 {body}
               </Link>

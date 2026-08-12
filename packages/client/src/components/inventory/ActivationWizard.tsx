@@ -282,7 +282,7 @@ export function ActivationWizard() {
 
   if (!selectedLocationId) {
     return (
-      <div className="flex items-center justify-center h-64 text-[#666]">
+      <div className="flex items-center justify-center h-64 text-dark-500">
         <p>Select a location to manage item activation.</p>
       </div>
     );
@@ -314,7 +314,7 @@ export function ActivationWizard() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <Package className="size-4 text-[#D4A574]" />
+              <Package className="size-4 text-gold" />
               <span className="text-sm font-medium text-white">
                 {activatedCount} of {totalItems} items activated
               </span>
@@ -336,7 +336,7 @@ export function ActivationWizard() {
             <select
               value={copySourceId}
               onChange={(e) => setCopySourceId(e.target.value)}
-              className="px-3 py-1.5 rounded-lg bg-[#161616] border border-[#2A2A2A] text-sm text-white focus:outline-none focus:border-[#D4A574]/50 transition-all"
+              className="px-3 py-1.5 rounded-lg bg-dark-50 border border-dark-200 text-sm text-white focus:outline-none focus:border-gold/50 transition-all"
             >
               <option value="">Copy from...</option>
               {otherLocations.map((loc) => (
@@ -348,7 +348,7 @@ export function ActivationWizard() {
             <button
               onClick={handleCopyActivation}
               disabled={!copySourceId || copying}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed bg-[#1A1A1A] border border-[#2A2A2A] text-[#ccc] hover:border-[#D4A574]/40 hover:text-white"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed bg-[#1A1A1A] border border-dark-200 text-[#ccc] hover:border-gold/40 hover:text-white"
             >
               {copying ? (
                 <Loader2 className="size-3.5 animate-spin" />
@@ -377,7 +377,7 @@ export function ActivationWizard() {
       {/* ── Filter Tabs ── */}
       <div className="bg-[#111]/80 backdrop-blur-md border border-white/5 rounded-xl p-4 space-y-3">
         {/* Type tabs */}
-        <div className="flex gap-1 border-b border-[#2A2A2A] pb-2">
+        <div className="flex gap-1 border-b border-dark-200 pb-2">
           {tabs.map((tab) => (
             <button
               key={tab.key}
@@ -388,7 +388,7 @@ export function ActivationWizard() {
               className={`px-4 py-1.5 text-sm font-medium rounded-t-lg transition-all border-b-2 ${
                 activeTab === tab.key
                   ? `${tab.color} ${tab.borderColor}`
-                  : "text-[#666] border-transparent hover:text-[#999]"
+                  : "text-dark-500 border-transparent hover:text-dark-600"
               }`}
             >
               {tab.label}
@@ -399,43 +399,43 @@ export function ActivationWizard() {
         {/* Search + category filter */}
         <div className="flex flex-col sm:flex-row gap-2">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-[#666]" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-dark-500" />
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search items..."
-              className="w-full pl-10 pr-4 py-2 rounded-xl bg-[#161616] border border-[#2A2A2A] text-sm text-white placeholder-[#666] focus:outline-none focus:border-[#D4A574]/50 transition-all"
+              className="w-full pl-10 pr-4 py-2 rounded-xl bg-dark-50 border border-dark-200 text-sm text-white placeholder-dark-500 focus:outline-none focus:border-gold/50 transition-all"
             />
             {search && (
               <button
                 onClick={() => setSearch("")}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-[#666] hover:text-white"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-dark-500 hover:text-white"
               >
                 <X className="size-3.5" />
               </button>
             )}
           </div>
           <div className="relative">
-            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-[#666] pointer-events-none" />
+            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-dark-500 pointer-events-none" />
             <select
               value={filterCat}
               onChange={(e) => setFilterCat(e.target.value)}
-              className="pl-9 pr-8 py-2 rounded-xl bg-[#161616] border border-[#2A2A2A] text-sm text-white focus:outline-none focus:border-[#D4A574]/50 transition-all appearance-none cursor-pointer"
+              className="pl-9 pr-8 py-2 rounded-xl bg-dark-50 border border-dark-200 text-sm text-white focus:outline-none focus:border-gold/50 transition-all appearance-none cursor-pointer"
             >
               <option value="">All Categories</option>
               {availableCategories.map((c) => (
                 <option key={c.key} value={c.key}>{c.label}</option>
               ))}
             </select>
-            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 size-3.5 text-[#666] pointer-events-none" />
+            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 size-3.5 text-dark-500 pointer-events-none" />
           </div>
         </div>
       </div>
 
       {/* ── Items List — Grouped by Category ── */}
       {grouped.size === 0 ? (
-        <div className="flex flex-col items-center justify-center h-48 text-[#666] gap-2">
+        <div className="flex flex-col items-center justify-center h-48 text-dark-500 gap-2">
           <Layers className="size-8 opacity-40" />
           <p className="text-sm">No items match your filters.</p>
         </div>
@@ -467,7 +467,7 @@ export function ActivationWizard() {
                     <span className="text-sm font-medium text-[#ccc]">
                       {CATEGORY_LABELS[category] || category}
                     </span>
-                    <span className="text-xs text-[#666]">
+                    <span className="text-xs text-dark-500">
                       ({activatedInCat} of {items.length} activated)
                     </span>
                   </div>
@@ -513,7 +513,7 @@ export function ActivationWizard() {
                               />
                             ) : (
                               <ToggleLeft
-                                className="size-6 text-[#444] transition-all hover:text-[#666]"
+                                className="size-6 text-dark-400 transition-all hover:text-dark-500"
                               />
                             )}
                           </button>
@@ -533,7 +533,7 @@ export function ActivationWizard() {
                           </span>
 
                           {/* Base unit */}
-                          <span className="text-xs text-[#666] w-10 text-right">
+                          <span className="text-xs text-dark-500 w-10 text-right">
                             {item.baseUnit}
                           </span>
 

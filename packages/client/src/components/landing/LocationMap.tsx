@@ -32,8 +32,8 @@ const locations: LocationNode[] = [
     name: "Comfort Spoon Co. — HQ",
     type: "Headquarters",
     address: "Melbourne CBD",
-    dotColor: "bg-[#D4A574]",
-    borderColor: "border-[#D4A574]/30",
+    dotColor: "bg-gold",
+    borderColor: "border-gold/30",
     badge: { text: "Healthy", color: "green" },
     indented: false,
   },
@@ -42,7 +42,7 @@ const locations: LocationNode[] = [
     type: "Branch",
     address: "2 Greenwich Crescent",
     dotColor: "bg-emerald-400",
-    borderColor: "border-[#2A2A2A]",
+    borderColor: "border-dark-200",
     badge: { text: "3 low stock", color: "amber" },
     indented: true,
   },
@@ -51,7 +51,7 @@ const locations: LocationNode[] = [
     type: "Branch",
     address: "Smith Street",
     dotColor: "bg-emerald-400",
-    borderColor: "border-[#2A2A2A]",
+    borderColor: "border-dark-200",
     badge: { text: "Healthy", color: "green" },
     indented: true,
   },
@@ -59,8 +59,8 @@ const locations: LocationNode[] = [
     name: "Central Prep Kitchen",
     type: "Commissary",
     address: "Port Melbourne",
-    dotColor: "bg-[#666666]",
-    borderColor: "border-[#2A2A2A]",
+    dotColor: "bg-dark-500",
+    borderColor: "border-dark-200",
     badge: { text: "Healthy", color: "green" },
     indented: true,
   },
@@ -72,10 +72,10 @@ export function LocationMap() {
       initial={{ opacity: 0, y: 30 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.7, ease: "easeOut" }}
-      className="w-[320px] rounded-2xl border border-[#2A2A2A] bg-[#1E1E1E] p-5 shadow-2xl shadow-black/30"
+      className="w-[320px] rounded-2xl border border-dark-200 bg-dark-100 p-5 shadow-2xl shadow-black/30"
     >
       {/* Header */}
-      <p className="mb-4 text-[10px] font-semibold uppercase tracking-widest text-[#666666]">
+      <p className="mb-4 text-[10px] font-semibold uppercase tracking-widest text-dark-500">
         Organisation Overview
       </p>
 
@@ -90,11 +90,11 @@ export function LocationMap() {
           <motion.div
             key={i}
             variants={nodeVariants}
-            className={`relative flex items-center gap-3 rounded-xl border ${loc.borderColor} bg-[#161616] px-3 py-3 ${loc.indented ? "ml-6" : ""}`}
+            className={`relative flex items-center gap-3 rounded-xl border ${loc.borderColor} bg-dark-50 px-3 py-3 ${loc.indented ? "ml-6" : ""}`}
           >
             {/* Connector line for indented items */}
             {loc.indented && (
-              <div className="absolute -left-4 top-1/2 h-px w-4 bg-[#2A2A2A]" />
+              <div className="absolute -left-4 top-1/2 h-px w-4 bg-dark-200" />
             )}
 
             {/* Dot */}
@@ -105,7 +105,7 @@ export function LocationMap() {
             {/* Info */}
             <div className="min-w-0 flex-1">
               <p className="text-xs font-medium text-white">{loc.name}</p>
-              <p className="mt-0.5 text-[10px] text-[#666666]">
+              <p className="mt-0.5 text-[10px] text-dark-500">
                 {loc.type} · {loc.address}
               </p>
             </div>
@@ -126,7 +126,7 @@ export function LocationMap() {
 
       {/* Vertical connector line behind nodes */}
       <div
-        className="pointer-events-none absolute left-[2.85rem] top-[4.5rem] -z-10 hidden h-[calc(100%-6rem)] w-px bg-[#2A2A2A]"
+        className="pointer-events-none absolute left-[2.85rem] top-[4.5rem] -z-10 hidden h-[calc(100%-6rem)] w-px bg-dark-200"
         aria-hidden
       />
     </motion.div>

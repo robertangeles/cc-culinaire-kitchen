@@ -89,8 +89,8 @@ export function KitchenOpsToolbar() {
         background: "linear-gradient(180deg, rgba(40,34,28,0.99) 0%, rgba(30,26,22,0.99) 100%)",
         backdropFilter: "blur(16px)",
         borderBottom: "1px solid rgba(212,165,116,0.2)",
-        borderTop: "1px solid rgba(212,165,116,0.08)",
-        boxShadow: "0 2px 12px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.03), inset 0 -1px 0 rgba(212,165,116,0.08)",
+        borderTop: "1px solid var(--color-gold-glow)",
+        boxShadow: "0 2px 12px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.03), inset 0 -1px 0 var(--color-gold-glow)",
       }}
     >
       {/* Location selector */}
@@ -107,11 +107,11 @@ export function KitchenOpsToolbar() {
           <span className="relative flex items-center justify-center w-4 h-4 shrink-0">
             <span
               className="absolute w-2.5 h-2.5 rounded-full animate-ping opacity-20"
-              style={{ backgroundColor: selectedLocation?.colorAccent ?? "#D4A574" }}
+              style={{ backgroundColor: selectedLocation?.colorAccent ?? "var(--color-gold)" }}
             />
             <span
               className="relative w-2 h-2 rounded-full"
-              style={{ backgroundColor: selectedLocation?.colorAccent ?? "#D4A574" }}
+              style={{ backgroundColor: selectedLocation?.colorAccent ?? "var(--color-gold)" }}
             />
           </span>
 
@@ -132,7 +132,7 @@ export function KitchenOpsToolbar() {
           {/* Chevron */}
           {hasMultiple && (
             <ChevronDown
-              className={`size-3.5 text-[#666] transition-transform duration-200 shrink-0 ${
+              className={`size-3.5 text-dark-500 transition-transform duration-200 shrink-0 ${
                 dropdownOpen ? "rotate-180" : ""
               }`}
             />
@@ -146,7 +146,7 @@ export function KitchenOpsToolbar() {
             style={{
               background: "linear-gradient(135deg, rgba(22,20,18,0.98), rgba(12,11,10,0.99))",
               backdropFilter: "blur(20px)",
-              border: "1px solid rgba(212,165,116,0.15)",
+              border: "1px solid var(--color-gold-muted)",
               boxShadow: "0 12px 40px rgba(0,0,0,0.6), 0 0 1px rgba(212,165,116,0.1)",
             }}
           >
@@ -161,7 +161,7 @@ export function KitchenOpsToolbar() {
                     placeholder="Search locations..."
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    className="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg bg-white/[0.04] border border-white/[0.06] text-white placeholder:text-[#555] focus:outline-none focus:border-[#D4A574]/30"
+                    className="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg bg-white/[0.04] border border-white/[0.06] text-white placeholder:text-[#555] focus:outline-none focus:border-gold/30"
                   />
                 </div>
               </div>
@@ -175,11 +175,11 @@ export function KitchenOpsToolbar() {
                   onClick={() => handleSelect("all")}
                   className={`flex w-full items-center gap-2.5 px-3 py-2 transition-colors ${
                     selectedLocationId === "all"
-                      ? "bg-[#D4A574]/10 border-l-2 border-[#D4A574]"
+                      ? "bg-gold/10 border-l-2 border-gold"
                       : "hover:bg-white/[0.04] border-l-2 border-transparent"
                   }`}
                 >
-                  <Building2 className="size-4 text-[#D4A574] shrink-0" />
+                  <Building2 className="size-4 text-gold shrink-0" />
                   <span className="text-sm text-[#ccc]">All Locations</span>
                 </button>
               )}
@@ -193,14 +193,14 @@ export function KitchenOpsToolbar() {
                     onClick={() => handleSelect(loc.storeLocationId)}
                     className={`flex w-full items-center gap-2.5 px-3 py-2 transition-colors ${
                       isSelected
-                        ? "bg-[#D4A574]/10 border-l-2 border-[#D4A574]"
+                        ? "bg-gold/10 border-l-2 border-gold"
                         : "hover:bg-white/[0.04] border-l-2 border-transparent"
                     }`}
                   >
                     {/* Color dot */}
                     <span
                       className="w-2 h-2 rounded-full shrink-0"
-                      style={{ backgroundColor: loc.colorAccent ?? "#666" }}
+                      style={{ backgroundColor: loc.colorAccent ?? "var(--color-dark-500)" }}
                     />
 
                     {/* Name + badge */}
@@ -218,7 +218,7 @@ export function KitchenOpsToolbar() {
 
                     {/* Selected glow dot */}
                     {isSelected && (
-                      <span className="w-1.5 h-1.5 rounded-full bg-[#D4A574] shadow-[0_0_6px_rgba(212,165,116,0.5)] shrink-0" />
+                      <span className="w-1.5 h-1.5 rounded-full bg-gold shadow-[0_0_6px_var(--color-gold-ring)] shrink-0" />
                     )}
                   </button>
                 );
@@ -238,7 +238,7 @@ export function KitchenOpsToolbar() {
       <div className="w-px h-5 bg-white/[0.08] mx-3" />
 
       {/* Module name */}
-      <span className="text-xs text-[#666] font-medium tracking-wide">{moduleName}</span>
+      <span className="text-xs text-dark-500 font-medium tracking-wide">{moduleName}</span>
 
       {/* Right side */}
       <div className="flex-1" />

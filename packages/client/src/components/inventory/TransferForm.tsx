@@ -232,17 +232,17 @@ export default function TransferForm({ onClose, editTransferId, editData }: Tran
       <div className="flex items-center gap-3">
         <button
           onClick={onClose}
-          className="p-2 rounded-xl bg-[#161616] border border-[#2A2A2A] hover:border-[#D4A574]/20 transition-colors"
+          className="p-2 rounded-xl bg-dark-50 border border-dark-200 hover:border-gold/20 transition-colors"
         >
-          <ArrowLeft size={18} className="text-[#999]" />
+          <ArrowLeft size={18} className="text-dark-600" />
         </button>
-        <div className="p-2 rounded-xl bg-[#D4A574]/10 border border-[#D4A574]/20">
-          <ArrowRightLeft size={20} className="text-[#D4A574]" />
+        <div className="p-2 rounded-xl bg-gold/10 border border-gold/20">
+          <ArrowRightLeft size={20} className="text-gold" />
         </div>
         <div>
           <h2 className="text-lg font-semibold text-white">{isEditMode ? "Edit Transfer" : "New Transfer"}</h2>
           <p className="text-xs text-[#888]">
-            From <span className="text-[#D4A574]">{selectedLocation?.locationName || "Current Location"}</span>
+            From <span className="text-gold">{selectedLocation?.locationName || "Current Location"}</span>
           </p>
         </div>
       </div>
@@ -258,8 +258,8 @@ export default function TransferForm({ onClose, editTransferId, editData }: Tran
             onClick={() => setShowLocDropdown(!showLocDropdown)}
             className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg border text-sm transition-all ${
               toLocationId
-                ? "bg-[#161616] border-[#D4A574]/20 text-white"
-                : "bg-[#0A0A0A] border-[#2A2A2A] text-[#666]"
+                ? "bg-dark-50 border-gold/20 text-white"
+                : "bg-dark border-dark-200 text-dark-500"
             }`}
           >
             <div className="flex items-center gap-2">
@@ -267,7 +267,7 @@ export default function TransferForm({ onClose, editTransferId, editData }: Tran
                 <>
                   <span
                     className="w-2 h-2 rounded-full"
-                    style={{ backgroundColor: (selectedDest as any).colorAccent || "#D4A574" }}
+                    style={{ backgroundColor: (selectedDest as any).colorAccent || "var(--color-gold)" }}
                   />
                   <span>{(selectedDest as any).locationName}</span>
                 </>
@@ -275,7 +275,7 @@ export default function TransferForm({ onClose, editTransferId, editData }: Tran
                 <span>Select destination...</span>
               )}
             </div>
-            <ChevronDown size={14} className={`text-[#666] transition-transform ${showLocDropdown ? "rotate-180" : ""}`} />
+            <ChevronDown size={14} className={`text-dark-500 transition-transform ${showLocDropdown ? "rotate-180" : ""}`} />
           </button>
 
           {showLocDropdown && (
@@ -283,7 +283,7 @@ export default function TransferForm({ onClose, editTransferId, editData }: Tran
               className="absolute z-20 w-full mt-1 rounded-xl overflow-hidden animate-[fadeIn_100ms_ease-out]"
               style={{
                 background: "linear-gradient(135deg, rgba(22,20,18,0.98), rgba(12,11,10,0.99))",
-                border: "1px solid rgba(212,165,116,0.15)",
+                border: "1px solid var(--color-gold-muted)",
                 boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
               }}
             >
@@ -296,22 +296,22 @@ export default function TransferForm({ onClose, editTransferId, editData }: Tran
                   }}
                   className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-sm transition-colors ${
                     loc.storeLocationId === toLocationId
-                      ? "bg-[#D4A574]/10 border-l-2 border-[#D4A574] text-white"
+                      ? "bg-gold/10 border-l-2 border-gold text-white"
                       : "hover:bg-white/[0.04] border-l-2 border-transparent text-[#ccc]"
                   }`}
                 >
                   <span
                     className="w-2 h-2 rounded-full shrink-0"
-                    style={{ backgroundColor: loc.colorAccent || "#666" }}
+                    style={{ backgroundColor: loc.colorAccent || "var(--color-dark-500)" }}
                   />
                   <span>{loc.locationName}</span>
-                  <span className="ml-auto text-[10px] text-[#666] uppercase">
+                  <span className="ml-auto text-[10px] text-dark-500 uppercase">
                     {loc.classification}
                   </span>
                 </button>
               ))}
               {destinationOptions.length === 0 && (
-                <p className="px-3 py-3 text-xs text-[#666] text-center">No other locations available</p>
+                <p className="px-3 py-3 text-xs text-dark-500 text-center">No other locations available</p>
               )}
             </div>
           )}
@@ -328,8 +328,8 @@ export default function TransferForm({ onClose, editTransferId, editData }: Tran
             onClick={() => setShowSearch(!showSearch)}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${
               showSearch
-                ? "bg-[#1E1E1E] text-white border-[#2A2A2A]"
-                : "bg-[#D4A574]/10 text-[#D4A574] border-[#D4A574]/20 hover:bg-[#D4A574]/20"
+                ? "bg-dark-100 text-white border-dark-200"
+                : "bg-gold/10 text-gold border-gold/20 hover:bg-gold/20"
             }`}
           >
             {showSearch ? (
@@ -352,7 +352,7 @@ export default function TransferForm({ onClose, editTransferId, editData }: Tran
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Filter items..."
-                className="w-full pl-9 pr-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-white text-sm focus:outline-none focus:border-[#D4A574]/30 placeholder:text-[#555]"
+                className="w-full pl-9 pr-3 py-2 rounded-lg bg-dark border border-dark-200 text-white text-sm focus:outline-none focus:border-gold/30 placeholder:text-[#555]"
               />
             </div>
 
@@ -362,8 +362,8 @@ export default function TransferForm({ onClose, editTransferId, editData }: Tran
                 onClick={() => setActiveCat(null)}
                 className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors ${
                   activeCat === null
-                    ? "bg-[#D4A574]/15 text-[#D4A574] border-[#D4A574]/30"
-                    : "bg-white/[0.03] text-[#888] border-white/5 hover:border-[#D4A574]/20 hover:text-[#ccc]"
+                    ? "bg-gold/15 text-gold border-gold/30"
+                    : "bg-white/[0.03] text-[#888] border-white/5 hover:border-gold/20 hover:text-[#ccc]"
                 }`}
               >
                 All
@@ -379,8 +379,8 @@ export default function TransferForm({ onClose, editTransferId, editData }: Tran
                       onClick={() => setActiveCat(activeCat === cat ? null : cat)}
                       className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors ${
                         activeCat === cat
-                          ? "bg-[#D4A574]/15 text-[#D4A574] border-[#D4A574]/30"
-                          : "bg-white/[0.03] text-[#888] border-white/5 hover:border-[#D4A574]/20 hover:text-[#ccc]"
+                          ? "bg-gold/15 text-gold border-gold/30"
+                          : "bg-white/[0.03] text-[#888] border-white/5 hover:border-gold/20 hover:text-[#ccc]"
                       }`}
                     >
                       {catLabel} ({count})
@@ -391,11 +391,11 @@ export default function TransferForm({ onClose, editTransferId, editData }: Tran
             </div>
 
             {/* Item list grouped by category */}
-            <div className="max-h-60 overflow-y-auto rounded-lg border border-[#1E1E1E]">
+            <div className="max-h-60 overflow-y-auto rounded-lg border border-dark-100">
               {/* Column header */}
-              <div className="flex items-center justify-between px-3 py-1.5 bg-white/[0.02] border-b border-[#1E1E1E]">
-                <span className="text-[10px] text-[#666] uppercase tracking-wider">Item</span>
-                <span className="text-[10px] text-[#666] uppercase tracking-wider">Current Stock</span>
+              <div className="flex items-center justify-between px-3 py-1.5 bg-white/[0.02] border-b border-dark-100">
+                <span className="text-[10px] text-dark-500 uppercase tracking-wider">Item</span>
+                <span className="text-[10px] text-dark-500 uppercase tracking-wider">Current Stock</span>
               </div>
               {(() => {
                 const visibleItems = activeCat ? filteredItems.filter(i => i.ingredientCategory === activeCat) : filteredItems;
@@ -406,13 +406,13 @@ export default function TransferForm({ onClose, editTransferId, editData }: Tran
                   grouped.get(cat)!.push(item);
                 }
                 if (grouped.size === 0) {
-                  return <p className="px-3 py-4 text-xs text-[#666] text-center">No items match</p>;
+                  return <p className="px-3 py-4 text-xs text-dark-500 text-center">No items match</p>;
                 }
                 return [...grouped.entries()].map(([cat, items]) => {
                   const catLabel = cat.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
                   return (
                     <div key={cat}>
-                      <div className="px-3 py-1.5 bg-white/[0.02] text-[10px] text-[#666] uppercase tracking-wider font-medium">
+                      <div className="px-3 py-1.5 bg-white/[0.02] text-[10px] text-dark-500 uppercase tracking-wider font-medium">
                         {catLabel}
                       </div>
                       {items.map(item => {
@@ -427,17 +427,17 @@ export default function TransferForm({ onClose, editTransferId, editData }: Tran
                             disabled={disabled}
                             className={`w-full flex items-center justify-between px-3 py-2 text-sm transition-colors ${
                               alreadyAdded
-                                ? "text-[#555] bg-[#0A0A0A] cursor-default"
+                                ? "text-[#555] bg-dark cursor-default"
                                 : outOfStock
-                                ? "text-[#444] cursor-not-allowed"
-                                : "text-[#ccc] hover:bg-[#D4A574]/5 cursor-pointer"
+                                ? "text-dark-400 cursor-not-allowed"
+                                : "text-[#ccc] hover:bg-gold/5 cursor-pointer"
                             }`}
                           >
                             <div className="flex items-center gap-2">
                               {alreadyAdded ? (
                                 <span className="w-4 h-4 rounded border border-emerald-500/40 bg-emerald-500/20 flex items-center justify-center text-emerald-400 text-[10px]">✓</span>
                               ) : (
-                                <span className="w-4 h-4 rounded border border-[#2A2A2A]" />
+                                <span className="w-4 h-4 rounded border border-dark-200" />
                               )}
                               <span className={alreadyAdded || outOfStock ? "line-through" : ""}>{item.ingredientName}</span>
                             </div>
@@ -469,7 +469,7 @@ export default function TransferForm({ onClose, editTransferId, editData }: Tran
               return (
                 <div
                   key={line.ingredientId}
-                  className="px-3 py-2.5 rounded-lg bg-[#0A0A0A]/60 border border-white/5"
+                  className="px-3 py-2.5 rounded-lg bg-dark/60 border border-white/5"
                 >
                   <div className="flex items-center gap-3">
                     <div className="flex-1 min-w-0">
@@ -495,9 +495,9 @@ export default function TransferForm({ onClose, editTransferId, editData }: Tran
                       placeholder="Qty"
                       min="0.01"
                       step="any"
-                      className="w-20 px-2 py-1.5 rounded-md bg-[#161616] border border-[#2A2A2A] text-white text-sm text-right focus:outline-none focus:border-[#D4A574]/40 transition-colors"
+                      className="w-20 px-2 py-1.5 rounded-md bg-dark-50 border border-dark-200 text-white text-sm text-right focus:outline-none focus:border-gold/40 transition-colors"
                     />
-                    <span className="text-xs text-[#666] w-8">{line.sentUnit}</span>
+                    <span className="text-xs text-dark-500 w-8">{line.sentUnit}</span>
                     <button
                       onClick={() => removeLine(idx)}
                       className="p-1 rounded text-[#555] hover:text-red-400 transition-colors"
@@ -522,7 +522,7 @@ export default function TransferForm({ onClose, editTransferId, editData }: Tran
           onChange={(e) => setNotes(e.target.value)}
           rows={2}
           placeholder="e.g. Urgent request for weekend service"
-          className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-white text-sm focus:outline-none focus:border-[#D4A574]/30 transition-colors resize-none"
+          className="w-full px-3 py-2 rounded-lg bg-dark border border-dark-200 text-white text-sm focus:outline-none focus:border-gold/30 transition-colors resize-none"
         />
       </div>
 
@@ -539,7 +539,7 @@ export default function TransferForm({ onClose, editTransferId, editData }: Tran
           <button
             onClick={handleSubmit}
             disabled={saving}
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-[#1E1E1E] border border-[#2A2A2A] text-white font-semibold hover:bg-[#252525] active:scale-[0.98] transition-all disabled:opacity-50"
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-dark-100 border border-dark-200 text-white font-semibold hover:bg-[#252525] active:scale-[0.98] transition-all disabled:opacity-50"
           >
             {saving ? <Loader2 size={16} className="animate-spin" /> : <ArrowRightLeft size={16} />}
             Save Draft
@@ -554,7 +554,7 @@ export default function TransferForm({ onClose, editTransferId, editData }: Tran
               }
             }}
             disabled={saving}
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gradient-to-r from-[#D4A574] to-[#C4956A] text-[#0A0A0A] font-semibold hover:shadow-[0_0_12px_rgba(212,165,116,0.2)] active:scale-[0.98] transition-all disabled:opacity-50"
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gradient-to-r from-gold to-gold-hover text-dark font-semibold hover:shadow-[0_0_12px_rgba(212,165,116,0.2)] active:scale-[0.98] transition-all disabled:opacity-50"
           >
             <Send size={16} />
             Confirm Send
@@ -575,7 +575,7 @@ export default function TransferForm({ onClose, editTransferId, editData }: Tran
         <button
           onClick={handleSubmit}
           disabled={saving}
-          className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gradient-to-r from-[#D4A574] to-[#C4956A] text-[#0A0A0A] font-semibold hover:shadow-[0_0_12px_rgba(212,165,116,0.2)] active:scale-[0.98] transition-all disabled:opacity-50"
+          className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gradient-to-r from-gold to-gold-hover text-dark font-semibold hover:shadow-[0_0_12px_rgba(212,165,116,0.2)] active:scale-[0.98] transition-all disabled:opacity-50"
         >
           {saving ? <Loader2 size={18} className="animate-spin" /> : <ArrowRightLeft size={18} />}
           Initiate Transfer

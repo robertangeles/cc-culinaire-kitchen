@@ -51,7 +51,7 @@ export default function ReceiveQueue({ onChanged }: { onChanged?: () => void }) 
     <div className="space-y-4 animate-[fadeInUp_200ms_ease-out]">
       <div className="flex items-center gap-2">
         <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-          <Truck className="size-5 text-[#D4A574]" />
+          <Truck className="size-5 text-gold" />
           Deliveries to Receive
         </h2>
       </div>
@@ -64,25 +64,25 @@ export default function ReceiveQueue({ onChanged }: { onChanged?: () => void }) 
 
       {isLoading ? (
         <div className="flex items-center justify-center py-16">
-          <Loader2 className="size-6 text-[#D4A574] animate-spin" />
+          <Loader2 className="size-6 text-gold animate-spin" />
         </div>
       ) : sentPOs.length === 0 ? (
         <div className="text-center py-16 animate-[fadeIn_300ms_ease-out]">
-          <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-[#1E1E1E]/60 backdrop-blur-sm
-            flex items-center justify-center border border-[#2A2A2A]
-            shadow-[0_0_20px_rgba(212,165,116,0.08)]">
-            <Package className="size-8 text-[#D4A574]/60" />
+          <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-dark-100/60 backdrop-blur-sm
+            flex items-center justify-center border border-dark-200
+            shadow-[0_0_20px_var(--color-gold-glow)]">
+            <Package className="size-8 text-gold/60" />
           </div>
-          <p className="text-[#999] text-sm">No deliveries waiting to be received.</p>
-          <p className="text-[#666] text-xs mt-1">Sent purchase orders will appear here.</p>
+          <p className="text-dark-600 text-sm">No deliveries waiting to be received.</p>
+          <p className="text-dark-500 text-xs mt-1">Sent purchase orders will appear here.</p>
         </div>
       ) : (
         <div className="space-y-2">
           {sentPOs.map((po, idx) => (
             <div
               key={po.poId}
-              className="rounded-xl bg-[#161616]/80 backdrop-blur-sm border border-[#2A2A2A]
-                hover:border-[#D4A574]/30 hover:shadow-[0_0_16px_rgba(212,165,116,0.08)]
+              className="rounded-xl bg-dark-50/80 backdrop-blur-sm border border-dark-200
+                hover:border-gold/30 hover:shadow-[0_0_16px_var(--color-gold-glow)]
                 transition-all cursor-pointer"
               style={{ animationDelay: `${idx * 40}ms` }}
               onClick={() => handleStartReceiving(po.poId)}
@@ -98,7 +98,7 @@ export default function ReceiveQueue({ onChanged }: { onChanged?: () => void }) 
                       {po.status === "RECEIVING" ? "In Progress" : "Ready"}
                     </span>
                   </div>
-                  <div className="flex items-center gap-3 mt-0.5 text-xs text-[#999]">
+                  <div className="flex items-center gap-3 mt-0.5 text-xs text-dark-600">
                     <span>{po.supplierName}</span>
                     <span className="text-[#333]">|</span>
                     <span>{po.lineCount} item{po.lineCount !== 1 ? "s" : ""}</span>
@@ -113,7 +113,7 @@ export default function ReceiveQueue({ onChanged }: { onChanged?: () => void }) 
                     )}
                   </div>
                   {(po.sentAt || po.createdByUserName) && (
-                    <div className="flex items-center gap-1 mt-1 text-xs text-[#666]">
+                    <div className="flex items-center gap-1 mt-1 text-xs text-dark-500">
                       <Send className="size-3" />
                       {po.sentAt
                         ? `Sent ${new Date(po.sentAt).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" })}`

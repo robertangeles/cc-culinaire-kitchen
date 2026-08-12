@@ -82,7 +82,7 @@ export function AIFeaturesPanel() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-full text-[#999999]">
+      <div className="flex items-center justify-center h-full text-dark-600">
         <Loader2 className="size-5 animate-spin mr-2" />
         Loading settings...
       </div>
@@ -93,14 +93,14 @@ export function AIFeaturesPanel() {
     <div className="flex-1 flex flex-col min-h-0">
       <div className="flex-1 overflow-y-auto px-8 py-6 space-y-3">
         {/* Web Search Toggle */}
-        <div className="flex items-center justify-between rounded-lg border border-[#2A2A2A] bg-[#161616] px-4 py-3">
+        <div className="flex items-center justify-between rounded-lg border border-dark-200 bg-dark-50 px-4 py-3">
           <div className="flex items-center gap-3">
-            <Globe className="size-5 text-[#D4A574]" />
+            <Globe className="size-5 text-gold" />
             <div>
               <div className="text-sm font-medium text-[#FAFAFA]">
                 Enable Web Search
               </div>
-              <p className="text-xs text-[#999999] mt-0.5">
+              <p className="text-xs text-dark-600 mt-0.5">
                 Allow the AI assistant to search the web for current information
                 beyond the curated knowledge base. Uses a web-search-capable model via OpenRouter.
               </p>
@@ -114,11 +114,11 @@ export function AIFeaturesPanel() {
 
         {/* Web Search Model Selector */}
         {form.web_search_enabled === "true" && (
-          <div className="rounded-lg border border-[#2A2A2A] bg-[#161616] px-4 py-3 ml-8">
+          <div className="rounded-lg border border-dark-200 bg-dark-50 px-4 py-3 ml-8">
             <label className="block text-sm font-medium text-[#FAFAFA] mb-1">
               Web Search Model
             </label>
-            <p className="text-xs text-[#999999] mb-2">
+            <p className="text-xs text-dark-600 mb-2">
               Select the model used for web search requests.
             </p>
             <ModelSelector
@@ -131,14 +131,14 @@ export function AIFeaturesPanel() {
         )}
 
         {/* Image Generation Toggle */}
-        <div className="flex items-center justify-between rounded-lg border border-[#2A2A2A] bg-[#161616] px-4 py-3">
+        <div className="flex items-center justify-between rounded-lg border border-dark-200 bg-dark-50 px-4 py-3">
           <div className="flex items-center gap-3">
-            <Image className="size-5 text-[#D4A574]" />
+            <Image className="size-5 text-gold" />
             <div>
               <div className="text-sm font-medium text-[#FAFAFA]">
                 Enable Image Generation
               </div>
-              <p className="text-xs text-[#999999] mt-0.5">
+              <p className="text-xs text-dark-600 mt-0.5">
                 Allow users to generate images using AI models via OpenRouter.
                 Requires OPENROUTER_API_KEY to be configured.
               </p>
@@ -152,11 +152,11 @@ export function AIFeaturesPanel() {
 
         {/* Image Generation Model Selector */}
         {form.image_generation_enabled === "true" && (
-          <div className="rounded-lg border border-[#2A2A2A] bg-[#161616] px-4 py-3 ml-8">
+          <div className="rounded-lg border border-dark-200 bg-dark-50 px-4 py-3 ml-8">
             <label className="block text-sm font-medium text-[#FAFAFA] mb-1">
               Image Generation Model
             </label>
-            <p className="text-xs text-[#999999] mb-2">
+            <p className="text-xs text-dark-600 mb-2">
               Select the model used for image generation.
             </p>
             <ModelSelector
@@ -169,14 +169,14 @@ export function AIFeaturesPanel() {
         )}
 
         {/* Vector Search Toggle */}
-        <div className="flex items-center justify-between rounded-lg border border-[#2A2A2A] bg-[#161616] px-4 py-3">
+        <div className="flex items-center justify-between rounded-lg border border-dark-200 bg-dark-50 px-4 py-3">
           <div className="flex items-center gap-3">
-            <Database className="size-5 text-[#D4A574]" />
+            <Database className="size-5 text-gold" />
             <div>
               <div className="text-sm font-medium text-[#FAFAFA]">
                 Enable Semantic Vector Search
               </div>
-              <p className="text-xs text-[#999999] mt-0.5">
+              <p className="text-xs text-dark-600 mt-0.5">
                 Use AI embeddings for semantic knowledge search instead of keyword matching.
                 Requires pgvector on your PostgreSQL instance and an OpenRouter API key.
                 Falls back to keyword search when disabled.
@@ -191,7 +191,7 @@ export function AIFeaturesPanel() {
       </div>
 
       {/* Bottom bar */}
-      <div className="px-8 py-4 border-t border-[#2A2A2A] bg-[#0A0A0A] flex items-center justify-end gap-3">
+      <div className="px-8 py-4 border-t border-dark-200 bg-dark flex items-center justify-end gap-3">
         {error && (
           <span className="flex items-center gap-1.5 text-sm text-red-400">
             <AlertCircle className="size-4" />
@@ -207,7 +207,7 @@ export function AIFeaturesPanel() {
         <button
           onClick={handleSave}
           disabled={isSaving}
-          className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-white bg-[#D4A574] rounded-lg hover:bg-[#C4956A] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-white bg-gold rounded-lg hover:bg-gold-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           {isSaving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
           Save
@@ -304,7 +304,7 @@ export function ModelRegistryPanel() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-full text-[#999999]">
+      <div className="flex items-center justify-center h-full text-dark-600">
         <Loader2 className="size-5 animate-spin mr-2" />
         Loading models...
       </div>
@@ -338,7 +338,7 @@ export function ModelRegistryPanel() {
           </h2>
           <button
             onClick={handleBrowse}
-            className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-[#D4A574] bg-[#D4A574]/10 rounded-lg hover:bg-[#D4A574]/20 transition-colors"
+            className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-gold bg-gold/10 rounded-lg hover:bg-gold/20 transition-colors"
           >
             <Plus className="size-3.5" />
             Browse OpenRouter
@@ -346,7 +346,7 @@ export function ModelRegistryPanel() {
         </div>
 
         {enabledModels.length === 0 ? (
-          <div className="rounded-lg border border-[#2A2A2A] bg-[#161616] px-6 py-8 text-center text-sm text-[#999999]">
+          <div className="rounded-lg border border-dark-200 bg-dark-50 px-6 py-8 text-center text-sm text-dark-600">
             No models enabled yet. Browse the OpenRouter catalog to add models.
           </div>
         ) : (
@@ -369,18 +369,18 @@ export function ModelRegistryPanel() {
       {/* Disabled Models */}
       {disabledModels.length > 0 && (
         <div>
-          <h2 className="text-sm font-semibold text-[#666666] uppercase tracking-wider mb-3">
+          <h2 className="text-sm font-semibold text-dark-500 uppercase tracking-wider mb-3">
             Disabled ({disabledModels.length})
           </h2>
           <div className="space-y-2">
             {disabledModels.map((m) => (
               <div
                 key={m.modelOptionId}
-                className="flex items-center justify-between rounded-lg border border-[#2A2A2A]/50 bg-[#161616]/50 px-4 py-3 opacity-60"
+                className="flex items-center justify-between rounded-lg border border-dark-200/50 bg-dark-50/50 px-4 py-3 opacity-60"
               >
                 <div>
-                  <div className="text-sm text-[#999999]">{m.displayName}</div>
-                  <div className="text-xs text-[#666666]">{m.modelId}</div>
+                  <div className="text-sm text-dark-600">{m.displayName}</div>
+                  <div className="text-xs text-dark-500">{m.modelId}</div>
                 </div>
                 <button
                   onClick={() => handleEnable({
@@ -391,7 +391,7 @@ export function ModelRegistryPanel() {
                     inputCostPerM: m.inputCostPerM,
                     outputCostPerM: m.outputCostPerM,
                   })}
-                  className="text-xs text-[#D4A574] hover:text-[#FAFAFA] transition-colors"
+                  className="text-xs text-gold hover:text-[#FAFAFA] transition-colors"
                 >
                   Re-enable
                 </button>
@@ -403,14 +403,14 @@ export function ModelRegistryPanel() {
 
       {/* Browse OpenRouter Catalog (expandable) */}
       {showCatalog && (
-        <div className="border-t border-[#2A2A2A] pt-6">
+        <div className="border-t border-dark-200 pt-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-sm font-semibold text-[#FAFAFA] uppercase tracking-wider">
               OpenRouter Catalog
             </h2>
             <button
               onClick={() => setShowCatalog(false)}
-              className="p-1 text-[#999999] hover:text-[#E5E5E5] transition-colors"
+              className="p-1 text-dark-600 hover:text-[#E5E5E5] transition-colors"
             >
               <X className="size-4" />
             </button>
@@ -419,19 +419,19 @@ export function ModelRegistryPanel() {
           {/* Search & Filter */}
           <div className="flex gap-3 mb-4">
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-[#666666]" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-dark-500" />
               <input
                 type="text"
                 value={catalogSearch}
                 onChange={(e) => setCatalogSearch(e.target.value)}
                 placeholder="Search models..."
-                className="w-full pl-9 pr-3 py-2 rounded-lg border border-[#2A2A2A] bg-[#0A0A0A] text-sm text-[#FAFAFA] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-transparent"
+                className="w-full pl-9 pr-3 py-2 rounded-lg border border-dark-200 bg-dark text-sm text-[#FAFAFA] focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-transparent"
               />
             </div>
             <select
               value={providerFilter}
               onChange={(e) => setProviderFilter(e.target.value)}
-              className="rounded-lg border border-[#2A2A2A] bg-[#0A0A0A] px-3 py-2 text-sm text-[#FAFAFA] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-transparent"
+              className="rounded-lg border border-dark-200 bg-dark px-3 py-2 text-sm text-[#FAFAFA] focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-transparent"
             >
               <option value="">All Providers</option>
               {providers.map((p) => (
@@ -443,24 +443,24 @@ export function ModelRegistryPanel() {
           </div>
 
           {isFetchingCatalog ? (
-            <div className="flex items-center justify-center py-8 text-[#999999]">
+            <div className="flex items-center justify-center py-8 text-dark-600">
               <Loader2 className="size-5 animate-spin mr-2" />
               Fetching OpenRouter catalog...
             </div>
           ) : (
-            <div className="max-h-96 overflow-y-auto space-y-1 rounded-lg border border-[#2A2A2A]">
+            <div className="max-h-96 overflow-y-auto space-y-1 rounded-lg border border-dark-200">
               {filteredCatalog.slice(0, 100).map((m) => (
                 <CatalogRow key={m.modelId} model={m} onEnable={() => handleEnable(m)} />
               ))}
               {filteredCatalog.length === 0 && (
-                <div className="px-4 py-6 text-center text-sm text-[#999999]">
+                <div className="px-4 py-6 text-center text-sm text-dark-600">
                   {catalogSearch || providerFilter
                     ? "No models match your filters."
                     : "All available models are already enabled."}
                 </div>
               )}
               {filteredCatalog.length > 100 && (
-                <div className="px-4 py-2 text-center text-xs text-[#666666]">
+                <div className="px-4 py-2 text-center text-xs text-dark-500">
                   Showing first 100 of {filteredCatalog.length} results. Use search to narrow down.
                 </div>
               )}
@@ -484,12 +484,12 @@ function ToggleSwitch({ checked, onChange }: { checked: boolean; onChange: (v: b
       role="switch"
       aria-checked={checked}
       onClick={() => onChange(!checked)}
-      className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 ${
-        checked ? "bg-[#D4A574]" : "bg-[#2A2A2A]"
+      className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-gold/50 ${
+        checked ? "bg-gold" : "bg-dark-200"
       }`}
     >
       <span
-        className={`inline-block h-4 w-4 transform rounded-full bg-[#161616] transition-transform ${
+        className={`inline-block h-4 w-4 transform rounded-full bg-dark-50 transition-transform ${
           checked ? "translate-x-6" : "translate-x-1"
         }`}
       />
@@ -522,20 +522,20 @@ function ModelCard({
   isLast: boolean;
 }) {
   return (
-    <div className="flex items-center gap-3 rounded-lg border border-[#2A2A2A] bg-[#161616] px-4 py-3 hover:border-[#D4A574]/30 transition-colors">
+    <div className="flex items-center gap-3 rounded-lg border border-dark-200 bg-dark-50 px-4 py-3 hover:border-gold/30 transition-colors">
       {/* Sort arrows */}
       <div className="flex flex-col gap-0.5">
         <button
           onClick={onMoveUp}
           disabled={isFirst}
-          className="p-0.5 text-[#666666] hover:text-[#D4A574] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          className="p-0.5 text-dark-500 hover:text-gold disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
         >
           <ChevronUp className="size-3.5" />
         </button>
         <button
           onClick={onMoveDown}
           disabled={isLast}
-          className="p-0.5 text-[#666666] hover:text-[#D4A574] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          className="p-0.5 text-dark-500 hover:text-gold disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
         >
           <ChevronDown className="size-3.5" />
         </button>
@@ -547,15 +547,15 @@ function ModelCard({
           <span className="text-sm font-medium text-[#FAFAFA] truncate">
             {model.displayName}
           </span>
-          <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-[#2A2A2A] text-[#999999] uppercase">
+          <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-dark-200 text-dark-600 uppercase">
             {model.provider}
           </span>
         </div>
-        <div className="text-xs text-[#666666] truncate mt-0.5">{model.modelId}</div>
+        <div className="text-xs text-dark-500 truncate mt-0.5">{model.modelId}</div>
       </div>
 
       {/* Pricing */}
-      <div className="flex items-center gap-4 text-xs text-[#999999] flex-shrink-0">
+      <div className="flex items-center gap-4 text-xs text-dark-600 flex-shrink-0">
         {model.contextLength && (
           <span title="Context window">
             {(model.contextLength / 1000).toFixed(0)}k ctx
@@ -572,7 +572,7 @@ function ModelCard({
       {/* Disable */}
       <button
         onClick={onDisable}
-        className="p-1.5 text-[#666666] hover:text-red-400 transition-colors"
+        className="p-1.5 text-dark-500 hover:text-red-400 transition-colors"
         title="Disable model"
       >
         <X className="size-4" />
@@ -590,15 +590,15 @@ function CatalogRow({
   onEnable: () => void;
 }) {
   return (
-    <div className="flex items-center justify-between px-4 py-2 hover:bg-[#161616] transition-colors">
+    <div className="flex items-center justify-between px-4 py-2 hover:bg-dark-50 transition-colors">
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <span className="text-sm text-[#E5E5E5] truncate">{model.displayName}</span>
-          <span className="px-1.5 py-0.5 text-[10px] rounded bg-[#2A2A2A] text-[#666666] uppercase">
+          <span className="px-1.5 py-0.5 text-[10px] rounded bg-dark-200 text-dark-500 uppercase">
             {model.provider}
           </span>
         </div>
-        <div className="flex items-center gap-3 mt-0.5 text-xs text-[#666666]">
+        <div className="flex items-center gap-3 mt-0.5 text-xs text-dark-500">
           <span>{model.modelId}</span>
           {model.contextLength && (
             <span>{(model.contextLength / 1000).toFixed(0)}k ctx</span>
@@ -609,7 +609,7 @@ function CatalogRow({
       </div>
       <button
         onClick={onEnable}
-        className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-[#D4A574] bg-[#D4A574]/10 rounded-md hover:bg-[#D4A574]/20 transition-colors flex-shrink-0"
+        className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-gold bg-gold/10 rounded-md hover:bg-gold/20 transition-colors flex-shrink-0"
       >
         <Plus className="size-3" />
         Enable

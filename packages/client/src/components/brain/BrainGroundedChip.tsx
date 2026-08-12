@@ -63,12 +63,12 @@ export function BrainGroundedChip({
 
   return (
     <div role="status" aria-live="polite" className="mt-1.5">
-      <div className="inline-flex items-center gap-1 rounded-full border border-[#D4A574]/20 bg-[#D4A574]/10 pl-2.5 pr-1 py-0.5">
+      <div className="inline-flex items-center gap-1 rounded-full border border-gold/20 bg-gold/10 pl-2.5 pr-1 py-0.5">
         <button
           type="button"
           onClick={() => setExpanded((e) => !e)}
           aria-expanded={expanded}
-          className="inline-flex items-center gap-1.5 text-[11px] text-[#D4A574] rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4A574]/60"
+          className="inline-flex items-center gap-1.5 text-[11px] text-gold rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
         >
           <Brain className="size-3" aria-hidden="true" />
           Grounded in your Brain
@@ -81,7 +81,7 @@ export function BrainGroundedChip({
           type="button"
           onClick={() => setDismissed(true)}
           aria-label="Dismiss"
-          className="flex size-5 items-center justify-center rounded-full text-[#D4A574]/60 hover:text-[#D4A574] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4A574]/60"
+          className="flex size-5 items-center justify-center rounded-full text-gold/60 hover:text-gold focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
         >
           <X className="size-3" aria-hidden="true" />
         </button>
@@ -90,7 +90,7 @@ export function BrainGroundedChip({
       {expanded && (
         <ul className="mt-1.5 space-y-0.5 pl-1">
           {memories.map((memory) => (
-            <li key={memory.memoryId} className="text-[11px] text-[#999999]">
+            <li key={memory.memoryId} className="text-[11px] text-dark-600">
               · {memory.title || "A note from your kitchen"}
             </li>
           ))}

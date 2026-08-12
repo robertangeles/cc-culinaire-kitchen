@@ -41,24 +41,24 @@ const DOMAIN_CONFIG: Record<RecipeDomain, DomainConfig> = {
     label: "CulinAIre Recipe",
     tagline: "AI-powered recipes across every cuisine and technique",
     icon: ChefHat,
-    accent: "text-[#D4A574]",
-    bg: "bg-[#0A0A0A]",
+    accent: "text-gold",
+    bg: "bg-dark",
     apiEndpoint: "/api/recipes/generate",
   },
   patisserie: {
     label: "CulinAIre Patisserie",
     tagline: "Precision pastry recipes from a world-class AI pastry chef",
     icon: Croissant,
-    accent: "text-[#D4A574]",
-    bg: "bg-[#0A0A0A]",
+    accent: "text-gold",
+    bg: "bg-dark",
     apiEndpoint: "/api/recipes/patisserie",
   },
   spirits: {
     label: "CulinAIre Spirits",
     tagline: "Cocktails and mocktails crafted by an AI bar director",
     icon: GlassWater,
-    accent: "text-[#D4A574]",
-    bg: "bg-[#0A0A0A]",
+    accent: "text-gold",
+    bg: "bg-dark",
     apiEndpoint: "/api/recipes/spirits",
   },
 };
@@ -177,7 +177,7 @@ export function RecipeLabPage({ domain }: RecipeLabPageProps) {
 
   // Form panel (shared between initial and split-screen states)
   const formPanel = (
-    <div className={`${generated ? "" : "w-full max-w-xl"} bg-[#161616] rounded-2xl border border-[#2A2A2A] p-6 md:p-8`}>
+    <div className={`${generated ? "" : "w-full max-w-xl"} bg-dark-50 rounded-2xl border border-dark-200 p-6 md:p-8`}>
       {error && (
         <div className="mb-4 flex items-start gap-2 bg-red-500/10 border border-red-500/20 rounded-lg p-3">
           <AlertCircle className="size-4 text-red-400 shrink-0 mt-0.5" />
@@ -185,10 +185,10 @@ export function RecipeLabPage({ domain }: RecipeLabPageProps) {
         </div>
       )}
       {proseResponse && (
-        <div className="mb-4 bg-[#D4A574]/10 border border-[#D4A574]/20 rounded-lg p-4">
+        <div className="mb-4 bg-gold/10 border border-gold/20 rounded-lg p-4">
           <div className="flex items-center gap-2 mb-2">
-            <AlertCircle className="size-4 text-[#D4A574]" />
-            <h3 className="text-sm font-semibold text-[#D4A574]">Suggestions</h3>
+            <AlertCircle className="size-4 text-gold" />
+            <h3 className="text-sm font-semibold text-gold">Suggestions</h3>
           </div>
           <p className="text-sm text-[#E5E5E5] whitespace-pre-line">{proseResponse}</p>
         </div>
@@ -205,7 +205,7 @@ export function RecipeLabPage({ domain }: RecipeLabPageProps) {
           <div className="text-center mb-8">
             <DomainIcon className={`size-12 mx-auto mb-3 ${config.accent}`} />
             <h1 className="text-2xl md:text-3xl font-bold text-[#FAFAFA] tracking-tight">{config.label}</h1>
-            <p className="text-[#999999] mt-2 text-sm md:text-base">{config.tagline}</p>
+            <p className="text-dark-600 mt-2 text-sm md:text-base">{config.tagline}</p>
           </div>
           {formPanel}
         </div>
@@ -217,17 +217,17 @@ export function RecipeLabPage({ domain }: RecipeLabPageProps) {
   return (
     <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
       {/* Left: form panel (sticky, scrollable) */}
-      <div className="md:w-[380px] lg:w-[420px] md:flex-shrink-0 md:border-r border-[#2A2A2A] bg-[#161616] overflow-y-auto p-6">
+      <div className="md:w-[380px] lg:w-[420px] md:flex-shrink-0 md:border-r border-dark-200 bg-dark-50 overflow-y-auto p-6">
         <div className="mb-4">
           <DomainIcon className={`size-8 mb-2 ${config.accent}`} />
           <h2 className="text-lg font-bold text-[#FAFAFA] tracking-tight">{config.label}</h2>
-          <p className="text-xs text-[#999999]">{config.tagline}</p>
+          <p className="text-xs text-dark-600">{config.tagline}</p>
         </div>
         {formPanel}
       </div>
 
       {/* Right: recipe output (scrollable) */}
-      <div className="flex-1 overflow-y-auto bg-[#0A0A0A]">
+      <div className="flex-1 overflow-y-auto bg-dark">
         <RecipeHero
           imageUrl={generated.imageUrl}
           recipeName={generated.recipe.name}

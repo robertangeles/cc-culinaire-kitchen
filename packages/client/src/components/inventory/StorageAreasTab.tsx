@@ -122,7 +122,7 @@ function AreaItemsEditor({
       aria-modal="true"
       aria-labelledby="area-items-title"
     >
-      <div className="w-full max-w-lg max-h-[85vh] flex flex-col bg-[#111]/95 backdrop-blur-md border border-[#D4A574]/20 rounded-2xl shadow-[0_0_32px_rgba(212,165,116,0.1)]">
+      <div className="w-full max-w-lg max-h-[85vh] flex flex-col bg-[#111]/95 backdrop-blur-md border border-gold/20 rounded-2xl shadow-[0_0_32px_rgba(212,165,116,0.1)]">
         <div className="flex items-start justify-between p-5 pb-3">
           <div>
             <h3 id="area-items-title" className="text-base font-semibold text-[#EEE]">
@@ -133,7 +133,7 @@ function AreaItemsEditor({
               restock list.
             </p>
           </div>
-          <button onClick={onClose} className="text-[#666] hover:text-[#CCC] transition-colors">
+          <button onClick={onClose} className="text-dark-500 hover:text-[#CCC] transition-colors">
             <X size={18} />
           </button>
         </div>
@@ -147,19 +147,19 @@ function AreaItemsEditor({
               placeholder="Add an item..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full bg-[#0A0A0A] border border-[#2A2A2A] rounded-lg pl-9 pr-4 py-2 text-sm text-white placeholder-[#555] focus:outline-none focus:border-[#D4A574]/30 transition-all"
+              className="w-full bg-dark border border-dark-200 rounded-lg pl-9 pr-4 py-2 text-sm text-white placeholder-[#555] focus:outline-none focus:border-gold/30 transition-all"
             />
           </div>
           {candidates.length > 0 && (
-            <div className="mt-1 rounded-lg border border-[#2A2A2A] overflow-hidden">
+            <div className="mt-1 rounded-lg border border-dark-200 overflow-hidden">
               {candidates.map((c) => (
                 <button
                   key={c.ingredientId}
                   onClick={() => addItem(c.ingredientId, c.ingredientName, c.baseUnit)}
-                  className="w-full flex items-center justify-between px-3 py-2 text-sm text-[#ccc] hover:bg-[#D4A574]/5 transition-colors"
+                  className="w-full flex items-center justify-between px-3 py-2 text-sm text-[#ccc] hover:bg-gold/5 transition-colors"
                 >
                   <span>{c.ingredientName}</span>
-                  <span className="text-[10px] text-[#666]">{c.baseUnit}</span>
+                  <span className="text-[10px] text-dark-500">{c.baseUnit}</span>
                 </button>
               ))}
             </div>
@@ -170,14 +170,14 @@ function AreaItemsEditor({
         <div className="flex-1 overflow-y-auto px-5">
           {loading ? (
             <div className="flex justify-center py-10">
-              <Loader2 className="size-5 animate-spin text-[#D4A574]" />
+              <Loader2 className="size-5 animate-spin text-gold" />
             </div>
           ) : rows.length === 0 ? (
-            <p className="text-xs text-[#666] text-center py-10">
+            <p className="text-xs text-dark-500 text-center py-10">
               Nothing here yet. Search above to put items on this sheet.
             </p>
           ) : (
-            <div className="rounded-lg border border-[#2A2A2A] divide-y divide-[#2A2A2A]/40">
+            <div className="rounded-lg border border-dark-200 divide-y divide-dark-200/40">
               {rows.map((row, i) => (
                 <div key={row.ingredientId} className="flex items-center gap-2 px-3 py-2">
                   <div className="flex flex-col">
@@ -185,7 +185,7 @@ function AreaItemsEditor({
                       onClick={() => move(i, -1)}
                       disabled={i === 0}
                       aria-label={`Move ${row.ingredientName} up`}
-                      className="text-[#555] hover:text-[#D4A574] disabled:opacity-20 disabled:hover:text-[#555] transition-colors"
+                      className="text-[#555] hover:text-gold disabled:opacity-20 disabled:hover:text-[#555] transition-colors"
                     >
                       <ChevronUp size={12} />
                     </button>
@@ -193,7 +193,7 @@ function AreaItemsEditor({
                       onClick={() => move(i, 1)}
                       disabled={i === rows.length - 1}
                       aria-label={`Move ${row.ingredientName} down`}
-                      className="text-[#555] hover:text-[#D4A574] disabled:opacity-20 disabled:hover:text-[#555] transition-colors"
+                      className="text-[#555] hover:text-gold disabled:opacity-20 disabled:hover:text-[#555] transition-colors"
                     >
                       <ChevronDown size={12} />
                     </button>
@@ -212,9 +212,9 @@ function AreaItemsEditor({
                           r.map((x, xi) => (xi === i ? { ...x, areaParLevel: e.target.value } : x)),
                         )
                       }
-                      className="w-16 bg-[#0A0A0A] border border-[#2A2A2A] rounded-md px-2 py-1 text-xs text-white text-right placeholder-[#555] focus:outline-none focus:border-[#D4A574]/30"
+                      className="w-16 bg-dark border border-dark-200 rounded-md px-2 py-1 text-xs text-white text-right placeholder-[#555] focus:outline-none focus:border-gold/30"
                     />
-                    <span className="text-[10px] text-[#666] w-10">{row.baseUnit}</span>
+                    <span className="text-[10px] text-dark-500 w-10">{row.baseUnit}</span>
                   </div>
                   <button
                     onClick={() => setRows((r) => r.filter((_, xi) => xi !== i))}
@@ -234,14 +234,14 @@ function AreaItemsEditor({
         <div className="flex justify-end gap-2 p-5 pt-3">
           <button
             onClick={onClose}
-            className="px-4 py-2 rounded-xl text-sm font-medium text-[#999] hover:text-[#CCC] border border-[#2A2A2A] hover:border-[#3A3A3A] transition-colors"
+            className="px-4 py-2 rounded-xl text-sm font-medium text-dark-600 hover:text-[#CCC] border border-dark-200 hover:border-dark-300 transition-colors"
           >
             Cancel
           </button>
           <button
             onClick={save}
             disabled={saving}
-            className="bg-gradient-to-r from-[#D4A574] to-[#C4956A] text-[#0A0A0A] font-semibold rounded-xl px-5 py-2 text-sm transition-all hover:shadow-[0_0_20px_rgba(212,165,116,0.2)] hover:brightness-110 disabled:opacity-40 flex items-center gap-2"
+            className="bg-gradient-to-r from-gold to-gold-hover text-dark font-semibold rounded-xl px-5 py-2 text-sm transition-all hover:shadow-[0_0_20px_rgba(212,165,116,0.2)] hover:brightness-110 disabled:opacity-40 flex items-center gap-2"
           >
             {saving && <Loader2 size={14} className="animate-spin" />}
             Save sheet
@@ -311,13 +311,13 @@ export default function StorageAreasTab() {
   }, [deactivate]);
 
   if (!selectedLocationId) {
-    return <p className="text-sm text-[#666] text-center py-16">Select a location first.</p>;
+    return <p className="text-sm text-dark-500 text-center py-16">Select a location first.</p>;
   }
 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-16">
-        <Loader2 className="size-6 animate-spin text-[#D4A574]" />
+        <Loader2 className="size-6 animate-spin text-gold" />
       </div>
     );
   }
@@ -348,19 +348,19 @@ export default function StorageAreasTab() {
               maxLength={50}
               onChange={(e) => setNewName(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleCreate()}
-              className="flex-1 bg-[#0A0A0A] border border-[#2A2A2A] rounded-lg px-3 py-2 text-sm text-white placeholder-[#555] focus:outline-none focus:border-[#D4A574]/30 transition-all"
+              className="flex-1 bg-dark border border-dark-200 rounded-lg px-3 py-2 text-sm text-white placeholder-[#555] focus:outline-none focus:border-gold/30 transition-all"
             />
             <button
               onClick={handleCreate}
               disabled={creating || !newName.trim()}
-              className="bg-gradient-to-r from-[#D4A574] to-[#C4956A] text-[#0A0A0A] font-semibold rounded-lg px-4 py-2 text-sm transition-all hover:shadow-[0_0_20px_rgba(212,165,116,0.2)] hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5"
+              className="bg-gradient-to-r from-gold to-gold-hover text-dark font-semibold rounded-lg px-4 py-2 text-sm transition-all hover:shadow-[0_0_20px_rgba(212,165,116,0.2)] hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5"
             >
               {creating ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
               Add
             </button>
           </div>
         </div>
-        <p className="text-[11px] text-[#666]">
+        <p className="text-[11px] text-dark-500">
           Areas organise the count. Stock still belongs to the whole site — moving something to
           the bar never changes what you have.
         </p>
@@ -369,9 +369,9 @@ export default function StorageAreasTab() {
 
       {/* The areas */}
       {areas.length === 0 ? (
-        <div className="text-center py-16 rounded-xl bg-[#161616] border border-[#2A2A2A]">
-          <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-[#D4A574]/10 border border-[#D4A574]/20 flex items-center justify-center shadow-[0_0_20px_rgba(212,165,116,0.1)]">
-            <Boxes className="size-7 text-[#D4A574]" />
+        <div className="text-center py-16 rounded-xl bg-dark-50 border border-dark-200">
+          <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-gold/10 border border-gold/20 flex items-center justify-center shadow-[0_0_20px_rgba(212,165,116,0.1)]">
+            <Boxes className="size-7 text-gold" />
           </div>
           <h3 className="text-base font-semibold text-white mb-1">Create your first area</h3>
           <p className="text-sm text-[#888] max-w-sm mx-auto">
@@ -379,7 +379,7 @@ export default function StorageAreasTab() {
           </p>
         </div>
       ) : (
-        <div className="rounded-xl bg-[#111]/80 backdrop-blur-md border border-white/5 divide-y divide-[#2A2A2A]/40">
+        <div className="rounded-xl bg-[#111]/80 backdrop-blur-md border border-white/5 divide-y divide-dark-200/40">
           {areas.map((area, i) => (
             <div
               key={area.storageAreaId}
@@ -390,7 +390,7 @@ export default function StorageAreasTab() {
                   onClick={() => handleReorder(i, -1)}
                   disabled={i === 0}
                   aria-label={`Move ${area.areaName} earlier in the walk`}
-                  className="text-[#555] hover:text-[#D4A574] disabled:opacity-20 disabled:hover:text-[#555] transition-colors"
+                  className="text-[#555] hover:text-gold disabled:opacity-20 disabled:hover:text-[#555] transition-colors"
                 >
                   <ChevronUp size={13} />
                 </button>
@@ -398,7 +398,7 @@ export default function StorageAreasTab() {
                   onClick={() => handleReorder(i, 1)}
                   disabled={i === areas.length - 1}
                   aria-label={`Move ${area.areaName} later in the walk`}
-                  className="text-[#555] hover:text-[#D4A574] disabled:opacity-20 disabled:hover:text-[#555] transition-colors"
+                  className="text-[#555] hover:text-gold disabled:opacity-20 disabled:hover:text-[#555] transition-colors"
                 >
                   <ChevronDown size={13} />
                 </button>
@@ -416,7 +416,7 @@ export default function StorageAreasTab() {
                   }}
                   onBlur={() => setEditingId(null)}
                   aria-label={`Rename ${area.areaName}`}
-                  className="flex-1 bg-[#0A0A0A] border border-[#D4A574]/30 rounded-md px-2 py-1 text-sm text-white focus:outline-none"
+                  className="flex-1 bg-dark border border-gold/30 rounded-md px-2 py-1 text-sm text-white focus:outline-none"
                 />
               ) : (
                 <span className="flex-1 text-sm text-white">{area.areaName}</span>
@@ -424,7 +424,7 @@ export default function StorageAreasTab() {
 
               <button
                 onClick={() => setEditingItemsFor(area)}
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-white/[0.03] border border-white/5 text-[#888] hover:border-[#D4A574]/20 hover:text-[#ccc] transition-colors"
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-white/[0.03] border border-white/5 text-[#888] hover:border-gold/20 hover:text-[#ccc] transition-colors"
               >
                 <PackageOpen size={11} />
                 {area.itemCount} {area.itemCount === 1 ? "item" : "items"}
@@ -436,7 +436,7 @@ export default function StorageAreasTab() {
                   setEditName(area.areaName);
                 }}
                 aria-label={`Rename ${area.areaName}`}
-                className="text-[#555] hover:text-[#D4A574] transition-colors"
+                className="text-[#555] hover:text-gold transition-colors"
               >
                 {editingId === area.storageAreaId ? <Check size={14} /> : <Pencil size={13} />}
               </button>

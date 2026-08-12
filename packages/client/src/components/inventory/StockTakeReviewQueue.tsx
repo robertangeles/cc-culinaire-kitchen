@@ -32,7 +32,7 @@ export function StockTakeReviewQueue({ sessions, refresh, readOnly = false, titl
           <CheckCircle2 className="size-10 text-emerald-400" />
         </div>
         <h3 className="text-xl font-semibold text-white mb-2">{readOnly ? "No History Yet" : "All Clear"}</h3>
-        <p className="text-sm text-[#999] max-w-md mx-auto">
+        <p className="text-sm text-dark-600 max-w-md mx-auto">
           {readOnly
             ? "Approved stock takes will appear here for reference."
             : "No stock takes pending review. All locations are up to date."}
@@ -45,7 +45,7 @@ export function StockTakeReviewQueue({ sessions, refresh, readOnly = false, titl
     <div className="space-y-4 animate-[fadeInUp_200ms_ease-out]">
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold text-white">{title ?? "Pending Reviews"}</h3>
-        <span className={`text-xs px-2.5 py-1 rounded-full font-medium border ${readOnly ? "bg-[#2A2A2A] text-[#999] border-[#3A3A3A]" : "bg-red-500/10 text-red-400 border-red-500/20"}`}>
+        <span className={`text-xs px-2.5 py-1 rounded-full font-medium border ${readOnly ? "bg-dark-200 text-dark-600 border-dark-300" : "bg-red-500/10 text-red-400 border-red-500/20"}`}>
           {sessions.length}{readOnly ? "" : " pending"}
         </span>
       </div>
@@ -101,26 +101,26 @@ function ReviewCard({
       className={`rounded-xl border overflow-hidden transition-all ${
         isFlagged
           ? "bg-red-500/5 border-red-500/20"
-          : "bg-[#161616] border-[#2A2A2A]"
+          : "bg-dark-50 border-dark-200"
       } ${!isExpanded ? "hover:-translate-y-0.5 hover:shadow-lg" : ""}`}
     >
       {/* Compact card header */}
       <button
         onClick={onToggle}
-        className="w-full flex items-center justify-between p-4 text-left hover:bg-[#1E1E1E]/50 transition-colors"
+        className="w-full flex items-center justify-between p-4 text-left hover:bg-dark-100/50 transition-colors"
       >
         <div className="flex-1 min-w-0">
           {/* Row 1: location, opener, time */}
           <div className="flex items-center gap-3 flex-wrap">
             <span className="flex items-center gap-1.5 text-sm font-medium text-white">
-              <MapPin className="size-3.5 text-[#D4A574] shrink-0" />
+              <MapPin className="size-3.5 text-gold shrink-0" />
               {session.locationName}
             </span>
-            <span className="flex items-center gap-1 text-xs text-[#999]">
+            <span className="flex items-center gap-1 text-xs text-dark-600">
               <User className="size-3 shrink-0" />
               {session.openedByUserName}
             </span>
-            <span className="flex items-center gap-1 text-xs text-[#666]">
+            <span className="flex items-center gap-1 text-xs text-dark-500">
               <Clock className="size-3 shrink-0" />
               {timeAgo}
             </span>
@@ -134,7 +134,7 @@ function ReviewCard({
 
           {/* Row 2: type + counts + flag */}
           <div className="flex items-center gap-2 mt-1.5">
-            <span className="text-xs text-[#666]">
+            <span className="text-xs text-dark-500">
               {session.categoryCount === 10 ? "Full Inventory" : "Cycle Count"}
               {" · "}
               {session.submittedCount} categor{session.submittedCount === 1 ? "y" : "ies"}
@@ -150,15 +150,15 @@ function ReviewCard({
 
         <div className="ml-3 shrink-0">
           {isExpanded
-            ? <ChevronDown className="size-5 text-[#999]" />
-            : <ChevronRight className="size-5 text-[#999]" />
+            ? <ChevronDown className="size-5 text-dark-600" />
+            : <ChevronRight className="size-5 text-dark-600" />
           }
         </div>
       </button>
 
       {/* Expanded: full review panel */}
       {isExpanded && (
-        <div className="border-t border-[#2A2A2A] p-4 animate-[fadeIn_150ms_ease-out]">
+        <div className="border-t border-dark-200 p-4 animate-[fadeIn_150ms_ease-out]">
           <StockTakeReview
             session={fullSession as any}
             onActionComplete={onActionComplete}

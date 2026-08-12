@@ -102,22 +102,22 @@ export default function BulkParEditor() {
 
   if (!selectedLocationId) {
     return (
-      <div className="rounded-xl bg-[#161616]/80 backdrop-blur-sm border border-[#2A2A2A] p-6 text-center">
-        <p className="text-[#999] text-sm">Pick a location to set its par levels.</p>
+      <div className="rounded-xl bg-dark-50/80 backdrop-blur-sm border border-dark-200 p-6 text-center">
+        <p className="text-dark-600 text-sm">Pick a location to set its par levels.</p>
       </div>
     );
   }
 
   return (
-    <div className="rounded-xl bg-[#161616]/80 backdrop-blur-sm border border-[#2A2A2A] p-4">
+    <div className="rounded-xl bg-dark-50/80 backdrop-blur-sm border border-dark-200 p-4">
       {/* Header + progress */}
       <div className="flex items-start justify-between gap-3 mb-1">
         <h3 className="text-sm font-medium text-white flex items-center gap-2">
-          <Gauge className="size-4 text-[#D4A574]" />
+          <Gauge className="size-4 text-gold" />
           Par Levels
         </h3>
-        <span className="text-xs text-[#999] shrink-0">
-          <span className="text-[#D4A574] font-medium">{withPar}</span> of {items.length} set
+        <span className="text-xs text-dark-600 shrink-0">
+          <span className="text-gold font-medium">{withPar}</span> of {items.length} set
         </span>
       </div>
       <p className="text-xs text-[#777] mb-3">
@@ -128,7 +128,7 @@ export default function BulkParEditor() {
       {items.length > 0 && (
         <div className="h-1 rounded-full bg-[#1A1A1A] mb-3 overflow-hidden">
           <div
-            className="h-full rounded-full bg-gradient-to-r from-[#D4A574] to-[#C4956A] transition-all"
+            className="h-full rounded-full bg-gradient-to-r from-gold to-gold-hover transition-all"
             style={{ width: `${Math.round((withPar / items.length) * 100)}%` }}
           />
         </div>
@@ -136,31 +136,31 @@ export default function BulkParEditor() {
 
       {/* Search */}
       <div className="relative mb-3">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-[#666]" />
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-dark-500" />
         <input
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Filter items by name..."
-          className="w-full pl-9 pr-3 py-2 rounded-lg text-sm bg-[#0A0A0A] text-white
-            border border-[#2A2A2A] focus:border-[#D4A574]/40
+          className="w-full pl-9 pr-3 py-2 rounded-lg text-sm bg-dark text-white
+            border border-dark-200 focus:border-gold/40
             focus:shadow-[0_0_8px_rgba(212,165,116,0.12)] outline-none placeholder:text-[#555]"
         />
       </div>
 
       {isLoading ? (
-        <div className="py-8 text-center text-[#999] text-sm flex items-center justify-center gap-2">
+        <div className="py-8 text-center text-dark-600 text-sm flex items-center justify-center gap-2">
           <Loader2 className="size-4 animate-spin" /> Loading your items…
         </div>
       ) : items.length === 0 ? (
         <div className="py-8 text-center">
-          <p className="text-[#999] text-sm">No items in this location&apos;s catalogue yet.</p>
-          <p className="text-[#666] text-xs mt-1">Add items first, then set their pars here.</p>
+          <p className="text-dark-600 text-sm">No items in this location&apos;s catalogue yet.</p>
+          <p className="text-dark-500 text-xs mt-1">Add items first, then set their pars here.</p>
         </div>
       ) : (
         <>
-          <div className="max-h-80 overflow-y-auto rounded-lg border border-[#2A2A2A] bg-[#0A0A0A]/50">
-            <div className="sticky top-0 flex items-center gap-3 px-3 py-1.5 text-[10px] uppercase tracking-wider text-[#666] bg-[#141414] border-b border-[#2A2A2A]">
+          <div className="max-h-80 overflow-y-auto rounded-lg border border-dark-200 bg-dark/50">
+            <div className="sticky top-0 flex items-center gap-3 px-3 py-1.5 text-[10px] uppercase tracking-wider text-dark-500 bg-[#141414] border-b border-dark-200">
               <div className="flex-1">Item</div>
               <div className="w-12 text-center">Unit</div>
               <div className="w-16 text-right">On hand</div>
@@ -179,8 +179,8 @@ export default function BulkParEditor() {
                   <div className="flex-1 min-w-0">
                     <span className="text-white text-sm truncate block">{item.ingredientName}</span>
                   </div>
-                  <div className="w-12 text-center text-xs text-[#666]">{item.baseUnit}</div>
-                  <div className="w-16 text-right text-xs text-[#999]">
+                  <div className="w-12 text-center text-xs text-dark-500">{item.baseUnit}</div>
+                  <div className="w-16 text-right text-xs text-dark-600">
                     {Number(item.currentQty ?? 0).toFixed(1)}
                   </div>
                   <div className="w-24">
@@ -194,12 +194,12 @@ export default function BulkParEditor() {
                         setDrafts((prev) => ({ ...prev, [item.ingredientId]: e.target.value }))
                       }
                       placeholder="—"
-                      className={`w-full px-2 py-1 rounded-lg text-sm text-right bg-[#0A0A0A] text-white
+                      className={`w-full px-2 py-1 rounded-lg text-sm text-right bg-dark text-white
                         border outline-none transition-all placeholder:text-[#555]
                         ${
                           isDirty
-                            ? "border-[#D4A574]/50 shadow-[0_0_8px_rgba(212,165,116,0.15)]"
-                            : "border-[#2A2A2A] focus:border-[#D4A574]/40"
+                            ? "border-gold/50 shadow-[0_0_8px_var(--color-gold-muted)]"
+                            : "border-dark-200 focus:border-gold/40"
                         }`}
                     />
                   </div>
@@ -207,7 +207,7 @@ export default function BulkParEditor() {
               );
             })}
             {filtered.length === 0 && (
-              <div className="py-6 text-center text-[#666] text-sm">
+              <div className="py-6 text-center text-dark-500 text-sm">
                 Nothing matches “{search}”.
               </div>
             )}
@@ -219,12 +219,12 @@ export default function BulkParEditor() {
               {error ? (
                 <span className="text-amber-400">{error}</span>
               ) : savedCount !== null ? (
-                <span className="text-[#999] flex items-center gap-1.5">
-                  <Check className="size-3.5 text-[#D4A574]" />
+                <span className="text-dark-600 flex items-center gap-1.5">
+                  <Check className="size-3.5 text-gold" />
                   Saved {savedCount} par{savedCount === 1 ? "" : "s"}
                 </span>
               ) : changed.length > 0 ? (
-                <span className="text-[#999]">
+                <span className="text-dark-600">
                   {changed.length} change{changed.length === 1 ? "" : "s"} not saved yet
                 </span>
               ) : null}
@@ -233,7 +233,7 @@ export default function BulkParEditor() {
               onClick={save}
               disabled={isSaving || changed.length === 0}
               className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium
-                bg-gradient-to-r from-[#D4A574] to-[#C4956A] text-[#0A0A0A]
+                bg-gradient-to-r from-gold to-gold-hover text-dark
                 hover:shadow-[0_0_12px_rgba(212,165,116,0.2)]
                 disabled:opacity-40 disabled:cursor-not-allowed transition-all active:scale-[0.98]"
             >

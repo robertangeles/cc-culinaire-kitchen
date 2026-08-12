@@ -94,7 +94,7 @@ export function Hero() {
           <motion.div variants={fadeUp} className="flex flex-wrap items-center gap-4">
             <Link
               to="/register"
-              className="inline-flex items-center rounded-lg bg-gold px-8 py-3 text-sm font-semibold text-dark transition-all duration-200 hover:-translate-y-0.5 hover:bg-gold-hover hover:shadow-[0_8px_24px_rgba(212,165,116,0.25)]"
+              className="inline-flex items-center rounded-lg bg-gold px-8 py-3 text-sm font-semibold text-dark transition-all duration-200 hover:-translate-y-0.5 hover:bg-gold-hover hover:shadow-[0_8px_24px_var(--color-border-gold)]"
             >
               Start free trial
             </Link>

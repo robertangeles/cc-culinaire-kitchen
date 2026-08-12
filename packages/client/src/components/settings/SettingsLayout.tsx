@@ -139,10 +139,10 @@ export function SettingsLayout({
   }
 
   return (
-    <div className="flex h-full bg-[#0A0A0A]">
+    <div className="flex h-full bg-dark">
       {/* Tab navigation */}
-      <div className="w-56 border-r border-[#2A2A2A] bg-[#0A0A0A] px-3 py-6">
-        <h2 className="px-3 mb-4 text-sm font-semibold text-[#666666] uppercase tracking-wider">
+      <div className="w-56 border-r border-dark-200 bg-dark px-3 py-6">
+        <h2 className="px-3 mb-4 text-sm font-semibold text-dark-500 uppercase tracking-wider">
           Settings
         </h2>
         <nav role="tablist" aria-label="Settings" aria-orientation="vertical">
@@ -153,7 +153,7 @@ export function SettingsLayout({
               aria-label={group.label}
               className={idx > 0 ? "mt-4 pt-4 border-t border-white/5" : ""}
             >
-              <h3 className="px-3 mb-2 text-xs font-semibold text-[#666666] uppercase tracking-wider">
+              <h3 className="px-3 mb-2 text-xs font-semibold text-dark-500 uppercase tracking-wider">
                 {group.label}
               </h3>
               {group.items.length === 0 && (
@@ -175,16 +175,16 @@ export function SettingsLayout({
                     disabled={disabled}
                     className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
                       activeTab === id
-                        ? "bg-[#1E1E1E] text-[#FAFAFA] shadow-sm"
+                        ? "bg-dark-100 text-[#FAFAFA] shadow-sm"
                         : disabled
-                          ? "text-[#666666] cursor-not-allowed"
-                          : "text-[#999999] hover:bg-[#1E1E1E]/60 hover:text-[#FAFAFA]"
+                          ? "text-dark-500 cursor-not-allowed"
+                          : "text-dark-600 hover:bg-dark-100/60 hover:text-[#FAFAFA]"
                     }`}
                   >
                     <Icon className="size-4" />
                     {label}
                     {disabled && (
-                      <span className="ml-auto text-[10px] text-[#666666] uppercase">
+                      <span className="ml-auto text-[10px] text-dark-500 uppercase">
                         Soon
                       </span>
                     )}
@@ -201,7 +201,7 @@ export function SettingsLayout({
         role="tabpanel"
         id={`settings-tabpanel-${activeTab}`}
         aria-labelledby={`settings-tab-${activeTab}`}
-        className="flex-1 overflow-y-auto bg-[#0A0A0A]"
+        className="flex-1 overflow-y-auto bg-dark"
       >
         {children}
       </div>

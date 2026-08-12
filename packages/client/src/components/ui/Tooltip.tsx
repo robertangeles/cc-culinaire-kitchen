@@ -52,7 +52,7 @@ export function Tooltip({ text, children, position = "bottom", delay = 300 }: To
           <div
             className="rounded-xl p-[1px]"
             style={{
-              background: "linear-gradient(135deg, rgba(212,165,116,0.4), rgba(212,165,116,0.08) 50%, rgba(212,165,116,0.2))",
+              background: "linear-gradient(135deg, rgba(212,165,116,0.4), var(--color-gold-glow) 50%, rgba(212,165,116,0.2))",
             }}
           >
             {/* Glass inner */}

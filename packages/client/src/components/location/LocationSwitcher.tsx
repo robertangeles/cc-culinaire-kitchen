@@ -222,7 +222,7 @@ export function LocationSwitcher() {
 
               {/* Active indicator */}
               {loc.storeLocationId === selectedLocationId && (
-                <div className="w-2.5 h-2.5 rounded-full bg-gold shadow-[0_0_8px_rgba(212,165,116,0.5)] shrink-0" />
+                <div className="w-2.5 h-2.5 rounded-full bg-gold shadow-[0_0_8px_var(--color-gold-ring)] shrink-0" />
               )}
             </button>
           ))}

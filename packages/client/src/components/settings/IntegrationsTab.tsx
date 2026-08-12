@@ -82,7 +82,7 @@ function SourceBadge({ source }: { source: "db" | "env" | "none" }) {
   }
   if (source === "env") {
     return (
-      <span className="inline-flex items-center gap-1 text-[10px] font-medium text-[#999999] bg-[#1E1E1E] px-1.5 py-0.5 rounded">
+      <span className="inline-flex items-center gap-1 text-[10px] font-medium text-dark-600 bg-dark-100 px-1.5 py-0.5 rounded">
         <Server className="size-2.5" />
         .env
       </span>
@@ -247,7 +247,7 @@ export function IntegrationsTab() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-full text-[#999999]">
+      <div className="flex items-center justify-center h-full text-dark-600">
         <Loader2 className="size-5 animate-spin mr-2" />
         Loading credentials...
       </div>
@@ -264,7 +264,7 @@ export function IntegrationsTab() {
     return (
       <div
         key={cred.key}
-        className="flex items-start gap-4 p-4 rounded-lg border border-[#2A2A2A] bg-[#161616]"
+        className="flex items-start gap-4 p-4 rounded-lg border border-dark-200 bg-dark-50"
       >
         {/* Label + source */}
         <div className="flex-shrink-0 w-48">
@@ -290,7 +290,7 @@ export function IntegrationsTab() {
                   }))
                 }
                 placeholder={`Enter ${cred.label}`}
-                className="flex-1 rounded-lg border border-[#2A2A2A] px-3 py-1.5 text-sm text-[#FAFAFA] font-mono focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-transparent"
+                className="flex-1 rounded-lg border border-dark-200 px-3 py-1.5 text-sm text-[#FAFAFA] font-mono focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-transparent"
                 autoFocus
               />
               <button
@@ -298,7 +298,7 @@ export function IntegrationsTab() {
                 disabled={
                   savingKey === cred.key || !editValues[cred.key]
                 }
-                className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-white bg-[#D4A574] rounded-lg hover:bg-[#C4956A] disabled:opacity-50 transition-colors"
+                className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-white bg-gold rounded-lg hover:bg-gold-hover disabled:opacity-50 transition-colors"
               >
                 {savingKey === cred.key ? (
                   <Loader2 className="size-3.5 animate-spin" />
@@ -309,7 +309,7 @@ export function IntegrationsTab() {
               </button>
               <button
                 onClick={() => cancelEditing(cred.key)}
-                className="px-3 py-1.5 text-sm text-[#999999] hover:text-[#E5E5E5] transition-colors"
+                className="px-3 py-1.5 text-sm text-dark-600 hover:text-[#E5E5E5] transition-colors"
               >
                 Cancel
               </button>
@@ -317,11 +317,11 @@ export function IntegrationsTab() {
           ) : (
             <div className="flex items-center gap-2">
               {cred.hasValue ? (
-                <code className="text-sm text-[#E5E5E5] font-mono bg-[#0A0A0A] px-2 py-1 rounded">
+                <code className="text-sm text-[#E5E5E5] font-mono bg-dark px-2 py-1 rounded">
                   {isRevealed && revealedValues[cred.key] ? revealedValues[cred.key] : cred.value}
                 </code>
               ) : (
-                <span className="text-sm text-[#999999] italic">
+                <span className="text-sm text-dark-600 italic">
                   Not configured
                 </span>
               )}
@@ -329,7 +329,7 @@ export function IntegrationsTab() {
                 <button
                   onClick={() => toggleReveal(cred.key)}
                   disabled={revealingKey === cred.key}
-                  className="p-1 text-[#999999] hover:text-[#E5E5E5] disabled:opacity-50 transition-colors"
+                  className="p-1 text-dark-600 hover:text-[#E5E5E5] disabled:opacity-50 transition-colors"
                   title={isRevealed ? "Hide" : "Show"}
                 >
                   {revealingKey === cred.key ? (
@@ -350,7 +350,7 @@ export function IntegrationsTab() {
           <div className="flex items-center gap-1 flex-shrink-0">
             <button
               onClick={() => startEditing(cred.key)}
-              className="px-3 py-1.5 text-sm text-[#E5E5E5] bg-[#161616] border border-[#2A2A2A] rounded-lg hover:bg-[#0A0A0A] transition-colors"
+              className="px-3 py-1.5 text-sm text-[#E5E5E5] bg-dark-50 border border-dark-200 rounded-lg hover:bg-dark transition-colors"
             >
               {cred.hasValue ? "Update" : "Set"}
             </button>
@@ -358,7 +358,7 @@ export function IntegrationsTab() {
               <button
                 onClick={() => handleDelete(cred.key)}
                 disabled={deletingKey === cred.key}
-                className="p-1.5 text-[#999999] hover:text-red-400 transition-colors"
+                className="p-1.5 text-dark-600 hover:text-red-400 transition-colors"
                 title="Remove from database (revert to .env)"
               >
                 {deletingKey === cred.key ? (
@@ -377,16 +377,16 @@ export function IntegrationsTab() {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="px-8 py-6 border-b border-[#2A2A2A]">
+      <div className="px-8 py-6 border-b border-dark-200">
         <h1 className="text-xl font-semibold text-[#FAFAFA]">Integrations</h1>
-        <p className="mt-1 text-sm text-[#999999]">
+        <p className="mt-1 text-sm text-dark-600">
           Manage API keys, OAuth credentials, and integration settings.
           Values are encrypted at rest in the database.
         </p>
       </div>
 
       {/* Category sub-tabs */}
-      <div className="px-8 pt-4 border-b border-[#2A2A2A]">
+      <div className="px-8 pt-4 border-b border-dark-200">
         <div role="tablist" aria-label="Integration categories" className="flex gap-1">
           {categories.map((cat) => {
             const Icon = CATEGORY_ICONS[cat.id] ?? KeyRound;
@@ -403,14 +403,14 @@ export function IntegrationsTab() {
                 onClick={() => setActiveTab(cat.id)}
                 className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-t-lg transition-colors border-b-2 -mb-px ${
                   isActive
-                    ? "text-[#D4A574] border-[#D4A574] bg-[#D4A574]/10/50"
-                    : "text-[#999999] border-transparent hover:text-[#E5E5E5] hover:bg-[#0A0A0A]"
+                    ? "text-gold border-gold bg-gold/10/50"
+                    : "text-dark-600 border-transparent hover:text-[#E5E5E5] hover:bg-dark"
                 }`}
               >
                 <Icon className="size-3.5" />
                 {cat.label}
                 <span className={`text-xs px-1.5 py-0.5 rounded-full ${
-                  isActive ? "bg-[#D4A574]/15 text-[#D4A574]" : "bg-[#1E1E1E] text-[#999999]"
+                  isActive ? "bg-gold/15 text-gold" : "bg-dark-100 text-dark-600"
                 }`}>
                   {catCount}
                 </span>
@@ -422,8 +422,8 @@ export function IntegrationsTab() {
 
       {/* AI inner tabs (shown only when AI Configuration category is active) */}
       {activeTab === "ai" && (
-        <div className="px-8 pt-3 border-b border-[#2A2A2A]">
-          <div className="flex gap-1 bg-[#161616] rounded-lg p-1 w-fit">
+        <div className="px-8 pt-3 border-b border-dark-200">
+          <div className="flex gap-1 bg-dark-50 rounded-lg p-1 w-fit">
             {([
               { id: "credentials" as const, label: "Credentials", icon: KeyRound },
               { id: "features" as const, label: "AI Features", icon: Zap },
@@ -434,8 +434,8 @@ export function IntegrationsTab() {
                 onClick={() => setAiInnerTab(tab.id)}
                 className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
                   aiInnerTab === tab.id
-                    ? "bg-[#2A2A2A] text-[#FAFAFA] shadow-sm"
-                    : "text-[#999999] hover:text-[#E5E5E5]"
+                    ? "bg-dark-200 text-[#FAFAFA] shadow-sm"
+                    : "text-dark-600 hover:text-[#E5E5E5]"
                 }`}
               >
                 <tab.icon className="size-3.5" />
@@ -459,7 +459,7 @@ export function IntegrationsTab() {
           className="flex-1 overflow-y-auto px-8 py-6 space-y-3"
         >
           {activeCredentials.length === 0 ? (
-            <p className="text-sm text-[#999999] text-center py-8">
+            <p className="text-sm text-dark-600 text-center py-8">
               No credentials in this category.
             </p>
           ) : activeTab === "oauth" ? (
@@ -480,7 +480,7 @@ export function IntegrationsTab() {
       )}
 
       {/* Bottom bar */}
-      <div className="px-8 py-4 border-t border-[#2A2A2A] bg-[#0A0A0A] flex items-center justify-end gap-3">
+      <div className="px-8 py-4 border-t border-dark-200 bg-dark flex items-center justify-end gap-3">
         {error && (
           <span className="flex items-center gap-1.5 text-sm text-red-400">
             <AlertCircle className="size-4" />
@@ -571,7 +571,7 @@ function DatabaseStorageViewer() {
   const maxBytes = stats?.tables?.[0]?.totalBytes ?? 1;
 
   return (
-    <div className="mt-6 border-t border-[#2A2A2A] pt-6 space-y-6">
+    <div className="mt-6 border-t border-dark-200 pt-6 space-y-6">
       {/* ─── Storage Overview (collapsible) ─────────────────── */}
       <div>
         <button
@@ -579,16 +579,16 @@ function DatabaseStorageViewer() {
           className="w-full flex items-center justify-between"
         >
           <h3 className="text-sm font-semibold text-[#E5E5E5] flex items-center gap-2">
-            <Server className="size-4 text-[#999999]" />
+            <Server className="size-4 text-dark-600" />
             Storage Overview
           </h3>
-          {storageOpen ? <ChevronUp className="size-4 text-[#999999]" /> : <ChevronDown className="size-4 text-[#999999]" />}
+          {storageOpen ? <ChevronUp className="size-4 text-dark-600" /> : <ChevronDown className="size-4 text-dark-600" />}
         </button>
 
         {storageOpen && (
           <div className="mt-3">
             <div className="flex justify-end mb-2">
-              <button onClick={fetchStats} disabled={loading} className="text-xs text-[#D4A574] hover:text-[#D4A574] font-medium disabled:opacity-50">
+              <button onClick={fetchStats} disabled={loading} className="text-xs text-gold hover:text-gold font-medium disabled:opacity-50">
                 {loading ? "Loading..." : "Refresh"}
               </button>
             </div>
@@ -602,16 +602,16 @@ function DatabaseStorageViewer() {
             {stats && (
               <>
                 <div className="grid grid-cols-3 gap-3 mb-5">
-                  <div className="bg-[#0A0A0A] rounded-lg p-3 text-center">
-                    <p className="text-xs text-[#999999]">Total Size</p>
+                  <div className="bg-dark rounded-lg p-3 text-center">
+                    <p className="text-xs text-dark-600">Total Size</p>
                     <p className="text-lg font-bold text-[#FAFAFA]">{stats.totalSize}</p>
                   </div>
-                  <div className="bg-[#0A0A0A] rounded-lg p-3 text-center">
-                    <p className="text-xs text-[#999999]">Tables</p>
+                  <div className="bg-dark rounded-lg p-3 text-center">
+                    <p className="text-xs text-dark-600">Tables</p>
                     <p className="text-lg font-bold text-[#FAFAFA]">{stats.tables.length}</p>
                   </div>
-                  <div className="bg-[#0A0A0A] rounded-lg p-3 text-center">
-                    <p className="text-xs text-[#999999]">Embeddings</p>
+                  <div className="bg-dark rounded-lg p-3 text-center">
+                    <p className="text-xs text-dark-600">Embeddings</p>
                     <p className="text-lg font-bold text-[#FAFAFA]">{stats.embeddingCount.toLocaleString()}</p>
                   </div>
                 </div>
@@ -619,7 +619,7 @@ function DatabaseStorageViewer() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-[#2A2A2A] text-left">
+                      <tr className="border-b border-dark-200 text-left">
                         <th className="py-2 pr-3 font-medium text-[#E5E5E5]">Table</th>
                         <th className="py-2 pr-3 font-medium text-[#E5E5E5] text-right">Rows</th>
                         <th className="py-2 pr-3 font-medium text-[#E5E5E5] text-right">Size</th>
@@ -630,15 +630,15 @@ function DatabaseStorageViewer() {
                     </thead>
                     <tbody>
                       {stats.tables.map((t) => (
-                        <tr key={t.tableName} className="border-b border-[#2A2A2A]">
+                        <tr key={t.tableName} className="border-b border-dark-200">
                           <td className="py-2 pr-3 text-[#FAFAFA] font-mono text-xs">{t.tableName}</td>
                           <td className="py-2 pr-3 text-[#E5E5E5] text-right">{t.rowCount.toLocaleString()}</td>
                           <td className="py-2 pr-3 text-[#E5E5E5] text-right">{t.totalSize}</td>
-                          <td className="py-2 pr-3 text-[#999999] text-right">{t.dataSize}</td>
-                          <td className="py-2 pr-3 text-[#999999] text-right">{t.indexSize}</td>
+                          <td className="py-2 pr-3 text-dark-600 text-right">{t.dataSize}</td>
+                          <td className="py-2 pr-3 text-dark-600 text-right">{t.indexSize}</td>
                           <td className="py-2">
-                            <div className="w-full bg-[#1E1E1E] rounded-full h-2">
-                              <div className="bg-[#D4A574]/100 h-2 rounded-full" style={{ width: `${Math.max(2, (t.totalBytes / maxBytes) * 100)}%` }} />
+                            <div className="w-full bg-dark-100 rounded-full h-2">
+                              <div className="bg-gold/100 h-2 rounded-full" style={{ width: `${Math.max(2, (t.totalBytes / maxBytes) * 100)}%` }} />
                             </div>
                           </td>
                         </tr>
@@ -651,7 +651,7 @@ function DatabaseStorageViewer() {
 
             {loading && !stats && (
               <div className="flex items-center justify-center py-8">
-                <Loader2 className="size-5 animate-spin text-[#D4A574]" />
+                <Loader2 className="size-5 animate-spin text-gold" />
               </div>
             )}
           </div>
@@ -661,13 +661,13 @@ function DatabaseStorageViewer() {
       {/* ─── SQL Query Tool ──────────────────────────────────── */}
       <div>
         <h3 className="text-sm font-semibold text-[#E5E5E5] flex items-center gap-2 mb-3">
-          <Terminal className="size-4 text-[#999999]" />
+          <Terminal className="size-4 text-dark-600" />
           Query Tool
         </h3>
 
-        <div className="bg-[#D4A574]/10 border border-[#D4A574]/20 rounded-lg px-3 py-2 mb-3 flex items-center gap-2">
-          <AlertTriangle className="size-4 text-[#D4A574] flex-shrink-0" />
-          <p className="text-xs text-[#D4A574]">Direct database access. Use with caution.</p>
+        <div className="bg-gold/10 border border-gold/20 rounded-lg px-3 py-2 mb-3 flex items-center gap-2">
+          <AlertTriangle className="size-4 text-gold flex-shrink-0" />
+          <p className="text-xs text-gold">Direct database access. Use with caution.</p>
         </div>
 
         <textarea
@@ -675,16 +675,16 @@ function DatabaseStorageViewer() {
           onChange={(e) => setQuery(e.target.value)}
           placeholder="SELECT * FROM recipe LIMIT 10;"
           rows={4}
-          className="w-full px-3 py-2 text-sm font-mono border border-[#2A2A2A] rounded-lg bg-[#0A0A0A] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:bg-[#161616] resize-none"
+          className="w-full px-3 py-2 text-sm font-mono border border-dark-200 rounded-lg bg-dark focus:outline-none focus:ring-2 focus:ring-gold/50 focus:bg-dark-50 resize-none"
           onKeyDown={(e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) executeQuery(); }}
         />
 
         <div className="flex items-center justify-between mt-2">
-          <span className="text-xs text-[#999999]">Ctrl+Enter to execute</span>
+          <span className="text-xs text-dark-600">Ctrl+Enter to execute</span>
           <button
             onClick={executeQuery}
             disabled={querying || !query.trim()}
-            className="flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium text-white bg-[#D4A574] rounded-lg hover:bg-[#C4956A] disabled:opacity-50 transition-colors"
+            className="flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium text-white bg-gold rounded-lg hover:bg-gold-hover disabled:opacity-50 transition-colors"
           >
             {querying ? <Loader2 className="size-3 animate-spin" /> : <Play className="size-3" />}
             Execute
@@ -699,27 +699,27 @@ function DatabaseStorageViewer() {
 
         {queryResult && (
           <div className="mt-3">
-            <div className="flex items-center gap-3 text-xs text-[#999999] mb-2">
+            <div className="flex items-center gap-3 text-xs text-dark-600 mb-2">
               <span>{queryResult.rowCount} row{queryResult.rowCount !== 1 ? "s" : ""}</span>
               <span className="flex items-center gap-1"><Clock className="size-3" /> {queryResult.duration}ms</span>
             </div>
 
             {queryResult.columns.length > 0 ? (
-              <div className="overflow-x-auto border border-[#2A2A2A] rounded-lg max-h-80 overflow-y-auto">
+              <div className="overflow-x-auto border border-dark-200 rounded-lg max-h-80 overflow-y-auto">
                 <table className="w-full text-xs">
-                  <thead className="sticky top-0 bg-[#1E1E1E]">
+                  <thead className="sticky top-0 bg-dark-100">
                     <tr>
                       {queryResult.columns.map((col) => (
-                        <th key={col} className="px-3 py-2 text-left font-medium text-[#E5E5E5] border-b border-[#2A2A2A] whitespace-nowrap">{col}</th>
+                        <th key={col} className="px-3 py-2 text-left font-medium text-[#E5E5E5] border-b border-dark-200 whitespace-nowrap">{col}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody className="font-mono">
                     {queryResult.rows.map((row, i) => (
-                      <tr key={i} className="border-b border-[#2A2A2A] hover:bg-[#0A0A0A]">
+                      <tr key={i} className="border-b border-dark-200 hover:bg-dark">
                         {row.map((cell, j) => (
                           <td key={j} className="px-3 py-1.5 text-[#E5E5E5] whitespace-nowrap max-w-xs truncate">
-                            {cell === null ? <span className="text-[#666666] italic">NULL</span> : String(cell)}
+                            {cell === null ? <span className="text-dark-500 italic">NULL</span> : String(cell)}
                           </td>
                         ))}
                       </tr>
@@ -728,7 +728,7 @@ function DatabaseStorageViewer() {
                 </table>
               </div>
             ) : (
-              <p className="text-sm text-[#999999]">Query executed successfully. No rows returned.</p>
+              <p className="text-sm text-dark-600">Query executed successfully. No rows returned.</p>
             )}
           </div>
         )}

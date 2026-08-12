@@ -195,7 +195,7 @@ export function BrainTab() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12 text-[#999999]">
+      <div className="flex items-center justify-center py-12 text-dark-600">
         <Loader2 className="size-5 animate-spin mr-2" />
         Loading Brain settings…
       </div>
@@ -209,10 +209,10 @@ export function BrainTab() {
     <div className="max-w-3xl space-y-6 p-6">
       <div>
         <h2 className="flex items-center gap-2 text-base font-semibold text-[#FAFAFA]">
-          <Brain className="size-4 text-[#D4A574]" />
+          <Brain className="size-4 text-gold" />
           The Brain
         </h2>
-        <p className="text-sm text-[#999999] mt-1">
+        <p className="text-sm text-dark-600 mt-1">
           Per-user AI memory. Flip flags one at a time; every change is instant and reversible.
           Recommended order: Capture → let it warm → Distillation → Recall.
         </p>
@@ -225,13 +225,13 @@ export function BrainTab() {
       )}
 
       {/* Health readout */}
-      <div className="rounded-xl border border-[#2A2A2A] bg-[#111111] p-4">
+      <div className="rounded-xl border border-dark-200 bg-[#111111] p-4">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-semibold text-[#E5E5E5]">Health</h3>
           <button
             type="button"
             onClick={loadStats}
-            className="flex items-center gap-1.5 text-xs text-[#999999] hover:text-[#FAFAFA] transition-colors"
+            className="flex items-center gap-1.5 text-xs text-dark-600 hover:text-[#FAFAFA] transition-colors"
             aria-label="Refresh Brain health"
           >
             <RefreshCw className="size-3.5" /> Refresh
@@ -258,7 +258,7 @@ export function BrainTab() {
           />
         </div>
         {errorsCount > 0 && (
-          <p className="mt-3 text-xs text-[#D4A574]">
+          <p className="mt-3 text-xs text-gold">
             Capture errors since boot — check the <code>brain_capture_error</code> log alert. A broken
             capture path is otherwise silent by design.
           </p>
@@ -266,7 +266,7 @@ export function BrainTab() {
         {/* Re-embed panel (T18) — only when there's something stuck to requeue. */}
         {(failedCount > 0 || reembedMsg) && (
           <div className="mt-3 pt-3 border-t border-white/5 flex items-center justify-between gap-3">
-            <p className="text-xs text-[#999999]">
+            <p className="text-xs text-dark-600">
               {reembedMsg
                 ? reembedMsg
                 : `${failedCount} memor${failedCount === 1 ? "y" : "ies"} failed to embed after 3 tries. Requeue to try again.`}
@@ -276,7 +276,7 @@ export function BrainTab() {
                 type="button"
                 onClick={reembedFailed}
                 disabled={reembedding}
-                className="flex flex-shrink-0 items-center gap-1.5 rounded-lg bg-[#D4A574] px-3 py-1.5 text-xs font-medium text-[#0A0A0A] hover:bg-[#C4956A] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4A574]/60 disabled:opacity-50"
+                className="flex flex-shrink-0 items-center gap-1.5 rounded-lg bg-gold px-3 py-1.5 text-xs font-medium text-dark hover:bg-gold-hover transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60 disabled:opacity-50"
               >
                 {reembedding ? <Loader2 className="size-3.5 animate-spin" /> : <Wand2 className="size-3.5" />}
                 Re-embed failed
@@ -287,14 +287,14 @@ export function BrainTab() {
       </div>
 
       {/* Analytics dashboards (Phase 3 T18) — recall + corpus signal */}
-      <div className="rounded-xl border border-[#2A2A2A] bg-[#111111] p-4">
+      <div className="rounded-xl border border-dark-200 bg-[#111111] p-4">
         <div className="flex items-center gap-2 mb-3">
-          <BarChart3 className="size-4 text-[#D4A574]" />
+          <BarChart3 className="size-4 text-gold" />
           <h3 className="text-sm font-semibold text-[#E5E5E5]">Analytics</h3>
-          <span className="text-[11px] text-[#666666]">recall &amp; corpus signal, last 30 days</span>
+          <span className="text-[11px] text-dark-500">recall &amp; corpus signal, last 30 days</span>
         </div>
         {!analytics || analytics.recall.totalRecalls === 0 ? (
-          <p className="text-xs text-[#999999] py-2">
+          <p className="text-xs text-dark-600 py-2">
             No recall activity yet — the dashboards fill in as the Brain is used. Capture and recall
             events feed <code>fact_brain_recall</code>; the nightly job snapshots corpus size.
           </p>
@@ -332,15 +332,15 @@ export function BrainTab() {
               key={f.key}
               className={`flex items-start justify-between gap-4 rounded-xl border px-4 py-3 transition-colors ${
                 on
-                  ? "border-[#D4A574]/40 bg-[#D4A574]/[0.06] shadow-[0_0_12px_rgba(212,165,116,0.10)]"
-                  : "border-[#2A2A2A] bg-[#111111]"
+                  ? "border-gold/40 bg-gold/[0.06] shadow-[0_0_12px_rgba(212,165,116,0.10)]"
+                  : "border-dark-200 bg-[#111111]"
               }`}
             >
               <div className="min-w-0">
                 <span className="text-sm font-medium text-[#FAFAFA]">{f.label}</span>
-                <p className="text-xs text-[#999999] mt-0.5">{f.desc}</p>
+                <p className="text-xs text-dark-600 mt-0.5">{f.desc}</p>
                 {dimmed && (
-                  <p className="text-xs text-[#D4A574]/80 mt-1">Turn on the master switch first.</p>
+                  <p className="text-xs text-gold/80 mt-1">Turn on the master switch first.</p>
                 )}
               </div>
               <ToggleSwitch
@@ -355,10 +355,10 @@ export function BrainTab() {
         })}
 
         {/* Compaction cap — brain_compaction_enabled is a no-op unless this is > 0. */}
-        <div className="flex items-start justify-between gap-4 rounded-xl border border-[#2A2A2A] bg-[#111111] px-4 py-3">
+        <div className="flex items-start justify-between gap-4 rounded-xl border border-dark-200 bg-[#111111] px-4 py-3">
           <div className="min-w-0">
             <span className="text-sm font-medium text-[#FAFAFA]">Compaction cap</span>
-            <p className="text-xs text-[#999999] mt-0.5">
+            <p className="text-xs text-dark-600 mt-0.5">
               Memories per user before the coldest are compacted. 0 disables compaction even when the
               toggle above is on.
             </p>
@@ -374,13 +374,13 @@ export function BrainTab() {
               const v = String(Math.max(0, parseInt(e.target.value || "0", 10) || 0));
               if (v !== (flags.brain_compaction_cap ?? "0")) saveValue("brain_compaction_cap", v);
             }}
-            className="w-20 flex-shrink-0 rounded-lg border border-[#2A2A2A] bg-[#0A0A0A] px-2 py-1 text-right text-sm text-[#E5E5E5] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/60 disabled:opacity-50"
+            className="w-20 flex-shrink-0 rounded-lg border border-dark-200 bg-dark px-2 py-1 text-right text-sm text-[#E5E5E5] focus:outline-none focus:ring-2 focus:ring-gold/60 disabled:opacity-50"
           />
         </div>
       </div>
 
-      <p className="text-xs text-[#666666]">
-        Distillation model: <code className="text-[#999999]">{flags.brain_distillation_model ?? "—"}</code>
+      <p className="text-xs text-dark-500">
+        Distillation model: <code className="text-dark-600">{flags.brain_distillation_model ?? "—"}</code>
       </p>
     </div>
   );
@@ -407,7 +407,7 @@ function Stat({
       >
         {value}
       </div>
-      <div className="text-[11px] text-[#999999]">{label}</div>
+      <div className="text-[11px] text-dark-600">{label}</div>
     </div>
   );
 }
@@ -434,8 +434,8 @@ function ToggleSwitch({
       aria-label={`Toggle ${label}`}
       disabled={disabled}
       onClick={() => onChange(!on)}
-      className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[#D4A574]/60 disabled:opacity-50 disabled:cursor-not-allowed ${
-        on ? "bg-[#D4A574]" : "bg-[#333333]"
+      className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-gold/60 disabled:opacity-50 disabled:cursor-not-allowed ${
+        on ? "bg-gold" : "bg-[#333333]"
       }`}
     >
       <span
@@ -443,7 +443,7 @@ function ToggleSwitch({
           on ? "translate-x-6" : "translate-x-1"
         }`}
       >
-        {busy && <Loader2 className="size-3 animate-spin text-[#666]" />}
+        {busy && <Loader2 className="size-3 animate-spin text-dark-500" />}
       </span>
     </button>
   );

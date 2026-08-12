@@ -39,7 +39,7 @@ import {
 /* ── Status badge config ──────────────────────────────────────── */
 
 const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
-  DRAFT:              { bg: "bg-[#333]/60",           text: "text-[#999]",     label: "Draft" },
+  DRAFT:              { bg: "bg-[#333]/60",           text: "text-dark-600",     label: "Draft" },
   PENDING_APPROVAL:   { bg: "bg-amber-500/15",        text: "text-amber-400",  label: "Pending Approval" },
   SENT:               { bg: "bg-blue-500/15",          text: "text-blue-400",   label: "Sent" },
   RECEIVING:          { bg: "bg-purple-500/15",        text: "text-purple-400", label: "Receiving" },
@@ -73,7 +73,7 @@ const LINE_STATUS_STYLES: Record<string, { bg: string; text: string; label: stri
  */
 export function StatusBadge({ status, kind = "order" }: { status: string; kind?: "order" | "line" }) {
   const map = kind === "line" ? LINE_STATUS_STYLES : STATUS_STYLES;
-  const s = map[status] ?? { bg: "bg-[#333]/60", text: "text-[#999]", label: status };
+  const s = map[status] ?? { bg: "bg-[#333]/60", text: "text-dark-600", label: status };
   return (
     <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${s.bg} ${s.text}`}>
       {s.label}
@@ -296,13 +296,13 @@ export default function PurchaseOrderList({ focusPoId }: { focusPoId?: string | 
       {/* Header */}
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-          <FileText className="size-5 text-[#D4A574]" />
+          <FileText className="size-5 text-gold" />
           Purchase Orders
         </h2>
         <button
           onClick={() => setView("create")}
           className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium
-            bg-gradient-to-r from-[#D4A574] to-[#C4956A] text-[#0A0A0A]
+            bg-gradient-to-r from-gold to-gold-hover text-dark
             hover:shadow-[0_0_16px_rgba(212,165,116,0.3)] transition-all
             hover:-translate-y-0.5 active:translate-y-0"
         >
@@ -313,16 +313,16 @@ export default function PurchaseOrderList({ focusPoId }: { focusPoId?: string | 
 
       {/* Filters */}
       <div className="flex items-center gap-2">
-        <Filter className="size-4 text-[#666]" />
-        <div className="flex gap-1 p-0.5 rounded-lg bg-[#161616] border border-[#2A2A2A]">
+        <Filter className="size-4 text-dark-500" />
+        <div className="flex gap-1 p-0.5 rounded-lg bg-dark-50 border border-dark-200">
           {FILTER_OPTIONS.map((f) => (
             <button
               key={f.key}
               onClick={() => setStatusFilter(f.key)}
               className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${
                 statusFilter === f.key
-                  ? "bg-[#1E1E1E] text-white shadow-[0_0_8px_rgba(212,165,116,0.1)]"
-                  : "text-[#999] hover:text-white"
+                  ? "bg-dark-100 text-white shadow-[0_0_8px_rgba(212,165,116,0.1)]"
+                  : "text-dark-600 hover:text-white"
               }`}
             >
               {f.label}
@@ -334,23 +334,23 @@ export default function PurchaseOrderList({ focusPoId }: { focusPoId?: string | 
       {/* List */}
       {isLoading ? (
         <div className="flex items-center justify-center py-16">
-          <Loader2 className="size-6 text-[#D4A574] animate-spin" />
+          <Loader2 className="size-6 text-gold animate-spin" />
         </div>
       ) : filtered.length === 0 ? (
         <div className="text-center py-16 animate-[fadeIn_300ms_ease-out]">
-          <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-[#1E1E1E]/60 backdrop-blur-sm
-            flex items-center justify-center border border-[#2A2A2A]
-            shadow-[0_0_20px_rgba(212,165,116,0.08)]">
-            <Package className="size-8 text-[#D4A574]/60" />
+          <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-dark-100/60 backdrop-blur-sm
+            flex items-center justify-center border border-dark-200
+            shadow-[0_0_20px_var(--color-gold-glow)]">
+            <Package className="size-8 text-gold/60" />
           </div>
-          <p className="text-[#999] text-sm mb-4">
+          <p className="text-dark-600 text-sm mb-4">
             {statusFilter ? "No purchase orders match this filter." : "No purchase orders yet."}
           </p>
           <button
             onClick={() => setView("create")}
             className="px-4 py-2 rounded-lg text-sm font-medium
-              bg-[#1E1E1E] text-[#D4A574] border border-[#D4A574]/20
-              hover:border-[#D4A574]/40 hover:shadow-[0_0_12px_rgba(212,165,116,0.15)] transition-all"
+              bg-dark-100 text-gold border border-gold/20
+              hover:border-gold/40 hover:shadow-[0_0_12px_var(--color-gold-muted)] transition-all"
           >
             Create your first PO
           </button>
@@ -361,8 +361,8 @@ export default function PurchaseOrderList({ focusPoId }: { focusPoId?: string | 
             <div
               key={po.poId}
               data-po-id={po.poId}
-              className="rounded-xl bg-[#161616]/80 backdrop-blur-sm border border-[#2A2A2A]
-                hover:border-[#3A3A3A] transition-all
+              className="rounded-xl bg-dark-50/80 backdrop-blur-sm border border-dark-200
+                hover:border-dark-300 transition-all
                 shadow-[0_2px_8px_rgba(0,0,0,0.3)]"
               style={{ animationDelay: `${idx * 40}ms` }}
             >
@@ -371,7 +371,7 @@ export default function PurchaseOrderList({ focusPoId }: { focusPoId?: string | 
                 onClick={() => toggleExpand(po.poId)}
                 className="w-full flex items-center gap-3 px-4 py-3 text-left"
               >
-                <span className="text-[#666]">
+                <span className="text-dark-500">
                   {expandedId === po.poId
                     ? <ChevronDown className="size-4" />
                     : <ChevronRight className="size-4" />}
@@ -381,7 +381,7 @@ export default function PurchaseOrderList({ focusPoId }: { focusPoId?: string | 
                     <span className="text-sm font-mono font-medium text-white">{po.poNumber}</span>
                     <StatusBadge status={po.status} />
                   </div>
-                  <div className="flex items-center gap-3 mt-0.5 text-xs text-[#999]">
+                  <div className="flex items-center gap-3 mt-0.5 text-xs text-dark-600">
                     <span>{po.supplierName ?? "Unknown supplier"}</span>
                     <span className="text-[#333]">|</span>
                     <span>{po.locationName}</span>
@@ -395,7 +395,7 @@ export default function PurchaseOrderList({ focusPoId }: { focusPoId?: string | 
                       ${Number(po.totalValue).toFixed(2)}
                     </div>
                   )}
-                  <div className="text-xs text-[#999]">
+                  <div className="text-xs text-dark-600">
                     {po.createdDttm ? new Date(po.createdDttm).toLocaleDateString() : ""}
                   </div>
                   {po.status === "PENDING_APPROVAL" && po.submittedAt && (
@@ -416,10 +416,10 @@ export default function PurchaseOrderList({ focusPoId }: { focusPoId?: string | 
 
               {/* Expanded detail */}
               {expandedId === po.poId && (
-                <div className="border-t border-[#2A2A2A] px-4 py-3 animate-[fadeIn_150ms_ease-out]">
+                <div className="border-t border-dark-200 px-4 py-3 animate-[fadeIn_150ms_ease-out]">
                   {loadingDetail === po.poId ? (
                     <div className="flex justify-center py-4">
-                      <Loader2 className="size-5 text-[#D4A574] animate-spin" />
+                      <Loader2 className="size-5 text-gold animate-spin" />
                     </div>
                   ) : detailCache[po.poId]?.lines ? (
                     <>
@@ -431,7 +431,7 @@ export default function PurchaseOrderList({ focusPoId }: { focusPoId?: string | 
                         const receipt = detailCache[po.poId].lines!.find((l) => l.receivedDttm);
                         if (!receipt) return null;
                         return (
-                          <div className="flex items-center gap-1.5 mb-3 text-xs text-[#999]">
+                          <div className="flex items-center gap-1.5 mb-3 text-xs text-dark-600">
                             <PackageCheck className="size-3.5 text-emerald-400/80" />
                             Received
                             {receipt.receivedByUserName && <span>by <span className="text-[#CCC]">{receipt.receivedByUserName}</span></span>}
@@ -445,7 +445,7 @@ export default function PurchaseOrderList({ focusPoId }: { focusPoId?: string | 
                       <div className="overflow-x-auto">
                         <table className="w-full text-sm">
                           <thead>
-                            <tr className="text-[#666] text-[10px] uppercase tracking-wider border-b border-[#1A1A1A]">
+                            <tr className="text-dark-500 text-[10px] uppercase tracking-wider border-b border-[#1A1A1A]">
                               <th className="text-left py-2 font-medium">Item</th>
                               <th className="text-center py-2 font-medium">UOM</th>
                               <th className="text-right py-2 font-medium">Stock</th>
@@ -465,8 +465,8 @@ export default function PurchaseOrderList({ focusPoId }: { focusPoId?: string | 
                               return (
                               <tr key={line.lineId} className="border-b border-[#1A1A1A]/50">
                                 <td className="py-2 text-white">{line.ingredientName}</td>
-                                <td className="py-2 text-center text-xs text-[#666]">{line.baseUnit ?? line.orderedUnit}</td>
-                                <td className={`py-2 text-right text-xs ${isLow ? "text-amber-400 font-medium" : "text-[#666]"}`}>
+                                <td className="py-2 text-center text-xs text-dark-500">{line.baseUnit ?? line.orderedUnit}</td>
+                                <td className={`py-2 text-right text-xs ${isLow ? "text-amber-400 font-medium" : "text-dark-500"}`}>
                                   {stock.toFixed(1)}
                                 </td>
                                 <td className="py-2 text-right text-xs text-[#555]">
@@ -506,7 +506,7 @@ export default function PurchaseOrderList({ focusPoId }: { focusPoId?: string | 
 
                       {/* Notes */}
                       {po.notes && (
-                        <div className="mt-3 text-xs text-[#999] bg-[#1A1A1A] rounded-lg px-3 py-2">
+                        <div className="mt-3 text-xs text-dark-600 bg-[#1A1A1A] rounded-lg px-3 py-2">
                           {po.notes}
                         </div>
                       )}
@@ -529,7 +529,7 @@ export default function PurchaseOrderList({ focusPoId }: { focusPoId?: string | 
                             <button
                               onClick={() => handleSubmit(po.poId)}
                               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium
-                                bg-gradient-to-r from-[#D4A574] to-[#C4956A] text-[#0A0A0A]
+                                bg-gradient-to-r from-gold to-gold-hover text-dark
                                 hover:shadow-[0_0_12px_rgba(212,165,116,0.3)] transition-all"
                             >
                               <Send className="size-3" /> Submit
@@ -575,7 +575,7 @@ export default function PurchaseOrderList({ focusPoId }: { focusPoId?: string | 
                                 <button
                                   onClick={() => handleSendEmail(po.poId)}
                                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium
-                                    bg-[#D4A574]/10 text-[#D4A574] hover:bg-[#D4A574]/20 transition-all"
+                                    bg-gold/10 text-gold hover:bg-gold/20 transition-all"
                                 >
                                   <Mail className="size-3" /> {po.supplierEmailedAt ? "Resend to supplier" : "Send to supplier"}
                                 </button>
@@ -594,7 +594,7 @@ export default function PurchaseOrderList({ focusPoId }: { focusPoId?: string | 
                             <button
                               onClick={() => handleDownloadPdf(po.poId, po.poNumber)}
                               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium
-                                bg-[#1E1E1E] text-[#999] hover:text-white transition-all"
+                                bg-dark-100 text-dark-600 hover:text-white transition-all"
                             >
                               <Download className="size-3" /> PDF
                             </button>
@@ -604,7 +604,7 @@ export default function PurchaseOrderList({ focusPoId }: { focusPoId?: string | 
                           <button
                             onClick={() => handleClone(po.poId)}
                             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium
-                              bg-[#D4A574]/10 text-[#D4A574] hover:bg-[#D4A574]/20 transition-all"
+                              bg-gold/10 text-gold hover:bg-gold/20 transition-all"
                           >
                             <Copy className="size-3" /> Reorder
                           </button>
@@ -613,12 +613,12 @@ export default function PurchaseOrderList({ focusPoId }: { focusPoId?: string | 
                     </>
                   ) : (
                     <div className="py-2">
-                      <p className="text-[#999] text-sm">
+                      <p className="text-dark-600 text-sm">
                         {detailError[po.poId] ?? "Couldn't load this order."}
                       </p>
                       <button
                         onClick={() => { setExpandedId(null); toggleExpand(po.poId); }}
-                        className="mt-2 text-xs text-[#D4A574] hover:underline"
+                        className="mt-2 text-xs text-gold hover:underline"
                       >
                         Try again
                       </button>
@@ -634,10 +634,10 @@ export default function PurchaseOrderList({ focusPoId }: { focusPoId?: string | 
       {/* Reject modal */}
       {rejectModalPO && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="bg-[#1E1E1E] border border-[#2A2A2A] rounded-xl p-6 w-full max-w-md
+          <div className="bg-dark-100 border border-dark-200 rounded-xl p-6 w-full max-w-md
             shadow-[0_8px_32px_rgba(0,0,0,0.5)] animate-[fadeInUp_200ms_ease-out]">
             <h3 className="text-white font-semibold mb-3">Reject Purchase Order</h3>
-            <p className="text-sm text-[#999] mb-4">
+            <p className="text-sm text-dark-600 mb-4">
               Provide a reason so the location can amend and resubmit.
             </p>
             <textarea
@@ -645,14 +645,14 @@ export default function PurchaseOrderList({ focusPoId }: { focusPoId?: string | 
               onChange={(e) => setRejectReason(e.target.value)}
               placeholder="Reason for rejection..."
               rows={3}
-              className="w-full rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-white px-3 py-2 text-sm
-                focus:outline-none focus:border-[#D4A574]/50 focus:shadow-[0_0_0_2px_rgba(212,165,116,0.15)]
-                placeholder:text-[#666]"
+              className="w-full rounded-lg bg-dark border border-dark-200 text-white px-3 py-2 text-sm
+                focus:outline-none focus:border-gold/50 focus:shadow-[0_0_0_2px_var(--color-gold-muted)]
+                placeholder:text-dark-500"
             />
             <div className="flex justify-end gap-2 mt-4">
               <button
                 onClick={() => setRejectModalPO(null)}
-                className="px-4 py-2 rounded-lg text-sm text-[#999] hover:text-white transition-all"
+                className="px-4 py-2 rounded-lg text-sm text-dark-600 hover:text-white transition-all"
               >
                 Cancel
               </button>

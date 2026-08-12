@@ -209,14 +209,14 @@ export default function ConsumptionLogger({
       {/* ── Header ─────────────────────────────────────────────── */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#D4A574]/20 to-[#D4A574]/5 flex items-center justify-center">
-            <ClipboardEdit size={16} className="text-[#D4A574]" />
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-gold/20 to-gold/5 flex items-center justify-center">
+            <ClipboardEdit size={16} className="text-gold" />
           </div>
           <h2 className="text-sm font-semibold tracking-wide text-[#E0E0E0] uppercase">
             Transfer
           </h2>
         </div>
-        <div className="flex items-center gap-1.5 text-[#666] text-xs">
+        <div className="flex items-center gap-1.5 text-dark-500 text-xs">
           <Clock size={12} />
           <span>{todayEntries.length} today</span>
         </div>
@@ -238,16 +238,16 @@ export default function ConsumptionLogger({
           aria-modal="true"
           aria-labelledby="move-warning-title"
         >
-          <div className="w-full max-w-md bg-[#111]/95 backdrop-blur-md border border-[#D4A574]/25 rounded-2xl p-6 space-y-4 shadow-[0_0_32px_rgba(212,165,116,0.12)]">
+          <div className="w-full max-w-md bg-[#111]/95 backdrop-blur-md border border-gold/25 rounded-2xl p-6 space-y-4 shadow-[0_0_32px_rgba(212,165,116,0.12)]">
             <div className="flex items-start gap-3">
-              <div className="mt-0.5 p-2 rounded-xl bg-[#D4A574]/10 border border-[#D4A574]/20">
-                <ArrowRightLeft size={18} className="text-[#D4A574]" />
+              <div className="mt-0.5 p-2 rounded-xl bg-gold/10 border border-gold/20">
+                <ArrowRightLeft size={18} className="text-gold" />
               </div>
               <div className="space-y-1.5">
                 <h3 id="move-warning-title" className="text-base font-semibold text-[#EEE]">
                   Taking stock to the bar or front of house?
                 </h3>
-                <p className="text-sm text-[#999] leading-relaxed">
+                <p className="text-sm text-dark-600 leading-relaxed">
                   That's a move, not usage — {selectedItem.ingredientName} stays at this site
                   until it's sold or wasted. Logging it as FOH usage deducts it now and again
                   when it sells.
@@ -258,14 +258,14 @@ export default function ConsumptionLogger({
               <button
                 onClick={() => setShowMoveWarning(false)}
                 disabled={saving}
-                className="px-4 py-2.5 rounded-xl text-sm font-medium text-[#999] hover:text-[#CCC] border border-[#2A2A2A] hover:border-[#3A3A3A] transition-colors disabled:opacity-50"
+                className="px-4 py-2.5 rounded-xl text-sm font-medium text-dark-600 hover:text-[#CCC] border border-dark-200 hover:border-dark-300 transition-colors disabled:opacity-50"
               >
                 Go back
               </button>
               <button
                 onClick={() => void submitLog()}
                 disabled={saving}
-                className="px-4 py-2.5 rounded-xl text-sm font-medium bg-[#1A1A1A] border border-[#2A2A2A] text-[#CCC] hover:border-[#D4A574]/30 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                className="px-4 py-2.5 rounded-xl text-sm font-medium bg-[#1A1A1A] border border-dark-200 text-[#CCC] hover:border-gold/30 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {saving && <Loader2 size={14} className="animate-spin" />}
                 Log as usage anyway
@@ -281,7 +281,7 @@ export default function ConsumptionLogger({
                     })
                   }
                   disabled={saving}
-                  className="px-4 py-2.5 rounded-xl text-sm font-semibold bg-gradient-to-r from-[#D4A574] to-[#C4956A] text-[#0A0A0A] transition-all hover:shadow-[0_0_20px_rgba(212,165,116,0.2)] hover:brightness-110 disabled:opacity-50 flex items-center justify-center gap-2"
+                  className="px-4 py-2.5 rounded-xl text-sm font-semibold bg-gradient-to-r from-gold to-gold-hover text-dark transition-all hover:shadow-[0_0_20px_rgba(212,165,116,0.2)] hover:brightness-110 disabled:opacity-50 flex items-center justify-center gap-2"
                 >
                   <ArrowRightLeft size={14} />
                   Record as movement
@@ -310,8 +310,8 @@ export default function ConsumptionLogger({
                       isActive
                         ? isReturn
                           ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
-                          : "bg-[#D4A574]/20 text-[#D4A574] border-[#D4A574]/30"
-                        : "bg-[#161616] text-[#888] border-[#2A2A2A] hover:border-[#444]"
+                          : "bg-gold/20 text-gold border-gold/30"
+                        : "bg-dark-50 text-[#888] border-dark-200 hover:border-dark-400"
                     }`}
                   >
                     {r.label}
@@ -334,7 +334,7 @@ export default function ConsumptionLogger({
                 placeholder="Filter items..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-[#0A0A0A] border border-[#2A2A2A] rounded-lg pl-9 pr-4 py-2 text-sm text-white placeholder-[#555] focus:outline-none focus:border-[#D4A574]/30 transition-all"
+                className="w-full bg-dark border border-dark-200 rounded-lg pl-9 pr-4 py-2 text-sm text-white placeholder-[#555] focus:outline-none focus:border-gold/30 transition-all"
                 autoFocus
               />
             </div>
@@ -345,8 +345,8 @@ export default function ConsumptionLogger({
                 onClick={() => setActiveCat(null)}
                 className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors ${
                   activeCat === null
-                    ? "bg-[#D4A574]/15 text-[#D4A574] border-[#D4A574]/30"
-                    : "bg-white/[0.03] text-[#888] border-white/5 hover:border-[#D4A574]/20 hover:text-[#ccc]"
+                    ? "bg-gold/15 text-gold border-gold/30"
+                    : "bg-white/[0.03] text-[#888] border-white/5 hover:border-gold/20 hover:text-[#ccc]"
                 }`}
               >
                 All
@@ -363,8 +363,8 @@ export default function ConsumptionLogger({
                       onClick={() => setActiveCat(activeCat === cat ? null : cat)}
                       className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors ${
                         activeCat === cat
-                          ? "bg-[#D4A574]/15 text-[#D4A574] border-[#D4A574]/30"
-                          : "bg-white/[0.03] text-[#888] border-white/5 hover:border-[#D4A574]/20 hover:text-[#ccc]"
+                          ? "bg-gold/15 text-gold border-gold/30"
+                          : "bg-white/[0.03] text-[#888] border-white/5 hover:border-gold/20 hover:text-[#ccc]"
                       }`}
                     >
                       {catLabel} ({count})
@@ -375,11 +375,11 @@ export default function ConsumptionLogger({
             </div>
 
             {/* Item list grouped by category */}
-            <div className="max-h-60 overflow-y-auto rounded-lg border border-[#1E1E1E]">
+            <div className="max-h-60 overflow-y-auto rounded-lg border border-dark-100">
               {/* Column header */}
-              <div className="flex items-center justify-between px-3 py-1.5 bg-white/[0.02] border-b border-[#1E1E1E]">
-                <span className="text-[10px] text-[#666] uppercase tracking-wider">Item</span>
-                <span className="text-[10px] text-[#666] uppercase tracking-wider">Current Stock</span>
+              <div className="flex items-center justify-between px-3 py-1.5 bg-white/[0.02] border-b border-dark-100">
+                <span className="text-[10px] text-dark-500 uppercase tracking-wider">Item</span>
+                <span className="text-[10px] text-dark-500 uppercase tracking-wider">Current Stock</span>
               </div>
               {(() => {
                 const activeItems = locationItems.filter((i) => i.activeInd !== false);
@@ -395,13 +395,13 @@ export default function ConsumptionLogger({
                   grouped.get(cat)!.push(item);
                 }
                 if (grouped.size === 0) {
-                  return <p className="px-3 py-4 text-xs text-[#666] text-center">No items match</p>;
+                  return <p className="px-3 py-4 text-xs text-dark-500 text-center">No items match</p>;
                 }
                 return [...grouped.entries()].map(([cat, items]) => {
                   const catLabel = cat.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
                   return (
                     <div key={cat}>
-                      <div className="px-3 py-1.5 bg-white/[0.02] text-[10px] text-[#666] uppercase tracking-wider font-medium border-t border-[#1E1E1E] first:border-t-0">
+                      <div className="px-3 py-1.5 bg-white/[0.02] text-[10px] text-dark-500 uppercase tracking-wider font-medium border-t border-dark-100 first:border-t-0">
                         {catLabel}
                       </div>
                       {items.map((item) => {
@@ -415,8 +415,8 @@ export default function ConsumptionLogger({
                             disabled={outOfStock}
                             className={`w-full flex items-center justify-between px-3 py-2 text-sm transition-colors ${
                               outOfStock
-                                ? "text-[#444] cursor-not-allowed"
-                                : "text-[#ccc] hover:bg-[#D4A574]/5 cursor-pointer"
+                                ? "text-dark-400 cursor-not-allowed"
+                                : "text-[#ccc] hover:bg-gold/5 cursor-pointer"
                             }`}
                           >
                             <span className={outOfStock ? "line-through" : ""}>{item.ingredientName}</span>
@@ -446,7 +446,7 @@ export default function ConsumptionLogger({
                 <span className="text-xs text-[#888]">
                   {unit}
                   {currentStock != null && (
-                    <span className="ml-2 text-[#D4A574]">
+                    <span className="ml-2 text-gold">
                       {currentStock.toFixed(1)} in stock
                     </span>
                   )}
@@ -454,7 +454,7 @@ export default function ConsumptionLogger({
               </div>
               <button
                 onClick={handleClearItem}
-                className="p-1.5 rounded-lg hover:bg-white/5 text-[#666] hover:text-[#E0E0E0] transition-colors"
+                className="p-1.5 rounded-lg hover:bg-white/5 text-dark-500 hover:text-[#E0E0E0] transition-colors"
                 title="Clear selection"
               >
                 <X size={16} />
@@ -474,9 +474,9 @@ export default function ConsumptionLogger({
                     value={quantity}
                     onChange={(e) => setQuantity(e.target.value)}
                     placeholder="0.0"
-                    className="w-24 bg-[#0A0A0A] border border-[#2A2A2A] rounded-lg px-3 py-2 text-sm text-[#E0E0E0] placeholder-[#555] focus:outline-none focus:border-[#D4A574]/40 focus:shadow-[0_0_8px_rgba(212,165,116,0.08)] transition-all text-center"
+                    className="w-24 bg-dark border border-dark-200 rounded-lg px-3 py-2 text-sm text-[#E0E0E0] placeholder-[#555] focus:outline-none focus:border-gold/40 focus:shadow-[0_0_8px_var(--color-gold-glow)] transition-all text-center"
                   />
-                  <span className="text-xs text-[#666]">{unit}</span>
+                  <span className="text-xs text-dark-500">{unit}</span>
                 </div>
               </div>
 
@@ -489,8 +489,8 @@ export default function ConsumptionLogger({
                       onClick={() => setReason(r.key)}
                       className={`px-3 py-1.5 rounded-full text-xs border transition-all cursor-pointer ${
                         reason === r.key
-                          ? "bg-[#D4A574]/20 text-[#D4A574] border-[#D4A574]/30 shadow-[0_0_8px_rgba(212,165,116,0.1)]"
-                          : "bg-[#161616] text-[#888] border-[#2A2A2A] hover:border-[#444] hover:text-[#BBB]"
+                          ? "bg-gold/20 text-gold border-gold/30 shadow-[0_0_8px_rgba(212,165,116,0.1)]"
+                          : "bg-dark-50 text-[#888] border-dark-200 hover:border-dark-400 hover:text-[#BBB]"
                       }`}
                     >
                       {r.label}
@@ -511,12 +511,12 @@ export default function ConsumptionLogger({
                 <select
                   value={menuItemId}
                   onChange={(e) => setMenuItemId(e.target.value)}
-                  className="bg-[#0A0A0A] border border-[#2A2A2A] rounded-lg px-3 py-2 text-sm text-[#E0E0E0] focus:outline-none focus:border-[#D4A574]/40 transition-all"
+                  className="bg-dark border border-dark-200 rounded-lg px-3 py-2 text-sm text-[#E0E0E0] focus:outline-none focus:border-gold/40 transition-all"
                 >
                   <option value="">— No specific dish —</option>
                   {menuItems.map((m) => (
                     <option key={m.menuItemId} value={m.menuItemId}>
-                      {m.name} <span className="text-[#666]">({m.category})</span>
+                      {m.name} <span className="text-dark-500">({m.category})</span>
                     </option>
                   ))}
                 </select>
@@ -536,8 +536,8 @@ export default function ConsumptionLogger({
                       onClick={() => setShift(shift === s.key ? null : s.key)}
                       className={`px-3 py-1.5 rounded-full text-xs border transition-all cursor-pointer ${
                         shift === s.key
-                          ? "bg-[#D4A574]/20 text-[#D4A574] border-[#D4A574]/30 shadow-[0_0_8px_rgba(212,165,116,0.1)]"
-                          : "bg-[#161616] text-[#888] border-[#2A2A2A] hover:border-[#444] hover:text-[#BBB]"
+                          ? "bg-gold/20 text-gold border-gold/30 shadow-[0_0_8px_rgba(212,165,116,0.1)]"
+                          : "bg-dark-50 text-[#888] border-dark-200 hover:border-dark-400 hover:text-[#BBB]"
                       }`}
                     >
                       {s.label}
@@ -555,7 +555,7 @@ export default function ConsumptionLogger({
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   placeholder="Optional notes..."
-                  className="w-full bg-[#0A0A0A] border border-[#2A2A2A] rounded-lg px-3 py-2 text-sm text-[#E0E0E0] placeholder-[#555] focus:outline-none focus:border-[#D4A574]/40 transition-all"
+                  className="w-full bg-dark border border-dark-200 rounded-lg px-3 py-2 text-sm text-[#E0E0E0] placeholder-[#555] focus:outline-none focus:border-gold/40 transition-all"
                 />
               </div>
             </div>
@@ -569,7 +569,7 @@ export default function ConsumptionLogger({
             <button
               onClick={handleSubmit}
               disabled={saving || !quantity || !reason}
-              className="w-full sm:w-auto bg-gradient-to-r from-[#D4A574] to-[#C4956A] text-[#0A0A0A] font-semibold rounded-xl px-6 py-2.5 text-sm transition-all hover:shadow-[0_0_20px_rgba(212,165,116,0.2)] hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-none flex items-center justify-center gap-2"
+              className="w-full sm:w-auto bg-gradient-to-r from-gold to-gold-hover text-dark font-semibold rounded-xl px-6 py-2.5 text-sm transition-all hover:shadow-[0_0_20px_rgba(212,165,116,0.2)] hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-none flex items-center justify-center gap-2"
             >
               {saving ? (
                 <>
@@ -598,14 +598,14 @@ export default function ConsumptionLogger({
         </h3>
 
         {logsLoading && (
-          <div className="flex items-center justify-center py-6 text-[#666]">
+          <div className="flex items-center justify-center py-6 text-dark-500">
             <Loader2 size={18} className="animate-spin" />
           </div>
         )}
 
         {!logsLoading && todayEntries.length === 0 && (
           <div className="bg-[#111]/60 border border-white/5 rounded-xl px-4 py-6 text-center">
-            <ClipboardEdit size={20} className="mx-auto mb-2 text-[#444]" />
+            <ClipboardEdit size={20} className="mx-auto mb-2 text-dark-400" />
             <p className="text-xs text-[#555]">No entries logged today</p>
           </div>
         )}
@@ -622,7 +622,7 @@ export default function ConsumptionLogger({
                   <span className="text-sm font-medium text-[#E0E0E0]">
                     {Number(entry.quantity).toFixed(1)}
                   </span>
-                  <span className="text-xs text-[#666]">
+                  <span className="text-xs text-dark-500">
                     {entry.unit || entry.baseUnit}
                   </span>
                 </div>
@@ -630,11 +630,11 @@ export default function ConsumptionLogger({
                   {entry.ingredientName}
                 </span>
                 <span
-                  className="px-2 py-0.5 rounded-full text-xs bg-[#1A1A1A] border border-[#2A2A2A] text-[#888]"
+                  className="px-2 py-0.5 rounded-full text-xs bg-[#1A1A1A] border border-dark-200 text-[#888]"
                 >
                   {REASON_LABELS[entry.reason] ?? entry.reason}
                 </span>
-                <span className="text-xs text-[#666] min-w-[4.5rem] text-right">
+                <span className="text-xs text-dark-500 min-w-[4.5rem] text-right">
                   {formatTime(entry.loggedAt)}
                 </span>
                 {/* Entries are final — no edits */}

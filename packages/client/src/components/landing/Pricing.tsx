@@ -109,7 +109,7 @@ export function Pricing() {
           {/* CTA */}
           <Link
             to="/register"
-            className="mb-3 block w-full rounded-lg bg-gold py-3.5 text-center text-sm font-semibold text-dark transition-all duration-200 hover:-translate-y-0.5 hover:bg-gold-hover hover:shadow-[0_8px_24px_rgba(212,165,116,0.25)]"
+            className="mb-3 block w-full rounded-lg bg-gold py-3.5 text-center text-sm font-semibold text-dark transition-all duration-200 hover:-translate-y-0.5 hover:bg-gold-hover hover:shadow-[0_8px_24px_var(--color-border-gold)]"
           >
             Start your 3-day free trial
           </Link>
@@ -149,7 +149,7 @@ export function Pricing() {
             viewport={{ once: true }}
             className="pointer-events-none absolute inset-0 rounded-2xl"
             style={{
-              boxShadow: "0 0 40px rgba(212,165,116,0.08)",
+              boxShadow: "0 0 40px var(--color-gold-glow)",
             }}
           />
         </motion.div>

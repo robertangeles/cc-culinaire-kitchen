@@ -25,18 +25,18 @@ export function RequirePermission({
 
   return (
     <div className="flex-1 flex items-center justify-center p-8">
-      <div className="max-w-sm w-full text-center rounded-2xl border border-[#1E1E1E] bg-[#111111] px-6 py-10 shadow-[0_16px_50px_-12px_rgba(0,0,0,0.6)]">
-        <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-full bg-[#D4A574]/15 border border-[#D4A574]/20">
-          <Lock className="size-5 text-[#D4A574]" />
+      <div className="max-w-sm w-full text-center rounded-2xl border border-dark-100 bg-[#111111] px-6 py-10 shadow-[0_16px_50px_-12px_rgba(0,0,0,0.6)]">
+        <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-full bg-gold/15 border border-gold/20">
+          <Lock className="size-5 text-gold" />
         </div>
         <h2 className="text-lg font-semibold text-white">This tool isn't on your plan</h2>
-        <p className="mt-2 text-sm text-[#999999]">
+        <p className="mt-2 text-sm text-dark-600">
           Your role doesn't include access to this part of the kitchen. Ask an administrator
           to grant it, or head back to your chat.
         </p>
         <Link
           to="/chat/new"
-          className="mt-6 inline-flex items-center justify-center rounded-xl bg-[#D4A574] px-4 py-2.5 text-sm font-medium text-[#0A0A0A] hover:bg-[#C4956A] transition-colors"
+          className="mt-6 inline-flex items-center justify-center rounded-xl bg-gold px-4 py-2.5 text-sm font-medium text-dark hover:bg-gold-hover transition-colors"
         >
           Back to Ask Antoine
         </Link>

@@ -108,9 +108,9 @@ export function MfaSection() {
   }
 
   return (
-    <div className="bg-[#161616] rounded-2xl border border-[#2A2A2A] p-6 space-y-4">
+    <div className="bg-dark-50 rounded-2xl border border-dark-200 p-6 space-y-4">
       <div className="flex items-center gap-2">
-        <ShieldCheck className="size-4 text-[#D4A574]" />
+        <ShieldCheck className="size-4 text-gold" />
         <h3 className="text-sm font-semibold text-[#E5E5E5]">Two-Factor Authentication</h3>
       </div>
 
@@ -128,7 +128,7 @@ export function MfaSection() {
 
       {isChecking ? (
         <div className="flex items-center justify-center py-6">
-          <Loader2 className="size-5 animate-spin text-[#999999]" />
+          <Loader2 className="size-5 animate-spin text-dark-600" />
         </div>
       ) : mfaEnabled ? (
         <div className="space-y-4">
@@ -154,8 +154,8 @@ export function MfaSection() {
             <img src={qrDataUrl} alt="MFA QR Code" className="w-48 h-48" />
           </div>
           <div className="text-center">
-            <p className="text-xs text-[#999999] mb-1">Or enter this key manually:</p>
-            <code className="text-xs bg-[#1E1E1E] px-2 py-1 rounded font-mono select-all">{secret}</code>
+            <p className="text-xs text-dark-600 mb-1">Or enter this key manually:</p>
+            <code className="text-xs bg-dark-100 px-2 py-1 rounded font-mono select-all">{secret}</code>
           </div>
           <div>
             <label htmlFor="mfaCode" className="block text-sm font-medium text-[#E5E5E5] mb-1">
@@ -171,14 +171,14 @@ export function MfaSection() {
               onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
               required
               autoFocus
-              className="w-full rounded-lg border border-[#2A2A2A] px-3 py-2 text-sm text-[#FAFAFA] text-center tracking-[0.5em] font-mono focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-transparent"
+              className="w-full rounded-lg border border-dark-200 px-3 py-2 text-sm text-[#FAFAFA] text-center tracking-[0.5em] font-mono focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-transparent"
               placeholder="000000"
             />
           </div>
           <button
             type="submit"
             disabled={isLoading || code.length !== 6}
-            className="w-full flex items-center justify-center gap-2 py-2.5 text-sm font-medium text-white bg-[#D4A574] rounded-lg hover:bg-[#C4956A] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="w-full flex items-center justify-center gap-2 py-2.5 text-sm font-medium text-white bg-gold rounded-lg hover:bg-gold-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {isLoading && <Loader2 className="size-4 animate-spin" />}
             Enable MFA
@@ -193,7 +193,7 @@ export function MfaSection() {
           <button
             onClick={handleSetup}
             disabled={isLoading}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-[#D4A574] rounded-lg hover:bg-[#C4956A] disabled:opacity-50 transition-colors"
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-gold rounded-lg hover:bg-gold-hover disabled:opacity-50 transition-colors"
           >
             {isLoading ? <Loader2 className="size-4 animate-spin" /> : <ShieldCheck className="size-4" />}
             Set Up MFA

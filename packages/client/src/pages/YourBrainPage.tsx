@@ -37,7 +37,7 @@ function LoadingRows() {
       {[0, 1, 2].map((i) => (
         <li
           key={i}
-          className="h-16 rounded-xl border border-[#1E1E1E] bg-[#111111] animate-pulse motion-reduce:animate-none"
+          className="h-16 rounded-xl border border-dark-100 bg-[#111111] animate-pulse motion-reduce:animate-none"
         />
       ))}
     </ul>
@@ -78,16 +78,16 @@ export function YourBrainPage() {
       : "warming";
 
   return (
-    <div className="flex-1 overflow-y-auto bg-[#0A0A0A]">
+    <div className="flex-1 overflow-y-auto bg-dark">
       <div className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6">
         {/* Header — title + trust subtitle (spec IA) */}
         <header className="flex items-start gap-3">
-          <div className="mt-0.5 flex size-10 flex-shrink-0 items-center justify-center rounded-xl bg-[#D4A574]/10 border border-[#D4A574]/20">
-            <Brain className="size-5 text-[#D4A574]" aria-hidden="true" />
+          <div className="mt-0.5 flex size-10 flex-shrink-0 items-center justify-center rounded-xl bg-gold/10 border border-gold/20">
+            <Brain className="size-5 text-gold" aria-hidden="true" />
           </div>
           <div>
             <h1 className="text-xl font-semibold text-white">Your Brain</h1>
-            <p className="mt-0.5 text-sm text-[#999999]">
+            <p className="mt-0.5 text-sm text-dark-600">
               What CulinAIre remembers, so it always has your context.
             </p>
           </div>
@@ -106,7 +106,7 @@ export function YourBrainPage() {
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search your memories…"
               aria-label="Search your memories"
-              className="w-full rounded-xl border border-[#1E1E1E] bg-[#111111] py-2.5 pl-9 pr-3 text-sm text-[#E5E5E5] placeholder:text-[#777777] shadow-[inset_0_1px_2px_rgba(0,0,0,0.4)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4A574]/60"
+              className="w-full rounded-xl border border-dark-100 bg-[#111111] py-2.5 pl-9 pr-3 text-sm text-[#E5E5E5] placeholder:text-[#777777] shadow-[inset_0_1px_2px_rgba(0,0,0,0.4)] focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
             />
           </div>
           {hasOrg && (
@@ -124,10 +124,10 @@ export function YourBrainPage() {
                 type="button"
                 onClick={() => setSourceTypeFilter(chip.value)}
                 aria-pressed={active}
-                className={`flex-shrink-0 rounded-full border px-3 py-1 text-xs font-medium transition-colors motion-reduce:transition-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4A574]/60 ${
+                className={`flex-shrink-0 rounded-full border px-3 py-1 text-xs font-medium transition-colors motion-reduce:transition-none focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60 ${
                   active
-                    ? "border-[#D4A574]/30 bg-[#D4A574]/15 text-[#D4A574]"
-                    : "border-[#1E1E1E] bg-[#111111] text-[#999999] hover:text-[#E5E5E5]"
+                    ? "border-gold/30 bg-gold/15 text-gold"
+                    : "border-dark-100 bg-[#111111] text-dark-600 hover:text-[#E5E5E5]"
                 }`}
               >
                 {chip.label}
@@ -143,13 +143,13 @@ export function YourBrainPage() {
           ) : error ? (
             <div
               role="alert"
-              className="rounded-xl border border-[#1E1E1E] bg-[#111111] px-4 py-6 text-center"
+              className="rounded-xl border border-dark-100 bg-[#111111] px-4 py-6 text-center"
             >
               <p className="text-sm text-[#E5E5E5]">{error}</p>
               <button
                 type="button"
                 onClick={reload}
-                className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-[#D4A574] px-3 py-1.5 text-sm font-medium text-[#0A0A0A] hover:bg-[#C4956A] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4A574]/60"
+                className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-gold px-3 py-1.5 text-sm font-medium text-dark hover:bg-gold-hover transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
               >
                 <Loader2 className="size-3.5" aria-hidden="true" />
                 Retry

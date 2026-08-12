@@ -123,10 +123,10 @@ interface RecipeCardProps {
 }
 
 const DIFFICULTY_COLORS: Record<string, string> = {
-  beginner: "bg-[#1E1E1E] text-[#999999]",
-  intermediate: "bg-[#1E1E1E] text-[#999999]",
-  advanced: "bg-[#1E1E1E] text-[#999999]",
-  expert: "bg-[#1E1E1E] text-[#999999]",
+  beginner: "bg-dark-100 text-dark-600",
+  intermediate: "bg-dark-100 text-dark-600",
+  advanced: "bg-dark-100 text-dark-600",
+  expert: "bg-dark-100 text-dark-600",
 };
 
 export function RecipeCard({ recipe, domain, recipeId, slug, imageUrl, onTogglePublic, isPublic, creator, isOwner, onRecipeUpdate, onImageUpdate }: RecipeCardProps) {
@@ -192,7 +192,7 @@ export function RecipeCard({ recipe, domain, recipeId, slug, imageUrl, onToggleP
     window.print();
   }
 
-  const accentBorder = "border-[#D4A574]";
+  const accentBorder = "border-gold";
 
   /* ── Edit mode: render editor instead of read-only card ── */
   if (editMode && recipeId) {
@@ -219,45 +219,45 @@ export function RecipeCard({ recipe, domain, recipeId, slug, imageUrl, onToggleP
   }
 
   return (
-    <div className="bg-[#161616] border border-[#2A2A2A] rounded-2xl overflow-visible">
+    <div className="bg-dark-50 border border-dark-200 rounded-2xl overflow-visible">
       {/* Recipe meta strip */}
-      <div className="border-b border-[#2A2A2A] px-6 md:px-10 py-5">
+      <div className="border-b border-dark-200 px-6 md:px-10 py-5">
         <p className="text-[#E5E5E5] text-sm leading-relaxed mb-4 max-w-3xl">{recipe.description}</p>
 
         <div className="flex flex-wrap items-center gap-4 text-sm text-[#E5E5E5]">
           <span className="flex items-center gap-1.5">
-            <Clock className="size-4 text-[#999999]" />
+            <Clock className="size-4 text-dark-600" />
             Prep {recipe.prepTime}
           </span>
           <span className="flex items-center gap-1.5">
-            <Clock className="size-4 text-[#999999]" />
+            <Clock className="size-4 text-dark-600" />
             Cook {recipe.cookTime}
           </span>
           <span className="flex items-center gap-1.5">
-            <Users className="size-4 text-[#999999]" />
+            <Users className="size-4 text-dark-600" />
             {recipe.yield}
           </span>
           <span
             className={`px-3 py-1 rounded-full text-xs font-medium capitalize ${
-              DIFFICULTY_COLORS[recipe.difficulty] ?? "bg-[#1E1E1E] text-[#999999]"
+              DIFFICULTY_COLORS[recipe.difficulty] ?? "bg-dark-100 text-dark-600"
             }`}
           >
             {recipe.difficulty}
           </span>
           {recipe.temperature && (
             <span className="flex items-center gap-1.5">
-              <Thermometer className="size-4 text-[#999999]" />
+              <Thermometer className="size-4 text-dark-600" />
               {recipe.temperature}
             </span>
           )}
           {recipe.glassware && (
             <span className="flex items-center gap-1.5">
-              <GlassWater className="size-4 text-[#999999]" />
+              <GlassWater className="size-4 text-dark-600" />
               {recipe.glassware}
             </span>
           )}
           {recipe.garnish && (
-            <span className="text-[#999999] italic">Garnish: {recipe.garnish}</span>
+            <span className="text-dark-600 italic">Garnish: {recipe.garnish}</span>
           )}
         </div>
 
@@ -268,7 +268,7 @@ export function RecipeCard({ recipe, domain, recipeId, slug, imageUrl, onToggleP
               <button
                 onClick={() => onTogglePublic(!isPublic)}
                 className={`flex items-center gap-1.5 text-sm transition-colors ${
-                  isPublic ? "text-[#D4A574] hover:text-[#C4956A]" : "text-[#999999] hover:text-white"
+                  isPublic ? "text-gold hover:text-gold-hover" : "text-dark-600 hover:text-white"
                 }`}
               >
                 <Share2 className="size-4" />
@@ -278,7 +278,7 @@ export function RecipeCard({ recipe, domain, recipeId, slug, imageUrl, onToggleP
           </div>
           <button
             onClick={handlePrint}
-            className="flex items-center gap-1.5 text-sm text-[#999999] hover:text-white transition-colors"
+            className="flex items-center gap-1.5 text-sm text-dark-600 hover:text-white transition-colors"
           >
             <Printer className="size-4" />
             Print
@@ -287,8 +287,8 @@ export function RecipeCard({ recipe, domain, recipeId, slug, imageUrl, onToggleP
 
         {/* Hook line (social caption) */}
         {recipe.hookLine && (
-          <div className="mt-4 bg-[#D4A574]/10 border border-[#D4A574]/20 rounded-xl px-4 py-3">
-            <p className="text-sm font-medium text-[#D4A574] italic">"{recipe.hookLine}"</p>
+          <div className="mt-4 bg-gold/10 border border-gold/20 rounded-xl px-4 py-3">
+            <p className="text-sm font-medium text-gold italic">"{recipe.hookLine}"</p>
           </div>
         )}
 
@@ -297,7 +297,7 @@ export function RecipeCard({ recipe, domain, recipeId, slug, imageUrl, onToggleP
           <div className="mt-4 space-y-2">
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-2">
-                <span className="text-xs text-[#666666]">Share:</span>
+                <span className="text-xs text-dark-500">Share:</span>
                 <RecipeShareBar
                   title={recipe.name}
                   description={recipe.description}
@@ -315,7 +315,7 @@ export function RecipeCard({ recipe, domain, recipeId, slug, imageUrl, onToggleP
                 {creator ? (
                   <CreatorCard creator={creator} />
                 ) : (
-                  <span className="text-xs text-[#666666]">Added by <span className="font-medium text-[#999999]">Anonymous</span></span>
+                  <span className="text-xs text-dark-500">Added by <span className="font-medium text-dark-600">Anonymous</span></span>
                 )}
               </div>
             </div>
@@ -324,17 +324,17 @@ export function RecipeCard({ recipe, domain, recipeId, slug, imageUrl, onToggleP
 
         {/* Owner action buttons */}
         {isOwner && recipeId && (
-          <div className="mt-4 flex items-center gap-3 pt-3 border-t border-[#2A2A2A]">
+          <div className="mt-4 flex items-center gap-3 pt-3 border-t border-dark-200">
             <button
               onClick={() => setEditMode(true)}
-              className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-[#D4A574] border border-[#D4A574]/30 hover:border-[#D4A574]/60 hover:bg-[#D4A574]/10 rounded-xl transition-colors"
+              className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-gold border border-gold/30 hover:border-gold/60 hover:bg-gold/10 rounded-xl transition-colors"
             >
               <Pencil className="size-4" />
               Edit Recipe
             </button>
             <button
               onClick={() => setShowHistory(true)}
-              className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-[#999999] hover:text-white border border-[#2A2A2A] hover:border-[#444444] rounded-xl transition-colors"
+              className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-dark-600 hover:text-white border border-dark-200 hover:border-dark-400 rounded-xl transition-colors"
             >
               <History className="size-4" />
               History
@@ -360,7 +360,7 @@ export function RecipeCard({ recipe, domain, recipeId, slug, imageUrl, onToggleP
                 }
               }}
               disabled={regeneratingImage}
-              className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-[#999999] hover:text-white border border-[#2A2A2A] hover:border-[#444444] rounded-xl transition-colors disabled:opacity-50"
+              className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-dark-600 hover:text-white border border-dark-200 hover:border-dark-400 rounded-xl transition-colors disabled:opacity-50"
             >
               {regeneratingImage ? <Loader2 className="size-4 animate-spin" /> : <ImagePlus className="size-4" />}
               {regeneratingImage ? "Generating..." : "New Image"}
@@ -370,7 +370,7 @@ export function RecipeCard({ recipe, domain, recipeId, slug, imageUrl, onToggleP
       </div>
 
       {/* Two-column layout */}
-      <div className="grid md:grid-cols-5 gap-0 divide-y md:divide-y-0 md:divide-x divide-[#2A2A2A]">
+      <div className="grid md:grid-cols-5 gap-0 divide-y md:divide-y-0 md:divide-x divide-dark-200">
         {/* Ingredients — 2/5 width */}
         <div className="md:col-span-2 px-6 md:px-8 py-8">
           <h2 className={`text-lg font-semibold text-[#FAFAFA] mb-5 pb-2 border-b-2 ${accentBorder}`}>
@@ -383,23 +383,23 @@ export function RecipeCard({ recipe, domain, recipeId, slug, imageUrl, onToggleP
                   onClick={() => toggleIngredient(idx)}
                   className={`mt-0.5 size-5 rounded border-2 shrink-0 flex items-center justify-center transition-colors ${
                     checkedIngredients.has(idx)
-                      ? "bg-[#D4A574] border-[#D4A574]"
-                      : "border-[#3A3A3A] hover:border-[#D4A574]"
+                      ? "bg-gold border-gold"
+                      : "border-dark-300 hover:border-gold"
                   }`}
                   aria-label={`Mark ${ing.name} as used`}
                 >
                   {checkedIngredients.has(idx) && (
-                    <svg className="size-3 text-[#0A0A0A]" fill="none" viewBox="0 0 12 12">
+                    <svg className="size-3 text-dark" fill="none" viewBox="0 0 12 12">
                       <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                   )}
                 </button>
-                <span className={`text-sm leading-relaxed ${checkedIngredients.has(idx) ? "line-through text-[#666666]" : "text-[#E5E5E5]"}`}>
+                <span className={`text-sm leading-relaxed ${checkedIngredients.has(idx) ? "line-through text-dark-500" : "text-[#E5E5E5]"}`}>
                   <strong className="font-medium">
                     {ing.amount} {ing.unit}
                   </strong>{" "}
                   {ing.name}
-                  {ing.note && <span className="text-[#999999] italic"> ({ing.note})</span>}
+                  {ing.note && <span className="text-dark-600 italic"> ({ing.note})</span>}
                 </span>
               </li>
             ))}
@@ -418,8 +418,8 @@ export function RecipeCard({ recipe, domain, recipeId, slug, imageUrl, onToggleP
                   onClick={() => toggleStep(step.step)}
                   className={`size-8 rounded-full flex items-center justify-center text-sm font-semibold shrink-0 transition-colors ${
                     completedSteps.has(step.step)
-                      ? "bg-[#D4A574] text-[#0A0A0A]"
-                      : "bg-[#1E1E1E] text-[#D4A574] hover:bg-[#2A2A2A]"
+                      ? "bg-gold text-dark"
+                      : "bg-dark-100 text-gold hover:bg-dark-200"
                   }`}
                   aria-label={`Mark step ${step.step} complete`}
                 >
@@ -427,7 +427,7 @@ export function RecipeCard({ recipe, domain, recipeId, slug, imageUrl, onToggleP
                 </button>
                 <p
                   className={`text-sm leading-relaxed pt-1 ${
-                    completedSteps.has(step.step) ? "text-[#666666] line-through" : "text-[#E5E5E5]"
+                    completedSteps.has(step.step) ? "text-dark-500 line-through" : "text-[#E5E5E5]"
                   }`}
                 >
                   {step.instruction}
@@ -438,9 +438,9 @@ export function RecipeCard({ recipe, domain, recipeId, slug, imageUrl, onToggleP
 
           {/* Pro tips */}
           {recipe.proTips && recipe.proTips.length > 0 && (
-            <div className="mt-8 bg-[#D4A574]/10 border border-[#D4A574]/20 rounded-xl p-5">
+            <div className="mt-8 bg-gold/10 border border-gold/20 rounded-xl p-5">
               <div className="flex items-center gap-2 mb-3">
-                <ChefHat className="size-4 text-[#D4A574]" />
+                <ChefHat className="size-4 text-gold" />
                 <h3 className="text-sm font-semibold text-[#FAFAFA]">Pro Tips</h3>
               </div>
               <ul className="space-y-2">
@@ -456,8 +456,8 @@ export function RecipeCard({ recipe, domain, recipeId, slug, imageUrl, onToggleP
       </div>
 
       {/* Allergen note */}
-      <div className="mx-6 md:mx-10 mb-8 mt-2 flex items-start gap-3 bg-[#D4A574]/10 border border-[#D4A574]/20 rounded-xl p-4">
-        <AlertTriangle className="size-4 text-[#D4A574] shrink-0 mt-0.5" />
+      <div className="mx-6 md:mx-10 mb-8 mt-2 flex items-start gap-3 bg-gold/10 border border-gold/20 rounded-xl p-4">
+        <AlertTriangle className="size-4 text-gold shrink-0 mt-0.5" />
         <p className="text-sm text-[#E5E5E5] leading-relaxed">{recipe.allergenNote}</p>
       </div>
 
@@ -465,7 +465,7 @@ export function RecipeCard({ recipe, domain, recipeId, slug, imageUrl, onToggleP
       {recipe.whyThisWorks && (
         <div className="mx-6 md:mx-10 mb-6">
           <h3 className="text-sm font-semibold text-[#FAFAFA] mb-2 flex items-center gap-2">
-            <Sparkles className="size-4 text-[#D4A574]" />
+            <Sparkles className="size-4 text-gold" />
             Why This Works
           </h3>
           <p className="text-sm text-[#E5E5E5] leading-relaxed">{recipe.whyThisWorks}</p>
@@ -482,9 +482,9 @@ export function RecipeCard({ recipe, domain, recipeId, slug, imageUrl, onToggleP
 
       {/* Flavor Balance */}
       {recipe.flavorBalance && (
-        <div className="mx-6 md:mx-10 mb-6 bg-[#1E1E1E] rounded-xl p-5 border border-[#2A2A2A]">
+        <div className="mx-6 md:mx-10 mb-6 bg-dark-100 rounded-xl p-5 border border-dark-200">
           <h3 className="text-sm font-semibold text-[#FAFAFA] mb-4 flex items-center gap-2">
-            <Flame className="size-4 text-[#D4A574]" />
+            <Flame className="size-4 text-gold" />
             Flavor Balance
           </h3>
           <div className="grid grid-cols-5 gap-3">
@@ -492,12 +492,12 @@ export function RecipeCard({ recipe, domain, recipeId, slug, imageUrl, onToggleP
               const data = recipe.flavorBalance![taste];
               return (
                 <div key={taste} className="text-center">
-                  <div className="text-xs font-medium text-[#999999] uppercase mb-1">{taste}</div>
-                  <div className="text-lg font-bold text-[#FAFAFA]">{data.score}<span className="text-xs text-[#666666]">/10</span></div>
-                  <div className="w-full bg-[#2A2A2A] rounded-full h-1.5 mt-1">
-                    <div className="bg-[#D4A574] h-1.5 rounded-full" style={{ width: `${data.score * 10}%` }} />
+                  <div className="text-xs font-medium text-dark-600 uppercase mb-1">{taste}</div>
+                  <div className="text-lg font-bold text-[#FAFAFA]">{data.score}<span className="text-xs text-dark-500">/10</span></div>
+                  <div className="w-full bg-dark-200 rounded-full h-1.5 mt-1">
+                    <div className="bg-gold h-1.5 rounded-full" style={{ width: `${data.score * 10}%` }} />
                   </div>
-                  <p className="text-xs text-[#666666] mt-1 leading-tight">{data.description}</p>
+                  <p className="text-xs text-dark-500 mt-1 leading-tight">{data.description}</p>
                 </div>
               );
             })}
@@ -511,10 +511,10 @@ export function RecipeCard({ recipe, domain, recipeId, slug, imageUrl, onToggleP
           <h3 className="text-sm font-semibold text-[#FAFAFA] mb-3">Nutrition Per Serving</h3>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {recipe.nutritionPerServing.map((n, i) => (
-              <div key={i} className="bg-[#1E1E1E] rounded-xl px-3 py-2 text-center">
-                <div className="text-xs text-[#999999]">{n.nutrient}</div>
+              <div key={i} className="bg-dark-100 rounded-xl px-3 py-2 text-center">
+                <div className="text-xs text-dark-600">{n.nutrient}</div>
                 <div className="text-sm font-semibold text-[#FAFAFA]">{n.amount}</div>
-                {n.dailyValue && <div className="text-xs text-[#666666]">{n.dailyValue} DV</div>}
+                {n.dailyValue && <div className="text-xs text-dark-500">{n.dailyValue} DV</div>}
               </div>
             ))}
           </div>
@@ -523,16 +523,16 @@ export function RecipeCard({ recipe, domain, recipeId, slug, imageUrl, onToggleP
 
       {/* Wine Pairing (not shown for spirits — spirits uses foodPairing instead) */}
       {recipe.winePairing && domain !== "spirits" && (
-        <div className="mx-6 md:mx-10 mb-6 bg-[#1E1E1E] rounded-xl p-5 border border-[#2A2A2A]">
+        <div className="mx-6 md:mx-10 mb-6 bg-dark-100 rounded-xl p-5 border border-dark-200">
           <h3 className="text-sm font-semibold text-[#FAFAFA] mb-3 flex items-center gap-2">
-            <Wine className="size-4 text-[#D4A574]" />
+            <Wine className="size-4 text-gold" />
             Wine Pairing
           </h3>
           <p className="text-sm font-medium text-[#FAFAFA]">{recipe.winePairing.primary.wine}</p>
           <p className="text-sm text-[#E5E5E5] mt-1">{recipe.winePairing.primary.why}</p>
           {recipe.winePairing.alternatives && recipe.winePairing.alternatives.length > 0 && (
-            <div className="mt-3 pt-3 border-t border-[#2A2A2A]">
-              <p className="text-xs font-medium text-[#999999] mb-1">Alternatives:</p>
+            <div className="mt-3 pt-3 border-t border-dark-200">
+              <p className="text-xs font-medium text-dark-600 mb-1">Alternatives:</p>
               {recipe.winePairing.alternatives.map((alt, i) => (
                 <p key={i} className="text-xs text-[#E5E5E5]"><strong>{alt.wine}</strong> — {alt.why}</p>
               ))}
@@ -550,18 +550,18 @@ export function RecipeCard({ recipe, domain, recipeId, slug, imageUrl, onToggleP
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-[#2A2A2A] text-left">
-                  <th className="py-2 pr-4 font-medium text-[#999999]">Ingredient</th>
-                  <th className="py-2 pr-4 font-medium text-[#999999]">Weight</th>
-                  <th className="py-2 font-medium text-[#999999]">%</th>
+                <tr className="border-b border-dark-200 text-left">
+                  <th className="py-2 pr-4 font-medium text-dark-600">Ingredient</th>
+                  <th className="py-2 pr-4 font-medium text-dark-600">Weight</th>
+                  <th className="py-2 font-medium text-dark-600">%</th>
                 </tr>
               </thead>
               <tbody>
                 {recipe.bakerPercentages.map((bp, i) => (
-                  <tr key={i} className="border-b border-[#1E1E1E]">
+                  <tr key={i} className="border-b border-dark-100">
                     <td className="py-1.5 pr-4 text-[#E5E5E5]">{bp.ingredient}</td>
                     <td className="py-1.5 pr-4 text-[#E5E5E5]">{bp.weight}</td>
-                    <td className="py-1.5 text-[#D4A574] font-medium">{bp.percentage}</td>
+                    <td className="py-1.5 text-gold font-medium">{bp.percentage}</td>
                   </tr>
                 ))}
               </tbody>
@@ -595,7 +595,7 @@ export function RecipeCard({ recipe, domain, recipeId, slug, imageUrl, onToggleP
           <h3 className="text-sm font-semibold text-[#FAFAFA] mb-2">Make-Ahead Components</h3>
           <ul className="space-y-1">
             {recipe.makeAheadComponents.map((c, i) => (
-              <li key={i} className="text-sm text-[#E5E5E5]"><span className="text-[#D4A574]">•</span> {c}</li>
+              <li key={i} className="text-sm text-[#E5E5E5]"><span className="text-gold">•</span> {c}</li>
             ))}
           </ul>
         </div>
@@ -605,15 +605,15 @@ export function RecipeCard({ recipe, domain, recipeId, slug, imageUrl, onToggleP
 
       {/* Batch Spec */}
       {recipe.batchSpec && (
-        <div className="mx-6 md:mx-10 mb-6 bg-[#D4A574]/10 rounded-xl p-5 border border-[#D4A574]/20">
-          <h3 className="text-sm font-semibold text-[#D4A574] mb-3">Batch Spec ({recipe.batchSpec.servings} Servings)</h3>
+        <div className="mx-6 md:mx-10 mb-6 bg-gold/10 rounded-xl p-5 border border-gold/20">
+          <h3 className="text-sm font-semibold text-gold mb-3">Batch Spec ({recipe.batchSpec.servings} Servings)</h3>
           <ul className="space-y-1 mb-3">
             {recipe.batchSpec.components.map((c, i) => (
-              <li key={i} className="text-sm text-[#E5E5E5]"><span className="text-[#D4A574]">•</span> {c}</li>
+              <li key={i} className="text-sm text-[#E5E5E5]"><span className="text-gold">•</span> {c}</li>
             ))}
           </ul>
-          <p className="text-xs text-[#999999]"><strong>Storage:</strong> {recipe.batchSpec.storage}</p>
-          <p className="text-xs text-[#999999] mt-1"><strong>To serve:</strong> {recipe.batchSpec.toServe}</p>
+          <p className="text-xs text-dark-600"><strong>Storage:</strong> {recipe.batchSpec.storage}</p>
+          <p className="text-xs text-dark-600 mt-1"><strong>To serve:</strong> {recipe.batchSpec.toServe}</p>
         </div>
       )}
 
@@ -623,9 +623,9 @@ export function RecipeCard({ recipe, domain, recipeId, slug, imageUrl, onToggleP
           <h3 className="text-sm font-semibold text-[#FAFAFA] mb-3">Variations</h3>
           <div className="space-y-3">
             {recipe.variations.map((v, i) => (
-              <div key={i} className="bg-[#1E1E1E] rounded-xl p-4 border border-[#2A2A2A]">
+              <div key={i} className="bg-dark-100 rounded-xl p-4 border border-dark-200">
                 <p className="text-sm font-medium text-[#FAFAFA]">{v.name}</p>
-                <p className="text-xs text-[#999999] mt-1">{v.description}</p>
+                <p className="text-xs text-dark-600 mt-1">{v.description}</p>
                 <p className="text-xs text-[#E5E5E5] mt-1"><strong>Change:</strong> {v.specAdjustment}</p>
               </div>
             ))}
@@ -635,12 +635,12 @@ export function RecipeCard({ recipe, domain, recipeId, slug, imageUrl, onToggleP
 
       {/* Food Pairing (Spirits) */}
       {recipe.foodPairing && (
-        <div className="mx-6 md:mx-10 mb-6 bg-[#1E1E1E] rounded-xl p-5 border border-[#2A2A2A]">
+        <div className="mx-6 md:mx-10 mb-6 bg-dark-100 rounded-xl p-5 border border-dark-200">
           <h3 className="text-sm font-semibold text-[#FAFAFA] mb-3">Food Pairing</h3>
           <p className="text-sm font-medium text-[#FAFAFA]">{recipe.foodPairing.primary.dish}</p>
           <p className="text-sm text-[#E5E5E5] mt-1">{recipe.foodPairing.primary.why}</p>
           {recipe.foodPairing.alternatives && recipe.foodPairing.alternatives.length > 0 && (
-            <div className="mt-3 pt-3 border-t border-[#2A2A2A]">
+            <div className="mt-3 pt-3 border-t border-dark-200">
               {recipe.foodPairing.alternatives.map((a, i) => (
                 <p key={i} className="text-xs text-[#E5E5E5] mt-1"><strong>{a.dish}</strong> — {a.why}</p>
               ))}
@@ -651,11 +651,11 @@ export function RecipeCard({ recipe, domain, recipeId, slug, imageUrl, onToggleP
 
       {/* ABV / Safety Disclosure (Spirits) */}
       {(recipe.abv || recipe.standardDrinks) && (
-        <div className="mx-6 md:mx-10 mb-6 flex flex-wrap items-center gap-3 text-xs text-[#999999]">
-          {recipe.abv && <span className="bg-[#1E1E1E] px-3 py-1 rounded-full">ABV: {recipe.abv}</span>}
-          {recipe.standardDrinks && <span className="bg-[#1E1E1E] px-3 py-1 rounded-full">{recipe.standardDrinks}</span>}
-          {recipe.venueType && <span className="bg-[#1E1E1E] px-3 py-1 rounded-full capitalize">{recipe.venueType}</span>}
-          {recipe.buildTime && <span className="bg-[#1E1E1E] px-3 py-1 rounded-full">Build: {recipe.buildTime}</span>}
+        <div className="mx-6 md:mx-10 mb-6 flex flex-wrap items-center gap-3 text-xs text-dark-600">
+          {recipe.abv && <span className="bg-dark-100 px-3 py-1 rounded-full">ABV: {recipe.abv}</span>}
+          {recipe.standardDrinks && <span className="bg-dark-100 px-3 py-1 rounded-full">{recipe.standardDrinks}</span>}
+          {recipe.venueType && <span className="bg-dark-100 px-3 py-1 rounded-full capitalize">{recipe.venueType}</span>}
+          {recipe.buildTime && <span className="bg-dark-100 px-3 py-1 rounded-full">Build: {recipe.buildTime}</span>}
         </div>
       )}
 
@@ -686,9 +686,9 @@ export function RecipeCard({ recipe, domain, recipeId, slug, imageUrl, onToggleP
       {/* Hashtags */}
       {recipe.hashtags && recipe.hashtags.length > 0 && (
         <div className="mx-6 md:mx-10 mb-6 flex flex-wrap gap-2">
-          <Hash className="size-4 text-[#666666]" />
+          <Hash className="size-4 text-dark-500" />
           {recipe.hashtags.map((tag, i) => (
-            <span key={i} className="text-xs text-[#D4A574] bg-[#D4A574]/10 px-2 py-0.5 rounded-full">
+            <span key={i} className="text-xs text-gold bg-gold/10 px-2 py-0.5 rounded-full">
               {tag.startsWith("#") ? tag : `#${tag}`}
             </span>
           ))}
@@ -702,12 +702,12 @@ export function RecipeCard({ recipe, domain, recipeId, slug, imageUrl, onToggleP
 
       {/* Confidence note */}
       <div className="px-6 md:px-10 pb-4">
-        <p className="text-xs text-[#999999] italic">{recipe.confidenceNote}</p>
+        <p className="text-xs text-dark-600 italic">{recipe.confidenceNote}</p>
       </div>
 
       {/* AI Disclaimer */}
       <div className="px-6 md:px-10 pb-8">
-        <p className="text-xs text-[#666666] leading-relaxed">
+        <p className="text-xs text-dark-500 leading-relaxed">
           All recipes are AI-generated and should be reviewed by a qualified professional before use.
           CulinAIre Kitchen does not guarantee outcomes, nutritional accuracy, or allergen completeness.
           Always verify ingredient safety, cooking temperatures, and dietary suitability.

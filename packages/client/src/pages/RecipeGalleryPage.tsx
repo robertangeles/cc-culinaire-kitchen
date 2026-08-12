@@ -56,14 +56,14 @@ export function RecipeGalleryPage() {
   const hasMore = recipes.length < total;
 
   return (
-    <div className="flex-1 overflow-y-auto bg-[#0A0A0A]">
+    <div className="flex-1 overflow-y-auto bg-dark">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="text-center mb-8">
-          <ChefHat className="size-10 mx-auto mb-3 text-[#D4A574]" />
+          <ChefHat className="size-10 mx-auto mb-3 text-gold" />
           <h1 className="text-2xl md:text-3xl font-bold text-[#FAFAFA]">The Kitchen Shelf</h1>
-          <p className="text-[#999999] mt-2">AI Recipes for Inspiration. Season to your own Judgment.</p>
-          <p className="text-xs text-[#666666] max-w-2xl mx-auto mt-3 leading-relaxed">
+          <p className="text-dark-600 mt-2">AI Recipes for Inspiration. Season to your own Judgment.</p>
+          <p className="text-xs text-dark-500 max-w-2xl mx-auto mt-3 leading-relaxed">
             All recipes are AI-generated and should be reviewed by a qualified professional before use.
             CulinAIre Kitchen does not guarantee outcomes, nutritional accuracy, or allergen completeness.
             Always verify ingredient safety, cooking temperatures, and dietary suitability.
@@ -78,8 +78,8 @@ export function RecipeGalleryPage() {
               onClick={() => setDomainFilter(f.value)}
               className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
                 domainFilter === f.value
-                  ? "bg-[#D4A574] text-[#0A0A0A]"
-                  : "bg-[#1E1E1E] text-[#999999] hover:bg-[#2A2A2A]"
+                  ? "bg-gold text-dark"
+                  : "bg-dark-100 text-dark-600 hover:bg-dark-200"
               }`}
             >
               {f.label}
@@ -90,13 +90,13 @@ export function RecipeGalleryPage() {
         {/* Search bar */}
         <div className="max-w-md mx-auto mb-8">
           <div className="relative">
-            <Search className="absolute left-3 top-2.5 size-4 text-[#666666]" />
+            <Search className="absolute left-3 top-2.5 size-4 text-dark-500" />
             <input
               type="text"
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               placeholder="Search recipes by name, ingredient, cuisine..."
-              className="w-full pl-10 pr-4 py-2.5 border border-[#2A2A2A] rounded-full text-sm text-white placeholder-[#444444] focus:ring-2 focus:ring-[#D4A574]/50 focus:border-[#D4A574]/50 bg-[#0A0A0A]"
+              className="w-full pl-10 pr-4 py-2.5 border border-dark-200 rounded-full text-sm text-white placeholder-dark-400 focus:ring-2 focus:ring-gold/50 focus:border-gold/50 bg-dark"
             />
           </div>
         </div>
@@ -104,16 +104,16 @@ export function RecipeGalleryPage() {
         {/* Loading */}
         {isLoading && (
           <div className="flex justify-center py-20">
-            <Loader2 className="size-8 animate-spin text-[#D4A574]" />
+            <Loader2 className="size-8 animate-spin text-gold" />
           </div>
         )}
 
         {/* Empty state */}
         {!isLoading && recipes.length === 0 && (
           <div className="text-center py-20">
-            <ChefHat className="size-12 mx-auto text-[#666666] mb-3" />
-            <p className="text-[#999999] font-medium">No recipes in the gallery yet</p>
-            <p className="text-sm text-[#666666] mt-1">Generate a recipe and make it public to see it here.</p>
+            <ChefHat className="size-12 mx-auto text-dark-500 mb-3" />
+            <p className="text-dark-600 font-medium">No recipes in the gallery yet</p>
+            <p className="text-sm text-dark-500 mt-1">Generate a recipe and make it public to see it here.</p>
           </div>
         )}
 
@@ -134,7 +134,7 @@ export function RecipeGalleryPage() {
             <button
               onClick={loadMore}
               disabled={isLoadingMore}
-              className="w-full py-3 bg-[#1E1E1E] hover:bg-[#2A2A2A] text-[#E5E5E5] rounded-xl transition-colors text-sm font-medium disabled:opacity-50"
+              className="w-full py-3 bg-dark-100 hover:bg-dark-200 text-[#E5E5E5] rounded-xl transition-colors text-sm font-medium disabled:opacity-50"
             >
               {isLoadingMore ? (
                 <span className="flex items-center justify-center gap-2">
@@ -150,7 +150,7 @@ export function RecipeGalleryPage() {
 
         {/* Showing X of Y */}
         {!isLoading && recipes.length > 0 && (
-          <p className="text-center text-sm text-[#666666] mt-3">
+          <p className="text-center text-sm text-dark-500 mt-3">
             Showing {recipes.length} of {total} recipes
           </p>
         )}

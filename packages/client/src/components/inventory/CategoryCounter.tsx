@@ -128,7 +128,7 @@ export function CategoryCounter({ sessionId, category, onBack }: Props) {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-16">
-        <Loader2 className="size-6 text-[#D4A574] animate-spin" />
+        <Loader2 className="size-6 text-gold animate-spin" />
       </div>
     );
   }
@@ -143,7 +143,7 @@ export function CategoryCounter({ sessionId, category, onBack }: Props) {
       <div className="animate-[fadeIn_150ms_ease-out]">
         <button
           onClick={() => setActiveIngredient(null)}
-          className="flex items-center gap-1.5 text-sm text-[#999] hover:text-white mb-4 transition-colors"
+          className="flex items-center gap-1.5 text-sm text-dark-600 hover:text-white mb-4 transition-colors"
         >
           <ArrowLeft className="size-4" />
           Back to list
@@ -151,11 +151,11 @@ export function CategoryCounter({ sessionId, category, onBack }: Props) {
 
         <div className="text-center mb-6">
           <h3 className="text-lg font-semibold text-white">{ing.ingredientName}</h3>
-          <p className="text-xs text-[#999] mt-1">
+          <p className="text-xs text-dark-600 mt-1">
             {ing.baseUnit} · {CATEGORY_LABELS[category.categoryName] || category.categoryName}
           </p>
           {existingQty && (
-            <p className="text-xs text-[#D4A574] mt-1">Current count: {existingQty}</p>
+            <p className="text-xs text-gold mt-1">Current count: {existingQty}</p>
           )}
         </div>
 
@@ -182,14 +182,14 @@ export function CategoryCounter({ sessionId, category, onBack }: Props) {
       <div className="flex items-center justify-between mb-6">
         <button
           onClick={onBack}
-          className="flex items-center gap-1.5 text-sm text-[#999] hover:text-white transition-colors"
+          className="flex items-center gap-1.5 text-sm text-dark-600 hover:text-white transition-colors"
         >
           <ArrowLeft className="size-4" />
           Categories
         </button>
         <button
           onClick={handleCopyLastCount}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-[#D4A574] bg-[#D4A574]/10 hover:bg-[#D4A574]/20 transition-colors"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-gold bg-gold/10 hover:bg-gold/20 transition-colors"
         >
           <Copy className="size-3" />
           Copy Last Count
@@ -239,7 +239,7 @@ export function CategoryCounter({ sessionId, category, onBack }: Props) {
 
       {/* Ingredient list */}
       {categoryIngredients.length === 0 ? (
-        <p className="text-sm text-[#999] text-center py-8">
+        <p className="text-sm text-dark-600 text-center py-8">
           No ingredients in this category. Add ingredients in the Ingredients tab.
         </p>
       ) : (
@@ -254,12 +254,12 @@ export function CategoryCounter({ sessionId, category, onBack }: Props) {
                 className={`w-full flex items-center justify-between p-3 rounded-xl border transition-all hover:-translate-y-0.5 ${
                   counted
                     ? "bg-emerald-500/5 border-emerald-500/20"
-                    : "bg-[#161616] border-[#2A2A2A] hover:border-[#3A3A3A]"
+                    : "bg-dark-50 border-dark-200 hover:border-dark-300"
                 }`}
               >
                 <div className="text-left">
                   <p className="text-sm font-medium text-white">{ing.ingredientName}</p>
-                  <p className="text-xs text-[#999]">{ing.unitOverride || ing.baseUnit}</p>
+                  <p className="text-xs text-dark-600">{ing.unitOverride || ing.baseUnit}</p>
                 </div>
                 <div className="text-right flex items-center gap-3">
                   {counted ? (
@@ -267,7 +267,7 @@ export function CategoryCounter({ sessionId, category, onBack }: Props) {
                       <div>
                         <p className="text-sm font-semibold text-emerald-400">{counted}</p>
                         {line && (
-                          <p className="text-[10px] text-[#666] flex items-center gap-1">
+                          <p className="text-[10px] text-dark-500 flex items-center gap-1">
                             <User className="size-2.5" />
                             {new Date(line.countedDttm).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                           </p>
@@ -276,7 +276,7 @@ export function CategoryCounter({ sessionId, category, onBack }: Props) {
                       <Check className="size-4 text-emerald-400" />
                     </>
                   ) : (
-                    <span className="text-xs text-[#666]">Tap to count</span>
+                    <span className="text-xs text-dark-500">Tap to count</span>
                   )}
                 </div>
               </button>
@@ -304,10 +304,10 @@ function CategoryProgressRing({ counted, total }: { counted: number; total: numb
   return (
     <div className="relative w-12 h-12 flex items-center justify-center">
       <svg className="absolute inset-0 -rotate-90" viewBox="0 0 44 44">
-        <circle cx="22" cy="22" r={radius} fill="none" stroke="#2A2A2A" strokeWidth="3" />
+        <circle cx="22" cy="22" r={radius} fill="none" stroke="var(--color-dark-200)" strokeWidth="3" />
         <circle
           cx="22" cy="22" r={radius} fill="none"
-          stroke={pct >= 100 ? "#34d399" : "#D4A574"}
+          stroke={pct >= 100 ? "#34d399" : "var(--color-gold)"}
           strokeWidth="3"
           strokeDasharray={circumference}
           strokeDashoffset={offset}

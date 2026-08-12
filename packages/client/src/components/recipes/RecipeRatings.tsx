@@ -37,8 +37,8 @@ function StarIcon({
       size={size}
       className={`transition-colors ${className} ${
         filled
-          ? "fill-[#D4A574] text-[#D4A574]"
-          : "fill-none text-[#3A3A3A]"
+          ? "fill-gold text-gold"
+          : "fill-none text-dark-300"
       }`}
       onClick={onClick}
       onMouseEnter={onMouseEnter}
@@ -72,12 +72,12 @@ export function StarDisplay({
           size={size}
           className={
             n <= Math.round(avg)
-              ? "fill-[#D4A574] text-[#D4A574]"
-              : "fill-none text-[#3A3A3A]"
+              ? "fill-gold text-gold"
+              : "fill-none text-dark-300"
           }
         />
       ))}
-      <span className="text-xs text-[#999999] ml-1">
+      <span className="text-xs text-dark-600 ml-1">
         {cnt === 0 ? "No ratings yet" : `${avg.toFixed(1)} (${cnt})`}
       </span>
     </div>
@@ -100,7 +100,7 @@ export default function RecipeRatings({ recipeId, compact }: RecipeRatingsProps)
   const [showAllReviews, setShowAllReviews] = useState(false);
 
   if (loading && !data) {
-    return <div className="py-4 text-center text-[#999999] text-sm">Loading ratings...</div>;
+    return <div className="py-4 text-center text-dark-600 text-sm">Loading ratings...</div>;
   }
   if (!data) return null;
 
@@ -149,7 +149,7 @@ export default function RecipeRatings({ recipeId, compact }: RecipeRatingsProps)
   }
 
   return (
-    <div className="mx-6 md:mx-10 mb-6 border-t border-[#2A2A2A] pt-6">
+    <div className="mx-6 md:mx-10 mb-6 border-t border-dark-200 pt-6">
       {/* Average rating header */}
       <div className="flex items-center gap-4 mb-4">
         <div className="flex items-center gap-1">
@@ -159,8 +159,8 @@ export default function RecipeRatings({ recipeId, compact }: RecipeRatingsProps)
               size={24}
               className={
                 n <= Math.round(data.average)
-                  ? "fill-[#D4A574] text-[#D4A574]"
-                  : "fill-none text-[#3A3A3A]"
+                  ? "fill-gold text-gold"
+                  : "fill-none text-dark-300"
               }
             />
           ))}
@@ -168,7 +168,7 @@ export default function RecipeRatings({ recipeId, compact }: RecipeRatingsProps)
         <div className="text-sm text-[#E5E5E5]">
           <span className="font-semibold text-[#FAFAFA]">{data.average.toFixed(1)}</span>
           {" "}out of 5
-          <span className="text-[#666666] ml-1">
+          <span className="text-dark-500 ml-1">
             ({data.count} {data.count === 1 ? "rating" : "ratings"})
           </span>
         </div>
@@ -180,14 +180,14 @@ export default function RecipeRatings({ recipeId, compact }: RecipeRatingsProps)
           const pct = data.count > 0 ? ((data.distribution[n] ?? 0) / data.count) * 100 : 0;
           return (
             <div key={n} className="contents">
-              <span className="text-xs text-[#999999] w-10 text-right whitespace-nowrap">{n} star</span>
-              <div className="h-2 bg-[#2A2A2A] rounded-full self-center overflow-hidden">
+              <span className="text-xs text-dark-600 w-10 text-right whitespace-nowrap">{n} star</span>
+              <div className="h-2 bg-dark-200 rounded-full self-center overflow-hidden">
                 <div
-                  className="h-full bg-[#D4A574] rounded-full transition-all"
+                  className="h-full bg-gold rounded-full transition-all"
                   style={{ width: `${pct}%` }}
                 />
               </div>
-              <span className="text-xs text-[#666666] w-6">{data.distribution[n] ?? 0}</span>
+              <span className="text-xs text-dark-500 w-6">{data.distribution[n] ?? 0}</span>
             </div>
           );
         })}
@@ -212,14 +212,14 @@ export default function RecipeRatings({ recipeId, compact }: RecipeRatingsProps)
               />
             ))}
             {data.userRating && (
-              <span className="text-xs text-[#999999] ml-2">
+              <span className="text-xs text-dark-600 ml-2">
                 You rated this {data.userRating}/5
               </span>
             )}
           </div>
         </div>
       ) : (
-        <p className="text-sm text-[#999999] italic mb-4">
+        <p className="text-sm text-dark-600 italic mb-4">
           Sign in to rate this recipe
         </p>
       )}
@@ -230,14 +230,14 @@ export default function RecipeRatings({ recipeId, compact }: RecipeRatingsProps)
       {user && !showReviewForm && (
         <button
           onClick={() => setShowReviewForm(true)}
-          className="text-sm text-[#D4A574] hover:text-[#C4956A] font-medium mb-4"
+          className="text-sm text-gold hover:text-gold-hover font-medium mb-4"
         >
           Write a Review
         </button>
       )}
 
       {showReviewForm && (
-        <form onSubmit={handleReviewSubmit} className="mb-6 p-4 bg-[#1E1E1E] rounded-xl space-y-3 border border-[#2A2A2A]">
+        <form onSubmit={handleReviewSubmit} className="mb-6 p-4 bg-dark-100 rounded-xl space-y-3 border border-dark-200">
           <p className="text-sm font-medium text-[#FAFAFA]">Your Review</p>
 
           {/* Review star rating */}
@@ -254,7 +254,7 @@ export default function RecipeRatings({ recipeId, compact }: RecipeRatingsProps)
               />
             ))}
             {reviewRating > 0 && (
-              <span className="text-xs text-[#999999] ml-2">{reviewRating}/5</span>
+              <span className="text-xs text-dark-600 ml-2">{reviewRating}/5</span>
             )}
           </div>
 
@@ -264,7 +264,7 @@ export default function RecipeRatings({ recipeId, compact }: RecipeRatingsProps)
             value={reviewTitle}
             onChange={(e) => setReviewTitle(e.target.value)}
             maxLength={200}
-            className="w-full px-4 py-3 text-sm text-white bg-[#0A0A0A] border border-[#2A2A2A] rounded-xl placeholder-[#444444] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-[#D4A574]"
+            className="w-full px-4 py-3 text-sm text-white bg-dark border border-dark-200 rounded-xl placeholder-dark-400 focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-gold"
           />
 
           <textarea
@@ -273,14 +273,14 @@ export default function RecipeRatings({ recipeId, compact }: RecipeRatingsProps)
             onChange={(e) => setReviewBody(e.target.value)}
             rows={4}
             maxLength={5000}
-            className="w-full px-4 py-3 text-sm text-white bg-[#0A0A0A] border border-[#2A2A2A] rounded-xl placeholder-[#444444] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-[#D4A574] resize-none"
+            className="w-full px-4 py-3 text-sm text-white bg-dark border border-dark-200 rounded-xl placeholder-dark-400 focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-gold resize-none"
           />
 
           <div className="flex items-center gap-2">
             <button
               type="submit"
               disabled={submitting || reviewRating === 0 || reviewBody.length < 10}
-              className="px-4 py-2 text-sm bg-[#D4A574] text-[#0A0A0A] rounded-lg hover:bg-[#C4956A] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="px-4 py-2 text-sm bg-gold text-dark rounded-lg hover:bg-gold-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {submitting ? "Submitting..." : "Submit Review"}
             </button>
@@ -290,7 +290,7 @@ export default function RecipeRatings({ recipeId, compact }: RecipeRatingsProps)
                 setShowReviewForm(false);
                 setError("");
               }}
-              className="px-4 py-2 text-sm text-[#999999] hover:text-white"
+              className="px-4 py-2 text-sm text-dark-600 hover:text-white"
             >
               Cancel
             </button>
@@ -306,7 +306,7 @@ export default function RecipeRatings({ recipeId, compact }: RecipeRatingsProps)
           </p>
 
           {visibleReviews.map((review) => (
-            <div key={review.reviewId} className="p-4 bg-[#1E1E1E] border border-[#2A2A2A] rounded-xl">
+            <div key={review.reviewId} className="p-4 bg-dark-100 border border-dark-200 rounded-xl">
               <div className="flex items-start justify-between">
                 <div>
                   <div className="flex items-center gap-2 mb-1">
@@ -317,8 +317,8 @@ export default function RecipeRatings({ recipeId, compact }: RecipeRatingsProps)
                           size={14}
                           className={
                             n <= review.rating
-                              ? "fill-[#D4A574] text-[#D4A574]"
-                              : "fill-none text-[#3A3A3A]"
+                              ? "fill-gold text-gold"
+                              : "fill-none text-dark-300"
                           }
                         />
                       ))}
@@ -326,7 +326,7 @@ export default function RecipeRatings({ recipeId, compact }: RecipeRatingsProps)
                     <span className="text-xs font-medium text-[#FAFAFA]">
                       {review.userName}
                     </span>
-                    <span className="text-xs text-[#666666]">
+                    <span className="text-xs text-dark-500">
                       {new Date(review.createdDttm).toLocaleDateString()}
                     </span>
                   </div>
@@ -342,7 +342,7 @@ export default function RecipeRatings({ recipeId, compact }: RecipeRatingsProps)
                 {user && (user.userId === review.userId || user.roles?.includes("Administrator")) && (
                   <button
                     onClick={() => handleDelete(review.reviewId)}
-                    className="text-[#666666] hover:text-red-400 transition-colors ml-2 shrink-0"
+                    className="text-dark-500 hover:text-red-400 transition-colors ml-2 shrink-0"
                     title="Delete your review"
                   >
                     <Trash2 size={14} />
@@ -355,7 +355,7 @@ export default function RecipeRatings({ recipeId, compact }: RecipeRatingsProps)
           {data.reviews.length > 3 && (
             <button
               onClick={() => setShowAllReviews(!showAllReviews)}
-              className="flex items-center gap-1 text-sm text-[#D4A574] hover:text-[#C4956A]"
+              className="flex items-center gap-1 text-sm text-gold hover:text-gold-hover"
             >
               {showAllReviews ? (
                 <>

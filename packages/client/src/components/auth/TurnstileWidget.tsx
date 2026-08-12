@@ -169,7 +169,7 @@ export const TurnstileWidget = forwardRef<TurnstileHandle, Props>(
     return (
       <div className="min-h-[65px] flex items-center justify-center">
         {status === "loading" && (
-          <div className="flex items-center gap-2 text-sm text-[#666666]">
+          <div className="flex items-center gap-2 text-sm text-dark-500">
             <Loader2 className="size-4 animate-spin" />
             Loading security check…
           </div>

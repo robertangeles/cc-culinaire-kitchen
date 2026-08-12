@@ -81,8 +81,8 @@ function AccordionSection({
     <div
       className={`rounded-2xl border transition-all duration-300 ${
         isOpen
-          ? "bg-[#161616]/80 backdrop-blur-sm border-[rgba(212,165,116,0.25)] shadow-[0_0_16px_rgba(212,165,116,0.06)]"
-          : "bg-[#161616]/50 border-[#2A2A2A] hover:border-[#3A3A3A]"
+          ? "bg-dark-50/80 backdrop-blur-sm border-[var(--color-border-gold)] shadow-[0_0_16px_rgba(212,165,116,0.06)]"
+          : "bg-dark-50/50 border-dark-200 hover:border-dark-300"
       }`}
     >
       <button
@@ -93,8 +93,8 @@ function AccordionSection({
         <div
           className={`flex items-center justify-center size-9 rounded-xl transition-colors ${
             isOpen
-              ? "bg-[#D4A574]/15 text-[#D4A574]"
-              : "bg-[#2A2A2A] text-[#666666] group-hover:text-[#999999]"
+              ? "bg-gold/15 text-gold"
+              : "bg-dark-200 text-dark-500 group-hover:text-dark-600"
           }`}
         >
           <Icon className="size-4" />
@@ -106,10 +106,10 @@ function AccordionSection({
               <span className="size-2 rounded-full bg-emerald-400 flex-shrink-0" />
             )}
           </div>
-          <p className="text-xs text-[#666666] truncate">{subtitle}</p>
+          <p className="text-xs text-dark-500 truncate">{subtitle}</p>
         </div>
         <ChevronRight
-          className={`size-4 text-[#666666] transition-transform duration-300 flex-shrink-0 ${
+          className={`size-4 text-dark-500 transition-transform duration-300 flex-shrink-0 ${
             isOpen ? "rotate-90" : ""
           }`}
         />
@@ -157,10 +157,10 @@ function ChipSelect({
             disabled={!!atMax}
             className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all duration-150 ${
               isSelected
-                ? "bg-[#D4A574]/15 text-[#D4A574] border-[#D4A574]/30 shadow-[0_0_8px_rgba(212,165,116,0.1)]"
+                ? "bg-gold/15 text-gold border-gold/30 shadow-[0_0_8px_rgba(212,165,116,0.1)]"
                 : atMax
-                  ? "bg-[#1E1E1E] text-[#444444] border-[#2A2A2A] cursor-not-allowed"
-                  : "bg-[#1E1E1E] text-[#999999] border-[#2A2A2A] hover:border-[#3A3A3A] hover:text-[#E5E5E5]"
+                  ? "bg-dark-100 text-dark-400 border-dark-200 cursor-not-allowed"
+                  : "bg-dark-100 text-dark-600 border-dark-200 hover:border-dark-300 hover:text-[#E5E5E5]"
             }`}
           >
             {opt.label}
@@ -189,8 +189,8 @@ function RadioSelect({
           onClick={() => onSelect(selected === opt.value ? "" : opt.value)}
           className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all duration-150 ${
             selected === opt.value
-              ? "bg-[#D4A574]/15 text-[#D4A574] border-[#D4A574]/30 shadow-[0_0_8px_rgba(212,165,116,0.1)]"
-              : "bg-[#1E1E1E] text-[#999999] border-[#2A2A2A] hover:border-[#3A3A3A] hover:text-[#E5E5E5]"
+              ? "bg-gold/15 text-gold border-gold/30 shadow-[0_0_8px_rgba(212,165,116,0.1)]"
+              : "bg-dark-100 text-dark-600 border-dark-200 hover:border-dark-300 hover:text-[#E5E5E5]"
           }`}
         >
           {opt.label}
@@ -218,7 +218,7 @@ function TextInputWithCounter({
   rows?: number;
 }) {
   const fieldClass =
-    "w-full rounded-xl border border-[#2A2A2A] bg-[#0A0A0A] px-3 py-2 text-sm text-[#E5E5E5] placeholder:text-[#444444] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-transparent transition-shadow";
+    "w-full rounded-xl border border-dark-200 bg-dark px-3 py-2 text-sm text-[#E5E5E5] placeholder:text-dark-400 focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-transparent transition-shadow";
   return (
     <div>
       {multiline ? (
@@ -239,10 +239,10 @@ function TextInputWithCounter({
         />
       )}
       <div className="flex justify-between mt-1">
-        {helperText && <p className="text-[10px] text-[#666666] italic">{helperText}</p>}
+        {helperText && <p className="text-[10px] text-dark-500 italic">{helperText}</p>}
         <span
           className={`text-[10px] ml-auto ${
-            value.length > maxLength * 0.9 ? "text-[#D4A574]" : "text-[#666666]"
+            value.length > maxLength * 0.9 ? "text-gold" : "text-dark-500"
           }`}
         >
           {value.length}/{maxLength}
@@ -253,7 +253,7 @@ function TextInputWithCounter({
 }
 
 const inputClass =
-  "w-full rounded-xl border border-[#2A2A2A] bg-[#0A0A0A] px-3 py-2 text-sm text-[#E5E5E5] placeholder:text-[#444444] focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50 focus:border-transparent transition-shadow";
+  "w-full rounded-xl border border-dark-200 bg-dark px-3 py-2 text-sm text-[#E5E5E5] placeholder:text-dark-400 focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-transparent transition-shadow";
 
 // ---------------------------------------------------------------------------
 // Component
@@ -444,7 +444,7 @@ export function MyKitchenTab({ isOrgAdmin = false }: { isOrgAdmin?: boolean }) {
 
   if (loading || optionsLoading) {
     return (
-      <div className="flex items-center justify-center py-12 text-[#666666]">
+      <div className="flex items-center justify-center py-12 text-dark-500">
         <Loader2 className="size-5 animate-spin mr-2" />
         Loading kitchen profile…
       </div>
@@ -457,7 +457,7 @@ export function MyKitchenTab({ isOrgAdmin = false }: { isOrgAdmin?: boolean }) {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-base font-semibold text-[#E5E5E5]">Kitchen Profile</h2>
-          <p className="text-xs text-[#666666] mt-0.5">
+          <p className="text-xs text-dark-500 mt-0.5">
             These preferences shape every AI conversation and recipe.
           </p>
         </div>
@@ -465,7 +465,7 @@ export function MyKitchenTab({ isOrgAdmin = false }: { isOrgAdmin?: boolean }) {
           type="button"
           onClick={handleSave}
           disabled={saving}
-          className={`flex items-center gap-2 px-4 py-2 text-sm font-medium text-[#0A0A0A] bg-[#D4A574] rounded-xl hover:bg-[#C4956A] disabled:opacity-50 disabled:cursor-not-allowed transition-all ${
+          className={`flex items-center gap-2 px-4 py-2 text-sm font-medium text-dark bg-gold rounded-xl hover:bg-gold-hover disabled:opacity-50 disabled:cursor-not-allowed transition-all ${
             saving ? "" : "hover:shadow-[0_0_20px_rgba(212,165,116,0.2)]"
           }`}
         >
@@ -497,7 +497,7 @@ export function MyKitchenTab({ isOrgAdmin = false }: { isOrgAdmin?: boolean }) {
       >
         {/* Skill Level */}
         <div>
-          <label className="block text-xs font-medium text-[#999999] uppercase tracking-wider mb-2">
+          <label className="block text-xs font-medium text-dark-600 uppercase tracking-wider mb-2">
             Skill Level
           </label>
           <div className="grid grid-cols-1 gap-1.5">
@@ -510,19 +510,19 @@ export function MyKitchenTab({ isOrgAdmin = false }: { isOrgAdmin?: boolean }) {
                 }
                 className={`flex items-center gap-3 rounded-xl border px-4 py-2.5 text-left transition-all duration-150 ${
                   form.skillLevel === level.optionValue
-                    ? "border-[#D4A574]/30 bg-[#D4A574]/10 shadow-[0_0_12px_rgba(212,165,116,0.06)]"
-                    : "border-[#2A2A2A] bg-[#0A0A0A] hover:border-[#3A3A3A]"
+                    ? "border-gold/30 bg-gold/10 shadow-[0_0_12px_rgba(212,165,116,0.06)]"
+                    : "border-dark-200 bg-dark hover:border-dark-300"
                 }`}
               >
                 <span
                   className={`size-4 flex-shrink-0 rounded-full border-2 flex items-center justify-center transition-colors ${
                     form.skillLevel === level.optionValue
-                      ? "border-[#D4A574]"
-                      : "border-[#3A3A3A]"
+                      ? "border-gold"
+                      : "border-dark-300"
                   }`}
                 >
                   {form.skillLevel === level.optionValue && (
-                    <span className="size-2 rounded-full bg-[#D4A574]" />
+                    <span className="size-2 rounded-full bg-gold" />
                   )}
                 </span>
                 <span>
@@ -530,7 +530,7 @@ export function MyKitchenTab({ isOrgAdmin = false }: { isOrgAdmin?: boolean }) {
                     {level.optionLabel}
                   </span>
                   {level.optionDescription && (
-                    <span className="text-xs text-[#666666] block">
+                    <span className="text-xs text-dark-500 block">
                       {level.optionDescription}
                     </span>
                   )}
@@ -544,7 +544,7 @@ export function MyKitchenTab({ isOrgAdmin = false }: { isOrgAdmin?: boolean }) {
           <>
             {/* Cuisine Preferences */}
             <div>
-              <label className="block text-xs font-medium text-[#999999] uppercase tracking-wider mb-2">
+              <label className="block text-xs font-medium text-dark-600 uppercase tracking-wider mb-2">
                 Cuisine Preferences
               </label>
               <div className="flex flex-wrap gap-2">
@@ -555,8 +555,8 @@ export function MyKitchenTab({ isOrgAdmin = false }: { isOrgAdmin?: boolean }) {
                     onClick={() => toggleChip("cuisinePreferences", opt.optionLabel)}
                     className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all duration-150 ${
                       form.cuisinePreferences.includes(opt.optionLabel)
-                        ? "bg-[#D4A574]/15 text-[#D4A574] border-[#D4A574]/30 shadow-[0_0_8px_rgba(212,165,116,0.1)]"
-                        : "bg-[#1E1E1E] text-[#999999] border-[#2A2A2A] hover:border-[#3A3A3A] hover:text-[#E5E5E5]"
+                        ? "bg-gold/15 text-gold border-gold/30 shadow-[0_0_8px_rgba(212,165,116,0.1)]"
+                        : "bg-dark-100 text-dark-600 border-dark-200 hover:border-dark-300 hover:text-[#E5E5E5]"
                     }`}
                   >
                     {opt.optionLabel}
@@ -567,7 +567,7 @@ export function MyKitchenTab({ isOrgAdmin = false }: { isOrgAdmin?: boolean }) {
 
             {/* Dietary Restrictions */}
             <div>
-              <label className="block text-xs font-medium text-[#999999] uppercase tracking-wider mb-2">
+              <label className="block text-xs font-medium text-dark-600 uppercase tracking-wider mb-2">
                 Dietary Restrictions
               </label>
               <div className="flex flex-wrap gap-2">
@@ -578,8 +578,8 @@ export function MyKitchenTab({ isOrgAdmin = false }: { isOrgAdmin?: boolean }) {
                     onClick={() => toggleChip("dietaryRestrictions", opt.optionLabel)}
                     className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all duration-150 ${
                       form.dietaryRestrictions.includes(opt.optionLabel)
-                        ? "bg-[#D4A574]/15 text-[#D4A574] border-[#D4A574]/30 shadow-[0_0_8px_rgba(212,165,116,0.1)]"
-                        : "bg-[#1E1E1E] text-[#999999] border-[#2A2A2A] hover:border-[#3A3A3A] hover:text-[#E5E5E5]"
+                        ? "bg-gold/15 text-gold border-gold/30 shadow-[0_0_8px_rgba(212,165,116,0.1)]"
+                        : "bg-dark-100 text-dark-600 border-dark-200 hover:border-dark-300 hover:text-[#E5E5E5]"
                     }`}
                   >
                     {opt.optionLabel}
@@ -603,7 +603,7 @@ export function MyKitchenTab({ isOrgAdmin = false }: { isOrgAdmin?: boolean }) {
         >
           {/* Kitchen Equipment */}
           <div>
-            <label className="block text-xs font-medium text-[#999999] uppercase tracking-wider mb-2">
+            <label className="block text-xs font-medium text-dark-600 uppercase tracking-wider mb-2">
               Kitchen Equipment
             </label>
             <div className="flex flex-wrap gap-2">
@@ -614,8 +614,8 @@ export function MyKitchenTab({ isOrgAdmin = false }: { isOrgAdmin?: boolean }) {
                   onClick={() => toggleChip("kitchenEquipment", opt.optionLabel)}
                   className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all duration-150 ${
                     form.kitchenEquipment.includes(opt.optionLabel)
-                      ? "bg-[#D4A574]/15 text-[#D4A574] border-[#D4A574]/30 shadow-[0_0_8px_rgba(212,165,116,0.1)]"
-                      : "bg-[#1E1E1E] text-[#999999] border-[#2A2A2A] hover:border-[#3A3A3A] hover:text-[#E5E5E5]"
+                      ? "bg-gold/15 text-gold border-gold/30 shadow-[0_0_8px_rgba(212,165,116,0.1)]"
+                      : "bg-dark-100 text-dark-600 border-dark-200 hover:border-dark-300 hover:text-[#E5E5E5]"
                   }`}
                 >
                   {opt.optionLabel}
@@ -626,10 +626,10 @@ export function MyKitchenTab({ isOrgAdmin = false }: { isOrgAdmin?: boolean }) {
 
           {/* Default Servings */}
           <div>
-            <label className="block text-xs font-medium text-[#999999] uppercase tracking-wider mb-1">
+            <label className="block text-xs font-medium text-dark-600 uppercase tracking-wider mb-1">
               Default Servings
             </label>
-            <p className="text-[10px] text-[#666666] mb-2">
+            <p className="text-[10px] text-dark-500 mb-2">
               How many portions should recipes default to?
             </p>
             <input
@@ -649,9 +649,9 @@ export function MyKitchenTab({ isOrgAdmin = false }: { isOrgAdmin?: boolean }) {
 
           {/* Kitchen Constraints */}
           <div>
-            <label className="block text-xs font-medium text-[#999999] uppercase tracking-wider mb-2">
+            <label className="block text-xs font-medium text-dark-600 uppercase tracking-wider mb-2">
               Kitchen Constraints
-              <span className="text-[#444444] font-normal ml-1 normal-case tracking-normal">(optional)</span>
+              <span className="text-dark-400 font-normal ml-1 normal-case tracking-normal">(optional)</span>
             </label>
             <ChipSelect
               options={KITCHEN_CONSTRAINTS_OPTIONS}
@@ -674,7 +674,7 @@ export function MyKitchenTab({ isOrgAdmin = false }: { isOrgAdmin?: boolean }) {
         >
           {/* Restaurant Name */}
           <div>
-            <label className="block text-xs font-medium text-[#999999] uppercase tracking-wider mb-1">
+            <label className="block text-xs font-medium text-dark-600 uppercase tracking-wider mb-1">
               Restaurant or Business Name
             </label>
             <TextInputWithCounter
@@ -688,7 +688,7 @@ export function MyKitchenTab({ isOrgAdmin = false }: { isOrgAdmin?: boolean }) {
 
           {/* Establishment Type */}
           <div>
-            <label className="block text-xs font-medium text-[#999999] uppercase tracking-wider mb-2">
+            <label className="block text-xs font-medium text-dark-600 uppercase tracking-wider mb-2">
               Type of Establishment
             </label>
             <RadioSelect
@@ -714,7 +714,7 @@ export function MyKitchenTab({ isOrgAdmin = false }: { isOrgAdmin?: boolean }) {
 
           {/* Cuisine Identity */}
           <div>
-            <label className="block text-xs font-medium text-[#999999] uppercase tracking-wider mb-1">
+            <label className="block text-xs font-medium text-dark-600 uppercase tracking-wider mb-1">
               Cuisine Identity of Your Menu
             </label>
             <TextInputWithCounter
@@ -729,7 +729,7 @@ export function MyKitchenTab({ isOrgAdmin = false }: { isOrgAdmin?: boolean }) {
 
           {/* Target Diner */}
           <div>
-            <label className="block text-xs font-medium text-[#999999] uppercase tracking-wider mb-1">
+            <label className="block text-xs font-medium text-dark-600 uppercase tracking-wider mb-1">
               Who is Your Target Diner?
             </label>
             <TextInputWithCounter
@@ -743,7 +743,7 @@ export function MyKitchenTab({ isOrgAdmin = false }: { isOrgAdmin?: boolean }) {
 
           {/* Price Point */}
           <div>
-            <label className="block text-xs font-medium text-[#999999] uppercase tracking-wider mb-2">
+            <label className="block text-xs font-medium text-dark-600 uppercase tracking-wider mb-2">
               Average Price Point Per Main Course
             </label>
             <RadioSelect
@@ -755,7 +755,7 @@ export function MyKitchenTab({ isOrgAdmin = false }: { isOrgAdmin?: boolean }) {
 
           {/* Restaurant Voice */}
           <div>
-            <label className="block text-xs font-medium text-[#999999] uppercase tracking-wider mb-1">
+            <label className="block text-xs font-medium text-dark-600 uppercase tracking-wider mb-1">
               Your Restaurant's Voice or Personality
             </label>
             <TextInputWithCounter
@@ -782,9 +782,9 @@ export function MyKitchenTab({ isOrgAdmin = false }: { isOrgAdmin?: boolean }) {
         >
           {/* Sourcing Values */}
           <div>
-            <label className="block text-xs font-medium text-[#999999] uppercase tracking-wider mb-2">
+            <label className="block text-xs font-medium text-dark-600 uppercase tracking-wider mb-2">
               Sourcing Values
-              <span className="text-[#444444] font-normal ml-1 normal-case tracking-normal">(optional)</span>
+              <span className="text-dark-400 font-normal ml-1 normal-case tracking-normal">(optional)</span>
             </label>
             <ChipSelect
               options={SOURCING_VALUES.filter((o) => o.value !== "other")}
@@ -802,7 +802,7 @@ export function MyKitchenTab({ isOrgAdmin = false }: { isOrgAdmin?: boolean }) {
 
           {/* Plating Style */}
           <div>
-            <label className="block text-xs font-medium text-[#999999] uppercase tracking-wider mb-2">
+            <label className="block text-xs font-medium text-dark-600 uppercase tracking-wider mb-2">
               Plating Style That Fits Your Menu
             </label>
             <RadioSelect
@@ -814,9 +814,9 @@ export function MyKitchenTab({ isOrgAdmin = false }: { isOrgAdmin?: boolean }) {
 
           {/* Menu Needs */}
           <div>
-            <label className="block text-xs font-medium text-[#999999] uppercase tracking-wider mb-2">
+            <label className="block text-xs font-medium text-dark-600 uppercase tracking-wider mb-2">
               What Does Your Menu Need Right Now?
-              <span className="text-[#444444] font-normal ml-1 normal-case tracking-normal">(pick up to 3)</span>
+              <span className="text-dark-400 font-normal ml-1 normal-case tracking-normal">(pick up to 3)</span>
             </label>
             <ChipSelect
               options={MENU_NEEDS}

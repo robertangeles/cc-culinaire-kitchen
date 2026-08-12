@@ -417,25 +417,25 @@ export function UserDetailPanel({ user, availableRoles, onClose, onRefresh }: Us
       <div className="absolute inset-0 bg-black/20" />
 
       {/* Panel */}
-      <div className="relative w-full max-w-lg bg-[#161616] shadow-2xl shadow-black/40 flex flex-col">
+      <div className="relative w-full max-w-lg bg-dark-50 shadow-2xl shadow-black/40 flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[#2A2A2A]">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-dark-200">
           <div className="flex items-center gap-3">
             {user.userPhotoPath ? (
               <img src={user.userPhotoPath} alt="" className="size-10 rounded-full object-cover" />
             ) : (
-              <div className="size-10 rounded-full bg-[#D4A574]/15 flex items-center justify-center text-sm font-semibold text-[#D4A574]">
+              <div className="size-10 rounded-full bg-gold/15 flex items-center justify-center text-sm font-semibold text-gold">
                 {initials}
               </div>
             )}
             <div>
               <h2 className="text-lg font-semibold text-[#FAFAFA]">{user.userName}</h2>
-              <p className="text-sm text-[#999999]">{user.userEmail}</p>
+              <p className="text-sm text-dark-600">{user.userEmail}</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1 text-[#999999] hover:text-[#E5E5E5] transition-colors"
+            className="p-1 text-dark-600 hover:text-[#E5E5E5] transition-colors"
           >
             <X className="size-5" />
           </button>
@@ -446,7 +446,7 @@ export function UserDetailPanel({ user, availableRoles, onClose, onRefresh }: Us
           {/* Account Info */}
           <div>
             <div className="flex items-center gap-2 mb-2">
-              <User className="size-4 text-[#999999]" />
+              <User className="size-4 text-dark-600" />
               <h3 className="text-sm font-semibold text-[#E5E5E5] uppercase tracking-wider">Account</h3>
               {!editing && (
                 <button
@@ -457,7 +457,7 @@ export function UserDetailPanel({ user, availableRoles, onClose, onRefresh }: Us
                     setSaveError("");
                     setEditing(true);
                   }}
-                  className="ml-auto p-1 text-[#999999] hover:text-[#D4A574] transition-colors"
+                  className="ml-auto p-1 text-dark-600 hover:text-gold transition-colors"
                   title="Edit account details"
                 >
                   <Pencil className="size-3.5" />
@@ -474,29 +474,29 @@ export function UserDetailPanel({ user, availableRoles, onClose, onRefresh }: Us
               {editing ? (
                 <>
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-[#999999]">Name</span>
+                    <span className="text-sm text-dark-600">Name</span>
                     <input
                       type="text"
                       value={editName}
                       onChange={(e) => setEditName(e.target.value)}
-                      className="w-48 rounded-lg border border-[#2A2A2A] px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50"
+                      className="w-48 rounded-lg border border-dark-200 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-gold/50"
                     />
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-[#999999]">Email</span>
+                    <span className="text-sm text-dark-600">Email</span>
                     <input
                       type="email"
                       value={editEmail}
                       onChange={(e) => setEditEmail(e.target.value)}
-                      className="w-48 rounded-lg border border-[#2A2A2A] px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50"
+                      className="w-48 rounded-lg border border-dark-200 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-gold/50"
                     />
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-[#999999]">Status</span>
+                    <span className="text-sm text-dark-600">Status</span>
                     <select
                       value={editStatus}
                       onChange={(e) => setEditStatus(e.target.value)}
-                      className="w-48 rounded-lg border border-[#2A2A2A] px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50"
+                      className="w-48 rounded-lg border border-dark-200 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-gold/50"
                     >
                       <option value="active">active</option>
                       <option value="suspended">suspended</option>
@@ -507,7 +507,7 @@ export function UserDetailPanel({ user, availableRoles, onClose, onRefresh }: Us
                     <button
                       onClick={handleSave}
                       disabled={saving}
-                      className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-[#D4A574] rounded-lg hover:bg-[#C4956A] disabled:opacity-50 transition-colors"
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-gold rounded-lg hover:bg-gold-hover disabled:opacity-50 transition-colors"
                     >
                       {saving ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
                       Save
@@ -526,7 +526,7 @@ export function UserDetailPanel({ user, availableRoles, onClose, onRefresh }: Us
               ) : (
                 <>
                   <InfoRow label="Status">
-                    <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${statusColors[user.userStatus] ?? "bg-[#1E1E1E] text-[#E5E5E5]"}`}>
+                    <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${statusColors[user.userStatus] ?? "bg-dark-100 text-[#E5E5E5]"}`}>
                       {user.userStatus}
                     </span>
                   </InfoRow>
@@ -549,7 +549,7 @@ export function UserDetailPanel({ user, availableRoles, onClose, onRefresh }: Us
 
           {/* Profile (bio + address + social) — loaded async */}
           {profileLoading ? (
-            <div className="flex items-center gap-2 text-sm text-[#999999]">
+            <div className="flex items-center gap-2 text-sm text-dark-600">
               <Loader2 className="size-4 animate-spin" /> Loading profile…
             </div>
           ) : fullProfile && (
@@ -579,7 +579,7 @@ export function UserDetailPanel({ user, availableRoles, onClose, onRefresh }: Us
                           href={fullProfile[key] as string}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-sm text-[#D4A574] hover:underline truncate max-w-[200px] block"
+                          className="text-sm text-gold hover:underline truncate max-w-[200px] block"
                         >
                           {fullProfile[key] as string}
                         </a>
@@ -597,7 +597,7 @@ export function UserDetailPanel({ user, availableRoles, onClose, onRefresh }: Us
                 user.roles.map((r) => (
                   <span
                     key={r}
-                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-[#D4A574]/10 text-[#D4A574] border border-[#D4A574]/20 cursor-pointer hover:bg-red-900/40 hover:text-red-400 hover:border-red-700/40 transition-colors"
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-gold/10 text-gold border border-gold/20 cursor-pointer hover:bg-red-900/40 hover:text-red-400 hover:border-red-700/40 transition-colors"
                     title={`Click to remove ${r}`}
                     onClick={() => handleRemoveRole(r)}
                   >
@@ -606,11 +606,11 @@ export function UserDetailPanel({ user, availableRoles, onClose, onRefresh }: Us
                   </span>
                 ))
               ) : (
-                <span className="text-sm text-[#999999] italic">No roles assigned</span>
+                <span className="text-sm text-dark-600 italic">No roles assigned</span>
               )}
               {unassignedRoles.length > 0 && (
                 <select
-                  className="text-xs border border-[#2A2A2A] rounded px-1.5 py-0.5 text-[#999999]"
+                  className="text-xs border border-dark-200 rounded px-1.5 py-0.5 text-dark-600"
                   value=""
                   onChange={(e) => {
                     if (e.target.value) handleAssignRole(parseInt(e.target.value));
@@ -658,7 +658,7 @@ export function UserDetailPanel({ user, availableRoles, onClose, onRefresh }: Us
                           href={orgDetails.organisationWebsite}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-[#D4A574] hover:underline text-sm truncate max-w-[200px] block"
+                          className="text-gold hover:underline text-sm truncate max-w-[200px] block"
                         >
                           {orgDetails.organisationWebsite}
                         </a>
@@ -679,7 +679,7 @@ export function UserDetailPanel({ user, availableRoles, onClose, onRefresh }: Us
                                 href={orgDetails[key] as string}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="text-sm text-[#D4A574] hover:underline truncate max-w-[200px] block"
+                                className="text-sm text-gold hover:underline truncate max-w-[200px] block"
                               >
                                 {orgDetails[key] as string}
                               </a>
@@ -691,14 +691,14 @@ export function UserDetailPanel({ user, availableRoles, onClose, onRefresh }: Us
                 )}
               </div>
             ) : (
-              <p className="text-sm text-[#999999] italic">Not a member of any organisation</p>
+              <p className="text-sm text-dark-600 italic">Not a member of any organisation</p>
             )}
           </Section>
 
           {/* Subscription — editable */}
           <div>
             <div className="flex items-center gap-2 mb-2">
-              <CreditCard className="size-4 text-[#999999]" />
+              <CreditCard className="size-4 text-dark-600" />
               <h3 className="text-sm font-semibold text-[#E5E5E5] uppercase tracking-wider">Subscription</h3>
               {!editingSub && (
                 <button
@@ -709,7 +709,7 @@ export function UserDetailPanel({ user, availableRoles, onClose, onRefresh }: Us
                     setSubError("");
                     setEditingSub(true);
                   }}
-                  className="ml-auto p-1 text-[#999999] hover:text-[#D4A574] transition-colors"
+                  className="ml-auto p-1 text-dark-600 hover:text-gold transition-colors"
                   title="Edit subscription"
                 >
                   <Pencil className="size-3.5" />
@@ -726,11 +726,11 @@ export function UserDetailPanel({ user, availableRoles, onClose, onRefresh }: Us
               {editingSub ? (
                 <>
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-[#999999]">Tier</span>
+                    <span className="text-sm text-dark-600">Tier</span>
                     <select
                       value={editTier}
                       onChange={(e) => setEditTier(e.target.value)}
-                      className="w-48 rounded-lg border border-[#2A2A2A] px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50"
+                      className="w-48 rounded-lg border border-dark-200 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-gold/50"
                     >
                       <option value="free">free</option>
                       <option value="starter">starter</option>
@@ -739,11 +739,11 @@ export function UserDetailPanel({ user, availableRoles, onClose, onRefresh }: Us
                     </select>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-[#999999]">Status</span>
+                    <span className="text-sm text-dark-600">Status</span>
                     <select
                       value={editSubStatus}
                       onChange={(e) => setEditSubStatus(e.target.value)}
-                      className="w-48 rounded-lg border border-[#2A2A2A] px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50"
+                      className="w-48 rounded-lg border border-dark-200 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-gold/50"
                     >
                       <option value="active">active</option>
                       <option value="cancelled">cancelled</option>
@@ -753,20 +753,20 @@ export function UserDetailPanel({ user, availableRoles, onClose, onRefresh }: Us
                     </select>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-[#999999]">Free Sessions</span>
+                    <span className="text-sm text-dark-600">Free Sessions</span>
                     <input
                       type="number"
                       min={0}
                       value={editFreeSessions}
                       onChange={(e) => setEditFreeSessions(parseInt(e.target.value) || 0)}
-                      className="w-48 rounded-lg border border-[#2A2A2A] px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50"
+                      className="w-48 rounded-lg border border-dark-200 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-gold/50"
                     />
                   </div>
                   <div className="flex items-center gap-2 pt-2">
                     <button
                       onClick={handleSaveSub}
                       disabled={savingSub}
-                      className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-[#D4A574] rounded-lg hover:bg-[#C4956A] disabled:opacity-50 transition-colors"
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-gold rounded-lg hover:bg-gold-hover disabled:opacity-50 transition-colors"
                     >
                       {savingSub ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
                       Save
@@ -801,7 +801,7 @@ export function UserDetailPanel({ user, availableRoles, onClose, onRefresh }: Us
             )}
             <button
               onClick={() => setShowEmailForm(!showEmailForm)}
-              className="flex items-center gap-1.5 text-sm text-[#D4A574] hover:text-[#D4A574] font-medium transition-colors"
+              className="flex items-center gap-1.5 text-sm text-gold hover:text-gold font-medium transition-colors"
             >
               {showEmailForm ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
               {showEmailForm ? "Hide" : "Compose Email"}
@@ -820,7 +820,7 @@ export function UserDetailPanel({ user, availableRoles, onClose, onRefresh }: Us
                   onChange={(e) => setEmailSubject(e.target.value)}
                   placeholder="Subject"
                   required
-                  className="w-full rounded-lg border border-[#2A2A2A] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50"
+                  className="w-full rounded-lg border border-dark-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gold/50"
                 />
                 <textarea
                   value={emailBody}
@@ -828,12 +828,12 @@ export function UserDetailPanel({ user, availableRoles, onClose, onRefresh }: Us
                   placeholder="Email body (HTML supported)"
                   required
                   rows={4}
-                  className="w-full rounded-lg border border-[#2A2A2A] px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[#D4A574]/50"
+                  className="w-full rounded-lg border border-dark-200 px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-gold/50"
                 />
                 <button
                   type="submit"
                   disabled={sendingEmail}
-                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-[#D4A574] rounded-lg hover:bg-[#C4956A] disabled:opacity-50 transition-colors"
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-gold rounded-lg hover:bg-gold-hover disabled:opacity-50 transition-colors"
                 >
                   {sendingEmail ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
                   Send Email
@@ -843,7 +843,7 @@ export function UserDetailPanel({ user, availableRoles, onClose, onRefresh }: Us
           </Section>
 
           {/* Delete User */}
-          <div className="border-t border-[#2A2A2A] pt-4">
+          <div className="border-t border-dark-200 pt-4">
             {deleteError && (
               <div className="flex items-center gap-2 text-sm text-red-400 mb-3">
                 <AlertCircle className="size-4" /> {deleteError}
@@ -904,7 +904,7 @@ function Section({ icon: Icon, title, children }: {
   return (
     <div>
       <div className="flex items-center gap-2 mb-2">
-        <Icon className="size-4 text-[#999999]" />
+        <Icon className="size-4 text-dark-600" />
         <h3 className="text-sm font-semibold text-[#E5E5E5] uppercase tracking-wider">{title}</h3>
       </div>
       <div className="pl-6 space-y-1.5">{children}</div>
@@ -916,7 +916,7 @@ function Section({ icon: Icon, title, children }: {
 function InfoRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex items-center justify-between">
-      <span className="text-sm text-[#999999]">{label}</span>
+      <span className="text-sm text-dark-600">{label}</span>
       <span className="text-sm text-[#FAFAFA]">{children}</span>
     </div>
   );

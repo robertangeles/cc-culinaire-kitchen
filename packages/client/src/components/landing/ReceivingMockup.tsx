@@ -51,7 +51,7 @@ export function ReceivingMockup() {
       initial={{ opacity: 0, y: 30 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.7, ease: "easeOut" }}
-      className="w-[300px] rounded-2xl border border-[#2A2A2A] bg-[#161616] p-5 shadow-2xl shadow-black/30"
+      className="w-[300px] rounded-2xl border border-dark-200 bg-dark-50 p-5 shadow-2xl shadow-black/30"
     >
       {/* Header */}
       <div className="mb-4">
@@ -64,7 +64,7 @@ export function ReceivingMockup() {
             In progress
           </span>
         </div>
-        <p className="mt-1 text-[11px] text-[#666666]">
+        <p className="mt-1 text-[11px] text-dark-500">
           PO-2024-0847 · Sysco Foods
         </p>
       </div>
@@ -80,16 +80,16 @@ export function ReceivingMockup() {
           <motion.div
             key={i}
             variants={itemVariants}
-            className="flex items-center gap-3 rounded-lg bg-[#1E1E1E] px-3 py-2.5"
+            className="flex items-center gap-3 rounded-lg bg-dark-100 px-3 py-2.5"
           >
             {/* Item info */}
             <div className="min-w-0 flex-1">
               <p className="text-xs font-medium text-white">{item.name}</p>
-              <p className="mt-0.5 text-[10px] text-[#666666]">
+              <p className="mt-0.5 text-[10px] text-dark-500">
                 Ordered: {item.ordered} · Received:{" "}
                 <span
                   className={
-                    item.status === "warn" ? "text-amber-400" : "text-[#666666]"
+                    item.status === "warn" ? "text-amber-400" : "text-dark-500"
                   }
                 >
                   {item.received}
@@ -130,7 +130,7 @@ export function ReceivingMockup() {
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 1, duration: 0.4 }}
-        className="mt-4 w-full rounded-lg bg-gradient-to-r from-[#D4A574] to-[#C4956A] py-2.5 text-xs font-semibold text-[#0A0A0A] shadow-lg shadow-[#D4A574]/20 transition-all hover:shadow-[#D4A574]/30"
+        className="mt-4 w-full rounded-lg bg-gradient-to-r from-gold to-gold-hover py-2.5 text-xs font-semibold text-dark shadow-lg shadow-gold/20 transition-all hover:shadow-gold/30"
       >
         Confirm receipt
       </motion.button>

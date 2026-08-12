@@ -85,7 +85,7 @@ export function DayInTheLife() {
           className="pointer-events-none absolute left-[127px] top-0 bottom-0 hidden w-px md:block"
           style={{
             background:
-              "linear-gradient(to bottom, transparent 0%, #2A2A2A 10%, #2A2A2A 90%, transparent 100%)",
+              "linear-gradient(to bottom, transparent 0%, var(--color-dark-200) 10%, var(--color-dark-200) 90%, transparent 100%)",
           }}
         />
 

@@ -335,12 +335,12 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
       <div className="flex items-center gap-3">
         <button
           onClick={onBack}
-          className="p-2 rounded-lg text-[#999] hover:text-white hover:bg-[#1E1E1E] transition-all"
+          className="p-2 rounded-lg text-dark-600 hover:text-white hover:bg-dark-100 transition-all"
         >
           <ArrowLeft className="size-4" />
         </button>
         <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-          <ShoppingCart className="size-5 text-[#D4A574]" />
+          <ShoppingCart className="size-5 text-gold" />
           New Purchase Order
         </h2>
       </div>
@@ -348,13 +348,13 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
       {/* Supplier + date row */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="md:col-span-2">
-          <label htmlFor="po-supplier" className="block text-xs text-[#999] mb-1">Supplier *</label>
+          <label htmlFor="po-supplier" className="block text-xs text-dark-600 mb-1">Supplier *</label>
           <select
             id="po-supplier"
             value={supplierId}
             onChange={(e) => setSupplierId(e.target.value)}
             className="w-full px-3 py-2 rounded-lg text-sm bg-[#1A1A1A] text-white
-              border border-[#2A2A2A] focus:border-[#D4A574]/40
+              border border-dark-200 focus:border-gold/40
               focus:shadow-[0_0_8px_rgba(212,165,116,0.12)] transition-all
               outline-none appearance-none"
           >
@@ -367,13 +367,13 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
           </select>
         </div>
         <div>
-          <label className="block text-xs text-[#999] mb-1">Expected delivery</label>
+          <label className="block text-xs text-dark-600 mb-1">Expected delivery</label>
           <input
             type="date"
             value={expectedDate}
             onChange={(e) => setExpectedDate(e.target.value)}
             className="w-full px-3 py-2 rounded-lg text-sm bg-[#1A1A1A] text-white
-              border border-[#2A2A2A] focus:border-[#D4A574]/40
+              border border-dark-200 focus:border-gold/40
               focus:shadow-[0_0_8px_rgba(212,165,116,0.12)] transition-all outline-none"
           />
         </div>
@@ -381,14 +381,14 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
 
       {/* Notes */}
       <div>
-        <label className="block text-xs text-[#999] mb-1">Notes</label>
+        <label className="block text-xs text-dark-600 mb-1">Notes</label>
         <textarea
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           rows={2}
           placeholder="Special instructions, delivery notes..."
           className="w-full px-3 py-2 rounded-lg text-sm bg-[#1A1A1A] text-white
-            border border-[#2A2A2A] focus:border-[#D4A574]/40
+            border border-dark-200 focus:border-gold/40
             focus:shadow-[0_0_8px_rgba(212,165,116,0.12)] transition-all
             outline-none resize-none placeholder:text-[#555]"
         />
@@ -397,10 +397,10 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
       {/* Order guides — the default way in. Pick the regular list and the draft
           arrives already filled to par; the catalog below stays as the fallback. */}
       {guides.length > 0 && (
-        <div className="rounded-xl bg-[#161616]/80 backdrop-blur-sm border border-[#2A2A2A] p-4">
+        <div className="rounded-xl bg-dark-50/80 backdrop-blur-sm border border-dark-200 p-4">
           <div className="flex items-center justify-between gap-3 mb-3">
             <h3 className="text-sm font-medium text-white flex items-center gap-2">
-              <BookOpen className="size-4 text-[#D4A574]" />
+              <BookOpen className="size-4 text-gold" />
               Order Guide
             </h3>
             {selectedGuideId && lines.length > 0 && (
@@ -408,8 +408,8 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
                 type="button"
                 onClick={orderEverythingToPar}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold
-                  bg-gradient-to-r from-[#D4A574] to-[#C4956A] text-[#0A0A0A]
-                  shadow-[0_0_12px_rgba(212,165,116,0.25)] hover:brightness-110 transition-all"
+                  bg-gradient-to-r from-gold to-gold-hover text-dark
+                  shadow-[0_0_12px_var(--color-border-gold)] hover:brightness-110 transition-all"
               >
                 <Sparkles className="size-3.5" />
                 Order everything to par
@@ -426,12 +426,12 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
                   onClick={() => applyGuide(g)}
                   className={`px-3 py-2 rounded-xl text-left transition-all border ${
                     active
-                      ? "bg-[#D4A574]/15 border-[#D4A574]/40 shadow-[0_0_10px_rgba(212,165,116,0.15)]"
-                      : "bg-[#1A1A1A] border-[#2A2A2A] hover:border-[#3A3A3A]"
+                      ? "bg-gold/15 border-gold/40 shadow-[0_0_10px_var(--color-gold-muted)]"
+                      : "bg-[#1A1A1A] border-dark-200 hover:border-dark-300"
                   }`}
                 >
                   <span
-                    className={`block text-xs font-medium ${active ? "text-[#D4A574]" : "text-white"}`}
+                    className={`block text-xs font-medium ${active ? "text-gold" : "text-white"}`}
                   >
                     {g.name}
                   </span>
@@ -446,7 +446,7 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
       )}
 
       {/* Add items */}
-      <div className="rounded-xl bg-[#161616]/80 backdrop-blur-sm border border-[#2A2A2A] p-4">
+      <div className="rounded-xl bg-dark-50/80 backdrop-blur-sm border border-dark-200 p-4">
         <h3 className="text-sm font-medium text-white mb-3">Line Items</h3>
 
         {/* Search. Category pills used to sit here: nobody orders by browsing
@@ -455,14 +455,14 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
         <div className="space-y-3 mb-3">
           {/* Search */}
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-[#666]" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-dark-500" />
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Filter items by name..."
               className="w-full pl-9 pr-3 py-2 rounded-lg text-sm bg-[#1A1A1A] text-white
-                border border-[#2A2A2A] focus:border-[#D4A574]/40
+                border border-dark-200 focus:border-gold/40
                 focus:shadow-[0_0_8px_rgba(212,165,116,0.12)] transition-all
                 outline-none placeholder:text-[#555]"
             />
@@ -478,9 +478,9 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
             that kicked off this whole rework. The columns are worth showing;
             showing them empty, unprompted, is not. */}
         {hasPickerIntent && filteredIngredients.length > 0 && (
-          <div className="max-h-48 overflow-y-auto rounded-lg border border-[#2A2A2A] bg-[#0A0A0A]/50 mb-3">
+          <div className="max-h-48 overflow-y-auto rounded-lg border border-dark-200 bg-dark/50 mb-3">
             {/* Column headers */}
-            <div className="sticky top-0 flex items-center gap-3 px-3 py-1.5 text-[10px] uppercase tracking-wider text-[#666] bg-[#141414] border-b border-[#2A2A2A]">
+            <div className="sticky top-0 flex items-center gap-3 px-3 py-1.5 text-[10px] uppercase tracking-wider text-dark-500 bg-[#141414] border-b border-dark-200">
               <div className="w-4 shrink-0" />
               <div className="flex-1">Item</div>
               <div className="w-12 text-center">UOM</div>
@@ -500,18 +500,18 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
                 <button
                   key={ing.ingredientId}
                   onClick={() => addLine(ing)}
-                  className="w-full text-left px-3 py-2 text-sm hover:bg-[#1E1E1E] transition-colors
+                  className="w-full text-left px-3 py-2 text-sm hover:bg-dark-100 transition-colors
                     border-b border-[#1A1A1A] last:border-0 flex items-center gap-3"
                 >
-                  <Plus className="size-4 text-[#D4A574] shrink-0" />
+                  <Plus className="size-4 text-gold shrink-0" />
                   <div className="flex-1 min-w-0">
                     <span className="text-white text-sm">{ing.ingredientName}</span>
                   </div>
-                  <div className="w-12 text-center text-xs text-[#666] shrink-0">
+                  <div className="w-12 text-center text-xs text-dark-500 shrink-0">
                     {ing.baseUnit}
                   </div>
                   <div className="w-14 text-right text-xs shrink-0">
-                    <span className={isLow ? "text-amber-400 font-medium" : "text-[#999]"}>
+                    <span className={isLow ? "text-amber-400 font-medium" : "text-dark-600"}>
                       {stock.toFixed(1)}
                     </span>
                   </div>
@@ -521,7 +521,7 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
                   <div className="w-14 text-right text-xs text-[#555] shrink-0">
                     {ing.supplierMinOrderQty ? Number(ing.supplierMinOrderQty).toFixed(1) : "—"}
                   </div>
-                  <div className="w-16 text-right text-xs text-[#666] shrink-0">
+                  <div className="w-16 text-right text-xs text-dark-500 shrink-0">
                     {(ing.locationUnitCost || ing.orgUnitCost)
                       ? `$${Number(ing.locationUnitCost ?? ing.orgUnitCost).toFixed(2)}`
                       : "—"}
@@ -530,14 +530,14 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
               );
             })}
             {hiddenIngredientCount > 0 && (
-              <p className="px-3 py-2 text-[11px] text-[#666] text-center border-t border-[#1A1A1A]">
+              <p className="px-3 py-2 text-[11px] text-dark-500 text-center border-t border-[#1A1A1A]">
                 +{hiddenIngredientCount} more — keep typing to narrow it down
               </p>
             )}
           </div>
         )}
         {hasPickerIntent && filteredIngredients.length === 0 && search.trim() && (
-          <p className="text-xs text-[#666] mb-3 text-center py-4">No items match your search.</p>
+          <p className="text-xs text-dark-500 mb-3 text-center py-4">No items match your search.</p>
         )}
 
         {/* Lines */}
@@ -545,13 +545,13 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
           <div className="text-center py-8 text-sm">
             {guides.length > 0 ? (
               <>
-                <p className="text-[#999]">Pick a guide above to fill this order to par.</p>
-                <p className="text-[#666] text-xs mt-1">
+                <p className="text-dark-600">Pick a guide above to fill this order to par.</p>
+                <p className="text-dark-500 text-xs mt-1">
                   Or choose a supplier and search to build it by hand.
                 </p>
               </>
             ) : (
-              <p className="text-[#666]">Choose a supplier, or search for an item to add.</p>
+              <p className="text-dark-500">Choose a supplier, or search for an item to add.</p>
             )}
           </div>
         ) : (
@@ -576,20 +576,20 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
                     <div>
                       <div className="text-sm font-medium text-white">{line.ingredientName}</div>
                       <div className="flex items-center gap-3 mt-0.5 text-xs">
-                        <span className={stock < par && par > 0 ? "text-amber-400" : "text-[#666]"}>
+                        <span className={stock < par && par > 0 ? "text-amber-400" : "text-dark-500"}>
                           In stock: {stock.toFixed(1)} {ing?.baseUnit ?? ""}
                         </span>
                         {par > 0 && (
-                          <span className="text-[#666]">Par: {par.toFixed(1)}</span>
+                          <span className="text-dark-500">Par: {par.toFixed(1)}</span>
                         )}
                         {par > 0 && stock < par && (
-                          <span className="text-[#D4A574]">below par</span>
+                          <span className="text-gold">below par</span>
                         )}
                       </div>
                     </div>
                     <button
                       onClick={() => removeLine(line.id)}
-                      className="p-1.5 rounded-lg text-[#666] hover:text-red-400 hover:bg-red-500/10 transition-all"
+                      className="p-1.5 rounded-lg text-dark-500 hover:text-red-400 hover:bg-red-500/10 transition-all"
                     >
                       <Trash2 className="size-4" />
                     </button>
@@ -598,7 +598,7 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
                   {/* Fields with labels */}
                   <div className="grid grid-cols-4 gap-2">
                     <div>
-                      <label className="block text-[10px] uppercase tracking-wider text-[#666] mb-1">Order Qty</label>
+                      <label className="block text-[10px] uppercase tracking-wider text-dark-500 mb-1">Order Qty</label>
                       <div className="flex gap-1">
                         <input
                           type="number"
@@ -606,8 +606,8 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
                           onChange={(e) => updateLine(line.id, "orderedQty", e.target.value)}
                           min="0"
                           step="0.1"
-                          className="w-full min-w-0 px-2 py-1.5 rounded-lg text-sm bg-[#0A0A0A] text-white
-                            border border-[#2A2A2A] focus:border-[#D4A574]/40
+                          className="w-full min-w-0 px-2 py-1.5 rounded-lg text-sm bg-dark text-white
+                            border border-dark-200 focus:border-gold/40
                             focus:shadow-[0_0_8px_rgba(212,165,116,0.12)] outline-none"
                         />
                         {guideItemById.has(line.ingredientId) && (
@@ -616,8 +616,8 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
                             onClick={() => setLineToPar(line.id, line.ingredientId)}
                             title={`Set to par (${orderQtyFor(guideItemById.get(line.ingredientId)!)} ${line.orderedUnit})`}
                             className="shrink-0 px-2 rounded-lg text-[10px] font-semibold tracking-wide
-                              text-[#D4A574] border border-[#D4A574]/30 bg-[#D4A574]/10
-                              hover:bg-[#D4A574]/20 transition-all"
+                              text-gold border border-gold/30 bg-gold/10
+                              hover:bg-gold/20 transition-all"
                           >
                             TO PAR
                           </button>
@@ -641,12 +641,12 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
                       })()}
                     </div>
                     <div>
-                      <label className="block text-[10px] uppercase tracking-wider text-[#666] mb-1">Unit</label>
+                      <label className="block text-[10px] uppercase tracking-wider text-dark-500 mb-1">Unit</label>
                       <select
                         value={line.orderedUnit}
                         onChange={(e) => changeLineUnit(line.id, e.target.value, ing)}
-                        className="w-full px-2 py-1.5 rounded-lg text-sm bg-[#0A0A0A] text-white
-                          border border-[#2A2A2A] focus:border-[#D4A574]/40
+                        className="w-full px-2 py-1.5 rounded-lg text-sm bg-dark text-white
+                          border border-dark-200 focus:border-gold/40
                           focus:shadow-[0_0_8px_rgba(212,165,116,0.12)] outline-none"
                       >
                         {/* Purchase packaging first (case of 12), then the kitchen unit */}
@@ -659,7 +659,7 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-[10px] uppercase tracking-wider text-[#666] mb-1">Cost ($ per {line.orderedUnit || "unit"})</label>
+                      <label className="block text-[10px] uppercase tracking-wider text-dark-500 mb-1">Cost ($ per {line.orderedUnit || "unit"})</label>
                       <input
                         type="number"
                         value={line.unitCost}
@@ -667,14 +667,14 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
                         min="0"
                         step="any"
                         placeholder="0.00"
-                        className="w-full px-2 py-1.5 rounded-lg text-sm bg-[#0A0A0A] text-white
-                          border border-[#2A2A2A] focus:border-[#D4A574]/40
+                        className="w-full px-2 py-1.5 rounded-lg text-sm bg-dark text-white
+                          border border-dark-200 focus:border-gold/40
                           focus:shadow-[0_0_8px_rgba(212,165,116,0.12)] outline-none placeholder:text-[#555]"
                       />
                     </div>
                     <div>
-                      <label className="block text-[10px] uppercase tracking-wider text-[#666] mb-1">Line Total</label>
-                      <div className="px-2 py-1.5 rounded-lg text-sm text-[#D4A574] font-medium bg-[#0A0A0A]/50 border border-transparent">
+                      <label className="block text-[10px] uppercase tracking-wider text-dark-500 mb-1">Line Total</label>
+                      <div className="px-2 py-1.5 rounded-lg text-sm text-gold font-medium bg-dark/50 border border-transparent">
                         ${((Number(line.orderedQty) || 0) * (Number(line.unitCost) || 0)).toFixed(2)}
                       </div>
                     </div>
@@ -686,7 +686,7 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
             {/* Total */}
             <div className="flex justify-end pt-2 pr-2 border-t border-[#222]">
               <span className="text-sm font-medium text-white">
-                Total: <span className="text-[#D4A574]">${totalCost.toFixed(2)}</span>
+                Total: <span className="text-gold">${totalCost.toFixed(2)}</span>
               </span>
             </div>
           </div>
@@ -706,8 +706,8 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
           onClick={() => handleSave(false)}
           disabled={isSaving}
           className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium
-            bg-[#1E1E1E] text-white border border-[#2A2A2A]
-            hover:border-[#3A3A3A] hover:shadow-[0_0_8px_rgba(255,255,255,0.05)]
+            bg-dark-100 text-white border border-dark-200
+            hover:border-dark-300 hover:shadow-[0_0_8px_rgba(255,255,255,0.05)]
             disabled:opacity-50 transition-all"
         >
           {isSaving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
@@ -717,7 +717,7 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
           onClick={() => handleSave(true)}
           disabled={isSaving}
           className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium
-            bg-gradient-to-r from-[#D4A574] to-[#C4956A] text-[#0A0A0A]
+            bg-gradient-to-r from-gold to-gold-hover text-dark
             hover:shadow-[0_0_12px_rgba(212,165,116,0.2)]
             disabled:opacity-50 transition-all active:scale-[0.98]"
         >

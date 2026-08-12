@@ -25,8 +25,8 @@ import { CATEGORIES, CATEGORY_LABELS } from "@culinaire/shared";
 const ALL_CATEGORIES = CATEGORIES;
 
 const STATUS_CONFIG: Record<string, { color: string; bg: string; border: string; icon: typeof CheckCircle2 }> = {
-  NOT_STARTED: { color: "text-[#666]", bg: "bg-[#1E1E1E]", border: "border-[#2A2A2A]", icon: Clock },
-  IN_PROGRESS: { color: "text-[#D4A574]", bg: "bg-[#D4A574]/10", border: "border-[#D4A574]/20", icon: Play },
+  NOT_STARTED: { color: "text-dark-500", bg: "bg-dark-100", border: "border-dark-200", icon: Clock },
+  IN_PROGRESS: { color: "text-gold", bg: "bg-gold/10", border: "border-gold/20", icon: Play },
   SUBMITTED: { color: "text-blue-400", bg: "bg-blue-500/10", border: "border-blue-500/20", icon: CheckCircle2 },
   APPROVED: { color: "text-emerald-400", bg: "bg-emerald-500/10", border: "border-emerald-500/20", icon: CheckCircle2 },
   FLAGGED: { color: "text-red-400", bg: "bg-red-500/10", border: "border-red-500/20", icon: AlertTriangle },
@@ -46,7 +46,7 @@ export function StockTakeSession() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-16">
-        <Loader2 className="size-6 text-[#D4A574] animate-spin" />
+        <Loader2 className="size-6 text-gold animate-spin" />
       </div>
     );
   }
@@ -55,11 +55,11 @@ export function StockTakeSession() {
   if (!session) {
     return (
       <div className="text-center py-16 animate-[fadeInUp_200ms_ease-out]">
-        <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-[#D4A574]/20 to-[#C4956A]/10 flex items-center justify-center shadow-[0_0_20px_rgba(212,165,116,0.1)]">
-          <ClipboardCheck className="size-10 text-[#D4A574]" />
+        <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-gold/20 to-gold-hover/10 flex items-center justify-center shadow-[0_0_20px_rgba(212,165,116,0.1)]">
+          <ClipboardCheck className="size-10 text-gold" />
         </div>
         <h3 className="text-xl font-semibold text-white mb-2">Ready for Stock Take</h3>
-        <p className="text-sm text-[#999] max-w-md mx-auto mb-8">
+        <p className="text-sm text-dark-600 max-w-md mx-auto mb-8">
           Select which categories to count — cycle count (weekly) or full inventory (monthly).
         </p>
         {error && (
@@ -70,7 +70,7 @@ export function StockTakeSession() {
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <button
               onClick={() => setShowCategoryPicker(true)}
-              className="px-6 py-3 rounded-xl bg-gradient-to-r from-[#D4A574] to-[#C4956A] text-[#0A0A0A] font-semibold text-sm hover:shadow-[0_0_16px_rgba(212,165,116,0.3)] transition-all active:scale-[0.98]"
+              className="px-6 py-3 rounded-xl bg-gradient-to-r from-gold to-gold-hover text-dark font-semibold text-sm hover:shadow-[0_0_16px_rgba(212,165,116,0.3)] transition-all active:scale-[0.98]"
             >
               Cycle Count
             </button>
@@ -83,17 +83,17 @@ export function StockTakeSession() {
                   setError(err.message);
                 }
               }}
-              className="px-6 py-3 rounded-xl bg-[#1E1E1E] border border-[#2A2A2A] text-white font-semibold text-sm hover:bg-[#2A2A2A] transition-all active:scale-[0.98]"
+              className="px-6 py-3 rounded-xl bg-dark-100 border border-dark-200 text-white font-semibold text-sm hover:bg-dark-200 transition-all active:scale-[0.98]"
             >
               Full Inventory
             </button>
           </div>
         ) : (
           <div className="max-w-sm mx-auto animate-[scaleIn_200ms_ease-out]">
-            <p className="text-xs text-[#999] mb-3 text-left">Select categories to count:</p>
+            <p className="text-xs text-dark-600 mb-3 text-left">Select categories to count:</p>
             <div className="space-y-1.5 mb-4">
               {ALL_CATEGORIES.map((cat) => (
-                <label key={cat.key} className="flex items-center gap-3 p-2.5 rounded-lg bg-[#161616] border border-[#2A2A2A] hover:border-[#3A3A3A] cursor-pointer transition-colors">
+                <label key={cat.key} className="flex items-center gap-3 p-2.5 rounded-lg bg-dark-50 border border-dark-200 hover:border-dark-300 cursor-pointer transition-colors">
                   <input
                     type="checkbox"
                     checked={selectedNewCats.has(cat.key)}
@@ -103,7 +103,7 @@ export function StockTakeSession() {
                       else next.delete(cat.key);
                       setSelectedNewCats(next);
                     }}
-                    className="rounded border-[#3A3A3A] bg-[#0A0A0A] text-[#D4A574] focus:ring-[#D4A574]/50"
+                    className="rounded border-dark-300 bg-dark text-gold focus:ring-gold/50"
                   />
                   <span className="text-sm text-white">{cat.label}</span>
                 </label>
@@ -112,7 +112,7 @@ export function StockTakeSession() {
             <div className="flex gap-3">
               <button
                 onClick={() => setShowCategoryPicker(false)}
-                className="flex-1 px-4 py-2.5 rounded-xl text-sm text-[#999] hover:text-white border border-[#2A2A2A] transition-colors"
+                className="flex-1 px-4 py-2.5 rounded-xl text-sm text-dark-600 hover:text-white border border-dark-200 transition-colors"
               >
                 Cancel
               </button>
@@ -128,7 +128,7 @@ export function StockTakeSession() {
                   }
                 }}
                 disabled={selectedNewCats.size === 0}
-                className="flex-1 px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#D4A574] to-[#C4956A] text-[#0A0A0A] font-semibold text-sm disabled:opacity-50 active:scale-[0.98] transition-all"
+                className="flex-1 px-4 py-2.5 rounded-xl bg-gradient-to-r from-gold to-gold-hover text-dark font-semibold text-sm disabled:opacity-50 active:scale-[0.98] transition-all"
               >
                 Start ({selectedNewCats.size})
               </button>
@@ -161,8 +161,8 @@ export function StockTakeSession() {
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-lg font-semibold text-white">Active Stock Take</h3>
-          <p className="text-xs text-[#999] mt-1">
-            Status: <span className="text-[#D4A574]">{session.sessionStatus}</span>
+          <p className="text-xs text-dark-600 mt-1">
+            Status: <span className="text-gold">{session.sessionStatus}</span>
             {" · "}
             Opened {new Date(session.openedDttm).toLocaleString()}
           </p>
@@ -176,7 +176,7 @@ export function StockTakeSession() {
           <AlertTriangle className="size-5 text-red-400 mt-0.5 shrink-0" />
           <div>
             <p className="text-sm font-medium text-red-400">HQ flagged this session</p>
-            <p className="text-xs text-[#999] mt-1">{session.flagReason}</p>
+            <p className="text-xs text-dark-600 mt-1">{session.flagReason}</p>
           </div>
         </div>
       )}
@@ -187,7 +187,7 @@ export function StockTakeSession() {
           <ShieldCheck className="size-5 text-blue-400 shrink-0" />
           <div>
             <p className="text-sm font-medium text-blue-400">Submitted for Review</p>
-            <p className="text-xs text-[#999] mt-0.5">This stock take is awaiting HQ approval. Check the Review tab for details.</p>
+            <p className="text-xs text-dark-600 mt-0.5">This stock take is awaiting HQ approval. Check the Review tab for details.</p>
           </div>
         </div>
       )}
@@ -239,7 +239,7 @@ export function StockTakeSession() {
               }
             }}
             disabled={isSubmitting}
-            className="flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-[#D4A574] to-[#C4956A] text-[#0A0A0A] font-semibold text-sm hover:shadow-[0_0_16px_rgba(212,165,116,0.3)] transition-all active:scale-[0.98] disabled:opacity-50"
+            className="flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-gold to-gold-hover text-dark font-semibold text-sm hover:shadow-[0_0_16px_rgba(212,165,116,0.3)] transition-all active:scale-[0.98] disabled:opacity-50"
           >
             {isSubmitting ? <Loader2 className="size-4 animate-spin" /> : <ShieldCheck className="size-4" />}
             Submit for Review
@@ -284,7 +284,7 @@ function CategoryCard({
       </div>
 
       {category.lineCount !== undefined && (
-        <p className="text-xs text-[#999] mb-3">{category.lineCount} items counted</p>
+        <p className="text-xs text-dark-600 mb-3">{category.lineCount} items counted</p>
       )}
 
       {category.flagReason && (
@@ -295,7 +295,7 @@ function CategoryCard({
         {canCount && (
           <button
             onClick={onSelect}
-            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-[#D4A574]/10 text-[#D4A574] text-sm font-medium hover:bg-[#D4A574]/20 transition-colors"
+            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-gold/10 text-gold text-sm font-medium hover:bg-gold/20 transition-colors"
           >
             {category.categoryStatus === "NOT_STARTED" ? "Start Counting" : "Continue"}
             <ChevronRight className="size-3.5" />
@@ -310,7 +310,7 @@ function CategoryCard({
           </button>
         )}
         {isLocked && (
-          <div className="flex items-center gap-1.5 text-xs text-[#666]">
+          <div className="flex items-center gap-1.5 text-xs text-dark-500">
             <Lock className="size-3" />
             {category.categoryStatus === "APPROVED" ? "Approved" : "Pending review"}
           </div>
@@ -329,10 +329,10 @@ function SessionProgress({ categories }: { categories: StockTakeCategory[] }) {
 
   return (
     <div className="flex items-center gap-3">
-      <span className="text-xs text-[#999]">{done}/{total}</span>
-      <div className="w-24 h-2 rounded-full bg-[#2A2A2A] overflow-hidden">
+      <span className="text-xs text-dark-600">{done}/{total}</span>
+      <div className="w-24 h-2 rounded-full bg-dark-200 overflow-hidden">
         <div
-          className="h-full rounded-full bg-gradient-to-r from-[#D4A574] to-emerald-400 transition-all duration-500"
+          className="h-full rounded-full bg-gradient-to-r from-gold to-emerald-400 transition-all duration-500"
           style={{ width: `${pct}%` }}
         />
       </div>

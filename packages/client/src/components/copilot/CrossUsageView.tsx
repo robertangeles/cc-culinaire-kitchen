@@ -66,8 +66,8 @@ export function CrossUsageView({ sessionId, teamView }: Props) {
   if (!sessionId) {
     return (
       <div className="text-center py-16">
-        <Layers className="size-10 mx-auto text-[#666666] mb-3" />
-        <p className="text-[#999999]">Create a prep session first to see cross-usage data.</p>
+        <Layers className="size-10 mx-auto text-dark-500 mb-3" />
+        <p className="text-dark-600">Create a prep session first to see cross-usage data.</p>
       </div>
     );
   }
@@ -76,7 +76,7 @@ export function CrossUsageView({ sessionId, teamView }: Props) {
   if (loading) {
     return (
       <div className="flex justify-center py-16">
-        <Loader2 className="size-8 animate-spin text-[#D4A574]" />
+        <Loader2 className="size-8 animate-spin text-gold" />
       </div>
     );
   }
@@ -94,9 +94,9 @@ export function CrossUsageView({ sessionId, teamView }: Props) {
   if (data.length === 0) {
     return (
       <div className="text-center py-16">
-        <Layers className="size-10 mx-auto text-[#666666] mb-3" />
-        <p className="text-[#999999]">No cross-usage data for this session.</p>
-        <p className="text-sm text-[#666666] mt-1">Tasks need multiple dishes sharing ingredients.</p>
+        <Layers className="size-10 mx-auto text-dark-500 mb-3" />
+        <p className="text-dark-600">No cross-usage data for this session.</p>
+        <p className="text-sm text-dark-500 mt-1">Tasks need multiple dishes sharing ingredients.</p>
       </div>
     );
   }
@@ -105,7 +105,7 @@ export function CrossUsageView({ sessionId, teamView }: Props) {
 
   return (
     <div>
-      <p className="text-sm text-[#666666] mb-4">
+      <p className="text-sm text-dark-500 mb-4">
         Ingredients ranked by the number of dishes that use them. Prep these once, use everywhere.
       </p>
 
@@ -118,19 +118,19 @@ export function CrossUsageView({ sessionId, teamView }: Props) {
           return (
             <div
               key={item.ingredientName}
-              className={`rounded-lg border border-[#2A2A2A] overflow-hidden ${
-                highlight ? "bg-[#D4A574]/10" : "bg-[#161616]"
+              className={`rounded-lg border border-dark-200 overflow-hidden ${
+                highlight ? "bg-gold/10" : "bg-dark-50"
               }`}
             >
               {/* Row */}
               <button
                 onClick={() => toggleExpand(item.ingredientName)}
-                className="w-full flex items-center gap-3 p-4 text-left hover:bg-[#1E1E1E]/50 transition-colors min-h-[44px]"
+                className="w-full flex items-center gap-3 p-4 text-left hover:bg-dark-100/50 transition-colors min-h-[44px]"
               >
                 {isExpanded ? (
-                  <ChevronDown className="size-4 text-[#666666] shrink-0" />
+                  <ChevronDown className="size-4 text-dark-500 shrink-0" />
                 ) : (
-                  <ChevronRight className="size-4 text-[#666666] shrink-0" />
+                  <ChevronRight className="size-4 text-dark-500 shrink-0" />
                 )}
 
                 <div className="flex-1 min-w-0">
@@ -139,18 +139,18 @@ export function CrossUsageView({ sessionId, teamView }: Props) {
                       {item.ingredientName}
                     </span>
                     <div className="flex items-center gap-3 shrink-0">
-                      <span className="text-xs bg-[#D4A574]/80 text-white px-2 py-0.5 rounded-full font-medium">
+                      <span className="text-xs bg-gold/80 text-white px-2 py-0.5 rounded-full font-medium">
                         {item.dishCount} {item.dishCount === 1 ? "dish" : "dishes"}
                       </span>
-                      <span className="text-sm text-[#999999]">
+                      <span className="text-sm text-dark-600">
                         {item.totalQuantity} {item.unit}
                       </span>
                     </div>
                   </div>
                   {/* Bar */}
-                  <div className="w-full bg-[#1E1E1E] rounded-full h-2">
+                  <div className="w-full bg-dark-100 rounded-full h-2">
                     <div
-                      className="h-2 rounded-full bg-[#D4A574]/100 transition-all duration-500"
+                      className="h-2 rounded-full bg-gold/100 transition-all duration-500"
                       style={{ width: `${barWidth}%` }}
                     />
                   </div>
@@ -160,11 +160,11 @@ export function CrossUsageView({ sessionId, teamView }: Props) {
               {/* Expanded dish list */}
               {isExpanded && item.dishes?.length > 0 && (
                 <div className="px-4 pb-4 pl-11">
-                  <p className="text-xs text-[#666666] uppercase tracking-wider mb-2">Used in:</p>
+                  <p className="text-xs text-dark-500 uppercase tracking-wider mb-2">Used in:</p>
                   <ul className="space-y-1">
                     {item.dishes.map((dish) => (
                       <li key={dish} className="text-sm text-[#E5E5E5] flex items-center gap-2">
-                        <span className="size-1.5 rounded-full bg-[#D4A574]/100 shrink-0" />
+                        <span className="size-1.5 rounded-full bg-gold/100 shrink-0" />
                         {dish}
                       </li>
                     ))}

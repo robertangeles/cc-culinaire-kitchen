@@ -50,7 +50,7 @@ const SOURCE_ICONS: Record<string, typeof FileText> = {
 function StatusBadge({ doc }: { doc: KnowledgeDocument }) {
   if (doc.status === "processing") {
     return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium text-[#D4A574] bg-[#D4A574]/10 rounded-full">
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium text-gold bg-gold/10 rounded-full">
         <Loader2 className="size-3 animate-spin" /> Processing
       </span>
     );
@@ -66,7 +66,7 @@ function StatusBadge({ doc }: { doc: KnowledgeDocument }) {
     <span className="group relative inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium text-red-400 bg-red-900/30 rounded-full cursor-help">
       <XCircle className="size-3" /> Failed
       {doc.errorMessage && (
-        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 text-xs text-white bg-[#0A0A0A] rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap max-w-xs truncate z-10">
+        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 text-xs text-white bg-dark rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap max-w-xs truncate z-10">
           {doc.errorMessage}
         </span>
       )}
@@ -89,18 +89,18 @@ function DocumentTable({
 }) {
   if (documents.length === 0) {
     return (
-      <div className="text-center py-12 bg-[#0A0A0A] rounded-xl border border-[#2A2A2A]">
-        <FileText className="size-8 mx-auto text-[#666666] mb-2" />
-        <p className="text-sm text-[#999999]">No documents in this category yet.</p>
+      <div className="text-center py-12 bg-dark rounded-xl border border-dark-200">
+        <FileText className="size-8 mx-auto text-dark-500 mb-2" />
+        <p className="text-sm text-dark-600">No documents in this category yet.</p>
       </div>
     );
   }
 
   return (
-    <div className="border border-[#2A2A2A] rounded-xl overflow-hidden">
+    <div className="border border-dark-200 rounded-xl overflow-hidden">
       <table className="w-full text-sm">
         <thead>
-          <tr className="bg-[#0A0A0A] border-b border-[#2A2A2A]">
+          <tr className="bg-dark border-b border-dark-200">
             <th className="text-left px-4 py-3 font-medium text-[#E5E5E5]">Document</th>
             <th className="text-left px-4 py-3 font-medium text-[#E5E5E5]">Category</th>
             <th className="text-center px-4 py-3 font-medium text-[#E5E5E5]">Chunks</th>
@@ -112,23 +112,23 @@ function DocumentTable({
           {documents.map((doc) => {
             const Icon = SOURCE_ICONS[doc.sourceType] || FileText;
             return (
-              <tr key={doc.documentId} className="border-b border-[#2A2A2A] last:border-b-0 hover:bg-[#0A0A0A]">
+              <tr key={doc.documentId} className="border-b border-dark-200 last:border-b-0 hover:bg-dark">
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-2">
-                    <Icon className="size-4 text-[#999999] flex-shrink-0" />
+                    <Icon className="size-4 text-dark-600 flex-shrink-0" />
                     <div className="min-w-0">
                       <p className="font-medium text-[#FAFAFA] truncate">{doc.title}</p>
                       {doc.originalFilename && (
-                        <p className="text-xs text-[#999999] truncate">{doc.originalFilename}</p>
+                        <p className="text-xs text-dark-600 truncate">{doc.originalFilename}</p>
                       )}
                       {doc.sourceUrl && (
-                        <p className="text-xs text-[#999999] truncate">{doc.sourceUrl}</p>
+                        <p className="text-xs text-dark-600 truncate">{doc.sourceUrl}</p>
                       )}
                     </div>
                   </div>
                 </td>
                 <td className="px-4 py-3">
-                  <span className="inline-block px-2 py-0.5 text-xs font-medium text-[#E5E5E5] bg-[#1E1E1E] rounded">
+                  <span className="inline-block px-2 py-0.5 text-xs font-medium text-[#E5E5E5] bg-dark-100 rounded">
                     {doc.category}
                   </span>
                 </td>
@@ -139,7 +139,7 @@ function DocumentTable({
                     <button
                       onClick={() => onReEmbed(doc.documentId)}
                       disabled={doc.status === "processing"}
-                      className="p-1.5 rounded hover:bg-[#1E1E1E] text-[#999999] hover:text-[#D4A574] disabled:opacity-30 transition-colors"
+                      className="p-1.5 rounded hover:bg-dark-100 text-dark-600 hover:text-gold disabled:opacity-30 transition-colors"
                       title="Re-embed"
                     >
                       <RefreshCw className="size-4" />
@@ -154,7 +154,7 @@ function DocumentTable({
                         </button>
                         <button
                           onClick={() => setDeleteConfirm(null)}
-                          className="px-2 py-1 text-xs font-medium text-[#E5E5E5] bg-[#1E1E1E] rounded hover:bg-[#2A2A2A]"
+                          className="px-2 py-1 text-xs font-medium text-[#E5E5E5] bg-dark-100 rounded hover:bg-dark-200"
                         >
                           Cancel
                         </button>
@@ -162,7 +162,7 @@ function DocumentTable({
                     ) : (
                       <button
                         onClick={() => setDeleteConfirm(doc.documentId)}
-                        className="p-1.5 rounded hover:bg-[#1E1E1E] text-[#999999] hover:text-red-400 transition-colors"
+                        className="p-1.5 rounded hover:bg-dark-100 text-dark-600 hover:text-red-400 transition-colors"
                         title="Delete"
                       >
                         <Trash2 className="size-4" />
@@ -233,7 +233,7 @@ export default function KnowledgeBaseTab() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <Loader2 className="size-6 animate-spin text-[#D4A574]" />
+        <Loader2 className="size-6 animate-spin text-gold" />
       </div>
     );
   }
@@ -244,20 +244,20 @@ export default function KnowledgeBaseTab() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-semibold text-[#FAFAFA]">Knowledge Base</h2>
-          <p className="text-sm text-[#999999] mt-1">
+          <p className="text-sm text-dark-600 mt-1">
             {total} document{total !== 1 ? "s" : ""} indexed
           </p>
         </div>
         <button
           onClick={() => setDialog(btn.dialog)}
-          className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-[#D4A574] rounded-lg hover:bg-[#C4956A] transition-colors"
+          className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-gold rounded-lg hover:bg-gold-hover transition-colors"
         >
           <btn.icon className="size-4" /> {btn.label}
         </button>
       </div>
 
       {/* Sub-tabs */}
-      <div className="flex gap-1 border-b border-[#2A2A2A]">
+      <div className="flex gap-1 border-b border-dark-200">
         {SUB_TABS.map((tab) => {
           const TabIcon = tab.icon;
           const count = documents.filter((d) => tab.sourceTypes.includes(d.sourceType)).length;
@@ -267,15 +267,15 @@ export default function KnowledgeBaseTab() {
               onClick={() => { setSubTab(tab.id); setDeleteConfirm(null); }}
               className={`inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
                 subTab === tab.id
-                  ? "border-[#D4A574] text-[#D4A574]"
-                  : "border-transparent text-[#999999] hover:text-[#E5E5E5] hover:border-[#2A2A2A]"
+                  ? "border-gold text-gold"
+                  : "border-transparent text-dark-600 hover:text-[#E5E5E5] hover:border-dark-200"
               }`}
             >
               <TabIcon className="size-4" />
               {tab.label}
               {count > 0 && (
                 <span className={`ml-1 px-1.5 py-0.5 text-xs rounded-full ${
-                  subTab === tab.id ? "bg-[#D4A574]/15 text-[#D4A574]" : "bg-[#1E1E1E] text-[#999999]"
+                  subTab === tab.id ? "bg-gold/15 text-gold" : "bg-dark-100 text-dark-600"
                 }`}>
                   {count}
                 </span>
@@ -305,21 +305,21 @@ export default function KnowledgeBaseTab() {
       {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between">
-          <p className="text-sm text-[#999999]">
+          <p className="text-sm text-dark-600">
             Page {page} of {totalPages}
           </p>
           <div className="flex gap-2">
             <button
               onClick={() => setPage(page - 1)}
               disabled={page <= 1}
-              className="inline-flex items-center gap-1 px-3 py-1.5 text-sm text-[#E5E5E5] bg-[#1E1E1E] rounded-lg hover:bg-[#2A2A2A] disabled:opacity-30 transition-colors"
+              className="inline-flex items-center gap-1 px-3 py-1.5 text-sm text-[#E5E5E5] bg-dark-100 rounded-lg hover:bg-dark-200 disabled:opacity-30 transition-colors"
             >
               <ChevronLeft className="size-4" /> Previous
             </button>
             <button
               onClick={() => setPage(page + 1)}
               disabled={page >= totalPages}
-              className="inline-flex items-center gap-1 px-3 py-1.5 text-sm text-[#E5E5E5] bg-[#1E1E1E] rounded-lg hover:bg-[#2A2A2A] disabled:opacity-30 transition-colors"
+              className="inline-flex items-center gap-1 px-3 py-1.5 text-sm text-[#E5E5E5] bg-dark-100 rounded-lg hover:bg-dark-200 disabled:opacity-30 transition-colors"
             >
               Next <ChevronRight className="size-4" />
             </button>
