@@ -167,7 +167,13 @@ export function App() {
                           <Route path="/your-brain" element={<AuthenticatedOnly><RequirePermission anyOf={["brain:read"]}><YourBrainPage /></RequirePermission></AuthenticatedOnly>} />
                           <Route path="/menu-intelligence" element={<AuthenticatedOnly><RequirePermission anyOf={["menu:read"]}><LocationGate><KitchenOpsLayout><MenuIntelligencePage /></KitchenOpsLayout></LocationGate></RequirePermission></AuthenticatedOnly>} />
                           <Route path="/waste-intelligence" element={<AuthenticatedOnly><RequirePermission anyOf={["waste:read"]}><LocationGate><KitchenOpsLayout><WasteIntelligencePage /></KitchenOpsLayout></LocationGate></RequirePermission></AuthenticatedOnly>} />
-                          <Route path="/compliance" element={<AuthenticatedOnly><RequirePermission anyOf={["compliance:read-own", "compliance:read-all", "compliance:verify", "compliance:manage-rules"]}><LocationGate><KitchenOpsLayout><CompliancePage /></KitchenOpsLayout></LocationGate></RequirePermission></AuthenticatedOnly>} />
+                          {/* read-all / verify only. read-own and manage-rules were admitted when this
+                              page also hosted My Documents and Requirements; those now live on the
+                              profile and in Settings, so admitting those permissions here would send a
+                              staff member to a page with no tabs — a dead end that reads as "you lack
+                              access" when in fact their surfaces simply moved. Kept in step with the
+                              gate in navConfig.ts. */}
+                          <Route path="/compliance" element={<AuthenticatedOnly><RequirePermission anyOf={["compliance:read-all", "compliance:verify"]}><LocationGate><KitchenOpsLayout><CompliancePage /></KitchenOpsLayout></LocationGate></RequirePermission></AuthenticatedOnly>} />
                           <Route path="/kitchen-copilot" element={<AuthenticatedOnly><RequirePermission anyOf={["prep:manage"]}><LocationGate><KitchenOpsLayout><KitchenCopilotPage /></KitchenOpsLayout></LocationGate></RequirePermission></AuthenticatedOnly>} />
                           <Route path="/inventory" element={<AuthenticatedOnly><RequirePermission anyOf={["inventory:count", "inventory:manage", "inventory:transfer", "inventory:hq"]}><LocationGate><KitchenOpsLayout><InventoryPage /></KitchenOpsLayout></LocationGate></RequirePermission></AuthenticatedOnly>} />
                           <Route path="/purchasing" element={<AuthenticatedOnly><RequirePermission anyOf={["purchasing:draft", "purchasing:submit", "purchasing:approve", "purchasing:receive", "purchasing:credit"]}><LocationGate><KitchenOpsLayout><PurchasingPage /></KitchenOpsLayout></LocationGate></RequirePermission></AuthenticatedOnly>} />

@@ -13,6 +13,7 @@ import { SiteSettingsTab } from "../components/settings/SiteSettingsTab.js";
 import { PagesTab } from "../components/settings/PagesTab.js";
 import { AppearanceTab } from "../components/settings/AppearanceTab.js";
 import { UsersTab } from "../components/settings/UsersTab.js";
+import { RequiredDocumentsTab } from "../components/compliance/RequiredDocumentsTab.js";
 import { RolesTab } from "../components/settings/RolesTab.js";
 import { IntegrationsTab } from "../components/settings/IntegrationsTab.js";
 import KnowledgeBaseTab from "../components/settings/KnowledgeBaseTab.js";
@@ -35,6 +36,7 @@ export function SettingsPage() {
       {activeTab === "mobilePages" && <PagesTab surface="mobile" />}
       {activeTab === "appearance" && <AppearanceTab />}
       {activeTab === "users" && <UsersTab />}
+      {activeTab === "compliance" && <RequiredDocumentsTab />}
       {activeTab === "roles" && <RolesTab />}
       {activeTab === "integrations" && <IntegrationsTab />}
       {activeTab === "knowledge" && <KnowledgeBaseTab />}

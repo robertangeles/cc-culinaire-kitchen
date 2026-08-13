@@ -1,48 +1,37 @@
 /**
  * @module pages/CompliancePage
  *
- * Page shell for Compliance, mounted at `/compliance` (see navConfig.ts).
- * The route itself allows any of compliance:read-own / read-all / verify /
- * manage-rules, but each of those unlocks a different screen with different
- * endpoints behind it — so this page picks tabs from what the user actually
- * holds, rather than always rendering the manager dashboard. A user with
- * only read-own must never mount (and never fetch from) the read-all or
- * verify views.
+ * Page shell for Team Compliance, mounted at `/compliance` (see
+ * navConfig.ts). Team and Verify are the only tabs here — both are
+ * manager-facing. My Documents moved to the user's Profile and Requirements
+ * moved to Admin Settings, each mounted where its audience actually looks
+ * for it.
  */
 
 import { useMemo, useState } from "react";
-import { ShieldCheck, Users, ClipboardCheck, FileText, ListChecks } from "lucide-react";
+import { ShieldCheck, Users, ClipboardCheck } from "lucide-react";
 import { useAuth } from "../context/AuthContext.js";
 import { useHasPermission } from "../hooks/useHasPermission.js";
 import { ComplianceDashboard } from "../components/compliance/ComplianceDashboard.js";
 import { VerificationView } from "../components/compliance/VerificationView.js";
-import { MyDocumentsTab } from "../components/compliance/MyDocumentsTab.js";
-import { RequiredDocumentsTab } from "../components/compliance/RequiredDocumentsTab.js";
 
-type ComplianceTab = "team" | "verify" | "mine" | "requirements";
+type ComplianceTab = "team" | "verify";
 
 export function CompliancePage() {
   const { user, isGuest } = useAuth();
   const hasPermission = useHasPermission();
-  const canReadOwn = hasPermission("compliance:read-own");
   const canReadAll = hasPermission("compliance:read-all");
   const canVerify = hasPermission("compliance:verify");
-  const canManageRules = hasPermission("compliance:manage-rules");
 
-  // Team and Verify are listed (and default) ahead of My Documents: this page
-  // used to render only ComplianceDashboard, so anyone who already had
-  // compliance:read-all keeps landing on the same view as before. My
-  // Documents only becomes the default for someone who holds read-own alone.
-  // Requirements is listed last, for the same reason: it must never displace
-  // Team as the default for anyone who already lands there today.
+  // Team is listed (and default) ahead of Verify: this page used to render
+  // only ComplianceDashboard, so anyone who already had compliance:read-all
+  // keeps landing on the same view as before.
   const tabs = useMemo(() => {
     const t: { key: ComplianceTab; label: string; icon: typeof Users }[] = [];
     if (canReadAll) t.push({ key: "team", label: "Team", icon: Users });
     if (canVerify) t.push({ key: "verify", label: "Verify", icon: ClipboardCheck });
-    if (canReadOwn) t.push({ key: "mine", label: "My Documents", icon: FileText });
-    if (canManageRules) t.push({ key: "requirements", label: "Requirements", icon: ListChecks });
     return t;
-  }, [canReadAll, canVerify, canReadOwn, canManageRules]);
+  }, [canReadAll, canVerify]);
   // Holds an explicit user choice only; null means "hasn't picked one yet".
   //
   // Deliberately NOT seeded with useState(tabs[0]?.key). AuthContext starts
@@ -65,7 +54,7 @@ export function CompliancePage() {
           <div className="mx-auto mb-4 flex size-16 items-center justify-center rounded-2xl bg-dark-100">
             <ShieldCheck className="size-8 text-gold" aria-hidden="true" />
           </div>
-          <h2 className="mb-2 text-xl font-semibold text-[#FAFAFA]">Compliance</h2>
+          <h2 className="mb-2 text-xl font-semibold text-[#FAFAFA]">Team Compliance</h2>
           <p className="text-sm text-dark-600">Sign in to view staff compliance status.</p>
         </div>
       </div>
@@ -79,13 +68,13 @@ export function CompliancePage() {
           <div className="flex size-10 items-center justify-center rounded-xl bg-gradient-to-r from-gold to-gold-hover shadow-[0_0_12px_rgba(212,165,116,0.2)]">
             <ShieldCheck className="size-5 text-dark" aria-hidden="true" />
           </div>
-          <h1 className="text-2xl font-bold text-[#FAFAFA]">Compliance</h1>
+          <h1 className="text-2xl font-bold text-[#FAFAFA]">Team Compliance</h1>
         </header>
 
-        {/* A single-tab user (e.g. a line cook with only compliance:read-own)
+        {/* A single-tab user (e.g. a manager holding read-all but not verify)
             never sees this bar — a tablist with one option is chrome, not a
             choice. flex-wrap is free insurance against horizontal scroll on
-            narrow screens; three short labels never actually need it. */}
+            narrow screens; two short labels never actually need it. */}
         {tabs.length > 1 && (
           <div
             className="mb-6 flex flex-wrap gap-1 rounded-xl border border-dark-200 bg-dark-100 p-1"
@@ -119,8 +108,6 @@ export function CompliancePage() {
             and never 403s. */}
         {activeTab === "team" && <ComplianceDashboard />}
         {activeTab === "verify" && <VerificationView />}
-        {activeTab === "mine" && <MyDocumentsTab />}
-        {activeTab === "requirements" && <RequiredDocumentsTab />}
         {activeTab === null && (
           <p className="text-sm text-dark-600">
             Nothing to show here yet. Ask an admin to check your compliance permissions.

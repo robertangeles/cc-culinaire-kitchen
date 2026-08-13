@@ -130,14 +130,15 @@ export const NAV_SECTIONS: NavSection[] = [
       },
       {
         id: "compliance",
-        label: "Compliance",
+        label: "Team Compliance",
         icon: ShieldCheck,
         to: "/compliance",
-        // read-own is included so a staff member who can only see their OWN
-        // documents still gets the nav entry. Hiding it would leave them no way
-        // to reach the upload flow at all. The server route is the security
-        // boundary; this list only decides what is visible.
-        gate: { anyPermission: ["compliance:read-own", "compliance:read-all", "compliance:verify", "compliance:manage-rules"] },
+        // Team and Verify are both manager-facing, so the entry is gated to
+        // the two permissions that actually unlock a tab on this page now
+        // that My Documents (Profile) and Requirements (Admin Settings) have
+        // moved elsewhere. The server route is the security boundary; this
+        // list only decides what is visible.
+        gate: { anyPermission: ["compliance:read-all", "compliance:verify"] },
       },
     ],
   },

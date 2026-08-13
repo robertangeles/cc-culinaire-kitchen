@@ -19,18 +19,15 @@ import {
   UtensilsCrossed,
   MapPin,
   Info,
+  FileText,
 } from "lucide-react";
 import { MyKitchenTab } from "../components/profile/MyKitchenTab.js";
 import { MfaSection } from "../components/profile/MfaSection.js";
 import { useAuth } from "../context/AuthContext.js";
+import { useHasPermission } from "../hooks/useHasPermission.js";
 import { ImageCropModal } from "../components/ui/ImageCropModal.js";
 import { StoreLocationsSection } from "../components/location/StoreLocationsSection.js";
-
-const tabs: { id: "account" | "security" | "kitchen"; label: string; Icon: ElementType }[] = [
-  { id: "account", label: "Account Details", Icon: User },
-  { id: "security", label: "Security", Icon: ShieldCheck },
-  { id: "kitchen", label: "Profile", Icon: UtensilsCrossed },
-];
+import { MyDocumentsTab } from "../components/compliance/MyDocumentsTab.js";
 
 interface Organisation {
   organisationId: number;
@@ -323,9 +320,20 @@ function OrgBenchBanner({ orgId }: { orgId: number }) {
 
 export function ProfilePage() {
   const { user, refreshUser } = useAuth();
+  const hasPermission = useHasPermission();
 
-  // Tabs
-  const [activeTab, setActiveTab] = useState<"account" | "security" | "kitchen">("account");
+  // Tabs — My Documents only appears once the user actually holds the
+  // permission its endpoints require, so the tab and the data behind it
+  // never disagree.
+  const tabs: { id: "account" | "security" | "kitchen" | "documents"; label: string; Icon: ElementType }[] = [
+    { id: "account", label: "Account Details", Icon: User },
+    { id: "security", label: "Security", Icon: ShieldCheck },
+    { id: "kitchen", label: "Profile", Icon: UtensilsCrossed },
+  ];
+  if (hasPermission("compliance:read-own")) {
+    tabs.push({ id: "documents", label: "My Documents", Icon: FileText });
+  }
+  const [activeTab, setActiveTab] = useState<"account" | "security" | "kitchen" | "documents">("account");
 
   // Profile
   const [name, setName] = useState(user?.userName ?? "");
@@ -805,7 +813,10 @@ export function ProfilePage() {
 
   return (
     <div className="flex-1 overflow-y-auto p-6 bg-dark">
-      <div className="max-w-2xl mx-auto space-y-6">
+      {/* Was max-w-2xl (42rem/672px). 25% wider is 840px = 52.5rem, which has
+          no Tailwind preset (max-w-3xl is only +14%, max-w-4xl is +33%), hence
+          the arbitrary value. */}
+      <div className="max-w-[52.5rem] mx-auto space-y-6">
         <h1 className="text-xl font-bold text-[#FAFAFA]">Profile</h1>
 
         {/* Tab Bar */}
@@ -1309,6 +1320,13 @@ export function ProfilePage() {
                 )}
               </div>
             )}
+          </div>
+        )}
+
+        {/* My Documents Tab */}
+        {activeTab === "documents" && (
+          <div role="tabpanel" id="profile-tabpanel-documents" aria-labelledby="profile-tab-documents" className="bg-dark-50 rounded-2xl border border-dark-200 p-6">
+            <MyDocumentsTab />
           </div>
         )}
 

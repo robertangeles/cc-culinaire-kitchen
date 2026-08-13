@@ -1,11 +1,25 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, within } from "@testing-library/react";
+
+// SettingsLayout gates the Compliance tab on a permission, so every test
+// needs this stubbed — the real hook requires an AuthProvider ancestor none
+// of these renders have. Defaults to "granted" so the pre-existing tests
+// below (written before the gate existed) keep seeing every tab.
+const hasPermissionMock = vi.fn();
+vi.mock("../../hooks/useHasPermission.js", () => ({
+  useHasPermission: () => hasPermissionMock,
+}));
+
 import {
   SettingsLayout,
   groupTabs,
   orderedTabs,
   type SettingsGroup,
 } from "./SettingsLayout.js";
+
+beforeEach(() => {
+  hasPermissionMock.mockReset().mockReturnValue(true);
+});
 
 type Fixture = { id: string; group?: SettingsGroup };
 
@@ -158,5 +172,52 @@ describe("SettingsLayout — rendered shell", () => {
 
     expect(onTabChange).toHaveBeenCalledTimes(1);
     expect(onTabChange.mock.calls[0][0]).toBe("knowledge");
+  });
+});
+
+describe("SettingsLayout — Compliance tab gating", () => {
+  it("shows Compliance, in Shared directly after Users, when the user holds compliance:manage-rules", () => {
+    hasPermissionMock.mockImplementation((...keys: string[]) => keys.includes("compliance:manage-rules"));
+    render(
+      <SettingsLayout activeTab="prompts" onTabChange={() => {}}>
+        <div>panel</div>
+      </SettingsLayout>,
+    );
+
+    const sharedGroup = screen.getByRole("group", { name: "Shared" });
+    const idsInOrder = within(sharedGroup)
+      .getAllByRole("tab")
+      .map((el) => el.id);
+    const usersIndex = idsInOrder.indexOf("settings-tab-users");
+    expect(idsInOrder[usersIndex + 1]).toBe("settings-tab-compliance");
+  });
+
+  it("hides Compliance entirely when the user lacks compliance:manage-rules", () => {
+    hasPermissionMock.mockReturnValue(false);
+    render(
+      <SettingsLayout activeTab="prompts" onTabChange={() => {}}>
+        <div>panel</div>
+      </SettingsLayout>,
+    );
+
+    expect(document.getElementById("settings-tab-compliance")).toBeNull();
+  });
+
+  it("does not disturb the rest of the tab list or grouping either way", () => {
+    hasPermissionMock.mockReturnValue(false);
+    render(
+      <SettingsLayout activeTab="prompts" onTabChange={() => {}}>
+        <div>panel</div>
+      </SettingsLayout>,
+    );
+
+    expect(screen.getByRole("heading", { name: "Web" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Mobile" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Shared" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Unassigned" })).toBeNull();
+    // Users and Roles — the tabs either side of where Compliance would sit —
+    // are unaffected by the gate hiding it.
+    expect(screen.getByRole("tab", { name: /Users/ })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /Roles/ })).toBeInTheDocument();
   });
 });

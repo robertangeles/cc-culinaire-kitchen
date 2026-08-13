@@ -20,12 +20,14 @@ import {
   Globe,
   Users,
   Shield,
+  ShieldCheck,
   Plug,
   MessagesSquare,
   FileText,
   Brain,
   type LucideIcon,
 } from "lucide-react";
+import { useHasPermission } from "../../hooks/useHasPermission.js";
 
 /** Which app surface a settings tab primarily affects. */
 export type SettingsGroup = "web" | "mobile" | "shared" | "unassigned";
@@ -45,6 +47,12 @@ interface TabItem {
    * "Unassigned" section so newly-added tabs remain visible until classified.
    */
   group?: SettingsGroup;
+  /**
+   * Permission key required to see this tab. Omit for tabs every signed-in
+   * admin-area visitor may see — /settings itself is only AuthenticatedOnly,
+   * so an ungated tab is visible to anyone who can reach the page.
+   */
+  permission?: string;
 }
 
 /** Display order + label for each group section. */
@@ -63,6 +71,13 @@ const tabs: TabItem[] = [
   { id: "pages", label: "Pages", icon: FileText, group: "web" },
   { id: "appearance", label: "Appearance", icon: Palette, group: "web" },
   { id: "users", label: "Users", icon: Users, group: "shared" },
+  {
+    id: "compliance",
+    label: "Compliance",
+    icon: ShieldCheck,
+    group: "shared",
+    permission: "compliance:manage-rules",
+  },
   { id: "roles", label: "Roles", icon: Shield, group: "shared" },
   { id: "integrations", label: "Integrations", icon: Plug, group: "shared" },
   { id: "models", label: "Models", icon: Bot, disabled: true, group: "shared" },
@@ -116,12 +131,18 @@ export function SettingsLayout({
   onTabChange,
   children,
 }: SettingsLayoutProps) {
-  const visualTabs = orderedTabs(tabs);
+  // /settings is guarded only by AuthenticatedOnly (App.tsx) — individual
+  // tabs are the only gate a permission-scoped tab like Compliance gets, so
+  // an ungated tab whose PUT endpoint requires a permission would otherwise
+  // be visible (and 403 on save) to every signed-in user.
+  const hasPermission = useHasPermission();
+  const visibleTabs = tabs.filter((t) => !t.permission || hasPermission(t.permission));
+  const visualTabs = orderedTabs(visibleTabs);
   const enabledTabs = visualTabs.filter((t) => !t.disabled);
   // Always render the three primary groups (Web, Mobile, Shared) so the
   // cherry-pick targets stay visible even when empty. The Unassigned fallback
   // only renders when something falls into it.
-  const groups = groupTabs(tabs).filter(
+  const groups = groupTabs(visibleTabs).filter(
     (g) => g.id !== "unassigned" || g.items.length > 0,
   );
 

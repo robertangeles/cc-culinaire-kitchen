@@ -13,11 +13,13 @@ import { render, screen, fireEvent } from "@testing-library/react";
  *     fallback forever. That is a blank page for 100% of users, which is
  *     exactly why it is the first test here.
  *
- *  2. It must never mount a view whose endpoints the user cannot call. The
- *     read-own-only case is a real person: a line cook, whose only compliance
- *     screen is their own documents. Mounting the manager dashboard for them
- *     fires three read-all fetches that all 403, and strands them in an error
- *     state whose Retry button re-fails forever.
+ *  2. It must never mount a view whose endpoint the user cannot call. A user
+ *     holding only compliance:read-own or only compliance:manage-rules can
+ *     still reach this route, since neither permission unlocks a tab here
+ *     any more (My Documents now lives on Profile, Requirements in Admin
+ *     Settings) — the page must fall back to the "nothing to show" message
+ *     for them rather than mounting the manager dashboard, which would fire
+ *     read-all fetches that all 403.
  */
 
 const mockUseAuth = vi.fn();
@@ -30,12 +32,6 @@ vi.mock("../components/compliance/ComplianceDashboard.js", () => ({
 }));
 vi.mock("../components/compliance/VerificationView.js", () => ({
   VerificationView: () => <div>STUB verification queue</div>,
-}));
-vi.mock("../components/compliance/MyDocumentsTab.js", () => ({
-  MyDocumentsTab: () => <div>STUB my documents</div>,
-}));
-vi.mock("../components/compliance/RequiredDocumentsTab.js", () => ({
-  RequiredDocumentsTab: () => <div>STUB requirements</div>,
 }));
 
 const { CompliancePage } = await import("./CompliancePage.js");
@@ -62,38 +58,35 @@ describe("CompliancePage", () => {
     expect(screen.queryByText(/Nothing to show here yet/)).not.toBeInTheDocument();
   });
 
-  it("shows a read-own-only user their documents and never the manager views", () => {
+  it("gives a read-own-only user no tabs, since My Documents now lives on Profile", () => {
     mockUseAuth.mockReturnValue(signedIn(["compliance:read-own"]));
     render(<CompliancePage />);
 
-    expect(screen.getByText("STUB my documents")).toBeInTheDocument();
-    // Mounting either of these would fire a 403 fetch on their behalf.
+    // Mounting either would fire a 403 fetch on their behalf.
     expect(screen.queryByText("STUB team dashboard")).not.toBeInTheDocument();
     expect(screen.queryByText("STUB verification queue")).not.toBeInTheDocument();
-    // One tab is not a choice, so no tablist chrome.
     expect(screen.queryByRole("tablist")).not.toBeInTheDocument();
+    expect(screen.getByText(/Nothing to show here yet/)).toBeInTheDocument();
   });
 
-  it("gives an Administrator all four tabs without granting them explicitly", () => {
+  it("gives an Administrator both tabs without granting them explicitly", () => {
     mockUseAuth.mockReturnValue(signedIn([], ["Administrator"]));
     render(<CompliancePage />);
 
     expect(screen.getByRole("tablist")).toBeInTheDocument();
-    expect(screen.getAllByRole("tab")).toHaveLength(4);
+    expect(screen.getAllByRole("tab")).toHaveLength(2);
     // Defaults to Team, preserving what this page did before it had tabs.
     expect(screen.getByText("STUB team dashboard")).toBeInTheDocument();
   });
 
-  it("gives a manage-rules-only user just the Requirements tab, not the manager views", () => {
+  it("gives a manage-rules-only user no tabs, since Requirements now lives in Admin Settings", () => {
     mockUseAuth.mockReturnValue(signedIn(["compliance:manage-rules"]));
     render(<CompliancePage />);
 
-    expect(screen.getByText("STUB requirements")).toBeInTheDocument();
     expect(screen.queryByText("STUB team dashboard")).not.toBeInTheDocument();
     expect(screen.queryByText("STUB verification queue")).not.toBeInTheDocument();
-    expect(screen.queryByText("STUB my documents")).not.toBeInTheDocument();
-    // One tab is not a choice, so no tablist chrome.
     expect(screen.queryByRole("tablist")).not.toBeInTheDocument();
+    expect(screen.getByText(/Nothing to show here yet/)).toBeInTheDocument();
   });
 
   it("mounts only the selected tab's view", () => {
