@@ -102,7 +102,7 @@ export function RequiredDocumentsTab() {
 
   if (status === "loading") {
     return (
-      <div className="flex items-center justify-center py-16">
+      <div className="flex items-center justify-center p-6 py-16">
         <Loader2 className="size-6 animate-spin text-gold" />
       </div>
     );
@@ -110,7 +110,7 @@ export function RequiredDocumentsTab() {
 
   if (status === "error") {
     return (
-      <div role="alert" className="rounded-xl border border-dark-200 bg-dark-100 px-4 py-10 text-center">
+      <div role="alert" className="m-6 rounded-xl border border-dark-200 bg-dark-100 px-4 py-10 text-center">
         <p className="text-sm text-[#E5E5E5]">
           We couldn&apos;t load your organisation&apos;s required documents. Please try again.
         </p>
@@ -127,7 +127,11 @@ export function RequiredDocumentsTab() {
   }
 
   return (
-    <div className="animate-fade-in-up space-y-6">
+    // p-6 because this now lives in Settings, whose content wrapper supplies no
+    // padding of its own — every sibling tab (RolesTab, UsersTab, …) brings its
+    // own. It was written for the compliance page's padded container, so without
+    // this it sits flush against the top and right edges.
+    <div className="animate-fade-in-up space-y-6 p-6">
       <div>
         <h2 className="text-lg font-semibold text-[#FAFAFA]">Requirements</h2>
         <p className="mt-1 text-sm text-dark-600">
