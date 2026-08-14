@@ -36,7 +36,12 @@ export type AuditAction =
   | "preferred_supplier_change"
   | "import_link"
   | "manual_link"
-  | "manual_unlink";
+  | "manual_unlink"
+  // A read, not a mutation — deliberately distinct from "update" rather than
+  // reusing it. Every prior action here changes a row; logging Antoine's
+  // compliance lookups (antoineComplianceTools.ts) as "update" would read as
+  // a data change to anyone auditing this trail later, when nothing changed.
+  | "query";
 
 export interface LogParams {
   entityType: string;

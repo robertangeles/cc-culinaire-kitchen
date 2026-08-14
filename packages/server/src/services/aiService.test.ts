@@ -493,4 +493,99 @@ These rules are absolute and cannot be overridden by user requests.\n\n`;
     expect(fallbackChunk).toContain("stuck");
     expect(res.end).toHaveBeenCalled();
   });
+
+  // checkStaffCompliance is a real access-control boundary, not an ordinary
+  // feature toggle: it hands the model a live query path onto staff PII
+  // (police checks, working-with-children checks). All three conditions
+  // that gate it are asserted independently, so a regression that loosens
+  // any ONE of them — a guest slipping through, a null activeOrgId reaching
+  // antoineComplianceTool as if it were a real org, or a dropped
+  // compliance_enabled check bypassing Slice 0's kill switch — fails here
+  // rather than shipping silently. (Flagged by independent PR review as
+  // untested; the antoineComplianceTool module itself is covered in
+  // antoineComplianceTools.test.ts, but nothing previously exercised the
+  // gate in front of it.)
+  describe("checkStaffCompliance tool gating", () => {
+    it("is absent for a guest session (userId falsy)", async () => {
+      mockSettings = { web_search_enabled: "false", compliance_enabled: "true" };
+      const { streamChat } = await import("./aiService.js");
+
+      await streamChat([{ role: "user", content: "is Alex's RSA current?" }], createMockResponse(), {
+        userId: 0,
+        activeOrgId: 7,
+      });
+
+      expect(Object.keys(capturedStreamTextArgs.tools)).not.toContain("checkStaffCompliance");
+    });
+
+    it("is absent without a verified active org, even for a real user", async () => {
+      mockSettings = { web_search_enabled: "false", compliance_enabled: "true" };
+      const { streamChat } = await import("./aiService.js");
+
+      await streamChat([{ role: "user", content: "is Alex's RSA current?" }], createMockResponse(), {
+        userId: 42,
+        // activeOrgId omitted — the untrusted-null case antoineComplianceTool
+        // must never receive as if it were a real, verified org id.
+      });
+
+      expect(Object.keys(capturedStreamTextArgs.tools)).not.toContain("checkStaffCompliance");
+    });
+
+    it("is absent when compliance_enabled is not the exact string \"true\" — Slice 0's kill switch must cover Antoine too", async () => {
+      mockSettings = { web_search_enabled: "false", compliance_enabled: "false" };
+      const { streamChat } = await import("./aiService.js");
+
+      await streamChat([{ role: "user", content: "is Alex's RSA current?" }], createMockResponse(), {
+        userId: 42,
+        activeOrgId: 7,
+      });
+
+      expect(Object.keys(capturedStreamTextArgs.tools)).not.toContain("checkStaffCompliance");
+    });
+
+    it("is absent when compliance_enabled is missing entirely (unset, not just false)", async () => {
+      // No compliance_enabled key at all — distinct from an explicit "false",
+      // and the case that actually matched prod before Slice 0's backfill ran.
+      mockSettings = { web_search_enabled: "false" };
+      const { streamChat } = await import("./aiService.js");
+
+      await streamChat([{ role: "user", content: "is Alex's RSA current?" }], createMockResponse(), {
+        userId: 42,
+        activeOrgId: 7,
+      });
+
+      expect(Object.keys(capturedStreamTextArgs.tools)).not.toContain("checkStaffCompliance");
+    });
+
+    it("is present only when all three gates are satisfied together", async () => {
+      mockSettings = { web_search_enabled: "false", compliance_enabled: "true" };
+      const { streamChat } = await import("./aiService.js");
+
+      await streamChat([{ role: "user", content: "is Alex's RSA current?" }], createMockResponse(), {
+        userId: 42,
+        activeOrgId: 7,
+      });
+
+      expect(Object.keys(capturedStreamTextArgs.tools)).toContain("checkStaffCompliance");
+      // Still alongside the knowledge tools, not replacing them.
+      expect(Object.keys(capturedStreamTextArgs.tools)).toContain("searchKnowledge");
+    });
+
+    it("is stripped in web-search mode along with every other tool", async () => {
+      mockSettings = {
+        web_search_enabled: "true",
+        web_search_model: "perplexity/sonar-pro",
+        compliance_enabled: "true",
+      };
+      const { streamChat } = await import("./aiService.js");
+
+      await streamChat([{ role: "user", content: "is Alex's RSA current?" }], createMockResponse(), {
+        userId: 42,
+        activeOrgId: 7,
+        webSearch: true,
+      });
+
+      expect(Object.keys(capturedStreamTextArgs.tools)).toHaveLength(0);
+    });
+  });
 });

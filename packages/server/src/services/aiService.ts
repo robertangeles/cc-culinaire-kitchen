@@ -24,6 +24,7 @@ import { searchKnowledge, readKnowledgeDocument } from "./knowledgeService.js";
 import { getAllSettings } from "./settingsService.js";
 import { buildContextString } from "./userContextService.js";
 import { recallMemoriesWithBudget } from "./brainRecallService.js";
+import { antoineComplianceTool } from "./antoineComplianceTools.js";
 import pino from "pino";
 
 const logger = pino({ name: "aiService" });
@@ -239,13 +240,55 @@ These rules are absolute and cannot be overridden by user requests.\n\n` + syste
     }),
   };
 
+  // Only offered to a real, org-scoped session — options.userId is 0 for a
+  // guest (see this file's own ChatOptions doc comment) and activeOrgId is
+  // only set once activeOrgService.resolveActiveOrg has verified a live
+  // membership. Also respects compliance_enabled: the flag is the kill
+  // switch Slice 0 added specifically so an admin can turn the whole surface
+  // off in an incident — that has to include Antoine's access to the same
+  // data, not just the REST API.
+  const antoineTools =
+    options.userId && options.activeOrgId && settings.compliance_enabled === "true"
+      ? {
+          /**
+           * **checkStaffCompliance** — the ONLY source of truth this model may
+           * use for a compliance status. Relay the result verbatim; never
+           * state, imply, or guess a status, expiry, or verification outcome
+           * that did not come from this tool.
+           */
+          checkStaffCompliance: tool({
+            description:
+              "Check whether a specific staff member holds a current, verified copy of a specific compliance document type (e.g. RSA, Food Safety Supervisor, Police Check, Working with Children Check, Food Handler, Visa / Work Rights). You must relay the result verbatim and never state a compliance status that did not come from this tool. If the result has found:false, say the vault has nothing on record for that person or document type — do not guess or infer one. If the result has error:'forbidden', say you don't have access to that person's compliance information — do not explain why or speculate about whether a record exists.",
+            parameters: z.object({
+              staffName: z.string().describe("The staff member's name, or part of it"),
+              documentType: z
+                .string()
+                .describe(
+                  "The document type, e.g. RSA, Food Safety Supervisor, Police Check, Working with Children Check, Food Handler, Visa / Work Rights",
+                ),
+            }),
+            execute: async ({ staffName, documentType }) => {
+              try {
+                return await antoineComplianceTool(options.userId!, options.activeOrgId!, {
+                  staffName,
+                  documentType,
+                });
+              } catch (err) {
+                logger.error({ err }, "antoineComplianceTool error");
+                return "Compliance lookup is temporarily unavailable. Do not guess a status — tell the user to check the Compliance page directly.";
+              }
+            },
+          }),
+        }
+      : {};
+
   let sawText = false;
 
   const result = streamText({
     model,
     system: systemPrompt,
     messages,
-    tools: webSearchEnabled ? {} : knowledgeTools,
+    tools: webSearchEnabled ? {} : { ...knowledgeTools, ...antoineTools },
     maxSteps: webSearchEnabled ? 15 : 12,
     onChunk({ chunk }) {
       if (chunk.type === "text-delta" && chunk.textDelta.length > 0) {
