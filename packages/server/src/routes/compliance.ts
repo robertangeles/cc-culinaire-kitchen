@@ -5,7 +5,9 @@
  * upload, the HQ verification queue, expiry rules, and the compliance
  * dashboard.
  *
- * All routes require authentication. Permission-gated by:
+ * Gated on the compliance_enabled site_setting (404 when off — see
+ * requireFlag's own header comment), then require authentication.
+ * Permission-gated by:
  *   compliance:read-own     — view/upload your own compliance documents
  *   compliance:read-all     — view compliance documents for all staff
  *   compliance:verify       — approve or reject uploaded documents
@@ -15,6 +17,7 @@
 import { Router } from "express";
 import multer from "multer";
 import { authenticate, requirePermission } from "../middleware/auth.js";
+import { requireFlag } from "../middleware/requireFlag.js";
 import { complianceDocumentViewRateLimit, complianceReportRateLimit } from "../middleware/rateLimiter.js";
 import {
   handleListMyDocuments,
@@ -37,6 +40,11 @@ import {
 } from "../controllers/complianceController.js";
 
 const router = Router();
+// Ahead of authenticate, on purpose: with the flag off, an unauthenticated
+// prober should see the same 404 an authenticated one gets — the route looks
+// entirely absent, not merely locked behind a login. See requireFlag's own
+// header comment for why this retrofit exists and why it fails closed.
+router.use(requireFlag("compliance_enabled"));
 router.use(authenticate);
 
 /**
