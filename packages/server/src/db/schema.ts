@@ -3378,6 +3378,8 @@ export const staffAvailability = pgTable(
     index("idx_staff_availability_user").on(table.userId),
     // FK index: org-wide availability reporting.
     index("idx_staff_availability_org").on(table.organisationId),
+    // FK index: "every availability window defined at (or org-wide for) one venue".
+    index("idx_staff_availability_location").on(table.storeLocationId),
     check(
       "chk_staff_availability_time_order",
       sql`${table.availableUntil} > ${table.availableFrom}`,

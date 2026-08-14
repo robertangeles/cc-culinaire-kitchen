@@ -137,6 +137,8 @@ const statements = [
   sql`CREATE INDEX IF NOT EXISTS idx_staff_availability_user ON staff_availability (user_id)`,
   // FK index: org-wide availability reporting.
   sql`CREATE INDEX IF NOT EXISTS idx_staff_availability_org ON staff_availability (organisation_id)`,
+  // FK index: "every availability window defined at (or org-wide for) one venue".
+  sql`CREATE INDEX IF NOT EXISTS idx_staff_availability_location ON staff_availability (store_location_id)`,
 ];
 
 async function main() {
