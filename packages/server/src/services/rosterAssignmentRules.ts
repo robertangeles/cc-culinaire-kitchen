@@ -48,10 +48,15 @@ function classify(doc: HeldDocument | undefined, today: string): Status {
 
 /**
  * Decide whether a staff member holding `heldDocs` can be assigned to a role
- * requiring `requirements`. Checked in order; the first requirement that
- * fails AND whose rule blocks on it stops the check. A requirement whose
- * rule does not block on expiry (blockOnExpiry=false) never gates assignment
- * — it is tracked in the compliance vault but does not stop rostering.
+ * requiring `requirements`. Checked in order; the first failing requirement
+ * stops the check.
+ *
+ * blockOnExpiry (document_expiry_rule.block_roster_on_expiry) governs only
+ * the "expired" case, matching its own doc comment in schema.ts — "whether
+ * an EXPIRED one blocks rostering". A document that is missing, rejected, or
+ * still unverified is a completeness gap, not an expiry grace period, so it
+ * always blocks: the rule flag cannot be used to make a required document
+ * type optional.
  */
 export function canAssign(
   heldDocs: HeldDocument[],
@@ -62,7 +67,7 @@ export function canAssign(
     const doc = heldDocs.find((d) => d.documentType === req.documentType);
     const status = classify(doc, today);
     if (status === "ok") continue;
-    if (!req.blockOnExpiry) continue;
+    if (status === "expired" && !req.blockOnExpiry) continue;
     return { allowed: false, documentType: req.documentType, reason: status, expiryDate: doc?.expiryDate ?? null };
   }
   return { allowed: true };

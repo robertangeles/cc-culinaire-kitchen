@@ -29,8 +29,13 @@ describe("Formula F-RA-01: canAssign", () => {
         expiryDate: null,
       });
     });
-    it("missing + blockOnExpiry=false -> allowed", () => {
-      expect(canAssign([], [requirement(false)], TODAY)).toEqual({ allowed: true });
+    it("missing + blockOnExpiry=false -> STILL blocked (flag only governs expiry)", () => {
+      expect(canAssign([], [requirement(false)], TODAY)).toEqual({
+        allowed: false,
+        documentType: "RSA",
+        reason: "missing",
+        expiryDate: null,
+      });
     });
 
     it("unverified (Pending) + blockOnExpiry=true -> blocked, reason unverified", () => {
@@ -41,8 +46,13 @@ describe("Formula F-RA-01: canAssign", () => {
         expiryDate: "2027-01-01",
       });
     });
-    it("unverified (Pending) + blockOnExpiry=false -> allowed", () => {
-      expect(canAssign([PENDING], [requirement(false)], TODAY)).toEqual({ allowed: true });
+    it("unverified (Pending) + blockOnExpiry=false -> STILL blocked (flag only governs expiry)", () => {
+      expect(canAssign([PENDING], [requirement(false)], TODAY)).toEqual({
+        allowed: false,
+        documentType: "RSA",
+        reason: "unverified",
+        expiryDate: "2027-01-01",
+      });
     });
 
     it("rejected + blockOnExpiry=true -> blocked, reason rejected", () => {
@@ -53,8 +63,13 @@ describe("Formula F-RA-01: canAssign", () => {
         expiryDate: "2027-01-01",
       });
     });
-    it("rejected + blockOnExpiry=false -> allowed", () => {
-      expect(canAssign([REJECTED], [requirement(false)], TODAY)).toEqual({ allowed: true });
+    it("rejected + blockOnExpiry=false -> STILL blocked (flag only governs expiry)", () => {
+      expect(canAssign([REJECTED], [requirement(false)], TODAY)).toEqual({
+        allowed: false,
+        documentType: "RSA",
+        reason: "rejected",
+        expiryDate: "2027-01-01",
+      });
     });
 
     it("expired (Verified past expiryDate) + blockOnExpiry=true -> blocked, reason expired", () => {
@@ -120,11 +135,13 @@ describe("Formula F-RA-01: canAssign", () => {
       });
     });
 
-    it("a non-blocking failure is skipped in favour of a later blocking one", () => {
-      const held: HeldDocument[] = [];
+    it("a non-blocking expired document is skipped in favour of a later blocking failure", () => {
+      const held: HeldDocument[] = [
+        { documentType: "RSA", verificationStatus: "Verified", expiryDate: "2026-08-01" }, // expired, but rule tolerates it
+      ];
       const requirements: AssignmentRequirement[] = [
-        { documentType: "RSA", blockOnExpiry: false }, // missing, but not gating
-        { documentType: "FSS", blockOnExpiry: true }, // missing, and gating
+        { documentType: "RSA", blockOnExpiry: false }, // expired, but not gating
+        { documentType: "FSS", blockOnExpiry: true }, // missing, and always gates
       ];
       expect(canAssign(held, requirements, TODAY)).toEqual({
         allowed: false,
