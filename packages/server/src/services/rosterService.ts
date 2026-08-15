@@ -598,6 +598,8 @@ export async function publishRoster(
   await assertLocationInOrg(storeLocationId, orgId);
   const jurisdiction = await resolveJurisdiction(storeLocationId);
   const today = todayIso();
+  const fromDate = parseFilterDate(from);
+  const toDate = parseFilterDate(to);
 
   const draftShifts = await db
     .select()
@@ -607,8 +609,8 @@ export async function publishRoster(
         eq(shift.organisationId, orgId),
         eq(shift.storeLocationId, storeLocationId),
         eq(shift.status, "Draft"),
-        gte(shift.startDatetime, new Date(from)),
-        lte(shift.startDatetime, new Date(to)),
+        gte(shift.startDatetime, fromDate),
+        lte(shift.startDatetime, toDate),
       ),
     );
 
