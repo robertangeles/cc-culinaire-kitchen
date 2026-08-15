@@ -73,7 +73,7 @@ router.delete("/assignments/:id", requirePermission("roster:manage"), handleRemo
 // ─── Availability ─────────────────────────────────────────────────
 
 router.get("/availability/mine", requirePermission("roster:read-own"), handleListMyAvailability);
-router.get("/availability", requirePermission("roster:manage"), handleListOrgAvailability);
+router.get("/availability", requirePermission("roster:read-all"), handleListOrgAvailability);
 router.post("/availability", requirePermission("roster:read-own"), handleCreateAvailability);
 router.put("/availability/:id", requirePermission("roster:read-own"), handleUpdateAvailability);
 router.delete("/availability/:id", requirePermission("roster:read-own"), handleDeleteAvailability);
