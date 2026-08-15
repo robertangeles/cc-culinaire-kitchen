@@ -92,6 +92,11 @@ describe.skipIf(!RUN)("roster service (real DB)", () => {
       { userId: userA, organisationId: orgA, role: "admin" },
       { userId: userB, organisationId: orgA, role: "admin" },
       { userId: userC, organisationId: orgB, role: "admin" },
+      // userC also staffs orgA — a real dual-membership case (joinOrganisation
+      // lets any user belong to more than one org), used below to prove a
+      // document verified under orgB's compliance program can't gate an
+      // assignment at orgA.
+      { userId: userC, organisationId: orgA, role: "member" },
     ]);
 
     [{ id: locA }] = await db
@@ -225,6 +230,34 @@ describe.skipIf(!RUN)("roster service (real DB)", () => {
 
     const assignment = await assignStaff(orgA, s.shiftId, userA, userA);
     expect(assignment.status).toBe("Pending");
+  });
+
+  it("assignStaff at orgA ignores a document verified only under orgB's compliance program", async () => {
+    // userC belongs to both orgs. orgB independently verified userC's
+    // document; orgA never has. The gate must not trust orgB's verification.
+    await db.insert(complianceDocument).values({
+      organisationId: orgB,
+      userId: userC,
+      documentType: docType,
+      verificationStatus: "Verified",
+      expiryDate: addDays(TODAY, 365),
+      storagePublicId: `${tag}-pub-c-orgB`,
+      uploadedBy: userC,
+    });
+
+    const start = new Date();
+    const end = new Date(start.getTime() + 4 * 60 * 60 * 1000);
+    const s = await createShift(
+      orgA,
+      { storeLocationId: locA, rosterRoleId: roleId, startDatetime: start.toISOString(), endDatetime: end.toISOString() },
+      userA,
+    );
+
+    await expect(assignStaff(orgA, s.shiftId, userC, userA)).rejects.toMatchObject({
+      name: "AssignmentBlockedError",
+      statusCode: 409,
+      message: `Cannot assign. Roster Staff C (org B) has not uploaded a ${docType}.`,
+    });
   });
 
   it("respondToAssignment enforces ownership — userB cannot respond to userA's assignment", async () => {

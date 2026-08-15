@@ -165,11 +165,17 @@ export interface ShiftFilters {
   to?: string;
 }
 
+function parseFilterDate(value: string): Date {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) throw new RosterError("from/to must be valid dates", 400);
+  return parsed;
+}
+
 export async function listShifts(orgId: number, filters: ShiftFilters = {}) {
   const conditions = [eq(shift.organisationId, orgId)];
   if (filters.storeLocationId) conditions.push(eq(shift.storeLocationId, filters.storeLocationId));
-  if (filters.from) conditions.push(gte(shift.startDatetime, new Date(filters.from)));
-  if (filters.to) conditions.push(lte(shift.startDatetime, new Date(filters.to)));
+  if (filters.from) conditions.push(gte(shift.startDatetime, parseFilterDate(filters.from)));
+  if (filters.to) conditions.push(lte(shift.startDatetime, parseFilterDate(filters.to)));
   return db
     .select()
     .from(shift)
@@ -415,7 +421,7 @@ async function getRequirementsForRole(
   return requirements;
 }
 
-async function getHeldDocuments(userId: number, documentTypes: string[]): Promise<HeldDocument[]> {
+async function getHeldDocuments(orgId: number, userId: number, documentTypes: string[]): Promise<HeldDocument[]> {
   if (documentTypes.length === 0) return [];
   const rows = await db
     .select({
@@ -424,7 +430,13 @@ async function getHeldDocuments(userId: number, documentTypes: string[]): Promis
       expiryDate: complianceDocument.expiryDate,
     })
     .from(complianceDocument)
-    .where(and(eq(complianceDocument.userId, userId), inArray(complianceDocument.documentType, documentTypes)))
+    .where(
+      and(
+        eq(complianceDocument.organisationId, orgId),
+        eq(complianceDocument.userId, userId),
+        inArray(complianceDocument.documentType, documentTypes),
+      ),
+    )
     .orderBy(desc(complianceDocument.uploadedAt));
 
   // A person may hold more than one row per type over time (renewals,
@@ -473,6 +485,7 @@ export async function assignStaff(orgId: number, shiftId: string, userId: number
   const today = todayIso();
   const requirements = await getRequirementsForRole(roleRow.rosterRoleId, jurisdiction, today);
   const heldDocs = await getHeldDocuments(
+    orgId,
     userId,
     requirements.map((r) => r.documentType),
   );
@@ -614,6 +627,7 @@ export async function publishRoster(
     let blockedReason: string | null = null;
     for (const a of assignments) {
       const heldDocs = await getHeldDocuments(
+        orgId,
         a.userId,
         requirements.map((r) => r.documentType),
       );
