@@ -149,6 +149,11 @@ async function seed() {
     { permissionKey: "compliance:read-all", permissionDescription: "View compliance documents for all staff at your venue" },
     { permissionKey: "compliance:verify", permissionDescription: "Approve or reject uploaded compliance documents" },
     { permissionKey: "compliance:manage-rules", permissionDescription: "Manage expiry rules and organisation document requirements" },
+    // Roster Core — shift scheduling and staff availability
+    { permissionKey: "roster:read-own", permissionDescription: "View and respond to your own shifts and availability" },
+    { permissionKey: "roster:read-all", permissionDescription: "View all shifts, roles, and org-wide availability" },
+    { permissionKey: "roster:manage", permissionDescription: "Create and edit roles, shifts, and staff assignments" },
+    { permissionKey: "roster:publish", permissionDescription: "Publish a roster, making shifts live" },
   ];
 
   for (const p of defaultPermissions) {
@@ -176,6 +181,7 @@ async function seed() {
       "menu:read", "waste:read", "prep:manage",
       "brain:read", "brain:manage",
       "compliance:read-own", "compliance:read-all", "compliance:verify", "compliance:manage-rules",
+      "roster:read-own", "roster:read-all", "roster:manage", "roster:publish",
     ],
     // Default tiers are solo operators (chef + owner in one) — they keep full module
     // access. Staff differentiation (BOH/FOH) is done via custom roles that omit these.
@@ -186,6 +192,7 @@ async function seed() {
       "menu:read", "waste:read", "prep:manage",
       "brain:read", "brain:manage",
       "compliance:read-own",
+      "roster:read-own",
     ],
     "Paid Subscriber": [
       "chat:access", "chat:unlimited", "org:create-organisation", "org:manage-organisation",
@@ -194,6 +201,7 @@ async function seed() {
       "menu:read", "waste:read", "prep:manage",
       "brain:read", "brain:manage",
       "compliance:read-own", "compliance:read-all", "compliance:verify",
+      "roster:read-own", "roster:read-all", "roster:manage", "roster:publish",
     ],
   };
 
