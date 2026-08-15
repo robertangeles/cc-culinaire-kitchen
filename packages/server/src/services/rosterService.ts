@@ -26,6 +26,13 @@ import {
 } from "../db/schema.js";
 import * as auditService from "./auditService.js";
 import { canAssign, type HeldDocument, type AssignmentRequirement } from "./rosterAssignmentRules.js";
+import {
+  getActiveAwardRules,
+  evaluateAwardRules,
+  buildAwardCoverage,
+  type AwardWarning,
+  type AwardCoverage,
+} from "./awardRuleService.js";
 import { formatAuDate } from "@culinaire/shared";
 
 export class RosterError extends Error {
@@ -574,6 +581,10 @@ export async function removeAssignment(orgId: number, assignmentId: string, acto
 export interface PublishResult {
   publishedShiftIds: string[];
   heldShifts: Array<{ shiftId: string; reason: string }>;
+  /** Advisory-only — never blocks. Each warning is tagged with the shift it's about. */
+  awardWarnings: Array<AwardWarning & { shiftId: string }>;
+  /** ALWAYS present, warnings or not — an empty warnings[] must never read as "verified clean". */
+  awardCoverage: AwardCoverage;
 }
 
 /**
@@ -582,6 +593,12 @@ export interface PublishResult {
  * can expire between drafting and publishing. A shift whose assignment now
  * fails is held back (left in Draft) rather than blocking the whole batch —
  * same "held, not blocked" shape the s.114 consent workflow (Slice 7) uses.
+ *
+ * Every shift that DOES publish is also run through the Award engine
+ * (advisory-only, never blocks — see awardRuleService.ts). The coverage
+ * disclosure is always returned, even when zero shifts publish or zero
+ * award_rule rows exist, so the operator is never left assuming silence
+ * means the roster was checked clean.
  *
  * ponytail: re-checks one shift/assignment at a time (a DB round trip per
  * assignment), fine at a single venue's weekly-roster scale. Upgrade to a
@@ -598,6 +615,7 @@ export async function publishRoster(
   await assertLocationInOrg(storeLocationId, orgId);
   const jurisdiction = await resolveJurisdiction(storeLocationId);
   const today = todayIso();
+  const now = new Date().toISOString();
   const fromDate = parseFilterDate(from);
   const toDate = parseFilterDate(to);
 
@@ -614,8 +632,12 @@ export async function publishRoster(
       ),
     );
 
+  // Fetched once — jurisdiction and "now" are constant for the whole batch.
+  const activeAwardRules = await getActiveAwardRules(jurisdiction, today);
+
   const publishedShiftIds: string[] = [];
   const heldShifts: Array<{ shiftId: string; reason: string }> = [];
+  const awardWarnings: Array<AwardWarning & { shiftId: string }> = [];
 
   for (const s of draftShifts) {
     const assignments = await db
@@ -646,9 +668,19 @@ export async function publishRoster(
       continue;
     }
 
+    const evaluation = evaluateAwardRules(
+      { startDatetime: s.startDatetime.toISOString(), endDatetime: s.endDatetime.toISOString() },
+      activeAwardRules,
+      now,
+      jurisdiction,
+    );
+    for (const w of evaluation.warnings) awardWarnings.push({ ...w, shiftId: s.shiftId });
+
     await db.update(shift).set({ status: "Published", updatedDttm: new Date() }).where(eq(shift.shiftId, s.shiftId));
     publishedShiftIds.push(s.shiftId);
   }
+
+  const awardCoverage = buildAwardCoverage(activeAwardRules, jurisdiction);
 
   await auditService.log({
     entityType: "roster_publish",
@@ -656,8 +688,8 @@ export async function publishRoster(
     action: "update",
     actorUserId,
     organisationId: orgId,
-    metadata: { from, to, publishedShiftIds, heldShifts },
+    metadata: { from, to, publishedShiftIds, heldShifts, awardWarnings, awardCoverage },
   });
 
-  return { publishedShiftIds, heldShifts };
+  return { publishedShiftIds, heldShifts, awardWarnings, awardCoverage };
 }

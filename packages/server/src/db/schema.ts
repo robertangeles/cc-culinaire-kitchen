@@ -3390,3 +3390,41 @@ export const staffAvailability = pgTable(
     ),
   ],
 );
+
+/**
+ * Award interpretation rules (Fair Work / MA000009-style), advisory-only —
+ * see awardRuleService.ts. Shared jurisdiction rule library, same shape as
+ * documentExpiryRule: no organisationId, effective-dated and versioned, a
+ * changed rule closes the old row (effectiveTo) and inserts a new one so a
+ * roster published last year can still show the rule that applied then.
+ *
+ * Ships with ZERO rows seeded (Phase 2 decision, 2026-08-14): nobody on this
+ * project is named as competent to author Award thresholds, and a wrong
+ * threshold is worse than an honestly-disclosed gap. awardRuleService.evaluate()
+ * always runs and always returns a `coverage` object naming what it checked —
+ * an empty `warnings[]` must never read as "the roster was verified clean"
+ * when really no rules exist to check it against.
+ */
+export const awardRule = pgTable(
+  "award_rule",
+  {
+    awardRuleId: uuid("award_rule_id").defaultRandom().primaryKey(),
+    /** NULL = national (applies regardless of venue state). */
+    jurisdiction: varchar("jurisdiction", { length: 3 }),
+    awardCode: varchar("award_code", { length: 20 }).notNull(),
+    /** e.g. "max_ordinary_hours", "publish_notice" — see AWARD_CHECKED_RULE_TYPES in awardRuleService.ts. */
+    ruleType: varchar("rule_type", { length: 40 }).notNull(),
+    /** Unit is implied by ruleType (hours for both rule types this engine currently evaluates). */
+    thresholdValue: numeric("threshold_value", { precision: 10, scale: 2 }),
+    effectiveFrom: date("effective_from").notNull(),
+    effectiveTo: date("effective_to"),
+    sourceCitation: varchar("source_citation", { length: 500 }),
+    ruleVersion: varchar("rule_version", { length: 20 }).notNull(),
+    createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
+    updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // Rule lookup: "the active rule for this type + jurisdiction on date X" — same shape as idx_document_expiry_rule_lookup.
+    index("idx_award_rule_lookup").on(table.ruleType, table.jurisdiction, table.effectiveFrom),
+  ],
+);
