@@ -642,7 +642,14 @@ async function assertHolidayCalendarLoaded(
   toDate: Date,
 ): Promise<void> {
   if (!jurisdiction) return;
-  for (let year = fromDate.getFullYear(); year <= toDate.getFullYear(); year++) {
+  // getUTCFullYear(), not getFullYear(): parseFilterDate() parses a bare
+  // "YYYY-MM-DD" string as UTC midnight (new Date(value)), so reading the
+  // year back in the HOST's local time zone is wrong on any host west of
+  // UTC — dates.ts documents this exact class of bug ("this project runs on
+  // a US-hosted server"). getFullYear() there silently reads back one year
+  // early (e.g. Jan 1 2031 UTC midnight -> Dec 31 2030 in America/Los_Angeles),
+  // which can make this loop skip the very year it exists to guard.
+  for (let year = fromDate.getUTCFullYear(); year <= toDate.getUTCFullYear(); year++) {
     if (!(await isYearLoaded(jurisdiction, year))) {
       throw new RosterError(`Public holidays for ${jurisdiction} ${year} are not loaded.`, 409);
     }
