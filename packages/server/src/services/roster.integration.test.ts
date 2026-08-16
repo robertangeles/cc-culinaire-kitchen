@@ -239,6 +239,28 @@ describe.skipIf(!RUN)("roster service (real DB)", () => {
     expect(shiftsOrgB.some((s) => s.shiftId === created.shiftId)).toBe(false);
   });
 
+  it("assignStaff refuses to add anyone to an already-Published shift", async () => {
+    // Closes the gap pr-reviewer found: publishRoster() is the ONLY place
+    // the s.114 consent gate runs, and it only ever touches Draft shifts.
+    // Without this guard, assigning someone directly onto an already-
+    // Published shift would skip consent checking entirely for that person.
+    const start = new Date();
+    const end = new Date(start.getTime() + 4 * 60 * 60 * 1000);
+    const s = await createShift(
+      orgA,
+      { storeLocationId: locA, rosterRoleId: roleId, startDatetime: start.toISOString(), endDatetime: end.toISOString() },
+      userA,
+    );
+    const result = await publishRoster(orgA, locA, addDays(TODAY, -1), addDays(TODAY, 1), userA);
+    expect(result.publishedShiftIds).toContain(s.shiftId);
+
+    await expect(assignStaff(orgA, s.shiftId, userA, userA)).rejects.toMatchObject({
+      name: "RosterError",
+      statusCode: 409,
+      message: "Can only assign staff to a Draft shift",
+    });
+  });
+
   it("assignStaff blocks with the verbatim refusal message when the required document is missing", async () => {
     const start = new Date();
     const end = new Date(start.getTime() + 4 * 60 * 60 * 1000);

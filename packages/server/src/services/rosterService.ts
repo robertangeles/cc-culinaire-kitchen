@@ -531,6 +531,14 @@ function consentHoldReason(consent: string | null, staffDisplayName: string): st
 
 export async function assignStaff(orgId: number, shiftId: string, userId: number, actorUserId: number) {
   const shiftRow = await getShiftRow(orgId, shiftId);
+  // Same rule as updateShift: only a Draft shift can gain a new assignee.
+  // Not just consistency — publishRoster() is the ONLY place the s.114
+  // consent gate runs, and it only ever touches Draft shifts. Without this,
+  // assigning someone directly onto an already-Published public-holiday
+  // shift would skip consent entirely: no request, no notification, no
+  // audit trail, and nothing would ever catch it since that shift never
+  // goes through publishRoster() again.
+  if (shiftRow.status !== "Draft") throw new RosterError("Can only assign staff to a Draft shift", 409);
   await assertUserInOrg(userId, orgId);
   const roleRow = await getRoleRow(orgId, shiftRow.rosterRoleId);
 
