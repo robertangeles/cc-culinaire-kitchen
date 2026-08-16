@@ -40,6 +40,7 @@ import {
   deletePublicHoliday,
   PublicHolidayError,
 } from "../services/publicHolidayService.js";
+import { requestConsent, respondToConsent } from "../services/consentService.js";
 
 const RoleSchema = z.object({
   roleName: z.string().min(1).max(100),
@@ -78,6 +79,7 @@ const AvailabilitySchema = z.object({
 
 const AssignSchema = z.object({ userId: z.number().int().positive() });
 const RespondSchema = z.object({ response: z.enum(["Confirmed", "Declined"]) });
+const ConsentResponseSchema = z.object({ response: z.enum(["Accepted", "Declined"]) });
 const PublishSchema = z.object({
   storeLocationId: z.string().uuid(),
   from: z.string().min(1),
@@ -301,6 +303,31 @@ export async function handleRespondToAssignment(req: Request, res: Response, nex
     res.json(
       await respondToAssignment(ctx.orgId, req.params.id as string, req.user!.sub, parsed.data.response),
     );
+  } catch (err) {
+    handleServiceError(err, res, next);
+  }
+}
+
+export async function handleRequestConsent(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const ctx = await resolveContext(req, res);
+    if (!ctx) return;
+    res.json(await requestConsent(ctx.orgId, req.params.id as string, req.user!.sub));
+  } catch (err) {
+    handleServiceError(err, res, next);
+  }
+}
+
+export async function handleRespondToConsent(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const ctx = await resolveContext(req, res);
+    if (!ctx) return;
+    const parsed = ConsentResponseSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.errors[0]?.message ?? "Invalid input" });
+      return;
+    }
+    res.json(await respondToConsent(ctx.orgId, req.params.id as string, req.user!.sub, parsed.data.response));
   } catch (err) {
     handleServiceError(err, res, next);
   }

@@ -24,6 +24,7 @@ import {
   awardRule,
   publicHoliday,
   auditLog,
+  notification,
 } from "../db/schema.js";
 import {
   listRoles,
@@ -39,6 +40,7 @@ import {
   createAvailability,
   listShiftAssignments,
 } from "./rosterService.js";
+import { requestConsent, respondToConsent } from "./consentService.js";
 
 /**
  * Real-database behaviour of Roster Core (Phase 2, Slice 3), end to end
@@ -201,6 +203,9 @@ describe.skipIf(!RUN)("roster service (real DB)", () => {
     if (locB) await db.delete(storeLocation).where(eq(storeLocation.storeLocationId, locB));
     if (orgA && orgB) {
       await db.delete(userOrganisation).where(inArray(userOrganisation.organisationId, [orgA, orgB]));
+      // requestConsent/respondToConsent write notification rows — must clear
+      // before the organisation FK delete, same reasoning as audit_log below.
+      await db.delete(notification).where(inArray(notification.organisationId, [orgA, orgB]));
       // assignStaff/respondToAssignment/removeAssignment/publishRoster all
       // write audit_log rows — must clear before the organisation FK delete.
       await db.delete(auditLog).where(inArray(auditLog.organisationId, [orgA, orgB]));
@@ -232,6 +237,28 @@ describe.skipIf(!RUN)("roster service (real DB)", () => {
 
     const shiftsOrgB = await listShifts(orgB);
     expect(shiftsOrgB.some((s) => s.shiftId === created.shiftId)).toBe(false);
+  });
+
+  it("assignStaff refuses to add anyone to an already-Published shift", async () => {
+    // Closes the gap pr-reviewer found: publishRoster() is the ONLY place
+    // the s.114 consent gate runs, and it only ever touches Draft shifts.
+    // Without this guard, assigning someone directly onto an already-
+    // Published shift would skip consent checking entirely for that person.
+    const start = new Date();
+    const end = new Date(start.getTime() + 4 * 60 * 60 * 1000);
+    const s = await createShift(
+      orgA,
+      { storeLocationId: locA, rosterRoleId: roleId, startDatetime: start.toISOString(), endDatetime: end.toISOString() },
+      userA,
+    );
+    const result = await publishRoster(orgA, locA, addDays(TODAY, -1), addDays(TODAY, 1), userA);
+    expect(result.publishedShiftIds).toContain(s.shiftId);
+
+    await expect(assignStaff(orgA, s.shiftId, userA, userA)).rejects.toMatchObject({
+      name: "RosterError",
+      statusCode: 409,
+      message: "Can only assign staff to a Draft shift",
+    });
   });
 
   it("assignStaff blocks with the verbatim refusal message when the required document is missing", async () => {
@@ -375,7 +402,15 @@ describe.skipIf(!RUN)("roster service (real DB)", () => {
     await assignStaff(orgA, s.shiftId, userA, userA);
 
     const assignments = await listShiftAssignments(orgA, s.shiftId);
-    expect(assignments).toEqual([{ assignmentId: expect.any(String), userId: userA, status: "Pending", staffName: "Roster Staff A" }]);
+    expect(assignments).toEqual([
+      {
+        assignmentId: expect.any(String),
+        userId: userA,
+        status: "Pending",
+        staffName: "Roster Staff A",
+        publicHolidayConsent: null,
+      },
+    ]);
 
     await expect(listShiftAssignments(orgB, s.shiftId)).rejects.toMatchObject({ statusCode: 404 });
   });
@@ -565,6 +600,153 @@ describe.skipIf(!RUN)("roster service (real DB)", () => {
 
     const publishedShift = (await listShifts(orgA, { storeLocationId: locA })).find((row) => row.shiftId === s.shiftId);
     expect(publishedShift?.isPublicHoliday).toBe(true);
+  });
+
+  // ── s.114 consent workflow (Slice 7) ──────────────────────────────
+  // Same holidayDate/VIC fixture as the isPublicHoliday test above — every
+  // shift here uses an explicit +11:00 (AEDT) offset for the same reason:
+  // a bare local-format string parses in the TEST RUNNER's zone (UTC in
+  // CI), which would stop these shifts from actually landing on the
+  // holiday date once read back through toVenueLocalDate.
+  describe("public holiday consent", () => {
+    const holidayDate = `${new Date().getFullYear()}-01-01`; // seeded in beforeAll
+
+    async function createHolidayAssignment(userId: number) {
+      const start = new Date(`${holidayDate}T09:00:00+11:00`);
+      const end = new Date(`${holidayDate}T17:00:00+11:00`);
+      const s = await createShift(
+        orgA,
+        { storeLocationId: locA, rosterRoleId: roleId, startDatetime: start.toISOString(), endDatetime: end.toISOString() },
+        userA,
+      );
+      const assignment = await assignStaff(orgA, s.shiftId, userId, userA);
+      return { shift: s, assignment };
+    }
+
+    it("requestConsent rejects a shift that isn't on a loaded public holiday date", async () => {
+      const start = new Date(`${TODAY}T09:00:00+11:00`);
+      const end = new Date(`${TODAY}T17:00:00+11:00`);
+      const s = await createShift(
+        orgA,
+        { storeLocationId: locA, rosterRoleId: roleId, startDatetime: start.toISOString(), endDatetime: end.toISOString() },
+        userA,
+      );
+      const assignment = await assignStaff(orgA, s.shiftId, userA, userA);
+      await expect(requestConsent(orgA, assignment.assignmentId, userB)).rejects.toMatchObject({
+        name: "RosterError",
+        statusCode: 400,
+        message: "This shift is not on a loaded public holiday date.",
+      });
+    });
+
+    it("requestConsent sets Requested and notifies the assignee directly", async () => {
+      const { assignment } = await createHolidayAssignment(userA);
+      const updated = await requestConsent(orgA, assignment.assignmentId, userB);
+      expect(updated.publicHolidayConsent).toBe("Requested");
+      expect(updated.consentRequestedAt).not.toBeNull();
+
+      const notifications = await db
+        .select({ id: notification.notificationId, recipientUserId: notification.recipientUserId })
+        .from(notification)
+        .where(
+          and(
+            eq(notification.relatedEntityId, assignment.assignmentId),
+            eq(notification.type, "HOLIDAY_CONSENT_REQUESTED"),
+          ),
+        );
+      expect(notifications).toHaveLength(1);
+      expect(notifications[0].recipientUserId).toBe(userA);
+    });
+
+    it("requestConsent refuses to re-request an already-accepted consent", async () => {
+      const { assignment } = await createHolidayAssignment(userA);
+      await requestConsent(orgA, assignment.assignmentId, userB);
+      await respondToConsent(orgA, assignment.assignmentId, userA, "Accepted");
+      await expect(requestConsent(orgA, assignment.assignmentId, userB)).rejects.toMatchObject({
+        statusCode: 409,
+      });
+    });
+
+    it("respondToConsent 404s for someone who isn't the assignee", async () => {
+      const { assignment } = await createHolidayAssignment(userA);
+      await requestConsent(orgA, assignment.assignmentId, userB);
+      await expect(respondToConsent(orgA, assignment.assignmentId, userB, "Accepted")).rejects.toMatchObject({
+        statusCode: 404,
+      });
+    });
+
+    it("respondToConsent 409s when there is no pending request", async () => {
+      const { assignment } = await createHolidayAssignment(userA);
+      await expect(respondToConsent(orgA, assignment.assignmentId, userA, "Accepted")).rejects.toMatchObject({
+        statusCode: 409,
+      });
+    });
+
+    it("respondToConsent(Accepted) sets Accepted and audit-logs consent_accept", async () => {
+      const { assignment } = await createHolidayAssignment(userA);
+      await requestConsent(orgA, assignment.assignmentId, userB);
+      const updated = await respondToConsent(orgA, assignment.assignmentId, userA, "Accepted");
+      expect(updated.publicHolidayConsent).toBe("Accepted");
+      expect(updated.consentRespondedAt).not.toBeNull();
+
+      const [logRow] = await db
+        .select({ metadata: auditLog.metadata })
+        .from(auditLog)
+        .where(and(eq(auditLog.entityId, assignment.assignmentId), eq(auditLog.entityType, "shift_assignment")))
+        .orderBy(desc(auditLog.createdDttm))
+        .limit(1);
+      expect((logRow.metadata as { action: string }).action).toBe("consent_accept");
+    });
+
+    it("respondToConsent(Declined) sets Declined and audit-logs consent_decline — never silently overridden", async () => {
+      const { assignment } = await createHolidayAssignment(userA);
+      await requestConsent(orgA, assignment.assignmentId, userB);
+      const updated = await respondToConsent(orgA, assignment.assignmentId, userA, "Declined");
+      expect(updated.publicHolidayConsent).toBe("Declined");
+
+      const [logRow] = await db
+        .select({ metadata: auditLog.metadata })
+        .from(auditLog)
+        .where(and(eq(auditLog.entityId, assignment.assignmentId), eq(auditLog.entityType, "shift_assignment")))
+        .orderBy(desc(auditLog.createdDttm))
+        .limit(1);
+      expect((logRow.metadata as { action: string }).action).toBe("consent_decline");
+
+      // A second respond attempt (e.g. a manager trying to flip it back)
+      // finds no pending request and is refused — the decline stands.
+      await expect(respondToConsent(orgA, assignment.assignmentId, userA, "Accepted")).rejects.toMatchObject({
+        statusCode: 409,
+      });
+    });
+
+    it("publishRoster holds a public-holiday shift whose assignee was never asked to consent", async () => {
+      const { shift: s } = await createHolidayAssignment(userA);
+      const result = await publishRoster(orgA, locA, addDays(holidayDate, -1), addDays(holidayDate, 1), userA);
+      expect(result.publishedShiftIds).not.toContain(s.shiftId);
+      const held = result.heldShifts.find((h) => h.shiftId === s.shiftId);
+      expect(held?.reason).toContain("hasn't been asked to consent");
+    });
+
+    it("publishRoster holds a public-holiday shift whose assignee declined", async () => {
+      const { shift: s, assignment } = await createHolidayAssignment(userA);
+      await requestConsent(orgA, assignment.assignmentId, userB);
+      await respondToConsent(orgA, assignment.assignmentId, userA, "Declined");
+
+      const result = await publishRoster(orgA, locA, addDays(holidayDate, -1), addDays(holidayDate, 1), userA);
+      expect(result.publishedShiftIds).not.toContain(s.shiftId);
+      const held = result.heldShifts.find((h) => h.shiftId === s.shiftId);
+      expect(held?.reason).toContain("declined to work this public holiday shift");
+    });
+
+    it("publishRoster publishes a public-holiday shift whose assignee accepted", async () => {
+      const { shift: s, assignment } = await createHolidayAssignment(userA);
+      await requestConsent(orgA, assignment.assignmentId, userB);
+      await respondToConsent(orgA, assignment.assignmentId, userA, "Accepted");
+
+      const result = await publishRoster(orgA, locA, addDays(holidayDate, -1), addDays(holidayDate, 1), userA);
+      expect(result.publishedShiftIds).toContain(s.shiftId);
+      expect(result.heldShifts.find((h) => h.shiftId === s.shiftId)).toBeUndefined();
+    });
   });
 
   it("createAvailability is scoped to the caller's org and location", async () => {

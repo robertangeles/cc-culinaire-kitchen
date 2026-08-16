@@ -41,6 +41,8 @@ import {
   handleListPublicHolidays,
   handleCreatePublicHoliday,
   handleDeletePublicHoliday,
+  handleRequestConsent,
+  handleRespondToConsent,
 } from "../controllers/rosterController.js";
 
 const router = Router();
@@ -73,6 +75,8 @@ router.post("/shifts/:id/assignments", requirePermission("roster:manage"), handl
 // ─── Assignments ──────────────────────────────────────────────────
 
 router.post("/assignments/:id/respond", requirePermission("roster:read-own"), handleRespondToAssignment);
+router.post("/assignments/:id/consent/request", requirePermission("roster:manage"), handleRequestConsent);
+router.post("/assignments/:id/consent/respond", requirePermission("roster:read-own"), handleRespondToConsent);
 router.delete("/assignments/:id", requirePermission("roster:manage"), handleRemoveAssignment);
 
 // ─── Availability ─────────────────────────────────────────────────

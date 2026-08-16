@@ -41,7 +41,7 @@ Categories: **entity** (named things) · **concept** (patterns) · **decision** 
 | [Store Locations System](entities/store-locations-system.md) | Multi-location subsystem under each Organisation (HQ, Branch, Commissary, Satellite) | 2026-04-29 |
 | [Prompt System](entities/prompt-system.md) | Prompt registry, runtime guard, versioning, mobile fetch endpoint | 2026-04-29 |
 | [Staff Compliance Vault](entities/staff-compliance-vault.md) | Phase 1 of 3: private vault for staff/venue compliance documents, verification queue, org-wide dashboard | 2026-08-07 |
-| [Roster Core](entities/roster-core.md) | Phase 2: roles, shifts, `canAssign` compliance gate, Award engine (shipped empty, coverage disclosed), fail-loud public holiday calendar; Slice 7 (s.114 consent) remaining | 2026-08-16 |
+| [Roster Core](entities/roster-core.md) | Phase 2 complete: roles, shifts, `canAssign` compliance gate, Award engine (shipped empty, coverage disclosed), fail-loud public holiday calendar, s.114 consent workflow | 2026-08-16 |
 
 ## Concepts
 | Page | Summary | Created |

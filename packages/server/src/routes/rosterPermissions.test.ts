@@ -63,6 +63,8 @@ const ROUTES: Array<{ method: string; path: string; permission: string }> = [
   { method: "GET", path: "/shifts/:id/assignments", permission: "roster:read-all" },
   { method: "POST", path: "/shifts/:id/assignments", permission: "roster:manage" },
   { method: "POST", path: "/assignments/:id/respond", permission: "roster:read-own" },
+  { method: "POST", path: "/assignments/:id/consent/request", permission: "roster:manage" },
+  { method: "POST", path: "/assignments/:id/consent/respond", permission: "roster:read-own" },
   { method: "DELETE", path: "/assignments/:id", permission: "roster:manage" },
   { method: "GET", path: "/availability/mine", permission: "roster:read-own" },
   { method: "GET", path: "/availability", permission: "roster:read-all" },

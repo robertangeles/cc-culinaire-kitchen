@@ -3315,7 +3315,7 @@ export const shift = pgTable(
  * "not applicable" is a real, distinct state from "requested but not yet
  * answered", so a nullable varchar carries that instead of forcing a
  * default like "Not Required" to stand in for NULL.
- * Allowed values when set: Pending | Accepted | Declined.
+ * Allowed values when set: Requested | Accepted | Declined.
  */
 export const shiftAssignment = pgTable(
   "shift_assignment",

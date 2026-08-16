@@ -31,7 +31,10 @@ export type NotificationType =
   | "BRAIN_CAPTURE_ERROR"
   | "BRAIN_DIGEST"
   | "BRAIN_NUDGE"
-  | "DOCUMENT_EXPIRY_ALERT";
+  | "DOCUMENT_EXPIRY_ALERT"
+  // "PUBLIC_HOLIDAY_..." would exceed `notification.type`'s varchar(30).
+  | "HOLIDAY_CONSENT_REQUESTED"
+  | "HOLIDAY_CONSENT_DECLINED";
 
 export type NotificationChannel = "IN_APP" | "EMAIL";
 

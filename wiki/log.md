@@ -4,6 +4,30 @@ Append-only. Newest entry on top.
 
 ---
 
+## 2026-08-17 — Roster Core Phase 2 complete: Slice 7 (s.114 consent workflow)
+
+- `feature/ck-web/public-holiday-consent`: `services/consentService.ts` (`requestConsent`/`respondToConsent`),
+  a `publicHolidayConsent` state machine already present on `shift_assignment` since Slice 2's original
+  schema (no new migration needed — confirmed on both dev and prod before starting). `publishRoster()`
+  now holds — never blocks — a public-holiday shift whose assignees haven't all accepted, reading
+  consent straight off the assignment rows it already fetches for the `canAssign` re-check (no extra
+  query). This closes out Phase 2 — all of T12–T16 from the original plan are now shipped.
+- **Real bug caught before it shipped**: `NotificationType` members `PUBLIC_HOLIDAY_CONSENT_REQUESTED`/
+  `_DECLINED` (32/31 chars) exceed `notification.type`'s `varchar(30)` — a Postgres error at insert time,
+  invisible to `tsc`. Only surfaced when the live integration suite actually ran the insert. Renamed to
+  `HOLIDAY_CONSENT_REQUESTED`/`_DECLINED`. Lesson: a DB column-length constraint is not something the
+  type system can catch — a string-literal union type only proves the value is one of the allowed
+  strings, never that it fits the column.
+- 25 integration tests (request/respond state machine, ownership, audit-log actions, three publish-hold
+  outcomes: never-asked, declined, accepted) — all passing against the live dev DB, alongside a full
+  live browser QA pass (Settings → Public Holidays loader → assign → request consent → staff sees a
+  distinct Accept/Decline prompt in `MyShiftsView.tsx` → decline → publish holds the shift with the
+  exact reason text → re-request → accept → publish succeeds).
+- Wrote up the whole workflow in [[roster-core]] and closed its stale "Slice 7 not built yet" limit.
+  Documented the still-open, module-wide (not Slice-7-specific) gap: no Playwright E2E exists for any
+  Roster Core flow across Slices 2–7 — every slice this session was verified via live browser QA
+  instead, matching established practice rather than introducing new E2E CI infrastructure mid-slice.
+
 ## 2026-08-16 — Roster Core (Phase 2, Slices 0–6) built and documented
 
 - Slices 0–5 (flags, Antoine tool, roster schema + `canAssign`, roster service/routes, Award
