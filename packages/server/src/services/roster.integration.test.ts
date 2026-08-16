@@ -7,7 +7,7 @@ import { applyEnvPrefix } from "../utils/envShim.js";
 config({ path: resolve(dirname(fileURLToPath(import.meta.url)), "../../../../.env") });
 applyEnvPrefix();
 
-import { eq, inArray } from "drizzle-orm";
+import { eq, and, desc, inArray } from "drizzle-orm";
 import { db } from "../db/index.js";
 import {
   organisation,
@@ -21,6 +21,7 @@ import {
   staffAvailability,
   complianceDocument,
   documentExpiryRule,
+  awardRule,
   auditLog,
 } from "../db/schema.js";
 import {
@@ -371,6 +372,96 @@ describe.skipIf(!RUN)("roster service (real DB)", () => {
     expect(result.heldShifts.find((h) => h.shiftId === shiftToHold.shiftId)?.reason).toBe(
       `Cannot assign. Roster Staff B's ${docType} expired on ${formatDateForMessage(addDays(TODAY, -1))}.`,
     );
+
+    // The "ship empty" case: zero award_rule rows exist, so warnings must be
+    // empty, but the coverage disclosure must still be fully populated —
+    // never silently absent just because there was nothing to flag.
+    expect(result.awardWarnings).toEqual([]);
+    expect(result.awardCoverage.checked.length).toBeGreaterThan(0);
+    expect(result.awardCoverage.notChecked.length).toBeGreaterThan(0);
+    expect(result.awardCoverage.jurisdiction).toBe("VIC");
+  });
+
+  it("publishRoster's audit_log ack always carries the coverage object, even with zero warnings", async () => {
+    await db.insert(complianceDocument).values({
+      organisationId: orgA,
+      userId: userA,
+      documentType: docType,
+      verificationStatus: "Verified",
+      expiryDate: addDays(TODAY, 365),
+      storagePublicId: `${tag}-pub-audit1`,
+      uploadedBy: userA,
+    });
+    const start = new Date();
+    const end = new Date(start.getTime() + 4 * 60 * 60 * 1000);
+    const s = await createShift(
+      orgA,
+      { storeLocationId: locA, rosterRoleId: roleId, startDatetime: start.toISOString(), endDatetime: end.toISOString() },
+      userA,
+    );
+    await assignStaff(orgA, s.shiftId, userA, userA);
+
+    await publishRoster(orgA, locA, addDays(TODAY, -1), addDays(TODAY, 1), userA);
+
+    const [row] = await db
+      .select()
+      .from(auditLog)
+      .where(and(eq(auditLog.entityType, "roster_publish"), eq(auditLog.entityId, locA)))
+      .orderBy(desc(auditLog.createdDttm))
+      .limit(1);
+    expect(row).toBeTruthy();
+    const metadata = row.metadata as { awardWarnings: unknown[]; awardCoverage: { checked: string[] } };
+    expect(metadata.awardWarnings).toEqual([]);
+    expect(metadata.awardCoverage.checked.length).toBeGreaterThan(0);
+  });
+
+  it("publishRoster surfaces an advisory warning when an active award_rule is exceeded, without blocking the shift", async () => {
+    const [rule] = await db
+      .insert(awardRule)
+      .values({
+        jurisdiction: "VIC",
+        awardCode: `${tag}-MA000009`,
+        ruleType: "max_ordinary_hours",
+        thresholdValue: "4",
+        effectiveFrom: "2020-01-01",
+        ruleVersion: `${tag}-v1`,
+        sourceCitation: "MA000009 cl 32",
+      })
+      .returning({ id: awardRule.awardRuleId });
+
+    try {
+      await db.insert(complianceDocument).values({
+        organisationId: orgA,
+        userId: userA,
+        documentType: docType,
+        verificationStatus: "Verified",
+        expiryDate: addDays(TODAY, 365),
+        storagePublicId: `${tag}-pub-award1`,
+        uploadedBy: userA,
+      });
+      const start = new Date();
+      const end = new Date(start.getTime() + 8 * 60 * 60 * 1000); // 8h shift, exceeds the 4h rule
+      const s = await createShift(
+        orgA,
+        { storeLocationId: locA, rosterRoleId: roleId, startDatetime: start.toISOString(), endDatetime: end.toISOString() },
+        userA,
+      );
+      await assignStaff(orgA, s.shiftId, userA, userA);
+
+      const result = await publishRoster(orgA, locA, addDays(TODAY, -1), addDays(TODAY, 1), userA);
+
+      expect(result.publishedShiftIds).toContain(s.shiftId); // advisory only — never blocks
+      const warning = result.awardWarnings.find((w) => w.shiftId === s.shiftId);
+      expect(warning).toMatchObject({
+        severity: "advisory",
+        ruleVersion: `${tag}-v1`,
+        sourceCitation: "MA000009 cl 32",
+      });
+      expect(warning!.message).toContain("exceeding the Award's 4-hour ordinary-hours limit");
+      expect(result.awardCoverage.ruleVersionsInScope).toContain(`${tag}-v1`);
+    } finally {
+      await db.delete(awardRule).where(eq(awardRule.awardRuleId, rule.id));
+    }
   });
 
   it("createAvailability is scoped to the caller's org and location", async () => {
