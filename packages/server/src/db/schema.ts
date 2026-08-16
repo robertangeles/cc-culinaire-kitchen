@@ -3428,3 +3428,48 @@ export const awardRule = pgTable(
     index("idx_award_rule_lookup").on(table.ruleType, table.jurisdiction, table.effectiveFrom),
   ],
 );
+
+/**
+ * Gazetted public holidays, per Fair Work s.114. Shared jurisdiction data,
+ * same shape as awardRule/documentExpiryRule: no organisationId. Unlike
+ * award_rule, this table has no "ship empty by design" story — holiday
+ * declaration is clerical, not a competence question (see Known Risk 2a in
+ * the plan), and publishRoster() fails loud (blocks, not advisory) when a
+ * venue's jurisdiction+year combination has never been loaded, rather than
+ * silently treating every day as a non-holiday.
+ *
+ * jurisdiction is NOT NULL, unlike award_rule's national fallback — every AU
+ * public holiday is genuinely state-specific (there is no "national" row).
+ */
+export const publicHoliday = pgTable(
+  "public_holiday",
+  {
+    publicHolidayId: uuid("public_holiday_id").defaultRandom().primaryKey(),
+    jurisdiction: varchar("jurisdiction", { length: 3 }).notNull(),
+    holidayDate: date("holiday_date").notNull(),
+    holidayName: varchar("holiday_name", { length: 200 }).notNull(),
+    /** Regionally-declared (not observed statewide) — e.g. a show day observed in one town only. */
+    isRegional: boolean("is_regional").notNull().default(false),
+    regionNote: varchar("region_note", { length: 500 }),
+    sourceCitation: varchar("source_citation", { length: 500 }),
+    /**
+     * The calendar year this row was loaded as part of — normally equal to
+     * holidayDate's own year, but tracked explicitly (not derived) so "has
+     * jurisdiction X's Y calendar been loaded" is a direct equality lookup,
+     * not date arithmetic, and so an admin loading "2027" can see exactly
+     * what that load added even if research turns up an edge-case date
+     * outside the calendar year it belongs to.
+     */
+    loadedForYear: integer("loaded_for_year").notNull(),
+    createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
+    updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // isPublicHoliday(date, jurisdiction): "is this exact date a holiday here".
+    index("idx_public_holiday_lookup").on(table.jurisdiction, table.holidayDate),
+    // Gap check: "has jurisdiction X's year Y been loaded" + the admin loader's own list-by-year view.
+    index("idx_public_holiday_year").on(table.jurisdiction, table.loadedForYear),
+    // No AU state gazettes two different public holidays on the same date.
+    uniqueIndex("idx_public_holiday_unique").on(table.jurisdiction, table.holidayDate),
+  ],
+);

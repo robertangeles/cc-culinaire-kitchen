@@ -4,6 +4,30 @@ Append-only. Newest entry on top.
 
 ---
 
+## 2026-08-16 — Roster Core (Phase 2, Slices 0–6) built and documented
+
+- Slices 0–5 (flags, Antoine tool, roster schema + `canAssign`, roster service/routes, Award
+  engine shipped empty, roster builder + publish UI) shipped to production this session,
+  PRs #94–#98. Slice 6 (`feature/ck-web/public-holiday-calendar`) adds the `public_holiday`
+  table, `isPublicHoliday`/`isYearLoaded`, a daily gap-check job reusing `claimDailyRun`
+  verbatim, an admin loader Settings tab, and a fail-loud whole-publish block when a venue's
+  jurisdiction+year isn't loaded.
+- **Self-caught correctness bug, fixed before it shipped**: `publishRoster()`'s
+  `isPublicHoliday` computation originally read a shift's calendar date via
+  `startDatetime.toISOString().slice(0, 10)` — always UTC, so an early-local-morning AU
+  shift resolves to the *previous* UTC calendar day. Fixed with `toVenueLocalDate()`, which
+  reads the instant back in `store_location.iana_timezone` via `Intl.DateTimeFormat`.
+  Verified against the live dev DB: an integration test using an explicit `+11:00`
+  (AEDT) offset — deliberately avoiding a bare local-format string, which would parse in
+  the *test runner's* timezone and silently stop exercising the bug in a UTC-based CI
+  runner — now passes; it failed before the fix.
+- Wrote [[roster-core]] (new entity page) covering the full Phase 2 data model, the
+  `canAssign` gate, the Award engine's "shipped empty, coverage disclosed" design, and the
+  public-holiday fail-loud block. Corrected [[staff-compliance-vault]]'s stale "Phase 2
+  blocked on naming an `award_rule` owner" line — that blocker was resolved by shipping the
+  engine with zero rules seeded rather than waiting on an IR-competent reviewer.
+- Slice 7 (s.114 consent workflow) is the one remaining piece of Phase 2.
+
 ## 2026-08-07 — Documented the Staff Compliance Vault (Phase 1)
 
 - Wrote up `feature/ck-web/compliance-vault` (Phase 1 of the CEO-reviewed three-phase

@@ -38,6 +38,9 @@ import {
   handleUpdateAvailability,
   handleDeleteAvailability,
   handlePublishRoster,
+  handleListPublicHolidays,
+  handleCreatePublicHoliday,
+  handleDeletePublicHoliday,
 } from "../controllers/rosterController.js";
 
 const router = Router();
@@ -79,6 +82,14 @@ router.get("/availability", requirePermission("roster:read-all"), handleListOrgA
 router.post("/availability", requirePermission("roster:read-own"), handleCreateAvailability);
 router.put("/availability/:id", requirePermission("roster:read-own"), handleUpdateAvailability);
 router.delete("/availability/:id", requirePermission("roster:read-own"), handleDeleteAvailability);
+
+// ─── Public holidays ──────────────────────────────────────────────
+// Admin loader (Settings tab) — same permission for read and write, no
+// separate roster:read key exists for this admin-only reference table.
+
+router.get("/public-holidays", requirePermission("roster:manage"), handleListPublicHolidays);
+router.post("/public-holidays", requirePermission("roster:manage"), handleCreatePublicHoliday);
+router.delete("/public-holidays/:id", requirePermission("roster:manage"), handleDeletePublicHoliday);
 
 // ─── Publish ──────────────────────────────────────────────────────
 

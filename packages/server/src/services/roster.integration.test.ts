@@ -22,6 +22,7 @@ import {
   complianceDocument,
   documentExpiryRule,
   awardRule,
+  publicHoliday,
   auditLog,
 } from "../db/schema.js";
 import {
@@ -66,6 +67,8 @@ describe.skipIf(!RUN)("roster service (real DB)", () => {
   let locB: string;
   let roleId: string;
   let ruleId: string;
+  let publicHolidayId: string;
+  let publicHolidayPriorYearId: string;
 
   beforeAll(async () => {
     [{ id: userA }] = await db
@@ -137,9 +140,45 @@ describe.skipIf(!RUN)("roster service (real DB)", () => {
         effectiveFrom: "2020-01-01",
       })
       .returning({ id: documentExpiryRule.documentExpiryRuleId });
+
+    // Loads VIC for the current year — every existing publishRoster test
+    // uses a TODAY-relative window, so this is enough for them to pass the
+    // fail-loud holiday-calendar gate without every test needing to seed its
+    // own row. The date itself is arbitrary; only (jurisdiction,
+    // loadedForYear) matters for "is this year loaded".
+    [{ id: publicHolidayId }] = await db
+      .insert(publicHoliday)
+      .values({
+        jurisdiction: "VIC",
+        holidayDate: `${new Date().getFullYear()}-01-01`,
+        holidayName: `${tag} New Year's Day`,
+        loadedForYear: new Date().getFullYear(),
+      })
+      .returning({ id: publicHoliday.publicHolidayId });
+
+    // Also load the PRIOR year — the isPublicHoliday test below targets Jan
+    // 1 and widens its publish window by addDays(-1) (same reason every
+    // other publishRoster test in this file widens: a shift's UTC instant
+    // can sit outside a tight from/to boundary). Dec 31 the year before
+    // still falls inside that window, so assertHolidayCalendarLoaded's
+    // per-year loop needs that year loaded too, or its own fail-loud gate
+    // blocks a test that isn't exercising the gap-check path at all.
+    [{ id: publicHolidayPriorYearId }] = await db
+      .insert(publicHoliday)
+      .values({
+        jurisdiction: "VIC",
+        holidayDate: `${new Date().getFullYear() - 1}-01-01`,
+        holidayName: `${tag} New Year's Day (prior year)`,
+        loadedForYear: new Date().getFullYear() - 1,
+      })
+      .returning({ id: publicHoliday.publicHolidayId });
   });
 
   afterAll(async () => {
+    if (publicHolidayId) await db.delete(publicHoliday).where(eq(publicHoliday.publicHolidayId, publicHolidayId));
+    if (publicHolidayPriorYearId) {
+      await db.delete(publicHoliday).where(eq(publicHoliday.publicHolidayId, publicHolidayPriorYearId));
+    }
     if (ruleId) await db.delete(documentExpiryRule).where(eq(documentExpiryRule.documentExpiryRuleId, ruleId));
     const shiftRows = await db.select({ id: shift.shiftId }).from(shift).where(eq(shift.organisationId, orgA));
     const shiftIds = shiftRows.map((r) => r.id);
@@ -488,6 +527,44 @@ describe.skipIf(!RUN)("roster service (real DB)", () => {
     } finally {
       await db.delete(awardRule).where(eq(awardRule.awardRuleId, rule.id));
     }
+  });
+
+  it("publishRoster fails loud when the venue's jurisdiction+year holiday calendar isn't loaded", async () => {
+    // VIC/current-year is loaded (beforeAll); 2031 is not and never will be —
+    // fails before any shift is even queried, so no fixture shift is needed.
+    await expect(publishRoster(orgA, locA, "2031-01-01", "2031-01-02", userA)).rejects.toMatchObject({
+      name: "RosterError",
+      statusCode: 409,
+      message: "Public holidays for VIC 2031 are not loaded.",
+    });
+  });
+
+  it("publishRoster sets isPublicHoliday on a shift that falls on a loaded holiday date", async () => {
+    const holidayDate = `${new Date().getFullYear()}-01-01`; // seeded in beforeAll
+    // Explicit +11:00 (AEDT, always in effect on Jan 1) rather than a bare
+    // local-format string — locA's ianaTimezone defaults to
+    // Australia/Melbourne, and a bare string parses in the TEST RUNNER's
+    // local time, which is UTC in CI. That would silently stop this test
+    // from ever crossing a UTC day boundary in CI, defeating the point: 9am
+    // Melbourne on Jan 1 is 10pm UTC on Dec 31, the exact case
+    // toVenueLocalDate exists to get right.
+    const start = new Date(`${holidayDate}T09:00:00+11:00`);
+    const end = new Date(`${holidayDate}T17:00:00+11:00`);
+    const s = await createShift(
+      orgA,
+      { storeLocationId: locA, rosterRoleId: roleId, startDatetime: start.toISOString(), endDatetime: end.toISOString() },
+      userA,
+    );
+
+    // Wider than the single holiday day, matching the other publishRoster
+    // tests' addDays(-1)/addDays(1) window — startDatetime is parsed as
+    // local time while a bare date-only from/to boundary parses as UTC
+    // midnight, so a tight same-day window can miss the shift entirely.
+    const result = await publishRoster(orgA, locA, addDays(holidayDate, -1), addDays(holidayDate, 1), userA);
+    expect(result.publishedShiftIds).toContain(s.shiftId);
+
+    const publishedShift = (await listShifts(orgA, { storeLocationId: locA })).find((row) => row.shiftId === s.shiftId);
+    expect(publishedShift?.isPublicHoliday).toBe(true);
   });
 
   it("createAvailability is scoped to the caller's org and location", async () => {

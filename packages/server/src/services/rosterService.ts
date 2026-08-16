@@ -26,6 +26,8 @@ import {
 } from "../db/schema.js";
 import * as auditService from "./auditService.js";
 import { canAssign, type HeldDocument, type AssignmentRequirement } from "./rosterAssignmentRules.js";
+import { normalizeJurisdiction } from "./jurisdiction.js";
+import { isYearLoaded, isPublicHoliday as checkIsPublicHoliday } from "./publicHolidayService.js";
 import {
   getActiveAwardRules,
   evaluateAwardRules,
@@ -391,7 +393,32 @@ async function resolveJurisdiction(storeLocationId: string): Promise<string | nu
     .select({ state: storeLocation.state })
     .from(storeLocation)
     .where(eq(storeLocation.storeLocationId, storeLocationId));
-  return loc?.state?.trim().toUpperCase() || null;
+  return normalizeJurisdiction(loc?.state);
+}
+
+async function getVenueTimezone(storeLocationId: string): Promise<string> {
+  const [loc] = await db
+    .select({ ianaTimezone: storeLocation.ianaTimezone })
+    .from(storeLocation)
+    .where(eq(storeLocation.storeLocationId, storeLocationId));
+  return loc?.ianaTimezone ?? "Australia/Melbourne";
+}
+
+/**
+ * A shift's `startDatetime` is a UTC instant. `.toISOString().slice(0, 10)`
+ * would silently answer with the wrong calendar day for any shift whose
+ * local start time crosses midnight UTC once converted — e.g. a 9am AEST
+ * shift is 11pm UTC the day before. Public holidays are dates in the
+ * venue's local calendar, so the instant must be read back in the venue's
+ * own zone, not UTC.
+ */
+function toVenueLocalDate(instant: Date, ianaTimezone: string): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: ianaTimezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(instant);
 }
 
 /** The active document_expiry_rule for one type as of `today`, preferring an exact jurisdiction match over the national (NULL-jurisdiction) rule. */
@@ -604,6 +631,32 @@ export interface PublishResult {
 }
 
 /**
+ * Fail loud, whole-publish, before any shift is touched — a missing
+ * holiday-calendar year is a data gap that could hide an s.114 obligation
+ * on ANY shift in range, not a per-shift concern like canAssign. Decision 3:
+ * never silently skip s.114 by treating an unloaded year as "no holidays".
+ */
+async function assertHolidayCalendarLoaded(
+  jurisdiction: string | null,
+  fromDate: Date,
+  toDate: Date,
+): Promise<void> {
+  if (!jurisdiction) return;
+  // getUTCFullYear(), not getFullYear(): parseFilterDate() parses a bare
+  // "YYYY-MM-DD" string as UTC midnight (new Date(value)), so reading the
+  // year back in the HOST's local time zone is wrong on any host west of
+  // UTC — dates.ts documents this exact class of bug ("this project runs on
+  // a US-hosted server"). getFullYear() there silently reads back one year
+  // early (e.g. Jan 1 2031 UTC midnight -> Dec 31 2030 in America/Los_Angeles),
+  // which can make this loop skip the very year it exists to guard.
+  for (let year = fromDate.getUTCFullYear(); year <= toDate.getUTCFullYear(); year++) {
+    if (!(await isYearLoaded(jurisdiction, year))) {
+      throw new RosterError(`Public holidays for ${jurisdiction} ${year} are not loaded.`, 409);
+    }
+  }
+}
+
+/**
  * Publish every Draft shift at a venue within [from, to]. Each shift's
  * assignments are re-checked against canAssign at THIS moment — a document
  * can expire between drafting and publishing. A shift whose assignment now
@@ -615,6 +668,10 @@ export interface PublishResult {
  * disclosure is always returned, even when zero shifts publish or zero
  * award_rule rows exist, so the operator is never left assuming silence
  * means the roster was checked clean.
+ *
+ * Every published shift's isPublicHoliday flag is (re-)confirmed against
+ * the now-guaranteed-loaded calendar — this is what actually populates the
+ * column Slice 7's s.114 consent workflow reads.
  *
  * ponytail: re-checks one shift/assignment at a time (a DB round trip per
  * assignment), fine at a single venue's weekly-roster scale. Upgrade to a
@@ -630,10 +687,12 @@ export async function publishRoster(
 ): Promise<PublishResult> {
   await assertLocationInOrg(storeLocationId, orgId);
   const jurisdiction = await resolveJurisdiction(storeLocationId);
+  const venueTimezone = await getVenueTimezone(storeLocationId);
   const today = todayIso();
   const now = new Date().toISOString();
   const fromDate = parseFilterDate(from);
   const toDate = parseFilterDate(to);
+  await assertHolidayCalendarLoaded(jurisdiction, fromDate, toDate);
 
   const draftShifts = await db
     .select()
@@ -692,7 +751,16 @@ export async function publishRoster(
     );
     for (const w of evaluation.warnings) awardWarnings.push({ ...w, shiftId: s.shiftId });
 
-    await db.update(shift).set({ status: "Published", updatedDttm: new Date() }).where(eq(shift.shiftId, s.shiftId));
+    // Safe to call unconditionally when jurisdiction is set — the year is
+    // already guaranteed loaded by assertHolidayCalendarLoaded above.
+    const isPublicHolidayShift = jurisdiction
+      ? await checkIsPublicHoliday(toVenueLocalDate(s.startDatetime, venueTimezone), jurisdiction)
+      : false;
+
+    await db
+      .update(shift)
+      .set({ status: "Published", isPublicHoliday: isPublicHolidayShift, updatedDttm: new Date() })
+      .where(eq(shift.shiftId, s.shiftId));
     publishedShiftIds.push(s.shiftId);
   }
 
