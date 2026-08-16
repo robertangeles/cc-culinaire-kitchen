@@ -37,6 +37,8 @@ export interface Shift {
   updatedDttm: string;
 }
 
+export type PublicHolidayConsent = "Requested" | "Accepted" | "Declined" | null;
+
 export interface MyShift {
   shiftId: string;
   storeLocationId: string;
@@ -46,6 +48,7 @@ export interface MyShift {
   status: string;
   assignmentId: string;
   assignmentStatus: "Pending" | "Confirmed" | "Declined" | "Removed";
+  publicHolidayConsent: PublicHolidayConsent;
 }
 
 export interface Availability {
@@ -269,6 +272,7 @@ export interface ShiftAssignmentRow {
   userId: number;
   status: string;
   staffName: string;
+  publicHolidayConsent: PublicHolidayConsent;
 }
 
 /** Fetched on demand (e.g. when a shift row is expanded), not part of useShifts's list payload. */
@@ -276,6 +280,12 @@ export async function fetchShiftAssignments(shiftId: string): Promise<ShiftAssig
   const res = await fetch(`${BASE}/shifts/${shiftId}/assignments`, opts);
   if (!res.ok) throw await parseError(res, "Failed to load shift assignments");
   return res.json();
+}
+
+/** Manager asks a staff member to consent to a public-holiday shift (roster:manage). Caller re-fetches assignments to see the new status. */
+export async function requestConsent(assignmentId: string): Promise<void> {
+  const res = await fetch(`${BASE}/assignments/${assignmentId}/consent/request`, { ...opts, method: "POST" });
+  if (!res.ok) throw await parseError(res, "Failed to request consent");
 }
 
 export function usePublish() {
@@ -331,11 +341,25 @@ export function useMyShifts() {
     [refresh],
   );
 
+  /** s.114: accept or decline a requested public-holiday shift — distinct from `respond`, which answers "will you work this shift" rather than "do you consent to it being a public holiday". */
+  const respondToConsentRequest = useCallback(
+    async (assignmentId: string, response: "Accepted" | "Declined") => {
+      const res = await fetch(`${BASE}/assignments/${assignmentId}/consent/respond`, {
+        ...jsonOpts,
+        method: "POST",
+        body: JSON.stringify({ response }),
+      });
+      if (!res.ok) throw await parseError(res, "Failed to respond to the consent request");
+      await refresh();
+    },
+    [refresh],
+  );
+
   useEffect(() => {
     refresh();
   }, [refresh]);
 
-  return { shifts, isLoading, error, refresh, respond };
+  return { shifts, isLoading, error, refresh, respond, respondToConsentRequest };
 }
 
 export function useMyAvailability() {

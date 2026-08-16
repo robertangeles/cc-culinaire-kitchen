@@ -204,6 +204,7 @@ export async function listMyShifts(orgId: number, userId: number) {
       status: shift.status,
       assignmentId: shiftAssignment.assignmentId,
       assignmentStatus: shiftAssignment.status,
+      publicHolidayConsent: shiftAssignment.publicHolidayConsent,
     })
     .from(shiftAssignment)
     .innerJoin(shift, eq(shiftAssignment.shiftId, shift.shiftId))
@@ -387,8 +388,13 @@ export async function deleteAvailability(orgId: number, availabilityId: string, 
 
 // ── Assignment gate wiring ────────────────────────────────────────────
 
-/** The venue's state drives rule lookup — a document's own issuingJurisdiction is informational only (plan's Phase 1 note). */
-async function resolveJurisdiction(storeLocationId: string): Promise<string | null> {
+/**
+ * The venue's state drives rule lookup — a document's own issuingJurisdiction
+ * is informational only (plan's Phase 1 note). Exported — consentService.ts
+ * needs the same resolution to decide whether a shift's date is a public
+ * holiday before requesting consent for it.
+ */
+export async function resolveJurisdiction(storeLocationId: string): Promise<string | null> {
   const [loc] = await db
     .select({ state: storeLocation.state })
     .from(storeLocation)
@@ -396,7 +402,7 @@ async function resolveJurisdiction(storeLocationId: string): Promise<string | nu
   return normalizeJurisdiction(loc?.state);
 }
 
-async function getVenueTimezone(storeLocationId: string): Promise<string> {
+export async function getVenueTimezone(storeLocationId: string): Promise<string> {
   const [loc] = await db
     .select({ ianaTimezone: storeLocation.ianaTimezone })
     .from(storeLocation)
@@ -412,7 +418,7 @@ async function getVenueTimezone(storeLocationId: string): Promise<string> {
  * venue's local calendar, so the instant must be read back in the venue's
  * own zone, not UTC.
  */
-function toVenueLocalDate(instant: Date, ianaTimezone: string): string {
+export function toVenueLocalDate(instant: Date, ianaTimezone: string): string {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: ianaTimezone,
     year: "numeric",
@@ -510,6 +516,19 @@ async function staffName(userId: number): Promise<string> {
   return row?.userName ?? "This staff member";
 }
 
+/**
+ * The held-shift reason for one assignee who hasn't accepted a
+ * public-holiday shift, or null if they have (Slice 7, s.114). Every
+ * assignment row is already in hand here for the canAssign re-check, so
+ * this reads `publicHolidayConsent` off it rather than a fresh query.
+ */
+function consentHoldReason(consent: string | null, staffDisplayName: string): string | null {
+  if (consent === "Accepted") return null;
+  if (consent === "Declined") return `${staffDisplayName} declined to work this public holiday shift.`;
+  if (consent === "Requested") return `${staffDisplayName} hasn't responded to the public holiday consent request yet.`;
+  return `${staffDisplayName} hasn't been asked to consent to this public holiday shift yet.`;
+}
+
 export async function assignStaff(orgId: number, shiftId: string, userId: number, actorUserId: number) {
   const shiftRow = await getShiftRow(orgId, shiftId);
   await assertUserInOrg(userId, orgId);
@@ -552,6 +571,7 @@ export async function listShiftAssignments(orgId: number, shiftId: string) {
       userId: shiftAssignment.userId,
       status: shiftAssignment.status,
       staffName: user.userName,
+      publicHolidayConsent: shiftAssignment.publicHolidayConsent,
     })
     .from(shiftAssignment)
     .innerJoin(user, eq(user.userId, shiftAssignment.userId))
@@ -660,8 +680,13 @@ async function assertHolidayCalendarLoaded(
  * Publish every Draft shift at a venue within [from, to]. Each shift's
  * assignments are re-checked against canAssign at THIS moment — a document
  * can expire between drafting and publishing. A shift whose assignment now
- * fails is held back (left in Draft) rather than blocking the whole batch —
- * same "held, not blocked" shape the s.114 consent workflow (Slice 7) uses.
+ * fails is held back (left in Draft) rather than blocking the whole batch.
+ *
+ * A public-holiday shift gets the SAME "held, not blocked" treatment
+ * (s.114, Slice 7): every Pending/Confirmed assignee must have
+ * `publicHolidayConsent === "Accepted"` — see `consentHoldReason()` — or
+ * the shift is held with a reason naming who hasn't consented (or declined),
+ * checked only once canAssign has already passed for that person.
  *
  * Every shift that DOES publish is also run through the Award engine
  * (advisory-only, never blocks — see awardRuleService.ts). The coverage
@@ -670,8 +695,8 @@ async function assertHolidayCalendarLoaded(
  * means the roster was checked clean.
  *
  * Every published shift's isPublicHoliday flag is (re-)confirmed against
- * the now-guaranteed-loaded calendar — this is what actually populates the
- * column Slice 7's s.114 consent workflow reads.
+ * the now-guaranteed-loaded calendar — this is the column the consent
+ * workflow above reads.
  *
  * ponytail: re-checks one shift/assignment at a time (a DB round trip per
  * assignment), fine at a single venue's weekly-roster scale. Upgrade to a
@@ -723,6 +748,17 @@ export async function publishRoster(
       );
 
     const requirements = await getRequirementsForRole(s.rosterRoleId, jurisdiction, today);
+
+    // Computed once per shift, ahead of the assignment loop — the consent
+    // gate below needs to know this before it can check anyone's consent,
+    // and the value is reused at publish time so isPublicHoliday is checked
+    // exactly once per shift. Safe to call unconditionally when jurisdiction
+    // is set — the year is already guaranteed loaded by
+    // assertHolidayCalendarLoaded above.
+    const isPublicHolidayShift = jurisdiction
+      ? await checkIsPublicHoliday(toVenueLocalDate(s.startDatetime, venueTimezone), jurisdiction)
+      : false;
+
     let blockedReason: string | null = null;
     for (const a of assignments) {
       const heldDocs = await getHeldDocuments(
@@ -735,6 +771,17 @@ export async function publishRoster(
         const name = await staffName(a.userId);
         blockedReason = refusalMessage(name, decision.documentType, decision.reason, decision.expiryDate);
         break;
+      }
+      // s.114: a public-holiday shift needs every assignee's consent —
+      // checked only once canAssign has passed, so a compliance block is
+      // always the reason surfaced first when both apply.
+      if (isPublicHolidayShift) {
+        const name = await staffName(a.userId);
+        const holdReason = consentHoldReason(a.publicHolidayConsent, name);
+        if (holdReason) {
+          blockedReason = holdReason;
+          break;
+        }
       }
     }
 
@@ -750,12 +797,6 @@ export async function publishRoster(
       jurisdiction,
     );
     for (const w of evaluation.warnings) awardWarnings.push({ ...w, shiftId: s.shiftId });
-
-    // Safe to call unconditionally when jurisdiction is set — the year is
-    // already guaranteed loaded by assertHolidayCalendarLoaded above.
-    const isPublicHolidayShift = jurisdiction
-      ? await checkIsPublicHoliday(toVenueLocalDate(s.startDatetime, venueTimezone), jurisdiction)
-      : false;
 
     await db
       .update(shift)

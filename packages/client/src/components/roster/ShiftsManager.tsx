@@ -7,7 +7,7 @@
  */
 
 import { useEffect, useState } from "react";
-import { CalendarDays, ChevronDown, ChevronRight, Loader2, MapPin, Plus, Send, Trash2, UserPlus } from "lucide-react";
+import { CalendarDays, CalendarHeart, ChevronDown, ChevronRight, Loader2, MapPin, Plus, Send, Trash2, UserPlus } from "lucide-react";
 import { useLocation } from "../../context/LocationContext.js";
 import { useHasPermission } from "../../hooks/useHasPermission.js";
 import {
@@ -15,6 +15,7 @@ import {
   useRosterRoles,
   useOrgMembers,
   fetchShiftAssignments,
+  requestConsent,
   type Shift,
   type ShiftAssignmentRow,
   type OrgMember,
@@ -34,6 +35,12 @@ function statusTone(status: string): string {
   if (status === "Published") return "border-emerald-500/40 text-emerald-400";
   if (status === "Cancelled") return "border-red-500/40 text-red-400";
   return "border-dark-300 text-dark-600"; // Draft
+}
+
+function consentTone(consent: string): string {
+  if (consent === "Accepted") return "border-emerald-500/40 text-emerald-400";
+  if (consent === "Declined") return "border-red-500/40 text-red-400";
+  return "border-amber-500/40 text-amber-400"; // Requested
 }
 
 export function ShiftsManager() {
@@ -253,6 +260,8 @@ function ShiftRow({
   const [selectedUserId, setSelectedUserId] = useState("");
   const [assignError, setAssignError] = useState<string | null>(null);
   const [assigning, setAssigning] = useState(false);
+  const [requestingConsentFor, setRequestingConsentFor] = useState<string | null>(null);
+  const [consentError, setConsentError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isExpanded) return;
@@ -283,6 +292,20 @@ function ShiftRow({
   async function handleRemove(assignmentId: string) {
     await onRemoveAssignment(assignmentId);
     setAssignments(await fetchShiftAssignments(shift.shiftId));
+  }
+
+  async function handleRequestConsent(assignmentId: string) {
+    setConsentError(null);
+    setRequestingConsentFor(assignmentId);
+    try {
+      await requestConsent(assignmentId);
+      setAssignments(await fetchShiftAssignments(shift.shiftId));
+    } catch (err) {
+      // e.g. "This shift is not on a loaded public holiday date." — relayed verbatim.
+      setConsentError(err instanceof Error ? err.message : "Failed to request consent");
+    } finally {
+      setRequestingConsentFor(null);
+    }
   }
 
   return (
@@ -321,25 +344,56 @@ function ShiftRow({
           ) : assignments.length === 0 ? (
             <p className="text-xs text-dark-600">Nobody assigned yet.</p>
           ) : (
-            <ul className="space-y-1">
+            <ul className="space-y-1.5">
               {assignments.map((a) => (
-                <li key={a.assignmentId} className="flex items-center justify-between text-sm">
-                  <span className="text-white">
+                <li key={a.assignmentId} className="flex items-center justify-between gap-2 text-sm">
+                  <span className="text-white truncate">
                     {a.staffName} <span className="text-dark-600 text-xs">({a.status})</span>
+                    {a.publicHolidayConsent && (
+                      <span
+                        className={`ml-2 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] ${consentTone(a.publicHolidayConsent)}`}
+                      >
+                        <CalendarHeart className="size-3" aria-hidden="true" />
+                        Holiday: {a.publicHolidayConsent}
+                      </span>
+                    )}
                   </span>
-                  {canManage && (
-                    <button
-                      type="button"
-                      onClick={() => handleRemove(a.assignmentId)}
-                      className="p-1 rounded-lg hover:bg-dark-200 text-dark-500 hover:text-red-400 transition-all"
-                      aria-label={`Remove ${a.staffName}`}
-                    >
-                      <Trash2 className="size-3.5" />
-                    </button>
-                  )}
+                  <div className="flex items-center gap-1 shrink-0">
+                    {canManage && shift.status === "Draft" && a.publicHolidayConsent !== "Accepted" && (
+                      <button
+                        type="button"
+                        onClick={() => handleRequestConsent(a.assignmentId)}
+                        disabled={requestingConsentFor === a.assignmentId}
+                        className="rounded-lg border border-dark-200 px-2 py-1 text-[11px] text-dark-600 hover:text-white hover:border-gold/40 transition-all disabled:opacity-50"
+                      >
+                        {requestingConsentFor === a.assignmentId ? (
+                          <Loader2 className="size-3 animate-spin" />
+                        ) : a.publicHolidayConsent ? (
+                          "Re-request holiday consent"
+                        ) : (
+                          "Request holiday consent"
+                        )}
+                      </button>
+                    )}
+                    {canManage && (
+                      <button
+                        type="button"
+                        onClick={() => handleRemove(a.assignmentId)}
+                        className="p-1 rounded-lg hover:bg-dark-200 text-dark-500 hover:text-red-400 transition-all"
+                        aria-label={`Remove ${a.staffName}`}
+                      >
+                        <Trash2 className="size-3.5" />
+                      </button>
+                    )}
+                  </div>
                 </li>
               ))}
             </ul>
+          )}
+          {consentError && (
+            <p className="text-xs text-red-400 rounded-lg border border-red-500/30 bg-red-500/5 px-3 py-2 mt-1">
+              {consentError}
+            </p>
           )}
           {canManage && shift.status === "Draft" && (
             <div className="flex gap-2 pt-2">

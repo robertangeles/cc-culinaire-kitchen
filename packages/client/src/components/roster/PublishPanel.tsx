@@ -150,7 +150,7 @@ export function PublishPanel({
           {result.heldShifts.length > 0 && (
             <div className="space-y-2">
               <p className="text-xs text-dark-500 uppercase tracking-wider">
-                Held back — not published, missing compliance requirements
+                Held back — not published, see each reason below
               </p>
               {result.heldShifts.map((h) => (
                 <div

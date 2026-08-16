@@ -77,9 +77,9 @@ production.
 every sibling compliance component uses. Harmless while the client is same-origin;
 breaks the moment it is not.
 
-**Still blocked, unchanged:** Phase 2 rostering needs a named owner for `award_rule`
-authorship. That is an industrial-relations competence question, not an engineering
-one.
+**Stale as of 2026-08-17 — Phase 2 rostering has since shipped in full** (Slices 0–7,
+`main`). The `award_rule` owner question below was resolved by shipping the engine
+with zero rules seeded rather than waiting — see the P2 entry further down.
 
 ## ▶ START HERE — 2026-07-16
 
@@ -303,19 +303,17 @@ _Nothing confirmed outstanding. New work to be defined._
 - [ ] Food Cost Calculator (per dish, per menu)
 - [ ] Supplier portal (external supplier access to POs)
 - [ ] Compliance / HACCP logging — folded into Staff Compliance Vault below (venue-level docs, E3)
-- [ ] Rostering / Staff scheduling — CEO-reviewed 2026-08-04, see below
+- [x] Rostering / Staff scheduling — CEO-reviewed 2026-08-04, shipped 2026-08-17 (Slices 0–7), see below
 
 ---
 
-## Staff Compliance Vault + Rostering — CEO reviewed 2026-08-04, awaiting eng review
+## Staff Compliance Vault + Rostering — Phase 1 + Phase 2 shipped 2026-08-17
 
 Plan: `~/.claude/plans/1-problem-statement-cheerful-gosling.md` (SELECTIVE EXPANSION,
-approach C — full 3-phase spec). 18 implementation tasks, 12 decisions settled.
-Task JSONL for `/autoplan`:
-`~/.gstack/projects/robertangeles-cc-culinaire-kitchen/tasks-ceo-review-20260804-222111.jsonl`
-
-**Blocked on `/plan-eng-review`** — the required gate. The 2026-07-20 eng review predates
-this plan entirely.
+approach C — full 3-phase spec). Phase 1 (Compliance Vault) and Phase 2 (Roster Core,
+Slices 0–7 including the s.114 consent workflow) are both on `main`. See [[roster-core]]
+and [[staff-compliance-vault]] in the wiki. Phase 3 (workforce optimisation, E1) is not
+started.
 
 Three items the review deferred rather than built:
 
