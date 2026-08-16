@@ -2,7 +2,7 @@
 title: Staff Compliance Vault
 category: entity
 created: 2026-08-07
-updated: 2026-08-07
+updated: 2026-08-16
 related: [[compliance-expiry-engine]], [[document-storage-cloudinary-private]], [[scheduled-job-daily-claim]], [[store-locations-system]], [[tenant-isolation-remediation]]
 ---
 
@@ -62,7 +62,11 @@ The second CHECK's `store_location_id IS NOT NULL` term is load-bearing, not dec
 
 ## Client
 
-`CompliancePage.tsx` (`/compliance`) is a permission-driven tab shell, not a role-driven one. Each tab is gated by holding the matching permission, and — this is the point — a component is only ever mounted if the user holds the permission its endpoint needs, so a user without `compliance:read-all` never even fetches the team dashboard and never sees a 403. Tabs, in listed order: Team (`ComplianceDashboard`, needs `read-all`), Verify (`VerificationView`, needs `verify`), My Documents (`MyDocumentsTab`, needs `read-own`), Requirements (`RequiredDocumentsTab`, needs `manage-rules`). The tab bar itself is hidden entirely for a single-tab user (e.g. a line cook with only `read-own`) — a tablist with one option is chrome, not a choice.
+As of the information-architecture rework (PR #99), the compliance surfaces are no longer one page — each lives where its audience actually looks for it, though the four underlying permissions and their `routes/compliance.ts` gates are unchanged:
+
+- **Team Compliance** — `CompliancePage.tsx` at `/compliance`, renamed from "Compliance". Now a two-tab shell: Team (`ComplianceDashboard`, needs `read-all`) and Verify (`VerificationView`, needs `verify`). A component is only ever mounted if the user holds the permission its endpoint needs, so a user without `compliance:read-all` never even fetches the team dashboard and never sees a 403. The route guard (`App.tsx`) and nav gate (`navConfig.ts`) are both narrowed to `read-all` / `verify` only, kept deliberately in step with each other; a user holding only `read-own` or only `manage-rules` gets no nav entry and, if they hit the URL directly, the page's own "nothing to show" fallback rather than a dead single-tab shell.
+- **My Documents** — moved to `ProfilePage.tsx`'s new "My Documents" tab, gated on `compliance:read-own`; still `MyDocumentsTab.tsx` underneath, unchanged. The profile container widened `max-w-2xl` → `max-w-[52.5rem]` (672px → 840px) to give the document list room.
+- **Requirements** — moved to the Settings page's new "Compliance" tab (`SettingsLayout.tsx`'s tab registry gates it on `compliance:manage-rules`), still `RequiredDocumentsTab.tsx` underneath, unchanged apart from `p-6`/`m-6` added across its loading/error/ready states — it was built for the old Compliance page's own padded container, which Settings' wrapper doesn't supply.
 
 ## Known limits
 

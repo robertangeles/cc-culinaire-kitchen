@@ -910,3 +910,47 @@ Moved the approved, fully-reviewed plan for **the Brain** (per-user + per-org AI
   throwaway where org 2 has no catalog, so all 8 checks would pass vacuously. Lesson #65.
 - **Final state:** lint, tsc, 890 tests (683 server / 122 client / 85 shared), build — all pass.
   Prod verifier reads 0 missing.
+
+## 2026-08-16 — Reviewed PR #99 (compliance information architecture)
+
+- **Adversarial review of `fix/ck-web/compliance-information-architecture` vs `main`**, post-merge
+  of the 5 Roster Core slices (PRs #94–#98). Requirements moved from the standalone Compliance
+  page into Settings → Users → Compliance; My Documents moved into User Profile; the remaining
+  page renamed "Team Compliance" with its gate narrowed from four permissions to two
+  (`compliance:read-all`, `compliance:verify`).
+- **Permission-gate narrowing verified consistent across all three layers**: server
+  `routes/compliance.ts` (unchanged — still gates each endpoint individually, e.g.
+  `/documents/mine` on `read-own`, `/rules` and `/required-documents` on `manage-rules`, so the
+  narrower page-level gate is a safe subset, not a functional regression), the `App.tsx` route
+  guard, and `navConfig.ts`'s nav gate — both narrowed identically, both carry a comment pointing
+  at the other. Administrator superuser bypass confirmed present and consistent in all three
+  layers (`middleware/auth.ts` line 132, `useHasPermission.ts`, `navConfig.ts`'s
+  `isItemVisible`). A `read-own`-only or `manage-rules`-only user now gets no nav entry and, on a
+  direct `/compliance` hit, `RequirePermission`'s "isn't on your plan" empty state rather than a
+  dead single-tab shell — covered by updated tests in `CompliancePage.test.tsx`.
+- **Merge-conflict resolution in `App.tsx` verified clean** via three-way diff against both
+  parents (branch tip `847f742`, main tip `b44791e`): the merge result is exactly branch's
+  narrowed `/compliance` gate + comment, plus main's `/roster` route, byte-for-byte — nothing
+  dropped or corrupted from either side. `navConfig.ts`'s claimed clean auto-merge verified the
+  same way.
+- **My Documents (Profile) and Requirements (Settings) tabs verified independently gated**: the
+  Profile tab only appears for `hasPermission("compliance:read-own")`
+  (`ProfilePage.tsx`), and the new Settings "Compliance" tab is filtered out of the tab bar
+  entirely without `compliance:manage-rules` (`SettingsLayout.tsx`'s new `permission` field on
+  `TabItem`, filtered before render). Neither tab's underlying component does its own gating —
+  both rely on the parent, same pattern as before the move — but both endpoints they call
+  (`/documents/mine`, `/required-documents`) are independently permission-gated server-side
+  regardless.
+- **`RequiredDocumentsTab` padding fix confirmed complete** across all three render branches:
+  loading (`p-6 py-16`), error (`m-6`), ready (`p-6`).
+- Ran the three touched/added test files locally (22 tests) — all pass, independent of CI. CI
+  (`Typecheck, test, build`, `Tenant isolation (real DB)`) both green, `mergeStateStatus: CLEAN`.
+- **Fixed directly (low-risk, docs-only):** `wiki/entities/staff-compliance-vault.md`'s "## Client"
+  section described the pre-PR four-tab `CompliancePage` layout, now false — updated to describe
+  the three relocated surfaces and their gates.
+- **No blocking findings.** One cosmetic pre-existing nit noted, not introduced by this PR and out
+  of its scope to fix: the Roster nav entry's comment in `navConfig.ts` ("same reasoning as
+  Compliance above") references Compliance's old read-own-inclusive gate, which this PR narrowed —
+  the comment is now slightly stale but not incorrect as general reasoning.
+- Branch: `fix/ck-web/compliance-information-architecture`, PR #99. Not merged — reviewer does not
+  merge.
