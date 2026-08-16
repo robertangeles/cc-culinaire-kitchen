@@ -27,6 +27,7 @@ import {
   updateAvailability,
   deleteAvailability,
   assignStaff,
+  listShiftAssignments,
   respondToAssignment,
   removeAssignment,
   publishRoster,
@@ -257,6 +258,16 @@ export async function handleAssignStaff(req: Request, res: Response, next: NextF
     res
       .status(201)
       .json(await assignStaff(ctx.orgId, req.params.id as string, parsed.data.userId, req.user!.sub));
+  } catch (err) {
+    handleServiceError(err, res, next);
+  }
+}
+
+export async function handleListShiftAssignments(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const ctx = await resolveContext(req, res);
+    if (!ctx) return;
+    res.json(await listShiftAssignments(ctx.orgId, req.params.id as string));
   } catch (err) {
     handleServiceError(err, res, next);
   }

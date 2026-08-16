@@ -516,6 +516,22 @@ export async function assignStaff(orgId: number, shiftId: string, userId: number
   return created;
 }
 
+/** Every assignment on one shift, staff name joined in — the roster builder's "who's on this shift" view. */
+export async function listShiftAssignments(orgId: number, shiftId: string) {
+  await getShiftRow(orgId, shiftId);
+  return db
+    .select({
+      assignmentId: shiftAssignment.assignmentId,
+      userId: shiftAssignment.userId,
+      status: shiftAssignment.status,
+      staffName: user.userName,
+    })
+    .from(shiftAssignment)
+    .innerJoin(user, eq(user.userId, shiftAssignment.userId))
+    .where(eq(shiftAssignment.shiftId, shiftId))
+    .orderBy(asc(user.userName));
+}
+
 async function getAssignmentRow(orgId: number, assignmentId: string) {
   const [row] = await db
     .select({

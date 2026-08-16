@@ -36,6 +36,7 @@ import {
   removeAssignment,
   publishRoster,
   createAvailability,
+  listShiftAssignments,
 } from "./rosterService.js";
 
 /**
@@ -313,6 +314,31 @@ describe.skipIf(!RUN)("roster service (real DB)", () => {
     await expect(respondToAssignment(orgA, assignment.assignmentId, userA, "Confirmed")).rejects.toMatchObject({
       statusCode: 404,
     });
+  });
+
+  it("listShiftAssignments returns the staff assigned to a shift, name joined in, scoped to the caller's org", async () => {
+    await db.insert(complianceDocument).values({
+      organisationId: orgA,
+      userId: userA,
+      documentType: docType,
+      verificationStatus: "Verified",
+      expiryDate: addDays(TODAY, 365),
+      storagePublicId: `${tag}-pub-listassign`,
+      uploadedBy: userA,
+    });
+    const start = new Date();
+    const end = new Date(start.getTime() + 4 * 60 * 60 * 1000);
+    const s = await createShift(
+      orgA,
+      { storeLocationId: locA, rosterRoleId: roleId, startDatetime: start.toISOString(), endDatetime: end.toISOString() },
+      userA,
+    );
+    await assignStaff(orgA, s.shiftId, userA, userA);
+
+    const assignments = await listShiftAssignments(orgA, s.shiftId);
+    expect(assignments).toEqual([{ assignmentId: expect.any(String), userId: userA, status: "Pending", staffName: "Roster Staff A" }]);
+
+    await expect(listShiftAssignments(orgB, s.shiftId)).rejects.toMatchObject({ statusCode: 404 });
   });
 
   it("publishRoster re-checks at publish time and holds a shift whose document expired after assignment, publishing the rest", async () => {
