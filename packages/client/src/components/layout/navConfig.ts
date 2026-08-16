@@ -26,6 +26,7 @@ import {
   Leaf,
   LayoutGrid,
   MessagesSquare,
+  CalendarDays,
   type LucideIcon,
 } from "lucide-react";
 
@@ -139,6 +140,15 @@ export const NAV_SECTIONS: NavSection[] = [
         // moved elsewhere. The server route is the security boundary; this
         // list only decides what is visible.
         gate: { anyPermission: ["compliance:read-all", "compliance:verify"] },
+      },
+      {
+        id: "roster",
+        label: "Roster",
+        icon: CalendarDays,
+        to: "/roster",
+        // read-own included so a staff member who can only see their OWN
+        // shifts still gets the nav entry — same reasoning as Compliance above.
+        gate: { anyPermission: ["roster:read-own", "roster:read-all", "roster:manage", "roster:publish"] },
       },
     ],
   },

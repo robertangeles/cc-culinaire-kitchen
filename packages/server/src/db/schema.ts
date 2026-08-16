@@ -3176,9 +3176,8 @@ export const documentAccessLog = pgTable(
  * expects of EVERY staff member, regardless of role.
  *
  * Phase 1's "incomplete document set" dashboard metric reads this. Phase 2's
- * per-role `roster_role_document` narrows requirements on top WITHOUT replacing
- * it — org-level stays the baseline everyone must meet. Without this table the
- * Phase 1 metric has nothing to query, since roster tables do not exist yet.
+ * per-role `roster_role_document` (below) narrows requirements on top
+ * WITHOUT replacing it — org-level stays the baseline everyone must meet.
  */
 export const organisationRequiredDocument = pgTable(
   "organisation_required_document",
@@ -3195,5 +3194,237 @@ export const organisationRequiredDocument = pgTable(
       table.organisationId,
       table.documentType,
     ),
+  ],
+);
+
+// ── Phase 2: Roster Core ────────────────────────────────────────────────
+//
+// Tenancy is a per-table judgment here, not a blind copy of
+// complianceDocument's nullable storeLocationId (nullable THERE because a
+// compliance document can be org-wide or venue-scoped — a genuinely
+// different question from any table below):
+//   - shift.storeLocationId is NOT NULL: a shift always happens at one
+//     physical venue, there is no such thing as an org-wide shift.
+//   - rosterRole.storeLocationId and staffAvailability.storeLocationId are
+//     nullable: a role ("Bartender") or an availability window may be
+//     defined org-wide or narrowed to one venue.
+
+/**
+ * A role staff can be rostered into ("Bartender", "Line Cook"), scoped to
+ * one org and optionally to one venue.
+ */
+export const rosterRole = pgTable(
+  "roster_role",
+  {
+    rosterRoleId: uuid("roster_role_id").defaultRandom().primaryKey(),
+    organisationId: integer("organisation_id")
+      .notNull()
+      .references(() => organisation.organisationId),
+    /** NULL = this role applies at every venue in the org. */
+    storeLocationId: uuid("store_location_id").references(() => storeLocation.storeLocationId),
+    roleName: varchar("role_name", { length: 100 }).notNull(),
+    createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
+    updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // FK index: "every role defined for an org" (Settings admin list).
+    index("idx_roster_role_org").on(table.organisationId),
+    // FK index: "every role defined at (or org-wide for) one venue".
+    index("idx_roster_role_location").on(table.storeLocationId),
+  ],
+);
+
+/**
+ * Which document types a role requires, narrowing organisationRequiredDocument
+ * (above) per role rather than replacing its org-wide baseline. R1 junction —
+ * same shape as documentExpiryRuleAlertDay/organisationRequiredDocument: no
+ * surrogate key, a composite unique index is the PK.
+ *
+ * documentType is not a foreign key to any table — same free-vocabulary
+ * varchar convention organisationRequiredDocument already uses, matched
+ * against the same real values compliance_document.document_type stores.
+ */
+export const rosterRoleDocument = pgTable(
+  "roster_role_document",
+  {
+    rosterRoleId: uuid("roster_role_id")
+      .notNull()
+      .references(() => rosterRole.rosterRoleId, { onDelete: "cascade" }),
+    documentType: varchar("document_type", { length: 40 }).notNull(),
+  },
+  (table) => [
+    // Composite PK: one requirement per role per document type.
+    uniqueIndex("idx_roster_role_document_pk").on(table.rosterRoleId, table.documentType),
+  ],
+);
+
+/**
+ * One scheduled block of work at one venue, for one role.
+ *
+ * status is a documented varchar, not a CHECK-enforced enum — the same
+ * convention compliance_document.verification_status already uses in this
+ * schema, so the app layer owns the state machine.
+ * Allowed values: Draft | Published | Cancelled.
+ */
+export const shift = pgTable(
+  "shift",
+  {
+    shiftId: uuid("shift_id").defaultRandom().primaryKey(),
+    organisationId: integer("organisation_id")
+      .notNull()
+      .references(() => organisation.organisationId),
+    storeLocationId: uuid("store_location_id")
+      .notNull()
+      .references(() => storeLocation.storeLocationId),
+    rosterRoleId: uuid("roster_role_id")
+      .notNull()
+      .references(() => rosterRole.rosterRoleId),
+    startDatetime: timestamp("start_datetime", { withTimezone: true }).notNull(),
+    endDatetime: timestamp("end_datetime", { withTimezone: true }).notNull(),
+    /** Set at shift-creation time by resolving the venue's jurisdiction and
+     * date against publicHoliday — drives the s.114 consent requirement on
+     * shiftAssignment. */
+    isPublicHoliday: boolean("is_public_holiday").notNull().default(false),
+    status: varchar("status", { length: 20 }).notNull().default("Draft"),
+    createdBy: integer("created_by")
+      .notNull()
+      .references(() => user.userId),
+    createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
+    updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // FK index: "every shift for an org" (org-wide roster views/reports).
+    index("idx_shift_org").on(table.organisationId),
+    // Roster grid: "every shift at this venue in this date range".
+    index("idx_shift_location_start").on(table.storeLocationId, table.startDatetime),
+    // FK index: "every shift this role has been used for".
+    index("idx_shift_role").on(table.rosterRoleId),
+    // A shift that ends before or exactly when it starts is malformed data,
+    // not a valid zero-or-negative-length shift.
+    check("chk_shift_time_order", sql`${table.endDatetime} > ${table.startDatetime}`),
+  ],
+);
+
+/**
+ * One staff member assigned to one shift.
+ *
+ * status is a documented varchar (same convention as shift.status above).
+ * Allowed values: Pending | Confirmed | Declined | Removed.
+ *
+ * publicHolidayConsent is NULL for a shift where isPublicHoliday is false —
+ * "not applicable" is a real, distinct state from "requested but not yet
+ * answered", so a nullable varchar carries that instead of forcing a
+ * default like "Not Required" to stand in for NULL.
+ * Allowed values when set: Pending | Accepted | Declined.
+ */
+export const shiftAssignment = pgTable(
+  "shift_assignment",
+  {
+    assignmentId: uuid("assignment_id").defaultRandom().primaryKey(),
+    shiftId: uuid("shift_id")
+      .notNull()
+      .references(() => shift.shiftId, { onDelete: "cascade" }),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => user.userId),
+    status: varchar("status", { length: 20 }).notNull().default("Pending"),
+    publicHolidayConsent: varchar("public_holiday_consent", { length: 20 }),
+    consentRequestedAt: timestamp("consent_requested_at", { withTimezone: true }),
+    consentRespondedAt: timestamp("consent_responded_at", { withTimezone: true }),
+    createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
+    updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // One assignment per person per shift — the plan's own spec.
+    uniqueIndex("idx_shift_assignment_unique").on(table.shiftId, table.userId),
+    // FK index: "every shift a staff member is on" (their own roster view).
+    index("idx_shift_assignment_user").on(table.userId),
+  ],
+);
+
+/**
+ * A recurring weekly availability window for one staff member.
+ *
+ * Mirrors storeLocationHour's exact shape one table up in this file:
+ * dayOfWeek as a smallint (0=Sunday..6=Saturday), times as "HH:MM" varchars
+ * rather than a native `time` column, for the same reason — this schema
+ * already made that call once and staying consistent beats introducing a
+ * second time representation.
+ */
+export const staffAvailability = pgTable(
+  "staff_availability",
+  {
+    staffAvailabilityId: uuid("staff_availability_id").defaultRandom().primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => user.userId),
+    organisationId: integer("organisation_id")
+      .notNull()
+      .references(() => organisation.organisationId),
+    /** NULL = available at any of the org's venues. */
+    storeLocationId: uuid("store_location_id").references(() => storeLocation.storeLocationId),
+    dayOfWeek: smallint("day_of_week").notNull(),
+    availableFrom: varchar("available_from", { length: 5 }).notNull(),
+    availableUntil: varchar("available_until", { length: 5 }).notNull(),
+    effectiveFrom: date("effective_from").notNull(),
+    /** NULL = no end date, still in effect. */
+    effectiveUntil: date("effective_until"),
+    createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
+    updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // "This person's availability" — their own profile view, and the input
+    // to the roster builder's assignment suggestions.
+    index("idx_staff_availability_user").on(table.userId),
+    // FK index: org-wide availability reporting.
+    index("idx_staff_availability_org").on(table.organisationId),
+    // FK index: "every availability window defined at (or org-wide for) one venue".
+    index("idx_staff_availability_location").on(table.storeLocationId),
+    check(
+      "chk_staff_availability_time_order",
+      sql`${table.availableUntil} > ${table.availableFrom}`,
+    ),
+    check(
+      "chk_staff_availability_date_order",
+      sql`${table.effectiveUntil} IS NULL OR ${table.effectiveUntil} >= ${table.effectiveFrom}`,
+    ),
+  ],
+);
+
+/**
+ * Award interpretation rules (Fair Work / MA000009-style), advisory-only —
+ * see awardRuleService.ts. Shared jurisdiction rule library, same shape as
+ * documentExpiryRule: no organisationId, effective-dated and versioned, a
+ * changed rule closes the old row (effectiveTo) and inserts a new one so a
+ * roster published last year can still show the rule that applied then.
+ *
+ * Ships with ZERO rows seeded (Phase 2 decision, 2026-08-14): nobody on this
+ * project is named as competent to author Award thresholds, and a wrong
+ * threshold is worse than an honestly-disclosed gap. awardRuleService.evaluate()
+ * always runs and always returns a `coverage` object naming what it checked —
+ * an empty `warnings[]` must never read as "the roster was verified clean"
+ * when really no rules exist to check it against.
+ */
+export const awardRule = pgTable(
+  "award_rule",
+  {
+    awardRuleId: uuid("award_rule_id").defaultRandom().primaryKey(),
+    /** NULL = national (applies regardless of venue state). */
+    jurisdiction: varchar("jurisdiction", { length: 3 }),
+    awardCode: varchar("award_code", { length: 20 }).notNull(),
+    /** e.g. "max_ordinary_hours", "publish_notice" — see AWARD_CHECKED_RULE_TYPES in awardRuleService.ts. */
+    ruleType: varchar("rule_type", { length: 40 }).notNull(),
+    /** Unit is implied by ruleType (hours for both rule types this engine currently evaluates). */
+    thresholdValue: numeric("threshold_value", { precision: 10, scale: 2 }),
+    effectiveFrom: date("effective_from").notNull(),
+    effectiveTo: date("effective_to"),
+    sourceCitation: varchar("source_citation", { length: 500 }),
+    ruleVersion: varchar("rule_version", { length: 20 }).notNull(),
+    createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
+    updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // Rule lookup: "the active rule for this type + jurisdiction on date X" — same shape as idx_document_expiry_rule_lookup.
+    index("idx_award_rule_lookup").on(table.ruleType, table.jurisdiction, table.effectiveFrom),
   ],
 );

@@ -149,6 +149,11 @@ async function seed() {
     { permissionKey: "compliance:read-all", permissionDescription: "View compliance documents for all staff at your venue" },
     { permissionKey: "compliance:verify", permissionDescription: "Approve or reject uploaded compliance documents" },
     { permissionKey: "compliance:manage-rules", permissionDescription: "Manage expiry rules and organisation document requirements" },
+    // Roster Core — shift scheduling and staff availability
+    { permissionKey: "roster:read-own", permissionDescription: "View and respond to your own shifts and availability" },
+    { permissionKey: "roster:read-all", permissionDescription: "View all shifts, roles, and org-wide availability" },
+    { permissionKey: "roster:manage", permissionDescription: "Create and edit roles, shifts, and staff assignments" },
+    { permissionKey: "roster:publish", permissionDescription: "Publish a roster, making shifts live" },
   ];
 
   for (const p of defaultPermissions) {
@@ -176,6 +181,7 @@ async function seed() {
       "menu:read", "waste:read", "prep:manage",
       "brain:read", "brain:manage",
       "compliance:read-own", "compliance:read-all", "compliance:verify", "compliance:manage-rules",
+      "roster:read-own", "roster:read-all", "roster:manage", "roster:publish",
     ],
     // Default tiers are solo operators (chef + owner in one) — they keep full module
     // access. Staff differentiation (BOH/FOH) is done via custom roles that omit these.
@@ -186,6 +192,7 @@ async function seed() {
       "menu:read", "waste:read", "prep:manage",
       "brain:read", "brain:manage",
       "compliance:read-own",
+      "roster:read-own",
     ],
     "Paid Subscriber": [
       "chat:access", "chat:unlimited", "org:create-organisation", "org:manage-organisation",
@@ -194,6 +201,7 @@ async function seed() {
       "menu:read", "waste:read", "prep:manage",
       "brain:read", "brain:manage",
       "compliance:read-own", "compliance:read-all", "compliance:verify",
+      "roster:read-own", "roster:read-all", "roster:manage", "roster:publish",
     ],
   };
 
@@ -242,6 +250,22 @@ async function seed() {
     { key: "default_registered_sessions", value: "10" },
     { key: "recipe_archive_retention_days", value: "30" },
     { key: "recipes_per_page", value: "20" },
+    // Compliance Vault (Phase 1) — retrofitted after the fact. Ships "true", not
+    // "false": Phase 1 has been live in production with no kill switch since
+    // launch, and this row's own existence-check insert (below) is what a
+    // routine `db:seed` run would perform on that live install the first time
+    // it sees this key. Seeding "false" here would insert a fresh OFF row into
+    // a database with a feature already live, and requireFlag("compliance_enabled")
+    // would 404 the whole vault the moment the enforcing code deployed. A
+    // prod-only UPSERT additionally guards this in scripts/backfillFeatureFlags.ts,
+    // since this seed script is existence-check-only and never touches a row
+    // that's already there.
+    { key: "compliance_enabled", value: "true" },
+    // Roster Core (Phase 2) and Workforce Optimisation (Phase 3) do not exist
+    // in any deployed environment yet, so — unlike compliance_enabled above —
+    // "false" is the correct, ordinary rollout default here.
+    { key: "roster_enabled", value: "false" },
+    { key: "workforce_enabled", value: "false" },
     // The Brain — all flags ship OFF; rollout flips them in order:
     // brain_enabled → brain_capture_enabled (corpus warms) → brain_recall_enabled.
     // Rollback is flags → "false" (instant, no deploy).
