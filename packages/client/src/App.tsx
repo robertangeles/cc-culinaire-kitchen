@@ -42,6 +42,7 @@ import { InventoryPage } from "./pages/InventoryPage.js";
 import { PurchasingPage } from "./pages/PurchasingPage.js";
 import { YourBrainPage } from "./pages/YourBrainPage.js";
 import CompliancePage from "./pages/CompliancePage.js";
+import RosterPage from "./pages/RosterPage.js";
 import { KitchenOnboarding } from "./components/onboarding/KitchenOnboarding.js";
 import { LocationProvider } from "./context/LocationContext.js";
 import { LocationSwitcher } from "./components/location/LocationSwitcher.js";
@@ -168,6 +169,7 @@ export function App() {
                           <Route path="/menu-intelligence" element={<AuthenticatedOnly><RequirePermission anyOf={["menu:read"]}><LocationGate><KitchenOpsLayout><MenuIntelligencePage /></KitchenOpsLayout></LocationGate></RequirePermission></AuthenticatedOnly>} />
                           <Route path="/waste-intelligence" element={<AuthenticatedOnly><RequirePermission anyOf={["waste:read"]}><LocationGate><KitchenOpsLayout><WasteIntelligencePage /></KitchenOpsLayout></LocationGate></RequirePermission></AuthenticatedOnly>} />
                           <Route path="/compliance" element={<AuthenticatedOnly><RequirePermission anyOf={["compliance:read-own", "compliance:read-all", "compliance:verify", "compliance:manage-rules"]}><LocationGate><KitchenOpsLayout><CompliancePage /></KitchenOpsLayout></LocationGate></RequirePermission></AuthenticatedOnly>} />
+                          <Route path="/roster" element={<AuthenticatedOnly><RequirePermission anyOf={["roster:read-own", "roster:read-all", "roster:manage", "roster:publish"]}><LocationGate><KitchenOpsLayout><RosterPage /></KitchenOpsLayout></LocationGate></RequirePermission></AuthenticatedOnly>} />
                           <Route path="/kitchen-copilot" element={<AuthenticatedOnly><RequirePermission anyOf={["prep:manage"]}><LocationGate><KitchenOpsLayout><KitchenCopilotPage /></KitchenOpsLayout></LocationGate></RequirePermission></AuthenticatedOnly>} />
                           <Route path="/inventory" element={<AuthenticatedOnly><RequirePermission anyOf={["inventory:count", "inventory:manage", "inventory:transfer", "inventory:hq"]}><LocationGate><KitchenOpsLayout><InventoryPage /></KitchenOpsLayout></LocationGate></RequirePermission></AuthenticatedOnly>} />
                           <Route path="/purchasing" element={<AuthenticatedOnly><RequirePermission anyOf={["purchasing:draft", "purchasing:submit", "purchasing:approve", "purchasing:receive", "purchasing:credit"]}><LocationGate><KitchenOpsLayout><PurchasingPage /></KitchenOpsLayout></LocationGate></RequirePermission></AuthenticatedOnly>} />

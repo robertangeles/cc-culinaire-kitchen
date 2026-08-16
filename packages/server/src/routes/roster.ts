@@ -29,6 +29,7 @@ import {
   handleUpdateShift,
   handleCancelShift,
   handleAssignStaff,
+  handleListShiftAssignments,
   handleRespondToAssignment,
   handleRemoveAssignment,
   handleListMyAvailability,
@@ -63,6 +64,7 @@ router.get("/shifts", requirePermission("roster:read-all"), handleListShifts);
 router.post("/shifts", requirePermission("roster:manage"), handleCreateShift);
 router.put("/shifts/:id", requirePermission("roster:manage"), handleUpdateShift);
 router.post("/shifts/:id/cancel", requirePermission("roster:manage"), handleCancelShift);
+router.get("/shifts/:id/assignments", requirePermission("roster:read-all"), handleListShiftAssignments);
 router.post("/shifts/:id/assignments", requirePermission("roster:manage"), handleAssignStaff);
 
 // ─── Assignments ──────────────────────────────────────────────────
