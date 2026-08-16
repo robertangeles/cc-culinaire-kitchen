@@ -101,9 +101,14 @@ export function useRosterRoles() {
   const [roles, setRoles] = useState<RosterRole[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Same fix as useShifts: RolesManager early-returns a full-page spinner
+  // while isLoading is true, which would unmount an expanded RoleRow (and
+  // its in-progress document-requirement edit) on every create/remove.
+  // Only the true first load should show that spinner.
+  const hasLoadedOnce = useRef(false);
 
   const refresh = useCallback(async () => {
-    setIsLoading(true);
+    if (!hasLoadedOnce.current) setIsLoading(true);
     setError(null);
     try {
       const res = await fetch(`${BASE}/roles`, opts);
@@ -111,6 +116,7 @@ export function useRosterRoles() {
       else setError((await parseError(res, "Failed to load roles")).message);
     } finally {
       setIsLoading(false);
+      hasLoadedOnce.current = true;
     }
   }, []);
 
