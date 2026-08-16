@@ -152,5 +152,8 @@ jobs:
       - name: Run roster integration tests
         run: pnpm --filter @culinaire/server exec vitest run src/services/roster.integration.test.ts
 
+      - name: Run public holiday integration tests
+        run: pnpm --filter @culinaire/server exec vitest run src/services/publicHolidayService.integration.test.ts
+
       - name: Run daily-run-claim integration tests
         run: pnpm --filter @culinaire/server exec vitest run src/utils/dailyRunClaim.integration.test.ts

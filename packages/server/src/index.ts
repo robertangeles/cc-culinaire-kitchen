@@ -58,6 +58,7 @@ import { runNudges } from "./services/brainNudgeService.js";
 import { runIfClaimed, dayKey, dayHourKey } from "./utils/dailyRunClaim.js";
 import { runExpiryScan } from "./services/complianceExpiryJob.js";
 import { purgeExpiredRetention, pruneAccessLog } from "./services/complianceRetentionService.js";
+import { runPublicHolidayGapCheck } from "./services/publicHolidayService.js";
 import { brainRouter } from "./routes/brain.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -629,6 +630,28 @@ hydrateEnvFromCredentials().then(() => {
         log,
       }), 60_000);
 
+      // Public holiday gap check — 05:00 daily. A heads-up, not enforcement:
+      // the real block is publishRoster()'s own fail-loud check at the
+      // moment a gap actually matters. This just surfaces one before anyone
+      // hits it, via a structured alert marker an alerting pipeline can pick up.
+      const publicHolidayGapCheckInterval = everyMs(() => void runIfClaimed({
+        job: "public_holiday_gap_check",
+        due: (now) => now.getHours() === 5,
+        period: dayKey,
+        run: async () => {
+          const result = await runPublicHolidayGapCheck();
+          if (result.missing.length > 0) {
+            log.warn(
+              { alert: "compliance_holiday_calendar_gap", missing: result.missing },
+              "Public holiday calendar gap detected",
+            );
+          } else {
+            log.info({ checked: result.checked }, "Public holiday gap check complete — no gaps");
+          }
+        },
+        log,
+      }), 60_000);
+
       // Graceful shutdown: close server and release port on termination signals
       function shutdown(signal: string) {
         log.info(`${signal} received — shutting down`);
@@ -641,6 +664,7 @@ hydrateEnvFromCredentials().then(() => {
         clearInterval(nudgeInterval);
         clearInterval(complianceExpiryInterval);
         clearInterval(complianceRetentionInterval);
+        clearInterval(publicHolidayGapCheckInterval);
         clearInterval(feedbackEmailInterval);
         clearInterval(brainWorkerInterval);
         clearInterval(captureHealthInterval);

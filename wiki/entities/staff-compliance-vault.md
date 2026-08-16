@@ -3,14 +3,14 @@ title: Staff Compliance Vault
 category: entity
 created: 2026-08-07
 updated: 2026-08-16
-related: [[compliance-expiry-engine]], [[document-storage-cloudinary-private]], [[scheduled-job-daily-claim]], [[store-locations-system]], [[tenant-isolation-remediation]]
+related: [[compliance-expiry-engine]], [[document-storage-cloudinary-private]], [[scheduled-job-daily-claim]], [[store-locations-system]], [[tenant-isolation-remediation]], [[roster-core]]
 ---
 
-Phase 1 of a three-phase plan: a private vault for staff and venue compliance documents (RSA, Food Safety Supervisor, police checks, Medicare cards, liquor licences), a manager verification queue, and an org-wide dashboard — built on `feature/ck-web/compliance-vault`, no rostering yet.
+Phase 1 of a three-phase plan: a private vault for staff and venue compliance documents (RSA, Food Safety Supervisor, police checks, Medicare cards, liquor licences), a manager verification queue, and an org-wide dashboard — built on `feature/ck-web/compliance-vault`.
 
 ## Why it exists
 
-Venue operators track RSA and Food Safety Supervisor certificates by hand — email threads, camera rolls, filing cabinets — and nobody notices a lapse until an inspector asks. NSW RSA and FSS both run five-year cycles with no automatic renewal and no grace period. The vault gives an operator one screen to answer "is everyone current?" It deliberately stops there: it does not decide who can be rostered (that's Phase 2, and it is blocked — see Known limits).
+Venue operators track RSA and Food Safety Supervisor certificates by hand — email threads, camera rolls, filing cabinets — and nobody notices a lapse until an inspector asks. NSW RSA and FSS both run five-year cycles with no automatic renewal and no grace period. The vault gives an operator one screen to answer "is everyone current?" It deliberately stops there: deciding who can be rostered is Phase 2 — see [[roster-core]].
 
 ## Data model
 
@@ -72,9 +72,9 @@ As of the information-architecture rework (PR #99), the compliance surfaces are 
 
 Stated plainly, not softened into "future enhancements":
 
-- **Phase 2 (rostering) is blocked, not merely unbuilt.** The gate that would stop assigning someone to a shift when their RSA has lapsed depends on `award_rule` rows (Fair Work Award interpretation), and nobody on this project is currently named as competent to author them. MA000009 changes several times a year — 1 July wage reviews, FWC variations, casual-conversion and loading changes — and getting it right needs industrial-relations competence, not calendar diligence. This is tracked as a P1 backlog item that explicitly blocks the Phase 2 ship, separate from and harder than the holiday-calendar upkeep (which is clerical and low-risk).
+- **Phase 2 (rostering) is built — see [[roster-core]].** The award-rule-owner blocker was resolved by shipping the Award engine machinery with zero `award_rule` rows seeded and the coverage gap explicitly disclosed on every publish, rather than waiting on an IR-competent reviewer to be named. That naming is still open, tracked as a P2 follow-on, not a ship-blocker.
 - **No admin UI exists yet for the expiry-rule editor.** `GET`/`PUT /api/compliance/rules` are live and permission-gated (`compliance:manage-rules`), but there is no client screen that calls them — `RequiredDocumentsTab.tsx` only manages *which document types an org requires* (`organisation_required_document`), not the rules that say how long each type stays valid or what days to alert on (`document_expiry_rule`). Until a rules screen exists, seeding and editing expiry rules is a server-side/SQL operation.
 - **Document preview and the real upload write are unverified pending Cloudinary credentials.** `documentStorageService.test.ts` mocks the `cloudinary` module entirely, so the test suite proves the code's *logic* (magic-byte sniffing, hard-fail on missing credentials, TTL, access logging) but has never exercised a real upload or a real signed-URL fetch against a live Cloudinary account. That first real call is still owed before this ships to a pilot org.
 
 ## Related
-[[compliance-expiry-engine]] · [[document-storage-cloudinary-private]] · [[scheduled-job-daily-claim]] · [[store-locations-system]] · [[tenant-isolation-remediation]]
+[[compliance-expiry-engine]] · [[document-storage-cloudinary-private]] · [[scheduled-job-daily-claim]] · [[store-locations-system]] · [[tenant-isolation-remediation]] · [[roster-core]]

@@ -14,6 +14,7 @@ import { PagesTab } from "../components/settings/PagesTab.js";
 import { AppearanceTab } from "../components/settings/AppearanceTab.js";
 import { UsersTab } from "../components/settings/UsersTab.js";
 import { RequiredDocumentsTab } from "../components/compliance/RequiredDocumentsTab.js";
+import { PublicHolidaysTab } from "../components/roster/PublicHolidaysTab.js";
 import { RolesTab } from "../components/settings/RolesTab.js";
 import { IntegrationsTab } from "../components/settings/IntegrationsTab.js";
 import KnowledgeBaseTab from "../components/settings/KnowledgeBaseTab.js";
@@ -37,6 +38,7 @@ export function SettingsPage() {
       {activeTab === "appearance" && <AppearanceTab />}
       {activeTab === "users" && <UsersTab />}
       {activeTab === "compliance" && <RequiredDocumentsTab />}
+      {activeTab === "publicHolidays" && <PublicHolidaysTab />}
       {activeTab === "roles" && <RolesTab />}
       {activeTab === "integrations" && <IntegrationsTab />}
       {activeTab === "knowledge" && <KnowledgeBaseTab />}

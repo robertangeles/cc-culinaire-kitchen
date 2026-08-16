@@ -395,6 +395,52 @@ export interface OrgMember {
   photoPath: string | null;
 }
 
+// ─── Public holidays ──────────────────────────────────────────────
+
+export interface PublicHoliday {
+  publicHolidayId: string;
+  jurisdiction: string;
+  holidayDate: string;
+  holidayName: string;
+  isRegional: boolean;
+  regionNote: string | null;
+  sourceCitation: string | null;
+  loadedForYear: number;
+  createdDttm: string;
+  updatedDttm: string;
+}
+
+export interface NewPublicHoliday {
+  jurisdiction: string;
+  holidayDate: string;
+  holidayName: string;
+  isRegional?: boolean;
+  regionNote?: string | null;
+  sourceCitation?: string | null;
+  loadedForYear: number;
+}
+
+export async function listPublicHolidays(): Promise<PublicHoliday[]> {
+  const res = await fetch(`${BASE}/public-holidays`, opts);
+  if (!res.ok) throw await parseError(res, "Failed to load public holidays");
+  return res.json();
+}
+
+export async function createPublicHoliday(input: NewPublicHoliday): Promise<PublicHoliday> {
+  const res = await fetch(`${BASE}/public-holidays`, {
+    ...jsonOpts,
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) throw await parseError(res, "Failed to add public holiday");
+  return res.json();
+}
+
+export async function deletePublicHoliday(id: string): Promise<void> {
+  const res = await fetch(`${BASE}/public-holidays/${id}`, { ...opts, method: "DELETE" });
+  if (!res.ok) throw await parseError(res, "Failed to remove public holiday");
+}
+
 export function useOrgMembers(orgId: number | null) {
   const [members, setMembers] = useState<OrgMember[]>([]);
   const [isLoading, setIsLoading] = useState(true);

@@ -69,6 +69,9 @@ const ROUTES: Array<{ method: string; path: string; permission: string }> = [
   { method: "POST", path: "/availability", permission: "roster:read-own" },
   { method: "PUT", path: "/availability/:id", permission: "roster:read-own" },
   { method: "DELETE", path: "/availability/:id", permission: "roster:read-own" },
+  { method: "GET", path: "/public-holidays", permission: "roster:manage" },
+  { method: "POST", path: "/public-holidays", permission: "roster:manage" },
+  { method: "DELETE", path: "/public-holidays/:id", permission: "roster:manage" },
   { method: "POST", path: "/publish", permission: "roster:publish" },
 ];
 

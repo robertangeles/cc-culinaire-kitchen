@@ -34,6 +34,12 @@ import {
   RosterError,
   AssignmentBlockedError,
 } from "../services/rosterService.js";
+import {
+  listPublicHolidays,
+  createPublicHoliday,
+  deletePublicHoliday,
+  PublicHolidayError,
+} from "../services/publicHolidayService.js";
 
 const RoleSchema = z.object({
   roleName: z.string().min(1).max(100),
@@ -78,10 +84,20 @@ const PublishSchema = z.object({
   to: z.string().min(1),
 });
 
+const PublicHolidaySchema = z.object({
+  jurisdiction: z.string().min(1).max(50),
+  holidayDate: z.string().min(1),
+  holidayName: z.string().min(1).max(200),
+  isRegional: z.boolean().optional(),
+  regionNote: z.string().max(500).nullable().optional(),
+  sourceCitation: z.string().max(500).nullable().optional(),
+  loadedForYear: z.number().int().min(2000).max(2100),
+});
+
 function handleServiceError(err: unknown, res: Response, next: NextFunction): void {
   if (err instanceof AssignmentBlockedError) {
     res.status(err.statusCode).json({ error: err.message, blocked: err.info });
-  } else if (err instanceof RosterError) {
+  } else if (err instanceof RosterError || err instanceof PublicHolidayError) {
     res.status(err.statusCode).json({ error: err.message });
   } else {
     next(err);
@@ -360,6 +376,46 @@ export async function handleDeleteAvailability(req: Request, res: Response, next
     const ctx = await resolveContext(req, res);
     if (!ctx) return;
     await deleteAvailability(ctx.orgId, req.params.id as string, req.user!.sub);
+    res.status(204).end();
+  } catch (err) {
+    handleServiceError(err, res, next);
+  }
+}
+
+// ── Public holidays ────────────────────────────────────────────────────
+// No org scoping — jurisdiction-keyed shared reference data (plan's Phase 2
+// finding 8), same shape as award_rule.
+
+export async function handleListPublicHolidays(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { jurisdiction, year } = req.query;
+    res.json(
+      await listPublicHolidays({
+        jurisdiction: typeof jurisdiction === "string" ? jurisdiction : undefined,
+        year: typeof year === "string" && year.trim() !== "" ? Number(year) : undefined,
+      }),
+    );
+  } catch (err) {
+    handleServiceError(err, res, next);
+  }
+}
+
+export async function handleCreatePublicHoliday(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const parsed = PublicHolidaySchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.errors[0]?.message ?? "Invalid input" });
+      return;
+    }
+    res.status(201).json(await createPublicHoliday(parsed.data));
+  } catch (err) {
+    handleServiceError(err, res, next);
+  }
+}
+
+export async function handleDeletePublicHoliday(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    await deletePublicHoliday(req.params.id as string);
     res.status(204).end();
   } catch (err) {
     handleServiceError(err, res, next);

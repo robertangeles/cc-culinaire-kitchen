@@ -25,6 +25,7 @@ import {
   MessagesSquare,
   FileText,
   Brain,
+  CalendarDays,
   type LucideIcon,
 } from "lucide-react";
 import { useHasPermission } from "../../hooks/useHasPermission.js";
@@ -77,6 +78,13 @@ const tabs: TabItem[] = [
     icon: ShieldCheck,
     group: "shared",
     permission: "compliance:manage-rules",
+  },
+  {
+    id: "publicHolidays",
+    label: "Public Holidays",
+    icon: CalendarDays,
+    group: "shared",
+    permission: "roster:manage",
   },
   { id: "roles", label: "Roles", icon: Shield, group: "shared" },
   { id: "integrations", label: "Integrations", icon: Plug, group: "shared" },
