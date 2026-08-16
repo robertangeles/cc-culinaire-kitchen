@@ -322,10 +322,14 @@ Three items the review deferred rather than built:
 - [ ] **P2 — Name an owner for `award_rule` authorship.** No longer a ship-blocker
   (2026-08-14 resolution): T14 (Slice 4, shipped) builds the full Award engine machinery —
   `award_rule` table, `evaluate()` returning both `warnings[]` and a `coverage` object, the
-  publish-time audit ack — but seeds ZERO rows on purpose, and the publish screen always
-  discloses "0 of N rule categories checked" with the same visual weight a populated warning
-  list would get. The gap is disclosed, not hidden, so Phase 2 ships without reversing the
-  original CEO review's safety concern. This item is now a data-entry follow-on (INSERT
+  publish-time audit ack always carrying `{awardWarnings, awardCoverage}` — but seeds ZERO
+  rows on purpose. The engine is server-only in Slice 4 (no UI yet); Slice 5 must surface the
+  disclosure on the publish screen as "0 of N rule categories checked" with the same visual
+  weight a populated warning list would get, so the gap stays disclosed, not hidden, once staff
+  are looking at it. That UI step is required before this can be called resolved end-to-end —
+  Phase 2 ships the machinery without reversing the original CEO review's safety concern, but
+  the review's disclosure requirement lands on staff only when Slice 5 ships. This item is now
+  a data-entry follow-on (INSERT
   statements + an IR-competent reviewer), not an engineering dependency: MA000009 varies
   several times a year (1 July wage reviews, FWC variations, casual-conversion and loading
   changes), and nobody on this project is currently named as able to author those rows. The

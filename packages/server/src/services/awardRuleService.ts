@@ -93,6 +93,50 @@ export function buildAwardCoverage(activeRules: ActiveAwardRule[], jurisdiction:
   };
 }
 
+const HOUR_MS = 60 * 60 * 1000;
+
+type CheckedRuleType = (typeof AWARD_CHECKED_RULE_TYPES)[number];
+
+interface EvalContext {
+  startMs: number;
+  endMs: number;
+  nowMs: number;
+}
+
+type RuleEvaluator = (rule: ActiveAwardRule, ctx: EvalContext) => AwardWarning | null;
+
+/**
+ * One evaluator per entry in AWARD_CHECKED_RULE_TYPES — keyed by a `Record`
+ * over that same union, so adding/removing a checked rule type without a
+ * matching evaluator (or vice versa) is a TypeScript compile error, not a
+ * silent coverage/behaviour mismatch. This is the mechanism that keeps the
+ * `coverage.checked` disclosure honest: it is structurally impossible for a
+ * type to appear in AWARD_CHECKED_RULE_TYPES without also having code that
+ * actually evaluates it.
+ */
+const RULE_EVALUATORS: Record<CheckedRuleType, RuleEvaluator> = {
+  max_ordinary_hours: (rule, { startMs, endMs }) => {
+    const durationHours = (endMs - startMs) / HOUR_MS;
+    if (durationHours <= rule.thresholdValue) return null;
+    return {
+      severity: "advisory",
+      message: `This shift is ${round1(durationHours)} hours long, exceeding the Award's ${rule.thresholdValue}-hour ordinary-hours limit.`,
+      ruleVersion: rule.ruleVersion,
+      sourceCitation: rule.sourceCitation,
+    };
+  },
+  publish_notice: (rule, { startMs, nowMs }) => {
+    const noticeHours = (startMs - nowMs) / HOUR_MS;
+    if (noticeHours >= rule.thresholdValue) return null;
+    return {
+      severity: "advisory",
+      message: `This shift starts in ${round1(noticeHours)} hours, less than the Award's required ${rule.thresholdValue} hours' notice.`,
+      ruleVersion: rule.ruleVersion,
+      sourceCitation: rule.sourceCitation,
+    };
+  },
+};
+
 /**
  * Pure — no DB. `now` is injected (ISO datetime) so publish_notice is
  * testable without mocking the clock, same convention as
@@ -105,33 +149,16 @@ export function evaluateAwardRules(
   jurisdiction: string | null,
 ): AwardEvaluation {
   const warnings: AwardWarning[] = [];
-  const start = new Date(shift.startDatetime).getTime();
-  const end = new Date(shift.endDatetime).getTime();
-  const nowMs = new Date(now).getTime();
-  const HOUR_MS = 60 * 60 * 1000;
+  const ctx: EvalContext = {
+    startMs: new Date(shift.startDatetime).getTime(),
+    endMs: new Date(shift.endDatetime).getTime(),
+    nowMs: new Date(now).getTime(),
+  };
 
   for (const rule of activeRules) {
-    if (rule.ruleType === "max_ordinary_hours") {
-      const durationHours = (end - start) / HOUR_MS;
-      if (durationHours > rule.thresholdValue) {
-        warnings.push({
-          severity: "advisory",
-          message: `This shift is ${round1(durationHours)} hours long, exceeding the Award's ${rule.thresholdValue}-hour ordinary-hours limit.`,
-          ruleVersion: rule.ruleVersion,
-          sourceCitation: rule.sourceCitation,
-        });
-      }
-    } else if (rule.ruleType === "publish_notice") {
-      const noticeHours = (start - nowMs) / HOUR_MS;
-      if (noticeHours < rule.thresholdValue) {
-        warnings.push({
-          severity: "advisory",
-          message: `This shift starts in ${round1(noticeHours)} hours, less than the Award's required ${rule.thresholdValue} hours' notice.`,
-          ruleVersion: rule.ruleVersion,
-          sourceCitation: rule.sourceCitation,
-        });
-      }
-    }
+    const evaluator = RULE_EVALUATORS[rule.ruleType as CheckedRuleType];
+    const warning = evaluator?.(rule, ctx);
+    if (warning) warnings.push(warning);
   }
 
   return { warnings, coverage: buildAwardCoverage(activeRules, jurisdiction) };
