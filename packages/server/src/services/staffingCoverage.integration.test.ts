@@ -226,4 +226,31 @@ describe.skipIf(!RUN)("staffingCoverageService (real DB)", () => {
       statusCode: 404,
     });
   });
+
+  it("buckets a shift by the venue's local calendar day, not the UTC day it's stored under", async () => {
+    // locA defaults to Australia/Melbourne (schema default) — currently
+    // AEST (+10:00), no DST in August. An explicit offset, not a bare
+    // local-format string: a bare string parses in the TEST RUNNER's zone
+    // (UTC in CI), which would silently stop this test from ever crossing a
+    // UTC day boundary there. 05:00 AEST = 19:00 UTC the PREVIOUS day —
+    // exactly the case toVenueLocalDate() exists to bucket correctly.
+    const targetDay = addDays(TODAY, 10);
+    const start = new Date(`${targetDay}T05:00:00+10:00`);
+    const end = new Date(`${targetDay}T09:00:00+10:00`);
+    const [s5] = await db
+      .insert(shift)
+      .values({ organisationId: orgA, storeLocationId: locA, rosterRoleId: roleId, startDatetime: start, endDatetime: end, createdBy: userA })
+      .returning({ id: shift.shiftId });
+    shiftIds.push(s5.id);
+    await db.insert(shiftAssignment).values({ shiftId: s5.id, userId: userA });
+
+    const result = await getStaffingCoverage(orgA, locA, addDays(targetDay, -1), addDays(targetDay, 1));
+    const cell = result.cells.find((c) => c.roleId === roleId && c.date === targetDay);
+    expect(cell).toBeDefined();
+    expect(cell!.status).toBe("ok");
+    expect(cell!.rosteredHours).toBe(4);
+    // The bug this guards against: without toVenueLocalDate, this shift
+    // would have landed on the UTC day (targetDay - 1) instead.
+    expect(result.cells.some((c) => c.roleId === roleId && c.date === addDays(targetDay, -1))).toBe(false);
+  });
 });
