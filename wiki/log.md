@@ -4,6 +4,48 @@ Append-only. Newest entry on top.
 
 ---
 
+## 2026-08-17 — Phase 3 Slice 3 shipped: shift swap — Phase 3 (Workforce Optimisation) complete
+
+- `feature/ck-web/workforce-shift-swap`: new `shift_swap_request` table + `services/shiftSwapService.ts`
+  — peer-to-peer swap marketplace, no manager-approval step. `offerSwap` (own Confirmed
+  assignment only), `listOpenSwaps` (org-wide browse), `claimSwap` (atomic conditional
+  `UPDATE ... WHERE status='Open'` inside the same transaction as the assignment transfer —
+  the losing side of a concurrent claim gets zero rows back and rolls back cleanly, no
+  advisory lock needed), `cancelSwap` (offerer-only, still-Open only).
+- `assignStaff`'s Draft-only guard deliberately does NOT apply to a claim — that guard exists
+  so `publishRoster()` stays the only place a *fresh* assignment's s.114 consent gate fires.
+  A swap claim replaces an already-Published assignment, so it's its own dedicated
+  delete-then-insert path inside one transaction, not a call through `assignStaff`.
+- Public-holiday consent needed zero new logic: a successful claim into an
+  `isPublicHoliday` shift calls the existing `consentService.requestConsent()` directly, so
+  the new assignee gets the identical Accept/Decline banner `MyShiftsView.tsx` already
+  renders for any `"Requested"` consent — never inherited from the person who offered.
+- **Real bug caught by my own integration test before it ever reached review**: the initial
+  `claimSwap` returned the assignment row captured *before* calling `requestConsent()`, so a
+  caller claiming a public-holiday shift saw `publicHolidayConsent: null` instead of
+  `"Requested"` — `requestConsent`'s own UPDATE never made it back to the caller. Fixed by
+  returning `requestConsent`'s result directly when the shift is a public holiday.
+- Exported `getRequirementsForRole` and `getHeldDocuments` from `rosterService.ts` (both were
+  private) so the swap-claim gate reuses the exact same `canAssign` resolution path
+  `assignStaff`/`publishRoster` already use, rather than a third reimplementation — Slice 2's
+  `staffingCoverageService.ts` reimplemented a *batched* multi-user version for its own
+  reasons, but a swap claim only ever checks one candidate, so reusing the existing
+  single-user functions was the right call here.
+- Verified via 7 integration tests: offer→claim happy path (including the self-claim and
+  cross-org 404 guards), claim blocked by `canAssign` with the verbatim `refusalMessage()`
+  text, two concurrent claims on the same swap (exactly one wins, proven against the real DB
+  under `Promise.allSettled`), the public-holiday consent-reset case, offerer cancel, and a
+  non-offerer's cancel attempt 404ing. Also found and cleaned up ~2 unrelated orphaned-fixture
+  rows left over in dev from an earlier session's aborted `publicHolidayService.integration.test.ts`
+  run — pre-existing pollution, not caused by this slice, but it was failing the full suite
+  until cleaned up.
+- Client: `MyShiftsView.tsx` gets an "Offer to swap" / "Cancel swap offer" button on
+  `Confirmed` rows and a flat "Open swaps" list below it with a Claim button for everyone
+  else's open offers — no new tab, no new page, matching the plan. Verified live against dev
+  (offer → button flips to Cancel → cancel → flips back), zero console errors.
+- Phase 3 (Workforce Optimisation) is now fully shipped: demand forecasting (Slice 1),
+  coverage heat map (Slice 2), shift swap (Slice 3). Updated [[workforce-optimisation]].
+
 ## 2026-08-17 — Phase 3 Slice 2 shipped: coverage heat map + skill coverage
 
 - `feature/ck-web/workforce-coverage-heatmap`: `services/staffingCoverageService.ts` — a

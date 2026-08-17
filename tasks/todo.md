@@ -307,13 +307,14 @@ _Nothing confirmed outstanding. New work to be defined._
 
 ---
 
-## Staff Compliance Vault + Rostering — Phase 1 + Phase 2 shipped 2026-08-17
+## Staff Compliance Vault + Rostering — Phase 1, 2 + 3 shipped 2026-08-17
 
 Plan: `~/.claude/plans/1-problem-statement-cheerful-gosling.md` (SELECTIVE EXPANSION,
-approach C — full 3-phase spec). Phase 1 (Compliance Vault) and Phase 2 (Roster Core,
-Slices 0–7 including the s.114 consent workflow) are both on `main`. See [[roster-core]]
-and [[staff-compliance-vault]] in the wiki. Phase 3 (workforce optimisation, E1) is not
-started.
+approach C — full 3-phase spec). Phase 1 (Compliance Vault), Phase 2 (Roster Core,
+Slices 0–7 including the s.114 consent workflow), and Phase 3 (Workforce Optimisation —
+demand forecasting, coverage heat map, shift swap) are all on `main` (or on their
+finishing branch, about to merge). See [[roster-core]], [[staff-compliance-vault]], and
+[[workforce-optimisation]] in the wiki.
 
 Three items the review deferred rather than built:
 

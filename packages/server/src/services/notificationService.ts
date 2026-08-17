@@ -34,7 +34,8 @@ export type NotificationType =
   | "DOCUMENT_EXPIRY_ALERT"
   // "PUBLIC_HOLIDAY_..." would exceed `notification.type`'s varchar(30).
   | "HOLIDAY_CONSENT_REQUESTED"
-  | "HOLIDAY_CONSENT_DECLINED";
+  | "HOLIDAY_CONSENT_DECLINED"
+  | "SHIFT_SWAP_CLAIMED";
 
 export type NotificationChannel = "IN_APP" | "EMAIL";
 

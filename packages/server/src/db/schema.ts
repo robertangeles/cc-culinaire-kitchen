@@ -3473,3 +3473,49 @@ export const publicHoliday = pgTable(
     uniqueIndex("idx_public_holiday_unique").on(table.jurisdiction, table.holidayDate),
   ],
 );
+
+/**
+ * A staff member offering their own Confirmed shift assignment up for
+ * someone else to take (Phase 3, Slice 3). Peer-to-peer, no manager
+ * approval step — claiming re-runs canAssign against the candidate, same
+ * gate assignStaff already uses, so an ineligible claimant is refused
+ * automatically rather than requiring a human gatekeeper.
+ *
+ * Two terminal states (Claimed, Cancelled), one open state — claiming IS
+ * completion, there's no separate "pending manager review" step, so a
+ * third state was not added.
+ */
+export const shiftSwapRequest = pgTable(
+  "shift_swap_request",
+  {
+    swapRequestId: uuid("swap_request_id").defaultRandom().primaryKey(),
+    shiftId: uuid("shift_id")
+      .notNull()
+      .references(() => shift.shiftId, { onDelete: "cascade" }),
+    /** The outgoing assignment being offered. Denormalized fromUserId below avoids a join for "who offered this". */
+    fromAssignmentId: uuid("from_assignment_id")
+      .notNull()
+      .references(() => shiftAssignment.assignmentId, { onDelete: "cascade" }),
+    fromUserId: integer("from_user_id")
+      .notNull()
+      .references(() => user.userId),
+    /** NULL until claimed. */
+    toUserId: integer("to_user_id").references(() => user.userId),
+    status: varchar("status", { length: 20 }).notNull().default("Open"),
+    createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
+    updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // One open offer per assignment at a time — claiming or cancelling
+    // frees the assignment to be re-offered later under a new row.
+    uniqueIndex("idx_shift_swap_request_open_unique")
+      .on(table.shiftId, table.fromAssignmentId)
+      .where(sql`status = 'Open'`),
+    // "Every open swap at this venue's shifts" — the browse/claim list.
+    index("idx_shift_swap_request_shift").on(table.shiftId),
+    // FK index: "swaps this person has offered".
+    index("idx_shift_swap_request_from_user").on(table.fromUserId),
+    // FK index: "swaps this person has claimed".
+    index("idx_shift_swap_request_to_user").on(table.toUserId),
+  ],
+);

@@ -446,7 +446,10 @@ async function getActiveRule(documentType: string, jurisdiction: string | null, 
   return exact ?? rows.find((r) => r.jurisdiction === null) ?? null;
 }
 
-async function getRequirementsForRole(
+// Exported — reused by shiftSwapService.ts to re-run the exact same
+// canAssign gate against a swap-claim candidate, rather than a second copy
+// of this role-requirements lookup.
+export async function getRequirementsForRole(
   roleId: string,
   jurisdiction: string | null,
   today: string,
@@ -464,7 +467,8 @@ async function getRequirementsForRole(
   return requirements;
 }
 
-async function getHeldDocuments(orgId: number, userId: number, documentTypes: string[]): Promise<HeldDocument[]> {
+// Exported for the same reason as getRequirementsForRole above.
+export async function getHeldDocuments(orgId: number, userId: number, documentTypes: string[]): Promise<HeldDocument[]> {
   if (documentTypes.length === 0) return [];
   const rows = await db
     .select({
