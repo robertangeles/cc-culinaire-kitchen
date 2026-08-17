@@ -25,7 +25,7 @@
 import { and, eq, gte, lte, ne, inArray, or, isNull, desc } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { rosterRole, shift, shiftAssignment, rosterRoleDocument, complianceDocument, documentExpiryRule, user } from "../db/schema.js";
-import { assertLocationInOrg, refusalMessage, RosterError } from "./rosterService.js";
+import { assertLocationInOrg, getVenueTimezone, refusalMessage, RosterError, toVenueLocalDate } from "./rosterService.js";
 import { canAssign, type HeldDocument, type AssignmentRequirement, type AssignmentBlockReason } from "./rosterAssignmentRules.js";
 
 export type CoverageCellStatus = "ok" | "unstaffed" | AssignmentBlockReason;
@@ -89,6 +89,7 @@ export async function getStaffingCoverage(
     throw new RosterError("from/to must be valid dates", 400);
   }
   const today = todayIso();
+  const venueTimezone = await getVenueTimezone(storeLocationId);
 
   // Query 1: every shift in range at this venue, its role, and every
   // Pending/Confirmed assignee (LEFT JOIN so an unstaffed shift still
@@ -203,7 +204,11 @@ export async function getStaffingCoverage(
   const seenShifts = new Set<string>();
   for (const row of shiftRows) {
     roleNames.set(row.roleId, row.roleName);
-    const date = row.startDatetime.toISOString().slice(0, 10);
+    // Read the shift's calendar day back in the venue's own zone, not UTC —
+    // see toVenueLocalDate()'s doc comment (rosterService.ts) for why
+    // .toISOString().slice(0, 10) would misfile any shift whose local start
+    // crosses midnight UTC (e.g. a 6am AEST shift is 8pm UTC the day before).
+    const date = toVenueLocalDate(row.startDatetime, venueTimezone);
     const key = `${date}::${row.roleId}`;
     const hours = (row.endDatetime.getTime() - row.startDatetime.getTime()) / (1000 * 60 * 60);
 
