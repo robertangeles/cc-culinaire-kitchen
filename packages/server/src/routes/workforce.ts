@@ -15,7 +15,14 @@
 import { Router } from "express";
 import { authenticate, requirePermission } from "../middleware/auth.js";
 import { requireFlag } from "../middleware/requireFlag.js";
-import { handleGetWorkforceDemand, handleGetStaffingCoverage } from "../controllers/workforceController.js";
+import {
+  handleGetWorkforceDemand,
+  handleGetStaffingCoverage,
+  handleOfferSwap,
+  handleListOpenSwaps,
+  handleClaimSwap,
+  handleCancelSwap,
+} from "../controllers/workforceController.js";
 
 const router = Router();
 // Ahead of authenticate, on purpose — see routes/roster.ts's identical
@@ -26,5 +33,14 @@ router.use(authenticate);
 
 router.get("/demand", requirePermission("roster:read-all"), handleGetWorkforceDemand);
 router.get("/coverage", requirePermission("roster:read-all"), handleGetStaffingCoverage);
+
+// Self-service swap marketplace — roster:read-own, same tier MyShiftsView's
+// own respond/consent routes use. Browsing briefly surfaces another staff
+// member's name + shift time, a deliberate minimal disclosure the feature
+// can't function without (Decision 5's own reasoning).
+router.post("/swaps", requirePermission("roster:read-own"), handleOfferSwap);
+router.get("/swaps", requirePermission("roster:read-own"), handleListOpenSwaps);
+router.post("/swaps/:id/claim", requirePermission("roster:read-own"), handleClaimSwap);
+router.post("/swaps/:id/cancel", requirePermission("roster:read-own"), handleCancelSwap);
 
 export default router;

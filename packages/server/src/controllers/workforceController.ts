@@ -11,10 +11,13 @@ import type { Request, Response, NextFunction } from "express";
 import { getUserLocationContext } from "../services/locationContextService.js";
 import { getStationDemand } from "../services/workforceDemandService.js";
 import { getStaffingCoverage } from "../services/staffingCoverageService.js";
-import { RosterError } from "../services/rosterService.js";
+import { offerSwap, listOpenSwaps, claimSwap, cancelSwap } from "../services/shiftSwapService.js";
+import { RosterError, AssignmentBlockedError } from "../services/rosterService.js";
 
 function handleServiceError(err: unknown, res: Response, next: NextFunction): void {
-  if (err instanceof RosterError) {
+  if (err instanceof AssignmentBlockedError) {
+    res.status(err.statusCode).json({ error: err.message, blocked: err.info });
+  } else if (err instanceof RosterError) {
     res.status(err.statusCode).json({ error: err.message });
   } else {
     next(err);
@@ -55,6 +58,51 @@ export async function handleGetStaffingCoverage(req: Request, res: Response, nex
       return;
     }
     res.json(await getStaffingCoverage(ctx.orgId, storeLocationId, from, to));
+  } catch (err) {
+    handleServiceError(err, res, next);
+  }
+}
+
+export async function handleOfferSwap(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const ctx = await resolveContext(req, res);
+    if (!ctx) return;
+    const { assignmentId } = req.body;
+    if (typeof assignmentId !== "string") {
+      res.status(400).json({ error: "assignmentId is required" });
+      return;
+    }
+    res.status(201).json(await offerSwap(ctx.orgId, assignmentId, req.user!.sub));
+  } catch (err) {
+    handleServiceError(err, res, next);
+  }
+}
+
+export async function handleListOpenSwaps(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const ctx = await resolveContext(req, res);
+    if (!ctx) return;
+    res.json(await listOpenSwaps(ctx.orgId));
+  } catch (err) {
+    handleServiceError(err, res, next);
+  }
+}
+
+export async function handleClaimSwap(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const ctx = await resolveContext(req, res);
+    if (!ctx) return;
+    res.json(await claimSwap(ctx.orgId, req.params.id as string, req.user!.sub));
+  } catch (err) {
+    handleServiceError(err, res, next);
+  }
+}
+
+export async function handleCancelSwap(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const ctx = await resolveContext(req, res);
+    if (!ctx) return;
+    res.json(await cancelSwap(ctx.orgId, req.params.id as string, req.user!.sub));
   } catch (err) {
     handleServiceError(err, res, next);
   }

@@ -7,9 +7,11 @@
  */
 
 import { useState } from "react";
-import { CalendarDays, CalendarHeart, Check, Loader2, X } from "lucide-react";
+import { ArrowLeftRight, CalendarDays, CalendarHeart, Check, Loader2, X } from "lucide-react";
 import { formatAuDate } from "@culinaire/shared";
 import { useMyShifts } from "../../hooks/useRoster.js";
+import { useShiftSwaps } from "../../hooks/useWorkforce.js";
+import { useAuth } from "../../context/AuthContext.js";
 import { EmptyState } from "../ui/EmptyState.js";
 
 function formatShiftTime(startIso: string, endIso: string): string {
@@ -21,8 +23,12 @@ function formatShiftTime(startIso: string, endIso: string): string {
 
 export function MyShiftsView() {
   const { shifts, isLoading, error, respond, respondToConsentRequest } = useMyShifts();
+  const { swaps, isLoading: swapsLoading, offer, claim, cancel } = useShiftSwaps();
+  const { user } = useAuth();
   const [respondingId, setRespondingId] = useState<string | null>(null);
   const [respondError, setRespondError] = useState<string | null>(null);
+  const [swapActionId, setSwapActionId] = useState<string | null>(null);
+  const [swapError, setSwapError] = useState<string | null>(null);
 
   async function handleRespond(assignmentId: string, response: "Confirmed" | "Declined") {
     setRespondingId(assignmentId);
@@ -47,6 +53,47 @@ export function MyShiftsView() {
       setRespondingId(null);
     }
   }
+
+  async function handleOfferSwap(assignmentId: string) {
+    setSwapActionId(assignmentId);
+    setSwapError(null);
+    try {
+      await offer(assignmentId);
+    } catch (err) {
+      setSwapError(err instanceof Error ? err.message : "Failed to offer this shift for swap");
+    } finally {
+      setSwapActionId(null);
+    }
+  }
+
+  async function handleCancelSwap(swapRequestId: string) {
+    setSwapActionId(swapRequestId);
+    setSwapError(null);
+    try {
+      await cancel(swapRequestId);
+    } catch (err) {
+      setSwapError(err instanceof Error ? err.message : "Failed to cancel this swap offer");
+    } finally {
+      setSwapActionId(null);
+    }
+  }
+
+  async function handleClaimSwap(swapRequestId: string) {
+    setSwapActionId(swapRequestId);
+    setSwapError(null);
+    try {
+      await claim(swapRequestId);
+    } catch (err) {
+      setSwapError(err instanceof Error ? err.message : "Failed to claim this swap");
+    } finally {
+      setSwapActionId(null);
+    }
+  }
+
+  const myOfferedSwapByAssignment = new Map(
+    swaps.filter((s) => s.fromUserId === user?.userId).map((s) => [s.fromAssignmentId, s.swapRequestId]),
+  );
+  const claimableSwaps = swaps.filter((s) => s.fromUserId !== user?.userId);
 
   if (isLoading) {
     return (
@@ -106,6 +153,26 @@ export function MyShiftsView() {
                   </button>
                 </div>
               )}
+              {s.assignmentStatus === "Confirmed" &&
+                (myOfferedSwapByAssignment.has(s.assignmentId) ? (
+                  <button
+                    type="button"
+                    onClick={() => handleCancelSwap(myOfferedSwapByAssignment.get(s.assignmentId)!)}
+                    disabled={swapActionId === myOfferedSwapByAssignment.get(s.assignmentId)}
+                    className="flex items-center gap-1 rounded-lg border border-dark-200 px-3 py-1.5 text-xs text-dark-600 hover:text-white transition-all disabled:opacity-50"
+                  >
+                    <X className="size-3.5" /> Cancel swap offer
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => handleOfferSwap(s.assignmentId)}
+                    disabled={swapActionId === s.assignmentId}
+                    className="flex items-center gap-1 rounded-lg border border-dark-200 px-3 py-1.5 text-xs text-dark-600 hover:text-white transition-all disabled:opacity-50"
+                  >
+                    <ArrowLeftRight className="size-3.5" /> Offer to swap
+                  </button>
+                ))}
             </div>
             {/* s.114: a distinct question from "will you work this shift" — do you
                 consent to it being a public holiday, since you can be asked
@@ -145,6 +212,38 @@ export function MyShiftsView() {
           </div>
         ))}
       </div>
+
+      {(claimableSwaps.length > 0 || swapError) && (
+        <div className="space-y-2">
+          <h3 className="text-sm font-medium text-white">Open swaps</h3>
+          {swapError && <p className="text-sm text-red-400">{swapError}</p>}
+          {!swapsLoading && claimableSwaps.length > 0 && (
+            <div className="rounded-xl border border-dark-200 overflow-hidden">
+              {claimableSwaps.map((s) => (
+                <div
+                  key={s.swapRequestId}
+                  className="flex items-center justify-between border-b border-dark-200/30 px-4 py-3 last:border-b-0"
+                >
+                  <div className="text-sm">
+                    <span className="text-white font-medium">{formatShiftTime(s.startDatetime, s.endDatetime)}</span>
+                    <div className="mt-0.5 text-xs text-dark-600">
+                      {s.roleName} — offered by {s.fromUserName}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleClaimSwap(s.swapRequestId)}
+                    disabled={swapActionId === s.swapRequestId}
+                    className="flex items-center gap-1 rounded-lg bg-gold px-3 py-1.5 text-xs font-semibold text-dark transition-all hover:bg-gold-hover disabled:opacity-50"
+                  >
+                    <ArrowLeftRight className="size-3.5" /> Claim
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -6,7 +6,7 @@ updated: 2026-08-17
 related: [[roster-core]], [[staff-compliance-vault]]
 ---
 
-Phase 3 of the Staff Compliance Vault + Rostering plan: demand forecasting from prep workload, a coverage heat map, and shift swapping. In progress — Slices 1 (demand forecasting) and 2 (coverage heat map) are built; Slice 3 (shift swap) is not yet started.
+Phase 3 of the Staff Compliance Vault + Rostering plan: demand forecasting from prep workload, a coverage heat map, and shift swapping. Complete — all three slices (demand forecasting, coverage heat map, shift swap) are shipped.
 
 ## Why it exists
 
@@ -48,9 +48,23 @@ Client: a "Coverage" tab in `RosterPage.tsx`, hand-rolled CSS-grid table (no cha
 
 No new permission keys. Reuses Roster Core's existing `roster:read-own`/`roster:read-all`/`roster:manage`/`roster:publish` — established precedent (the public-holiday admin loader in [[roster-core]] made the same call).
 
-## Not yet built
+## Shift swap (Slice 3) — peer-to-peer, no manager approval
 
-- **Shift swap** (Slice 3) — peer-to-peer, `canAssign` re-run against the claiming candidate as the only gate (no manager-approval step). New `shift_swap_request` table. On claim into a public-holiday shift, reuses `consentService.requestConsent()` directly so the new assignee independently consents rather than inheriting the old assignee's consent.
+`services/shiftSwapService.ts` + new `shift_swap_request` table. A staff member offers their own `Confirmed` assignment; any other org staff member browses the open-swap list and self-claims, gated only by `canAssign` re-run against the claiming candidate — the same gate `assignStaff` uses, no manager-approval step (Decision 5, matching the plan's own wording).
+
+**Race-safe claim, one transaction, no advisory lock.** `claimSwap` runs a conditional `UPDATE shift_swap_request SET status='Claimed' WHERE swap_request_id=:id AND status='Open' RETURNING *` inside the same `db.transaction()` as the assignment transfer (hard-delete the old `shift_assignment` row, insert the new one `Confirmed`). If the conditional UPDATE returns zero rows — someone else claimed it first — the whole transaction throws and rolls back, including the delete/insert that hadn't happened yet. Proven under a real concurrent `Promise.allSettled([claimA, claimB])` against the dev DB: exactly one wins, exactly one assignment row exists afterward.
+
+**`assignStaff`'s Draft-only guard deliberately does not apply to a claim.** That guard exists so `publishRoster()` stays the only place a *fresh* assignment's s.114 consent gate fires — see [[roster-core]]. A swap claim replaces an assignment on an already-Published shift (the realistic case), so it's its own dedicated delete-then-insert path inside one transaction, never a call through `assignStaff`.
+
+**Public-holiday consent needed zero new logic.** On a successful claim into an `isPublicHoliday` shift, `claimSwap` calls the existing `consentService.requestConsent(orgId, newAssignmentId, actorUserId)` directly. `MyShiftsView.tsx` already renders the `publicHolidayConsent === "Requested"` Accept/Decline banner unconditionally for any assignment in that state, so the new assignee gets the identical prompt with zero new client code — and never inherits the old assignee's `"Accepted"` consent, since it's a brand-new assignment row.
+
+**A real bug caught by my own integration test, before review**: the first version of `claimSwap` returned the assignment row captured *before* calling `requestConsent()`, so the caller saw `publicHolidayConsent: null` instead of `"Requested"` — `requestConsent`'s own UPDATE never made it back out. Fixed by returning `requestConsent`'s result directly whenever the shift is a public holiday.
+
+**Reuses `rosterService.ts`'s single-user `canAssign` resolution path** (`getRequirementsForRole`, `getHeldDocuments`, both newly exported for this) rather than a third reimplementation — deliberately different from Slice 2's `staffingCoverageService.ts`, which reimplemented a *batched* multi-user version for its own dashboard reasons. A swap claim only ever checks one candidate, so reusing the existing single-user functions was the right call here, not premature DRY.
+
+No new permission key — `roster:read-own`, same tier as `MyShiftsView.tsx`'s own respond/consent actions. The browse list briefly surfaces another staff member's name and shift time to make the marketplace work; a deliberate, minimal, non-sensitive disclosure.
+
+Client: `MyShiftsView.tsx` gets an "Offer to swap" / "Cancel swap offer" button on `Confirmed` rows and a flat "Open swaps" list below with a Claim button for everyone else's offers. No new tab, no new page.
 
 Full design (formula derivation, query shapes, schema, slice sequencing) is in the plan file's "Phase 3 Execution Plan" section.
 

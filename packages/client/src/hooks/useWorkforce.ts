@@ -4,11 +4,13 @@
  * Custom hooks for Workforce Optimisation (Phase 3): demand forecasting.
  */
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
+import type { AssignmentBlocked } from "./useRoster.js";
 
 const API = import.meta.env.VITE_API_URL ?? "";
 const BASE = `${API}/api/workforce`;
 const opts = { credentials: "include" as const };
+const jsonOpts = { ...opts, headers: { "Content-Type": "application/json" } };
 
 export interface StationDemand {
   station: string;
@@ -99,4 +101,77 @@ export function useStaffingCoverage() {
   }, []);
 
   return { result, isLoading, error, fetchCoverage };
+}
+
+// ─── Shift swap (Slice 3, staff self-service) ─────────────────────
+
+export interface OpenSwap {
+  swapRequestId: string;
+  shiftId: string;
+  fromAssignmentId: string;
+  fromUserId: number;
+  fromUserName: string;
+  startDatetime: string;
+  endDatetime: string;
+  rosterRoleId: string;
+  roleName: string;
+  storeLocationId: string;
+}
+
+async function parseSwapError(res: Response, fallback: string): Promise<Error & { blocked?: AssignmentBlocked }> {
+  const body = await res.json().catch(() => ({}));
+  const err = new Error(body.error || fallback) as Error & { blocked?: AssignmentBlocked };
+  if (body.blocked) err.blocked = body.blocked;
+  return err;
+}
+
+export function useShiftSwaps() {
+  const [swaps, setSwaps] = useState<OpenSwap[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`${BASE}/swaps`, opts);
+      if (res.ok) setSwaps(await res.json());
+      else setError((await parseSwapError(res, "Failed to load open swaps")).message);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const offer = useCallback(
+    async (assignmentId: string) => {
+      const res = await fetch(`${BASE}/swaps`, { ...jsonOpts, method: "POST", body: JSON.stringify({ assignmentId }) });
+      if (!res.ok) throw await parseSwapError(res, "Failed to offer this shift for swap");
+      await refresh();
+    },
+    [refresh],
+  );
+
+  const claim = useCallback(
+    async (swapRequestId: string) => {
+      const res = await fetch(`${BASE}/swaps/${swapRequestId}/claim`, { ...jsonOpts, method: "POST" });
+      if (!res.ok) throw await parseSwapError(res, "Failed to claim this swap");
+      await refresh();
+    },
+    [refresh],
+  );
+
+  const cancel = useCallback(
+    async (swapRequestId: string) => {
+      const res = await fetch(`${BASE}/swaps/${swapRequestId}/cancel`, { ...jsonOpts, method: "POST" });
+      if (!res.ok) throw await parseSwapError(res, "Failed to cancel this swap offer");
+      await refresh();
+    },
+    [refresh],
+  );
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  return { swaps, isLoading, error, refresh, offer, claim, cancel };
 }

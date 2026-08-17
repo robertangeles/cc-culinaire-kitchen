@@ -161,5 +161,8 @@ jobs:
       - name: Run staffing coverage integration tests
         run: pnpm --filter @culinaire/server exec vitest run src/services/staffingCoverage.integration.test.ts
 
+      - name: Run shift swap integration tests
+        run: pnpm --filter @culinaire/server exec vitest run src/services/shiftSwap.integration.test.ts
+
       - name: Run daily-run-claim integration tests
         run: pnpm --filter @culinaire/server exec vitest run src/utils/dailyRunClaim.integration.test.ts
