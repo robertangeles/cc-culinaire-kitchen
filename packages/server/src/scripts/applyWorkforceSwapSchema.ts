@@ -39,6 +39,8 @@ const statements = [
   sql`CREATE INDEX IF NOT EXISTS idx_shift_swap_request_shift ON shift_swap_request (shift_id)`,
   // FK index: "swaps this person has offered".
   sql`CREATE INDEX IF NOT EXISTS idx_shift_swap_request_from_user ON shift_swap_request (from_user_id)`,
+  // FK index: "swaps this person has claimed".
+  sql`CREATE INDEX IF NOT EXISTS idx_shift_swap_request_to_user ON shift_swap_request (to_user_id)`,
 ];
 
 async function main() {

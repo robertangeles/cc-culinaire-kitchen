@@ -3515,5 +3515,7 @@ export const shiftSwapRequest = pgTable(
     index("idx_shift_swap_request_shift").on(table.shiftId),
     // FK index: "swaps this person has offered".
     index("idx_shift_swap_request_from_user").on(table.fromUserId),
+    // FK index: "swaps this person has claimed".
+    index("idx_shift_swap_request_to_user").on(table.toUserId),
   ],
 );

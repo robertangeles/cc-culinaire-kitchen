@@ -218,17 +218,23 @@ export async function claimSwap(orgId: number, swapRequestId: string, callerUser
   return newAssignment;
 }
 
-/** Offerer cancels their own still-open request. */
+/**
+ * Offerer cancels their own still-open request. The status flip is a
+ * conditional UPDATE (WHERE status='Open'), same reason as claimSwap's —
+ * without it, a cancel racing a concurrent claim could blindly overwrite an
+ * already-"Claimed" row back to "Cancelled" after the assignment had already
+ * transferred.
+ */
 export async function cancelSwap(orgId: number, swapRequestId: string, callerUserId: number) {
   const swapRow = await getSwapWithShift(orgId, swapRequestId);
   if (swapRow.fromUserId !== callerUserId) throw new RosterError("Swap request not found", 404);
-  if (swapRow.status !== "Open") throw new RosterError("This swap can no longer be cancelled.", 409);
 
   const [updated] = await db
     .update(shiftSwapRequest)
     .set({ status: "Cancelled", updatedDttm: new Date() })
-    .where(eq(shiftSwapRequest.swapRequestId, swapRequestId))
+    .where(and(eq(shiftSwapRequest.swapRequestId, swapRequestId), eq(shiftSwapRequest.status, "Open")))
     .returning();
+  if (!updated) throw new RosterError("This swap can no longer be cancelled.", 409);
   await auditService.log({
     entityType: "shift_swap_request",
     entityId: swapRequestId,

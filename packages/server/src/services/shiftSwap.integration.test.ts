@@ -22,6 +22,7 @@ import {
   complianceDocument,
   publicHoliday,
   auditLog,
+  notification,
 } from "../db/schema.js";
 import { offerSwap, listOpenSwaps, claimSwap, cancelSwap } from "./shiftSwapService.js";
 import { refusalMessage } from "./rosterService.js";
@@ -181,6 +182,10 @@ describe.skipIf(!RUN)("shiftSwapService (real DB)", () => {
     }
     if (locA) await db.delete(storeLocation).where(eq(storeLocation.storeLocationId, locA));
     if (orgA && orgB) await db.delete(auditLog).where(inArray(auditLog.organisationId, [orgA, orgB]));
+    // claimSwap/requestConsent create in-app notifications (SHIFT_SWAP_CLAIMED,
+    // HOLIDAY_CONSENT_REQUESTED) — clean those up before deleting the
+    // organisations, or the FK on notification.organisation_id blocks it.
+    if (orgA && orgB) await db.delete(notification).where(inArray(notification.organisationId, [orgA, orgB]));
     if (orgA) await db.delete(userOrganisation).where(eq(userOrganisation.organisationId, orgA));
     if (orgB) await db.delete(userOrganisation).where(eq(userOrganisation.organisationId, orgB));
     if (orgA && orgB) await db.delete(organisation).where(inArray(organisation.organisationId, [orgA, orgB]));
