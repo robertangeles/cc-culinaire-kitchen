@@ -6,7 +6,7 @@ updated: 2026-08-17
 related: [[roster-core]], [[staff-compliance-vault]]
 ---
 
-Phase 3 of the Staff Compliance Vault + Rostering plan: demand forecasting from prep workload, a coverage heat map, and shift swapping. In progress — Slice 1 (demand forecasting) is built; Slices 2 (coverage heat map) and 3 (shift swap) are not yet started.
+Phase 3 of the Staff Compliance Vault + Rostering plan: demand forecasting from prep workload, a coverage heat map, and shift swapping. In progress — Slices 1 (demand forecasting) and 2 (coverage heat map) are built; Slice 3 (shift swap) is not yet started.
 
 ## Why it exists
 
@@ -26,6 +26,20 @@ Roster Core (Phase 2) answers "who can I put on tonight?" (the `canAssign` compl
 
 Client: a "Demand" tab in `RosterPage.tsx`, gated `roster:read-all`. Verified live end-to-end against dev (seeded 3 days of history + a target session, confirmed the exact recommended-hours and confidence-percentage math rendered matched the formula).
 
+## Coverage heat map + skill coverage (Slice 2)
+
+`services/staffingCoverageService.ts`. A day x role grid for one venue over a 7-day window: cell = rostered hours for that role that day (summed across shifts, deduped so a shift with multiple assignees doesn't double-count its own duration), coloured by the worst compliance status among its Pending/Confirmed assignees. A (day, role) with no shift simply has no cell — the client renders that square as an empty placeholder, distinct from a shift nobody's covering (`"unstaffed"`).
+
+**Skill coverage reuses `roster_role_document` + the existing `canAssign` gate generically** — the same pure function `assignStaff`/`publishRoster` already use, re-run per assignee in memory. No hardcoded "RSA"/"Food Safety Supervisor" strings, no "alcohol shift" flag anywhere. "Is an FSS on shift" falls out for free once an operator has configured that requirement on a role in Roster Core's Roles UI — a config gap on their side isn't a code gap on ours, same disclosure posture as the Award engine.
+
+**Batched, not per-cell** — this is a dashboard opened every time someone loads the tab, unlike `publishRoster()`'s one-shot per-assignment `canAssign` re-check (fine there since it runs once per publish action). Four fixed queries regardless of grid size: shifts+role+assignments joined for the date range, `roster_role_document` for the roles seen, `document_expiry_rule` for the document types seen, and held documents for every distinct assignee — then `canAssign` runs purely in memory. Detail text for an at-risk cell reuses `refusalMessage()` verbatim (exported from `rosterService.ts` for this purpose), same wording a live assignment refusal already shows.
+
+**A real bug caught by the integration test before it shipped**: the worst-status accumulator originally seeded each new cell at `"unstaffed"` (the worst possible severity) and only ever moved a cell *up* in severity — meaning nothing could ever override the seed, and every cell read "unstaffed" regardless of what its shifts actually said. Fixed by seeding at `"ok"` (the best) instead, so real problems correctly escalate the status as they're found.
+
+**Known gap, documented in code**: the service doesn't resolve a per-venue jurisdiction the way `publishRoster()`/`consentService.ts` do, so a jurisdiction-specific `document_expiry_rule` override (e.g. a state-specific `blockOnExpiry`) is invisible here — every role falls back to the national rule only. Acceptable for a heat map (advisory, not a publish gate) but worth revisiting if it turns out to matter in practice.
+
+Client: a "Coverage" tab in `RosterPage.tsx`, hand-rolled CSS-grid table (no charting library in this repo), a `StatRow` summary strip above it computed from the same resolved dataset the grid renders. Verified live against dev with a 3-shift fixture (covered / unstaffed / covered) — grid cells, colors, and summary counts all reconciled exactly.
+
 ## Feature flag
 
 `workforce_enabled` — reuses the `site_setting` flag already seeded `"false"` from Phase 2 Slice 0, never wired to a route until now. Gated via the existing `requireFlag()` middleware, same "unauthenticated prober sees the same 404" pattern as `roster_enabled`/`compliance_enabled`.
@@ -36,7 +50,6 @@ No new permission keys. Reuses Roster Core's existing `roster:read-own`/`roster:
 
 ## Not yet built
 
-- **Coverage heat map** (Slice 2) — day × role grid per venue, cell = rostered hours. "Skill coverage" (is an FSS on shift, is RSA-certified staff on every alcohol shift) is designed to reuse `roster_role_document` + the existing `canAssign` gate generically rather than hardcoding certification names — no "alcohol shift" flag, no magic strings.
 - **Shift swap** (Slice 3) — peer-to-peer, `canAssign` re-run against the claiming candidate as the only gate (no manager-approval step). New `shift_swap_request` table. On claim into a public-holiday shift, reuses `consentService.requestConsent()` directly so the new assignee independently consents rather than inheriting the old assignee's consent.
 
 Full design (formula derivation, query shapes, schema, slice sequencing) is in the plan file's "Phase 3 Execution Plan" section.
