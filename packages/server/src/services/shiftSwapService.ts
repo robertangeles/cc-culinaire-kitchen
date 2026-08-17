@@ -6,10 +6,14 @@
  * gated only by canAssign against the shift's role requirements — no
  * manager-approval step (Decision 5).
  *
- * assignStaff()'s Draft-only guard does NOT apply to a claim: that guard
- * exists so publishRoster() stays the only place a FRESH assignment's s.114
- * consent gate runs. Swapping trades an already-Published shift (the
- * realistic case), so claiming is its own delete+insert path.
+ * assignStaff()'s Draft-only guard does NOT apply to a claim, and claiming
+ * never checks the shift's own status either — a Confirmed assignment on a
+ * still-Draft shift is a reachable state (respondToAssignment doesn't check
+ * shift status), and swapping it is no different from a manager manually
+ * reassigning it before publish. Safety doesn't come from a status check
+ * here: publishRoster() independently recomputes isPublicHoliday and holds
+ * any shift whose assignee hasn't consented, however that assignment came
+ * to exist, so it's the one place s.114 is actually enforced.
  *
  * Claiming into a public-holiday shift reuses consentService.requestConsent()
  * directly, so the new assignee gets the exact same Accept/Decline prompt
@@ -33,6 +37,9 @@ import { canAssign } from "./rosterAssignmentRules.js";
 import { requestConsent } from "./consentService.js";
 import { createInApp } from "./notificationService.js";
 import * as auditService from "./auditService.js";
+import pino from "pino";
+
+const logger = pino({ name: "shiftSwapService" });
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
@@ -211,8 +218,20 @@ export async function claimSwap(orgId: number, swapRequestId: string, callerUser
 
   // requestConsent's own UPDATE sets publicHolidayConsent — return ITS row,
   // not the pre-consent one captured above, or the caller sees a stale null.
+  //
+  // The transfer above already committed, so a failure here (e.g. the
+  // public-holiday calendar row was edited/removed between publish and this
+  // claim) must not turn a successful claim into a reported failure. Log and
+  // fall through to the transferred assignment instead: publishRoster()'s
+  // own hold-if-unconsented gate is the actual s.114 safety net regardless
+  // of whether this auto-request fired, and a manager can still re-trigger
+  // consent manually via the existing request-consent route.
   if (swapRow.isPublicHoliday) {
-    return requestConsent(orgId, newAssignment.assignmentId, callerUserId);
+    try {
+      return await requestConsent(orgId, newAssignment.assignmentId, callerUserId);
+    } catch (err) {
+      logger.error({ err, assignmentId: newAssignment.assignmentId }, "requestConsent failed after a successful swap claim");
+    }
   }
 
   return newAssignment;
