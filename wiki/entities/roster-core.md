@@ -3,7 +3,7 @@ title: Roster Core
 category: entity
 created: 2026-08-16
 updated: 2026-08-17
-related: [[staff-compliance-vault]], [[compliance-expiry-engine]], [[scheduled-job-daily-claim]], [[store-locations-system]]
+related: [[staff-compliance-vault]], [[compliance-expiry-engine]], [[scheduled-job-daily-claim]], [[store-locations-system]], [[workforce-optimisation]]
 ---
 
 Phase 2 of the Staff Compliance Vault + Rostering plan, complete: roles, shifts, availability, the `canAssign` compliance gate, an advisory-only Award engine, a fail-loud public-holiday calendar, and the s.114 consent workflow — built across Slices 0–7 on flag `roster_enabled`.
@@ -71,4 +71,4 @@ A shift's `startDatetime` is a `timestamptz` (a UTC instant). Converting that to
 - **No Playwright E2E coverage for any Roster Core flow (Slices 2–7).** CI has no E2E step at all (the plan's own eng-review issue 11 / task T26) — pre-existing across the whole module, not Slice-7-specific. Every roster slice this session was instead verified via live browser QA against dev before shipping, same as Slice 7's consent flow above.
 
 ## Related
-[[staff-compliance-vault]] · [[compliance-expiry-engine]] · [[scheduled-job-daily-claim]] · [[store-locations-system]]
+[[staff-compliance-vault]] · [[compliance-expiry-engine]] · [[scheduled-job-daily-claim]] · [[store-locations-system]] · [[workforce-optimisation]]

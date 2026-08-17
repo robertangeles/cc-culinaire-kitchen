@@ -4,6 +4,8 @@ import {
   daysUntilDepletion,
   suggestedReorderQty,
   forecastConfidence,
+  minutesPerCover,
+  recommendedStationHours,
 } from "./forecastMath.js";
 
 describe("Formula F-FC-01: dailyUsageRate", () => {
@@ -172,6 +174,76 @@ describe("Formula F-FC-04: forecastConfidence", () => {
         const c = forecastConfidence(days);
         expect(c).toBeGreaterThanOrEqual(0);
         expect(c).toBeLessThanOrEqual(1);
+      }
+    });
+  });
+});
+
+describe("Formula F-FC-05: minutesPerCover", () => {
+  describe("Forward reconciliation", () => {
+    it("calculates minutes per cover from realistic totals", () => {
+      // 900 minutes across 120 covers = 7.5 min/cover
+      expect(minutesPerCover(900, 120)).toBe(7.5);
+    });
+  });
+
+  describe("Backward reconciliation", () => {
+    it("minutesPerCover × totalCovers = totalMinutes (algebraic identity)", () => {
+      const totalMinutes = 543.2;
+      const totalCovers = 87;
+      const rate = minutesPerCover(totalMinutes, totalCovers);
+      expect(rate * totalCovers).toBeCloseTo(totalMinutes, 10);
+    });
+  });
+
+  describe("Boundary conditions", () => {
+    it("floors totalCovers to 1 when 0 (no division by zero)", () => {
+      expect(minutesPerCover(45, 0)).toBe(45);
+    });
+
+    it("floors totalCovers to 1 when negative", () => {
+      expect(minutesPerCover(45, -5)).toBe(45);
+    });
+
+    it("returns 0 when totalMinutes is 0", () => {
+      expect(minutesPerCover(0, 100)).toBe(0);
+    });
+  });
+});
+
+describe("Formula F-FC-06: recommendedStationHours", () => {
+  describe("Forward reconciliation", () => {
+    it("scales minutesPerCover by target covers and converts to hours", () => {
+      // 7.5 min/cover × 80 covers = 600 min = 10.0h
+      expect(recommendedStationHours(7.5, 80)).toBe(10);
+    });
+
+    it("rounds to the nearest quarter hour", () => {
+      // 5 min/cover × 50 covers = 250 min = 4.1667h -> nearest 0.25 = 4.25
+      expect(recommendedStationHours(5, 50)).toBe(4.25);
+    });
+  });
+
+  describe("Boundary conditions", () => {
+    it("returns 0 when targetCovers is 0", () => {
+      expect(recommendedStationHours(7.5, 0)).toBe(0);
+    });
+
+    it("treats a negative targetCovers as 0", () => {
+      expect(recommendedStationHours(7.5, -10)).toBe(0);
+    });
+
+    it("returns 0 when minutesPerCoverValue is 0", () => {
+      expect(recommendedStationHours(0, 100)).toBe(0);
+    });
+  });
+
+  describe("Invariants", () => {
+    it("result is always a non-negative multiple of 0.25", () => {
+      for (const [mpc, covers] of [[3.3, 40], [12.1, 5], [0.5, 200]] as const) {
+        const hours = recommendedStationHours(mpc, covers);
+        expect(hours).toBeGreaterThanOrEqual(0);
+        expect(Number.isInteger(hours * 4)).toBe(true);
       }
     });
   });

@@ -4,6 +4,33 @@ Append-only. Newest entry on top.
 
 ---
 
+## 2026-08-17 — Phase 3 (Workforce Optimisation) planned + Slice 1 shipped
+
+- Ran the same planning rigor Phase 2 got: 3 parallel Explore agents against the current
+  codebase (not the original spec's assumptions) surfaced a load-bearing gap the original
+  plan didn't anticipate — `prep_task.station` (kitchen-area vocabulary) and
+  `roster_role.roleName` (free-text per org) are independently-typed vocabularies with no
+  mapping between them anywhere in the schema, so "recommended hours per role" can't be
+  computed directly from "station task load" as the original spec assumed.
+- User-confirmed 3 real product decisions before locking the plan: (1) `sale` data dropped
+  from v1 demand — no formula anywhere converts sale volume to labour-hours, inventing one
+  would be a guess; (2) day-level granularity, not shift-window — `prep_session.prepDate`
+  is a bare date, no AM/PM concept exists in Phase 1/2; (3) shift swap is peer-to-peer,
+  `canAssign` is the only gate, no manager-approval step.
+- Wrote the full "Phase 3 Execution Plan" into the plan file: 3 slices (demand forecasting →
+  coverage heat map ‖ shift swap, the latter two independent once the shared router lands),
+  each with concrete schema/query/formula decisions, no padding to match Phase 2's slice
+  count.
+- **Slice 1 shipped** (`feature/ck-web/workforce-demand-forecast`): `services/
+  workforceDemandService.ts` reports demand per station (not role, per the gap above),
+  two new pure formulas added to the existing `forecastMath.ts` (`minutesPerCover`,
+  `recommendedStationHours`), reuses `forecastConfidence` verbatim. Reuses the
+  `workforce_enabled` flag already seeded from Phase 2 Slice 0. Verified live against dev:
+  seeded 3 days of prep history + a target session, confirmed the rendered recommended-hours
+  and confidence percentage matched the formula exactly (2.5h, 10% confidence, 3d history).
+- Wrote up the module in [[workforce-optimisation]] (new entity page), cross-linked from
+  [[roster-core]]. Slices 2 (coverage heat map) and 3 (shift swap) not yet started.
+
 ## 2026-08-17 — Roster Core Phase 2 complete: Slice 7 (s.114 consent workflow)
 
 - `feature/ck-web/public-holiday-consent`: `services/consentService.ts` (`requestConsent`/`respondToConsent`),

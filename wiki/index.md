@@ -42,6 +42,7 @@ Categories: **entity** (named things) · **concept** (patterns) · **decision** 
 | [Prompt System](entities/prompt-system.md) | Prompt registry, runtime guard, versioning, mobile fetch endpoint | 2026-04-29 |
 | [Staff Compliance Vault](entities/staff-compliance-vault.md) | Phase 1 of 3: private vault for staff/venue compliance documents, verification queue, org-wide dashboard | 2026-08-07 |
 | [Roster Core](entities/roster-core.md) | Phase 2 complete: roles, shifts, `canAssign` compliance gate, Award engine (shipped empty, coverage disclosed), fail-loud public holiday calendar, s.114 consent workflow | 2026-08-16 |
+| [Workforce Optimisation](entities/workforce-optimisation.md) | Phase 3, in progress: demand forecasting per kitchen station from prep history (Slice 1, built); coverage heat map + shift swap (Slices 2-3, not started) | 2026-08-17 |
 
 ## Concepts
 | Page | Summary | Created |
