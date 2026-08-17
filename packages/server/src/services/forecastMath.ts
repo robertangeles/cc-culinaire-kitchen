@@ -6,10 +6,12 @@
  * in isolation.
  *
  * Formulas:
- *   F-FC-01  dailyUsageRate       — totalConsumed / max(1, elapsedDays)
- *   F-FC-02  daysUntilDepletion   — floor(max(0, currentStock / dailyRate))
- *   F-FC-03  suggestedReorderQty  — ceil(dailyRate × bufferDays)
- *   F-FC-04  forecastConfidence   — min(1, daysWithData / windowDays)
+ *   F-FC-01  dailyUsageRate         — totalConsumed / max(1, elapsedDays)
+ *   F-FC-02  daysUntilDepletion     — floor(max(0, currentStock / dailyRate))
+ *   F-FC-03  suggestedReorderQty    — ceil(dailyRate × bufferDays)
+ *   F-FC-04  forecastConfidence     — min(1, daysWithData / windowDays)
+ *   F-FC-05  minutesPerCover        — totalMinutes / max(1, totalCovers)
+ *   F-FC-06  recommendedStationHours — round((minutesPerCover × targetCovers) / 60, nearest 0.25h)
  */
 
 /**
@@ -60,4 +62,33 @@ export function forecastConfidence(
   const window = windowDays ?? 30;
   if (window <= 0) return 1;
   return Math.min(1, daysWithData / window);
+}
+
+/**
+ * Historical prep-minutes-per-cover for one station, over some window of
+ * prep sessions. Floors totalCovers to 1 to avoid division by zero (a
+ * window with tasks logged but no covers recorded is a data-quality gap,
+ * not a reason to throw).
+ */
+export function minutesPerCover(
+  totalMinutes: number,
+  totalCovers: number,
+): number {
+  const safeCovers = Math.max(1, totalCovers);
+  return totalMinutes / safeCovers;
+}
+
+/**
+ * Recommended staffing hours for a station on a target date: historical
+ * minutes-per-cover scaled by that date's expected covers, rounded to the
+ * nearest quarter hour (the smallest unit a roster shift is worth adjusting
+ * by — finer precision would be false accuracy on top of a historical
+ * average).
+ */
+export function recommendedStationHours(
+  minutesPerCoverValue: number,
+  targetCovers: number,
+): number {
+  const minutes = minutesPerCoverValue * Math.max(0, targetCovers);
+  return Math.round((minutes / 60) * 4) / 4;
 }

@@ -174,6 +174,7 @@ app.use("/api/internal", internalRouter);
 app.use("/api/notifications", notificationsRouter);
 app.use("/api/compliance", complianceRouter);
 app.use("/api/roster", rosterRouter);
+app.use("/api/workforce", workforceRouter);
 app.use("/api/brain", brainRouter);
 
 // Location context routes are now inside usersRouter (before /:id params)
@@ -216,6 +217,7 @@ import internalRouter from "./routes/internal.js";
 import notificationsRouter from "./routes/notifications.js";
 import complianceRouter from "./routes/compliance.js";
 import rosterRouter from "./routes/roster.js";
+import workforceRouter from "./routes/workforce.js";
 
 app.get("/kitchen-shelf/:slug", async (req, res, next) => {
   // Only handle HTML requests (not API calls or assets)

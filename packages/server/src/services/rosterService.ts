@@ -65,7 +65,10 @@ export class AssignmentBlockedError extends RosterError {
 
 // ── Org-scoping helpers ──────────────────────────────────────────────
 
-async function assertLocationInOrg(locationId: string, orgId: number): Promise<void> {
+// Exported — reused by the Phase 3 workforce services (demand, staffing
+// coverage), which all need the same "does this venue belong to this org"
+// guard rosterService.ts already established.
+export async function assertLocationInOrg(locationId: string, orgId: number): Promise<void> {
   const [loc] = await db
     .select({ id: storeLocation.storeLocationId })
     .from(storeLocation)
