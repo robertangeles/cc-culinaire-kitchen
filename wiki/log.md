@@ -4,6 +4,34 @@ Append-only. Newest entry on top.
 
 ---
 
+## 2026-08-17 — Phase 3 Slice 2 shipped: coverage heat map + skill coverage
+
+- `feature/ck-web/workforce-coverage-heatmap`: `services/staffingCoverageService.ts` — a
+  day x role coverage grid for one venue, cell = rostered hours coloured by the worst
+  compliance status among its assignees. Skill coverage reuses `roster_role_document` +
+  the existing `canAssign` gate generically (no hardcoded "RSA"/"FSS" strings, no "alcohol
+  shift" flag) — same design call the plan locked in before building this slice.
+- **Self-caught bug, before it ever reached review**: the worst-status accumulator seeded
+  each new cell at `"unstaffed"` (the worst severity) and only ever escalated UP in
+  severity — meaning nothing could ever override the seed, so every cell read "unstaffed"
+  regardless of what its shifts actually said. Found by my own integration test failing
+  ("expected ok, got unstaffed" on a cell I'd seeded with a fully-compliant assignee), not
+  by pr-reviewer. Fixed by seeding at `"ok"` (the best) instead. `refusalMessage()` in
+  `rosterService.ts` was exported (previously private) so the cell detail text reuses the
+  exact wording a live assignment refusal already shows, rather than a second copy.
+- 4 fixed batched queries per screen-load regardless of grid size (shifts+role+assignments,
+  role-document requirements, expiry rules, held documents for every distinct assignee) —
+  `canAssign` then runs purely in memory, same "dashboard needs O(1) queries, not O(N)"
+  discipline `complianceService.ts`'s dashboard already established.
+- Verified via 4 integration tests (worst-of-cell computation across ok/missing/unstaffed,
+  a multi-assignee-same-shift hours-dedup check, summary/grid reconciliation, 400/404
+  boundaries) plus live browser QA against dev — grid cells, colours, and the summary stat
+  row all matched a hand-seeded 3-shift fixture exactly.
+- Updated [[workforce-optimisation]] with the design, the seed-bug story, and a documented
+  known gap (no per-venue jurisdiction resolution yet, so a state-specific expiry-rule
+  override is invisible to this screen — acceptable for an advisory heat map, flagged for
+  later). Slice 3 (shift swap) is the only piece of Phase 3 left.
+
 ## 2026-08-17 — Phase 3 (Workforce Optimisation) planned + Slice 1 shipped
 
 - Ran the same planning rigor Phase 2 got: 3 parallel Explore agents against the current

@@ -15,7 +15,7 @@
 import { Router } from "express";
 import { authenticate, requirePermission } from "../middleware/auth.js";
 import { requireFlag } from "../middleware/requireFlag.js";
-import { handleGetWorkforceDemand } from "../controllers/workforceController.js";
+import { handleGetWorkforceDemand, handleGetStaffingCoverage } from "../controllers/workforceController.js";
 
 const router = Router();
 // Ahead of authenticate, on purpose — see routes/roster.ts's identical
@@ -25,5 +25,6 @@ router.use(requireFlag("workforce_enabled"));
 router.use(authenticate);
 
 router.get("/demand", requirePermission("roster:read-all"), handleGetWorkforceDemand);
+router.get("/coverage", requirePermission("roster:read-all"), handleGetStaffingCoverage);
 
 export default router;

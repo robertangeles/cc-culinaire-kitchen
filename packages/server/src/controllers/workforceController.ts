@@ -10,6 +10,7 @@
 import type { Request, Response, NextFunction } from "express";
 import { getUserLocationContext } from "../services/locationContextService.js";
 import { getStationDemand } from "../services/workforceDemandService.js";
+import { getStaffingCoverage } from "../services/staffingCoverageService.js";
 import { RosterError } from "../services/rosterService.js";
 
 function handleServiceError(err: unknown, res: Response, next: NextFunction): void {
@@ -39,6 +40,21 @@ export async function handleGetWorkforceDemand(req: Request, res: Response, next
       return;
     }
     res.json(await getStationDemand(ctx.orgId, storeLocationId, forDate));
+  } catch (err) {
+    handleServiceError(err, res, next);
+  }
+}
+
+export async function handleGetStaffingCoverage(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const ctx = await resolveContext(req, res);
+    if (!ctx) return;
+    const { storeLocationId, from, to } = req.query;
+    if (typeof storeLocationId !== "string" || typeof from !== "string" || typeof to !== "string") {
+      res.status(400).json({ error: "storeLocationId, from, and to are required" });
+      return;
+    }
+    res.json(await getStaffingCoverage(ctx.orgId, storeLocationId, from, to));
   } catch (err) {
     handleServiceError(err, res, next);
   }

@@ -49,6 +49,7 @@ function runGates(handlers: Handler[], user: unknown): { status: number | null }
 
 const ROUTES: Array<{ method: string; path: string; permission: string }> = [
   { method: "GET", path: "/demand", permission: "roster:read-all" },
+  { method: "GET", path: "/coverage", permission: "roster:read-all" },
 ];
 
 const ALL_KEYS = ["roster:read-own", "roster:read-all", "roster:manage", "roster:publish"];

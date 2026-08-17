@@ -502,7 +502,10 @@ const REASON_TEXT: Record<string, string> = {
   rejected: "has a rejected",
 };
 
-function refusalMessage(
+// Exported — reused by staffingCoverageService.ts to describe an existing
+// assignment's compliance gap in the same wording assignStaff's own live
+// refusal already uses, rather than a second copy drifting from it.
+export function refusalMessage(
   staffName: string,
   documentType: string,
   reason: string,
