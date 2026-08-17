@@ -22,7 +22,7 @@
  * result, same honesty posture as the Award engine's "0 of N checked".
  */
 
-import { sql, eq, and, desc } from "drizzle-orm";
+import { sql, eq, and } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { prepSession } from "../db/schema.js";
 import { assertLocationInOrg, RosterError } from "./rosterService.js";
@@ -74,25 +74,25 @@ export async function getStationDemand(
   await assertLocationInOrg(storeLocationId, orgId);
 
   // A venue can have more than one prep_session for the same date (one per
-  // staff member — see prepService.ts's teamView). No unique constraint
-  // enforces a single session per venue/day, so without an explicit order
-  // this pick would be arbitrary. Match getTodaySession's own tie-break
-  // (most recently created) rather than leave it to whatever order Postgres
-  // happens to return.
-  const [targetSession] = await db
+  // staff member — see prepService.ts's teamView; no unique constraint
+  // enforces a single session per venue/day). Sum covers across every
+  // session on the target date, exactly like the historical window below
+  // already sums covers across every session on each historical day — an
+  // "which one session wins" pick would be inconsistent with that and
+  // understate the venue's real covers on a day split across e.g. a lunch
+  // and a dinner session.
+  const targetSessions = await db
     .select({ expectedCovers: prepSession.expectedCovers, actualCovers: prepSession.actualCovers })
     .from(prepSession)
-    .where(and(eq(prepSession.storeLocationId, storeLocationId), eq(prepSession.prepDate, forDate)))
-    .orderBy(desc(prepSession.createdDttm))
-    .limit(1);
+    .where(and(eq(prepSession.storeLocationId, storeLocationId), eq(prepSession.prepDate, forDate)));
 
-  if (!targetSession) {
+  if (targetSessions.length === 0) {
     throw new RosterError(
       `No prep session found for ${forDate} at this venue — create one with expected covers first.`,
       404,
     );
   }
-  const targetCovers = targetSession.actualCovers ?? targetSession.expectedCovers ?? 0;
+  const targetCovers = targetSessions.reduce((sum, s) => sum + (s.actualCovers ?? s.expectedCovers ?? 0), 0);
 
   const windowStart = subDays(forDate, WINDOW_DAYS);
 

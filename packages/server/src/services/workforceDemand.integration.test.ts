@@ -157,4 +157,22 @@ describe.skipIf(!RUN)("workforceDemandService (real DB)", () => {
     expect(station!.recommendedHours).toBe(2.5);
     expect(station!.basedOnDays).toBe(3);
   });
+
+  it("sums covers across multiple prep sessions on the same target date", async () => {
+    // A venue can log more than one prep_session per day (one per staff
+    // member, or e.g. a separate lunch/dinner session — no unique
+    // constraint prevents it). Target-day covers must sum across all of
+    // them, exactly like the historical window already sums covers per day
+    // — otherwise picking a single session would understate a day split
+    // across multiple sessions.
+    const [secondSession] = await db
+      .insert(prepSession)
+      .values({ userId: userA, organisationId: orgA, storeLocationId: locA, prepDate: TODAY, expectedCovers: 50 })
+      .returning({ id: prepSession.prepSessionId });
+    sessionIds.push(secondSession.id);
+
+    const result = await getStationDemand(orgA, locA, TODAY);
+    // Original target session (expectedCovers: 100) + this one (50) = 150.
+    expect(result.targetCovers).toBe(150);
+  });
 });
