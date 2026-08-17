@@ -22,7 +22,7 @@
  * result, same honesty posture as the Award engine's "0 of N checked".
  */
 
-import { sql, eq, and } from "drizzle-orm";
+import { sql, eq, and, desc } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { prepSession } from "../db/schema.js";
 import { assertLocationInOrg, RosterError } from "./rosterService.js";
@@ -73,10 +73,18 @@ export async function getStationDemand(
 ): Promise<WorkforceDemandResult> {
   await assertLocationInOrg(storeLocationId, orgId);
 
+  // A venue can have more than one prep_session for the same date (one per
+  // staff member — see prepService.ts's teamView). No unique constraint
+  // enforces a single session per venue/day, so without an explicit order
+  // this pick would be arbitrary. Match getTodaySession's own tie-break
+  // (most recently created) rather than leave it to whatever order Postgres
+  // happens to return.
   const [targetSession] = await db
     .select({ expectedCovers: prepSession.expectedCovers, actualCovers: prepSession.actualCovers })
     .from(prepSession)
-    .where(and(eq(prepSession.storeLocationId, storeLocationId), eq(prepSession.prepDate, forDate)));
+    .where(and(eq(prepSession.storeLocationId, storeLocationId), eq(prepSession.prepDate, forDate)))
+    .orderBy(desc(prepSession.createdDttm))
+    .limit(1);
 
   if (!targetSession) {
     throw new RosterError(
