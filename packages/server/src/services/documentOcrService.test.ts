@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 const recognizeMock = vi.fn();
-const createWorkerMock = vi.fn(async () => ({ recognize: recognizeMock }));
+const terminateMock = vi.fn(async () => {});
+const createWorkerMock = vi.fn(async () => ({ recognize: recognizeMock, terminate: terminateMock }));
 
 vi.mock("tesseract.js", () => ({
   createWorker: createWorkerMock,
@@ -77,7 +78,24 @@ describe("extractCertificateFields", () => {
 
   beforeEach(() => {
     recognizeMock.mockReset();
+    terminateMock.mockReset().mockResolvedValue(undefined);
+    createWorkerMock.mockClear();
   });
+
+  /**
+   * Worker creation goes through a real dynamic import + async factory, which
+   * takes a few genuine microtask ticks — under fake timers, that's enough to
+   * make a cold getWorker() race against Promise.race's own setTimeout not
+   * being registered yet when advanceTimersByTimeAsync runs, hanging the
+   * test. Warming the worker under REAL timers first (as it would already be
+   * in production after the first real upload) sidesteps that entirely and
+   * matches the module's own "one warm worker, reused forever" design.
+   */
+  async function warmUpWorker(): Promise<void> {
+    recognizeMock.mockResolvedValueOnce({ data: { text: "" } });
+    await extractCertificateFields(Buffer.from("warm-up"));
+    createWorkerMock.mockClear();
+  }
 
   it("creates the tesseract worker once and reuses it across calls", async () => {
     recognizeMock.mockResolvedValue({ data: { text: "Certificate No: 2026-004521" } });
@@ -86,15 +104,49 @@ describe("extractCertificateFields", () => {
     const second = await extractCertificateFields(Buffer.from("page-2"));
 
     expect(createWorkerMock).toHaveBeenCalledTimes(1);
+    expect(terminateMock).not.toHaveBeenCalled();
     expect(first).toEqual({ documentNumber: "2026-004521" });
     expect(second).toEqual({ documentNumber: "2026-004521" });
   });
 
   it("returns {} when recognition exceeds the 5s budget instead of hanging", async () => {
+    await warmUpWorker();
     vi.useFakeTimers();
     recognizeMock.mockImplementation(() => new Promise(() => {})); // never resolves
 
     const pending = extractCertificateFields(Buffer.from("slow-page"));
+    await vi.advanceTimersByTimeAsync(5000);
+
+    expect(await pending).toEqual({});
+  });
+
+  it("kills the wedged worker on timeout instead of leaving the abandoned call running against it, and spins up a fresh one for the next upload", async () => {
+    await warmUpWorker();
+    vi.useFakeTimers();
+    recognizeMock.mockImplementation(() => new Promise(() => {})); // never resolves — simulates a hung/malformed input
+
+    const pending = extractCertificateFields(Buffer.from("wedged-page"));
+    await vi.advanceTimersByTimeAsync(5000);
+    await pending;
+
+    expect(terminateMock).toHaveBeenCalledTimes(1);
+
+    // The next call must not queue behind — or share — the terminated worker.
+    vi.useRealTimers();
+    recognizeMock.mockResolvedValue({ data: { text: "Certificate No: 999" } });
+    const next = await extractCertificateFields(Buffer.from("next-page"));
+
+    expect(createWorkerMock).toHaveBeenCalledTimes(1);
+    expect(next).toEqual({ documentNumber: "999" });
+  });
+
+  it("still resolves to {} even if terminate() itself fails on an already-dead worker", async () => {
+    await warmUpWorker();
+    vi.useFakeTimers();
+    recognizeMock.mockImplementation(() => new Promise(() => {}));
+    terminateMock.mockRejectedValue(new Error("worker already exited"));
+
+    const pending = extractCertificateFields(Buffer.from("dead-page"));
     await vi.advanceTimersByTimeAsync(5000);
 
     expect(await pending).toEqual({});

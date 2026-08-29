@@ -18,11 +18,25 @@
  * - Every call still gets a hard 5s ceiling via Promise.race. Timeout,
  *   empty text, a worker error, or unparseable output all resolve to `{}`
  *   — never a throw, never an error surfaced to the user.
+ * - Promise.race only bounds how long WE wait — it does not stop the
+ *   abandoned recognize() call, which keeps running against the shared
+ *   worker. A malformed image (magic bytes valid, internal data garbage —
+ *   bad Huffman tables, a decompression-bomb PNG, etc.) can peg tesseract's
+ *   worker thread hard enough to starve the whole process, the same way a
+ *   raw PDF buffer did (see complianceController.ts's shouldRunOcr, which
+ *   only closes the PDF case). On timeout, this module force-terminates the
+ *   worker via worker.terminate() — a real kill via Node's own
+ *   worker_threads API, not a cooperative shutdown a wedged worker could
+ *   ignore — and drops the warm-worker cache so the next call spins up a
+ *   fresh one. The termination is awaited before recognizeWithTimeout
+ *   returns, so the FIFO queue below doesn't advance to the next queued
+ *   upload until the poisoned worker is actually gone.
  */
 
-/** Narrow structural type — only the one method this module actually calls. */
+/** Narrow structural type — only the methods this module actually calls. */
 interface OcrWorker {
   recognize(image: Buffer): Promise<{ data: { text: string } }>;
+  terminate(): Promise<void>;
 }
 
 export interface OcrResult {
@@ -77,15 +91,35 @@ async function recognizeWithTimeout(buffer: Buffer): Promise<string | null> {
     return null;
   }
 
+  let timedOut = false;
   const timeout = new Promise<null>((resolve) => {
-    setTimeout(() => resolve(null), OCR_TIMEOUT_MS);
+    setTimeout(() => {
+      timedOut = true;
+      resolve(null);
+    }, OCR_TIMEOUT_MS);
   });
   const recognition = worker
     .recognize(buffer)
     .then((result) => result.data.text ?? "")
     .catch(() => null);
 
-  return Promise.race([recognition, timeout]);
+  const outcome = await Promise.race([recognition, timeout]);
+
+  if (timedOut) {
+    // Kill the worker the abandoned call is still running against, and drop
+    // the cache so the next queued call gets a fresh one instead of running
+    // concurrently against a possibly-still-wedged worker.
+    warmWorker = null;
+    workerInitPromise = null;
+    try {
+      await worker.terminate();
+    } catch {
+      // Already dead or unresponsive — nothing more to do; getWorker() will
+      // spin up a replacement regardless since warmWorker is now null.
+    }
+  }
+
+  return outcome;
 }
 
 /** OCR a certificate image/PDF page and pull out the fields we can find. Never throws. */
