@@ -67,8 +67,10 @@ describe.skipIf(!RUN)("Operations Admin — tenant isolation (real DB)", () => {
   let userA: number;
   let userB: number;
   let userC: number;
+  let userD: number;
   let orgA: number;
   let orgB: number;
+  let orgD: number;
   let secondOrgForUserA: number;
   let opsAdminRoleId: number;
 
@@ -76,6 +78,7 @@ describe.skipIf(!RUN)("Operations Admin — tenant isolation (real DB)", () => {
     [{ id: userA }] = await db.insert(user).values({ userName: "OAIT A", userEmail: `${tag}-a@it.test` }).returning({ id: user.userId });
     [{ id: userB }] = await db.insert(user).values({ userName: "OAIT B", userEmail: `${tag}-b@it.test` }).returning({ id: user.userId });
     [{ id: userC }] = await db.insert(user).values({ userName: "OAIT C", userEmail: `${tag}-c@it.test` }).returning({ id: user.userId });
+    [{ id: userD }] = await db.insert(user).values({ userName: "OAIT D", userEmail: `${tag}-d@it.test` }).returning({ id: user.userId });
 
     const [opsAdmin] = await db.select().from(role).where(eq(role.roleName, "Operations Admin"));
     if (!opsAdmin) throw new Error("Operations Admin role not seeded — run db/seed.ts before this suite.");
@@ -85,19 +88,26 @@ describe.skipIf(!RUN)("Operations Admin — tenant isolation (real DB)", () => {
     orgA = orgAResult.organisationId;
     const orgBResult = await createOrganisation(userB, { name: `${tag}-orgB` });
     orgB = orgBResult.organisationId;
+    const orgDResult = await createOrganisation(userD, { name: `${tag}-orgD` });
+    orgD = orgDResult.organisationId;
 
     // userC joins orgB as a plain member — not an org admin, not Operations Admin.
     await joinOrganisation(userC, orgBResult.joinKey);
+    // userD is Operations Admin of their OWN org (orgD), then separately joins
+    // orgB as a plain member — the exact shape the cross-org escalation needs:
+    // a real global org:manage-organisation holder who is genuinely a member
+    // (not admin) of a DIFFERENT org.
+    await joinOrganisation(userD, orgBResult.joinKey);
   });
 
   afterAll(async () => {
-    const orgIds = [orgA, orgB, secondOrgForUserA].filter(Boolean);
+    const orgIds = [orgA, orgB, orgD, secondOrgForUserA].filter(Boolean);
     if (orgIds.length) {
-      await db.delete(userRole).where(and(inArray(userRole.userId, [userA, userB, userC]), eq(userRole.roleId, opsAdminRoleId)));
+      await db.delete(userRole).where(and(inArray(userRole.userId, [userA, userB, userC, userD]), eq(userRole.roleId, opsAdminRoleId)));
       await db.delete(userOrganisation).where(inArray(userOrganisation.organisationId, orgIds));
       await db.delete(organisation).where(inArray(organisation.organisationId, orgIds));
     }
-    await db.delete(user).where(inArray(user.userId, [userA, userB, userC]));
+    await db.delete(user).where(inArray(user.userId, [userA, userB, userC, userD]));
   });
 
   it("createOrganisation grants the creator exactly one Operations Admin user_role row", async () => {
@@ -151,6 +161,50 @@ describe.skipIf(!RUN)("Operations Admin — tenant isolation (real DB)", () => {
     expect(getStatus()).toBeNull(); // no error status set — handler responded via res.json without calling status()
     expect((getBody() as { organisation?: { organisationName?: string } })?.organisation?.organisationName).toBe(
       `${tag}-orgA-renamed`,
+    );
+  });
+
+  it("a global org:manage-organisation holder who is merely a MEMBER of org B (not org B's admin) cannot self-promote, promote others, remove members, or edit org B's details — closes the cross-org escalation isOrgManager's old OR-fallback allowed", async () => {
+    const authUserD = await getUserWithRolesAndPermissions(userD);
+    expect(authUserD.permissions).toContain("org:manage-organisation");
+
+    const reqPayload: TokenPayload = { sub: userD, roles: authUserD.roles, permissions: authUserD.permissions };
+
+    // Self-promotion to admin in a foreign org — the persistent-privilege
+    // escalation: a global permission must never let someone write a NEW
+    // standing per-org admin flag into an org they don't already administer.
+    const { res: selfPromoteRes, getStatus: selfPromoteStatus } = makeRes();
+    await handleUpdateMemberRole(
+      makeReq(reqPayload, { id: String(orgB), userId: String(userD) }, { role: "admin" }),
+      selfPromoteRes,
+      noopNext,
+    );
+    expect(selfPromoteStatus()).toBe(403);
+
+    // Promoting someone ELSE to admin in a foreign org.
+    const { res: promoteRes, getStatus: promoteStatus } = makeRes();
+    await handleUpdateMemberRole(
+      makeReq(reqPayload, { id: String(orgB), userId: String(userC) }, { role: "admin" }),
+      promoteRes,
+      noopNext,
+    );
+    expect(promoteStatus()).toBe(403);
+
+    const { res: removeRes, getStatus: removeStatus } = makeRes();
+    await handleRemoveMember(makeReq(reqPayload, { id: String(orgB), userId: String(userC) }), removeRes, noopNext);
+    expect(removeStatus()).toBe(403);
+
+    const { res: updateRes, getStatus: updateStatus } = makeRes();
+    await handleUpdateOrganisation(makeReq(reqPayload, { id: String(orgB) }, { name: "Hijacked by a mere member" }), updateRes, noopNext);
+    expect(updateStatus()).toBe(403);
+
+    // Sanity: userD's OWN org (orgD, where they're the real creator/admin)
+    // is unaffected by tightening isOrgManager.
+    const { res: ownOrgRes, getStatus: ownOrgStatus, getBody: ownOrgBody } = makeRes();
+    await handleUpdateOrganisation(makeReq(reqPayload, { id: String(orgD) }, { name: `${tag}-orgD-renamed` }), ownOrgRes, noopNext);
+    expect(ownOrgStatus()).toBeNull();
+    expect((ownOrgBody() as { organisation?: { organisationName?: string } })?.organisation?.organisationName).toBe(
+      `${tag}-orgD-renamed`,
     );
   });
 

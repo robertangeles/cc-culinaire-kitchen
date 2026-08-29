@@ -10,7 +10,6 @@ import {
   generateTokens,
   getUserWithRolesAndPermissions,
 } from "../services/authService.js";
-import { hasPermission } from "../middleware/auth.js";
 import { setAuthCookies } from "./authController.js";
 import {
   createOrganisation,
@@ -36,14 +35,20 @@ const socialMediaFields = {
 };
 
 /**
- * Org admin (per-org userOrganisation.role flag) OR a global
- * org:manage-organisation holder (Operations Admin). Membership in THIS org
- * must already be confirmed by the caller before this runs — the global
- * permission alone must never authorize an action on an org the caller
- * doesn't belong to.
+ * Org admin per the per-org userOrganisation.role flag ONLY — deliberately
+ * does not fall back to the global org:manage-organisation permission.
+ * user_role carries no organisationId (see the plan's disclosed limitation),
+ * so an OR-fallback there let an Operations Admin of Org A — merely a
+ * "member" of Org B — promote themselves to admin in Org B, or remove/
+ * demote Org B's real members: privilege escalation across a tenant
+ * boundary, not the "same global permission, same org" case the tenant-
+ * isolation canary tests. Costs nothing: createOrganisation() grants local
+ * admin and the global role together, and the backfill only targeted
+ * existing per-org admins, so every legitimate Operations Admin already
+ * holds local admin on every org they actually administer.
  */
-function isOrgManager(req: Request, membership: { role: string } | null): boolean {
-  return !!membership && (membership.role === "admin" || hasPermission(req.user!, "org:manage-organisation"));
+function isOrgManager(membership: { role: string } | null): boolean {
+  return !!membership && membership.role === "admin";
 }
 
 const CreateOrgSchema = z.object({
@@ -95,13 +100,13 @@ const UpdateOrgSchema = z.object({
   defaultJurisdiction: z.string().max(3).or(z.literal("")).optional(),
 });
 
-/** PATCH /api/organisations/:id — update organisation details (org admin, or org:manage-organisation holder). */
+/** PATCH /api/organisations/:id — update organisation details (org admin only). */
 export async function handleUpdateOrganisation(req: Request, res: Response, next: NextFunction) {
   try {
     const orgId = parseInt(req.params.id as string);
 
     const membership = await getMembership(req.user!.sub, orgId);
-    if (!isOrgManager(req, membership)) {
+    if (!isOrgManager(membership)) {
       res.status(403).json({ error: "Only organisation admins can update organisation details." });
       return;
     }
@@ -128,7 +133,7 @@ export async function handleOrganisationLogoUpload(req: Request, res: Response, 
     const orgId = parseInt(req.params.id as string);
 
     const membership = await getMembership(req.user!.sub, orgId);
-    if (!isOrgManager(req, membership)) {
+    if (!isOrgManager(membership)) {
       res.status(403).json({ error: "Only organisation admins can update the logo." });
       return;
     }
@@ -264,7 +269,7 @@ export async function handleUpdateMemberRole(req: Request, res: Response, next: 
     const requestingUserId = req.user!.sub;
 
     const membership = await getMembership(requestingUserId, orgId);
-    if (!isOrgManager(req, membership)) {
+    if (!isOrgManager(membership)) {
       res.status(403).json({ error: "Only admins can update member roles." });
       return;
     }
@@ -300,7 +305,7 @@ export async function handleRemoveMember(req: Request, res: Response, next: Next
     }
 
     const membership = await getMembership(requestingUserId, orgId);
-    if (!isOrgManager(req, membership)) {
+    if (!isOrgManager(membership)) {
       res.status(403).json({ error: "Only admins can remove members." });
       return;
     }

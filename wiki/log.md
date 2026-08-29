@@ -4,6 +4,45 @@ Append-only. Newest entry on top.
 
 ---
 
+## 2026-08-29 — Operations Admin: closed a real cross-org privilege escalation + fixed the UI
+
+- A background security review of the Operations Admin commit (`f7c9e9c`) flagged
+  Authorization (IDOR / Privilege Escalation via Cross-Org Role) in
+  `organisationController.ts`. Investigated directly against the actual code (not
+  assumed): confirmed real. `isOrgManager()`'s OR-fallback — global
+  `org:manage-organisation` permission, once membership in the target org was
+  confirmed — let any Operations Admin who later joined a SECOND org as a plain
+  member self-promote to admin there, promote/demote/remove its real members, or
+  rewrite its details. Proven exploitable by temporarily reverting the fix and
+  re-running the new regression test: the self-promotion request returned no error
+  status at all (it silently succeeded) against the old code.
+- Fix: `isOrgManager()` now authorizes on the per-org `userOrganisation.role ===
+  "admin"` flag only, dropping the global-permission fallback entirely. Costs no
+  real capability — `createOrganisation()` already grants local admin and the
+  global role together, and the backfill only targeted existing per-org admins.
+  Mirrored client-side in `TeamMembersSection.tsx`'s `isOrgAdmin` derivation so the
+  Make Admin/Remove buttons don't appear for someone who'd now 403 on click.
+  New regression test in `organisation.tenant.integration.test.ts` covers
+  self-promotion, promoting someone else, removal, and org-details rewrite — all
+  4 confirmed blocked, plus a sanity check that the fix doesn't touch the
+  Operations Admin's own org.
+- Separately, user flagged the Organisation page's visual inconsistency with
+  Admin Settings (`/settings`) — a centered narrow column with horizontal pill
+  tabs, nothing like `SettingsLayout`'s left-sidebar + header/body pattern.
+  Rewrote `OrganisationPage.tsx` to mirror `SettingsLayout`/`SiteSettingsTab`'s
+  exact markup and tokens (not a shared component — `SettingsLayout`'s tabs are
+  a hardcoded platform-settings registry, not built to accept an external tab
+  set). Verified via live browser screenshot comparison against `/settings` —
+  sidebar structure, spacing, and tab-button states now match.
+- Full regression clean after both fixes: lint, `tsc:check`, 1147 server tests +
+  30 client test files, tenant-isolation integration test (6/6, including the
+  new escalation regression), build.
+- Wiki updated: [[operations-admin-role]]'s Tenant isolation and Disclosed
+  limitation sections corrected to reflect the narrowed authorization model and
+  a newly-documented (unfixed, non-security) access gap for admins promoted by
+  an existing admin rather than via `createOrganisation()`/backfill.
+- Still uncommitted at write time — user has not yet been asked to push.
+
 ## 2026-08-29 — Operations Admin role + Organisation Settings built
 
 - `feature/ck-web/operations-admin-role`: new `Operations Admin` RBAC role (26 of 30

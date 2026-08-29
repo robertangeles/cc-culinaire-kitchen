@@ -9,7 +9,6 @@
 
 import { useState, useEffect } from "react";
 import { Users, Loader2, AlertCircle } from "lucide-react";
-import { useHasPermission } from "../../hooks/useHasPermission.js";
 
 interface OrgMember {
   userId: number;
@@ -34,14 +33,13 @@ export function TeamMembersSection({ orgId, currentUserId }: { orgId: number; cu
   const [members, setMembers] = useState<OrgMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const hasPermission = useHasPermission();
 
-  // Org admin (per-org flag, from the members list itself) OR a global
-  // org:manage-organisation holder (Operations Admin) — matches the
-  // server's identical isOrgManager() OR-check in organisationController.ts.
-  const isOrgAdmin =
-    members.some((m) => m.userId === currentUserId && m.role === "admin") ||
-    hasPermission("org:manage-organisation");
+  // Org admin per the per-org flag ONLY — matches the server's
+  // isOrgManager() in organisationController.ts, which deliberately does not
+  // fall back to the global org:manage-organisation permission (that
+  // permission isn't scoped to a single org, so it must never be treated as
+  // "admin of this specific org").
+  const isOrgAdmin = members.some((m) => m.userId === currentUserId && m.role === "admin");
 
   async function fetchMembers() {
     setError("");

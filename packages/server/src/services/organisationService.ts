@@ -211,10 +211,10 @@ export async function getUserOrganisation(userId: number) {
 }
 
 /**
- * Update organisation details. Authorization (creator, org admin, or
- * org:manage-organisation holder) is checked by the caller — see
- * handleUpdateOrganisation, which matches the same pattern
- * handleUpdateMemberRole/handleRemoveMember already use.
+ * Update organisation details. Authorization (org admin — per-org
+ * userOrganisation.role, not the global org:manage-organisation permission)
+ * is checked by the caller — see handleUpdateOrganisation's isOrgManager,
+ * which matches handleUpdateMemberRole/handleRemoveMember.
  */
 export async function updateOrganisation(
   organisationId: number,
