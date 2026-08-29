@@ -29,6 +29,7 @@ import { VerifyEmailPage } from "./pages/VerifyEmailPage.js";
 import { ForgotPasswordPage } from "./pages/ForgotPasswordPage.js";
 import { ResetPasswordPage } from "./pages/ResetPasswordPage.js";
 import { ProfilePage } from "./pages/ProfilePage.js";
+import OrganisationPage from "./pages/OrganisationPage.js";
 import { RecipeLabPage } from "./pages/RecipeLabPage.js";
 import { RecipeGalleryPage } from "./pages/RecipeGalleryPage.js";
 import { NotFoundPage } from "./pages/NotFoundPage.js";
@@ -161,6 +162,7 @@ export function App() {
                           <Route path="/chat/:id" element={<ChatPage />} />
                           <Route path="/settings" element={<AuthenticatedOnly><SettingsPage /></AuthenticatedOnly>} />
                           <Route path="/profile" element={<AuthenticatedOnly><ProfilePage /></AuthenticatedOnly>} />
+                          <Route path="/organisation" element={<AuthenticatedOnly><RequirePermission anyOf={["org:manage-organisation"]}><OrganisationPage /></RequirePermission></AuthenticatedOnly>} />
                           <Route path="/recipes" element={<RecipeLabPage key="recipe" domain="recipe" />} />
                           <Route path="/patisserie" element={<RecipeLabPage key="patisserie" domain="patisserie" />} />
                           <Route path="/spirits" element={<RecipeLabPage key="spirits" domain="spirits" />} />

@@ -146,6 +146,9 @@ jobs:
       - name: Run roster tenant-isolation integration tests
         run: pnpm --filter @culinaire/server exec vitest run src/services/roster.tenant.integration.test.ts
 
+      - name: Run organisation tenant-isolation integration tests
+        run: pnpm --filter @culinaire/server exec vitest run src/services/organisation.tenant.integration.test.ts
+
       - name: Run compliance integration tests
         run: pnpm --filter @culinaire/server exec vitest run src/services/compliance.integration.test.ts
 

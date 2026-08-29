@@ -99,6 +99,10 @@ async function seed() {
     { roleName: "Administrator", roleDescription: "Full system access" },
     { roleName: "Subscriber", roleDescription: "Default role after email verification (free tier)" },
     { roleName: "Paid Subscriber", roleDescription: "Paid subscription tier with unlimited access" },
+    {
+      roleName: "Operations Admin",
+      roleDescription: "Full operational control of an organisation — everything except role and permission management",
+    },
   ];
 
   for (const r of defaultRoles) {
@@ -194,13 +198,32 @@ async function seed() {
       "compliance:read-own",
       "roster:read-own",
     ],
+    // org:manage-organisation deliberately excluded: it was seeded here
+    // harmlessly while nothing checked it, but Operations Admin (below) is
+    // the role that gate now authorizes for cross-org-membership actions
+    // (routes/organisations.ts's member-management routes) — granting it to
+    // every Paid Subscriber too would let any of them manage the membership
+    // of any org they merely belong to, not just ones they administer.
     "Paid Subscriber": [
-      "chat:access", "chat:unlimited", "org:create-organisation", "org:manage-organisation",
+      "chat:access", "chat:unlimited", "org:create-organisation",
       "inventory:count", "inventory:manage", "inventory:transfer",
       "purchasing:draft", "purchasing:submit", "purchasing:receive", "purchasing:credit",
       "menu:read", "waste:read", "prep:manage",
       "brain:read", "brain:manage",
       "compliance:read-own", "compliance:read-all", "compliance:verify",
+      "roster:read-own", "roster:read-all", "roster:manage", "roster:publish",
+    ],
+    // Everything Administrator has except the four admin:* keys (role,
+    // permission, platform-user, and dashboard management) — full
+    // operational control of an org, no software-administration reach.
+    "Operations Admin": [
+      "chat:access", "chat:unlimited",
+      "org:create-organisation", "org:manage-organisation",
+      "inventory:count", "inventory:manage", "inventory:transfer", "inventory:hq",
+      "purchasing:draft", "purchasing:submit", "purchasing:approve", "purchasing:receive", "purchasing:credit",
+      "menu:read", "waste:read", "prep:manage",
+      "brain:read", "brain:manage",
+      "compliance:read-own", "compliance:read-all", "compliance:verify", "compliance:manage-rules",
       "roster:read-own", "roster:read-all", "roster:manage", "roster:publish",
     ],
   };

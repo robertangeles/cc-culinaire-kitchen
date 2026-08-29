@@ -4,6 +4,40 @@ Append-only. Newest entry on top.
 
 ---
 
+## 2026-08-29 — Operations Admin role + Organisation Settings built
+
+- `feature/ck-web/operations-admin-role`: new `Operations Admin` RBAC role (26 of 30
+  permission keys, excludes `admin:*`), granted idempotently to an org's creator via
+  `createOrganisation()`. Replaces the old `ORG_ADMIN_PERMISSIONS` bridge in
+  `authService.ts` (deleted).
+- Closed a real, not-yet-live privilege escalation as part of the same PR: `Paid Subscriber`
+  was already (harmlessly) seeded with `org:manage-organisation`; removed before the member-
+  management routes started checking that key, so no Paid Subscriber ever gained a
+  privilege the change didn't intend.
+- New `organisation` columns: logo path, accent colour, default timezone/currency/
+  jurisdiction — metadata only, not wired into per-venue jurisdiction/timezone resolution.
+- New Profile → Organisation page (`OrganisationPage.tsx`): User Management (relocated
+  `TeamMembersSection`, extracted verbatim, old Profile → Team sub-tab deleted) + Organisation
+  Settings (new `OrganisationBrandingForm.tsx`).
+- Tenant isolation proven by `organisation.tenant.integration.test.ts` (real DB): an
+  Operations Admin of Org A gets 403 on Org B despite holding the identical global permission
+  Org B's own admin holds — the `getMembership()` check runs first and unconditionally.
+- Idempotent backfill (`backfillOperationsAdminRole.ts`) applied to dev: granted 4 existing
+  org admins the new role, removed the Paid Subscriber leak. Prod migration still pending —
+  read-only prod access means the repo owner runs it.
+- Live-verified end-to-end against dev with the `qa-test` account: new nav item, relocated
+  User Management screen, Organisation Settings tab (branding + defaults render correctly,
+  save round-trips via `PATCH /api/organisations/:id`, values persist across reload).
+- New wiki page: [[operations-admin-role]].
+- Full regression clean: `pnpm lint`, `pnpm tsc:check`, `pnpm test` (1147 server tests +
+  client), `pnpm build`, tenant-isolation integration test — all green before commit.
+- Self-inflicted, caught and cleaned before commit: an earlier `pnpm tsc` (no such root
+  script — falls through to the raw `tsc` binary, not `tsc:check`) emitted ~1900 compiled
+  `.js`/`.d.ts` files directly into `packages/*/src/`, breaking Vite's module resolution in
+  the client test suite. All gitignored, none tracked — deleted, tests re-ran green. Lesson:
+  this repo's TypeScript check command is `pnpm tsc:check`, never bare `pnpm tsc`.
+- PR #106 (unrelated OCR-hang fix) remains open, unmerged, per standing user "hold off."
+
 ## 2026-08-17 — Phase 3 Slice 3 shipped: shift swap — Phase 3 (Workforce Optimisation) complete
 
 - `feature/ck-web/workforce-shift-swap`: new `shift_swap_request` table + `services/shiftSwapService.ts`

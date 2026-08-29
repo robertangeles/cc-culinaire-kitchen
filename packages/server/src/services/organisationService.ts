@@ -8,12 +8,42 @@
 import crypto from "crypto";
 import { eq, and } from "drizzle-orm";
 import { db } from "../db/index.js";
-import { organisation, userOrganisation, user } from "../db/schema.js";
+import { organisation, userOrganisation, user, role, userRole } from "../db/schema.js";
 import { encryptOrgPii, decryptOrgPii, decryptUserPii } from "./piiService.js";
 
 /** Generate a short random join key. */
 function generateJoinKey(): string {
   return "CULINAIRE-" + crypto.randomBytes(9).toString("base64url").replace(/[^A-Z0-9]/gi, "").slice(0, 12).toUpperCase();
+}
+
+/**
+ * Pure decision, exported for a direct unit test: does this user still need
+ * the Operations Admin system role granted? `user_role` has no unique
+ * constraint on (userId, roleId), so a user creating a SECOND organisation
+ * must not get a duplicate grant.
+ */
+export function shouldGrantOperationsAdminRole(existingRoleIds: number[], opsAdminRoleId: number): boolean {
+  return !existingRoleIds.includes(opsAdminRoleId);
+}
+
+/**
+ * Grant the org creator the Operations Admin system role, replacing the old
+ * ORG_ADMIN_PERMISSIONS bridge (deleted from authService.ts) with a real,
+ * permission-key-based role — the same RBAC system compliance:* and
+ * roster:* already use, instead of a hardcoded inventory+purchasing-only grant.
+ * Additive, never a replacement: an existing Subscriber/Paid Subscriber role
+ * is untouched (stripeService.ts reads those for billing).
+ */
+async function grantOperationsAdminRole(userId: number): Promise<void> {
+  const [opsAdminRole] = await db.select().from(role).where(eq(role.roleName, "Operations Admin"));
+  // Guarded, not thrown: an environment where db/seed.ts hasn't run yet
+  // degrades to today's behaviour instead of failing org creation.
+  if (!opsAdminRole) return;
+
+  const existing = await db.select({ roleId: userRole.roleId }).from(userRole).where(eq(userRole.userId, userId));
+  if (shouldGrantOperationsAdminRole(existing.map((r) => r.roleId), opsAdminRole.roleId)) {
+    await db.insert(userRole).values({ userId, roleId: opsAdminRole.roleId });
+  }
 }
 
 /** Create a new organisation and add the creator as a member. */
@@ -63,12 +93,17 @@ export async function createOrganisation(
     })
     .returning();
 
-  // Add creator as admin member
+  // Add creator as admin member. Still load-bearing on its own: it's what
+  // updateMemberRole's last-admin-demotion guard and the client's
+  // myOrgRole === "admin" checks key off — a separate axis from the
+  // Operations Admin system role granted below.
   await db.insert(userOrganisation).values({
     userId,
     organisationId: org.organisationId,
     role: "admin",
   });
+
+  await grantOperationsAdminRole(userId);
 
   return org;
 }
@@ -156,6 +191,11 @@ export async function getUserOrganisation(userId: number) {
       organisationLinkedin: organisation.organisationLinkedin,
       joinKey: organisation.joinKey,
       createdBy: organisation.createdBy,
+      organisationLogoPath: organisation.organisationLogoPath,
+      organisationColorAccent: organisation.organisationColorAccent,
+      defaultTimezone: organisation.defaultTimezone,
+      defaultCurrency: organisation.defaultCurrency,
+      defaultJurisdiction: organisation.defaultJurisdiction,
     })
     .from(userOrganisation)
     .innerJoin(
@@ -170,9 +210,13 @@ export async function getUserOrganisation(userId: number) {
   return { ...row, ...pii };
 }
 
-/** Update organisation details (creator only). */
+/**
+ * Update organisation details. Authorization (creator, org admin, or
+ * org:manage-organisation holder) is checked by the caller — see
+ * handleUpdateOrganisation, which matches the same pattern
+ * handleUpdateMemberRole/handleRemoveMember already use.
+ */
 export async function updateOrganisation(
-  userId: number,
   organisationId: number,
   data: {
     name: string;
@@ -184,11 +228,15 @@ export async function updateOrganisation(
     tiktok?: string;
     pinterest?: string;
     linkedin?: string;
+    logoPath?: string;
+    colorAccent?: string;
+    defaultTimezone?: string;
+    defaultCurrency?: string;
+    defaultJurisdiction?: string;
   }
 ) {
   const org = await getOrganisation(organisationId);
   if (!org) throw new Error("Organisation not found.");
-  if (org.createdBy !== userId) throw new Error("Only the creator can update the organisation.");
 
   const orgPii = encryptOrgPii({
     organisationName: data.name,
@@ -213,12 +261,34 @@ export async function updateOrganisation(
       organisationTiktok: data.tiktok ?? null,
       organisationPinterest: data.pinterest ?? null,
       organisationLinkedin: data.linkedin ?? null,
+      // Preserved (not nulled) when ABSENT from the request — these are
+      // edited from a separate Organisation Settings form and must never be
+      // blown away by a submission from the org-details (name/website/
+      // social) form above, which never sends them. An explicit "" clears
+      // the nullable fields; defaultTimezone/defaultCurrency are NOT NULL
+      // so they're only ever preserved or set, never cleared.
+      organisationLogoPath: data.logoPath !== undefined ? data.logoPath || null : org.organisationLogoPath,
+      organisationColorAccent: data.colorAccent !== undefined ? data.colorAccent || null : org.organisationColorAccent,
+      defaultTimezone: data.defaultTimezone ?? org.defaultTimezone,
+      defaultCurrency: data.defaultCurrency ?? org.defaultCurrency,
+      defaultJurisdiction: data.defaultJurisdiction !== undefined ? data.defaultJurisdiction || null : org.defaultJurisdiction,
       ...orgPii,
       updatedDttm: new Date(),
     })
     .where(eq(organisation.organisationId, organisationId))
     .returning();
 
+  return updated;
+}
+
+/** Set the organisation's logo path after a successful upload (Organisation Settings). */
+export async function updateOrganisationLogo(organisationId: number, logoPath: string) {
+  const [updated] = await db
+    .update(organisation)
+    .set({ organisationLogoPath: logoPath, updatedDttm: new Date() })
+    .where(eq(organisation.organisationId, organisationId))
+    .returning();
+  if (!updated) throw new Error("Organisation not found.");
   return updated;
 }
 
