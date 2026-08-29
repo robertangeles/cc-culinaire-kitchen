@@ -78,6 +78,7 @@ import { getUserLocationContext } from "../services/locationContextService.js";
 import { uploadFileBuffer } from "../middleware/upload.js";
 import { getDocument, ComplianceError } from "../services/complianceService.js";
 import { storeDocument, signedUrlForDocument, DocumentStorageError } from "../services/documentStorageService.js";
+import { extractCertificateFields } from "../services/documentOcrService.js";
 
 function mockReq(opts: {
   user?: { sub: number; roles?: string[]; permissions?: string[] };
@@ -148,6 +149,32 @@ describe("handleUploadDocument — POST /api/compliance/documents/upload", () =>
     });
     expect(res.status).not.toHaveBeenCalled();
     expect(uploadFileBuffer).not.toHaveBeenCalled();
+  });
+
+  it("skips OCR for a PDF — tesseract cannot read one, so trying only waits out the 5s timeout", async () => {
+    vi.mocked(storeDocument).mockResolvedValue({
+      publicId: "culinaire/compliance/org-2/pdf1",
+      mime: "application/pdf",
+    });
+    const req = mockReq({ user: CALLER, file: { buffer: Buffer.from("x") } });
+    const res = mockRes();
+    await handleUploadDocument(req, res, vi.fn());
+    expect(extractCertificateFields).not.toHaveBeenCalled();
+    expect(res.json).toHaveBeenCalledWith({
+      storagePublicId: "culinaire/compliance/org-2/pdf1",
+      storageFormat: "pdf",
+      ocr: {},
+    });
+  });
+
+  it.each(["image/jpeg", "image/png"] as const)("still runs OCR on the uploaded bytes for %s and returns what it found", async (mime) => {
+    vi.mocked(storeDocument).mockResolvedValue({ publicId: "culinaire/compliance/org-2/img1", mime });
+    vi.mocked(extractCertificateFields).mockResolvedValueOnce({ documentNumber: "WWC1234567" });
+    const buffer = Buffer.from("image-bytes");
+    const res = mockRes();
+    await handleUploadDocument(mockReq({ user: CALLER, file: { buffer } }), res, vi.fn());
+    expect(extractCertificateFields).toHaveBeenCalledWith(buffer);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ ocr: { documentNumber: "WWC1234567" } }));
   });
 });
 
