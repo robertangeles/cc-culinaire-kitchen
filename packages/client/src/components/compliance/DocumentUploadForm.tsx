@@ -20,6 +20,8 @@ import { Camera, CheckCircle2, Loader2 } from "lucide-react";
 import { EmptyState } from "../ui/EmptyState.js";
 import { formatAuDate } from "@culinaire/shared";
 import { DOCUMENT_TYPES } from "../../lib/complianceDocumentTypes.js";
+import { useDocumentTypeSelection } from "../../hooks/useDocumentTypeSelection.js";
+import { OtherDocumentTypeInput } from "./OtherDocumentTypeInput.js";
 
 const API = import.meta.env.VITE_API_URL ?? "";
 
@@ -44,8 +46,14 @@ const inputClass =
   "mt-1 min-h-11 w-full rounded-lg border border-dark-300 bg-dark px-3 text-sm text-[#FAFAFA] placeholder:text-dark-500 focus:outline-none";
 
 export function DocumentUploadForm({ onUploaded }: { onUploaded?: () => void }) {
-  const [documentType, setDocumentType] = useState("");
-  const [otherType, setOtherType] = useState("");
+  const {
+    selectedType: documentType,
+    setSelectedType: setDocumentType,
+    otherType,
+    setOtherType,
+    pendingType: effectiveType,
+    reset: resetDocumentType,
+  } = useDocumentTypeSelection();
   const [file, setFile] = useState<File | null>(null);
   const [storagePublicId, setStoragePublicId] = useState<string | null>(null);
   const [storageFormat, setStorageFormat] = useState<string | null>(null);
@@ -64,11 +72,8 @@ export function DocumentUploadForm({ onUploaded }: { onUploaded?: () => void }) 
   const submitGuard = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const effectiveType = documentType === "Other" ? otherType.trim() : documentType;
-
   function reset() {
-    setDocumentType("");
-    setOtherType("");
+    resetDocumentType();
     setFile(null);
     setStoragePublicId(null);
     setStorageFormat(null);
@@ -197,15 +202,7 @@ export function DocumentUploadForm({ onUploaded }: { onUploaded?: () => void }) 
           ))}
         </select>
         {documentType === "Other" && (
-          <input
-            type="text"
-            value={otherType}
-            onChange={(e) => setOtherType(e.target.value)}
-            placeholder="Name the document"
-            aria-label="Document name"
-            maxLength={40}
-            className={inputClass}
-          />
+          <OtherDocumentTypeInput value={otherType} onChange={setOtherType} className={inputClass} />
         )}
       </div>
 

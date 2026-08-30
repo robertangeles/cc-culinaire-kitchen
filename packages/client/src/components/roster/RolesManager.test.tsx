@@ -15,8 +15,9 @@ const mockRoles = [{ rosterRoleId: "role-1", organisationId: 1, storeLocationId:
 
 const getRoleDocuments = vi.fn(async (_id: string) => [] as string[]);
 const setRoleDocuments = vi.fn(async (_id: string, next: string[]) => next);
+const canManage = vi.fn(() => true);
 
-vi.mock("../../hooks/useHasPermission.js", () => ({ useHasPermission: () => () => true }));
+vi.mock("../../hooks/useHasPermission.js", () => ({ useHasPermission: () => canManage }));
 vi.mock("../../hooks/useRoster.js", () => ({
   useRosterRoles: () => ({ roles: mockRoles, isLoading: false, error: null, refresh: vi.fn(), create: vi.fn(), update: vi.fn(), remove: vi.fn() }),
   getRoleDocuments: (id: string) => getRoleDocuments(id),
@@ -29,6 +30,7 @@ describe("RolesManager — required documents", () => {
   beforeEach(() => {
     getRoleDocuments.mockClear();
     setRoleDocuments.mockClear();
+    canManage.mockReturnValue(true);
   });
 
   it("offers a dropdown of canonical document types, not a free-text field", async () => {
@@ -97,5 +99,37 @@ describe("RolesManager — required documents", () => {
 
     fireEvent.click(addButton);
     expect(setRoleDocuments).not.toHaveBeenCalled();
+  });
+
+  it("without roster:manage, required documents render read-only — no dropdown, no Add, no remove", async () => {
+    canManage.mockReturnValue(false);
+    getRoleDocuments.mockResolvedValueOnce(["RSA"]);
+    render(<RolesManager />);
+    fireEvent.click(screen.getByText("Head Chef"));
+
+    await screen.findByText("RSA");
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Add" })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Remove RSA")).not.toBeInTheDocument();
+  });
+
+  it("shows an error message when loading requirements fails", async () => {
+    getRoleDocuments.mockRejectedValueOnce(new Error("Failed to load requirements"));
+    render(<RolesManager />);
+    fireEvent.click(screen.getByText("Head Chef"));
+
+    await waitFor(() => expect(screen.getByText("Failed to load requirements")).toBeInTheDocument());
+  });
+
+  it("shows an error message when saving a new requirement fails", async () => {
+    setRoleDocuments.mockRejectedValueOnce(new Error("Network error"));
+    render(<RolesManager />);
+    fireEvent.click(screen.getByText("Head Chef"));
+    const select = await screen.findByDisplayValue("Choose a document type");
+
+    fireEvent.change(select, { target: { value: "RSA" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+
+    await waitFor(() => expect(screen.getByText("Network error")).toBeInTheDocument());
   });
 });
