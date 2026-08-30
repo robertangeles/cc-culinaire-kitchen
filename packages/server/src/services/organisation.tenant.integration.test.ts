@@ -17,6 +17,7 @@ import {
   handleUpdateOrganisation,
   handleUpdateMemberRole,
   handleRemoveMember,
+  handleOrganisationLogoUpload,
 } from "../controllers/organisationController.js";
 
 /**
@@ -150,6 +151,12 @@ describe.skipIf(!RUN)("Operations Admin — tenant isolation (real DB)", () => {
     const { res: updateRes, getStatus: updateStatus } = makeRes();
     await handleUpdateOrganisation(makeReq(reqPayload, { id: String(orgB) }, { name: "Hijacked name" }), updateRes, noopNext);
     expect(updateStatus()).toBe(403);
+
+    // Same isOrgManager gate, same handler family — handleOrganisationLogoUpload
+    // checks it before looking at req.file, so the 403 fires without a file.
+    const { res: logoRes, getStatus: logoStatus } = makeRes();
+    await handleOrganisationLogoUpload(makeReq(reqPayload, { id: String(orgB) }), logoRes, noopNext);
+    expect(logoStatus()).toBe(403);
   });
 
   it("Operations Admin of org A CAN update org A's own details — the positive case the negative case above is contrasted against", async () => {
@@ -206,6 +213,52 @@ describe.skipIf(!RUN)("Operations Admin — tenant isolation (real DB)", () => {
     expect((ownOrgBody() as { organisation?: { organisationName?: string } })?.organisation?.organisationName).toBe(
       `${tag}-orgD-renamed`,
     );
+  });
+
+  it("branding fields survive a submit from the org-details form (which never sends them), but an explicit empty string clears them", async () => {
+    const authUserA = await getUserWithRolesAndPermissions(userA);
+    const reqPayload: TokenPayload = { sub: userA, roles: authUserA.roles, permissions: authUserA.permissions };
+
+    // Organisation Settings form sets a colour.
+    const { res: setRes, getBody: setBody } = makeRes();
+    await handleUpdateOrganisation(makeReq(reqPayload, { id: String(orgA) }, { name: `${tag}-orgA`, colorAccent: "#FF6B35" }), setRes, noopNext);
+    expect((setBody() as { organisation: { organisationColorAccent: string | null } }).organisation.organisationColorAccent).toBe("#FF6B35");
+
+    // Org-details form submits name-only — colorAccent is absent from the body, not "".
+    const { res: preserveRes, getBody: preserveBody } = makeRes();
+    await handleUpdateOrganisation(makeReq(reqPayload, { id: String(orgA) }, { name: `${tag}-orgA-v2` }), preserveRes, noopNext);
+    expect((preserveBody() as { organisation: { organisationColorAccent: string | null } }).organisation.organisationColorAccent).toBe(
+      "#FF6B35",
+    );
+
+    // Organisation Settings form explicitly clears it.
+    const { res: clearRes, getBody: clearBody } = makeRes();
+    await handleUpdateOrganisation(makeReq(reqPayload, { id: String(orgA) }, { name: `${tag}-orgA-v2`, colorAccent: "" }), clearRes, noopNext);
+    expect((clearBody() as { organisation: { organisationColorAccent: string | null } }).organisation.organisationColorAccent).toBeNull();
+  });
+
+  it("updating own org with an invalid colorAccent is rejected 400 by the Zod schema, not silently coerced or persisted", async () => {
+    const authUserA = await getUserWithRolesAndPermissions(userA);
+    const reqPayload: TokenPayload = { sub: userA, roles: authUserA.roles, permissions: authUserA.permissions };
+
+    const { res, getStatus, getBody } = makeRes();
+    await handleUpdateOrganisation(
+      makeReq(reqPayload, { id: String(orgA) }, { name: `${tag}-orgA`, colorAccent: "not-a-hex-color" }),
+      res,
+      noopNext,
+    );
+    expect(getStatus()).toBe(400);
+    expect(getBody()).toHaveProperty("error");
+  });
+
+  it("uploading a logo with no file attached is rejected 400 after the (passing) admin gate — the not-file-missing branch, not the auth branch", async () => {
+    const authUserA = await getUserWithRolesAndPermissions(userA);
+    const reqPayload: TokenPayload = { sub: userA, roles: authUserA.roles, permissions: authUserA.permissions };
+
+    const { res, getStatus, getBody } = makeRes();
+    await handleOrganisationLogoUpload(makeReq(reqPayload, { id: String(orgA) }), res, noopNext);
+    expect(getStatus()).toBe(400);
+    expect(getBody()).toEqual({ error: "No file provided" });
   });
 
   it("a plain member of org B (not an org admin, not Operations Admin) cannot manage org B's members", async () => {
