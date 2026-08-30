@@ -128,6 +128,13 @@ jobs:
       - name: Push schema to test database
         run: pnpm --filter @culinaire/server db:push
 
+      # organisation.tenant.integration.test.ts is the first integration test
+      # in this job to depend on seeded RBAC rows (it looks up the
+      # "Operations Admin" role by name) — db:push only pushes schema, never
+      # data, so without this step that suite's beforeAll throws.
+      - name: Seed roles and permissions
+        run: pnpm --filter @culinaire/server db:seed
+
       - name: Run tenant-isolation integration tests
         run: pnpm --filter @culinaire/server exec vitest run src/tenantIsolation.integration.test.ts
 
