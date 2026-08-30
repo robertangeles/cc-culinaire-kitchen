@@ -212,6 +212,7 @@ function RoleRow({
                 <select
                   value={selectedType}
                   onChange={(e) => setSelectedType(e.target.value)}
+                  aria-label="Document type"
                   className="flex-1 rounded-lg bg-dark-100 border border-dark-200 px-3 py-1.5 text-xs text-white focus:outline-none focus:border-gold/50"
                 >
                   <option value="">Choose a document type</option>
