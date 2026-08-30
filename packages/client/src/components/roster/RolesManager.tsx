@@ -10,8 +10,10 @@ import { useEffect, useState } from "react";
 import { ChevronDown, ChevronRight, Loader2, ListChecks, Plus, Trash2 } from "lucide-react";
 import { useHasPermission } from "../../hooks/useHasPermission.js";
 import { useRosterRoles, getRoleDocuments, setRoleDocuments, type RosterRole } from "../../hooks/useRoster.js";
+import { useDocumentTypeSelection } from "../../hooks/useDocumentTypeSelection.js";
 import { EmptyState } from "../ui/EmptyState.js";
 import { DOCUMENT_TYPES } from "../../lib/complianceDocumentTypes.js";
+import { OtherDocumentTypeInput } from "../compliance/OtherDocumentTypeInput.js";
 
 export function RolesManager() {
   const canManage = useHasPermission()("roster:manage");
@@ -138,10 +140,9 @@ function RoleRow({
   onDelete: () => void;
 }) {
   const [docTypes, setDocTypes] = useState<string[]>([]);
-  const [selectedType, setSelectedType] = useState("");
-  const [otherType, setOtherType] = useState("");
+  const { selectedType, setSelectedType, otherType, setOtherType, pendingType, reset: resetDocumentType } =
+    useDocumentTypeSelection();
   const [docsError, setDocsError] = useState<string | null>(null);
-  const pendingType = selectedType === "Other" ? otherType.trim() : selectedType;
 
   useEffect(() => {
     if (!isExpanded) return;
@@ -228,8 +229,7 @@ function RoleRow({
                   onClick={() => {
                     if (!pendingType) return;
                     handleSaveDocs([...docTypes, pendingType]);
-                    setSelectedType("");
-                    setOtherType("");
+                    resetDocumentType();
                   }}
                   className="rounded-lg bg-dark-200 px-3 py-1.5 text-xs text-white hover:bg-dark-300 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
@@ -237,13 +237,9 @@ function RoleRow({
                 </button>
               </div>
               {selectedType === "Other" && (
-                <input
-                  type="text"
+                <OtherDocumentTypeInput
                   value={otherType}
-                  onChange={(e) => setOtherType(e.target.value)}
-                  placeholder="Name the document"
-                  aria-label="Document name"
-                  maxLength={40}
+                  onChange={setOtherType}
                   className="rounded-lg bg-dark-100 border border-dark-200 px-3 py-1.5 text-xs text-white placeholder-dark-500 focus:outline-none focus:border-gold/50"
                 />
               )}
