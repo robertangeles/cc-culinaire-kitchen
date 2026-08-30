@@ -80,4 +80,22 @@ describe("RolesManager — required documents", () => {
     expect(screen.queryByRole("option", { name: "RSA" })).not.toBeInTheDocument();
     expect(screen.getByRole("option", { name: "Food Safety Supervisor" })).toBeInTheDocument();
   });
+
+  it("Add stays disabled with nothing selected, and with Other selected but no name typed", async () => {
+    render(<RolesManager />);
+    fireEvent.click(screen.getByText("Head Chef"));
+    const select = await screen.findByDisplayValue("Choose a document type");
+    const addButton = screen.getByRole("button", { name: "Add" });
+
+    expect(addButton).toBeDisabled();
+
+    fireEvent.change(select, { target: { value: "Other" } });
+    expect(addButton).toBeDisabled();
+
+    fireEvent.change(screen.getByPlaceholderText("Name the document"), { target: { value: "   " } });
+    expect(addButton).toBeDisabled();
+
+    fireEvent.click(addButton);
+    expect(setRoleDocuments).not.toHaveBeenCalled();
+  });
 });
