@@ -140,8 +140,15 @@ function RoleRow({
   onDelete: () => void;
 }) {
   const [docTypes, setDocTypes] = useState<string[]>([]);
-  const { selectedType, setSelectedType, otherType, setOtherType, pendingType, reset: resetDocumentType } =
-    useDocumentTypeSelection();
+  const {
+    selectedType,
+    setSelectedType,
+    otherType,
+    setOtherType,
+    pendingType,
+    otherTypeDuplicateOf,
+    reset: resetDocumentType,
+  } = useDocumentTypeSelection();
   const [docsError, setDocsError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -237,11 +244,18 @@ function RoleRow({
                 </button>
               </div>
               {selectedType === "Other" && (
-                <OtherDocumentTypeInput
-                  value={otherType}
-                  onChange={setOtherType}
-                  className="rounded-lg bg-dark-100 border border-dark-200 px-3 py-1.5 text-xs text-white placeholder-dark-500 focus:outline-none focus:border-gold/50"
-                />
+                <>
+                  <OtherDocumentTypeInput
+                    value={otherType}
+                    onChange={setOtherType}
+                    className="rounded-lg bg-dark-100 border border-dark-200 px-3 py-1.5 text-xs text-white placeholder-dark-500 focus:outline-none focus:border-gold/50"
+                  />
+                  {otherTypeDuplicateOf && (
+                    <p className="text-xs text-red-400">
+                      Did you mean “{otherTypeDuplicateOf}”? Pick it from the dropdown instead.
+                    </p>
+                  )}
+                </>
               )}
             </div>
           )}
