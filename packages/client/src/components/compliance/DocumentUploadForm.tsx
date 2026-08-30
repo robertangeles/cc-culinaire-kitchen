@@ -52,6 +52,7 @@ export function DocumentUploadForm({ onUploaded }: { onUploaded?: () => void }) 
     otherType,
     setOtherType,
     pendingType: effectiveType,
+    otherTypeDuplicateOf,
     reset: resetDocumentType,
   } = useDocumentTypeSelection();
   const [file, setFile] = useState<File | null>(null);
@@ -202,7 +203,14 @@ export function DocumentUploadForm({ onUploaded }: { onUploaded?: () => void }) 
           ))}
         </select>
         {documentType === "Other" && (
-          <OtherDocumentTypeInput value={otherType} onChange={setOtherType} className={inputClass} />
+          <>
+            <OtherDocumentTypeInput value={otherType} onChange={setOtherType} className={inputClass} />
+            {otherTypeDuplicateOf && (
+              <p className="mt-1 text-sm text-red-400">
+                Did you mean “{otherTypeDuplicateOf}”? Pick it from the dropdown instead.
+              </p>
+            )}
+          </>
         )}
       </div>
 

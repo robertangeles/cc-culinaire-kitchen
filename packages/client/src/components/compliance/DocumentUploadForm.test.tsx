@@ -93,4 +93,14 @@ describe("DocumentUploadForm", () => {
     render(<DocumentUploadForm />);
     expect(screen.getByRole("button", { name: "Send for review" })).toBeDisabled();
   });
+
+  it("typing a near-duplicate of a canonical type under Other is refused, not silently submitted", async () => {
+    render(<DocumentUploadForm />);
+    fireEvent.change(screen.getByLabelText("Document type"), { target: { value: "Other" } });
+
+    fireEvent.change(screen.getByPlaceholderText("Name the document"), { target: { value: "R.S.A" } });
+
+    expect(screen.getByText(/Did you mean.*RSA/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Send for review" })).toBeDisabled();
+  });
 });
