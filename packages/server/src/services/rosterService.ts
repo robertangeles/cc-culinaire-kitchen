@@ -10,7 +10,7 @@
  * exists.
  */
 
-import { eq, and, or, gte, lte, inArray, isNull, desc, asc } from "drizzle-orm";
+import { eq, and, or, ne, gte, lte, inArray, isNull, desc, asc } from "drizzle-orm";
 import { db } from "../db/index.js";
 import {
   rosterRole,
@@ -193,6 +193,98 @@ export async function listShifts(orgId: number, filters: ShiftFilters = {}) {
     .from(shift)
     .where(and(...conditions))
     .orderBy(asc(shift.startDatetime));
+}
+
+export interface CalendarShift {
+  shiftId: string;
+  rosterRoleId: string;
+  roleName: string;
+  startDatetime: Date;
+  endDatetime: Date;
+  status: string;
+  isPublicHoliday: boolean;
+  assignments: Array<{ assignmentId: string; userId: number; staffName: string; status: string }>;
+}
+
+/**
+ * One row per shift (not aggregated, unlike getStaffingCoverage's day×role
+ * cells) with its role name and every Pending/Confirmed assignee inline —
+ * the week calendar needs to render "who's on this shift" at a glance for
+ * a whole week across every role at once, and the existing GET /shifts
+ * doesn't carry assignee data (ShiftsManager fetches it lazily per-row on
+ * expand, which doesn't scale to rendering a week of shifts simultaneously).
+ * Same join shape as staffingCoverageService.ts's first query, minus the
+ * canAssign/compliance-status machinery — that's Coverage's job, not this
+ * one's.
+ */
+export async function getWeekCalendar(
+  orgId: number,
+  storeLocationId: string,
+  from: string,
+  to: string,
+): Promise<CalendarShift[]> {
+  await assertLocationInOrg(storeLocationId, orgId);
+  const fromDate = parseFilterDate(from);
+  const toDate = parseFilterDate(to);
+
+  const rows = await db
+    .select({
+      shiftId: shift.shiftId,
+      rosterRoleId: shift.rosterRoleId,
+      roleName: rosterRole.roleName,
+      startDatetime: shift.startDatetime,
+      endDatetime: shift.endDatetime,
+      status: shift.status,
+      isPublicHoliday: shift.isPublicHoliday,
+      assignmentId: shiftAssignment.assignmentId,
+      assignmentUserId: shiftAssignment.userId,
+      assignmentStatus: shiftAssignment.status,
+      staffName: user.userName,
+    })
+    .from(shift)
+    .innerJoin(rosterRole, eq(rosterRole.rosterRoleId, shift.rosterRoleId))
+    .leftJoin(
+      shiftAssignment,
+      and(eq(shiftAssignment.shiftId, shift.shiftId), inArray(shiftAssignment.status, ["Pending", "Confirmed"])),
+    )
+    .leftJoin(user, eq(user.userId, shiftAssignment.userId))
+    .where(
+      and(
+        eq(shift.organisationId, orgId),
+        eq(shift.storeLocationId, storeLocationId),
+        ne(shift.status, "Cancelled"),
+        gte(shift.startDatetime, fromDate),
+        lte(shift.startDatetime, toDate),
+      ),
+    )
+    .orderBy(asc(shift.startDatetime));
+
+  const byShift = new Map<string, CalendarShift>();
+  for (const row of rows) {
+    let entry = byShift.get(row.shiftId);
+    if (!entry) {
+      entry = {
+        shiftId: row.shiftId,
+        rosterRoleId: row.rosterRoleId,
+        roleName: row.roleName,
+        startDatetime: row.startDatetime,
+        endDatetime: row.endDatetime,
+        status: row.status,
+        isPublicHoliday: row.isPublicHoliday,
+        assignments: [],
+      };
+      byShift.set(row.shiftId, entry);
+    }
+    if (row.assignmentId && row.assignmentUserId && row.staffName) {
+      entry.assignments.push({
+        assignmentId: row.assignmentId,
+        userId: row.assignmentUserId,
+        staffName: row.staffName,
+        status: row.assignmentStatus!,
+      });
+    }
+  }
+  return [...byShift.values()];
 }
 
 /** Shifts the caller is personally assigned to, across every venue in the org. */
@@ -566,6 +658,19 @@ export async function assignStaff(orgId: number, shiftId: string, userId: number
     const name = await staffName(userId);
     const message = refusalMessage(name, decision.documentType, decision.reason, decision.expiryDate);
     throw new AssignmentBlockedError(message, decision);
+  }
+
+  // UNIQUE(shiftId, userId) means a second attempt (e.g. a UI that doesn't
+  // filter its candidate list, or a double-click) would otherwise surface a
+  // raw Postgres constraint violation as an unhandled 500 — checked
+  // explicitly so it reads as a clean, human message instead.
+  const [existing] = await db
+    .select()
+    .from(shiftAssignment)
+    .where(and(eq(shiftAssignment.shiftId, shiftId), eq(shiftAssignment.userId, userId)));
+  if (existing) {
+    const name = await staffName(userId);
+    throw new RosterError(`${name} is already assigned to this shift.`, 409);
   }
 
   const [created] = await db.insert(shiftAssignment).values({ shiftId, userId }).returning();

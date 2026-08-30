@@ -300,6 +300,33 @@ describe.skipIf(!RUN)("roster service (real DB)", () => {
     expect(assignment.status).toBe("Pending");
   });
 
+  it("assignStaff refuses a second assignment of the same person to the same shift with a clean 409, not a raw constraint error", async () => {
+    await db.insert(complianceDocument).values({
+      organisationId: orgA,
+      userId: userA,
+      documentType: docType,
+      verificationStatus: "Verified",
+      expiryDate: addDays(TODAY, 365),
+      storagePublicId: `${tag}-pub-dup`,
+      uploadedBy: userA,
+    });
+
+    const start = new Date();
+    const end = new Date(start.getTime() + 4 * 60 * 60 * 1000);
+    const s = await createShift(
+      orgA,
+      { storeLocationId: locA, rosterRoleId: roleId, startDatetime: start.toISOString(), endDatetime: end.toISOString() },
+      userA,
+    );
+
+    await assignStaff(orgA, s.shiftId, userA, userA);
+    await expect(assignStaff(orgA, s.shiftId, userA, userA)).rejects.toMatchObject({
+      name: "RosterError",
+      statusCode: 409,
+      message: expect.stringContaining("already assigned"),
+    });
+  });
+
   it("assignStaff at orgA ignores a document verified only under orgB's compliance program", async () => {
     // userC belongs to both orgs. orgB independently verified userC's
     // document; orgA never has. The gate must not trust orgB's verification.

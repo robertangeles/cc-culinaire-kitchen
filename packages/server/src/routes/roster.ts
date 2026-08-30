@@ -24,6 +24,7 @@ import {
   handleListRoleDocuments,
   handleSetRoleDocuments,
   handleListShifts,
+  handleGetWeekCalendar,
   handleListMyShifts,
   handleCreateShift,
   handleUpdateShift,
@@ -65,6 +66,7 @@ router.put("/roles/:id/documents", requirePermission("roster:manage"), handleSet
 // ─── Shifts ───────────────────────────────────────────────────────
 
 router.get("/shifts/mine", requirePermission("roster:read-own"), handleListMyShifts);
+router.get("/shifts/calendar", requirePermission("roster:read-all"), handleGetWeekCalendar);
 router.get("/shifts", requirePermission("roster:read-all"), handleListShifts);
 router.post("/shifts", requirePermission("roster:manage"), handleCreateShift);
 router.put("/shifts/:id", requirePermission("roster:manage"), handleUpdateShift);

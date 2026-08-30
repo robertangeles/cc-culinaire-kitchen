@@ -17,6 +17,7 @@ import {
   listRoleDocuments,
   setRoleDocuments,
   listShifts,
+  getWeekCalendar,
   listMyShifts,
   createShift,
   updateShift,
@@ -194,6 +195,21 @@ export async function handleSetRoleDocuments(req: Request, res: Response, next: 
 }
 
 // ── Shifts ─────────────────────────────────────────────────────────────
+
+export async function handleGetWeekCalendar(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const ctx = await resolveContext(req, res);
+    if (!ctx) return;
+    const { storeLocationId, from, to } = req.query;
+    if (typeof storeLocationId !== "string" || typeof from !== "string" || typeof to !== "string") {
+      res.status(400).json({ error: "storeLocationId, from, and to are required" });
+      return;
+    }
+    res.json(await getWeekCalendar(ctx.orgId, storeLocationId, from, to));
+  } catch (err) {
+    handleServiceError(err, res, next);
+  }
+}
 
 export async function handleListShifts(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {

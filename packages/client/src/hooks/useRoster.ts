@@ -267,6 +267,116 @@ export function useShifts(storeLocationId: string | null) {
   return { shifts, isLoading, error, refresh, create, cancel, assign, removeAssignment };
 }
 
+export interface CalendarShiftAssignment {
+  assignmentId: string;
+  userId: number;
+  staffName: string;
+  status: string;
+}
+
+export interface CalendarShift {
+  shiftId: string;
+  rosterRoleId: string;
+  roleName: string;
+  startDatetime: string;
+  endDatetime: string;
+  status: "Draft" | "Published" | "Cancelled";
+  isPublicHoliday: boolean;
+  assignments: CalendarShiftAssignment[];
+}
+
+/**
+ * Backs the RosterCalendarView "Calendar" tab — one row per shift with role
+ * name and assignees inline (GET /shifts/calendar), unlike useShifts'
+ * GET /shifts which returns bare shift rows only. Mutators hit the SAME
+ * routes useShifts already calls; refresh is the only thing pointed at the
+ * new route. Kept separate from useShifts rather than shared — the two
+ * hooks refresh from different endpoints, and there's no second consumer to
+ * justify genericizing that yet.
+ */
+export function useRosterCalendar(storeLocationId: string | null, from: string, to: string) {
+  const [calendarShifts, setCalendarShifts] = useState<CalendarShift[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const hasLoadedOnce = useRef(false);
+
+  const refresh = useCallback(async () => {
+    if (!storeLocationId) {
+      setCalendarShifts([]);
+      setIsLoading(false);
+      return;
+    }
+    if (!hasLoadedOnce.current) setIsLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`${BASE}/shifts/calendar?storeLocationId=${storeLocationId}&from=${from}&to=${to}`, opts);
+      if (res.ok) setCalendarShifts(await res.json());
+      else setError((await parseError(res, "Failed to load the roster calendar")).message);
+    } finally {
+      setIsLoading(false);
+      hasLoadedOnce.current = true;
+    }
+  }, [storeLocationId, from, to]);
+
+  const create = useCallback(
+    async (data: { storeLocationId: string; rosterRoleId: string; startDatetime: string; endDatetime: string }) => {
+      const res = await fetch(`${BASE}/shifts`, { ...jsonOpts, method: "POST", body: JSON.stringify(data) });
+      if (!res.ok) throw await parseError(res, "Failed to create shift");
+      await refresh();
+      return (await res.json()) as Shift;
+    },
+    [refresh],
+  );
+
+  /** Reschedule/resize a Draft shift — the PUT /shifts/:id route existed server-side with no client caller until now. */
+  const updateTime = useCallback(
+    async (shiftId: string, data: { startDatetime?: string; endDatetime?: string }) => {
+      const res = await fetch(`${BASE}/shifts/${shiftId}`, { ...jsonOpts, method: "PUT", body: JSON.stringify(data) });
+      if (!res.ok) throw await parseError(res, "Failed to reschedule shift");
+      await refresh();
+    },
+    [refresh],
+  );
+
+  const cancel = useCallback(
+    async (id: string) => {
+      const res = await fetch(`${BASE}/shifts/${id}/cancel`, { ...opts, method: "POST" });
+      if (!res.ok) throw await parseError(res, "Failed to cancel shift");
+      await refresh();
+    },
+    [refresh],
+  );
+
+  const assign = useCallback(
+    async (shiftId: string, userId: number) => {
+      const res = await fetch(`${BASE}/shifts/${shiftId}/assignments`, {
+        ...jsonOpts,
+        method: "POST",
+        body: JSON.stringify({ userId }),
+      });
+      if (!res.ok) throw await parseError(res, "Failed to assign staff");
+      await refresh();
+    },
+    [refresh],
+  );
+
+  const removeAssignment = useCallback(
+    async (assignmentId: string) => {
+      const res = await fetch(`${BASE}/assignments/${assignmentId}`, { ...opts, method: "DELETE" });
+      if (!res.ok) throw await parseError(res, "Failed to remove assignment");
+      await refresh();
+    },
+    [refresh],
+  );
+
+  useEffect(() => {
+    hasLoadedOnce.current = false;
+    refresh();
+  }, [refresh]);
+
+  return { calendarShifts, isLoading, error, refresh, create, updateTime, cancel, assign, removeAssignment };
+}
+
 export interface ShiftAssignmentRow {
   assignmentId: string;
   userId: number;
