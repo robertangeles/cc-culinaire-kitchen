@@ -2,7 +2,7 @@
 title: Roster Core
 category: entity
 created: 2026-08-16
-updated: 2026-08-17
+updated: 2026-08-31
 related: [[staff-compliance-vault]], [[compliance-expiry-engine]], [[scheduled-job-daily-claim]], [[store-locations-system]], [[workforce-optimisation]]
 ---
 
@@ -33,6 +33,8 @@ Tenancy: `shift.storeLocationId` is NOT NULL (a shift always happens at one venu
 ## The `canAssign` gate
 
 `services/rosterAssignmentRules.ts` — pure function, same shape as `complianceExpiryMath.ts`: `canAssign(heldDocs, requiredDocTypes, today)` → discriminated union naming the reason. Blocked per-shift, not per-batch: `assignStaff` refuses a single assignment ("Cannot assign. Alex's RSA expired on 15 June 2026."), and `publishRoster()` re-runs the same check for every already-assigned shift, holding back (not blocking) any shift whose assignment now fails rather than failing the whole publish.
+
+`canAssign` matches document types by exact string equality — no normalization. `RolesManager.tsx`'s required-document editor (`roster_role_document`) therefore offers a dropdown of the canonical `complianceDocumentTypes.ts` list rather than free text, the same fix already shipped on the staff-upload side (`DocumentUploadForm.tsx`). Both share `useDocumentTypeSelection()`: picking "Other" for a genuinely uncommon type is still free text, but the hook normalizes (case + stray dots/whitespace) and refuses a near-duplicate of a canonical type — e.g. typing "R.S.A" under "Other" is rejected with "Did you mean 'RSA'?" rather than silently saved as a requirement no uploaded "RSA" document can ever satisfy.
 
 ## Award engine — shipped empty, by design
 
