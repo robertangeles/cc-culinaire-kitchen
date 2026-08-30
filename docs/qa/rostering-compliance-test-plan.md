@@ -35,6 +35,40 @@ To flip a flag: Settings → Site Settings (`compliance:manage-rules`/admin), or
 
 ---
 
+## How it works — the design thinking behind this module
+
+The test cases below tell you what to click and what to expect. This section is different: it's the reasoning that produced those clicks — why the system is shaped the way it is, so a reviewer can tell a genuine bug from the system correctly doing something that looks surprising at first glance.
+
+### The problem this solves
+
+Before this module existed, venue operators managed staff compliance documents by hand — certificates in email threads, camera rolls, filing cabinets — and nobody noticed an RSA or Food Safety Supervisor certificate had lapsed until an inspector asked. Both run five-year cycles with no automatic renewal and no grace period. Rostering was spreadsheets and verbal agreement, with no link between who was actually qualified, who was available, and what the kitchen needed that night. The intended outcome: an operator can answer "is my venue legal to trade tonight, and who can I put on?" from one screen, and can never roster someone into a role whose required certificate has lapsed.
+
+### Why compliance is document-centric, not a checkbox
+
+A simpler design would be a single "RSA: yes/no" toggle on a staff profile. That was rejected because the actual liability isn't "does this person claim to hold an RSA" — it's "can we prove it, and will it still be valid on the date they're rostered." That needs three things a checkbox can't carry: an expiry date the system can compute against (the whole point of the expiry engine in CV-D/CV-E below), a verification step so a manager — not the staff member — is the one asserting it's real (CV-C), and a record of who verified what and when, for when an inspector actually asks. `verification_status` has more states than "yes/no" for the same reason: `Rejected` (a manager looked at it and refused it) is a different fact than `Requires Renewal` (it was valid once and lapsed), and conflating them would make the audit trail lie.
+
+### Why shifts are role-first, not person-first
+
+The Roster "New shift" form asks for a Role before anything else — no employee picker up front. That's deliberate, not a missing feature: a shift represents a *need* ("a Bartender, 5pm–11pm"), not a person, and that's what lets the system enforce compliance *before* assignment rather than after. Each role declares which document types it requires (`roster_role_document`); `canAssign()` checks a candidate's held documents against that list the moment someone tries to assign them, and refuses in plain language — "Cannot assign. Alex's RSA expired on 15 June 2026." — never a generic error. If shifts were created directly against a person, there would be nothing to check the assignment against; the role has to exist first because the role is what carries the compliance requirement. This is the same reasoning that shapes the [week calendar](#the-week-calendar) below: role has to be a spatial dimension of that grid for exactly this reason.
+
+### The Award engine: shipped empty, on purpose
+
+Publishing a roster always shows a coverage line — "Checked 4 of the Hospitality Award's rostering rules" — even when zero `award_rule` rows are configured for pay rates, penalties, or loading. That's not a bug or an oversight: nobody on this project is currently named as competent to author Fair Work Award rules (MA000009 changes several times a year and needs industrial-relations expertise, not engineering judgment), so the engine ships with the *machinery* — the rule table, the evaluation, the coverage disclosure — but zero populated rules. The reason this matters for QA: an *empty* warnings list is not the same claim as a *clean* one. If the coverage line ever silently disappeared, or a publish stopped showing "0 of N checked" with the same visual weight a populated list would get, that's the actual regression to watch for — not whether warnings appear, since none are configured to.
+
+### Public holidays: fail loud, never silent
+
+Every other gap in this system degrades gracefully — a missing document shows a plain empty state, an unmatched filter says so. Holiday-calendar gaps are the one deliberate exception: publishing a roster into a jurisdiction+year with no loaded public holiday calendar *blocks the entire publish* with a named error ("Public holidays for VIC 2027 are not loaded"), rather than silently treating every day as a non-holiday. The asymmetry is intentional — a silently-skipped s.114 consent requirement is a Fair Work Act violation with no error to alert anyone, so this is the one place "fail loud" beats "degrade gracefully."
+
+### Tenancy and permissions
+
+Two things worth knowing before filing a permissions bug. First, every table in this module carries `organisation_id`, and most carry a nullable `store_location_id` (null = org-wide, e.g. a role every venue shares; set = one specific venue). A cross-org id reads as 404, never 403 — the API refuses to confirm that a resource in another org even exists. Second, the Operations Admin role (the org creator's default role) grants org-wide permissions through a **global** `user_role` — there's no `organisationId` column on it. The accepted, disclosed consequence: someone who is Operations Admin of one org and merely a *member* of a second org still carries several of those permissions into the second org too (though not org-membership-management itself — that was found to be a real escalation path during development and is gated separately on the per-org admin flag, not the global permission). If a test case seems to grant more access than expected across two orgs the same user belongs to, this is very likely why — check `wiki/entities/operations-admin-role.md` before filing it as a bug.
+
+### The week calendar
+
+The Calendar tab (Phase 2) is a genuine drag-to-build surface, not a read-only view: drag on empty space to create a shift, drag an existing Draft shift to reschedule it, drag its edge to resize, drag a staff member's name onto it to assign. Two things explain its shape. The grid is day-columns-of-role-lanes, not a plain 7-column week, because role is immutable on a shift once created (server-enforced) — a create-drag has to know its role from where you drop it, so role has to be a spatial axis, and it also means a shift can never accidentally be dragged into a different role's lane. And Published shifts render read-only, with no drag handles at all — that's not a UI restriction layered on top, it's a direct reflection of the server: `PUT /shifts/:id` and the assign endpoint both 409 on anything that isn't Draft, so the grid never offers a gesture the API would refuse.
+
+---
+
 ## Phase 1 — Staff Compliance Vault
 
 A private vault for staff and venue compliance documents (RSA, Food Safety Supervisor certificate, police check, Medicare card, liquor licence — document types are free text, not a fixed list), a manager verification queue, and an org-wide dashboard. Answers "is everyone current?" — deciding who can be *rostered* is Phase 2.
@@ -359,6 +393,25 @@ Links the vault to scheduling: a shift can only be assigned to someone holding e
 | RC-J4 | Request a shift/role/assignment belonging to another org | 404 | |
 
 **Automated coverage:** `rosterPermissions.test.ts` covers every route; `roster.tenant.integration.test.ts` is the org-A/org-B canary.
+
+### RC-K — Calendar (drag-to-build)
+
+**What it does:** A week grid — 7 day columns, one sub-lane per role — for building the roster visually instead of through the plain form on the Shifts tab. See [The week calendar](#the-week-calendar) above for why it's shaped this way. Same four underlying operations as RC-B/RC-C (create, reschedule, resize, assign), reached by dragging instead of filling a form.
+
+**Where:** Roster → Calendar tab. Permission: `roster:read-all` to view, `roster:manage` to drag.
+
+| ID | Steps | Expected result | Result |
+|---|---|---|---|
+| RC-K1 | Open Calendar with at least one role configured | 7 day columns render, one sub-lane per role, hour rail scrolled to roughly 6am | |
+| RC-K2 | Open Calendar with zero roles configured | Empty state: "No roles set up yet", pointing at the Roles tab | |
+| RC-K3 | Drag on empty lane space | Live ghost block tracks the drag; releasing creates a Draft shift for that lane's role, snapped to 15-minute increments | |
+| RC-K4 | Drag an existing Draft shift to a different day, same role's lane | Shift moves; dragging it into a *different* role's lane does nothing (a shift's role never changes) | |
+| RC-K5 | Drag a Draft shift's top or bottom edge | Resizes that end only, minimum 15 minutes | |
+| RC-K6 | Drag a staff member from the Staff drawer onto a Draft shift | Assigns them; a `canAssign` refusal (RC-C2–C5) shows the same verbatim message the Shifts tab does | |
+| RC-K7 | Attempt any of the above on a Published shift | No drag handles — Published shifts render read-only | |
+| RC-K8 | Navigate to the previous/next week, then "This week" | Date range and grid update accordingly | |
+
+**Automated coverage:** `rosterCalendarMath.test.ts` — the pure position math (time↔pixel, snap-to-grid, day-column index at week boundaries, lane index). `rosterCalendar.integration.test.ts` — the `GET /shifts/calendar` query (one row per shift with role + assignees inline, Cancelled excluded, cross-org 404). `roster-calendar.spec.ts` (Playwright) — a real drag-create round-tripping to an actual shift row, since that's the one thing no unit or integration test can exercise. RC-K1–K8 above are the full manual walk-through, including the gestures the E2E smoke test doesn't cover.
 
 ---
 

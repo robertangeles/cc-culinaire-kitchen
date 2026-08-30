@@ -2,7 +2,7 @@
 title: Roster Core
 category: entity
 created: 2026-08-16
-updated: 2026-08-17
+updated: 2026-08-30
 related: [[staff-compliance-vault]], [[compliance-expiry-engine]], [[scheduled-job-daily-claim]], [[store-locations-system]], [[workforce-optimisation]]
 ---
 
@@ -61,6 +61,18 @@ Tenancy: `shift.storeLocationId` is NOT NULL (a shift always happens at one venu
 
 A shift's `startDatetime` is a `timestamptz` (a UTC instant). Converting that to "which calendar day is this" via `date.toISOString().slice(0, 10)` is wrong whenever the venue's local timezone differs from UTC: a 9am AEDT shift is 10pm UTC the *previous* day. `rosterService.ts`'s `toVenueLocalDate(instant, ianaTimezone)` reads the instant back in the venue's own `store_location.iana_timezone` (via `Intl.DateTimeFormat` with the `timeZone` option) instead of naive UTC slicing — the same class of bug [[compliance-expiry-engine]] never had to solve, because `compliance_document.expiry_date` is a bare `date` column, not a timestamptz.
 
+## Week calendar (drag-to-build)
+
+`components/roster/RosterCalendarView.tsx`, the "Calendar" tab beside the pre-existing flat-list "Shifts" tab — additive, not a replacement. X = 7 day columns (Mon–Sun), each subdivided into one sub-lane per role active at the venue; Y = time-of-day, a full 24h scroll defaulting to ~6am. Four gestures map to the four mutations Shift builder already exposes — drag empty lane space (create), drag a Draft shift (reschedule), drag its edge (resize), drag a staff chip onto a Draft shift (assign) — no new mutation surface, and Published shifts render read-only since the server 409s on all four for a non-Draft shift.
+
+**Why role-lanes, not a plain 7-column week:** role is immutable on a shift once created (`PUT /shifts/:id` never accepts a role change), so a drag-create gesture has to know its role from where you drop it — the role has to be a spatial axis of the grid, not a picker step after the fact. This also makes cross-role time overlap structurally impossible (different lane) without a real collision-packing algorithm, and constrains a move-drag to its own role's lane by construction.
+
+**New read path:** `getWeekCalendar(orgId, storeLocationId, from, to)` (`rosterService.ts`) via `GET /shifts/calendar`, one row per shift with role name and Pending/Confirmed assignees joined inline — same join shape `staffingCoverageService.ts` already established, minus its `canAssign` aggregation (that's Coverage's job). The existing `GET /shifts` deliberately wasn't touched or overloaded — `ShiftsManager.tsx` depends on its bare-shift-row contract, and fetching assignments per-shift on demand (its existing lazy pattern) doesn't scale to rendering a whole week of shifts at once.
+
+**Position math** lives in `lib/rosterCalendarMath.ts` — pure, separately unit-tested (time↔pixel, snap-to-15-minutes, Monday-start week/day-column resolution, lane index), same "pure logic module" convention as `complianceExpiryMath.ts`/`rosterAssignmentRules.ts`. Drag mechanics are hand-rolled Pointer Events + `elementFromPoint` — no DnD library, matching this repo's zero-dependency convention already set by `MiniCalendar.tsx`/`StaffingCoverageView.tsx`.
+
+**Two real bugs found only by actually dragging things in a browser**, neither catchable by unit or integration tests: (1) day columns never received their initial ~6am scroll position — only the hour rail did, since each day column is an independently-scrolling container synced to the others only on a user-driven scroll — so a freshly-created shift rendered at the wrong apparent time relative to the visible hour labels until the mount effect was fixed to set every column's `scrollTop`, not just the rail's. (2) A second assignment of the same person to the same shift hit `shiftAssignment`'s `UNIQUE(shiftId, userId)` constraint directly and surfaced a raw Postgres error as an unhandled 500 — `assignStaff()` now checks for an existing row first and refuses with `"{name} is already assigned to this shift."` (409), regression-tested in `roster.integration.test.ts`.
+
 ## Permissions
 
 `roster:read-own` (your own shifts/availability), `roster:read-all` (org-wide), `roster:manage` (create/edit roles, shifts, assignments, public holidays), `roster:publish`. Full six-step checklist applied per CLAUDE.md; boundary tests in `rosterPermissions.test.ts`.
@@ -68,7 +80,7 @@ A shift's `startDatetime` is a `timestamptz` (a UTC instant). Converting that to
 ## Known limits
 
 - **No admin UI for authoring `award_rule` rows.** Deferred until an IR-competent reviewer is named — see the plan's Known Risk 2b.
-- **No Playwright E2E coverage for any Roster Core flow (Slices 2–7).** CI has no E2E step at all (the plan's own eng-review issue 11 / task T26) — pre-existing across the whole module, not Slice-7-specific. Every roster slice this session was instead verified via live browser QA against dev before shipping, same as Slice 7's consent flow above.
+- **No Playwright E2E coverage for the original Roster Core flows (Slices 2–7)** — roles, shift builder, my shifts, availability, publish, public holidays, s.114 consent. CI has no E2E step at all (the plan's own eng-review issue 11 / task T26); every one of those slices was instead verified via live browser QA against dev before shipping. The week calendar above is the one exception — it does have a real Playwright spec (`roster-calendar.spec.ts`), added specifically because a drag gesture is the one class of interaction browser QA can eyeball but can't leave behind as a durable regression check.
 
 ## Related
 [[staff-compliance-vault]] · [[compliance-expiry-engine]] · [[scheduled-job-daily-claim]] · [[store-locations-system]] · [[workforce-optimisation]]

@@ -4,6 +4,59 @@ Append-only. Newest entry on top.
 
 ---
 
+## 2026-08-30 — Roster week calendar (drag-to-build) + design manual
+
+- User feedback on the plain-form "Shifts" tab ("no calendar, just a form")
+  led to a new "Calendar" tab: a real drag-to-build week grid, not a
+  read-only view. X = 7 day columns, each subdivided into one sub-lane per
+  role (role is immutable on a shift once created, so it has to be a
+  spatial axis for a drag-create gesture to know its role without an extra
+  picker). Y = time-of-day, full 24h scroll. Four gestures — create,
+  reschedule, resize, assign — map onto the four mutations the Shift
+  builder already exposed; only one new read endpoint was needed
+  (`GET /shifts/calendar`, one row per shift with role + assignees inline,
+  avoiding the N+1 a naive per-shift fetch would cause for a whole week).
+- Hand-rolled Pointer Events + `elementFromPoint`, no new dependency —
+  matches this repo's existing "no charting/DnD library" convention
+  (`MiniCalendar.tsx`, `StaffingCoverageView.tsx`). Position math (pixel↔
+  time, snap-to-grid, Monday-start week/day-column resolution, lane index)
+  extracted into a pure, separately unit-tested module
+  (`lib/rosterCalendarMath.ts`), same convention as `complianceExpiryMath.ts`.
+- Live drag-testing in the browser (via synthetic PointerEvents, then
+  Playwright's real mouse API for the E2E spec) surfaced two real bugs
+  neither unit nor integration tests could have caught: day columns never
+  got their initial ~6am scroll position (only the shared hour rail did,
+  since each day column scrolls independently until synced by a user
+  action), and a duplicate-assignment attempt hit the database's UNIQUE
+  constraint directly, surfacing a raw 500 instead of a clean error.
+  Both fixed; the second one is now a regression test in
+  `roster.integration.test.ts`.
+- Also caught mid-testing: a sequencing mistake in my own branch planning.
+  I initially planned the (unrelated) `compliance.spec.ts` E2E fix — found
+  while researching this feature — as a fresh branch off `main`, before
+  realizing the bug it fixes only exists on the still-unmerged
+  `feature/ck-web/operations-admin-role` branch. Caught before any commits
+  were made; the fix landed there instead, and this feature's own work
+  went on a separate fresh branch off `main`
+  (`feature/ck-web/roster-week-calendar`), since the two efforts share no
+  files and should merge independently in either order.
+- Added a "How it works" design-manual section to
+  `docs/qa/rostering-compliance-test-plan.md` (placed before the Phase 1
+  checklists) explaining the reasoning behind the whole compliance +
+  rostering system for a reader who wasn't in the room for the original
+  design decisions — why compliance is document-centric, why shifts are
+  role-first, why the Award engine ships empty on purpose, why public
+  holidays fail loud, the tenancy/permissions model, and the new calendar's
+  own design — plus a new RC-K test-case table for the Calendar tab itself.
+- Wiki updated: [[roster-core]]'s new "Week calendar" section, and its
+  "Known limits" E2E-coverage note corrected (no longer blanket-true now
+  that `roster-calendar.spec.ts` exists for this one flow).
+- Full regression clean: lint, tsc, 1139+ server unit tests, 166 client
+  tests, `rosterCalendarMath.test.ts` (16), `rosterCalendar.integration.test.ts`
+  (3/3) and `roster.integration.test.ts` (27/27, including the new
+  duplicate-assignment regression), `roster-calendar.spec.ts` (E2E, 2
+  passed + 1 gracefully skipped where no roster roles exist), build.
+
 ## 2026-08-17 — Phase 3 Slice 3 shipped: shift swap — Phase 3 (Workforce Optimisation) complete
 
 - `feature/ck-web/workforce-shift-swap`: new `shift_swap_request` table + `services/shiftSwapService.ts`
