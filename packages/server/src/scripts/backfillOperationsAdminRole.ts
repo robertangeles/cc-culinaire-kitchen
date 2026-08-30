@@ -33,7 +33,7 @@ import { eq, and } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { role, permission, rolePermission, userRole, userOrganisation } from "../db/schema.js";
 
-const OPERATIONS_ADMIN_PERMISSION_KEYS = [
+export const OPERATIONS_ADMIN_PERMISSION_KEYS = [
   "chat:access", "chat:unlimited",
   "org:create-organisation", "org:manage-organisation",
   "inventory:count", "inventory:manage", "inventory:transfer", "inventory:hq",

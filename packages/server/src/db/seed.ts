@@ -32,6 +32,7 @@ const matter = (await import("gray-matter")).default;
 const { db } = await import("./index.js");
 const { prompt, role, permission, rolePermission, siteSetting, guide } = await import("./schema.js");
 const { eq, and } = await import("drizzle-orm");
+const { OPERATIONS_ADMIN_PERMISSION_KEYS } = await import("../scripts/backfillOperationsAdminRole.js");
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 /** Absolute path to the chatbot prompts directory in the monorepo. */
@@ -216,16 +217,9 @@ async function seed() {
     // Everything Administrator has except the four admin:* keys (role,
     // permission, platform-user, and dashboard management) — full
     // operational control of an org, no software-administration reach.
-    "Operations Admin": [
-      "chat:access", "chat:unlimited",
-      "org:create-organisation", "org:manage-organisation",
-      "inventory:count", "inventory:manage", "inventory:transfer", "inventory:hq",
-      "purchasing:draft", "purchasing:submit", "purchasing:approve", "purchasing:receive", "purchasing:credit",
-      "menu:read", "waste:read", "prep:manage",
-      "brain:read", "brain:manage",
-      "compliance:read-own", "compliance:read-all", "compliance:verify", "compliance:manage-rules",
-      "roster:read-own", "roster:read-all", "roster:manage", "roster:publish",
-    ],
+    // Single source of truth: scripts/backfillOperationsAdminRole.ts reads
+    // the same list when granting this role to existing org admins.
+    "Operations Admin": OPERATIONS_ADMIN_PERMISSION_KEYS,
   };
 
   const allRoles = await db.select().from(role);
