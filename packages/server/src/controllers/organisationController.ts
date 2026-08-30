@@ -89,11 +89,13 @@ const UpdateOrgSchema = z.object({
   // Organisation Settings (Operations Admin) — branding + operational
   // defaults. A field absent from the request preserves its current value
   // (this endpoint is shared with the org-details/social-media form, which
-  // never sends these). logoPath/colorAccent/defaultJurisdiction are
-  // nullable columns, so an explicit "" clears them; defaultTimezone/
-  // defaultCurrency are NOT NULL with sane defaults, so they can be changed
-  // but not cleared to empty.
-  logoPath: z.string().max(500).or(z.literal("")).optional(),
+  // never sends these). colorAccent/defaultJurisdiction are nullable
+  // columns, so an explicit "" clears them; defaultTimezone/defaultCurrency
+  // are NOT NULL with sane defaults, so they can be changed but not cleared
+  // to empty. logoPath is deliberately NOT accepted here — the only
+  // legitimate way to set it is POST /:id/logo, which derives the URL
+  // server-side from an uploaded, type-checked file. Accepting an arbitrary
+  // string here would let it bypass that validation entirely.
   colorAccent: z.string().regex(/^#[0-9A-Fa-f]{6}$/).or(z.literal("")).optional(),
   defaultTimezone: z.string().min(1).max(50).optional(),
   defaultCurrency: z.string().length(3).optional(),

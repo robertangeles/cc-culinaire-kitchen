@@ -228,7 +228,6 @@ export async function updateOrganisation(
     tiktok?: string;
     pinterest?: string;
     linkedin?: string;
-    logoPath?: string;
     colorAccent?: string;
     defaultTimezone?: string;
     defaultCurrency?: string;
@@ -266,8 +265,9 @@ export async function updateOrganisation(
       // blown away by a submission from the org-details (name/website/
       // social) form above, which never sends them. An explicit "" clears
       // the nullable fields; defaultTimezone/defaultCurrency are NOT NULL
-      // so they're only ever preserved or set, never cleared.
-      organisationLogoPath: data.logoPath !== undefined ? data.logoPath || null : org.organisationLogoPath,
+      // so they're only ever preserved or set, never cleared. logoPath is
+      // never accepted here at all — see updateOrganisationLogo below, the
+      // only legitimate write path (server-derived, upload-validated URL).
       organisationColorAccent: data.colorAccent !== undefined ? data.colorAccent || null : org.organisationColorAccent,
       defaultTimezone: data.defaultTimezone ?? org.defaultTimezone,
       defaultCurrency: data.defaultCurrency ?? org.defaultCurrency,
