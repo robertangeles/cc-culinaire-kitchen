@@ -19,18 +19,9 @@ import { useRef, useState } from "react";
 import { Camera, CheckCircle2, Loader2 } from "lucide-react";
 import { EmptyState } from "../ui/EmptyState.js";
 import { formatAuDate } from "@culinaire/shared";
+import { DOCUMENT_TYPES } from "../../lib/complianceDocumentTypes.js";
 
 const API = import.meta.env.VITE_API_URL ?? "";
-
-const DOCUMENT_TYPES = [
-  "RSA",
-  "Food Safety Supervisor",
-  "Working with Children Check",
-  "Police Check",
-  "Food Handler",
-  "Visa / Work Rights",
-  "Other",
-];
 
 const AU_STATES = ["NSW", "VIC", "QLD", "WA", "SA", "TAS", "ACT", "NT"];
 
