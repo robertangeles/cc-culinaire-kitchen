@@ -42,7 +42,6 @@ import { KitchenCopilotPage } from "./pages/KitchenCopilotPage.js";
 import { InventoryPage } from "./pages/InventoryPage.js";
 import { PurchasingPage } from "./pages/PurchasingPage.js";
 import { YourBrainPage } from "./pages/YourBrainPage.js";
-import CompliancePage from "./pages/CompliancePage.js";
 import RosterPage from "./pages/RosterPage.js";
 import { KitchenOnboarding } from "./components/onboarding/KitchenOnboarding.js";
 import { LocationProvider } from "./context/LocationContext.js";
@@ -162,7 +161,7 @@ export function App() {
                           <Route path="/chat/:id" element={<ChatPage />} />
                           <Route path="/settings" element={<AuthenticatedOnly><SettingsPage /></AuthenticatedOnly>} />
                           <Route path="/profile" element={<AuthenticatedOnly><ProfilePage /></AuthenticatedOnly>} />
-                          <Route path="/organisation" element={<AuthenticatedOnly><RequirePermission anyOf={["org:manage-organisation"]}><OrganisationPage /></RequirePermission></AuthenticatedOnly>} />
+                          <Route path="/organisation" element={<AuthenticatedOnly><RequirePermission anyOf={["org:manage-organisation", "compliance:read-all", "compliance:verify"]}><OrganisationPage /></RequirePermission></AuthenticatedOnly>} />
                           <Route path="/recipes" element={<RecipeLabPage key="recipe" domain="recipe" />} />
                           <Route path="/patisserie" element={<RecipeLabPage key="patisserie" domain="patisserie" />} />
                           <Route path="/spirits" element={<RecipeLabPage key="spirits" domain="spirits" />} />
@@ -176,7 +175,6 @@ export function App() {
                               staff member to a page with no tabs — a dead end that reads as "you lack
                               access" when in fact their surfaces simply moved. Kept in step with the
                               gate in navConfig.ts. */}
-                          <Route path="/compliance" element={<AuthenticatedOnly><RequirePermission anyOf={["compliance:read-all", "compliance:verify"]}><LocationGate><KitchenOpsLayout><CompliancePage /></KitchenOpsLayout></LocationGate></RequirePermission></AuthenticatedOnly>} />
                           <Route path="/roster" element={<AuthenticatedOnly><RequirePermission anyOf={["roster:read-own", "roster:read-all", "roster:manage", "roster:publish"]}><LocationGate><KitchenOpsLayout><RosterPage /></KitchenOpsLayout></LocationGate></RequirePermission></AuthenticatedOnly>} />
                           <Route path="/kitchen-copilot" element={<AuthenticatedOnly><RequirePermission anyOf={["prep:manage"]}><LocationGate><KitchenOpsLayout><KitchenCopilotPage /></KitchenOpsLayout></LocationGate></RequirePermission></AuthenticatedOnly>} />
                           <Route path="/inventory" element={<AuthenticatedOnly><RequirePermission anyOf={["inventory:count", "inventory:manage", "inventory:transfer", "inventory:hq"]}><LocationGate><KitchenOpsLayout><InventoryPage /></KitchenOpsLayout></LocationGate></RequirePermission></AuthenticatedOnly>} />

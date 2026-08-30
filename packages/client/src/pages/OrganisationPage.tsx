@@ -2,23 +2,31 @@
  * @module pages/OrganisationPage
  *
  * Org-scoped administration: User Management (relocated from Profile →
- * Team) and Organisation Settings (branding + operational defaults).
- * Reachable from the Profile menu → Organisation. Gated on
- * org:manage-organisation — held by Operations Admin (the org creator's
- * default role) or anyone else explicitly granted it.
+ * Team), Organisation Settings (branding + operational defaults), and Team
+ * Compliance (relocated from the standalone /compliance route). Reachable
+ * from the Profile menu → Organisation.
+ *
+ * User Management and Organisation Settings require org:manage-organisation
+ * (Operations Admin). Team Compliance requires compliance:read-all or
+ * compliance:verify instead — a Paid Subscriber holds those without holding
+ * org:manage-organisation, so tabs are filtered per-user, same as
+ * SettingsLayout's permission-gated tab registry.
  */
 
 import { useEffect, useState, type KeyboardEvent } from "react";
-import { Loader2, AlertCircle, Users, Settings2 } from "lucide-react";
+import { Loader2, AlertCircle, Users, Settings2, ShieldCheck } from "lucide-react";
 import { useAuth } from "../context/AuthContext.js";
+import { useHasPermission } from "../hooks/useHasPermission.js";
 import { TeamMembersSection } from "../components/organisation/TeamMembersSection.js";
 import { OrganisationBrandingForm, type OrganisationSettings } from "../components/organisation/OrganisationBrandingForm.js";
+import { TeamComplianceSection } from "../components/organisation/TeamComplianceSection.js";
 
-type OrgTab = "team" | "settings";
+type OrgTab = "team" | "settings" | "compliance";
 
-const TABS: Array<{ id: OrgTab; label: string; icon: typeof Users; description: string }> = [
-  { id: "team", label: "User Management", icon: Users, description: "Manage who belongs to your organisation and their access level." },
-  { id: "settings", label: "Organisation Settings", icon: Settings2, description: "Branding and operational defaults for your organisation." },
+const ALL_TABS: Array<{ id: OrgTab; label: string; icon: typeof Users; description: string; permissions: string[] }> = [
+  { id: "team", label: "User Management", icon: Users, description: "Manage who belongs to your organisation and their access level.", permissions: ["org:manage-organisation"] },
+  { id: "settings", label: "Organisation Settings", icon: Settings2, description: "Branding and operational defaults for your organisation.", permissions: ["org:manage-organisation"] },
+  { id: "compliance", label: "Team Compliance", icon: ShieldCheck, description: "Staff certificates, expiry status, and verification.", permissions: ["compliance:read-all", "compliance:verify"] },
 ];
 
 /**
@@ -33,10 +41,17 @@ const TABS: Array<{ id: OrgTab; label: string; icon: typeof Users; description: 
  */
 export default function OrganisationPage() {
   const { user } = useAuth();
+  const hasPermission = useHasPermission();
   const [org, setOrg] = useState<OrganisationSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [tab, setTab] = useState<OrgTab>("team");
+  // Holds an explicit user choice only; null means "hasn't picked one yet"
+  // or "auth hasn't resolved yet". NOT seeded via useState(visibleTabs[0]) —
+  // AuthContext starts with user === null and fills it in asynchronously, so
+  // on the first render visibleTabs is empty for everyone (mirrors
+  // CompliancePage's identical defense, now needed here too since tabs are
+  // permission-filtered).
+  const [selectedTab, setSelectedTab] = useState<OrgTab | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -54,16 +69,19 @@ export default function OrganisationPage() {
     })();
   }, []);
 
+  const visibleTabs = ALL_TABS.filter((t) => hasPermission(...t.permissions));
+  const tab = visibleTabs.find((t) => t.id === selectedTab)?.id ?? visibleTabs[0]?.id ?? null;
+
   function handleTabKeyDown(e: KeyboardEvent<HTMLButtonElement>) {
     if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
     e.preventDefault();
-    const currentIndex = TABS.findIndex((t) => t.id === tab);
-    const next = e.key === "ArrowDown" ? (currentIndex + 1) % TABS.length : (currentIndex - 1 + TABS.length) % TABS.length;
-    setTab(TABS[next].id);
-    document.getElementById(`organisation-tab-${TABS[next].id}`)?.focus();
+    const currentIndex = visibleTabs.findIndex((t) => t.id === tab);
+    const next = e.key === "ArrowDown" ? (currentIndex + 1) % visibleTabs.length : (currentIndex - 1 + visibleTabs.length) % visibleTabs.length;
+    setSelectedTab(visibleTabs[next].id);
+    document.getElementById(`organisation-tab-${visibleTabs[next].id}`)?.focus();
   }
 
-  const activeTab = TABS.find((t) => t.id === tab)!;
+  const activeTab = visibleTabs.find((t) => t.id === tab);
 
   return (
     <div className="flex h-full bg-dark">
@@ -74,7 +92,7 @@ export default function OrganisationPage() {
         </h2>
         {org && <p className="px-3 mb-4 text-xs text-dark-600 truncate">{org.organisationName}</p>}
         <nav role="tablist" aria-label="Organisation" aria-orientation="vertical" className="space-y-1">
-          {TABS.map(({ id, label, icon: Icon }) => (
+          {visibleTabs.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
               role="tab"
@@ -82,7 +100,7 @@ export default function OrganisationPage() {
               aria-controls={`organisation-tabpanel-${id}`}
               id={`organisation-tab-${id}`}
               tabIndex={tab === id ? 0 : -1}
-              onClick={() => setTab(id)}
+              onClick={() => setSelectedTab(id)}
               onKeyDown={handleTabKeyDown}
               className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
                 tab === id
@@ -114,6 +132,10 @@ export default function OrganisationPage() {
               <AlertCircle className="size-4 flex-shrink-0" /> {error || "No organisation found."}
             </div>
           </div>
+        ) : !activeTab ? (
+          <div className="flex items-center justify-center h-full">
+            <Loader2 className="size-6 animate-spin text-dark-500" />
+          </div>
         ) : (
           <div className="flex flex-col h-full">
             <div className="px-8 py-6 border-b border-dark-200">
@@ -127,6 +149,7 @@ export default function OrganisationPage() {
               {tab === "settings" && (
                 <OrganisationBrandingForm org={org} onUpdated={setOrg} />
               )}
+              {tab === "compliance" && <TeamComplianceSection />}
             </div>
           </div>
         )}

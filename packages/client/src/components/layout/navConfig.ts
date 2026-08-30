@@ -22,7 +22,6 @@ import {
   ShoppingCart,
   BarChart3,
   ClipboardList,
-  ShieldCheck,
   Leaf,
   LayoutGrid,
   MessagesSquare,
@@ -128,18 +127,6 @@ export const NAV_SECTIONS: NavSection[] = [
         icon: Leaf,
         to: "/waste-intelligence",
         gate: { anyPermission: ["waste:read"] },
-      },
-      {
-        id: "compliance",
-        label: "Team Compliance",
-        icon: ShieldCheck,
-        to: "/compliance",
-        // Team and Verify are both manager-facing, so the entry is gated to
-        // the two permissions that actually unlock a tab on this page now
-        // that My Documents (Profile) and Requirements (Admin Settings) have
-        // moved elsewhere. The server route is the security boundary; this
-        // list only decides what is visible.
-        gate: { anyPermission: ["compliance:read-all", "compliance:verify"] },
       },
       {
         id: "roster",

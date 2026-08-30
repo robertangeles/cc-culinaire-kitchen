@@ -4,6 +4,43 @@ Append-only. Newest entry on top.
 
 ---
 
+## 2026-08-30 — Team Compliance relocated into the Organisation page
+
+- User request: Team Compliance should live inside the Organisation section
+  rather than as its own nav item under Run the Kitchen, since it's already
+  effectively an org-admin-only surface (gated on `compliance:read-all`/
+  `compliance:verify`, held only by Administrator, Paid Subscriber, and
+  Operations Admin).
+- Investigated first rather than assuming: confirmed Team Compliance data is
+  org-wide, never location-filtered (`ComplianceDashboard`/`VerificationView`
+  have zero references to store-location context), so its `LocationGate`/
+  `KitchenOpsLayout` wrapping was incidental chrome, not a real dependency —
+  safe to drop when moving.
+- Found and resolved a real permission-boundary mismatch before writing any
+  code: `/organisation` was gated on `org:manage-organisation` alone, but
+  Paid Subscriber holds `compliance:read-all`/`verify` WITHOUT
+  `org:manage-organisation` (deliberately, since the earlier privilege-
+  escalation fix removed it from that role). Moving Compliance under
+  `/organisation` unchanged would have locked Paid Subscriber out of Team
+  Compliance entirely. Fixed by widening the route's permission gate to
+  `anyOf` all three keys, then gating each of the three tabs independently
+  inside `OrganisationPage.tsx` — the same per-tab `permission` pattern
+  `SettingsLayout` already uses for platform Admin Settings.
+- Extracted `TeamComplianceSection.tsx` from the deleted `CompliancePage.tsx`
+  (route, nav entry, and file all removed — a real relocation, not a
+  duplicate). Ported its 5 tests, preserving the "auth resolves after first
+  render" defence, and added the same defence to `OrganisationPage.tsx`
+  itself now that ALL three of its tabs are permission-filtered (previously
+  only the route was gated, tabs were static).
+- Verified live in the browser: all three tabs render for a full-permission
+  user, Team/Verify sub-tabs work, `/compliance` now hits the app's real
+  404 page cleanly, no new console errors.
+- Full regression clean: lint, tsc, `check:reachability` (confirms no
+  orphaned references from the deleted page), 166 client tests + 1147
+  server tests, build.
+- Wiki updated: [[operations-admin-role]]'s Client section describes the
+  three-tab, per-tab-permission-gated structure.
+
 ## 2026-08-29 — Operations Admin: closed a real cross-org privilege escalation + fixed the UI
 
 - A background security review of the Operations Admin commit (`f7c9e9c`) flagged

@@ -36,7 +36,9 @@ Five new columns on `organisation` (`organisationLogoPath`, `organisationColorAc
 
 ## Client
 
-`Profile menu → Organisation` (`pages/OrganisationPage.tsx`, gated `RequirePermission anyOf={["org:manage-organisation"]}`), two tabs: User Management (relocated `TeamMembersSection`, extracted verbatim from `ProfilePage.tsx`) and Organisation Settings (`OrganisationBrandingForm.tsx`). The old Profile → Team sub-tab is deleted, not left as a duplicate entry point.
+`Profile menu → Organisation` (`pages/OrganisationPage.tsx`, gated `RequirePermission anyOf={["org:manage-organisation", "compliance:read-all", "compliance:verify"]}`), three permission-filtered tabs: User Management and Organisation Settings (both require `org:manage-organisation`), and Team Compliance (requires `compliance:read-all` or `compliance:verify` instead — a Paid Subscriber holds those without holding `org:manage-organisation`). Tabs are filtered per-user the same way `SettingsLayout`'s registry filters on a `permission` field, with the same "auth resolves after first render" defence `CompliancePage` originally needed (tab list must never be seeded once via `useState`, since `user` starts null).
+
+Team Compliance was relocated (not duplicated) from the standalone `/compliance` route — that route, its nav entry, and `pages/CompliancePage.tsx` are gone; the content moved into `components/organisation/TeamComplianceSection.tsx`. It never needed the Kitchen Ops location-switcher chrome (`LocationGate`/`KitchenOpsLayout`) it was incidentally wrapped in — compliance data is org-wide, never location-filtered. The old Profile → Team sub-tab was deleted the same way in the same earlier change, not left as a duplicate entry point.
 
 ## Backfill
 
