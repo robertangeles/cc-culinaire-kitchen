@@ -12,30 +12,33 @@
  * completes the second factor.
  *
  * These assert the flows that only break at the seams: permission gating,
- * LocationGate, the headline reconciling with the table, and the responsive
- * collapse. Pure logic is covered by unit tests and is not re-tested here.
+ * the headline reconciling with the table, and the responsive collapse. Pure
+ * logic is covered by unit tests and is not re-tested here.
+ *
+ * Team Compliance moved from the standalone /compliance route into
+ * Profile -> Organisation as a tab (packages/client/src/pages/OrganisationPage.tsx).
+ * It no longer sits behind LocationGate — compliance data is org-wide, never
+ * location-filtered — so there is no "location gate" case to assert against
+ * any more.
  */
 
 import { test, expect, type Page } from "@playwright/test";
 
 async function openCompliance(page: Page) {
-  await page.goto("/compliance");
+  await page.goto("/organisation");
+  await page.getByRole("tab", { name: "Team Compliance" }).click();
   // Not networkidle — socket.io holds the connection open, so it never fires.
   await page.locator("main, [role=main], h1").first().waitFor({ state: "visible", timeout: 20_000 });
 }
 
 test.describe("Staff Compliance Vault — Phase 1", () => {
   // The harness test. It proves the MFA login path works end to end in a real
-  // browser, that the route is reachable behind its four permissions, and that
-  // LocationGate resolved rather than swallowing the page.
-  test("compliance page loads for a permitted user and is not the location gate", async ({ page }) => {
+  // browser and that the Organisation route/tab is reachable behind its
+  // permissions.
+  test("compliance page loads for a permitted user", async ({ page }) => {
     await openCompliance(page);
 
-    await expect(page).toHaveURL(/\/compliance/);
-
-    // LocationGate renders a "no location" screen when the context fetch loses
-    // its race; a page that got past it must not show that.
-    await expect(page.getByText(/no location|select a location to continue/i)).toHaveCount(0);
+    await expect(page).toHaveURL(/\/organisation/);
 
     // Either real content or a designed empty state — never a raw error and
     // never a permanently spinning skeleton.
@@ -49,25 +52,23 @@ test.describe("Staff Compliance Vault — Phase 1", () => {
     await expect(page.getByText(/\[object Object\]|undefined is not|TypeError/i)).toHaveCount(0);
   });
 
-  test("the compliance nav entry is present and routes correctly", async ({ page }) => {
-    // Desktop viewport: the sidebar is `hidden md:flex`, so it does not exist
-    // at phone widths (Sidebar.tsx:137).
+  test("the Organisation menu entry is present and routes to Team Compliance", async ({ page }) => {
+    // Desktop viewport: the sidebar/user menu is `hidden md:flex`, so it does
+    // not exist at phone widths.
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.goto("/chat");
     await page.locator("nav, aside").first().waitFor({ state: "visible", timeout: 20_000 });
 
-    // Nav sections render collapsed until the user opens one (Sidebar.tsx:92),
-    // so the link is in the DOM but not visible. Expand "Run the Kitchen"
-    // first — which is exactly what a real user does to reach Compliance.
-    const sectionHeader = page.getByText(/run the kitchen/i).first();
-    if (await sectionHeader.isVisible().catch(() => false)) {
-      await sectionHeader.click();
-    }
+    // "Organisation" lives in the user-menu dropdown at the bottom of the
+    // sidebar, not the main nav — click the user button to open it.
+    await page.getByRole("button", { name: "User menu" }).click();
+    const orgLink = page.getByText("Organisation", { exact: true });
+    await expect(orgLink).toBeVisible({ timeout: 10_000 });
+    await orgLink.click();
+    await expect(page).toHaveURL(/\/organisation/);
 
-    const navLink = page.getByRole("link", { name: /compliance/i }).first();
-    await expect(navLink).toBeVisible({ timeout: 10_000 });
-    await navLink.click();
-    await expect(page).toHaveURL(/\/compliance/);
+    await page.getByRole("tab", { name: "Team Compliance" }).click();
+    await expect(page.getByRole("heading", { name: "Team Compliance" })).toBeVisible({ timeout: 10_000 });
   });
 
   // The headline is derived from the same array the table renders, precisely so

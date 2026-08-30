@@ -40,7 +40,10 @@ export function UserMenu({ compact = false }: { compact?: boolean }) {
 
   const primaryRole = user.roles[0] ?? "Subscriber";
   const isAdmin = user.roles.includes("Administrator");
-  const canManageOrg = hasPermission("org:manage-organisation");
+  // Matches /organisation's own route gate exactly (App.tsx) — a Paid
+  // Subscriber holds compliance:read-all/verify without org:manage-organisation
+  // and must still be able to discover the page to reach Team Compliance.
+  const canAccessOrganisation = hasPermission("org:manage-organisation", "compliance:read-all", "compliance:verify");
 
   async function handleLogout() {
     await logout();
@@ -59,7 +62,7 @@ export function UserMenu({ compact = false }: { compact?: boolean }) {
               <User className="size-4" />
               Profile
             </button>
-            {canManageOrg && (
+            {canAccessOrganisation && (
               <button
                 onClick={() => { navigate("/organisation"); setOpen(false); }}
                 className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-[#E5E5E5] hover:bg-dark-200 transition-colors"
@@ -116,7 +119,7 @@ export function UserMenu({ compact = false }: { compact?: boolean }) {
             <User className="size-4" />
             Profile
           </button>
-          {canManageOrg && (
+          {canAccessOrganisation && (
             <button
               onClick={() => { navigate("/organisation"); setOpen(false); }}
               className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-[#E5E5E5] hover:bg-dark-200 transition-colors"
@@ -148,6 +151,7 @@ export function UserMenu({ compact = false }: { compact?: boolean }) {
       {/* User button */}
       <button
         onClick={() => setOpen(!open)}
+        aria-label="User menu"
         className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left hover:bg-dark-100/50 transition-colors"
       >
         {user.userPhotoPath ? (
