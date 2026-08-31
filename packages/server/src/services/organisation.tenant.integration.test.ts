@@ -11,7 +11,7 @@ import type { Request, Response } from "express";
 import { eq, and, inArray } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { organisation, user, userOrganisation, userRole, role } from "../db/schema.js";
-import { createOrganisation, joinOrganisation } from "./organisationService.js";
+import { createOrganisation, joinOrganisation, leaveOrganisation } from "./organisationService.js";
 import { getUserWithRolesAndPermissions, type TokenPayload } from "./authService.js";
 import {
   handleUpdateOrganisation,
@@ -269,5 +269,97 @@ describe.skipIf(!RUN)("Operations Admin — tenant isolation (real DB)", () => {
     const { res, getStatus } = makeRes();
     await handleRemoveMember(makeReq(reqPayload, { id: String(orgB), userId: String(userB) }), res, noopNext);
     expect(getStatus()).toBe(403);
+  });
+});
+
+/**
+ * Adversarial review (real gap, confirmed by direct code read): the deleted
+ * ORG_ADMIN_PERMISSIONS bridge was recomputed live on every token mint, off
+ * current userOrganisation rows — it dropped the instant a user stopped
+ * admining anywhere. The role-based Operations Admin grant is a static
+ * user_role row; nothing revoked it. Worst case: compliance:manage-rules
+ * gates document_expiry_rule, which carries no organisationId at all — a
+ * stale grant meant global, platform-wide compliance-rule authorship for a
+ * user with zero organisations. Fixed by revokeOperationsAdminRoleIfNoLongerAdmin,
+ * called from leaveOrganisation / removeMember / updateMemberRole (demotion).
+ */
+describe.skipIf(!RUN)("Operations Admin — grant is revoked, not just orphaned (real DB)", () => {
+  const tag = `oarv_${Date.now().toString(36)}`;
+  let userE: number;
+  let userF: number;
+  let userG: number;
+  let orgE: number;
+  let orgESecond: number;
+  let orgF: number;
+  let orgG: number;
+  let coAdminForG: number;
+  let opsAdminRoleId: number;
+
+  async function holdsOperationsAdmin(userId: number): Promise<boolean> {
+    const rows = await db.select().from(userRole).where(and(eq(userRole.userId, userId), eq(userRole.roleId, opsAdminRoleId)));
+    return rows.length > 0;
+  }
+
+  beforeAll(async () => {
+    [{ id: userE }] = await db.insert(user).values({ userName: "OARV E", userEmail: `${tag}-e@it.test` }).returning({ id: user.userId });
+    [{ id: userF }] = await db.insert(user).values({ userName: "OARV F", userEmail: `${tag}-f@it.test` }).returning({ id: user.userId });
+    [{ id: userG }] = await db.insert(user).values({ userName: "OARV G", userEmail: `${tag}-g@it.test` }).returning({ id: user.userId });
+
+    const [opsAdmin] = await db.select().from(role).where(eq(role.roleName, "Operations Admin"));
+    if (!opsAdmin) throw new Error("Operations Admin role not seeded — run db/seed.ts before this suite.");
+    opsAdminRoleId = opsAdmin.roleId;
+  });
+
+  afterAll(async () => {
+    const orgIds = [orgE, orgESecond, orgF, orgG].filter(Boolean);
+    const userIds = [userE, userF, userG, coAdminForG].filter(Boolean);
+    if (orgIds.length) {
+      await db.delete(userRole).where(and(inArray(userRole.userId, userIds), eq(userRole.roleId, opsAdminRoleId)));
+      await db.delete(userOrganisation).where(inArray(userOrganisation.organisationId, orgIds));
+      await db.delete(organisation).where(inArray(organisation.organisationId, orgIds));
+    }
+    await db.delete(user).where(inArray(user.userId, userIds));
+  });
+
+  it("leaving your only admin org revokes the Operations Admin grant", async () => {
+    const org = await createOrganisation(userE, { name: `${tag}-orgE` });
+    orgE = org.organisationId;
+    expect(await holdsOperationsAdmin(userE)).toBe(true);
+
+    await leaveOrganisation(userE, orgE);
+
+    expect(await holdsOperationsAdmin(userE)).toBe(false);
+  });
+
+  it("leaving one org keeps the grant while still admining another", async () => {
+    const first = await createOrganisation(userF, { name: `${tag}-orgF` });
+    orgF = first.organisationId;
+    const second = await createOrganisation(userF, { name: `${tag}-orgE-second` });
+    orgESecond = second.organisationId;
+    expect(await holdsOperationsAdmin(userF)).toBe(true);
+
+    await leaveOrganisation(userF, orgF);
+
+    expect(await holdsOperationsAdmin(userF)).toBe(true);
+  });
+
+  it("being demoted (Make Member) out of your only admin org revokes the grant", async () => {
+    const org = await createOrganisation(userG, { name: `${tag}-orgG` });
+    orgG = org.organisationId;
+    expect(await holdsOperationsAdmin(userG)).toBe(true);
+
+    const authUserG = await getUserWithRolesAndPermissions(userG);
+    const reqPayload: TokenPayload = { sub: userG, roles: authUserG.roles, permissions: authUserG.permissions };
+    // updateMemberRole's "last admin" guard blocks demoting the ONLY admin
+    // — seed a second admin first via a direct membership row so userG's
+    // own demotion is the case under test, not the guard.
+    [{ id: coAdminForG }] = await db.insert(user).values({ userName: "OARV G co-admin", userEmail: `${tag}-g2@it.test` }).returning({ id: user.userId });
+    await db.insert(userOrganisation).values({ userId: coAdminForG, organisationId: orgG, role: "admin" });
+
+    const { res, getStatus } = makeRes();
+    await handleUpdateMemberRole(makeReq(reqPayload, { id: String(orgG), userId: String(userG) }, { role: "member" }), res, noopNext);
+    expect(getStatus()).toBeNull();
+
+    expect(await holdsOperationsAdmin(userG)).toBe(false);
   });
 });

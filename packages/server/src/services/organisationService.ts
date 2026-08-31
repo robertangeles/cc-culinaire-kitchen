@@ -46,6 +46,43 @@ async function grantOperationsAdminRole(userId: number): Promise<void> {
   }
 }
 
+/**
+ * Pure decision, exported for a direct unit test: should this user's
+ * Operations Admin grant be revoked? True once they no longer admin ANY
+ * organisation. The deleted ORG_ADMIN_PERMISSIONS bridge was recomputed
+ * live on every token mint, straight off current userOrganisation rows, so
+ * it dropped automatically the moment a user stopped being an admin
+ * anywhere. The role-based replacement is a static user_role row — nothing
+ * about holding it is re-derived — so revocation has to be an explicit
+ * write instead of falling out of a live read.
+ */
+export function shouldRevokeOperationsAdminRole(remainingAdminOrgCount: number): boolean {
+  return remainingAdminOrgCount === 0;
+}
+
+/**
+ * Revoke the Operations Admin role from a user who no longer admins any
+ * organisation. Called after any write that can end someone's last admin
+ * membership — leaveOrganisation, removeMember, and updateMemberRole
+ * (demotion) below. Without this, "Remove"/"Make Member" in the UI would
+ * imply access is cut off while inventory:manage, purchasing:approve,
+ * compliance:manage-rules (global — document_expiry_rule carries no
+ * organisationId), roster:manage, etc. silently persisted.
+ */
+async function revokeOperationsAdminRoleIfNoLongerAdmin(userId: number): Promise<void> {
+  const [opsAdminRole] = await db.select().from(role).where(eq(role.roleName, "Operations Admin"));
+  if (!opsAdminRole) return;
+
+  const adminMemberships = await db
+    .select()
+    .from(userOrganisation)
+    .where(and(eq(userOrganisation.userId, userId), eq(userOrganisation.role, "admin")));
+
+  if (shouldRevokeOperationsAdminRole(adminMemberships.length)) {
+    await db.delete(userRole).where(and(eq(userRole.userId, userId), eq(userRole.roleId, opsAdminRole.roleId)));
+  }
+}
+
 /** Create a new organisation and add the creator as a member. */
 export async function createOrganisation(
   userId: number,
@@ -154,6 +191,7 @@ export async function leaveOrganisation(userId: number, organisationId: number) 
         eq(userOrganisation.organisationId, organisationId)
       )
     );
+  await revokeOperationsAdminRoleIfNoLongerAdmin(userId);
 }
 
 /** Get organisation details by ID. */
@@ -383,6 +421,10 @@ export async function updateMemberRole(
     throw new Error("Member not found in this organisation.");
   }
 
+  if (newRole !== "admin") {
+    await revokeOperationsAdminRoleIfNoLongerAdmin(targetUserId);
+  }
+
   return updated;
 }
 
@@ -401,6 +443,8 @@ export async function removeMember(organisationId: number, targetUserId: number)
   if (!deleted) {
     throw new Error("Member not found in this organisation.");
   }
+
+  await revokeOperationsAdminRoleIfNoLongerAdmin(targetUserId);
 }
 
 /** Regenerate the join key for an organisation (owner only). */
