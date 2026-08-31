@@ -82,6 +82,9 @@ describe.skipIf(!RUN)("getWeekCalendar (real DB)", () => {
       })
       .returning({ id: shift.shiftId });
     shiftIds.push(s1.id);
+    // s1 also has a Declined assignment — it must read as unassigned, not
+    // as if the decliner is still on the shift.
+    await db.insert(shiftAssignment).values({ shiftId: s1.id, userId: userB, status: "Declined" });
 
     // Draft, two assignees on the same shift — both must appear.
     const day2 = addDays(TODAY, 1);
@@ -159,6 +162,8 @@ describe.skipIf(!RUN)("getWeekCalendar (real DB)", () => {
 
     const unassigned = rows.find((r) => r.shiftId === shiftIds[0])!;
     expect(unassigned.roleName).toBe(`${tag}-bartender`);
+    // Reads as unassigned even though it carries a Declined row — only
+    // Pending/Confirmed assignees are "on" a shift.
     expect(unassigned.assignments).toEqual([]);
 
     const twoAssignees = rows.find((r) => r.shiftId === shiftIds[1])!;
