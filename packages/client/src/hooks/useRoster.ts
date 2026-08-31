@@ -338,15 +338,6 @@ export function useRosterCalendar(storeLocationId: string | null, from: string, 
     [refresh],
   );
 
-  const cancel = useCallback(
-    async (id: string) => {
-      const res = await fetch(`${BASE}/shifts/${id}/cancel`, { ...opts, method: "POST" });
-      if (!res.ok) throw await parseError(res, "Failed to cancel shift");
-      await refresh();
-    },
-    [refresh],
-  );
-
   const assign = useCallback(
     async (shiftId: string, userId: number) => {
       const res = await fetch(`${BASE}/shifts/${shiftId}/assignments`, {
@@ -360,21 +351,12 @@ export function useRosterCalendar(storeLocationId: string | null, from: string, 
     [refresh],
   );
 
-  const removeAssignment = useCallback(
-    async (assignmentId: string) => {
-      const res = await fetch(`${BASE}/assignments/${assignmentId}`, { ...opts, method: "DELETE" });
-      if (!res.ok) throw await parseError(res, "Failed to remove assignment");
-      await refresh();
-    },
-    [refresh],
-  );
-
   useEffect(() => {
     hasLoadedOnce.current = false;
     refresh();
   }, [refresh]);
 
-  return { calendarShifts, isLoading, error, refresh, create, updateTime, cancel, assign, removeAssignment };
+  return { calendarShifts, isLoading, error, refresh, create, updateTime, assign };
 }
 
 export interface ShiftAssignmentRow {

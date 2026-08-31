@@ -56,6 +56,7 @@ const ROUTES: Array<{ method: string; path: string; permission: string }> = [
   { method: "GET", path: "/roles/:id/documents", permission: "roster:read-all" },
   { method: "PUT", path: "/roles/:id/documents", permission: "roster:manage" },
   { method: "GET", path: "/shifts/mine", permission: "roster:read-own" },
+  { method: "GET", path: "/shifts/calendar", permission: "roster:read-all" },
   { method: "GET", path: "/shifts", permission: "roster:read-all" },
   { method: "POST", path: "/shifts", permission: "roster:manage" },
   { method: "PUT", path: "/shifts/:id", permission: "roster:manage" },
