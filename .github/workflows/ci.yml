@@ -98,6 +98,15 @@ jobs:
       UOM_IT: "1"
       DATABASE_URL: postgresql://ci:ci@localhost:5432/culinaire_it
       DEV_DATABASE_URL: postgresql://ci:ci@localhost:5432/culinaire_it
+      # Throwaway keys for this ephemeral, destroyed-after-the-run CI database
+      # only — never the real dev/prod keys. organisation.tenant.integration.
+      # test.ts is the first suite in this job to call createOrganisation()
+      # (the service, not a raw insert), which encrypts org PII and throws if
+      # these aren't set — every other tenant test seeds `organisation` rows
+      # directly, bypassing PII encryption entirely.
+      PII_ENCRYPTION_KEY: b5f9b9838d8ed457094872d51a841a91cf1d2be1a0dc5745fbf5d456cfa9fad7
+      PII_HMAC_KEY: 240e45c0ca546021838cbd7ef3f6db89ae7db670a08bf2e74cdec5019e57657a
+      CREDENTIALS_ENCRYPTION_KEY: c0dd5eaba08873f966f913dae031a0c95d492c58196e49097e18173fd58eaae4
 
     steps:
       - name: Checkout
