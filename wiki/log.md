@@ -4,6 +4,29 @@ Append-only. Newest entry on top.
 
 ---
 
+## 2026-08-31 — Shipped feature/ck-web/operations-admin-role: full pre-landing + adversarial review
+
+- Ran the full `/ship` pipeline on this branch (4 commits from an earlier session: role + org
+  settings, the cross-org privilege-escalation fix, the Team Compliance relocation, an E2E fix).
+  Coverage audit initially came back 43% — below the 60% gate — with two entirely untested new
+  components (`OrganisationBrandingForm.tsx`, `TeamMembersSection.tsx`). Wrote 15 new client tests
+  + 3 server-side integration tests closing both, then re-ran clean.
+- Pre-landing review (checklist + 6 specialists) found and fixed: CI never seeded RBAC data before
+  `organisation.tenant.integration.test.ts`'s `beforeAll` (which looks up "Operations Admin" by
+  name and throws if missing) — would have broken CI outright; `UpdateOrgSchema.logoPath` accepted
+  an arbitrary unvalidated string, stored verbatim and rendered as `<img src>`, with no client ever
+  legitimately sending it — removed from the schema entirely; an orphaned stale comment in
+  `App.tsx`; a 26-key permission list hand-duplicated between `db/seed.ts` and
+  `backfillOperationsAdminRole.ts` — single-sourced via export/import.
+- **Adversarial review found a real HIGH-severity regression, confirmed by direct code read before
+  acting on it**: `leaveOrganisation()`/`removeMember()`/`updateMemberRole()` (demotion) never
+  revoked the Operations Admin `user_role` grant — only the deleted `ORG_ADMIN_PERMISSIONS` bridge
+  was live-recomputed; the role-based replacement was a static, permanent grant. Worst case
+  verified directly: `compliance:manage-rules` gates `document_expiry_rule`, which has no
+  `organisationId` column — global, platform-wide compliance-rule authorship persisting for a user
+  with zero organisations. Fixed with `revokeOperationsAdminRoleIfNoLongerAdmin()`, called from all
+  three exit paths; 3 new real-DB tests prove it. Full detail in [[operations-admin-role]].
+
 ## 2026-08-30 — Team Compliance relocated into the Organisation page
 
 - User request: Team Compliance should live inside the Organisation section

@@ -2,7 +2,7 @@
 title: Operations Admin + Organisation Settings
 category: entity
 created: 2026-08-29
-updated: 2026-08-29
+updated: 2026-08-31
 related: [[store-locations-system]], [[roster-core]], [[staff-compliance-vault]]
 ---
 
@@ -14,13 +14,24 @@ Two separate, half-built stories existed before this: a narrow hardcoded permiss
 
 ## Role
 
-`Operations Admin` — seeded in `db/seed.ts`, granted 26 of the 30 permission keys (everything except the four `admin:*` platform-administration keys). `createOrganisation()` grants it to the creator idempotently (`shouldGrantOperationsAdminRole`), additive to whatever role they already hold (Subscriber/Paid Subscriber) — `stripeService.ts` still reads those for billing.
+`Operations Admin` — seeded in `db/seed.ts`, granted 26 of the 30 permission keys (everything except the four `admin:*` platform-administration keys). `createOrganisation()` grants it to the creator idempotently (`shouldGrantOperationsAdminRole`), additive to whatever role they already hold (Subscriber/Paid Subscriber) — `stripeService.ts` still reads those for billing. It is also revoked — see below.
+
+## Revocation — the grant is not permanent
+
+The role this replaced (`ORG_ADMIN_PERMISSIONS` in `authService.ts`) was recomputed live on every token mint, straight off `userOrganisation` rows — it dropped automatically the instant a user stopped being an admin anywhere. `user_role` is a static grant, so nothing about holding it re-derives on its own; an earlier version of this branch granted it but never revoked it. Caught by an adversarial review before merge, worst case verified directly: `compliance:manage-rules` gates `document_expiry_rule`, which carries no `organisationId` column at all — that's global, platform-wide compliance-rule authorship, not org-scoped. A user who created an org, then left or was removed from every org they belonged to, kept the ability to edit platform-wide compliance rules forever, with zero orgs to their name — while the "Remove"/"Make Member" buttons this same branch ships gave admins a false sense the access was cut off.
+
+Fixed with `shouldRevokeOperationsAdminRole()` (pure, unit-tested: true once a user admins zero organisations) and `revokeOperationsAdminRoleIfNoLongerAdmin()`, called from all three paths that can end someone's last admin membership: `leaveOrganisation`, `removeMember`, and `updateMemberRole` (only on demotion — promotions never revoke). Proven by three real-DB tests in `organisation.tenant.integration.test.ts`: leaving your only admin org revokes the grant, leaving one of two orgs you admin keeps it, and demotion out of your last admin org revokes it the same way removal does.
 
 ## Disclosed limitation — global role, not per-org
 
 `user_role` has no `organisationId` column. An Operations Admin of Org A still carries the other 24 permission keys (`inventory:*`, `purchasing:*`, `compliance:*`, `roster:*`, etc.) into every other org they merely belong to as a plain member — those routes authorize on the permission alone, with no per-org admin flag to fall back to. Not new — the old 9-key bridge had the identical shape at a narrower scope — just wider now. Proper per-org scoping would touch every `getUserWithRolesAndPermissions` caller, the JWT shape, and every `hasPermission` call site; out of scope here and disclosed rather than hidden, matching the Award engine's "0 of N checked" precedent in [[roster-core]]. **`org:manage-organisation` itself is no longer part of this limitation** — see Tenant isolation below.
 
 **Known gap, not fixed:** a member promoted to per-org admin by an *existing* admin (`handleUpdateMemberRole`, not `createOrganisation()` or the backfill) gets `userOrganisation.role = "admin"` but no `user_role` Operations Admin grant — so they can't reach `/organisation` at all (`RequirePermission anyOf={["org:manage-organisation"]}` blocks the route client-side) even though the server would authorize their actions if they could. An access gap, not a security hole — out of scope for this pass, left for a follow-up.
+
+**Other known gaps flagged by the adversarial review, deferred (low severity or pre-existing, not introduced by this branch):**
+- `leaveOrganisation()` has no "last admin" guard (`updateMemberRole`'s demotion path does) — a sole admin can leave their own org, orphaning it with zero admins forever. Pre-existing behavior; this branch's new `/organisation` entry point makes it easier to reach, not more likely to be a bug.
+- `regenerateJoinKey()` is still gated on `organisation.createdBy === userId` (the pre-fix model), not `isOrgManager()` like every other write in `organisationController.ts` now is. Fails closed (more restrictive, not a hole) — a second admin, or the creator after being demoted, cannot rotate the join key. A consistency gap, not a security one.
+- `defaultTimezone`/`defaultJurisdiction` accept any string up to their length limit server-side, not validated against real IANA zone names or the AU-state list the client's `<select>` offers. Low impact since neither field is wired into anything yet (see below).
 
 ## Tenant isolation
 
@@ -32,7 +43,9 @@ Two separate, half-built stories existed before this: a narrow hardcoded permiss
 
 ## Organisation Settings — branding + operational defaults
 
-Five new columns on `organisation` (`organisationLogoPath`, `organisationColorAccent`, `defaultTimezone`, `defaultCurrency`, `defaultJurisdiction`). **Metadata only** — not wired into `resolveJurisdiction()` or venue timezone resolution, which stay correctly per-`store_location` since a multi-location org can legitimately span jurisdictions. Saved via the existing `PATCH /api/organisations/:id`, extended rather than a new endpoint. Field-update semantics: absent preserves, empty string clears (nullable fields only), a value sets — needed because this route is shared with the pre-existing org-details form and neither form may blow away the other's fields when its own fields are simply absent from a given request.
+Five new columns on `organisation` (`organisationLogoPath`, `organisationColorAccent`, `defaultTimezone`, `defaultCurrency`, `defaultJurisdiction`). **Metadata only** — not wired into `resolveJurisdiction()` or venue timezone resolution, which stay correctly per-`store_location` since a multi-location org can legitimately span jurisdictions. Four of the five are saved via the existing `PATCH /api/organisations/:id`, extended rather than a new endpoint; field-update semantics: absent preserves, empty string clears (nullable fields only), a value sets — needed because this route is shared with the pre-existing org-details form and neither form may blow away the other's fields when its own fields are simply absent from a given request.
+
+`organisationLogoPath` is the exception — deliberately **not** accepted by `UpdateOrgSchema` at all. It was originally, as an arbitrary ≤500-char string with no URL validation, stored verbatim and rendered as `<img src>`; a pre-landing security review caught that no client ever actually sends it that way (the only real logo-setting flow is `POST /:id/logo`, which uploads a file through `middleware/upload.ts`'s type-checked multer filter and derives the URL server-side) — so the field was removed from the PATCH schema entirely rather than validated, closing an unused, attacker-reachable write path for zero product cost.
 
 ## Client
 
