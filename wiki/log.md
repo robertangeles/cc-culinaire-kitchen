@@ -4,6 +4,35 @@ Append-only. Newest entry on top.
 
 ---
 
+## 2026-08-31 — Shipped feature/ck-web/roster-week-calendar: full pre-landing + adversarial review
+
+- Ran the full `/ship` pipeline on this branch. Coverage audit came back 47% — below the 60% gate,
+  but structurally different from a genuine oversight: server-side (`getWeekCalendar`, the
+  duplicate-assignment guard, the permission boundary) and the pure math module are solidly
+  tested with real-DB integration tests; the uncovered surface is almost entirely
+  `RosterCalendarView.tsx`'s drag gestures, which this branch's own wiki/QA-test-plan already
+  disclose as manual-QA-only (jsdom can't exercise real pointer-event hit-testing). Accepted as
+  disclosed rather than forcing brittle stub-based tests.
+- Pre-landing review found and fixed: a CRITICAL performance issue — `shiftsForLane()` re-filtered
+  the full shift list on every pointermove-triggered render during a drag — memoized into a Map;
+  a redundant `elementFromPoint` hit-test and a value recomputed up to 4x per shift per render,
+  both independently caught by two specialists; a missing permission-boundary test row for the new
+  `GET /shifts/calendar` route; dead code (`cancel`/`removeAssignment` on `useRosterCalendar`, zero
+  callers); a real gap in `useRosterCalendar`'s own test coverage (zero tests despite an
+  established pattern already in this codebase) and in the Declined-assignment exclusion (no test
+  proved a declined assignee reads as unassigned).
+- **Adversarial review found a real, deterministic silent-data-corruption bug, confirmed by direct
+  code read before acting on it**: the resize gesture derived a shift's calendar day via
+  `.toISOString().slice(0, 10)` (the UTC day) while every other path in the file used the LOCAL
+  day. For this app's own AU deployment timezone, any shift starting before ~10-11am local is
+  stored with a UTC date one day earlier — resizing it silently moved the shift a calendar day
+  backward, and the server accepted it with no error since only `end > start` was checked. Fixed by
+  extracting `localDayIso()` into `rosterCalendarMath.ts` (this branch's own pure-math module) and
+  reusing it everywhere; two new unit tests reproduce the exact UTC/local disagreement via a `TZ`
+  override. Full detail, plus four disclosed-not-fixed lower-severity findings (overnight-shift
+  drag, same-role overlap ambiguity, multi-touch safety, unbounded date range), in
+  [[roster-core]]'s "Week calendar" section.
+
 ## 2026-08-30 — Roster week calendar (drag-to-build) + design manual
 
 - User feedback on the plain-form "Shifts" tab ("no calendar, just a form")
