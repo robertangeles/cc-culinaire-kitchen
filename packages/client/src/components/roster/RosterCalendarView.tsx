@@ -154,15 +154,33 @@ export function RosterCalendarView() {
     window.setTimeout(() => setBanner((b) => (b?.text === text ? null : b)), 6000);
   }
 
+  // Bucketed once per shift-list load, not per render — onPointerMove calls
+  // setDrag() at pointer-move frequency during a drag, and shiftsForLane()
+  // used to re-filter the full shift list for every (day x role) lane on
+  // every one of those renders. Keyed only on calendarShifts, so a drag in
+  // progress never invalidates it; the "shift renders in its hovered lane"
+  // special case is applied separately in shiftsForLane below.
+  const shiftsByLaneKey = useMemo(() => {
+    const map = new Map<string, CalendarShift[]>();
+    for (const s of calendarShifts) {
+      const local = new Date(s.startDatetime);
+      const dayIso = `${local.getFullYear()}-${String(local.getMonth() + 1).padStart(2, "0")}-${String(local.getDate()).padStart(2, "0")}`;
+      const key = `${dayIso}|${s.rosterRoleId}`;
+      const bucket = map.get(key);
+      if (bucket) bucket.push(s);
+      else map.set(key, [s]);
+    }
+    return map;
+  }, [calendarShifts]);
+
   function shiftsForLane(dayIso: string, roleId: string): CalendarShift[] {
-    return calendarShifts.filter((s) => {
-      if (s.rosterRoleId !== roleId) return false;
-      // A shift being actively dragged to a different day renders ONLY in
-      // the day it's currently hovering over, not its still-stored day —
-      // otherwise it would visually stay put while the cursor moves.
-      if (drag?.kind === "move" && drag.shift.shiftId === s.shiftId) return drag.dayIso === dayIso;
-      return new Date(s.startDatetime).toDateString() === dateFromDayAndMinutes(dayIso, 0).toDateString();
-    });
+    const base = shiftsByLaneKey.get(`${dayIso}|${roleId}`) ?? [];
+    if (drag?.kind !== "move") return base;
+    // A shift being actively dragged to a different day renders ONLY in the
+    // day it's currently hovering over, not its still-stored day —
+    // otherwise it would visually stay put while the cursor moves.
+    const withoutDragged = base.filter((s) => s.shiftId !== drag.shift.shiftId);
+    return drag.dayIso === dayIso && drag.shift.rosterRoleId === roleId ? [...withoutDragged, drag.shift] : withoutDragged;
   }
 
   // ── Drag lifecycle ──────────────────────────────────────────────
@@ -194,10 +212,10 @@ export function RosterCalendarView() {
     if (!current) return;
 
     if (current.kind === "assign") {
-      const lane = laneAt(e.clientX, e.clientY);
+      // Only the shift block matters for assign — no lane lookup needed,
+      // so this is the sole elementFromPoint hit-test per move event here.
       const shiftEl = (document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null)?.closest("[data-shift-id]") as HTMLElement | null;
       const next = { ...current, overShiftId: shiftEl?.dataset.shiftId ?? null };
-      void lane; // lane not otherwise needed for assign — drop target is a shift block, not a lane
       dragRef.current = next;
       setDrag(next);
       return;
@@ -437,8 +455,10 @@ export function RosterCalendarView() {
 
                           {shiftsForLane(dayIso, role.rosterRoleId).map((s) => {
                             const override = dragOverrideFor(drag, s.shiftId);
-                            const startMinutes = override?.start ?? minutesSinceMidnight(new Date(s.startDatetime));
-                            const endMinutes = override?.end ?? minutesSinceMidnight(new Date(s.endDatetime));
+                            const storedStartMinutes = minutesSinceMidnight(new Date(s.startDatetime));
+                            const storedEndMinutes = minutesSinceMidnight(new Date(s.endDatetime));
+                            const startMinutes = override?.start ?? storedStartMinutes;
+                            const endMinutes = override?.end ?? storedEndMinutes;
                             const isDraft = s.status === "Draft";
                             const isDropTarget = drag?.kind === "assign" && drag.overShiftId === s.shiftId;
 
@@ -460,9 +480,9 @@ export function RosterCalendarView() {
                                   const grabY = e.clientY - rect.top;
                                   const nearEdge = 8;
                                   if (grabY <= nearEdge) {
-                                    beginDrag({ kind: "resize", shift: s, edge: "top", startMinutes: minutesSinceMidnight(new Date(s.startDatetime)), endMinutes: minutesSinceMidnight(new Date(s.endDatetime)) }, e);
+                                    beginDrag({ kind: "resize", shift: s, edge: "top", startMinutes: storedStartMinutes, endMinutes: storedEndMinutes }, e);
                                   } else if (rect.height - grabY <= nearEdge) {
-                                    beginDrag({ kind: "resize", shift: s, edge: "bottom", startMinutes: minutesSinceMidnight(new Date(s.startDatetime)), endMinutes: minutesSinceMidnight(new Date(s.endDatetime)) }, e);
+                                    beginDrag({ kind: "resize", shift: s, edge: "bottom", startMinutes: storedStartMinutes, endMinutes: storedEndMinutes }, e);
                                   } else {
                                     const grabOffsetMinutes = minutesForPixel(grabY, HOUR_HEIGHT);
                                     beginDrag(
@@ -470,9 +490,9 @@ export function RosterCalendarView() {
                                         kind: "move",
                                         shift: s,
                                         grabOffsetMinutes,
-                                        durationMinutes: minutesSinceMidnight(new Date(s.endDatetime)) - minutesSinceMidnight(new Date(s.startDatetime)),
+                                        durationMinutes: storedEndMinutes - storedStartMinutes,
                                         dayIso,
-                                        startMinutes: minutesSinceMidnight(new Date(s.startDatetime)),
+                                        startMinutes: storedStartMinutes,
                                       },
                                       e,
                                     );
