@@ -1,9 +1,10 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
 import {
   minutesForPixel,
   pixelForMinutes,
   snapMinutes,
   minutesSinceMidnight,
+  localDayIso,
   addDaysIso,
   mondayOfWeek,
   dayColumnIndexForDate,
@@ -55,6 +56,28 @@ describe("minutesSinceMidnight", () => {
 
   it("is zero at local midnight", () => {
     expect(minutesSinceMidnight(new Date(2026, 0, 1, 0, 0))).toBe(0);
+  });
+});
+
+describe("localDayIso", () => {
+  const originalTz = process.env.TZ;
+  afterEach(() => {
+    process.env.TZ = originalTz;
+  });
+
+  it("returns the LOCAL calendar day, not the UTC day — the resize-gesture bug this function exists to prevent", () => {
+    process.env.TZ = "Australia/Sydney"; // UTC+10/+11
+    // 21:00 UTC on the 30th is already the morning of the 31st in Sydney —
+    // the UTC day and the local day genuinely disagree here.
+    const d = new Date("2026-08-30T21:00:00.000Z");
+    expect(d.toISOString().slice(0, 10)).toBe("2026-08-30"); // the UTC day — what the old buggy code returned
+    expect(localDayIso(d)).toBe("2026-08-31"); // the local day — the day the shift actually renders under
+  });
+
+  it("reads local Y/M/D directly, independent of timezone", () => {
+    process.env.TZ = "Pacific/Auckland"; // UTC+12/+13
+    const d = new Date(2026, 0, 5, 23, 59); // constructed from local components
+    expect(localDayIso(d)).toBe("2026-01-05");
   });
 });
 

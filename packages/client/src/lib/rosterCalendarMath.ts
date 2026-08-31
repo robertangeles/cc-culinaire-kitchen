@@ -41,6 +41,19 @@ export function minutesSinceMidnight(date: Date): number {
   return date.getHours() * MINUTES_PER_HOUR + date.getMinutes();
 }
 
+/**
+ * A Date's own local calendar day as "YYYY-MM-DD" — browser-local, see
+ * module doc. Never `.toISOString().slice(0, 10)` for this: that's the UTC
+ * day, which disagrees with the local day (and therefore with which lane a
+ * shift renders in) for any shift whose local start time falls before the
+ * UTC offset "catches up" — e.g. an 8am AEDT (UTC+11) shift is still the
+ * previous day in UTC. Silently moved a shift a day backward when the
+ * resize gesture used the UTC form to re-derive a shift's day.
+ */
+export function localDayIso(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
 /** Add N days to an ISO date string ("YYYY-MM-DD"), UTC-safe. */
 export function addDaysIso(dateIso: string, days: number): string {
   const [y, m, d] = dateIso.split("-").map(Number);

@@ -38,6 +38,7 @@ import {
   pixelForMinutes,
   snapMinutes,
   minutesSinceMidnight,
+  localDayIso,
   addDaysIso,
   mondayOfWeek,
   laneIndexForRole,
@@ -163,9 +164,7 @@ export function RosterCalendarView() {
   const shiftsByLaneKey = useMemo(() => {
     const map = new Map<string, CalendarShift[]>();
     for (const s of calendarShifts) {
-      const local = new Date(s.startDatetime);
-      const dayIso = `${local.getFullYear()}-${String(local.getMonth() + 1).padStart(2, "0")}-${String(local.getDate()).padStart(2, "0")}`;
-      const key = `${dayIso}|${s.rosterRoleId}`;
+      const key = `${localDayIso(new Date(s.startDatetime))}|${s.rosterRoleId}`;
       const bucket = map.get(key);
       if (bucket) bucket.push(s);
       else map.set(key, [s]);
@@ -276,7 +275,7 @@ export function RosterCalendarView() {
           endDatetime: dateFromDayAndMinutes(final.dayIso, final.startMinutes + final.durationMinutes).toISOString(),
         });
       } else if (final.kind === "resize") {
-        const dayIso = new Date(final.shift.startDatetime).toISOString().slice(0, 10);
+        const dayIso = localDayIso(new Date(final.shift.startDatetime));
         await updateTime(final.shift.shiftId, {
           startDatetime: dateFromDayAndMinutes(dayIso, final.startMinutes).toISOString(),
           endDatetime: dateFromDayAndMinutes(dayIso, final.endMinutes).toISOString(),
