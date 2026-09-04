@@ -246,7 +246,7 @@ export async function handleUpdateShift(req: Request, res: Response, next: NextF
       res.status(400).json({ error: parsed.error.errors[0]?.message ?? "Invalid input" });
       return;
     }
-    res.json(await updateShift(ctx.orgId, req.params.id as string, parsed.data));
+    res.json(await updateShift(ctx.orgId, req.params.id as string, parsed.data, req.user!.sub));
   } catch (err) {
     handleServiceError(err, res, next);
   }
