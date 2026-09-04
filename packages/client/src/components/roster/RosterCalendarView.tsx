@@ -29,6 +29,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CalendarRange, ChevronLeft, ChevronRight, Loader2, Users } from "lucide-react";
+import { formatShiftRange } from "@culinaire/shared";
 import { useLocation } from "../../context/LocationContext.js";
 import { useHasPermission } from "../../hooks/useHasPermission.js";
 import { useRosterRoles, useOrgMembers, useRosterCalendar, type CalendarShift, type RosterRole } from "../../hooks/useRoster.js";
@@ -42,6 +43,7 @@ import {
   addDaysIso,
   mondayOfWeek,
   laneIndexForRole,
+  dayColumnIndexForDate,
 } from "../../lib/rosterCalendarMath.js";
 
 const HOUR_HEIGHT = 48; // px per hour row
@@ -72,10 +74,6 @@ function formatHourLabel(hour: number): string {
   return `${h}${hour < 12 ? "am" : "pm"}`;
 }
 
-function formatTimeRange(startIso: string, endIso: string): string {
-  const fmt: Intl.DateTimeFormatOptions = { hour: "numeric", minute: "2-digit" };
-  return `${new Date(startIso).toLocaleTimeString("en-AU", fmt)}–${new Date(endIso).toLocaleTimeString("en-AU", fmt)}`;
-}
 
 /** The lane element (day x role cell) currently under a client point, if any. */
 function laneAt(clientX: number, clientY: number): HTMLElement | null {
@@ -460,12 +458,21 @@ export function RosterCalendarView() {
                             const endMinutes = override?.end ?? storedEndMinutes;
                             const isDraft = s.status === "Draft";
                             const isDropTarget = drag?.kind === "assign" && drag.overShiftId === s.shiftId;
+                            // A shift spanning multiple calendar days renders once, in its
+                            // start day's lane, sized to only that day's minutes (see the
+                            // module doc on minutesSinceMidnight) — which otherwise looks
+                            // exactly like a normal same-day shift with no visual sign the
+                            // remaining days exist. This badge is that sign.
+                            const daySpan = dayColumnIndexForDate(
+                              localDayIso(new Date(s.endDatetime)),
+                              localDayIso(new Date(s.startDatetime)),
+                            );
 
                             return (
                               <div
                                 key={s.shiftId}
                                 data-shift-id={isDraft ? s.shiftId : undefined}
-                                title={`${role.roleName} — ${formatTimeRange(s.startDatetime, s.endDatetime)} — ${
+                                title={`${role.roleName} — ${formatShiftRange(s.startDatetime, s.endDatetime)} — ${
                                   s.assignments.length === 0 ? "Unassigned" : s.assignments.map((a) => a.staffName).join(", ")
                                 } — ${s.status}`}
                                 className={`absolute left-0.5 right-0.5 rounded border-l-4 px-1.5 py-1 text-[11px] leading-tight overflow-hidden ${roleAccent(role.rosterRoleId, roleIds)} ${
@@ -498,8 +505,18 @@ export function RosterCalendarView() {
                                   }
                                 }}
                               >
-                                <div className="font-medium text-[#FAFAFA] truncate">{role.roleName}</div>
-                                <div className="text-dark-600 truncate">{formatTimeRange(s.startDatetime, s.endDatetime)}</div>
+                                <div className="flex items-center gap-1 font-medium text-[#FAFAFA] truncate">
+                                  {role.roleName}
+                                  {daySpan > 0 && (
+                                    <span
+                                      className="shrink-0 rounded-sm border border-amber-500/40 bg-amber-500/10 px-1 text-[10px] font-normal text-amber-300"
+                                      title={`Spans ${daySpan + 1} days — ends ${new Date(s.endDatetime).toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short" })}`}
+                                    >
+                                      +{daySpan}d
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-dark-600 truncate">{formatShiftRange(s.startDatetime, s.endDatetime)}</div>
                                 <div className="truncate text-dark-600">
                                   {s.assignments.length === 0 ? "Unassigned" : s.assignments.map((a) => a.staffName).join(", ")}
                                 </div>
