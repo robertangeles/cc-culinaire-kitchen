@@ -81,6 +81,8 @@ A shift's `startDatetime` is a `timestamptz` (a UTC instant). Converting that to
 - **Not multi-touch/pointerId-safe.** The drag state machine is a single global slot; a second concurrent pointer (tablet multi-touch) silently discards whatever the first pointer was mid-drag. Matches the plan's own "full mobile/touch polish" exclusion for v1.
 - **`getWeekCalendar` has no cap on the requested date range**, same as `listShifts`/`getStaffingCoverage` already have — not a new risk class, but the response is heavier per row (assignee names joined in) than those two.
 
+**A fourth bug found merging this branch with the shift-time incident fix below, before landing rather than after:** a shift spanning multiple calendar days rendered in a single day's lane, sized to only that day's minutes (`minutesSinceMidnight` strips the date component on both ends) — which looked exactly like an ordinary same-day shift, no visual sign the remaining days existed. Not the "renders absurdly tall" failure originally assumed when scoping this fix; the actual failure was the opposite and more dangerous — a normal-looking block silently hiding a 129h/157h-class incident shift. `formatTimeRange()` (a fourth independent reimplementation of the same start-date-without-end-date formatting bug fixed below) is replaced by the shared `formatShiftRange()`, and every shift block now carries a "+Nd" badge (amber, hover for the exact end date) whenever `localDayIso(end) !== localDayIso(start)` — computed via the existing `dayColumnIndexForDate()`, no new date-math primitive needed.
+
 ## Shift-time display, validation, and editing (2026-09 incident hardening)
 
 Two "Duty Manager" shifts in dev were entered with end dates 5-7 days after their start (129h and 157h spans) — genuine bad data, not a calculation bug. `staffingCoverageService.ts`'s hour arithmetic and day-bucketing were both already correct; what let the mistake through unnoticed was purely a display gap:
@@ -93,7 +95,7 @@ New shared helpers in `packages/shared/src/utils/dates.ts`: `durationHours()` an
 
 The two corrupted dev rows were deleted (`DELETE FROM shift WHERE shift_id IN (...)`) after confirming they were Draft, unpublished, and had no recoverable original intent; `shift_assignment.shift_id`'s `ON DELETE CASCADE` handled any assignment rows automatically.
 
-**Not yet done** (tracked separately, not part of this fix): a published-only week-agenda redesign of `MyShiftsView.tsx` (today's `listMyShifts()` has no status filter, so Draft shifts still show to staff); a server-side 24h duration guard; double-booking overlap warnings. The drag-to-build week calendar above (PR #109) is being finished in the same pass as this section's own multi-day-shift guard — see below.
+**Not yet done** (tracked separately, not part of this fix): a published-only week-agenda redesign of `MyShiftsView.tsx` (today's `listMyShifts()` has no status filter, so Draft shifts still show to staff); a server-side 24h duration guard; double-booking overlap warnings. The drag-to-build week calendar (above, "Week calendar (drag-to-build)") merged in the same pass as this section, with its own multi-day-shift "+Nd" guard added — see that section's final paragraph.
 
 ## Permissions
 

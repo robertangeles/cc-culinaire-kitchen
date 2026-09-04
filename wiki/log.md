@@ -4,6 +4,29 @@ Append-only. Newest entry on top.
 
 ---
 
+## 2026-09-04 — Roster week calendar (PR #109) merged: Phase 2 admin of the incident plan
+
+- Merged `main` (Phase 1's shift-time fix) into `feature/ck-web/roster-week-calendar`, resolving
+  two wiki-only conflicts (kept both sections, newest-first in the log); all server/client code
+  merged cleanly.
+- The plan going in assumed a multi-day shift would render as an absurdly tall block on the
+  calendar — reading the actual rendering code (`minutesSinceMidnight` strips the date on both
+  start and end) showed the opposite: a multi-day shift renders as an ordinary, correctly-sized
+  same-day block with no visual sign it's wrong. Fixed by adding an amber "+Nd" badge whenever a
+  shift's local start/end days differ, and replacing a fourth independent copy of the
+  date-swallowing time-range formatter (`formatTimeRange`) with the shared `formatShiftRange()`.
+- Bumped three (later four) real-DB integration tests in `roster.integration.test.ts` from the
+  default 30s to 60s — confirmed via a direct `SELECT 1` ping (~2s round-trip vs the normal
+  <0.5s) that this was the documented Singapore-DB-latency flakiness, not a regression: the
+  failing tests are in the public-holiday-consent subsystem, untouched by this branch's diff,
+  and were passing cleanly before latency degraded mid-session.
+- New `RosterCalendarView.test.tsx` (2 tests) — the badge logic is pure render/data, unlike the
+  drag gestures this branch's own QA plan already discloses as manual-only.
+- Full regression clean: shared 104, client 204, server 1143 (+160 gated integration), real-DB
+  integration 1303/1303.
+
+---
+
 ## 2026-09-04 — Roster shift-time bug fix (Phase 1 of the incident plan)
 
 - `feature/ck-web/roster-shift-time-fix`: root cause was two dev-DB "Duty Manager" shifts
