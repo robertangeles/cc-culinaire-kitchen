@@ -511,72 +511,76 @@ describe.skipIf(!RUN)("roster service (real DB)", () => {
     await expect(listShiftAssignments(orgB, s.shiftId)).rejects.toMatchObject({ statusCode: 404 });
   });
 
-  it("publishRoster re-checks at publish time and holds a shift whose document expired after assignment, publishing the rest", async () => {
-    const [doc] = await db
-      .insert(complianceDocument)
-      .values({
+  it(
+    "publishRoster re-checks at publish time and holds a shift whose document expired after assignment, publishing the rest",
+    async () => {
+      const [doc] = await db
+        .insert(complianceDocument)
+        .values({
+          organisationId: orgA,
+          userId: userB,
+          documentType: docType,
+          verificationStatus: "Verified",
+          expiryDate: addDays(TODAY, 365), // valid at assignment time
+          storagePublicId: `${tag}-pub-b`,
+          uploadedBy: userB,
+        })
+        .returning({ id: complianceDocument.complianceDocumentId });
+
+      const start = new Date();
+      const end = new Date(start.getTime() + 4 * 60 * 60 * 1000);
+      const shiftToHold = await createShift(
+        orgA,
+        { storeLocationId: locA, rosterRoleId: roleId, startDatetime: start.toISOString(), endDatetime: end.toISOString() },
+        userA,
+      );
+      await assignStaff(orgA, shiftToHold.shiftId, userB, userA); // succeeds — document is valid right now
+
+      // Simulate the certificate expiring between drafting and publishing —
+      // exactly what "re-check at publish, not only at assign" exists to catch.
+      await db
+        .update(complianceDocument)
+        .set({ expiryDate: addDays(TODAY, -1) })
+        .where(eq(complianceDocument.complianceDocumentId, doc.id));
+
+      // A second, unaffected shift with userA (still valid) to prove the batch
+      // is not blocked wholesale by the one bad assignment.
+      await db.insert(complianceDocument).values({
         organisationId: orgA,
-        userId: userB,
+        userId: userA,
         documentType: docType,
         verificationStatus: "Verified",
-        expiryDate: addDays(TODAY, 365), // valid at assignment time
-        storagePublicId: `${tag}-pub-b`,
-        uploadedBy: userB,
-      })
-      .returning({ id: complianceDocument.complianceDocumentId });
+        expiryDate: addDays(TODAY, 365),
+        storagePublicId: `${tag}-pub-a4`,
+        uploadedBy: userA,
+      });
+      const shiftToPublish = await createShift(
+        orgA,
+        { storeLocationId: locA, rosterRoleId: roleId, startDatetime: start.toISOString(), endDatetime: end.toISOString() },
+        userA,
+      );
+      await assignStaff(orgA, shiftToPublish.shiftId, userA, userA);
 
-    const start = new Date();
-    const end = new Date(start.getTime() + 4 * 60 * 60 * 1000);
-    const shiftToHold = await createShift(
-      orgA,
-      { storeLocationId: locA, rosterRoleId: roleId, startDatetime: start.toISOString(), endDatetime: end.toISOString() },
-      userA,
-    );
-    await assignStaff(orgA, shiftToHold.shiftId, userB, userA); // succeeds — document is valid right now
+      const from = addDays(TODAY, -1);
+      const to = addDays(TODAY, 1);
+      const result = await publishRoster(orgA, locA, from, to, userA);
 
-    // Simulate the certificate expiring between drafting and publishing —
-    // exactly what "re-check at publish, not only at assign" exists to catch.
-    await db
-      .update(complianceDocument)
-      .set({ expiryDate: addDays(TODAY, -1) })
-      .where(eq(complianceDocument.complianceDocumentId, doc.id));
+      expect(result.publishedShiftIds).toContain(shiftToPublish.shiftId);
+      expect(result.publishedShiftIds).not.toContain(shiftToHold.shiftId);
+      expect(result.heldShifts.find((h) => h.shiftId === shiftToHold.shiftId)?.reason).toBe(
+        `Cannot assign. Roster Staff B's ${docType} expired on ${formatDateForMessage(addDays(TODAY, -1))}.`,
+      );
 
-    // A second, unaffected shift with userA (still valid) to prove the batch
-    // is not blocked wholesale by the one bad assignment.
-    await db.insert(complianceDocument).values({
-      organisationId: orgA,
-      userId: userA,
-      documentType: docType,
-      verificationStatus: "Verified",
-      expiryDate: addDays(TODAY, 365),
-      storagePublicId: `${tag}-pub-a4`,
-      uploadedBy: userA,
-    });
-    const shiftToPublish = await createShift(
-      orgA,
-      { storeLocationId: locA, rosterRoleId: roleId, startDatetime: start.toISOString(), endDatetime: end.toISOString() },
-      userA,
-    );
-    await assignStaff(orgA, shiftToPublish.shiftId, userA, userA);
-
-    const from = addDays(TODAY, -1);
-    const to = addDays(TODAY, 1);
-    const result = await publishRoster(orgA, locA, from, to, userA);
-
-    expect(result.publishedShiftIds).toContain(shiftToPublish.shiftId);
-    expect(result.publishedShiftIds).not.toContain(shiftToHold.shiftId);
-    expect(result.heldShifts.find((h) => h.shiftId === shiftToHold.shiftId)?.reason).toBe(
-      `Cannot assign. Roster Staff B's ${docType} expired on ${formatDateForMessage(addDays(TODAY, -1))}.`,
-    );
-
-    // The "ship empty" case: zero award_rule rows exist, so warnings must be
-    // empty, but the coverage disclosure must still be fully populated —
-    // never silently absent just because there was nothing to flag.
-    expect(result.awardWarnings).toEqual([]);
-    expect(result.awardCoverage.checked.length).toBeGreaterThan(0);
-    expect(result.awardCoverage.notChecked.length).toBeGreaterThan(0);
-    expect(result.awardCoverage.jurisdiction).toBe("VIC");
-  });
+      // The "ship empty" case: zero award_rule rows exist, so warnings must be
+      // empty, but the coverage disclosure must still be fully populated —
+      // never silently absent just because there was nothing to flag.
+      expect(result.awardWarnings).toEqual([]);
+      expect(result.awardCoverage.checked.length).toBeGreaterThan(0);
+      expect(result.awardCoverage.notChecked.length).toBeGreaterThan(0);
+      expect(result.awardCoverage.jurisdiction).toBe("VIC");
+    },
+    60000,
+  );
 
   it("publishRoster's audit_log ack always carries the coverage object, even with zero warnings", async () => {
     await db.insert(complianceDocument).values({
@@ -815,34 +819,54 @@ describe.skipIf(!RUN)("roster service (real DB)", () => {
       });
     });
 
-    it("publishRoster holds a public-holiday shift whose assignee was never asked to consent", async () => {
-      const { shift: s } = await createHolidayAssignment(userA);
-      const result = await publishRoster(orgA, locA, addDays(holidayDate, -1), addDays(holidayDate, 1), userA);
-      expect(result.publishedShiftIds).not.toContain(s.shiftId);
-      const held = result.heldShifts.find((h) => h.shiftId === s.shiftId);
-      expect(held?.reason).toContain("hasn't been asked to consent");
-    });
+    // These three do the most sequential DB round-trips of any test in this
+    // file (createHolidayAssignment's own role/document/shift/assignment
+    // setup, plus requestConsent + respondToConsent + publishRoster's own
+    // multi-table read/write) - the default 30s timeout has been observed to
+    // trip under this repo's documented Singapore-DB-latency flakiness (see
+    // dev-db-on-render memory) even though nothing here is slow under normal
+    // latency. A longer per-test ceiling, not a shorter/mocked test, is the
+    // right fix: this is real infra latency, not a hang.
+    it(
+      "publishRoster holds a public-holiday shift whose assignee was never asked to consent",
+      async () => {
+        const { shift: s } = await createHolidayAssignment(userA);
+        const result = await publishRoster(orgA, locA, addDays(holidayDate, -1), addDays(holidayDate, 1), userA);
+        expect(result.publishedShiftIds).not.toContain(s.shiftId);
+        const held = result.heldShifts.find((h) => h.shiftId === s.shiftId);
+        expect(held?.reason).toContain("hasn't been asked to consent");
+      },
+      60000,
+    );
 
-    it("publishRoster holds a public-holiday shift whose assignee declined", async () => {
-      const { shift: s, assignment } = await createHolidayAssignment(userA);
-      await requestConsent(orgA, assignment.assignmentId, userB);
-      await respondToConsent(orgA, assignment.assignmentId, userA, "Declined");
+    it(
+      "publishRoster holds a public-holiday shift whose assignee declined",
+      async () => {
+        const { shift: s, assignment } = await createHolidayAssignment(userA);
+        await requestConsent(orgA, assignment.assignmentId, userB);
+        await respondToConsent(orgA, assignment.assignmentId, userA, "Declined");
 
-      const result = await publishRoster(orgA, locA, addDays(holidayDate, -1), addDays(holidayDate, 1), userA);
-      expect(result.publishedShiftIds).not.toContain(s.shiftId);
-      const held = result.heldShifts.find((h) => h.shiftId === s.shiftId);
-      expect(held?.reason).toContain("declined to work this public holiday shift");
-    });
+        const result = await publishRoster(orgA, locA, addDays(holidayDate, -1), addDays(holidayDate, 1), userA);
+        expect(result.publishedShiftIds).not.toContain(s.shiftId);
+        const held = result.heldShifts.find((h) => h.shiftId === s.shiftId);
+        expect(held?.reason).toContain("declined to work this public holiday shift");
+      },
+      60000,
+    );
 
-    it("publishRoster publishes a public-holiday shift whose assignee accepted", async () => {
-      const { shift: s, assignment } = await createHolidayAssignment(userA);
-      await requestConsent(orgA, assignment.assignmentId, userB);
-      await respondToConsent(orgA, assignment.assignmentId, userA, "Accepted");
+    it(
+      "publishRoster publishes a public-holiday shift whose assignee accepted",
+      async () => {
+        const { shift: s, assignment } = await createHolidayAssignment(userA);
+        await requestConsent(orgA, assignment.assignmentId, userB);
+        await respondToConsent(orgA, assignment.assignmentId, userA, "Accepted");
 
-      const result = await publishRoster(orgA, locA, addDays(holidayDate, -1), addDays(holidayDate, 1), userA);
-      expect(result.publishedShiftIds).toContain(s.shiftId);
-      expect(result.heldShifts.find((h) => h.shiftId === s.shiftId)).toBeUndefined();
-    });
+        const result = await publishRoster(orgA, locA, addDays(holidayDate, -1), addDays(holidayDate, 1), userA);
+        expect(result.publishedShiftIds).toContain(s.shiftId);
+        expect(result.heldShifts.find((h) => h.shiftId === s.shiftId)).toBeUndefined();
+      },
+      60000,
+    );
   });
 
   it("createAvailability is scoped to the caller's org and location", async () => {
