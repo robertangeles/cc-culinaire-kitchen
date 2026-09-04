@@ -33,6 +33,7 @@ import {
   listRoleDocuments,
   listShifts,
   createShift,
+  updateShift,
   assignStaff,
   respondToAssignment,
   removeAssignment,
@@ -237,6 +238,74 @@ describe.skipIf(!RUN)("roster service (real DB)", () => {
 
     const shiftsOrgB = await listShifts(orgB);
     expect(shiftsOrgB.some((s) => s.shiftId === created.shiftId)).toBe(false);
+  });
+
+  it("updateShift edits a Draft shift's times and audit-logs the before/after", async () => {
+    const start = new Date();
+    const end = new Date(start.getTime() + 4 * 60 * 60 * 1000);
+    const s = await createShift(
+      orgA,
+      { storeLocationId: locA, rosterRoleId: roleId, startDatetime: start.toISOString(), endDatetime: end.toISOString() },
+      userA,
+    );
+    const newEnd = new Date(start.getTime() + 8 * 60 * 60 * 1000);
+    const updated = await updateShift(orgA, s.shiftId, { endDatetime: newEnd.toISOString() }, userA);
+    expect(updated.endDatetime.toISOString()).toBe(newEnd.toISOString());
+
+    const [logRow] = await db
+      .select()
+      .from(auditLog)
+      .where(and(eq(auditLog.entityType, "shift"), eq(auditLog.entityId, s.shiftId)))
+      .orderBy(desc(auditLog.createdDttm))
+      .limit(1);
+    expect(logRow?.action).toBe("update");
+  });
+
+  it("updateShift refuses to edit an already-Published shift", async () => {
+    const start = new Date();
+    const end = new Date(start.getTime() + 4 * 60 * 60 * 1000);
+    const s = await createShift(
+      orgA,
+      { storeLocationId: locA, rosterRoleId: roleId, startDatetime: start.toISOString(), endDatetime: end.toISOString() },
+      userA,
+    );
+    await publishRoster(orgA, locA, addDays(TODAY, -1), addDays(TODAY, 1), userA);
+
+    await expect(
+      updateShift(orgA, s.shiftId, { endDatetime: new Date(start.getTime() + 8 * 60 * 60 * 1000).toISOString() }, userA),
+    ).rejects.toMatchObject({ name: "RosterError", statusCode: 409 });
+  });
+
+  it("updateShift rejects an end datetime at or before the start", async () => {
+    const start = new Date();
+    const end = new Date(start.getTime() + 4 * 60 * 60 * 1000);
+    const s = await createShift(
+      orgA,
+      { storeLocationId: locA, rosterRoleId: roleId, startDatetime: start.toISOString(), endDatetime: end.toISOString() },
+      userA,
+    );
+
+    await expect(
+      updateShift(orgA, s.shiftId, { endDatetime: start.toISOString() }, userA),
+    ).rejects.toMatchObject({ name: "RosterError", statusCode: 400 });
+  });
+
+  it("updateShift rejects an unparseable datetime with a clean 400, not a crash", async () => {
+    // Regression: end <= start on two NaN Dates evaluates to false either way,
+    // so a malformed string used to sail past that check and reach
+    // db.update()'s .toISOString(), which throws RangeError instead of a
+    // controlled RosterError — matching the existing guard in createShift().
+    const start = new Date();
+    const end = new Date(start.getTime() + 4 * 60 * 60 * 1000);
+    const s = await createShift(
+      orgA,
+      { storeLocationId: locA, rosterRoleId: roleId, startDatetime: start.toISOString(), endDatetime: end.toISOString() },
+      userA,
+    );
+
+    await expect(
+      updateShift(orgA, s.shiftId, { endDatetime: "not-a-date" }, userA),
+    ).rejects.toMatchObject({ name: "RosterError", statusCode: 400 });
   });
 
   it("assignStaff refuses to add anyone to an already-Published shift", async () => {

@@ -464,6 +464,21 @@ Afterwards:
 Also uncommitted on purpose: `data/imports/` (supplier catalog import batches — separate
 workstream, keep out of this feature branch).
 
+## Roster shift-time fix — deferred from adversarial review (2026-09-04)
+
+`feature/ck-web/roster-shift-time-fix`. Two real bugs found by the review were fixed on the
+branch (a confirm-checkbox that didn't re-arm when a field changed after being confirmed —
+the exact bad-data class this branch exists to prevent; `updateShift()` missing the
+`Number.isNaN` date-validity guard `createShift()` already has). One is deliberately left open:
+
+- **P2** `updateShift()`'s DB write and its `auditService.log()` call are two separate awaits,
+  not wrapped in `db.transaction()` — if the audit insert throws, the shift's start/end are
+  already committed but the caller sees a generic failure. Pre-existing pattern, not new to
+  this branch (`respondToAssignment()`/`removeAssignment()` have the same shape) — this branch
+  just gives `updateShift()` its first real caller. `auditService.log()` already accepts an
+  optional `tx` param. Worth a single pass across all three functions rather than a one-off fix
+  here — `packages/server/src/services/rosterService.ts`.
+
 ## AI-Native Purchasing — deferred from eng-review (2026-07-20)
 - **P2** AI-suggest-par from usage (blocked on real consumption_log/depletion history)
 - **P2** order-from-stocktake (one-tap draft PO from last count; add multi-group guard)

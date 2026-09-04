@@ -346,12 +346,15 @@ export interface UpdateShiftInput {
   endDatetime?: string;
 }
 
-export async function updateShift(orgId: number, shiftId: string, input: UpdateShiftInput) {
+export async function updateShift(orgId: number, shiftId: string, input: UpdateShiftInput, actorUserId: number) {
   const row = await getShiftRow(orgId, shiftId);
   if (row.status !== "Draft") throw new RosterError("Only a Draft shift can be edited", 409);
 
   const start = input.startDatetime ? new Date(input.startDatetime) : row.startDatetime;
   const end = input.endDatetime ? new Date(input.endDatetime) : row.endDatetime;
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    throw new RosterError("Invalid start or end time", 400);
+  }
   if (end <= start) throw new RosterError("Shift must end after it starts", 400);
 
   const [updated] = await db
@@ -359,6 +362,15 @@ export async function updateShift(orgId: number, shiftId: string, input: UpdateS
     .set({ startDatetime: start, endDatetime: end, updatedDttm: new Date() })
     .where(eq(shift.shiftId, shiftId))
     .returning();
+  await auditService.log({
+    entityType: "shift",
+    entityId: shiftId,
+    action: "update",
+    actorUserId,
+    organisationId: orgId,
+    beforeValue: { startDatetime: row.startDatetime, endDatetime: row.endDatetime },
+    afterValue: { startDatetime: start, endDatetime: end },
+  });
   return updated;
 }
 
