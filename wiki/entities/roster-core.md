@@ -2,7 +2,7 @@
 title: Roster Core
 category: entity
 created: 2026-08-16
-updated: 2026-08-17
+updated: 2026-09-04
 related: [[staff-compliance-vault]], [[compliance-expiry-engine]], [[scheduled-job-daily-claim]], [[store-locations-system]], [[workforce-optimisation]]
 ---
 
@@ -60,6 +60,20 @@ Tenancy: `shift.storeLocationId` is NOT NULL (a shift always happens at one venu
 ### The UTC/local calendar-date bug this module exists to avoid
 
 A shift's `startDatetime` is a `timestamptz` (a UTC instant). Converting that to "which calendar day is this" via `date.toISOString().slice(0, 10)` is wrong whenever the venue's local timezone differs from UTC: a 9am AEDT shift is 10pm UTC the *previous* day. `rosterService.ts`'s `toVenueLocalDate(instant, ianaTimezone)` reads the instant back in the venue's own `store_location.iana_timezone` (via `Intl.DateTimeFormat` with the `timeZone` option) instead of naive UTC slicing — the same class of bug [[compliance-expiry-engine]] never had to solve, because `compliance_document.expiry_date` is a bare `date` column, not a timestamptz.
+
+## Shift-time display, validation, and editing (2026-09 incident hardening)
+
+Two "Duty Manager" shifts in dev were entered with end dates 5-7 days after their start (129h and 157h spans) — genuine bad data, not a calculation bug. `staffingCoverageService.ts`'s hour arithmetic and day-bucketing were both already correct; what let the mistake through unnoticed was purely a display gap:
+
+- `formatShiftTime()` (formerly duplicated in `ShiftsManager.tsx` and `MyShiftsView.tsx`) printed the shift's start date once, then `startTime–endTime` — it never checked whether `endDatetime` landed on a different calendar day, so a 157-hour shift rendered identically to a normal 13-hour one. Replaced by `formatShiftRange()` (`packages/shared/src/utils/dates.ts`), which shows the end date too whenever it differs: `"Mon, 7 Sept, 8:00 am – Sun, 13 Sept, 9:00 pm"`.
+- The create-shift form had two independent `datetime-local` inputs with no duration feedback at all. `ShiftTimeFields` (`ShiftsManager.tsx`) now shows a live duration readout and a non-blocking warning + required confirm checkbox above 16 hours or when the shift spans more than one calendar-day boundary (`daysBetweenLocal(...) > 1` — crossing exactly one midnight is a normal overnight shift and doesn't warn).
+- There was no way to see or fix a shift's start/end after creating it, even though the server's `PUT /shifts/:id` (`updateShift()`) already enforced Draft-only + `end > start` — it simply had no caller. `useShifts()` now exposes `update()`, and `ShiftRow` has an Edit action (same Draft-only gate as Cancel). `updateShift()` now also writes an audit-log entry (before/after start/end), following `respondToAssignment()`'s diff pattern rather than `publishRoster()`'s batched-summary one.
+
+New shared helpers in `packages/shared/src/utils/dates.ts`: `durationHours()` and `daysBetweenLocal()` — used by both the client warning and (planned, Phase 3) a server-side 24h hard ceiling, so the arithmetic exists once across the client/server boundary rather than being reimplemented per layer.
+
+The two corrupted dev rows were deleted (`DELETE FROM shift WHERE shift_id IN (...)`) after confirming they were Draft, unpublished, and had no recoverable original intent; `shift_assignment.shift_id`'s `ON DELETE CASCADE` handled any assignment rows automatically.
+
+**Not yet done** (tracked separately, not part of this fix): merging the already-built drag-to-build week calendar (PR #109, `feature/ck-web/roster-week-calendar`) with a block-height clamp for multi-day shifts; a published-only week-agenda redesign of `MyShiftsView.tsx` (today's `listMyShifts()` has no status filter, so Draft shifts still show to staff); a server-side 24h duration guard; double-booking overlap warnings.
 
 ## Permissions
 

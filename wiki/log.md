@@ -4,6 +4,29 @@ Append-only. Newest entry on top.
 
 ---
 
+## 2026-09-04 — Roster shift-time bug fix (Phase 1 of the incident plan)
+
+- `feature/ck-web/roster-shift-time-fix`: root cause was two dev-DB "Duty Manager" shifts
+  entered with end dates 5-7 days after start (129h/157h spans, real bad data) — hidden by
+  a display formatter that swallowed the end date, and a create form with no duration
+  feedback. `staffingCoverageService.ts`'s arithmetic and day-bucketing were already correct.
+- New shared helpers (`packages/shared/src/utils/dates.ts`): `formatShiftRange()` (replaces
+  the duplicated `formatShiftTime()` in `ShiftsManager.tsx`/`MyShiftsView.tsx`, shows the end
+  date whenever it differs from the start), `durationHours()`, `daysBetweenLocal()`.
+  `ShiftTimeFields` (new, exported from `ShiftsManager.tsx`) shows a live duration + warns
+  above 16h or `daysBetweenLocal(...) > 1`, with a required confirm checkbox.
+- Wired the previously-uncalled `PUT /shifts/:id` (`updateShift()`) into an Edit action on
+  `ShiftRow` — same Draft-only gate as Cancel. `updateShift()` now also audit-logs (before/
+  after start/end), following `respondToAssignment()`'s diff pattern.
+- Deleted the two corrupted dev rows after confirming with the user (Draft, unpublished, no
+  recoverable intent).
+- See [[roster-core]] for the full writeup. Not yet done (separate effort, per the plan):
+  merging PR #109's already-built drag-to-build week calendar with a multi-day-shift guard,
+  a published-only staff agenda redesign, a server-side 24h duration guard, and double-
+  booking overlap warnings.
+
+---
+
 ## 2026-08-17 — Phase 3 Slice 3 shipped: shift swap — Phase 3 (Workforce Optimisation) complete
 
 - `feature/ck-web/workforce-shift-swap`: new `shift_swap_request` table + `services/shiftSwapService.ts`
