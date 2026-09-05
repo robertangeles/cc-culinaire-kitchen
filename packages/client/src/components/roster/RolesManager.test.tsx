@@ -116,6 +116,24 @@ describe("RolesManager — required documents", () => {
     expect(setRoleDocuments).not.toHaveBeenCalled();
   });
 
+  it("typing a near-duplicate of an already-required custom type under Other is refused, not silently saved", async () => {
+    getRoleDocuments.mockResolvedValueOnce(["First Aid Certificate"]);
+    render(<RolesManager />);
+    fireEvent.click(screen.getByText("Head Chef"));
+    const select = await screen.findByDisplayValue("Choose a document type");
+    fireEvent.change(select, { target: { value: "Other" } });
+
+    fireEvent.change(screen.getByPlaceholderText("Name the document"), {
+      target: { value: "first aid certificate" },
+    });
+
+    expect(screen.getByText(/Did you mean.*First Aid Certificate/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add" })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+    expect(setRoleDocuments).not.toHaveBeenCalled();
+  });
+
   it("without roster:manage, required documents render read-only — no dropdown, no Add, no remove", async () => {
     canManage.mockReturnValue(false);
     getRoleDocuments.mockResolvedValueOnce(["RSA"]);

@@ -148,7 +148,7 @@ function RoleRow({
     pendingType,
     otherTypeDuplicateOf,
     reset: resetDocumentType,
-  } = useDocumentTypeSelection();
+  } = useDocumentTypeSelection("", docTypes);
   const [docsError, setDocsError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -252,7 +252,7 @@ function RoleRow({
                   />
                   {otherTypeDuplicateOf && (
                     <p className="text-xs text-red-400">
-                      Did you mean “{otherTypeDuplicateOf}”? Pick it from the dropdown instead.
+                      Did you mean “{otherTypeDuplicateOf}”? This role already treats that as the same document.
                     </p>
                   )}
                 </>
