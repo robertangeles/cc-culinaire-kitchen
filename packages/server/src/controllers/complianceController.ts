@@ -57,6 +57,17 @@ export function mimeToStorageFormat(mime: AllowedMime): StorageFormat {
   return FORMAT_BY_MIME[mime];
 }
 
+/**
+ * tesseract.js is an image OCR engine — it does not decode PDF byte streams.
+ * Handing it a PDF buffer doesn't reject cleanly, it hangs badly enough that
+ * even extractCertificateFields's own 5s Promise.race timeout never fires
+ * (reproduced: one PDF upload made the whole dev server unresponsive to
+ * every request). Exported for a direct unit test.
+ */
+export function shouldRunOcr(mime: AllowedMime): boolean {
+  return mime !== "application/pdf";
+}
+
 const CreateDocumentSchema = z.object({
   documentType: z.string().min(1).max(40),
   engagementType: z.enum(["employee", "contractor", "agency"]).optional(),
@@ -197,7 +208,9 @@ export async function handleUploadDocument(
 
     const { publicId, mime } = await storeDocument(req.file.buffer, ctx.orgId, req.user!.sub);
     // Never throws — a miss just means the form falls back to manual entry.
-    const ocr = await extractCertificateFields(req.file.buffer);
+    const ocr: Awaited<ReturnType<typeof extractCertificateFields>> = shouldRunOcr(mime)
+      ? await extractCertificateFields(req.file.buffer)
+      : {};
 
     res.json({ storagePublicId: publicId, storageFormat: mimeToStorageFormat(mime), ocr });
   } catch (err) {
