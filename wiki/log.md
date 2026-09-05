@@ -4,6 +4,34 @@ Append-only. Newest entry on top.
 
 ---
 
+## 2026-09-05 — /code-review on PR #109's merge caught 4 more pre-existing bugs
+
+- Ran `/code-review 109` as the pre-merge check for Phase 2 admin (a step up from the
+  `pr-reviewer` subagent pass, which had already approved). Found 7 issues; 5 fixed, 2 deferred
+  to `tasks/todo.md`.
+- The most serious: my own "+Nd" badge fix from the prior entry was correctly flagging multi-day
+  shifts, but sitting on top of a still-broken block — any *overnight* shift (not just a genuine
+  multi-day one) collapses to an 18px sliver via the same `minutesSinceMidnight` date-stripping,
+  since `endMinutes - startMinutes` goes negative when the end time-of-day is numerically earlier
+  than the start's. Fixed by rendering from start-time to the bottom of the visible day instead.
+- `assignStaff()`'s duplicate-assignment guard (from the original branch) blocked re-offering a
+  shift to someone who'd declined it, with a factually wrong "already assigned" message — the old
+  Declined row (kept for audit, per the schema's `idx_shift_assignment_unique`) permanently
+  occupied the unique slot. Fixed by reactivating that row instead of inserting a second one.
+  Also closed the guard's own TOCTOU gap (SELECT-then-INSERT with no lock) by catching the
+  underlying Postgres `23505` directly, matching this codebase's existing pattern in four other
+  services.
+- `todayIso()` used a bare UTC slice — the exact bug class this branch's own resize-gesture fix
+  already fixed once (commit 17e4ee6), reintroduced fresh in a sibling function. Fixed to reuse
+  `localDayIso()`.
+- A render-loop memoization gap (`daySpan`/`formatShiftRange` recomputed per shift per render,
+  including pointermove-frequency drag renders) — the exact problem this branch's own perf pass
+  already solved once for `shiftsForLane` (commit 38ff4fa). Precomputed into a sibling map.
+- Full regression clean after all fixes: shared 104, client 205 (+3 new tests for the height and
+  reactivate-on-decline fixes), server 1143 (+1 new), real-DB integration 1304/1304.
+
+---
+
 ## 2026-09-04 — Roster week calendar (PR #109) merged: Phase 2 admin of the incident plan
 
 - Merged `main` (Phase 1's shift-time fix) into `feature/ck-web/roster-week-calendar`, resolving

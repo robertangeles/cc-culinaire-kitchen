@@ -479,6 +479,23 @@ the exact bad-data class this branch exists to prevent; `updateShift()` missing 
   optional `tx` param. Worth a single pass across all three functions rather than a one-off fix
   here — `packages/server/src/services/rosterService.ts`.
 
+## Roster week calendar (PR #109) — deferred from /code-review (2026-09-05)
+
+Merging Phase 1's shift-time fix into `feature/ck-web/roster-week-calendar` surfaced 7 findings
+from `/code-review`. 5 were fixed on the branch (a height-collapse bug for any overnight or
+multi-day shift, `assignStaff`'s duplicate-guard blocking re-offers after a decline plus its
+TOCTOU race, a UTC-vs-local-day bug in `todayIso()` — the same class this branch already fixed
+once elsewhere — and a render-loop memoization gap). Two are deliberately left open:
+
+- **P3** `addDaysIso` (add N days to an ISO date string) is independently reimplemented three
+  times: `rosterCalendarMath.ts`, `StaffingCoverageView.tsx:25`, `PublishPanel.tsx:22`. Worth
+  consolidating into `packages/shared` next time any of the three needs a change, rather than as
+  a standalone refactor — touches two files unrelated to the roster calendar.
+- **P3** `useRosterCalendar`'s `create`/`updateTime`/`assign` each discard their own mutation
+  response and call `refresh()`, refetching the entire padded week from `GET /shifts/calendar`
+  after every single drag gesture. Fine at today's data volume; revisit if a venue with many
+  shifts/roles makes the round-trip after each drag noticeably slow.
+
 ## AI-Native Purchasing — deferred from eng-review (2026-07-20)
 - **P2** AI-suggest-par from usage (blocked on real consumption_log/depletion history)
 - **P2** order-from-stocktake (one-tap draft PO from last count; add multi-group guard)
