@@ -60,7 +60,12 @@ function roleAccent(roleId: string, roleIds: string[]): string {
 }
 
 function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
+  // localDayIso, never .toISOString().slice(0, 10) — the exact UTC-vs-local
+  // day bug this branch's own resize-gesture fix (commit 17e4ee6) already
+  // fixed once. In this app's AU deployment timezone, any local time before
+  // ~10-11am is still the previous day in UTC, so a bare UTC slice here
+  // opens the calendar on last week's Monday during that window.
+  return localDayIso(new Date());
 }
 
 /** dayIso + minutes-since-local-midnight -> a real Date, browser-local (matches ShiftsManager's own time convention). */
@@ -166,6 +171,21 @@ export function RosterCalendarView() {
       const bucket = map.get(key);
       if (bucket) bucket.push(s);
       else map.set(key, [s]);
+    }
+    return map;
+  }, [calendarShifts]);
+
+  // Same reasoning as shiftsByLaneKey above: derived once per shift-list
+  // load, not re-derived (2 Date constructions + formatShiftRange's own
+  // day-diff check) for every visible shift on every pointermove-triggered
+  // render during a drag.
+  const shiftDisplayInfo = useMemo(() => {
+    const map = new Map<string, { daySpan: number; rangeLabel: string }>();
+    for (const s of calendarShifts) {
+      map.set(s.shiftId, {
+        daySpan: dayColumnIndexForDate(localDayIso(new Date(s.endDatetime)), localDayIso(new Date(s.startDatetime))),
+        rangeLabel: formatShiftRange(s.startDatetime, s.endDatetime),
+      });
     }
     return map;
   }, [calendarShifts]);
@@ -462,23 +482,34 @@ export function RosterCalendarView() {
                             // start day's lane, sized to only that day's minutes (see the
                             // module doc on minutesSinceMidnight) — which otherwise looks
                             // exactly like a normal same-day shift with no visual sign the
-                            // remaining days exist. This badge is that sign.
-                            const daySpan = dayColumnIndexForDate(
-                              localDayIso(new Date(s.endDatetime)),
-                              localDayIso(new Date(s.startDatetime)),
-                            );
+                            // remaining days exist. This badge is that sign. Precomputed in
+                            // shiftDisplayInfo above, not re-derived per render.
+                            const { daySpan, rangeLabel } = shiftDisplayInfo.get(s.shiftId)!;
+                            // When a shift's end falls on a different local day (any overnight
+                            // shift, not just a genuine multi-day one — e.g. 10pm-2am has
+                            // storedStartMinutes=1320, storedEndMinutes=120), storedEndMinutes
+                            // alone is <= storedStartMinutes, so using it as the block's bottom
+                            // edge collapses the height to the 18px floor instead of showing
+                            // anything. Render such a shift from its start down to the bottom
+                            // of the visible day instead — the "+Nd" badge is what actually
+                            // communicates "this continues past what's drawn here". Only the
+                            // static render is clamped: a resize/move drag still seeds itself
+                            // from the true (unclamped) endMinutes below, since overnight/
+                            // multi-day shifts are already disclosed as undraggable, not
+                            // silently corrupted.
+                            const visualEndMinutes = !override && daySpan > 0 ? 24 * 60 : endMinutes;
 
                             return (
                               <div
                                 key={s.shiftId}
                                 data-shift-id={isDraft ? s.shiftId : undefined}
-                                title={`${role.roleName} — ${formatShiftRange(s.startDatetime, s.endDatetime)} — ${
+                                title={`${role.roleName} — ${rangeLabel} — ${
                                   s.assignments.length === 0 ? "Unassigned" : s.assignments.map((a) => a.staffName).join(", ")
                                 } — ${s.status}`}
                                 className={`absolute left-0.5 right-0.5 rounded border-l-4 px-1.5 py-1 text-[11px] leading-tight overflow-hidden ${roleAccent(role.rosterRoleId, roleIds)} ${
                                   isDraft ? "bg-dark-100 border border-dark-300 cursor-grab active:cursor-grabbing" : "bg-dark-200/70 border border-dark-300/50 opacity-90"
                                 } ${isDropTarget ? "ring-2 ring-gold" : ""}`}
-                                style={{ top: pixelForMinutes(startMinutes, HOUR_HEIGHT), height: Math.max(18, pixelForMinutes(endMinutes - startMinutes, HOUR_HEIGHT)) }}
+                                style={{ top: pixelForMinutes(startMinutes, HOUR_HEIGHT), height: Math.max(18, pixelForMinutes(visualEndMinutes - startMinutes, HOUR_HEIGHT)) }}
                                 onPointerDown={(e) => {
                                   if (!canManage || !isDraft) return;
                                   e.stopPropagation();
@@ -516,7 +547,7 @@ export function RosterCalendarView() {
                                     </span>
                                   )}
                                 </div>
-                                <div className="text-dark-600 truncate">{formatShiftRange(s.startDatetime, s.endDatetime)}</div>
+                                <div className="text-dark-600 truncate">{rangeLabel}</div>
                                 <div className="truncate text-dark-600">
                                   {s.assignments.length === 0 ? "Unassigned" : s.assignments.map((a) => a.staffName).join(", ")}
                                 </div>

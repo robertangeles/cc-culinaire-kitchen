@@ -83,4 +83,26 @@ describe("RosterCalendarView multi-day shift badge", () => {
     render(<RosterCalendarView />);
     expect(screen.queryByText(/^\+\d+d$/)).not.toBeInTheDocument();
   });
+
+  it("regression: an overnight shift renders its real height instead of collapsing to the 18px floor", () => {
+    // 10pm -> 2am: storedEndMinutes (120) is less than storedStartMinutes
+    // (1320) once both are stripped to minutes-since-midnight, which used to
+    // make `endMinutes - startMinutes` negative and collapse the block to
+    // its Math.max(18, ...) floor — an ordinary overnight shift rendered as
+    // a near-invisible sliver. It should now render from 10pm down to the
+    // bottom of the visible day: (24*60 - 22*60) = 120 minutes = 96px at
+    // this test's HOUR_HEIGHT (48px/hour), and still carry the "+1d" badge
+    // since it does end on the following calendar day.
+    mockCalendarShifts = [
+      calendarShift({
+        startDatetime: localIso(weekStartIso, 22),
+        endDatetime: localIso(addDaysIso(weekStartIso, 1), 2),
+      }),
+    ];
+    render(<RosterCalendarView />);
+    expect(screen.getByText("+1d")).toBeInTheDocument();
+    const block = document.querySelector('[data-shift-id="shift-1"]') as HTMLElement;
+    expect(block).toBeTruthy();
+    expect(block.style.height).toBe("96px");
+  });
 });
