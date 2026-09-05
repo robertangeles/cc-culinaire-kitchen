@@ -672,20 +672,70 @@ export async function assignStaff(orgId: number, shiftId: string, userId: number
     throw new AssignmentBlockedError(message, decision);
   }
 
-  // UNIQUE(shiftId, userId) means a second attempt (e.g. a UI that doesn't
-  // filter its candidate list, or a double-click) would otherwise surface a
-  // raw Postgres constraint violation as an unhandled 500 — checked
-  // explicitly so it reads as a clean, human message instead.
+  // UNIQUE(shiftId, userId) is a hard "one assignment row per person per
+  // shift" constraint (the plan's own spec, schema.ts's idx_shift_assignment_
+  // unique) — a Declined row is kept, not deleted, for audit, so re-offering
+  // the same shift to the same person can never be a second INSERT; it has
+  // to reuse and reactivate that row. Fetch the row regardless of status
+  // (not just Pending/Confirmed) so both paths below can see it.
   const [existing] = await db
     .select()
     .from(shiftAssignment)
     .where(and(eq(shiftAssignment.shiftId, shiftId), eq(shiftAssignment.userId, userId)));
-  if (existing) {
+
+  if (existing && existing.status !== "Declined") {
+    // Only an ACTIVE row blocks re-assignment — the calendar and coverage
+    // views already treat Declined as unassigned (see getStaffingCoverage/
+    // getWeekCalendar's own inArray(status, ["Pending", "Confirmed"])
+    // filter), so a Declined row must not permanently block a re-offer.
     const name = await staffName(userId);
     throw new RosterError(`${name} is already assigned to this shift.`, 409);
   }
 
-  const [created] = await db.insert(shiftAssignment).values({ shiftId, userId }).returning();
+  if (existing) {
+    // Re-offering after a decline: reactivate the same row rather than
+    // insert a second one (the unique index wouldn't allow that anyway).
+    // Consent fields reset — a fresh offer means a fresh consent cycle if
+    // this is a public-holiday shift, not the prior decline persisting.
+    const [reactivated] = await db
+      .update(shiftAssignment)
+      .set({
+        status: "Pending",
+        publicHolidayConsent: null,
+        consentRequestedAt: null,
+        consentRespondedAt: null,
+        updatedDttm: new Date(),
+      })
+      .where(eq(shiftAssignment.assignmentId, existing.assignmentId))
+      .returning();
+    await auditService.log({
+      entityType: "shift_assignment",
+      entityId: reactivated.assignmentId,
+      action: "update",
+      actorUserId,
+      organisationId: orgId,
+      beforeValue: { status: existing.status },
+      afterValue: { status: reactivated.status },
+    });
+    return reactivated;
+  }
+
+  // No existing row at all. The check above is a friendliness check, not a
+  // lock: two near-simultaneous first-time assigns for the same (shift,
+  // user) can both pass it before either INSERT commits — the second then
+  // hits the unique index directly. Without this, that lands as a raw 500
+  // instead of the same clean message the check above already gives the
+  // non-racing case.
+  let created: typeof shiftAssignment.$inferSelect;
+  try {
+    [created] = await db.insert(shiftAssignment).values({ shiftId, userId }).returning();
+  } catch (err) {
+    if ((err as { code?: string })?.code === "23505") {
+      const name = await staffName(userId);
+      throw new RosterError(`${name} is already assigned to this shift.`, 409);
+    }
+    throw err;
+  }
   await auditService.log({
     entityType: "shift_assignment",
     entityId: created.assignmentId,

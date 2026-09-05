@@ -396,6 +396,41 @@ describe.skipIf(!RUN)("roster service (real DB)", () => {
     });
   });
 
+  it("assignStaff allows re-assigning someone after they declined, the old row does not block it", async () => {
+    // The duplicate-assignment guard above must only block an ACTIVE
+    // (Pending/Confirmed) row — a Declined one is kept for audit, not
+    // deleted, and getStaffingCoverage/getWeekCalendar already treat
+    // Declined as unassigned. A manager re-offering the same shift to the
+    // same person after a decline must succeed, not hit a stale "already
+    // assigned" refusal from the row the decline left behind.
+    await db.insert(complianceDocument).values({
+      organisationId: orgA,
+      userId: userA,
+      documentType: docType,
+      verificationStatus: "Verified",
+      expiryDate: addDays(TODAY, 365),
+      storagePublicId: `${tag}-pub-redup`,
+      uploadedBy: userA,
+    });
+
+    const start = new Date();
+    const end = new Date(start.getTime() + 4 * 60 * 60 * 1000);
+    const s = await createShift(
+      orgA,
+      { storeLocationId: locA, rosterRoleId: roleId, startDatetime: start.toISOString(), endDatetime: end.toISOString() },
+      userA,
+    );
+
+    const firstAssignment = await assignStaff(orgA, s.shiftId, userA, userA);
+    await respondToAssignment(orgA, firstAssignment.assignmentId, userA, "Declined");
+
+    // The unique index on (shiftId, userId) means this reactivates the same
+    // row rather than creating a second one — same assignmentId, reset status.
+    const secondAssignment = await assignStaff(orgA, s.shiftId, userA, userA);
+    expect(secondAssignment.status).toBe("Pending");
+    expect(secondAssignment.assignmentId).toBe(firstAssignment.assignmentId);
+  });
+
   it("assignStaff at orgA ignores a document verified only under orgB's compliance program", async () => {
     // userC belongs to both orgs. orgB independently verified userC's
     // document; orgA never has. The gate must not trust orgB's verification.
