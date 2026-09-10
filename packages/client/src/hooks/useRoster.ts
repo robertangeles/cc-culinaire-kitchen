@@ -226,6 +226,15 @@ export function useShifts(storeLocationId: string | null) {
     [refresh],
   );
 
+  const update = useCallback(
+    async (id: string, data: { startDatetime?: string; endDatetime?: string }) => {
+      const res = await fetch(`${BASE}/shifts/${id}`, { ...jsonOpts, method: "PUT", body: JSON.stringify(data) });
+      if (!res.ok) throw await parseError(res, "Failed to update shift");
+      await refresh();
+    },
+    [refresh],
+  );
+
   const cancel = useCallback(
     async (id: string) => {
       const res = await fetch(`${BASE}/shifts/${id}/cancel`, { ...opts, method: "POST" });
@@ -264,7 +273,7 @@ export function useShifts(storeLocationId: string | null) {
     refresh();
   }, [refresh]);
 
-  return { shifts, isLoading, error, refresh, create, cancel, assign, removeAssignment };
+  return { shifts, isLoading, error, refresh, create, update, cancel, assign, removeAssignment };
 }
 
 export interface ShiftAssignmentRow {

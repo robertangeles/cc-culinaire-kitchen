@@ -241,6 +241,7 @@ Links the vault to scheduling: a shift can only be assigned to someone holding e
 | RC-B2 | Edit a Draft shift's time | Updates correctly | |
 | RC-B3 | Cancel a shift | Status flips to `Cancelled`, drops off the active list | |
 | RC-B4 | View shifts across a date range for a venue | Correctly filtered by venue and date | |
+| RC-B5 | Create or edit a shift with a duration over 16h, or spanning more than one overnight | Amber warning banner names the duration; Create/Save stays disabled until "I confirm this is correct" is checked | |
 
 ### RC-C — Assignment and the `canAssign` compliance gate
 
