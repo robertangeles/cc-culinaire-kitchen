@@ -70,8 +70,8 @@ describe.skipIf(!RUN)("roster service (real DB)", () => {
   let locB: string;
   let roleId: string;
   let ruleId: string;
-  let publicHolidayId: string;
-  let publicHolidayPriorYearId: string;
+  let publicHolidayId: string | undefined;
+  let publicHolidayPriorYearId: string | undefined;
 
   beforeAll(async () => {
     [{ id: userA }] = await db
@@ -147,9 +147,18 @@ describe.skipIf(!RUN)("roster service (real DB)", () => {
     // Loads VIC for the current year — every existing publishRoster test
     // uses a TODAY-relative window, so this is enough for them to pass the
     // fail-loud holiday-calendar gate without every test needing to seed its
-    // own row. The date itself is arbitrary; only (jurisdiction,
-    // loadedForYear) matters for "is this year loaded".
-    [{ id: publicHolidayId }] = await db
+    // own row. The date itself is arbitrary EXCEPT that some tests below
+    // (the isPublicHoliday ones) specifically target Jan 1, so it can't move.
+    //
+    // onConflictDoNothing, not a plain insert: a real AU public holiday can
+    // already occupy VIC/Jan-1 in a dev DB that's had the AU holiday seed
+    // script run against it (idx_public_holiday_unique is (jurisdiction,
+    // date) only, so a second row here — even with a different, tagged name
+    // — would collide). When that happens, reuse the real row: this test
+    // only needs the DATE to be a loaded holiday, not to own the row, and
+    // afterAll must never delete real seeded data it didn't create — hence
+    // publicHolidayId stays undefined (skipping its own delete) in that case.
+    const insertedHoliday = await db
       .insert(publicHoliday)
       .values({
         jurisdiction: "VIC",
@@ -157,7 +166,9 @@ describe.skipIf(!RUN)("roster service (real DB)", () => {
         holidayName: `${tag} New Year's Day`,
         loadedForYear: new Date().getFullYear(),
       })
+      .onConflictDoNothing()
       .returning({ id: publicHoliday.publicHolidayId });
+    publicHolidayId = insertedHoliday[0]?.id;
 
     // Also load the PRIOR year — the isPublicHoliday test below targets Jan
     // 1 and widens its publish window by addDays(-1) (same reason every
@@ -165,8 +176,9 @@ describe.skipIf(!RUN)("roster service (real DB)", () => {
     // can sit outside a tight from/to boundary). Dec 31 the year before
     // still falls inside that window, so assertHolidayCalendarLoaded's
     // per-year loop needs that year loaded too, or its own fail-loud gate
-    // blocks a test that isn't exercising the gap-check path at all.
-    [{ id: publicHolidayPriorYearId }] = await db
+    // blocks a test that isn't exercising the gap-check path at all. Same
+    // onConflictDoNothing reasoning as the current-year insert above.
+    const insertedPriorYearHoliday = await db
       .insert(publicHoliday)
       .values({
         jurisdiction: "VIC",
@@ -174,7 +186,9 @@ describe.skipIf(!RUN)("roster service (real DB)", () => {
         holidayName: `${tag} New Year's Day (prior year)`,
         loadedForYear: new Date().getFullYear() - 1,
       })
+      .onConflictDoNothing()
       .returning({ id: publicHoliday.publicHolidayId });
+    publicHolidayPriorYearId = insertedPriorYearHoliday[0]?.id;
   });
 
   afterAll(async () => {

@@ -334,6 +334,15 @@ export const organisation = pgTable("organisation", {
   // Purchasing module feature flag + org-level spend threshold
   purchasingEnabledInd: boolean("purchasing_enabled_ind").notNull().default(false),
   defaultSpendThreshold: numeric("default_spend_threshold"),
+  // Branding (Operations Admin, Organisation Settings)
+  organisationLogoPath: varchar("organisation_logo_path", { length: 500 }),
+  organisationColorAccent: varchar("organisation_color_accent", { length: 7 }),
+  // Operational defaults — metadata only. NOT read by resolveJurisdiction()/
+  // getVenueTimezone() in rosterService.ts, which stay per-store-location on
+  // purpose: a multi-location org can legitimately span jurisdictions.
+  defaultTimezone: varchar("default_timezone", { length: 50 }).notNull().default("Australia/Melbourne"),
+  defaultCurrency: varchar("default_currency", { length: 3 }).notNull().default("AUD"),
+  defaultJurisdiction: varchar("default_jurisdiction", { length: 3 }),
   createdBy: integer("created_by").notNull(),
   createdDttm: timestamp("created_dttm").notNull().defaultNow(),
   updatedDttm: timestamp("updated_dttm").notNull().defaultNow(),

@@ -7,12 +7,14 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router";
-import { User, LogOut, ChevronUp, Settings } from "lucide-react";
+import { User, LogOut, ChevronUp, Settings, Building2 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.js";
+import { useHasPermission } from "../../hooks/useHasPermission.js";
 
 export function UserMenu({ compact = false }: { compact?: boolean }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const hasPermission = useHasPermission();
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -38,6 +40,10 @@ export function UserMenu({ compact = false }: { compact?: boolean }) {
 
   const primaryRole = user.roles[0] ?? "Subscriber";
   const isAdmin = user.roles.includes("Administrator");
+  // Matches /organisation's own route gate exactly (App.tsx) — a Paid
+  // Subscriber holds compliance:read-all/verify without org:manage-organisation
+  // and must still be able to discover the page to reach Team Compliance.
+  const canAccessOrganisation = hasPermission("org:manage-organisation", "compliance:read-all", "compliance:verify");
 
   async function handleLogout() {
     await logout();
@@ -56,6 +62,15 @@ export function UserMenu({ compact = false }: { compact?: boolean }) {
               <User className="size-4" />
               Profile
             </button>
+            {canAccessOrganisation && (
+              <button
+                onClick={() => { navigate("/organisation"); setOpen(false); }}
+                className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-[#E5E5E5] hover:bg-dark-200 transition-colors"
+              >
+                <Building2 className="size-4" />
+                Organisation
+              </button>
+            )}
             {isAdmin && (
               <button
                 onClick={() => { navigate("/settings"); setOpen(false); }}
@@ -104,6 +119,15 @@ export function UserMenu({ compact = false }: { compact?: boolean }) {
             <User className="size-4" />
             Profile
           </button>
+          {canAccessOrganisation && (
+            <button
+              onClick={() => { navigate("/organisation"); setOpen(false); }}
+              className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-[#E5E5E5] hover:bg-dark-200 transition-colors"
+            >
+              <Building2 className="size-4" />
+              Organisation
+            </button>
+          )}
           {isAdmin && (
             <button
               onClick={() => { navigate("/settings"); setOpen(false); }}
@@ -127,6 +151,7 @@ export function UserMenu({ compact = false }: { compact?: boolean }) {
       {/* User button */}
       <button
         onClick={() => setOpen(!open)}
+        aria-label="User menu"
         className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left hover:bg-dark-100/50 transition-colors"
       >
         {user.userPhotoPath ? (
