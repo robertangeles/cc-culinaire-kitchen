@@ -24,6 +24,7 @@ import {
   handleListRoleDocuments,
   handleSetRoleDocuments,
   handleListShifts,
+  handleGetWeekCalendar,
   handleListMyShifts,
   handleCreateShift,
   handleUpdateShift,
@@ -32,6 +33,12 @@ import {
   handleListShiftAssignments,
   handleRespondToAssignment,
   handleRemoveAssignment,
+  handleListTemplates,
+  handleCreateTemplateRow,
+  handleUpdateTemplateRow,
+  handleDeleteTemplateRow,
+  handleGenerateWeekFromTemplate,
+  handleUndoGeneration,
   handleListMyAvailability,
   handleListOrgAvailability,
   handleCreateAvailability,
@@ -65,12 +72,25 @@ router.put("/roles/:id/documents", requirePermission("roster:manage"), handleSet
 // ─── Shifts ───────────────────────────────────────────────────────
 
 router.get("/shifts/mine", requirePermission("roster:read-own"), handleListMyShifts);
+router.get("/shifts/calendar", requirePermission("roster:read-all"), handleGetWeekCalendar);
 router.get("/shifts", requirePermission("roster:read-all"), handleListShifts);
 router.post("/shifts", requirePermission("roster:manage"), handleCreateShift);
 router.put("/shifts/:id", requirePermission("roster:manage"), handleUpdateShift);
 router.post("/shifts/:id/cancel", requirePermission("roster:manage"), handleCancelShift);
 router.get("/shifts/:id/assignments", requirePermission("roster:read-all"), handleListShiftAssignments);
 router.post("/shifts/:id/assignments", requirePermission("roster:manage"), handleAssignStaff);
+
+// ─── Roster Shift Templates ───────────────────────────────────────
+// A saved weekly pattern (role + day-of-week + start/end time), turned into
+// real Draft shifts via "Generate this week". See
+// docs/designs/roster-scheduling-templates.md.
+
+router.get("/templates", requirePermission("roster:manage"), handleListTemplates);
+router.post("/templates", requirePermission("roster:manage"), handleCreateTemplateRow);
+router.post("/templates/generate", requirePermission("roster:manage"), handleGenerateWeekFromTemplate);
+router.post("/templates/undo-generation", requirePermission("roster:manage"), handleUndoGeneration);
+router.patch("/templates/:id", requirePermission("roster:manage"), handleUpdateTemplateRow);
+router.delete("/templates/:id", requirePermission("roster:manage"), handleDeleteTemplateRow);
 
 // ─── Assignments ──────────────────────────────────────────────────
 

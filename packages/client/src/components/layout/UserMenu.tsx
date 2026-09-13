@@ -38,7 +38,10 @@ export function UserMenu({ compact = false }: { compact?: boolean }) {
     .toUpperCase()
     .slice(0, 2);
 
-  const primaryRole = user.roles[0] ?? "Subscriber";
+  // roles[0] — the server orders roles[] by permission count descending
+  // (authService.ts's getUserWithRolesAndPermissions), so this is the
+  // user's single most-privileged role, not an arbitrary one.
+  const roleLabel = user.roles[0] ?? "Subscriber";
   const isAdmin = user.roles.includes("Administrator");
   // Matches /organisation's own route gate exactly (App.tsx) — a Paid
   // Subscriber holds compliance:read-all/verify without org:manage-organisation
@@ -167,7 +170,7 @@ export function UserMenu({ compact = false }: { compact?: boolean }) {
         )}
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium text-white truncate">{user.userName}</p>
-          <p className="text-xs text-dark-600 truncate">{primaryRole}</p>
+          <p className="text-xs text-dark-600 truncate">{roleLabel}</p>
         </div>
         <ChevronUp className={`size-4 text-dark-600 transition-transform ${open ? "" : "rotate-180"}`} />
       </button>

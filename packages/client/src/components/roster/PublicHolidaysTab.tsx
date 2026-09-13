@@ -30,6 +30,8 @@ const emptyForm = {
   isRegional: false,
   regionNote: "",
   sourceCitation: "",
+  isPartialDay: false,
+  partialDayFromTime: "",
 };
 
 export function PublicHolidaysTab() {
@@ -67,6 +69,10 @@ export function PublicHolidaysTab() {
       setFormError("Holiday name is required");
       return;
     }
+    if (form.isPartialDay && !form.partialDayFromTime) {
+      setFormError("A start time is required for a partial-day holiday");
+      return;
+    }
     setSaving(true);
     try {
       const created = await createPublicHoliday({
@@ -77,6 +83,7 @@ export function PublicHolidaysTab() {
         regionNote: form.regionNote.trim() || null,
         sourceCitation: form.sourceCitation.trim() || null,
         loadedForYear: year,
+        partialDayFromTime: form.isPartialDay ? form.partialDayFromTime : null,
       });
       setHolidays((prev) => [...prev, created].sort((a, b) => a.jurisdiction.localeCompare(b.jurisdiction) || a.holidayDate.localeCompare(b.holidayDate)));
       setForm(emptyForm);
@@ -203,6 +210,26 @@ export function PublicHolidaysTab() {
               />
             </label>
           )}
+          <label className="flex items-center gap-2 text-xs text-dark-600">
+            <input
+              type="checkbox"
+              checked={form.isPartialDay}
+              onChange={(e) => setForm((f) => ({ ...f, isPartialDay: e.target.checked }))}
+              className="size-4 rounded border-dark-300 bg-dark accent-gold focus:outline-none focus:ring-2 focus:ring-gold-ring"
+            />
+            Partial day (only from a given time until midnight)
+          </label>
+          {form.isPartialDay && (
+            <label className="block text-xs text-dark-600">
+              Applies from
+              <input
+                type="time"
+                value={form.partialDayFromTime}
+                onChange={(e) => setForm((f) => ({ ...f, partialDayFromTime: e.target.value }))}
+                className="mt-1 w-full rounded-lg bg-dark-100 border border-dark-200 px-3 py-2 text-sm text-white focus:outline-none focus:border-gold/50"
+              />
+            </label>
+          )}
           <label className="block text-xs text-dark-600">
             Source citation (optional)
             <input
@@ -261,6 +288,11 @@ export function PublicHolidaysTab() {
                 <span className="text-xs text-dark-600">{h.holidayDate}</span>
                 {h.isRegional && (
                   <span className="rounded-full border border-gold/30 px-2 py-0.5 text-xs text-gold">Regional</span>
+                )}
+                {h.partialDayFromTime && (
+                  <span className="rounded-full border border-gold/30 px-2 py-0.5 text-xs text-gold">
+                    From {h.partialDayFromTime}
+                  </span>
                 )}
               </div>
               {canManage && (

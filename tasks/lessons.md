@@ -688,4 +688,178 @@ builds all tables with CHECKs enforcing. Stop it again when done.
   been pushed.
 - **Rule**: After ANY merge or `checkout main`, the next write to the working tree starts with
   `git checkout -b`. Check `git branch --show-current` before `git add`, not after `git commit`.
+
+## #68 — venue-local-time helpers only went one direction (2026-09-07)
+
+- **Problem**: `rosterService.ts` had `toVenueLocalDate`/`toVenueLocalTime` (UTC instant → venue-local
+  string) but nothing for the reverse — venue-local wall-clock time on a given date → the correct UTC
+  instant, accounting for that venue's `ianaTimezone` and any DST offset on that specific date. The
+  Roster Scheduling Templates design needed exactly this (template says "Mon 9am-5pm" in venue-local
+  time; generation must produce a UTC `startDatetime`) and the gap only surfaced during outside-voice
+  review, not the first design pass.
+- **Fix**: Added `resolveVenueLocalToUtc(dateIso, hhmm, ianaTimezone)` as a new pure helper using
+  `Intl.DateTimeFormat`'s offset lookup for the target date (not a fixed offset), so it's correct
+  across a DST transition.
+- **Rule**: A local→UTC helper and a UTC→local helper are not symmetric-for-free — one direction
+  existing in the codebase is not evidence the other direction was ever needed or written. When a new
+  feature needs the reverse conversion, check for it explicitly; do not assume it's just "the other
+  side" of code that already works.
+
+## #69 — the reachable mutation path was `updateRole`, not `deleteRole` (2026-09-07)
+
+- **Problem**: Outside-voice review flagged a test scenario ("role belonging to a template gets
+  deleted") as unreachable, but the actual bug-relevant path was a role's `storeLocationId` being
+  changed via `updateRole` — a role is rarely deleted once shifts reference it, but its venue *can*
+  be edited, silently invalidating any template row that assumed the old venue. Assumed "role becomes
+  invalid" meant deletion without checking which mutation functions on `roleService`/`rosterService`
+  actually exist and are reachable from the UI.
+- **Fix**: Corrected the design doc and test plan to cover `updateRole`'s venue-change path instead,
+  confirmed via grep that `updateRole` (not `deleteRole`) is the actually-callable mutation for this
+  case.
+- **Rule**: When a design doc's edge case says "X gets deleted/changed," verify which mutation
+  function is actually reachable in the code before writing the test scenario around it — don't
+  infer the mechanism from the English description of the edge case.
+
+## #70 — an option's own text can under-specify the fix it proposes (2026-09-07)
+
+- **Problem**: Presented an AskUserQuestion option as "reuse the existing 23505 unique-violation
+  catch pattern" for a concurrent-generation race, without specifying a real backing unique
+  constraint — as written, the try/catch would never actually fire, since nothing would violate
+  anything. The user picked the option (reasonably — the option text sounded complete), and only
+  after that did the gap register.
+- **Fix**: Completed the mechanism before moving on: added the two nullable `shift` columns
+  (`sourceTemplateRowId`, `generatedForWeekStart`) plus a real unique index on the pair, making the
+  `23505` catch meaningful. Flagged the correction explicitly to the user rather than silently
+  patching it in.
+- **Rule**: Before finalizing an AskUserQuestion option that names an existing pattern ("reuse X"),
+  check that the concrete mechanism the pattern depends on (here: a real unique constraint) is
+  actually present or will be added — a familiar pattern name is not the same as a complete fix.
   Post-merge is the highest-risk moment for this, because `main` is exactly where you just landed.
+
+## #71 — a "soft delete" row still occupies its own unique key (2026-09-07)
+
+- **Problem**: While implementing `generateWeekFromTemplate`, a bare `INSERT` + `23505` catch on
+  the new `idx_shift_template_week_unique` (on `sourceTemplateRowId, generatedForWeekStart`)
+  correctly closed the double-click concurrency race, but broke the design doc's OWN stated
+  rollback semantics ("a cancelled generated shift never blocks regeneration of that slot") — a
+  cancelled shift is never deleted, only status-flipped, so it still occupies that unique key
+  forever. A TDD test written against the design doc's own rollback bullet ("cancel, then
+  regenerate the same slot") caught this immediately: `{created:0, skipped:1}` instead of
+  `{created:1, skipped:0}`.
+- **Fix**: Replaced the bare insert with `.onConflictDoUpdate({target: [...], setWhere: eq(status,
+  "Cancelled"), ...})` — the exact idiom `insertOrReactivateAssignment` already established
+  earlier this session for the identical shape of problem (a Declined assignment blocking
+  re-assignment). A genuine concurrent double-click still resolves correctly: the loser's
+  `setWhere` doesn't match a still-Draft row, so it returns nothing (no exception) rather than a
+  duplicate.
+- **Rule**: Any time a "soft delete" / status-flip pattern (Cancelled, Declined, Removed — never a
+  real `DELETE`) coexists with a unique constraint meant to prevent duplicates, a bare insert +
+  exception-catch is not enough — the old row's status-flipped-but-still-present state IS the
+  conflict. Use `onConflictDoUpdate` with a `setWhere` guard on the "safe to overwrite" status
+  instead, and write the "cancel then redo" test explicitly; don't assume a race-closing fix that
+  works for the fresh-insert case also works for the revival case without testing it separately.
+
+## #72 — a real seed can collide with a test's hardcoded fixture date, in a SHARED dev DB (2026-09-07)
+
+- **Problem**: A full `TENANT_IT=1` regression run failed with `duplicate key value violates
+  unique constraint "idx_public_holiday_unique"` inside `roster.integration.test.ts`'s
+  `beforeAll` — a `PostgresError`, not an assertion failure, crashing the entire describe block
+  (every test in the file reported as failed). Root cause: earlier this session, the real AU
+  public-holidays seed script (225 rows, 2026-2027, all 8 jurisdictions) ran against the same
+  shared dev DB this test suite also uses. That test's own fixture hardcodes `VIC` +
+  `${currentYear}-01-01` ("New Year's Day") — a real, now-seeded date — and the table's unique
+  index is on `(jurisdiction, holiday_date)` only, not the name, so the test's own differently-named
+  row collided with the real one. A second test in the same file (`12-26`, "Boxing Day") had the
+  identical latent collision, just never reached because the `beforeAll` crash aborted the file
+  first.
+- **Fix**: Two different fixes for two different cases. (1) Where the test's OWN assertion
+  specifically depends on the real calendar date (the Jan-1 `isPublicHoliday` tests) — the date
+  can't move, so the insert uses `.onConflictDoNothing()` and reuses whichever row already exists,
+  leaving the tracked id `undefined` (skipping its own `afterAll` delete) when it didn't create the
+  row — a test must never delete real seeded data it doesn't own. (2) Where the date was
+  incidental to the test's own made-up scenario (the Dec-26 partial-day-threshold test) — moved to
+  a verified-free date (Dec 27) instead, since reusing the real (non-partial-day) Boxing Day row
+  there would have silently changed what the test was actually exercising.
+- **Rule**: A hardcoded date in a test fixture against SHARED reference data (`public_holiday`,
+  `award_rule` — anything with no `organisationId`) is safe only until real data gets seeded into
+  the same database. Before hardcoding such a date, either verify it's free of realistic real-world
+  collisions and won't need to be (an arbitrary/incidental date, safe to move if it ever collides),
+  or — if the test's assertion is genuinely ABOUT that specific real date — make the insert
+  conflict-tolerant and never let cleanup delete a row the test didn't create itself.
+
+## #73 — a role-based refactor that didn't reach every gate (2026-09-08)
+
+- **Problem**: User reported "Alex Charasse is org admin but can't view the Org Admin page."
+  Investigation surfaced TWO independent bugs stacked on top of each other:
+  1. `ProfilePage.tsx`'s org/role-fetch effect had `useEffect(..., [])` — empty deps — whose async
+     body read `user?.userId` (from `useAuth()`, which starts `null` and resolves later via its own
+     `GET /api/auth/me`). A real, ordinary race: if that effect fired before auth resolved, it
+     permanently captured `user = null`, the `.find()` matching "am I in the members list" never
+     matched, and `myOrgRole` stayed stuck at its default `"member"` forever — hiding every
+     admin-gated section of the page for the rest of that session, silently.
+  2. Even with (1) fixed, `organisationService.ts`'s `updateOrganisation`/`regenerateJoinKey` still
+     checked `organisation.createdBy !== userId` — a leftover from BEFORE the "Org members list +
+     role-based admin controls" feature (git commit `7a16311`) introduced *promotable* admins via
+     `userOrganisation.role`. That commit correctly updated member-management endpoints
+     (`updateMemberRole`/`removeMember`) to check `role === "admin"`, and correctly updated the
+     client's admin-gated UI to check the same — but never touched these two functions, which kept
+     checking the OLD single-owner model. A member promoted to admin via the Team Members "Make
+     Admin" button could see the Edit Organisation UI (once bug 1 was fixed) but got a confusing
+     400 the moment they tried to save, because the server still only trusted the literal creator.
+- **Fix**: (1) `[user?.userId]` instead of `[]` — same pattern already used correctly two effects
+  above it in the same file (`useEffect(() => setName(user?.userName ?? ""), [user])`), just missed
+  in this one. (2) Replaced the `createdBy` check with the same `getMembership(...).role === "admin"`
+  check `updateMemberRole`/`removeMember` already use — `createdBy` is always also `role: "admin"`
+  by construction (set at creation), so the creator keeps working; promoted admins now do too.
+- **Rule**: When a role-based permission model replaces a single-owner one, grep for EVERY existing
+  check against the old owner field (`createdBy`, `ownerId`, etc.) across the whole feature — a
+  role-based refactor that updates the obviously-related endpoints (member management, nav/UI
+  gating) but misses an older, less-obvious function (org profile edit, key rotation) leaves a
+  trap that only surfaces later, for a specific non-creator admin, in a specific action — exactly
+  the shape of bug a quick manual test with the ORIGINAL admin account would never catch.
+
+## #74 — a screenshot found the actual page; my own reasoning had picked the wrong one (2026-09-10)
+
+- **Problem**: After fixing #73, the user reported "still can't see Alex's Org Admin page" and sent
+  a screenshot of the sidebar account menu — a completely different component
+  (`components/layout/UserMenu.tsx`) than the one I'd fixed (`ProfilePage.tsx`'s Organisation tab).
+  It showed "Alex Charasse / Subscriber" — `UserMenu.tsx:39`'s `const primaryRole = user.roles[0]
+  ?? "Subscriber"`. Alex holds two global roles (`Subscriber`, `Operations Admin`); which one
+  happened to be `roles[0]` was arbitrary — `authService.ts`'s `getUserWithRolesAndPermissions`
+  fetches `userRole` joined to `role` with no `ORDER BY` at all, so the array order is whatever
+  Postgres's unindexed scan happens to return, not "most privileged first" or any deliberate rule.
+  This was almost certainly the user's ORIGINAL complaint two turns earlier ("why is his role just
+  Subscriber now") — I diagnosed and fixed a real, adjacent bug instead of this one, because
+  nothing in the conversation up to that point named the actual component on screen.
+- **Fix**: Show every held role, not an arbitrary single one — `user.roles.join(", ")`. No new
+  "which role is more important" heuristic invented; the array's own order was never meaningful,
+  so displaying the whole set is both simpler and strictly more correct than picking one.
+- **Rule**: When a user reports "I don't see X" and a fix doesn't resolve it, don't assume the fix
+  was incomplete or re-litigate the same component harder — ask what's literally on screen (or
+  wait for a screenshot) before going deeper. A single screenshot located the real component in
+  one turn; the two prior turns of text-only description had been about a real bug, just not the
+  one on screen. Every symptom the user narrates first is not guaranteed to be the same feature.
+
+## #75 — "show everything" is the lazy fix, not the correct one, when the real ask is "rank and pick" (2026-09-10)
+
+- **Problem**: Fixed #74 (`UserMenu.tsx`'s arbitrary `roles[0]`) by joining ALL of a user's roles
+  into the badge (`user.roles.join(", ")`). Technically stopped hiding information, shipped fast —
+  but was the wrong UX call. User, correctly and bluntly: a sidebar identity badge should show ONE
+  thing, the user's highest-level role, not a comma-mashed list that truncates illegibly
+  ("Subscriber, Operation...") the moment someone holds more than one role. "Show everything" is
+  the shape of fix you reach for under time pressure specifically because it avoids having to
+  define what "highest" even means — it dodges the actual design question instead of answering it.
+- **Fix**: Went back to a single-role display, but fixed the data instead of papering over it.
+  `authService.ts`'s `getUserWithRolesAndPermissions` now orders `roles[]` by how many permissions
+  each role actually grants (descending, `LEFT JOIN role_permission ... GROUP BY ... ORDER BY
+  count(...) DESC`) — verified against real seeded data first (`Administrator` 30 perms,
+  `Operations Admin` 26, `Paid Subscriber` 22, `Subscriber` 12 — a clean, real hierarchy, not
+  invented). `roles[0]` is now genuinely "this user's highest role." `UserMenu.tsx` goes back to
+  displaying just `roles[0]`, now correct instead of arbitrary. Permission-count-as-rank was chosen
+  specifically because it needs no hardcoded role-name list to maintain — this app supports
+  admin-created custom roles (`role` table's own doc comment), and a name-based rank table would
+  silently misrank every future one.
+- **Rule**: When "just show all of it" removes an arbitrary-selection bug, check whether the UI
+  slot was ever meant to hold a LIST — a single-line identity badge wasn't. If the real fix is
+  "pick correctly," find or build the actual ranking signal (here: permission count, already
+  sitting in the DB) rather than dodging the ranking question by displaying the whole set.

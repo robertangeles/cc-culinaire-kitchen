@@ -4,6 +4,111 @@ Append-only. Newest entry on top.
 
 ---
 
+## 2026-09-06 — Partial-day public holidays + AU 2026-2027 seed
+
+- User hit `publishRoster()`'s "Public holidays for VIC 2026 are not loaded" gate while testing
+  the roster calendar fixes. Asked to load Australia's public holidays to unblock it — scaled to
+  all 8 jurisdictions, 2026-2027, per explicit confirmation.
+- Spawned one research agent per jurisdiction (8 total) against each state's own primary
+  `.gov.au`/legislation source, cross-checked results against a self-computed Easter algorithm —
+  zero discrepancies. Surfaced a real gap along the way: 3 states (QLD/SA/NT) gazette Christmas
+  Eve (+ SA/NT's New Year's Eve) as a public holiday only from a set evening time, not the whole
+  date — the `public_holiday` table had no time-of-day at all.
+- User asked directly why not fix the model instead of working around it — correct call. Added
+  `public_holiday.partialDayFromTime` (nullable "HH:MM", null = ordinary full-day holiday, zero
+  behavior change for every existing/future full-day row) and taught `isPublicHoliday()` an
+  optional `shiftEndTimeOnDate` parameter so a shift that never reaches the threshold correctly
+  isn't treated as falling on the holiday. Wired into both real call sites (`publishRoster()`,
+  `consentService.ts`'s `assertShiftIsPublicHoliday()`) via a new `shiftEndTimeOnStartDate()` /
+  `toVenueLocalTime()` pair in `rosterService.ts`. Full TDD: failing unit test for the pure
+  comparison logic, failing integration test for the real-DB round-trip and the `publishRoster()`/
+  `requestConsent()` threshold behavior, then the fix.
+- Seeded 225 rows (`scripts/seedAuPublicHolidays20262027.ts`, idempotent) — national + genuinely
+  statewide holidays only, explicitly excluding local/regional observances (would wrongly gate
+  every venue in a state, not just the town) and NSW's "Bank Holiday" (industry-narrow, not
+  observed by hospitality). Verified end to end: all 8×2 jurisdiction/year combinations now load,
+  and a QLD Dec-24 shift ending 5pm vs 8pm correctly answers false/true for `isPublicHoliday()`.
+- Full regression: unit (1154 passed), full real-DB integration (1320 total incl. new tests),
+  `tsc:check` + `pnpm build` clean across all 3 packages. See [[roster-core]].
+
+## 2026-09-06 — Second /code-review pass on PR #109: 6 more fixes via TDD, incl. 2 silent-corruption bugs
+
+- User asked to run `/code-review` again on PR #109; ran 5 parallel review angles (correctness,
+  cross-file impact, reuse/duplication, simplification/efficiency, conventions) and got 8 raw
+  findings (with overlap). Compiled, ranked, and sequenced 6 for a fix pass; 1 deferred to
+  `tasks/todo.md`.
+- Also spawned `pr-reviewer` on the three other open PRs (#106, #107, #108) at the user's request
+  ("be liberal in spawning subagents") — #106 approved clean, #107 got a real fix (an "Other"
+  duplicate-guard gap) plus a title reword (overclaimed "closes" a risk it only mitigates
+  client-side) and an unrelated bundled commit dropped via rebase + force-push, #108 approved with
+  a note to merge `main` in first (stale `mergeStateStatus: DIRTY`, no real conflict).
+- Two of the six PR #109 fixes were genuine silent-data-corruption bugs: dragging to resize/move
+  an overnight shift could rewrite it with the end before the start (no error shown), and a
+  timezone-behind-UTC viewer could have real Sunday-night shifts silently vanish from the
+  calendar. Also caught, independently confirmed against the actual built CSS bundle: 6 of 8
+  role-legend colors were invisible in production because the color class was built via a runtime
+  `.replace()` that Tailwind's JIT scanner never sees.
+- Fixed `claimSwap()`'s inconsistency with `assignStaff()`'s Declined-row reactivation by
+  extracting one shared, atomic `insertOrReactivateAssignment()` helper (`ON CONFLICT ... DO
+  UPDATE ... WHERE status = 'Declined'`) — this also closes a race the prior
+  SELECT-then-branch-then-UPDATE pattern had, by construction rather than by adding a lock.
+- Every fix followed strict TDD: wrote the failing test, ran it to confirm red (the resize-guard
+  test's captured payload literally showed `endDatetime` before `startDatetime`), then fixed.
+  Full regression: `pnpm test` (1143 passed), full `pnpm test:integration` (1306 passed, 97
+  files), `tsc:check` and `pnpm build` all clean across all 3 packages.
+- Recorded in `wiki/entities/roster-core.md` and `tasks/todo.md`; see [[roster-core]].
+
+## 2026-09-05 — /code-review on PR #109's merge caught 4 more pre-existing bugs
+
+- Ran `/code-review 109` as the pre-merge check for Phase 2 admin (a step up from the
+  `pr-reviewer` subagent pass, which had already approved). Found 7 issues; 5 fixed, 2 deferred
+  to `tasks/todo.md`.
+- The most serious: my own "+Nd" badge fix from the prior entry was correctly flagging multi-day
+  shifts, but sitting on top of a still-broken block — any *overnight* shift (not just a genuine
+  multi-day one) collapses to an 18px sliver via the same `minutesSinceMidnight` date-stripping,
+  since `endMinutes - startMinutes` goes negative when the end time-of-day is numerically earlier
+  than the start's. Fixed by rendering from start-time to the bottom of the visible day instead.
+- `assignStaff()`'s duplicate-assignment guard (from the original branch) blocked re-offering a
+  shift to someone who'd declined it, with a factually wrong "already assigned" message — the old
+  Declined row (kept for audit, per the schema's `idx_shift_assignment_unique`) permanently
+  occupied the unique slot. Fixed by reactivating that row instead of inserting a second one.
+  Also closed the guard's own TOCTOU gap (SELECT-then-INSERT with no lock) by catching the
+  underlying Postgres `23505` directly, matching this codebase's existing pattern in four other
+  services.
+- `todayIso()` used a bare UTC slice — the exact bug class this branch's own resize-gesture fix
+  already fixed once (commit 17e4ee6), reintroduced fresh in a sibling function. Fixed to reuse
+  `localDayIso()`.
+- A render-loop memoization gap (`daySpan`/`formatShiftRange` recomputed per shift per render,
+  including pointermove-frequency drag renders) — the exact problem this branch's own perf pass
+  already solved once for `shiftsForLane` (commit 38ff4fa). Precomputed into a sibling map.
+- Full regression clean after all fixes: shared 104, client 205 (+3 new tests for the height and
+  reactivate-on-decline fixes), server 1143 (+1 new), real-DB integration 1304/1304.
+
+---
+
+## 2026-09-04 — Roster week calendar (PR #109) merged: Phase 2 admin of the incident plan
+
+- Merged `main` (Phase 1's shift-time fix) into `feature/ck-web/roster-week-calendar`, resolving
+  two wiki-only conflicts (kept both sections, newest-first in the log); all server/client code
+  merged cleanly.
+- The plan going in assumed a multi-day shift would render as an absurdly tall block on the
+  calendar — reading the actual rendering code (`minutesSinceMidnight` strips the date on both
+  start and end) showed the opposite: a multi-day shift renders as an ordinary, correctly-sized
+  same-day block with no visual sign it's wrong. Fixed by adding an amber "+Nd" badge whenever a
+  shift's local start/end days differ, and replacing a fourth independent copy of the
+  date-swallowing time-range formatter (`formatTimeRange`) with the shared `formatShiftRange()`.
+- Bumped three (later four) real-DB integration tests in `roster.integration.test.ts` from the
+  default 30s to 60s — confirmed via a direct `SELECT 1` ping (~2s round-trip vs the normal
+  <0.5s) that this was the documented Singapore-DB-latency flakiness, not a regression: the
+  failing tests are in the public-holiday-consent subsystem, untouched by this branch's diff,
+  and were passing cleanly before latency degraded mid-session.
+- New `RosterCalendarView.test.tsx` (2 tests) — the badge logic is pure render/data, unlike the
+  drag gestures this branch's own QA plan already discloses as manual-only.
+- Full regression clean: shared 104, client 204, server 1143 (+160 gated integration), real-DB
+  integration 1303/1303.
+
+---
+
 ## 2026-09-04 — Roster shift-time bug fix (Phase 1 of the incident plan)
 
 - `feature/ck-web/roster-shift-time-fix`: root cause was two dev-DB "Duty Manager" shifts
@@ -24,6 +129,90 @@ Append-only. Newest entry on top.
   merging PR #109's already-built drag-to-build week calendar with a multi-day-shift guard,
   a published-only staff agenda redesign, a server-side 24h duration guard, and double-
   booking overlap warnings.
+
+---
+
+## 2026-08-31 — Shipped feature/ck-web/roster-week-calendar: full pre-landing + adversarial review
+
+- Ran the full `/ship` pipeline on this branch. Coverage audit came back 47% — below the 60% gate,
+  but structurally different from a genuine oversight: server-side (`getWeekCalendar`, the
+  duplicate-assignment guard, the permission boundary) and the pure math module are solidly
+  tested with real-DB integration tests; the uncovered surface is almost entirely
+  `RosterCalendarView.tsx`'s drag gestures, which this branch's own wiki/QA-test-plan already
+  disclose as manual-QA-only (jsdom can't exercise real pointer-event hit-testing). Accepted as
+  disclosed rather than forcing brittle stub-based tests.
+- Pre-landing review found and fixed: a CRITICAL performance issue — `shiftsForLane()` re-filtered
+  the full shift list on every pointermove-triggered render during a drag — memoized into a Map;
+  a redundant `elementFromPoint` hit-test and a value recomputed up to 4x per shift per render,
+  both independently caught by two specialists; a missing permission-boundary test row for the new
+  `GET /shifts/calendar` route; dead code (`cancel`/`removeAssignment` on `useRosterCalendar`, zero
+  callers); a real gap in `useRosterCalendar`'s own test coverage (zero tests despite an
+  established pattern already in this codebase) and in the Declined-assignment exclusion (no test
+  proved a declined assignee reads as unassigned).
+- **Adversarial review found a real, deterministic silent-data-corruption bug, confirmed by direct
+  code read before acting on it**: the resize gesture derived a shift's calendar day via
+  `.toISOString().slice(0, 10)` (the UTC day) while every other path in the file used the LOCAL
+  day. For this app's own AU deployment timezone, any shift starting before ~10-11am local is
+  stored with a UTC date one day earlier — resizing it silently moved the shift a calendar day
+  backward, and the server accepted it with no error since only `end > start` was checked. Fixed by
+  extracting `localDayIso()` into `rosterCalendarMath.ts` (this branch's own pure-math module) and
+  reusing it everywhere; two new unit tests reproduce the exact UTC/local disagreement via a `TZ`
+  override. Full detail, plus four disclosed-not-fixed lower-severity findings (overnight-shift
+  drag, same-role overlap ambiguity, multi-touch safety, unbounded date range), in
+  [[roster-core]]'s "Week calendar" section.
+
+## 2026-08-30 — Roster week calendar (drag-to-build) + design manual
+
+- User feedback on the plain-form "Shifts" tab ("no calendar, just a form")
+  led to a new "Calendar" tab: a real drag-to-build week grid, not a
+  read-only view. X = 7 day columns, each subdivided into one sub-lane per
+  role (role is immutable on a shift once created, so it has to be a
+  spatial axis for a drag-create gesture to know its role without an extra
+  picker). Y = time-of-day, full 24h scroll. Four gestures — create,
+  reschedule, resize, assign — map onto the four mutations the Shift
+  builder already exposed; only one new read endpoint was needed
+  (`GET /shifts/calendar`, one row per shift with role + assignees inline,
+  avoiding the N+1 a naive per-shift fetch would cause for a whole week).
+- Hand-rolled Pointer Events + `elementFromPoint`, no new dependency —
+  matches this repo's existing "no charting/DnD library" convention
+  (`MiniCalendar.tsx`, `StaffingCoverageView.tsx`). Position math (pixel↔
+  time, snap-to-grid, Monday-start week/day-column resolution, lane index)
+  extracted into a pure, separately unit-tested module
+  (`lib/rosterCalendarMath.ts`), same convention as `complianceExpiryMath.ts`.
+- Live drag-testing in the browser (via synthetic PointerEvents, then
+  Playwright's real mouse API for the E2E spec) surfaced two real bugs
+  neither unit nor integration tests could have caught: day columns never
+  got their initial ~6am scroll position (only the shared hour rail did,
+  since each day column scrolls independently until synced by a user
+  action), and a duplicate-assignment attempt hit the database's UNIQUE
+  constraint directly, surfacing a raw 500 instead of a clean error.
+  Both fixed; the second one is now a regression test in
+  `roster.integration.test.ts`.
+- Also caught mid-testing: a sequencing mistake in my own branch planning.
+  I initially planned the (unrelated) `compliance.spec.ts` E2E fix — found
+  while researching this feature — as a fresh branch off `main`, before
+  realizing the bug it fixes only exists on the still-unmerged
+  `feature/ck-web/operations-admin-role` branch. Caught before any commits
+  were made; the fix landed there instead, and this feature's own work
+  went on a separate fresh branch off `main`
+  (`feature/ck-web/roster-week-calendar`), since the two efforts share no
+  files and should merge independently in either order.
+- Added a "How it works" design-manual section to
+  `docs/qa/rostering-compliance-test-plan.md` (placed before the Phase 1
+  checklists) explaining the reasoning behind the whole compliance +
+  rostering system for a reader who wasn't in the room for the original
+  design decisions — why compliance is document-centric, why shifts are
+  role-first, why the Award engine ships empty on purpose, why public
+  holidays fail loud, the tenancy/permissions model, and the new calendar's
+  own design — plus a new RC-K test-case table for the Calendar tab itself.
+- Wiki updated: [[roster-core]]'s new "Week calendar" section, and its
+  "Known limits" E2E-coverage note corrected (no longer blanket-true now
+  that `roster-calendar.spec.ts` exists for this one flow).
+- Full regression clean: lint, tsc, 1139+ server unit tests, 166 client
+  tests, `rosterCalendarMath.test.ts` (16), `rosterCalendar.integration.test.ts`
+  (3/3) and `roster.integration.test.ts` (27/27, including the new
+  duplicate-assignment regression), `roster-calendar.spec.ts` (E2E, 2
+  passed + 1 gracefully skipped where no roster roles exist), build.
 
 ---
 
@@ -1257,3 +1446,99 @@ Moved the approved, fully-reviewed plan for **the Brain** (per-user + per-org AI
   the comment is now slightly stale but not incorrect as general reasoning.
 - Branch: `fix/ck-web/compliance-information-architecture`, PR #99. Not merged — reviewer does not
   merge.
+
+## 2026-09-07 — Roster Scheduling Templates: design → build, end to end
+
+A UX-review question ("is per-day shift creation burdensome for chefs/owners?") cascaded through
+`/plan-ceo-review` → `/office-hours` (design doc, APPROVED) → `/plan-eng-review` (architecture
+locked, 9 outside-voice findings resolved) → `/plan-design-review` (UI placement resolved against
+real mockups) → full TDD implementation, all in one session. Full detail in
+[[roster-core]]'s new "Scheduling Templates" section; design doc at
+`docs/designs/roster-scheduling-templates.md`.
+
+- **Demand evidence, not assumption:** a co-founder testing the product and Chef John Hand (Head
+  Chef, St Georges Restaurant — a named external operator, not a category) independently raised
+  the identical complaint. Matched against 7shifts'/Deputy's own documented "Scheduling
+  Templates"/"Copy previous week" features before any design work started.
+- **New entity:** `roster_shift_template` (role + day-of-week + start/end time, venue-scoped) +
+  `shift.sourceTemplateRowId`/`generatedForWeekStart` (nullable, unique-indexed pair).
+  `generateWeekFromTemplate` turns a saved pattern into real Draft shifts, best-effort per-row.
+- **Two real bugs caught by TDD before merge, not after:**
+  1. `resolveVenueLocalToUtc` (a genuinely new local→UTC direction — the existing
+     `toVenueLocalDate`/`toVenueLocalTime` only ever went the other way) needed a DST-transition
+     test, which the design doc explicitly called for and which passed only after a two-pass
+     offset-resolution implementation.
+  2. A bare `INSERT` + `23505` catch for the concurrent-generation race — correct for the
+     double-click case — silently broke "cancel a generated shift, then regenerate that slot",
+     since a Cancelled row still occupies its own unique key. A test written directly against the
+     design doc's own stated rollback semantics caught it immediately. Fixed with
+     `onConflictDoUpdate` + `setWhere: eq(status, "Cancelled")`, reusing the exact idiom
+     `insertOrReactivateAssignment` (this branch, earlier) already established for the same shape
+     of problem. Logged as `tasks/lessons.md` #71 — a status-flip pattern coexisting with a unique
+     constraint needs an upsert, not a catch.
+- **UI placement decided against real mockups, twice overriding the reviewer's own
+  recommendation:** first choosing inline-on-Calendar over a mechanically-cheaper new Roster tab,
+  then rejecting a literal cramped-popover mockup of that choice in favor of a clean second
+  toolbar row + centered modals (`RosterTemplatesToolbar`/`RosterTemplatesPanel.tsx`) — chosen
+  specifically to leave `RosterCalendarView.tsx`'s dense, hand-rolled drag-gesture code untouched.
+- **Fully tested:** unit (pure helpers, incl. DST), integration (16 cases incl. the concurrency
+  race and the cancel-then-regenerate scenario that caught bug #2 above), permission boundary (6
+  new routes × 4 rows each), client hook (11 cases), component (8 cases). `pnpm test`,
+  `pnpm tsc:check`, and `pnpm build` all green across all three packages.
+- **Not yet done:** code review, `git push`/PR. Logged in `tasks/todo.md`.
+
+## 2026-09-08 — Org admin bugs: a stale-closure race + a role-refactor gap that missed two functions
+
+User-reported: "Alex Charasse is org admin but can't view the Org Admin page" — a real member of
+"Almost French Pâtisserie" (`userOrganisation.role = 'admin'`, promoted via Team Members, not the
+org's original creator). Investigation found two independent bugs; both fixed with TDD. Full detail
+in `tasks/lessons.md` #73.
+
+1. **`ProfilePage.tsx`'s org-role fetch effect had `useEffect(..., [])`** whose async body read
+   `user?.userId` from `useAuth()` — which starts `null` and resolves later. A real race: if the
+   effect fired before auth resolved, `myOrgRole` stayed stuck at its default `"member"` forever,
+   hiding every admin-gated section of the Organisation tab. Fixed: `[user?.userId]`. A dedicated
+   Explore-agent sweep of the rest of `packages/client/src` (71 files touching `useAuth`/
+   `useLocation`, cross-checked against 276 files with `useEffect`) found no other live instance
+   of this bug class — it was isolated, not systemic.
+2. **`organisationService.ts`'s `updateOrganisation`/`regenerateJoinKey` still checked
+   `organisation.createdBy`** — a leftover from before commit `7a16311` ("Org members list +
+   role-based admin controls") introduced promotable admins via `userOrganisation.role`. That
+   commit updated member-management endpoints and the client's UI gating to the new role-based
+   model, but never touched these two functions. Fixed: both now check `getMembership(...).role
+   === "admin"`, matching `updateMemberRole`/`removeMember`'s existing pattern. New
+   `organisationService.integration.test.ts` (6 cases) covers a promoted (non-creator) admin,
+   the creator, and a plain member for both functions.
+
+**Cleanup, same pass:** swept 84 untracked stray `tsc -b` build artifacts (`.js`/`.d.ts` files
+shadowing source) across all three packages — confirmed none tracked before deleting, same
+recurring quirk logged earlier this session.
+
+**Found, not touched — flagged for the user's own next-step review, not fixed unilaterally:**
+- Organisation address fields (`organisationAddressLine1/2/Suburb/State/Country/Postcode`) have a
+  DB column, a working PII-encryption function (`encryptOrgPii`, correctly builds an encrypted
+  blob when given real data) — but `createOrganisation`/`updateOrganisation`'s own input types
+  never include them, so `encryptOrgPii` is always called with hardcoded `null`s for every address
+  field. The edit form has no address input fields at all, and the read view never displays them.
+  A real feature, apparently scaffolded then left unfinished — not literally dead code, since the
+  schema/PII plumbing is real and correct, just never wired end to end.
+- `POST /api/organisations/:id/regenerate-key` (`regenerateJoinKey`) has a working, tested route
+  and service function — zero client UI calls it. No regenerate-key button exists anywhere.
+- `OrgMember.joinedAt` is typed `string` (required) on the client but the server always sends
+  `null` (`userOrganisation` has no timestamp column at all) — and it's never rendered anywhere in
+  `TeamMembersSection`. Would need a real schema column to ever be genuine.
+
+## 2026-09-10 — The actual "Subscriber" bug: UserMenu's arbitrary roles[0]
+
+User reported "still can't see Alex's Org Admin page" after the 09-08 fix and sent a screenshot —
+it showed the sidebar account menu (`components/layout/UserMenu.tsx`), not `ProfilePage.tsx`'s
+Organisation tab. Full detail in `tasks/lessons.md` #74 — including the miss: this was almost
+certainly the user's ORIGINAL "why is his role just Subscriber" question from two turns earlier,
+answered with an explanation of the *global vs org-level role systems* at the time, but the actual
+UI bug behind it wasn't found until a screenshot pinned down which component was on screen.
+
+`UserMenu.tsx:39`: `const primaryRole = user.roles[0] ?? "Subscriber"`. Alex holds two global
+roles (`Subscriber`, `Operations Admin`); `authService.ts`'s `getUserWithRolesAndPermissions`
+fetches them with no `ORDER BY`, so array order is incidental, not "most privileged first." Fixed:
+show every role (`user.roles.join(", ")`) instead of picking one arbitrarily. 5 new tests
+(`UserMenu.test.tsx`), full client suite green (232 tests), `tsc -b` clean.
