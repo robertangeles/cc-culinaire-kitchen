@@ -438,7 +438,27 @@ export function RosterCalendarView() {
           {/* Hour rail */}
           <div className="w-12 flex-shrink-0 border-r border-dark-200 bg-dark-50">
             <div className="h-8 border-b border-dark-200" />
-            <div ref={gridRef} className="overflow-y-auto" style={{ height: 420 }} id="roster-calendar-hour-rail">
+            <div
+              ref={gridRef}
+              className="overflow-y-auto"
+              style={{ height: 420 }}
+              id="roster-calendar-hour-rail"
+              onScroll={(e) => {
+                // Day columns are overflow-y-hidden (a single visible
+                // scrollbar here, not seven) so this hour rail is the only
+                // element a real scroll gesture (wheel/touch/scrollbar drag)
+                // ever lands on. Without this handler that scroll never
+                // reached scrollerRefs — the day columns' onScroll below
+                // only fires from a scroll THEY receive, which overflow:
+                // hidden makes impossible — so shift blocks stayed frozen
+                // at whatever scrollTop the mount effect set, regardless of
+                // where the hour labels had scrolled to.
+                const top = e.currentTarget.scrollTop;
+                for (const el of scrollerRefs.current) {
+                  if (el) el.scrollTop = top;
+                }
+              }}
+            >
               <div style={{ height: GRID_HEIGHT }} className="relative">
                 {Array.from({ length: 24 }, (_, h) => (
                   <div

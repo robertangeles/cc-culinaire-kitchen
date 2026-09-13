@@ -153,4 +153,28 @@ describe("RosterCalendarView multi-day shift badge", () => {
       expect(source).toContain(`border-${color}-500`);
     }
   });
+
+  it("scrolling the hour rail moves the day columns (and their shift blocks) with it", () => {
+    mockCalendarShifts = [calendarShift({})];
+    render(<RosterCalendarView />);
+
+    const hourRail = document.getElementById("roster-calendar-hour-rail") as HTMLElement;
+    const dayColumn = document.querySelector('[data-day-iso][data-role-id]')!.closest(
+      "div.overflow-y-hidden",
+    ) as HTMLElement;
+    expect(hourRail).toBeTruthy();
+    expect(dayColumn).toBeTruthy();
+
+    // The hour rail is the only element overflow lets a real scroll gesture
+    // land on (day columns are overflow-y-hidden by design, to avoid seven
+    // visible scrollbars) — so this is the scroll a user's wheel/touch
+    // actually produces. Before the fix, day columns had no way to hear it:
+    // their own onScroll only fires from a scroll THEY receive, which
+    // overflow:hidden makes impossible, so shift blocks stayed frozen at
+    // the mount-time scrollTop no matter how far the hour rail scrolled.
+    hourRail.scrollTop = 300;
+    fireEvent.scroll(hourRail);
+
+    expect(dayColumn.scrollTop).toBe(300);
+  });
 });
