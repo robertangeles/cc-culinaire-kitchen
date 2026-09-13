@@ -21,12 +21,20 @@ import {
  * Real-database behaviour of organisation management, gated on TENANT_IT=1
  * same convention as roster.integration.test.ts. Covers the createdBy-vs-role
  * authorization bug found while investigating "Alex can't view the Org Admin
- * page": updateOrganisation/regenerateJoinKey originally checked
- * organisation.createdBy only, ignoring userOrganisation.role entirely — a
- * member PROMOTED to admin (via updateMemberRole, the exact mechanism the
- * Team Members UI uses) could never actually update org details or rotate
- * the join key, even though they're a real admin by every other measure in
- * the app (client UI gating, member-management endpoints).
+ * page": these originally checked organisation.createdBy only, ignoring
+ * userOrganisation.role entirely — a member PROMOTED to admin (via
+ * updateMemberRole, the exact mechanism the Team Members UI uses) could
+ * never actually update org details or rotate the join key, even though
+ * they're a real admin by every other measure in the app (client UI
+ * gating, member-management endpoints).
+ *
+ * On main this landed as a controller-level fix instead: updateOrganisation
+ * no longer takes a userId or checks membership itself — authorization is
+ * handleUpdateOrganisation's isOrgManager gate (see
+ * organisation.tenant.integration.test.ts for that coverage). The
+ * updateOrganisation tests below only verify the persistence behaviour is
+ * unaffected by who the (already-authorized) caller is.
+ * regenerateJoinKey still does its own membership check, unchanged.
  */
 const RUN = process.env.TENANT_IT === "1";
 
@@ -74,20 +82,9 @@ describe.skipIf(!RUN)("organisationService (real DB)", () => {
   });
 
   describe("updateOrganisation", () => {
-    it("succeeds for a member PROMOTED to admin (not the creator) — the bug scenario", async () => {
-      const updated = await updateOrganisation(promotedAdminId, orgId, { name: `${tag} Org (renamed by promoted admin)` });
-      expect(updated.organisationName).toBe(`${tag} Org (renamed by promoted admin)`);
-    });
-
-    it("still succeeds for the creator — regression", async () => {
-      const updated = await updateOrganisation(creatorId, orgId, { name: `${tag} Org (renamed by creator)` });
-      expect(updated.organisationName).toBe(`${tag} Org (renamed by creator)`);
-    });
-
-    it("rejects a plain (non-admin) member", async () => {
-      await expect(updateOrganisation(memberId, orgId, { name: "Should not save" })).rejects.toThrow(
-        /admin/i,
-      );
+    it("persists a name change (authorization is the controller's job — see organisation.tenant.integration.test.ts)", async () => {
+      const updated = await updateOrganisation(orgId, { name: `${tag} Org (renamed)` });
+      expect(updated.organisationName).toBe(`${tag} Org (renamed)`);
     });
   });
 
