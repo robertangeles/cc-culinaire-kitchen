@@ -21,9 +21,9 @@ const weekStartIso = mondayOfWeek(new Date().toISOString().slice(0, 10));
 // ISO string anchored to UTC can silently roll onto a different local day
 // depending on the test runner's timezone — the exact bug class this badge
 // exists to catch, now in fixture form if built the wrong way.
-function localIso(dayIso: string, hour: number): string {
+function localIso(dayIso: string, hour: number, minute = 0): string {
   const [y, m, d] = dayIso.split("-").map(Number);
-  return new Date(y, m - 1, d, hour, 0, 0, 0).toISOString();
+  return new Date(y, m - 1, d, hour, minute, 0, 0).toISOString();
 }
 
 function calendarShift(overrides: Partial<{ shiftId: string; startDatetime: string; endDatetime: string }>) {
@@ -209,5 +209,36 @@ describe("RosterCalendarView multi-day shift badge", () => {
 
     fireEvent.mouseLeave(block);
     expect(document.body.querySelector(".fixed.z-50.pointer-events-none")).not.toBeInTheDocument();
+  });
+
+  it("two overlapping shifts for the same role render side-by-side, not stacked on top of each other", () => {
+    // Two real (non-Cancelled) Draft shifts, same role/day, overlapping
+    // 8:00-8:15am — exactly the "overlap for Sep 14 8AM" report: 7:45-8:15am
+    // and 8:00-9:00am both assigned to Front of House at the same venue.
+    mockCalendarShifts = [
+      calendarShift({ shiftId: "shift-a", startDatetime: localIso(weekStartIso, 7, 45), endDatetime: localIso(weekStartIso, 8, 15) }),
+      calendarShift({ shiftId: "shift-b", startDatetime: localIso(weekStartIso, 8), endDatetime: localIso(weekStartIso, 9) }),
+    ];
+    render(<RosterCalendarView />);
+    const blockA = document.querySelector('[data-shift-id="shift-a"]') as HTMLElement;
+    const blockB = document.querySelector('[data-shift-id="shift-b"]') as HTMLElement;
+    expect(blockA).toBeTruthy();
+    expect(blockB).toBeTruthy();
+    expect(blockA.style.left).not.toBe(blockB.style.left);
+    expect(blockA.style.width).toContain("50%");
+    expect(blockB.style.width).toContain("50%");
+  });
+
+  it("non-overlapping shifts for the same role still use the lane's full width", () => {
+    mockCalendarShifts = [
+      calendarShift({ shiftId: "shift-a", startDatetime: localIso(weekStartIso, 8), endDatetime: localIso(weekStartIso, 9) }),
+      calendarShift({ shiftId: "shift-b", startDatetime: localIso(weekStartIso, 10), endDatetime: localIso(weekStartIso, 11) }),
+    ];
+    render(<RosterCalendarView />);
+    const blockA = document.querySelector('[data-shift-id="shift-a"]') as HTMLElement;
+    const blockB = document.querySelector('[data-shift-id="shift-b"]') as HTMLElement;
+    expect(blockA.style.left).toBe(blockB.style.left);
+    expect(blockA.style.width).toBe(blockB.style.width);
+    expect(blockA.style.width).toContain("100%");
   });
 });

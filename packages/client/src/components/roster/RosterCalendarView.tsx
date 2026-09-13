@@ -114,6 +114,38 @@ function dragOverrideFor(drag: DragState | null, shiftId: string): { start: numb
   return null;
 }
 
+/**
+ * Two real (non-Cancelled) shifts for the same role can genuinely overlap
+ * in time — a second person double-booked, or just two Draft shifts drawn
+ * a few minutes apart before either is finalised. Every shift in a lane
+ * used to render at the lane's full width regardless, so any overlap made
+ * two blocks sit exactly on top of each other with no visual sign a second
+ * one even existed underneath. Classic interval-scheduling column
+ * assignment instead: sort by start, reuse the first column whose current
+ * occupant has already ended, otherwise open a new one — same algorithm
+ * a calendar app's day view uses to lay out overlapping meetings
+ * side-by-side. Returns each item's column index and the lane's overall
+ * column count (1 when nothing overlaps, so the common case is untouched).
+ */
+function assignOverlapColumns(items: { start: number; end: number }[]): { colIndex: number; colCount: number }[] {
+  const order = items.map((_, i) => i).sort((a, b) => items[a].start - items[b].start || items[a].end - items[b].end);
+  const colEndsMinutes: number[] = [];
+  const colOf: number[] = new Array(items.length);
+  for (const i of order) {
+    const item = items[i];
+    let col = colEndsMinutes.findIndex((end) => end <= item.start);
+    if (col === -1) {
+      col = colEndsMinutes.length;
+      colEndsMinutes.push(item.end);
+    } else {
+      colEndsMinutes[col] = item.end;
+    }
+    colOf[i] = col;
+  }
+  const colCount = colEndsMinutes.length;
+  return items.map((_, i) => ({ colIndex: colOf[i], colCount }));
+}
+
 type DragState =
   | { kind: "create"; dayIso: string; roleId: string; anchorMinutes: number; nowMinutes: number }
   | { kind: "move"; shift: CalendarShift; grabOffsetMinutes: number; durationMinutes: number; dayIso: string; startMinutes: number }
@@ -561,48 +593,67 @@ export function RosterCalendarView() {
                             />
                           )}
 
-                          {shiftsForLane(dayIso, role.rosterRoleId).map((s) => {
-                            const override = dragOverrideFor(drag, s.shiftId);
-                            // A shift spanning multiple calendar days renders once, in its
-                            // start day's lane, sized to only that day's minutes (see the
-                            // module doc on minutesSinceMidnight) — which otherwise looks
-                            // exactly like a normal same-day shift with no visual sign the
-                            // remaining days exist. This badge is that sign. Precomputed in
-                            // shiftDisplayInfo above (storedStartMinutes/storedEndMinutes
-                            // included), not re-derived per render.
-                            const { daySpan, rangeLabel, storedStartMinutes, storedEndMinutes } = shiftDisplayInfo.get(s.shiftId)!;
-                            const startMinutes = override?.start ?? storedStartMinutes;
-                            const endMinutes = override?.end ?? storedEndMinutes;
+                          {(() => {
+                            const laneShifts = shiftsForLane(dayIso, role.rosterRoleId).map((s) => {
+                              const override = dragOverrideFor(drag, s.shiftId);
+                              // A shift spanning multiple calendar days renders once, in its
+                              // start day's lane, sized to only that day's minutes (see the
+                              // module doc on minutesSinceMidnight) — which otherwise looks
+                              // exactly like a normal same-day shift with no visual sign the
+                              // remaining days exist. This badge is that sign. Precomputed in
+                              // shiftDisplayInfo above (storedStartMinutes/storedEndMinutes
+                              // included), not re-derived per render.
+                              const { daySpan, rangeLabel, storedStartMinutes, storedEndMinutes } = shiftDisplayInfo.get(s.shiftId)!;
+                              const startMinutes = override?.start ?? storedStartMinutes;
+                              const endMinutes = override?.end ?? storedEndMinutes;
+                              // When a shift's end falls on a different local day (any overnight
+                              // shift, not just a genuine multi-day one — e.g. 10pm-2am has
+                              // storedStartMinutes=1320, storedEndMinutes=120), storedEndMinutes
+                              // alone is <= storedStartMinutes, so using it as the block's bottom
+                              // edge collapses the height to the 18px floor instead of showing
+                              // anything. Render such a shift from its start down to the bottom
+                              // of the visible day instead — the "+Nd" badge is what actually
+                              // communicates "this continues past what's drawn here". Only the
+                              // static render is clamped: a resize/move drag still seeds itself
+                              // from the true (unclamped) endMinutes below, since overnight/
+                              // multi-day shifts are already disclosed as undraggable, not
+                              // silently corrupted.
+                              const visualEndMinutes = !override && daySpan > 0 ? 24 * 60 : endMinutes;
+                              return { s, daySpan, rangeLabel, storedStartMinutes, storedEndMinutes, startMinutes, visualEndMinutes };
+                            });
+                            // Two real (non-Cancelled) shifts for this role can genuinely
+                            // overlap in time — see assignOverlapColumns's own doc. Laid out
+                            // side-by-side instead of directly on top of each other.
+                            const columns = assignOverlapColumns(laneShifts.map((l) => ({ start: l.startMinutes, end: l.visualEndMinutes })));
+
+                            return laneShifts.map((l, i) => {
+                            const { s, daySpan, rangeLabel, storedStartMinutes, storedEndMinutes, startMinutes, visualEndMinutes } = l;
+                            const { colIndex, colCount } = columns[i];
                             const isDraft = s.status === "Draft";
                             const isDropTarget = drag?.kind === "assign" && drag.overShiftId === s.shiftId;
-                            // When a shift's end falls on a different local day (any overnight
-                            // shift, not just a genuine multi-day one — e.g. 10pm-2am has
-                            // storedStartMinutes=1320, storedEndMinutes=120), storedEndMinutes
-                            // alone is <= storedStartMinutes, so using it as the block's bottom
-                            // edge collapses the height to the 18px floor instead of showing
-                            // anything. Render such a shift from its start down to the bottom
-                            // of the visible day instead — the "+Nd" badge is what actually
-                            // communicates "this continues past what's drawn here". Only the
-                            // static render is clamped: a resize/move drag still seeds itself
-                            // from the true (unclamped) endMinutes below, since overnight/
-                            // multi-day shifts are already disclosed as undraggable, not
-                            // silently corrupted.
-                            const visualEndMinutes = !override && daySpan > 0 ? 24 * 60 : endMinutes;
 
                             const hoverText = `${role.roleName} — ${rangeLabel} — ${
                               s.assignments.length === 0 ? "Unassigned" : s.assignments.map((a) => a.staffName).join(", ")
                             } — ${s.status}`;
 
+                            const widthPct = 100 / colCount;
+                            const leftPct = colIndex * widthPct;
+
                             return (
                               <div
                                 key={s.shiftId}
                                 data-shift-id={isDraft ? s.shiftId : undefined}
-                                className={`absolute left-0.5 right-0.5 rounded border-l-4 px-1.5 py-1 text-[11px] leading-tight overflow-hidden ${roleAccent(role.rosterRoleId, roleIds)} ${
+                                className={`absolute rounded border-l-4 px-1.5 py-1 text-[11px] leading-tight overflow-hidden ${roleAccent(role.rosterRoleId, roleIds)} ${
                                   isDraft
                                     ? `bg-dark-100 border border-dark-300 ${daySpan > 0 ? "" : "cursor-grab active:cursor-grabbing"}`
                                     : "bg-dark-200/70 border border-dark-300/50 opacity-90"
                                 } ${isDropTarget ? "ring-2 ring-gold" : ""}`}
-                                style={{ top: pixelForMinutes(startMinutes, HOUR_HEIGHT), height: Math.max(18, pixelForMinutes(visualEndMinutes - startMinutes, HOUR_HEIGHT)) }}
+                                style={{
+                                  top: pixelForMinutes(startMinutes, HOUR_HEIGHT),
+                                  height: Math.max(18, pixelForMinutes(visualEndMinutes - startMinutes, HOUR_HEIGHT)),
+                                  left: `calc(${leftPct}% + 2px)`,
+                                  width: `calc(${widthPct}% - 4px)`,
+                                }}
                                 onMouseEnter={(e) => {
                                   setHoverInfo(hoverText);
                                   positionHoverTooltip(e.clientX, e.clientY);
@@ -660,7 +711,8 @@ export function RosterCalendarView() {
                                 {!isDraft && <div className="text-dark-600 italic">{s.status}</div>}
                               </div>
                             );
-                          })}
+                            });
+                          })()}
                         </div>
                       ))}
                     </div>
