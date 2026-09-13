@@ -32,8 +32,15 @@ import {
   respondToAssignment,
   removeAssignment,
   publishRoster,
+  listTemplates,
+  createTemplateRow,
+  updateTemplateRow,
+  deleteTemplateRow,
+  generateWeekFromTemplate,
+  undoGeneration,
   RosterError,
   AssignmentBlockedError,
+  RoleVenueConflictError,
 } from "../services/rosterService.js";
 import {
   listPublicHolidays,
@@ -46,6 +53,10 @@ import { requestConsent, respondToConsent } from "../services/consentService.js"
 const RoleSchema = z.object({
   roleName: z.string().min(1).max(100),
   storeLocationId: z.string().uuid().nullable().optional(),
+});
+
+const RoleUpdateSchema = RoleSchema.extend({
+  confirmed: z.boolean().optional(),
 });
 
 const RoleDocumentsSchema = z.object({
@@ -87,6 +98,19 @@ const PublishSchema = z.object({
   to: z.string().min(1),
 });
 
+const TemplateRowSchema = z.object({
+  storeLocationId: z.string().uuid(),
+  rosterRoleId: z.string().uuid(),
+  dayOfWeek: z.number().int().min(0).max(6),
+  startTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "startTime must be HH:MM"),
+  endTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "endTime must be HH:MM"),
+});
+
+const GenerateWeekSchema = z.object({
+  storeLocationId: z.string().uuid(),
+  weekStart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "weekStart must be YYYY-MM-DD"),
+});
+
 const PublicHolidaySchema = z.object({
   jurisdiction: z.string().min(1).max(50),
   holidayDate: z.string().min(1),
@@ -95,12 +119,34 @@ const PublicHolidaySchema = z.object({
   regionNote: z.string().max(500).nullable().optional(),
   sourceCitation: z.string().max(500).nullable().optional(),
   loadedForYear: z.number().int().min(2000).max(2100),
+  partialDayFromTime: z
+    .string()
+    .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "partialDayFromTime must be HH:MM (24h)")
+    .nullable()
+    .optional(),
 });
 
+// Most-derived-first: a RosterError subclass carrying extra structured data
+// must be listed here, ahead of the generic RosterError fallback below, or
+// `instanceof RosterError` matches first and the extra field is silently
+// dropped from the response (bit this codebase once already with
+// AssignmentBlockedError before RoleVenueConflictError existed).
+const ERROR_EXTRA_FIELD: [
+  (err: RosterError) => boolean,
+  (err: RosterError) => Record<string, unknown>,
+][] = [
+  [(err) => err instanceof AssignmentBlockedError, (err) => ({ blocked: (err as AssignmentBlockedError).info })],
+  [
+    (err) => err instanceof RoleVenueConflictError,
+    (err) => ({ conflicts: (err as RoleVenueConflictError).conflicts }),
+  ],
+];
+
 function handleServiceError(err: unknown, res: Response, next: NextFunction): void {
-  if (err instanceof AssignmentBlockedError) {
-    res.status(err.statusCode).json({ error: err.message, blocked: err.info });
-  } else if (err instanceof RosterError || err instanceof PublicHolidayError) {
+  if (err instanceof RosterError) {
+    const match = ERROR_EXTRA_FIELD.find(([matches]) => matches(err));
+    res.status(err.statusCode).json({ error: err.message, ...(match ? match[1](err) : {}) });
+  } else if (err instanceof PublicHolidayError) {
     res.status(err.statusCode).json({ error: err.message });
   } else {
     next(err);
@@ -147,7 +193,7 @@ export async function handleUpdateRole(req: Request, res: Response, next: NextFu
   try {
     const ctx = await resolveContext(req, res);
     if (!ctx) return;
-    const parsed = RoleSchema.safeParse(req.body);
+    const parsed = RoleUpdateSchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({ error: parsed.error.errors[0]?.message ?? "Invalid input" });
       return;
@@ -273,6 +319,92 @@ export async function handleCancelShift(req: Request, res: Response, next: NextF
     const ctx = await resolveContext(req, res);
     if (!ctx) return;
     res.json(await cancelShift(ctx.orgId, req.params.id as string));
+  } catch (err) {
+    handleServiceError(err, res, next);
+  }
+}
+
+// ── Roster Shift Templates ──────────────────────────────────────────────
+
+export async function handleListTemplates(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const ctx = await resolveContext(req, res);
+    if (!ctx) return;
+    const storeLocationId = typeof req.query.storeLocationId === "string" ? req.query.storeLocationId : undefined;
+    res.json(await listTemplates(ctx.orgId, storeLocationId));
+  } catch (err) {
+    handleServiceError(err, res, next);
+  }
+}
+
+export async function handleCreateTemplateRow(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const ctx = await resolveContext(req, res);
+    if (!ctx) return;
+    const parsed = TemplateRowSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.errors[0]?.message ?? "Invalid input" });
+      return;
+    }
+    res.status(201).json(await createTemplateRow(ctx.orgId, parsed.data));
+  } catch (err) {
+    handleServiceError(err, res, next);
+  }
+}
+
+export async function handleUpdateTemplateRow(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const ctx = await resolveContext(req, res);
+    if (!ctx) return;
+    const parsed = TemplateRowSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.errors[0]?.message ?? "Invalid input" });
+      return;
+    }
+    res.json(await updateTemplateRow(ctx.orgId, req.params.id as string, parsed.data));
+  } catch (err) {
+    handleServiceError(err, res, next);
+  }
+}
+
+export async function handleDeleteTemplateRow(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const ctx = await resolveContext(req, res);
+    if (!ctx) return;
+    await deleteTemplateRow(ctx.orgId, req.params.id as string);
+    res.status(204).end();
+  } catch (err) {
+    handleServiceError(err, res, next);
+  }
+}
+
+export async function handleGenerateWeekFromTemplate(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const ctx = await resolveContext(req, res);
+    if (!ctx) return;
+    const parsed = GenerateWeekSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.errors[0]?.message ?? "Invalid input" });
+      return;
+    }
+    res.json(
+      await generateWeekFromTemplate(ctx.orgId, parsed.data.storeLocationId, parsed.data.weekStart, req.user!.sub),
+    );
+  } catch (err) {
+    handleServiceError(err, res, next);
+  }
+}
+
+export async function handleUndoGeneration(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const ctx = await resolveContext(req, res);
+    if (!ctx) return;
+    const parsed = GenerateWeekSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.errors[0]?.message ?? "Invalid input" });
+      return;
+    }
+    res.json(await undoGeneration(ctx.orgId, parsed.data.storeLocationId, parsed.data.weekStart));
   } catch (err) {
     handleServiceError(err, res, next);
   }

@@ -34,6 +34,7 @@ import { useLocation } from "../../context/LocationContext.js";
 import { useHasPermission } from "../../hooks/useHasPermission.js";
 import { useRosterRoles, useOrgMembers, useRosterCalendar, type CalendarShift, type RosterRole } from "../../hooks/useRoster.js";
 import { EmptyState } from "../ui/EmptyState.js";
+import { RosterTemplatesToolbar } from "./RosterTemplatesPanel.js";
 import {
   minutesForPixel,
   pixelForMinutes,
@@ -54,9 +55,23 @@ const ROLE_ACCENT = [
   "border-l-rose-500", "border-l-amber-500", "border-l-emerald-500", "border-l-cyan-500",
   "border-l-blue-500", "border-l-violet-500", "border-l-fuchsia-500", "border-l-teal-500",
 ];
+// Same colors as ROLE_ACCENT above, as literal "border-*" classes for the
+// legend dot's ring — kept as its own static array rather than derived via
+// a runtime string substitution, since Tailwind's JIT scanner only generates
+// CSS for class names it can find as literal text in source. A dynamically
+// built class name can look correct as a JS value while never having been
+// scanned, so its CSS rule ends up silently missing from the build.
+const ROLE_ACCENT_RING = [
+  "border-rose-500", "border-amber-500", "border-emerald-500", "border-cyan-500",
+  "border-blue-500", "border-violet-500", "border-fuchsia-500", "border-teal-500",
+];
 function roleAccent(roleId: string, roleIds: string[]): string {
   const idx = laneIndexForRole(roleId, roleIds);
   return ROLE_ACCENT[idx >= 0 ? idx % ROLE_ACCENT.length : 0];
+}
+function roleAccentRing(roleId: string, roleIds: string[]): string {
+  const idx = laneIndexForRole(roleId, roleIds);
+  return ROLE_ACCENT_RING[idx >= 0 ? idx % ROLE_ACCENT_RING.length : 0];
 }
 
 function todayIso(): string {
@@ -122,7 +137,7 @@ export function RosterCalendarView() {
   const weekEnd = addDaysIso(weekStart, 6);
   const days = useMemo(() => Array.from({ length: 7 }, (_, i) => addDaysIso(weekStart, i)), [weekStart]);
 
-  const { calendarShifts, isLoading, error, create, updateTime, assign } = useRosterCalendar(
+  const { calendarShifts, isLoading, error, create, updateTime, assign, refresh: refreshCalendar } = useRosterCalendar(
     selectedLocationId,
     // Padded a day on each side: the query boundary is bare UTC midnight,
     // but times are browser-local (see module doc) — a Monday-6am shift in
@@ -140,6 +155,12 @@ export function RosterCalendarView() {
   const [showStaffDrawer, setShowStaffDrawer] = useState(false);
   const dragRef = useRef<DragState | null>(null);
   const gridRef = useRef<HTMLDivElement>(null);
+  // Scoped to this component instance, not document.querySelectorAll — the
+  // gridRef/dragRef above already use refs for exactly this kind of DOM
+  // coordination; a document-wide selector would cross-wire two mounted
+  // instances of this view (e.g. a comparison page) and re-scans the whole
+  // DOM on every scroll event instead of touching only the 7 known columns.
+  const scrollerRefs = useRef<(HTMLDivElement | null)[]>([]);
 
   useEffect(() => {
     // Default scroll position ~6am, once, on mount — every day column has
@@ -148,9 +169,9 @@ export function RosterCalendarView() {
     // enough: every column needs this set or they open misaligned with it.
     const top = pixelForMinutes(6 * 60, HOUR_HEIGHT) - 40;
     if (gridRef.current) gridRef.current.scrollTop = top;
-    document.querySelectorAll<HTMLElement>("[data-calendar-scroller]").forEach((el) => {
-      el.scrollTop = top;
-    });
+    for (const el of scrollerRefs.current) {
+      if (el) el.scrollTop = top;
+    }
   }, [days]);
 
   function showBanner(tone: "error" | "success", text: string) {
@@ -176,15 +197,20 @@ export function RosterCalendarView() {
   }, [calendarShifts]);
 
   // Same reasoning as shiftsByLaneKey above: derived once per shift-list
-  // load, not re-derived (2 Date constructions + formatShiftRange's own
-  // day-diff check) for every visible shift on every pointermove-triggered
-  // render during a drag.
+  // load, not re-derived (Date construction + formatShiftRange's own
+  // day-diff check, for EVERY visible shift) on every pointermove-triggered
+  // render during a drag — storedStartMinutes/storedEndMinutes used to fall
+  // through that same loop untouched, re-parsing every visible shift's
+  // datetimes on every drag frame even though only the dragged shift's
+  // position ever changes.
   const shiftDisplayInfo = useMemo(() => {
-    const map = new Map<string, { daySpan: number; rangeLabel: string }>();
+    const map = new Map<string, { daySpan: number; rangeLabel: string; storedStartMinutes: number; storedEndMinutes: number }>();
     for (const s of calendarShifts) {
       map.set(s.shiftId, {
         daySpan: dayColumnIndexForDate(localDayIso(new Date(s.endDatetime)), localDayIso(new Date(s.startDatetime))),
         rangeLabel: formatShiftRange(s.startDatetime, s.endDatetime),
+        storedStartMinutes: minutesSinceMidnight(new Date(s.startDatetime)),
+        storedEndMinutes: minutesSinceMidnight(new Date(s.endDatetime)),
       });
     }
     return map;
@@ -377,6 +403,15 @@ export function RosterCalendarView() {
         )}
       </div>
 
+      {canManage && (
+        <RosterTemplatesToolbar
+          storeLocationId={selectedLocationId}
+          venueRoles={venueRoles}
+          weekStart={weekStart}
+          onGenerated={refreshCalendar}
+        />
+      )}
+
       {banner && (
         <div
           className={`mb-3 rounded-lg border px-3 py-2 text-sm ${
@@ -392,7 +427,7 @@ export function RosterCalendarView() {
       <div className="mb-3 flex flex-wrap gap-3">
         {venueRoles.map((r) => (
           <span key={r.rosterRoleId} className="flex items-center gap-1.5 text-xs text-dark-600">
-            <span className={`size-2.5 rounded-full border-2 ${roleAccent(r.rosterRoleId, roleIds).replace("border-l-", "border-")}`} />
+            <span className={`size-2.5 rounded-full border-2 ${roleAccentRing(r.rosterRoleId, roleIds)}`} />
             {r.roleName}
           </span>
         ))}
@@ -427,18 +462,20 @@ export function RosterCalendarView() {
                     {DAY_LABELS[i]} {new Date(dayIso).getDate()}
                   </div>
                   <div
+                    ref={(el) => {
+                      scrollerRefs.current[i] = el;
+                    }}
                     className="overflow-y-hidden"
                     style={{ height: 420 }}
                     onScroll={(e) => {
                       // Keep every column (and the hour rail) in sync with
                       // whichever one the user actually scrolled.
                       const top = e.currentTarget.scrollTop;
-                      document.querySelectorAll<HTMLElement>("[data-calendar-scroller]").forEach((el) => {
-                        if (el !== e.currentTarget) el.scrollTop = top;
-                      });
+                      for (const el of scrollerRefs.current) {
+                        if (el && el !== e.currentTarget) el.scrollTop = top;
+                      }
                       if (gridRef.current) gridRef.current.scrollTop = top;
                     }}
-                    data-calendar-scroller
                   >
                     <div className="flex" style={{ height: GRID_HEIGHT }}>
                       {venueRoles.map((role) => (
@@ -472,19 +509,18 @@ export function RosterCalendarView() {
 
                           {shiftsForLane(dayIso, role.rosterRoleId).map((s) => {
                             const override = dragOverrideFor(drag, s.shiftId);
-                            const storedStartMinutes = minutesSinceMidnight(new Date(s.startDatetime));
-                            const storedEndMinutes = minutesSinceMidnight(new Date(s.endDatetime));
-                            const startMinutes = override?.start ?? storedStartMinutes;
-                            const endMinutes = override?.end ?? storedEndMinutes;
-                            const isDraft = s.status === "Draft";
-                            const isDropTarget = drag?.kind === "assign" && drag.overShiftId === s.shiftId;
                             // A shift spanning multiple calendar days renders once, in its
                             // start day's lane, sized to only that day's minutes (see the
                             // module doc on minutesSinceMidnight) — which otherwise looks
                             // exactly like a normal same-day shift with no visual sign the
                             // remaining days exist. This badge is that sign. Precomputed in
-                            // shiftDisplayInfo above, not re-derived per render.
-                            const { daySpan, rangeLabel } = shiftDisplayInfo.get(s.shiftId)!;
+                            // shiftDisplayInfo above (storedStartMinutes/storedEndMinutes
+                            // included), not re-derived per render.
+                            const { daySpan, rangeLabel, storedStartMinutes, storedEndMinutes } = shiftDisplayInfo.get(s.shiftId)!;
+                            const startMinutes = override?.start ?? storedStartMinutes;
+                            const endMinutes = override?.end ?? storedEndMinutes;
+                            const isDraft = s.status === "Draft";
+                            const isDropTarget = drag?.kind === "assign" && drag.overShiftId === s.shiftId;
                             // When a shift's end falls on a different local day (any overnight
                             // shift, not just a genuine multi-day one — e.g. 10pm-2am has
                             // storedStartMinutes=1320, storedEndMinutes=120), storedEndMinutes
@@ -507,11 +543,19 @@ export function RosterCalendarView() {
                                   s.assignments.length === 0 ? "Unassigned" : s.assignments.map((a) => a.staffName).join(", ")
                                 } — ${s.status}`}
                                 className={`absolute left-0.5 right-0.5 rounded border-l-4 px-1.5 py-1 text-[11px] leading-tight overflow-hidden ${roleAccent(role.rosterRoleId, roleIds)} ${
-                                  isDraft ? "bg-dark-100 border border-dark-300 cursor-grab active:cursor-grabbing" : "bg-dark-200/70 border border-dark-300/50 opacity-90"
+                                  isDraft
+                                    ? `bg-dark-100 border border-dark-300 ${daySpan > 0 ? "" : "cursor-grab active:cursor-grabbing"}`
+                                    : "bg-dark-200/70 border border-dark-300/50 opacity-90"
                                 } ${isDropTarget ? "ring-2 ring-gold" : ""}`}
                                 style={{ top: pixelForMinutes(startMinutes, HOUR_HEIGHT), height: Math.max(18, pixelForMinutes(visualEndMinutes - startMinutes, HOUR_HEIGHT)) }}
                                 onPointerDown={(e) => {
-                                  if (!canManage || !isDraft) return;
+                                  // daySpan > 0 covers overnight shifts too (not just genuine
+                                  // multi-day ones) — resize/move both seed themselves from
+                                  // storedStartMinutes/storedEndMinutes, which strip the date
+                                  // and can't tell which calendar day the end falls on. Refusing
+                                  // the gesture here is what makes the render comment's claim
+                                  // ("already disclosed as undraggable") actually true.
+                                  if (!canManage || !isDraft || daySpan > 0) return;
                                   e.stopPropagation();
                                   const rect = e.currentTarget.getBoundingClientRect();
                                   const grabY = e.clientY - rect.top;

@@ -59,6 +59,8 @@ Publishing a roster always shows a coverage line — "Checked 4 of the Hospitali
 
 Every other gap in this system degrades gracefully — a missing document shows a plain empty state, an unmatched filter says so. Holiday-calendar gaps are the one deliberate exception: publishing a roster into a jurisdiction+year with no loaded public holiday calendar *blocks the entire publish* with a named error ("Public holidays for VIC 2027 are not loaded"), rather than silently treating every day as a non-holiday. The asymmetry is intentional — a silently-skipped s.114 consent requirement is a Fair Work Act violation with no error to alert anyone, so this is the one place "fail loud" beats "degrade gracefully."
 
+Not every gazetted public holiday is a full calendar day, either — QLD, SA, and NT each declare Christmas Eve (and SA/NT also New Year's Eve) a holiday only from a set evening hour, per their own Holidays Acts. A shift landing on one of those dates only actually needs consent if it extends into that window; a shift ending well before it correctly reads as an ordinary working day. Getting this wrong in either direction has a real cost — treat every date as full-day and a manager gets asked for consent (or blocked from publishing) on shifts nobody would call a public holiday; ignore the partial-day distinction entirely and a genuine late-evening public-holiday shift silently skips consent.
+
 ### Tenancy and permissions
 
 Two things worth knowing before filing a permissions bug. First, every table in this module carries `organisation_id`, and most carry a nullable `store_location_id` (null = org-wide, e.g. a role every venue shares; set = one specific venue). A cross-org id reads as 404, never 403 — the API refuses to confirm that a resource in another org even exists. Second, the Operations Admin role (the org creator's default role) grants org-wide permissions through a **global** `user_role` — there's no `organisationId` column on it. The accepted, disclosed consequence: someone who is Operations Admin of one org and merely a *member* of a second org still carries several of those permissions into the second org too (though not org-membership-management itself — that was found to be a real escalation path during development and is gated separately on the per-org admin flag, not the global permission). If a test case seems to grant more access than expected across two orgs the same user belongs to, this is very likely why — check `wiki/entities/operations-admin-role.md` before filing it as a bug.
@@ -263,6 +265,30 @@ Links the vault to scheduling: a shift can only be assigned to someone holding e
 | RC-A3 | Attempt to delete a role that has shifts scheduled against it | Blocked with a clear message | |
 | RC-A4 | Delete an unused role | Removed | |
 
+**Venue picker** (`docs/designs/roster-roles-venue-picker.md`) — a role can be scoped to one specific venue instead of "All venues." This is what makes RC-L4 reachable through the UI.
+
+| ID | Steps | Expected result | Result |
+|---|---|---|---|
+| RC-A5 | Create a role, selecting a specific venue instead of "All venues" | Appears in the list with a venue badge (e.g. "HQ only"); the venue picker's list only ever offers venues in this org | |
+| RC-A6 | Switch to a different venue's Roster → Templates tab | The venue-scoped role from RC-A5 does not appear in that venue's role dropdown | |
+| RC-A7 | Expand an existing org-wide role and change its venue to a specific one, where it is **not** used by any template | Saves immediately, no warning | |
+| RC-A8 | Use a venue-scoped role in a template (Templates tab), then edit that role's venue to a **different** venue | A warning appears naming the venue(s) where the role is still templated; save is not yet committed | |
+| RC-A9 | With the warning from RC-A8 showing, change the venue dropdown again | The warning clears immediately — back to a plain editable state, not a stale confirm | |
+| RC-A10 | Re-trigger the warning (repeat RC-A8), then click "Save anyway" | Saves despite the conflict; re-running Generate This Week at the role's *original* venue now reports that template row as failed (RC-L13), not silently dropped | |
+| RC-A11 | Widen a venue-scoped role (still used by a template elsewhere) back to "All venues" | Saves immediately — widening can never break an existing template, so no warning appears here even though one did in RC-A8 | |
+| RC-A12 | Create a role with the same name at the same venue as an existing role | Rejected (409) with a clear message | |
+| RC-A13 | Create a role with the same name as an existing role, but at a *different* venue, or with "All venues" on both | Both succeed — the same name is only blocked at the same venue | |
+
+**Copy roles to a new venue** — Settings → Store Locations → Add Location.
+
+| ID | Steps | Expected result | Result |
+|---|---|---|---|
+| RC-A14 | Create a new venue, selecting an existing venue as "Copy roles from" | The new venue ends up with that source venue's venue-scoped roles; the source's own org-wide roles are **not** copied (they're already valid everywhere) | |
+| RC-A15 | Repeat RC-A14 when the target venue already independently has a role with the same name as one being copied | That one is reported as "skipped," the rest copy normally | |
+| RC-A16 | Open "Add Location" in an org that has zero existing venues yet | The "Copy roles from" field does not render at all (no source to copy from) | |
+
+**Automated coverage:** `rosterTemplates.integration.test.ts` — `updateRole` cross-venue conflict check (incl. the null-target/widening-is-always-safe case, RC-A11) and the `createRole` duplicate-name guard (RC-A12/A13) against a real DB. `VenueSelect.test.tsx`, `RolesManager.test.tsx` (venue picker, badge, warning + reset-on-change, RC-A5–A10) and `StoreLocationsSection.test.tsx` (copy-roles, dedup skip, retry, zero-venues hide, RC-A14–A16) cover the UI wiring. No Playwright E2E yet — same disclosed gap as the rest of Roster Core (see [Known Limitations](#known-limitations)).
+
 ### RC-B — Shift builder
 
 **What it does:** Create, edit, cancel shifts at a venue for a role and time window. Starts life as `Draft`.
@@ -309,6 +335,7 @@ Links the vault to scheduling: a shift can only be assigned to someone holding e
 | RC-D3 | Confirm a Pending shift | Status flips to `Confirmed` | |
 | RC-D4 | Decline a Pending shift | Status flips to `Declined` | |
 | RC-D5 | Try to respond to an already-responded assignment again | Blocked (409) | |
+| RC-D6 | View any shift in the list | The assigned role's name is shown above the date/time line, not just implied | |
 
 ### RC-E — Staff availability
 
@@ -340,7 +367,9 @@ Links the vault to scheduling: a shift can only be assigned to someone holding e
 
 ### RC-G — Public holiday calendar
 
-**What it does:** Fail-loud, not silent — publishing into a jurisdiction/year with no loaded public holiday calendar is *blocked* outright, because a missing year would otherwise mean s.114 consent silently never fires for that year's holidays.
+**What it does:** Fail-loud, not silent — publishing into a jurisdiction/year with no loaded public holiday calendar is *blocked* outright, because a missing year would otherwise mean s.114 consent silently never fires for that year's holidays. As of 2026-09, national + genuinely statewide holidays for all 8 AU jurisdictions are pre-loaded for 2026-2027 on dev (`scripts/seedAuPublicHolidays20262027.ts`) — pick a different year (e.g. 2030) to exercise RC-G2's missing-year block.
+
+Some states gazette a public holiday only from a set evening time, not the whole date (QLD's Christmas Eve, 6pm–midnight; SA/NT's Christmas Eve + New Year's Eve, 7pm–midnight) — `partialDayFromTime` on the holiday captures this, and a shift only counts as falling on the holiday if it actually extends into that window.
 
 **Where:** Settings → Public Holidays tab (admin loader). Permission: `roster:manage`.
 
@@ -351,6 +380,11 @@ Links the vault to scheduling: a shift can only be assigned to someone holding e
 | RC-G3 | Load the missing year, retry the publish | Succeeds | |
 | RC-G4 | Publish a shift that lands exactly on a loaded holiday date | `shift.isPublicHoliday` is set true on that shift | |
 | RC-G5 | Delete a loaded public holiday | Removed; a second delete on the same id 404s | |
+| RC-G6 | Load a holiday with "Partial day" checked and a start time (e.g. 18:00) | Saved; the list row shows a "From 18:00" badge | |
+| RC-G7 | Publish a shift on a QLD venue that ends *before* 6pm on a loaded Dec 24 | `shift.isPublicHoliday` stays false — the shift never reaches the holiday's active window | |
+| RC-G8 | Publish a shift on the same venue/date that ends *after* 6pm | `shift.isPublicHoliday` is set true | |
+
+**Automated coverage:** `publicHolidayService.test.ts` (the pure threshold comparison) and `publicHolidayService.integration.test.ts`/`roster.integration.test.ts` (the real-DB round-trip and `publishRoster()`'s actual before/after-threshold behavior) cover RC-G6–G8 exhaustively — the manual checks above are a spot check, not the primary proof.
 
 ### RC-H — s.114 public holiday consent
 
@@ -368,6 +402,8 @@ Links the vault to scheduling: a shift can only be assigned to someone holding e
 | RC-H6 | Publish a roster with a declined public-holiday shift | Held back, reason names the decline — never silently overridden | |
 | RC-H7 | Try to re-request consent on an already-Accepted assignment | Refused (409) | |
 | RC-H8 | Try to respond to a consent request as someone other than the assignee | 404 — never confirms another user's assignment exists | |
+| RC-H9 | Request consent for a shift on a partial-day holiday (RC-G6) that ends *before* the threshold time | Refused: "This shift is not on a loaded public holiday date." | |
+| RC-H10 | Request consent for a shift on the same date that ends *after* the threshold | Succeeds normally, same as RC-H1 | |
 
 ### RC-I — Timezone correctness (spot check)
 
@@ -411,8 +447,38 @@ Links the vault to scheduling: a shift can only be assigned to someone holding e
 | RC-K6 | Drag a staff member from the Staff drawer onto a Draft shift | Assigns them; a `canAssign` refusal (RC-C2–C5) shows the same verbatim message the Shifts tab does | |
 | RC-K7 | Attempt any of the above on a Published shift | No drag handles — Published shifts render read-only | |
 | RC-K8 | Navigate to the previous/next week, then "This week" | Date range and grid update accordingly | |
+| RC-K9 | Attempt to drag (move or resize) an overnight shift (e.g. 10pm–2am) or a shift spanning several calendar days | No drag handles / the gesture does nothing — previously this could silently rewrite the shift's stored time with the end before the start | |
+| RC-K10 | Check the role legend (above the grid) with several roles configured | Every role's colored dot has a visible matching border color — previously 6 of the 8 role colors had no border in production due to a Tailwind build issue | |
 
-**Automated coverage:** `rosterCalendarMath.test.ts` — the pure position math (time↔pixel, snap-to-grid, day-column index at week boundaries, lane index). `rosterCalendar.integration.test.ts` — the `GET /shifts/calendar` query (one row per shift with role + assignees inline, Cancelled excluded, cross-org 404). `roster-calendar.spec.ts` (Playwright) — a real drag-create round-tripping to an actual shift row, since that's the one thing no unit or integration test can exercise. RC-K1–K8 above are the full manual walk-through, including the gestures the E2E smoke test doesn't cover.
+**Automated coverage:** `rosterCalendarMath.test.ts` — the pure position math (time↔pixel, snap-to-grid, day-column index at week boundaries, lane index). `rosterCalendar.integration.test.ts` — the `GET /shifts/calendar` query (one row per shift with role + assignees inline, Cancelled excluded, cross-org 404). `roster-calendar.spec.ts` (Playwright) — a real drag-create round-tripping to an actual shift row, since that's the one thing no unit or integration test can exercise. `RosterCalendarView.test.tsx` covers RC-K9 (the drag guard) and RC-K10 (the legend colors are literal Tailwind classes, not built at runtime) directly. RC-K1–K10 above are the full manual walk-through, including the gestures the E2E smoke test doesn't cover.
+
+### RC-L — Scheduling Templates
+
+**What it does:** A saved weekly pattern per venue (role + day-of-week + start/end time), reusable indefinitely — "Generate this week" turns it into real Draft shifts in one action instead of recreating them by hand every week. Full design: `docs/designs/roster-scheduling-templates.md`.
+
+**Where:** Roster → Calendar tab, a second toolbar row (label "Templates") below the week navigator — three actions, each opening a modal: **Manage Templates**, **Generate This Week**, **Undo Last Generation**. Permission: `roster:manage` for all three (the row is hidden entirely without it).
+
+**Venue-scoped roles (`docs/designs/roster-roles-venue-picker.md`):** a role can be scoped to one venue (Roles tab → Add role, or editing an existing role) instead of the default "All venues." This is what makes RC-L4 reachable through the UI — previously a venue-scoped role could only exist via a raw API call.
+
+| ID | Steps | Expected result | Result |
+|---|---|---|---|
+| RC-L1 | Open Calendar as a manager with zero templates saved | Templates row visible; "Manage Templates" opens a modal with the empty state "No templates yet" and a CTA | |
+| RC-L2 | Add a template row (role, day, start/end time) | Row appears grouped under the correct day, sorted by start time within that day | |
+| RC-L3 | Add a second row for the same role/day with an overlapping time range | Rejected with a clear message — same overlap check as the server's | |
+| RC-L4 | Add a row with a role that belongs to a different venue (scope a role to a specific venue via Roles tab → Add role / edit an existing role's venue, `docs/designs/roster-roles-venue-picker.md`) | Rejected — the role isn't a valid option for this venue's template | |
+| RC-L5 | Add an overnight row (e.g. 10pm–2am) | Accepted, anchored to the start day | |
+| RC-L6 | Edit an existing row's time | Saves; does not affect shifts already generated from the row's earlier version | |
+| RC-L7 | Delete a template row | Removed from the list immediately | |
+| RC-L8 | Click "Generate This Week" for a venue with saved templates, default week | Confirms, then shows "Created N, skipped N" — one Draft shift per non-conflicting row appears on the calendar grid underneath once the modal closes | |
+| RC-L9 | Click "Generate This Week" again for the same week without changes | Every row skipped (already has a shift) — grid shows no duplicates | |
+| RC-L10 | Cancel one of the generated shifts (from the grid, same as any Draft shift), then re-run Generate for that week | That slot creates again — a cancelled generated shift never permanently blocks its slot | |
+| RC-L11 | Click "Undo Last Generation" for a week that was generated | First click asks for explicit confirmation (destructive); confirming cancels every shift generated for that venue/week, leaves manually-created shifts and other weeks untouched | |
+| RC-L12 | Click "Undo Last Generation" again for the same week | "Cancelled 0 shifts" — already-cancelled shifts aren't re-cancelled | |
+| RC-L13 | Change a template row's role's venue (Roles tab), then re-run Generate | That row's slot reports as failed, not silently dropped — the rest of the week still generates | |
+| RC-L14 | Attempt to delete a role that's used only in a template (no shifts generated from it yet) | Blocked (409) with a clear message, same pattern as deleting a role with live shifts | |
+| RC-L15 | View the Calendar as a Subscriber without `roster:manage` | The Templates toolbar row does not render at all | |
+
+**Automated coverage:** `rosterService.test.ts` (`resolveVenueLocalToUtc`, incl. a DST-transition date). `rosterTemplates.integration.test.ts` — all 6 service functions against a real DB, including the concurrent-generation race (two simultaneous calls, exactly one shift created) and RC-L10's cancel-then-regenerate scenario, plus the venue-picker's `updateRole` cross-venue conflict check (RC-L4's enabling capability) and the `createRole` duplicate-name guard. `rosterPermissions.test.ts` — all 6 routes × 401/403/200/Administrator-bypass, covering RC-L15. `useRosterTemplates.test.ts` (client hook) and `RosterTemplatesPanel.test.tsx` (toolbar + all 3 modals, including the zero-roles-for-this-venue hint) cover the UI wiring above the API. `RolesManager.test.tsx` and `StoreLocationsSection.test.tsx` cover the venue picker, badge, cross-venue warning, and copy-roles-to-a-new-venue action. No Playwright E2E yet for this feature — same disclosed gap as the rest of Roster Core (see [Known Limitations](#known-limitations)).
 
 ---
 
@@ -466,8 +532,9 @@ Uses signals CulinAIre already has (prep workload, existing compliance data) to 
 | WO-C8 | Cancel your own still-open offer | Removed from every list; the original assignment is untouched | |
 | WO-C9 | Try to cancel someone else's open offer | 404 — never confirms it exists | |
 | WO-C10 | Two people attempt to claim the same open offer at (as close to) the same instant | Exactly one succeeds; the other gets "This swap was just claimed by someone else" | |
+| WO-C11 | As a staff member who previously *declined* a shift, claim that exact same shift back via a swap someone else has since offered | Succeeds — previously this falsely reported "You're already assigned to this shift" because the old declined row was never reactivated | |
 
-**Automated coverage:** the concurrent-claim race (WO-C10) is proven against the real database under genuine concurrency in `shiftSwap.integration.test.ts`, not simulated — worth trusting that result rather than trying to reproduce true concurrency by hand in the UI.
+**Automated coverage:** the concurrent-claim race (WO-C10) is proven against the real database under genuine concurrency in `shiftSwap.integration.test.ts`, not simulated — worth trusting that result rather than trying to reproduce true concurrency by hand in the UI. WO-C11 is also covered there directly.
 
 ### WO-D — Permission boundaries (Phase 3)
 

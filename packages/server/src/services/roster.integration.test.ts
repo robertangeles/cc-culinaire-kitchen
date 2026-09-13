@@ -40,6 +40,8 @@ import {
   publishRoster,
   createAvailability,
   listShiftAssignments,
+  getWeekCalendar,
+  listMyShifts,
 } from "./rosterService.js";
 import { requestConsent, respondToConsent } from "./consentService.js";
 
@@ -70,8 +72,9 @@ describe.skipIf(!RUN)("roster service (real DB)", () => {
   let locB: string;
   let roleId: string;
   let ruleId: string;
-  let publicHolidayId: string;
-  let publicHolidayPriorYearId: string;
+  let publicHolidayId: string | undefined;
+  let publicHolidayPriorYearId: string | undefined;
+  let partialDayHolidayId: string | undefined;
 
   beforeAll(async () => {
     [{ id: userA }] = await db
@@ -147,9 +150,18 @@ describe.skipIf(!RUN)("roster service (real DB)", () => {
     // Loads VIC for the current year — every existing publishRoster test
     // uses a TODAY-relative window, so this is enough for them to pass the
     // fail-loud holiday-calendar gate without every test needing to seed its
-    // own row. The date itself is arbitrary; only (jurisdiction,
-    // loadedForYear) matters for "is this year loaded".
-    [{ id: publicHolidayId }] = await db
+    // own row. The date itself is arbitrary EXCEPT that some tests below
+    // (the isPublicHoliday ones) specifically target Jan 1, so it can't move.
+    //
+    // onConflictDoNothing, not a plain insert: a real AU public holiday can
+    // already occupy VIC/Jan-1 in a dev DB that's had the AU holiday seed
+    // script run against it (idx_public_holiday_unique is (jurisdiction,
+    // date) only, so a second row here — even with a different, tagged name
+    // — would collide). When that happens, reuse the real row: this test
+    // only needs the DATE to be a loaded holiday, not to own the row, and
+    // afterAll must never delete real seeded data it didn't create — hence
+    // publicHolidayId stays undefined (skipping its own delete) in that case.
+    const insertedHoliday = await db
       .insert(publicHoliday)
       .values({
         jurisdiction: "VIC",
@@ -157,7 +169,9 @@ describe.skipIf(!RUN)("roster service (real DB)", () => {
         holidayName: `${tag} New Year's Day`,
         loadedForYear: new Date().getFullYear(),
       })
+      .onConflictDoNothing()
       .returning({ id: publicHoliday.publicHolidayId });
+    publicHolidayId = insertedHoliday[0]?.id;
 
     // Also load the PRIOR year — the isPublicHoliday test below targets Jan
     // 1 and widens its publish window by addDays(-1) (same reason every
@@ -165,8 +179,9 @@ describe.skipIf(!RUN)("roster service (real DB)", () => {
     // can sit outside a tight from/to boundary). Dec 31 the year before
     // still falls inside that window, so assertHolidayCalendarLoaded's
     // per-year loop needs that year loaded too, or its own fail-loud gate
-    // blocks a test that isn't exercising the gap-check path at all.
-    [{ id: publicHolidayPriorYearId }] = await db
+    // blocks a test that isn't exercising the gap-check path at all. Same
+    // onConflictDoNothing reasoning as the current-year insert above.
+    const insertedPriorYearHoliday = await db
       .insert(publicHoliday)
       .values({
         jurisdiction: "VIC",
@@ -174,7 +189,9 @@ describe.skipIf(!RUN)("roster service (real DB)", () => {
         holidayName: `${tag} New Year's Day (prior year)`,
         loadedForYear: new Date().getFullYear() - 1,
       })
+      .onConflictDoNothing()
       .returning({ id: publicHoliday.publicHolidayId });
+    publicHolidayPriorYearId = insertedPriorYearHoliday[0]?.id;
   });
 
   afterAll(async () => {
@@ -182,6 +199,7 @@ describe.skipIf(!RUN)("roster service (real DB)", () => {
     if (publicHolidayPriorYearId) {
       await db.delete(publicHoliday).where(eq(publicHoliday.publicHolidayId, publicHolidayPriorYearId));
     }
+    if (partialDayHolidayId) await db.delete(publicHoliday).where(eq(publicHoliday.publicHolidayId, partialDayHolidayId));
     if (ruleId) await db.delete(documentExpiryRule).where(eq(documentExpiryRule.documentExpiryRuleId, ruleId));
     const shiftRows = await db.select({ id: shift.shiftId }).from(shift).where(eq(shift.organisationId, orgA));
     const shiftIds = shiftRows.map((r) => r.id);
@@ -737,6 +755,47 @@ describe.skipIf(!RUN)("roster service (real DB)", () => {
     expect(publishedShift?.isPublicHoliday).toBe(true);
   });
 
+  it("publishRoster respects a partial-day holiday's threshold — a shift ending before it is not a public holiday, one ending after it is", async () => {
+    const partialDate = `${new Date().getFullYear()}-12-24`;
+    [{ id: partialDayHolidayId }] = await db
+      .insert(publicHoliday)
+      .values({
+        jurisdiction: "VIC",
+        holidayDate: partialDate,
+        holidayName: `${tag} Partial-day Eve`,
+        loadedForYear: new Date().getFullYear(),
+        partialDayFromTime: "18:00",
+      })
+      .returning({ id: publicHoliday.publicHolidayId });
+
+    const beforeThreshold = await createShift(
+      orgA,
+      {
+        storeLocationId: locA,
+        rosterRoleId: roleId,
+        startDatetime: new Date(`${partialDate}T14:00:00+11:00`).toISOString(),
+        endDatetime: new Date(`${partialDate}T17:00:00+11:00`).toISOString(),
+      },
+      userA,
+    );
+    const afterThreshold = await createShift(
+      orgA,
+      {
+        storeLocationId: locA,
+        rosterRoleId: roleId,
+        startDatetime: new Date(`${partialDate}T18:30:00+11:00`).toISOString(),
+        endDatetime: new Date(`${partialDate}T22:00:00+11:00`).toISOString(),
+      },
+      userA,
+    );
+
+    await publishRoster(orgA, locA, addDays(partialDate, -1), addDays(partialDate, 1), userA);
+
+    const shifts = await listShifts(orgA, { storeLocationId: locA });
+    expect(shifts.find((row) => row.shiftId === beforeThreshold.shiftId)?.isPublicHoliday).toBe(false);
+    expect(shifts.find((row) => row.shiftId === afterThreshold.shiftId)?.isPublicHoliday).toBe(true);
+  });
+
   // ── s.114 consent workflow (Slice 7) ──────────────────────────────
   // Same holidayDate/VIC fixture as the isPublicHoliday test above — every
   // shift here uses an explicit +11:00 (AEDT) offset for the same reason:
@@ -772,6 +831,65 @@ describe.skipIf(!RUN)("roster service (real DB)", () => {
         statusCode: 400,
         message: "This shift is not on a loaded public holiday date.",
       });
+    });
+
+    it("requestConsent respects a partial-day holiday's threshold the same way publishRoster does", async () => {
+      // Self-contained: its own date/row/cleanup, not shared with the
+      // publishRoster partial-day test above — avoids coupling to test order.
+      // Dec 26 collides with the real seeded VIC "Boxing Day" row
+      // (idx_public_holiday_unique is (jurisdiction, date) only) — this test's
+      // own scenario is a made-up partial-day threshold, not real Boxing Day
+      // behavior, so the date itself is arbitrary; Dec 27 is free.
+      const partialDate = `${new Date().getFullYear()}-12-27`;
+      const [{ id: holidayId }] = await db
+        .insert(publicHoliday)
+        .values({
+          jurisdiction: "VIC",
+          holidayDate: partialDate,
+          holidayName: `${tag} Consent Partial-day`,
+          loadedForYear: new Date().getFullYear(),
+          partialDayFromTime: "18:00",
+        })
+        .returning({ id: publicHoliday.publicHolidayId });
+
+      try {
+        const beforeThresholdShift = await createShift(
+          orgA,
+          {
+            storeLocationId: locA,
+            rosterRoleId: roleId,
+            startDatetime: new Date(`${partialDate}T14:00:00+11:00`).toISOString(),
+            endDatetime: new Date(`${partialDate}T17:00:00+11:00`).toISOString(),
+          },
+          userA,
+        );
+        const beforeAssignment = await assignStaff(orgA, beforeThresholdShift.shiftId, userA, userA);
+        await expect(requestConsent(orgA, beforeAssignment.assignmentId, userB)).rejects.toMatchObject({
+          name: "RosterError",
+          statusCode: 400,
+          message: "This shift is not on a loaded public holiday date.",
+        });
+
+        const afterThresholdShift = await createShift(
+          orgA,
+          {
+            storeLocationId: locA,
+            rosterRoleId: roleId,
+            startDatetime: new Date(`${partialDate}T18:30:00+11:00`).toISOString(),
+            endDatetime: new Date(`${partialDate}T22:00:00+11:00`).toISOString(),
+          },
+          userA,
+        );
+        // userA, not userB — an earlier test in this file ("publishRoster
+        // re-checks at publish time...") permanently expires userB's only
+        // compliance document as part of exercising that scenario, so userB
+        // can no longer be assigned to anything for the rest of this suite.
+        const afterAssignment = await assignStaff(orgA, afterThresholdShift.shiftId, userA, userA);
+        const updated = await requestConsent(orgA, afterAssignment.assignmentId, userA);
+        expect(updated.publicHolidayConsent).toBe("Requested");
+      } finally {
+        await db.delete(publicHoliday).where(eq(publicHoliday.publicHolidayId, holidayId));
+      }
     });
 
     it("requestConsent sets Requested and notifies the assignee directly", async () => {
@@ -920,6 +1038,51 @@ describe.skipIf(!RUN)("roster service (real DB)", () => {
       name: "RosterError",
       statusCode: 404,
     });
+  });
+
+  it("getWeekCalendar includes a shift anywhere within the `to` day, not just its first UTC instant", async () => {
+    // `to` is a bare calendar date; parseFilterDate() parses it as UTC midnight.
+    // A shift genuinely on that calendar day (from a viewer's perspective) can
+    // still store a startDatetime well after that midnight instant — e.g. a
+    // timezone-behind-UTC viewer's late-evening shift. The `to` bound must
+    // cover the whole day, symmetric to how `from`'s gte already covers the
+    // whole of its own day from midnight onward.
+    const to = addDays(TODAY, 5);
+    const start = new Date(`${to}T12:00:00.000Z`);
+    const end = new Date(`${to}T14:00:00.000Z`);
+    const s = await createShift(
+      orgA,
+      { storeLocationId: locA, rosterRoleId: roleId, startDatetime: start.toISOString(), endDatetime: end.toISOString() },
+      userA,
+    );
+
+    const calendar = await getWeekCalendar(orgA, locA, TODAY, to);
+    expect(calendar.map((c) => c.shiftId)).toContain(s.shiftId);
+  });
+
+  it("listMyShifts includes the assigned role's name, not just its id", async () => {
+    // A fresh, document-free role — the shared `roleId` fixture requires an
+    // RSA upload assignStaff would otherwise block on; this test only cares
+    // about the roleName join, not compliance gating.
+    const noDocRole = await createRole(orgA, { roleName: `${tag}-nodoc`, storeLocationId: locA });
+    const to = addDays(TODAY, 6);
+    const start = new Date(`${to}T09:00:00.000Z`);
+    const end = new Date(`${to}T17:00:00.000Z`);
+    const s = await createShift(
+      orgA,
+      {
+        storeLocationId: locA,
+        rosterRoleId: noDocRole.rosterRoleId,
+        startDatetime: start.toISOString(),
+        endDatetime: end.toISOString(),
+      },
+      userA,
+    );
+    await assignStaff(orgA, s.shiftId, userA, userA);
+
+    const myShifts = await listMyShifts(orgA, userA);
+    const mine = myShifts.find((m) => m.shiftId === s.shiftId);
+    expect(mine?.roleName).toBe(`${tag}-nodoc`);
   });
 });
 

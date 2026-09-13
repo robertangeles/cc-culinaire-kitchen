@@ -39,21 +39,50 @@ export async function isYearLoaded(jurisdiction: string, year: number): Promise<
 }
 
 /**
+ * Does a holiday with the given `partialDayFromTime` ("HH:MM", or null for
+ * an ordinary full-day holiday) cover a shift whose portion on this date
+ * ends at `shiftEndTimeOnDate` ("HH:MM", or "24:00" for a shift that
+ * crosses into the next local day)? Plain string comparison is valid here —
+ * both sides are zero-padded 24h "HH:MM", which sorts identically to
+ * chronological order.
+ *
+ * `shiftEndTimeOnDate` omitted defaults to true (covers the shift) even for
+ * a partial-day holiday — preserves today's exact behavior for any caller
+ * that doesn't know about shift times at all, rather than silently changing
+ * what an existing/future caller gets back.
+ */
+export function holidayCoversShift(partialDayFromTime: string | null, shiftEndTimeOnDate?: string): boolean {
+  if (!partialDayFromTime) return true;
+  if (shiftEndTimeOnDate === undefined) return true;
+  return shiftEndTimeOnDate > partialDayFromTime;
+}
+
+/**
  * Is `date` ("YYYY-MM-DD") a public holiday in `jurisdiction`? Throws if
  * that (jurisdiction, year) has never been loaded — a missing year is a
  * data gap, never silently treated as "no holidays this year".
+ *
+ * `shiftEndTimeOnDate` ("HH:MM" venue-local, or "24:00" for a shift
+ * crossing into the next local day) lets a partial-day holiday (e.g. QLD's
+ * Christmas Eve, 6pm-midnight) correctly exclude a shift that never
+ * overlaps its active window — omit it to get the old date-only answer.
  */
-export async function isPublicHoliday(date: string, jurisdiction: string): Promise<boolean> {
+export async function isPublicHoliday(
+  date: string,
+  jurisdiction: string,
+  shiftEndTimeOnDate?: string,
+): Promise<boolean> {
   const year = Number(date.slice(0, 4));
   if (!(await isYearLoaded(jurisdiction, year))) {
     throw new PublicHolidayError(`Public holidays for ${jurisdiction} ${year} are not loaded.`, 409);
   }
   const [row] = await db
-    .select({ id: publicHoliday.publicHolidayId })
+    .select({ id: publicHoliday.publicHolidayId, partialDayFromTime: publicHoliday.partialDayFromTime })
     .from(publicHoliday)
     .where(and(eq(publicHoliday.jurisdiction, jurisdiction), eq(publicHoliday.holidayDate, date)))
     .limit(1);
-  return !!row;
+  if (!row) return false;
+  return holidayCoversShift(row.partialDayFromTime, shiftEndTimeOnDate);
 }
 
 export interface PublicHolidayFilters {
@@ -80,6 +109,7 @@ export interface CreatePublicHolidayInput {
   regionNote?: string | null;
   sourceCitation?: string | null;
   loadedForYear: number;
+  partialDayFromTime?: string | null;
 }
 
 export async function createPublicHoliday(input: CreatePublicHolidayInput) {
@@ -100,6 +130,7 @@ export async function createPublicHoliday(input: CreatePublicHolidayInput) {
         regionNote: input.regionNote ?? null,
         sourceCitation: input.sourceCitation ?? null,
         loadedForYear: input.loadedForYear,
+        partialDayFromTime: input.partialDayFromTime ?? null,
       })
       .returning();
     return created;

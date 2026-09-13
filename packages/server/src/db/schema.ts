@@ -3231,6 +3231,11 @@ export const rosterRole = pgTable(
     index("idx_roster_role_org").on(table.organisationId),
     // FK index: "every role defined at (or org-wide for) one venue".
     index("idx_roster_role_location").on(table.storeLocationId),
+    // A plain (non-partial) unique index: Postgres treats any row with a
+    // NULL column as non-conflicting, so this naturally protects only
+    // venue-scoped duplicate names while leaving org-wide (null-venue)
+    // roles unrestricted.
+    uniqueIndex("idx_roster_role_org_location_name").on(table.organisationId, table.storeLocationId, table.roleName),
   ],
 );
 
@@ -3255,6 +3260,50 @@ export const rosterRoleDocument = pgTable(
   (table) => [
     // Composite PK: one requirement per role per document type.
     uniqueIndex("idx_roster_role_document_pk").on(table.rosterRoleId, table.documentType),
+  ],
+);
+
+/**
+ * A saved weekly pattern row: one (role, day-of-week, start/end time) slot
+ * that "Generate this week" turns into a real Draft shift via createShift.
+ * A blueprint, not a live shift — editing or deleting a row never touches
+ * shifts already generated from an earlier version of it (see shift's
+ * sourceTemplateRowId below, ON DELETE SET NULL).
+ *
+ * Table name deliberately singular, not CLAUDE.md's stated plural
+ * convention — every sibling in this domain (roster_role, shift,
+ * shift_assignment, public_holiday, shift_swap_request) is already
+ * singular in actual practice; this is the convention-follower, not the
+ * exception. Flagged explicitly per /plan-eng-review outside-voice review.
+ */
+export const rosterShiftTemplate = pgTable(
+  "roster_shift_template",
+  {
+    rosterShiftTemplateId: uuid("roster_shift_template_id").defaultRandom().primaryKey(),
+    organisationId: integer("organisation_id")
+      .notNull()
+      .references(() => organisation.organisationId),
+    storeLocationId: uuid("store_location_id")
+      .notNull()
+      .references(() => storeLocation.storeLocationId),
+    rosterRoleId: uuid("roster_role_id")
+      .notNull()
+      .references(() => rosterRole.rosterRoleId),
+    /** 0=Sunday..6=Saturday, same convention as staff_availability.day_of_week. */
+    dayOfWeek: smallint("day_of_week").notNull(),
+    /** "HH:MM", venue-local — same convention as staff_availability.available_from/until. */
+    startTime: varchar("start_time", { length: 5 }).notNull(),
+    endTime: varchar("end_time", { length: 5 }).notNull(),
+    createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
+    updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // FK index: org-wide template management views.
+    index("idx_roster_shift_template_org").on(table.organisationId),
+    // Generation's own lookup: "every row for this venue".
+    index("idx_roster_shift_template_location").on(table.storeLocationId),
+    // FK index: feeds deleteRole's in-use-template guard.
+    index("idx_roster_shift_template_role").on(table.rosterRoleId),
   ],
 );
 
@@ -3289,6 +3338,18 @@ export const shift = pgTable(
     createdBy: integer("created_by")
       .notNull()
       .references(() => user.userId),
+    /** NULL = manually created. Set when this shift came from "Generate this
+     * week". ON DELETE SET NULL: the template can be deleted anytime (it's
+     * reusable indefinitely) without touching shifts it already generated —
+     * a RESTRICT FK would make an ever-used template permanently undeletable. */
+    sourceTemplateRowId: uuid("source_template_row_id").references(
+      () => rosterShiftTemplate.rosterShiftTemplateId,
+      { onDelete: "set null" },
+    ),
+    /** The Monday-anchor date of the week this shift was generated for, NULL
+     * for manually-created shifts. Paired with sourceTemplateRowId in a
+     * unique index below to close the concurrent-generation race (23505). */
+    generatedForWeekStart: date("generated_for_week_start"),
     createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
     updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
   },
@@ -3299,9 +3360,18 @@ export const shift = pgTable(
     index("idx_shift_location_start").on(table.storeLocationId, table.startDatetime),
     // FK index: "every shift this role has been used for".
     index("idx_shift_role").on(table.rosterRoleId),
+    // FK index: "every shift this template row has generated" (undo-generation, deleteRole guard's shift-side check).
+    index("idx_shift_source_template").on(table.sourceTemplateRowId),
     // A shift that ends before or exactly when it starts is malformed data,
     // not a valid zero-or-negative-length shift.
     check("chk_shift_time_order", sql`${table.endDatetime} > ${table.startDatetime}`),
+    // Closes the concurrent-generation race: two calls generating the same
+    // template row for the same week can't both insert — the loser's 23505
+    // folds into the generation call's `skipped` count.
+    uniqueIndex("idx_shift_template_week_unique").on(
+      table.sourceTemplateRowId,
+      table.generatedForWeekStart,
+    ),
   ],
 );
 
@@ -3452,6 +3522,15 @@ export const publicHoliday = pgTable(
     isRegional: boolean("is_regional").notNull().default(false),
     regionNote: varchar("region_note", { length: 500 }),
     sourceCitation: varchar("source_citation", { length: 500 }),
+    /**
+     * "HH:MM", venue-local, or NULL for an ordinary full-day holiday. Some
+     * states gazette a public holiday only from a given time of day until
+     * midnight (e.g. QLD/SA/NT's Christmas Eve) — NULL is the common case
+     * and behaves exactly as before; a set value means isPublicHoliday()
+     * only counts a shift as falling on this holiday if the shift's own
+     * end-time-on-this-date is later than this threshold.
+     */
+    partialDayFromTime: varchar("partial_day_from_time", { length: 5 }),
     /**
      * The calendar year this row was loaded as part of — normally equal to
      * holidayDate's own year, but tracked explicitly (not derived) so "has

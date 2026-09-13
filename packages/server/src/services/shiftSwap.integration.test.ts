@@ -268,6 +268,40 @@ describe.skipIf(!RUN)("shiftSwapService (real DB)", () => {
     expect(claimed.publicHolidayConsent).toBe("Requested");
   });
 
+  it("claimSwap reactivates the claimer's own Declined row on the same shift instead of falsely blocking the claim", async () => {
+    // UNIQUE(shiftId, userId) keeps a Declined row for audit rather than
+    // deleting it — assignStaff() already knows to reactivate it instead of
+    // treating "has a row" as "already assigned". claimSwap's raw insert
+    // didn't, and would hit the same unique index and throw the wrong error.
+    const day = addDays(TODAY, 6);
+    const [shiftRow] = await db
+      .insert(shift)
+      .values({
+        organisationId: orgA,
+        storeLocationId: locA,
+        rosterRoleId: roleId,
+        startDatetime: new Date(`${day}T09:00:00+10:00`),
+        endDatetime: new Date(`${day}T13:00:00+10:00`),
+        createdBy: userA,
+      })
+      .returning({ id: shift.shiftId });
+    shiftIds.push(shiftRow.id);
+    const [offererAssignment] = await db
+      .insert(shiftAssignment)
+      .values({ shiftId: shiftRow.id, userId: userA, status: "Confirmed" })
+      .returning({ id: shiftAssignment.assignmentId });
+    await db.insert(shiftAssignment).values({ shiftId: shiftRow.id, userId: userB, status: "Declined" });
+
+    const created = await offerSwap(orgA, offererAssignment.id, userA);
+    const claimed = await claimSwap(orgA, created.swapRequestId, userB);
+    expect(claimed.userId).toBe(userB);
+    expect(claimed.status).toBe("Confirmed");
+
+    const rows = await db.select().from(shiftAssignment).where(eq(shiftAssignment.shiftId, shiftRow.id));
+    expect(rows).toHaveLength(1);
+    expect(rows[0].status).toBe("Confirmed");
+  });
+
   it("the offerer can cancel their own still-open swap, and it disappears from the browse list", async () => {
     const created = await offerSwap(orgA, cancelTarget.assignmentId, userA);
     const cancelled = await cancelSwap(orgA, created.swapRequestId, userA);

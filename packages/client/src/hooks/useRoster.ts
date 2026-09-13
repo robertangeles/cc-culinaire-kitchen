@@ -43,6 +43,7 @@ export interface MyShift {
   shiftId: string;
   storeLocationId: string;
   rosterRoleId: string;
+  roleName: string;
   startDatetime: string;
   endDatetime: string;
   status: string;
@@ -91,10 +92,22 @@ export interface AssignmentBlocked {
   expiryDate: string | null;
 }
 
-async function parseError(res: Response, fallback: string): Promise<Error & { blocked?: AssignmentBlocked }> {
+export interface RoleVenueConflict {
+  storeLocationId: string;
+  locationName: string;
+}
+
+export async function parseError(
+  res: Response,
+  fallback: string,
+): Promise<Error & { blocked?: AssignmentBlocked; conflicts?: RoleVenueConflict[] }> {
   const body = await res.json().catch(() => ({}));
-  const err = new Error(body.error || fallback) as Error & { blocked?: AssignmentBlocked };
+  const err = new Error(body.error || fallback) as Error & {
+    blocked?: AssignmentBlocked;
+    conflicts?: RoleVenueConflict[];
+  };
   if (body.blocked) err.blocked = body.blocked;
+  if (body.conflicts) err.conflicts = body.conflicts;
   return err;
 }
 
@@ -134,7 +147,7 @@ export function useRosterRoles() {
   );
 
   const update = useCallback(
-    async (id: string, data: { roleName: string; storeLocationId?: string | null }) => {
+    async (id: string, data: { roleName: string; storeLocationId?: string | null; confirmed?: boolean }) => {
       const res = await fetch(`${BASE}/roles/${id}`, { ...jsonOpts, method: "PUT", body: JSON.stringify(data) });
       if (!res.ok) throw await parseError(res, "Failed to update role");
       await refresh();
@@ -274,6 +287,127 @@ export function useShifts(storeLocationId: string | null) {
   }, [refresh]);
 
   return { shifts, isLoading, error, refresh, create, update, cancel, assign, removeAssignment };
+}
+
+// ─── Roster Shift Templates ───────────────────────────────────────
+
+export interface RosterShiftTemplate {
+  rosterShiftTemplateId: string;
+  organisationId: number;
+  storeLocationId: string;
+  rosterRoleId: string;
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
+  createdDttm: string;
+  updatedDttm: string;
+}
+
+export interface TemplateRowInput {
+  storeLocationId: string;
+  rosterRoleId: string;
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
+}
+
+export interface GenerateWeekResult {
+  created: number;
+  skipped: number;
+  failed: number;
+}
+
+export interface UndoGenerationResult {
+  cancelled: number;
+}
+
+/** Same stale-closure-safe shape as useShifts above — storeLocationId drives refresh's own deps, hasLoadedOnce resets on venue switch. */
+export function useRosterTemplates(storeLocationId: string | null) {
+  const [templates, setTemplates] = useState<RosterShiftTemplate[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const hasLoadedOnce = useRef(false);
+
+  const refresh = useCallback(async () => {
+    if (!storeLocationId) {
+      setTemplates([]);
+      setIsLoading(false);
+      return;
+    }
+    if (!hasLoadedOnce.current) setIsLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`${BASE}/templates?storeLocationId=${storeLocationId}`, opts);
+      if (res.ok) setTemplates(await res.json());
+      else setError((await parseError(res, "Failed to load templates")).message);
+    } finally {
+      setIsLoading(false);
+      hasLoadedOnce.current = true;
+    }
+  }, [storeLocationId]);
+
+  const create = useCallback(
+    async (data: TemplateRowInput) => {
+      const res = await fetch(`${BASE}/templates`, { ...jsonOpts, method: "POST", body: JSON.stringify(data) });
+      if (!res.ok) throw await parseError(res, "Failed to create template row");
+      await refresh();
+      return (await res.json()) as RosterShiftTemplate;
+    },
+    [refresh],
+  );
+
+  const update = useCallback(
+    async (id: string, data: TemplateRowInput) => {
+      const res = await fetch(`${BASE}/templates/${id}`, { ...jsonOpts, method: "PATCH", body: JSON.stringify(data) });
+      if (!res.ok) throw await parseError(res, "Failed to update template row");
+      await refresh();
+    },
+    [refresh],
+  );
+
+  const remove = useCallback(
+    async (id: string) => {
+      const res = await fetch(`${BASE}/templates/${id}`, { ...opts, method: "DELETE" });
+      if (!res.ok) throw await parseError(res, "Failed to delete template row");
+      await refresh();
+    },
+    [refresh],
+  );
+
+  const generateWeek = useCallback(
+    async (weekStart: string): Promise<GenerateWeekResult> => {
+      if (!storeLocationId) throw new Error("No venue selected");
+      const res = await fetch(`${BASE}/templates/generate`, {
+        ...jsonOpts,
+        method: "POST",
+        body: JSON.stringify({ storeLocationId, weekStart }),
+      });
+      if (!res.ok) throw await parseError(res, "Failed to generate week");
+      return res.json();
+    },
+    [storeLocationId],
+  );
+
+  const undoGeneration = useCallback(
+    async (weekStart: string): Promise<UndoGenerationResult> => {
+      if (!storeLocationId) throw new Error("No venue selected");
+      const res = await fetch(`${BASE}/templates/undo-generation`, {
+        ...jsonOpts,
+        method: "POST",
+        body: JSON.stringify({ storeLocationId, weekStart }),
+      });
+      if (!res.ok) throw await parseError(res, "Failed to undo generation");
+      return res.json();
+    },
+    [storeLocationId],
+  );
+
+  useEffect(() => {
+    hasLoadedOnce.current = false;
+    refresh();
+  }, [refresh]);
+
+  return { templates, isLoading, error, refresh, create, update, remove, generateWeek, undoGeneration };
 }
 
 export interface CalendarShiftAssignment {
@@ -531,6 +665,7 @@ export interface PublicHoliday {
   regionNote: string | null;
   sourceCitation: string | null;
   loadedForYear: number;
+  partialDayFromTime: string | null;
   createdDttm: string;
   updatedDttm: string;
 }
@@ -543,6 +678,7 @@ export interface NewPublicHoliday {
   regionNote?: string | null;
   sourceCitation?: string | null;
   loadedForYear: number;
+  partialDayFromTime?: string | null;
 }
 
 export async function listPublicHolidays(): Promise<PublicHoliday[]> {

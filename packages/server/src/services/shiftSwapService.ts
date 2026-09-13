@@ -32,6 +32,7 @@ import {
   refusalMessage,
   getRequirementsForRole,
   getHeldDocuments,
+  insertOrReactivateAssignment,
 } from "./rosterService.js";
 import { canAssign } from "./rosterAssignmentRules.js";
 import { requestConsent } from "./consentService.js";
@@ -167,44 +168,46 @@ export async function claimSwap(orgId: number, swapRequestId: string, callerUser
       .returning();
     if (!claimed) throw new RosterError("This swap was just claimed by someone else.", 409);
 
-    try {
-      await tx.delete(shiftAssignment).where(eq(shiftAssignment.assignmentId, swapRow.fromAssignmentId));
-      const [inserted] = await tx
-        .insert(shiftAssignment)
-        .values({ shiftId: swapRow.shiftId, userId: callerUserId, status: "Confirmed" })
-        .returning();
-
-      await auditService.log(
-        {
-          entityType: "shift_assignment",
-          entityId: swapRow.fromAssignmentId,
-          action: "cancel",
-          actorUserId: callerUserId,
-          organisationId: orgId,
-          beforeValue: { shiftId: swapRow.shiftId, userId: swapRow.fromUserId },
-          metadata: { action: "swap_claimed", swapRequestId },
-        },
-        tx,
-      );
-      await auditService.log(
-        {
-          entityType: "shift_assignment",
-          entityId: inserted.assignmentId,
-          action: "create",
-          actorUserId: callerUserId,
-          organisationId: orgId,
-          afterValue: { shiftId: swapRow.shiftId, userId: callerUserId, status: "Confirmed" },
-          metadata: { action: "swap_claimed", swapRequestId },
-        },
-        tx,
-      );
-      return inserted;
-    } catch (err) {
-      if ((err as { code?: string }).code === "23505") {
-        throw new RosterError("You're already assigned to this shift.", 409);
-      }
-      throw err;
+    await tx.delete(shiftAssignment).where(eq(shiftAssignment.assignmentId, swapRow.fromAssignmentId));
+    // Reactivates the claimer's own Declined row on this shift, if they have
+    // one, instead of a raw insert hitting UNIQUE(shiftId, userId) and
+    // misreporting a stale decline as "already assigned" — same shared
+    // helper assignStaff() uses, so both give the same answer.
+    const inserted = await insertOrReactivateAssignment(swapRow.shiftId, callerUserId, "Confirmed", tx);
+    if (!inserted) {
+      throw new RosterError("You're already assigned to this shift.", 409);
     }
+    // Same createdDttm/updatedDttm comparison assignStaff() uses to tell a
+    // genuine insert from a Declined-row reactivation, for an accurate audit
+    // action label either way.
+    const wasReactivation = inserted.updatedDttm.getTime() > inserted.createdDttm.getTime();
+
+    await auditService.log(
+      {
+        entityType: "shift_assignment",
+        entityId: swapRow.fromAssignmentId,
+        action: "cancel",
+        actorUserId: callerUserId,
+        organisationId: orgId,
+        beforeValue: { shiftId: swapRow.shiftId, userId: swapRow.fromUserId },
+        metadata: { action: "swap_claimed", swapRequestId },
+      },
+      tx,
+    );
+    await auditService.log(
+      {
+        entityType: "shift_assignment",
+        entityId: inserted.assignmentId,
+        action: wasReactivation ? "update" : "create",
+        actorUserId: callerUserId,
+        organisationId: orgId,
+        beforeValue: wasReactivation ? { status: "Declined" } : undefined,
+        afterValue: { shiftId: swapRow.shiftId, userId: callerUserId, status: "Confirmed" },
+        metadata: { action: "swap_claimed", swapRequestId },
+      },
+      tx,
+    );
+    return inserted;
   });
 
   await createInApp({

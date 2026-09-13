@@ -119,6 +119,7 @@ export function MyShiftsView() {
           <div key={s.assignmentId} className="border-b border-dark-200/30 px-4 py-3 last:border-b-0">
             <div className="flex items-center justify-between">
               <div className="text-sm">
+                <div className="text-xs font-medium text-gold">{s.roleName}</div>
                 <span className="text-white font-medium">{formatShiftRange(s.startDatetime, s.endDatetime)}</span>
                 <div className="mt-0.5 text-xs text-dark-600">
                   {s.assignmentStatus === "Pending" && <span className="text-dark-500">Awaiting your response</span>}

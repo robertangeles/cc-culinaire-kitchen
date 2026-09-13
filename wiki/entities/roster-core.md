@@ -2,7 +2,7 @@
 title: Roster Core
 category: entity
 created: 2026-08-16
-updated: 2026-09-04
+updated: 2026-09-07
 related: [[staff-compliance-vault]], [[compliance-expiry-engine]], [[scheduled-job-daily-claim]], [[store-locations-system]], [[workforce-optimisation]]
 ---
 
@@ -23,6 +23,7 @@ The Compliance Vault (Phase 1) answers "is everyone current?" but not "who can I
 | `staff_availability` | Recurring day-of-week windows a staff member is available |
 | `award_rule` | Fair Work Award rules (jurisdiction, ruleType, threshold), effective-dated. **Zero rows seeded — see Award engine below** |
 | `public_holiday` | Gazetted public holidays by jurisdiction + date, admin-loaded |
+| `roster_shift_template` | A saved weekly pattern row (role + day-of-week + start/end time), venue-scoped — see Scheduling Templates below |
 
 Tenancy: `shift.storeLocationId` is NOT NULL (a shift always happens at one venue); `roster_role.storeLocationId` and `staff_availability.storeLocationId` are nullable (org-wide or venue-scoped). `award_rule` and `public_holiday` carry no `organisationId` at all — both are jurisdiction-keyed shared reference data, same shape as `document_expiry_rule`.
 
@@ -40,12 +41,24 @@ Tenancy: `shift.storeLocationId` is NOT NULL (a shift always happens at one venu
 
 ## Public holiday calendar — fail loud, not silent
 
-`services/publicHolidayService.ts`. Unlike the Award engine, this has no "ship empty forever" story: holiday declaration is clerical (a human loads each jurisdiction+year once it's gazetted), not a competence question. `isPublicHoliday(date, jurisdiction)` **throws** if that (jurisdiction, year) has never been loaded, rather than silently answering "not a holiday" — a missing year would otherwise mean s.114 (public-holiday work consent) is silently skipped for every shift that year.
+`services/publicHolidayService.ts`. Unlike the Award engine, this has no "ship empty forever" story: holiday declaration is clerical (a human loads each jurisdiction+year once it's gazetted), not a competence question. `isPublicHoliday(date, jurisdiction, shiftEndTimeOnDate?)` **throws** if that (jurisdiction, year) has never been loaded, rather than silently answering "not a holiday" — a missing year would otherwise mean s.114 (public-holiday work consent) is silently skipped for every shift that year.
 
 - `publishRoster()` calls `assertHolidayCalendarLoaded()` before touching any shift: if the venue's jurisdiction has no row for every year the publish window spans, the whole publish is blocked with `"Public holidays for VIC 2027 are not loaded."` This is the one WHOLE-PUBLISH hard block in `publishRoster()` — `canAssign` blocks per-shift, the Award engine never blocks at all.
 - Every shift that does publish gets `shift.isPublicHoliday` (re-)confirmed against the now-guaranteed-loaded calendar — the column the consent workflow below reads.
 - A daily gap-check job (05:00, reusing `claimDailyRun`/`runIfClaimed` verbatim — see [[scheduled-job-daily-claim]]) scans every distinct venue jurisdiction and logs an `alert: "compliance_holiday_calendar_gap"` marker for any (jurisdiction, year) not yet loaded for the current year, and next year from November on. This is a heads-up, not enforcement — the real block is `publishRoster()`'s own check at the moment a gap actually matters.
-- Admin loader UI: Settings → Public Holidays (`PublicHolidaysTab.tsx`), gated on `roster:manage`. Manual entry only, no bulk auto-population of real AU dates — deliberately clerical.
+- Admin loader UI: Settings → Public Holidays (`PublicHolidaysTab.tsx`), gated on `roster:manage`. Manual entry only, no bulk-import **feature** — deliberately clerical, so a bad automated source can never silently corrupt live compliance data. A one-off, reviewed **script** (below) is a different thing from a standing bulk-import button in the product.
+
+### Partial-day holidays (2026-09)
+
+Some states gazette a public holiday only from a given time of day until midnight, not the whole calendar date — QLD's Christmas Eve (6pm-midnight, *Holidays Act 1983*) and SA/NT's Christmas Eve + New Year's Eve (7pm-midnight, SA's *Public Holidays Act 2023*). `public_holiday.partialDayFromTime` ("HH:MM" venue-local, nullable — null is an ordinary full-day holiday and the default for every other row) captures this. `isPublicHoliday()`'s new optional `shiftEndTimeOnDate` parameter ("HH:MM", or `"24:00"` for a shift crossing into the next local day) lets a partial-day holiday correctly exclude a shift that never overlaps its active window — a 9am–2pm shift on QLD's Christmas Eve is not a public holiday shift; a 6pm–1am one is. Both real call sites (`publishRoster()`, `consentService.ts`'s `assertShiftIsPublicHoliday()`) compute this via a new `rosterService.ts` helper, `shiftEndTimeOnStartDate()`, built on a new `toVenueLocalTime()` sibling to the existing `toVenueLocalDate()`. Omitting the parameter preserves the exact pre-existing date-only behavior — no other caller or historical row is affected.
+
+### AU 2026-2027 seed (2026-09)
+
+`scripts/seedAuPublicHolidays20262027.ts` — a one-off, idempotent load of national + genuinely statewide holidays for all 8 jurisdictions, 2026-2027 (225 rows). Sourced by spawning one research agent per jurisdiction against that state's own primary `.gov.au`/legislation source, then cross-checked: every Easter-based date independently verified against the standard Gregorian Easter algorithm (zero discrepancies across all 8 states), and QLD's Anzac-Day transfer rule confirmed directly against `qld.gov.au`'s own footnote rather than trusted from a general aggregator. Two things deliberately excluded, not overlooked:
+- **Local/regional-only observances** (town show days, regional cup/regatta days) — `isRegional` is informational-only at query time (`isPublicHoliday()` doesn't filter on it), so loading a regional entry would wrongly gate every venue in that whole state, not just the town it applies to.
+- **NSW's "Bank Holiday"** (first Monday in August) — gazetted state-wide but observed in practice only by banking/some public-service employers, essentially never by this app's actual hospitality/retail user base; including it would false-positive-gate consent for the vast majority of venues.
+
+VIC's 2027 "Friday before the AFL Grand Final" is loaded as a best estimate (24 Sep 2027) — the government's own source marks it provisional pending the 2027 AFL fixture, `sourceCitation` notes this, correct via the admin UI if the fixture moves it.
 
 ## s.114 consent workflow (Slice 7)
 
@@ -91,6 +104,16 @@ A shift's `startDatetime` is a `timestamptz` (a UTC instant). Converting that to
 
 Two smaller findings from the same pass — `addDaysIso` reimplemented in two other components, and a full-week refetch after every drag gesture — are logged in `tasks/todo.md` rather than fixed here (both touch scope beyond this branch or aren't a problem at today's data volume).
 
+**A second, 5-angle `/code-review` pass surfaced 6 more real issues, all fixed via TDD (failing test first) before merge:**
+- **The overnight/multi-day drag guard above was aspirational, not real.** The resize/move gesture's start guard only checked `canManage`/`isDraft` — nothing stopped dragging one, and since resize/move both seed themselves from the same date-stripped `minutesSinceMidnight` values, a drag on an overnight shift could silently rewrite it to a same-day shift with the end BEFORE the start (confirmed by the failing test's own captured payload). Fixed by adding `daySpan > 0` to the same guard, which is what makes the file's pre-existing "already disclosed as undraggable" comment actually true rather than wishful.
+- **`getWeekCalendar`'s date-range filter was asymmetric.** `to` is a bare calendar date, parsed as UTC midnight; comparing with `lte()` against that instant only matched the day's very first moment, while `from`'s `gte()` correctly covered its whole day forward. A shift late in the `to` day — for any viewer in a timezone behind UTC — could be silently dropped from the calendar. Fixed with `lt()` against the *next* day's midnight, giving `to` the same full-day coverage `from` already had.
+- **The role-legend dot's border color was invisible in production for 6 of 8 roles.** `roleAccent(...).replace("border-l-", "border-")` builds the class name at runtime; Tailwind's JIT scanner only generates CSS for literal class text in source, so the replaced string was never scanned — confirmed by grepping the actual built `dist/assets/*.css`. Fixed with a static `ROLE_ACCENT_RING` array of literal `border-{color}-500` classes, re-verified against a fresh build.
+- **`claimSwap()` didn't know about Declined-row reactivation.** `assignStaff()` already reactivates a Declined `shift_assignment` row instead of blocking a re-offer (see the third-bug entry above); `claimSwap()`'s raw insert still hit the same unique index and threw a false "already assigned" error, blocking a legitimate swap claim. Fixed by extracting the reactivate-or-create logic into a shared `insertOrReactivateAssignment()` (`rosterService.ts`) — one atomic `INSERT ... ON CONFLICT (shiftId, userId) DO UPDATE ... WHERE status = 'Declined'` statement, used by both `assignStaff()` and `claimSwap()`. This also closes a race the old SELECT-then-branch-then-UPDATE had: two concurrent re-offers of the same declined shift now serialize on Postgres's own row lock, so only one can ever win — the loser's `WHERE` fails and it gets `null` back, same as if the row never existed.
+- **Scroll-sync used a document-wide query.** Every other DOM coordination in `RosterCalendarView.tsx` uses a ref (`gridRef`, `dragRef`); the day-column scroll handler alone used `document.querySelectorAll("[data-calendar-scroller]")`, which would cross-wire two mounted instances of the view and re-scans the whole DOM on every scroll event. Fixed with a `scrollerRefs` array scoped to the component.
+- **A memoization gap the file's own precedent should have caught.** `shiftDisplayInfo` exists specifically to avoid recomputing `daySpan`/`rangeLabel` on every pointermove-frequency render during a drag; `storedStartMinutes`/`storedEndMinutes` fell through that same render loop untouched, still re-parsing every visible shift's dates on every drag frame. Folded into the same memo.
+
+One finding deferred to `tasks/todo.md`: `getWeekCalendar` duplicates `getStaffingCoverage`'s shift-fetch join/where shape verbatim — real divergence risk, but extracting a shared query builder touches a second service outside this fix's scope.
+
 ## Shift-time display, validation, and editing (2026-09 incident hardening)
 
 Two "Duty Manager" shifts in dev were entered with end dates 5-7 days after their start (129h and 157h spans) — genuine bad data, not a calculation bug. `staffingCoverageService.ts`'s hour arithmetic and day-bucketing were both already correct; what let the mistake through unnoticed was purely a display gap:
@@ -104,6 +127,22 @@ New shared helpers in `packages/shared/src/utils/dates.ts`: `durationHours()` an
 The two corrupted dev rows were deleted (`DELETE FROM shift WHERE shift_id IN (...)`) after confirming they were Draft, unpublished, and had no recoverable original intent; `shift_assignment.shift_id`'s `ON DELETE CASCADE` handled any assignment rows automatically.
 
 **Not yet done** (tracked separately, not part of this fix): a published-only week-agenda redesign of `MyShiftsView.tsx` (today's `listMyShifts()` has no status filter, so Draft shifts still show to staff); a server-side 24h duration guard; double-booking overlap warnings. The drag-to-build week calendar (above, "Week calendar (drag-to-build)") merged in the same pass as this section, with its own multi-day-shift "+Nd" guard added — see that section's final paragraph.
+
+## Scheduling Templates (2026-09-07)
+
+Full design: `docs/designs/roster-scheduling-templates.md` (CEO review → office-hours → eng-review → design-review, all approved). Two independent, named sources — a co-founder testing the product, and Chef John Hand (Head Chef, St Georges Restaurant, an external operator) — converged unprompted on the same complaint: recreating a fixed weekly pattern one shift at a time "loses the purpose of having a system." Matches 7shifts'/Deputy's own "Scheduling Templates"/"Copy previous week" framing: under the hood, both competitors still store a shift as an individual date+time+role+person record — the same primitive this app already uses. The gap was a missing acceleration layer, not a wrong data model.
+
+A `roster_shift_template` row is a blueprint, not a live shift: role + day-of-week + start/end time, venue-scoped, independent of any specific week. "Generate this week" (`generateWeekFromTemplate`) turns every row into a real Draft shift via the same `createShift`-adjacent insert path — best-effort per-row (`publishRoster()`'s own established pattern), returning `{created, skipped, failed}`. No default assignee per slot (availability/compliance can change week to week); assignment stays a manual step after generation, same as a hand-created shift today.
+
+**Local-time→UTC was a genuine gap, not a reuse.** `toVenueLocalDate`/`toVenueLocalTime` only went instant→local; generation needed the reverse, so `resolveVenueLocalToUtc(dateIso, hhmm, ianaTimezone)` is new code, built on the same `Intl.DateTimeFormat` offset-resolution primitive, two-pass to resolve correctly across a DST transition boundary.
+
+**Concurrent-generation race, closed twice.** `shift` gained two nullable columns, `sourceTemplateRowId` (FK, `ON DELETE SET NULL` — a template stays deletable anytime, even once used) and `generatedForWeekStart`, with a unique index on the pair. First pass: a bare insert + `23505` catch. **Caught during TDD, not at design time:** cancelling a generated shift never deletes the row, so it still occupies that unique key — a bare catch would have permanently blocked regenerating any cancelled slot, directly contradicting the design's own stated rollback semantics. Fixed with `.onConflictDoUpdate({target: [...], setWhere: eq(status, "Cancelled"), ...})` — the exact idiom `insertOrReactivateAssignment` already established for a Declined assignment blocking re-assignment. A genuine double-click race now resolves for free: the loser's `setWhere` doesn't match a still-Draft row, so it returns nothing, no exception, no duplicate.
+
+**Bulk undo, built in the same PR** (explicit user choice, overriding the reviewer's "defer to tasks/todo.md" recommendation): `POST /roster/templates/undo-generation` cancels every shift matching a venue/week pair, reusing the same two columns — no new schema. Idempotent (already-Cancelled shifts aren't re-cancelled).
+
+**UI placement, resolved by `/plan-design-review` against two real mockups, not the reviewer's own recommendation.** A new "Templates" Roster tab was proposed as mechanically cheaper (one array push in `RosterPage.tsx`) and safer (avoids `RosterCalendarView.tsx`'s already-dense, hand-rolled drag-gesture toolbar) — the user chose inline-on-Calendar instead, then rejected a literal cramped-popover mockup of that option in favor of a clean second toolbar row (`RosterTemplatesToolbar`, `RosterTemplatesPanel.tsx`) with three actions — Manage Templates, Generate This Week, Undo Last Generation — each opening a **centered modal**, never a popover anchored to the toolbar, so the grid's own pointer-events code stays completely untouched.
+
+Six new routes under `/roster/templates*`, all gated `roster:manage`, no new permission key. `deleteRole` gained a second in-use guard (409) — identical shape to its existing shift-in-use check — for a role still referenced by a saved template.
 
 ## Permissions
 

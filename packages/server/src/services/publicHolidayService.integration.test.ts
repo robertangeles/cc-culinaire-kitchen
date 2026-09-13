@@ -84,6 +84,27 @@ describe.skipIf(!RUN)("publicHolidayService (real DB)", () => {
     ).rejects.toMatchObject({ statusCode: 409 });
   });
 
+  it("createPublicHoliday persists partialDayFromTime, and isPublicHoliday only counts a shift that reaches it", async () => {
+    const created = await createPublicHoliday({
+      jurisdiction: TEST_JURISDICTION,
+      holidayDate: "2094-12-24",
+      holidayName: `${tag} Partial-day Eve`,
+      loadedForYear: 2094,
+      partialDayFromTime: "18:00",
+    });
+    seededIds.push(created.publicHolidayId);
+    expect(created.partialDayFromTime).toBe("18:00");
+
+    const row = await listPublicHolidays({ jurisdiction: TEST_JURISDICTION, year: 2094 });
+    expect(row.find((r) => r.publicHolidayId === created.publicHolidayId)?.partialDayFromTime).toBe("18:00");
+
+    expect(await isPublicHoliday("2094-12-24", TEST_JURISDICTION, "17:59")).toBe(false);
+    expect(await isPublicHoliday("2094-12-24", TEST_JURISDICTION, "18:01")).toBe(true);
+    // Omitting the 3rd arg preserves today's exact behavior for any caller
+    // unaware of partial-day holidays — never a silent false negative.
+    expect(await isPublicHoliday("2094-12-24", TEST_JURISDICTION)).toBe(true);
+  });
+
   it("listPublicHolidays filters by jurisdiction and year", async () => {
     const rows = await listPublicHolidays({ jurisdiction: TEST_JURISDICTION, year: 2091 });
     expect(rows.some((r) => r.holidayName === `${tag} Test Day`)).toBe(true);

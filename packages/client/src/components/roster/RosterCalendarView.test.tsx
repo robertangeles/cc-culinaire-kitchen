@@ -1,5 +1,8 @@
-import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { render, screen, fireEvent } from "@testing-library/react";
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { mondayOfWeek, addDaysIso } from "../../lib/rosterCalendarMath.js";
 
 /**
@@ -38,6 +41,7 @@ function calendarShift(overrides: Partial<{ shiftId: string; startDatetime: stri
 }
 
 let mockCalendarShifts: ReturnType<typeof calendarShift>[] = [];
+const mockUpdateTime = vi.fn();
 
 vi.mock("../../context/LocationContext.js", () => ({
   useLocation: () => ({
@@ -58,7 +62,7 @@ vi.mock("../../hooks/useRoster.js", () => ({
     isLoading: false,
     error: null,
     create: vi.fn(),
-    updateTime: vi.fn(),
+    updateTime: mockUpdateTime,
     assign: vi.fn(),
   }),
 }));
@@ -66,6 +70,10 @@ vi.mock("../../hooks/useRoster.js", () => ({
 const { RosterCalendarView } = await import("./RosterCalendarView.js");
 
 describe("RosterCalendarView multi-day shift badge", () => {
+  beforeEach(() => {
+    mockUpdateTime.mockClear();
+  });
+
   it("shows a +Nd badge for a shift spanning multiple calendar days", () => {
     // Mon 8am -> the following Sunday 9pm: 6 local days after its start day.
     mockCalendarShifts = [
@@ -104,5 +112,45 @@ describe("RosterCalendarView multi-day shift badge", () => {
     const block = document.querySelector('[data-shift-id="shift-1"]') as HTMLElement;
     expect(block).toBeTruthy();
     expect(block.style.height).toBe("96px");
+  });
+
+  it("refuses to drag (resize or move) an overnight/multi-day shift instead of silently corrupting its stored time", () => {
+    // The component's own comment used to claim overnight/multi-day shifts
+    // were "already disclosed as undraggable" — they weren't; a drag's start
+    // guard only checked canManage/isDraft, so a resize/move on one of these
+    // could silently rewrite its stored time using time-of-day-only minutes
+    // that discard which calendar day the end actually falls on.
+    mockCalendarShifts = [
+      calendarShift({
+        startDatetime: localIso(weekStartIso, 22),
+        endDatetime: localIso(addDaysIso(weekStartIso, 1), 2),
+      }),
+    ];
+    render(<RosterCalendarView />);
+    const block = document.querySelector('[data-shift-id="shift-1"]') as HTMLElement;
+    expect(block).toBeTruthy();
+
+    // jsdom has no layout engine (elementFromPoint doesn't exist), so this
+    // only exercises the gesture's start guard, not a real pointer move —
+    // sufficient here since the guard's whole job is to refuse the drag
+    // before beginDrag() ever attaches a listener for it.
+    fireEvent.pointerDown(block, { clientY: 5 });
+    fireEvent.pointerUp(window);
+
+    expect(mockUpdateTime).not.toHaveBeenCalled();
+  });
+
+  it("role-legend border colors are literal Tailwind classes, not built via runtime string replacement", () => {
+    // Tailwind's JIT scanner only generates CSS for class names it can find
+    // as literal text in source — a runtime .replace("border-l-", "border-")
+    // produces a JS string that looks correct but was never scanned, so its
+    // CSS rule is silently missing from the production bundle. Confirmed
+    // against the actual built CSS during review: 6 of 8 role colors had no
+    // border in production.
+    const source = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "./RosterCalendarView.tsx"), "utf-8");
+    expect(source).not.toMatch(/\.replace\(\s*["'`]border-l-/);
+    for (const color of ["rose", "amber", "emerald", "cyan", "blue", "violet", "fuchsia", "teal"]) {
+      expect(source).toContain(`border-${color}-500`);
+    }
   });
 });
