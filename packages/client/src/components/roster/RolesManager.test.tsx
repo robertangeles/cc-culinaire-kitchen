@@ -200,4 +200,27 @@ describe("RolesManager — RoleRow venue edit + cross-venue warning", () => {
     expect(screen.queryByText("Save anyway")).not.toBeInTheDocument();
     expect(screen.getByText("Save changes")).toBeInTheDocument();
   });
+
+  it("Cancel on the conflict warning reverts the venue selection, not just dismisses the warning", async () => {
+    const conflictErr = Object.assign(new Error("This role is used by templates at other venues"), {
+      conflicts: [{ storeLocationId: "loc-hq", locationName: "HQ" }],
+    });
+    update.mockRejectedValueOnce(conflictErr);
+    render(<RolesManager />);
+    expandRow();
+
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "loc-branch" } });
+    fireEvent.click(screen.getByText("Save changes"));
+    await waitFor(() => expect(screen.getByText(/Templates at other venues/)).toBeInTheDocument());
+
+    fireEvent.click(screen.getByText("Cancel"));
+
+    // Reverted to the role's actual original venue (this describe block's
+    // fixture — see beforeEach above), not just the warning dismissed —
+    // otherwise "Save changes" reappears right underneath for a change the
+    // user just cancelled.
+    expect((screen.getByRole("combobox") as HTMLSelectElement).value).toBe("loc-hq");
+    expect(screen.queryByText("Save changes")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Templates at other venues/)).not.toBeInTheDocument();
+  });
 });

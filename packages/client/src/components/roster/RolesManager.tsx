@@ -281,7 +281,14 @@ function RoleRow({
                   <div className="flex justify-end gap-2">
                     <button
                       type="button"
-                      onClick={() => setConflicts(null)}
+                      onClick={() => {
+                        // "Cancel" means cancel the venue change, not just dismiss the
+                        // warning — leaving editVenueId at the conflicting value made
+                        // "Save changes" reappear right underneath with nothing actually
+                        // cancelled.
+                        setEditVenueId(role.storeLocationId);
+                        setConflicts(null);
+                      }}
                       className="text-xs text-dark-600 hover:text-white transition-all"
                     >
                       Cancel

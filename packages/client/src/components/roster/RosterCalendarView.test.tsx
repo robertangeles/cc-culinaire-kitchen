@@ -241,4 +241,27 @@ describe("RosterCalendarView multi-day shift badge", () => {
     expect(blockA.style.width).toBe(blockB.style.width);
     expect(blockA.style.width).toContain("100%");
   });
+
+  it("three mutually-overlapping shifts for the same role split into three columns", () => {
+    // a: 8:00-9:00, b: 8:15-9:15, c: 8:30-9:30 — no single pair spans the
+    // whole window, but all three are concurrent around 8:30-9:00, so all
+    // three need their own column (assignOverlapColumns' colEnds-reuse
+    // check must actually run per-item, not just check pairwise overlap).
+    mockCalendarShifts = [
+      calendarShift({ shiftId: "shift-a", startDatetime: localIso(weekStartIso, 8, 0), endDatetime: localIso(weekStartIso, 9, 0) }),
+      calendarShift({ shiftId: "shift-b", startDatetime: localIso(weekStartIso, 8, 15), endDatetime: localIso(weekStartIso, 9, 15) }),
+      calendarShift({ shiftId: "shift-c", startDatetime: localIso(weekStartIso, 8, 30), endDatetime: localIso(weekStartIso, 9, 30) }),
+    ];
+    render(<RosterCalendarView />);
+    const blocks = ["shift-a", "shift-b", "shift-c"].map(
+      (id) => document.querySelector(`[data-shift-id="${id}"]`) as HTMLElement,
+    );
+    blocks.forEach((b) => expect(b).toBeTruthy());
+
+    const lefts = blocks.map((b) => b.style.left);
+    expect(new Set(lefts).size).toBe(3); // three distinct columns, not two shifts sharing one
+    for (const b of blocks) {
+      expect(b.style.width).toMatch(/33\.3+/); // 100/3, not 50 (would mean only 2 columns were used)
+    }
+  });
 });
