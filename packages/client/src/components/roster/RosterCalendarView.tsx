@@ -34,6 +34,7 @@ import { useLocation } from "../../context/LocationContext.js";
 import { useHasPermission } from "../../hooks/useHasPermission.js";
 import { useRosterRoles, useOrgMembers, useRosterCalendar, type CalendarShift, type RosterRole } from "../../hooks/useRoster.js";
 import { EmptyState } from "../ui/EmptyState.js";
+import { Tooltip } from "../ui/Tooltip.js";
 import { RosterTemplatesToolbar } from "./RosterTemplatesPanel.js";
 import {
   minutesForPixel,
@@ -559,9 +560,6 @@ export function RosterCalendarView() {
                               <div
                                 key={s.shiftId}
                                 data-shift-id={isDraft ? s.shiftId : undefined}
-                                title={`${role.roleName} — ${rangeLabel} — ${
-                                  s.assignments.length === 0 ? "Unassigned" : s.assignments.map((a) => a.staffName).join(", ")
-                                } — ${s.status}`}
                                 className={`absolute left-0.5 right-0.5 rounded border-l-4 px-1.5 py-1 text-[11px] leading-tight overflow-hidden ${roleAccent(role.rosterRoleId, roleIds)} ${
                                   isDraft
                                     ? `bg-dark-100 border border-dark-300 ${daySpan > 0 ? "" : "cursor-grab active:cursor-grabbing"}`
@@ -600,22 +598,29 @@ export function RosterCalendarView() {
                                   }
                                 }}
                               >
-                                <div className="flex items-center gap-1 font-medium text-[#FAFAFA] truncate">
-                                  {role.roleName}
-                                  {daySpan > 0 && (
-                                    <span
-                                      className="shrink-0 rounded-sm border border-amber-500/40 bg-amber-500/10 px-1 text-[10px] font-normal text-amber-300"
-                                      title={`Spans ${daySpan + 1} days — ends ${new Date(s.endDatetime).toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short" })}`}
-                                    >
-                                      +{daySpan}d
-                                    </span>
-                                  )}
-                                </div>
-                                <div className="text-dark-600 truncate">{rangeLabel}</div>
-                                <div className="truncate text-dark-600">
-                                  {s.assignments.length === 0 ? "Unassigned" : s.assignments.map((a) => a.staffName).join(", ")}
-                                </div>
-                                {!isDraft && <div className="text-dark-600 italic">{s.status}</div>}
+                                <Tooltip
+                                  text={`${role.roleName} — ${rangeLabel} — ${
+                                    s.assignments.length === 0 ? "Unassigned" : s.assignments.map((a) => a.staffName).join(", ")
+                                  } — ${s.status}`}
+                                  className="w-full h-full flex-col"
+                                >
+                                  <div className="flex items-center gap-1 font-medium text-[#FAFAFA] truncate">
+                                    {role.roleName}
+                                    {daySpan > 0 && (
+                                      <span
+                                        className="shrink-0 rounded-sm border border-amber-500/40 bg-amber-500/10 px-1 text-[10px] font-normal text-amber-300"
+                                        title={`Spans ${daySpan + 1} days — ends ${new Date(s.endDatetime).toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short" })}`}
+                                      >
+                                        +{daySpan}d
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="text-dark-600 truncate">{rangeLabel}</div>
+                                  <div className="truncate text-dark-600">
+                                    {s.assignments.length === 0 ? "Unassigned" : s.assignments.map((a) => a.staffName).join(", ")}
+                                  </div>
+                                  {!isDraft && <div className="text-dark-600 italic">{s.status}</div>}
+                                </Tooltip>
                               </div>
                             );
                           })}

@@ -5,16 +5,16 @@
  * amber glow, gradient border, micro-animation on appear.
  */
 
-import { useState, useRef, type ReactNode } from "react";
+import { useState, useRef, type HTMLAttributes, type ReactNode } from "react";
 
-interface TooltipProps {
+interface TooltipProps extends HTMLAttributes<HTMLDivElement> {
   text: string;
   children: ReactNode;
   position?: "top" | "bottom";
   delay?: number;
 }
 
-export function Tooltip({ text, children, position = "bottom", delay = 300 }: TooltipProps) {
+export function Tooltip({ text, children, position = "bottom", delay = 300, className = "", ...rest }: TooltipProps) {
   const [visible, setVisible] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
@@ -34,7 +34,8 @@ export function Tooltip({ text, children, position = "bottom", delay = 300 }: To
 
   return (
     <div
-      className="relative inline-flex"
+      {...rest}
+      className={`relative inline-flex ${className}`}
       onMouseEnter={handleEnter}
       onMouseLeave={handleLeave}
       onFocus={handleEnter}

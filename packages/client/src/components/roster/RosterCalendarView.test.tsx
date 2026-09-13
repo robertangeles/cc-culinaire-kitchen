@@ -177,4 +177,25 @@ describe("RosterCalendarView multi-day shift badge", () => {
 
     expect(dayColumn.scrollTop).toBe(300);
   });
+
+  it("a shift block's hover info is the shared rectangular Tooltip, not a native title attribute", async () => {
+    // A native `title` tooltip can't be styled and often renders as one
+    // wide unwrapped line — the reported complaint. Uses the shared,
+    // width-capped Tooltip component (see components/ui/Tooltip.tsx)
+    // instead, so the same info wraps into a proper rectangle.
+    mockCalendarShifts = [calendarShift({})];
+    render(<RosterCalendarView />);
+    const block = document.querySelector('[data-shift-id="shift-1"]') as HTMLElement;
+    expect(block).toBeTruthy();
+    expect(block.getAttribute("title")).toBeNull();
+
+    // The Tooltip component's own hover-trigger wrapper — the immediate
+    // child of the block — not `block` itself, since onMouseEnter is bound
+    // there, not on `block`.
+    const tooltipTrigger = block.firstElementChild as HTMLElement;
+    fireEvent.mouseEnter(tooltipTrigger);
+    const tooltip = await screen.findByRole("tooltip");
+    expect(tooltip.textContent).toContain("Duty Manager");
+    expect(tooltip.textContent).toContain("Unassigned");
+  });
 });
