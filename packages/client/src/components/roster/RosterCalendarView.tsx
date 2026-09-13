@@ -27,14 +27,14 @@
  * that math to pointer events and renders the result.
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { CalendarRange, ChevronLeft, ChevronRight, Loader2, Users } from "lucide-react";
 import { formatShiftRange } from "@culinaire/shared";
 import { useLocation } from "../../context/LocationContext.js";
 import { useHasPermission } from "../../hooks/useHasPermission.js";
 import { useRosterRoles, useOrgMembers, useRosterCalendar, type CalendarShift, type RosterRole } from "../../hooks/useRoster.js";
 import { EmptyState } from "../ui/EmptyState.js";
-import { Tooltip } from "../ui/Tooltip.js";
 import { RosterTemplatesToolbar } from "./RosterTemplatesPanel.js";
 import {
   minutesForPixel,
@@ -156,6 +156,39 @@ export function RosterCalendarView() {
   const [showStaffDrawer, setShowStaffDrawer] = useState(false);
   const dragRef = useRef<DragState | null>(null);
   const gridRef = useRef<HTMLDivElement>(null);
+
+  // Cursor-following hover info for a shift block, rendered via a portal to
+  // <body> (position: fixed, so it escapes every overflow-hidden ancestor
+  // between here and the page — the calendar card itself, and each day
+  // column's own clipped scroller). An anchored tooltip (top/bottom of the
+  // block) put the info far from the cursor for a tall multi-hour shift;
+  // this follows the pointer instead. Position updates go straight to the
+  // DOM via hoverTooltipElRef on every mousemove, not through React state —
+  // re-rendering per pointermove is the exact cost this file's own
+  // shiftsByLaneKey/shiftDisplayInfo comments already document avoiding
+  // elsewhere. React state only toggles content/visibility, which changes
+  // far less often (hover start/end, not every pixel of movement).
+  const [hoverInfo, setHoverInfo] = useState<string | null>(null);
+  const hoverTooltipElRef = useRef<HTMLDivElement>(null);
+  const lastPointerRef = useRef({ x: 0, y: 0 });
+
+  function positionHoverTooltip(clientX: number, clientY: number) {
+    lastPointerRef.current = { x: clientX, y: clientY };
+    const el = hoverTooltipElRef.current;
+    if (!el) return;
+    el.style.left = `${clientX + 14}px`;
+    el.style.top = `${clientY + 14}px`;
+  }
+
+  // The portal element (and hoverTooltipElRef) doesn't exist until AFTER
+  // hoverInfo goes non-null and React commits — so the onMouseEnter that
+  // triggers it can't position it in the same tick (the ref is still null
+  // then). Without this, the tooltip would flash at its default (0, 0)
+  // for one frame before the next mousemove corrects it. useLayoutEffect
+  // runs synchronously right after that commit, before the browser paints.
+  useLayoutEffect(() => {
+    if (hoverInfo) positionHoverTooltip(lastPointerRef.current.x, lastPointerRef.current.y);
+  }, [hoverInfo]);
   // Scoped to this component instance, not document.querySelectorAll — the
   // gridRef/dragRef above already use refs for exactly this kind of DOM
   // coordination; a document-wide selector would cross-wire two mounted
@@ -556,6 +589,10 @@ export function RosterCalendarView() {
                             // silently corrupted.
                             const visualEndMinutes = !override && daySpan > 0 ? 24 * 60 : endMinutes;
 
+                            const hoverText = `${role.roleName} — ${rangeLabel} — ${
+                              s.assignments.length === 0 ? "Unassigned" : s.assignments.map((a) => a.staffName).join(", ")
+                            } — ${s.status}`;
+
                             return (
                               <div
                                 key={s.shiftId}
@@ -566,7 +603,14 @@ export function RosterCalendarView() {
                                     : "bg-dark-200/70 border border-dark-300/50 opacity-90"
                                 } ${isDropTarget ? "ring-2 ring-gold" : ""}`}
                                 style={{ top: pixelForMinutes(startMinutes, HOUR_HEIGHT), height: Math.max(18, pixelForMinutes(visualEndMinutes - startMinutes, HOUR_HEIGHT)) }}
+                                onMouseEnter={(e) => {
+                                  setHoverInfo(hoverText);
+                                  positionHoverTooltip(e.clientX, e.clientY);
+                                }}
+                                onMouseMove={(e) => positionHoverTooltip(e.clientX, e.clientY)}
+                                onMouseLeave={() => setHoverInfo(null)}
                                 onPointerDown={(e) => {
+                                  setHoverInfo(null); // don't float a hover tooltip over a drag/resize in progress
                                   // daySpan > 0 covers overnight shifts too (not just genuine
                                   // multi-day ones) — resize/move both seed themselves from
                                   // storedStartMinutes/storedEndMinutes, which strip the date
@@ -598,29 +642,22 @@ export function RosterCalendarView() {
                                   }
                                 }}
                               >
-                                <Tooltip
-                                  text={`${role.roleName} — ${rangeLabel} — ${
-                                    s.assignments.length === 0 ? "Unassigned" : s.assignments.map((a) => a.staffName).join(", ")
-                                  } — ${s.status}`}
-                                  className="w-full h-full flex-col"
-                                >
-                                  <div className="flex items-center gap-1 font-medium text-[#FAFAFA] truncate">
-                                    {role.roleName}
-                                    {daySpan > 0 && (
-                                      <span
-                                        className="shrink-0 rounded-sm border border-amber-500/40 bg-amber-500/10 px-1 text-[10px] font-normal text-amber-300"
-                                        title={`Spans ${daySpan + 1} days — ends ${new Date(s.endDatetime).toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short" })}`}
-                                      >
-                                        +{daySpan}d
-                                      </span>
-                                    )}
-                                  </div>
-                                  <div className="text-dark-600 truncate">{rangeLabel}</div>
-                                  <div className="truncate text-dark-600">
-                                    {s.assignments.length === 0 ? "Unassigned" : s.assignments.map((a) => a.staffName).join(", ")}
-                                  </div>
-                                  {!isDraft && <div className="text-dark-600 italic">{s.status}</div>}
-                                </Tooltip>
+                                <div className="flex items-center gap-1 font-medium text-[#FAFAFA] truncate">
+                                  {role.roleName}
+                                  {daySpan > 0 && (
+                                    <span
+                                      className="shrink-0 rounded-sm border border-amber-500/40 bg-amber-500/10 px-1 text-[10px] font-normal text-amber-300"
+                                      title={`Spans ${daySpan + 1} days — ends ${new Date(s.endDatetime).toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short" })}`}
+                                    >
+                                      +{daySpan}d
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-dark-600 truncate">{rangeLabel}</div>
+                                <div className="truncate text-dark-600">
+                                  {s.assignments.length === 0 ? "Unassigned" : s.assignments.map((a) => a.staffName).join(", ")}
+                                </div>
+                                {!isDraft && <div className="text-dark-600 italic">{s.status}</div>}
                               </div>
                             );
                           })}
@@ -663,6 +700,29 @@ export function RosterCalendarView() {
         Draft shifts can be dragged and resized; drag a name from Staff onto one to assign it.{" "}
         {canManage ? "Cancel a shift from the Shifts tab." : "You have view-only access."}
       </p>
+
+      {hoverInfo &&
+        createPortal(
+          <div ref={hoverTooltipElRef} className="fixed z-50 pointer-events-none" style={{ left: 0, top: 0 }}>
+            <div
+              className="rounded-xl p-[1px]"
+              style={{
+                background: "linear-gradient(135deg, rgba(212,165,116,0.4), var(--color-gold-glow) 50%, rgba(212,165,116,0.2))",
+              }}
+            >
+              <div
+                className="rounded-[11px] px-4 py-2.5 min-w-[200px] max-w-[280px] backdrop-blur-xl"
+                style={{
+                  background: "linear-gradient(135deg, rgba(38,32,26,0.97), rgba(25,22,18,0.99))",
+                  boxShadow: "inset 0 1px 0 rgba(212,165,116,0.1), inset 0 -1px 0 rgba(0,0,0,0.4), 0 8px 32px rgba(0,0,0,0.7)",
+                }}
+              >
+                <p className="text-[12px] font-medium leading-relaxed text-[#E8DDD0] tracking-wide">{hoverInfo}</p>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

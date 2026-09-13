@@ -178,24 +178,36 @@ describe("RosterCalendarView multi-day shift badge", () => {
     expect(dayColumn.scrollTop).toBe(300);
   });
 
-  it("a shift block's hover info is the shared rectangular Tooltip, not a native title attribute", async () => {
-    // A native `title` tooltip can't be styled and often renders as one
-    // wide unwrapped line — the reported complaint. Uses the shared,
-    // width-capped Tooltip component (see components/ui/Tooltip.tsx)
-    // instead, so the same info wraps into a proper rectangle.
+  it("a shift block's hover info follows the cursor via a fixed-position portal, not a native title attribute", () => {
+    // A native `title` tooltip can't be styled (can't be capped to a
+    // rectangle) and always anchors to the OS's own timing/position rules.
+    // A portal to <body> with position:fixed both escapes every
+    // overflow-hidden ancestor between the block and the page (the
+    // calendar card, each day column's own clipped scroller) and lets the
+    // tooltip track the actual cursor position — important since blocks
+    // vary hugely in height (18px to several hundred), so an
+    // element-anchored tooltip (e.g. always below the block) can land far
+    // from wherever the pointer actually is on a tall block.
     mockCalendarShifts = [calendarShift({})];
     render(<RosterCalendarView />);
     const block = document.querySelector('[data-shift-id="shift-1"]') as HTMLElement;
     expect(block).toBeTruthy();
     expect(block.getAttribute("title")).toBeNull();
+    expect(screen.queryByText(/Duty Manager.*Unassigned/)).not.toBeInTheDocument();
 
-    // The Tooltip component's own hover-trigger wrapper — the immediate
-    // child of the block — not `block` itself, since onMouseEnter is bound
-    // there, not on `block`.
-    const tooltipTrigger = block.firstElementChild as HTMLElement;
-    fireEvent.mouseEnter(tooltipTrigger);
-    const tooltip = await screen.findByRole("tooltip");
+    fireEvent.mouseEnter(block, { clientX: 120, clientY: 340 });
+    const tooltip = document.body.querySelector(".fixed.z-50.pointer-events-none") as HTMLElement;
+    expect(tooltip).toBeTruthy();
     expect(tooltip.textContent).toContain("Duty Manager");
     expect(tooltip.textContent).toContain("Unassigned");
+    expect(tooltip.style.left).toBe("134px"); // clientX + 14
+    expect(tooltip.style.top).toBe("354px"); // clientY + 14
+
+    fireEvent.mouseMove(block, { clientX: 200, clientY: 400 });
+    expect(tooltip.style.left).toBe("214px");
+    expect(tooltip.style.top).toBe("414px");
+
+    fireEvent.mouseLeave(block);
+    expect(document.body.querySelector(".fixed.z-50.pointer-events-none")).not.toBeInTheDocument();
   });
 });
