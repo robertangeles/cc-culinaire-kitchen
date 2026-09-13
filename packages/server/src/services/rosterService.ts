@@ -389,7 +389,17 @@ export async function listMyShifts(orgId: number, userId: number) {
     .from(shiftAssignment)
     .innerJoin(shift, eq(shiftAssignment.shiftId, shift.shiftId))
     .innerJoin(rosterRole, eq(rosterRole.rosterRoleId, shift.rosterRoleId))
-    .where(and(eq(shift.organisationId, orgId), eq(shiftAssignment.userId, userId)))
+    .where(
+      and(
+        eq(shift.organisationId, orgId),
+        eq(shiftAssignment.userId, userId),
+        // A cancelled shift keeps its assignment row for history (cancelShift
+        // never touches shift_assignment), but a staff member's own "My
+        // Shifts" list should never show it as something to work or respond
+        // to — same convention as getWeekCalendar/generateWeekFromTemplate.
+        ne(shift.status, "Cancelled"),
+      ),
+    )
     .orderBy(asc(shift.startDatetime));
 }
 

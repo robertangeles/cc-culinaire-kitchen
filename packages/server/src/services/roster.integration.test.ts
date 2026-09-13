@@ -42,6 +42,7 @@ import {
   listShiftAssignments,
   getWeekCalendar,
   listMyShifts,
+  cancelShift,
 } from "./rosterService.js";
 import { requestConsent, respondToConsent } from "./consentService.js";
 
@@ -1083,6 +1084,28 @@ describe.skipIf(!RUN)("roster service (real DB)", () => {
     const myShifts = await listMyShifts(orgA, userA);
     const mine = myShifts.find((m) => m.shiftId === s.shiftId);
     expect(mine?.roleName).toBe(`${tag}-nodoc`);
+  });
+
+  it("listMyShifts excludes a Cancelled shift — cancelShift never touches shift_assignment, so the row would otherwise linger", async () => {
+    const noDocRole = await createRole(orgA, { roleName: `${tag}-nodoc2`, storeLocationId: locA });
+    const to = addDays(TODAY, 6);
+    const start = new Date(`${to}T09:00:00.000Z`);
+    const end = new Date(`${to}T17:00:00.000Z`);
+    const s = await createShift(
+      orgA,
+      {
+        storeLocationId: locA,
+        rosterRoleId: noDocRole.rosterRoleId,
+        startDatetime: start.toISOString(),
+        endDatetime: end.toISOString(),
+      },
+      userA,
+    );
+    await assignStaff(orgA, s.shiftId, userA, userA);
+    await cancelShift(orgA, s.shiftId);
+
+    const myShifts = await listMyShifts(orgA, userA);
+    expect(myShifts.find((m) => m.shiftId === s.shiftId)).toBeUndefined();
   });
 });
 
