@@ -14,6 +14,7 @@ import { setAuthCookies } from "./authController.js";
 import {
   createOrganisation,
   updateOrganisation,
+  updateOrganisationLogo,
   joinOrganisation,
   leaveOrganisation,
   getOrganisation,
@@ -33,6 +34,23 @@ const socialMediaFields = {
   linkedin: z.string().max(500).optional(),
 };
 
+/**
+ * Org admin per the per-org userOrganisation.role flag ONLY — deliberately
+ * does not fall back to the global org:manage-organisation permission.
+ * user_role carries no organisationId (see the plan's disclosed limitation),
+ * so an OR-fallback there let an Operations Admin of Org A — merely a
+ * "member" of Org B — promote themselves to admin in Org B, or remove/
+ * demote Org B's real members: privilege escalation across a tenant
+ * boundary, not the "same global permission, same org" case the tenant-
+ * isolation canary tests. Costs nothing: createOrganisation() grants local
+ * admin and the global role together, and the backfill only targeted
+ * existing per-org admins, so every legitimate Operations Admin already
+ * holds local admin on every org they actually administer.
+ */
+function isOrgManager(membership: { role: string } | null): boolean {
+  return !!membership && membership.role === "admin";
+}
+
 const CreateOrgSchema = z.object({
   name: z.string().min(1).max(200),
   website: z.string().max(500).optional(),
@@ -50,9 +68,9 @@ export async function handleCreateOrganisation(req: Request, res: Response, next
       return;
     }
     const org = await createOrganisation(req.user!.sub, parsed.data);
-    // The creator is now an org admin, which grants inventory + purchasing
-    // permissions. Re-mint the access token so those apply immediately without
-    // requiring the user to log out and back in.
+    // The creator now holds the Operations Admin system role. Re-mint the
+    // access token so its permissions apply immediately without requiring
+    // the user to log out and back in.
     const authUser = await getUserWithRolesAndPermissions(req.user!.sub);
     const tokens = await generateTokens(authUser);
     setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
@@ -68,23 +86,71 @@ const UpdateOrgSchema = z.object({
   email: z.string().email().optional().or(z.literal("")),
   phone: z.string().max(50).optional(),
   ...socialMediaFields,
+  // Organisation Settings (Operations Admin) — branding + operational
+  // defaults. A field absent from the request preserves its current value
+  // (this endpoint is shared with the org-details/social-media form, which
+  // never sends these). colorAccent/defaultJurisdiction are nullable
+  // columns, so an explicit "" clears them; defaultTimezone/defaultCurrency
+  // are NOT NULL with sane defaults, so they can be changed but not cleared
+  // to empty. logoPath is deliberately NOT accepted here — the only
+  // legitimate way to set it is POST /:id/logo, which derives the URL
+  // server-side from an uploaded, type-checked file. Accepting an arbitrary
+  // string here would let it bypass that validation entirely.
+  colorAccent: z.string().regex(/^#[0-9A-Fa-f]{6}$/).or(z.literal("")).optional(),
+  defaultTimezone: z.string().min(1).max(50).optional(),
+  defaultCurrency: z.string().length(3).optional(),
+  defaultJurisdiction: z.string().max(3).or(z.literal("")).optional(),
 });
 
-/** PATCH /api/organisations/:id — update organisation details (org admins only). */
+/** PATCH /api/organisations/:id — update organisation details (org admin only). */
 export async function handleUpdateOrganisation(req: Request, res: Response, next: NextFunction) {
   try {
+    const orgId = parseInt(req.params.id as string);
+
+    const membership = await getMembership(req.user!.sub, orgId);
+    if (!isOrgManager(membership)) {
+      res.status(403).json({ error: "Only organisation admins can update organisation details." });
+      return;
+    }
+
     const parsed = UpdateOrgSchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({ error: parsed.error.flatten() });
       return;
     }
-    const org = await updateOrganisation(req.user!.sub, parseInt(req.params.id as string), parsed.data);
+    const org = await updateOrganisation(orgId, parsed.data);
     res.json({ organisation: org });
   } catch (err: unknown) {
     if (err instanceof Error) {
       res.status(400).json({ error: err.message });
       return;
     }
+    next(err);
+  }
+}
+
+/** POST /api/organisations/:id/logo — upload the organisation's logo image. */
+export async function handleOrganisationLogoUpload(req: Request, res: Response, next: NextFunction) {
+  try {
+    const orgId = parseInt(req.params.id as string);
+
+    const membership = await getMembership(req.user!.sub, orgId);
+    if (!isOrgManager(membership)) {
+      res.status(403).json({ error: "Only organisation admins can update the logo." });
+      return;
+    }
+
+    if (!req.file) {
+      res.status(400).json({ error: "No file provided" });
+      return;
+    }
+
+    const { uploadFileBuffer } = await import("../middleware/upload.js");
+    const filePath = await uploadFileBuffer(req.file.buffer, req.file.originalname, "culinaire/organisations");
+
+    const org = await updateOrganisationLogo(orgId, filePath);
+    res.json({ logoPath: filePath, organisation: org });
+  } catch (err) {
     next(err);
   }
 }
@@ -204,9 +270,8 @@ export async function handleUpdateMemberRole(req: Request, res: Response, next: 
     const targetUserId = parseInt(req.params.userId as string);
     const requestingUserId = req.user!.sub;
 
-    // Verify requesting user is org admin
     const membership = await getMembership(requestingUserId, orgId);
-    if (!membership || membership.role !== "admin") {
+    if (!isOrgManager(membership)) {
       res.status(403).json({ error: "Only admins can update member roles." });
       return;
     }
@@ -241,9 +306,8 @@ export async function handleRemoveMember(req: Request, res: Response, next: Next
       return;
     }
 
-    // Verify requesting user is org admin
     const membership = await getMembership(requestingUserId, orgId);
-    if (!membership || membership.role !== "admin") {
+    if (!isOrgManager(membership)) {
       res.status(403).json({ error: "Only admins can remove members." });
       return;
     }

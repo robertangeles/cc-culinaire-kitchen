@@ -5,10 +5,13 @@
  */
 
 import { Router } from "express";
+import multer from "multer";
 import { authenticate } from "../middleware/auth.js";
+import { upload } from "../middleware/upload.js";
 import {
   handleCreateOrganisation,
   handleUpdateOrganisation,
+  handleOrganisationLogoUpload,
   handleJoinOrganisation,
   handleLeaveOrganisation,
   handleGetOrganisation,
@@ -35,6 +38,24 @@ router.delete("/:id/members/:userId", handleRemoveMember);
 
 router.get("/:id", handleGetOrganisation);
 router.patch("/:id", handleUpdateOrganisation);
+// Same multer error-handling wrapper as POST /api/users/profile/avatar.
+router.post("/:id/logo", (req, res, next) => {
+  upload.single("file")(req, res, (err: unknown) => {
+    if (err instanceof multer.MulterError) {
+      if (err.code === "LIMIT_FILE_SIZE") {
+        res.status(400).json({ error: "File too large. Maximum size is 10 MB." });
+        return;
+      }
+      res.status(400).json({ error: err.message });
+      return;
+    }
+    if (err instanceof Error) {
+      res.status(400).json({ error: err.message });
+      return;
+    }
+    next();
+  });
+}, handleOrganisationLogoUpload);
 router.delete("/:id/leave", handleLeaveOrganisation);
 router.post("/:id/regenerate-key", handleRegenerateJoinKey);
 

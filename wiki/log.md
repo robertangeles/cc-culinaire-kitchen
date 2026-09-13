@@ -216,6 +216,141 @@ Append-only. Newest entry on top.
 
 ---
 
+## 2026-08-31 — Shipped feature/ck-web/operations-admin-role: full pre-landing + adversarial review
+
+- Ran the full `/ship` pipeline on this branch (4 commits from an earlier session: role + org
+  settings, the cross-org privilege-escalation fix, the Team Compliance relocation, an E2E fix).
+  Coverage audit initially came back 43% — below the 60% gate — with two entirely untested new
+  components (`OrganisationBrandingForm.tsx`, `TeamMembersSection.tsx`). Wrote 15 new client tests
+  + 3 server-side integration tests closing both, then re-ran clean.
+- Pre-landing review (checklist + 6 specialists) found and fixed: CI never seeded RBAC data before
+  `organisation.tenant.integration.test.ts`'s `beforeAll` (which looks up "Operations Admin" by
+  name and throws if missing) — would have broken CI outright; `UpdateOrgSchema.logoPath` accepted
+  an arbitrary unvalidated string, stored verbatim and rendered as `<img src>`, with no client ever
+  legitimately sending it — removed from the schema entirely; an orphaned stale comment in
+  `App.tsx`; a 26-key permission list hand-duplicated between `db/seed.ts` and
+  `backfillOperationsAdminRole.ts` — single-sourced via export/import.
+- **Adversarial review found a real HIGH-severity regression, confirmed by direct code read before
+  acting on it**: `leaveOrganisation()`/`removeMember()`/`updateMemberRole()` (demotion) never
+  revoked the Operations Admin `user_role` grant — only the deleted `ORG_ADMIN_PERMISSIONS` bridge
+  was live-recomputed; the role-based replacement was a static, permanent grant. Worst case
+  verified directly: `compliance:manage-rules` gates `document_expiry_rule`, which has no
+  `organisationId` column — global, platform-wide compliance-rule authorship persisting for a user
+  with zero organisations. Fixed with `revokeOperationsAdminRoleIfNoLongerAdmin()`, called from all
+  three exit paths; 3 new real-DB tests prove it. Full detail in [[operations-admin-role]].
+
+## 2026-08-30 — Team Compliance relocated into the Organisation page
+
+- User request: Team Compliance should live inside the Organisation section
+  rather than as its own nav item under Run the Kitchen, since it's already
+  effectively an org-admin-only surface (gated on `compliance:read-all`/
+  `compliance:verify`, held only by Administrator, Paid Subscriber, and
+  Operations Admin).
+- Investigated first rather than assuming: confirmed Team Compliance data is
+  org-wide, never location-filtered (`ComplianceDashboard`/`VerificationView`
+  have zero references to store-location context), so its `LocationGate`/
+  `KitchenOpsLayout` wrapping was incidental chrome, not a real dependency —
+  safe to drop when moving.
+- Found and resolved a real permission-boundary mismatch before writing any
+  code: `/organisation` was gated on `org:manage-organisation` alone, but
+  Paid Subscriber holds `compliance:read-all`/`verify` WITHOUT
+  `org:manage-organisation` (deliberately, since the earlier privilege-
+  escalation fix removed it from that role). Moving Compliance under
+  `/organisation` unchanged would have locked Paid Subscriber out of Team
+  Compliance entirely. Fixed by widening the route's permission gate to
+  `anyOf` all three keys, then gating each of the three tabs independently
+  inside `OrganisationPage.tsx` — the same per-tab `permission` pattern
+  `SettingsLayout` already uses for platform Admin Settings.
+- Extracted `TeamComplianceSection.tsx` from the deleted `CompliancePage.tsx`
+  (route, nav entry, and file all removed — a real relocation, not a
+  duplicate). Ported its 5 tests, preserving the "auth resolves after first
+  render" defence, and added the same defence to `OrganisationPage.tsx`
+  itself now that ALL three of its tabs are permission-filtered (previously
+  only the route was gated, tabs were static).
+- Verified live in the browser: all three tabs render for a full-permission
+  user, Team/Verify sub-tabs work, `/compliance` now hits the app's real
+  404 page cleanly, no new console errors.
+- Full regression clean: lint, tsc, `check:reachability` (confirms no
+  orphaned references from the deleted page), 166 client tests + 1147
+  server tests, build.
+- Wiki updated: [[operations-admin-role]]'s Client section describes the
+  three-tab, per-tab-permission-gated structure.
+
+## 2026-08-29 — Operations Admin: closed a real cross-org privilege escalation + fixed the UI
+
+- A background security review of the Operations Admin commit (`f7c9e9c`) flagged
+  Authorization (IDOR / Privilege Escalation via Cross-Org Role) in
+  `organisationController.ts`. Investigated directly against the actual code (not
+  assumed): confirmed real. `isOrgManager()`'s OR-fallback — global
+  `org:manage-organisation` permission, once membership in the target org was
+  confirmed — let any Operations Admin who later joined a SECOND org as a plain
+  member self-promote to admin there, promote/demote/remove its real members, or
+  rewrite its details. Proven exploitable by temporarily reverting the fix and
+  re-running the new regression test: the self-promotion request returned no error
+  status at all (it silently succeeded) against the old code.
+- Fix: `isOrgManager()` now authorizes on the per-org `userOrganisation.role ===
+  "admin"` flag only, dropping the global-permission fallback entirely. Costs no
+  real capability — `createOrganisation()` already grants local admin and the
+  global role together, and the backfill only targeted existing per-org admins.
+  Mirrored client-side in `TeamMembersSection.tsx`'s `isOrgAdmin` derivation so the
+  Make Admin/Remove buttons don't appear for someone who'd now 403 on click.
+  New regression test in `organisation.tenant.integration.test.ts` covers
+  self-promotion, promoting someone else, removal, and org-details rewrite — all
+  4 confirmed blocked, plus a sanity check that the fix doesn't touch the
+  Operations Admin's own org.
+- Separately, user flagged the Organisation page's visual inconsistency with
+  Admin Settings (`/settings`) — a centered narrow column with horizontal pill
+  tabs, nothing like `SettingsLayout`'s left-sidebar + header/body pattern.
+  Rewrote `OrganisationPage.tsx` to mirror `SettingsLayout`/`SiteSettingsTab`'s
+  exact markup and tokens (not a shared component — `SettingsLayout`'s tabs are
+  a hardcoded platform-settings registry, not built to accept an external tab
+  set). Verified via live browser screenshot comparison against `/settings` —
+  sidebar structure, spacing, and tab-button states now match.
+- Full regression clean after both fixes: lint, `tsc:check`, 1147 server tests +
+  30 client test files, tenant-isolation integration test (6/6, including the
+  new escalation regression), build.
+- Wiki updated: [[operations-admin-role]]'s Tenant isolation and Disclosed
+  limitation sections corrected to reflect the narrowed authorization model and
+  a newly-documented (unfixed, non-security) access gap for admins promoted by
+  an existing admin rather than via `createOrganisation()`/backfill.
+- Still uncommitted at write time — user has not yet been asked to push.
+
+## 2026-08-29 — Operations Admin role + Organisation Settings built
+
+- `feature/ck-web/operations-admin-role`: new `Operations Admin` RBAC role (26 of 30
+  permission keys, excludes `admin:*`), granted idempotently to an org's creator via
+  `createOrganisation()`. Replaces the old `ORG_ADMIN_PERMISSIONS` bridge in
+  `authService.ts` (deleted).
+- Closed a real, not-yet-live privilege escalation as part of the same PR: `Paid Subscriber`
+  was already (harmlessly) seeded with `org:manage-organisation`; removed before the member-
+  management routes started checking that key, so no Paid Subscriber ever gained a
+  privilege the change didn't intend.
+- New `organisation` columns: logo path, accent colour, default timezone/currency/
+  jurisdiction — metadata only, not wired into per-venue jurisdiction/timezone resolution.
+- New Profile → Organisation page (`OrganisationPage.tsx`): User Management (relocated
+  `TeamMembersSection`, extracted verbatim, old Profile → Team sub-tab deleted) + Organisation
+  Settings (new `OrganisationBrandingForm.tsx`).
+- Tenant isolation proven by `organisation.tenant.integration.test.ts` (real DB): an
+  Operations Admin of Org A gets 403 on Org B despite holding the identical global permission
+  Org B's own admin holds — the `getMembership()` check runs first and unconditionally.
+- Idempotent backfill (`backfillOperationsAdminRole.ts`) applied to dev: granted 4 existing
+  org admins the new role, removed the Paid Subscriber leak. Prod migration still pending —
+  read-only prod access means the repo owner runs it.
+- Live-verified end-to-end against dev with the `qa-test` account: new nav item, relocated
+  User Management screen, Organisation Settings tab (branding + defaults render correctly,
+  save round-trips via `PATCH /api/organisations/:id`, values persist across reload).
+- New wiki page: [[operations-admin-role]].
+- Full regression clean: `pnpm lint`, `pnpm tsc:check`, `pnpm test` (1147 server tests +
+  client), `pnpm build`, tenant-isolation integration test — all green before commit.
+- Self-inflicted, caught and cleaned before commit: an earlier `pnpm tsc` (no such root
+  script — falls through to the raw `tsc` binary, not `tsc:check`) emitted ~1900 compiled
+  `.js`/`.d.ts` files directly into `packages/*/src/`, breaking Vite's module resolution in
+  the client test suite. All gitignored, none tracked — deleted, tests re-ran green. Lesson:
+  this repo's TypeScript check command is `pnpm tsc:check`, never bare `pnpm tsc`.
+- PR #106 (unrelated OCR-hang fix) remains open, unmerged, per standing user "hold off."
+
+---
+
 ## 2026-08-17 — Phase 3 Slice 3 shipped: shift swap — Phase 3 (Workforce Optimisation) complete
 
 - `feature/ck-web/workforce-shift-swap`: new `shift_swap_request` table + `services/shiftSwapService.ts`
