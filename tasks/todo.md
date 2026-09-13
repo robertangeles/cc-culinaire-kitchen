@@ -496,6 +496,121 @@ once elsewhere — and a render-loop memoization gap). Two are deliberately left
   after every single drag gesture. Fine at today's data volume; revisit if a venue with many
   shifts/roles makes the round-trip after each drag noticeably slow.
 
+### Second `/code-review` pass on PR #109 (2026-09-06) — 6 more findings fixed, 1 deferred
+
+A second, 5-angle `/code-review` pass on the same branch (correctness, cross-file impact, reuse,
+simplification/efficiency, conventions) found 8 more issues; 6 fixed, 2 already covered above.
+All fixed via TDD (failing test committed first, confirmed red, then the fix) and verified against
+the full unit + real-DB integration suite plus a fresh `pnpm build`:
+
+- **Silent data corruption**: resizing/moving an overnight or multi-day shift used
+  time-of-day-only minutes that discard which calendar day the end falls on — could silently
+  rewrite a 4h overnight shift into a ~1h same-day one with no error. Fixed by refusing the drag
+  gesture entirely when `daySpan > 0` (`RosterCalendarView.tsx`), making the file's own
+  pre-existing comment claiming this was "already disclosed as undraggable" actually true.
+- **Asymmetric timezone bug**: `getWeekCalendar`'s `to` boundary was `lte()` against a bare UTC
+  midnight — covered only the first instant of that day, not the whole day, unlike `from`'s
+  `gte()`. A shift late in the `to` day (any viewer behind UTC) could be silently excluded from
+  the calendar. Fixed with `lt()` against the next day's midnight instead.
+- **Production CSS bug**: the role-legend dot's border color was built via
+  `roleAccent(...).replace("border-l-", "border-")` at runtime — Tailwind's JIT scanner never
+  sees the resulting string as literal source text, so 6 of 8 role colors had no border in the
+  actual built CSS (confirmed against `dist/assets/*.css`). Fixed with a static `ROLE_ACCENT_RING`
+  array of literal classes.
+- **`claimSwap()`/`assignStaff()` inconsistency**: `assignStaff()` reactivates a Declined
+  assignment row instead of blocking it; `claimSwap()`'s raw insert still hit the same unique
+  index and threw the wrong "already assigned" error. Fixed by extracting a shared
+  `insertOrReactivateAssignment()` helper (one atomic `ON CONFLICT ... DO UPDATE ... WHERE status
+  = 'Declined'` statement) used by both — this also closes the race the old
+  SELECT-then-branch-then-UPDATE had between two concurrent re-offers of the same declined shift,
+  and removes the duplicated "already assigned" throw sites.
+- **Unscoped scroll-sync**: day-column scroll sync used `document.querySelectorAll(...)`
+  (document-wide) instead of a ref, unlike every other DOM coordination in the file. Fixed with a
+  `scrollerRefs` array scoped to the component instance.
+- **Missed memoization**: `storedStartMinutes`/`storedEndMinutes` were recomputed per shift per
+  render even during a drag's pointermove-frequency re-renders — the adjacent `shiftDisplayInfo`
+  memo exists specifically to avoid this for its other two fields. Folded both into that memo.
+
+Deferred:
+
+- **P3** `getWeekCalendar`'s shift-fetch query duplicates `getStaffingCoverage`'s join/where shape
+  verbatim (`rosterService.ts` vs `staffingCoverageService.ts`). A shared query builder would
+  prevent the two from silently diverging on a future shift-visibility rule change, but extracting
+  one now touches a second service unrelated to this fix pass.
+
+## Roster Scheduling Templates — shipped, unreviewed (2026-09-07)
+
+Full design: `docs/designs/roster-scheduling-templates.md` (CEO review → office-hours →
+eng-review → design-review, all approved). Built end to end via TDD per the design doc's
+Implementation Tasks (T1-T9), all tests green (unit, integration incl. concurrency/DST, permission
+boundary, client hook, component). Not yet code-reviewed or shipped/PR'd — do that next.
+
+- **Schema**: new `roster_shift_template` table (role + day-of-week + start/end time), plus
+  `shift.sourceTemplateRowId`/`generatedForWeekStart` (nullable, unique-indexed pair) for the
+  concurrent-generation race and bulk undo. Migration: `scripts/addRosterShiftTemplate.ts`, run
+  against dev.
+- **Service**: `createTemplateRow`/`updateTemplateRow`/`deleteTemplateRow`/`listTemplates`,
+  `generateWeekFromTemplate` (best-effort per-row, `{created, skipped, failed}`), `undoGeneration`,
+  and `deleteRole`'s new in-use-template 409 guard — all in `rosterService.ts`.
+- **New pure helper**: `resolveVenueLocalToUtc` (the local-time→UTC direction that didn't exist
+  before this feature — see `tasks/lessons.md` #68).
+- **Caught during TDD, not at design time** (see `tasks/lessons.md` #71): a bare insert + `23505`
+  catch for the concurrency fix silently broke "cancel a generated shift, then regenerate that
+  slot" — a Cancelled row still occupies its own unique key. Fixed with `onConflictDoUpdate` +
+  `setWhere: eq(status, "Cancelled")`, the same idiom `insertOrReactivateAssignment` already uses.
+- **Routes**: 6 new routes under `/roster/templates*`, all gated `roster:manage`, all 4
+  permission-boundary rows each (401/403/200/Administrator) — `rosterPermissions.test.ts`.
+- **Client**: `useRosterTemplates` hook (stale-closure-safe, matches `useShifts`'s pattern) +
+  `RosterTemplatesToolbar`/`RosterTemplatesPanel.tsx` — a second toolbar row on the Calendar tab
+  (Manage Templates / Generate This Week / Undo Last Generation), each opening a centered modal,
+  never a popover — `/plan-design-review`'s explicit UI-placement decision, chosen specifically to
+  leave `RosterCalendarView.tsx`'s existing hand-rolled drag-gesture code untouched.
+- **Not yet done**: code review, `git push`/PR, and the user's own "Assignment" (watch Chef John
+  Hand build a real roster by hand) — an open validation step, not a gate on shipping this.
+
+**Unrelated pre-existing bug found by the full regression run, fixed in the same pass** (see
+`tasks/lessons.md` #72): `roster.integration.test.ts`'s `beforeAll` hardcoded a VIC/Jan-1 public
+holiday fixture that collided with the real AU public-holidays seed run earlier this session (225
+rows, 2026-2027) — `idx_public_holiday_unique` is `(jurisdiction, date)` only, so the differently
+-named test row still conflicted. Fixed with `onConflictDoNothing()` + reuse-without-owning for the
+two tests that genuinely need Jan 1 to be a loaded holiday, and moved an unrelated Dec-26 fixture
+(collided with the real "Boxing Day" row) to a verified-free date, since that test's own scenario
+was made-up and the date itself was never load-bearing. Full server suite (`TENANT_IT=1`) green
+after the fix.
+
+## Org admin bugs — fixed, plus unwired fields found (2026-09-08, updated 2026-09-10)
+
+**2026-09-10 update:** the user's ORIGINAL "why is his role just Subscriber" question (before the
+09-08 investigation) turned out to be a third, separate bug — a screenshot showed it was the
+sidebar `UserMenu.tsx`, not `ProfilePage.tsx`. `primaryRole = user.roles[0]` picked an arbitrary
+role (no `ORDER BY` server-side) instead of showing all of them. Fixed: shows every role now. See
+`tasks/lessons.md` #74. 5 new tests, full client suite green (232), `tsc -b` clean.
+
+
+
+User report: "Alex Charasse is org admin but can't view the Org Admin page." Both a client
+stale-closure bug and a server auth-model gap were found and fixed with TDD — full detail in
+`tasks/lessons.md` #73, `wiki/log.md` same date. `pnpm tsc:check` clean, full client suite (227)
+and server suite (unit + `TENANT_IT=1` integration) green.
+
+- Fixed: `ProfilePage.tsx`'s org-role effect (`myOrgRole`) — was `useEffect(..., [])`, raced
+  against `useAuth()`'s async user resolution, silently stuck at `"member"` forever if the race
+  went the wrong way. Now `[user?.userId]`.
+- Fixed: `organisationService.ts`'s `updateOrganisation`/`regenerateJoinKey` checked
+  `organisation.createdBy` only — a leftover from before role-based admin promotion existed. A
+  promoted (non-creator) admin could see the Edit Organisation UI but got a 400 on save. Now both
+  check `role === "admin"`, matching `updateMemberRole`/`removeMember`'s existing pattern.
+- Cleanup: swept 84 untracked stray `tsc -b` build artifacts across all three packages.
+
+**Not fixed — flagged for review before deciding whether to build/finish or remove:**
+- Organisation address fields (line1/2/suburb/state/country/postcode): DB column + working PII
+  encryption exist, but no input UI, not in the create/update service function's own input type,
+  not displayed in the read view. `encryptOrgPii` is always called with `null` for these.
+- `POST /api/organisations/:id/regenerate-key`: working route + service function, zero client UI
+  calls it.
+- `OrgMember.joinedAt`: typed as a required `string` on the client; server always sends `null`
+  (`userOrganisation` has no timestamp column); never rendered anywhere.
+
 ## AI-Native Purchasing — deferred from eng-review (2026-07-20)
 - **P2** AI-suggest-par from usage (blocked on real consumption_log/depletion history)
 - **P2** order-from-stocktake (one-tap draft PO from last count; add multi-group guard)
