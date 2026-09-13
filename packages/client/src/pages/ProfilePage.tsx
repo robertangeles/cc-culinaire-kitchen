@@ -503,7 +503,13 @@ export function ProfilePage() {
     })();
   }, []);
 
-  // Fetch user's organisation on mount
+  // Fetch user's organisation on mount — and again if `user` resolves later.
+  // AuthContext's `user` starts null and only populates after its own async
+  // GET /api/auth/me; depending on user?.userId (not just [] once) closes
+  // that race instead of permanently capturing a null user from whichever
+  // fetch happened to finish first. Depending on the id specifically, not
+  // the whole `user` object, avoids an unnecessary refetch on every
+  // unrelated user-object refresh (e.g. after an avatar upload).
   useEffect(() => {
     (async () => {
       try {
@@ -530,7 +536,7 @@ export function ProfilePage() {
         setOrgLoading(false);
       }
     })();
-  }, []);
+  }, [user?.userId]);
 
   async function handleSaveProfile(e: FormEvent) {
     e.preventDefault();

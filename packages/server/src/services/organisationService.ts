@@ -170,7 +170,7 @@ export async function getUserOrganisation(userId: number) {
   return { ...row, ...pii };
 }
 
-/** Update organisation details (creator only). */
+/** Update organisation details (org admins only — the creator is always an admin, but so is anyone since promoted via updateMemberRole). */
 export async function updateOrganisation(
   userId: number,
   organisationId: number,
@@ -188,7 +188,10 @@ export async function updateOrganisation(
 ) {
   const org = await getOrganisation(organisationId);
   if (!org) throw new Error("Organisation not found.");
-  if (org.createdBy !== userId) throw new Error("Only the creator can update the organisation.");
+  const membership = await getMembership(userId, organisationId);
+  if (!membership || membership.role !== "admin") {
+    throw new Error("Only organisation admins can update the organisation.");
+  }
 
   const orgPii = encryptOrgPii({
     organisationName: data.name,
@@ -333,11 +336,14 @@ export async function removeMember(organisationId: number, targetUserId: number)
   }
 }
 
-/** Regenerate the join key for an organisation (owner only). */
+/** Regenerate the join key for an organisation (org admins only). */
 export async function regenerateJoinKey(userId: number, organisationId: number) {
   const org = await getOrganisation(organisationId);
   if (!org) throw new Error("Organisation not found.");
-  if (org.createdBy !== userId) throw new Error("Only the creator can regenerate the join key.");
+  const membership = await getMembership(userId, organisationId);
+  if (!membership || membership.role !== "admin") {
+    throw new Error("Only organisation admins can regenerate the join key.");
+  }
 
   const newKey = generateJoinKey();
   await db

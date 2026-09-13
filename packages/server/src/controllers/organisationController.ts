@@ -70,7 +70,7 @@ const UpdateOrgSchema = z.object({
   ...socialMediaFields,
 });
 
-/** PATCH /api/organisations/:id — update organisation details (creator only). */
+/** PATCH /api/organisations/:id — update organisation details (org admins only). */
 export async function handleUpdateOrganisation(req: Request, res: Response, next: NextFunction) {
   try {
     const parsed = UpdateOrgSchema.safeParse(req.body);
