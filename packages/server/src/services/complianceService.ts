@@ -31,7 +31,7 @@ import {
 } from "../db/schema.js";
 import * as auditService from "./auditService.js";
 import { readLastRun, dayKey } from "../utils/dailyRunClaim.js";
-import { complianceStorageFolder } from "./documentStorageService.js";
+import { complianceStorageFolder, deleteStoredDocument } from "./documentStorageService.js";
 import type {
   ComplianceReportPdfData,
   ComplianceReportStaffRow,
@@ -279,6 +279,126 @@ export async function createDocument(orgId: number, input: CreateDocumentInput) 
     }
     throw err;
   }
+}
+
+export interface UpdateDocumentInput {
+  documentNumber?: string | null;
+  issueDate?: string | null;
+  expiryDate?: string | null;
+  issuingAuthority?: string | null;
+  issuingJurisdiction?: string | null;
+  notes?: string | null;
+}
+
+/**
+ * Edit a document's own metadata. Owner-only, and only while Pending or
+ * Rejected — once Verified, the row is the record a manager signed off on;
+ * letting the subject quietly change dates or numbers after the fact would
+ * undermine that verification. A Rejected document that gets fixed goes
+ * back to Pending and clears the rejection reason, which is the resubmit
+ * the UI already promises ("You'll see the result on My Documents").
+ */
+export async function updateDocument(
+  orgId: number,
+  documentId: string,
+  callerUserId: number,
+  input: UpdateDocumentInput,
+) {
+  const doc = await getDocumentRow(orgId, documentId);
+  // 404, not 403 — mirrors handleGetDocument: a guessed id never confirms a
+  // colleague's document exists.
+  if (!isOwnDocument(doc, callerUserId)) {
+    throw new ComplianceError("Document not found", 404);
+  }
+  if (doc.verificationStatus !== "Pending" && doc.verificationStatus !== "Rejected") {
+    throw new ComplianceError(
+      `Can't edit a document that is ${doc.verificationStatus.toLowerCase()}`,
+      409,
+    );
+  }
+
+  const wasRejected = doc.verificationStatus === "Rejected";
+  const [updated] = await db
+    .update(complianceDocument)
+    .set({
+      documentNumber: input.documentNumber ?? null,
+      issueDate: input.issueDate ?? null,
+      expiryDate: input.expiryDate ?? null,
+      issuingAuthority: input.issuingAuthority ?? null,
+      issuingJurisdiction: input.issuingJurisdiction ?? null,
+      notes: input.notes ?? null,
+      ...(wasRejected
+        ? { verificationStatus: "Pending", rejectionReason: null, verifiedBy: null, verifiedAt: null }
+        : {}),
+      updatedDttm: new Date(),
+    })
+    .where(
+      and(
+        eq(complianceDocument.complianceDocumentId, documentId),
+        eq(complianceDocument.organisationId, orgId),
+      ),
+    )
+    .returning();
+
+  await auditService.log({
+    entityType: "compliance_document",
+    entityId: documentId,
+    action: "update",
+    actorUserId: callerUserId,
+    organisationId: orgId,
+    beforeValue: { ...doc },
+    afterValue: { ...updated },
+    metadata: { action: wasRejected ? "edit_and_resubmit" : "edit" },
+  });
+
+  return updated;
+}
+
+/**
+ * Delete a document the caller owns. Only while Pending or Rejected — a
+ * Verified document is the legal employee record complianceRetentionService
+ * governs (Fair Work reg 3.44's 7-year retention window); letting the
+ * subject delete it early is a retention decision, not a self-service one.
+ * Cloudinary blob is destroyed before the row, same ordering as
+ * purgeExpiredRetention, so a failed delete leaves row and blob in sync
+ * instead of orphaning the asset.
+ */
+export async function deleteDocument(
+  orgId: number,
+  documentId: string,
+  callerUserId: number,
+): Promise<void> {
+  const doc = await getDocumentRow(orgId, documentId);
+  if (!isOwnDocument(doc, callerUserId)) {
+    throw new ComplianceError("Document not found", 404);
+  }
+  if (doc.verificationStatus !== "Pending" && doc.verificationStatus !== "Rejected") {
+    throw new ComplianceError(
+      `Can't delete a document that is ${doc.verificationStatus.toLowerCase()}`,
+      409,
+    );
+  }
+
+  await deleteStoredDocument(doc.storagePublicId);
+
+  await db
+    .delete(complianceDocument)
+    .where(
+      and(
+        eq(complianceDocument.complianceDocumentId, documentId),
+        eq(complianceDocument.organisationId, orgId),
+      ),
+    );
+
+  await auditService.log({
+    entityType: "compliance_document",
+    entityId: documentId,
+    action: "soft_delete",
+    actorUserId: callerUserId,
+    organisationId: orgId,
+    beforeValue: { ...doc },
+    metadata: { action: "self_delete" },
+  });
 }
 
 export async function verifyDocument(orgId: number, documentId: string, verifierUserId: number) {

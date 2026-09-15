@@ -22,6 +22,8 @@ import { complianceDocumentViewRateLimit, complianceReportRateLimit } from "../m
 import {
   handleListMyDocuments,
   handleCreateDocument,
+  handleUpdateDocument,
+  handleDeleteDocument,
   handleUploadDocument,
   handleGetDocument,
   handleGetDocumentViewUrl,
@@ -75,6 +77,8 @@ router.post(
   handleUploadDocument,
 );
 router.get("/documents/:id", requirePermission("compliance:read-own"), handleGetDocument);
+router.put("/documents/:id", requirePermission("compliance:read-own"), handleUpdateDocument);
+router.delete("/documents/:id", requirePermission("compliance:read-own"), handleDeleteDocument);
 router.get(
   "/documents/:id/view-url",
   // Ownership (not just permission) decides access — see the handler.

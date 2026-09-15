@@ -15,6 +15,8 @@ import {
   listDocumentsForUser,
   getDocument,
   createDocument,
+  updateDocument,
+  deleteDocument,
   verifyDocument,
   rejectDocument,
   getComplianceDashboard,
@@ -73,6 +75,15 @@ const CreateDocumentSchema = z.object({
   // every other field here is enough.
   storageFormat: z.enum(STORAGE_FORMATS).nullable().optional(),
   storeLocationId: z.string().uuid().nullable().optional(),
+  notes: z.string().max(2000).nullable().optional(),
+});
+
+const UpdateDocumentSchema = z.object({
+  documentNumber: z.string().max(100).nullable().optional(),
+  issueDate: z.string().min(1).nullable().optional(),
+  expiryDate: z.string().min(1).nullable().optional(),
+  issuingAuthority: z.string().max(200).nullable().optional(),
+  issuingJurisdiction: z.string().max(3).nullable().optional(),
   notes: z.string().max(2000).nullable().optional(),
 });
 
@@ -226,6 +237,52 @@ export async function handleGetDocument(
       return;
     }
     res.json(doc);
+  } catch (err) {
+    handleServiceError(err, res, next);
+  }
+}
+
+export async function handleUpdateDocument(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const ctx = await resolveContext(req, res);
+    if (!ctx) return;
+
+    const parsed = UpdateDocumentSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.errors[0]?.message ?? "Invalid input" });
+      return;
+    }
+
+    const doc = await updateDocument(ctx.orgId, req.params.id as string, req.user!.sub, parsed.data);
+    logger.info(
+      { complianceDocumentId: doc.complianceDocumentId, userId: req.user!.sub },
+      "Compliance document edited",
+    );
+    res.json(doc);
+  } catch (err) {
+    handleServiceError(err, res, next);
+  }
+}
+
+export async function handleDeleteDocument(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const ctx = await resolveContext(req, res);
+    if (!ctx) return;
+
+    await deleteDocument(ctx.orgId, req.params.id as string, req.user!.sub);
+    logger.info(
+      { complianceDocumentId: req.params.id, userId: req.user!.sub },
+      "Compliance document deleted",
+    );
+    res.status(204).end();
   } catch (err) {
     handleServiceError(err, res, next);
   }

@@ -27,6 +27,7 @@ import {
 import {
   createDocument,
   listDocumentsForUser,
+  updateDocument,
   verifyDocument,
   rejectDocument,
   getDocument,
@@ -168,6 +169,67 @@ describe.skipIf(!RUN)("compliance vault (real DB)", () => {
       );
       expect(rejected.verificationStatus).toBe("Rejected");
       expect(rejected.rejectionReason).toBe("Photo is blurry, please re-upload"); // trimmed
+    });
+
+    it("updateDocument edits a Pending document's own fields, staying Pending", async () => {
+      const doc = await createDocument(org1, {
+        userId: staffA,
+        uploadedBy: staffA,
+        documentType: `${tag}-edit-pending`,
+        storagePublicId: sp(org1, staffA, "edit-pending"),
+      });
+
+      const updated = await updateDocument(org1, doc.complianceDocumentId, staffA, {
+        documentNumber: "ABC-123",
+        expiryDate: "2027-06-01",
+      });
+      expect(updated.documentNumber).toBe("ABC-123");
+      expect(updated.expiryDate).toBe("2027-06-01");
+      expect(updated.verificationStatus).toBe("Pending");
+    });
+
+    it("updateDocument on a Rejected document resubmits it to Pending and clears the rejection reason", async () => {
+      const doc = await createDocument(org1, {
+        userId: staffA,
+        uploadedBy: staffA,
+        documentType: `${tag}-edit-rejected`,
+        storagePublicId: sp(org1, staffA, "edit-rejected"),
+      });
+      await rejectDocument(org1, doc.complianceDocumentId, staffB, "Wrong document number");
+
+      const updated = await updateDocument(org1, doc.complianceDocumentId, staffA, {
+        documentNumber: "FIXED-1",
+      });
+      expect(updated.verificationStatus).toBe("Pending");
+      expect(updated.rejectionReason).toBeNull();
+      expect(updated.documentNumber).toBe("FIXED-1");
+    });
+
+    it("updateDocument REFUSES to edit a Verified document", async () => {
+      const doc = await createDocument(org1, {
+        userId: staffA,
+        uploadedBy: staffA,
+        documentType: `${tag}-edit-verified`,
+        storagePublicId: sp(org1, staffA, "edit-verified"),
+      });
+      await verifyDocument(org1, doc.complianceDocumentId, staffB);
+
+      await expect(
+        updateDocument(org1, doc.complianceDocumentId, staffA, { documentNumber: "SHOULD-FAIL" }),
+      ).rejects.toMatchObject({ statusCode: 409 });
+    });
+
+    it("updateDocument REFUSES a colleague editing someone else's document (404, not 403)", async () => {
+      const doc = await createDocument(org1, {
+        userId: staffA,
+        uploadedBy: staffA,
+        documentType: `${tag}-edit-not-owner`,
+        storagePublicId: sp(org1, staffA, "edit-not-owner"),
+      });
+
+      await expect(
+        updateDocument(org1, doc.complianceDocumentId, staffB, { documentNumber: "NOT-YOURS" }),
+      ).rejects.toMatchObject({ statusCode: 404 });
     });
 
     it("isOwnDocument distinguishes the owner from a colleague; a cross-org read is a 404", async () => {
