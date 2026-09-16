@@ -18,7 +18,11 @@ import { Router } from "express";
 import multer from "multer";
 import { authenticate, requirePermission } from "../middleware/auth.js";
 import { requireFlag } from "../middleware/requireFlag.js";
-import { complianceDocumentViewRateLimit, complianceReportRateLimit } from "../middleware/rateLimiter.js";
+import {
+  complianceDocumentEditRateLimit,
+  complianceDocumentViewRateLimit,
+  complianceReportRateLimit,
+} from "../middleware/rateLimiter.js";
 import {
   handleListMyDocuments,
   handleCreateDocument,
@@ -77,8 +81,18 @@ router.post(
   handleUploadDocument,
 );
 router.get("/documents/:id", requirePermission("compliance:read-own"), handleGetDocument);
-router.put("/documents/:id", requirePermission("compliance:read-own"), handleUpdateDocument);
-router.delete("/documents/:id", requirePermission("compliance:read-own"), handleDeleteDocument);
+router.put(
+  "/documents/:id",
+  requirePermission("compliance:read-own"),
+  complianceDocumentEditRateLimit,
+  handleUpdateDocument,
+);
+router.delete(
+  "/documents/:id",
+  requirePermission("compliance:read-own"),
+  complianceDocumentEditRateLimit,
+  handleDeleteDocument,
+);
 router.get(
   "/documents/:id/view-url",
   // Ownership (not just permission) decides access — see the handler.

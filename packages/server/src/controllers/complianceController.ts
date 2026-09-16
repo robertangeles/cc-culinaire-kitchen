@@ -78,13 +78,17 @@ const CreateDocumentSchema = z.object({
   notes: z.string().max(2000).nullable().optional(),
 });
 
+// notes is deliberately absent — schema.ts documents compliance_document.notes
+// as "Manager-only free text. Sanitised before it can reach any model
+// prompt." The ownership guard on this route lets the document's SUBJECT
+// call it, so accepting notes here would let a staff member overwrite their
+// manager's annotation about them, not just their own certificate metadata.
 const UpdateDocumentSchema = z.object({
   documentNumber: z.string().max(100).nullable().optional(),
   issueDate: z.string().min(1).nullable().optional(),
   expiryDate: z.string().min(1).nullable().optional(),
   issuingAuthority: z.string().max(200).nullable().optional(),
   issuingJurisdiction: z.string().max(3).nullable().optional(),
-  notes: z.string().max(2000).nullable().optional(),
 });
 
 const RejectDocumentSchema = z.object({

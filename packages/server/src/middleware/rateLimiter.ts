@@ -163,6 +163,32 @@ export const complianceDocumentViewRateLimit = rateLimit({
 });
 
 /**
+ * Rate limiter for self-service edit/delete of a compliance document
+ * (`PUT`/`DELETE /api/compliance/documents/:id`).
+ *
+ * 20 requests per minute, keyed by authenticated user ID. deleteDocument
+ * holds a DB row lock for the duration of an external Cloudinary API call
+ * (see complianceService.ts's own comment on that tradeoff) — a pooled
+ * connection, not just app time. Without a limit, a single caller firing
+ * concurrent deletes at their own document could pin enough of the app's
+ * connection pool (postgres-js default: 10) to stall unrelated requests
+ * for as long as those calls take. 20/min covers correcting a typo a few
+ * times or cleaning up a handful of mistaken uploads in one sitting, while
+ * bounding a scripted hammering loop.
+ */
+export const complianceDocumentEditRateLimit = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 20,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  keyGenerator: (req: Request) => {
+    if (req.user?.sub) return `compliance-edit-user-${req.user.sub}`;
+    return req.ip ?? "unknown";
+  },
+  message: { error: "Too many document changes — please wait a moment before trying again." },
+});
+
+/**
  * Rate limiter for the compliance report PDF export
  * (`GET /api/compliance/report.pdf`).
  *

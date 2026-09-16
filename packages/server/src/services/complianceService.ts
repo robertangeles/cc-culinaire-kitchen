@@ -288,7 +288,6 @@ export interface UpdateDocumentInput {
   expiryDate?: string | null;
   issuingAuthority?: string | null;
   issuingJurisdiction?: string | null;
-  notes?: string | null;
 }
 
 /**
@@ -332,9 +331,11 @@ export async function updateDocument(
   const wasRejected = doc.verificationStatus === "Rejected";
   // Only set keys the caller actually sent. The client's edit form always
   // sends documentNumber/issueDate/expiryDate/issuingJurisdiction (even as
-  // null to clear them), but never sends issuingAuthority or notes —
-  // defaulting every absent key to `?? null` silently wiped those two
-  // columns on every self-service edit instead of leaving them untouched.
+  // null to clear them), but never sends issuingAuthority — defaulting every
+  // absent key to `?? null` silently wiped that column on every self-service
+  // edit instead of leaving it untouched. `notes` is never accepted here at
+  // all (see UpdateDocumentInput) — it's manager-only free text, and this
+  // guard lets the document's own SUBJECT call it.
   const updates: Record<string, unknown> = {
     updatedDttm: new Date(),
     ...(wasRejected
@@ -346,7 +347,6 @@ export async function updateDocument(
   if (input.expiryDate !== undefined) updates.expiryDate = input.expiryDate;
   if (input.issuingAuthority !== undefined) updates.issuingAuthority = input.issuingAuthority;
   if (input.issuingJurisdiction !== undefined) updates.issuingJurisdiction = input.issuingJurisdiction;
-  if (input.notes !== undefined) updates.notes = input.notes;
 
   let updated: typeof doc | undefined;
   try {
