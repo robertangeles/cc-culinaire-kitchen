@@ -19,6 +19,7 @@ import { useRef, useState } from "react";
 import { Camera, CheckCircle2, Loader2 } from "lucide-react";
 import { EmptyState } from "../ui/EmptyState.js";
 import { formatAuDate } from "@culinaire/shared";
+import { AU_STATES, inputClass } from "./documentFormShared.js";
 
 const API = import.meta.env.VITE_API_URL ?? "";
 
@@ -31,8 +32,6 @@ const DOCUMENT_TYPES = [
   "Visa / Work Rights",
   "Other",
 ];
-
-const AU_STATES = ["NSW", "VIC", "QLD", "WA", "SA", "TAS", "ACT", "NT"];
 
 interface OcrResult {
   documentNumber?: string;
@@ -48,9 +47,6 @@ function OcrMark() {
     </span>
   );
 }
-
-const inputClass =
-  "mt-1 min-h-11 w-full rounded-lg border border-dark-300 bg-dark px-3 text-sm text-[#FAFAFA] placeholder:text-dark-500 focus:outline-none";
 
 export function DocumentUploadForm({ onUploaded }: { onUploaded?: () => void }) {
   const [documentType, setDocumentType] = useState("");

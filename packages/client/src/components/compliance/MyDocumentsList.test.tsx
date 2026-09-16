@@ -232,6 +232,83 @@ describe("MyDocumentsList", () => {
     expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
   });
 
+  it("shows an inline error and keeps the edit form open when saving fails", async () => {
+    const pending = {
+      complianceDocumentId: "doc-1",
+      documentType: "RSA",
+      verificationStatus: "Pending",
+      documentNumber: null,
+      expiryDate: null,
+      uploadedAt: "2026-06-03T00:00:00.000Z",
+      rejectionReason: null,
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (init?.method === "PUT") {
+          return { ok: false, json: async () => ({ error: "Couldn't save your changes." }) } as Response;
+        }
+        return { ok: true, json: async () => [pending] } as Response;
+      }),
+    );
+
+    render(<MyDocumentsList />);
+    await waitFor(() => expect(screen.getByText("RSA")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByLabelText("Edit RSA"));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(screen.getByText("Couldn't save your changes.")).toBeInTheDocument());
+    // The form is still open — the failed save didn't get treated as a success.
+    expect(screen.getByRole("button", { name: "Save" })).toBeInTheDocument();
+  });
+
+  it("shows an error (and stops rendering the list) when the delete request fails", async () => {
+    const pending = {
+      complianceDocumentId: "doc-1",
+      documentType: "RSA",
+      verificationStatus: "Pending",
+      expiryDate: null,
+      uploadedAt: "2026-06-03T00:00:00.000Z",
+      rejectionReason: null,
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (init?.method === "DELETE") {
+          return { ok: false, status: 500, json: async () => ({ error: "Couldn't delete this document." }) } as Response;
+        }
+        return { ok: true, json: async () => [pending] } as Response;
+      }),
+    );
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+
+    render(<MyDocumentsList />);
+    await waitFor(() => expect(screen.getByText("RSA")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByLabelText("Delete RSA"));
+
+    await waitFor(() => expect(screen.getByText("Couldn't delete this document.")).toBeInTheDocument());
+  });
+
+  it("offers edit/delete on a Rejected document too, not just Pending", async () => {
+    stubDocuments([
+      {
+        complianceDocumentId: "doc-rejected",
+        documentType: "Food Handler",
+        verificationStatus: "Rejected",
+        expiryDate: null,
+        uploadedAt: "2026-06-01T00:00:00.000Z",
+        rejectionReason: "Blurry photo",
+      },
+    ]);
+    render(<MyDocumentsList />);
+    await waitFor(() => expect(screen.getByText("Food Handler")).toBeInTheDocument());
+
+    expect(screen.getByLabelText("Edit Food Handler")).toBeInTheDocument();
+    expect(screen.getByLabelText("Delete Food Handler")).toBeInTheDocument();
+  });
+
   it("View toggles closed on a second click", async () => {
     stubDocuments([
       {
@@ -299,5 +376,27 @@ describe("MyDocumentsList", () => {
     fireEvent.click(screen.getByLabelText("Edit RSA"));
     expect(screen.queryByText("Close")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Save" })).toBeInTheDocument();
+  });
+
+  it("opening View closes an open Edit form (the reverse direction)", async () => {
+    stubDocuments([
+      {
+        complianceDocumentId: "doc-1",
+        documentType: "RSA",
+        verificationStatus: "Pending",
+        expiryDate: null,
+        uploadedAt: "2026-06-03T00:00:00.000Z",
+        rejectionReason: null,
+      },
+    ]);
+    render(<MyDocumentsList />);
+    await waitFor(() => expect(screen.getByText("RSA")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByLabelText("Edit RSA"));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Save" })).toBeInTheDocument());
+
+    fireEvent.click(screen.getByLabelText("View RSA"));
+    expect(screen.queryByRole("button", { name: "Save" })).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText("Close")).toBeInTheDocument());
   });
 });

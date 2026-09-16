@@ -20,11 +20,12 @@
  * file on its own.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Camera, Eye, ImageOff, Loader2, Pencil, Trash2, X } from "lucide-react";
 import { formatAuDate } from "@culinaire/shared";
 import { EmptyState } from "../ui/EmptyState.js";
 import { StatusPill, type StatusPillVariant } from "../ui/StatusPill.js";
+import { AU_STATES, inputClass } from "./documentFormShared.js";
 
 const API = import.meta.env.VITE_API_URL ?? "";
 
@@ -50,11 +51,6 @@ const STATUS_VARIANT: Record<string, StatusPillVariant> = {
   Orphaned: "na",
 };
 
-const AU_STATES = ["NSW", "VIC", "QLD", "WA", "SA", "TAS", "ACT", "NT"];
-
-const inputClass =
-  "mt-1 min-h-11 w-full rounded-lg border border-dark-300 bg-dark px-3 text-sm text-[#FAFAFA] placeholder:text-dark-500 focus:outline-none";
-
 function pillAriaLabel(doc: MyDocument): string {
   const expiry = doc.expiryDate ? `, expires ${formatAuDate(doc.expiryDate)}` : "";
   return `${doc.documentType}: ${doc.verificationStatus}${expiry}`;
@@ -66,21 +62,31 @@ export function MyDocumentsList({ onUploadClick }: { onUploadClick?: () => void 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [viewingId, setViewingId] = useState<string | null>(null);
+  // fetchDocuments is called both on mount and after edit/delete — the mount
+  // call can still be in flight if the tab unmounts (e.g. navigating away
+  // from Profile) before it resolves, so it's guarded the same way the
+  // original mount-effect's `cancelled` flag was.
+  const mountedRef = useRef(true);
 
   async function fetchDocuments() {
     try {
       const res = await fetch(`${API}/api/compliance/documents/mine`, { credentials: "include" });
       if (!res.ok) throw new Error("Couldn't load your documents.");
       const data: MyDocument[] = await res.json();
+      if (!mountedRef.current) return;
       setDocuments(data);
       setError(null);
     } catch (e) {
+      if (!mountedRef.current) return;
       setError(e instanceof Error ? e.message : "Couldn't load your documents.");
     }
   }
 
   useEffect(() => {
     fetchDocuments();
+    return () => {
+      mountedRef.current = false;
+    };
   }, []);
 
   async function handleDelete(doc: MyDocument) {

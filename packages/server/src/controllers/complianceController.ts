@@ -284,6 +284,14 @@ export async function handleDeleteDocument(
     );
     res.status(204).end();
   } catch (err) {
+    // deleteDocument calls deleteStoredDocument, which can throw the same
+    // DocumentStorageError handleUploadDocument maps below (e.g. Cloudinary
+    // credentials missing) — without this branch it fell through to a
+    // generic 500 instead of that error's real status/message.
+    if (err instanceof DocumentStorageError) {
+      res.status(err.status).json({ error: err.message });
+      return;
+    }
     handleServiceError(err, res, next);
   }
 }

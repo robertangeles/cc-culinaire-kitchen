@@ -28,6 +28,7 @@ import {
   createDocument,
   listDocumentsForUser,
   updateDocument,
+  deleteDocument,
   verifyDocument,
   rejectDocument,
   getDocument,
@@ -230,6 +231,46 @@ describe.skipIf(!RUN)("compliance vault (real DB)", () => {
       await expect(
         updateDocument(org1, doc.complianceDocumentId, staffB, { documentNumber: "NOT-YOURS" }),
       ).rejects.toMatchObject({ statusCode: 404 });
+    });
+
+    // deleteDocument's happy path (Pending/Rejected -> actually removed, Cloudinary
+    // blob destroyed first) is deliberately NOT exercised here: deleteStoredDocument
+    // calls the real Cloudinary API via credentials from the Integrations panel,
+    // which this suite has no business depending on. Both guards below are
+    // ownership/status checks that throw BEFORE deleteStoredDocument is ever
+    // called (see complianceService.deleteDocument), so they're safe to run
+    // against the real DB with zero Cloudinary interaction.
+    it("deleteDocument REFUSES to delete a Verified document", async () => {
+      const doc = await createDocument(org1, {
+        userId: staffA,
+        uploadedBy: staffA,
+        documentType: `${tag}-delete-verified`,
+        storagePublicId: sp(org1, staffA, "delete-verified"),
+      });
+      await verifyDocument(org1, doc.complianceDocumentId, staffB);
+
+      await expect(deleteDocument(org1, doc.complianceDocumentId, staffA)).rejects.toMatchObject({
+        statusCode: 409,
+      });
+      // Refused, so it must still be there.
+      const stillThere = await getDocument(org1, doc.complianceDocumentId);
+      expect(stillThere.verificationStatus).toBe("Verified");
+    });
+
+    it("deleteDocument REFUSES a colleague deleting someone else's document (404, not 403)", async () => {
+      const doc = await createDocument(org1, {
+        userId: staffA,
+        uploadedBy: staffA,
+        documentType: `${tag}-delete-not-owner`,
+        storagePublicId: sp(org1, staffA, "delete-not-owner"),
+      });
+
+      await expect(deleteDocument(org1, doc.complianceDocumentId, staffB)).rejects.toMatchObject({
+        statusCode: 404,
+      });
+      // Refused, so it must still be there.
+      const stillThere = await getDocument(org1, doc.complianceDocumentId);
+      expect(stillThere.complianceDocumentId).toBe(doc.complianceDocumentId);
     });
 
     it("isOwnDocument distinguishes the owner from a colleague; a cross-org read is a 404", async () => {
