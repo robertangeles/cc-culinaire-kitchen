@@ -15,6 +15,8 @@ import {
   listDocumentsForUser,
   getDocument,
   createDocument,
+  updateDocument,
+  deleteDocument,
   verifyDocument,
   rejectDocument,
   getComplianceDashboard,
@@ -74,6 +76,19 @@ const CreateDocumentSchema = z.object({
   storageFormat: z.enum(STORAGE_FORMATS).nullable().optional(),
   storeLocationId: z.string().uuid().nullable().optional(),
   notes: z.string().max(2000).nullable().optional(),
+});
+
+// notes is deliberately absent — schema.ts documents compliance_document.notes
+// as "Manager-only free text. Sanitised before it can reach any model
+// prompt." The ownership guard on this route lets the document's SUBJECT
+// call it, so accepting notes here would let a staff member overwrite their
+// manager's annotation about them, not just their own certificate metadata.
+const UpdateDocumentSchema = z.object({
+  documentNumber: z.string().max(100).nullable().optional(),
+  issueDate: z.string().min(1).nullable().optional(),
+  expiryDate: z.string().min(1).nullable().optional(),
+  issuingAuthority: z.string().max(200).nullable().optional(),
+  issuingJurisdiction: z.string().max(3).nullable().optional(),
 });
 
 const RejectDocumentSchema = z.object({
@@ -227,6 +242,60 @@ export async function handleGetDocument(
     }
     res.json(doc);
   } catch (err) {
+    handleServiceError(err, res, next);
+  }
+}
+
+export async function handleUpdateDocument(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const ctx = await resolveContext(req, res);
+    if (!ctx) return;
+
+    const parsed = UpdateDocumentSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.errors[0]?.message ?? "Invalid input" });
+      return;
+    }
+
+    const doc = await updateDocument(ctx.orgId, req.params.id as string, req.user!.sub, parsed.data);
+    logger.info(
+      { complianceDocumentId: doc.complianceDocumentId, userId: req.user!.sub },
+      "Compliance document edited",
+    );
+    res.json(doc);
+  } catch (err) {
+    handleServiceError(err, res, next);
+  }
+}
+
+export async function handleDeleteDocument(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const ctx = await resolveContext(req, res);
+    if (!ctx) return;
+
+    await deleteDocument(ctx.orgId, req.params.id as string, req.user!.sub);
+    logger.info(
+      { complianceDocumentId: req.params.id, userId: req.user!.sub },
+      "Compliance document deleted",
+    );
+    res.status(204).end();
+  } catch (err) {
+    // deleteDocument calls deleteStoredDocument, which can throw the same
+    // DocumentStorageError handleUploadDocument maps below (e.g. Cloudinary
+    // credentials missing) — without this branch it fell through to a
+    // generic 500 instead of that error's real status/message.
+    if (err instanceof DocumentStorageError) {
+      res.status(err.status).json({ error: err.message });
+      return;
+    }
     handleServiceError(err, res, next);
   }
 }

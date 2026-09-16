@@ -65,6 +65,8 @@ const ROUTES: Array<{ method: string; path: string; permission: string }> = [
   { method: "POST", path: "/documents", permission: "compliance:read-own" },
   { method: "POST", path: "/documents/upload", permission: "compliance:read-own" },
   { method: "GET", path: "/documents/:id", permission: "compliance:read-own" },
+  { method: "PUT", path: "/documents/:id", permission: "compliance:read-own" },
+  { method: "DELETE", path: "/documents/:id", permission: "compliance:read-own" },
   { method: "GET", path: "/documents/:id/view-url", permission: "compliance:read-own" },
   { method: "GET", path: "/staff/:userId/documents", permission: "compliance:read-all" },
   { method: "GET", path: "/dashboard", permission: "compliance:read-all" },

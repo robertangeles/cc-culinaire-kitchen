@@ -27,6 +27,8 @@ import {
 import {
   createDocument,
   listDocumentsForUser,
+  updateDocument,
+  deleteDocument,
   verifyDocument,
   rejectDocument,
   getDocument,
@@ -168,6 +170,107 @@ describe.skipIf(!RUN)("compliance vault (real DB)", () => {
       );
       expect(rejected.verificationStatus).toBe("Rejected");
       expect(rejected.rejectionReason).toBe("Photo is blurry, please re-upload"); // trimmed
+    });
+
+    it("updateDocument edits a Pending document's own fields, staying Pending", async () => {
+      const doc = await createDocument(org1, {
+        userId: staffA,
+        uploadedBy: staffA,
+        documentType: `${tag}-edit-pending`,
+        storagePublicId: sp(org1, staffA, "edit-pending"),
+      });
+
+      const updated = await updateDocument(org1, doc.complianceDocumentId, staffA, {
+        documentNumber: "ABC-123",
+        expiryDate: "2027-06-01",
+      });
+      expect(updated.documentNumber).toBe("ABC-123");
+      expect(updated.expiryDate).toBe("2027-06-01");
+      expect(updated.verificationStatus).toBe("Pending");
+    });
+
+    it("updateDocument on a Rejected document resubmits it to Pending and clears the rejection reason", async () => {
+      const doc = await createDocument(org1, {
+        userId: staffA,
+        uploadedBy: staffA,
+        documentType: `${tag}-edit-rejected`,
+        storagePublicId: sp(org1, staffA, "edit-rejected"),
+      });
+      await rejectDocument(org1, doc.complianceDocumentId, staffB, "Wrong document number");
+
+      const updated = await updateDocument(org1, doc.complianceDocumentId, staffA, {
+        documentNumber: "FIXED-1",
+      });
+      expect(updated.verificationStatus).toBe("Pending");
+      expect(updated.rejectionReason).toBeNull();
+      expect(updated.documentNumber).toBe("FIXED-1");
+    });
+
+    it("updateDocument REFUSES to edit a Verified document", async () => {
+      const doc = await createDocument(org1, {
+        userId: staffA,
+        uploadedBy: staffA,
+        documentType: `${tag}-edit-verified`,
+        storagePublicId: sp(org1, staffA, "edit-verified"),
+      });
+      await verifyDocument(org1, doc.complianceDocumentId, staffB);
+
+      await expect(
+        updateDocument(org1, doc.complianceDocumentId, staffA, { documentNumber: "SHOULD-FAIL" }),
+      ).rejects.toMatchObject({ statusCode: 409 });
+    });
+
+    it("updateDocument REFUSES a colleague editing someone else's document (404, not 403)", async () => {
+      const doc = await createDocument(org1, {
+        userId: staffA,
+        uploadedBy: staffA,
+        documentType: `${tag}-edit-not-owner`,
+        storagePublicId: sp(org1, staffA, "edit-not-owner"),
+      });
+
+      await expect(
+        updateDocument(org1, doc.complianceDocumentId, staffB, { documentNumber: "NOT-YOURS" }),
+      ).rejects.toMatchObject({ statusCode: 404 });
+    });
+
+    // deleteDocument's happy path (Pending/Rejected -> actually removed, Cloudinary
+    // blob destroyed first) is deliberately NOT exercised here: deleteStoredDocument
+    // calls the real Cloudinary API via credentials from the Integrations panel,
+    // which this suite has no business depending on. Both guards below are
+    // ownership/status checks that throw BEFORE deleteStoredDocument is ever
+    // called (see complianceService.deleteDocument), so they're safe to run
+    // against the real DB with zero Cloudinary interaction.
+    it("deleteDocument REFUSES to delete a Verified document", async () => {
+      const doc = await createDocument(org1, {
+        userId: staffA,
+        uploadedBy: staffA,
+        documentType: `${tag}-delete-verified`,
+        storagePublicId: sp(org1, staffA, "delete-verified"),
+      });
+      await verifyDocument(org1, doc.complianceDocumentId, staffB);
+
+      await expect(deleteDocument(org1, doc.complianceDocumentId, staffA)).rejects.toMatchObject({
+        statusCode: 409,
+      });
+      // Refused, so it must still be there.
+      const stillThere = await getDocument(org1, doc.complianceDocumentId);
+      expect(stillThere.verificationStatus).toBe("Verified");
+    });
+
+    it("deleteDocument REFUSES a colleague deleting someone else's document (404, not 403)", async () => {
+      const doc = await createDocument(org1, {
+        userId: staffA,
+        uploadedBy: staffA,
+        documentType: `${tag}-delete-not-owner`,
+        storagePublicId: sp(org1, staffA, "delete-not-owner"),
+      });
+
+      await expect(deleteDocument(org1, doc.complianceDocumentId, staffB)).rejects.toMatchObject({
+        statusCode: 404,
+      });
+      // Refused, so it must still be there.
+      const stillThere = await getDocument(org1, doc.complianceDocumentId);
+      expect(stillThere.complianceDocumentId).toBe(doc.complianceDocumentId);
     });
 
     it("isOwnDocument distinguishes the owner from a colleague; a cross-org read is a 404", async () => {
