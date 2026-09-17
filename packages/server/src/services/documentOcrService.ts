@@ -8,22 +8,26 @@
  * extractCertificateFields(buffer) -> recognizeWithTimeout -> parseCertificateText
  *
  * Design notes:
- * - ONE warm module-level worker, created lazily on first call and reused
- *   forever after. `createWorker()` costs 1-2s cold; paying that once and
- *   amortising it keeps the 5s-per-call budget realistic instead of eating
- *   most of it on every request.
- * - A tesseract worker is not safe to drive concurrently, so every
- *   recognize() call is funneled through a one-at-a-time promise queue —
- *   two uploads racing each other queue up instead of corrupting the worker.
- * - Every call still gets a hard 5s ceiling via Promise.race. Timeout,
- *   empty text, a worker error, or unparseable output all resolve to `{}`
- *   — never a throw, never an error surfaced to the user.
+ * - The actual tesseract.js work runs in a dedicated `worker_threads` Worker
+ *   (documentOcrWorker.ts), not on this thread. Confirmed by hand: tesseract's
+ *   own worker/WASM init can block its host thread's event loop hard enough
+ *   that a same-thread `Promise.race` timeout never fires — the timer itself
+ *   never gets a turn, and the whole server stops answering requests. Running
+ *   it on a separate OS thread means a hang there can be ended with
+ *   `.terminate()`, which works regardless of what that thread is stuck on.
+ * - ONE warm worker thread, spawned lazily on first call and reused after.
+ *   `createWorker()` costs 1-2s cold; paying that once amortises it instead
+ *   of eating most of the 5s budget on every request.
+ * - Only one recognize() is in flight at a time — every call is funneled
+ *   through a one-at-a-time promise queue — two uploads racing each other
+ *   queue up instead of both hitting the worker thread together.
+ * - Every call still gets a hard 5s ceiling. Timeout, empty text, a worker
+ *   error, or unparseable output all resolve to `{}` — never a throw, never
+ *   an error surfaced to the user. A timeout terminates the worker thread
+ *   and lets the next call spawn a fresh one.
  */
 
-/** Narrow structural type — only the one method this module actually calls. */
-interface OcrWorker {
-  recognize(image: Buffer): Promise<{ data: { text: string } }>;
-}
+import { Worker } from "node:worker_threads";
 
 export interface OcrResult {
   documentNumber?: string;
@@ -34,27 +38,24 @@ export interface OcrResult {
 const OCR_TIMEOUT_MS = 5000;
 
 // ---------------------------------------------------------------------------
-// Warm worker + serialising queue
+// Warm worker thread + serialising queue
 // ---------------------------------------------------------------------------
 
-let warmWorker: OcrWorker | null = null;
-let workerInitPromise: Promise<OcrWorker> | null = null;
+let warmWorker: Worker | null = null;
+let nextJobId = 1;
 
-async function getWorker(): Promise<OcrWorker> {
+function getWorkerThread(): Worker {
   if (warmWorker) return warmWorker;
-  if (!workerInitPromise) {
-    workerInitPromise = (async () => {
-      const { createWorker } = await import("tesseract.js");
-      const worker = (await createWorker("eng")) as unknown as OcrWorker;
-      warmWorker = worker;
-      return worker;
-    })().catch((err) => {
-      // Creation failed — allow the next call to retry instead of wedging forever.
-      workerInitPromise = null;
-      throw err;
-    });
-  }
-  return workerInitPromise;
+  const worker = new Worker(new URL("./documentOcrWorker.js", import.meta.url));
+  // A crash/exit orphans nothing to clean up — just stop treating it as warm.
+  worker.once("exit", () => {
+    if (warmWorker === worker) warmWorker = null;
+  });
+  worker.once("error", () => {
+    if (warmWorker === worker) warmWorker = null;
+  });
+  warmWorker = worker;
+  return worker;
 }
 
 /** Simple FIFO queue: chains each task onto the last, so only one runs at a time. */
@@ -70,22 +71,33 @@ function enqueue<T>(task: () => Promise<T>): Promise<T> {
 }
 
 async function recognizeWithTimeout(buffer: Buffer): Promise<string | null> {
-  let worker: OcrWorker;
-  try {
-    worker = await getWorker();
-  } catch {
-    return null;
-  }
+  const worker = getWorkerThread();
+  const id = nextJobId++;
 
-  const timeout = new Promise<null>((resolve) => {
-    setTimeout(() => resolve(null), OCR_TIMEOUT_MS);
+  return new Promise<string | null>((resolve) => {
+    let settled = false;
+
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      // Kills the thread outright — the only thing that reliably works
+      // against a hang inside tesseract's own init/recognize call.
+      void worker.terminate();
+      if (warmWorker === worker) warmWorker = null;
+      resolve(null);
+    }, OCR_TIMEOUT_MS);
+
+    const onMessage = (msg: { id: number; text?: string; error?: string }) => {
+      if (msg.id !== id || settled) return;
+      settled = true;
+      clearTimeout(timer);
+      worker.off("message", onMessage);
+      resolve(msg.error ? null : (msg.text ?? null));
+    };
+
+    worker.on("message", onMessage);
+    worker.postMessage({ id, buffer });
   });
-  const recognition = worker
-    .recognize(buffer)
-    .then((result) => result.data.text ?? "")
-    .catch(() => null);
-
-  return Promise.race([recognition, timeout]);
 }
 
 /** OCR a certificate image/PDF page and pull out the fields we can find. Never throws. */
