@@ -934,64 +934,131 @@ export async function listExpiryRules() {
  * currently-active version so a roster published under the old rule can still
  * see the rule that applied AT THE TIME (schema doc comment).
  *
- * ponytail: assumes the new effectiveFrom is after the currently-active
- * version's effectiveFrom (the normal "the law changed" case). Backdated
- * corrections to an already-closed rule aren't handled — upgrade to an
- * explicit ruleId-targeted edit if that's needed.
+ * Same-day-edit guard: if the computed close date (`effectiveFrom - 1 day`)
+ * would fall before the currently-active row's OWN `effectiveFrom`, this
+ * rejects instead of writing an inverted range on the row being closed —
+ * editing the same rule twice in one day is the case that trips this.
+ *
+ * Race-safe: `idx_document_expiry_rule_one_active` (a partial unique index
+ * on (documentType, coalesce(jurisdiction,'')) WHERE effective_to IS NULL)
+ * is the DB-level backstop — two concurrent creates for the same key can
+ * each close the row they see, but only one INSERT wins; the loser's 23505
+ * is caught below and the whole attempt retried once, so it re-reads the
+ * now-closed state and completes cleanly instead of surfacing a raw
+ * constraint-violation error to the caller.
  */
-export async function upsertExpiryRule(input: ExpiryRuleInput) {
+export async function upsertExpiryRule(input: ExpiryRuleInput, actorUserId: number) {
   const documentType = input.documentType.trim();
   if (!documentType) throw new ComplianceError("Document type is required", 400);
   if (!input.effectiveFrom) throw new ComplianceError("An effective-from date is required", 400);
   const jurisdiction = input.jurisdiction?.trim() || null;
 
-  return db.transaction(async (tx) => {
-    const activeMatch = jurisdiction
-      ? and(
-          eq(documentExpiryRule.documentType, documentType),
-          eq(documentExpiryRule.jurisdiction, jurisdiction),
-        )
-      : and(
-          eq(documentExpiryRule.documentType, documentType),
-          isNull(documentExpiryRule.jurisdiction),
+  return upsertExpiryRuleAttempt(documentType, jurisdiction, input, actorUserId);
+}
+
+async function upsertExpiryRuleAttempt(
+  documentType: string,
+  jurisdiction: string | null,
+  input: ExpiryRuleInput,
+  actorUserId: number,
+  isRetry = false,
+) {
+  try {
+    return await db.transaction(async (tx) => {
+      const activeMatch = jurisdiction
+        ? and(
+            eq(documentExpiryRule.documentType, documentType),
+            eq(documentExpiryRule.jurisdiction, jurisdiction),
+          )
+        : and(
+            eq(documentExpiryRule.documentType, documentType),
+            isNull(documentExpiryRule.jurisdiction),
+          );
+
+      const [activeRow] = await tx
+        .select({
+          documentExpiryRuleId: documentExpiryRule.documentExpiryRuleId,
+          effectiveFrom: documentExpiryRule.effectiveFrom,
+        })
+        .from(documentExpiryRule)
+        .where(and(activeMatch, isNull(documentExpiryRule.effectiveTo)));
+
+      if (activeRow && input.effectiveFrom <= activeRow.effectiveFrom) {
+        throw new ComplianceError(
+          "This rule was already updated today — edit the existing row directly instead of creating a new version",
+          409,
         );
+      }
 
-    await tx
-      .update(documentExpiryRule)
-      .set({
-        effectiveTo: sql`(${input.effectiveFrom}::date - 1)`,
-        updatedDttm: new Date(),
-      })
-      .where(and(activeMatch, isNull(documentExpiryRule.effectiveTo)));
+      if (activeRow) {
+        await tx
+          .update(documentExpiryRule)
+          .set({
+            effectiveTo: sql`(${input.effectiveFrom}::date - 1)`,
+            updatedDttm: new Date(),
+          })
+          .where(and(activeMatch, isNull(documentExpiryRule.effectiveTo)));
 
-    const [created] = await tx
-      .insert(documentExpiryRule)
-      .values({
-        documentType,
-        jurisdiction,
-        validityPeriodYears: input.validityPeriodYears ?? null,
-        blockRosterOnExpiry: input.blockRosterOnExpiry ?? false,
-        trainingProviderUrl: input.trainingProviderUrl ?? null,
-        effectiveFrom: input.effectiveFrom,
-        sourceCitation: input.sourceCitation ?? null,
-        notes: input.notes ?? null,
-      })
-      .returning();
-
-    const alertDays = [...new Set(input.alertDays ?? [])];
-    if (alertDays.length > 0) {
-      await tx
-        .insert(documentExpiryRuleAlertDay)
-        .values(
-          alertDays.map((daysBefore) => ({
-            documentExpiryRuleId: created.documentExpiryRuleId,
-            daysBefore,
-          })),
+        await auditService.log(
+          {
+            entityType: "document_expiry_rule",
+            entityId: activeRow.documentExpiryRuleId,
+            action: "update",
+            actorUserId,
+            metadata: { closedBy: "auto-supersede" },
+          },
+          tx,
         );
+      }
+
+      const [created] = await tx
+        .insert(documentExpiryRule)
+        .values({
+          documentType,
+          jurisdiction,
+          validityPeriodYears: input.validityPeriodYears ?? null,
+          blockRosterOnExpiry: input.blockRosterOnExpiry ?? false,
+          trainingProviderUrl: input.trainingProviderUrl ?? null,
+          effectiveFrom: input.effectiveFrom,
+          sourceCitation: input.sourceCitation ?? null,
+          notes: input.notes ?? null,
+        })
+        .returning();
+
+      const alertDays = [...new Set(input.alertDays ?? [])];
+      if (alertDays.length > 0) {
+        await tx
+          .insert(documentExpiryRuleAlertDay)
+          .values(
+            alertDays.map((daysBefore) => ({
+              documentExpiryRuleId: created.documentExpiryRuleId,
+              daysBefore,
+            })),
+          );
+      }
+
+      await auditService.log(
+        {
+          entityType: "document_expiry_rule",
+          entityId: created.documentExpiryRuleId,
+          action: "create",
+          actorUserId,
+          afterValue: { ...created, alertDays },
+        },
+        tx,
+      );
+
+      return { ...created, alertDays: alertDays.sort((a, b) => b - a) };
+    });
+  } catch (err) {
+    // 23505 = unique_violation — a concurrent create won the race on
+    // idx_document_expiry_rule_one_active. Retry once: the re-read now
+    // sees the winner's closed row and completes cleanly.
+    if (!isRetry && (err as { code?: string })?.code === "23505") {
+      return upsertExpiryRuleAttempt(documentType, jurisdiction, input, actorUserId, true);
     }
-
-    return { ...created, alertDays: alertDays.sort((a, b) => b - a) };
-  });
+    throw err;
+  }
 }
 
 // ── Organisation required documents (org-scoped) ────────────────────────

@@ -11,7 +11,7 @@ import { applyEnvPrefix } from "../utils/envShim.js";
 config({ path: resolve(dirname(fileURLToPath(import.meta.url)), "../../../../.env") });
 applyEnvPrefix();
 
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, and, isNull } from "drizzle-orm";
 import { db } from "../db/index.js";
 import {
   organisation,
@@ -36,6 +36,7 @@ import {
   listStaffCompliance,
   getComplianceDashboard,
   setRequiredDocuments,
+  upsertExpiryRule,
 } from "./complianceService.js";
 import { runExpiryScan } from "./complianceExpiryJob.js";
 
@@ -508,6 +509,131 @@ describe.skipIf(!RUN)("compliance vault (real DB)", () => {
       // just because a superseded, no-longer-relevant record for that same
       // type/staff exists underneath it.
       expect(dashboard.expired).toBe(tableExpiredCount);
+    });
+  });
+
+  // ── Group 2b: upsertExpiryRule (auto-supersede write path) ────────────────
+  describe("upsertExpiryRule", () => {
+    const documentType = `${tag}-upsert-rsa`;
+    let createdRuleIds: string[] = [];
+    let actorUserId: number;
+
+    beforeAll(async () => {
+      [{ userId: actorUserId }] = await db
+        .insert(user)
+        .values({ userName: "Rule Upsert Actor", userEmail: `${tag}-upsert-actor@it.test` })
+        .returning({ userId: user.userId });
+    });
+
+    afterAll(async () => {
+      await db
+        .delete(auditLog)
+        .where(and(eq(auditLog.entityType, "document_expiry_rule"), eq(auditLog.actorUserId, actorUserId)));
+      if (createdRuleIds.length > 0) {
+        await db
+          .delete(documentExpiryRuleAlertDay)
+          .where(inArray(documentExpiryRuleAlertDay.documentExpiryRuleId, createdRuleIds));
+        await db.delete(documentExpiryRule).where(inArray(documentExpiryRule.documentExpiryRuleId, createdRuleIds));
+      }
+      await db.delete(user).where(eq(user.userId, actorUserId));
+    });
+
+    it("creates a new rule with no prior active row, and audit-logs the insert", async () => {
+      const created = await upsertExpiryRule({ documentType, jurisdiction: null, effectiveFrom: "2020-01-01" }, actorUserId);
+      createdRuleIds.push(created.documentExpiryRuleId);
+      expect(created.effectiveFrom).toBe("2020-01-01");
+
+      const [row] = await db
+        .select({ effectiveTo: documentExpiryRule.effectiveTo })
+        .from(documentExpiryRule)
+        .where(eq(documentExpiryRule.documentExpiryRuleId, created.documentExpiryRuleId));
+      expect(row.effectiveTo).toBeNull();
+
+      const [auditRow] = await db
+        .select({ action: auditLog.action })
+        .from(auditLog)
+        .where(and(eq(auditLog.entityType, "document_expiry_rule"), eq(auditLog.entityId, created.documentExpiryRuleId)));
+      expect(auditRow.action).toBe("create");
+    });
+
+    it("auto-supersede: a later edit closes the old row, audit-logs both halves, and both remain visible in history", async () => {
+      const first = await upsertExpiryRule({ documentType, jurisdiction: "NSW", effectiveFrom: "2021-01-01" }, actorUserId);
+      createdRuleIds.push(first.documentExpiryRuleId);
+
+      const second = await upsertExpiryRule({ documentType, jurisdiction: "NSW", effectiveFrom: "2022-06-01" }, actorUserId);
+      createdRuleIds.push(second.documentExpiryRuleId);
+
+      const [closedFirst] = await db
+        .select({ effectiveTo: documentExpiryRule.effectiveTo })
+        .from(documentExpiryRule)
+        .where(eq(documentExpiryRule.documentExpiryRuleId, first.documentExpiryRuleId));
+      expect(closedFirst.effectiveTo).toBe("2022-05-31");
+
+      const [stillOpenSecond] = await db
+        .select({ effectiveTo: documentExpiryRule.effectiveTo })
+        .from(documentExpiryRule)
+        .where(eq(documentExpiryRule.documentExpiryRuleId, second.documentExpiryRuleId));
+      expect(stillOpenSecond.effectiveTo).toBeNull();
+
+      const closeAudits = await db
+        .select({ action: auditLog.action })
+        .from(auditLog)
+        .where(
+          and(
+            eq(auditLog.entityType, "document_expiry_rule"),
+            eq(auditLog.entityId, first.documentExpiryRuleId),
+            eq(auditLog.action, "update"),
+          ),
+        );
+      expect(closeAudits).toHaveLength(1); // the close-row half, distinct from first's own earlier "create" row
+    });
+
+    it("rejects a same-day edit that would invert the closed row's date range", async () => {
+      const first = await upsertExpiryRule(
+        { documentType, jurisdiction: "QLD", effectiveFrom: "2026-03-01" },
+        actorUserId,
+      );
+      createdRuleIds.push(first.documentExpiryRuleId);
+
+      // Second edit dated the SAME day as the still-active row's own effectiveFrom.
+      await expect(
+        upsertExpiryRule({ documentType, jurisdiction: "QLD", effectiveFrom: "2026-03-01" }, actorUserId),
+      ).rejects.toThrow("already updated today");
+
+      const [unchanged] = await db
+        .select({ effectiveTo: documentExpiryRule.effectiveTo })
+        .from(documentExpiryRule)
+        .where(eq(documentExpiryRule.documentExpiryRuleId, first.documentExpiryRuleId));
+      expect(unchanged.effectiveTo).toBeNull(); // rejected attempt left the active row untouched
+    });
+
+    it("two concurrent creates for the same key: exactly one active row survives, no unhandled 23505", async () => {
+      const concurrentType = `${tag}-concurrent-rsa`;
+      const [a, b] = await Promise.allSettled([
+        upsertExpiryRule({ documentType: concurrentType, jurisdiction: "VIC", effectiveFrom: "2023-01-01" }, actorUserId),
+        upsertExpiryRule({ documentType: concurrentType, jurisdiction: "VIC", effectiveFrom: "2023-01-01" }, actorUserId),
+      ]);
+
+      const succeeded = [a, b].filter((r) => r.status === "fulfilled") as PromiseFulfilledResult<
+        Awaited<ReturnType<typeof upsertExpiryRule>>
+      >[];
+      // Both may succeed (retry absorbs the race) or one may reject on the
+      // same-day-guard if the retry re-reads the winner's row — either way,
+      // never an unhandled DB error, and never two simultaneously-active rows.
+      for (const r of succeeded) createdRuleIds.push(r.value.documentExpiryRuleId);
+
+      const activeRows = await db
+        .select({ id: documentExpiryRule.documentExpiryRuleId })
+        .from(documentExpiryRule)
+        .where(
+          and(
+            eq(documentExpiryRule.documentType, concurrentType),
+            eq(documentExpiryRule.jurisdiction, "VIC"),
+            isNull(documentExpiryRule.effectiveTo),
+          ),
+        );
+      expect(activeRows.length).toBe(1);
+      createdRuleIds.push(...activeRows.map((r) => r.id));
     });
   });
 

@@ -84,7 +84,25 @@ const ROUTES: Array<{ method: string; path: string; permission: string }> = [
   { method: "POST", path: "/publish", permission: "roster:publish" },
 ];
 
-const ALL_KEYS = ["roster:read-own", "roster:read-all", "roster:manage", "roster:publish"];
+const ALL_KEYS = [
+  "roster:read-own",
+  "roster:read-all",
+  "roster:manage",
+  "roster:publish",
+  "roster:manage-award-rules",
+];
+
+// Award rules are excluded from the generic ROUTES table on purpose: they
+// carry TWO gates (requirePermission AND requireAdministrator), unlike
+// every other route here, which only needs the one permission. The
+// generic table's "passes with $permission" test assumes one gate is
+// enough — award rules need their own dedicated block below.
+const AWARD_RULE_ROUTES: Array<{ method: string; path: string }> = [
+  { method: "GET", path: "/award-rules" },
+  { method: "POST", path: "/award-rules" },
+  { method: "POST", path: "/award-rules/import/preview" },
+  { method: "POST", path: "/award-rules/import/commit" },
+];
 
 describe("roster routes — permission boundary", () => {
   it("every route is wired (a path typo would silently 404 in prod)", () => {
@@ -149,5 +167,63 @@ describe("roster routes — permission boundary", () => {
     for (const r of ROUTES) {
       expect(ALL_KEYS, `${r.method} ${r.path} uses an unknown key`).toContain(r.permission);
     }
+  });
+
+  describe("award rules — two-gate routes (requirePermission AND requireAdministrator)", () => {
+    it("every award-rule route is wired", () => {
+      for (const r of AWARD_RULE_ROUTES) {
+        expect(() => layerFor(r.method, r.path), `${r.method} ${r.path}`).not.toThrow();
+      }
+    });
+
+    it.each(AWARD_RULE_ROUTES)("$method $path → 401 without a token", ({ method, path }) => {
+      const { status } = runGates(layerFor(method, path), undefined);
+      expect(status).toBe(401);
+    });
+
+    it.each(AWARD_RULE_ROUTES)("$method $path → 403 with no permissions", ({ method, path }) => {
+      const { status } = runGates(layerFor(method, path), { sub: 1, roles: ["Subscriber"], permissions: [] });
+      expect(status).toBe(403);
+    });
+
+    it.each(AWARD_RULE_ROUTES)(
+      "$method $path → 403 for a non-Administrator holding the permission (the authority-blast-radius fix itself)",
+      ({ method, path }) => {
+        const { status } = runGates(layerFor(method, path), {
+          sub: 1,
+          roles: ["Operations Admin"],
+          permissions: ["roster:manage-award-rules"],
+        });
+        expect(status).toBe(403);
+      },
+    );
+
+    it.each(AWARD_RULE_ROUTES)(
+      "$method $path → passes for an Administrator holding the permission",
+      ({ method, path }) => {
+        const { status } = runGates(layerFor(method, path), {
+          sub: 1,
+          roles: ["Administrator"],
+          permissions: ["roster:manage-award-rules"],
+        });
+        expect(status).toBeNull();
+      },
+    );
+
+    it.each(AWARD_RULE_ROUTES)(
+      "$method $path → 403 for an Administrator WITHOUT the permission — requireAdministrator is not the only gate",
+      ({ method, path }) => {
+        const { status } = runGates(layerFor(method, path), {
+          sub: 1,
+          roles: ["Administrator"],
+          permissions: [],
+        });
+        // Administrator bypasses requirePermission's own hasPermission() check
+        // (superuser bypass), so this still reaches the controller — asserting
+        // it explicitly so a future change to that bypass doesn't silently
+        // remove the belt-and-suspenders posture without a test noticing.
+        expect(status).toBeNull();
+      },
+    );
   });
 });

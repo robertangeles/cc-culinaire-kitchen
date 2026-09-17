@@ -18,6 +18,7 @@
 import { useState } from "react";
 import { AlertTriangle, Check, Loader2, ShieldAlert, X } from "lucide-react";
 import { usePublish, type AwardCoverage, type PublishResult } from "../../hooks/useRoster.js";
+import { useHasPermission } from "../../hooks/useHasPermission.js";
 
 function addDaysIso(days: number): string {
   const d = new Date();
@@ -25,8 +26,15 @@ function addDaysIso(days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-function CoverageDisclosure({ coverage }: { coverage: AwardCoverage }) {
+/** Exported for unit testing — same pattern as groupTabs, isOwnDocument, etc. */
+export function CoverageDisclosure({ coverage }: { coverage: AwardCoverage }) {
   const total = coverage.checked.length + coverage.notChecked.length;
+  const hasPermission = useHasPermission();
+  // Renders only when there's an actual gap to close AND the viewer can act
+  // on it — matching this exact permission's Administrator-only gate
+  // (roster:manage-award-rules), not just "holds the permission", since the
+  // client hook already resolves the same superuser bypass the server does.
+  const canManageAwardRules = coverage.notChecked.length > 0 && hasPermission("roster:manage-award-rules");
   return (
     <div className="rounded-lg border border-dark-200 bg-dark-100 px-4 py-3">
       <div className="flex items-start gap-2">
@@ -37,6 +45,15 @@ function CoverageDisclosure({ coverage }: { coverage: AwardCoverage }) {
           </p>
           <p className="mt-1 text-xs text-dark-600">
             <span className="text-dark-500">NOT checked:</span> {coverage.notChecked.join(", ")}.
+            {canManageAwardRules && (
+              <>
+                {" "}
+                <a href="/settings?tab=awardRules" className="text-gold underline hover:text-gold-hover">
+                  Add rules now
+                </a>
+                .
+              </>
+            )}
           </p>
           {coverage.checked.length > 0 && (
             <p className="mt-1 text-xs text-dark-600">

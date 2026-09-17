@@ -514,7 +514,7 @@ export async function handleUpsertRule(
       res.status(400).json({ error: parsed.error.errors[0]?.message ?? "Invalid input" });
       return;
     }
-    const rule = await upsertExpiryRule(parsed.data);
+    const rule = await upsertExpiryRule(parsed.data, req.user!.sub);
     logger.info(
       { documentExpiryRuleId: rule.documentExpiryRuleId, userId: req.user!.sub },
       "Compliance expiry rule saved",

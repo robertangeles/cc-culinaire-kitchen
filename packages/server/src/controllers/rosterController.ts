@@ -49,6 +49,8 @@ import {
   PublicHolidayError,
 } from "../services/publicHolidayService.js";
 import { requestConsent, respondToConsent } from "../services/consentService.js";
+import { upsertAwardRule, listAwardRules, AwardRuleError } from "../services/awardRuleService.js";
+import { previewAwardRuleCsv, commitAwardRuleCsvImport, type CsvAwardRuleRow } from "../services/awardRuleCsvImport.js";
 
 const RoleSchema = z.object({
   roleName: z.string().min(1).max(100),
@@ -126,6 +128,19 @@ const PublicHolidaySchema = z.object({
     .optional(),
 });
 
+// jurisdiction/ruleType/thresholdValue are further validated by
+// upsertAwardRule itself (whitelist + positivity) — this schema only
+// enforces shape, matching the split every other controller schema here
+// uses between "is this the right shape" and "is this a valid domain value".
+const AwardRuleSchema = z.object({
+  awardCode: z.string().min(1).max(20),
+  ruleType: z.string().min(1).max(40),
+  jurisdiction: z.string().max(3).nullable().optional(),
+  thresholdValue: z.number(),
+  effectiveFrom: z.string().min(1),
+  sourceCitation: z.string().max(500).nullable().optional(),
+});
+
 // Most-derived-first: a RosterError subclass carrying extra structured data
 // must be listed here, ahead of the generic RosterError fallback below, or
 // `instanceof RosterError` matches first and the extra field is silently
@@ -147,6 +162,8 @@ function handleServiceError(err: unknown, res: Response, next: NextFunction): vo
     const match = ERROR_EXTRA_FIELD.find(([matches]) => matches(err));
     res.status(err.statusCode).json({ error: err.message, ...(match ? match[1](err) : {}) });
   } else if (err instanceof PublicHolidayError) {
+    res.status(err.statusCode).json({ error: err.message });
+  } else if (err instanceof AwardRuleError) {
     res.status(err.statusCode).json({ error: err.message });
   } else {
     next(err);
@@ -592,6 +609,78 @@ export async function handleDeletePublicHoliday(req: Request, res: Response, nex
   try {
     await deletePublicHoliday(req.params.id as string);
     res.status(204).end();
+  } catch (err) {
+    handleServiceError(err, res, next);
+  }
+}
+
+// ── Award rules ────────────────────────────────────────────────────────
+// No org scoping — same platform-wide shared reference data shape as
+// public holidays. Administrator-only (see middleware/auth.ts's
+// requireAdministrator) in addition to roster:manage-award-rules.
+
+export async function handleListAwardRules(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    res.json(await listAwardRules());
+  } catch (err) {
+    handleServiceError(err, res, next);
+  }
+}
+
+export async function handleUpsertAwardRule(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const parsed = AwardRuleSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.errors[0]?.message ?? "Invalid input" });
+      return;
+    }
+    const rule = await upsertAwardRule(
+      { ...parsed.data, jurisdiction: parsed.data.jurisdiction ?? null, sourceCitation: parsed.data.sourceCitation ?? null },
+      req.user!.sub,
+    );
+    res.status(201).json(rule);
+  } catch (err) {
+    handleServiceError(err, res, next);
+  }
+}
+
+/** POST /roster/award-rules/import/preview — parse + validate only, commits nothing. */
+export async function handleAwardRuleCsvPreview(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const file = req.file;
+    if (!file) {
+      res.status(400).json({ error: "CSV file required" });
+      return;
+    }
+    res.json(previewAwardRuleCsv(file.buffer.toString("utf-8")));
+  } catch (err) {
+    if (err instanceof Error) {
+      res.status(400).json({ error: err.message });
+      return;
+    }
+    next(err);
+  }
+}
+
+const CsvRowSchema = z.object({
+  rowIndex: z.number().int(),
+  awardCode: z.string().min(1).max(20),
+  ruleType: z.string().min(1).max(40),
+  jurisdiction: z.string().max(3).nullable(),
+  thresholdValue: z.number(),
+  effectiveFrom: z.string().min(1),
+  sourceCitation: z.string().max(500).nullable(),
+});
+
+/** POST /roster/award-rules/import/commit — commit rows the client already previewed. */
+export async function handleAwardRuleCsvCommit(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const parsed = z.object({ rows: z.array(CsvRowSchema).min(1).max(1000) }).safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.errors[0]?.message ?? "Invalid input" });
+      return;
+    }
+    res.json(await commitAwardRuleCsvImport(parsed.data.rows as CsvAwardRuleRow[], req.user!.sub));
   } catch (err) {
     handleServiceError(err, res, next);
   }

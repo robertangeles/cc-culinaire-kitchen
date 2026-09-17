@@ -16,7 +16,7 @@
 
 import { Router } from "express";
 import multer from "multer";
-import { authenticate, requirePermission } from "../middleware/auth.js";
+import { authenticate, requirePermission, requireAdministrator } from "../middleware/auth.js";
 import { requireFlag } from "../middleware/requireFlag.js";
 import {
   complianceDocumentEditRateLimit,
@@ -136,8 +136,27 @@ router.post(
 
 // ─── Rules + required documents (admin) ──────────────────────────
 
-router.get("/rules", requirePermission("compliance:manage-rules"), handleListRules);
-router.put("/rules", requirePermission("compliance:manage-rules"), handleUpsertRule);
+// Administrator-only (requireAdministrator), not just compliance:manage-rules
+// — document_expiry_rule is platform-wide, no-organisationId data.
+// compliance:manage-rules is ALSO granted to Operations Admin (a
+// single-org role), which the outside-voice authority-blast-radius finding
+// caught: wiring a UI onto this permission alone would let any org's
+// Operations Admin edit rules that apply to every org on the platform.
+// compliance:manage-rules stays unweakened for its OTHER use
+// (RequiredDocumentsTab, genuinely org-scoped) — only this route gets the
+// extra gate.
+router.get(
+  "/rules",
+  requirePermission("compliance:manage-rules"),
+  requireAdministrator(),
+  handleListRules,
+);
+router.put(
+  "/rules",
+  requirePermission("compliance:manage-rules"),
+  requireAdministrator(),
+  handleUpsertRule,
+);
 router.get(
   "/required-documents",
   requirePermission("compliance:manage-rules"),

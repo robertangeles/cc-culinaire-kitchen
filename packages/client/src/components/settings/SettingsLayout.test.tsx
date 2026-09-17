@@ -10,6 +10,15 @@ vi.mock("../../hooks/useHasPermission.js", () => ({
   useHasPermission: () => hasPermissionMock,
 }));
 
+// Award Rules / Document Expiry Rules also gate on the Administrator role
+// directly (requireAdministrator field), not just a permission — so every
+// test needs this stubbed too. Defaults to Administrator so pre-existing
+// tests (written before this gate existed) keep seeing every tab.
+const useAuthMock = vi.fn();
+vi.mock("../../context/AuthContext.js", () => ({
+  useAuth: () => useAuthMock(),
+}));
+
 import {
   SettingsLayout,
   groupTabs,
@@ -19,6 +28,7 @@ import {
 
 beforeEach(() => {
   hasPermissionMock.mockReset().mockReturnValue(true);
+  useAuthMock.mockReset().mockReturnValue({ user: { roles: ["Administrator"] } });
 });
 
 type Fixture = { id: string; group?: SettingsGroup };
@@ -219,5 +229,43 @@ describe("SettingsLayout — Compliance tab gating", () => {
     // are unaffected by the gate hiding it.
     expect(screen.getByRole("tab", { name: /Users/ })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /Roles/ })).toBeInTheDocument();
+  });
+});
+
+describe("SettingsLayout — Award Rules / Document Expiry Rules gating (permission AND Administrator)", () => {
+  it("shows both tabs to an Administrator holding both permissions", () => {
+    hasPermissionMock.mockReturnValue(true);
+    useAuthMock.mockReturnValue({ user: { roles: ["Administrator"] } });
+    render(
+      <SettingsLayout activeTab="prompts" onTabChange={() => {}}>
+        <div>panel</div>
+      </SettingsLayout>,
+    );
+    expect(document.getElementById("settings-tab-awardRules")).toBeInTheDocument();
+    expect(document.getElementById("settings-tab-documentExpiryRules")).toBeInTheDocument();
+  });
+
+  it("hides both tabs from a non-Administrator EVEN THOUGH they hold the permission — the authority-blast-radius fix itself", () => {
+    hasPermissionMock.mockReturnValue(true); // holds roster:manage-award-rules / compliance:manage-rules
+    useAuthMock.mockReturnValue({ user: { roles: ["Operations Admin"] } });
+    render(
+      <SettingsLayout activeTab="prompts" onTabChange={() => {}}>
+        <div>panel</div>
+      </SettingsLayout>,
+    );
+    expect(document.getElementById("settings-tab-awardRules")).toBeNull();
+    expect(document.getElementById("settings-tab-documentExpiryRules")).toBeNull();
+  });
+
+  it("hides both tabs from an Administrator who lacks the permission — Administrator role alone is not enough either", () => {
+    hasPermissionMock.mockReturnValue(false);
+    useAuthMock.mockReturnValue({ user: { roles: ["Administrator"] } });
+    render(
+      <SettingsLayout activeTab="prompts" onTabChange={() => {}}>
+        <div>panel</div>
+      </SettingsLayout>,
+    );
+    expect(document.getElementById("settings-tab-awardRules")).toBeNull();
+    expect(document.getElementById("settings-tab-documentExpiryRules")).toBeNull();
   });
 });

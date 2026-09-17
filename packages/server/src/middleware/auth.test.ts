@@ -5,8 +5,19 @@ vi.mock("../services/authService.js", () => ({
   verifyAccessToken: vi.fn(),
 }));
 
-import { authenticate, authenticateOptional, hasPermission, requirePermission } from "./auth.js";
+vi.mock("../services/auditService.js", () => ({
+  log: vi.fn().mockResolvedValue(undefined),
+}));
+
+import {
+  authenticate,
+  authenticateOptional,
+  hasPermission,
+  requirePermission,
+  requireAdministrator,
+} from "./auth.js";
 import { verifyAccessToken } from "../services/authService.js";
+import { log } from "../services/auditService.js";
 
 function mockReq(opts: { authHeader?: string; cookieToken?: string } = {}): Request {
   return {
@@ -189,6 +200,54 @@ describe("requirePermission (thin wrapper — HTTP status contract unchanged)", 
     );
     expect(next).toHaveBeenCalled();
     expect(res.status).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * requireAdministrator — the platform-wide-data gate for award_rule /
+ * document_expiry_rule (org-less reference data, so a single-org role like
+ * Operations Admin must never pass, even holding the permission the route
+ * also checks — see the outside-voice authority-blast-radius finding this
+ * gate was added to close). Vestigial today against requirePermission
+ * (nobody but Administrator holds roster:manage-award-rules yet), but this
+ * is the real, only-live gate until that changes.
+ */
+describe("requireAdministrator", () => {
+  function gateReq(user?: { sub: number; roles: string[] }): Request {
+    return { user, path: "/api/roster/award-rules" } as unknown as Request;
+  }
+
+  beforeEach(() => vi.clearAllMocks());
+
+  it("401s with no authenticated user", () => {
+    const res = mockRes();
+    const next = vi.fn();
+    requireAdministrator()(gateReq(), res, next);
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("403s a non-Administrator, even one holding the route's own permission — and audit-logs the rejection", () => {
+    const res = mockRes();
+    const next = vi.fn();
+    requireAdministrator()(gateReq({ sub: 5, roles: ["Operations Admin"] }), res, next);
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(next).not.toHaveBeenCalled();
+    expect(log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "access_denied",
+        actorUserId: 5,
+      }),
+    );
+  });
+
+  it("calls next() for an Administrator, without logging anything", () => {
+    const res = mockRes();
+    const next = vi.fn();
+    requireAdministrator()(gateReq({ sub: 1, roles: ["Administrator"] }), res, next);
+    expect(next).toHaveBeenCalled();
+    expect(res.status).not.toHaveBeenCalled();
+    expect(log).not.toHaveBeenCalled();
   });
 });
 

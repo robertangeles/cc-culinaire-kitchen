@@ -26,9 +26,12 @@ import {
   FileText,
   Brain,
   CalendarDays,
+  Scale,
+  Clock,
   type LucideIcon,
 } from "lucide-react";
 import { useHasPermission } from "../../hooks/useHasPermission.js";
+import { useAuth } from "../../context/AuthContext.js";
 
 /** Which app surface a settings tab primarily affects. */
 export type SettingsGroup = "web" | "mobile" | "shared" | "unassigned";
@@ -54,6 +57,15 @@ interface TabItem {
    * so an ungated tab is visible to anyone who can reach the page.
    */
   permission?: string;
+  /**
+   * When true, ALSO requires the Administrator role, on top of `permission`
+   * — for platform-wide, no-organisationId reference data (award_rule,
+   * document_expiry_rule) where even a role holding `permission` (e.g.
+   * Operations Admin holding compliance:manage-rules) must not see the tab.
+   * See requireAdministrator's doc comment (middleware/auth.ts) for the
+   * server-side half of this same gate.
+   */
+  requireAdministrator?: boolean;
 }
 
 /** Display order + label for each group section. */
@@ -85,6 +97,22 @@ const tabs: TabItem[] = [
     icon: CalendarDays,
     group: "shared",
     permission: "roster:manage",
+  },
+  {
+    id: "awardRules",
+    label: "Award Rules",
+    icon: Scale,
+    group: "shared",
+    permission: "roster:manage-award-rules",
+    requireAdministrator: true,
+  },
+  {
+    id: "documentExpiryRules",
+    label: "Document Expiry Rules",
+    icon: Clock,
+    group: "shared",
+    permission: "compliance:manage-rules",
+    requireAdministrator: true,
   },
   { id: "roles", label: "Roles", icon: Shield, group: "shared" },
   { id: "integrations", label: "Integrations", icon: Plug, group: "shared" },
@@ -144,7 +172,12 @@ export function SettingsLayout({
   // an ungated tab whose PUT endpoint requires a permission would otherwise
   // be visible (and 403 on save) to every signed-in user.
   const hasPermission = useHasPermission();
-  const visibleTabs = tabs.filter((t) => !t.permission || hasPermission(t.permission));
+  const { user } = useAuth();
+  const isAdministrator = user?.roles?.includes("Administrator") ?? false;
+  const visibleTabs = tabs.filter(
+    (t) =>
+      (!t.permission || hasPermission(t.permission)) && (!t.requireAdministrator || isAdministrator),
+  );
   const visualTabs = orderedTabs(visibleTabs);
   const enabledTabs = visualTabs.filter((t) => !t.disabled);
   // Always render the three primary groups (Web, Mobile, Shared) so the
