@@ -318,21 +318,17 @@ finishing branch, about to merge). See [[roster-core]], [[staff-compliance-vault
 
 Three items the review deferred rather than built:
 
-- [ ] **P2 — Name an owner for `award_rule` authorship.** No longer a ship-blocker
-  (2026-08-14 resolution): T14 (Slice 4, shipped) builds the full Award engine machinery —
-  `award_rule` table, `evaluate()` returning both `warnings[]` and a `coverage` object, the
-  publish-time audit ack always carrying `{awardWarnings, awardCoverage}` — but seeds ZERO
-  rows on purpose. The engine is server-only in Slice 4 (no UI yet); Slice 5 must surface the
-  disclosure on the publish screen as "0 of N rule categories checked" with the same visual
-  weight a populated warning list would get, so the gap stays disclosed, not hidden, once staff
-  are looking at it. That UI step is required before this can be called resolved end-to-end —
-  Phase 2 ships the machinery without reversing the original CEO review's safety concern, but
-  the review's disclosure requirement lands on staff only when Slice 5 ships. This item is now
-  a data-entry follow-on (INSERT
-  statements + an IR-competent reviewer), not an engineering dependency: MA000009 varies
-  several times a year (1 July wage reviews, FWC variations, casual-conversion and loading
-  changes), and nobody on this project is currently named as able to author those rows. The
-  answer may be "engage an adviser," which is an unbudgeted cost. Effort: S.
+- [x] **P2 — Name an owner for `award_rule` authorship.** ✅ SHIPPED 2026-09-17
+  (`feature/ck-web/org-admin-rule-editors`): Org Admin → Settings now has an Award Rules
+  tab (Administrator-only, `roster:manage-award-rules` + `requireAdministrator()`
+  double-gated) with create/edit via a drawer form and CSV bulk import, so an IR-competent
+  reviewer can author/update `award_rule` rows (MA000009 wage reviews, FWC variations,
+  casual-conversion/loading changes) without raw DB access. The PublishPanel's coverage
+  disclosure ("N of M rule categories checked") now links straight to this tab when
+  coverage is missing, closing the loop the original CEO review flagged — the gap stays
+  disclosed AND is now one click from being fixed. Same pattern applied to compliance
+  document expiry rules (new Document Expiry Rules tab). Who actually keeps the rows
+  current over time is still an operational (non-engineering) question.
 
 - [ ] **P2 — Labour cost joined to menu costing (E4).** Roll roster hours × award rate per
   shift and attribute to menu items via recorded sales, so Menu Intelligence can report
