@@ -5,10 +5,11 @@
  * left and a scrollable content area on the right. Tabs that are not yet
  * implemented are shown in a disabled state with a "Soon" badge.
  *
- * Tabs are organised into groups (Web / Mobile / Shared / Unassigned) so an
- * admin can see, at a glance, which app each setting affects. Group placement
- * is driven by the optional `group` field on each tab — empty groups are not
- * rendered, and tabs without a group fall through to "Unassigned".
+ * Tabs are organised into groups (Web / Mobile / Rostering & Compliance /
+ * Shared / Unassigned) so an admin can see, at a glance, which app — or which
+ * feature domain — each setting affects. Group placement is driven by the
+ * optional `group` field on each tab — empty groups are not rendered, and
+ * tabs without a group fall through to "Unassigned".
  */
 
 import { type ReactNode, type KeyboardEvent } from "react";
@@ -33,8 +34,8 @@ import {
 import { useHasPermission } from "../../hooks/useHasPermission.js";
 import { useAuth } from "../../context/AuthContext.js";
 
-/** Which app surface a settings tab primarily affects. */
-export type SettingsGroup = "web" | "mobile" | "shared" | "unassigned";
+/** Which app surface — or feature domain — a settings tab primarily affects. */
+export type SettingsGroup = "web" | "mobile" | "rosteringCompliance" | "shared" | "unassigned";
 
 /** Descriptor for a single settings tab. */
 interface TabItem {
@@ -72,6 +73,7 @@ interface TabItem {
 const GROUP_ORDER: { id: SettingsGroup; label: string }[] = [
   { id: "web", label: "Web" },
   { id: "mobile", label: "Mobile" },
+  { id: "rosteringCompliance", label: "Rostering & Compliance" },
   { id: "shared", label: "Shared" },
   { id: "unassigned", label: "Unassigned" },
 ];
@@ -88,21 +90,21 @@ const tabs: TabItem[] = [
     id: "compliance",
     label: "Compliance",
     icon: ShieldCheck,
-    group: "shared",
+    group: "rosteringCompliance",
     permission: "compliance:manage-rules",
   },
   {
     id: "publicHolidays",
     label: "Public Holidays",
     icon: CalendarDays,
-    group: "shared",
+    group: "rosteringCompliance",
     permission: "roster:manage",
   },
   {
     id: "awardRules",
     label: "Award Rules",
     icon: Scale,
-    group: "shared",
+    group: "rosteringCompliance",
     permission: "roster:manage-award-rules",
     requireAdministrator: true,
   },
@@ -110,7 +112,7 @@ const tabs: TabItem[] = [
     id: "documentExpiryRules",
     label: "Document Expiry Rules",
     icon: Clock,
-    group: "shared",
+    group: "rosteringCompliance",
     permission: "compliance:manage-rules",
     requireAdministrator: true,
   },
@@ -180,11 +182,14 @@ export function SettingsLayout({
   );
   const visualTabs = orderedTabs(visibleTabs);
   const enabledTabs = visualTabs.filter((t) => !t.disabled);
-  // Always render the three primary groups (Web, Mobile, Shared) so the
-  // cherry-pick targets stay visible even when empty. The Unassigned fallback
-  // only renders when something falls into it.
+  // Always render Web, Mobile, and Shared so the cherry-pick targets stay
+  // visible even when empty. Rostering & Compliance and Unassigned are both
+  // fully permission-gated (every tab in Rostering & Compliance requires a
+  // permission, several also requireAdministrator) — a viewer holding none
+  // of those would otherwise see an empty section with nothing to explain
+  // it, so both fall back to "hidden when empty" instead.
   const groups = groupTabs(visibleTabs).filter(
-    (g) => g.id !== "unassigned" || g.items.length > 0,
+    (g) => (g.id !== "unassigned" && g.id !== "rosteringCompliance") || g.items.length > 0,
   );
 
   function handleTabKeyDown(e: KeyboardEvent<HTMLButtonElement>) {
