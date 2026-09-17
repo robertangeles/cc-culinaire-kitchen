@@ -1,3 +1,4 @@
+import { StrictMode } from "react";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MyDocumentsList } from "./MyDocumentsList.js";
@@ -27,6 +28,22 @@ describe("MyDocumentsList", () => {
     render(<MyDocumentsList />);
     await waitFor(() => expect(screen.getByText("Add your first certificate")).toBeInTheDocument());
     expect(screen.getByText("Takes about a minute.")).toBeInTheDocument();
+  });
+
+  // Regression: CV-A1 — My Documents spun forever under React 18 StrictMode
+  // mountedRef was set false on unmount but never reset true on the next
+  // mount, so StrictMode's dev-only double-invoke discarded the kept
+  // fetch's result and the list never left the loading state.
+  // Found by /qa on 2026-09-18
+  // Report: docs/qa/rostering-compliance-test-plan.md (CV-A1)
+  it("still resolves out of loading under StrictMode's double-invoked mount effect", async () => {
+    stubDocuments([]);
+    render(
+      <StrictMode>
+        <MyDocumentsList />
+      </StrictMode>,
+    );
+    await waitFor(() => expect(screen.getByText("Add your first certificate")).toBeInTheDocument());
   });
 
   it("tells a pending document's owner who has it and since when", async () => {
