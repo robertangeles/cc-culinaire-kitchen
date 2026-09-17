@@ -83,6 +83,7 @@ export function MyDocumentsList({ onUploadClick }: { onUploadClick?: () => void 
   }
 
   useEffect(() => {
+    mountedRef.current = true;
     fetchDocuments();
     return () => {
       mountedRef.current = false;
