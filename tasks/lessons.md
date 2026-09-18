@@ -863,3 +863,72 @@ builds all tables with CHECKs enforcing. Stop it again when done.
   slot was ever meant to hold a LIST — a single-line identity badge wasn't. If the real fix is
   "pick correctly," find or build the actual ranking signal (here: permission count, already
   sitting in the DB) rather than dodging the ranking question by displaying the whole set.
+
+## #76 — a "5s ceiling" that only wrapped half the work is worse than no ceiling at all (2026-09-18)
+
+- **Problem**: `documentOcrService.ts` claimed OCR pre-fill "always resolves within 5s" via
+  `Promise.race([recognizeWithTimeout(buffer), timeout])`, but the race only wrapped
+  `worker.recognize()` — `getWorker()`'s `createWorker()` call ran before the race even started.
+  Live in QA: a compliance-document upload whose tesseract worker init hung didn't just miss the
+  5s budget, it froze the **entire Node event loop** — confirmed by `/api/health` going
+  unresponsive to every user, not just the uploader. Two occurrences of this during one QA session
+  exhausted the dev machine's swap and got `earlyoom` to kill the Vite dev server outright.
+- **Fix**: Moved the actual tesseract.js work into a dedicated `worker_threads` Worker
+  (`documentOcrWorker.ts`). The timeout now calls `worker.terminate()`, which ends the thread
+  regardless of what it's stuck on — a guarantee a same-thread `Promise.race` can never give
+  against a synchronous/blocking native or WASM call, because the timer itself needs the event
+  loop free to fire.
+- **Rule**: A documented timeout around a multi-step async operation (init + do-the-work) has to
+  wrap ALL of it, not just the step that seemed likely to be slow — the step you didn't bother
+  timing is exactly the one that eventually hangs. And when the risk is a blocking call (native
+  bindings, WASM init, anything that could occupy the OS thread synchronously), a same-thread
+  `Promise.race` is not a real backstop — only a separate thread/process with a hard `.terminate()`
+  actually bounds it, because a blocked event loop can't run the timer that was supposed to save it.
+
+## #77 — a bare "YYYY-MM-DD" parses as UTC midnight; lte() against it only matches that first instant (2026-09-18)
+
+- **Problem**: `publishRoster` and `listShifts` both compared a shift's `startDatetime` with
+  `lte()` against a bare "to" date string parsed via `new Date("YYYY-MM-DD")` — which is UTC
+  midnight, the very *first* instant of that day. Any shift starting later in the day (i.e. almost
+  every shift, in any timezone east of UTC or any evening shift at all) fell outside the range and
+  was silently dropped from the query — not published, not held back with a reason, just invisible.
+  `getWeekCalendar` already had the correct fix (`lt()` against the *next* day's midnight) with a
+  comment explaining exactly this bug, but it was never applied to its two siblings — found live
+  when publishing a roster reported "0 shifts published" with zero held-back reasons at all, for a
+  shift whose only real blocker (public holiday consent) had already been resolved.
+- **Fix**: Added one shared `parseFilterDateEnd()` helper (exclusive next-day boundary) and used it
+  with `lt()` in all three places instead of duplicating the `+24h` computation ad hoc.
+- **Rule**: When a comment in one function names a bug class ("lte() against a bare date only
+  matches its first instant") and the fix pattern, grep for every *sibling* function doing the same
+  bare-date range comparison — a documented fix that isn't propagated to the other call sites doing
+  the identical thing isn't a fixed bug class, it's a bug that now has one correct example and N
+  wrong ones sitting right next to it. This is the second time this general timezone/UTC-day bug
+  class has bitten this codebase (see `dates.ts`'s own doc comment, referenced in `rosterService.ts`
+  around `assertHolidayCalendarLoaded`) — worth a project-wide grep for `parseFilterDate\(` and
+  raw `new Date("YYYY-MM-DD")` comparisons the next time this class of bug is suspected anywhere.
+
+## #78 — `pnpm -w tsc` is not `pnpm tsc:check`; the former emits raw build output into every package's own `src/` (2026-09-18)
+
+- **Problem**: Ran `pnpm -w tsc` (not a defined script) at the repo root as an ad-hoc "full
+  typecheck," expecting `--noEmit` behaviour. Because it isn't a package.json script, pnpm resolved
+  it to the raw `tsc` binary against the root project-references tsconfig, which — for composite
+  referenced projects — emits `.js`/`.d.ts`/`.map` files even without `--noEmit` on the CLI (project
+  references require real emission for downstream projects to consume). This wrote 1,181 compiled
+  files directly into `packages/client/src/` alone (plus server, plus shared) — silently, no error,
+  "clean" exit. The client's compiled `.js` twins contain literal JSX syntax (tsc's `--jsx` output),
+  which Vite's `.js` loader can't parse, so the very next `pnpm test` run failed 42 of 49 client
+  test files with "invalid JS syntax" — looking exactly like a catastrophic regression, for a
+  session that hadn't touched any of those files.
+- **Fix**: `git clean -ndX` (dry run) confirmed every stray file was already gitignored — safe to
+  `git clean -fdX packages/{client,server,shared}/src` and delete them all, then re-ran with the
+  actual project scripts: `pnpm tsc:check` (→ `turbo run tsc:check`, each package's own
+  `tsc -b --noEmit` or `tsc --noEmit`) and `pnpm test`. Both clean afterward — confirming the
+  client-test carnage was 100% self-inflicted by the wrong command, not a real regression.
+- **Rule**: This repo's real regression-check commands are `pnpm tsc:check` and `pnpm test` (root
+  package.json scripts, each with a `--noEmit`-safe pipeline) — never a raw `pnpm -w tsc` or
+  `npx tsc` at the root. When a workspace uses TS project references (`composite: true`), a bare
+  `tsc` invocation without a script wrapper can emit real files into `src/` even though intuition
+  says a type-check-only command "obviously" wouldn't write anything. If a from-nowhere test
+  failure spans dozens of unrelated files right after a typecheck command, check `git status`
+  (or `find src -name "*.js" -newer package.json`) for stray compiled output before assuming a
+  real regression.
