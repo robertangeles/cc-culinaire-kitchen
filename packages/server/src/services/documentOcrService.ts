@@ -44,9 +44,20 @@ const OCR_TIMEOUT_MS = 5000;
 let warmWorker: Worker | null = null;
 let nextJobId = 1;
 
+// In dev this file runs as raw TypeScript under tsx; in prod it runs as
+// compiled JS under plain node. A worker_threads Worker does NOT inherit
+// tsx's module loader the way a normal `import` does — pointing at the
+// (nonexistent, in dev) .js sibling fails silently from the caller's side
+// (an 'error' event, never a 'message'), which looks identical to a slow
+// OCR call and just eats the 5s timeout on every single request. Dev needs
+// the .ts file plus an explicit tsx loader for that thread; prod needs the
+// compiled .js sibling with no special loader.
+const IS_DEV = import.meta.url.endsWith(".ts");
+const WORKER_URL = new URL(IS_DEV ? "./documentOcrWorker.ts" : "./documentOcrWorker.js", import.meta.url);
+
 function getWorkerThread(): Worker {
   if (warmWorker) return warmWorker;
-  const worker = new Worker(new URL("./documentOcrWorker.js", import.meta.url));
+  const worker = new Worker(WORKER_URL, IS_DEV ? { execArgv: ["--import", "tsx"] } : undefined);
   // A crash/exit orphans nothing to clean up — just stop treating it as warm.
   worker.once("exit", () => {
     if (warmWorker === worker) warmWorker = null;
