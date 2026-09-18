@@ -932,3 +932,51 @@ builds all tables with CHECKs enforcing. Stop it again when done.
   failure spans dozens of unrelated files right after a typecheck command, check `git status`
   (or `find src -name "*.js" -newer package.json`) for stray compiled output before assuming a
   real regression.
+
+## #79 — killing a long integration test early is worse than letting it run: it skips afterAll and leaves permanent debris (2026-09-18)
+
+- **Problem**: Wrapped slow real-DB `roster.integration.test.ts` runs in `timeout 90` twice
+  (against a suite where individual tests take 5-40s each over the known Singapore-latency
+  connection). Both got SIGTERM'd mid-suite, before the file's `afterAll` could run its cleanup —
+  leaving 2 entire fake organisations, 6 fixture users, and 122 dependent rows (shifts,
+  compliance_document, roster_role, audit_log, etc.) permanently orphaned in the shared dev DB.
+  This silently broke an UNRELATED test a session later: `compliance.integration.test.ts`'s expiry
+  scan asserted an exact global `scanned` count, which the leaked rows (plus one legitimate
+  document from this same session's own manual QA) inflated from 2 to 20, then to 3.
+- **Fix**: Ran the file to genuine completion with no artificial timeout (409s, all 38 passed,
+  confirmed cleanup fired correctly on an uninterrupted run) before concluding the cleanup logic
+  itself was fine. Deleted the 122 orphaned rows in FK-dependency order (shift_assignment → shift
+  → roster_role_document → roster_role → compliance_document → user_organisation → audit_log →
+  store_location → organisation → user). Separately fixed the OTHER test's fragile exact-count
+  assertion (see below) since real usage will always be able to add more matching documents.
+- **Rule**: Never wrap a real-DB integration test command in an aggressive `timeout` guessed from
+  how long it "should" take — check actual per-test timing first (or just don't cap it) if the
+  suite is unfamiliar. A killed test process skips `afterAll`/`finally` cleanup entirely, and for
+  a suite that creates real organisations/users, that debris doesn't just vanish — it accumulates
+  in the shared dev DB and can break some completely different test's assertions in a future
+  session, in a way that looks like a fresh regression but is actually inherited damage from an
+  impatient timeout weeks or sessions earlier.
+
+## #80 — an "exact count" assertion against a shared, growing database is a ticking test (2026-09-18)
+
+- **Problem**: `compliance.integration.test.ts`'s expiry-scan tests asserted
+  `expect(result).toEqual({ scanned: 2, notified: 1, expired: 1 })`. `scanned` comes from
+  `selectCandidates()` in `complianceExpiryJob.ts`, which is deliberately GLOBAL — no
+  `organisationId` filter, because the real production cron job has to scan every org, not one.
+  The test's exact-count assumption only ever held because the dev DB happened to have zero OTHER
+  non-Archived, dated compliance documents at the moment it was written. It broke for real the
+  moment that stopped being true (orphaned rows from #79, plus one legitimate document from a
+  manual QA session elsewhere in this same org).
+- **Fix**: Kept `notified`/`expired` as exact assertions — those two ARE correctly scoped, since
+  they only increment for documents that actually match today's specific rule/alert-day, which
+  nothing else in a shared DB would coincidentally do. Changed `scanned` to
+  `toBeGreaterThanOrEqual(2)` — a lower bound that verifies this test's own two documents were
+  included without asserting anything about what else exists in the database.
+- **Rule**: When a function is deliberately un-scoped (global by design, not by oversight — check
+  the function's own doc comment or its production call site before assuming it's a bug), a test
+  against a SHARED, persistent database can only assert exact counts for the fields that are
+  actually scoped to the test's own fixtures. Anything that aggregates across the whole table
+  (a total count, a sum, "how many rows exist") needs a lower-bound or delta assertion instead —
+  an exact equality there isn't testing the code, it's silently asserting "nothing else in this
+  database will ever change," which is false by construction in a DB other tests and other people
+  also write to.
