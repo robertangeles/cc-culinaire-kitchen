@@ -202,6 +202,7 @@ export function MyDocumentsList({ onUploadClick }: { onUploadClick?: () => void 
                   With your manager since {formatAuDate(new Date(doc.uploadedAt))}
                 </p>
               )}
+              {doc.verificationStatus === "Pending" && <NudgeButton doc={doc} />}
               {doc.verificationStatus === "Rejected" && doc.rejectionReason && !isEditing && !isViewing && (
                 <div className="mt-2 rounded-lg border border-red-500/30 bg-red-500/5 p-2 text-xs text-red-300">
                   <p className="font-medium text-red-400">What to fix</p>
@@ -223,6 +224,54 @@ export function MyDocumentsList({ onUploadClick }: { onUploadClick?: () => void 
           );
         })}
       </ul>
+    </div>
+  );
+}
+
+const NUDGE_ELIGIBLE_AFTER_HOURS = 48;
+
+/** CV-C7's "nudge" affordance — only renders once a Pending document has genuinely been waiting; the server re-checks the same 48h threshold, this is just so the button isn't offered before it would work. */
+function NudgeButton({ doc }: { doc: MyDocument }) {
+  const [state, setState] = useState<"idle" | "sending" | "sent" | "error">("idle");
+  const [error, setError] = useState<string | null>(null);
+
+  const hoursWaiting = (Date.now() - new Date(doc.uploadedAt).getTime()) / (60 * 60 * 1000);
+  if (hoursWaiting < NUDGE_ELIGIBLE_AFTER_HOURS) return null;
+
+  if (state === "sent") {
+    return <p className="mt-1 text-xs text-dark-600">Reminder sent.</p>;
+  }
+
+  async function handleNudge() {
+    setState("sending");
+    setError(null);
+    try {
+      const res = await fetch(`${API}/api/compliance/documents/${doc.complianceDocumentId}/nudge`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? "Couldn't send a reminder.");
+      }
+      setState("sent");
+    } catch (e) {
+      setState("error");
+      setError(e instanceof Error ? e.message : "Couldn't send a reminder.");
+    }
+  }
+
+  return (
+    <div className="mt-1">
+      <button
+        type="button"
+        onClick={handleNudge}
+        disabled={state === "sending"}
+        className="text-xs text-gold underline transition-colors hover:text-gold-hover disabled:opacity-50"
+      >
+        {state === "sending" ? "Sending…" : "Nudge your manager"}
+      </button>
+      {error && <p className="mt-0.5 text-xs text-red-400">{error}</p>}
     </div>
   );
 }

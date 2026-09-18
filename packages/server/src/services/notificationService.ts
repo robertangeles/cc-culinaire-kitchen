@@ -35,7 +35,8 @@ export type NotificationType =
   // "PUBLIC_HOLIDAY_..." would exceed `notification.type`'s varchar(30).
   | "HOLIDAY_CONSENT_REQUESTED"
   | "HOLIDAY_CONSENT_DECLINED"
-  | "SHIFT_SWAP_CLAIMED";
+  | "SHIFT_SWAP_CLAIMED"
+  | "COMPLIANCE_DOCUMENT_NUDGE";
 
 export type NotificationChannel = "IN_APP" | "EMAIL";
 

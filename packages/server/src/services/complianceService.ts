@@ -546,6 +546,65 @@ export async function rejectDocument(
   return updated;
 }
 
+const NUDGE_ELIGIBLE_AFTER_HOURS = 48;
+
+/**
+ * The staff member's "nudge" affordance on a Pending document that's been
+ * waiting 48+ hours (CV-C7). Own-document only (404, not 403, for anyone
+ * else's — same tenancy/ownership shape as every other document action);
+ * throttled to one nudge per 24h via the same hasRecentNotification()
+ * dedup the expiry job uses, so repeated clicks can't spam every verifier.
+ */
+export async function nudgeVerifier(orgId: number, documentId: string, callerUserId: number) {
+  const doc = await getDocumentRow(orgId, documentId);
+  if (!isOwnDocument(doc, callerUserId)) throw new ComplianceError("Document not found", 404);
+  if (doc.verificationStatus !== "Pending") {
+    throw new ComplianceError(
+      `Document is not pending verification (status: ${doc.verificationStatus})`,
+      409,
+    );
+  }
+
+  const hoursWaiting = (Date.now() - doc.uploadedAt.getTime()) / (60 * 60 * 1000);
+  if (hoursWaiting < NUDGE_ELIGIBLE_AFTER_HOURS) {
+    throw new ComplianceError(
+      `Not old enough to nudge yet — wait until it's been pending ${NUDGE_ELIGIBLE_AFTER_HOURS}h`,
+      409,
+    );
+  }
+
+  const { notifyHQAdmins, hasRecentNotification } = await import("./notificationService.js");
+  const alreadyNudged = await hasRecentNotification(
+    "compliance_document",
+    documentId,
+    "COMPLIANCE_DOCUMENT_NUDGE",
+    24,
+  );
+  if (alreadyNudged) {
+    throw new ComplianceError("Already nudged in the last 24 hours", 409);
+  }
+
+  const [staff] = await db.select({ userName: user.userName }).from(user).where(eq(user.userId, callerUserId));
+  const staffName = staff?.userName ?? "A staff member";
+  const { escapeHtml } = await import("../utils/escapeHtml.js");
+
+  await notifyHQAdmins(
+    orgId,
+    "COMPLIANCE_DOCUMENT_NUDGE",
+    { documentType: doc.documentType, staffName, hoursWaiting: Math.round(hoursWaiting) },
+    "compliance_document",
+    documentId,
+    `Reminder: ${staffName}'s ${doc.documentType} is still waiting on your review`,
+    `
+      <h2 style="color: #d97706; margin-bottom: 16px;">Verification reminder</h2>
+      <p><strong>Staff member:</strong> ${escapeHtml(staffName)}</p>
+      <p><strong>Document type:</strong> ${escapeHtml(doc.documentType)}</p>
+      <p>This document has been waiting on your review for over ${NUDGE_ELIGIBLE_AFTER_HOURS} hours.</p>
+    `,
+    "compliance:verify",
+  );
+}
+
 /** The HQ verification queue — oldest upload first. */
 export async function listPendingVerification(orgId: number) {
   return listDocumentsForOrg(orgId, { verificationStatus: "Pending" });

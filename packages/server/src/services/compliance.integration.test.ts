@@ -31,6 +31,7 @@ import {
   deleteDocument,
   verifyDocument,
   rejectDocument,
+  nudgeVerifier,
   getDocument,
   isOwnDocument,
   listStaffCompliance,
@@ -736,6 +737,96 @@ describe.skipIf(!RUN)("compliance vault (real DB)", () => {
         .from(notification)
         .where(eq(notification.relatedEntityId, alertDueId));
       expect(after).toHaveLength(1); // still exactly one — dedup held
+    });
+  });
+
+  // ── Group: nudge — CV-C7's staff-side reminder on an aged Pending doc ──
+  describe("nudge", () => {
+    let staffH: number;
+    let org5: number;
+    let docId: string;
+
+    beforeAll(async () => {
+      [{ userId: staffH }] = await db
+        .insert(user)
+        .values({ userName: "Compliance H", userEmail: `${tag}-h@it.test` })
+        .returning({ userId: user.userId });
+
+      [{ id: org5 }] = await db
+        .insert(organisation)
+        .values({ organisationName: `${tag}-org5`, joinKey: `${tag}-jk5`, createdBy: staffH })
+        .returning({ id: organisation.organisationId });
+
+      [{ id: docId }] = await db
+        .insert(complianceDocument)
+        .values({
+          organisationId: org5,
+          userId: staffH,
+          documentType: `${tag}-nudge-doc`,
+          storagePublicId: sp(org5, staffH, "nudge-1"),
+          verificationStatus: "Pending",
+          uploadedBy: staffH,
+        })
+        .returning({ id: complianceDocument.complianceDocumentId });
+    });
+
+    afterAll(async () => {
+      await db.delete(notification).where(eq(notification.organisationId, org5));
+      await db.delete(complianceDocument).where(eq(complianceDocument.organisationId, org5));
+      await db.delete(organisation).where(eq(organisation.organisationId, org5));
+      await db.delete(user).where(eq(user.userId, staffH));
+    });
+
+    it("refuses a nudge on a document that hasn't been waiting 48h yet", async () => {
+      await expect(nudgeVerifier(org5, docId, staffH)).rejects.toMatchObject({
+        message: expect.stringContaining("Not old enough"),
+        statusCode: 409,
+      });
+    });
+
+    it("404s a nudge attempt on someone else's document — never confirms it exists", async () => {
+      const [{ userId: otherStaff }] = await db
+        .insert(user)
+        .values({ userName: "Compliance H2", userEmail: `${tag}-h2@it.test` })
+        .returning({ userId: user.userId });
+      try {
+        await expect(nudgeVerifier(org5, docId, otherStaff)).rejects.toMatchObject({
+          message: "Document not found",
+          statusCode: 404,
+        });
+      } finally {
+        await db.delete(user).where(eq(user.userId, otherStaff));
+      }
+    });
+
+    it("succeeds once the document has genuinely been waiting 48h, then throttles a repeat within 24h", async () => {
+      await db
+        .update(complianceDocument)
+        .set({ uploadedAt: new Date(Date.now() - 50 * 60 * 60 * 1000) })
+        .where(eq(complianceDocument.complianceDocumentId, docId));
+
+      // Nobody in this fresh org holds compliance:verify, so notifyHQAdmins()
+      // has no one to actually notify — that's fine, nudgeVerifier must not
+      // throw over an empty recipient list. Manually verified with a real
+      // compliance:verify holder via live QA (docs/qa/rostering-compliance-
+      // test-plan.md, CV-C7): 3 recipients, in-app + email each.
+      await expect(nudgeVerifier(org5, docId, staffH)).resolves.toBeUndefined();
+
+      // Insert the notification row a real recipient would have gotten, so
+      // the throttle's hasRecentNotification() dedup check (keyed on
+      // relatedEntityId + type, not on who received it) has something to see.
+      await db.insert(notification).values({
+        organisationId: org5,
+        recipientUserId: staffH,
+        type: "COMPLIANCE_DOCUMENT_NUDGE",
+        relatedEntityType: "compliance_document",
+        relatedEntityId: docId,
+      });
+
+      await expect(nudgeVerifier(org5, docId, staffH)).rejects.toMatchObject({
+        message: expect.stringContaining("Already nudged"),
+        statusCode: 409,
+      });
     });
   });
 });

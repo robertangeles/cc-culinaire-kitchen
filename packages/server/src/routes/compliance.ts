@@ -28,6 +28,7 @@ import {
   handleCreateDocument,
   handleUpdateDocument,
   handleDeleteDocument,
+  handleNudgeDocument,
   handleUploadDocument,
   handleGetDocument,
   handleGetDocumentViewUrl,
@@ -92,6 +93,12 @@ router.delete(
   requirePermission("compliance:read-own"),
   complianceDocumentEditRateLimit,
   handleDeleteDocument,
+);
+router.post(
+  "/documents/:id/nudge",
+  requirePermission("compliance:read-own"),
+  complianceDocumentEditRateLimit,
+  handleNudgeDocument,
 );
 router.get(
   "/documents/:id/view-url",

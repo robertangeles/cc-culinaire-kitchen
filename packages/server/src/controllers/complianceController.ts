@@ -19,6 +19,7 @@ import {
   deleteDocument,
   verifyDocument,
   rejectDocument,
+  nudgeVerifier,
   getComplianceDashboard,
   listStaffCompliance,
   getComplianceStats,
@@ -296,6 +297,28 @@ export async function handleDeleteDocument(
       res.status(err.status).json({ error: err.message });
       return;
     }
+    handleServiceError(err, res, next);
+  }
+}
+
+/**
+ * POST /api/compliance/documents/:id/nudge — the staff member's own-document
+ * reminder to whoever holds compliance:verify, once a Pending document has
+ * been waiting 48+ hours (CV-C7). All the real rules (ownership, status,
+ * age, once-per-24h) live in nudgeVerifier — this just maps its errors.
+ */
+export async function handleNudgeDocument(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const ctx = await resolveContext(req, res);
+    if (!ctx) return;
+
+    await nudgeVerifier(ctx.orgId, req.params.id as string, req.user!.sub);
+    res.status(204).end();
+  } catch (err) {
     handleServiceError(err, res, next);
   }
 }

@@ -71,6 +71,15 @@ function Field({ label, value, ocr }: { label: string; value: string; ocr: boole
   );
 }
 
+/** CV-C7: "the item visibly ages for the manager" — plain gray under 24h, amber past it, red once it's crossed the 48h nudge threshold the staff side offers at. */
+function WaitingBadge({ uploadedAt }: { uploadedAt: string }) {
+  const hours = (Date.now() - new Date(uploadedAt).getTime()) / (60 * 60 * 1000);
+  const days = Math.floor(hours / 24);
+  const label = days >= 1 ? `Waiting ${days}d ${Math.round(hours % 24)}h` : `Waiting ${Math.round(hours)}h`;
+  const color = hours >= 48 ? "text-red-400" : hours >= 24 ? "text-amber-400" : "text-dark-600";
+  return <p className={`mt-1 text-xs font-medium ${color}`}>{label}</p>;
+}
+
 export function VerificationView({ onQueueChange }: { onQueueChange?: (remaining: number) => void }) {
   const [documents, setDocuments] = useState<QueueDocument[] | null>(null);
   const [total, setTotal] = useState(0);
@@ -238,6 +247,7 @@ export function VerificationView({ onQueueChange }: { onQueueChange?: (remaining
           <div>
             <p className="text-lg font-semibold text-[#FAFAFA]">{current.staffName ?? "Unknown staff member"}</p>
             <p className="text-sm text-dark-600">{ENGAGEMENT_LABEL[current.engagementType] ?? current.engagementType}</p>
+            <WaitingBadge uploadedAt={current.uploadedAt} />
           </div>
 
           <div className="grid grid-cols-2 gap-4 rounded-xl border border-dark-200 bg-dark-100 p-4">
