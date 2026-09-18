@@ -718,6 +718,38 @@ describe.skipIf(!RUN)("roster service (real DB)", () => {
     }
   });
 
+  // Regression: a shift starting late in the day on the "to" boundary date
+  // was silently dropped from the publish batch entirely — not published,
+  // not held back with a reason — because `to` (a bare "YYYY-MM-DD") parses
+  // as UTC midnight, and the query compared with lte() against that single
+  // instant instead of covering the whole day. getWeekCalendar already had
+  // the lt()-against-next-midnight fix; publishRoster and listShifts did not.
+  it("publishRoster includes a shift starting late in the day on the 'to' boundary date, not just at its first instant", async () => {
+    await db.insert(complianceDocument).values({
+      organisationId: orgA,
+      userId: userA,
+      documentType: docType,
+      verificationStatus: "Verified",
+      expiryDate: addDays(TODAY, 365),
+      storagePublicId: `${tag}-pub-boundary1`,
+      uploadedBy: userA,
+    });
+    const toDate = addDays(TODAY, 1);
+    const start = new Date(`${toDate}T23:00:00.000Z`);
+    const end = new Date(start.getTime() + 2 * 60 * 60 * 1000);
+    const s = await createShift(
+      orgA,
+      { storeLocationId: locA, rosterRoleId: roleId, startDatetime: start.toISOString(), endDatetime: end.toISOString() },
+      userA,
+    );
+    await assignStaff(orgA, s.shiftId, userA, userA);
+
+    const result = await publishRoster(orgA, locA, TODAY, toDate, userA);
+
+    expect(result.publishedShiftIds).toContain(s.shiftId);
+    expect(result.heldShifts.find((h) => h.shiftId === s.shiftId)).toBeUndefined();
+  });
+
   it("publishRoster fails loud when the venue's jurisdiction+year holiday calendar isn't loaded", async () => {
     // VIC/current-year is loaded (beforeAll); 2031 is not and never will be —
     // fails before any shift is even queried, so no fixture shift is needed.

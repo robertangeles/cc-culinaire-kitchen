@@ -261,11 +261,26 @@ function parseFilterDate(value: string): Date {
   return parsed;
 }
 
+/**
+ * Exclusive upper bound for a bare "to" calendar date. parseFilterDate()
+ * parses "YYYY-MM-DD" as UTC midnight, so an lte() against it only matches
+ * the very first instant of that day — asymmetric with a "from" gte(),
+ * which correctly covers its whole day forward. Compare with lt() against
+ * the NEXT day's midnight instead, so the "to" day is fully included
+ * regardless of how far a shift's real UTC instant sits from local
+ * midnight. (Originally fixed only in getWeekCalendar; listShifts and
+ * publishRoster had the same bug — a shift late in the day on the "to"
+ * date silently never matched either query.)
+ */
+function parseFilterDateEnd(value: string): Date {
+  return new Date(parseFilterDate(value).getTime() + 24 * 60 * 60 * 1000);
+}
+
 export async function listShifts(orgId: number, filters: ShiftFilters = {}) {
   const conditions = [eq(shift.organisationId, orgId)];
   if (filters.storeLocationId) conditions.push(eq(shift.storeLocationId, filters.storeLocationId));
   if (filters.from) conditions.push(gte(shift.startDatetime, parseFilterDate(filters.from)));
-  if (filters.to) conditions.push(lte(shift.startDatetime, parseFilterDate(filters.to)));
+  if (filters.to) conditions.push(lt(shift.startDatetime, parseFilterDateEnd(filters.to)));
   return db
     .select()
     .from(shift)
@@ -303,13 +318,7 @@ export async function getWeekCalendar(
 ): Promise<CalendarShift[]> {
   await assertLocationInOrg(storeLocationId, orgId);
   const fromDate = parseFilterDate(from);
-  // `to` is a bare calendar date, parsed as UTC midnight — lte() against
-  // that instant would only match the very first moment of that day,
-  // asymmetric with fromDate's gte() (which covers its whole day forward).
-  // Compare with lt() against the NEXT day's midnight instead, so the `to`
-  // day is fully included regardless of how far a shift's real UTC instant
-  // sits from local midnight in either direction.
-  const toDateExclusive = new Date(parseFilterDate(to).getTime() + 24 * 60 * 60 * 1000);
+  const toDateExclusive = parseFilterDateEnd(to);
 
   const rows = await db
     .select({
@@ -1386,6 +1395,11 @@ export async function publishRoster(
   const toDate = parseFilterDate(to);
   await assertHolidayCalendarLoaded(jurisdiction, fromDate, toDate);
 
+  // lt() against the exclusive next-day boundary, not lte() against toDate
+  // itself — see parseFilterDateEnd. A shift starting later in the day on
+  // the "to" date (UTC midnight is the very first instant of that day)
+  // would otherwise never be selected, silently excluded from the publish
+  // batch entirely rather than published or held back with a reason.
   const draftShifts = await db
     .select()
     .from(shift)
@@ -1395,7 +1409,7 @@ export async function publishRoster(
         eq(shift.storeLocationId, storeLocationId),
         eq(shift.status, "Draft"),
         gte(shift.startDatetime, fromDate),
-        lte(shift.startDatetime, toDate),
+        lt(shift.startDatetime, parseFilterDateEnd(to)),
       ),
     );
 
