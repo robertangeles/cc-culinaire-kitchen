@@ -251,7 +251,7 @@ export function SettingsLayout({
                   <button
                     role="tab"
                     aria-selected={isRosteringActive}
-                    aria-controls={`settings-tabpanel-${activeTab}`}
+                    aria-controls={`settings-tabpanel-${isRosteringActive ? activeTab : rosteringTabs[0].id}`}
                     id={`settings-tab-${ROSTERING_GROUP_ID}`}
                     tabIndex={isRosteringActive ? 0 : -1}
                     onClick={() => onTabChange(isRosteringActive ? activeTab : rosteringTabs[0].id)}

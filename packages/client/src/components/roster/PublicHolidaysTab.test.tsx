@@ -242,6 +242,36 @@ describe("PublicHolidaysTab", () => {
     expect(screen.queryByText("NSW Day")).not.toBeInTheDocument();
   });
 
+  it("REGRESSION: switching the jurisdiction pill rescopes the year to one that has data for the new jurisdiction", async () => {
+    // NSW has the current year; VIC only has an older year. Switching to VIC
+    // must not carry over NSW's year (which is empty for VIC).
+    stubOrgFetch("NSW");
+    listPublicHolidaysMock.mockResolvedValue([
+      holiday({ publicHolidayId: "nsw-current", jurisdiction: "NSW", loadedForYear: CURRENT_YEAR }),
+      holiday({ publicHolidayId: "vic-old", jurisdiction: "VIC", loadedForYear: CURRENT_YEAR - 2, holidayName: "VIC Old Day" }),
+    ]);
+    render(<PublicHolidaysTab />);
+    await waitFor(() => expect(screen.getByRole("tab", { name: "NSW" })).toHaveAttribute("aria-selected", "true"));
+    expect((screen.getByLabelText("Year") as HTMLSelectElement).value).toBe(String(CURRENT_YEAR));
+
+    fireEvent.click(screen.getByRole("tab", { name: "VIC" }));
+    expect((screen.getByLabelText("Year") as HTMLSelectElement).value).toBe(String(CURRENT_YEAR - 2));
+    expect(screen.getByText("VIC Old Day")).toBeInTheDocument();
+  });
+
+  it("REGRESSION: the Year select only offers years that have data for the active jurisdiction", async () => {
+    stubOrgFetch("NSW");
+    listPublicHolidaysMock.mockResolvedValue([
+      holiday({ publicHolidayId: "nsw-current", jurisdiction: "NSW", loadedForYear: CURRENT_YEAR }),
+      holiday({ publicHolidayId: "vic-future", jurisdiction: "VIC", loadedForYear: CURRENT_YEAR + 3 }),
+    ]);
+    render(<PublicHolidaysTab />);
+    await waitFor(() => expect(screen.getByLabelText("Year")).toBeInTheDocument());
+    expect(within(screen.getByLabelText("Year")).getAllByRole("option").map((o) => o.textContent)).toEqual([
+      String(CURRENT_YEAR),
+    ]);
+  });
+
   it("switching the year select updates the list instantly", async () => {
     stubOrgFetch("NSW");
     listPublicHolidaysMock.mockResolvedValue([
@@ -396,6 +426,38 @@ describe("PublicHolidaysTab", () => {
     // pointing at a year with no matching <option>.
     expect((screen.getByLabelText("Year") as HTMLSelectElement).value).toBe(String(CURRENT_YEAR));
     expect(screen.getByText("Current Year Day")).toBeInTheDocument();
+  });
+
+  it("REGRESSION: a slow delete resolving after the user switches jurisdiction re-syncs against the CURRENT filter, not a stale one", async () => {
+    // NSW's only holiday is the one being deleted; VIC has an unrelated
+    // holiday in a distinct year. If the post-delete re-sync used a stale
+    // closure (the filter as it was when Delete was clicked, i.e. NSW/2099)
+    // instead of reading it fresh, it would incorrectly reset activeYear
+    // after the user has already moved on to VIC.
+    stubOrgFetch("NSW");
+    const vicYear = CURRENT_YEAR + 5;
+    listPublicHolidaysMock.mockResolvedValue([
+      holiday({ publicHolidayId: "nsw-2099", jurisdiction: "NSW", loadedForYear: 2099, holidayDate: "2099-01-01", holidayName: "NSW Day" }),
+      holiday({ publicHolidayId: "vic-far", jurisdiction: "VIC", loadedForYear: vicYear, holidayName: "VIC Far Day" }),
+    ]);
+    let resolveDelete!: () => void;
+    deletePublicHolidayMock.mockReturnValue(new Promise<void>((resolve) => (resolveDelete = () => resolve())));
+    render(<PublicHolidaysTab />);
+    await waitFor(() => expect(screen.getByText("NSW Day")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: /remove nsw day/i }));
+
+    // While the delete is still in flight, switch to VIC.
+    fireEvent.click(screen.getByRole("tab", { name: "VIC" }));
+    expect(screen.getByText("VIC Far Day")).toBeInTheDocument();
+    expect((screen.getByLabelText("Year") as HTMLSelectElement).value).toBe(String(vicYear));
+
+    resolveDelete();
+    await waitFor(() => expect(deletePublicHolidayMock).toHaveBeenCalled());
+    // Give the post-await state updates a tick to flush.
+    await waitFor(() => expect(screen.getByText("VIC Far Day")).toBeInTheDocument());
+    expect(screen.getByRole("tab", { name: "VIC" })).toHaveAttribute("aria-selected", "true");
+    expect((screen.getByLabelText("Year") as HTMLSelectElement).value).toBe(String(vicYear));
   });
 
   it("leaves the row in place on a failed delete (pre-existing silent no-op)", async () => {

@@ -13,7 +13,7 @@
  * for the full design + eng review.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { CalendarOff, Loader2, Plus, Trash2 } from "lucide-react";
 import { useHasPermission } from "../../hooks/useHasPermission.js";
 import {
@@ -57,6 +57,13 @@ function pickDefaultYear(loadedYears: number[]): number {
   })[0];
 }
 
+/** Distinct loadedForYear values for one jurisdiction, newest first. */
+function loadedYearsFor(holidays: PublicHoliday[], jurisdiction: string): number[] {
+  return [...new Set(holidays.filter((h) => h.jurisdiction === jurisdiction).map((h) => h.loadedForYear))].sort(
+    (a, b) => b - a,
+  );
+}
+
 /** "2026-01-01" -> "Thu, 1 Jan 2026". Matches the approved mockup. */
 function formatHolidayDate(isoDate: string): string {
   return new Date(`${isoDate}T00:00:00`).toLocaleDateString("en-AU", {
@@ -97,6 +104,14 @@ export function PublicHolidaysTab() {
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
+  // Always-fresh mirror of the active filter for async callbacks (e.g. a
+  // delete in flight) that must not act on a stale closure if the user
+  // switches jurisdiction/year before the request resolves.
+  const activeFilterRef = useRef({ jurisdiction: activeJurisdiction, year: activeYear });
+  useEffect(() => {
+    activeFilterRef.current = { jurisdiction: activeJurisdiction, year: activeYear };
+  }, [activeJurisdiction, activeYear]);
+
   const load = useCallback(async () => {
     setStatus("loading");
     try {
@@ -118,13 +133,7 @@ export function PublicHolidaysTab() {
       // "best available year" must mean best available FOR THIS jurisdiction,
       // or it can default to a jurisdiction+year pair that has no data even
       // though the jurisdiction itself does (elsewhere).
-      setActiveYear(
-        pickDefaultYear([
-          ...new Set(
-            loaded.filter((h) => h.jurisdiction === resolvedJurisdiction).map((h) => h.loadedForYear),
-          ),
-        ]),
-      );
+      setActiveYear(pickDefaultYear(loadedYearsFor(loaded, resolvedJurisdiction)));
       setStatus("ready");
     } catch {
       setStatus("error");
@@ -134,6 +143,16 @@ export function PublicHolidaysTab() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Switching jurisdiction must rescope the year too — the previously
+  // active year may not exist for the newly selected jurisdiction (a
+  // multi-jurisdiction org can have different years loaded per state).
+  // Same bug class as load()'s initial default, just triggered by a click
+  // instead of the first fetch.
+  function selectJurisdiction(jurisdiction: string) {
+    setActiveJurisdiction(jurisdiction);
+    setActiveYear(pickDefaultYear(loadedYearsFor(holidays, jurisdiction)));
+  }
 
   function openAdd() {
     setForm({ ...emptyForm, jurisdiction: activeJurisdiction });
@@ -191,20 +210,22 @@ export function PublicHolidaysTab() {
     setDeletingId(id);
     try {
       await deletePublicHoliday(id);
-      setHolidays((prev) => {
-        const next = prev.filter((h) => h.publicHolidayId !== id);
-        // If that was the last holiday for the active jurisdiction+year, the
-        // Year select's options no longer include activeYear — its <select>
-        // would show a value with no matching <option>. Re-sync the same way
-        // load() picks a default.
-        const yearsForJurisdiction = [
-          ...new Set(next.filter((h) => h.jurisdiction === activeJurisdiction).map((h) => h.loadedForYear)),
-        ];
-        if (!yearsForJurisdiction.includes(activeYear)) {
-          setActiveYear(pickDefaultYear(yearsForJurisdiction));
-        }
-        return next;
-      });
+      setHolidays((prev) => prev.filter((h) => h.publicHolidayId !== id));
+      // If that was the last holiday for the active jurisdiction+year, the
+      // Year select's options no longer include activeYear — its <select>
+      // would show a value with no matching <option>. Re-sync the same way
+      // load() picks a default. Computed from `holidays` (this render's
+      // closure, not React's deferred functional-updater result — that
+      // isn't guaranteed to run synchronously) and activeFilterRef (not
+      // activeJurisdiction/activeYear directly — the user may have switched
+      // jurisdiction/year while this delete was in flight, and re-syncing
+      // against a stale filter would clobber the one they've since switched to).
+      const { jurisdiction, year } = activeFilterRef.current;
+      const remainingYears = loadedYearsFor(
+        holidays.filter((h) => h.publicHolidayId !== id),
+        jurisdiction,
+      );
+      if (!remainingYears.includes(year)) setActiveYear(pickDefaultYear(remainingYears));
     } catch {
       // ponytail: silent no-op on failed delete, row simply stays — add a
       // toast if this turns out to be confusing in practice.
@@ -236,8 +257,11 @@ export function PublicHolidaysTab() {
     );
   }
 
-  const loadedYears = [...new Set(holidays.map((h) => h.loadedForYear))].sort((a, b) => b - a);
-  const yearOptions = loadedYears.length > 0 ? loadedYears : [new Date().getFullYear()];
+  // Scoped to the active jurisdiction — showing a year with no data for
+  // this jurisdiction just because another jurisdiction has it is exactly
+  // the false-empty trap this component exists to avoid.
+  const yearsForActiveJurisdiction = loadedYearsFor(holidays, activeJurisdiction);
+  const yearOptions = yearsForActiveJurisdiction.length > 0 ? yearsForActiveJurisdiction : [new Date().getFullYear()];
   const filteredHolidays = holidays
     .filter((h) => h.jurisdiction === activeJurisdiction && h.loadedForYear === activeYear)
     .sort((a, b) => a.holidayDate.localeCompare(b.holidayDate));
@@ -278,7 +302,7 @@ export function PublicHolidaysTab() {
                 type="button"
                 role="tab"
                 aria-selected={activeJurisdiction === j}
-                onClick={() => setActiveJurisdiction(j)}
+                onClick={() => selectJurisdiction(j)}
                 className={`shrink-0 rounded-lg px-4 py-2 text-sm font-medium transition-all ${
                   activeJurisdiction === j
                     ? "bg-gold text-dark"
