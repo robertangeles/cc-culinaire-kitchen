@@ -3,7 +3,7 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { mondayOfWeek, addDaysIso } from "../../lib/rosterCalendarMath.js";
+import { mondayOfWeek, addDaysIso, localDayIso } from "../../lib/rosterCalendarMath.js";
 
 /**
  * A shift spanning multiple calendar days renders once, in its start day's
@@ -14,7 +14,16 @@ import { mondayOfWeek, addDaysIso } from "../../lib/rosterCalendarMath.js";
  * instead of looking like ordinary single-day shifts.
  */
 
-const weekStartIso = mondayOfWeek(new Date().toISOString().slice(0, 10));
+// localDayIso, never .toISOString().slice(0, 10) — the component's own
+// todayIso() carries this exact warning: in this app's AU deployment
+// timezone, any local time before ~10-11am is still the previous UTC day,
+// so a bare UTC slice here computes last week's Monday while the component
+// (which correctly uses localDayIso) renders the real current week —
+// every fixture then falls outside the visible range and no shift blocks
+// render. Confirmed live: this test suite passed the evening before and
+// failed the next morning with no code changes, at exactly that clock
+// window.
+const weekStartIso = mondayOfWeek(localDayIso(new Date()));
 
 // Local-constructor, not a raw "...Z" string: this component's day math is
 // explicitly browser-local (see rosterCalendarMath's own module doc), so an
