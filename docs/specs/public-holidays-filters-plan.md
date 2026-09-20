@@ -231,35 +231,35 @@ kind of cross-component interaction unit tests are weakest at catching.
 Synthesized from this review's findings. Each task derives from a specific
 finding above. Run with Claude Code or Codex; checkbox as you ship.
 
-- [ ] **T1 (P1, human: ~1.5h / CC: ~20min)** — PublicHolidaysTab — Add jurisdiction pill filter + Year select toolbar, wired to the org's default jurisdiction
+- [x] **T1 (P1, human: ~1.5h / CC: ~20min)** — PublicHolidaysTab — Add jurisdiction pill filter + Year select toolbar, wired to the org's default jurisdiction
   - Surfaced by: Pass 1 (Information Architecture); eng review outside voice (default-jurisdiction sourcing, year tie-break)
   - Files: `packages/client/src/components/roster/PublicHolidaysTab.tsx`; a small new client fetch for the current org's `defaultJurisdiction` (no existing hook exposes it — `LocationContext` already has `organisationId` to call `GET /api/organisations/:id` with)
   - Verify: (a) load tab, confirm the org's `default_jurisdiction` (or NSW if unset) + best-available year (ties prefer future) shown by default; (b) click another state pill, list updates instantly; (c) brand-new org (zero years loaded) shows current year as the only Year option and lands on the filtered-empty state; (d) an org with `default_jurisdiction` set to e.g. VIC opens on VIC, not NSW
-- [ ] **T2 (P1, human: ~1h / CC: ~15min)** — PublicHolidaysTab — Replace flat row-list with a real `<table>` + footer count line + mobile horizontal scroll + row hover state
+- [x] **T2 (P1, human: ~1h / CC: ~15min)** — PublicHolidaysTab — Replace flat row-list with a real `<table>` + footer count line + mobile horizontal scroll + row hover state
   - Surfaced by: Approved mockup (variant C); Pass 5 (Design System Alignment); Pass 6 (a11y — table semantics; mobile — table scroll, found by independent review)
   - Files: `packages/client/src/components/roster/PublicHolidaysTab.tsx`
   - Verify: screen reader announces column headers; footer reads "Showing N holidays for {state} in {year}"; rows sorted date-ascending; 375px viewport scrolls the table horizontally in its own container; row hover state visible
-- [ ] **T3 (P1, human: ~20min / CC: ~5min)** — PublicHolidaysTab — Context-specific empty state for filtered zero-results, gated by `!showAdd`
+- [x] **T3 (P1, human: ~20min / CC: ~5min)** — PublicHolidaysTab — Context-specific empty state for filtered zero-results, gated by `!showAdd`
   - Surfaced by: Pass 2 (Interaction State Coverage); edge case (Add panel open + filtered-empty) found by independent review
   - Files: `packages/client/src/components/roster/PublicHolidaysTab.tsx`
   - Verify: (a) filter to a state/year with no loaded data, confirm message names the state+year; (b) open Add panel while filtered-empty, confirm the empty-state block does NOT also render underneath it
-- [ ] **T4 (P1, human: ~30min / CC: ~10min)** — PublicHolidaysTab — Add-holiday form defaults to active filter; active filter auto-switches to the saved holiday on success
+- [x] **T4 (P1, human: ~30min / CC: ~10min)** — PublicHolidaysTab — Add-holiday form defaults to active filter; active filter auto-switches to the saved holiday on success
   - Surfaced by: Pass 7 (form default); CRITICAL invisible-add-after-save gap found by independent review
   - Files: `packages/client/src/components/roster/PublicHolidaysTab.tsx`
   - Verify: (a) filter to VIC, click Add holiday, confirm jurisdiction dropdown opens on VIC; (b) add a holiday for a DIFFERENT jurisdiction/year than the active filter, confirm the filter switches to match and the new row is visible immediately, not silently hidden
-- [ ] **T5 (P2, human: ~20min / CC: ~10min)** — PublicHolidaysTab — Mobile horizontal-scroll for jurisdiction pill row
+- [x] **T5 (P2, human: ~20min / CC: ~10min)** — PublicHolidaysTab — Mobile horizontal-scroll for jurisdiction pill row
   - Surfaced by: Pass 6 (Responsive)
   - Files: `packages/client/src/components/roster/PublicHolidaysTab.tsx`
   - Verify: 375px viewport, all 8 pills reachable via horizontal scroll, no wrap
-- [ ] **T7 (P1, human: ~30min / CC: ~10min)** — PublicHolidaysTab — Regression test for `handleAdd`'s changed behavior
+- [x] **T7 (P1, human: ~30min / CC: ~10min)** — PublicHolidaysTab — Regression test for `handleAdd`'s changed behavior
   - Surfaced by: eng review Test section — IRON RULE (existing behavior modified, zero prior coverage)
   - Files: `packages/client/src/components/roster/PublicHolidaysTab.test.tsx` (new)
   - Verify: `pnpm --filter @culinaire/client test PublicHolidaysTab`
-- [ ] **T8 (P1, human: ~2h / CC: ~30min)** — PublicHolidaysTab — Full RTL component test suite (all 17 diagrammed paths)
+- [x] **T8 (P1, human: ~2h / CC: ~30min)** — PublicHolidaysTab — Full RTL component test suite (all 17 diagrammed paths)
   - Surfaced by: eng review Test section — 0% existing coverage, CLAUDE.md testing mandate
   - Files: `packages/client/src/components/roster/PublicHolidaysTab.test.tsx`
   - Verify: `pnpm --filter @culinaire/client test PublicHolidaysTab`
-- [ ] **T9 (P1, human: ~45min / CC: ~15min)** — E2E — Critical-journey Playwright spec
+- [x] **T9 (P1, human: ~45min / CC: ~15min)** — E2E — Critical-journey Playwright spec
   - Surfaced by: eng review Test section — auto-switch-on-save is the design review's critical finding
   - Files: `packages/client/tests/e2e/public-holidays.spec.ts` (new)
   - Verify: `pnpm --filter @culinaire/client test:e2e public-holidays`
