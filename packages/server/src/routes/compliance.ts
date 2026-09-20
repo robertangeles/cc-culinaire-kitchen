@@ -29,6 +29,7 @@ import {
   handleUpdateDocument,
   handleDeleteDocument,
   handleNudgeDocument,
+  handleCreateVenueDocument,
   handleUploadDocument,
   handleGetDocument,
   handleGetDocumentViewUrl,
@@ -75,6 +76,14 @@ const documentUpload = multer({
 
 router.get("/documents/mine", requirePermission("compliance:read-own"), handleListMyDocuments);
 router.post("/documents", requirePermission("compliance:read-own"), handleCreateDocument);
+// CV-E: a venue document has no staff subject, so it's gated on verify (a
+// manager action), not read-own (which is a staff-subject self-upload).
+router.post(
+  "/documents/venue",
+  requirePermission("compliance:verify"),
+  complianceDocumentEditRateLimit,
+  handleCreateVenueDocument,
+);
 router.post(
   "/documents/upload",
   requirePermission("compliance:read-own"),

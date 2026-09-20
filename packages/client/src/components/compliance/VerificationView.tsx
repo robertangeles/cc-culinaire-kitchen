@@ -25,8 +25,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Loader2, CheckCircle2, ImageOff } from "lucide-react";
-import { formatAuDate } from "@culinaire/shared";
+import { formatAuDate, NUDGE_ELIGIBLE_AFTER_HOURS } from "@culinaire/shared";
 import { EmptyState } from "../ui/EmptyState.js";
+import { VenueDocumentForm } from "./VenueDocumentForm.js";
 
 const API = import.meta.env.VITE_API_URL ?? "";
 
@@ -39,6 +40,9 @@ interface QueueDocument {
   expiryDate: string | null;
   issuingJurisdiction: string | null;
   staffName: string | null;
+  /** CV-E: set instead of staffName when the document's subject is a venue, not a person. */
+  subjectStoreLocationId?: string | null;
+  locationName?: string | null;
   uploadedAt: string;
   /** See BACKEND GAP above — currently always undefined. */
   ocrFilledFields?: string[];
@@ -76,7 +80,7 @@ function WaitingBadge({ uploadedAt }: { uploadedAt: string }) {
   const hours = (Date.now() - new Date(uploadedAt).getTime()) / (60 * 60 * 1000);
   const days = Math.floor(hours / 24);
   const label = days >= 1 ? `Waiting ${days}d ${Math.round(hours % 24)}h` : `Waiting ${Math.round(hours)}h`;
-  const color = hours >= 48 ? "text-red-400" : hours >= 24 ? "text-amber-400" : "text-dark-600";
+  const color = hours >= NUDGE_ELIGIBLE_AFTER_HOURS ? "text-red-400" : hours >= 24 ? "text-amber-400" : "text-dark-600";
   return <p className={`mt-1 text-xs font-medium ${color}`}>{label}</p>;
 }
 
@@ -195,12 +199,15 @@ export function VerificationView({ onQueueChange }: { onQueueChange?: (remaining
 
   if (!current) {
     return (
-      <EmptyState
-        icon={CheckCircle2}
-        title="All caught up"
-        body="No documents are waiting for review right now."
-        variant="invitation"
-      />
+      <div className="flex flex-col gap-4">
+        <EmptyState
+          icon={CheckCircle2}
+          title="All caught up"
+          body="No documents are waiting for review right now."
+          variant="invitation"
+        />
+        <VenueDocumentForm />
+      </div>
     );
   }
 
@@ -225,6 +232,10 @@ export function VerificationView({ onQueueChange }: { onQueueChange?: (remaining
         </div>
       </div>
 
+      <div className="mt-4">
+        <VenueDocumentForm />
+      </div>
+
       <div className="mt-4 flex flex-col gap-4 lg:flex-row">
         <div className="flex min-h-[320px] items-center justify-center overflow-hidden rounded-xl border border-dark-200 bg-dark-100 lg:min-h-[520px] lg:w-[55%]">
           {imageLoading && <Loader2 className="size-6 animate-spin text-gold" />}
@@ -237,7 +248,7 @@ export function VerificationView({ onQueueChange }: { onQueueChange?: (remaining
           {!imageLoading && !imageError && imageUrl && (
             <iframe
               src={imageUrl}
-              title={`${current.documentType} document for ${current.staffName ?? "staff member"}`}
+              title={`${current.documentType} document for ${current.subjectStoreLocationId ? (current.locationName ?? "a venue") : (current.staffName ?? "a staff member")}`}
               className="h-full min-h-[320px] w-full lg:min-h-[520px]"
             />
           )}
@@ -245,8 +256,17 @@ export function VerificationView({ onQueueChange }: { onQueueChange?: (remaining
 
         <div className="flex flex-col gap-5 lg:w-[45%]">
           <div>
-            <p className="text-lg font-semibold text-[#FAFAFA]">{current.staffName ?? "Unknown staff member"}</p>
-            <p className="text-sm text-dark-600">{ENGAGEMENT_LABEL[current.engagementType] ?? current.engagementType}</p>
+            {current.subjectStoreLocationId ? (
+              <>
+                <p className="text-lg font-semibold text-[#FAFAFA]">{current.locationName ?? "Unknown venue"}</p>
+                <p className="text-sm text-dark-600">Venue document</p>
+              </>
+            ) : (
+              <>
+                <p className="text-lg font-semibold text-[#FAFAFA]">{current.staffName ?? "Unknown staff member"}</p>
+                <p className="text-sm text-dark-600">{ENGAGEMENT_LABEL[current.engagementType] ?? current.engagementType}</p>
+              </>
+            )}
             <WaitingBadge uploadedAt={current.uploadedAt} />
           </div>
 

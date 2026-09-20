@@ -22,7 +22,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Camera, Eye, ImageOff, Loader2, Pencil, Trash2, X } from "lucide-react";
-import { formatAuDate } from "@culinaire/shared";
+import { formatAuDate, NUDGE_ELIGIBLE_AFTER_HOURS } from "@culinaire/shared";
 import { EmptyState } from "../ui/EmptyState.js";
 import { StatusPill, type StatusPillVariant } from "../ui/StatusPill.js";
 import { AU_STATES, inputClass } from "./documentFormShared.js";
@@ -227,8 +227,6 @@ export function MyDocumentsList({ onUploadClick }: { onUploadClick?: () => void 
     </div>
   );
 }
-
-const NUDGE_ELIGIBLE_AFTER_HOURS = 48;
 
 /** CV-C7's "nudge" affordance — only renders once a Pending document has genuinely been waiting; the server re-checks the same 48h threshold, this is just so the button isn't offered before it would work. */
 function NudgeButton({ doc }: { doc: MyDocument }) {

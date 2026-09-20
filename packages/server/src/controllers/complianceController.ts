@@ -79,6 +79,20 @@ const CreateDocumentSchema = z.object({
   notes: z.string().max(2000).nullable().optional(),
 });
 
+/** CV-E: a venue document has no staff subject — its subject IS the venue. */
+const CreateVenueDocumentSchema = z.object({
+  documentType: z.string().min(1).max(40),
+  storeLocationId: z.string().uuid(),
+  documentNumber: z.string().max(100).nullable().optional(),
+  issueDate: z.string().min(1).nullable().optional(),
+  expiryDate: z.string().min(1).nullable().optional(),
+  issuingAuthority: z.string().max(200).nullable().optional(),
+  issuingJurisdiction: z.string().max(3).nullable().optional(),
+  storagePublicId: z.string().min(1).max(255),
+  storageFormat: z.enum(STORAGE_FORMATS).nullable().optional(),
+  notes: z.string().max(2000).nullable().optional(),
+});
+
 // notes is deliberately absent — schema.ts documents compliance_document.notes
 // as "Manager-only free text. Sanitised before it can reach any model
 // prompt." The ownership guard on this route lets the document's SUBJECT
@@ -184,6 +198,44 @@ export async function handleCreateDocument(
     logger.info(
       { complianceDocumentId: doc.complianceDocumentId, userId: req.user!.sub },
       "Compliance document uploaded",
+    );
+    res.status(201).json(doc);
+  } catch (err) {
+    handleServiceError(err, res, next);
+  }
+}
+
+/**
+ * POST /api/compliance/documents/venue (CV-E) — a document whose subject is a
+ * venue (liquor licence, food business registration), not a staff member.
+ * Gated at compliance:verify, not compliance:read-own — there is no "self"
+ * for a venue, so this is a manager action, not a self-upload.
+ */
+export async function handleCreateVenueDocument(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const ctx = await resolveContext(req, res);
+    if (!ctx) return;
+
+    const parsed = CreateVenueDocumentSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.errors[0]?.message ?? "Invalid input" });
+      return;
+    }
+
+    const { storeLocationId, ...rest } = parsed.data;
+    const doc = await createDocument(ctx.orgId, {
+      ...rest,
+      userId: null,
+      subjectStoreLocationId: storeLocationId,
+      uploadedBy: req.user!.sub,
+    });
+    logger.info(
+      { complianceDocumentId: doc.complianceDocumentId, storeLocationId, userId: req.user!.sub },
+      "Venue compliance document uploaded",
     );
     res.status(201).json(doc);
   } catch (err) {
@@ -346,9 +398,13 @@ export async function handleGetDocumentViewUrl(
     // the document exists.
     const doc = await getDocument(ctx.orgId, req.params.id as string);
 
+    // An Archived document (offboarding, or a superseded upload) must never
+    // mint a signed URL again, regardless of ownership or permission — that
+    // refusal is the entire point of archiving on offboard (CV-K1/K2).
     const granted =
-      isOwnDocument(doc, req.user!.sub) ||
-      hasPermission(req.user!, "compliance:read-all", "compliance:verify");
+      doc.verificationStatus !== "Archived" &&
+      (isOwnDocument(doc, req.user!.sub) ||
+        hasPermission(req.user!, "compliance:read-all", "compliance:verify"));
 
     // Always call through — signedUrlForDocument writes the access-log row
     // for denials too, which is the record that matters when investigating

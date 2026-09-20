@@ -48,9 +48,16 @@ function OcrMark() {
   );
 }
 
+const ENGAGEMENT_TYPES: { value: "employee" | "contractor" | "agency"; label: string }[] = [
+  { value: "employee", label: "Employee" },
+  { value: "contractor", label: "Contractor" },
+  { value: "agency", label: "Agency staff" },
+];
+
 export function DocumentUploadForm({ onUploaded }: { onUploaded?: () => void }) {
   const [documentType, setDocumentType] = useState("");
   const [otherType, setOtherType] = useState("");
+  const [engagementType, setEngagementType] = useState<"employee" | "contractor" | "agency">("employee");
   const [file, setFile] = useState<File | null>(null);
   const [storagePublicId, setStoragePublicId] = useState<string | null>(null);
   const [storageFormat, setStorageFormat] = useState<string | null>(null);
@@ -74,6 +81,7 @@ export function DocumentUploadForm({ onUploaded }: { onUploaded?: () => void }) 
   function reset() {
     setDocumentType("");
     setOtherType("");
+    setEngagementType("employee");
     setFile(null);
     setStoragePublicId(null);
     setStorageFormat(null);
@@ -149,6 +157,7 @@ export function DocumentUploadForm({ onUploaded }: { onUploaded?: () => void }) 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           documentType: effectiveType,
+          engagementType,
           documentNumber: documentNumber.trim() || null,
           issueDate: issueDate || null,
           expiryDate: expiryDate || null,
@@ -212,6 +221,24 @@ export function DocumentUploadForm({ onUploaded }: { onUploaded?: () => void }) 
             className={inputClass}
           />
         )}
+      </div>
+
+      <div>
+        <label htmlFor="engagement-type" className="text-xs font-medium text-dark-600">
+          I'm working here as a
+        </label>
+        <select
+          id="engagement-type"
+          value={engagementType}
+          onChange={(e) => setEngagementType(e.target.value as "employee" | "contractor" | "agency")}
+          className={inputClass}
+        >
+          {ENGAGEMENT_TYPES.map((t) => (
+            <option key={t.value} value={t.value}>
+              {t.label}
+            </option>
+          ))}
+        </select>
       </div>
 
       <div>

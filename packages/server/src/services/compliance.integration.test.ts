@@ -11,13 +11,15 @@ import { applyEnvPrefix } from "../utils/envShim.js";
 config({ path: resolve(dirname(fileURLToPath(import.meta.url)), "../../../../.env") });
 applyEnvPrefix();
 
-import { eq, inArray, and, isNull } from "drizzle-orm";
+import { eq, inArray, and, isNull, desc } from "drizzle-orm";
 import { db } from "../db/index.js";
 import {
   organisation,
   user,
   userOrganisation,
+  storeLocation,
   complianceDocument,
+  documentAccessLog,
   documentExpiryRule,
   documentExpiryRuleAlertDay,
   organisationRequiredDocument,
@@ -40,6 +42,8 @@ import {
   upsertExpiryRule,
 } from "./complianceService.js";
 import { runExpiryScan } from "./complianceExpiryJob.js";
+import { archiveForOffboardedStaff } from "./complianceRetentionService.js";
+import { handleGetDocumentViewUrl } from "../controllers/complianceController.js";
 
 /**
  * Real-database behaviour of the Compliance Vault, end to end against Postgres.
@@ -784,6 +788,29 @@ describe.skipIf(!RUN)("compliance vault (real DB)", () => {
       });
     });
 
+    it("refuses a nudge on a document that is not Pending, regardless of age", async () => {
+      const [{ id: verifiedDocId }] = await db
+        .insert(complianceDocument)
+        .values({
+          organisationId: org5,
+          userId: staffH,
+          documentType: `${tag}-nudge-verified-doc`,
+          storagePublicId: sp(org5, staffH, "nudge-verified-1"),
+          verificationStatus: "Verified",
+          uploadedBy: staffH,
+        })
+        .returning({ id: complianceDocument.complianceDocumentId });
+
+      try {
+        await expect(nudgeVerifier(org5, verifiedDocId, staffH)).rejects.toMatchObject({
+          message: expect.stringContaining("is not pending verification"),
+          statusCode: 409,
+        });
+      } finally {
+        await db.delete(complianceDocument).where(eq(complianceDocument.complianceDocumentId, verifiedDocId));
+      }
+    });
+
     it("404s a nudge attempt on someone else's document — never confirms it exists", async () => {
       const [{ userId: otherStaff }] = await db
         .insert(user)
@@ -827,6 +854,235 @@ describe.skipIf(!RUN)("compliance vault (real DB)", () => {
         message: expect.stringContaining("Already nudged"),
         statusCode: 409,
       });
+    });
+  });
+
+  // ── CV-E: venue-level (org-wide) compliance documents ───────────────────
+  describe("venue documents", () => {
+    let manager: number;
+    let org6: number;
+    let otherOrg: number;
+    let loc6: string;
+    let otherOrgLoc: string;
+
+    beforeAll(async () => {
+      [{ userId: manager }] = await db
+        .insert(user)
+        .values({ userName: "Compliance Manager", userEmail: `${tag}-mgr@it.test` })
+        .returning({ userId: user.userId });
+
+      [{ id: org6 }] = await db
+        .insert(organisation)
+        .values({ organisationName: `${tag}-org6`, joinKey: `${tag}-jk6`, createdBy: manager })
+        .returning({ id: organisation.organisationId });
+
+      [{ id: loc6 }] = await db
+        .insert(storeLocation)
+        .values({
+          organisationId: org6,
+          locationName: `${tag}-venue6`,
+          storeKey: `${tag}-sk6`.slice(0, 25),
+          createdBy: manager,
+        })
+        .returning({ id: storeLocation.storeLocationId });
+
+      // A location in a DIFFERENT org, to prove a venue document can't be
+      // pointed at another tenant's venue.
+      [{ id: otherOrg }] = await db
+        .insert(organisation)
+        .values({ organisationName: `${tag}-org6b`, joinKey: `${tag}-jk6b`, createdBy: manager })
+        .returning({ id: organisation.organisationId });
+      [{ id: otherOrgLoc }] = await db
+        .insert(storeLocation)
+        .values({
+          organisationId: otherOrg,
+          locationName: `${tag}-venue6b`,
+          storeKey: `${tag}-sk6b`.slice(0, 25),
+          createdBy: manager,
+        })
+        .returning({ id: storeLocation.storeLocationId });
+    });
+
+    afterAll(async () => {
+      // createDocument audit-logs the insert (auditService.log), so org6 has
+      // an audit_log row FK'd to it — delete it before the organisation.
+      await db.delete(auditLog).where(eq(auditLog.organisationId, org6));
+      await db.delete(complianceDocument).where(eq(complianceDocument.organisationId, org6));
+      await db.delete(storeLocation).where(eq(storeLocation.organisationId, org6));
+      await db.delete(storeLocation).where(eq(storeLocation.organisationId, otherOrg));
+      await db.delete(organisation).where(inArray(organisation.organisationId, [org6, otherOrg]));
+      await db.delete(user).where(eq(user.userId, manager));
+    });
+
+    it("creates a document whose subject is a venue, no staff member involved", async () => {
+      const doc = await createDocument(org6, {
+        userId: null,
+        subjectStoreLocationId: loc6,
+        uploadedBy: manager,
+        documentType: "Liquor Licence",
+        storagePublicId: sp(org6, manager, "liquor-1"),
+      });
+      expect(doc.userId).toBeNull();
+      expect(doc.subjectStoreLocationId).toBe(loc6);
+      // chk_compliance_document_venue_scope: owning location defaults to the subject.
+      expect(doc.storeLocationId).toBe(loc6);
+
+      const dashboard = await getComplianceDashboard(org6);
+      expect(dashboard.venueDocumentCount).toBe(1);
+    });
+
+    it("rejects a document with BOTH a staff member and a venue subject", async () => {
+      await expect(
+        createDocument(org6, {
+          userId: manager,
+          subjectStoreLocationId: loc6,
+          uploadedBy: manager,
+          documentType: "Liquor Licence",
+          storagePublicId: sp(org6, manager, "liquor-both"),
+        }),
+      ).rejects.toMatchObject({ message: expect.stringContaining("exactly one subject"), statusCode: 400 });
+    });
+
+    it("rejects a document with NEITHER a staff member nor a venue subject", async () => {
+      await expect(
+        createDocument(org6, {
+          userId: null,
+          uploadedBy: manager,
+          documentType: "Liquor Licence",
+          storagePublicId: sp(org6, manager, "liquor-neither"),
+        }),
+      ).rejects.toMatchObject({ message: expect.stringContaining("exactly one subject"), statusCode: 400 });
+    });
+
+    it("404s a venue document pointed at another organisation's location", async () => {
+      await expect(
+        createDocument(org6, {
+          userId: null,
+          subjectStoreLocationId: otherOrgLoc,
+          uploadedBy: manager,
+          documentType: "Liquor Licence",
+          storagePublicId: sp(org6, manager, "liquor-cross-org"),
+        }),
+      ).rejects.toMatchObject({ message: "Location not found", statusCode: 404 });
+    });
+  });
+
+  // ── CV-K: an Archived document (offboarding) must never mint a signed URL,
+  // even for its own owner — the whole point of archiving on offboard is that
+  // the person can no longer pull their own certificate back out.
+  describe("view-url — archived documents", () => {
+    let staffI: number;
+    let colleague: number;
+    let org7: number;
+    let docId: string;
+
+    beforeAll(async () => {
+      [{ userId: staffI }] = await db
+        .insert(user)
+        .values({ userName: "Compliance I", userEmail: `${tag}-i@it.test` })
+        .returning({ userId: user.userId });
+      [{ userId: colleague }] = await db
+        .insert(user)
+        .values({ userName: "Compliance I2", userEmail: `${tag}-i2@it.test` })
+        .returning({ userId: user.userId });
+
+      [{ id: org7 }] = await db
+        .insert(organisation)
+        .values({ organisationName: `${tag}-org7`, joinKey: `${tag}-jk7`, createdBy: staffI })
+        .returning({ id: organisation.organisationId });
+
+      await db.insert(userOrganisation).values([
+        { userId: staffI, organisationId: org7, role: "member" },
+        { userId: colleague, organisationId: org7, role: "member" },
+      ]);
+
+      const created = await createDocument(org7, {
+        userId: staffI,
+        uploadedBy: staffI,
+        documentType: "RSA",
+        storagePublicId: sp(org7, staffI, "archived-1"),
+      });
+      docId = created.complianceDocumentId;
+    });
+
+    afterAll(async () => {
+      // createDocument audit-logs the insert — delete before the organisation.
+      await db.delete(auditLog).where(eq(auditLog.organisationId, org7));
+      await db.delete(complianceDocument).where(eq(complianceDocument.organisationId, org7));
+      await db.delete(userOrganisation).where(eq(userOrganisation.organisationId, org7));
+      await db.delete(organisation).where(eq(organisation.organisationId, org7));
+      await db.delete(user).where(inArray(user.userId, [staffI, colleague]));
+    });
+
+    /** Minimal stand-in for Express's req/res — same shape compliancePermissions.test.ts uses. */
+    function reqRes(
+      userId: number,
+      documentId: string,
+      perms: { roles?: string[]; permissions?: string[] } = {},
+    ) {
+      const req = {
+        user: { sub: userId, roles: perms.roles ?? [], permissions: perms.permissions ?? ["compliance:read-own"] },
+        params: { id: documentId },
+        query: {},
+        body: {},
+        headers: {},
+      } as any;
+      let status: number | null = null;
+      let json: unknown = null;
+      const res = {
+        status(code: number) {
+          status = code;
+          return this;
+        },
+        json(body: unknown) {
+          json = body;
+          return this;
+        },
+      } as any;
+      return { req, res, result: () => ({ status, json }) };
+    }
+
+    it("grants the owner a signed URL before archiving", async () => {
+      const { req, res, result } = reqRes(staffI, docId);
+      await handleGetDocumentViewUrl(req, res, () => {});
+      const { status, json } = result();
+      expect(status).toBeNull(); // res.json() was called directly, no res.status() first
+      expect((json as { url?: string })?.url).toBeTruthy();
+    });
+
+    it("CV-L2: refuses a colleague with only compliance:read-own, and logs the denial", async () => {
+      const { req, res, result } = reqRes(colleague, docId, { permissions: ["compliance:read-own"] });
+      await handleGetDocumentViewUrl(req, res, () => {});
+      const { status, json } = result();
+      expect(status).toBe(403);
+      expect((json as { error?: string })?.error).toBeTruthy();
+
+      const [log] = await db
+        .select({ outcome: documentAccessLog.outcome, actorUserId: documentAccessLog.actorUserId })
+        .from(documentAccessLog)
+        .where(eq(documentAccessLog.complianceDocumentId, docId))
+        .orderBy(desc(documentAccessLog.createdDttm))
+        .limit(1);
+      expect(log?.outcome).toBe("denied");
+      expect(log?.actorUserId).toBe(colleague);
+    });
+
+    it("refuses the owner's own document once it's archived, and logs the denial", async () => {
+      await archiveForOffboardedStaff(staffI, "2020-01-01");
+
+      const { req, res, result } = reqRes(staffI, docId);
+      await handleGetDocumentViewUrl(req, res, () => {});
+      const { status, json } = result();
+      expect(status).toBe(403);
+      expect((json as { error?: string })?.error).toBeTruthy();
+
+      const [log] = await db
+        .select({ outcome: documentAccessLog.outcome })
+        .from(documentAccessLog)
+        .where(eq(documentAccessLog.complianceDocumentId, docId))
+        .orderBy(desc(documentAccessLog.createdDttm))
+        .limit(1);
+      expect(log?.outcome).toBe("denied");
     });
   });
 });

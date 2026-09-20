@@ -17,6 +17,7 @@ import {
   userOrganisation,
 } from "../db/schema.js";
 import { sendDirectEmail } from "./emailService.js";
+import type { DbOrTx } from "./auditService.js";
 import pino from "pino";
 
 const logger = pino({ name: "notificationService" });
@@ -57,8 +58,9 @@ export interface CreateNotificationParams {
  */
 export async function createInApp(
   params: Omit<CreateNotificationParams, "channel">,
+  tx: DbOrTx = db,
 ) {
-  const [row] = await db
+  const [row] = await tx
     .insert(notification)
     .values({
       organisationId: params.organisationId,
@@ -86,9 +88,10 @@ export async function createInApp(
  */
 export async function sendEmailNotification(
   params: CreateNotificationParams & { recipientEmail: string; subject: string; htmlBody: string },
+  tx: DbOrTx = db,
 ) {
   // Insert the notification record first
-  const [row] = await db
+  const [row] = await tx
     .insert(notification)
     .values({
       organisationId: params.organisationId,
@@ -106,7 +109,7 @@ export async function sendEmailNotification(
   const result = await sendDirectEmail(params.recipientEmail, params.subject, params.htmlBody);
 
   // Update notification status
-  await db
+  await tx
     .update(notification)
     .set({
       status: result.sent ? "SENT" : "FAILED",
@@ -266,6 +269,7 @@ export async function notifyHQAdmins(
    * who do not own it get noise.
    */
   recipientPermission: string = "purchasing:approve",
+  tx: DbOrTx = db,
 ) {
   const admins = await getUsersWithPermission(orgId, recipientPermission);
 
@@ -278,27 +282,33 @@ export async function notifyHQAdmins(
 
   for (const admin of admins) {
     // In-app notification
-    await createInApp({
-      organisationId: orgId,
-      recipientUserId: admin.userId,
-      type,
-      payload,
-      relatedEntityType,
-      relatedEntityId,
-    });
+    await createInApp(
+      {
+        organisationId: orgId,
+        recipientUserId: admin.userId,
+        type,
+        payload,
+        relatedEntityType,
+        relatedEntityId,
+      },
+      tx,
+    );
 
     // Email notification
-    const emailResult = await sendEmailNotification({
-      organisationId: orgId,
-      recipientUserId: admin.userId,
-      recipientEmail: admin.userEmail,
-      type,
-      payload,
-      relatedEntityType,
-      relatedEntityId,
-      subject: emailSubject,
-      htmlBody: emailBody,
-    });
+    const emailResult = await sendEmailNotification(
+      {
+        organisationId: orgId,
+        recipientUserId: admin.userId,
+        recipientEmail: admin.userEmail,
+        type,
+        payload,
+        relatedEntityType,
+        relatedEntityId,
+        subject: emailSubject,
+        htmlBody: emailBody,
+      },
+      tx,
+    );
 
     results.push({ userId: admin.userId, ...emailResult });
   }
@@ -315,10 +325,11 @@ export async function hasRecentNotification(
   relatedEntityId: string,
   type: NotificationType,
   withinHours = 24,
+  tx: DbOrTx = db,
 ): Promise<boolean> {
   const cutoff = new Date(Date.now() - withinHours * 60 * 60 * 1000);
 
-  const [result] = await db
+  const [result] = await tx
     .select({ count: sql<number>`count(*)::int` })
     .from(notification)
     .where(
