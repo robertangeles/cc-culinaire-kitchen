@@ -204,13 +204,13 @@ describe("SettingsLayout — Compliance tab gating", () => {
     hasPermissionMock.mockImplementation((...keys: string[]) => keys.includes("compliance:manage-rules"));
     useAuthMock.mockReturnValue({ user: { roles: ["Administrator"] } });
     render(
-      <SettingsLayout activeTab="prompts" onTabChange={() => {}}>
+      <SettingsLayout activeTab="compliance" onTabChange={() => {}}>
         <div>panel</div>
       </SettingsLayout>,
     );
 
-    const group = screen.getByRole("group", { name: "Rostering & Compliance" });
-    const idsInOrder = within(group)
+    const strip = screen.getByRole("tablist", { name: "Rostering & Compliance" });
+    const idsInOrder = within(strip)
       .getAllByRole("tab")
       .map((el) => el.id);
     expect(idsInOrder[0]).toBe("settings-tab-compliance");
@@ -247,17 +247,31 @@ describe("SettingsLayout — Compliance tab gating", () => {
 });
 
 describe("SettingsLayout — Rostering & Compliance group", () => {
-  it("holds Compliance, Public Holidays, Award Rules, and Document Expiry Rules together, in that order, for an Administrator with every permission", () => {
+  it("collapses to a single sidebar entry, active whenever any of its 4 tabs is selected", () => {
     hasPermissionMock.mockReturnValue(true);
     useAuthMock.mockReturnValue({ user: { roles: ["Administrator"] } });
     render(
-      <SettingsLayout activeTab="prompts" onTabChange={() => {}}>
+      <SettingsLayout activeTab="awardRules" onTabChange={() => {}}>
         <div>panel</div>
       </SettingsLayout>,
     );
 
     const group = screen.getByRole("group", { name: "Rostering & Compliance" });
-    const labelsInOrder = within(group)
+    const groupTab = within(group).getByRole("tab", { name: "Rostering & Compliance" });
+    expect(groupTab).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("holds Compliance, Public Holidays, Award Rules, and Document Expiry Rules together, in that order, as a tab strip in the content pane", () => {
+    hasPermissionMock.mockReturnValue(true);
+    useAuthMock.mockReturnValue({ user: { roles: ["Administrator"] } });
+    render(
+      <SettingsLayout activeTab="compliance" onTabChange={() => {}}>
+        <div>panel</div>
+      </SettingsLayout>,
+    );
+
+    const strip = screen.getByRole("tablist", { name: "Rostering & Compliance" });
+    const labelsInOrder = within(strip)
       .getAllByRole("tab")
       .map((el) => el.textContent);
     expect(labelsInOrder).toEqual([
@@ -267,6 +281,20 @@ describe("SettingsLayout — Rostering & Compliance group", () => {
       "Document Expiry Rules",
     ]);
   });
+
+  it("clicking the collapsed sidebar entry jumps to its first visible tab", () => {
+    const onTabChange = vi.fn();
+    hasPermissionMock.mockReturnValue(true);
+    useAuthMock.mockReturnValue({ user: { roles: ["Administrator"] } });
+    render(
+      <SettingsLayout activeTab="prompts" onTabChange={onTabChange}>
+        <div>panel</div>
+      </SettingsLayout>,
+    );
+
+    fireEvent.click(screen.getByRole("tab", { name: "Rostering & Compliance" }));
+    expect(onTabChange).toHaveBeenCalledWith("compliance");
+  });
 });
 
 describe("SettingsLayout — Award Rules / Document Expiry Rules gating (permission AND Administrator)", () => {
@@ -274,7 +302,7 @@ describe("SettingsLayout — Award Rules / Document Expiry Rules gating (permiss
     hasPermissionMock.mockReturnValue(true);
     useAuthMock.mockReturnValue({ user: { roles: ["Administrator"] } });
     render(
-      <SettingsLayout activeTab="prompts" onTabChange={() => {}}>
+      <SettingsLayout activeTab="compliance" onTabChange={() => {}}>
         <div>panel</div>
       </SettingsLayout>,
     );
@@ -286,7 +314,9 @@ describe("SettingsLayout — Award Rules / Document Expiry Rules gating (permiss
     hasPermissionMock.mockReturnValue(true); // holds roster:manage-award-rules / compliance:manage-rules
     useAuthMock.mockReturnValue({ user: { roles: ["Operations Admin"] } });
     render(
-      <SettingsLayout activeTab="prompts" onTabChange={() => {}}>
+      // compliance has no requireAdministrator gate, so it's the one visible
+      // tab this role can land on to open the Rostering & Compliance strip.
+      <SettingsLayout activeTab="compliance" onTabChange={() => {}}>
         <div>panel</div>
       </SettingsLayout>,
     );
@@ -302,6 +332,8 @@ describe("SettingsLayout — Award Rules / Document Expiry Rules gating (permiss
         <div>panel</div>
       </SettingsLayout>,
     );
+    // No permission is held, so the whole Rostering & Compliance group is
+    // empty and never renders — its tabs can't appear under any activeTab.
     expect(document.getElementById("settings-tab-awardRules")).toBeNull();
     expect(document.getElementById("settings-tab-documentExpiryRules")).toBeNull();
   });

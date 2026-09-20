@@ -10,6 +10,11 @@
  * feature domain — each setting affects. Group placement is driven by the
  * optional `group` field on each tab — empty groups are not rendered, and
  * tabs without a group fall through to "Unassigned".
+ *
+ * Rostering & Compliance renders as a single collapsed entry in the sidebar
+ * (its 4 tabs would otherwise crowd the vertical list); selecting it reveals
+ * a horizontal tab strip at the top of the content pane to switch between
+ * Compliance / Public Holidays / Award Rules / Document Expiry Rules.
  */
 
 import { type ReactNode, type KeyboardEvent } from "react";
@@ -180,8 +185,6 @@ export function SettingsLayout({
     (t) =>
       (!t.permission || hasPermission(t.permission)) && (!t.requireAdministrator || isAdministrator),
   );
-  const visualTabs = orderedTabs(visibleTabs);
-  const enabledTabs = visualTabs.filter((t) => !t.disabled);
   // Always render Web, Mobile, and Shared so the cherry-pick targets stay
   // visible even when empty. Rostering & Compliance and Unassigned are both
   // fully permission-gated (every tab in Rostering & Compliance requires a
@@ -192,16 +195,31 @@ export function SettingsLayout({
     (g) => (g.id !== "unassigned" && g.id !== "rosteringCompliance") || g.items.length > 0,
   );
 
+  // Rostering & Compliance renders as ONE sidebar entry (collapsed group)
+  // plus a horizontal tab strip in the content pane — see render below.
+  const rosteringTabs = groups.find((g) => g.id === "rosteringCompliance")?.items ?? [];
+  const isRosteringActive = rosteringTabs.some((t) => t.id === activeTab);
+  const ROSTERING_GROUP_ID = "rosteringCompliance-group";
+
+  // Sidebar focus order: the collapsed rostering group counts as a single
+  // stop, same as every other tab.
+  const navIds = groups.flatMap((g) =>
+    g.id === "rosteringCompliance" && g.items.length > 0
+      ? [ROSTERING_GROUP_ID]
+      : g.items.filter((t) => !t.disabled).map((t) => t.id),
+  );
+
   function handleTabKeyDown(e: KeyboardEvent<HTMLButtonElement>) {
     if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
     e.preventDefault();
-    const currentIndex = enabledTabs.findIndex((t) => t.id === activeTab);
+    const currentId = isRosteringActive ? ROSTERING_GROUP_ID : activeTab;
+    const currentIndex = navIds.indexOf(currentId);
     const next =
       e.key === "ArrowDown"
-        ? (currentIndex + 1) % enabledTabs.length
-        : (currentIndex - 1 + enabledTabs.length) % enabledTabs.length;
-    const nextId = enabledTabs[next].id;
-    onTabChange(nextId);
+        ? (currentIndex + 1) % navIds.length
+        : (currentIndex - 1 + navIds.length) % navIds.length;
+    const nextId = navIds[next];
+    onTabChange(nextId === ROSTERING_GROUP_ID ? rosteringTabs[0].id : nextId);
     document.getElementById(`settings-tab-${nextId}`)?.focus();
   }
 
@@ -229,34 +247,54 @@ export function SettingsLayout({
                 </p>
               )}
               <div className="space-y-1">
-                {group.items.map(({ id, label, icon: Icon, disabled }) => (
+                {group.id === "rosteringCompliance" && group.items.length > 0 ? (
                   <button
-                    key={id}
                     role="tab"
-                    aria-selected={activeTab === id}
-                    aria-controls={`settings-tabpanel-${id}`}
-                    id={`settings-tab-${id}`}
-                    tabIndex={activeTab === id ? 0 : -1}
-                    onClick={() => !disabled && onTabChange(id)}
-                    onKeyDown={!disabled ? handleTabKeyDown : undefined}
-                    disabled={disabled}
+                    aria-selected={isRosteringActive}
+                    aria-controls={`settings-tabpanel-${activeTab}`}
+                    id={`settings-tab-${ROSTERING_GROUP_ID}`}
+                    tabIndex={isRosteringActive ? 0 : -1}
+                    onClick={() => onTabChange(isRosteringActive ? activeTab : rosteringTabs[0].id)}
+                    onKeyDown={handleTabKeyDown}
                     className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
-                      activeTab === id
+                      isRosteringActive
                         ? "bg-dark-100 text-[#FAFAFA] shadow-sm"
-                        : disabled
-                          ? "text-dark-500 cursor-not-allowed"
-                          : "text-dark-600 hover:bg-dark-100/60 hover:text-[#FAFAFA]"
+                        : "text-dark-600 hover:bg-dark-100/60 hover:text-[#FAFAFA]"
                     }`}
                   >
-                    <Icon className="size-4" />
-                    {label}
-                    {disabled && (
-                      <span className="ml-auto text-[10px] text-dark-500 uppercase">
-                        Soon
-                      </span>
-                    )}
+                    <ShieldCheck className="size-4" />
+                    {group.label}
                   </button>
-                ))}
+                ) : (
+                  group.items.map(({ id, label, icon: Icon, disabled }) => (
+                    <button
+                      key={id}
+                      role="tab"
+                      aria-selected={activeTab === id}
+                      aria-controls={`settings-tabpanel-${id}`}
+                      id={`settings-tab-${id}`}
+                      tabIndex={activeTab === id ? 0 : -1}
+                      onClick={() => !disabled && onTabChange(id)}
+                      onKeyDown={!disabled ? handleTabKeyDown : undefined}
+                      disabled={disabled}
+                      className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
+                        activeTab === id
+                          ? "bg-dark-100 text-[#FAFAFA] shadow-sm"
+                          : disabled
+                            ? "text-dark-500 cursor-not-allowed"
+                            : "text-dark-600 hover:bg-dark-100/60 hover:text-[#FAFAFA]"
+                      }`}
+                    >
+                      <Icon className="size-4" />
+                      {label}
+                      {disabled && (
+                        <span className="ml-auto text-[10px] text-dark-500 uppercase">
+                          Soon
+                        </span>
+                      )}
+                    </button>
+                  ))
+                )}
               </div>
             </div>
           ))}
@@ -267,9 +305,37 @@ export function SettingsLayout({
       <div
         role="tabpanel"
         id={`settings-tabpanel-${activeTab}`}
-        aria-labelledby={`settings-tab-${activeTab}`}
+        aria-labelledby={
+          isRosteringActive ? `settings-tab-${ROSTERING_GROUP_ID}` : `settings-tab-${activeTab}`
+        }
         className="flex-1 overflow-y-auto bg-dark"
       >
+        {isRosteringActive && (
+          <div
+            role="tablist"
+            aria-label={GROUP_ORDER.find((g) => g.id === "rosteringCompliance")?.label}
+            className="flex gap-1 p-1 mx-6 mt-6 rounded-xl bg-dark-50 border border-dark-200 w-fit"
+          >
+            {rosteringTabs.map(({ id, label, icon: Icon }) => (
+              <button
+                key={id}
+                role="tab"
+                aria-selected={activeTab === id}
+                aria-controls={`settings-tabpanel-${id}`}
+                id={`settings-tab-${id}`}
+                onClick={() => onTabChange(id)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                  activeTab === id
+                    ? "bg-dark-100 text-white shadow-[0_0_8px_rgba(212,165,116,0.1)]"
+                    : "text-dark-600 hover:text-white hover:bg-dark-100/50"
+                }`}
+              >
+                <Icon className="size-4" />
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
         {children}
       </div>
     </div>
