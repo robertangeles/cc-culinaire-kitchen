@@ -980,3 +980,88 @@ builds all tables with CHECKs enforcing. Stop it again when done.
   an exact equality there isn't testing the code, it's silently asserting "nothing else in this
   database will ever change," which is false by construction in a DB other tests and other people
   also write to.
+
+## #81 — before calling a QA finding "a bug fix," prove the buggy code path is actually reachable (2026-09-18)
+
+- **Problem**: Testing CV-D3 ("expired sorted before expiring" in the compliance dashboard's
+  "N staff need attention" card), found `ComplianceDashboard.tsx` sorted that list alphabetically
+  by name while `StaffComplianceTable.tsx` sorted the table underneath it worst-status-first via a
+  shared `sortWorstFirst` helper — a real-looking inconsistency, and the module's own doc comment
+  even claims "the exact same severity rule ... as this table uses for its own sort." Started
+  fixing it (exported `sortWorstFirst`, used it in the dashboard) before writing the regression
+  test — and the failing-first test proved the "fix" changed nothing: `isCompliant()` only lets
+  expired/rejected/missing into that list (severity 4), and expiring/pending count as compliant
+  (severity < 4) by design — so every item ever reachable in that list is tied at the same
+  severity, and `sortWorstFirst`'s comparator always falls through to the exact same alphabetical
+  tiebreak the "buggy" code already did. Reverted the change; documented the real finding instead
+  (the literal ordering claim isn't observable given the current compliance threshold, which isn't
+  a bug — expiring being a "warning not a failure" is the stated design).
+- **Rule**: "Write the failing test first" isn't just about test discipline — it's the actual
+  falsification step. A code-reading diff that "looks like" the fix a doc comment implies can still
+  be a no-op if the two branches are never fed inputs that would make them disagree. Before
+  reporting a QA finding as Fail → Fixed, get the pre-fix test to actually fail red; a "fix" whose
+  test passes unchanged before AND after the edit was never fixing anything observable, and the
+  edit should be reverted, not kept as a shrug-worthy "harmless cleanup."
+
+## #82 — an "impossible" test-plan scenario is worth a targeted DB write, but check the classifier first and have a code-reading fallback ready (2026-09-18)
+
+- **Problem**: CV-D2 needed exactly one non-compliant staff member to screenshot the AnchorCard's
+  single-item branch, but the shared dev org naturally had two. A direct `INSERT INTO
+  compliance_document (... verification_status='Verified' ...)` to bring one into compliance was
+  blocked by the Bash auto-mode classifier (same as the earlier password-table block this session)
+  — DB writes that look like they could touch trust/verification state get flagged regardless of
+  which table. Rather than stall on it, fell back to reading `AnchorCard.tsx`'s `count === 1`
+  branch directly (named item, one button, `border-l-4 border-l-red-500`) and combined that with
+  the live-confirmed count=0 and count=2 states to cover the count=1 branch by construction.
+- **Rule**: When a live-isolation setup step gets classifier-blocked, don't burn more turns
+  retrying variations of the same write — treat it like any other tooling wall (the Turnstile-swap
+  pattern from earlier this session): fall back to reading the exact branch of code that would
+  render the scenario, and say plainly in the QA doc that isolation was blocked by the harness
+  rather than silently downgrading the claimed evidence.
+
+## #83 — a schema-supported feature with zero route/controller/client code is a missing feature, not a bug — grep the whole stack before assuming a UI gap is just hidden (2026-09-18)
+
+- **Problem**: CV-E1 expected "upload a document with a venue as its subject" to succeed. The DB
+  schema (`compliance_document.subject_store_location_id`), its CHECK constraints, and even the
+  dashboard's `venueDocumentCount` stat all already existed — strong signal the feature was "there
+  somewhere." Grepping the ENTIRE stack (not just the client) for `subjectStoreLocationId` /
+  `subject_store_location` found zero hits outside schema/migration/integration-test files:
+  `CreateDocumentInput.userId` was a required `number`, no controller/route ever read a venue
+  subject from the request body, and `createDocument()`'s own comment said outright "cannot be
+  created through this path today — it is self-upload only. Whoever adds that route must extend
+  this check rather than skip it" — the original author had already scoped the exact extension
+  point needed.
+- **Rule**: When dashboard aggregates, DB columns, or CHECK constraints exist for a feature but a
+  test step can't find any UI for it, grep server routes AND controllers AND client components for
+  the field name before concluding it's "just hard to find in the UI" — schema-first design in this
+  codebase means the data model is often built ahead of the feature, and a genuinely-missing
+  feature looks identical to a well-hidden one until you check every layer. A comment on the
+  nearest related function is often the fastest way to confirm which one it is, and frequently
+  hands you the exact contract to implement.
+
+## #84 — building a new document subject type means re-checking every screen that already lists documents, not just the create path (2026-09-18)
+
+- **Problem**: After adding venue-subject compliance documents (CV-E1, lesson #83), live-testing it
+  surfaced a second bug for free: the venue document — created with the DB's default
+  `verificationStatus: "Pending"` — landed in the same manager verification queue as staff
+  documents, and `VerificationView.tsx` unconditionally rendered `current.staffName ?? "Unknown
+  staff member"` plus an `ENGAGEMENT_LABEL` line. A venue document has no `staffName` (LEFT JOIN
+  returns null) and no meaningful engagement type, so it rendered as "Unknown staff member" /
+  "Employee" — confusing and wrong, even though the server already had `locationName` available in
+  the same response (the service's `listDocumentsForOrg` LEFT JOINs `storeLocation` for exactly
+  this reason). Fixed by branching the display on `subjectStoreLocationId`: show the venue's name
+  and "Venue document" instead of a staff name and engagement label.
+- **Rule**: A new document/record subject type doesn't just need its own create path — it flows
+  into every EXISTING screen that lists, queues, or displays that record type, and each one was
+  written assuming the old, narrower set of subjects. Before calling a new subject type "done,"
+  walk every consumer of the shared list/queue query (grep the service function's other callers)
+  and check whether each display assumes the old shape. The fastest way to catch this is exactly
+  what caught it here: use the feature for real end-to-end in the browser, in the same session you
+  built it, before writing it up as passing — a unit test with mocked, deliberately-shaped fixture
+  data would have described the venue subject as valid without ever exercising the manager-facing
+  view that had to render it.
+
+## #85 — a doc comment describing a security guarantee is a claim, not proof it exists — grep for the enforcement, don't trust the prose (2026-09-18)
+
+- **Problem**: `complianceRetentionService.ts`'s `archiveForOffboardedStaff` had a doc comment stating "Access stops IMMEDIATELY... because documentStorageService refuses to serve an Archived document." Testing CV-K1/K2 by calling the function directly (there is no offboard UI — the doc's own "Known gap" note says testing at the service/API level is expected) and then attempting to view the now-archived document via the real `handleGetDocumentViewUrl` handler showed it still returned a valid, freshly-signed Cloudinary URL. Grepping `documentStorageService.ts` for any `Archived`/`verificationStatus` check found none — `signedUrlForDocument` just trusts whatever `granted` boolean its one caller passes in, and that caller (`handleGetDocumentViewUrl`) computed `granted` from ownership and permission only, never from document status. The described refusal never existed in either file; it was pure aspiration left behind by whoever wrote the comment (or wrote it before a later refactor moved the decision point elsewhere and never updated it).
+- **Rule**: A comment that names WHERE a security property is enforced ("X refuses to Y") is a pointer, not evidence — follow the pointer and read the actual code before trusting the property holds. This is especially dangerous for negative properties (refusal, denial, exclusion) because nothing calls attention to their absence: a positive feature that's missing usually crashes or visibly does nothing, but a missing refusal just quietly succeeds and looks like success. When a QA/test-plan item says "attempting X is refused," don't stop at confirming the setup step works (the archive happened, the flag flipped) — always also drive the actual access path that's supposed to enforce the refusal, end to end, through the real handler.
