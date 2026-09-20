@@ -14,7 +14,8 @@
  */
 
 import { Router } from "express";
-import { authenticate, requirePermission } from "../middleware/auth.js";
+import multer from "multer";
+import { authenticate, requirePermission, requireAdministrator } from "../middleware/auth.js";
 import { requireFlag } from "../middleware/requireFlag.js";
 import {
   handleListRoles,
@@ -50,7 +51,15 @@ import {
   handleDeletePublicHoliday,
   handleRequestConsent,
   handleRespondToConsent,
+  handleListAwardRules,
+  handleUpsertAwardRule,
+  handleAwardRuleCsvPreview,
+  handleAwardRuleCsvCommit,
 } from "../controllers/rosterController.js";
+
+// Memory storage only, same convention as routes/compliance.ts's
+// documentUpload — a CSV of a few hundred rows is well under 1MB.
+const csvUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 1 * 1024 * 1024 } });
 
 const router = Router();
 // Ahead of authenticate, on purpose — see routes/compliance.ts's identical
@@ -114,6 +123,39 @@ router.delete("/availability/:id", requirePermission("roster:read-own"), handleD
 router.get("/public-holidays", requirePermission("roster:manage"), handleListPublicHolidays);
 router.post("/public-holidays", requirePermission("roster:manage"), handleCreatePublicHoliday);
 router.delete("/public-holidays/:id", requirePermission("roster:manage"), handleDeletePublicHoliday);
+
+// ─── Award rules ────────────────────────────────────────────────────
+// Administrator-only (requireAdministrator), not just roster:manage-award-rules
+// — award_rule is platform-wide, no-organisationId data, same reasoning as
+// the authority-blast-radius fix on compliance/rules (Permissions section
+// of the Org Admin plan). Administrator-only until a non-admin owner is
+// named (tasks/todo.md) — remove requireAdministrator then, not before.
+
+router.get(
+  "/award-rules",
+  requirePermission("roster:manage-award-rules"),
+  requireAdministrator(),
+  handleListAwardRules,
+);
+router.post(
+  "/award-rules",
+  requirePermission("roster:manage-award-rules"),
+  requireAdministrator(),
+  handleUpsertAwardRule,
+);
+router.post(
+  "/award-rules/import/preview",
+  requirePermission("roster:manage-award-rules"),
+  requireAdministrator(),
+  csvUpload.single("file"),
+  handleAwardRuleCsvPreview,
+);
+router.post(
+  "/award-rules/import/commit",
+  requirePermission("roster:manage-award-rules"),
+  requireAdministrator(),
+  handleAwardRuleCsvCommit,
+);
 
 // ─── Publish ──────────────────────────────────────────────────────
 

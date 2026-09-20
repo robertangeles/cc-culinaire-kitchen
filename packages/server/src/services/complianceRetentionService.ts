@@ -147,8 +147,9 @@ function yearsAgo(today: string, years: number): string {
 /**
  * Archive every compliance document held for `userId`. Access stops
  * IMMEDIATELY — the day someone leaves, not seven years later — because
- * documentStorageService refuses to serve an Archived document. This
- * function only sets the state; it does not touch storage.
+ * `handleGetDocumentViewUrl` (complianceController.ts) refuses to mint a
+ * signed URL for an Archived document, regardless of ownership or
+ * permission. This function only sets the state; it does not touch storage.
  *
  * @returns the number of documents archived.
  */

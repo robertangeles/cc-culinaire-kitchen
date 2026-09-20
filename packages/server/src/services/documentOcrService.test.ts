@@ -1,10 +1,34 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { EventEmitter } from "node:events";
 
-const recognizeMock = vi.fn();
-const createWorkerMock = vi.fn(async () => ({ recognize: recognizeMock }));
+/**
+ * The real OCR work now runs in a separate `worker_threads` Worker
+ * (documentOcrWorker.ts) — a mock can't run inside that real thread, so
+ * these tests mock the `Worker` class itself instead of `tesseract.js`,
+ * and drive it through the same postMessage/message/terminate protocol
+ * documentOcrService.ts actually uses.
+ */
+let responseMode: { text?: string; error?: string } | "hang" = { text: "" };
 
-vi.mock("tesseract.js", () => ({
-  createWorker: createWorkerMock,
+class MockWorker extends EventEmitter {
+  postMessage = vi.fn((msg: { id: number }) => {
+    if (responseMode === "hang") return;
+    const response = responseMode;
+    queueMicrotask(() => this.emit("message", { id: msg.id, ...response }));
+  });
+  terminate = vi.fn(async () => {
+    this.emit("exit", 1);
+  });
+}
+
+let lastWorker: MockWorker | undefined;
+const WorkerMock = vi.fn(() => {
+  lastWorker = new MockWorker();
+  return lastWorker;
+});
+
+vi.mock("node:worker_threads", () => ({
+  Worker: WorkerMock,
 }));
 
 const { extractCertificateFields, parseCertificateText } = await import("./documentOcrService.js");
@@ -75,33 +99,34 @@ describe("extractCertificateFields", () => {
     vi.useRealTimers();
   });
 
-  beforeEach(() => {
-    recognizeMock.mockReset();
-  });
-
-  it("creates the tesseract worker once and reuses it across calls", async () => {
-    recognizeMock.mockResolvedValue({ data: { text: "Certificate No: 2026-004521" } });
+  it("spawns the worker thread once and reuses it across calls", async () => {
+    WorkerMock.mockClear();
+    responseMode = { text: "Certificate No: 2026-004521" };
 
     const first = await extractCertificateFields(Buffer.from("page-1"));
     const second = await extractCertificateFields(Buffer.from("page-2"));
 
-    expect(createWorkerMock).toHaveBeenCalledTimes(1);
+    expect(WorkerMock).toHaveBeenCalledTimes(1);
     expect(first).toEqual({ documentNumber: "2026-004521" });
     expect(second).toEqual({ documentNumber: "2026-004521" });
   });
 
-  it("returns {} when recognition exceeds the 5s budget instead of hanging", async () => {
+  it("returns {} and terminates the worker thread when recognition exceeds the 5s budget instead of hanging", async () => {
     vi.useFakeTimers();
-    recognizeMock.mockImplementation(() => new Promise(() => {})); // never resolves
+    WorkerMock.mockClear();
+    responseMode = "hang";
 
     const pending = extractCertificateFields(Buffer.from("slow-page"));
     await vi.advanceTimersByTimeAsync(5000);
 
     expect(await pending).toEqual({});
+    expect(lastWorker?.terminate).toHaveBeenCalledTimes(1);
   });
 
-  it("returns {} when the worker throws, never surfacing the error", async () => {
-    recognizeMock.mockRejectedValue(new Error("worker crashed"));
+  it("returns {} when the worker thread reports an error, never surfacing it", async () => {
+    // The 5s-timeout test above terminates its worker, so this call spawns
+    // a fresh one — reset the response mode for it.
+    responseMode = { error: "worker crashed" };
 
     await expect(extractCertificateFields(Buffer.from("bad-page"))).resolves.toEqual({});
   });

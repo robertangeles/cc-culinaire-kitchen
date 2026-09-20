@@ -31,9 +31,12 @@
  *   F-AR-01  evaluateAwardRules — pure per-shift warnings + coverage
  */
 
-import { eq, and, or, lte, gte, isNull, inArray } from "drizzle-orm";
+import { eq, and, or, lte, gte, isNull, inArray, sql, asc } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { awardRule } from "../db/schema.js";
+import { AU_JURISDICTIONS } from "./jurisdiction.js";
+import * as auditService from "./auditService.js";
+import { withRetryOnConflict } from "../utils/retryOnConflict.js";
 
 export const AWARD_CHECKED_RULE_TYPES = ["max_ordinary_hours", "publish_notice"] as const;
 export const AWARD_NOT_CHECKED_RULE_TYPES = [
@@ -45,6 +48,24 @@ export const AWARD_NOT_CHECKED_RULE_TYPES = [
   "overtime",
   "public_holiday_rates",
 ] as const;
+
+export const ALL_AWARD_RULE_TYPES = [...AWARD_CHECKED_RULE_TYPES, ...AWARD_NOT_CHECKED_RULE_TYPES] as const;
+
+/**
+ * Own error class, not a reuse of RosterError — rosterService.ts imports
+ * FROM this module (its evaluate()/getActiveAwardRules() are used by the
+ * publish-time Award coverage disclosure), so importing RosterError back
+ * from rosterService.ts here would be a circular import.
+ */
+export class AwardRuleError extends Error {
+  constructor(
+    message: string,
+    public statusCode: number,
+  ) {
+    super(message);
+    this.name = "AwardRuleError";
+  }
+}
 
 export interface AwardWarning {
   severity: "advisory";
@@ -205,4 +226,152 @@ export async function evaluate(jurisdiction: string | null, shift: ShiftTiming, 
   const today = now.slice(0, 10);
   const activeRules = await getActiveAwardRules(jurisdiction, today);
   return evaluateAwardRules(shift, activeRules, now, jurisdiction);
+}
+
+/**
+ * Active rows only (`effectiveTo IS NULL`) — per the plan's design decision,
+ * the admin table shows currently-active rules; superseded rows are history,
+ * visible only via the audit log (item 9), not this list.
+ */
+export async function listAwardRules(): Promise<AwardRuleRow[]> {
+  return db
+    .select()
+    .from(awardRule)
+    .where(isNull(awardRule.effectiveTo))
+    .orderBy(asc(awardRule.ruleType), asc(awardRule.jurisdiction));
+}
+
+export interface AwardRuleInput {
+  awardCode: string;
+  ruleType: string;
+  /** NULL = national. Must be one of AU_JURISDICTIONS, checked below — a typo
+   * (e.g. "NWS") would otherwise create a row idx_award_rule_lookup can
+   * never match, keeping Award engine coverage silently stuck at 0. */
+  jurisdiction: string | null;
+  thresholdValue: number;
+  effectiveFrom: string;
+  sourceCitation: string | null;
+}
+
+export interface AwardRuleRow {
+  awardRuleId: string;
+  awardCode: string;
+  ruleType: string;
+  jurisdiction: string | null;
+  thresholdValue: string | null;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  sourceCitation: string | null;
+  ruleVersion: string;
+}
+
+/**
+ * Create a new award_rule version for (ruleType, jurisdiction), closing out
+ * the currently-active version — same auto-supersede pattern as
+ * complianceService.ts's upsertExpiryRule, reused deliberately rather than
+ * designed from scratch (see this plan's Section 1 correction).
+ *
+ * `ruleVersion` is never user input — generated here as `v${effectiveFrom}`,
+ * tying the tag to when this version became effective rather than
+ * implying a fake official MA000009 document-version number.
+ *
+ * Same-day-edit guard and race-safety (idx_award_rule_one_active, retried
+ * once on conflict via `withRetryOnConflict`) mirror upsertExpiryRule
+ * exactly — see that function's doc comment for the full reasoning.
+ */
+export async function upsertAwardRule(input: AwardRuleInput, actorUserId: number): Promise<AwardRuleRow> {
+  const awardCode = input.awardCode.trim();
+  if (!awardCode) throw new AwardRuleError("An award code is required", 400);
+
+  if (!ALL_AWARD_RULE_TYPES.includes(input.ruleType as (typeof ALL_AWARD_RULE_TYPES)[number])) {
+    throw new AwardRuleError(`Unrecognized rule type: ${input.ruleType}`, 400);
+  }
+
+  const jurisdiction = input.jurisdiction?.trim() || null;
+  if (jurisdiction !== null && !AU_JURISDICTIONS.includes(jurisdiction)) {
+    throw new AwardRuleError(`Unrecognized jurisdiction code: ${jurisdiction}`, 400);
+  }
+
+  if (!Number.isFinite(input.thresholdValue) || input.thresholdValue <= 0) {
+    throw new AwardRuleError("Threshold value must be a positive number", 400);
+  }
+
+  if (!input.effectiveFrom) throw new AwardRuleError("An effective-from date is required", 400);
+
+  return withRetryOnConflict(() =>
+    upsertAwardRuleAttempt(awardCode, input.ruleType, jurisdiction, input, actorUserId),
+  );
+}
+
+async function upsertAwardRuleAttempt(
+  awardCode: string,
+  ruleType: string,
+  jurisdiction: string | null,
+  input: AwardRuleInput,
+  actorUserId: number,
+): Promise<AwardRuleRow> {
+  return db.transaction(async (tx) => {
+    const activeMatch = jurisdiction
+      ? and(eq(awardRule.ruleType, ruleType), eq(awardRule.jurisdiction, jurisdiction))
+      : and(eq(awardRule.ruleType, ruleType), isNull(awardRule.jurisdiction));
+
+    const [activeRow] = await tx
+      .select({ awardRuleId: awardRule.awardRuleId, effectiveFrom: awardRule.effectiveFrom })
+      .from(awardRule)
+      .where(and(activeMatch, isNull(awardRule.effectiveTo)));
+
+    if (activeRow && input.effectiveFrom <= activeRow.effectiveFrom) {
+      throw new AwardRuleError(
+        "This rule was already updated today — edit the existing row directly instead of creating a new version",
+        409,
+      );
+    }
+
+    if (activeRow) {
+      await tx
+        .update(awardRule)
+        .set({
+          effectiveTo: sql`(${input.effectiveFrom}::date - 1)`,
+          updatedDttm: new Date(),
+        })
+        .where(and(activeMatch, isNull(awardRule.effectiveTo)));
+
+      await auditService.log(
+        {
+          entityType: "award_rule",
+          entityId: activeRow.awardRuleId,
+          action: "update",
+          actorUserId,
+          metadata: { closedBy: "auto-supersede" },
+        },
+        tx,
+      );
+    }
+
+    const [created] = await tx
+      .insert(awardRule)
+      .values({
+        awardCode,
+        ruleType,
+        jurisdiction,
+        thresholdValue: String(input.thresholdValue),
+        effectiveFrom: input.effectiveFrom,
+        sourceCitation: input.sourceCitation ?? null,
+        ruleVersion: `v${input.effectiveFrom}`,
+      })
+      .returning();
+
+    await auditService.log(
+      {
+        entityType: "award_rule",
+        entityId: created.awardRuleId,
+        action: "create",
+        actorUserId,
+        afterValue: created,
+      },
+      tx,
+    );
+
+    return created;
+  });
 }

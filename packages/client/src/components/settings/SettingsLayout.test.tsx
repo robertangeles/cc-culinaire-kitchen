@@ -10,6 +10,15 @@ vi.mock("../../hooks/useHasPermission.js", () => ({
   useHasPermission: () => hasPermissionMock,
 }));
 
+// Award Rules / Document Expiry Rules also gate on the Administrator role
+// directly (requireAdministrator field), not just a permission — so every
+// test needs this stubbed too. Defaults to Administrator so pre-existing
+// tests (written before this gate existed) keep seeing every tab.
+const useAuthMock = vi.fn();
+vi.mock("../../context/AuthContext.js", () => ({
+  useAuth: () => useAuthMock(),
+}));
+
 import {
   SettingsLayout,
   groupTabs,
@@ -19,12 +28,13 @@ import {
 
 beforeEach(() => {
   hasPermissionMock.mockReset().mockReturnValue(true);
+  useAuthMock.mockReset().mockReturnValue({ user: { roles: ["Administrator"] } });
 });
 
 type Fixture = { id: string; group?: SettingsGroup };
 
 describe("groupTabs", () => {
-  it("returns one bucket per group in fixed order: web, mobile, shared, unassigned", () => {
+  it("returns one bucket per group in fixed order: web, mobile, rosteringCompliance, shared, unassigned", () => {
     const items: Fixture[] = [
       { id: "a", group: "shared" },
       { id: "b", group: "web" },
@@ -32,7 +42,7 @@ describe("groupTabs", () => {
       { id: "d" },
     ];
     const out = groupTabs(items).map((g) => g.id);
-    expect(out).toEqual(["web", "mobile", "shared", "unassigned"]);
+    expect(out).toEqual(["web", "mobile", "rosteringCompliance", "shared", "unassigned"]);
   });
 
   it("preserves declaration order within each group", () => {
@@ -63,19 +73,20 @@ describe("groupTabs", () => {
 });
 
 describe("orderedTabs", () => {
-  it("flattens groups in web -> mobile -> shared -> unassigned order", () => {
+  it("flattens groups in web -> mobile -> rosteringCompliance -> shared -> unassigned order", () => {
     const items: Fixture[] = [
       { id: "z" },
       { id: "s", group: "shared" },
+      { id: "r", group: "rosteringCompliance" },
       { id: "w", group: "web" },
       { id: "m", group: "mobile" },
     ];
-    expect(orderedTabs(items).map((t) => t.id)).toEqual(["w", "m", "s", "z"]);
+    expect(orderedTabs(items).map((t) => t.id)).toEqual(["w", "m", "r", "s", "z"]);
   });
 });
 
 describe("SettingsLayout — rendered shell", () => {
-  it("always renders the three primary groups (Web, Mobile, Shared) and elides empty Unassigned", () => {
+  it("always renders Web, Mobile, and Shared, plus Rostering & Compliance when it has visible tabs, and elides empty Unassigned", () => {
     render(
       <SettingsLayout activeTab="prompts" onTabChange={() => {}}>
         <div>panel</div>
@@ -84,8 +95,21 @@ describe("SettingsLayout — rendered shell", () => {
 
     expect(screen.getByRole("heading", { name: "Web" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Mobile" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Rostering & Compliance" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Shared" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Unassigned" })).toBeNull();
+  });
+
+  it("hides the Rostering & Compliance group entirely when the viewer holds none of its tabs' permissions", () => {
+    hasPermissionMock.mockReturnValue(false);
+    useAuthMock.mockReturnValue({ user: { roles: ["Subscriber"] } });
+    render(
+      <SettingsLayout activeTab="prompts" onTabChange={() => {}}>
+        <div>panel</div>
+      </SettingsLayout>,
+    );
+
+    expect(screen.queryByRole("heading", { name: "Rostering & Compliance" })).toBeNull();
   });
 
   it("renders the Mobile Pages tab inside the Mobile group", () => {
@@ -176,20 +200,20 @@ describe("SettingsLayout — rendered shell", () => {
 });
 
 describe("SettingsLayout — Compliance tab gating", () => {
-  it("shows Compliance, in Shared directly after Users, when the user holds compliance:manage-rules", () => {
+  it("shows Compliance, as the first tab in Rostering & Compliance, when the user holds compliance:manage-rules", () => {
     hasPermissionMock.mockImplementation((...keys: string[]) => keys.includes("compliance:manage-rules"));
+    useAuthMock.mockReturnValue({ user: { roles: ["Administrator"] } });
     render(
       <SettingsLayout activeTab="prompts" onTabChange={() => {}}>
         <div>panel</div>
       </SettingsLayout>,
     );
 
-    const sharedGroup = screen.getByRole("group", { name: "Shared" });
-    const idsInOrder = within(sharedGroup)
+    const group = screen.getByRole("group", { name: "Rostering & Compliance" });
+    const idsInOrder = within(group)
       .getAllByRole("tab")
       .map((el) => el.id);
-    const usersIndex = idsInOrder.indexOf("settings-tab-users");
-    expect(idsInOrder[usersIndex + 1]).toBe("settings-tab-compliance");
+    expect(idsInOrder[0]).toBe("settings-tab-compliance");
   });
 
   it("hides Compliance entirely when the user lacks compliance:manage-rules", () => {
@@ -215,9 +239,70 @@ describe("SettingsLayout — Compliance tab gating", () => {
     expect(screen.getByRole("heading", { name: "Mobile" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Shared" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Unassigned" })).toBeNull();
-    // Users and Roles — the tabs either side of where Compliance would sit —
-    // are unaffected by the gate hiding it.
+    // Users and Roles — unaffected by Compliance's gate, and unaffected by
+    // Compliance living in a different group entirely.
     expect(screen.getByRole("tab", { name: /Users/ })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /Roles/ })).toBeInTheDocument();
+  });
+});
+
+describe("SettingsLayout — Rostering & Compliance group", () => {
+  it("holds Compliance, Public Holidays, Award Rules, and Document Expiry Rules together, in that order, for an Administrator with every permission", () => {
+    hasPermissionMock.mockReturnValue(true);
+    useAuthMock.mockReturnValue({ user: { roles: ["Administrator"] } });
+    render(
+      <SettingsLayout activeTab="prompts" onTabChange={() => {}}>
+        <div>panel</div>
+      </SettingsLayout>,
+    );
+
+    const group = screen.getByRole("group", { name: "Rostering & Compliance" });
+    const labelsInOrder = within(group)
+      .getAllByRole("tab")
+      .map((el) => el.textContent);
+    expect(labelsInOrder).toEqual([
+      "Compliance",
+      "Public Holidays",
+      "Award Rules",
+      "Document Expiry Rules",
+    ]);
+  });
+});
+
+describe("SettingsLayout — Award Rules / Document Expiry Rules gating (permission AND Administrator)", () => {
+  it("shows both tabs to an Administrator holding both permissions", () => {
+    hasPermissionMock.mockReturnValue(true);
+    useAuthMock.mockReturnValue({ user: { roles: ["Administrator"] } });
+    render(
+      <SettingsLayout activeTab="prompts" onTabChange={() => {}}>
+        <div>panel</div>
+      </SettingsLayout>,
+    );
+    expect(document.getElementById("settings-tab-awardRules")).toBeInTheDocument();
+    expect(document.getElementById("settings-tab-documentExpiryRules")).toBeInTheDocument();
+  });
+
+  it("hides both tabs from a non-Administrator EVEN THOUGH they hold the permission — the authority-blast-radius fix itself", () => {
+    hasPermissionMock.mockReturnValue(true); // holds roster:manage-award-rules / compliance:manage-rules
+    useAuthMock.mockReturnValue({ user: { roles: ["Operations Admin"] } });
+    render(
+      <SettingsLayout activeTab="prompts" onTabChange={() => {}}>
+        <div>panel</div>
+      </SettingsLayout>,
+    );
+    expect(document.getElementById("settings-tab-awardRules")).toBeNull();
+    expect(document.getElementById("settings-tab-documentExpiryRules")).toBeNull();
+  });
+
+  it("hides both tabs from an Administrator who lacks the permission — Administrator role alone is not enough either", () => {
+    hasPermissionMock.mockReturnValue(false);
+    useAuthMock.mockReturnValue({ user: { roles: ["Administrator"] } });
+    render(
+      <SettingsLayout activeTab="prompts" onTabChange={() => {}}>
+        <div>panel</div>
+      </SettingsLayout>,
+    );
+    expect(document.getElementById("settings-tab-awardRules")).toBeNull();
+    expect(document.getElementById("settings-tab-documentExpiryRules")).toBeNull();
   });
 });

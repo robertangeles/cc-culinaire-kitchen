@@ -3120,6 +3120,17 @@ export const documentExpiryRule = pgTable(
       table.jurisdiction,
       table.effectiveFrom,
     ),
+    // At most one active (effective_to IS NULL) row per (documentType,
+    // jurisdiction) — the DB-level backstop for upsertExpiryRule's
+    // auto-supersede close+insert, closing the TOCTOU race two concurrent
+    // creates could otherwise hit (both see the same "no active row",
+    // both insert). coalesce() is required: a plain unique index treats
+    // every NULL jurisdiction (= national) as distinct from every other
+    // NULL, so two "national" rows for the same type would never conflict
+    // without it.
+    uniqueIndex("idx_document_expiry_rule_one_active")
+      .on(table.documentType, sql`coalesce(${table.jurisdiction}, '')`)
+      .where(sql`effective_to IS NULL`),
   ],
 );
 
@@ -3505,6 +3516,11 @@ export const awardRule = pgTable(
   (table) => [
     // Rule lookup: "the active rule for this type + jurisdiction on date X" — same shape as idx_document_expiry_rule_lookup.
     index("idx_award_rule_lookup").on(table.ruleType, table.jurisdiction, table.effectiveFrom),
+    // At most one active row per (ruleType, jurisdiction) — same reasoning
+    // and same coalesce() requirement as idx_document_expiry_rule_one_active.
+    uniqueIndex("idx_award_rule_one_active")
+      .on(table.ruleType, sql`coalesce(${table.jurisdiction}, '')`)
+      .where(sql`effective_to IS NULL`),
   ],
 );
 

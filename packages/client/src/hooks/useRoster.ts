@@ -702,6 +702,106 @@ export async function deletePublicHoliday(id: string): Promise<void> {
   if (!res.ok) throw await parseError(res, "Failed to remove public holiday");
 }
 
+// ─── Award rules ──────────────────────────────────────────────────
+// Same platform-wide shared shape as public holidays — no organisationId.
+
+export const AWARD_RULE_TYPES = [
+  "max_ordinary_hours",
+  "publish_notice",
+  "min_break",
+  "min_rest",
+  "penalty_rates",
+  "allowances",
+  "casual_loading",
+  "overtime",
+  "public_holiday_rates",
+] as const;
+
+/** Rule types this engine currently evaluates — the other 7 are honestly disclosed as not checked. */
+export const AWARD_CHECKED_RULE_TYPES = ["max_ordinary_hours", "publish_notice"] as const;
+
+export const AU_JURISDICTIONS = ["ACT", "NSW", "NT", "QLD", "SA", "TAS", "VIC", "WA"] as const;
+
+export interface AwardRule {
+  awardRuleId: string;
+  awardCode: string;
+  ruleType: string;
+  jurisdiction: string | null;
+  thresholdValue: string | null;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  sourceCitation: string | null;
+  ruleVersion: string;
+}
+
+export interface NewAwardRule {
+  awardCode: string;
+  ruleType: string;
+  jurisdiction: string | null;
+  thresholdValue: number;
+  effectiveFrom: string;
+  sourceCitation?: string | null;
+}
+
+export async function listAwardRules(): Promise<AwardRule[]> {
+  const res = await fetch(`${BASE}/award-rules`, opts);
+  if (!res.ok) throw await parseError(res, "Failed to load award rules");
+  return res.json();
+}
+
+export async function upsertAwardRule(input: NewAwardRule): Promise<AwardRule> {
+  const res = await fetch(`${BASE}/award-rules`, {
+    ...jsonOpts,
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) throw await parseError(res, "Failed to save award rule");
+  return res.json();
+}
+
+// ─── Award rules CSV import ───────────────────────────────────────
+// Two-phase preview -> commit, same client shape as useSales.ts's
+// previewSalesCsv/commitSalesCsv.
+
+export interface CsvAwardRuleRow {
+  rowIndex: number;
+  awardCode: string;
+  ruleType: string;
+  jurisdiction: string | null;
+  thresholdValue: number;
+  effectiveFrom: string;
+  sourceCitation: string | null;
+}
+
+export interface CsvImportPreview {
+  valid: CsvAwardRuleRow[];
+  invalid: Array<{ rowIndex: number; reason: string }>;
+}
+
+export interface CsvImportCommitResult {
+  imported: number;
+  skipped: number;
+  errors: Array<{ row: number; reason: string }>;
+}
+
+export async function previewAwardRuleCsv(file: File): Promise<CsvImportPreview> {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await fetch(`${BASE}/award-rules/import/preview`, { ...opts, method: "POST", body: form });
+  if (!res.ok) throw await parseError(res, "Failed to preview CSV");
+  return res.json();
+}
+
+export async function commitAwardRuleCsvImport(rows: CsvAwardRuleRow[]): Promise<CsvImportCommitResult> {
+  const res = await fetch(`${BASE}/award-rules/import/commit`, {
+    ...jsonOpts,
+    method: "POST",
+    body: JSON.stringify({ rows }),
+  });
+  if (!res.ok) throw await parseError(res, "Failed to commit CSV import");
+  return res.json();
+}
+
 export function useOrgMembers(orgId: number | null) {
   const [members, setMembers] = useState<OrgMember[]>([]);
   const [isLoading, setIsLoading] = useState(true);

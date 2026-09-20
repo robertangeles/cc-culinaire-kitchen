@@ -68,6 +68,8 @@ const ROUTES: Array<{ method: string; path: string; permission: string }> = [
   { method: "PUT", path: "/documents/:id", permission: "compliance:read-own" },
   { method: "DELETE", path: "/documents/:id", permission: "compliance:read-own" },
   { method: "GET", path: "/documents/:id/view-url", permission: "compliance:read-own" },
+  { method: "POST", path: "/documents/:id/nudge", permission: "compliance:read-own" },
+  { method: "POST", path: "/documents/venue", permission: "compliance:verify" },
   { method: "GET", path: "/staff/:userId/documents", permission: "compliance:read-all" },
   { method: "GET", path: "/dashboard", permission: "compliance:read-all" },
   { method: "GET", path: "/staff", permission: "compliance:read-all" },
@@ -75,8 +77,6 @@ const ROUTES: Array<{ method: string; path: string; permission: string }> = [
   { method: "GET", path: "/pending", permission: "compliance:verify" },
   { method: "POST", path: "/documents/:id/verify", permission: "compliance:verify" },
   { method: "POST", path: "/documents/:id/reject", permission: "compliance:verify" },
-  { method: "GET", path: "/rules", permission: "compliance:manage-rules" },
-  { method: "PUT", path: "/rules", permission: "compliance:manage-rules" },
   { method: "GET", path: "/required-documents", permission: "compliance:manage-rules" },
   { method: "PUT", path: "/required-documents", permission: "compliance:manage-rules" },
 ];
@@ -86,6 +86,17 @@ const ALL_KEYS = [
   "compliance:read-all",
   "compliance:verify",
   "compliance:manage-rules",
+];
+
+// /rules is excluded from the generic ROUTES table on purpose: it now
+// carries TWO gates (requirePermission AND requireAdministrator, added by
+// the authority-blast-radius fix — compliance:manage-rules is ALSO
+// granted to Operations Admin, a single-org role, but document_expiry_rule
+// is platform-wide data). The generic table's "passes with $permission"
+// test assumes one gate is enough — /rules needs its own dedicated block.
+const RULES_ROUTES: Array<{ method: string; path: string }> = [
+  { method: "GET", path: "/rules" },
+  { method: "PUT", path: "/rules" },
 ];
 
 describe("compliance routes — permission boundary", () => {
@@ -151,6 +162,48 @@ describe("compliance routes — permission boundary", () => {
     for (const r of ROUTES) {
       expect(ALL_KEYS, `${r.method} ${r.path} uses an unknown key`).toContain(r.permission);
     }
+  });
+
+  describe("/rules — two-gate routes (requirePermission AND requireAdministrator)", () => {
+    it("every /rules route is wired", () => {
+      for (const r of RULES_ROUTES) {
+        expect(() => layerFor(r.method, r.path), `${r.method} ${r.path}`).not.toThrow();
+      }
+    });
+
+    it.each(RULES_ROUTES)("$method $path → 401 without a token", ({ method, path }) => {
+      const { status } = runGates(layerFor(method, path), undefined);
+      expect(status).toBe(401);
+    });
+
+    it.each(RULES_ROUTES)("$method $path → 403 with no permissions", ({ method, path }) => {
+      const { status } = runGates(layerFor(method, path), { sub: 1, roles: ["Subscriber"], permissions: [] });
+      expect(status).toBe(403);
+    });
+
+    it.each(RULES_ROUTES)(
+      "$method $path → 403 for Operations Admin holding compliance:manage-rules (the authority-blast-radius fix itself)",
+      ({ method, path }) => {
+        const { status } = runGates(layerFor(method, path), {
+          sub: 1,
+          roles: ["Operations Admin"],
+          permissions: ["compliance:manage-rules"],
+        });
+        expect(status).toBe(403);
+      },
+    );
+
+    it.each(RULES_ROUTES)(
+      "$method $path → passes for an Administrator holding compliance:manage-rules",
+      ({ method, path }) => {
+        const { status } = runGates(layerFor(method, path), {
+          sub: 1,
+          roles: ["Administrator"],
+          permissions: ["compliance:manage-rules"],
+        });
+        expect(status).toBeNull();
+      },
+    );
   });
 });
 

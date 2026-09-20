@@ -7,6 +7,7 @@
 
 import type { Request, Response, NextFunction } from "express";
 import { verifyAccessToken, type TokenPayload } from "../services/authService.js";
+import { log } from "../services/auditService.js";
 
 /** Extends Express Request with the decoded token payload. */
 declare global {
@@ -154,6 +155,46 @@ export function requirePermission(...perms: string[]) {
 
     if (!hasPermission(req.user, ...perms)) {
       res.status(403).json({ error: "Insufficient permissions." });
+      return;
+    }
+
+    next();
+  };
+}
+
+/**
+ * Middleware factory restricting access to the Administrator role
+ * specifically — for platform-wide, no-`organisationId` reference data
+ * (`award_rule`, `document_expiry_rule`) where even a single-org role like
+ * Operations Admin must never pass, no matter what permission it holds.
+ *
+ * Administrator-only until a non-admin owner is named (tasks/todo.md:
+ * "extend roster:manage-award-rules"). Remove the call sites of this guard
+ * then — `requirePermission(...)` alongside it becomes the real gate at
+ * that point; today it's checked first but this is the only live one.
+ *
+ * Every rejection is audit-logged (`access_denied`) — this route's whole
+ * purpose is closing an authority-blast-radius gap, so a rejected attempt
+ * is itself security-relevant signal, not just a generic 403 in access logs.
+ */
+export function requireAdministrator() {
+  return (req: Request, res: Response, next: NextFunction) => {
+    if (!req.user) {
+      res.status(401).json({ error: "Authentication required." });
+      return;
+    }
+
+    if (!req.user.roles.includes("Administrator")) {
+      log({
+        entityType: "auth_gate",
+        entityId: req.path,
+        action: "access_denied",
+        actorUserId: req.user.sub,
+        metadata: { route: req.path, requiredRole: "Administrator" },
+      }).catch(() => {
+        // Never let an audit-log failure mask the real 403 already sent below.
+      });
+      res.status(403).json({ error: "Administrator access required." });
       return;
     }
 
