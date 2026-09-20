@@ -57,6 +57,7 @@ function stubOrgFetch(defaultJurisdiction: string | null = null) {
 }
 
 const CURRENT_YEAR = new Date().getFullYear();
+const REAL_FETCH = global.fetch;
 
 describe("PublicHolidaysTab", () => {
   beforeEach(() => {
@@ -66,7 +67,13 @@ describe("PublicHolidaysTab", () => {
     deletePublicHolidayMock.mockReset();
     stubOrgFetch(null);
   });
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => {
+    vi.restoreAllMocks();
+    // stubOrgFetch assigns global.fetch directly (not via vi.spyOn), so
+    // restoreAllMocks can't undo it — restore explicitly to avoid leaking
+    // a dead mock into other test files sharing this worker.
+    global.fetch = REAL_FETCH;
+  });
 
   it("shows a loading spinner, then the ready content", async () => {
     listPublicHolidaysMock.mockResolvedValue([]);
@@ -119,6 +126,27 @@ describe("PublicHolidaysTab", () => {
     expect(screen.getByRole("tab", { name: "NSW" })).toHaveAttribute("aria-selected", "false");
   });
 
+  it("falls back to NSW when the org fetch fails (network error)", async () => {
+    global.fetch = vi.fn(() => Promise.reject(new Error("network down"))) as unknown as typeof fetch;
+    listPublicHolidaysMock.mockResolvedValue([holiday({ jurisdiction: "NSW", loadedForYear: CURRENT_YEAR })]);
+    render(<PublicHolidaysTab />);
+    await waitFor(() => expect(screen.getByRole("tab", { name: "NSW" })).toHaveAttribute("aria-selected", "true"));
+  });
+
+  it("falls back to NSW when the org fetch returns a non-ok response", async () => {
+    global.fetch = vi.fn(() => Promise.resolve({ ok: false, json: async () => ({}) })) as unknown as typeof fetch;
+    listPublicHolidaysMock.mockResolvedValue([holiday({ jurisdiction: "NSW", loadedForYear: CURRENT_YEAR })]);
+    render(<PublicHolidaysTab />);
+    await waitFor(() => expect(screen.getByRole("tab", { name: "NSW" })).toHaveAttribute("aria-selected", "true"));
+  });
+
+  it("falls back to NSW when the org's default_jurisdiction is outside the known list", async () => {
+    stubOrgFetch("XYZ");
+    listPublicHolidaysMock.mockResolvedValue([holiday({ jurisdiction: "NSW", loadedForYear: CURRENT_YEAR })]);
+    render(<PublicHolidaysTab />);
+    await waitFor(() => expect(screen.getByRole("tab", { name: "NSW" })).toHaveAttribute("aria-selected", "true"));
+  });
+
   it("defaults the year to the current year when it has loaded data", async () => {
     stubOrgFetch("NSW");
     listPublicHolidaysMock.mockResolvedValue([holiday({ loadedForYear: CURRENT_YEAR })]);
@@ -137,6 +165,33 @@ describe("PublicHolidaysTab", () => {
     await waitFor(() => expect(screen.getByLabelText("Year")).toBeInTheDocument());
     // Current year absent, past and future both equidistant — future wins.
     expect((screen.getByLabelText("Year") as HTMLSelectElement).value).toBe(String(CURRENT_YEAR + 1));
+  });
+
+  it("picks the strictly nearer loaded year when distances are not tied", async () => {
+    stubOrgFetch("NSW");
+    listPublicHolidaysMock.mockResolvedValue([
+      holiday({ publicHolidayId: "near", loadedForYear: CURRENT_YEAR - 1 }),
+      holiday({ publicHolidayId: "far", loadedForYear: CURRENT_YEAR + 5 }),
+    ]);
+    render(<PublicHolidaysTab />);
+    await waitFor(() => expect(screen.getByLabelText("Year")).toBeInTheDocument());
+    expect((screen.getByLabelText("Year") as HTMLSelectElement).value).toBe(String(CURRENT_YEAR - 1));
+  });
+
+  it("formats the holiday date as a weekday + short-month string", async () => {
+    stubOrgFetch("NSW");
+    listPublicHolidaysMock.mockResolvedValue([
+      holiday({ jurisdiction: "NSW", loadedForYear: CURRENT_YEAR, holidayDate: `${CURRENT_YEAR}-01-01`, holidayName: "New Year's Day" }),
+    ]);
+    render(<PublicHolidaysTab />);
+    await waitFor(() => expect(screen.getByText("New Year's Day")).toBeInTheDocument());
+    const expected = new Date(`${CURRENT_YEAR}-01-01T00:00:00`).toLocaleDateString("en-AU", {
+      weekday: "short",
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+    expect(screen.getByText(expected)).toBeInTheDocument();
   });
 
   it("filters by jurisdiction AND year together, sorted date-ascending", async () => {
@@ -317,6 +372,70 @@ describe("PublicHolidaysTab", () => {
     fireEvent.click(screen.getByRole("button", { name: /remove new year's day/i }));
     await waitFor(() => expect(deletePublicHolidayMock).toHaveBeenCalled());
     expect(screen.getByText("New Year's Day")).toBeInTheDocument();
+  });
+
+  it("Cancel closes the Add panel and resets the form back to the active filter's jurisdiction", async () => {
+    stubOrgFetch("VIC");
+    listPublicHolidaysMock.mockResolvedValue([holiday({ jurisdiction: "VIC", loadedForYear: CURRENT_YEAR })]);
+    render(<PublicHolidaysTab />);
+    await waitFor(() => expect(screen.getByRole("tab", { name: "VIC" })).toHaveAttribute("aria-selected", "true"));
+
+    fireEvent.click(screen.getByRole("button", { name: /add holiday/i }));
+    fireEvent.change(screen.getByLabelText("Holiday jurisdiction"), { target: { value: "QLD" } });
+    fireEvent.change(screen.getByLabelText("Holiday name"), { target: { value: "Half-typed" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" })); // triggers a validation error first
+    expect(screen.getByText("A valid date is required")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("button", { name: "Save" })).not.toBeInTheDocument();
+
+    // Reopening shows a clean form defaulted back to the active filter, not
+    // the half-typed QLD/"Half-typed" state or the stale validation error.
+    fireEvent.click(screen.getByRole("button", { name: /add holiday/i }));
+    expect((screen.getByLabelText("Holiday jurisdiction") as HTMLSelectElement).value).toBe("VIC");
+    expect((screen.getByLabelText("Holiday name") as HTMLInputElement).value).toBe("");
+    expect(screen.queryByText("A valid date is required")).not.toBeInTheDocument();
+  });
+
+  it("sends trimmed optional fields as null and includes regionNote/sourceCitation/partialDayFromTime when provided", async () => {
+    listPublicHolidaysMock.mockResolvedValue([]);
+    createPublicHolidayMock.mockResolvedValue(holiday({ jurisdiction: "VIC", loadedForYear: 2027, holidayName: "Regional Day" }));
+    render(<PublicHolidaysTab />);
+    await waitFor(() => expect(screen.getByText("No public holidays loaded")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: /add holiday/i }));
+    fireEvent.change(screen.getByLabelText("Holiday jurisdiction"), { target: { value: "VIC" } });
+    fireEvent.change(screen.getByLabelText("Date"), { target: { value: "2027-03-11" } });
+    fireEvent.change(screen.getByLabelText("Holiday name"), { target: { value: "  Regional Day  " } });
+    fireEvent.click(screen.getByLabelText(/^regional/i));
+    fireEvent.change(screen.getByLabelText("Region note"), { target: { value: "  Metro Melbourne only  " } });
+    fireEvent.click(screen.getByLabelText(/partial day/i));
+    fireEvent.change(screen.getByLabelText("Applies from"), { target: { value: "13:00" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(createPublicHolidayMock).toHaveBeenCalledTimes(1));
+    expect(createPublicHolidayMock).toHaveBeenCalledWith({
+      jurisdiction: "VIC",
+      holidayDate: "2027-03-11",
+      holidayName: "Regional Day",
+      isRegional: true,
+      regionNote: "Metro Melbourne only",
+      sourceCitation: null,
+      loadedForYear: 2027,
+      partialDayFromTime: "13:00",
+    });
+  });
+
+  it("renders the Regional and partial-day 'From <time>' badges in the Tags column", async () => {
+    stubOrgFetch("NSW");
+    listPublicHolidaysMock.mockResolvedValue([
+      holiday({ jurisdiction: "NSW", loadedForYear: CURRENT_YEAR, isRegional: true, partialDayFromTime: "19:00" }),
+    ]);
+    render(<PublicHolidaysTab />);
+    await waitFor(() => expect(screen.getByText("New Year's Day")).toBeInTheDocument());
+
+    expect(screen.getByText("Regional")).toBeInTheDocument();
+    expect(screen.getByText("From 19:00")).toBeInTheDocument();
   });
 
   it("hides Add/Delete controls without roster:manage", async () => {

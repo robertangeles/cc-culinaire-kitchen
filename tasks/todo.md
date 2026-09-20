@@ -634,3 +634,9 @@ be copy-pasted 3 times (InventoryPage, SettingsLayout's Rostering &
 Compliance strip, PublicHolidaysTab) — DRY violation flagged and deferred
 here rather than fixed piecemeal, since this PR already touches every file
 with the pattern.
+
+**Also fold in (decided 2026-09-21, /ship pre-landing review):** none of
+these pill-tab strips support arrow-key navigation (click-only) — a real
+gap once extracted into a shared `PillTabs` component, since a shared
+component is exactly where that a11y work stops being "inconsistent to add
+in just one place."

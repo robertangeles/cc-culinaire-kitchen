@@ -197,6 +197,61 @@ describe("SettingsLayout — rendered shell", () => {
     expect(onTabChange).toHaveBeenCalledTimes(1);
     expect(onTabChange.mock.calls[0][0]).toBe("knowledge");
   });
+
+  it("ArrowDown from the last Mobile tab lands on the collapsed Rostering & Compliance entry's first tab", () => {
+    const onTabChange = vi.fn();
+    render(
+      <SettingsLayout activeTab="mobilePages" onTabChange={onTabChange}>
+        <div>panel</div>
+      </SettingsLayout>,
+    );
+
+    // "Pages" is ambiguous (web + mobile both use the label) — target by id.
+    fireEvent.keyDown(document.getElementById("settings-tab-mobilePages")!, { key: "ArrowDown" });
+
+    expect(onTabChange).toHaveBeenCalledTimes(1);
+    expect(onTabChange.mock.calls[0][0]).toBe("compliance");
+  });
+
+  it("ArrowDown while a Rostering & Compliance tab is active treats the whole group as one stop and moves to the next group's first tab", () => {
+    const onTabChange = vi.fn();
+    render(
+      <SettingsLayout activeTab="documentExpiryRules" onTabChange={onTabChange}>
+        <div>panel</div>
+      </SettingsLayout>,
+    );
+
+    // The collapsed sidebar entry is the focusable element while any of the
+    // 4 rostering tabs is active — not the (unfocused) tab strip button.
+    fireEvent.keyDown(screen.getByRole("tab", { name: "Rostering & Compliance" }), { key: "ArrowDown" });
+
+    expect(onTabChange).toHaveBeenCalledTimes(1);
+    expect(onTabChange.mock.calls[0][0]).toBe("prompts");
+  });
+
+  it("ArrowUp while a Rostering & Compliance tab is active treats the whole group as one stop and moves to the previous group's last tab", () => {
+    const onTabChange = vi.fn();
+    render(
+      <SettingsLayout activeTab="documentExpiryRules" onTabChange={onTabChange}>
+        <div>panel</div>
+      </SettingsLayout>,
+    );
+
+    fireEvent.keyDown(screen.getByRole("tab", { name: "Rostering & Compliance" }), { key: "ArrowUp" });
+
+    expect(onTabChange).toHaveBeenCalledTimes(1);
+    expect(onTabChange.mock.calls[0][0]).toBe("mobilePages"); // Mobile's only tab
+  });
+
+  it("does not render the Rostering & Compliance tab strip when a non-rostering tab is active", () => {
+    render(
+      <SettingsLayout activeTab="prompts" onTabChange={() => {}}>
+        <div>panel</div>
+      </SettingsLayout>,
+    );
+
+    expect(screen.queryByRole("tablist", { name: "Rostering & Compliance" })).not.toBeInTheDocument();
+  });
 });
 
 describe("SettingsLayout — Compliance tab gating", () => {

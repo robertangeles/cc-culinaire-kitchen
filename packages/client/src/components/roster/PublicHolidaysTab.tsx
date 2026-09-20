@@ -105,7 +105,14 @@ export function PublicHolidaysTab() {
         fetchOrgDefaultJurisdiction(),
       ]);
       setHolidays(loaded);
-      setActiveJurisdiction(orgDefaultJurisdiction || JURISDICTIONS[0]);
+      // Guard against a stale/unexpected default_jurisdiction value (e.g. a
+      // jurisdiction no longer in the list) — an unmatched value would leave
+      // no pill selected and permanently filter the table to empty.
+      setActiveJurisdiction(
+        orgDefaultJurisdiction && (JURISDICTIONS as string[]).includes(orgDefaultJurisdiction)
+          ? orgDefaultJurisdiction
+          : JURISDICTIONS[0],
+      );
       setActiveYear(pickDefaultYear([...new Set(loaded.map((h) => h.loadedForYear))]));
       setStatus("ready");
     } catch {
