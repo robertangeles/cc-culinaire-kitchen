@@ -15,6 +15,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Plus, Loader2, RotateCcw, Clock } from "lucide-react";
 import { EmptyState } from "../ui/EmptyState.js";
 import { RuleDrawer } from "./RuleDrawer.js";
+import { useRuleDrawer } from "./useRuleDrawer.js";
 import { AU_JURISDICTIONS } from "../../hooks/useRoster.js";
 
 const API = import.meta.env.VITE_API_URL ?? "";
@@ -78,10 +79,18 @@ async function saveRule(input: NewExpiryRule): Promise<ExpiryRule> {
 export function ComplianceRulesTab() {
   const [status, setStatus] = useState<ListState>("loading");
   const [rules, setRules] = useState<ExpiryRule[]>([]);
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const [form, setForm] = useState(emptyForm);
-  const [saveError, setSaveError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
+  const {
+    open: drawerOpen,
+    setOpen: setDrawerOpen,
+    form,
+    setForm,
+    saveError,
+    setSaveError,
+    saving,
+    setSaving,
+    openDrawer,
+    closeDrawer,
+  } = useRuleDrawer(emptyForm);
 
   const load = useCallback(async () => {
     setStatus("loading");
@@ -100,16 +109,6 @@ export function ComplianceRulesTab() {
   // Active rows only — closed/superseded rows are history, visible via the
   // audit log, not this table (Section 11 design decision).
   const activeRules = rules.filter((r) => r.effectiveTo === null);
-
-  function openDrawer() {
-    setForm(emptyForm);
-    setSaveError(null);
-    setDrawerOpen(true);
-  }
-
-  function closeDrawer() {
-    setDrawerOpen(false);
-  }
 
   async function handleSave() {
     setSaveError(null);

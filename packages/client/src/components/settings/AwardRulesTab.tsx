@@ -17,6 +17,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Plus, Loader2, RotateCcw, Scale, Upload } from "lucide-react";
 import { EmptyState } from "../ui/EmptyState.js";
 import { RuleDrawer } from "./RuleDrawer.js";
+import { useRuleDrawer } from "./useRuleDrawer.js";
 import {
   listAwardRules,
   upsertAwardRule,
@@ -48,10 +49,18 @@ function formatRuleType(ruleType: string): string {
 export function AwardRulesTab() {
   const [status, setStatus] = useState<ListState>("loading");
   const [rules, setRules] = useState<AwardRule[]>([]);
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const [form, setForm] = useState(emptyForm);
-  const [saveError, setSaveError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
+  const {
+    open: drawerOpen,
+    setOpen: setDrawerOpen,
+    form,
+    setForm,
+    saveError,
+    setSaveError,
+    saving,
+    setSaving,
+    openDrawer,
+    closeDrawer,
+  } = useRuleDrawer(emptyForm);
 
   const [importDrawerOpen, setImportDrawerOpen] = useState(false);
   const [importPreview, setImportPreview] = useState<CsvImportPreview | null>(null);
@@ -73,16 +82,6 @@ export function AwardRulesTab() {
   useEffect(() => {
     void load();
   }, [load]);
-
-  function openDrawer() {
-    setForm(emptyForm);
-    setSaveError(null);
-    setDrawerOpen(true);
-  }
-
-  function closeDrawer() {
-    setDrawerOpen(false);
-  }
 
   function openImportDrawer() {
     setImportPreview(null);
