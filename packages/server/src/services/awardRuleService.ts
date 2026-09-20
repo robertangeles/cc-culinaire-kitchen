@@ -36,6 +36,7 @@ import { db } from "../db/index.js";
 import { awardRule } from "../db/schema.js";
 import { AU_JURISDICTIONS } from "./jurisdiction.js";
 import * as auditService from "./auditService.js";
+import { withRetryOnConflict } from "../utils/retryOnConflict.js";
 
 export const AWARD_CHECKED_RULE_TYPES = ["max_ordinary_hours", "publish_notice"] as const;
 export const AWARD_NOT_CHECKED_RULE_TYPES = [
@@ -274,9 +275,9 @@ export interface AwardRuleRow {
  * tying the tag to when this version became effective rather than
  * implying a fake official MA000009 document-version number.
  *
- * Same-day-edit guard and race-safety (idx_award_rule_one_active, 23505
- * catch-and-retry) mirror upsertExpiryRule exactly — see that function's
- * doc comment for the full reasoning.
+ * Same-day-edit guard and race-safety (idx_award_rule_one_active, retried
+ * once on conflict via `withRetryOnConflict`) mirror upsertExpiryRule
+ * exactly — see that function's doc comment for the full reasoning.
  */
 export async function upsertAwardRule(input: AwardRuleInput, actorUserId: number): Promise<AwardRuleRow> {
   const awardCode = input.awardCode.trim();
@@ -297,7 +298,9 @@ export async function upsertAwardRule(input: AwardRuleInput, actorUserId: number
 
   if (!input.effectiveFrom) throw new AwardRuleError("An effective-from date is required", 400);
 
-  return upsertAwardRuleAttempt(awardCode, input.ruleType, jurisdiction, input, actorUserId);
+  return withRetryOnConflict(() =>
+    upsertAwardRuleAttempt(awardCode, input.ruleType, jurisdiction, input, actorUserId),
+  );
 }
 
 async function upsertAwardRuleAttempt(
@@ -306,80 +309,69 @@ async function upsertAwardRuleAttempt(
   jurisdiction: string | null,
   input: AwardRuleInput,
   actorUserId: number,
-  isRetry = false,
 ): Promise<AwardRuleRow> {
-  try {
-    return await db.transaction(async (tx) => {
-      const activeMatch = jurisdiction
-        ? and(eq(awardRule.ruleType, ruleType), eq(awardRule.jurisdiction, jurisdiction))
-        : and(eq(awardRule.ruleType, ruleType), isNull(awardRule.jurisdiction));
+  return db.transaction(async (tx) => {
+    const activeMatch = jurisdiction
+      ? and(eq(awardRule.ruleType, ruleType), eq(awardRule.jurisdiction, jurisdiction))
+      : and(eq(awardRule.ruleType, ruleType), isNull(awardRule.jurisdiction));
 
-      const [activeRow] = await tx
-        .select({ awardRuleId: awardRule.awardRuleId, effectiveFrom: awardRule.effectiveFrom })
-        .from(awardRule)
-        .where(and(activeMatch, isNull(awardRule.effectiveTo)));
+    const [activeRow] = await tx
+      .select({ awardRuleId: awardRule.awardRuleId, effectiveFrom: awardRule.effectiveFrom })
+      .from(awardRule)
+      .where(and(activeMatch, isNull(awardRule.effectiveTo)));
 
-      if (activeRow && input.effectiveFrom <= activeRow.effectiveFrom) {
-        throw new AwardRuleError(
-          "This rule was already updated today — edit the existing row directly instead of creating a new version",
-          409,
-        );
-      }
+    if (activeRow && input.effectiveFrom <= activeRow.effectiveFrom) {
+      throw new AwardRuleError(
+        "This rule was already updated today — edit the existing row directly instead of creating a new version",
+        409,
+      );
+    }
 
-      if (activeRow) {
-        await tx
-          .update(awardRule)
-          .set({
-            effectiveTo: sql`(${input.effectiveFrom}::date - 1)`,
-            updatedDttm: new Date(),
-          })
-          .where(and(activeMatch, isNull(awardRule.effectiveTo)));
-
-        await auditService.log(
-          {
-            entityType: "award_rule",
-            entityId: activeRow.awardRuleId,
-            action: "update",
-            actorUserId,
-            metadata: { closedBy: "auto-supersede" },
-          },
-          tx,
-        );
-      }
-
-      const [created] = await tx
-        .insert(awardRule)
-        .values({
-          awardCode,
-          ruleType,
-          jurisdiction,
-          thresholdValue: String(input.thresholdValue),
-          effectiveFrom: input.effectiveFrom,
-          sourceCitation: input.sourceCitation ?? null,
-          ruleVersion: `v${input.effectiveFrom}`,
+    if (activeRow) {
+      await tx
+        .update(awardRule)
+        .set({
+          effectiveTo: sql`(${input.effectiveFrom}::date - 1)`,
+          updatedDttm: new Date(),
         })
-        .returning();
+        .where(and(activeMatch, isNull(awardRule.effectiveTo)));
 
       await auditService.log(
         {
           entityType: "award_rule",
-          entityId: created.awardRuleId,
-          action: "create",
+          entityId: activeRow.awardRuleId,
+          action: "update",
           actorUserId,
-          afterValue: created,
+          metadata: { closedBy: "auto-supersede" },
         },
         tx,
       );
-
-      return created;
-    });
-  } catch (err) {
-    // 23505 = unique_violation — a concurrent create won the race on
-    // idx_award_rule_one_active. Retry once: the re-read now sees the
-    // winner's closed row and completes cleanly.
-    if (!isRetry && (err as { code?: string })?.code === "23505") {
-      return upsertAwardRuleAttempt(awardCode, ruleType, jurisdiction, input, actorUserId, true);
     }
-    throw err;
-  }
+
+    const [created] = await tx
+      .insert(awardRule)
+      .values({
+        awardCode,
+        ruleType,
+        jurisdiction,
+        thresholdValue: String(input.thresholdValue),
+        effectiveFrom: input.effectiveFrom,
+        sourceCitation: input.sourceCitation ?? null,
+        ruleVersion: `v${input.effectiveFrom}`,
+      })
+      .returning();
+
+    await auditService.log(
+      {
+        entityType: "award_rule",
+        entityId: created.awardRuleId,
+        action: "create",
+        actorUserId,
+        afterValue: created,
+      },
+      tx,
+    );
+
+    return created;
+  });
 }
