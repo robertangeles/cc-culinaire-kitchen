@@ -108,12 +108,23 @@ export function PublicHolidaysTab() {
       // Guard against a stale/unexpected default_jurisdiction value (e.g. a
       // jurisdiction no longer in the list) — an unmatched value would leave
       // no pill selected and permanently filter the table to empty.
-      setActiveJurisdiction(
+      const resolvedJurisdiction =
         orgDefaultJurisdiction && (JURISDICTIONS as string[]).includes(orgDefaultJurisdiction)
           ? orgDefaultJurisdiction
-          : JURISDICTIONS[0],
+          : JURISDICTIONS[0];
+      setActiveJurisdiction(resolvedJurisdiction);
+      // Scoped to the resolved jurisdiction, not the whole dataset — a
+      // multi-jurisdiction org can have different years loaded per state, so
+      // "best available year" must mean best available FOR THIS jurisdiction,
+      // or it can default to a jurisdiction+year pair that has no data even
+      // though the jurisdiction itself does (elsewhere).
+      setActiveYear(
+        pickDefaultYear([
+          ...new Set(
+            loaded.filter((h) => h.jurisdiction === resolvedJurisdiction).map((h) => h.loadedForYear),
+          ),
+        ]),
       );
-      setActiveYear(pickDefaultYear([...new Set(loaded.map((h) => h.loadedForYear))]));
       setStatus("ready");
     } catch {
       setStatus("error");
@@ -180,7 +191,20 @@ export function PublicHolidaysTab() {
     setDeletingId(id);
     try {
       await deletePublicHoliday(id);
-      setHolidays((prev) => prev.filter((h) => h.publicHolidayId !== id));
+      setHolidays((prev) => {
+        const next = prev.filter((h) => h.publicHolidayId !== id);
+        // If that was the last holiday for the active jurisdiction+year, the
+        // Year select's options no longer include activeYear — its <select>
+        // would show a value with no matching <option>. Re-sync the same way
+        // load() picks a default.
+        const yearsForJurisdiction = [
+          ...new Set(next.filter((h) => h.jurisdiction === activeJurisdiction).map((h) => h.loadedForYear)),
+        ];
+        if (!yearsForJurisdiction.includes(activeYear)) {
+          setActiveYear(pickDefaultYear(yearsForJurisdiction));
+        }
+        return next;
+      });
     } catch {
       // ponytail: silent no-op on failed delete, row simply stays — add a
       // toast if this turns out to be confusing in practice.

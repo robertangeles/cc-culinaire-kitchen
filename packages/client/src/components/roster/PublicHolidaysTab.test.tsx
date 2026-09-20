@@ -167,6 +167,21 @@ describe("PublicHolidaysTab", () => {
     expect((screen.getByLabelText("Year") as HTMLSelectElement).value).toBe(String(CURRENT_YEAR + 1));
   });
 
+  it("REGRESSION: scopes the default year to the resolved jurisdiction, not the whole dataset", async () => {
+    // Org defaults to VIC. NSW has the current year loaded; VIC only has an
+    // older year. The default must land on VIC + that older year (has data),
+    // not VIC + current year (empty) just because SOME jurisdiction has it.
+    stubOrgFetch("VIC");
+    listPublicHolidaysMock.mockResolvedValue([
+      holiday({ publicHolidayId: "nsw-current", jurisdiction: "NSW", loadedForYear: CURRENT_YEAR }),
+      holiday({ publicHolidayId: "vic-old", jurisdiction: "VIC", loadedForYear: CURRENT_YEAR - 2, holidayName: "VIC Old Day" }),
+    ]);
+    render(<PublicHolidaysTab />);
+    await waitFor(() => expect(screen.getByRole("tab", { name: "VIC" })).toHaveAttribute("aria-selected", "true"));
+    expect((screen.getByLabelText("Year") as HTMLSelectElement).value).toBe(String(CURRENT_YEAR - 2));
+    expect(screen.getByText("VIC Old Day")).toBeInTheDocument();
+  });
+
   it("picks the strictly nearer loaded year when distances are not tied", async () => {
     stubOrgFetch("NSW");
     listPublicHolidaysMock.mockResolvedValue([
@@ -360,6 +375,27 @@ describe("PublicHolidaysTab", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /remove new year's day/i }));
     await waitFor(() => expect(screen.queryByText("New Year's Day")).not.toBeInTheDocument());
+  });
+
+  it("REGRESSION: re-syncs the Year select after deleting the last holiday for the active year", async () => {
+    stubOrgFetch("NSW");
+    listPublicHolidaysMock.mockResolvedValue([
+      holiday({ publicHolidayId: "only-2099", jurisdiction: "NSW", loadedForYear: 2099, holidayDate: "2099-01-01" }),
+      holiday({ publicHolidayId: "nsw-current", jurisdiction: "NSW", loadedForYear: CURRENT_YEAR, holidayName: "Current Year Day" }),
+    ]);
+    deletePublicHolidayMock.mockResolvedValue(undefined);
+    render(<PublicHolidaysTab />);
+    await waitFor(() => expect(screen.getByLabelText("Year")).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText("Year"), { target: { value: "2099" } });
+    await waitFor(() => expect(screen.getByText("New Year's Day")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: /remove new year's day/i }));
+    await waitFor(() => expect(screen.queryByText("New Year's Day")).not.toBeInTheDocument());
+    // 2099 no longer has any NSW holiday — the select must not be left
+    // pointing at a year with no matching <option>.
+    expect((screen.getByLabelText("Year") as HTMLSelectElement).value).toBe(String(CURRENT_YEAR));
+    expect(screen.getByText("Current Year Day")).toBeInTheDocument();
   });
 
   it("leaves the row in place on a failed delete (pre-existing silent no-op)", async () => {
