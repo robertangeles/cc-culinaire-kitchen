@@ -4,6 +4,28 @@ Append-only. Newest entry on top.
 
 ---
 
+## 2026-09-21 — Settings nav collapse + Public Holidays filter/table redesign
+
+- Collapsed the Settings sidebar's 4 separate Rostering & Compliance rows (Compliance, Public
+  Holidays, Award Rules, Document Expiry Rules) into 1 sidebar entry with a horizontal tab strip,
+  in `SettingsLayout.tsx`.
+- Redesigned `PublicHolidaysTab.tsx`: was an unfiltered flat list (100+ rows across 8
+  jurisdictions with no grouping); now a jurisdiction pill filter + year `<select>` over a real
+  table, defaulting to the organisation's `default_jurisdiction` field — present in the schema and
+  returned by `GET /api/organisations/mine` since earlier work, but never read by any client until
+  now. Full design/eng review plan at `docs/specs/public-holidays-filters-plan.md`.
+- Two correctness bugs caught during review and fixed before landing: switching jurisdiction
+  didn't rescope the active year (could leave the Year `<select>` pointed at a year with no data
+  for the newly selected jurisdiction), and a delete-in-flight could resync against a stale
+  jurisdiction/year if the user switched filters before the request resolved (fixed with an
+  always-fresh ref mirroring the active filter).
+- Fixed a pre-existing UTC-vs-local-day bug in `RosterCalendarView.test.tsx` (unrelated to this
+  feature, found while touching adjacent test infra).
+- Cleaned up ~2650 stale gitignored build artifacts.
+- `wiki/entities/roster-core.md` updated to reflect the new admin UI and the Settings nav collapse.
+- Deferred to `tasks/todo.md`: pill-tab touch-target (44px) sweep + `PillTabs` extraction across
+  10 files, flagged during this review but scoped as its own follow-up PR.
+
 ## 2026-09-20 — Compliance Phase 1 polish: nudge, venue documents, engagement type, archived-doc fix
 
 - Exhaustive QA pass over `docs/qa/rostering-compliance-test-plan.md` (163/163 rows), turning up

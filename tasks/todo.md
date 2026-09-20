@@ -614,3 +614,29 @@ and server suite (unit + `TENANT_IT=1` integration) green.
 - **P3** natural-language ordering; invoice/credit-note OCR reconciliation
 - **P2** server-side catalog search/pagination (catalog is now a fallback)
 - **P2** cross-supplier order guides (schema is forward-compatible)
+
+## Pill/tab touch targets below 44px guideline (found during Public Holidays design review, 2026-09-20)
+
+`role="tab"` pill buttons across the app use `px-4 py-2` (~36px tall), below
+the 44px touch-target minimum. Spans 13 instances across 10 files:
+`InventoryPage.tsx`, `RosterPage.tsx`, `ProfilePage.tsx` (×3),
+`IntegrationsTab.tsx`, `PromptsTab.tsx`, `TeamComplianceSection.tsx`,
+`ScopeToggle.tsx`, `PurchasingPage.tsx`, `OrganisationPage.tsx`,
+`SettingsLayout.tsx` (×3 — includes the vertical sidebar rows, a different
+shape from the horizontal pills, worth checking separately).
+Decided during review: own follow-up PR, not bundled into unrelated feature
+work — deliberately scoped, reviewable, revertable on its own.
+
+**Also fold in while touching all these files (decided 2026-09-20, eng
+review of the Public Holidays plan):** extract a shared `PillTabs`
+component. By the time this PR lands, the horizontal pill-tablist JSX will
+be copy-pasted 3 times (InventoryPage, SettingsLayout's Rostering &
+Compliance strip, PublicHolidaysTab) — DRY violation flagged and deferred
+here rather than fixed piecemeal, since this PR already touches every file
+with the pattern.
+
+**Also fold in (decided 2026-09-21, /ship pre-landing review):** none of
+these pill-tab strips support arrow-key navigation (click-only) — a real
+gap once extracted into a shared `PillTabs` component, since a shared
+component is exactly where that a11y work stops being "inconsistent to add
+in just one place."

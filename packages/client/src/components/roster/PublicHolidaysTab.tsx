@@ -6,9 +6,14 @@
  * a year. There is no bulk auto-population — publishRoster() fail-loud
  * blocks with "Public holidays for VIC 2027 are not loaded." until someone
  * has loaded that jurisdiction+year here.
+ *
+ * Jurisdiction + Year are a client-side filter (dataset is small — no
+ * server-side pagination needed) so the list never renders more than one
+ * jurisdiction/year at a time. See docs/specs/public-holidays-filters-plan.md
+ * for the full design + eng review.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { CalendarOff, Loader2, Plus, Trash2 } from "lucide-react";
 import { useHasPermission } from "../../hooks/useHasPermission.js";
 import {
@@ -34,20 +39,101 @@ const emptyForm = {
   partialDayFromTime: "",
 };
 
+/**
+ * Best default year: the current calendar year if it has loaded data, else
+ * the nearest loaded year — ties (equidistant past/future) prefer the
+ * future, since an admin here is almost always preparing upcoming rosters,
+ * not auditing history. Zero loaded years anywhere falls back to the
+ * current calendar year (the Year select's only option in that case).
+ */
+function pickDefaultYear(loadedYears: number[]): number {
+  const currentYear = new Date().getFullYear();
+  if (loadedYears.length === 0 || loadedYears.includes(currentYear)) {
+    return currentYear;
+  }
+  return [...loadedYears].sort((a, b) => {
+    const distanceDiff = Math.abs(a - currentYear) - Math.abs(b - currentYear);
+    return distanceDiff !== 0 ? distanceDiff : b - a; // tie: prefer future (larger year)
+  })[0];
+}
+
+/** Distinct loadedForYear values for one jurisdiction, newest first. */
+function loadedYearsFor(holidays: PublicHoliday[], jurisdiction: string): number[] {
+  return [...new Set(holidays.filter((h) => h.jurisdiction === jurisdiction).map((h) => h.loadedForYear))].sort(
+    (a, b) => b - a,
+  );
+}
+
+/** "2026-01-01" -> "Thu, 1 Jan 2026". Matches the approved mockup. */
+function formatHolidayDate(isoDate: string): string {
+  return new Date(`${isoDate}T00:00:00`).toLocaleDateString("en-AU", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+/**
+ * organisation.default_jurisdiction — admin-settable via Settings ->
+ * Organisation -> Branding, already returned by GET /api/organisations/mine
+ * but not otherwise exposed to any client hook/context. Failures (network,
+ * no org membership) degrade to null -> NSW fallback rather than blocking
+ * the page; this is a nice-to-have default, not required data.
+ */
+async function fetchOrgDefaultJurisdiction(): Promise<string | null> {
+  try {
+    const res = await fetch("/api/organisations/mine", { credentials: "include" });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.organisation?.defaultJurisdiction || null;
+  } catch {
+    return null;
+  }
+}
+
 export function PublicHolidaysTab() {
   const canManage = useHasPermission()("roster:manage");
   const [status, setStatus] = useState<Status>("loading");
   const [holidays, setHolidays] = useState<PublicHoliday[]>([]);
+  const [activeJurisdiction, setActiveJurisdiction] = useState(JURISDICTIONS[0]);
+  const [activeYear, setActiveYear] = useState(new Date().getFullYear());
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
+  // Always-fresh mirror of the active filter for async callbacks (e.g. a
+  // delete in flight) that must not act on a stale closure if the user
+  // switches jurisdiction/year before the request resolves.
+  const activeFilterRef = useRef({ jurisdiction: activeJurisdiction, year: activeYear });
+  useEffect(() => {
+    activeFilterRef.current = { jurisdiction: activeJurisdiction, year: activeYear };
+  }, [activeJurisdiction, activeYear]);
+
   const load = useCallback(async () => {
     setStatus("loading");
     try {
-      setHolidays(await listPublicHolidays());
+      const [loaded, orgDefaultJurisdiction] = await Promise.all([
+        listPublicHolidays(),
+        fetchOrgDefaultJurisdiction(),
+      ]);
+      setHolidays(loaded);
+      // Guard against a stale/unexpected default_jurisdiction value (e.g. a
+      // jurisdiction no longer in the list) — an unmatched value would leave
+      // no pill selected and permanently filter the table to empty.
+      const resolvedJurisdiction =
+        orgDefaultJurisdiction && (JURISDICTIONS as string[]).includes(orgDefaultJurisdiction)
+          ? orgDefaultJurisdiction
+          : JURISDICTIONS[0];
+      setActiveJurisdiction(resolvedJurisdiction);
+      // Scoped to the resolved jurisdiction, not the whole dataset — a
+      // multi-jurisdiction org can have different years loaded per state, so
+      // "best available year" must mean best available FOR THIS jurisdiction,
+      // or it can default to a jurisdiction+year pair that has no data even
+      // though the jurisdiction itself does (elsewhere).
+      setActiveYear(pickDefaultYear(loadedYearsFor(loaded, resolvedJurisdiction)));
       setStatus("ready");
     } catch {
       setStatus("error");
@@ -57,6 +143,27 @@ export function PublicHolidaysTab() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Switching jurisdiction must rescope the year too — the previously
+  // active year may not exist for the newly selected jurisdiction (a
+  // multi-jurisdiction org can have different years loaded per state).
+  // Same bug class as load()'s initial default, just triggered by a click
+  // instead of the first fetch.
+  function selectJurisdiction(jurisdiction: string) {
+    setActiveJurisdiction(jurisdiction);
+    setActiveYear(pickDefaultYear(loadedYearsFor(holidays, jurisdiction)));
+  }
+
+  function openAdd() {
+    setForm({ ...emptyForm, jurisdiction: activeJurisdiction });
+    setShowAdd(true);
+  }
+
+  function cancelAdd() {
+    setShowAdd(false);
+    setForm({ ...emptyForm, jurisdiction: activeJurisdiction });
+    setFormError(null);
+  }
 
   async function handleAdd() {
     setFormError(null);
@@ -85,8 +192,12 @@ export function PublicHolidaysTab() {
         loadedForYear: year,
         partialDayFromTime: form.isPartialDay ? form.partialDayFromTime : null,
       });
-      setHolidays((prev) => [...prev, created].sort((a, b) => a.jurisdiction.localeCompare(b.jurisdiction) || a.holidayDate.localeCompare(b.holidayDate)));
-      setForm(emptyForm);
+      setHolidays((prev) => [...prev, created]);
+      // Jump the active filter to match, so a save outside the previous
+      // filter is never silently invisible — the whole reason this exists.
+      setActiveJurisdiction(created.jurisdiction);
+      setActiveYear(created.loadedForYear);
+      setForm({ ...emptyForm, jurisdiction: created.jurisdiction });
       setShowAdd(false);
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Failed to add public holiday");
@@ -100,6 +211,21 @@ export function PublicHolidaysTab() {
     try {
       await deletePublicHoliday(id);
       setHolidays((prev) => prev.filter((h) => h.publicHolidayId !== id));
+      // If that was the last holiday for the active jurisdiction+year, the
+      // Year select's options no longer include activeYear — its <select>
+      // would show a value with no matching <option>. Re-sync the same way
+      // load() picks a default. Computed from `holidays` (this render's
+      // closure, not React's deferred functional-updater result — that
+      // isn't guaranteed to run synchronously) and activeFilterRef (not
+      // activeJurisdiction/activeYear directly — the user may have switched
+      // jurisdiction/year while this delete was in flight, and re-syncing
+      // against a stale filter would clobber the one they've since switched to).
+      const { jurisdiction, year } = activeFilterRef.current;
+      const remainingYears = loadedYearsFor(
+        holidays.filter((h) => h.publicHolidayId !== id),
+        jurisdiction,
+      );
+      if (!remainingYears.includes(year)) setActiveYear(pickDefaultYear(remainingYears));
     } catch {
       // ponytail: silent no-op on failed delete, row simply stays — add a
       // toast if this turns out to be confusing in practice.
@@ -131,6 +257,16 @@ export function PublicHolidaysTab() {
     );
   }
 
+  // Scoped to the active jurisdiction — showing a year with no data for
+  // this jurisdiction just because another jurisdiction has it is exactly
+  // the false-empty trap this component exists to avoid.
+  const yearsForActiveJurisdiction = loadedYearsFor(holidays, activeJurisdiction);
+  const yearOptions = yearsForActiveJurisdiction.length > 0 ? yearsForActiveJurisdiction : [new Date().getFullYear()];
+  const filteredHolidays = holidays
+    .filter((h) => h.jurisdiction === activeJurisdiction && h.loadedForYear === activeYear)
+    .sort((a, b) => a.holidayDate.localeCompare(b.holidayDate));
+  const isGloballyEmpty = holidays.length === 0;
+
   return (
     <div className="animate-fade-in-up space-y-6 p-6">
       <div className="flex items-center justify-between">
@@ -144,12 +280,57 @@ export function PublicHolidaysTab() {
         {canManage && (
           <button
             type="button"
-            onClick={() => setShowAdd((v) => !v)}
+            onClick={() => (showAdd ? cancelAdd() : openAdd())}
             className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-gold to-gold-hover px-4 py-2 text-sm font-semibold text-dark transition-all hover:shadow-[0_0_12px_rgba(212,165,116,0.2)] active:scale-[0.98]"
           >
             <Plus className="size-4" /> Add holiday
           </button>
         )}
+      </div>
+
+      <div className="flex flex-wrap items-start gap-4">
+        <div>
+          <p className="mb-2 text-xs font-medium text-dark-600">Jurisdiction</p>
+          <div
+            role="tablist"
+            aria-label="Jurisdiction filter"
+            className="flex max-w-full gap-1 overflow-x-auto rounded-xl border border-dark-200 bg-dark-50 p-1"
+          >
+            {JURISDICTIONS.map((j) => (
+              <button
+                key={j}
+                type="button"
+                role="tab"
+                aria-selected={activeJurisdiction === j}
+                onClick={() => selectJurisdiction(j)}
+                className={`shrink-0 rounded-lg px-4 py-2 text-sm font-medium transition-all ${
+                  activeJurisdiction === j
+                    ? "bg-gold text-dark"
+                    : "text-dark-600 hover:bg-dark-100/50 hover:text-white"
+                }`}
+              >
+                {j}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div>
+          <label className="mb-2 block text-xs font-medium text-dark-600" htmlFor="public-holidays-year">
+            Year
+          </label>
+          <select
+            id="public-holidays-year"
+            value={activeYear}
+            onChange={(e) => setActiveYear(Number(e.target.value))}
+            className="rounded-lg border border-dark-200 bg-dark-100 px-3 py-2 text-sm text-white focus:border-gold/50 focus:outline-none"
+          >
+            {yearOptions.map((y) => (
+              <option key={y} value={y}>
+                {y}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {showAdd && (
@@ -158,6 +339,7 @@ export function PublicHolidaysTab() {
             <label className="text-xs text-dark-600">
               Jurisdiction
               <select
+                aria-label="Holiday jurisdiction"
                 value={form.jurisdiction}
                 onChange={(e) => setForm((f) => ({ ...f, jurisdiction: e.target.value }))}
                 className="mt-1 w-full rounded-lg bg-dark-100 border border-dark-200 px-3 py-2 text-sm text-white focus:outline-none focus:border-gold/50"
@@ -244,11 +426,7 @@ export function PublicHolidaysTab() {
           <div className="flex justify-end gap-2">
             <button
               type="button"
-              onClick={() => {
-                setShowAdd(false);
-                setForm(emptyForm);
-                setFormError(null);
-              }}
+              onClick={cancelAdd}
               className="rounded-lg px-4 py-2 text-sm text-dark-600 hover:text-white transition-all"
             >
               Cancel
@@ -266,53 +444,93 @@ export function PublicHolidaysTab() {
         </div>
       )}
 
-      {holidays.length === 0 && !showAdd ? (
+      {filteredHolidays.length === 0 && !showAdd ? (
         <EmptyState
           icon={CalendarOff}
-          title="No public holidays loaded"
-          body="Publishing a roster will block until the venue's jurisdiction and year are loaded here."
-          action={canManage ? { label: "Add a holiday", onClick: () => setShowAdd(true) } : undefined}
+          variant={isGloballyEmpty ? "invitation" : "no-match"}
+          title={isGloballyEmpty ? "No public holidays loaded" : "No holidays loaded"}
+          body={
+            isGloballyEmpty
+              ? "Publishing a roster will block until the venue's jurisdiction and year are loaded here."
+              : `No holidays loaded for ${activeJurisdiction} in ${activeYear}.`
+          }
+          action={canManage ? { label: "Add a holiday", onClick: openAdd } : undefined}
         />
       ) : (
-        <div className="rounded-xl border border-dark-200 overflow-hidden">
-          {holidays.map((h) => (
-            <div
-              key={h.publicHolidayId}
-              className="flex items-center justify-between gap-4 border-b border-dark-200/30 px-4 py-3 last:border-b-0"
-            >
-              <div className="flex items-center gap-3">
-                <span className="rounded-full border border-dark-300 px-2 py-0.5 text-xs text-dark-600">
-                  {h.jurisdiction}
-                </span>
-                <span className="text-sm text-white">{h.holidayName}</span>
-                <span className="text-xs text-dark-600">{h.holidayDate}</span>
-                {h.isRegional && (
-                  <span className="rounded-full border border-gold/30 px-2 py-0.5 text-xs text-gold">Regional</span>
-                )}
-                {h.partialDayFromTime && (
-                  <span className="rounded-full border border-gold/30 px-2 py-0.5 text-xs text-gold">
-                    From {h.partialDayFromTime}
-                  </span>
-                )}
-              </div>
-              {canManage && (
-                <button
-                  type="button"
-                  onClick={() => handleDelete(h.publicHolidayId)}
-                  disabled={deletingId === h.publicHolidayId}
-                  className="p-1.5 rounded-lg hover:bg-dark-200 text-dark-500 hover:text-red-400 transition-all disabled:opacity-50"
-                  aria-label={`Remove ${h.holidayName}`}
-                >
-                  {deletingId === h.publicHolidayId ? (
-                    <Loader2 className="size-3.5 animate-spin" />
-                  ) : (
-                    <Trash2 className="size-3.5" />
-                  )}
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
+        <>
+          <div className="overflow-x-auto rounded-xl border border-dark-200">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-dark-200/30 text-xs uppercase tracking-wider text-dark-600">
+                  <th scope="col" className="px-4 py-3 text-left font-semibold">
+                    Jurisdiction
+                  </th>
+                  <th scope="col" className="px-4 py-3 text-left font-semibold">
+                    Holiday
+                  </th>
+                  <th scope="col" className="px-4 py-3 text-left font-semibold">
+                    Date
+                  </th>
+                  <th scope="col" className="px-4 py-3 text-left font-semibold">
+                    Tags
+                  </th>
+                  {canManage && <th scope="col" className="px-4 py-3" />}
+                </tr>
+              </thead>
+              <tbody>
+                {filteredHolidays.map((h) => (
+                  <tr
+                    key={h.publicHolidayId}
+                    className="border-b border-dark-200/30 last:border-b-0 hover:bg-dark-100/40 transition-colors"
+                  >
+                    <td className="px-4 py-3">
+                      <span className="rounded-full border border-dark-300 px-2 py-0.5 text-xs text-dark-600">
+                        {h.jurisdiction}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-white">{h.holidayName}</td>
+                    <td className="px-4 py-3 text-dark-600">{formatHolidayDate(h.holidayDate)}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-wrap gap-1.5">
+                        {h.isRegional && (
+                          <span className="rounded-full border border-gold/30 px-2 py-0.5 text-xs text-gold">
+                            Regional
+                          </span>
+                        )}
+                        {h.partialDayFromTime && (
+                          <span className="rounded-full border border-gold/30 px-2 py-0.5 text-xs text-gold">
+                            From {h.partialDayFromTime}
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    {canManage && (
+                      <td className="px-4 py-3 text-right">
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(h.publicHolidayId)}
+                          disabled={deletingId === h.publicHolidayId}
+                          className="p-1.5 rounded-lg hover:bg-dark-200 text-dark-500 hover:text-red-400 transition-all disabled:opacity-50"
+                          aria-label={`Remove ${h.holidayName}`}
+                        >
+                          {deletingId === h.publicHolidayId ? (
+                            <Loader2 className="size-3.5 animate-spin" />
+                          ) : (
+                            <Trash2 className="size-3.5" />
+                          )}
+                        </button>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-xs text-dark-600">
+            Showing {filteredHolidays.length} holiday{filteredHolidays.length === 1 ? "" : "s"} for{" "}
+            {activeJurisdiction} in {activeYear}.
+          </p>
+        </>
       )}
     </div>
   );

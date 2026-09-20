@@ -2,7 +2,7 @@
 title: Roster Core
 category: entity
 created: 2026-08-16
-updated: 2026-09-07
+updated: 2026-09-21
 related: [[staff-compliance-vault]], [[compliance-expiry-engine]], [[scheduled-job-daily-claim]], [[store-locations-system]], [[workforce-optimisation]]
 ---
 
@@ -46,7 +46,7 @@ Tenancy: `shift.storeLocationId` is NOT NULL (a shift always happens at one venu
 - `publishRoster()` calls `assertHolidayCalendarLoaded()` before touching any shift: if the venue's jurisdiction has no row for every year the publish window spans, the whole publish is blocked with `"Public holidays for VIC 2027 are not loaded."` This is the one WHOLE-PUBLISH hard block in `publishRoster()` — `canAssign` blocks per-shift, the Award engine never blocks at all.
 - Every shift that does publish gets `shift.isPublicHoliday` (re-)confirmed against the now-guaranteed-loaded calendar — the column the consent workflow below reads.
 - A daily gap-check job (05:00, reusing `claimDailyRun`/`runIfClaimed` verbatim — see [[scheduled-job-daily-claim]]) scans every distinct venue jurisdiction and logs an `alert: "compliance_holiday_calendar_gap"` marker for any (jurisdiction, year) not yet loaded for the current year, and next year from November on. This is a heads-up, not enforcement — the real block is `publishRoster()`'s own check at the moment a gap actually matters.
-- Admin loader UI: Settings → Public Holidays (`PublicHolidaysTab.tsx`), gated on `roster:manage`. Manual entry only, no bulk-import **feature** — deliberately clerical, so a bad automated source can never silently corrupt live compliance data. A one-off, reviewed **script** (below) is a different thing from a standing bulk-import button in the product.
+- Admin loader UI: Settings → Rostering & Compliance → Public Holidays (`PublicHolidaysTab.tsx`), gated on `roster:manage`. Manual entry only, no bulk-import **feature** — deliberately clerical, so a bad automated source can never silently corrupt live compliance data. A one-off, reviewed **script** (below) is a different thing from a standing bulk-import button in the product. As of 2026-09, the tab renders a jurisdiction pill filter + year `<select>` over a real table instead of one unfiltered flat list (was 100+ rows with no grouping across 8 jurisdictions), defaulting to the org's own `default_jurisdiction` field (previously unused by any client) when it resolves to a loaded jurisdiction, else NSW. Also in Settings, the four Rostering & Compliance tabs (Compliance, Public Holidays, Award Rules, Document Expiry Rules) now collapse into one sidebar entry with a horizontal tab strip in `SettingsLayout.tsx`, rather than four separate sidebar rows.
 
 ### Partial-day holidays (2026-09)
 
