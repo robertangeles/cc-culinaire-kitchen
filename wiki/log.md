@@ -4,6 +4,22 @@ Append-only. Newest entry on top.
 
 ---
 
+## 2026-09-20 — Compliance Phase 1 polish: nudge, venue documents, engagement type, archived-doc fix
+
+- Exhaustive QA pass over `docs/qa/rostering-compliance-test-plan.md` (163/163 rows), turning up
+  several real bugs (StrictMode double-mount, an OCR worker silently dead in dev, a UTC
+  date-boundary bug in roster filters, and the Archived-document view-url check documented but
+  never actually implemented) and three features described in the plan but never built: the
+  nudge/aging affordance on a stale Pending document (CV-C7), venue-level compliance documents
+  with no staff subject (CV-E1), and a contractor/agency engagement-type picker (CV-F1).
+- A pre-merge automated review (`/ship`) then found and closed a genuine race condition in the new
+  nudge feature (concurrent nudges could both pass the "already nudged" throttle) and deduped the
+  identical retry-on-conflict pattern `upsertAwardRule`/`upsertExpiryRule` had each copy-pasted.
+- Updated [[staff-compliance-vault]]: the expiry-rule editor's "no admin UI yet" limitation is
+  stale (`org-admin-rule-editors` shipped it), plus the new routes/client surfaces above.
+
+---
+
 ## 2026-09-06 — Partial-day public holidays + AU 2026-2027 seed
 
 - User hit `publishRoster()`'s "Public holidays for VIC 2026 are not loaded" gate while testing
