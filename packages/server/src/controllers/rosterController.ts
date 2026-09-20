@@ -654,11 +654,7 @@ export async function handleAwardRuleCsvPreview(req: Request, res: Response, nex
     }
     res.json(previewAwardRuleCsv(file.buffer.toString("utf-8")));
   } catch (err) {
-    if (err instanceof Error) {
-      res.status(400).json({ error: err.message });
-      return;
-    }
-    next(err);
+    handleServiceError(err, res, next);
   }
 }
 

@@ -750,6 +750,23 @@ describe.skipIf(!RUN)("roster service (real DB)", () => {
     expect(result.heldShifts.find((h) => h.shiftId === s.shiftId)).toBeUndefined();
   });
 
+  // Same regression as the publishRoster test above, for listShifts's own
+  // `to` filter — see the parseFilterDateEnd comment in rosterService.ts.
+  it("listShifts includes a shift starting late in the day on the 'to' boundary date, not just at its first instant", async () => {
+    const toDate = addDays(TODAY, 2);
+    const start = new Date(`${toDate}T23:00:00.000Z`);
+    const end = new Date(start.getTime() + 2 * 60 * 60 * 1000);
+    const s = await createShift(
+      orgA,
+      { storeLocationId: locA, rosterRoleId: roleId, startDatetime: start.toISOString(), endDatetime: end.toISOString() },
+      userA,
+    );
+
+    const result = await listShifts(orgA, { storeLocationId: locA, to: toDate });
+
+    expect(result.map((row) => row.shiftId)).toContain(s.shiftId);
+  });
+
   it("publishRoster fails loud when the venue's jurisdiction+year holiday calendar isn't loaded", async () => {
     // VIC/current-year is loaded (beforeAll); 2031 is not and never will be —
     // fails before any shift is even queried, so no fixture shift is needed.

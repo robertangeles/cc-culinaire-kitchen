@@ -14,7 +14,7 @@
  * safe under concurrency).
  */
 
-import { ALL_AWARD_RULE_TYPES, upsertAwardRule, type AwardRuleRow } from "./awardRuleService.js";
+import { ALL_AWARD_RULE_TYPES, AwardRuleError, upsertAwardRule, type AwardRuleRow } from "./awardRuleService.js";
 import { AU_JURISDICTIONS } from "./jurisdiction.js";
 
 const MAX_ROWS = 1000;
@@ -47,10 +47,10 @@ export function previewAwardRuleCsv(csvContent: string): CsvImportPreview {
   if (lines.length > 0 && HEADER_RE.test(lines[0].trim())) lines.shift();
 
   if (lines.length === 0) {
-    throw new Error("The CSV file has no data rows");
+    throw new AwardRuleError("The CSV file has no data rows", 400);
   }
   if (lines.length > MAX_ROWS) {
-    throw new Error(`The CSV file has ${lines.length} rows, exceeding the ${MAX_ROWS}-row limit`);
+    throw new AwardRuleError(`The CSV file has ${lines.length} rows, exceeding the ${MAX_ROWS}-row limit`, 400);
   }
 
   const valid: CsvAwardRuleRow[] = [];
@@ -112,33 +112,54 @@ export interface CommitResult {
   errors: Array<{ row: number; reason: string }>;
 }
 
+/** Rows in flight at once — bounds concurrent DB round trips without serializing all 1000. */
+const COMMIT_BATCH_SIZE = 20;
+
 /**
  * Commit rows the client already showed the user in a preview. Each row is
  * its own `upsertAwardRule` call (own transaction, own auto-supersede) —
  * a bad row never rolls back the others, matching commitSalesCsv's
- * per-row-atomic precedent.
+ * per-row-atomic precedent. Rows run in batches of `COMMIT_BATCH_SIZE`
+ * concurrently rather than one at a time: at 1000 rows, sequential
+ * round trips make this the slowest step in the whole import. Safe to
+ * parallelise because `upsertAwardRule` already retries once on a 23505
+ * from `idx_award_rule_one_active` — the same backstop that makes two
+ * concurrent callers hitting the same (awardCode, ruleType, jurisdiction)
+ * key correct, not just fast.
  */
 export async function commitAwardRuleCsvImport(rows: CsvAwardRuleRow[], actorUserId: number): Promise<CommitResult> {
   let imported = 0;
   const errors: CommitResult["errors"] = [];
 
-  for (const row of rows) {
-    try {
-      const result: AwardRuleRow = await upsertAwardRule(
-        {
-          awardCode: row.awardCode,
-          ruleType: row.ruleType,
-          jurisdiction: row.jurisdiction,
-          thresholdValue: row.thresholdValue,
-          effectiveFrom: row.effectiveFrom,
-          sourceCitation: row.sourceCitation,
-        },
-        actorUserId,
-      );
-      if (result) imported++;
-    } catch (err) {
-      errors.push({ row: row.rowIndex, reason: err instanceof Error ? err.message : "failed to save" });
-    }
+  for (let i = 0; i < rows.length; i += COMMIT_BATCH_SIZE) {
+    const batch = rows.slice(i, i + COMMIT_BATCH_SIZE);
+    const outcomes = await Promise.allSettled(
+      batch.map(
+        (row): Promise<AwardRuleRow> =>
+          upsertAwardRule(
+            {
+              awardCode: row.awardCode,
+              ruleType: row.ruleType,
+              jurisdiction: row.jurisdiction,
+              thresholdValue: row.thresholdValue,
+              effectiveFrom: row.effectiveFrom,
+              sourceCitation: row.sourceCitation,
+            },
+            actorUserId,
+          ),
+      ),
+    );
+
+    outcomes.forEach((outcome, idx) => {
+      if (outcome.status === "fulfilled") {
+        if (outcome.value) imported++;
+      } else {
+        errors.push({
+          row: batch[idx].rowIndex,
+          reason: outcome.reason instanceof Error ? outcome.reason.message : "failed to save",
+        });
+      }
+    });
   }
 
   return { imported, skipped: errors.length, errors };
