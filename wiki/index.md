@@ -78,6 +78,7 @@ Categories: **entity** (named things) · **concept** (patterns) · **decision** 
 | [Stock Model + Storage-Area Standards](decisions/stock-model-and-storage-areas.md) | Venue-level on-hand (areas = count sheets, not ledgers); POS depletes the venue pool; per-area balances deferred opt-in; module renamed "Stock Room" → "Inventory"; AU-worded default areas seeded per location | 2026-07-17 |
 | [Compliance Documents Store to Cloudinary Private, Never Local Disk](decisions/document-storage-cloudinary-private.md) | No local-disk fallback ever (the unauthenticated `/uploads/` hazard); 120s signed URLs, not Cloudinary's 1hr default; encryption at rest is Cloudinary's key, not ours; denied access attempts are logged too | 2026-08-07 |
 | [Daily-Run Claim Replaces Advisory Lock for Scheduled Jobs](decisions/scheduled-job-daily-claim.md) | One atomic conditional UPDATE is simultaneously the cross-instance mutex, restart-safe day guard, and admin heartbeat; rejects `withAdvisoryLock` (holds a pool connection for the whole scan) and a JS variable (doesn't survive a Render deploy) | 2026-08-07 |
+| [Landing Page Hospitality Redesign](../docs/designs/landing-page-hospitality-redesign.md) | Palette moved off near-black/gold to a landing-only cocoa/copper token namespace (app-wide `--color-dark`/`--color-gold` untouched); real kitchen photography + real product screenshots replace synthetic mockups; GMSection and Pricing sections removed | 2026-09-24 |
 
 ## Synthesis
 | Page | Summary | Created |

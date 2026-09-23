@@ -4,6 +4,35 @@ Append-only. Newest entry on top.
 
 ---
 
+## 2026-09-24 — Landing page hospitality redesign shipped
+
+- `feature/ck-web/landing-hospitality-redesign`: real customer feedback ("looks vibe-coded, not
+  professional") traced to the visual system reading as generic dark-mode AI SaaS rather than
+  hospitality software. Full plan + implementation log at
+  `docs/designs/landing-page-hospitality-redesign.md`.
+- Added a landing-only `--color-cocoa*`/`--color-copper*` token namespace in `globals.css`,
+  additive alongside (not replacing) the app-wide `--color-dark`/`--color-gold` tokens the
+  authenticated product still uses — repainting the shared tokens in place would have re-skinned
+  ~150 files across the logged-in app.
+  Repointed the 14 landing components + `LandingPage.tsx` at the new tokens.
+- Real assets replaced synthetic mockups: AI-generated kitchen photography behind the hero,
+  real `/inventory` and `/purchasing` screenshots in `PhoneMockup.tsx`/`ReceivingMockup.tsx`
+  (the latter via a real purchase order created through the live Purchasing UI, since the test
+  account had no PO data), and a real customer logo (Almost French Patisserie) in `TrustStrip.tsx`
+  as a single-customer "Featured customer" callout rather than a fabricated multi-logo row.
+- GMSection and Pricing sections removed from `LandingPage.tsx`, both files deleted, and their
+  nav/footer links removed — including a dead `#pricing` footer link caught by the ship-workflow
+  coverage audit after the section itself was gone.
+- New permanent E2E suite `packages/client/tests/e2e/landing.spec.ts` (13 tests). Full regression
+  (`tsc`, `lint`, `pnpm test`, `build`) green throughout.
+- `docs/landing-page-creative-brief.md` (April 2026) is unaffected — it's marked an immutable,
+  dated briefing artefact per `wiki/raw-index/landing-page-creative-brief.md`, superseded in
+  effect (it called for a dark-only palette and a Pricing section) but intentionally left as
+  historical record rather than edited.
+- `wiki/index.md` Decisions table updated with a pointer to the design doc.
+
+---
+
 ## 2026-09-21 — Settings nav collapse + Public Holidays filter/table redesign
 
 - Collapsed the Settings sidebar's 4 separate Rostering & Compliance rows (Compliance, Public
