@@ -19,19 +19,12 @@ import { useRef, useState } from "react";
 import { Camera, CheckCircle2, Loader2 } from "lucide-react";
 import { EmptyState } from "../ui/EmptyState.js";
 import { formatAuDate } from "@culinaire/shared";
+import { DOCUMENT_TYPES } from "../../lib/complianceDocumentTypes.js";
+import { useDocumentTypeSelection } from "../../hooks/useDocumentTypeSelection.js";
+import { OtherDocumentTypeInput } from "./OtherDocumentTypeInput.js";
 import { AU_STATES, inputClass } from "./documentFormShared.js";
 
 const API = import.meta.env.VITE_API_URL ?? "";
-
-const DOCUMENT_TYPES = [
-  "RSA",
-  "Food Safety Supervisor",
-  "Working with Children Check",
-  "Police Check",
-  "Food Handler",
-  "Visa / Work Rights",
-  "Other",
-];
 
 interface OcrResult {
   documentNumber?: string;
@@ -55,8 +48,15 @@ const ENGAGEMENT_TYPES: { value: "employee" | "contractor" | "agency"; label: st
 ];
 
 export function DocumentUploadForm({ onUploaded }: { onUploaded?: () => void }) {
-  const [documentType, setDocumentType] = useState("");
-  const [otherType, setOtherType] = useState("");
+  const {
+    selectedType: documentType,
+    setSelectedType: setDocumentType,
+    otherType,
+    setOtherType,
+    pendingType: effectiveType,
+    otherTypeDuplicateOf,
+    reset: resetDocumentType,
+  } = useDocumentTypeSelection();
   const [engagementType, setEngagementType] = useState<"employee" | "contractor" | "agency">("employee");
   const [file, setFile] = useState<File | null>(null);
   const [storagePublicId, setStoragePublicId] = useState<string | null>(null);
@@ -76,11 +76,8 @@ export function DocumentUploadForm({ onUploaded }: { onUploaded?: () => void }) 
   const submitGuard = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const effectiveType = documentType === "Other" ? otherType.trim() : documentType;
-
   function reset() {
-    setDocumentType("");
-    setOtherType("");
+    resetDocumentType();
     setEngagementType("employee");
     setFile(null);
     setStoragePublicId(null);
@@ -211,15 +208,14 @@ export function DocumentUploadForm({ onUploaded }: { onUploaded?: () => void }) 
           ))}
         </select>
         {documentType === "Other" && (
-          <input
-            type="text"
-            value={otherType}
-            onChange={(e) => setOtherType(e.target.value)}
-            placeholder="Name the document"
-            aria-label="Document name"
-            maxLength={40}
-            className={inputClass}
-          />
+          <>
+            <OtherDocumentTypeInput value={otherType} onChange={setOtherType} className={inputClass} />
+            {otherTypeDuplicateOf && (
+              <p className="mt-1 text-sm text-red-400">
+                Did you mean “{otherTypeDuplicateOf}”? Pick it from the dropdown instead.
+              </p>
+            )}
+          </>
         )}
       </div>
 

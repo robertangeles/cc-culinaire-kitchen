@@ -389,6 +389,40 @@ Append-only. Newest entry on top.
 
 ---
 
+## 2026-08-31 — Role required-document type: free text → dropdown with an Other-duplicate guard
+
+- User question ("why do I have to type if we already defined compliance document types")
+  surfaced a real bug: `RolesManager.tsx`'s required-document input for a role was bare
+  free text, while `canAssign()` matches document types by exact string equality server-side
+  — a typo like "R.S.A" vs "RSA" would silently and permanently block every correctly-certified
+  staff member from that role, reading identically to a genuine missing document.
+- New `packages/client/src/lib/complianceDocumentTypes.ts` — the single canonical list
+  (`DOCUMENT_TYPES`, `REQUIRABLE_DOCUMENT_TYPES`), replacing hand-duplicated arrays that
+  already existed in `DocumentUploadForm.tsx` and `RequiredDocumentsTab.tsx`. `RolesManager.tsx`
+  now offers a dropdown sourced from it, same pattern as the other two.
+- Two independent adversarial review passes (Red Team + a fresh Claude adversarial subagent)
+  both separately flagged that the dropdown's "Other" free-text escape hatch reintroduces the
+  exact same typo risk it was built to close, just for role requirements instead of one
+  person's upload — higher blast radius (blocks an entire role, not one staff member). Fixed
+  with a concrete guard: new shared `useDocumentTypeSelection()` hook (also extracting the
+  previously-duplicated select+Other-input state out of `RolesManager`/`DocumentUploadForm`)
+  normalizes (case + stray dots/whitespace) and refuses a near-duplicate of a canonical type —
+  "Did you mean 'RSA'?" — rather than silently persisting it.
+- New shared `OtherDocumentTypeInput` component for the "Other" free-text field, used by both
+  consumers so the two escape hatches can't drift apart again.
+- Branch `fix/ck-web/role-document-type-dropdown`, pushed. Full `/ship` pre-landing review run:
+  pre-landing checklist + 5 specialists (testing, maintainability, security, performance,
+  simplification) + Red Team + Claude adversarial pass, all findings resolved or explicitly
+  accepted. 173 client tests passing (was 167 at branch start), `tsc` clean.
+- Updated [[roster-core]]'s `canAssign` section to describe the dropdown + duplicate guard.
+- PR #107 never merged despite this — sat open, unreviewed, until 2026-09-23, when a routine
+  cleanup after #112 surfaced it and #106 both still open. Rebased onto current main (54 commits
+  behind by then), 5 conflicting files resolved (DocumentUploadForm.tsx, RolesManager.tsx +
+  its test file, this log, roster-core.md's `updated:` date), full suite re-verified before
+  merge — see the entry logging that merge for details.
+
+---
+
 ## 2026-08-17 — Phase 3 Slice 3 shipped: shift swap — Phase 3 (Workforce Optimisation) complete
 
 - `feature/ck-web/workforce-shift-swap`: new `shift_swap_request` table + `services/shiftSwapService.ts`

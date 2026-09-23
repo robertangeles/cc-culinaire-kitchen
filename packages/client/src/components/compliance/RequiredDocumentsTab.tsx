@@ -18,29 +18,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertTriangle, Loader2, RotateCcw } from "lucide-react";
+import { REQUIRABLE_DOCUMENT_TYPES } from "../../lib/complianceDocumentTypes.js";
 
 const API = import.meta.env.VITE_API_URL ?? "";
-
-// Duplicated from DocumentUploadForm.tsx's DOCUMENT_TYPES — that file is
-// outside this change's ownership and doesn't export the list. If it ever
-// gains an export, switch this to import it instead: two independently
-// edited copies of the upload vocabulary WILL drift, and a requirement an
-// operator can never upload against is exactly the failure this list exists
-// to prevent.
-//
-// "Other" is deliberately left out even though DocumentUploadForm offers it:
-// on upload it's a free-text stand-in — the form persists whatever the staff
-// member typed, never the literal string "Other" — so a document's stored
-// type can never actually equal "Other". Requiring it would be a
-// requirement nobody could ever satisfy.
-const REQUIRABLE_DOCUMENT_TYPES = [
-  "RSA",
-  "Food Safety Supervisor",
-  "Working with Children Check",
-  "Police Check",
-  "Food Handler",
-  "Visa / Work Rights",
-];
 
 type Status = "loading" | "error" | "ready";
 

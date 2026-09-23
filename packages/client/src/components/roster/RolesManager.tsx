@@ -17,7 +17,10 @@ import {
   type RosterRole,
   type RoleVenueConflict,
 } from "../../hooks/useRoster.js";
+import { useDocumentTypeSelection } from "../../hooks/useDocumentTypeSelection.js";
 import { EmptyState } from "../ui/EmptyState.js";
+import { DOCUMENT_TYPES } from "../../lib/complianceDocumentTypes.js";
+import { OtherDocumentTypeInput } from "../compliance/OtherDocumentTypeInput.js";
 import { VenueSelect } from "./VenueSelect.js";
 
 export function RolesManager() {
@@ -155,7 +158,15 @@ function RoleRow({
 }) {
   const { locations } = useLocation();
   const [docTypes, setDocTypes] = useState<string[]>([]);
-  const [input, setInput] = useState("");
+  const {
+    selectedType,
+    setSelectedType,
+    otherType,
+    setOtherType,
+    pendingType,
+    otherTypeDuplicateOf,
+    reset: resetDocumentType,
+  } = useDocumentTypeSelection("", docTypes);
   const [docsError, setDocsError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [editVenueId, setEditVenueId] = useState<string | null>(role.storeLocationId);
@@ -343,26 +354,48 @@ function RoleRow({
             ))}
           </div>
           {canManage && (
-            <div className="flex gap-2 pt-1">
-              <input
-                type="text"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                placeholder="e.g. RSA"
-                className="flex-1 rounded-lg bg-dark-100 border border-dark-200 px-3 py-1.5 text-xs text-white placeholder-dark-500 focus:outline-none focus:border-gold/50"
-              />
-              <button
-                type="button"
-                onClick={() => {
-                  const trimmed = input.trim();
-                  if (!trimmed) return;
-                  handleSaveDocs([...docTypes, trimmed]);
-                  setInput("");
-                }}
-                className="rounded-lg bg-dark-200 px-3 py-1.5 text-xs text-white hover:bg-dark-300 transition-all"
-              >
-                Add
-              </button>
+            <div className="flex flex-col gap-2 pt-1">
+              <div className="flex gap-2">
+                <select
+                  value={selectedType}
+                  onChange={(e) => setSelectedType(e.target.value)}
+                  aria-label="Document type"
+                  className="flex-1 rounded-lg bg-dark-100 border border-dark-200 px-3 py-1.5 text-xs text-white focus:outline-none focus:border-gold/50"
+                >
+                  <option value="">Choose a document type</option>
+                  {DOCUMENT_TYPES.filter((t) => !docTypes.includes(t)).map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  disabled={!pendingType}
+                  onClick={() => {
+                    if (!pendingType) return;
+                    handleSaveDocs([...docTypes, pendingType]);
+                    resetDocumentType();
+                  }}
+                  className="rounded-lg bg-dark-200 px-3 py-1.5 text-xs text-white hover:bg-dark-300 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Add
+                </button>
+              </div>
+              {selectedType === "Other" && (
+                <>
+                  <OtherDocumentTypeInput
+                    value={otherType}
+                    onChange={setOtherType}
+                    className="rounded-lg bg-dark-100 border border-dark-200 px-3 py-1.5 text-xs text-white placeholder-dark-500 focus:outline-none focus:border-gold/50"
+                  />
+                  {otherTypeDuplicateOf && (
+                    <p className="text-xs text-red-400">
+                      Did you mean “{otherTypeDuplicateOf}”? This role already treats that as the same document.
+                    </p>
+                  )}
+                </>
+              )}
             </div>
           )}
           {docsError && <p className="text-xs text-red-400">{docsError}</p>}
