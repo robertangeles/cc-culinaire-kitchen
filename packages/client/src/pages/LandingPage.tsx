@@ -8,8 +8,6 @@ import { DayInTheLife } from "../components/landing/DayInTheLife.js";
 import { FeatureShowcase } from "../components/landing/FeatureShowcase.js";
 import { MobileCallout } from "../components/landing/MobileCallout.js";
 import { MultiLocation } from "../components/landing/MultiLocation.js";
-import { GMSection } from "../components/landing/GMSection.js";
-import { Pricing } from "../components/landing/Pricing.js";
 import { FinalCTA } from "../components/landing/FinalCTA.js";
 import { LandingFooter } from "../components/landing/LandingFooter.js";
 
@@ -35,7 +33,7 @@ export default function LandingPage() {
   useLandingFonts();
 
   return (
-    <div className="font-landing bg-dark text-white min-h-screen overflow-x-hidden">
+    <div className="font-landing bg-cocoa text-white min-h-screen overflow-x-hidden">
       <LandingNav />
       <Hero />
       <TrustStrip />
@@ -45,8 +43,6 @@ export default function LandingPage() {
       <FeatureShowcase />
       <MobileCallout />
       <MultiLocation />
-      <GMSection />
-      <Pricing />
       <FinalCTA />
       <LandingFooter />
     </div>

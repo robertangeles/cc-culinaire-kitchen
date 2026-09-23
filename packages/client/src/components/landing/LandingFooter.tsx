@@ -7,7 +7,6 @@ interface FooterLink {
 
 const links: FooterLink[] = [
   { label: "Features", to: "#features" },
-  { label: "Pricing", to: "#pricing" },
   { label: "Log In", to: "/login" },
   { label: "Contact", to: "/contact" },
   { label: "Privacy Policy", to: "/privacy" },
@@ -16,11 +15,11 @@ const links: FooterLink[] = [
 
 export function LandingFooter() {
   return (
-    <footer className="border-t border-dark-200 bg-dark-50 px-8 py-10">
+    <footer className="border-t border-cocoa-200 bg-cocoa-50 px-8 py-10">
       <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-6">
         {/* Logo */}
         <span className="font-display text-lg font-semibold text-white">
-          Culin<span className="text-gold">AI</span>re Kitchen
+          Culin<span className="text-copper">AI</span>re Kitchen
         </span>
 
         {/* Links */}
@@ -30,7 +29,7 @@ export function LandingFooter() {
               <a
                 key={link.label}
                 href={link.to}
-                className="text-sm text-dark-500 transition-colors hover:text-dark-600"
+                className="text-sm text-cocoa-500 transition-colors hover:text-cocoa-600"
               >
                 {link.label}
               </a>
@@ -38,7 +37,7 @@ export function LandingFooter() {
               <Link
                 key={link.label}
                 to={link.to}
-                className="text-sm text-dark-500 transition-colors hover:text-dark-600"
+                className="text-sm text-cocoa-500 transition-colors hover:text-cocoa-600"
               >
                 {link.label}
               </Link>
@@ -47,7 +46,7 @@ export function LandingFooter() {
         </nav>
 
         {/* Copyright */}
-        <span className="text-sm text-dark-500">
+        <span className="text-sm text-cocoa-500">
           &copy; 2026 CulinAIre Kitchen &middot; www.culinaire.kitchen
         </span>
       </div>

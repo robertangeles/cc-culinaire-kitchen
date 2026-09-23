@@ -27,7 +27,7 @@ function AnimatedCounter({ value, suffix }: { value: number; suffix: string }) {
   }
 
   return (
-    <span ref={ref} className="font-display text-3xl text-gold">
+    <span ref={ref} className="font-display text-3xl text-copper">
       <motion.span>{display}</motion.span>
       {suffix}
     </span>
@@ -46,10 +46,6 @@ export function MobileCallout() {
           viewport={{ once: true, margin: "-60px" }}
           className="flex flex-col gap-6"
         >
-          <span className="text-xs font-semibold uppercase tracking-widest text-gold">
-            Mobile first
-          </span>
-
           <h2
             className="font-display font-semibold leading-tight text-white"
             style={{ fontSize: "clamp(1.8rem, 3vw, 2.6rem)" }}
@@ -57,7 +53,7 @@ export function MobileCallout() {
             Works at the back dock, the walk-in, and the pass.
           </h2>
 
-          <p className="font-landing max-w-lg leading-relaxed text-dark-600">
+          <p className="font-landing max-w-lg leading-relaxed text-cocoa-600">
             Chefs don&rsquo;t work at desks. CulinAIre Kitchen is built for the
             phone in your pocket&nbsp;&mdash; one thumb, three taps, delivery
             received.
@@ -68,10 +64,10 @@ export function MobileCallout() {
             {metrics.map((m) => (
               <div
                 key={m.label}
-                className="rounded-xl border border-dark-200 bg-dark-50 p-5"
+                className="rounded-xl border border-cocoa-200 bg-cocoa-50 p-5"
               >
                 <AnimatedCounter value={m.value} suffix={m.suffix} />
-                <p className="mt-1 text-sm text-dark-500">{m.label}</p>
+                <p className="mt-1 text-sm text-cocoa-500">{m.label}</p>
               </div>
             ))}
           </div>

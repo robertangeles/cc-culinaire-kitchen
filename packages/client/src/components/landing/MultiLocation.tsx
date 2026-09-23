@@ -16,7 +16,7 @@ const fadeUp = {
 
 export function MultiLocation() {
   return (
-    <section className="border-y border-dark-200 bg-dark-50 px-8 py-24">
+    <section className="border-y border-cocoa-200 bg-cocoa-50 px-8 py-24">
       <div className="mx-auto grid max-w-7xl items-center gap-12 lg:grid-cols-2">
         {/* Left column */}
         <motion.div
@@ -26,10 +26,6 @@ export function MultiLocation() {
           viewport={{ once: true, margin: "-60px" }}
           className="flex flex-col gap-6"
         >
-          <span className="text-xs font-semibold uppercase tracking-widest text-gold">
-            Multi-location
-          </span>
-
           <h2
             className="font-display font-semibold leading-tight text-white"
             style={{ fontSize: "clamp(1.8rem, 3vw, 2.6rem)" }}
@@ -37,7 +33,7 @@ export function MultiLocation() {
             One platform for every kitchen in your group.
           </h2>
 
-          <p className="font-landing max-w-lg leading-relaxed text-dark-600">
+          <p className="font-landing max-w-lg leading-relaxed text-cocoa-600">
             HQ sees everything. Every location moves at its own speed. Inventory,
             purchasing, prep, and waste tracked across your entire
             operation&nbsp;&mdash; from one dashboard.
@@ -45,8 +41,8 @@ export function MultiLocation() {
 
           <ul className="flex flex-col gap-3">
             {bullets.map((text) => (
-              <li key={text} className="flex items-start gap-3 text-sm leading-relaxed text-dark-500">
-                <span className="mt-1.5 inline-block h-2 w-2 flex-shrink-0 rounded-full bg-gold" />
+              <li key={text} className="flex items-start gap-3 text-sm leading-relaxed text-cocoa-500">
+                <span className="mt-1.5 inline-block h-2 w-2 flex-shrink-0 rounded-full bg-copper" />
                 {text}
               </li>
             ))}
