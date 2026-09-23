@@ -10,7 +10,7 @@ export function ProblemStatement() {
       className="mx-auto max-w-3xl px-6 py-24 text-center"
     >
       <p
-        className="font-display font-light italic leading-relaxed text-dark-600"
+        className="font-display font-light italic leading-relaxed text-cocoa-600"
         style={{ fontSize: "clamp(1.4rem, 2.5vw, 2rem)" }}
       >
         Every morning, the prep plan lives{" "}
@@ -21,7 +21,7 @@ export function ProblemStatement() {
       </p>
 
       <p
-        className="mt-8 font-display font-light italic leading-relaxed text-dark-600"
+        className="mt-8 font-display font-light italic leading-relaxed text-cocoa-600"
         style={{ fontSize: "clamp(1.4rem, 2.5vw, 2rem)" }}
       >
         <em className="not-italic font-normal text-white">

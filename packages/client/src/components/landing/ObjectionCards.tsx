@@ -41,13 +41,8 @@ const cardVariant = {
 
 export function ObjectionCards() {
   return (
-    <section className="border-y border-dark-200 bg-dark-50 px-8 py-20">
+    <section className="border-y border-cocoa-200 bg-cocoa-50 px-8 py-20">
       <div className="mx-auto max-w-7xl">
-        {/* Eyebrow */}
-        <p className="text-xs font-semibold uppercase tracking-widest text-gold">
-          Built different
-        </p>
-
         {/* H2 */}
         <h2
           className="font-display mt-4 font-semibold leading-tight text-white"
@@ -70,10 +65,10 @@ export function ObjectionCards() {
             <motion.div
               key={card.number}
               variants={cardVariant}
-              className="group rounded-xl border border-dark-200 border-l-[3px] border-l-gold bg-dark-100 p-7 transition-all duration-200 hover:-translate-y-[3px] hover:border-border-gold"
+              className="group rounded-xl border border-cocoa-200 bg-cocoa-100 p-7 transition-all duration-200 hover:-translate-y-[3px] hover:border-border-copper"
             >
               <span
-                className="font-display block text-5xl font-bold leading-none text-gold/15"
+                className="font-display block text-5xl font-bold leading-none text-copper/15"
                 aria-hidden="true"
               >
                 {card.number}
@@ -81,7 +76,7 @@ export function ObjectionCards() {
               <p className="mt-4 text-base font-semibold leading-snug text-white">
                 {card.headline}
               </p>
-              <p className="mt-2 text-sm leading-relaxed text-dark-600">
+              <p className="mt-2 text-sm leading-relaxed text-cocoa-600">
                 {card.body}
               </p>
             </motion.div>

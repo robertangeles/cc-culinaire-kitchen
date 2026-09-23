@@ -65,11 +65,6 @@ const dotVariant = {
 export function DayInTheLife() {
   return (
     <section className="mx-auto max-w-7xl px-8 py-24">
-      {/* Eyebrow */}
-      <p className="text-xs font-semibold uppercase tracking-widest text-gold">
-        A day with CulinAIre
-      </p>
-
       {/* H2 */}
       <h2
         className="font-display mt-4 font-semibold leading-tight text-white"
@@ -85,7 +80,7 @@ export function DayInTheLife() {
           className="pointer-events-none absolute left-[127px] top-0 bottom-0 hidden w-px md:block"
           style={{
             background:
-              "linear-gradient(to bottom, transparent 0%, var(--color-dark-200) 10%, var(--color-dark-200) 90%, transparent 100%)",
+              "linear-gradient(to bottom, transparent 0%, var(--color-cocoa-200) 10%, var(--color-cocoa-200) 90%, transparent 100%)",
           }}
         />
 
@@ -102,7 +97,7 @@ export function DayInTheLife() {
             >
               {/* Time label */}
               <div className="flex items-center justify-end gap-3 md:pt-1">
-                <span className="font-display text-lg font-semibold text-gold">
+                <span className="font-display text-lg font-semibold text-copper">
                   {item.time}
                 </span>
               </div>
@@ -111,18 +106,18 @@ export function DayInTheLife() {
               <div className="hidden items-start justify-center pt-2 md:flex">
                 <motion.div
                   variants={dotVariant}
-                  className="h-3 w-3 rounded-full border-2 border-gold bg-dark"
-                  style={{ boxShadow: "0 0 12px rgba(212,165,116,0.3)" }}
+                  className="h-3 w-3 rounded-full border-2 border-copper bg-cocoa"
+                  style={{ boxShadow: "0 0 12px rgba(198,117,58,0.3)" }}
                 />
               </div>
 
               {/* Content card */}
-              <div className="rounded-xl border border-dark-200 bg-dark-50 p-5">
-                <p className="text-xs font-semibold uppercase tracking-widest text-gold">
+              <div className="rounded-xl border border-cocoa-200 bg-cocoa-50 p-5">
+                <p className="text-xs font-semibold uppercase tracking-widest text-copper">
                   {item.module}
                 </p>
                 <p
-                  className="mt-2 text-sm leading-relaxed text-dark-600 [&>b]:font-semibold [&>b]:text-white"
+                  className="mt-2 text-sm leading-relaxed text-cocoa-600 [&>b]:font-semibold [&>b]:text-white"
                   dangerouslySetInnerHTML={{ __html: item.description }}
                 />
               </div>
