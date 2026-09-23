@@ -1,0 +1,780 @@
+/**
+ * @module components/roster/RosterCalendarView
+ *
+ * Drag-to-build week calendar for Roster. X = 7 day columns (Mon-Sun), each
+ * subdivided into one sub-lane per role at this venue; Y = time-of-day, a
+ * full 24h scroll (default position ~6am) — never a fixed business-hours
+ * window that could clip an odd-hours shift. Role is immutable on a shift
+ * once created (server-enforced), so it has to be a spatial dimension of
+ * the grid: a drag-create gesture inside one lane already knows its role
+ * without an extra picker step, and a move/resize drag never lets a shift
+ * cross into a different role's lane.
+ *
+ * Four gestures, four existing endpoints — no new mutation surface beyond
+ * the one new read endpoint (GET /shifts/calendar, via useRosterCalendar):
+ *   - drag empty lane space      -> create (POST /shifts)
+ *   - drag an existing Draft block -> reschedule (PUT /shifts/:id)
+ *   - drag a Draft block's edge  -> resize (same PUT)
+ *   - drag a staff chip onto a Draft block -> assign (POST .../assignments)
+ * Published shifts render read-only (no drag handles) — the server 409s on
+ * any of those four for a non-Draft shift, so the grid must never offer a
+ * gesture the API will reject.
+ *
+ * No charting/DnD library — hand-rolled Pointer Events + elementFromPoint,
+ * same "hand-roll it" convention as MiniCalendar.tsx/StaffingCoverageView.tsx.
+ * Position math (time<->pixel, day-column, lane index) lives in the pure,
+ * separately-unit-tested lib/rosterCalendarMath.ts — this file only wires
+ * that math to pointer events and renders the result.
+ */
+
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { CalendarRange, ChevronLeft, ChevronRight, Loader2, Users } from "lucide-react";
+import { formatShiftRange } from "@culinaire/shared";
+import { useLocation } from "../../context/LocationContext.js";
+import { useHasPermission } from "../../hooks/useHasPermission.js";
+import { useRosterRoles, useOrgMembers, useRosterCalendar, type CalendarShift, type RosterRole } from "../../hooks/useRoster.js";
+import { EmptyState } from "../ui/EmptyState.js";
+import { RosterTemplatesToolbar } from "./RosterTemplatesPanel.js";
+import {
+  minutesForPixel,
+  pixelForMinutes,
+  snapMinutes,
+  minutesSinceMidnight,
+  localDayIso,
+  addDaysIso,
+  mondayOfWeek,
+  laneIndexForRole,
+  dayColumnIndexForDate,
+} from "../../lib/rosterCalendarMath.js";
+
+const HOUR_HEIGHT = 48; // px per hour row
+const GRID_HEIGHT = 24 * HOUR_HEIGHT;
+const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+const ROLE_ACCENT = [
+  "border-l-rose-500", "border-l-amber-500", "border-l-emerald-500", "border-l-cyan-500",
+  "border-l-blue-500", "border-l-violet-500", "border-l-fuchsia-500", "border-l-teal-500",
+];
+// Same colors as ROLE_ACCENT above, as literal "border-*" classes for the
+// legend dot's ring — kept as its own static array rather than derived via
+// a runtime string substitution, since Tailwind's JIT scanner only generates
+// CSS for class names it can find as literal text in source. A dynamically
+// built class name can look correct as a JS value while never having been
+// scanned, so its CSS rule ends up silently missing from the build.
+const ROLE_ACCENT_RING = [
+  "border-rose-500", "border-amber-500", "border-emerald-500", "border-cyan-500",
+  "border-blue-500", "border-violet-500", "border-fuchsia-500", "border-teal-500",
+];
+function roleAccent(roleId: string, roleIds: string[]): string {
+  const idx = laneIndexForRole(roleId, roleIds);
+  return ROLE_ACCENT[idx >= 0 ? idx % ROLE_ACCENT.length : 0];
+}
+function roleAccentRing(roleId: string, roleIds: string[]): string {
+  const idx = laneIndexForRole(roleId, roleIds);
+  return ROLE_ACCENT_RING[idx >= 0 ? idx % ROLE_ACCENT_RING.length : 0];
+}
+
+function todayIso(): string {
+  // localDayIso, never .toISOString().slice(0, 10) — the exact UTC-vs-local
+  // day bug this branch's own resize-gesture fix (commit 17e4ee6) already
+  // fixed once. In this app's AU deployment timezone, any local time before
+  // ~10-11am is still the previous day in UTC, so a bare UTC slice here
+  // opens the calendar on last week's Monday during that window.
+  return localDayIso(new Date());
+}
+
+/** dayIso + minutes-since-local-midnight -> a real Date, browser-local (matches ShiftsManager's own time convention). */
+function dateFromDayAndMinutes(dayIso: string, minutes: number): Date {
+  const [y, m, d] = dayIso.split("-").map(Number);
+  return new Date(y, m - 1, d, 0, minutes, 0, 0);
+}
+
+function formatHourLabel(hour: number): string {
+  const h = hour % 12 === 0 ? 12 : hour % 12;
+  return `${h}${hour < 12 ? "am" : "pm"}`;
+}
+
+
+/** The lane element (day x role cell) currently under a client point, if any. */
+function laneAt(clientX: number, clientY: number): HTMLElement | null {
+  const el = document.elementFromPoint(clientX, clientY);
+  return (el?.closest("[data-day-iso][data-role-id]") as HTMLElement) ?? null;
+}
+
+/** If `shiftId` is the one currently being moved/resized, its live (start, end) minutes — else null. */
+function dragOverrideFor(drag: DragState | null, shiftId: string): { start: number; end: number } | null {
+  if (!drag) return null;
+  if (drag.kind === "move" && drag.shift.shiftId === shiftId) {
+    return { start: drag.startMinutes, end: drag.startMinutes + drag.durationMinutes };
+  }
+  if (drag.kind === "resize" && drag.shift.shiftId === shiftId) {
+    return { start: drag.startMinutes, end: drag.endMinutes };
+  }
+  return null;
+}
+
+/**
+ * Two real (non-Cancelled) shifts for the same role can genuinely overlap
+ * in time — a second person double-booked, or just two Draft shifts drawn
+ * a few minutes apart before either is finalised. Every shift in a lane
+ * used to render at the lane's full width regardless, so any overlap made
+ * two blocks sit exactly on top of each other with no visual sign a second
+ * one even existed underneath. Classic interval-scheduling column
+ * assignment instead: sort by start, reuse the first column whose current
+ * occupant has already ended, otherwise open a new one — same algorithm
+ * a calendar app's day view uses to lay out overlapping meetings
+ * side-by-side. Returns each item's column index and the lane's overall
+ * column count (1 when nothing overlaps, so the common case is untouched).
+ */
+function assignOverlapColumns(items: { start: number; end: number }[]): { colIndex: number; colCount: number }[] {
+  const order = items.map((_, i) => i).sort((a, b) => items[a].start - items[b].start || items[a].end - items[b].end);
+  const colEndsMinutes: number[] = [];
+  const colOf: number[] = new Array(items.length);
+  for (const i of order) {
+    const item = items[i];
+    let col = colEndsMinutes.findIndex((end) => end <= item.start);
+    if (col === -1) {
+      col = colEndsMinutes.length;
+      colEndsMinutes.push(item.end);
+    } else {
+      colEndsMinutes[col] = item.end;
+    }
+    colOf[i] = col;
+  }
+  const colCount = colEndsMinutes.length;
+  return items.map((_, i) => ({ colIndex: colOf[i], colCount }));
+}
+
+type DragState =
+  | { kind: "create"; dayIso: string; roleId: string; anchorMinutes: number; nowMinutes: number }
+  | { kind: "move"; shift: CalendarShift; grabOffsetMinutes: number; durationMinutes: number; dayIso: string; startMinutes: number }
+  | { kind: "resize"; shift: CalendarShift; edge: "top" | "bottom"; startMinutes: number; endMinutes: number }
+  | { kind: "assign"; userId: number; staffName: string; overShiftId: string | null };
+
+export function RosterCalendarView() {
+  const { locations, selectedLocationId } = useLocation();
+  const hasPermission = useHasPermission();
+  const canManage = hasPermission("roster:manage");
+  const orgId = locations.find((l) => l.storeLocationId === selectedLocationId)?.organisationId ?? null;
+
+  const { roles } = useRosterRoles();
+  const venueRoles = useMemo(
+    () => roles.filter((r: RosterRole) => r.storeLocationId === null || r.storeLocationId === selectedLocationId),
+    [roles, selectedLocationId],
+  );
+  const roleIds = useMemo(() => venueRoles.map((r) => r.rosterRoleId), [venueRoles]);
+
+  const { members } = useOrgMembers(orgId);
+  const [weekStart, setWeekStart] = useState(() => mondayOfWeek(todayIso()));
+  const weekEnd = addDaysIso(weekStart, 6);
+  const days = useMemo(() => Array.from({ length: 7 }, (_, i) => addDaysIso(weekStart, i)), [weekStart]);
+
+  const { calendarShifts, isLoading, error, create, updateTime, assign, refresh: refreshCalendar } = useRosterCalendar(
+    selectedLocationId,
+    // Padded a day on each side: the query boundary is bare UTC midnight,
+    // but times are browser-local (see module doc) — a Monday-6am shift in
+    // a timezone ahead of UTC has a Sunday UTC startDatetime, and would be
+    // clipped by an unpadded `from`. shiftsForLane's local-day comparison
+    // is what actually buckets each shift into its correct column; this
+    // padding only has to be wide enough that the real week's shifts are
+    // never excluded before reaching that filter.
+    addDaysIso(weekStart, -1),
+    addDaysIso(weekEnd, 1),
+  );
+
+  const [drag, setDrag] = useState<DragState | null>(null);
+  const [banner, setBanner] = useState<{ tone: "error" | "success"; text: string } | null>(null);
+  const [showStaffDrawer, setShowStaffDrawer] = useState(false);
+  const dragRef = useRef<DragState | null>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
+
+  // Cursor-following hover info for a shift block, rendered via a portal to
+  // <body> (position: fixed, so it escapes every overflow-hidden ancestor
+  // between here and the page — the calendar card itself, and each day
+  // column's own clipped scroller). An anchored tooltip (top/bottom of the
+  // block) put the info far from the cursor for a tall multi-hour shift;
+  // this follows the pointer instead. Position updates go straight to the
+  // DOM via hoverTooltipElRef on every mousemove, not through React state —
+  // re-rendering per pointermove is the exact cost this file's own
+  // shiftsByLaneKey/shiftDisplayInfo comments already document avoiding
+  // elsewhere. React state only toggles content/visibility, which changes
+  // far less often (hover start/end, not every pixel of movement).
+  const [hoverInfo, setHoverInfo] = useState<string | null>(null);
+  const hoverTooltipElRef = useRef<HTMLDivElement>(null);
+  const lastPointerRef = useRef({ x: 0, y: 0 });
+
+  function positionHoverTooltip(clientX: number, clientY: number) {
+    lastPointerRef.current = { x: clientX, y: clientY };
+    const el = hoverTooltipElRef.current;
+    if (!el) return;
+    el.style.left = `${clientX + 14}px`;
+    el.style.top = `${clientY + 14}px`;
+  }
+
+  // The portal element (and hoverTooltipElRef) doesn't exist until AFTER
+  // hoverInfo goes non-null and React commits — so the onMouseEnter that
+  // triggers it can't position it in the same tick (the ref is still null
+  // then). Without this, the tooltip would flash at its default (0, 0)
+  // for one frame before the next mousemove corrects it. useLayoutEffect
+  // runs synchronously right after that commit, before the browser paints.
+  useLayoutEffect(() => {
+    if (hoverInfo) positionHoverTooltip(lastPointerRef.current.x, lastPointerRef.current.y);
+  }, [hoverInfo]);
+  // Scoped to this component instance, not document.querySelectorAll — the
+  // gridRef/dragRef above already use refs for exactly this kind of DOM
+  // coordination; a document-wide selector would cross-wire two mounted
+  // instances of this view (e.g. a comparison page) and re-scans the whole
+  // DOM on every scroll event instead of touching only the 7 known columns.
+  const scrollerRefs = useRef<(HTMLDivElement | null)[]>([]);
+
+  useEffect(() => {
+    // Default scroll position ~6am, once, on mount — every day column has
+    // its OWN independent scroll container (only synced to each other on a
+    // user-driven scroll, via onScroll below), so the hour rail alone isn't
+    // enough: every column needs this set or they open misaligned with it.
+    const top = pixelForMinutes(6 * 60, HOUR_HEIGHT) - 40;
+    if (gridRef.current) gridRef.current.scrollTop = top;
+    for (const el of scrollerRefs.current) {
+      if (el) el.scrollTop = top;
+    }
+  }, [days]);
+
+  function showBanner(tone: "error" | "success", text: string) {
+    setBanner({ tone, text });
+    window.setTimeout(() => setBanner((b) => (b?.text === text ? null : b)), 6000);
+  }
+
+  // Bucketed once per shift-list load, not per render — onPointerMove calls
+  // setDrag() at pointer-move frequency during a drag, and shiftsForLane()
+  // used to re-filter the full shift list for every (day x role) lane on
+  // every one of those renders. Keyed only on calendarShifts, so a drag in
+  // progress never invalidates it; the "shift renders in its hovered lane"
+  // special case is applied separately in shiftsForLane below.
+  const shiftsByLaneKey = useMemo(() => {
+    const map = new Map<string, CalendarShift[]>();
+    for (const s of calendarShifts) {
+      const key = `${localDayIso(new Date(s.startDatetime))}|${s.rosterRoleId}`;
+      const bucket = map.get(key);
+      if (bucket) bucket.push(s);
+      else map.set(key, [s]);
+    }
+    return map;
+  }, [calendarShifts]);
+
+  // Same reasoning as shiftsByLaneKey above: derived once per shift-list
+  // load, not re-derived (Date construction + formatShiftRange's own
+  // day-diff check, for EVERY visible shift) on every pointermove-triggered
+  // render during a drag — storedStartMinutes/storedEndMinutes used to fall
+  // through that same loop untouched, re-parsing every visible shift's
+  // datetimes on every drag frame even though only the dragged shift's
+  // position ever changes.
+  const shiftDisplayInfo = useMemo(() => {
+    const map = new Map<string, { daySpan: number; rangeLabel: string; storedStartMinutes: number; storedEndMinutes: number }>();
+    for (const s of calendarShifts) {
+      map.set(s.shiftId, {
+        daySpan: dayColumnIndexForDate(localDayIso(new Date(s.endDatetime)), localDayIso(new Date(s.startDatetime))),
+        rangeLabel: formatShiftRange(s.startDatetime, s.endDatetime),
+        storedStartMinutes: minutesSinceMidnight(new Date(s.startDatetime)),
+        storedEndMinutes: minutesSinceMidnight(new Date(s.endDatetime)),
+      });
+    }
+    return map;
+  }, [calendarShifts]);
+
+  function shiftsForLane(dayIso: string, roleId: string): CalendarShift[] {
+    const base = shiftsByLaneKey.get(`${dayIso}|${roleId}`) ?? [];
+    if (drag?.kind !== "move") return base;
+    // A shift being actively dragged to a different day renders ONLY in the
+    // day it's currently hovering over, not its still-stored day —
+    // otherwise it would visually stay put while the cursor moves.
+    const withoutDragged = base.filter((s) => s.shiftId !== drag.shift.shiftId);
+    return drag.dayIso === dayIso && drag.shift.rosterRoleId === roleId ? [...withoutDragged, drag.shift] : withoutDragged;
+  }
+
+  // ── Drag lifecycle ──────────────────────────────────────────────
+
+  function beginDrag(state: DragState, e: React.PointerEvent) {
+    e.preventDefault();
+    // Defensive: clears any listeners a previous drag left dangling (a
+    // pointerup that never fires — e.g. released outside the window, or a
+    // system dialog stealing focus mid-drag — would otherwise stack a
+    // second set of handlers on the next drag).
+    endDrag();
+    dragRef.current = state;
+    setDrag(state);
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp, { once: true });
+    window.addEventListener("pointercancel", onPointerUp, { once: true });
+  }
+
+  function endDrag() {
+    window.removeEventListener("pointermove", onPointerMove);
+    window.removeEventListener("pointerup", onPointerUp);
+    window.removeEventListener("pointercancel", onPointerUp);
+    dragRef.current = null;
+    setDrag(null);
+  }
+
+  function onPointerMove(e: PointerEvent) {
+    const current = dragRef.current;
+    if (!current) return;
+
+    if (current.kind === "assign") {
+      // Only the shift block matters for assign — no lane lookup needed,
+      // so this is the sole elementFromPoint hit-test per move event here.
+      const shiftEl = (document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null)?.closest("[data-shift-id]") as HTMLElement | null;
+      const next = { ...current, overShiftId: shiftEl?.dataset.shiftId ?? null };
+      dragRef.current = next;
+      setDrag(next);
+      return;
+    }
+
+    const lane = laneAt(e.clientX, e.clientY);
+    if (!lane) return;
+    const rect = lane.getBoundingClientRect();
+    const offsetY = e.clientY - rect.top;
+    const minutes = Math.min(1440, Math.max(0, snapMinutes(minutesForPixel(offsetY, HOUR_HEIGHT))));
+
+    if (current.kind === "create") {
+      // A create-drag stays within the lane it started in — never crosses
+      // day or role, since it has no existing identity to carry across.
+      if (lane.dataset.dayIso !== current.dayIso || lane.dataset.roleId !== current.roleId) return;
+      const next = { ...current, nowMinutes: minutes };
+      dragRef.current = next;
+      setDrag(next);
+    } else if (current.kind === "move") {
+      // Constrained to the shift's OWN role lane — role is immutable, so a
+      // move can change day but never role.
+      if (lane.dataset.roleId !== current.shift.rosterRoleId) return;
+      const anchored = Math.min(1440 - current.durationMinutes, Math.max(0, minutes - current.grabOffsetMinutes));
+      const next = { ...current, dayIso: lane.dataset.dayIso!, startMinutes: snapMinutes(anchored) };
+      dragRef.current = next;
+      setDrag(next);
+    } else if (current.kind === "resize") {
+      if (lane.dataset.roleId !== current.shift.rosterRoleId) return;
+      const next =
+        current.edge === "top"
+          ? { ...current, startMinutes: Math.min(minutes, current.endMinutes - 15) }
+          : { ...current, endMinutes: Math.max(minutes, current.startMinutes + 15) };
+      dragRef.current = next;
+      setDrag(next);
+    }
+  }
+
+  async function onPointerUp() {
+    const final = dragRef.current;
+    endDrag();
+    if (!final || !selectedLocationId) return;
+
+    try {
+      if (final.kind === "create") {
+        const lo = Math.min(final.anchorMinutes, final.nowMinutes);
+        const hi = Math.max(final.anchorMinutes, final.nowMinutes);
+        const endMinutes = hi === lo ? lo + 30 : hi; // a click-with-no-drag still makes a 30-minute shift
+        await create({
+          storeLocationId: selectedLocationId,
+          rosterRoleId: final.roleId,
+          startDatetime: dateFromDayAndMinutes(final.dayIso, lo).toISOString(),
+          endDatetime: dateFromDayAndMinutes(final.dayIso, endMinutes).toISOString(),
+        });
+        showBanner("success", "Shift created.");
+      } else if (final.kind === "move") {
+        await updateTime(final.shift.shiftId, {
+          startDatetime: dateFromDayAndMinutes(final.dayIso, final.startMinutes).toISOString(),
+          endDatetime: dateFromDayAndMinutes(final.dayIso, final.startMinutes + final.durationMinutes).toISOString(),
+        });
+      } else if (final.kind === "resize") {
+        const dayIso = localDayIso(new Date(final.shift.startDatetime));
+        await updateTime(final.shift.shiftId, {
+          startDatetime: dateFromDayAndMinutes(dayIso, final.startMinutes).toISOString(),
+          endDatetime: dateFromDayAndMinutes(dayIso, final.endMinutes).toISOString(),
+        });
+      } else if (final.kind === "assign") {
+        if (!final.overShiftId) return;
+        await assign(final.overShiftId, final.userId);
+        showBanner("success", `${final.staffName} assigned.`);
+      }
+    } catch (err: unknown) {
+      showBanner("error", err instanceof Error ? err.message : "That didn't work.");
+    }
+  }
+
+  // ── Render ───────────────────────────────────────────────────────
+
+  if (!selectedLocationId) {
+    return (
+      <EmptyState
+        icon={CalendarRange}
+        title="Pick a venue"
+        body="Select a store location to see its roster calendar."
+      />
+    );
+  }
+
+  if (venueRoles.length === 0 && !isLoading) {
+    return (
+      <EmptyState
+        icon={Users}
+        title="No roles set up yet"
+        body="Add a role on the Roles tab before building shifts on the calendar — every shift needs one."
+      />
+    );
+  }
+
+  return (
+    <div>
+      {/* Week navigator */}
+      <div className="mb-4 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setWeekStart(addDaysIso(weekStart, -7))}
+            className="flex size-8 items-center justify-center rounded-lg border border-dark-200 text-dark-600 hover:text-[#FAFAFA] hover:bg-dark-100 transition-colors"
+            aria-label="Previous week"
+          >
+            <ChevronLeft className="size-4" />
+          </button>
+          <span className="text-sm font-medium text-[#E5E5E5] min-w-40 text-center">
+            {new Date(weekStart).toLocaleDateString("en-AU", { day: "numeric", month: "short" })} –{" "}
+            {new Date(weekEnd).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}
+          </span>
+          <button
+            type="button"
+            onClick={() => setWeekStart(addDaysIso(weekStart, 7))}
+            className="flex size-8 items-center justify-center rounded-lg border border-dark-200 text-dark-600 hover:text-[#FAFAFA] hover:bg-dark-100 transition-colors"
+            aria-label="Next week"
+          >
+            <ChevronRight className="size-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setWeekStart(mondayOfWeek(todayIso()))}
+            className="ml-1 rounded-lg border border-dark-200 px-2.5 py-1 text-xs text-dark-600 hover:text-[#FAFAFA] hover:bg-dark-100 transition-colors"
+          >
+            This week
+          </button>
+        </div>
+        {canManage && (
+          <button
+            type="button"
+            onClick={() => setShowStaffDrawer((v) => !v)}
+            className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
+              showStaffDrawer ? "border-gold/40 bg-gold-dim text-gold" : "border-dark-200 text-dark-600 hover:text-[#FAFAFA]"
+            }`}
+          >
+            <Users className="size-3.5" />
+            Staff
+          </button>
+        )}
+      </div>
+
+      {canManage && (
+        <RosterTemplatesToolbar
+          storeLocationId={selectedLocationId}
+          venueRoles={venueRoles}
+          weekStart={weekStart}
+          onGenerated={refreshCalendar}
+        />
+      )}
+
+      {banner && (
+        <div
+          className={`mb-3 rounded-lg border px-3 py-2 text-sm ${
+            banner.tone === "error" ? "border-red-500/20 bg-red-500/10 text-red-400" : "border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
+          }`}
+        >
+          {banner.text}
+        </div>
+      )}
+
+      {/* Role legend — colour is never the only signal (each block also
+          shows its role name as text), this just orients the eye. */}
+      <div className="mb-3 flex flex-wrap gap-3">
+        {venueRoles.map((r) => (
+          <span key={r.rosterRoleId} className="flex items-center gap-1.5 text-xs text-dark-600">
+            <span className={`size-2.5 rounded-full border-2 ${roleAccentRing(r.rosterRoleId, roleIds)}`} />
+            {r.roleName}
+          </span>
+        ))}
+      </div>
+
+      <div className="flex gap-3">
+        <div className="flex-1 flex rounded-xl border border-dark-200 overflow-hidden">
+          {/* Hour rail */}
+          <div className="w-12 flex-shrink-0 border-r border-dark-200 bg-dark-50">
+            <div className="h-8 border-b border-dark-200" />
+            <div
+              ref={gridRef}
+              className="overflow-y-auto"
+              style={{ height: 420 }}
+              id="roster-calendar-hour-rail"
+              onScroll={(e) => {
+                // Day columns are overflow-y-hidden (a single visible
+                // scrollbar here, not seven) so this hour rail is the only
+                // element a real scroll gesture (wheel/touch/scrollbar drag)
+                // ever lands on. Without this handler that scroll never
+                // reached scrollerRefs — the day columns' onScroll below
+                // only fires from a scroll THEY receive, which overflow:
+                // hidden makes impossible — so shift blocks stayed frozen
+                // at whatever scrollTop the mount effect set, regardless of
+                // where the hour labels had scrolled to.
+                const top = e.currentTarget.scrollTop;
+                for (const el of scrollerRefs.current) {
+                  if (el) el.scrollTop = top;
+                }
+              }}
+            >
+              <div style={{ height: GRID_HEIGHT }} className="relative">
+                {Array.from({ length: 24 }, (_, h) => (
+                  <div
+                    key={h}
+                    className="absolute left-0 right-0 text-right pr-1.5 text-[10px] text-dark-600 -translate-y-1/2"
+                    style={{ top: pixelForMinutes(h * 60, HOUR_HEIGHT) }}
+                  >
+                    {formatHourLabel(h)}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Day columns */}
+          <div className="flex-1 overflow-x-auto">
+            <div className="grid grid-cols-7" style={{ minWidth: Math.max(840, venueRoles.length * 7 * 90) }}>
+              {days.map((dayIso, i) => (
+                <div key={dayIso} className={`${i > 0 ? "border-l border-dark-200" : ""}`}>
+                  <div className="h-8 flex items-center justify-center border-b border-dark-200 text-xs font-medium text-dark-600">
+                    {DAY_LABELS[i]} {new Date(dayIso).getDate()}
+                  </div>
+                  <div
+                    ref={(el) => {
+                      scrollerRefs.current[i] = el;
+                    }}
+                    className="overflow-y-hidden"
+                    style={{ height: 420 }}
+                    onScroll={(e) => {
+                      // Keep every column (and the hour rail) in sync with
+                      // whichever one the user actually scrolled.
+                      const top = e.currentTarget.scrollTop;
+                      for (const el of scrollerRefs.current) {
+                        if (el && el !== e.currentTarget) el.scrollTop = top;
+                      }
+                      if (gridRef.current) gridRef.current.scrollTop = top;
+                    }}
+                  >
+                    <div className="flex" style={{ height: GRID_HEIGHT }}>
+                      {venueRoles.map((role) => (
+                        <div
+                          key={role.rosterRoleId}
+                          data-day-iso={dayIso}
+                          data-role-id={role.rosterRoleId}
+                          className="relative flex-1 border-r border-dark-200/50 last:border-r-0"
+                          onPointerDown={(e) => {
+                            if (!canManage || e.target !== e.currentTarget) return;
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            const minutes = snapMinutes(minutesForPixel(e.clientY - rect.top, HOUR_HEIGHT));
+                            beginDrag({ kind: "create", dayIso, roleId: role.rosterRoleId, anchorMinutes: minutes, nowMinutes: minutes }, e);
+                          }}
+                        >
+                          {/* Hour gridlines */}
+                          {Array.from({ length: 24 }, (_, h) => (
+                            <div key={h} className="absolute left-0 right-0 border-t border-dark-200/30" style={{ top: pixelForMinutes(h * 60, HOUR_HEIGHT) }} />
+                          ))}
+
+                          {/* Live create ghost */}
+                          {drag?.kind === "create" && drag.dayIso === dayIso && drag.roleId === role.rosterRoleId && (
+                            <div
+                              className={`absolute left-0.5 right-0.5 rounded border-l-4 border border-dashed border-gold/60 bg-gold-dim ${roleAccent(role.rosterRoleId, roleIds)}`}
+                              style={{
+                                top: pixelForMinutes(Math.min(drag.anchorMinutes, drag.nowMinutes), HOUR_HEIGHT),
+                                height: Math.max(8, pixelForMinutes(Math.abs(drag.nowMinutes - drag.anchorMinutes), HOUR_HEIGHT)),
+                              }}
+                            />
+                          )}
+
+                          {(() => {
+                            const laneShifts = shiftsForLane(dayIso, role.rosterRoleId).map((s) => {
+                              const override = dragOverrideFor(drag, s.shiftId);
+                              // A shift spanning multiple calendar days renders once, in its
+                              // start day's lane, sized to only that day's minutes (see the
+                              // module doc on minutesSinceMidnight) — which otherwise looks
+                              // exactly like a normal same-day shift with no visual sign the
+                              // remaining days exist. This badge is that sign. Precomputed in
+                              // shiftDisplayInfo above (storedStartMinutes/storedEndMinutes
+                              // included), not re-derived per render.
+                              const { daySpan, rangeLabel, storedStartMinutes, storedEndMinutes } = shiftDisplayInfo.get(s.shiftId)!;
+                              const startMinutes = override?.start ?? storedStartMinutes;
+                              const endMinutes = override?.end ?? storedEndMinutes;
+                              // When a shift's end falls on a different local day (any overnight
+                              // shift, not just a genuine multi-day one — e.g. 10pm-2am has
+                              // storedStartMinutes=1320, storedEndMinutes=120), storedEndMinutes
+                              // alone is <= storedStartMinutes, so using it as the block's bottom
+                              // edge collapses the height to the 18px floor instead of showing
+                              // anything. Render such a shift from its start down to the bottom
+                              // of the visible day instead — the "+Nd" badge is what actually
+                              // communicates "this continues past what's drawn here". Only the
+                              // static render is clamped: a resize/move drag still seeds itself
+                              // from the true (unclamped) endMinutes below, since overnight/
+                              // multi-day shifts are already disclosed as undraggable, not
+                              // silently corrupted.
+                              const visualEndMinutes = !override && daySpan > 0 ? 24 * 60 : endMinutes;
+                              return { s, daySpan, rangeLabel, storedStartMinutes, storedEndMinutes, startMinutes, visualEndMinutes };
+                            });
+                            // Two real (non-Cancelled) shifts for this role can genuinely
+                            // overlap in time — see assignOverlapColumns's own doc. Laid out
+                            // side-by-side instead of directly on top of each other.
+                            const columns = assignOverlapColumns(laneShifts.map((l) => ({ start: l.startMinutes, end: l.visualEndMinutes })));
+
+                            return laneShifts.map((l, i) => {
+                            const { s, daySpan, rangeLabel, storedStartMinutes, storedEndMinutes, startMinutes, visualEndMinutes } = l;
+                            const { colIndex, colCount } = columns[i];
+                            const isDraft = s.status === "Draft";
+                            const isDropTarget = drag?.kind === "assign" && drag.overShiftId === s.shiftId;
+
+                            const hoverText = `${role.roleName} — ${rangeLabel} — ${
+                              s.assignments.length === 0 ? "Unassigned" : s.assignments.map((a) => a.staffName).join(", ")
+                            } — ${s.status}`;
+
+                            const widthPct = 100 / colCount;
+                            const leftPct = colIndex * widthPct;
+
+                            return (
+                              <div
+                                key={s.shiftId}
+                                data-shift-id={isDraft ? s.shiftId : undefined}
+                                className={`absolute rounded border-l-4 px-1.5 py-1 text-[11px] leading-tight overflow-hidden ${roleAccent(role.rosterRoleId, roleIds)} ${
+                                  isDraft
+                                    ? `bg-dark-100 border border-dark-300 ${daySpan > 0 ? "" : "cursor-grab active:cursor-grabbing"}`
+                                    : "bg-dark-200/70 border border-dark-300/50 opacity-90"
+                                } ${isDropTarget ? "ring-2 ring-gold" : ""}`}
+                                style={{
+                                  top: pixelForMinutes(startMinutes, HOUR_HEIGHT),
+                                  height: Math.max(18, pixelForMinutes(visualEndMinutes - startMinutes, HOUR_HEIGHT)),
+                                  left: `calc(${leftPct}% + 2px)`,
+                                  width: `calc(${widthPct}% - 4px)`,
+                                }}
+                                onMouseEnter={(e) => {
+                                  setHoverInfo(hoverText);
+                                  positionHoverTooltip(e.clientX, e.clientY);
+                                }}
+                                onMouseMove={(e) => positionHoverTooltip(e.clientX, e.clientY)}
+                                onMouseLeave={() => setHoverInfo(null)}
+                                onPointerDown={(e) => {
+                                  setHoverInfo(null); // don't float a hover tooltip over a drag/resize in progress
+                                  // daySpan > 0 covers overnight shifts too (not just genuine
+                                  // multi-day ones) — resize/move both seed themselves from
+                                  // storedStartMinutes/storedEndMinutes, which strip the date
+                                  // and can't tell which calendar day the end falls on. Refusing
+                                  // the gesture here is what makes the render comment's claim
+                                  // ("already disclosed as undraggable") actually true.
+                                  if (!canManage || !isDraft || daySpan > 0) return;
+                                  e.stopPropagation();
+                                  const rect = e.currentTarget.getBoundingClientRect();
+                                  const grabY = e.clientY - rect.top;
+                                  const nearEdge = 8;
+                                  if (grabY <= nearEdge) {
+                                    beginDrag({ kind: "resize", shift: s, edge: "top", startMinutes: storedStartMinutes, endMinutes: storedEndMinutes }, e);
+                                  } else if (rect.height - grabY <= nearEdge) {
+                                    beginDrag({ kind: "resize", shift: s, edge: "bottom", startMinutes: storedStartMinutes, endMinutes: storedEndMinutes }, e);
+                                  } else {
+                                    const grabOffsetMinutes = minutesForPixel(grabY, HOUR_HEIGHT);
+                                    beginDrag(
+                                      {
+                                        kind: "move",
+                                        shift: s,
+                                        grabOffsetMinutes,
+                                        durationMinutes: storedEndMinutes - storedStartMinutes,
+                                        dayIso,
+                                        startMinutes: storedStartMinutes,
+                                      },
+                                      e,
+                                    );
+                                  }
+                                }}
+                              >
+                                <div className="flex items-center gap-1 font-medium text-[#FAFAFA] truncate">
+                                  {role.roleName}
+                                  {daySpan > 0 && (
+                                    <span
+                                      className="shrink-0 rounded-sm border border-amber-500/40 bg-amber-500/10 px-1 text-[10px] font-normal text-amber-300"
+                                      title={`Spans ${daySpan + 1} days — ends ${new Date(s.endDatetime).toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short" })}`}
+                                    >
+                                      +{daySpan}d
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-dark-600 truncate">{rangeLabel}</div>
+                                <div className="truncate text-dark-600">
+                                  {s.assignments.length === 0 ? "Unassigned" : s.assignments.map((a) => a.staffName).join(", ")}
+                                </div>
+                                {!isDraft && <div className="text-dark-600 italic">{s.status}</div>}
+                              </div>
+                            );
+                            });
+                          })()}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Staff drawer — drag a chip onto a Draft shift to assign. */}
+        {canManage && showStaffDrawer && (
+          <div className="w-48 flex-shrink-0 rounded-xl border border-dark-200 p-2">
+            <p className="mb-2 px-1 text-xs font-medium text-dark-600">Drag onto a shift to assign</p>
+            <div className="space-y-1">
+              {members.map((m) => (
+                <div
+                  key={m.userId}
+                  onPointerDown={(e) => beginDrag({ kind: "assign", userId: m.userId, staffName: m.displayName, overShiftId: null }, e)}
+                  className="cursor-grab active:cursor-grabbing rounded-lg border border-dark-200 bg-dark-100 px-2 py-1.5 text-xs text-[#E5E5E5] truncate select-none"
+                >
+                  {m.displayName}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {isLoading && (
+        <div className="flex items-center justify-center py-6 text-dark-600">
+          <Loader2 className="size-4 animate-spin mr-2" /> Loading…
+        </div>
+      )}
+      {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
+      <p className="mt-3 text-xs text-dark-600">
+        Draft shifts can be dragged and resized; drag a name from Staff onto one to assign it.{" "}
+        {canManage ? "Cancel a shift from the Shifts tab." : "You have view-only access."}
+      </p>
+
+      {hoverInfo &&
+        createPortal(
+          <div ref={hoverTooltipElRef} className="fixed z-50 pointer-events-none" style={{ left: 0, top: 0 }}>
+            <div
+              className="rounded-xl p-[1px]"
+              style={{
+                background: "linear-gradient(135deg, rgba(212,165,116,0.4), var(--color-gold-glow) 50%, rgba(212,165,116,0.2))",
+              }}
+            >
+              <div
+                className="rounded-[11px] px-4 py-2.5 min-w-[200px] max-w-[280px] backdrop-blur-xl"
+                style={{
+                  background: "linear-gradient(135deg, rgba(38,32,26,0.97), rgba(25,22,18,0.99))",
+                  boxShadow: "inset 0 1px 0 rgba(212,165,116,0.1), inset 0 -1px 0 rgba(0,0,0,0.4), 0 8px 32px rgba(0,0,0,0.7)",
+                }}
+              >
+                <p className="text-[12px] font-medium leading-relaxed text-[#E8DDD0] tracking-wide">{hoverInfo}</p>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
+    </div>
+  );
+}

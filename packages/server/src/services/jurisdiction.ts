@@ -50,3 +50,15 @@ export function normalizeJurisdiction(state: string | null | undefined): string 
   if (!trimmed) return null;
   return STATE_NAME_TO_CODE[trimmed] ?? trimmed;
 }
+
+/**
+ * The 8 real AU state/territory jurisdiction codes — derived from
+ * `STATE_NAME_TO_CODE`'s own values so this list can never drift from the
+ * normalization map above. Used to validate a jurisdiction value a human
+ * or a CSV row is ASSERTING (award_rule/document_expiry_rule authoring),
+ * as opposed to `normalizeJurisdiction`'s job of interpreting free text
+ * that's already trusted. A typo'd jurisdiction here (e.g. "NWS") would
+ * otherwise create a rule `idx_award_rule_lookup` can never match, keeping
+ * Award engine coverage silently stuck at "0 of N" with no visible error.
+ */
+export const AU_JURISDICTIONS: readonly string[] = Array.from(new Set(Object.values(STATE_NAME_TO_CODE))).sort();

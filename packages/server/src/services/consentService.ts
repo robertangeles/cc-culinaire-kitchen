@@ -22,7 +22,13 @@
 import { eq, and } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { shift, shiftAssignment, user } from "../db/schema.js";
-import { RosterError, resolveJurisdiction, getVenueTimezone, toVenueLocalDate } from "./rosterService.js";
+import {
+  RosterError,
+  resolveJurisdiction,
+  getVenueTimezone,
+  toVenueLocalDate,
+  shiftEndTimeOnStartDate,
+} from "./rosterService.js";
 import { isPublicHoliday as checkIsPublicHoliday } from "./publicHolidayService.js";
 import { createInApp, notifyHQAdmins, hasRecentNotification } from "./notificationService.js";
 import * as auditService from "./auditService.js";
@@ -38,6 +44,7 @@ async function getAssignmentWithShift(orgId: number, assignmentId: string) {
       publicHolidayConsent: shiftAssignment.publicHolidayConsent,
       storeLocationId: shift.storeLocationId,
       startDatetime: shift.startDatetime,
+      endDatetime: shift.endDatetime,
     })
     .from(shiftAssignment)
     .innerJoin(shift, eq(shift.shiftId, shiftAssignment.shiftId))
@@ -64,13 +71,16 @@ async function venueLocalShiftDate(storeLocationId: string, startDatetime: Date)
 }
 
 /** Returns the shift's venue-local calendar date once confirmed to be a loaded public holiday. */
-async function assertShiftIsPublicHoliday(storeLocationId: string, startDatetime: Date): Promise<string> {
+async function assertShiftIsPublicHoliday(storeLocationId: string, startDatetime: Date, endDatetime: Date): Promise<string> {
   const jurisdiction = await resolveJurisdiction(storeLocationId);
   if (!jurisdiction) throw new RosterError("This venue has no jurisdiction set — cannot check public holidays.", 400);
-  const localDate = await venueLocalShiftDate(storeLocationId, startDatetime);
+  const timezone = await getVenueTimezone(storeLocationId);
+  const localDate = toVenueLocalDate(startDatetime, timezone);
   // Throws PublicHolidayError (409) itself if the year isn't loaded — same
-  // fail-loud behaviour as publishRoster()'s own holiday check.
-  const isHoliday = await checkIsPublicHoliday(localDate, jurisdiction);
+  // fail-loud behaviour as publishRoster()'s own holiday check. The 3rd arg
+  // lets a partial-day holiday (e.g. QLD's Christmas Eve, 6pm-midnight)
+  // correctly refuse a shift that never reaches its active window.
+  const isHoliday = await checkIsPublicHoliday(localDate, jurisdiction, shiftEndTimeOnStartDate(startDatetime, endDatetime, timezone));
   if (!isHoliday) throw new RosterError("This shift is not on a loaded public holiday date.", 400);
   return localDate;
 }
@@ -81,7 +91,7 @@ export async function requestConsent(orgId: number, assignmentId: string, actorU
   if (row.publicHolidayConsent === "Accepted") {
     throw new RosterError("This staff member has already accepted this public holiday shift.", 409);
   }
-  const localDate = await assertShiftIsPublicHoliday(row.storeLocationId, row.startDatetime);
+  const localDate = await assertShiftIsPublicHoliday(row.storeLocationId, row.startDatetime, row.endDatetime);
 
   const [updated] = await db
     .update(shiftAssignment)

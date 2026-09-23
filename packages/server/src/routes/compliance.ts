@@ -16,12 +16,20 @@
 
 import { Router } from "express";
 import multer from "multer";
-import { authenticate, requirePermission } from "../middleware/auth.js";
+import { authenticate, requirePermission, requireAdministrator } from "../middleware/auth.js";
 import { requireFlag } from "../middleware/requireFlag.js";
-import { complianceDocumentViewRateLimit, complianceReportRateLimit } from "../middleware/rateLimiter.js";
+import {
+  complianceDocumentEditRateLimit,
+  complianceDocumentViewRateLimit,
+  complianceReportRateLimit,
+} from "../middleware/rateLimiter.js";
 import {
   handleListMyDocuments,
   handleCreateDocument,
+  handleUpdateDocument,
+  handleDeleteDocument,
+  handleNudgeDocument,
+  handleCreateVenueDocument,
   handleUploadDocument,
   handleGetDocument,
   handleGetDocumentViewUrl,
@@ -68,6 +76,14 @@ const documentUpload = multer({
 
 router.get("/documents/mine", requirePermission("compliance:read-own"), handleListMyDocuments);
 router.post("/documents", requirePermission("compliance:read-own"), handleCreateDocument);
+// CV-E: a venue document has no staff subject, so it's gated on verify (a
+// manager action), not read-own (which is a staff-subject self-upload).
+router.post(
+  "/documents/venue",
+  requirePermission("compliance:verify"),
+  complianceDocumentEditRateLimit,
+  handleCreateVenueDocument,
+);
 router.post(
   "/documents/upload",
   requirePermission("compliance:read-own"),
@@ -75,6 +91,24 @@ router.post(
   handleUploadDocument,
 );
 router.get("/documents/:id", requirePermission("compliance:read-own"), handleGetDocument);
+router.put(
+  "/documents/:id",
+  requirePermission("compliance:read-own"),
+  complianceDocumentEditRateLimit,
+  handleUpdateDocument,
+);
+router.delete(
+  "/documents/:id",
+  requirePermission("compliance:read-own"),
+  complianceDocumentEditRateLimit,
+  handleDeleteDocument,
+);
+router.post(
+  "/documents/:id/nudge",
+  requirePermission("compliance:read-own"),
+  complianceDocumentEditRateLimit,
+  handleNudgeDocument,
+);
 router.get(
   "/documents/:id/view-url",
   // Ownership (not just permission) decides access — see the handler.
@@ -118,8 +152,27 @@ router.post(
 
 // ─── Rules + required documents (admin) ──────────────────────────
 
-router.get("/rules", requirePermission("compliance:manage-rules"), handleListRules);
-router.put("/rules", requirePermission("compliance:manage-rules"), handleUpsertRule);
+// Administrator-only (requireAdministrator), not just compliance:manage-rules
+// — document_expiry_rule is platform-wide, no-organisationId data.
+// compliance:manage-rules is ALSO granted to Operations Admin (a
+// single-org role), which the outside-voice authority-blast-radius finding
+// caught: wiring a UI onto this permission alone would let any org's
+// Operations Admin edit rules that apply to every org on the platform.
+// compliance:manage-rules stays unweakened for its OTHER use
+// (RequiredDocumentsTab, genuinely org-scoped) — only this route gets the
+// extra gate.
+router.get(
+  "/rules",
+  requirePermission("compliance:manage-rules"),
+  requireAdministrator(),
+  handleListRules,
+);
+router.put(
+  "/rules",
+  requirePermission("compliance:manage-rules"),
+  requireAdministrator(),
+  handleUpsertRule,
+);
 router.get(
   "/required-documents",
   requirePermission("compliance:manage-rules"),

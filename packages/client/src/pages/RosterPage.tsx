@@ -8,17 +8,18 @@
  */
 
 import { useMemo, useState } from "react";
-import { CalendarClock, CalendarDays, Gauge, Grid3x3, ListChecks, UserCog, Users } from "lucide-react";
+import { CalendarClock, CalendarDays, CalendarRange, Gauge, Grid3x3, ListChecks, UserCog, Users } from "lucide-react";
 import { useAuth } from "../context/AuthContext.js";
 import { useHasPermission } from "../hooks/useHasPermission.js";
 import { ShiftsManager } from "../components/roster/ShiftsManager.js";
+import { RosterCalendarView } from "../components/roster/RosterCalendarView.js";
 import { RolesManager } from "../components/roster/RolesManager.js";
 import { MyShiftsView } from "../components/roster/MyShiftsView.js";
 import { MyAvailabilityManager } from "../components/roster/MyAvailabilityManager.js";
 import { WorkforceDemandView } from "../components/roster/WorkforceDemandView.js";
 import { StaffingCoverageView } from "../components/roster/StaffingCoverageView.js";
 
-type RosterTab = "shifts" | "roles" | "mine" | "availability" | "demand" | "coverage";
+type RosterTab = "shifts" | "calendar" | "roles" | "mine" | "availability" | "demand" | "coverage";
 
 export function RosterPage() {
   const { user, isGuest } = useAuth();
@@ -29,6 +30,7 @@ export function RosterPage() {
   const tabs = useMemo(() => {
     const t: { key: RosterTab; label: string; icon: typeof Users }[] = [];
     if (canReadAll) t.push({ key: "shifts", label: "Shifts", icon: CalendarDays });
+    if (canReadAll) t.push({ key: "calendar", label: "Calendar", icon: CalendarRange });
     if (canReadAll) t.push({ key: "roles", label: "Roles", icon: ListChecks });
     if (canReadOwn) t.push({ key: "mine", label: "My Shifts", icon: UserCog });
     if (canReadOwn) t.push({ key: "availability", label: "My Availability", icon: CalendarClock });
@@ -92,6 +94,7 @@ export function RosterPage() {
         )}
 
         {activeTab === "shifts" && <ShiftsManager />}
+        {activeTab === "calendar" && <RosterCalendarView />}
         {activeTab === "roles" && <RolesManager />}
         {activeTab === "mine" && <MyShiftsView />}
         {activeTab === "availability" && <MyAvailabilityManager />}

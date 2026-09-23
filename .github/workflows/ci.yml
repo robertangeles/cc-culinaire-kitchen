@@ -98,6 +98,24 @@ jobs:
       UOM_IT: "1"
       DATABASE_URL: postgresql://ci:ci@localhost:5432/culinaire_it
       DEV_DATABASE_URL: postgresql://ci:ci@localhost:5432/culinaire_it
+      # Throwaway keys for this ephemeral, destroyed-after-the-run CI database
+      # only — never the real dev/prod keys. organisation.tenant.integration.
+      # test.ts is the first suite in this job to call createOrganisation()
+      # (the service, not a raw insert), which encrypts org PII and throws if
+      # these aren't set — every other tenant test seeds `organisation` rows
+      # directly, bypassing PII encryption entirely.
+      PII_ENCRYPTION_KEY: b5f9b9838d8ed457094872d51a841a91cf1d2be1a0dc5745fbf5d456cfa9fad7
+      PII_HMAC_KEY: 240e45c0ca546021838cbd7ef3f6db89ae7db670a08bf2e74cdec5019e57657a
+      CREDENTIALS_ENCRYPTION_KEY: c0dd5eaba08873f966f913dae031a0c95d492c58196e49097e18173fd58eaae4
+      # Throwaway values, same reasoning as the encryption keys above — this DB
+      # has no seeded `credential` row, so getCredentialValueWithFallback falls
+      # back to these env vars. cloudinary.utils.private_download_url signs a
+      # URL locally from api_key/api_secret; it never makes a network call, so
+      # a fake account is enough for compliance.integration.test.ts's signed-URL
+      # assertions without touching a real Cloudinary account from CI.
+      CLOUDINARY_CLOUD_NAME: ci-test
+      CLOUDINARY_API_KEY: "123456789012345"
+      CLOUDINARY_API_SECRET: ci-test-secret-not-real
 
     steps:
       - name: Checkout
@@ -128,6 +146,13 @@ jobs:
       - name: Push schema to test database
         run: pnpm --filter @culinaire/server db:push
 
+      # organisation.tenant.integration.test.ts is the first integration test
+      # in this job to depend on seeded RBAC rows (it looks up the
+      # "Operations Admin" role by name) — db:push only pushes schema, never
+      # data, so without this step that suite's beforeAll throws.
+      - name: Seed roles and permissions
+        run: pnpm --filter @culinaire/server db:seed
+
       - name: Run tenant-isolation integration tests
         run: pnpm --filter @culinaire/server exec vitest run src/tenantIsolation.integration.test.ts
 
@@ -146,6 +171,9 @@ jobs:
       - name: Run roster tenant-isolation integration tests
         run: pnpm --filter @culinaire/server exec vitest run src/services/roster.tenant.integration.test.ts
 
+      - name: Run organisation tenant-isolation integration tests
+        run: pnpm --filter @culinaire/server exec vitest run src/services/organisation.tenant.integration.test.ts
+
       - name: Run compliance integration tests
         run: pnpm --filter @culinaire/server exec vitest run src/services/compliance.integration.test.ts
 
@@ -160,6 +188,9 @@ jobs:
 
       - name: Run staffing coverage integration tests
         run: pnpm --filter @culinaire/server exec vitest run src/services/staffingCoverage.integration.test.ts
+
+      - name: Run roster week calendar integration tests
+        run: pnpm --filter @culinaire/server exec vitest run src/services/rosterCalendar.integration.test.ts
 
       - name: Run shift swap integration tests
         run: pnpm --filter @culinaire/server exec vitest run src/services/shiftSwap.integration.test.ts

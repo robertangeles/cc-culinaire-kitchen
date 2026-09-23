@@ -43,6 +43,7 @@ export interface MyShift {
   shiftId: string;
   storeLocationId: string;
   rosterRoleId: string;
+  roleName: string;
   startDatetime: string;
   endDatetime: string;
   status: string;
@@ -91,10 +92,22 @@ export interface AssignmentBlocked {
   expiryDate: string | null;
 }
 
-async function parseError(res: Response, fallback: string): Promise<Error & { blocked?: AssignmentBlocked }> {
+export interface RoleVenueConflict {
+  storeLocationId: string;
+  locationName: string;
+}
+
+export async function parseError(
+  res: Response,
+  fallback: string,
+): Promise<Error & { blocked?: AssignmentBlocked; conflicts?: RoleVenueConflict[] }> {
   const body = await res.json().catch(() => ({}));
-  const err = new Error(body.error || fallback) as Error & { blocked?: AssignmentBlocked };
+  const err = new Error(body.error || fallback) as Error & {
+    blocked?: AssignmentBlocked;
+    conflicts?: RoleVenueConflict[];
+  };
   if (body.blocked) err.blocked = body.blocked;
+  if (body.conflicts) err.conflicts = body.conflicts;
   return err;
 }
 
@@ -134,7 +147,7 @@ export function useRosterRoles() {
   );
 
   const update = useCallback(
-    async (id: string, data: { roleName: string; storeLocationId?: string | null }) => {
+    async (id: string, data: { roleName: string; storeLocationId?: string | null; confirmed?: boolean }) => {
       const res = await fetch(`${BASE}/roles/${id}`, { ...jsonOpts, method: "PUT", body: JSON.stringify(data) });
       if (!res.ok) throw await parseError(res, "Failed to update role");
       await refresh();
@@ -226,6 +239,15 @@ export function useShifts(storeLocationId: string | null) {
     [refresh],
   );
 
+  const update = useCallback(
+    async (id: string, data: { startDatetime?: string; endDatetime?: string }) => {
+      const res = await fetch(`${BASE}/shifts/${id}`, { ...jsonOpts, method: "PUT", body: JSON.stringify(data) });
+      if (!res.ok) throw await parseError(res, "Failed to update shift");
+      await refresh();
+    },
+    [refresh],
+  );
+
   const cancel = useCallback(
     async (id: string) => {
       const res = await fetch(`${BASE}/shifts/${id}/cancel`, { ...opts, method: "POST" });
@@ -264,7 +286,220 @@ export function useShifts(storeLocationId: string | null) {
     refresh();
   }, [refresh]);
 
-  return { shifts, isLoading, error, refresh, create, cancel, assign, removeAssignment };
+  return { shifts, isLoading, error, refresh, create, update, cancel, assign, removeAssignment };
+}
+
+// ─── Roster Shift Templates ───────────────────────────────────────
+
+export interface RosterShiftTemplate {
+  rosterShiftTemplateId: string;
+  organisationId: number;
+  storeLocationId: string;
+  rosterRoleId: string;
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
+  createdDttm: string;
+  updatedDttm: string;
+}
+
+export interface TemplateRowInput {
+  storeLocationId: string;
+  rosterRoleId: string;
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
+}
+
+export interface GenerateWeekResult {
+  created: number;
+  skipped: number;
+  failed: number;
+}
+
+export interface UndoGenerationResult {
+  cancelled: number;
+}
+
+/** Same stale-closure-safe shape as useShifts above — storeLocationId drives refresh's own deps, hasLoadedOnce resets on venue switch. */
+export function useRosterTemplates(storeLocationId: string | null) {
+  const [templates, setTemplates] = useState<RosterShiftTemplate[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const hasLoadedOnce = useRef(false);
+
+  const refresh = useCallback(async () => {
+    if (!storeLocationId) {
+      setTemplates([]);
+      setIsLoading(false);
+      return;
+    }
+    if (!hasLoadedOnce.current) setIsLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`${BASE}/templates?storeLocationId=${storeLocationId}`, opts);
+      if (res.ok) setTemplates(await res.json());
+      else setError((await parseError(res, "Failed to load templates")).message);
+    } finally {
+      setIsLoading(false);
+      hasLoadedOnce.current = true;
+    }
+  }, [storeLocationId]);
+
+  const create = useCallback(
+    async (data: TemplateRowInput) => {
+      const res = await fetch(`${BASE}/templates`, { ...jsonOpts, method: "POST", body: JSON.stringify(data) });
+      if (!res.ok) throw await parseError(res, "Failed to create template row");
+      await refresh();
+      return (await res.json()) as RosterShiftTemplate;
+    },
+    [refresh],
+  );
+
+  const update = useCallback(
+    async (id: string, data: TemplateRowInput) => {
+      const res = await fetch(`${BASE}/templates/${id}`, { ...jsonOpts, method: "PATCH", body: JSON.stringify(data) });
+      if (!res.ok) throw await parseError(res, "Failed to update template row");
+      await refresh();
+    },
+    [refresh],
+  );
+
+  const remove = useCallback(
+    async (id: string) => {
+      const res = await fetch(`${BASE}/templates/${id}`, { ...opts, method: "DELETE" });
+      if (!res.ok) throw await parseError(res, "Failed to delete template row");
+      await refresh();
+    },
+    [refresh],
+  );
+
+  const generateWeek = useCallback(
+    async (weekStart: string): Promise<GenerateWeekResult> => {
+      if (!storeLocationId) throw new Error("No venue selected");
+      const res = await fetch(`${BASE}/templates/generate`, {
+        ...jsonOpts,
+        method: "POST",
+        body: JSON.stringify({ storeLocationId, weekStart }),
+      });
+      if (!res.ok) throw await parseError(res, "Failed to generate week");
+      return res.json();
+    },
+    [storeLocationId],
+  );
+
+  const undoGeneration = useCallback(
+    async (weekStart: string): Promise<UndoGenerationResult> => {
+      if (!storeLocationId) throw new Error("No venue selected");
+      const res = await fetch(`${BASE}/templates/undo-generation`, {
+        ...jsonOpts,
+        method: "POST",
+        body: JSON.stringify({ storeLocationId, weekStart }),
+      });
+      if (!res.ok) throw await parseError(res, "Failed to undo generation");
+      return res.json();
+    },
+    [storeLocationId],
+  );
+
+  useEffect(() => {
+    hasLoadedOnce.current = false;
+    refresh();
+  }, [refresh]);
+
+  return { templates, isLoading, error, refresh, create, update, remove, generateWeek, undoGeneration };
+}
+
+export interface CalendarShiftAssignment {
+  assignmentId: string;
+  userId: number;
+  staffName: string;
+  status: string;
+}
+
+export interface CalendarShift {
+  shiftId: string;
+  rosterRoleId: string;
+  roleName: string;
+  startDatetime: string;
+  endDatetime: string;
+  status: "Draft" | "Published" | "Cancelled";
+  isPublicHoliday: boolean;
+  assignments: CalendarShiftAssignment[];
+}
+
+/**
+ * Backs the RosterCalendarView "Calendar" tab — one row per shift with role
+ * name and assignees inline (GET /shifts/calendar), unlike useShifts'
+ * GET /shifts which returns bare shift rows only. Mutators hit the SAME
+ * routes useShifts already calls; refresh is the only thing pointed at the
+ * new route. Kept separate from useShifts rather than shared — the two
+ * hooks refresh from different endpoints, and there's no second consumer to
+ * justify genericizing that yet.
+ */
+export function useRosterCalendar(storeLocationId: string | null, from: string, to: string) {
+  const [calendarShifts, setCalendarShifts] = useState<CalendarShift[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const hasLoadedOnce = useRef(false);
+
+  const refresh = useCallback(async () => {
+    if (!storeLocationId) {
+      setCalendarShifts([]);
+      setIsLoading(false);
+      return;
+    }
+    if (!hasLoadedOnce.current) setIsLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`${BASE}/shifts/calendar?storeLocationId=${storeLocationId}&from=${from}&to=${to}`, opts);
+      if (res.ok) setCalendarShifts(await res.json());
+      else setError((await parseError(res, "Failed to load the roster calendar")).message);
+    } finally {
+      setIsLoading(false);
+      hasLoadedOnce.current = true;
+    }
+  }, [storeLocationId, from, to]);
+
+  const create = useCallback(
+    async (data: { storeLocationId: string; rosterRoleId: string; startDatetime: string; endDatetime: string }) => {
+      const res = await fetch(`${BASE}/shifts`, { ...jsonOpts, method: "POST", body: JSON.stringify(data) });
+      if (!res.ok) throw await parseError(res, "Failed to create shift");
+      await refresh();
+      return (await res.json()) as Shift;
+    },
+    [refresh],
+  );
+
+  /** Reschedule/resize a Draft shift — the PUT /shifts/:id route existed server-side with no client caller until now. */
+  const updateTime = useCallback(
+    async (shiftId: string, data: { startDatetime?: string; endDatetime?: string }) => {
+      const res = await fetch(`${BASE}/shifts/${shiftId}`, { ...jsonOpts, method: "PUT", body: JSON.stringify(data) });
+      if (!res.ok) throw await parseError(res, "Failed to reschedule shift");
+      await refresh();
+    },
+    [refresh],
+  );
+
+  const assign = useCallback(
+    async (shiftId: string, userId: number) => {
+      const res = await fetch(`${BASE}/shifts/${shiftId}/assignments`, {
+        ...jsonOpts,
+        method: "POST",
+        body: JSON.stringify({ userId }),
+      });
+      if (!res.ok) throw await parseError(res, "Failed to assign staff");
+      await refresh();
+    },
+    [refresh],
+  );
+
+  useEffect(() => {
+    hasLoadedOnce.current = false;
+    refresh();
+  }, [refresh]);
+
+  return { calendarShifts, isLoading, error, refresh, create, updateTime, assign };
 }
 
 export interface ShiftAssignmentRow {
@@ -430,6 +665,7 @@ export interface PublicHoliday {
   regionNote: string | null;
   sourceCitation: string | null;
   loadedForYear: number;
+  partialDayFromTime: string | null;
   createdDttm: string;
   updatedDttm: string;
 }
@@ -442,6 +678,7 @@ export interface NewPublicHoliday {
   regionNote?: string | null;
   sourceCitation?: string | null;
   loadedForYear: number;
+  partialDayFromTime?: string | null;
 }
 
 export async function listPublicHolidays(): Promise<PublicHoliday[]> {
@@ -463,6 +700,106 @@ export async function createPublicHoliday(input: NewPublicHoliday): Promise<Publ
 export async function deletePublicHoliday(id: string): Promise<void> {
   const res = await fetch(`${BASE}/public-holidays/${id}`, { ...opts, method: "DELETE" });
   if (!res.ok) throw await parseError(res, "Failed to remove public holiday");
+}
+
+// ─── Award rules ──────────────────────────────────────────────────
+// Same platform-wide shared shape as public holidays — no organisationId.
+
+export const AWARD_RULE_TYPES = [
+  "max_ordinary_hours",
+  "publish_notice",
+  "min_break",
+  "min_rest",
+  "penalty_rates",
+  "allowances",
+  "casual_loading",
+  "overtime",
+  "public_holiday_rates",
+] as const;
+
+/** Rule types this engine currently evaluates — the other 7 are honestly disclosed as not checked. */
+export const AWARD_CHECKED_RULE_TYPES = ["max_ordinary_hours", "publish_notice"] as const;
+
+export const AU_JURISDICTIONS = ["ACT", "NSW", "NT", "QLD", "SA", "TAS", "VIC", "WA"] as const;
+
+export interface AwardRule {
+  awardRuleId: string;
+  awardCode: string;
+  ruleType: string;
+  jurisdiction: string | null;
+  thresholdValue: string | null;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  sourceCitation: string | null;
+  ruleVersion: string;
+}
+
+export interface NewAwardRule {
+  awardCode: string;
+  ruleType: string;
+  jurisdiction: string | null;
+  thresholdValue: number;
+  effectiveFrom: string;
+  sourceCitation?: string | null;
+}
+
+export async function listAwardRules(): Promise<AwardRule[]> {
+  const res = await fetch(`${BASE}/award-rules`, opts);
+  if (!res.ok) throw await parseError(res, "Failed to load award rules");
+  return res.json();
+}
+
+export async function upsertAwardRule(input: NewAwardRule): Promise<AwardRule> {
+  const res = await fetch(`${BASE}/award-rules`, {
+    ...jsonOpts,
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) throw await parseError(res, "Failed to save award rule");
+  return res.json();
+}
+
+// ─── Award rules CSV import ───────────────────────────────────────
+// Two-phase preview -> commit, same client shape as useSales.ts's
+// previewSalesCsv/commitSalesCsv.
+
+export interface CsvAwardRuleRow {
+  rowIndex: number;
+  awardCode: string;
+  ruleType: string;
+  jurisdiction: string | null;
+  thresholdValue: number;
+  effectiveFrom: string;
+  sourceCitation: string | null;
+}
+
+export interface CsvImportPreview {
+  valid: CsvAwardRuleRow[];
+  invalid: Array<{ rowIndex: number; reason: string }>;
+}
+
+export interface CsvImportCommitResult {
+  imported: number;
+  skipped: number;
+  errors: Array<{ row: number; reason: string }>;
+}
+
+export async function previewAwardRuleCsv(file: File): Promise<CsvImportPreview> {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await fetch(`${BASE}/award-rules/import/preview`, { ...opts, method: "POST", body: form });
+  if (!res.ok) throw await parseError(res, "Failed to preview CSV");
+  return res.json();
+}
+
+export async function commitAwardRuleCsvImport(rows: CsvAwardRuleRow[]): Promise<CsvImportCommitResult> {
+  const res = await fetch(`${BASE}/award-rules/import/commit`, {
+    ...jsonOpts,
+    method: "POST",
+    body: JSON.stringify({ rows }),
+  });
+  if (!res.ok) throw await parseError(res, "Failed to commit CSV import");
+  return res.json();
 }
 
 export function useOrgMembers(orgId: number | null) {

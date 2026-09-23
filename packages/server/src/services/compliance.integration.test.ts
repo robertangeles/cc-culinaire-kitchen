@@ -11,13 +11,15 @@ import { applyEnvPrefix } from "../utils/envShim.js";
 config({ path: resolve(dirname(fileURLToPath(import.meta.url)), "../../../../.env") });
 applyEnvPrefix();
 
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, and, isNull, desc } from "drizzle-orm";
 import { db } from "../db/index.js";
 import {
   organisation,
   user,
   userOrganisation,
+  storeLocation,
   complianceDocument,
+  documentAccessLog,
   documentExpiryRule,
   documentExpiryRuleAlertDay,
   organisationRequiredDocument,
@@ -27,15 +29,21 @@ import {
 import {
   createDocument,
   listDocumentsForUser,
+  updateDocument,
+  deleteDocument,
   verifyDocument,
   rejectDocument,
+  nudgeVerifier,
   getDocument,
   isOwnDocument,
   listStaffCompliance,
   getComplianceDashboard,
   setRequiredDocuments,
+  upsertExpiryRule,
 } from "./complianceService.js";
 import { runExpiryScan } from "./complianceExpiryJob.js";
+import { archiveForOffboardedStaff } from "./complianceRetentionService.js";
+import { handleGetDocumentViewUrl } from "../controllers/complianceController.js";
 
 /**
  * Real-database behaviour of the Compliance Vault, end to end against Postgres.
@@ -168,6 +176,107 @@ describe.skipIf(!RUN)("compliance vault (real DB)", () => {
       );
       expect(rejected.verificationStatus).toBe("Rejected");
       expect(rejected.rejectionReason).toBe("Photo is blurry, please re-upload"); // trimmed
+    });
+
+    it("updateDocument edits a Pending document's own fields, staying Pending", async () => {
+      const doc = await createDocument(org1, {
+        userId: staffA,
+        uploadedBy: staffA,
+        documentType: `${tag}-edit-pending`,
+        storagePublicId: sp(org1, staffA, "edit-pending"),
+      });
+
+      const updated = await updateDocument(org1, doc.complianceDocumentId, staffA, {
+        documentNumber: "ABC-123",
+        expiryDate: "2027-06-01",
+      });
+      expect(updated.documentNumber).toBe("ABC-123");
+      expect(updated.expiryDate).toBe("2027-06-01");
+      expect(updated.verificationStatus).toBe("Pending");
+    });
+
+    it("updateDocument on a Rejected document resubmits it to Pending and clears the rejection reason", async () => {
+      const doc = await createDocument(org1, {
+        userId: staffA,
+        uploadedBy: staffA,
+        documentType: `${tag}-edit-rejected`,
+        storagePublicId: sp(org1, staffA, "edit-rejected"),
+      });
+      await rejectDocument(org1, doc.complianceDocumentId, staffB, "Wrong document number");
+
+      const updated = await updateDocument(org1, doc.complianceDocumentId, staffA, {
+        documentNumber: "FIXED-1",
+      });
+      expect(updated.verificationStatus).toBe("Pending");
+      expect(updated.rejectionReason).toBeNull();
+      expect(updated.documentNumber).toBe("FIXED-1");
+    });
+
+    it("updateDocument REFUSES to edit a Verified document", async () => {
+      const doc = await createDocument(org1, {
+        userId: staffA,
+        uploadedBy: staffA,
+        documentType: `${tag}-edit-verified`,
+        storagePublicId: sp(org1, staffA, "edit-verified"),
+      });
+      await verifyDocument(org1, doc.complianceDocumentId, staffB);
+
+      await expect(
+        updateDocument(org1, doc.complianceDocumentId, staffA, { documentNumber: "SHOULD-FAIL" }),
+      ).rejects.toMatchObject({ statusCode: 409 });
+    });
+
+    it("updateDocument REFUSES a colleague editing someone else's document (404, not 403)", async () => {
+      const doc = await createDocument(org1, {
+        userId: staffA,
+        uploadedBy: staffA,
+        documentType: `${tag}-edit-not-owner`,
+        storagePublicId: sp(org1, staffA, "edit-not-owner"),
+      });
+
+      await expect(
+        updateDocument(org1, doc.complianceDocumentId, staffB, { documentNumber: "NOT-YOURS" }),
+      ).rejects.toMatchObject({ statusCode: 404 });
+    });
+
+    // deleteDocument's happy path (Pending/Rejected -> actually removed, Cloudinary
+    // blob destroyed first) is deliberately NOT exercised here: deleteStoredDocument
+    // calls the real Cloudinary API via credentials from the Integrations panel,
+    // which this suite has no business depending on. Both guards below are
+    // ownership/status checks that throw BEFORE deleteStoredDocument is ever
+    // called (see complianceService.deleteDocument), so they're safe to run
+    // against the real DB with zero Cloudinary interaction.
+    it("deleteDocument REFUSES to delete a Verified document", async () => {
+      const doc = await createDocument(org1, {
+        userId: staffA,
+        uploadedBy: staffA,
+        documentType: `${tag}-delete-verified`,
+        storagePublicId: sp(org1, staffA, "delete-verified"),
+      });
+      await verifyDocument(org1, doc.complianceDocumentId, staffB);
+
+      await expect(deleteDocument(org1, doc.complianceDocumentId, staffA)).rejects.toMatchObject({
+        statusCode: 409,
+      });
+      // Refused, so it must still be there.
+      const stillThere = await getDocument(org1, doc.complianceDocumentId);
+      expect(stillThere.verificationStatus).toBe("Verified");
+    });
+
+    it("deleteDocument REFUSES a colleague deleting someone else's document (404, not 403)", async () => {
+      const doc = await createDocument(org1, {
+        userId: staffA,
+        uploadedBy: staffA,
+        documentType: `${tag}-delete-not-owner`,
+        storagePublicId: sp(org1, staffA, "delete-not-owner"),
+      });
+
+      await expect(deleteDocument(org1, doc.complianceDocumentId, staffB)).rejects.toMatchObject({
+        statusCode: 404,
+      });
+      // Refused, so it must still be there.
+      const stillThere = await getDocument(org1, doc.complianceDocumentId);
+      expect(stillThere.complianceDocumentId).toBe(doc.complianceDocumentId);
     });
 
     it("isOwnDocument distinguishes the owner from a colleague; a cross-org read is a 404", async () => {
@@ -408,6 +517,131 @@ describe.skipIf(!RUN)("compliance vault (real DB)", () => {
     });
   });
 
+  // ── Group 2b: upsertExpiryRule (auto-supersede write path) ────────────────
+  describe("upsertExpiryRule", () => {
+    const documentType = `${tag}-upsert-rsa`;
+    let createdRuleIds: string[] = [];
+    let actorUserId: number;
+
+    beforeAll(async () => {
+      [{ userId: actorUserId }] = await db
+        .insert(user)
+        .values({ userName: "Rule Upsert Actor", userEmail: `${tag}-upsert-actor@it.test` })
+        .returning({ userId: user.userId });
+    });
+
+    afterAll(async () => {
+      await db
+        .delete(auditLog)
+        .where(and(eq(auditLog.entityType, "document_expiry_rule"), eq(auditLog.actorUserId, actorUserId)));
+      if (createdRuleIds.length > 0) {
+        await db
+          .delete(documentExpiryRuleAlertDay)
+          .where(inArray(documentExpiryRuleAlertDay.documentExpiryRuleId, createdRuleIds));
+        await db.delete(documentExpiryRule).where(inArray(documentExpiryRule.documentExpiryRuleId, createdRuleIds));
+      }
+      await db.delete(user).where(eq(user.userId, actorUserId));
+    });
+
+    it("creates a new rule with no prior active row, and audit-logs the insert", async () => {
+      const created = await upsertExpiryRule({ documentType, jurisdiction: null, effectiveFrom: "2020-01-01" }, actorUserId);
+      createdRuleIds.push(created.documentExpiryRuleId);
+      expect(created.effectiveFrom).toBe("2020-01-01");
+
+      const [row] = await db
+        .select({ effectiveTo: documentExpiryRule.effectiveTo })
+        .from(documentExpiryRule)
+        .where(eq(documentExpiryRule.documentExpiryRuleId, created.documentExpiryRuleId));
+      expect(row.effectiveTo).toBeNull();
+
+      const [auditRow] = await db
+        .select({ action: auditLog.action })
+        .from(auditLog)
+        .where(and(eq(auditLog.entityType, "document_expiry_rule"), eq(auditLog.entityId, created.documentExpiryRuleId)));
+      expect(auditRow.action).toBe("create");
+    });
+
+    it("auto-supersede: a later edit closes the old row, audit-logs both halves, and both remain visible in history", async () => {
+      const first = await upsertExpiryRule({ documentType, jurisdiction: "NSW", effectiveFrom: "2021-01-01" }, actorUserId);
+      createdRuleIds.push(first.documentExpiryRuleId);
+
+      const second = await upsertExpiryRule({ documentType, jurisdiction: "NSW", effectiveFrom: "2022-06-01" }, actorUserId);
+      createdRuleIds.push(second.documentExpiryRuleId);
+
+      const [closedFirst] = await db
+        .select({ effectiveTo: documentExpiryRule.effectiveTo })
+        .from(documentExpiryRule)
+        .where(eq(documentExpiryRule.documentExpiryRuleId, first.documentExpiryRuleId));
+      expect(closedFirst.effectiveTo).toBe("2022-05-31");
+
+      const [stillOpenSecond] = await db
+        .select({ effectiveTo: documentExpiryRule.effectiveTo })
+        .from(documentExpiryRule)
+        .where(eq(documentExpiryRule.documentExpiryRuleId, second.documentExpiryRuleId));
+      expect(stillOpenSecond.effectiveTo).toBeNull();
+
+      const closeAudits = await db
+        .select({ action: auditLog.action })
+        .from(auditLog)
+        .where(
+          and(
+            eq(auditLog.entityType, "document_expiry_rule"),
+            eq(auditLog.entityId, first.documentExpiryRuleId),
+            eq(auditLog.action, "update"),
+          ),
+        );
+      expect(closeAudits).toHaveLength(1); // the close-row half, distinct from first's own earlier "create" row
+    });
+
+    it("rejects a same-day edit that would invert the closed row's date range", async () => {
+      const first = await upsertExpiryRule(
+        { documentType, jurisdiction: "QLD", effectiveFrom: "2026-03-01" },
+        actorUserId,
+      );
+      createdRuleIds.push(first.documentExpiryRuleId);
+
+      // Second edit dated the SAME day as the still-active row's own effectiveFrom.
+      await expect(
+        upsertExpiryRule({ documentType, jurisdiction: "QLD", effectiveFrom: "2026-03-01" }, actorUserId),
+      ).rejects.toThrow("already updated today");
+
+      const [unchanged] = await db
+        .select({ effectiveTo: documentExpiryRule.effectiveTo })
+        .from(documentExpiryRule)
+        .where(eq(documentExpiryRule.documentExpiryRuleId, first.documentExpiryRuleId));
+      expect(unchanged.effectiveTo).toBeNull(); // rejected attempt left the active row untouched
+    });
+
+    it("two concurrent creates for the same key: exactly one active row survives, no unhandled 23505", async () => {
+      const concurrentType = `${tag}-concurrent-rsa`;
+      const [a, b] = await Promise.allSettled([
+        upsertExpiryRule({ documentType: concurrentType, jurisdiction: "VIC", effectiveFrom: "2023-01-01" }, actorUserId),
+        upsertExpiryRule({ documentType: concurrentType, jurisdiction: "VIC", effectiveFrom: "2023-01-01" }, actorUserId),
+      ]);
+
+      const succeeded = [a, b].filter((r) => r.status === "fulfilled") as PromiseFulfilledResult<
+        Awaited<ReturnType<typeof upsertExpiryRule>>
+      >[];
+      // Both may succeed (retry absorbs the race) or one may reject on the
+      // same-day-guard if the retry re-reads the winner's row — either way,
+      // never an unhandled DB error, and never two simultaneously-active rows.
+      for (const r of succeeded) createdRuleIds.push(r.value.documentExpiryRuleId);
+
+      const activeRows = await db
+        .select({ id: documentExpiryRule.documentExpiryRuleId })
+        .from(documentExpiryRule)
+        .where(
+          and(
+            eq(documentExpiryRule.documentType, concurrentType),
+            eq(documentExpiryRule.jurisdiction, "VIC"),
+            isNull(documentExpiryRule.effectiveTo),
+          ),
+        );
+      expect(activeRows.length).toBe(1);
+      createdRuleIds.push(...activeRows.map((r) => r.id));
+    });
+  });
+
   // ── Group 3: expiry scan ─────────────────────────────────────────────────
   describe("expiry scan", () => {
     const TODAY = "2026-01-15";
@@ -473,7 +707,14 @@ describe.skipIf(!RUN)("compliance vault (real DB)", () => {
 
     it("flips a document expiring today to Expired", async () => {
       const result = await runExpiryScan(TODAY);
-      expect(result).toEqual({ scanned: 2, notified: 1, expired: 1 });
+      // scanned counts every non-Archived, dated document system-wide (by
+      // design — the real cron job scans across all orgs), so it can only
+      // be asserted as a lower bound against a shared dev DB that other
+      // orgs' real documents also live in. notified/expired stay exact:
+      // they only fire for documents actually matching today's rule.
+      expect(result.scanned).toBeGreaterThanOrEqual(2);
+      expect(result.notified).toBe(1);
+      expect(result.expired).toBe(1);
 
       const [row] = await db
         .select({ status: complianceDocument.verificationStatus })
@@ -490,13 +731,358 @@ describe.skipIf(!RUN)("compliance vault (real DB)", () => {
       expect(before).toHaveLength(1); // the first run's alert, from the previous test
 
       const second = await runExpiryScan(TODAY);
-      expect(second).toEqual({ scanned: 2, notified: 0, expired: 1 });
+      // See the note in the previous test — scanned is a global count.
+      expect(second.scanned).toBeGreaterThanOrEqual(2);
+      expect(second.notified).toBe(0);
+      expect(second.expired).toBe(1);
 
       const after = await db
         .select({ id: notification.notificationId })
         .from(notification)
         .where(eq(notification.relatedEntityId, alertDueId));
       expect(after).toHaveLength(1); // still exactly one — dedup held
+    });
+  });
+
+  // ── Group: nudge — CV-C7's staff-side reminder on an aged Pending doc ──
+  describe("nudge", () => {
+    let staffH: number;
+    let org5: number;
+    let docId: string;
+
+    beforeAll(async () => {
+      [{ userId: staffH }] = await db
+        .insert(user)
+        .values({ userName: "Compliance H", userEmail: `${tag}-h@it.test` })
+        .returning({ userId: user.userId });
+
+      [{ id: org5 }] = await db
+        .insert(organisation)
+        .values({ organisationName: `${tag}-org5`, joinKey: `${tag}-jk5`, createdBy: staffH })
+        .returning({ id: organisation.organisationId });
+
+      [{ id: docId }] = await db
+        .insert(complianceDocument)
+        .values({
+          organisationId: org5,
+          userId: staffH,
+          documentType: `${tag}-nudge-doc`,
+          storagePublicId: sp(org5, staffH, "nudge-1"),
+          verificationStatus: "Pending",
+          uploadedBy: staffH,
+        })
+        .returning({ id: complianceDocument.complianceDocumentId });
+    });
+
+    afterAll(async () => {
+      await db.delete(notification).where(eq(notification.organisationId, org5));
+      await db.delete(complianceDocument).where(eq(complianceDocument.organisationId, org5));
+      await db.delete(organisation).where(eq(organisation.organisationId, org5));
+      await db.delete(user).where(eq(user.userId, staffH));
+    });
+
+    it("refuses a nudge on a document that hasn't been waiting 48h yet", async () => {
+      await expect(nudgeVerifier(org5, docId, staffH)).rejects.toMatchObject({
+        message: expect.stringContaining("Not old enough"),
+        statusCode: 409,
+      });
+    });
+
+    it("refuses a nudge on a document that is not Pending, regardless of age", async () => {
+      const [{ id: verifiedDocId }] = await db
+        .insert(complianceDocument)
+        .values({
+          organisationId: org5,
+          userId: staffH,
+          documentType: `${tag}-nudge-verified-doc`,
+          storagePublicId: sp(org5, staffH, "nudge-verified-1"),
+          verificationStatus: "Verified",
+          uploadedBy: staffH,
+        })
+        .returning({ id: complianceDocument.complianceDocumentId });
+
+      try {
+        await expect(nudgeVerifier(org5, verifiedDocId, staffH)).rejects.toMatchObject({
+          message: expect.stringContaining("is not pending verification"),
+          statusCode: 409,
+        });
+      } finally {
+        await db.delete(complianceDocument).where(eq(complianceDocument.complianceDocumentId, verifiedDocId));
+      }
+    });
+
+    it("404s a nudge attempt on someone else's document — never confirms it exists", async () => {
+      const [{ userId: otherStaff }] = await db
+        .insert(user)
+        .values({ userName: "Compliance H2", userEmail: `${tag}-h2@it.test` })
+        .returning({ userId: user.userId });
+      try {
+        await expect(nudgeVerifier(org5, docId, otherStaff)).rejects.toMatchObject({
+          message: "Document not found",
+          statusCode: 404,
+        });
+      } finally {
+        await db.delete(user).where(eq(user.userId, otherStaff));
+      }
+    });
+
+    it("succeeds once the document has genuinely been waiting 48h, then throttles a repeat within 24h", async () => {
+      await db
+        .update(complianceDocument)
+        .set({ uploadedAt: new Date(Date.now() - 50 * 60 * 60 * 1000) })
+        .where(eq(complianceDocument.complianceDocumentId, docId));
+
+      // Nobody in this fresh org holds compliance:verify, so notifyHQAdmins()
+      // has no one to actually notify — that's fine, nudgeVerifier must not
+      // throw over an empty recipient list. Manually verified with a real
+      // compliance:verify holder via live QA (docs/qa/rostering-compliance-
+      // test-plan.md, CV-C7): 3 recipients, in-app + email each.
+      await expect(nudgeVerifier(org5, docId, staffH)).resolves.toBeUndefined();
+
+      // Insert the notification row a real recipient would have gotten, so
+      // the throttle's hasRecentNotification() dedup check (keyed on
+      // relatedEntityId + type, not on who received it) has something to see.
+      await db.insert(notification).values({
+        organisationId: org5,
+        recipientUserId: staffH,
+        type: "COMPLIANCE_DOCUMENT_NUDGE",
+        relatedEntityType: "compliance_document",
+        relatedEntityId: docId,
+      });
+
+      await expect(nudgeVerifier(org5, docId, staffH)).rejects.toMatchObject({
+        message: expect.stringContaining("Already nudged"),
+        statusCode: 409,
+      });
+    });
+  });
+
+  // ── CV-E: venue-level (org-wide) compliance documents ───────────────────
+  describe("venue documents", () => {
+    let manager: number;
+    let org6: number;
+    let otherOrg: number;
+    let loc6: string;
+    let otherOrgLoc: string;
+
+    beforeAll(async () => {
+      [{ userId: manager }] = await db
+        .insert(user)
+        .values({ userName: "Compliance Manager", userEmail: `${tag}-mgr@it.test` })
+        .returning({ userId: user.userId });
+
+      [{ id: org6 }] = await db
+        .insert(organisation)
+        .values({ organisationName: `${tag}-org6`, joinKey: `${tag}-jk6`, createdBy: manager })
+        .returning({ id: organisation.organisationId });
+
+      [{ id: loc6 }] = await db
+        .insert(storeLocation)
+        .values({
+          organisationId: org6,
+          locationName: `${tag}-venue6`,
+          storeKey: `${tag}-sk6`.slice(0, 25),
+          createdBy: manager,
+        })
+        .returning({ id: storeLocation.storeLocationId });
+
+      // A location in a DIFFERENT org, to prove a venue document can't be
+      // pointed at another tenant's venue.
+      [{ id: otherOrg }] = await db
+        .insert(organisation)
+        .values({ organisationName: `${tag}-org6b`, joinKey: `${tag}-jk6b`, createdBy: manager })
+        .returning({ id: organisation.organisationId });
+      [{ id: otherOrgLoc }] = await db
+        .insert(storeLocation)
+        .values({
+          organisationId: otherOrg,
+          locationName: `${tag}-venue6b`,
+          storeKey: `${tag}-sk6b`.slice(0, 25),
+          createdBy: manager,
+        })
+        .returning({ id: storeLocation.storeLocationId });
+    });
+
+    afterAll(async () => {
+      // createDocument audit-logs the insert (auditService.log), so org6 has
+      // an audit_log row FK'd to it — delete it before the organisation.
+      await db.delete(auditLog).where(eq(auditLog.organisationId, org6));
+      await db.delete(complianceDocument).where(eq(complianceDocument.organisationId, org6));
+      await db.delete(storeLocation).where(eq(storeLocation.organisationId, org6));
+      await db.delete(storeLocation).where(eq(storeLocation.organisationId, otherOrg));
+      await db.delete(organisation).where(inArray(organisation.organisationId, [org6, otherOrg]));
+      await db.delete(user).where(eq(user.userId, manager));
+    });
+
+    it("creates a document whose subject is a venue, no staff member involved", async () => {
+      const doc = await createDocument(org6, {
+        userId: null,
+        subjectStoreLocationId: loc6,
+        uploadedBy: manager,
+        documentType: "Liquor Licence",
+        storagePublicId: sp(org6, manager, "liquor-1"),
+      });
+      expect(doc.userId).toBeNull();
+      expect(doc.subjectStoreLocationId).toBe(loc6);
+      // chk_compliance_document_venue_scope: owning location defaults to the subject.
+      expect(doc.storeLocationId).toBe(loc6);
+
+      const dashboard = await getComplianceDashboard(org6);
+      expect(dashboard.venueDocumentCount).toBe(1);
+    });
+
+    it("rejects a document with BOTH a staff member and a venue subject", async () => {
+      await expect(
+        createDocument(org6, {
+          userId: manager,
+          subjectStoreLocationId: loc6,
+          uploadedBy: manager,
+          documentType: "Liquor Licence",
+          storagePublicId: sp(org6, manager, "liquor-both"),
+        }),
+      ).rejects.toMatchObject({ message: expect.stringContaining("exactly one subject"), statusCode: 400 });
+    });
+
+    it("rejects a document with NEITHER a staff member nor a venue subject", async () => {
+      await expect(
+        createDocument(org6, {
+          userId: null,
+          uploadedBy: manager,
+          documentType: "Liquor Licence",
+          storagePublicId: sp(org6, manager, "liquor-neither"),
+        }),
+      ).rejects.toMatchObject({ message: expect.stringContaining("exactly one subject"), statusCode: 400 });
+    });
+
+    it("404s a venue document pointed at another organisation's location", async () => {
+      await expect(
+        createDocument(org6, {
+          userId: null,
+          subjectStoreLocationId: otherOrgLoc,
+          uploadedBy: manager,
+          documentType: "Liquor Licence",
+          storagePublicId: sp(org6, manager, "liquor-cross-org"),
+        }),
+      ).rejects.toMatchObject({ message: "Location not found", statusCode: 404 });
+    });
+  });
+
+  // ── CV-K: an Archived document (offboarding) must never mint a signed URL,
+  // even for its own owner — the whole point of archiving on offboard is that
+  // the person can no longer pull their own certificate back out.
+  describe("view-url — archived documents", () => {
+    let staffI: number;
+    let colleague: number;
+    let org7: number;
+    let docId: string;
+
+    beforeAll(async () => {
+      [{ userId: staffI }] = await db
+        .insert(user)
+        .values({ userName: "Compliance I", userEmail: `${tag}-i@it.test` })
+        .returning({ userId: user.userId });
+      [{ userId: colleague }] = await db
+        .insert(user)
+        .values({ userName: "Compliance I2", userEmail: `${tag}-i2@it.test` })
+        .returning({ userId: user.userId });
+
+      [{ id: org7 }] = await db
+        .insert(organisation)
+        .values({ organisationName: `${tag}-org7`, joinKey: `${tag}-jk7`, createdBy: staffI })
+        .returning({ id: organisation.organisationId });
+
+      await db.insert(userOrganisation).values([
+        { userId: staffI, organisationId: org7, role: "member" },
+        { userId: colleague, organisationId: org7, role: "member" },
+      ]);
+
+      const created = await createDocument(org7, {
+        userId: staffI,
+        uploadedBy: staffI,
+        documentType: "RSA",
+        storagePublicId: sp(org7, staffI, "archived-1"),
+      });
+      docId = created.complianceDocumentId;
+    });
+
+    afterAll(async () => {
+      // createDocument audit-logs the insert — delete before the organisation.
+      await db.delete(auditLog).where(eq(auditLog.organisationId, org7));
+      await db.delete(complianceDocument).where(eq(complianceDocument.organisationId, org7));
+      await db.delete(userOrganisation).where(eq(userOrganisation.organisationId, org7));
+      await db.delete(organisation).where(eq(organisation.organisationId, org7));
+      await db.delete(user).where(inArray(user.userId, [staffI, colleague]));
+    });
+
+    /** Minimal stand-in for Express's req/res — same shape compliancePermissions.test.ts uses. */
+    function reqRes(
+      userId: number,
+      documentId: string,
+      perms: { roles?: string[]; permissions?: string[] } = {},
+    ) {
+      const req = {
+        user: { sub: userId, roles: perms.roles ?? [], permissions: perms.permissions ?? ["compliance:read-own"] },
+        params: { id: documentId },
+        query: {},
+        body: {},
+        headers: {},
+      } as any;
+      let status: number | null = null;
+      let json: unknown = null;
+      const res = {
+        status(code: number) {
+          status = code;
+          return this;
+        },
+        json(body: unknown) {
+          json = body;
+          return this;
+        },
+      } as any;
+      return { req, res, result: () => ({ status, json }) };
+    }
+
+    it("grants the owner a signed URL before archiving", async () => {
+      const { req, res, result } = reqRes(staffI, docId);
+      await handleGetDocumentViewUrl(req, res, () => {});
+      const { status, json } = result();
+      expect(status).toBeNull(); // res.json() was called directly, no res.status() first
+      expect((json as { url?: string })?.url).toBeTruthy();
+    });
+
+    it("CV-L2: refuses a colleague with only compliance:read-own, and logs the denial", async () => {
+      const { req, res, result } = reqRes(colleague, docId, { permissions: ["compliance:read-own"] });
+      await handleGetDocumentViewUrl(req, res, () => {});
+      const { status, json } = result();
+      expect(status).toBe(403);
+      expect((json as { error?: string })?.error).toBeTruthy();
+
+      const [log] = await db
+        .select({ outcome: documentAccessLog.outcome, actorUserId: documentAccessLog.actorUserId })
+        .from(documentAccessLog)
+        .where(eq(documentAccessLog.complianceDocumentId, docId))
+        .orderBy(desc(documentAccessLog.createdDttm))
+        .limit(1);
+      expect(log?.outcome).toBe("denied");
+      expect(log?.actorUserId).toBe(colleague);
+    });
+
+    it("refuses the owner's own document once it's archived, and logs the denial", async () => {
+      await archiveForOffboardedStaff(staffI, "2020-01-01");
+
+      const { req, res, result } = reqRes(staffI, docId);
+      await handleGetDocumentViewUrl(req, res, () => {});
+      const { status, json } = result();
+      expect(status).toBe(403);
+      expect((json as { error?: string })?.error).toBeTruthy();
+
+      const [log] = await db
+        .select({ outcome: documentAccessLog.outcome })
+        .from(documentAccessLog)
+        .where(eq(documentAccessLog.complianceDocumentId, docId))
+        .orderBy(desc(documentAccessLog.createdDttm))
+        .limit(1);
+      expect(log?.outcome).toBe("denied");
     });
   });
 });

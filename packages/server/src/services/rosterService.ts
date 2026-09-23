@@ -10,11 +10,12 @@
  * exists.
  */
 
-import { eq, and, or, gte, lte, inArray, isNull, desc, asc } from "drizzle-orm";
+import { eq, and, or, ne, gte, lt, lte, inArray, isNull, isNotNull, desc, asc } from "drizzle-orm";
 import { db } from "../db/index.js";
 import {
   rosterRole,
   rosterRoleDocument,
+  rosterShiftTemplate,
   shift,
   shiftAssignment,
   staffAvailability,
@@ -25,6 +26,7 @@ import {
   documentExpiryRule,
 } from "../db/schema.js";
 import * as auditService from "./auditService.js";
+import type { DbOrTx } from "./auditService.js";
 import { canAssign, type HeldDocument, type AssignmentRequirement } from "./rosterAssignmentRules.js";
 import { normalizeJurisdiction } from "./jurisdiction.js";
 import { isYearLoaded, isPublicHoliday as checkIsPublicHoliday } from "./publicHolidayService.js";
@@ -60,6 +62,21 @@ export class AssignmentBlockedError extends RosterError {
   ) {
     super(message, 409);
     this.name = "AssignmentBlockedError";
+  }
+}
+
+export interface RoleVenueConflict {
+  storeLocationId: string;
+  locationName: string;
+}
+
+export class RoleVenueConflictError extends RosterError {
+  constructor(
+    message: string,
+    public conflicts: RoleVenueConflict[],
+  ) {
+    super(message, 409);
+    this.name = "RoleVenueConflictError";
   }
 }
 
@@ -118,22 +135,77 @@ export async function createRole(orgId: number, input: CreateRoleInput) {
   if (!roleName) throw new RosterError("Role name is required", 400);
   if (input.storeLocationId) await assertLocationInOrg(input.storeLocationId, orgId);
 
-  const [created] = await db
-    .insert(rosterRole)
-    .values({ organisationId: orgId, storeLocationId: input.storeLocationId ?? null, roleName })
-    .returning();
-  return created;
+  try {
+    const [created] = await db
+      .insert(rosterRole)
+      .values({ organisationId: orgId, storeLocationId: input.storeLocationId ?? null, roleName })
+      .returning();
+    return created;
+  } catch (err) {
+    // 23505 = unique_violation — a role with this name already exists at
+    // this venue (idx_roster_role_org_location_name). Give the sentence
+    // instead of a raw 500.
+    if ((err as { code?: string }).code === "23505") {
+      throw new RosterError(`A role named "${roleName}" already exists at this venue`, 409);
+    }
+    throw err;
+  }
 }
 
-export async function updateRole(orgId: number, roleId: string, input: CreateRoleInput) {
+/**
+ * Templates referencing this role at a venue other than the new target.
+ * Widening to org-wide (newStoreLocationId === null) can never conflict —
+ * mirrors generateWeekFromTemplate's own `role.storeLocationId &&` guard,
+ * which already treats a null role venue as always-valid.
+ */
+async function getRoleTemplateConflicts(
+  orgId: number,
+  roleId: string,
+  newStoreLocationId: string | null,
+): Promise<RoleVenueConflict[]> {
+  if (newStoreLocationId === null) return [];
+
+  const rows = await db
+    .selectDistinct({
+      storeLocationId: rosterShiftTemplate.storeLocationId,
+      locationName: storeLocation.locationName,
+    })
+    .from(rosterShiftTemplate)
+    .innerJoin(storeLocation, eq(storeLocation.storeLocationId, rosterShiftTemplate.storeLocationId))
+    .where(
+      and(
+        eq(rosterShiftTemplate.organisationId, orgId),
+        eq(rosterShiftTemplate.rosterRoleId, roleId),
+        ne(rosterShiftTemplate.storeLocationId, newStoreLocationId),
+      ),
+    );
+  return rows;
+}
+
+export async function updateRole(
+  orgId: number,
+  roleId: string,
+  input: CreateRoleInput & { confirmed?: boolean },
+) {
   await getRoleRow(orgId, roleId);
   const roleName = input.roleName.trim();
   if (!roleName) throw new RosterError("Role name is required", 400);
-  if (input.storeLocationId) await assertLocationInOrg(input.storeLocationId, orgId);
+  const newStoreLocationId = input.storeLocationId ?? null;
+  if (newStoreLocationId) await assertLocationInOrg(newStoreLocationId, orgId);
+
+  if (!input.confirmed) {
+    const conflicts = await getRoleTemplateConflicts(orgId, roleId, newStoreLocationId);
+    if (conflicts.length > 0) {
+      throw new RoleVenueConflictError(
+        "This role is used by templates at other venues",
+        conflicts,
+      );
+    }
+  }
 
   const [updated] = await db
     .update(rosterRole)
-    .set({ roleName, storeLocationId: input.storeLocationId ?? null, updatedDttm: new Date() })
+    .set({ roleName, storeLocationId: newStoreLocationId, updatedDttm: new Date() })
     .where(eq(rosterRole.rosterRoleId, roleId))
     .returning();
   return updated;
@@ -143,6 +215,12 @@ export async function deleteRole(orgId: number, roleId: string): Promise<void> {
   await getRoleRow(orgId, roleId);
   const [inUse] = await db.select({ id: shift.shiftId }).from(shift).where(eq(shift.rosterRoleId, roleId)).limit(1);
   if (inUse) throw new RosterError("Cannot delete a role with shifts scheduled against it", 409);
+  const [inUseTemplate] = await db
+    .select({ id: rosterShiftTemplate.rosterShiftTemplateId })
+    .from(rosterShiftTemplate)
+    .where(eq(rosterShiftTemplate.rosterRoleId, roleId))
+    .limit(1);
+  if (inUseTemplate) throw new RosterError("Cannot delete a role used in a saved weekly template", 409);
   await db.delete(rosterRole).where(eq(rosterRole.rosterRoleId, roleId));
 }
 
@@ -183,16 +261,123 @@ function parseFilterDate(value: string): Date {
   return parsed;
 }
 
+/**
+ * Exclusive upper bound for a bare "to" calendar date. parseFilterDate()
+ * parses "YYYY-MM-DD" as UTC midnight, so an lte() against it only matches
+ * the very first instant of that day — asymmetric with a "from" gte(),
+ * which correctly covers its whole day forward. Compare with lt() against
+ * the NEXT day's midnight instead, so the "to" day is fully included
+ * regardless of how far a shift's real UTC instant sits from local
+ * midnight. (Originally fixed only in getWeekCalendar; listShifts and
+ * publishRoster had the same bug — a shift late in the day on the "to"
+ * date silently never matched either query.)
+ */
+function parseFilterDateEnd(value: string): Date {
+  return new Date(parseFilterDate(value).getTime() + 24 * 60 * 60 * 1000);
+}
+
 export async function listShifts(orgId: number, filters: ShiftFilters = {}) {
   const conditions = [eq(shift.organisationId, orgId)];
   if (filters.storeLocationId) conditions.push(eq(shift.storeLocationId, filters.storeLocationId));
   if (filters.from) conditions.push(gte(shift.startDatetime, parseFilterDate(filters.from)));
-  if (filters.to) conditions.push(lte(shift.startDatetime, parseFilterDate(filters.to)));
+  if (filters.to) conditions.push(lt(shift.startDatetime, parseFilterDateEnd(filters.to)));
   return db
     .select()
     .from(shift)
     .where(and(...conditions))
     .orderBy(asc(shift.startDatetime));
+}
+
+export interface CalendarShift {
+  shiftId: string;
+  rosterRoleId: string;
+  roleName: string;
+  startDatetime: Date;
+  endDatetime: Date;
+  status: string;
+  isPublicHoliday: boolean;
+  assignments: Array<{ assignmentId: string; userId: number; staffName: string; status: string }>;
+}
+
+/**
+ * One row per shift (not aggregated, unlike getStaffingCoverage's day×role
+ * cells) with its role name and every Pending/Confirmed assignee inline —
+ * the week calendar needs to render "who's on this shift" at a glance for
+ * a whole week across every role at once, and the existing GET /shifts
+ * doesn't carry assignee data (ShiftsManager fetches it lazily per-row on
+ * expand, which doesn't scale to rendering a week of shifts simultaneously).
+ * Same join shape as staffingCoverageService.ts's first query, minus the
+ * canAssign/compliance-status machinery — that's Coverage's job, not this
+ * one's.
+ */
+export async function getWeekCalendar(
+  orgId: number,
+  storeLocationId: string,
+  from: string,
+  to: string,
+): Promise<CalendarShift[]> {
+  await assertLocationInOrg(storeLocationId, orgId);
+  const fromDate = parseFilterDate(from);
+  const toDateExclusive = parseFilterDateEnd(to);
+
+  const rows = await db
+    .select({
+      shiftId: shift.shiftId,
+      rosterRoleId: shift.rosterRoleId,
+      roleName: rosterRole.roleName,
+      startDatetime: shift.startDatetime,
+      endDatetime: shift.endDatetime,
+      status: shift.status,
+      isPublicHoliday: shift.isPublicHoliday,
+      assignmentId: shiftAssignment.assignmentId,
+      assignmentUserId: shiftAssignment.userId,
+      assignmentStatus: shiftAssignment.status,
+      staffName: user.userName,
+    })
+    .from(shift)
+    .innerJoin(rosterRole, eq(rosterRole.rosterRoleId, shift.rosterRoleId))
+    .leftJoin(
+      shiftAssignment,
+      and(eq(shiftAssignment.shiftId, shift.shiftId), inArray(shiftAssignment.status, ["Pending", "Confirmed"])),
+    )
+    .leftJoin(user, eq(user.userId, shiftAssignment.userId))
+    .where(
+      and(
+        eq(shift.organisationId, orgId),
+        eq(shift.storeLocationId, storeLocationId),
+        ne(shift.status, "Cancelled"),
+        gte(shift.startDatetime, fromDate),
+        lt(shift.startDatetime, toDateExclusive),
+      ),
+    )
+    .orderBy(asc(shift.startDatetime));
+
+  const byShift = new Map<string, CalendarShift>();
+  for (const row of rows) {
+    let entry = byShift.get(row.shiftId);
+    if (!entry) {
+      entry = {
+        shiftId: row.shiftId,
+        rosterRoleId: row.rosterRoleId,
+        roleName: row.roleName,
+        startDatetime: row.startDatetime,
+        endDatetime: row.endDatetime,
+        status: row.status,
+        isPublicHoliday: row.isPublicHoliday,
+        assignments: [],
+      };
+      byShift.set(row.shiftId, entry);
+    }
+    if (row.assignmentId && row.assignmentUserId && row.staffName) {
+      entry.assignments.push({
+        assignmentId: row.assignmentId,
+        userId: row.assignmentUserId,
+        staffName: row.staffName,
+        status: row.assignmentStatus!,
+      });
+    }
+  }
+  return [...byShift.values()];
 }
 
 /** Shifts the caller is personally assigned to, across every venue in the org. */
@@ -202,6 +387,7 @@ export async function listMyShifts(orgId: number, userId: number) {
       shiftId: shift.shiftId,
       storeLocationId: shift.storeLocationId,
       rosterRoleId: shift.rosterRoleId,
+      roleName: rosterRole.roleName,
       startDatetime: shift.startDatetime,
       endDatetime: shift.endDatetime,
       status: shift.status,
@@ -211,7 +397,18 @@ export async function listMyShifts(orgId: number, userId: number) {
     })
     .from(shiftAssignment)
     .innerJoin(shift, eq(shiftAssignment.shiftId, shift.shiftId))
-    .where(and(eq(shift.organisationId, orgId), eq(shiftAssignment.userId, userId)))
+    .innerJoin(rosterRole, eq(rosterRole.rosterRoleId, shift.rosterRoleId))
+    .where(
+      and(
+        eq(shift.organisationId, orgId),
+        eq(shiftAssignment.userId, userId),
+        // A cancelled shift keeps its assignment row for history (cancelShift
+        // never touches shift_assignment), but a staff member's own "My
+        // Shifts" list should never show it as something to work or respond
+        // to — same convention as getWeekCalendar/generateWeekFromTemplate.
+        ne(shift.status, "Cancelled"),
+      ),
+    )
     .orderBy(asc(shift.startDatetime));
 }
 
@@ -254,12 +451,15 @@ export interface UpdateShiftInput {
   endDatetime?: string;
 }
 
-export async function updateShift(orgId: number, shiftId: string, input: UpdateShiftInput) {
+export async function updateShift(orgId: number, shiftId: string, input: UpdateShiftInput, actorUserId: number) {
   const row = await getShiftRow(orgId, shiftId);
   if (row.status !== "Draft") throw new RosterError("Only a Draft shift can be edited", 409);
 
   const start = input.startDatetime ? new Date(input.startDatetime) : row.startDatetime;
   const end = input.endDatetime ? new Date(input.endDatetime) : row.endDatetime;
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    throw new RosterError("Invalid start or end time", 400);
+  }
   if (end <= start) throw new RosterError("Shift must end after it starts", 400);
 
   const [updated] = await db
@@ -267,6 +467,15 @@ export async function updateShift(orgId: number, shiftId: string, input: UpdateS
     .set({ startDatetime: start, endDatetime: end, updatedDttm: new Date() })
     .where(eq(shift.shiftId, shiftId))
     .returning();
+  await auditService.log({
+    entityType: "shift",
+    entityId: shiftId,
+    action: "update",
+    actorUserId,
+    organisationId: orgId,
+    beforeValue: { startDatetime: row.startDatetime, endDatetime: row.endDatetime },
+    afterValue: { startDatetime: start, endDatetime: end },
+  });
   return updated;
 }
 
@@ -278,6 +487,335 @@ export async function cancelShift(orgId: number, shiftId: string) {
     .where(eq(shift.shiftId, shiftId))
     .returning();
   return updated;
+}
+
+// ── Roster Shift Templates ───────────────────────────────────────────────
+//
+// A saved weekly pattern: role + day-of-week + start/end time, independent
+// of any specific week. "Generate this week" turns each row into a real
+// Draft shift via the same createShift-adjacent insert path. See
+// docs/designs/roster-scheduling-templates.md for the full design.
+
+export interface TemplateRowInput {
+  storeLocationId: string;
+  rosterRoleId: string;
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
+}
+
+async function getTemplateRow(orgId: number, templateRowId: string) {
+  const [row] = await db
+    .select()
+    .from(rosterShiftTemplate)
+    .where(
+      and(
+        eq(rosterShiftTemplate.rosterShiftTemplateId, templateRowId),
+        eq(rosterShiftTemplate.organisationId, orgId),
+      ),
+    );
+  if (!row) throw new RosterError("Template row not found", 404);
+  return row;
+}
+
+/**
+ * Two "HH:MM" ranges overlap. end <= start means the range crosses midnight
+ * into the next day (same rollover convention as shiftEndTimeOnStartDate),
+ * so it's normalized onto a common minutes-from-midnight scale before
+ * comparing — otherwise a same-day range and an overnight range that
+ * actually overlap would compare as non-overlapping.
+ */
+function timeRangesOverlap(aStart: string, aEnd: string, bStart: string, bEnd: string): boolean {
+  const toMinutes = (t: string): number => {
+    const [h, m] = t.split(":").map(Number);
+    return h * 60 + m;
+  };
+  const normalize = (start: string, end: string): readonly [number, number] => {
+    const s = toMinutes(start);
+    const e = toMinutes(end);
+    return e <= s ? [s, e + 24 * 60] : [s, e];
+  };
+  const [aS, aE] = normalize(aStart, aEnd);
+  const [bS, bE] = normalize(bStart, bEnd);
+  return aS < bE && bS < aE;
+}
+
+function validateTemplateInput(input: TemplateRowInput): void {
+  if (input.startTime === input.endTime) {
+    throw new RosterError("startTime and endTime cannot be equal", 400);
+  }
+}
+
+async function assertRoleValidAtLocation(orgId: number, rosterRoleId: string, storeLocationId: string) {
+  const role = await getRoleRow(orgId, rosterRoleId);
+  if (role.storeLocationId && role.storeLocationId !== storeLocationId) {
+    throw new RosterError("This role belongs to a different venue", 400);
+  }
+}
+
+/** Rejects (400) a new/updated row whose time range overlaps an existing row for the same (role, day-of-week). */
+async function assertNoTemplateOverlap(
+  orgId: number,
+  rosterRoleId: string,
+  dayOfWeek: number,
+  startTime: string,
+  endTime: string,
+  excludeRowId?: string,
+): Promise<void> {
+  const rows = await db
+    .select({
+      id: rosterShiftTemplate.rosterShiftTemplateId,
+      startTime: rosterShiftTemplate.startTime,
+      endTime: rosterShiftTemplate.endTime,
+    })
+    .from(rosterShiftTemplate)
+    .where(
+      and(
+        eq(rosterShiftTemplate.organisationId, orgId),
+        eq(rosterShiftTemplate.rosterRoleId, rosterRoleId),
+        eq(rosterShiftTemplate.dayOfWeek, dayOfWeek),
+      ),
+    );
+  for (const row of rows) {
+    if (excludeRowId && row.id === excludeRowId) continue;
+    if (timeRangesOverlap(startTime, endTime, row.startTime, row.endTime)) {
+      throw new RosterError("This role already has an overlapping template row on this day", 400);
+    }
+  }
+}
+
+export async function listTemplates(orgId: number, storeLocationId?: string) {
+  const conditions = [eq(rosterShiftTemplate.organisationId, orgId)];
+  if (storeLocationId) conditions.push(eq(rosterShiftTemplate.storeLocationId, storeLocationId));
+  return db
+    .select()
+    .from(rosterShiftTemplate)
+    .where(and(...conditions))
+    .orderBy(asc(rosterShiftTemplate.dayOfWeek), asc(rosterShiftTemplate.startTime));
+}
+
+export async function createTemplateRow(orgId: number, input: TemplateRowInput) {
+  await assertLocationInOrg(input.storeLocationId, orgId);
+  await assertRoleValidAtLocation(orgId, input.rosterRoleId, input.storeLocationId);
+  validateTemplateInput(input);
+  await assertNoTemplateOverlap(orgId, input.rosterRoleId, input.dayOfWeek, input.startTime, input.endTime);
+
+  const [created] = await db
+    .insert(rosterShiftTemplate)
+    .values({
+      organisationId: orgId,
+      storeLocationId: input.storeLocationId,
+      rosterRoleId: input.rosterRoleId,
+      dayOfWeek: input.dayOfWeek,
+      startTime: input.startTime,
+      endTime: input.endTime,
+    })
+    .returning();
+  return created;
+}
+
+export async function updateTemplateRow(orgId: number, templateRowId: string, input: TemplateRowInput) {
+  await getTemplateRow(orgId, templateRowId);
+  await assertLocationInOrg(input.storeLocationId, orgId);
+  await assertRoleValidAtLocation(orgId, input.rosterRoleId, input.storeLocationId);
+  validateTemplateInput(input);
+  await assertNoTemplateOverlap(
+    orgId,
+    input.rosterRoleId,
+    input.dayOfWeek,
+    input.startTime,
+    input.endTime,
+    templateRowId,
+  );
+
+  const [updated] = await db
+    .update(rosterShiftTemplate)
+    .set({
+      storeLocationId: input.storeLocationId,
+      rosterRoleId: input.rosterRoleId,
+      dayOfWeek: input.dayOfWeek,
+      startTime: input.startTime,
+      endTime: input.endTime,
+      updatedDttm: new Date(),
+    })
+    .where(eq(rosterShiftTemplate.rosterShiftTemplateId, templateRowId))
+    .returning();
+  return updated;
+}
+
+export async function deleteTemplateRow(orgId: number, templateRowId: string): Promise<void> {
+  await getTemplateRow(orgId, templateRowId);
+  await db.delete(rosterShiftTemplate).where(eq(rosterShiftTemplate.rosterShiftTemplateId, templateRowId));
+}
+
+/** Adds `days` to a plain "YYYY-MM-DD" calendar date, in UTC arithmetic so the server's own local timezone never affects the result. */
+function addDaysIso(dateIso: string, days: number): string {
+  const [y, m, d] = dateIso.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
+}
+
+export interface GenerateWeekResult {
+  created: number;
+  skipped: number;
+  failed: number;
+}
+
+/**
+ * Turns every template row for a venue into a real Draft shift for the
+ * target week (weekStart: "YYYY-MM-DD", the Monday of that week,
+ * venue-local). Best-effort per-row (publishRoster()'s own established
+ * pattern) — one bad row never blocks the others.
+ */
+export async function generateWeekFromTemplate(
+  orgId: number,
+  storeLocationId: string,
+  weekStart: string,
+  createdBy: number,
+): Promise<GenerateWeekResult> {
+  await assertLocationInOrg(storeLocationId, orgId);
+  const weekStartDate = new Date(weekStart);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(weekStart) || Number.isNaN(weekStartDate.getTime())) {
+    throw new RosterError("weekStart must be a valid YYYY-MM-DD date", 400);
+  }
+
+  const templateRows = await db
+    .select()
+    .from(rosterShiftTemplate)
+    .where(
+      and(eq(rosterShiftTemplate.organisationId, orgId), eq(rosterShiftTemplate.storeLocationId, storeLocationId)),
+    );
+  if (templateRows.length === 0) return { created: 0, skipped: 0, failed: 0 };
+
+  const ianaTimezone = await getVenueTimezone(storeLocationId);
+
+  // Batched, not per-row: fresh role-venue validity (a role's venue can
+  // change via updateRole after the template row was created).
+  const roleIds = [...new Set(templateRows.map((r) => r.rosterRoleId))];
+  const roles = await db.select().from(rosterRole).where(inArray(rosterRole.rosterRoleId, roleIds));
+  const roleById = new Map(roles.map((r) => [r.rosterRoleId, r]));
+
+  // One query for the whole call, widened a day past each edge to catch an
+  // overnight shift generated near the week boundary. Cancelled shifts are
+  // excluded — a cancelled generated shift must be regeneratable.
+  const rangeStart = new Date(weekStartDate.getTime() - 24 * 60 * 60 * 1000);
+  const rangeEnd = new Date(weekStartDate.getTime() + 8 * 24 * 60 * 60 * 1000);
+  const existingShifts = await db
+    .select({
+      rosterRoleId: shift.rosterRoleId,
+      startDatetime: shift.startDatetime,
+      endDatetime: shift.endDatetime,
+    })
+    .from(shift)
+    .where(
+      and(
+        eq(shift.storeLocationId, storeLocationId),
+        gte(shift.startDatetime, rangeStart),
+        lt(shift.startDatetime, rangeEnd),
+        ne(shift.status, "Cancelled"),
+      ),
+    );
+
+  let created = 0;
+  let skipped = 0;
+  let failed = 0;
+
+  for (const row of templateRows) {
+    const role = roleById.get(row.rosterRoleId);
+    if (!role || (role.storeLocationId && role.storeLocationId !== storeLocationId)) {
+      failed++;
+      continue;
+    }
+
+    const dayOffset = (row.dayOfWeek + 6) % 7; // 0=Sun..6=Sat -> offset from the Monday anchor
+    const startDateIso = addDaysIso(weekStart, dayOffset);
+    const isOvernight = row.endTime <= row.startTime;
+    const endDateIso = isOvernight ? addDaysIso(startDateIso, 1) : startDateIso;
+    const startInstant = resolveVenueLocalToUtc(startDateIso, row.startTime, ianaTimezone);
+    const endInstant = resolveVenueLocalToUtc(endDateIso, row.endTime, ianaTimezone);
+
+    const conflict = existingShifts.some(
+      (s) =>
+        s.rosterRoleId === row.rosterRoleId &&
+        startInstant.getTime() < s.endDatetime.getTime() &&
+        s.startDatetime.getTime() < endInstant.getTime(),
+    );
+    if (conflict) {
+      skipped++;
+      continue;
+    }
+
+    try {
+      // Upsert, not a bare insert: idx_shift_template_week_unique means a
+      // PRIOR generation of this exact template row for this exact week —
+      // Cancelled or not — already occupies that unique key. A Cancelled one
+      // must be revivable (rollback's own stated semantics: a cancelled
+      // generated shift never blocks regeneration of that slot), so this
+      // reactivates it in place, same idiom as insertOrReactivateAssignment
+      // above. A concurrent call landing on a still-Draft/Published row (the
+      // real double-click race) matches no row via setWhere and simply
+      // returns nothing — no exception, no duplicate.
+      const [insertedOrReactivated] = await db
+        .insert(shift)
+        .values({
+          organisationId: orgId,
+          storeLocationId,
+          rosterRoleId: row.rosterRoleId,
+          startDatetime: startInstant,
+          endDatetime: endInstant,
+          createdBy,
+          sourceTemplateRowId: row.rosterShiftTemplateId,
+          generatedForWeekStart: weekStart,
+        })
+        .onConflictDoUpdate({
+          target: [shift.sourceTemplateRowId, shift.generatedForWeekStart],
+          set: {
+            rosterRoleId: row.rosterRoleId,
+            startDatetime: startInstant,
+            endDatetime: endInstant,
+            status: "Draft",
+            updatedDttm: new Date(),
+          },
+          setWhere: eq(shift.status, "Cancelled"),
+        })
+        .returning();
+      if (insertedOrReactivated) {
+        created++;
+      } else {
+        skipped++;
+      }
+    } catch {
+      failed++;
+    }
+  }
+
+  return { created, skipped, failed };
+}
+
+export interface UndoGenerationResult {
+  cancelled: number;
+}
+
+/** Cancels every shift generated for a venue/week in one "Generate this week" call. Idempotent — already-cancelled shifts are excluded, so running it twice cancels nothing new the second time. */
+export async function undoGeneration(
+  orgId: number,
+  storeLocationId: string,
+  weekStart: string,
+): Promise<UndoGenerationResult> {
+  await assertLocationInOrg(storeLocationId, orgId);
+  const rows = await db
+    .update(shift)
+    .set({ status: "Cancelled", updatedDttm: new Date() })
+    .where(
+      and(
+        eq(shift.organisationId, orgId),
+        eq(shift.storeLocationId, storeLocationId),
+        isNotNull(shift.sourceTemplateRowId),
+        eq(shift.generatedForWeekStart, weekStart),
+        ne(shift.status, "Cancelled"),
+      ),
+    )
+    .returning({ id: shift.shiftId });
+  return { cancelled: rows.length };
 }
 
 // ── Availability ───────────────────────────────────────────────────────
@@ -430,6 +968,70 @@ export function toVenueLocalDate(instant: Date, ianaTimezone: string): string {
   }).format(instant);
 }
 
+/** "HH:MM" venue-local time-of-day, same instant->timezone conversion as toVenueLocalDate above. */
+export function toVenueLocalTime(instant: Date, ianaTimezone: string): string {
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: ianaTimezone,
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).format(instant);
+}
+
+/**
+ * The venue-local time-of-day a shift's END reaches on its START day —
+ * "24:00" if the shift crosses into a later local day (an overnight shift),
+ * so a partial-day public holiday's threshold on the start day can always
+ * be compared against a single "HH:MM" value. Feeds isPublicHoliday()'s
+ * shiftEndTimeOnDate parameter (publicHolidayService.ts).
+ */
+export function shiftEndTimeOnStartDate(startDatetime: Date, endDatetime: Date, ianaTimezone: string): string {
+  const startDate = toVenueLocalDate(startDatetime, ianaTimezone);
+  const endDate = toVenueLocalDate(endDatetime, ianaTimezone);
+  return startDate === endDate ? toVenueLocalTime(endDatetime, ianaTimezone) : "24:00";
+}
+
+/** The venue's UTC offset, in milliseconds, at the given instant — positive means ahead of UTC. */
+function venueOffsetMillis(instant: number, ianaTimezone: string): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: ianaTimezone,
+    hourCycle: "h23",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).formatToParts(new Date(instant));
+  const get = (type: string): number => Number(parts.find((p) => p.type === type)?.value ?? 0);
+  const localAsUtcMillis = Date.UTC(get("year"), get("month") - 1, get("day"), get("hour"), get("minute"), get("second"));
+  return localAsUtcMillis - instant;
+}
+
+/**
+ * Inverse of toVenueLocalDate/toVenueLocalTime: resolves a venue-local
+ * wall-clock date+time into the UTC instant it represents, using
+ * Intl.DateTimeFormat's own offset resolution for that specific date (not a
+ * fixed offset) — needed because generation reads a template row's time as
+ * venue-local but shift.startDatetime/endDatetime store UTC instants.
+ *
+ * Two-pass: the venue's offset can differ right at a DST transition
+ * boundary, so the offset is re-read at the corrected instant and
+ * re-applied if it changed. This resolves correctly for every real IANA
+ * zone's transition (the one genuine edge case worth testing, per
+ * /plan-eng-review — a target date that falls exactly on a DST transition).
+ */
+export function resolveVenueLocalToUtc(dateIso: string, hhmm: string, ianaTimezone: string): Date {
+  const [year, month, day] = dateIso.split("-").map(Number);
+  const [hour, minute] = hhmm.split(":").map(Number);
+  const wallClockAsUtcMillis = Date.UTC(year, month - 1, day, hour, minute, 0);
+
+  const offset = venueOffsetMillis(wallClockAsUtcMillis, ianaTimezone);
+  const utcMillis = wallClockAsUtcMillis - offset;
+  const offset2 = venueOffsetMillis(utcMillis, ianaTimezone);
+  return new Date(offset2 === offset ? utcMillis : wallClockAsUtcMillis - offset2);
+}
+
 /** The active document_expiry_rule for one type as of `today`, preferring an exact jurisdiction match over the national (NULL-jurisdiction) rule. */
 async function getActiveRule(documentType: string, jurisdiction: string | null, today: string) {
   const rows = await db
@@ -539,6 +1141,47 @@ function consentHoldReason(consent: string | null, staffDisplayName: string): st
   return `${staffDisplayName} hasn't been asked to consent to this public holiday shift yet.`;
 }
 
+/**
+ * Insert a new shiftAssignment, or reactivate an existing Declined one, as a
+ * single atomic statement. UNIQUE(shiftId, userId) is a hard "one row per
+ * person per shift" constraint (schema.ts's idx_shift_assignment_unique) — a
+ * Declined row is kept, not deleted, for audit, so "already has a row" does
+ * not mean "already assigned". Doing this as one ON CONFLICT ... DO UPDATE
+ * ... WHERE statement (instead of SELECT-then-branch-then-UPDATE/INSERT)
+ * closes the race between two concurrent re-offers of the same declined
+ * shift: Postgres serializes both attempts on the conflicting index row, so
+ * only the one that still sees status = 'Declined' at UPDATE time wins —
+ * the loser's WHERE fails and it gets null back, same as if the row had
+ * never existed. Shared by assignStaff() (manager-assigns) and claimSwap()
+ * (peer-claims) so both give the same answer to "does an existing Declined
+ * row block this?" — pass `tx` to run inside claimSwap's own transaction.
+ * Returns null when an ACTIVE assignment already exists — the caller decides
+ * the error message, since assignStaff's and claimSwap's wording differs.
+ */
+export async function insertOrReactivateAssignment(
+  shiftId: string,
+  userId: number,
+  status: "Pending" | "Confirmed",
+  tx: DbOrTx = db,
+): Promise<typeof shiftAssignment.$inferSelect | null> {
+  const [row] = await tx
+    .insert(shiftAssignment)
+    .values({ shiftId, userId, status })
+    .onConflictDoUpdate({
+      target: [shiftAssignment.shiftId, shiftAssignment.userId],
+      set: {
+        status,
+        publicHolidayConsent: null,
+        consentRequestedAt: null,
+        consentRespondedAt: null,
+        updatedDttm: new Date(),
+      },
+      setWhere: eq(shiftAssignment.status, "Declined"),
+    })
+    .returning();
+  return row ?? null;
+}
+
 export async function assignStaff(orgId: number, shiftId: string, userId: number, actorUserId: number) {
   const shiftRow = await getShiftRow(orgId, shiftId);
   // Same rule as updateShift: only a Draft shift can gain a new assignee.
@@ -568,16 +1211,31 @@ export async function assignStaff(orgId: number, shiftId: string, userId: number
     throw new AssignmentBlockedError(message, decision);
   }
 
-  const [created] = await db.insert(shiftAssignment).values({ shiftId, userId }).returning();
+  const row = await insertOrReactivateAssignment(shiftId, userId, "Pending");
+  if (!row) {
+    // Only an ACTIVE row blocks assignment — the calendar and coverage views
+    // already treat Declined as unassigned (see getStaffingCoverage/
+    // getWeekCalendar's own inArray(status, ["Pending", "Confirmed"])
+    // filter), so a Declined row must not permanently block a re-offer.
+    const name = await staffName(userId);
+    throw new RosterError(`${name} is already assigned to this shift.`, 409);
+  }
+
+  // createdDttm and updatedDttm both default to the same DB now() on a
+  // genuine INSERT; a reactivation explicitly bumps updatedDttm past it —
+  // distinguishes create vs. reactivate for the audit trail without a
+  // separate lookup.
+  const wasReactivation = row.updatedDttm.getTime() > row.createdDttm.getTime();
   await auditService.log({
     entityType: "shift_assignment",
-    entityId: created.assignmentId,
-    action: "create",
+    entityId: row.assignmentId,
+    action: wasReactivation ? "update" : "create",
     actorUserId,
     organisationId: orgId,
-    afterValue: { shiftId, userId, status: created.status },
+    beforeValue: wasReactivation ? { status: "Declined" } : undefined,
+    afterValue: wasReactivation ? { status: row.status } : { shiftId, userId, status: row.status },
   });
-  return created;
+  return row;
 }
 
 /** Every assignment on one shift, staff name joined in — the roster builder's "who's on this shift" view. */
@@ -737,6 +1395,11 @@ export async function publishRoster(
   const toDate = parseFilterDate(to);
   await assertHolidayCalendarLoaded(jurisdiction, fromDate, toDate);
 
+  // lt() against the exclusive next-day boundary, not lte() against toDate
+  // itself — see parseFilterDateEnd. A shift starting later in the day on
+  // the "to" date (UTC midnight is the very first instant of that day)
+  // would otherwise never be selected, silently excluded from the publish
+  // batch entirely rather than published or held back with a reason.
   const draftShifts = await db
     .select()
     .from(shift)
@@ -746,7 +1409,7 @@ export async function publishRoster(
         eq(shift.storeLocationId, storeLocationId),
         eq(shift.status, "Draft"),
         gte(shift.startDatetime, fromDate),
-        lte(shift.startDatetime, toDate),
+        lt(shift.startDatetime, parseFilterDateEnd(to)),
       ),
     );
 
@@ -774,7 +1437,11 @@ export async function publishRoster(
     // is set — the year is already guaranteed loaded by
     // assertHolidayCalendarLoaded above.
     const isPublicHolidayShift = jurisdiction
-      ? await checkIsPublicHoliday(toVenueLocalDate(s.startDatetime, venueTimezone), jurisdiction)
+      ? await checkIsPublicHoliday(
+          toVenueLocalDate(s.startDatetime, venueTimezone),
+          jurisdiction,
+          shiftEndTimeOnStartDate(s.startDatetime, s.endDatetime, venueTimezone),
+        )
       : false;
 
     let blockedReason: string | null = null;

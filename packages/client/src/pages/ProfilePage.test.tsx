@@ -48,3 +48,55 @@ describe("ProfilePage — My Documents tab", () => {
     expect(screen.queryByRole("tab", { name: /my documents/i })).not.toBeInTheDocument();
   });
 });
+
+describe("ProfilePage — Organisation tab admin status (AuthContext race)", () => {
+  beforeEach(() => mockUseAuth.mockReset());
+
+  const org = {
+    organisationId: 5,
+    organisationName: "Test Org",
+    organisationWebsite: null,
+    organisationEmail: null,
+    organisationPhone: null,
+    organisationFacebook: null,
+    organisationInstagram: null,
+    organisationTiktok: null,
+    organisationPinterest: null,
+    organisationLinkedin: null,
+    joinKey: "ABC123",
+    createdBy: 999, // someone else — this user is a PROMOTED admin, not the creator
+  };
+
+  function fetchMockFor(userId: number) {
+    return vi.fn(async (url: string) => {
+      if (url === "/api/organisations/mine") {
+        return { ok: true, json: async () => ({ organisation: org }) };
+      }
+      if (url === `/api/organisations/${org.organisationId}/members`) {
+        return { ok: true, json: async () => ({ members: [{ userId, role: "admin", displayName: "Test User" }] }) };
+      }
+      return { ok: true, json: async () => ({}) };
+    }) as unknown as typeof fetch;
+  }
+
+  /**
+   * AuthContext's `user` starts null and only resolves after its own async
+   * GET /api/auth/me — a real, ordinary race against this page's own
+   * mount-time org/members fetch. The org-role effect must not permanently
+   * capture a stale (null) `user` from the instant it first ran.
+   */
+  it("resolves org-admin status once the user context loads, even if it loads after the org/members fetch", async () => {
+    const userId = 1;
+    global.fetch = fetchMockFor(userId);
+    mockUseAuth.mockReturnValue({ user: null, refreshUser: vi.fn() }); // not yet loaded
+
+    const { rerender } = render(<ProfilePage />);
+
+    // AuthContext resolves on a later tick/render — exactly the race.
+    mockUseAuth.mockReturnValue({ user: { userId, userName: "Test User", permissions: [], roles: ["Subscriber"] }, refreshUser: vi.fn() });
+    rerender(<ProfilePage />);
+
+    fireEvent.click(screen.getByRole("tab", { name: /^profile$/i }));
+    await waitFor(() => expect(screen.getByText("Edit Organisation")).toBeInTheDocument());
+  });
+});

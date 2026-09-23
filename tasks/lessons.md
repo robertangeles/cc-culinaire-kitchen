@@ -688,4 +688,380 @@ builds all tables with CHECKs enforcing. Stop it again when done.
   been pushed.
 - **Rule**: After ANY merge or `checkout main`, the next write to the working tree starts with
   `git checkout -b`. Check `git branch --show-current` before `git add`, not after `git commit`.
+
+## #68 — venue-local-time helpers only went one direction (2026-09-07)
+
+- **Problem**: `rosterService.ts` had `toVenueLocalDate`/`toVenueLocalTime` (UTC instant → venue-local
+  string) but nothing for the reverse — venue-local wall-clock time on a given date → the correct UTC
+  instant, accounting for that venue's `ianaTimezone` and any DST offset on that specific date. The
+  Roster Scheduling Templates design needed exactly this (template says "Mon 9am-5pm" in venue-local
+  time; generation must produce a UTC `startDatetime`) and the gap only surfaced during outside-voice
+  review, not the first design pass.
+- **Fix**: Added `resolveVenueLocalToUtc(dateIso, hhmm, ianaTimezone)` as a new pure helper using
+  `Intl.DateTimeFormat`'s offset lookup for the target date (not a fixed offset), so it's correct
+  across a DST transition.
+- **Rule**: A local→UTC helper and a UTC→local helper are not symmetric-for-free — one direction
+  existing in the codebase is not evidence the other direction was ever needed or written. When a new
+  feature needs the reverse conversion, check for it explicitly; do not assume it's just "the other
+  side" of code that already works.
+
+## #69 — the reachable mutation path was `updateRole`, not `deleteRole` (2026-09-07)
+
+- **Problem**: Outside-voice review flagged a test scenario ("role belonging to a template gets
+  deleted") as unreachable, but the actual bug-relevant path was a role's `storeLocationId` being
+  changed via `updateRole` — a role is rarely deleted once shifts reference it, but its venue *can*
+  be edited, silently invalidating any template row that assumed the old venue. Assumed "role becomes
+  invalid" meant deletion without checking which mutation functions on `roleService`/`rosterService`
+  actually exist and are reachable from the UI.
+- **Fix**: Corrected the design doc and test plan to cover `updateRole`'s venue-change path instead,
+  confirmed via grep that `updateRole` (not `deleteRole`) is the actually-callable mutation for this
+  case.
+- **Rule**: When a design doc's edge case says "X gets deleted/changed," verify which mutation
+  function is actually reachable in the code before writing the test scenario around it — don't
+  infer the mechanism from the English description of the edge case.
+
+## #70 — an option's own text can under-specify the fix it proposes (2026-09-07)
+
+- **Problem**: Presented an AskUserQuestion option as "reuse the existing 23505 unique-violation
+  catch pattern" for a concurrent-generation race, without specifying a real backing unique
+  constraint — as written, the try/catch would never actually fire, since nothing would violate
+  anything. The user picked the option (reasonably — the option text sounded complete), and only
+  after that did the gap register.
+- **Fix**: Completed the mechanism before moving on: added the two nullable `shift` columns
+  (`sourceTemplateRowId`, `generatedForWeekStart`) plus a real unique index on the pair, making the
+  `23505` catch meaningful. Flagged the correction explicitly to the user rather than silently
+  patching it in.
+- **Rule**: Before finalizing an AskUserQuestion option that names an existing pattern ("reuse X"),
+  check that the concrete mechanism the pattern depends on (here: a real unique constraint) is
+  actually present or will be added — a familiar pattern name is not the same as a complete fix.
   Post-merge is the highest-risk moment for this, because `main` is exactly where you just landed.
+
+## #71 — a "soft delete" row still occupies its own unique key (2026-09-07)
+
+- **Problem**: While implementing `generateWeekFromTemplate`, a bare `INSERT` + `23505` catch on
+  the new `idx_shift_template_week_unique` (on `sourceTemplateRowId, generatedForWeekStart`)
+  correctly closed the double-click concurrency race, but broke the design doc's OWN stated
+  rollback semantics ("a cancelled generated shift never blocks regeneration of that slot") — a
+  cancelled shift is never deleted, only status-flipped, so it still occupies that unique key
+  forever. A TDD test written against the design doc's own rollback bullet ("cancel, then
+  regenerate the same slot") caught this immediately: `{created:0, skipped:1}` instead of
+  `{created:1, skipped:0}`.
+- **Fix**: Replaced the bare insert with `.onConflictDoUpdate({target: [...], setWhere: eq(status,
+  "Cancelled"), ...})` — the exact idiom `insertOrReactivateAssignment` already established
+  earlier this session for the identical shape of problem (a Declined assignment blocking
+  re-assignment). A genuine concurrent double-click still resolves correctly: the loser's
+  `setWhere` doesn't match a still-Draft row, so it returns nothing (no exception) rather than a
+  duplicate.
+- **Rule**: Any time a "soft delete" / status-flip pattern (Cancelled, Declined, Removed — never a
+  real `DELETE`) coexists with a unique constraint meant to prevent duplicates, a bare insert +
+  exception-catch is not enough — the old row's status-flipped-but-still-present state IS the
+  conflict. Use `onConflictDoUpdate` with a `setWhere` guard on the "safe to overwrite" status
+  instead, and write the "cancel then redo" test explicitly; don't assume a race-closing fix that
+  works for the fresh-insert case also works for the revival case without testing it separately.
+
+## #72 — a real seed can collide with a test's hardcoded fixture date, in a SHARED dev DB (2026-09-07)
+
+- **Problem**: A full `TENANT_IT=1` regression run failed with `duplicate key value violates
+  unique constraint "idx_public_holiday_unique"` inside `roster.integration.test.ts`'s
+  `beforeAll` — a `PostgresError`, not an assertion failure, crashing the entire describe block
+  (every test in the file reported as failed). Root cause: earlier this session, the real AU
+  public-holidays seed script (225 rows, 2026-2027, all 8 jurisdictions) ran against the same
+  shared dev DB this test suite also uses. That test's own fixture hardcodes `VIC` +
+  `${currentYear}-01-01` ("New Year's Day") — a real, now-seeded date — and the table's unique
+  index is on `(jurisdiction, holiday_date)` only, not the name, so the test's own differently-named
+  row collided with the real one. A second test in the same file (`12-26`, "Boxing Day") had the
+  identical latent collision, just never reached because the `beforeAll` crash aborted the file
+  first.
+- **Fix**: Two different fixes for two different cases. (1) Where the test's OWN assertion
+  specifically depends on the real calendar date (the Jan-1 `isPublicHoliday` tests) — the date
+  can't move, so the insert uses `.onConflictDoNothing()` and reuses whichever row already exists,
+  leaving the tracked id `undefined` (skipping its own `afterAll` delete) when it didn't create the
+  row — a test must never delete real seeded data it doesn't own. (2) Where the date was
+  incidental to the test's own made-up scenario (the Dec-26 partial-day-threshold test) — moved to
+  a verified-free date (Dec 27) instead, since reusing the real (non-partial-day) Boxing Day row
+  there would have silently changed what the test was actually exercising.
+- **Rule**: A hardcoded date in a test fixture against SHARED reference data (`public_holiday`,
+  `award_rule` — anything with no `organisationId`) is safe only until real data gets seeded into
+  the same database. Before hardcoding such a date, either verify it's free of realistic real-world
+  collisions and won't need to be (an arbitrary/incidental date, safe to move if it ever collides),
+  or — if the test's assertion is genuinely ABOUT that specific real date — make the insert
+  conflict-tolerant and never let cleanup delete a row the test didn't create itself.
+
+## #73 — a role-based refactor that didn't reach every gate (2026-09-08)
+
+- **Problem**: User reported "Alex Charasse is org admin but can't view the Org Admin page."
+  Investigation surfaced TWO independent bugs stacked on top of each other:
+  1. `ProfilePage.tsx`'s org/role-fetch effect had `useEffect(..., [])` — empty deps — whose async
+     body read `user?.userId` (from `useAuth()`, which starts `null` and resolves later via its own
+     `GET /api/auth/me`). A real, ordinary race: if that effect fired before auth resolved, it
+     permanently captured `user = null`, the `.find()` matching "am I in the members list" never
+     matched, and `myOrgRole` stayed stuck at its default `"member"` forever — hiding every
+     admin-gated section of the page for the rest of that session, silently.
+  2. Even with (1) fixed, `organisationService.ts`'s `updateOrganisation`/`regenerateJoinKey` still
+     checked `organisation.createdBy !== userId` — a leftover from BEFORE the "Org members list +
+     role-based admin controls" feature (git commit `7a16311`) introduced *promotable* admins via
+     `userOrganisation.role`. That commit correctly updated member-management endpoints
+     (`updateMemberRole`/`removeMember`) to check `role === "admin"`, and correctly updated the
+     client's admin-gated UI to check the same — but never touched these two functions, which kept
+     checking the OLD single-owner model. A member promoted to admin via the Team Members "Make
+     Admin" button could see the Edit Organisation UI (once bug 1 was fixed) but got a confusing
+     400 the moment they tried to save, because the server still only trusted the literal creator.
+- **Fix**: (1) `[user?.userId]` instead of `[]` — same pattern already used correctly two effects
+  above it in the same file (`useEffect(() => setName(user?.userName ?? ""), [user])`), just missed
+  in this one. (2) Replaced the `createdBy` check with the same `getMembership(...).role === "admin"`
+  check `updateMemberRole`/`removeMember` already use — `createdBy` is always also `role: "admin"`
+  by construction (set at creation), so the creator keeps working; promoted admins now do too.
+- **Rule**: When a role-based permission model replaces a single-owner one, grep for EVERY existing
+  check against the old owner field (`createdBy`, `ownerId`, etc.) across the whole feature — a
+  role-based refactor that updates the obviously-related endpoints (member management, nav/UI
+  gating) but misses an older, less-obvious function (org profile edit, key rotation) leaves a
+  trap that only surfaces later, for a specific non-creator admin, in a specific action — exactly
+  the shape of bug a quick manual test with the ORIGINAL admin account would never catch.
+
+## #74 — a screenshot found the actual page; my own reasoning had picked the wrong one (2026-09-10)
+
+- **Problem**: After fixing #73, the user reported "still can't see Alex's Org Admin page" and sent
+  a screenshot of the sidebar account menu — a completely different component
+  (`components/layout/UserMenu.tsx`) than the one I'd fixed (`ProfilePage.tsx`'s Organisation tab).
+  It showed "Alex Charasse / Subscriber" — `UserMenu.tsx:39`'s `const primaryRole = user.roles[0]
+  ?? "Subscriber"`. Alex holds two global roles (`Subscriber`, `Operations Admin`); which one
+  happened to be `roles[0]` was arbitrary — `authService.ts`'s `getUserWithRolesAndPermissions`
+  fetches `userRole` joined to `role` with no `ORDER BY` at all, so the array order is whatever
+  Postgres's unindexed scan happens to return, not "most privileged first" or any deliberate rule.
+  This was almost certainly the user's ORIGINAL complaint two turns earlier ("why is his role just
+  Subscriber now") — I diagnosed and fixed a real, adjacent bug instead of this one, because
+  nothing in the conversation up to that point named the actual component on screen.
+- **Fix**: Show every held role, not an arbitrary single one — `user.roles.join(", ")`. No new
+  "which role is more important" heuristic invented; the array's own order was never meaningful,
+  so displaying the whole set is both simpler and strictly more correct than picking one.
+- **Rule**: When a user reports "I don't see X" and a fix doesn't resolve it, don't assume the fix
+  was incomplete or re-litigate the same component harder — ask what's literally on screen (or
+  wait for a screenshot) before going deeper. A single screenshot located the real component in
+  one turn; the two prior turns of text-only description had been about a real bug, just not the
+  one on screen. Every symptom the user narrates first is not guaranteed to be the same feature.
+
+## #75 — "show everything" is the lazy fix, not the correct one, when the real ask is "rank and pick" (2026-09-10)
+
+- **Problem**: Fixed #74 (`UserMenu.tsx`'s arbitrary `roles[0]`) by joining ALL of a user's roles
+  into the badge (`user.roles.join(", ")`). Technically stopped hiding information, shipped fast —
+  but was the wrong UX call. User, correctly and bluntly: a sidebar identity badge should show ONE
+  thing, the user's highest-level role, not a comma-mashed list that truncates illegibly
+  ("Subscriber, Operation...") the moment someone holds more than one role. "Show everything" is
+  the shape of fix you reach for under time pressure specifically because it avoids having to
+  define what "highest" even means — it dodges the actual design question instead of answering it.
+- **Fix**: Went back to a single-role display, but fixed the data instead of papering over it.
+  `authService.ts`'s `getUserWithRolesAndPermissions` now orders `roles[]` by how many permissions
+  each role actually grants (descending, `LEFT JOIN role_permission ... GROUP BY ... ORDER BY
+  count(...) DESC`) — verified against real seeded data first (`Administrator` 30 perms,
+  `Operations Admin` 26, `Paid Subscriber` 22, `Subscriber` 12 — a clean, real hierarchy, not
+  invented). `roles[0]` is now genuinely "this user's highest role." `UserMenu.tsx` goes back to
+  displaying just `roles[0]`, now correct instead of arbitrary. Permission-count-as-rank was chosen
+  specifically because it needs no hardcoded role-name list to maintain — this app supports
+  admin-created custom roles (`role` table's own doc comment), and a name-based rank table would
+  silently misrank every future one.
+- **Rule**: When "just show all of it" removes an arbitrary-selection bug, check whether the UI
+  slot was ever meant to hold a LIST — a single-line identity badge wasn't. If the real fix is
+  "pick correctly," find or build the actual ranking signal (here: permission count, already
+  sitting in the DB) rather than dodging the ranking question by displaying the whole set.
+
+## #76 — a "5s ceiling" that only wrapped half the work is worse than no ceiling at all (2026-09-18)
+
+- **Problem**: `documentOcrService.ts` claimed OCR pre-fill "always resolves within 5s" via
+  `Promise.race([recognizeWithTimeout(buffer), timeout])`, but the race only wrapped
+  `worker.recognize()` — `getWorker()`'s `createWorker()` call ran before the race even started.
+  Live in QA: a compliance-document upload whose tesseract worker init hung didn't just miss the
+  5s budget, it froze the **entire Node event loop** — confirmed by `/api/health` going
+  unresponsive to every user, not just the uploader. Two occurrences of this during one QA session
+  exhausted the dev machine's swap and got `earlyoom` to kill the Vite dev server outright.
+- **Fix**: Moved the actual tesseract.js work into a dedicated `worker_threads` Worker
+  (`documentOcrWorker.ts`). The timeout now calls `worker.terminate()`, which ends the thread
+  regardless of what it's stuck on — a guarantee a same-thread `Promise.race` can never give
+  against a synchronous/blocking native or WASM call, because the timer itself needs the event
+  loop free to fire.
+- **Rule**: A documented timeout around a multi-step async operation (init + do-the-work) has to
+  wrap ALL of it, not just the step that seemed likely to be slow — the step you didn't bother
+  timing is exactly the one that eventually hangs. And when the risk is a blocking call (native
+  bindings, WASM init, anything that could occupy the OS thread synchronously), a same-thread
+  `Promise.race` is not a real backstop — only a separate thread/process with a hard `.terminate()`
+  actually bounds it, because a blocked event loop can't run the timer that was supposed to save it.
+
+## #77 — a bare "YYYY-MM-DD" parses as UTC midnight; lte() against it only matches that first instant (2026-09-18)
+
+- **Problem**: `publishRoster` and `listShifts` both compared a shift's `startDatetime` with
+  `lte()` against a bare "to" date string parsed via `new Date("YYYY-MM-DD")` — which is UTC
+  midnight, the very *first* instant of that day. Any shift starting later in the day (i.e. almost
+  every shift, in any timezone east of UTC or any evening shift at all) fell outside the range and
+  was silently dropped from the query — not published, not held back with a reason, just invisible.
+  `getWeekCalendar` already had the correct fix (`lt()` against the *next* day's midnight) with a
+  comment explaining exactly this bug, but it was never applied to its two siblings — found live
+  when publishing a roster reported "0 shifts published" with zero held-back reasons at all, for a
+  shift whose only real blocker (public holiday consent) had already been resolved.
+- **Fix**: Added one shared `parseFilterDateEnd()` helper (exclusive next-day boundary) and used it
+  with `lt()` in all three places instead of duplicating the `+24h` computation ad hoc.
+- **Rule**: When a comment in one function names a bug class ("lte() against a bare date only
+  matches its first instant") and the fix pattern, grep for every *sibling* function doing the same
+  bare-date range comparison — a documented fix that isn't propagated to the other call sites doing
+  the identical thing isn't a fixed bug class, it's a bug that now has one correct example and N
+  wrong ones sitting right next to it. This is the second time this general timezone/UTC-day bug
+  class has bitten this codebase (see `dates.ts`'s own doc comment, referenced in `rosterService.ts`
+  around `assertHolidayCalendarLoaded`) — worth a project-wide grep for `parseFilterDate\(` and
+  raw `new Date("YYYY-MM-DD")` comparisons the next time this class of bug is suspected anywhere.
+
+## #78 — `pnpm -w tsc` is not `pnpm tsc:check`; the former emits raw build output into every package's own `src/` (2026-09-18)
+
+- **Problem**: Ran `pnpm -w tsc` (not a defined script) at the repo root as an ad-hoc "full
+  typecheck," expecting `--noEmit` behaviour. Because it isn't a package.json script, pnpm resolved
+  it to the raw `tsc` binary against the root project-references tsconfig, which — for composite
+  referenced projects — emits `.js`/`.d.ts`/`.map` files even without `--noEmit` on the CLI (project
+  references require real emission for downstream projects to consume). This wrote 1,181 compiled
+  files directly into `packages/client/src/` alone (plus server, plus shared) — silently, no error,
+  "clean" exit. The client's compiled `.js` twins contain literal JSX syntax (tsc's `--jsx` output),
+  which Vite's `.js` loader can't parse, so the very next `pnpm test` run failed 42 of 49 client
+  test files with "invalid JS syntax" — looking exactly like a catastrophic regression, for a
+  session that hadn't touched any of those files.
+- **Fix**: `git clean -ndX` (dry run) confirmed every stray file was already gitignored — safe to
+  `git clean -fdX packages/{client,server,shared}/src` and delete them all, then re-ran with the
+  actual project scripts: `pnpm tsc:check` (→ `turbo run tsc:check`, each package's own
+  `tsc -b --noEmit` or `tsc --noEmit`) and `pnpm test`. Both clean afterward — confirming the
+  client-test carnage was 100% self-inflicted by the wrong command, not a real regression.
+- **Rule**: This repo's real regression-check commands are `pnpm tsc:check` and `pnpm test` (root
+  package.json scripts, each with a `--noEmit`-safe pipeline) — never a raw `pnpm -w tsc` or
+  `npx tsc` at the root. When a workspace uses TS project references (`composite: true`), a bare
+  `tsc` invocation without a script wrapper can emit real files into `src/` even though intuition
+  says a type-check-only command "obviously" wouldn't write anything. If a from-nowhere test
+  failure spans dozens of unrelated files right after a typecheck command, check `git status`
+  (or `find src -name "*.js" -newer package.json`) for stray compiled output before assuming a
+  real regression.
+
+## #79 — killing a long integration test early is worse than letting it run: it skips afterAll and leaves permanent debris (2026-09-18)
+
+- **Problem**: Wrapped slow real-DB `roster.integration.test.ts` runs in `timeout 90` twice
+  (against a suite where individual tests take 5-40s each over the known Singapore-latency
+  connection). Both got SIGTERM'd mid-suite, before the file's `afterAll` could run its cleanup —
+  leaving 2 entire fake organisations, 6 fixture users, and 122 dependent rows (shifts,
+  compliance_document, roster_role, audit_log, etc.) permanently orphaned in the shared dev DB.
+  This silently broke an UNRELATED test a session later: `compliance.integration.test.ts`'s expiry
+  scan asserted an exact global `scanned` count, which the leaked rows (plus one legitimate
+  document from this same session's own manual QA) inflated from 2 to 20, then to 3.
+- **Fix**: Ran the file to genuine completion with no artificial timeout (409s, all 38 passed,
+  confirmed cleanup fired correctly on an uninterrupted run) before concluding the cleanup logic
+  itself was fine. Deleted the 122 orphaned rows in FK-dependency order (shift_assignment → shift
+  → roster_role_document → roster_role → compliance_document → user_organisation → audit_log →
+  store_location → organisation → user). Separately fixed the OTHER test's fragile exact-count
+  assertion (see below) since real usage will always be able to add more matching documents.
+- **Rule**: Never wrap a real-DB integration test command in an aggressive `timeout` guessed from
+  how long it "should" take — check actual per-test timing first (or just don't cap it) if the
+  suite is unfamiliar. A killed test process skips `afterAll`/`finally` cleanup entirely, and for
+  a suite that creates real organisations/users, that debris doesn't just vanish — it accumulates
+  in the shared dev DB and can break some completely different test's assertions in a future
+  session, in a way that looks like a fresh regression but is actually inherited damage from an
+  impatient timeout weeks or sessions earlier.
+
+## #80 — an "exact count" assertion against a shared, growing database is a ticking test (2026-09-18)
+
+- **Problem**: `compliance.integration.test.ts`'s expiry-scan tests asserted
+  `expect(result).toEqual({ scanned: 2, notified: 1, expired: 1 })`. `scanned` comes from
+  `selectCandidates()` in `complianceExpiryJob.ts`, which is deliberately GLOBAL — no
+  `organisationId` filter, because the real production cron job has to scan every org, not one.
+  The test's exact-count assumption only ever held because the dev DB happened to have zero OTHER
+  non-Archived, dated compliance documents at the moment it was written. It broke for real the
+  moment that stopped being true (orphaned rows from #79, plus one legitimate document from a
+  manual QA session elsewhere in this same org).
+- **Fix**: Kept `notified`/`expired` as exact assertions — those two ARE correctly scoped, since
+  they only increment for documents that actually match today's specific rule/alert-day, which
+  nothing else in a shared DB would coincidentally do. Changed `scanned` to
+  `toBeGreaterThanOrEqual(2)` — a lower bound that verifies this test's own two documents were
+  included without asserting anything about what else exists in the database.
+- **Rule**: When a function is deliberately un-scoped (global by design, not by oversight — check
+  the function's own doc comment or its production call site before assuming it's a bug), a test
+  against a SHARED, persistent database can only assert exact counts for the fields that are
+  actually scoped to the test's own fixtures. Anything that aggregates across the whole table
+  (a total count, a sum, "how many rows exist") needs a lower-bound or delta assertion instead —
+  an exact equality there isn't testing the code, it's silently asserting "nothing else in this
+  database will ever change," which is false by construction in a DB other tests and other people
+  also write to.
+
+## #81 — before calling a QA finding "a bug fix," prove the buggy code path is actually reachable (2026-09-18)
+
+- **Problem**: Testing CV-D3 ("expired sorted before expiring" in the compliance dashboard's
+  "N staff need attention" card), found `ComplianceDashboard.tsx` sorted that list alphabetically
+  by name while `StaffComplianceTable.tsx` sorted the table underneath it worst-status-first via a
+  shared `sortWorstFirst` helper — a real-looking inconsistency, and the module's own doc comment
+  even claims "the exact same severity rule ... as this table uses for its own sort." Started
+  fixing it (exported `sortWorstFirst`, used it in the dashboard) before writing the regression
+  test — and the failing-first test proved the "fix" changed nothing: `isCompliant()` only lets
+  expired/rejected/missing into that list (severity 4), and expiring/pending count as compliant
+  (severity < 4) by design — so every item ever reachable in that list is tied at the same
+  severity, and `sortWorstFirst`'s comparator always falls through to the exact same alphabetical
+  tiebreak the "buggy" code already did. Reverted the change; documented the real finding instead
+  (the literal ordering claim isn't observable given the current compliance threshold, which isn't
+  a bug — expiring being a "warning not a failure" is the stated design).
+- **Rule**: "Write the failing test first" isn't just about test discipline — it's the actual
+  falsification step. A code-reading diff that "looks like" the fix a doc comment implies can still
+  be a no-op if the two branches are never fed inputs that would make them disagree. Before
+  reporting a QA finding as Fail → Fixed, get the pre-fix test to actually fail red; a "fix" whose
+  test passes unchanged before AND after the edit was never fixing anything observable, and the
+  edit should be reverted, not kept as a shrug-worthy "harmless cleanup."
+
+## #82 — an "impossible" test-plan scenario is worth a targeted DB write, but check the classifier first and have a code-reading fallback ready (2026-09-18)
+
+- **Problem**: CV-D2 needed exactly one non-compliant staff member to screenshot the AnchorCard's
+  single-item branch, but the shared dev org naturally had two. A direct `INSERT INTO
+  compliance_document (... verification_status='Verified' ...)` to bring one into compliance was
+  blocked by the Bash auto-mode classifier (same as the earlier password-table block this session)
+  — DB writes that look like they could touch trust/verification state get flagged regardless of
+  which table. Rather than stall on it, fell back to reading `AnchorCard.tsx`'s `count === 1`
+  branch directly (named item, one button, `border-l-4 border-l-red-500`) and combined that with
+  the live-confirmed count=0 and count=2 states to cover the count=1 branch by construction.
+- **Rule**: When a live-isolation setup step gets classifier-blocked, don't burn more turns
+  retrying variations of the same write — treat it like any other tooling wall (the Turnstile-swap
+  pattern from earlier this session): fall back to reading the exact branch of code that would
+  render the scenario, and say plainly in the QA doc that isolation was blocked by the harness
+  rather than silently downgrading the claimed evidence.
+
+## #83 — a schema-supported feature with zero route/controller/client code is a missing feature, not a bug — grep the whole stack before assuming a UI gap is just hidden (2026-09-18)
+
+- **Problem**: CV-E1 expected "upload a document with a venue as its subject" to succeed. The DB
+  schema (`compliance_document.subject_store_location_id`), its CHECK constraints, and even the
+  dashboard's `venueDocumentCount` stat all already existed — strong signal the feature was "there
+  somewhere." Grepping the ENTIRE stack (not just the client) for `subjectStoreLocationId` /
+  `subject_store_location` found zero hits outside schema/migration/integration-test files:
+  `CreateDocumentInput.userId` was a required `number`, no controller/route ever read a venue
+  subject from the request body, and `createDocument()`'s own comment said outright "cannot be
+  created through this path today — it is self-upload only. Whoever adds that route must extend
+  this check rather than skip it" — the original author had already scoped the exact extension
+  point needed.
+- **Rule**: When dashboard aggregates, DB columns, or CHECK constraints exist for a feature but a
+  test step can't find any UI for it, grep server routes AND controllers AND client components for
+  the field name before concluding it's "just hard to find in the UI" — schema-first design in this
+  codebase means the data model is often built ahead of the feature, and a genuinely-missing
+  feature looks identical to a well-hidden one until you check every layer. A comment on the
+  nearest related function is often the fastest way to confirm which one it is, and frequently
+  hands you the exact contract to implement.
+
+## #84 — building a new document subject type means re-checking every screen that already lists documents, not just the create path (2026-09-18)
+
+- **Problem**: After adding venue-subject compliance documents (CV-E1, lesson #83), live-testing it
+  surfaced a second bug for free: the venue document — created with the DB's default
+  `verificationStatus: "Pending"` — landed in the same manager verification queue as staff
+  documents, and `VerificationView.tsx` unconditionally rendered `current.staffName ?? "Unknown
+  staff member"` plus an `ENGAGEMENT_LABEL` line. A venue document has no `staffName` (LEFT JOIN
+  returns null) and no meaningful engagement type, so it rendered as "Unknown staff member" /
+  "Employee" — confusing and wrong, even though the server already had `locationName` available in
+  the same response (the service's `listDocumentsForOrg` LEFT JOINs `storeLocation` for exactly
+  this reason). Fixed by branching the display on `subjectStoreLocationId`: show the venue's name
+  and "Venue document" instead of a staff name and engagement label.
+- **Rule**: A new document/record subject type doesn't just need its own create path — it flows
+  into every EXISTING screen that lists, queues, or displays that record type, and each one was
+  written assuming the old, narrower set of subjects. Before calling a new subject type "done,"
+  walk every consumer of the shared list/queue query (grep the service function's other callers)
+  and check whether each display assumes the old shape. The fastest way to catch this is exactly
+  what caught it here: use the feature for real end-to-end in the browser, in the same session you
+  built it, before writing it up as passing — a unit test with mocked, deliberately-shaped fixture
+  data would have described the venue subject as valid without ever exercising the manager-facing
+  view that had to render it.
+
+## #85 — a doc comment describing a security guarantee is a claim, not proof it exists — grep for the enforcement, don't trust the prose (2026-09-18)
+
+- **Problem**: `complianceRetentionService.ts`'s `archiveForOffboardedStaff` had a doc comment stating "Access stops IMMEDIATELY... because documentStorageService refuses to serve an Archived document." Testing CV-K1/K2 by calling the function directly (there is no offboard UI — the doc's own "Known gap" note says testing at the service/API level is expected) and then attempting to view the now-archived document via the real `handleGetDocumentViewUrl` handler showed it still returned a valid, freshly-signed Cloudinary URL. Grepping `documentStorageService.ts` for any `Archived`/`verificationStatus` check found none — `signedUrlForDocument` just trusts whatever `granted` boolean its one caller passes in, and that caller (`handleGetDocumentViewUrl`) computed `granted` from ownership and permission only, never from document status. The described refusal never existed in either file; it was pure aspiration left behind by whoever wrote the comment (or wrote it before a later refactor moved the decision point elsewhere and never updated it).
+- **Rule**: A comment that names WHERE a security property is enforced ("X refuses to Y") is a pointer, not evidence — follow the pointer and read the actual code before trusting the property holds. This is especially dangerous for negative properties (refusal, denial, exclusion) because nothing calls attention to their absence: a positive feature that's missing usually crashes or visibly does nothing, but a missing refusal just quietly succeeds and looks like success. When a QA/test-plan item says "attempting X is refused," don't stop at confirming the setup step works (the archive happened, the flag flipped) — always also drive the actual access path that's supposed to enforce the refusal, end to end, through the real handler.

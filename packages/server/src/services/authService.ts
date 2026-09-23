@@ -11,7 +11,7 @@ import crypto from "crypto";
 import { OAuth2Client } from "google-auth-library";
 import { generateSecret as otpGenerateSecret, generateURI, verify as otpVerify } from "otplib";
 import QRCode from "qrcode";
-import { eq, and, or } from "drizzle-orm";
+import { eq, and, or, sql, desc, asc } from "drizzle-orm";
 import { db } from "../db/index.js";
 import {
   user,
@@ -23,7 +23,6 @@ import {
   emailVerification,
   oauthAccount,
   passwordReset,
-  userOrganisation,
 } from "../db/schema.js";
 import { sendVerificationEmail, sendPasswordResetEmail } from "./emailService.js";
 import { encryptUserPii, decryptUserPii, hashForLookup } from "./piiService.js";
@@ -222,24 +221,6 @@ export async function loginUser(
 }
 
 /**
- * Permissions every organisation admin holds, independent of their system
- * RBAC role. An org admin runs their organisation, so they can manage its
- * suppliers, ingredient catalog, stock takes, transfers, and purchasing.
- * Mirrors the inventory + purchasing domain of the Administrator system role.
- */
-const ORG_ADMIN_PERMISSIONS = [
-  "inventory:count",
-  "inventory:manage",
-  "inventory:transfer",
-  "inventory:hq",
-  "purchasing:draft",
-  "purchasing:submit",
-  "purchasing:approve",
-  "purchasing:receive",
-  "purchasing:credit",
-];
-
-/**
  * Fetches a user record with their roles and permissions populated.
  */
 export async function getUserWithRolesAndPermissions(
@@ -271,12 +252,20 @@ export async function getUserWithRolesAndPermissions(
   // Decrypt PII fields (falls back to plaintext if encrypted values not yet populated)
   const pii = decryptUserPii(row as unknown as Record<string, unknown>);
 
-  // Fetch roles
+  // Fetch roles, most-privileged first (by how many permissions each role
+  // actually grants — not name-based, so a newly created custom role sorts
+  // correctly with no hardcoded rank list to maintain). roles[0] is relied
+  // on elsewhere (e.g. UserMenu's role badge) as "this user's primary role",
+  // so the order here is load-bearing, not cosmetic. Alphabetical role name
+  // is only a tiebreaker for two roles with an equal permission count.
   const userRoles = await db
     .select({ roleName: role.roleName })
     .from(userRole)
     .innerJoin(role, eq(userRole.roleId, role.roleId))
-    .where(eq(userRole.userId, userId));
+    .leftJoin(rolePermission, eq(rolePermission.roleId, role.roleId))
+    .where(eq(userRole.userId, userId))
+    .groupBy(role.roleId, role.roleName)
+    .orderBy(desc(sql`count(${rolePermission.permissionId})`), asc(role.roleName));
 
   const roleNames = userRoles.map((r) => r.roleName);
 
@@ -310,21 +299,6 @@ export async function getUserWithRolesAndPermissions(
     }
 
     permKeys = [...new Set(perms.map((p) => p.permissionKey))];
-  }
-
-  // Org admins inherit the inventory + purchasing permission set regardless
-  // of their system role, so whoever runs an organisation can manage it.
-  const adminMemberships = await db
-    .select({ organisationId: userOrganisation.organisationId })
-    .from(userOrganisation)
-    .where(
-      and(
-        eq(userOrganisation.userId, userId),
-        eq(userOrganisation.role, "admin"),
-      ),
-    );
-  if (adminMemberships.length > 0) {
-    permKeys = [...new Set([...permKeys, ...ORG_ADMIN_PERMISSIONS])];
   }
 
   return {

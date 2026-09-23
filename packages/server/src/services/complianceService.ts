@@ -30,13 +30,16 @@ import {
   storeLocation,
 } from "../db/schema.js";
 import * as auditService from "./auditService.js";
+import type { DbOrTx } from "./auditService.js";
 import { readLastRun, dayKey } from "../utils/dailyRunClaim.js";
-import { complianceStorageFolder } from "./documentStorageService.js";
+import { withRetryOnConflict } from "../utils/retryOnConflict.js";
+import { complianceStorageFolder, deleteStoredDocument } from "./documentStorageService.js";
 import type {
   ComplianceReportPdfData,
   ComplianceReportStaffRow,
   EngagementType,
 } from "./compliancePdfService.js";
+import { NUDGE_ELIGIBLE_AFTER_HOURS } from "@culinaire/shared";
 
 export class ComplianceError extends Error {
   constructor(
@@ -111,8 +114,10 @@ function daysSince(period: string): number {
 // ── Documents ─────────────────────────────────────────────────────────
 
 export interface CreateDocumentInput {
-  /** Staff subject. Forced to the caller by the controller — never client-supplied. */
-  userId: number;
+  /** Staff subject. Forced to the caller by the controller — never client-supplied. Exactly one of userId/subjectStoreLocationId. */
+  userId: number | null;
+  /** Venue subject (liquor licence, food registration). Exactly one of userId/subjectStoreLocationId. */
+  subjectStoreLocationId?: string | null;
   /** Who uploaded it. Forced to the caller by the controller (self-upload only, Phase 1). */
   uploadedBy: number;
   documentType: string;
@@ -202,8 +207,18 @@ export async function createDocument(orgId: number, input: CreateDocumentInput) 
   const storagePublicId = input.storagePublicId.trim();
   if (!storagePublicId) throw new ComplianceError("A file upload is required", 400);
 
-  await assertUserInOrg(input.userId, orgId);
+  // Exactly one subject — mirrors chk_compliance_document_subject, but a
+  // friendly 400 here beats a raw constraint-violation 500 from the DB.
+  if (Number(!!input.userId) + Number(!!input.subjectStoreLocationId) !== 1) {
+    throw new ComplianceError("A document needs exactly one subject: a staff member or a venue", 400);
+  }
+
+  if (input.userId) await assertUserInOrg(input.userId, orgId);
+  if (input.subjectStoreLocationId) await assertLocationInOrg(input.subjectStoreLocationId, orgId);
   if (input.storeLocationId) await assertLocationInOrg(input.storeLocationId, orgId);
+  // chk_compliance_document_venue_scope: a venue document's owning location
+  // IS its subject — default it rather than making every caller repeat the id.
+  const storeLocationId = input.subjectStoreLocationId ?? input.storeLocationId ?? null;
 
   // The storage id arrives from the CLIENT — it is echoed back from the
   // /documents/upload response — so it gets the same org check every other
@@ -218,17 +233,17 @@ export async function createDocument(orgId: number, input: CreateDocumentInput) 
   // Worse than a read: complianceRetentionService purges on this same field,
   // so a forged row that ages into retention would destroy the victim's asset.
   //
-  // Scoped to org AND user, so this also blocks a colleague in the same
-  // organisation claiming another colleague's document.
-  //
-  // Venue documents (subject_store_location_id) have no uploader-owned folder
-  // and cannot be created through this path today — it is self-upload only.
-  // Whoever adds that route must extend this check rather than skip it.
+  // Scoped to org AND uploader, so this also blocks a colleague in the same
+  // organisation claiming another colleague's document. Keyed on the
+  // UPLOADER rather than the staff subject: self-upload has always had
+  // uploadedBy === userId, and a venue document has no staff subject at all
+  // (its file still lands in the uploading manager's own folder, since
+  // storeDocument's folder is keyed on the caller, not the subject).
   // A bare startsWith is not enough: public_ids are path-shaped, so
   // ".../org-1/user-1/../user-2/x" starts with the right prefix and still
   // walks out of the folder. Match the WHOLE id instead — the caller's folder
   // followed by exactly one Cloudinary-generated segment.
-  const expectedFolder = complianceStorageFolder(orgId, input.userId);
+  const expectedFolder = complianceStorageFolder(orgId, input.uploadedBy);
   const remainder = storagePublicId.startsWith(`${expectedFolder}/`)
     ? storagePublicId.slice(expectedFolder.length + 1)
     : null;
@@ -241,8 +256,9 @@ export async function createDocument(orgId: number, input: CreateDocumentInput) 
       .insert(complianceDocument)
       .values({
         organisationId: orgId,
-        storeLocationId: input.storeLocationId ?? null,
-        userId: input.userId,
+        storeLocationId,
+        userId: input.userId ?? null,
+        subjectStoreLocationId: input.subjectStoreLocationId ?? null,
         documentType,
         engagementType: input.engagementType ?? "employee",
         documentNumber: input.documentNumber ?? null,
@@ -279,6 +295,182 @@ export async function createDocument(orgId: number, input: CreateDocumentInput) 
     }
     throw err;
   }
+}
+
+export interface UpdateDocumentInput {
+  documentNumber?: string | null;
+  issueDate?: string | null;
+  expiryDate?: string | null;
+  issuingAuthority?: string | null;
+  issuingJurisdiction?: string | null;
+}
+
+/**
+ * Owner + Pending/Rejected guard shared by updateDocument and deleteDocument.
+ * 404, not 403, on a non-owner — mirrors handleGetDocument: a guessed id
+ * never confirms a colleague's document exists.
+ */
+function assertOwnedEditableDocument(
+  doc: { userId: number | null; verificationStatus: string },
+  callerUserId: number,
+  verb: "edit" | "delete",
+): void {
+  if (!isOwnDocument(doc, callerUserId)) {
+    throw new ComplianceError("Document not found", 404);
+  }
+  if (doc.verificationStatus !== "Pending" && doc.verificationStatus !== "Rejected") {
+    throw new ComplianceError(
+      `Can't ${verb} a document that is ${doc.verificationStatus.toLowerCase()}`,
+      409,
+    );
+  }
+}
+
+/**
+ * Edit a document's own metadata. Owner-only, and only while Pending or
+ * Rejected — once Verified, the row is the record a manager signed off on;
+ * letting the subject quietly change dates or numbers after the fact would
+ * undermine that verification. A Rejected document that gets fixed goes
+ * back to Pending and clears the rejection reason, which is the resubmit
+ * the UI already promises ("You'll see the result on My Documents").
+ */
+export async function updateDocument(
+  orgId: number,
+  documentId: string,
+  callerUserId: number,
+  input: UpdateDocumentInput,
+) {
+  const doc = await getDocumentRow(orgId, documentId);
+  assertOwnedEditableDocument(doc, callerUserId, "edit");
+
+  const wasRejected = doc.verificationStatus === "Rejected";
+  // Only set keys the caller actually sent. The client's edit form always
+  // sends documentNumber/issueDate/expiryDate/issuingJurisdiction (even as
+  // null to clear them), but never sends issuingAuthority — defaulting every
+  // absent key to `?? null` silently wiped that column on every self-service
+  // edit instead of leaving it untouched. `notes` is never accepted here at
+  // all (see UpdateDocumentInput) — it's manager-only free text, and this
+  // guard lets the document's own SUBJECT call it.
+  const updates: Record<string, unknown> = {
+    updatedDttm: new Date(),
+    ...(wasRejected
+      ? { verificationStatus: "Pending", rejectionReason: null, verifiedBy: null, verifiedAt: null }
+      : {}),
+  };
+  if (input.documentNumber !== undefined) updates.documentNumber = input.documentNumber;
+  if (input.issueDate !== undefined) updates.issueDate = input.issueDate;
+  if (input.expiryDate !== undefined) updates.expiryDate = input.expiryDate;
+  if (input.issuingAuthority !== undefined) updates.issuingAuthority = input.issuingAuthority;
+  if (input.issuingJurisdiction !== undefined) updates.issuingJurisdiction = input.issuingJurisdiction;
+
+  let updated: typeof doc | undefined;
+  try {
+    [updated] = await db
+      .update(complianceDocument)
+      .set(updates)
+      .where(
+        and(
+          eq(complianceDocument.complianceDocumentId, documentId),
+          eq(complianceDocument.organisationId, orgId),
+          // Atomic status guard: the SELECT above proved Pending/Rejected, but
+          // without re-checking status in the UPDATE's own WHERE, a manager's
+          // concurrent verifyDocument() landing between that read and this
+          // write would let the edit through against what is now a Verified
+          // row. inArray makes the check-then-act atomic in the database
+          // instead of just in application code.
+          inArray(complianceDocument.verificationStatus, ["Pending", "Rejected"]),
+        ),
+      )
+      .returning();
+  } catch (err) {
+    // idx_compliance_document_unique = unique(userId, documentType, documentNumber),
+    // same constraint createDocument guards below — an edit can collide with
+    // it exactly like a fresh upload can.
+    if (input.documentNumber && (err as { code?: string })?.code === "23505") {
+      throw new ComplianceError(
+        `You've already uploaded a ${doc.documentType} with this document number`,
+        409,
+      );
+    }
+    throw err;
+  }
+
+  if (!updated) {
+    throw new ComplianceError(
+      "This document was verified while you were editing it — refresh to see its current status",
+      409,
+    );
+  }
+
+  await auditService.log({
+    entityType: "compliance_document",
+    entityId: documentId,
+    action: "update",
+    actorUserId: callerUserId,
+    organisationId: orgId,
+    beforeValue: { ...doc },
+    afterValue: { ...updated },
+    metadata: { action: wasRejected ? "edit_and_resubmit" : "edit" },
+  });
+
+  return updated;
+}
+
+/**
+ * Delete a document the caller owns. Only while Pending or Rejected — a
+ * Verified document is the legal employee record complianceRetentionService
+ * governs (Fair Work reg 3.44's 7-year retention window); letting the
+ * subject delete it early is a retention decision, not a self-service one.
+ *
+ * Runs inside one transaction that locks the row (`for("update")`) before
+ * deciding anything. updateDocument closes its own version of this race with
+ * an atomic WHERE clause alone, but that trick doesn't work here: the
+ * Cloudinary blob has to be destroyed BEFORE the row (same ordering as
+ * purgeExpiredRetention, and for the same reason — deleting the row first
+ * risks a permanently unreachable blob if the Cloudinary call then fails).
+ * An unlocked read-then-act between that destroy and a concurrent
+ * verifyDocument() could still delete a document that became Verified in
+ * between, so the row is locked for the whole transaction — Cloudinary call
+ * included — rather than just re-checked at the final write. That holds one
+ * row lock for the duration of one external API call, which is acceptable
+ * for a single-row, low-frequency, permission-gated self-service action.
+ */
+export async function deleteDocument(
+  orgId: number,
+  documentId: string,
+  callerUserId: number,
+): Promise<void> {
+  await db.transaction(async (tx) => {
+    const [doc] = await tx
+      .select()
+      .from(complianceDocument)
+      .where(
+        and(
+          eq(complianceDocument.complianceDocumentId, documentId),
+          eq(complianceDocument.organisationId, orgId),
+        ),
+      )
+      .for("update");
+    if (!doc) throw new ComplianceError("Document not found", 404);
+    assertOwnedEditableDocument(doc, callerUserId, "delete");
+
+    await deleteStoredDocument(doc.storagePublicId);
+
+    await tx.delete(complianceDocument).where(eq(complianceDocument.complianceDocumentId, documentId));
+
+    await auditService.log(
+      {
+        entityType: "compliance_document",
+        entityId: documentId,
+        action: "soft_delete",
+        actorUserId: callerUserId,
+        organisationId: orgId,
+        beforeValue: { ...doc },
+        metadata: { action: "self_delete" },
+      },
+      tx as DbOrTx,
+    );
+  });
 }
 
 export async function verifyDocument(orgId: number, documentId: string, verifierUserId: number) {
@@ -367,6 +559,83 @@ export async function rejectDocument(
   });
 
   return updated;
+}
+
+/**
+ * The staff member's "nudge" affordance on a Pending document that's been
+ * waiting 48+ hours (CV-C7). Own-document only (404, not 403, for anyone
+ * else's — same tenancy/ownership shape as every other document action);
+ * throttled to one nudge per 24h via the same hasRecentNotification()
+ * dedup the expiry job uses, so repeated clicks can't spam every verifier.
+ *
+ * The throttle check and the notification insert run inside one transaction
+ * that locks the document row first (`for("update")`) — without it, two
+ * concurrent nudges both read zero prior notifications and both fire. The
+ * lock makes the second call wait for the first's transaction to commit, so
+ * it re-reads a notification the first one just created and correctly
+ * throws "already nudged" instead of sending a duplicate. Same one-row-lock-
+ * through-an-external-call tradeoff deleteDocument already makes for its
+ * Cloudinary call: low frequency, single row, acceptable here for the HQ
+ * admin email fan-out.
+ */
+export async function nudgeVerifier(orgId: number, documentId: string, callerUserId: number) {
+  const doc = await getDocumentRow(orgId, documentId);
+  if (!isOwnDocument(doc, callerUserId)) throw new ComplianceError("Document not found", 404);
+  if (doc.verificationStatus !== "Pending") {
+    throw new ComplianceError(
+      `Document is not pending verification (status: ${doc.verificationStatus})`,
+      409,
+    );
+  }
+
+  const hoursWaiting = (Date.now() - doc.uploadedAt.getTime()) / (60 * 60 * 1000);
+  if (hoursWaiting < NUDGE_ELIGIBLE_AFTER_HOURS) {
+    throw new ComplianceError(
+      `Not old enough to nudge yet — wait until it's been pending ${NUDGE_ELIGIBLE_AFTER_HOURS}h`,
+      409,
+    );
+  }
+
+  const [staff] = await db.select({ userName: user.userName }).from(user).where(eq(user.userId, callerUserId));
+  const staffName = staff?.userName ?? "A staff member";
+  const { escapeHtml } = await import("../utils/escapeHtml.js");
+  const { notifyHQAdmins, hasRecentNotification } = await import("./notificationService.js");
+
+  await db.transaction(async (tx) => {
+    await tx
+      .select({ id: complianceDocument.complianceDocumentId })
+      .from(complianceDocument)
+      .where(eq(complianceDocument.complianceDocumentId, documentId))
+      .for("update");
+
+    const alreadyNudged = await hasRecentNotification(
+      "compliance_document",
+      documentId,
+      "COMPLIANCE_DOCUMENT_NUDGE",
+      24,
+      tx,
+    );
+    if (alreadyNudged) {
+      throw new ComplianceError("Already nudged in the last 24 hours", 409);
+    }
+
+    await notifyHQAdmins(
+      orgId,
+      "COMPLIANCE_DOCUMENT_NUDGE",
+      { documentType: doc.documentType, staffName, hoursWaiting: Math.round(hoursWaiting) },
+      "compliance_document",
+      documentId,
+      `Reminder: ${staffName}'s ${doc.documentType} is still waiting on your review`,
+      `
+        <h2 style="color: #d97706; margin-bottom: 16px;">Verification reminder</h2>
+        <p><strong>Staff member:</strong> ${escapeHtml(staffName)}</p>
+        <p><strong>Document type:</strong> ${escapeHtml(doc.documentType)}</p>
+        <p>This document has been waiting on your review for over ${NUDGE_ELIGIBLE_AFTER_HOURS} hours.</p>
+      `,
+      "compliance:verify",
+      tx,
+    );
+  });
 }
 
 /** The HQ verification queue — oldest upload first. */
@@ -757,17 +1026,34 @@ export async function listExpiryRules() {
  * currently-active version so a roster published under the old rule can still
  * see the rule that applied AT THE TIME (schema doc comment).
  *
- * ponytail: assumes the new effectiveFrom is after the currently-active
- * version's effectiveFrom (the normal "the law changed" case). Backdated
- * corrections to an already-closed rule aren't handled — upgrade to an
- * explicit ruleId-targeted edit if that's needed.
+ * Same-day-edit guard: if the computed close date (`effectiveFrom - 1 day`)
+ * would fall before the currently-active row's OWN `effectiveFrom`, this
+ * rejects instead of writing an inverted range on the row being closed —
+ * editing the same rule twice in one day is the case that trips this.
+ *
+ * Race-safe: `idx_document_expiry_rule_one_active` (a partial unique index
+ * on (documentType, coalesce(jurisdiction,'')) WHERE effective_to IS NULL)
+ * is the DB-level backstop — two concurrent creates for the same key can
+ * each close the row they see, but only one INSERT wins; the loser's 23505
+ * is caught by `withRetryOnConflict` and the whole attempt retried once, so
+ * it re-reads the now-closed state and completes cleanly instead of
+ * surfacing a raw constraint-violation error to the caller.
  */
-export async function upsertExpiryRule(input: ExpiryRuleInput) {
+export async function upsertExpiryRule(input: ExpiryRuleInput, actorUserId: number) {
   const documentType = input.documentType.trim();
   if (!documentType) throw new ComplianceError("Document type is required", 400);
   if (!input.effectiveFrom) throw new ComplianceError("An effective-from date is required", 400);
   const jurisdiction = input.jurisdiction?.trim() || null;
 
+  return withRetryOnConflict(() => upsertExpiryRuleAttempt(documentType, jurisdiction, input, actorUserId));
+}
+
+async function upsertExpiryRuleAttempt(
+  documentType: string,
+  jurisdiction: string | null,
+  input: ExpiryRuleInput,
+  actorUserId: number,
+) {
   return db.transaction(async (tx) => {
     const activeMatch = jurisdiction
       ? and(
@@ -779,13 +1065,41 @@ export async function upsertExpiryRule(input: ExpiryRuleInput) {
           isNull(documentExpiryRule.jurisdiction),
         );
 
-    await tx
-      .update(documentExpiryRule)
-      .set({
-        effectiveTo: sql`(${input.effectiveFrom}::date - 1)`,
-        updatedDttm: new Date(),
+    const [activeRow] = await tx
+      .select({
+        documentExpiryRuleId: documentExpiryRule.documentExpiryRuleId,
+        effectiveFrom: documentExpiryRule.effectiveFrom,
       })
+      .from(documentExpiryRule)
       .where(and(activeMatch, isNull(documentExpiryRule.effectiveTo)));
+
+    if (activeRow && input.effectiveFrom <= activeRow.effectiveFrom) {
+      throw new ComplianceError(
+        "This rule was already updated today — edit the existing row directly instead of creating a new version",
+        409,
+      );
+    }
+
+    if (activeRow) {
+      await tx
+        .update(documentExpiryRule)
+        .set({
+          effectiveTo: sql`(${input.effectiveFrom}::date - 1)`,
+          updatedDttm: new Date(),
+        })
+        .where(and(activeMatch, isNull(documentExpiryRule.effectiveTo)));
+
+      await auditService.log(
+        {
+          entityType: "document_expiry_rule",
+          entityId: activeRow.documentExpiryRuleId,
+          action: "update",
+          actorUserId,
+          metadata: { closedBy: "auto-supersede" },
+        },
+        tx,
+      );
+    }
 
     const [created] = await tx
       .insert(documentExpiryRule)
@@ -812,6 +1126,17 @@ export async function upsertExpiryRule(input: ExpiryRuleInput) {
           })),
         );
     }
+
+    await auditService.log(
+      {
+        entityType: "document_expiry_rule",
+        entityId: created.documentExpiryRuleId,
+        action: "create",
+        actorUserId,
+        afterValue: { ...created, alertDays },
+      },
+      tx,
+    );
 
     return { ...created, alertDays: alertDays.sort((a, b) => b - a) };
   });

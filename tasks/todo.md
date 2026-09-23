@@ -318,21 +318,17 @@ finishing branch, about to merge). See [[roster-core]], [[staff-compliance-vault
 
 Three items the review deferred rather than built:
 
-- [ ] **P2 — Name an owner for `award_rule` authorship.** No longer a ship-blocker
-  (2026-08-14 resolution): T14 (Slice 4, shipped) builds the full Award engine machinery —
-  `award_rule` table, `evaluate()` returning both `warnings[]` and a `coverage` object, the
-  publish-time audit ack always carrying `{awardWarnings, awardCoverage}` — but seeds ZERO
-  rows on purpose. The engine is server-only in Slice 4 (no UI yet); Slice 5 must surface the
-  disclosure on the publish screen as "0 of N rule categories checked" with the same visual
-  weight a populated warning list would get, so the gap stays disclosed, not hidden, once staff
-  are looking at it. That UI step is required before this can be called resolved end-to-end —
-  Phase 2 ships the machinery without reversing the original CEO review's safety concern, but
-  the review's disclosure requirement lands on staff only when Slice 5 ships. This item is now
-  a data-entry follow-on (INSERT
-  statements + an IR-competent reviewer), not an engineering dependency: MA000009 varies
-  several times a year (1 July wage reviews, FWC variations, casual-conversion and loading
-  changes), and nobody on this project is currently named as able to author those rows. The
-  answer may be "engage an adviser," which is an unbudgeted cost. Effort: S.
+- [x] **P2 — Name an owner for `award_rule` authorship.** ✅ SHIPPED 2026-09-17
+  (`feature/ck-web/org-admin-rule-editors`): Org Admin → Settings now has an Award Rules
+  tab (Administrator-only, `roster:manage-award-rules` + `requireAdministrator()`
+  double-gated) with create/edit via a drawer form and CSV bulk import, so an IR-competent
+  reviewer can author/update `award_rule` rows (MA000009 wage reviews, FWC variations,
+  casual-conversion/loading changes) without raw DB access. The PublishPanel's coverage
+  disclosure ("N of M rule categories checked") now links straight to this tab when
+  coverage is missing, closing the loop the original CEO review flagged — the gap stays
+  disclosed AND is now one click from being fixed. Same pattern applied to compliance
+  document expiry rules (new Document Expiry Rules tab). Who actually keeps the rows
+  current over time is still an operational (non-engineering) question.
 
 - [ ] **P2 — Labour cost joined to menu costing (E4).** Roll roster hours × award rate per
   shift and attribute to menu items via recorded sales, so Menu Intelligence can report
@@ -464,6 +460,153 @@ Afterwards:
 Also uncommitted on purpose: `data/imports/` (supplier catalog import batches — separate
 workstream, keep out of this feature branch).
 
+## Roster shift-time fix — deferred from adversarial review (2026-09-04)
+
+`feature/ck-web/roster-shift-time-fix`. Two real bugs found by the review were fixed on the
+branch (a confirm-checkbox that didn't re-arm when a field changed after being confirmed —
+the exact bad-data class this branch exists to prevent; `updateShift()` missing the
+`Number.isNaN` date-validity guard `createShift()` already has). One is deliberately left open:
+
+- **P2** `updateShift()`'s DB write and its `auditService.log()` call are two separate awaits,
+  not wrapped in `db.transaction()` — if the audit insert throws, the shift's start/end are
+  already committed but the caller sees a generic failure. Pre-existing pattern, not new to
+  this branch (`respondToAssignment()`/`removeAssignment()` have the same shape) — this branch
+  just gives `updateShift()` its first real caller. `auditService.log()` already accepts an
+  optional `tx` param. Worth a single pass across all three functions rather than a one-off fix
+  here — `packages/server/src/services/rosterService.ts`.
+
+## Roster week calendar (PR #109) — deferred from /code-review (2026-09-05)
+
+Merging Phase 1's shift-time fix into `feature/ck-web/roster-week-calendar` surfaced 7 findings
+from `/code-review`. 5 were fixed on the branch (a height-collapse bug for any overnight or
+multi-day shift, `assignStaff`'s duplicate-guard blocking re-offers after a decline plus its
+TOCTOU race, a UTC-vs-local-day bug in `todayIso()` — the same class this branch already fixed
+once elsewhere — and a render-loop memoization gap). Two are deliberately left open:
+
+- **P3** `addDaysIso` (add N days to an ISO date string) is independently reimplemented three
+  times: `rosterCalendarMath.ts`, `StaffingCoverageView.tsx:25`, `PublishPanel.tsx:22`. Worth
+  consolidating into `packages/shared` next time any of the three needs a change, rather than as
+  a standalone refactor — touches two files unrelated to the roster calendar.
+- **P3** `useRosterCalendar`'s `create`/`updateTime`/`assign` each discard their own mutation
+  response and call `refresh()`, refetching the entire padded week from `GET /shifts/calendar`
+  after every single drag gesture. Fine at today's data volume; revisit if a venue with many
+  shifts/roles makes the round-trip after each drag noticeably slow.
+
+### Second `/code-review` pass on PR #109 (2026-09-06) — 6 more findings fixed, 1 deferred
+
+A second, 5-angle `/code-review` pass on the same branch (correctness, cross-file impact, reuse,
+simplification/efficiency, conventions) found 8 more issues; 6 fixed, 2 already covered above.
+All fixed via TDD (failing test committed first, confirmed red, then the fix) and verified against
+the full unit + real-DB integration suite plus a fresh `pnpm build`:
+
+- **Silent data corruption**: resizing/moving an overnight or multi-day shift used
+  time-of-day-only minutes that discard which calendar day the end falls on — could silently
+  rewrite a 4h overnight shift into a ~1h same-day one with no error. Fixed by refusing the drag
+  gesture entirely when `daySpan > 0` (`RosterCalendarView.tsx`), making the file's own
+  pre-existing comment claiming this was "already disclosed as undraggable" actually true.
+- **Asymmetric timezone bug**: `getWeekCalendar`'s `to` boundary was `lte()` against a bare UTC
+  midnight — covered only the first instant of that day, not the whole day, unlike `from`'s
+  `gte()`. A shift late in the `to` day (any viewer behind UTC) could be silently excluded from
+  the calendar. Fixed with `lt()` against the next day's midnight instead.
+- **Production CSS bug**: the role-legend dot's border color was built via
+  `roleAccent(...).replace("border-l-", "border-")` at runtime — Tailwind's JIT scanner never
+  sees the resulting string as literal source text, so 6 of 8 role colors had no border in the
+  actual built CSS (confirmed against `dist/assets/*.css`). Fixed with a static `ROLE_ACCENT_RING`
+  array of literal classes.
+- **`claimSwap()`/`assignStaff()` inconsistency**: `assignStaff()` reactivates a Declined
+  assignment row instead of blocking it; `claimSwap()`'s raw insert still hit the same unique
+  index and threw the wrong "already assigned" error. Fixed by extracting a shared
+  `insertOrReactivateAssignment()` helper (one atomic `ON CONFLICT ... DO UPDATE ... WHERE status
+  = 'Declined'` statement) used by both — this also closes the race the old
+  SELECT-then-branch-then-UPDATE had between two concurrent re-offers of the same declined shift,
+  and removes the duplicated "already assigned" throw sites.
+- **Unscoped scroll-sync**: day-column scroll sync used `document.querySelectorAll(...)`
+  (document-wide) instead of a ref, unlike every other DOM coordination in the file. Fixed with a
+  `scrollerRefs` array scoped to the component instance.
+- **Missed memoization**: `storedStartMinutes`/`storedEndMinutes` were recomputed per shift per
+  render even during a drag's pointermove-frequency re-renders — the adjacent `shiftDisplayInfo`
+  memo exists specifically to avoid this for its other two fields. Folded both into that memo.
+
+Deferred:
+
+- **P3** `getWeekCalendar`'s shift-fetch query duplicates `getStaffingCoverage`'s join/where shape
+  verbatim (`rosterService.ts` vs `staffingCoverageService.ts`). A shared query builder would
+  prevent the two from silently diverging on a future shift-visibility rule change, but extracting
+  one now touches a second service unrelated to this fix pass.
+
+## Roster Scheduling Templates — shipped, unreviewed (2026-09-07)
+
+Full design: `docs/designs/roster-scheduling-templates.md` (CEO review → office-hours →
+eng-review → design-review, all approved). Built end to end via TDD per the design doc's
+Implementation Tasks (T1-T9), all tests green (unit, integration incl. concurrency/DST, permission
+boundary, client hook, component). Not yet code-reviewed or shipped/PR'd — do that next.
+
+- **Schema**: new `roster_shift_template` table (role + day-of-week + start/end time), plus
+  `shift.sourceTemplateRowId`/`generatedForWeekStart` (nullable, unique-indexed pair) for the
+  concurrent-generation race and bulk undo. Migration: `scripts/addRosterShiftTemplate.ts`, run
+  against dev.
+- **Service**: `createTemplateRow`/`updateTemplateRow`/`deleteTemplateRow`/`listTemplates`,
+  `generateWeekFromTemplate` (best-effort per-row, `{created, skipped, failed}`), `undoGeneration`,
+  and `deleteRole`'s new in-use-template 409 guard — all in `rosterService.ts`.
+- **New pure helper**: `resolveVenueLocalToUtc` (the local-time→UTC direction that didn't exist
+  before this feature — see `tasks/lessons.md` #68).
+- **Caught during TDD, not at design time** (see `tasks/lessons.md` #71): a bare insert + `23505`
+  catch for the concurrency fix silently broke "cancel a generated shift, then regenerate that
+  slot" — a Cancelled row still occupies its own unique key. Fixed with `onConflictDoUpdate` +
+  `setWhere: eq(status, "Cancelled")`, the same idiom `insertOrReactivateAssignment` already uses.
+- **Routes**: 6 new routes under `/roster/templates*`, all gated `roster:manage`, all 4
+  permission-boundary rows each (401/403/200/Administrator) — `rosterPermissions.test.ts`.
+- **Client**: `useRosterTemplates` hook (stale-closure-safe, matches `useShifts`'s pattern) +
+  `RosterTemplatesToolbar`/`RosterTemplatesPanel.tsx` — a second toolbar row on the Calendar tab
+  (Manage Templates / Generate This Week / Undo Last Generation), each opening a centered modal,
+  never a popover — `/plan-design-review`'s explicit UI-placement decision, chosen specifically to
+  leave `RosterCalendarView.tsx`'s existing hand-rolled drag-gesture code untouched.
+- **Not yet done**: code review, `git push`/PR, and the user's own "Assignment" (watch Chef John
+  Hand build a real roster by hand) — an open validation step, not a gate on shipping this.
+
+**Unrelated pre-existing bug found by the full regression run, fixed in the same pass** (see
+`tasks/lessons.md` #72): `roster.integration.test.ts`'s `beforeAll` hardcoded a VIC/Jan-1 public
+holiday fixture that collided with the real AU public-holidays seed run earlier this session (225
+rows, 2026-2027) — `idx_public_holiday_unique` is `(jurisdiction, date)` only, so the differently
+-named test row still conflicted. Fixed with `onConflictDoNothing()` + reuse-without-owning for the
+two tests that genuinely need Jan 1 to be a loaded holiday, and moved an unrelated Dec-26 fixture
+(collided with the real "Boxing Day" row) to a verified-free date, since that test's own scenario
+was made-up and the date itself was never load-bearing. Full server suite (`TENANT_IT=1`) green
+after the fix.
+
+## Org admin bugs — fixed, plus unwired fields found (2026-09-08, updated 2026-09-10)
+
+**2026-09-10 update:** the user's ORIGINAL "why is his role just Subscriber" question (before the
+09-08 investigation) turned out to be a third, separate bug — a screenshot showed it was the
+sidebar `UserMenu.tsx`, not `ProfilePage.tsx`. `primaryRole = user.roles[0]` picked an arbitrary
+role (no `ORDER BY` server-side) instead of showing all of them. Fixed: shows every role now. See
+`tasks/lessons.md` #74. 5 new tests, full client suite green (232), `tsc -b` clean.
+
+
+
+User report: "Alex Charasse is org admin but can't view the Org Admin page." Both a client
+stale-closure bug and a server auth-model gap were found and fixed with TDD — full detail in
+`tasks/lessons.md` #73, `wiki/log.md` same date. `pnpm tsc:check` clean, full client suite (227)
+and server suite (unit + `TENANT_IT=1` integration) green.
+
+- Fixed: `ProfilePage.tsx`'s org-role effect (`myOrgRole`) — was `useEffect(..., [])`, raced
+  against `useAuth()`'s async user resolution, silently stuck at `"member"` forever if the race
+  went the wrong way. Now `[user?.userId]`.
+- Fixed: `organisationService.ts`'s `updateOrganisation`/`regenerateJoinKey` checked
+  `organisation.createdBy` only — a leftover from before role-based admin promotion existed. A
+  promoted (non-creator) admin could see the Edit Organisation UI but got a 400 on save. Now both
+  check `role === "admin"`, matching `updateMemberRole`/`removeMember`'s existing pattern.
+- Cleanup: swept 84 untracked stray `tsc -b` build artifacts across all three packages.
+
+**Not fixed — flagged for review before deciding whether to build/finish or remove:**
+- Organisation address fields (line1/2/suburb/state/country/postcode): DB column + working PII
+  encryption exist, but no input UI, not in the create/update service function's own input type,
+  not displayed in the read view. `encryptOrgPii` is always called with `null` for these.
+- `POST /api/organisations/:id/regenerate-key`: working route + service function, zero client UI
+  calls it.
+- `OrgMember.joinedAt`: typed as a required `string` on the client; server always sends `null`
+  (`userOrganisation` has no timestamp column); never rendered anywhere.
+
 ## AI-Native Purchasing — deferred from eng-review (2026-07-20)
 - **P2** AI-suggest-par from usage (blocked on real consumption_log/depletion history)
 - **P2** order-from-stocktake (one-tap draft PO from last count; add multi-group guard)
@@ -471,3 +614,29 @@ workstream, keep out of this feature branch).
 - **P3** natural-language ordering; invoice/credit-note OCR reconciliation
 - **P2** server-side catalog search/pagination (catalog is now a fallback)
 - **P2** cross-supplier order guides (schema is forward-compatible)
+
+## Pill/tab touch targets below 44px guideline (found during Public Holidays design review, 2026-09-20)
+
+`role="tab"` pill buttons across the app use `px-4 py-2` (~36px tall), below
+the 44px touch-target minimum. Spans 13 instances across 10 files:
+`InventoryPage.tsx`, `RosterPage.tsx`, `ProfilePage.tsx` (×3),
+`IntegrationsTab.tsx`, `PromptsTab.tsx`, `TeamComplianceSection.tsx`,
+`ScopeToggle.tsx`, `PurchasingPage.tsx`, `OrganisationPage.tsx`,
+`SettingsLayout.tsx` (×3 — includes the vertical sidebar rows, a different
+shape from the horizontal pills, worth checking separately).
+Decided during review: own follow-up PR, not bundled into unrelated feature
+work — deliberately scoped, reviewable, revertable on its own.
+
+**Also fold in while touching all these files (decided 2026-09-20, eng
+review of the Public Holidays plan):** extract a shared `PillTabs`
+component. By the time this PR lands, the horizontal pill-tablist JSX will
+be copy-pasted 3 times (InventoryPage, SettingsLayout's Rostering &
+Compliance strip, PublicHolidaysTab) — DRY violation flagged and deferred
+here rather than fixed piecemeal, since this PR already touches every file
+with the pattern.
+
+**Also fold in (decided 2026-09-21, /ship pre-landing review):** none of
+these pill-tab strips support arrow-key navigation (click-only) — a real
+gap once extracted into a shared `PillTabs` component, since a shared
+component is exactly where that a11y work stops being "inconsistent to add
+in just one place."

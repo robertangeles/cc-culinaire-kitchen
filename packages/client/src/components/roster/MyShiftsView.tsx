@@ -8,18 +8,11 @@
 
 import { useState } from "react";
 import { ArrowLeftRight, CalendarDays, CalendarHeart, Check, Loader2, X } from "lucide-react";
-import { formatAuDate } from "@culinaire/shared";
+import { formatShiftRange } from "@culinaire/shared";
 import { useMyShifts } from "../../hooks/useRoster.js";
 import { useShiftSwaps } from "../../hooks/useWorkforce.js";
 import { useAuth } from "../../context/AuthContext.js";
 import { EmptyState } from "../ui/EmptyState.js";
-
-function formatShiftTime(startIso: string, endIso: string): string {
-  const start = new Date(startIso);
-  const end = new Date(endIso);
-  const time = (d: Date) => d.toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" });
-  return `${formatAuDate(start)}, ${time(start)}–${time(end)}`;
-}
 
 export function MyShiftsView() {
   const { shifts, isLoading, error, respond, respondToConsentRequest } = useMyShifts();
@@ -126,7 +119,8 @@ export function MyShiftsView() {
           <div key={s.assignmentId} className="border-b border-dark-200/30 px-4 py-3 last:border-b-0">
             <div className="flex items-center justify-between">
               <div className="text-sm">
-                <span className="text-white font-medium">{formatShiftTime(s.startDatetime, s.endDatetime)}</span>
+                <div className="text-xs font-medium text-gold">{s.roleName}</div>
+                <span className="text-white font-medium">{formatShiftRange(s.startDatetime, s.endDatetime)}</span>
                 <div className="mt-0.5 text-xs text-dark-600">
                   {s.assignmentStatus === "Pending" && <span className="text-dark-500">Awaiting your response</span>}
                   {s.assignmentStatus === "Confirmed" && <span className="text-emerald-400">Confirmed</span>}
@@ -225,7 +219,7 @@ export function MyShiftsView() {
                   className="flex items-center justify-between border-b border-dark-200/30 px-4 py-3 last:border-b-0"
                 >
                   <div className="text-sm">
-                    <span className="text-white font-medium">{formatShiftTime(s.startDatetime, s.endDatetime)}</span>
+                    <span className="text-white font-medium">{formatShiftRange(s.startDatetime, s.endDatetime)}</span>
                     <div className="mt-0.5 text-xs text-dark-600">
                       {s.roleName} — offered by {s.fromUserName}
                     </div>

@@ -14,7 +14,8 @@
  */
 
 import { Router } from "express";
-import { authenticate, requirePermission } from "../middleware/auth.js";
+import multer from "multer";
+import { authenticate, requirePermission, requireAdministrator } from "../middleware/auth.js";
 import { requireFlag } from "../middleware/requireFlag.js";
 import {
   handleListRoles,
@@ -24,6 +25,7 @@ import {
   handleListRoleDocuments,
   handleSetRoleDocuments,
   handleListShifts,
+  handleGetWeekCalendar,
   handleListMyShifts,
   handleCreateShift,
   handleUpdateShift,
@@ -32,6 +34,12 @@ import {
   handleListShiftAssignments,
   handleRespondToAssignment,
   handleRemoveAssignment,
+  handleListTemplates,
+  handleCreateTemplateRow,
+  handleUpdateTemplateRow,
+  handleDeleteTemplateRow,
+  handleGenerateWeekFromTemplate,
+  handleUndoGeneration,
   handleListMyAvailability,
   handleListOrgAvailability,
   handleCreateAvailability,
@@ -43,7 +51,15 @@ import {
   handleDeletePublicHoliday,
   handleRequestConsent,
   handleRespondToConsent,
+  handleListAwardRules,
+  handleUpsertAwardRule,
+  handleAwardRuleCsvPreview,
+  handleAwardRuleCsvCommit,
 } from "../controllers/rosterController.js";
+
+// Memory storage only, same convention as routes/compliance.ts's
+// documentUpload — a CSV of a few hundred rows is well under 1MB.
+const csvUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 1 * 1024 * 1024 } });
 
 const router = Router();
 // Ahead of authenticate, on purpose — see routes/compliance.ts's identical
@@ -65,12 +81,25 @@ router.put("/roles/:id/documents", requirePermission("roster:manage"), handleSet
 // ─── Shifts ───────────────────────────────────────────────────────
 
 router.get("/shifts/mine", requirePermission("roster:read-own"), handleListMyShifts);
+router.get("/shifts/calendar", requirePermission("roster:read-all"), handleGetWeekCalendar);
 router.get("/shifts", requirePermission("roster:read-all"), handleListShifts);
 router.post("/shifts", requirePermission("roster:manage"), handleCreateShift);
 router.put("/shifts/:id", requirePermission("roster:manage"), handleUpdateShift);
 router.post("/shifts/:id/cancel", requirePermission("roster:manage"), handleCancelShift);
 router.get("/shifts/:id/assignments", requirePermission("roster:read-all"), handleListShiftAssignments);
 router.post("/shifts/:id/assignments", requirePermission("roster:manage"), handleAssignStaff);
+
+// ─── Roster Shift Templates ───────────────────────────────────────
+// A saved weekly pattern (role + day-of-week + start/end time), turned into
+// real Draft shifts via "Generate this week". See
+// docs/designs/roster-scheduling-templates.md.
+
+router.get("/templates", requirePermission("roster:manage"), handleListTemplates);
+router.post("/templates", requirePermission("roster:manage"), handleCreateTemplateRow);
+router.post("/templates/generate", requirePermission("roster:manage"), handleGenerateWeekFromTemplate);
+router.post("/templates/undo-generation", requirePermission("roster:manage"), handleUndoGeneration);
+router.patch("/templates/:id", requirePermission("roster:manage"), handleUpdateTemplateRow);
+router.delete("/templates/:id", requirePermission("roster:manage"), handleDeleteTemplateRow);
 
 // ─── Assignments ──────────────────────────────────────────────────
 
@@ -94,6 +123,39 @@ router.delete("/availability/:id", requirePermission("roster:read-own"), handleD
 router.get("/public-holidays", requirePermission("roster:manage"), handleListPublicHolidays);
 router.post("/public-holidays", requirePermission("roster:manage"), handleCreatePublicHoliday);
 router.delete("/public-holidays/:id", requirePermission("roster:manage"), handleDeletePublicHoliday);
+
+// ─── Award rules ────────────────────────────────────────────────────
+// Administrator-only (requireAdministrator), not just roster:manage-award-rules
+// — award_rule is platform-wide, no-organisationId data, same reasoning as
+// the authority-blast-radius fix on compliance/rules (Permissions section
+// of the Org Admin plan). Administrator-only until a non-admin owner is
+// named (tasks/todo.md) — remove requireAdministrator then, not before.
+
+router.get(
+  "/award-rules",
+  requirePermission("roster:manage-award-rules"),
+  requireAdministrator(),
+  handleListAwardRules,
+);
+router.post(
+  "/award-rules",
+  requirePermission("roster:manage-award-rules"),
+  requireAdministrator(),
+  handleUpsertAwardRule,
+);
+router.post(
+  "/award-rules/import/preview",
+  requirePermission("roster:manage-award-rules"),
+  requireAdministrator(),
+  csvUpload.single("file"),
+  handleAwardRuleCsvPreview,
+);
+router.post(
+  "/award-rules/import/commit",
+  requirePermission("roster:manage-award-rules"),
+  requireAdministrator(),
+  handleAwardRuleCsvCommit,
+);
 
 // ─── Publish ──────────────────────────────────────────────────────
 

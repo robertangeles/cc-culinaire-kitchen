@@ -7,7 +7,8 @@
  */
 
 import { useEffect, useState } from "react";
-import { CalendarDays, CalendarHeart, ChevronDown, ChevronRight, Loader2, MapPin, Plus, Send, Trash2, UserPlus } from "lucide-react";
+import { CalendarDays, CalendarHeart, ChevronDown, ChevronRight, Loader2, MapPin, Pencil, Plus, Send, Trash2, UserPlus } from "lucide-react";
+import { formatShiftRange, durationHours, daysBetweenLocal } from "@culinaire/shared";
 import { useLocation } from "../../context/LocationContext.js";
 import { useHasPermission } from "../../hooks/useHasPermission.js";
 import {
@@ -23,12 +24,110 @@ import {
 import { EmptyState } from "../ui/EmptyState.js";
 import { PublishPanel } from "./PublishPanel.js";
 
-function formatShiftTime(startIso: string, endIso: string): string {
-  const start = new Date(startIso);
-  const end = new Date(endIso);
-  const dateFmt: Intl.DateTimeFormatOptions = { weekday: "short", day: "numeric", month: "short" };
-  const timeFmt: Intl.DateTimeFormatOptions = { hour: "numeric", minute: "2-digit" };
-  return `${start.toLocaleDateString("en-AU", dateFmt)}, ${start.toLocaleTimeString("en-AU", timeFmt)}–${end.toLocaleTimeString("en-AU", timeFmt)}`;
+/** Above 16h, or more than a single overnight (>1 calendar-day boundary crossed),
+ *  a shift needs an explicit confirm before it can be created or saved. */
+function shiftNeedsConfirm(startDatetime: string, endDatetime: string): boolean {
+  if (!startDatetime || !endDatetime) return false;
+  const startIso = new Date(startDatetime).toISOString();
+  const endIso = new Date(endDatetime).toISOString();
+  const hours = durationHours(startIso, endIso);
+  return hours > 0 && (hours > 16 || daysBetweenLocal(startIso, endIso) > 1);
+}
+
+/** "7d 1h", "16h 30m", "45m" — a compact duration label for the warning banner. */
+function formatDurationLabel(hours: number): string {
+  const totalMinutes = Math.round(hours * 60);
+  const days = Math.floor(totalMinutes / (24 * 60));
+  const remHours = Math.floor((totalMinutes % (24 * 60)) / 60);
+  const minutes = totalMinutes % 60;
+  const parts: string[] = [];
+  if (days > 0) parts.push(`${days}d`);
+  if (remHours > 0) parts.push(`${remHours}h`);
+  if (minutes > 0) parts.push(`${minutes}m`);
+  if (parts.length === 0) parts.push("0m");
+  return parts.join(" ");
+}
+
+/** Start/end datetime-local inputs shared by the create form and the Edit
+ *  panel, with a live duration readout and a warning + required confirm
+ *  checkbox above 16h or when the shift spans more than one overnight. */
+export function ShiftTimeFields({
+  startDatetime,
+  endDatetime,
+  onStartChange,
+  onEndChange,
+  confirmed,
+  onConfirmedChange,
+}: {
+  startDatetime: string;
+  endDatetime: string;
+  onStartChange: (v: string) => void;
+  onEndChange: (v: string) => void;
+  confirmed: boolean;
+  onConfirmedChange: (v: boolean) => void;
+}) {
+  const hasBoth = Boolean(startDatetime && endDatetime);
+  const startIso = hasBoth ? new Date(startDatetime).toISOString() : null;
+  const endIso = hasBoth ? new Date(endDatetime).toISOString() : null;
+  const hours = startIso && endIso ? durationHours(startIso, endIso) : null;
+  const needsWarning = hasBoth && shiftNeedsConfirm(startDatetime, endDatetime);
+
+  // A prior confirm only covers the times it was given for — editing either
+  // field again must re-arm the warning, or a confirmed-then-edited shift
+  // could submit unconfirmed (the exact class of bad data this form exists
+  // to catch).
+  function handleStartChange(v: string) {
+    onConfirmedChange(false);
+    onStartChange(v);
+  }
+  function handleEndChange(v: string) {
+    onConfirmedChange(false);
+    onEndChange(v);
+  }
+
+  return (
+    <>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <label className="text-xs text-dark-600">
+          Start
+          <input
+            type="datetime-local"
+            value={startDatetime}
+            onChange={(e) => handleStartChange(e.target.value)}
+            className="mt-1 w-full rounded-lg bg-dark-100 border border-dark-200 px-3 py-2 text-sm text-white focus:outline-none focus:border-gold/50"
+          />
+        </label>
+        <label className="text-xs text-dark-600">
+          End
+          <input
+            type="datetime-local"
+            value={endDatetime}
+            onChange={(e) => handleEndChange(e.target.value)}
+            className="mt-1 w-full rounded-lg bg-dark-100 border border-dark-200 px-3 py-2 text-sm text-white focus:outline-none focus:border-gold/50"
+          />
+        </label>
+      </div>
+      {hours !== null && hours > 0 && (
+        <p className="mt-2 text-xs text-dark-600">Duration: {formatDurationLabel(hours)}</p>
+      )}
+      {needsWarning && (
+        <div className="mt-2 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2">
+          <p className="text-xs text-amber-300">
+            This shift is unusually long ({formatDurationLabel(hours!)}) — double check the end date.
+          </p>
+          <label className="mt-1.5 flex items-center gap-1.5 text-xs text-amber-300/80">
+            <input
+              type="checkbox"
+              checked={confirmed}
+              onChange={(e) => onConfirmedChange(e.target.checked)}
+              className="size-4 rounded border-amber-500/40 bg-dark accent-gold focus:outline-none focus:ring-2 focus:ring-gold-ring"
+            />
+            I confirm this is correct
+          </label>
+        </div>
+      )}
+    </>
+  );
 }
 
 function statusTone(status: string): string {
@@ -50,7 +149,8 @@ export function ShiftsManager() {
   const { locations, selectedLocationId } = useLocation();
   const orgId = locations.find((l) => l.storeLocationId === selectedLocationId)?.organisationId ?? null;
 
-  const { shifts, isLoading, error, refresh, create, cancel, assign, removeAssignment } = useShifts(selectedLocationId);
+  const { shifts, isLoading, error, refresh, create, update, cancel, assign, removeAssignment } =
+    useShifts(selectedLocationId);
   const { roles } = useRosterRoles();
   const { members } = useOrgMembers(orgId);
 
@@ -62,15 +162,22 @@ export function ShiftsManager() {
   const [rosterRoleId, setRosterRoleId] = useState("");
   const [startDatetime, setStartDatetime] = useState("");
   const [endDatetime, setEndDatetime] = useState("");
+  const [durationConfirmed, setDurationConfirmed] = useState(false);
 
   function roleName(id: string): string {
     return roles.find((r) => r.rosterRoleId === id)?.roleName ?? "—";
   }
 
+  const createNeedsConfirm = shiftNeedsConfirm(startDatetime, endDatetime);
+
   async function handleCreate() {
     setFormError(null);
     if (!rosterRoleId || !startDatetime || !endDatetime || !selectedLocationId) {
       setFormError("Role, start, and end are all required");
+      return;
+    }
+    if (createNeedsConfirm && !durationConfirmed) {
+      setFormError("Please confirm the shift duration before creating it");
       return;
     }
     setSaving(true);
@@ -85,6 +192,7 @@ export function ShiftsManager() {
       setRosterRoleId("");
       setStartDatetime("");
       setEndDatetime("");
+      setDurationConfirmed(false);
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Failed to create shift");
     } finally {
@@ -148,40 +256,30 @@ export function ShiftsManager() {
 
       {showCreate && (
         <div className="rounded-xl border border-gold/20 bg-dark-50 p-4 animate-scale-in">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <label className="text-xs text-dark-600">
-              Role
-              <select
-                value={rosterRoleId}
-                onChange={(e) => setRosterRoleId(e.target.value)}
-                className="mt-1 w-full rounded-lg bg-dark-100 border border-dark-200 px-3 py-2 text-sm text-white focus:outline-none focus:border-gold/50"
-              >
-                <option value="">Select a role…</option>
-                {roles.map((r) => (
-                  <option key={r.rosterRoleId} value={r.rosterRoleId}>
-                    {r.roleName}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="text-xs text-dark-600">
-              Start
-              <input
-                type="datetime-local"
-                value={startDatetime}
-                onChange={(e) => setStartDatetime(e.target.value)}
-                className="mt-1 w-full rounded-lg bg-dark-100 border border-dark-200 px-3 py-2 text-sm text-white focus:outline-none focus:border-gold/50"
-              />
-            </label>
-            <label className="text-xs text-dark-600">
-              End
-              <input
-                type="datetime-local"
-                value={endDatetime}
-                onChange={(e) => setEndDatetime(e.target.value)}
-                className="mt-1 w-full rounded-lg bg-dark-100 border border-dark-200 px-3 py-2 text-sm text-white focus:outline-none focus:border-gold/50"
-              />
-            </label>
+          <label className="text-xs text-dark-600">
+            Role
+            <select
+              value={rosterRoleId}
+              onChange={(e) => setRosterRoleId(e.target.value)}
+              className="mt-1 w-full rounded-lg bg-dark-100 border border-dark-200 px-3 py-2 text-sm text-white focus:outline-none focus:border-gold/50"
+            >
+              <option value="">Select a role…</option>
+              {roles.map((r) => (
+                <option key={r.rosterRoleId} value={r.rosterRoleId}>
+                  {r.roleName}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="mt-3">
+            <ShiftTimeFields
+              startDatetime={startDatetime}
+              endDatetime={endDatetime}
+              onStartChange={setStartDatetime}
+              onEndChange={setEndDatetime}
+              confirmed={durationConfirmed}
+              onConfirmedChange={setDurationConfirmed}
+            />
           </div>
           {formError && <p className="mt-2 text-sm text-red-400">{formError}</p>}
           <div className="mt-3 flex justify-end gap-2">
@@ -195,7 +293,7 @@ export function ShiftsManager() {
             <button
               type="button"
               onClick={handleCreate}
-              disabled={saving}
+              disabled={saving || (createNeedsConfirm && !durationConfirmed)}
               className="flex items-center gap-1.5 rounded-lg bg-gold px-4 py-2 text-sm font-semibold text-dark transition-all hover:bg-gold-hover disabled:opacity-50"
             >
               {saving && <Loader2 className="size-3.5 animate-spin" />}
@@ -224,6 +322,7 @@ export function ShiftsManager() {
               isExpanded={expandedId === s.shiftId}
               onToggle={() => setExpandedId(expandedId === s.shiftId ? null : s.shiftId)}
               onCancel={() => cancel(s.shiftId)}
+              onUpdate={(data) => update(s.shiftId, data)}
               onAssign={(userId) => assign(s.shiftId, userId)}
               onRemoveAssignment={removeAssignment}
             />
@@ -242,6 +341,7 @@ function ShiftRow({
   isExpanded,
   onToggle,
   onCancel,
+  onUpdate,
   onAssign,
   onRemoveAssignment,
 }: {
@@ -252,6 +352,7 @@ function ShiftRow({
   isExpanded: boolean;
   onToggle: () => void;
   onCancel: () => void;
+  onUpdate: (data: { startDatetime?: string; endDatetime?: string }) => Promise<void>;
   onAssign: (userId: number) => Promise<void>;
   onRemoveAssignment: (assignmentId: string) => Promise<void>;
 }) {
@@ -262,6 +363,49 @@ function ShiftRow({
   const [assigning, setAssigning] = useState(false);
   const [requestingConsentFor, setRequestingConsentFor] = useState<string | null>(null);
   const [consentError, setConsentError] = useState<string | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editStart, setEditStart] = useState("");
+  const [editEnd, setEditEnd] = useState("");
+  const [editConfirmed, setEditConfirmed] = useState(false);
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+
+  function toDatetimeLocal(iso: string): string {
+    const d = new Date(iso);
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+
+  function startEditing() {
+    setEditStart(toDatetimeLocal(shift.startDatetime));
+    setEditEnd(toDatetimeLocal(shift.endDatetime));
+    setEditConfirmed(false);
+    setEditError(null);
+    setIsEditing(true);
+  }
+
+  const editNeedsConfirm = shiftNeedsConfirm(editStart, editEnd);
+
+  async function handleSaveEdit() {
+    setEditError(null);
+    if (editNeedsConfirm && !editConfirmed) {
+      setEditError("Please confirm the shift duration before saving");
+      return;
+    }
+    setEditSaving(true);
+    try {
+      await onUpdate({
+        startDatetime: new Date(editStart).toISOString(),
+        endDatetime: new Date(editEnd).toISOString(),
+      });
+      setIsEditing(false);
+    } catch (err) {
+      // Relayed verbatim — the server's own Draft-only/end>start refusal text.
+      setEditError(err instanceof Error ? err.message : "Failed to update shift");
+    } finally {
+      setEditSaving(false);
+    }
+  }
 
   useEffect(() => {
     if (!isExpanded) return;
@@ -318,12 +462,22 @@ function ShiftRow({
             <ChevronRight className="size-3 text-dark-500 shrink-0" />
           )}
           <span className="text-white text-sm truncate">{roleName}</span>
-          <span className="text-dark-600 text-xs truncate">{formatShiftTime(shift.startDatetime, shift.endDatetime)}</span>
+          <span className="text-dark-600 text-xs truncate">{formatShiftRange(shift.startDatetime, shift.endDatetime)}</span>
         </button>
         <div className="flex items-center gap-2 shrink-0">
           <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${statusTone(shift.status)}`}>
             {shift.status}
           </span>
+          {canManage && shift.status === "Draft" && (
+            <button
+              type="button"
+              onClick={startEditing}
+              className="p-1.5 rounded-lg hover:bg-dark-200 text-dark-500 hover:text-white transition-all"
+              aria-label="Edit shift time"
+            >
+              <Pencil className="size-3.5" />
+            </button>
+          )}
           {canManage && shift.status === "Draft" && (
             <button
               type="button"
@@ -336,6 +490,37 @@ function ShiftRow({
           )}
         </div>
       </div>
+      {isEditing && (
+        <div className="border-t border-gold/20 bg-dark/50 px-4 py-3 animate-fade-in">
+          <ShiftTimeFields
+            startDatetime={editStart}
+            endDatetime={editEnd}
+            onStartChange={setEditStart}
+            onEndChange={setEditEnd}
+            confirmed={editConfirmed}
+            onConfirmedChange={setEditConfirmed}
+          />
+          {editError && <p className="mt-2 text-sm text-red-400">{editError}</p>}
+          <div className="mt-3 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setIsEditing(false)}
+              className="rounded-lg px-4 py-2 text-sm text-dark-600 hover:text-white transition-all"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleSaveEdit}
+              disabled={editSaving || (editNeedsConfirm && !editConfirmed)}
+              className="flex items-center gap-1.5 rounded-lg bg-gold px-4 py-2 text-sm font-semibold text-dark transition-all hover:bg-gold-hover disabled:opacity-50"
+            >
+              {editSaving && <Loader2 className="size-3.5 animate-spin" />}
+              Save
+            </button>
+          </div>
+        </div>
+      )}
       {isExpanded && (
         <div className="border-t border-gold/20 bg-dark/50 px-4 py-3 space-y-2 animate-fade-in">
           <p className="text-xs text-dark-500 uppercase tracking-wider">Assigned staff</p>

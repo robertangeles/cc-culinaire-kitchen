@@ -96,6 +96,41 @@ describe("VerificationView", () => {
     });
   });
 
+  it("CV-E: shows the venue's name, not 'Unknown staff member', for a venue-subject document", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url.includes("/pending")) {
+          return {
+            ok: true,
+            json: async () => [
+              {
+                complianceDocumentId: "doc-venue-1",
+                documentType: "Liquor Licence",
+                engagementType: "employee",
+                documentNumber: null,
+                issueDate: null,
+                expiryDate: null,
+                issuingJurisdiction: null,
+                staffName: null,
+                subjectStoreLocationId: "loc-1",
+                locationName: "Almost French Pâtisserie",
+                uploadedAt: "2026-06-01T00:00:00.000Z",
+              },
+            ],
+          } as Response;
+        }
+        if (url.includes("/view-url")) return { ok: false, json: async () => ({}) } as Response;
+        return { ok: true, json: async () => ({}) } as Response;
+      }),
+    );
+    render(<VerificationView />);
+    await waitFor(() => expect(screen.getByText("Almost French Pâtisserie")).toBeInTheDocument());
+    expect(screen.getByText("Venue document")).toBeInTheDocument();
+    expect(screen.queryByText("Unknown staff member")).not.toBeInTheDocument();
+    expect(screen.queryByText("Employee")).not.toBeInTheDocument();
+  });
+
   it("approving advances to the next document and shows the queue progress", async () => {
     render(<VerificationView />);
     await waitFor(() => expect(screen.getByText("1 of 2 pending")).toBeInTheDocument());

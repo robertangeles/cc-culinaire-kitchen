@@ -73,8 +73,20 @@ describe("DocumentUploadForm", () => {
         documentType: "RSA",
         documentNumber: "RSA-CORRECTED",
         storagePublicId: "culinaire/compliance/abc123",
+        engagementType: "employee",
       }),
     );
+  });
+
+  it("CV-F1: lets a contractor pick their engagement type, and submits it", async () => {
+    render(<DocumentUploadForm />);
+    await selectTypeAndFile();
+
+    fireEvent.change(screen.getByLabelText("I'm working here as a"), { target: { value: "contractor" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send for review" }));
+
+    await waitFor(() => expect(screen.getByText("Sent for review")).toBeInTheDocument());
+    expect(createDocument).toHaveBeenCalledWith(expect.objectContaining({ engagementType: "contractor" }));
   });
 
   it("guards double-tap submit — one tap creates exactly one document", async () => {

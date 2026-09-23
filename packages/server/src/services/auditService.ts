@@ -41,7 +41,14 @@ export type AuditAction =
   // reusing it. Every prior action here changes a row; logging Antoine's
   // compliance lookups (antoineComplianceTools.ts) as "update" would read as
   // a data change to anyone auditing this trail later, when nothing changed.
-  | "query";
+  | "query"
+  // A rejected authorization attempt, not a data change or a read — the
+  // Administrator-only gate on award_rule/document_expiry_rule logs this on
+  // every 403 so a probing attempt is itself visible in the audit trail,
+  // not just a generic 403 in access logs. `action.length` stays under
+  // varchar(30) — checked, per this codebase's own "check length before
+  // naming a new type" lesson.
+  | "access_denied";
 
 export interface LogParams {
   entityType: string;

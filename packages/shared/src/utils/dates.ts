@@ -47,3 +47,34 @@ export function formatAuDateShort(d: Date | string): string {
     year: "numeric",
   });
 }
+
+/** Hours between two ISO instants (can be fractional). */
+export function durationHours(startIso: string, endIso: string): number {
+  return (new Date(endIso).getTime() - new Date(startIso).getTime()) / 3600000;
+}
+
+/** Local-calendar-day boundaries crossed between two ISO instants (0 = same day). */
+export function daysBetweenLocal(startIso: string, endIso: string): number {
+  const start = new Date(startIso);
+  const end = new Date(endIso);
+  const startDay = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+  const endDay = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+  return Math.round((endDay.getTime() - startDay.getTime()) / 86400000);
+}
+
+/** "Mon 7 Sep, 8:00 am–9:00 pm" (same day) or
+ *  "Mon 7 Sep, 8:00 am – Sun 13 Sep, 9:00 pm" (end lands on a different
+ *  calendar day) — the end date is never silently dropped. */
+export function formatShiftRange(startIso: string, endIso: string): string {
+  const start = new Date(startIso);
+  const end = new Date(endIso);
+  const dateFmt: Intl.DateTimeFormatOptions = { weekday: "short", day: "numeric", month: "short" };
+  const timeFmt: Intl.DateTimeFormatOptions = { hour: "numeric", minute: "2-digit" };
+  const startDate = start.toLocaleDateString("en-AU", dateFmt);
+  const startTime = start.toLocaleTimeString("en-AU", timeFmt);
+  const endTime = end.toLocaleTimeString("en-AU", timeFmt);
+  if (daysBetweenLocal(startIso, endIso) === 0) {
+    return `${startDate}, ${startTime}–${endTime}`;
+  }
+  return `${startDate}, ${startTime} – ${end.toLocaleDateString("en-AU", dateFmt)}, ${endTime}`;
+}

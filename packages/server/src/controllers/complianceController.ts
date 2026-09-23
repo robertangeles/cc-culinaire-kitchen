@@ -15,8 +15,11 @@ import {
   listDocumentsForUser,
   getDocument,
   createDocument,
+  updateDocument,
+  deleteDocument,
   verifyDocument,
   rejectDocument,
+  nudgeVerifier,
   getComplianceDashboard,
   listStaffCompliance,
   getComplianceStats,
@@ -74,6 +77,33 @@ const CreateDocumentSchema = z.object({
   storageFormat: z.enum(STORAGE_FORMATS).nullable().optional(),
   storeLocationId: z.string().uuid().nullable().optional(),
   notes: z.string().max(2000).nullable().optional(),
+});
+
+/** CV-E: a venue document has no staff subject — its subject IS the venue. */
+const CreateVenueDocumentSchema = z.object({
+  documentType: z.string().min(1).max(40),
+  storeLocationId: z.string().uuid(),
+  documentNumber: z.string().max(100).nullable().optional(),
+  issueDate: z.string().min(1).nullable().optional(),
+  expiryDate: z.string().min(1).nullable().optional(),
+  issuingAuthority: z.string().max(200).nullable().optional(),
+  issuingJurisdiction: z.string().max(3).nullable().optional(),
+  storagePublicId: z.string().min(1).max(255),
+  storageFormat: z.enum(STORAGE_FORMATS).nullable().optional(),
+  notes: z.string().max(2000).nullable().optional(),
+});
+
+// notes is deliberately absent — schema.ts documents compliance_document.notes
+// as "Manager-only free text. Sanitised before it can reach any model
+// prompt." The ownership guard on this route lets the document's SUBJECT
+// call it, so accepting notes here would let a staff member overwrite their
+// manager's annotation about them, not just their own certificate metadata.
+const UpdateDocumentSchema = z.object({
+  documentNumber: z.string().max(100).nullable().optional(),
+  issueDate: z.string().min(1).nullable().optional(),
+  expiryDate: z.string().min(1).nullable().optional(),
+  issuingAuthority: z.string().max(200).nullable().optional(),
+  issuingJurisdiction: z.string().max(3).nullable().optional(),
 });
 
 const RejectDocumentSchema = z.object({
@@ -176,6 +206,44 @@ export async function handleCreateDocument(
 }
 
 /**
+ * POST /api/compliance/documents/venue (CV-E) — a document whose subject is a
+ * venue (liquor licence, food business registration), not a staff member.
+ * Gated at compliance:verify, not compliance:read-own — there is no "self"
+ * for a venue, so this is a manager action, not a self-upload.
+ */
+export async function handleCreateVenueDocument(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const ctx = await resolveContext(req, res);
+    if (!ctx) return;
+
+    const parsed = CreateVenueDocumentSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.errors[0]?.message ?? "Invalid input" });
+      return;
+    }
+
+    const { storeLocationId, ...rest } = parsed.data;
+    const doc = await createDocument(ctx.orgId, {
+      ...rest,
+      userId: null,
+      subjectStoreLocationId: storeLocationId,
+      uploadedBy: req.user!.sub,
+    });
+    logger.info(
+      { complianceDocumentId: doc.complianceDocumentId, storeLocationId, userId: req.user!.sub },
+      "Venue compliance document uploaded",
+    );
+    res.status(201).json(doc);
+  } catch (err) {
+    handleServiceError(err, res, next);
+  }
+}
+
+/**
  * POST /api/compliance/documents/upload — stores the file (private Cloudinary,
  * magic-byte sniffed) and best-effort OCRs it for form pre-fill. This is the
  * pre-step before `POST /documents`, which persists the record; nothing here
@@ -231,6 +299,82 @@ export async function handleGetDocument(
   }
 }
 
+export async function handleUpdateDocument(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const ctx = await resolveContext(req, res);
+    if (!ctx) return;
+
+    const parsed = UpdateDocumentSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.errors[0]?.message ?? "Invalid input" });
+      return;
+    }
+
+    const doc = await updateDocument(ctx.orgId, req.params.id as string, req.user!.sub, parsed.data);
+    logger.info(
+      { complianceDocumentId: doc.complianceDocumentId, userId: req.user!.sub },
+      "Compliance document edited",
+    );
+    res.json(doc);
+  } catch (err) {
+    handleServiceError(err, res, next);
+  }
+}
+
+export async function handleDeleteDocument(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const ctx = await resolveContext(req, res);
+    if (!ctx) return;
+
+    await deleteDocument(ctx.orgId, req.params.id as string, req.user!.sub);
+    logger.info(
+      { complianceDocumentId: req.params.id, userId: req.user!.sub },
+      "Compliance document deleted",
+    );
+    res.status(204).end();
+  } catch (err) {
+    // deleteDocument calls deleteStoredDocument, which can throw the same
+    // DocumentStorageError handleUploadDocument maps below (e.g. Cloudinary
+    // credentials missing) — without this branch it fell through to a
+    // generic 500 instead of that error's real status/message.
+    if (err instanceof DocumentStorageError) {
+      res.status(err.status).json({ error: err.message });
+      return;
+    }
+    handleServiceError(err, res, next);
+  }
+}
+
+/**
+ * POST /api/compliance/documents/:id/nudge — the staff member's own-document
+ * reminder to whoever holds compliance:verify, once a Pending document has
+ * been waiting 48+ hours (CV-C7). All the real rules (ownership, status,
+ * age, once-per-24h) live in nudgeVerifier — this just maps its errors.
+ */
+export async function handleNudgeDocument(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const ctx = await resolveContext(req, res);
+    if (!ctx) return;
+
+    await nudgeVerifier(ctx.orgId, req.params.id as string, req.user!.sub);
+    res.status(204).end();
+  } catch (err) {
+    handleServiceError(err, res, next);
+  }
+}
+
 /**
  * GET /api/compliance/documents/:id/view-url — mints a short-lived Cloudinary
  * signed URL for one document. Called by both the staff self-view (own
@@ -254,9 +398,13 @@ export async function handleGetDocumentViewUrl(
     // the document exists.
     const doc = await getDocument(ctx.orgId, req.params.id as string);
 
+    // An Archived document (offboarding, or a superseded upload) must never
+    // mint a signed URL again, regardless of ownership or permission — that
+    // refusal is the entire point of archiving on offboard (CV-K1/K2).
     const granted =
-      isOwnDocument(doc, req.user!.sub) ||
-      hasPermission(req.user!, "compliance:read-all", "compliance:verify");
+      doc.verificationStatus !== "Archived" &&
+      (isOwnDocument(doc, req.user!.sub) ||
+        hasPermission(req.user!, "compliance:read-all", "compliance:verify"));
 
     // Always call through — signedUrlForDocument writes the access-log row
     // for denials too, which is the record that matters when investigating
@@ -445,7 +593,7 @@ export async function handleUpsertRule(
       res.status(400).json({ error: parsed.error.errors[0]?.message ?? "Invalid input" });
       return;
     }
-    const rule = await upsertExpiryRule(parsed.data);
+    const rule = await upsertExpiryRule(parsed.data, req.user!.sub);
     logger.info(
       { documentExpiryRuleId: rule.documentExpiryRuleId, userId: req.user!.sub },
       "Compliance expiry rule saved",
