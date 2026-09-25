@@ -4,6 +4,22 @@ Append-only. Newest entry on top.
 
 ---
 
+## 2026-09-26 — Phase 1 refactor: JSDoc + typed domain errors
+
+- `refactor/ck-web/phase-1-jsdoc-typed-errors` (PR #116): Phase 1 of the refactoring plan
+  reviewed 2026-09-25. Added JSDoc annotations across controllers (auth, ingredient, knowledge,
+  prep) and services (auth, compliance, ingredient, knowledge, prep, roster).
+- Introduced typed domain error classes — `AuthError`, `IngredientError`, `KnowledgeError`,
+  `PrepError` — exported from their respective service files. Controllers now throw typed errors
+  instead of generic `Error`; `errorHandler.ts` handles `statusCode` property on errors so typed
+  errors map directly to HTTP status codes.
+- Added comprehensive test suites for controllers (`authController`, `ingredientController`,
+  `knowledgeController`, `prepController`) and middleware (`errorHandler`), covering happy path,
+  auth failures, and domain error propagation.
+- No schema changes. No new user-facing routes. Phase 0 (prod debt clearing) shipped via PR #115.
+
+---
+
 ## 2026-09-24 — Landing page hospitality redesign shipped
 
 - `feature/ck-web/landing-hospitality-redesign`: real customer feedback ("looks vibe-coded, not
