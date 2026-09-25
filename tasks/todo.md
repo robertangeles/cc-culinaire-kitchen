@@ -640,3 +640,11 @@ these pill-tab strips support arrow-key navigation (click-only) — a real
 gap once extracted into a shared `PillTabs` component, since a shared
 component is exactly where that a11y work stops being "inconsistent to add
 in just one place."
+
+## 2026-09-25 — Compliance routes removed in Phase 0 refactor
+
+The following two compliance routes were removed because they had no frontend callers:
+- `GET /api/compliance/documents/:id` (bare GET by document ID)
+- `GET /api/compliance/staff/:userId/documents` (list a staff member's compliance docs)
+
+The handler logic is preserved in git history. If product decides to wire a UI for these (e.g., a manager viewing a staff member's documents by user ID), re-add the handlers.

@@ -110,7 +110,6 @@ const RejectDocumentSchema = z.object({
   reason: z.string().min(1, "A rejection reason is required").max(500),
 });
 
-const StaffIdParamSchema = z.coerce.number().int().positive();
 
 const ExpiryRuleSchema = z.object({
   documentType: z.string().min(1).max(40),
@@ -277,27 +276,6 @@ export async function handleUploadDocument(
   }
 }
 
-export async function handleGetDocument(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-): Promise<void> {
-  try {
-    const ctx = await resolveContext(req, res);
-    if (!ctx) return;
-
-    const doc = await getDocument(ctx.orgId, req.params.id as string);
-    // compliance:read-own is READ-OWN ONLY. 404 (not 403) so a guessed id
-    // never confirms a colleague's document exists.
-    if (!isOwnDocument(doc, req.user!.sub)) {
-      res.status(404).json({ error: "Document not found" });
-      return;
-    }
-    res.json(doc);
-  } catch (err) {
-    handleServiceError(err, res, next);
-  }
-}
 
 export async function handleUpdateDocument(
   req: Request,
@@ -434,25 +412,6 @@ export async function handleGetDocumentViewUrl(
   }
 }
 
-export async function handleListStaffDocuments(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-): Promise<void> {
-  try {
-    const ctx = await resolveContext(req, res);
-    if (!ctx) return;
-
-    const parsedUserId = StaffIdParamSchema.safeParse(req.params.userId);
-    if (!parsedUserId.success) {
-      res.status(400).json({ error: "A valid staff userId is required" });
-      return;
-    }
-    res.json(await listDocumentsForUser(ctx.orgId, parsedUserId.data));
-  } catch (err) {
-    handleServiceError(err, res, next);
-  }
-}
 
 // ─── Dashboard ──────────────────────────────────────────────────
 
