@@ -31,9 +31,7 @@ import {
   handleNudgeDocument,
   handleCreateVenueDocument,
   handleUploadDocument,
-  handleGetDocument,
   handleGetDocumentViewUrl,
-  handleListStaffDocuments,
   handleGetDashboard,
   handleListStaffCompliance,
   handleGetStats,
@@ -90,7 +88,6 @@ router.post(
   documentUpload.single("file"),
   handleUploadDocument,
 );
-router.get("/documents/:id", requirePermission("compliance:read-own"), handleGetDocument);
 router.put(
   "/documents/:id",
   requirePermission("compliance:read-own"),
@@ -117,11 +114,6 @@ router.get(
   requirePermission("compliance:read-own", "compliance:read-all", "compliance:verify"),
   complianceDocumentViewRateLimit,
   handleGetDocumentViewUrl,
-);
-router.get(
-  "/staff/:userId/documents",
-  requirePermission("compliance:read-all"),
-  handleListStaffDocuments,
 );
 
 // ─── Dashboard ──────────────────────────────────────────────────

@@ -1643,3 +1643,19 @@ roles (`Subscriber`, `Operations Admin`); `authService.ts`'s `getUserWithRolesAn
 fetches them with no `ORDER BY`, so array order is incidental, not "most privileged first." Fixed:
 show every role (`user.roles.join(", ")`) instead of picking one arbitrarily. 5 new tests
 (`UserMenu.test.tsx`), full client suite green (232 tests), `tsc -b` clean.
+
+## 2026-09-25 — Eng Review: Full Codebase Refactor Plan
+
+`/plan-eng-review` completed on `docs/designs/full-codebase-refactor.md`. Verdict: **PASS**.
+
+8 findings (3 HIGH, 4 MEDIUM, 1 LOW), all addressed via plan amendments:
+- Phase 0 Tasks 1+2 marked pre-done (useSales fix, compliance PDF route already wired)
+- Phase 1 JSDoc scoped to 6 split-target services only (was 172)
+- authService: 24 throw-string calls + 7 controller catch sites — full conversion checklist added
+- Phase 2e/2f: baseline test prerequisite added (prepService + knowledgeManagementService have 0 tests)
+- Phase 2 error class extraction pattern (`{domain}Errors.ts`) added before splits
+- Phase 4 ESLint baseline fix (rule currently "off" — enable first, then count)
+- Phase 5 scheduler helpers + interface decision documented
+- Outside voice (native Claude subagent): 8 findings, 5 novel, all addressed
+
+Plan effective PR count: 17 → 15 (Tasks 1+2 pre-done).

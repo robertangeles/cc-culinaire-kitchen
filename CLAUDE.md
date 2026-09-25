@@ -256,7 +256,7 @@ Building new UI: apply glass morphism → add hover lift → stagger animations 
 - Never commit `.env` files
 - Never skip pre-commit hooks (Husky + lint-staged)
 
-Branch naming: `feature/ck-web/<slug>` · `fix/ck-web/<slug>` · `hotfix/ck-web/<slug>`
+Branch naming: `feature/ck-web/<slug>` · `fix/ck-web/<slug>` · `hotfix/ck-web/<slug>` · `refactor/ck-web/<slug>`
 
 CI: `pnpm install --frozen-lockfile` → lint → `tsc --noEmit` → vitest → build. All must pass.
 
