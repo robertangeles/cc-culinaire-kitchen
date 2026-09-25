@@ -2,7 +2,15 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { Request, Response } from "express";
 
 // Mock the auth service before importing the controller
-vi.mock("../services/authService.js", () => ({
+vi.mock("../services/authService.js", () => {
+  class AuthError extends Error {
+    constructor(message: string, public readonly code: string, public readonly statusCode: number) {
+      super(message);
+      this.name = "AuthError";
+    }
+  }
+  return {
+  AuthError,
   registerUser: vi.fn(),
   loginUser: vi.fn(),
   generateTokens: vi.fn(),
@@ -19,7 +27,10 @@ vi.mock("../services/authService.js", () => ({
   completeMfaLogin: vi.fn(),
   requestPasswordReset: vi.fn(),
   resetPassword: vi.fn(),
-}));
+  verifyGoogleIdToken: vi.fn(),
+  findOrCreateOAuthUser: vi.fn(),
+  };
+});
 
 // Turnstile verification is mocked so no real Cloudflare/DB call is made.
 // Default is "passes"; individual tests override to simulate a failed check.
@@ -37,8 +48,29 @@ import {
   handleForgotPassword,
   handleTurnstileConfig,
   handleGoogleRedirect,
+  handleRefresh,
+  handleVerifyEmail,
+  handleResendVerification,
+  handleResetPassword,
+  handleGoogleIdToken,
+  handleMfaEnable,
+  handleMfaVerify,
 } from "./authController.js";
-import { registerUser, loginUser, generateTokens, requestPasswordReset } from "../services/authService.js";
+import {
+  registerUser,
+  loginUser,
+  generateTokens,
+  requestPasswordReset,
+  refreshAccessToken,
+  verifyEmail,
+  resendVerification,
+  resetPassword,
+  enableMfa,
+  completeMfaLogin,
+  verifyGoogleIdToken,
+  findOrCreateOAuthUser,
+  AuthError,
+} from "../services/authService.js";
 import { getCredentialValueWithFallback } from "../services/credentialService.js";
 
 // Every test starts with Turnstile passing; failure cases opt in explicitly.
@@ -101,7 +133,7 @@ describe("handleRegister", () => {
   });
 
   it("returns 409 when email already exists", async () => {
-    vi.mocked(registerUser).mockRejectedValue(new Error("EMAIL_EXISTS"));
+    vi.mocked(registerUser).mockRejectedValue(new AuthError("EMAIL_EXISTS", "EMAIL_EXISTS", 409));
 
     const req = mockReq({
       body: { name: "Chef Bob", email: "bob@test.com", password: "Password1", turnstileToken: TT },
@@ -221,7 +253,7 @@ describe("handleLogin", () => {
   });
 
   it("returns 401 for invalid credentials", async () => {
-    vi.mocked(loginUser).mockRejectedValue(new Error("INVALID_CREDENTIALS"));
+    vi.mocked(loginUser).mockRejectedValue(new AuthError("INVALID_CREDENTIALS", "INVALID_CREDENTIALS", 401));
 
     const req = mockReq({
       body: { email: "bob@test.com", password: "Wrong1234", turnstileToken: TT },
@@ -346,6 +378,280 @@ describe("handleTurnstileConfig", () => {
     await handleTurnstileConfig(mockReq(), mockRes(), next);
 
     expect(next).toHaveBeenCalledWith(expect.any(Error));
+  });
+});
+
+describe("handleRefresh", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("returns 401 when no refresh token is provided", async () => {
+    const req = mockReq({ cookies: {}, body: {} });
+    const res = mockRes();
+    await handleRefresh(req, res, vi.fn());
+    expect(res.status).toHaveBeenCalledWith(401);
+  });
+
+  it("returns 401 for INVALID_REFRESH_TOKEN", async () => {
+    vi.mocked(refreshAccessToken).mockRejectedValue(
+      new AuthError("INVALID_REFRESH_TOKEN", "INVALID_REFRESH_TOKEN", 401),
+    );
+    const req = mockReq({ cookies: { refresh_token: "bad-token" } });
+    const res = mockRes();
+    await handleRefresh(req, res, vi.fn());
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: expect.stringContaining("expired") }));
+  });
+
+  it("returns 401 for REFRESH_TOKEN_EXPIRED", async () => {
+    vi.mocked(refreshAccessToken).mockRejectedValue(
+      new AuthError("REFRESH_TOKEN_EXPIRED", "REFRESH_TOKEN_EXPIRED", 401),
+    );
+    const req = mockReq({ cookies: { refresh_token: "old-token" } });
+    const res = mockRes();
+    await handleRefresh(req, res, vi.fn());
+    expect(res.status).toHaveBeenCalledWith(401);
+  });
+
+  it("forwards unexpected errors to next", async () => {
+    vi.mocked(refreshAccessToken).mockRejectedValue(new Error("DB down"));
+    const req = mockReq({ cookies: { refresh_token: "tok" } });
+    const res = mockRes();
+    const next = vi.fn();
+    await handleRefresh(req, res, next);
+    expect(next).toHaveBeenCalledWith(expect.any(Error));
+  });
+});
+
+describe("handleVerifyEmail", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("returns 400 with no token", async () => {
+    const req = mockReq({ query: {} });
+    const res = mockRes();
+    await handleVerifyEmail(req, res, vi.fn());
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+
+  it("returns 400 for INVALID_TOKEN", async () => {
+    vi.mocked(verifyEmail).mockRejectedValue(new AuthError("INVALID_TOKEN", "INVALID_TOKEN", 400));
+    const req = mockReq({ query: { token: "bad" } });
+    const res = mockRes();
+    await handleVerifyEmail(req, res, vi.fn());
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: "Invalid verification token." }));
+  });
+
+  it("returns 400 for TOKEN_ALREADY_USED", async () => {
+    vi.mocked(verifyEmail).mockRejectedValue(new AuthError("TOKEN_ALREADY_USED", "TOKEN_ALREADY_USED", 400));
+    const req = mockReq({ query: { token: "used" } });
+    const res = mockRes();
+    await handleVerifyEmail(req, res, vi.fn());
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: expect.stringContaining("already been used") }));
+  });
+
+  it("returns 400 for TOKEN_EXPIRED", async () => {
+    vi.mocked(verifyEmail).mockRejectedValue(new AuthError("TOKEN_EXPIRED", "TOKEN_EXPIRED", 400));
+    const req = mockReq({ query: { token: "expired" } });
+    const res = mockRes();
+    await handleVerifyEmail(req, res, vi.fn());
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: expect.stringContaining("expired") }));
+  });
+
+  it("returns success on valid token", async () => {
+    vi.mocked(verifyEmail).mockResolvedValue(undefined);
+    const req = mockReq({ query: { token: "valid-token" } });
+    const res = mockRes();
+    await handleVerifyEmail(req, res, vi.fn());
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringContaining("verified") }));
+  });
+});
+
+describe("handleResendVerification", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("returns 400 with no email", async () => {
+    const req = mockReq({ body: {} });
+    const res = mockRes();
+    await handleResendVerification(req, res, vi.fn());
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+
+  it("returns 400 for ALREADY_VERIFIED", async () => {
+    vi.mocked(resendVerification).mockRejectedValue(new AuthError("ALREADY_VERIFIED", "ALREADY_VERIFIED", 400));
+    const req = mockReq({ body: { email: "bob@test.com" } });
+    const res = mockRes();
+    await handleResendVerification(req, res, vi.fn());
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: "This email is already verified." }));
+  });
+
+  it("returns success message", async () => {
+    vi.mocked(resendVerification).mockResolvedValue(undefined);
+    const req = mockReq({ body: { email: "bob@test.com" } });
+    const res = mockRes();
+    await handleResendVerification(req, res, vi.fn());
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringContaining("verification link") }));
+  });
+});
+
+describe("handleResetPassword", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("returns 400 for invalid body", async () => {
+    const req = mockReq({ body: { token: "", newPassword: "short" } });
+    const res = mockRes();
+    await handleResetPassword(req, res, vi.fn());
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+
+  it("returns 400 for INVALID_RESET_TOKEN", async () => {
+    vi.mocked(resetPassword).mockRejectedValue(new AuthError("INVALID_RESET_TOKEN", "INVALID_RESET_TOKEN", 400));
+    const req = mockReq({ body: { token: "bad-tok", newPassword: "NewPass1234" } });
+    const res = mockRes();
+    await handleResetPassword(req, res, vi.fn());
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: "Invalid or expired reset token" }));
+  });
+
+  it("returns success on valid reset", async () => {
+    vi.mocked(resetPassword).mockResolvedValue(undefined);
+    const req = mockReq({ body: { token: "valid-tok", newPassword: "NewPass1234" } });
+    const res = mockRes();
+    await handleResetPassword(req, res, vi.fn());
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+  });
+});
+
+describe("handleGoogleIdToken", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("returns 400 for missing idToken", async () => {
+    const req = mockReq({ body: {} });
+    const res = mockRes();
+    await handleGoogleIdToken(req, res, vi.fn());
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+
+  it("returns 500 for OAUTH_NOT_CONFIGURED", async () => {
+    vi.mocked(verifyGoogleIdToken).mockRejectedValue(
+      new AuthError("OAUTH_NOT_CONFIGURED", "OAUTH_NOT_CONFIGURED", 503),
+    );
+    const req = mockReq({ body: { idToken: "tok" } });
+    const res = mockRes();
+    await handleGoogleIdToken(req, res, vi.fn());
+    expect(res.status).toHaveBeenCalledWith(500);
+  });
+
+  it("returns 401 for INVALID_ID_TOKEN", async () => {
+    vi.mocked(verifyGoogleIdToken).mockRejectedValue(
+      new AuthError("INVALID_ID_TOKEN", "INVALID_ID_TOKEN", 401),
+    );
+    const req = mockReq({ body: { idToken: "bad" } });
+    const res = mockRes();
+    await handleGoogleIdToken(req, res, vi.fn());
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: "Invalid Google ID token." }));
+  });
+
+  it("returns 401 for EMAIL_NOT_VERIFIED_BY_GOOGLE", async () => {
+    vi.mocked(verifyGoogleIdToken).mockRejectedValue(
+      new AuthError("EMAIL_NOT_VERIFIED_BY_GOOGLE", "EMAIL_NOT_VERIFIED_BY_GOOGLE", 403),
+    );
+    const req = mockReq({ body: { idToken: "unverified" } });
+    const res = mockRes();
+    await handleGoogleIdToken(req, res, vi.fn());
+    expect(res.status).toHaveBeenCalledWith(401);
+  });
+
+  it("returns user and tokens on success", async () => {
+    const fakeUser = { userId: 5, userName: "Google User" };
+    vi.mocked(verifyGoogleIdToken).mockResolvedValue({ email: "g@test.com", name: "Google User", sub: "gsub" } as any);
+    vi.mocked(findOrCreateOAuthUser).mockResolvedValue(fakeUser as any);
+    vi.mocked(generateTokens).mockResolvedValue({ accessToken: "at", refreshToken: "rt" });
+    const req = mockReq({ body: { idToken: "valid-tok" } });
+    const res = mockRes();
+    await handleGoogleIdToken(req, res, vi.fn());
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ user: fakeUser }));
+  });
+});
+
+describe("handleMfaEnable", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("returns 401 when not authenticated", async () => {
+    const req = mockReq({ body: { token: "123456" } });
+    const res = mockRes();
+    await handleMfaEnable(req, res, vi.fn());
+    expect(res.status).toHaveBeenCalledWith(401);
+  });
+
+  it("returns 400 when token is missing", async () => {
+    const req = { ...mockReq({ body: {} }), user: { sub: 1 } } as any;
+    const res = mockRes();
+    await handleMfaEnable(req, res, vi.fn());
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+
+  it("returns 400 for INVALID_MFA_CODE", async () => {
+    vi.mocked(enableMfa).mockRejectedValue(new AuthError("INVALID_MFA_CODE", "INVALID_MFA_CODE", 401));
+    const req = { ...mockReq({ body: { token: "000000" } }), user: { sub: 1 } } as any;
+    const res = mockRes();
+    await handleMfaEnable(req, res, vi.fn());
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: "Invalid code. Please try again." }));
+  });
+
+  it("returns success on valid TOTP code", async () => {
+    vi.mocked(enableMfa).mockResolvedValue(undefined);
+    const req = { ...mockReq({ body: { token: "123456" } }), user: { sub: 1 } } as any;
+    const res = mockRes();
+    await handleMfaEnable(req, res, vi.fn());
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringContaining("enabled") }));
+  });
+});
+
+describe("handleMfaVerify", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("returns 400 when mfaSessionToken or code is missing", async () => {
+    const req = mockReq({ body: { mfaSessionToken: "tok" } });
+    const res = mockRes();
+    await handleMfaVerify(req, res, vi.fn());
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+
+  it("returns 401 for INVALID_MFA_SESSION", async () => {
+    vi.mocked(completeMfaLogin).mockRejectedValue(
+      new AuthError("INVALID_MFA_SESSION", "INVALID_MFA_SESSION", 401),
+    );
+    const req = mockReq({ body: { mfaSessionToken: "expired-sess", code: "123456" } });
+    const res = mockRes();
+    await handleMfaVerify(req, res, vi.fn());
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: expect.stringContaining("expired") }));
+  });
+
+  it("returns 400 for INVALID_MFA_CODE", async () => {
+    vi.mocked(completeMfaLogin).mockRejectedValue(
+      new AuthError("INVALID_MFA_CODE", "INVALID_MFA_CODE", 401),
+    );
+    const req = mockReq({ body: { mfaSessionToken: "sess", code: "000000" } });
+    const res = mockRes();
+    await handleMfaVerify(req, res, vi.fn());
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: "Invalid code. Please try again." }));
+  });
+
+  it("returns user and tokens on success", async () => {
+    const fakeUser = { userId: 3, userName: "MFA User" };
+    vi.mocked(completeMfaLogin).mockResolvedValue(fakeUser as any);
+    vi.mocked(generateTokens).mockResolvedValue({ accessToken: "at", refreshToken: "rt" });
+    const req = mockReq({ body: { mfaSessionToken: "valid-sess", code: "123456" } });
+    const res = mockRes();
+    await handleMfaVerify(req, res, vi.fn());
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ user: fakeUser }));
   });
 });
 

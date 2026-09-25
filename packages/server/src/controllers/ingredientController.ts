@@ -39,6 +39,7 @@ import {
   getIngredientUsage,
   softDeleteIngredient,
   getSupplierInOrg,
+  IngredientError,
 } from "../services/ingredientService.js";
 import { invalidateConversionCache } from "../services/unitConversionService.js";
 
@@ -568,12 +569,12 @@ export async function handleCreateSupplier(
     }
     logger.info({ supplierId: row.supplierId, userId: req.user!.sub }, "Supplier created");
     res.status(201).json(row);
-  } catch (err: any) {
-    if (err.message?.includes("do not belong to your organisation")) {
-      res.status(400).json({ error: err.message });
+  } catch (err: unknown) {
+    if (err instanceof IngredientError) {
+      res.status(err.statusCode).json({ error: err.message });
       return;
     }
-    if (err.code === "23505") {
+    if ((err as { code?: string }).code === "23505") {
       res.status(409).json({ error: "A supplier with this name already exists" });
       return;
     }
@@ -616,12 +617,12 @@ export async function handleUpdateSupplier(
     }
     logger.info({ supplierId: row.supplierId, userId: req.user!.sub }, "Supplier updated");
     res.json(row);
-  } catch (err: any) {
-    if (err.message?.includes("do not belong to your organisation")) {
-      res.status(400).json({ error: err.message });
+  } catch (err: unknown) {
+    if (err instanceof IngredientError) {
+      res.status(err.statusCode).json({ error: err.message });
       return;
     }
-    if (err.code === "23505") {
+    if ((err as { code?: string }).code === "23505") {
       res.status(409).json({ error: "A supplier with this name already exists" });
       return;
     }

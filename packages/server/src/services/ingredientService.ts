@@ -32,6 +32,13 @@ import {
 import * as auditService from "./auditService.js";
 import { invalidateConversionCache } from "./unitConversionService.js";
 
+export class IngredientError extends Error {
+  constructor(message: string, public readonly statusCode: number) {
+    super(message);
+    this.name = "IngredientError";
+  }
+}
+
 // ─── Org-wide ingredient catalog ──────────────────────────────────
 
 /**
@@ -114,13 +121,13 @@ export async function changeKitchenUnit(
   newUnit: string,
   factor: number,
 ): Promise<void> {
-  if (!(factor > 0)) throw new Error("factor must be > 0");
+  if (!(factor > 0)) throw new IngredientError("factor must be > 0", 400);
   await db.transaction(async (tx) => {
     const [ing] = await tx
       .select()
       .from(ingredient)
       .where(and(eq(ingredient.ingredientId, ingredientId), eq(ingredient.organisationId, organisationId)));
-    if (!ing) throw new Error("Ingredient not found in this organisation");
+    if (!ing) throw new IngredientError("Ingredient not found in this organisation", 404);
 
     const f = String(factor);
     await tx.execute(sql`
@@ -222,6 +229,7 @@ export async function getIngredientUsage(ingredientId: string) {
     .where(eq(menuItemIngredient.ingredientId, ingredientId));
 }
 
+/** Soft-deletes an ingredient by marking it inactive; preserves transaction history. */
 export async function softDeleteIngredient(
   ingredientId: string,
   organisationId: number,
@@ -239,10 +247,10 @@ export async function softDeleteIngredient(
       );
 
     if (!existing) {
-      throw new Error("Ingredient not found in this organisation");
+      throw new IngredientError("Ingredient not found in this organisation", 404);
     }
     if (existing.deletedAt) {
-      throw new Error("Ingredient is already soft-deleted");
+      throw new IngredientError("Ingredient is already soft-deleted", 409);
     }
 
     const now = new Date();
@@ -291,10 +299,10 @@ export async function restoreIngredient(
       );
 
     if (!existing) {
-      throw new Error("Ingredient not found in this organisation");
+      throw new IngredientError("Ingredient not found in this organisation", 404);
     }
     if (!existing.deletedAt) {
-      throw new Error("Ingredient is not soft-deleted");
+      throw new IngredientError("Ingredient is not soft-deleted", 409);
     }
 
     const [updated] = await tx
@@ -780,7 +788,7 @@ export async function setSupplierLocations(
         ),
       );
     if (valid.length !== locationIds.length) {
-      throw new Error("One or more location IDs do not belong to your organisation");
+      throw new IngredientError("One or more location IDs do not belong to your organisation", 400);
     }
   }
 
@@ -1039,7 +1047,7 @@ export async function bulkActivateItems(
   const validIds = new Set(valid.map((r) => r.ingredientId));
   const invalidIds = ingredientIds.filter((id) => !validIds.has(id));
   if (invalidIds.length) {
-    throw new Error(`Ingredients not found in organisation: ${invalidIds.join(", ")}`);
+    throw new IngredientError(`Ingredients not found in organisation: ${invalidIds.join(", ")}`, 404);
   }
 
   // Upsert location_ingredient rows — set active_ind = true
@@ -1085,7 +1093,7 @@ export async function bulkDeactivateItems(
   const validIds = new Set(valid.map((r) => r.ingredientId));
   const invalidIds = ingredientIds.filter((id) => !validIds.has(id));
   if (invalidIds.length) {
-    throw new Error(`Ingredients not found in organisation: ${invalidIds.join(", ")}`);
+    throw new IngredientError(`Ingredients not found in organisation: ${invalidIds.join(", ")}`, 404);
   }
 
   await db
@@ -1125,7 +1133,7 @@ export async function copyActivationFromLocation(
     );
 
   if (!sourceItems.length) {
-    throw new Error("Source location has no activated items");
+    throw new IngredientError("Source location has no activated items", 422);
   }
 
   let copied = 0;

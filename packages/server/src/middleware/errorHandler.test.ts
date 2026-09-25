@@ -66,4 +66,24 @@ describe("errorHandler", () => {
     expect(res.status).not.toHaveBeenCalled();
     expect(res.json).not.toHaveBeenCalled();
   });
+
+  it("uses statusCode from typed domain errors (e.g. IngredientError)", () => {
+    const err = Object.assign(new Error("Ingredient not found in this organisation"), { statusCode: 404 });
+    const res = mockRes();
+
+    errorHandler(err, mockReq, res, mockNext);
+
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(res.json).toHaveBeenCalledWith({ error: "Ingredient not found in this organisation" });
+  });
+
+  it("ignores out-of-range statusCode (falls through to 500)", () => {
+    const err = Object.assign(new Error("weird lib error"), { statusCode: 3 });
+    const res = mockRes();
+
+    errorHandler(err, mockReq, res, mockNext);
+
+    expect(res.status).toHaveBeenCalledWith(500);
+    expect(res.json).toHaveBeenCalledWith({ error: "Internal server error" });
+  });
 });

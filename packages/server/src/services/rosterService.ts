@@ -85,6 +85,7 @@ export class RoleVenueConflictError extends RosterError {
 // Exported — reused by the Phase 3 workforce services (demand, staffing
 // coverage), which all need the same "does this venue belong to this org"
 // guard rosterService.ts already established.
+/** Throws if the given location does not belong to the org. */
 export async function assertLocationInOrg(locationId: string, orgId: number): Promise<void> {
   const [loc] = await db
     .select({ id: storeLocation.storeLocationId })
@@ -126,10 +127,12 @@ export interface CreateRoleInput {
   storeLocationId?: string | null;
 }
 
+/** Lists all roster roles for the org. */
 export async function listRoles(orgId: number) {
   return db.select().from(rosterRole).where(eq(rosterRole.organisationId, orgId)).orderBy(asc(rosterRole.roleName));
 }
 
+/** Creates a new roster role for the org. */
 export async function createRole(orgId: number, input: CreateRoleInput) {
   const roleName = input.roleName.trim();
   if (!roleName) throw new RosterError("Role name is required", 400);
@@ -182,6 +185,7 @@ async function getRoleTemplateConflicts(
   return rows;
 }
 
+/** Updates an existing roster role. */
 export async function updateRole(
   orgId: number,
   roleId: string,
@@ -211,6 +215,7 @@ export async function updateRole(
   return updated;
 }
 
+/** Deletes a roster role, failing if staff are currently assigned to it. */
 export async function deleteRole(orgId: number, roleId: string): Promise<void> {
   await getRoleRow(orgId, roleId);
   const [inUse] = await db.select({ id: shift.shiftId }).from(shift).where(eq(shift.rosterRoleId, roleId)).limit(1);
@@ -224,6 +229,7 @@ export async function deleteRole(orgId: number, roleId: string): Promise<void> {
   await db.delete(rosterRole).where(eq(rosterRole.rosterRoleId, roleId));
 }
 
+/** Lists compliance documents required for a given role. */
 export async function listRoleDocuments(orgId: number, roleId: string): Promise<string[]> {
   await getRoleRow(orgId, roleId);
   const rows = await db
@@ -276,6 +282,7 @@ function parseFilterDateEnd(value: string): Date {
   return new Date(parseFilterDate(value).getTime() + 24 * 60 * 60 * 1000);
 }
 
+/** Returns shifts for the org, optionally filtered by date range, location, and role. */
 export async function listShifts(orgId: number, filters: ShiftFilters = {}) {
   const conditions = [eq(shift.organisationId, orgId)];
   if (filters.storeLocationId) conditions.push(eq(shift.storeLocationId, filters.storeLocationId));
@@ -420,6 +427,7 @@ export interface CreateShiftInput {
   isPublicHoliday?: boolean;
 }
 
+/** Creates a new shift for the org. */
 export async function createShift(orgId: number, input: CreateShiftInput, createdBy: number) {
   await assertLocationInOrg(input.storeLocationId, orgId);
   await getRoleRow(orgId, input.rosterRoleId);
@@ -451,6 +459,7 @@ export interface UpdateShiftInput {
   endDatetime?: string;
 }
 
+/** Updates an existing shift. */
 export async function updateShift(orgId: number, shiftId: string, input: UpdateShiftInput, actorUserId: number) {
   const row = await getShiftRow(orgId, shiftId);
   if (row.status !== "Draft") throw new RosterError("Only a Draft shift can be edited", 409);
@@ -479,6 +488,7 @@ export async function updateShift(orgId: number, shiftId: string, input: UpdateS
   return updated;
 }
 
+/** Cancels a shift, notifying any assigned staff. */
 export async function cancelShift(orgId: number, shiftId: string) {
   await getShiftRow(orgId, shiftId);
   const [updated] = await db
@@ -584,6 +594,7 @@ async function assertNoTemplateOverlap(
   }
 }
 
+/** Lists roster template rows for the org, optionally scoped to a location. */
 export async function listTemplates(orgId: number, storeLocationId?: string) {
   const conditions = [eq(rosterShiftTemplate.organisationId, orgId)];
   if (storeLocationId) conditions.push(eq(rosterShiftTemplate.storeLocationId, storeLocationId));
@@ -594,6 +605,7 @@ export async function listTemplates(orgId: number, storeLocationId?: string) {
     .orderBy(asc(rosterShiftTemplate.dayOfWeek), asc(rosterShiftTemplate.startTime));
 }
 
+/** Creates a roster template row. */
 export async function createTemplateRow(orgId: number, input: TemplateRowInput) {
   await assertLocationInOrg(input.storeLocationId, orgId);
   await assertRoleValidAtLocation(orgId, input.rosterRoleId, input.storeLocationId);
@@ -614,6 +626,7 @@ export async function createTemplateRow(orgId: number, input: TemplateRowInput) 
   return created;
 }
 
+/** Updates a roster template row. */
 export async function updateTemplateRow(orgId: number, templateRowId: string, input: TemplateRowInput) {
   await getTemplateRow(orgId, templateRowId);
   await assertLocationInOrg(input.storeLocationId, orgId);
@@ -643,6 +656,7 @@ export async function updateTemplateRow(orgId: number, templateRowId: string, in
   return updated;
 }
 
+/** Deletes a roster template row. */
 export async function deleteTemplateRow(orgId: number, templateRowId: string): Promise<void> {
   await getTemplateRow(orgId, templateRowId);
   await db.delete(rosterShiftTemplate).where(eq(rosterShiftTemplate.rosterShiftTemplateId, templateRowId));
@@ -838,6 +852,7 @@ function validateAvailabilityInput(input: AvailabilityInput): void {
   }
 }
 
+/** Returns all availability windows for the given user. */
 export async function listAvailabilityForUser(orgId: number, userId: number) {
   return db
     .select()
@@ -855,6 +870,7 @@ export async function listAvailabilityForOrg(orgId: number) {
     .orderBy(asc(staffAvailability.userId), asc(staffAvailability.dayOfWeek));
 }
 
+/** Creates an availability window for a user. */
 export async function createAvailability(orgId: number, userId: number, input: AvailabilityInput) {
   if (input.storeLocationId) await assertLocationInOrg(input.storeLocationId, orgId);
   validateAvailabilityInput(input);
@@ -894,6 +910,7 @@ export function isOwnAvailability(row: { userId: number }, callerUserId: number)
   return row.userId === callerUserId;
 }
 
+/** Updates a user's availability window. */
 export async function updateAvailability(
   orgId: number,
   availabilityId: string,
@@ -921,6 +938,7 @@ export async function updateAvailability(
   return updated;
 }
 
+/** Deletes a user's availability window. */
 export async function deleteAvailability(orgId: number, availabilityId: string, callerUserId: number): Promise<void> {
   const row = await getAvailabilityRow(orgId, availabilityId);
   if (!isOwnAvailability(row, callerUserId)) throw new RosterError("Availability window not found", 404);
@@ -943,6 +961,7 @@ export async function resolveJurisdiction(storeLocationId: string): Promise<stri
   return normalizeJurisdiction(loc?.state);
 }
 
+/** Returns the IANA timezone for the given store location. */
 export async function getVenueTimezone(storeLocationId: string): Promise<string> {
   const [loc] = await db
     .select({ ianaTimezone: storeLocation.ianaTimezone })
@@ -1051,6 +1070,7 @@ async function getActiveRule(documentType: string, jurisdiction: string | null, 
 // Exported — reused by shiftSwapService.ts to re-run the exact same
 // canAssign gate against a swap-claim candidate, rather than a second copy
 // of this role-requirements lookup.
+/** Returns compliance document requirements for a role. */
 export async function getRequirementsForRole(
   roleId: string,
   jurisdiction: string | null,
@@ -1070,6 +1090,7 @@ export async function getRequirementsForRole(
 }
 
 // Exported for the same reason as getRequirementsForRole above.
+/** Returns compliance documents held by a user, optionally filtered by type. */
 export async function getHeldDocuments(orgId: number, userId: number, documentTypes: string[]): Promise<HeldDocument[]> {
   if (documentTypes.length === 0) return [];
   const rows = await db
@@ -1111,6 +1132,7 @@ const REASON_TEXT: Record<string, string> = {
 // Exported — reused by staffingCoverageService.ts to describe an existing
 // assignment's compliance gap in the same wording assignStaff's own live
 // refusal already uses, rather than a second copy drifting from it.
+/** Returns a human-readable refusal message for a blocked shift assignment. */
 export function refusalMessage(
   staffName: string,
   documentType: string,
@@ -1182,6 +1204,7 @@ export async function insertOrReactivateAssignment(
   return row ?? null;
 }
 
+/** Assigns a staff member to a shift, enforcing compliance and availability rules. */
 export async function assignStaff(orgId: number, shiftId: string, userId: number, actorUserId: number) {
   const shiftRow = await getShiftRow(orgId, shiftId);
   // Same rule as updateShift: only a Draft shift can gain a new assignee.
@@ -1275,6 +1298,7 @@ export function isOwnAssignment(row: { userId: number }, callerUserId: number): 
   return row.userId === callerUserId;
 }
 
+/** Records a staff member's acceptance or rejection of a shift assignment. */
 export async function respondToAssignment(
   orgId: number,
   assignmentId: string,
@@ -1302,6 +1326,7 @@ export async function respondToAssignment(
   return updated;
 }
 
+/** Removes a staff assignment from a shift. */
 export async function removeAssignment(orgId: number, assignmentId: string, actorUserId: number): Promise<void> {
   const row = await getAssignmentRow(orgId, assignmentId);
   await db.delete(shiftAssignment).where(eq(shiftAssignment.assignmentId, assignmentId));

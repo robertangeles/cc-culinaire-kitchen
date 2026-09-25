@@ -30,6 +30,13 @@ import { recordOpsEvent } from "./brainCaptureService.js";
 
 const logger = pino({ name: "prepService" });
 
+export class PrepError extends Error {
+  constructor(message: string, public readonly statusCode: number) {
+    super(message);
+    this.name = "PrepError";
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -204,6 +211,7 @@ function parseAmountToNumber(amount: string): number {
 // createPrepSession — creates session WITHOUT auto-generating tasks
 // ---------------------------------------------------------------------------
 
+/** Creates a prep session for the given user and date without auto-generating tasks. */
 export async function createPrepSession(
   userId: number,
   prepDate: string,
@@ -240,6 +248,7 @@ export async function createPrepSession(
 // getMenuForSelection — returns dishes available for the chef to pick
 // ---------------------------------------------------------------------------
 
+/** Returns the list of menu items available for a chef to select for a prep session. */
 export async function getMenuForSelection(
   userId: number,
   teamView?: boolean,
@@ -367,6 +376,7 @@ export async function suggestSelections(
 // saveMenuSelections — persist the chef's dish picks for a session
 // ---------------------------------------------------------------------------
 
+/** Persists the chef's dish picks for a prep session. */
 export async function saveMenuSelections(
   sessionId: string,
   userId: number,
@@ -379,10 +389,10 @@ export async function saveMenuSelections(
     .where(and(eq(prepSession.prepSessionId, sessionId), eq(prepSession.userId, userId)));
 
   if (!session) {
-    throw new Error("Prep session not found or not yours");
+    throw new PrepError("Prep session not found or not yours", 404);
   }
   if (session.isEndedInd) {
-    throw new Error("Cannot modify an ended prep session");
+    throw new PrepError("Cannot modify an ended prep session", 409);
   }
 
   const rows = await db.transaction(async (tx) => {
@@ -419,6 +429,7 @@ export async function saveMenuSelections(
 // getSelections — get selections for a session
 // ---------------------------------------------------------------------------
 
+/** Returns the dish selections saved for a given prep session. */
 export async function getSelections(
   sessionId: string,
   userId: number,
@@ -450,6 +461,7 @@ export async function getSelections(
 // generateTasksFromSelections — THE KEY FUNCTION
 // ---------------------------------------------------------------------------
 
+/** Generates prep tasks from the saved menu selections for a session. */
 export async function generateTasksFromSelections(
   sessionId: string,
   userId: number,
@@ -461,10 +473,10 @@ export async function generateTasksFromSelections(
     .where(and(eq(prepSession.prepSessionId, sessionId), eq(prepSession.userId, userId)));
 
   if (!session) {
-    throw new Error("Prep session not found or not yours");
+    throw new PrepError("Prep session not found or not yours", 404);
   }
   if (session.isEndedInd) {
-    throw new Error("Cannot modify an ended prep session");
+    throw new PrepError("Cannot modify an ended prep session", 409);
   }
 
   // Read selections (the clears + re-inserts happen atomically in the txn below)
@@ -731,6 +743,7 @@ export async function generateTasksFromSelections(
 // getPreviousSelections — get most recent session's selections for quick re-use
 // ---------------------------------------------------------------------------
 
+/** Returns the most recent session's selections for quick re-use. */
 export async function getPreviousSelections(
   userId: number,
   teamView?: boolean,
@@ -771,6 +784,7 @@ export async function getPreviousSelections(
 // getTodaySession — find existing session for today, no auto-create
 // ---------------------------------------------------------------------------
 
+/** Finds an existing prep session for today without creating one. */
 export async function getTodaySession(
   userId: number,
   teamView?: boolean,
@@ -812,6 +826,7 @@ export async function getTodaySession(
 // getPrepSession
 // ---------------------------------------------------------------------------
 
+/** Returns a prep session by ID, scoped to the given user. */
 export async function getPrepSession(
   sessionId: string,
   userId: number,
@@ -847,6 +862,7 @@ export async function getPrepSession(
 // updateTaskStatus
 // ---------------------------------------------------------------------------
 
+/** Updates the status of a single prep task. */
 export async function updateTaskStatus(
   taskId: string,
   userId: number,
@@ -971,6 +987,7 @@ export async function updateTaskStatus(
 // getIngredientCrossUsage
 // ---------------------------------------------------------------------------
 
+/** Returns cross-usage data showing which ingredients appear across multiple prep tasks. */
 export async function getIngredientCrossUsage(
   sessionId: string,
   userId?: number,
@@ -1032,6 +1049,7 @@ export async function getIngredientCrossUsage(
 // getHighImpactDishes
 // ---------------------------------------------------------------------------
 
+/** Returns dishes with the highest prep impact based on ingredient volume. */
 export async function getHighImpactDishes(
   userId: number,
   teamView?: boolean,
@@ -1143,6 +1161,7 @@ export async function getHighImpactDishes(
 // getSessionHistory
 // ---------------------------------------------------------------------------
 
+/** Returns paginated prep session history for the given user. */
 export async function getSessionHistory(
   userId: number,
   limit: number = 20,
@@ -1176,6 +1195,7 @@ export async function getSessionHistory(
 // endSession
 // ---------------------------------------------------------------------------
 
+/** Marks a prep session as ended and records actual covers. */
 export async function endSession(
   sessionId: string,
   userId: number,

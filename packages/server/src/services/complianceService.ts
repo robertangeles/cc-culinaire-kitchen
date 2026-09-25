@@ -201,6 +201,7 @@ export async function getDocument(orgId: number, documentId: string) {
   return getDocumentRow(orgId, documentId);
 }
 
+/** Creates a new compliance document record for the given org. */
 export async function createDocument(orgId: number, input: CreateDocumentInput) {
   const documentType = input.documentType.trim();
   if (!documentType) throw new ComplianceError("Document type is required", 400);
@@ -473,6 +474,7 @@ export async function deleteDocument(
   });
 }
 
+/** Marks a compliance document as verified by the given verifier. */
 export async function verifyDocument(orgId: number, documentId: string, verifierUserId: number) {
   const doc = await getDocumentRow(orgId, documentId);
   if (doc.verificationStatus !== "Pending") {
@@ -513,6 +515,7 @@ export async function verifyDocument(orgId: number, documentId: string, verifier
   return updated;
 }
 
+/** Rejects a compliance document, optionally recording a rejection reason. */
 export async function rejectDocument(
   orgId: number,
   documentId: string,
@@ -829,6 +832,7 @@ export function statusVariant(
   return expiryDate <= cutoff.toISOString().slice(0, 10) ? "expiring" : "compliant";
 }
 
+/** Returns aggregate compliance stats and per-staff document status for the org dashboard. */
 export async function getComplianceDashboard(orgId: number): Promise<ComplianceDashboard> {
   const [staffRow] = await db
     .select({ n: sql<number>`count(DISTINCT ${userOrganisation.userId})::int` })

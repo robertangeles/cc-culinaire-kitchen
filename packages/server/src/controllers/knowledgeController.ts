@@ -17,6 +17,7 @@ import {
   deleteDocument,
   listDocuments,
   getDocument,
+  KnowledgeError,
 } from "../services/knowledgeManagementService.js";
 
 const logger = pino({ name: "knowledgeController" });
@@ -148,8 +149,8 @@ export async function handleSubmitUrl(
     logger.info({ documentId, url: parsed.data.url }, "URL ingestion started");
     res.status(202).json({ documentId, status: "processing" });
   } catch (err: unknown) {
-    if (err instanceof Error && err.message.includes("URL not allowed")) {
-      res.status(400).json({ error: err.message });
+    if (err instanceof KnowledgeError) {
+      res.status(err.statusCode).json({ error: err.message });
       return;
     }
     next(err);
@@ -195,15 +196,14 @@ export async function handleReEmbed(
     await reEmbedDocument(id);
     res.json({ documentId: id, status: "processing" });
   } catch (err: unknown) {
-    if (err instanceof Error) {
-      if (err.message === "DOCUMENT_NOT_FOUND") {
-        res.status(404).json({ error: "Document not found." });
-        return;
-      }
-      if (err.message === "ALREADY_PROCESSING") {
-        res.status(409).json({ error: "Document is already being processed." });
-        return;
-      }
+    if (err instanceof KnowledgeError) {
+      const msg = err.message === "DOCUMENT_NOT_FOUND"
+        ? "Document not found."
+        : err.message === "ALREADY_PROCESSING"
+          ? "Document is already being processed."
+          : err.message;
+      res.status(err.statusCode).json({ error: msg });
+      return;
     }
     next(err);
   }
