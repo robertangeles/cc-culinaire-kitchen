@@ -59,7 +59,6 @@ import {
 } from "./ingredientController.js";
 import {
   createSupplier,
-  setSupplierLocations,
   updateSupplier,
   IngredientError,
 } from "../services/ingredientService.js";
