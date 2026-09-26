@@ -16,14 +16,10 @@ import {
   documentExpiryRule,
   shiftAssignment,
 } from "../db/schema.js";
-import { canAssign, type HeldDocument, type AssignmentRequirement } from "./rosterAssignmentRules.js";
+import { type HeldDocument, type AssignmentRequirement } from "./rosterAssignmentRules.js";
 import { normalizeJurisdiction } from "./jurisdiction.js";
 import { formatAuDate } from "@culinaire/shared";
-import {
-  RosterError,
-  type AssignmentBlockedInfo,
-  type RoleVenueConflict,
-} from "./rosterErrors.js";
+import { RosterError } from "./rosterErrors.js";
 import type { DbOrTx } from "./auditService.js";
 
 export { RosterError, AssignmentBlockedError, RoleVenueConflictError } from "./rosterErrors.js";

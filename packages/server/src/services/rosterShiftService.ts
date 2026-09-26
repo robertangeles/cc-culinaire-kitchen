@@ -6,7 +6,7 @@
  * for backward compatibility.
  */
 
-import { eq, and, ne, gte, lt, inArray, isNotNull, asc, desc } from "drizzle-orm";
+import { eq, and, ne, gte, lt, inArray, isNotNull, asc } from "drizzle-orm";
 import { db } from "../db/index.js";
 import {
   rosterRole,
