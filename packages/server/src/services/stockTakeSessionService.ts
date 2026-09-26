@@ -6,7 +6,7 @@
  *
  * Session state machine:
  *   OPEN → PENDING_REVIEW → APPROVED | FLAGGED
- *   FLAGGED → OPEN (reopened) → PENDING_REVIEW
+ *   FLAGGED → PENDING_REVIEW (re-submit via submitSessionForReview)
  *   APPROVED → ARCHIVED
  *
  * Every query is scoped by organisationId (via storeLocation FK) so a guessed
