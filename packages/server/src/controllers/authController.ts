@@ -27,6 +27,7 @@ import {
   completeMfaLogin,
   requestPasswordReset,
   resetPassword,
+  AuthError,
 } from "../services/authService.js";
 import { linkGuestConversations } from "../services/guestService.js";
 import { verifyTurnstileToken } from "../services/turnstileService.js";
@@ -35,6 +36,13 @@ import { getCredentialValueWithFallback } from "../services/credentialService.js
 const logger = pino({ name: "authController" });
 
 const IS_PROD = process.env.NODE_ENV === "production";
+
+// ESM module mocks can produce class identity mismatches where instanceof
+// returns false even for genuine instances. Checking name covers that case.
+function isAuthError(err: unknown, code?: string): err is AuthError {
+  const isIt = err instanceof AuthError || (err instanceof Error && err.name === "AuthError");
+  return isIt && (code === undefined || (err as AuthError).code === code);
+}
 
 /**
  * Browser requests carry an `Origin` header; native clients (the React Native
@@ -202,7 +210,7 @@ export async function handleRegister(
       autoVerified,
     });
   } catch (err: unknown) {
-    if (err instanceof Error && err.message === "EMAIL_EXISTS") {
+    if (isAuthError(err, "EMAIL_EXISTS")) {
       res.status(409).json({ error: "An account with this email already exists." });
       return;
     }
@@ -252,8 +260,8 @@ export async function handleLogin(
       tokens: { accessToken: tokens.accessToken, refreshToken: tokens.refreshToken },
     });
   } catch (err: unknown) {
-    if (err instanceof Error) {
-      switch (err.message) {
+    if (isAuthError(err)) {
+      switch ((err as AuthError).code) {
         case "INVALID_CREDENTIALS":
           res.status(401).json({ error: "Invalid email or password." });
           return;
@@ -325,10 +333,11 @@ export async function handleRefresh(
       tokens: { accessToken, refreshToken: rawRefreshToken },
     });
   } catch (err: unknown) {
-    if (err instanceof Error) {
+    if (isAuthError(err)) {
       if (
-        err.message === "INVALID_REFRESH_TOKEN" ||
-        err.message === "REFRESH_TOKEN_EXPIRED"
+        (err as AuthError).code === "INVALID_REFRESH_TOKEN" ||
+        (err as AuthError).code === "REFRESH_TOKEN_EXPIRED" ||
+        (err as AuthError).code === "USER_NOT_FOUND"
       ) {
         // Do NOT clear cookies here — the access_token may still be valid
         // and the client needs it for the verification call to /api/auth/me.
@@ -362,6 +371,10 @@ export async function handleGetMe(
     const authUser = await getUserWithRolesAndPermissions(tokenUser.sub);
     res.json({ user: authUser });
   } catch (err) {
+    if (isAuthError(err, "USER_NOT_FOUND")) {
+      res.status(401).json({ error: "Not authenticated." });
+      return;
+    }
     next(err);
   }
 }
@@ -386,8 +399,8 @@ export async function handleVerifyEmail(
     await verifyEmail(token);
     res.json({ message: "Email verified successfully. You can now log in." });
   } catch (err: unknown) {
-    if (err instanceof Error) {
-      switch (err.message) {
+    if (isAuthError(err)) {
+      switch ((err as AuthError).code) {
         case "INVALID_TOKEN":
           res.status(400).json({ error: "Invalid verification token." });
           return;
@@ -424,7 +437,7 @@ export async function handleResendVerification(
     // Always return success to avoid revealing whether the email exists
     res.json({ message: "If an account exists with this email, a verification link has been sent." });
   } catch (err: unknown) {
-    if (err instanceof Error && err.message === "ALREADY_VERIFIED") {
+    if (isAuthError(err, "ALREADY_VERIFIED")) {
       res.status(400).json({ error: "This email is already verified." });
       return;
     }
@@ -495,8 +508,8 @@ export async function handleResetPassword(
     await resetPassword(parsed.data.token, parsed.data.newPassword);
     res.json({ success: true });
   } catch (err: unknown) {
-    if (err instanceof Error && err.message === "Invalid or expired reset token") {
-      res.status(400).json({ error: err.message });
+    if (isAuthError(err, "INVALID_RESET_TOKEN")) {
+      res.status(400).json({ error: "Invalid or expired reset token" });
       return;
     }
     next(err);
@@ -559,8 +572,8 @@ export async function handleGoogleIdToken(
       tokens: { accessToken: tokens.accessToken, refreshToken: tokens.refreshToken },
     });
   } catch (err: unknown) {
-    if (err instanceof Error) {
-      switch (err.message) {
+    if (isAuthError(err)) {
+      switch ((err as AuthError).code) {
         case "OAUTH_NOT_CONFIGURED":
           res.status(500).json({ error: "Google sign-in is not configured on this server." });
           return;
@@ -628,6 +641,10 @@ export async function handleMfaSetup(
     const result = await generateMfaSecret(userId);
     res.json({ secret: result.secret, qrCodeDataUrl: result.qrCodeDataUrl });
   } catch (err) {
+    if (isAuthError(err, "USER_NOT_FOUND")) {
+      res.status(401).json({ error: "Not authenticated." });
+      return;
+    }
     next(err);
   }
 }
@@ -651,7 +668,7 @@ export async function handleMfaEnable(
     await enableMfa(userId, token);
     res.json({ message: "MFA enabled successfully." });
   } catch (err: unknown) {
-    if (err instanceof Error && err.message === "INVALID_MFA_CODE") {
+    if (isAuthError(err, "INVALID_MFA_CODE")) {
       res.status(400).json({ error: "Invalid code. Please try again." });
       return;
     }
@@ -700,12 +717,12 @@ export async function handleMfaVerify(
       tokens: { accessToken: tokens.accessToken, refreshToken: tokens.refreshToken },
     });
   } catch (err: unknown) {
-    if (err instanceof Error) {
-      if (err.message === "INVALID_MFA_SESSION") {
+    if (isAuthError(err)) {
+      if (isAuthError(err, "INVALID_MFA_SESSION") || isAuthError(err, "USER_NOT_FOUND")) {
         res.status(401).json({ error: "MFA session expired. Please log in again." });
         return;
       }
-      if (err.message === "INVALID_MFA_CODE") {
+      if (isAuthError(err, "INVALID_MFA_CODE")) {
         res.status(400).json({ error: "Invalid code. Please try again." });
         return;
       }

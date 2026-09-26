@@ -22,6 +22,7 @@ import {
   generateTasksFromSelections,
   getSelections,
   getPreviousSelections,
+  PrepError,
 } from "../services/prepService.js";
 
 // ---------------------------------------------------------------------------
@@ -313,9 +314,9 @@ export async function handleSaveSelections(req: Request, res: Response) {
   try {
     const selections = await saveMenuSelections(sessionId, userId, parsed.data.selections);
     res.status(201).json(selections);
-  } catch (err: any) {
-    if (err.message === "Prep session not found or not yours") {
-      res.status(404).json({ error: err.message });
+  } catch (err: unknown) {
+    if ((err instanceof Error && err.name === "PrepError") || err instanceof PrepError) {
+      res.status((err as PrepError).statusCode).json({ error: (err as Error).message });
       return;
     }
     throw err;
@@ -339,9 +340,9 @@ export async function handleGenerateFromSelections(req: Request, res: Response) 
   try {
     const tasks = await generateTasksFromSelections(sessionId, userId);
     res.status(201).json(tasks);
-  } catch (err: any) {
-    if (err.message === "Prep session not found or not yours") {
-      res.status(404).json({ error: err.message });
+  } catch (err: unknown) {
+    if ((err instanceof Error && err.name === "PrepError") || err instanceof PrepError) {
+      res.status((err as PrepError).statusCode).json({ error: (err as Error).message });
       return;
     }
     throw err;

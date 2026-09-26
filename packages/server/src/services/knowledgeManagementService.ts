@@ -22,6 +22,13 @@ import { embedText } from "./knowledgeService.js";
 
 const logger = pino({ name: "knowledgeManagement" });
 
+export class KnowledgeError extends Error {
+  constructor(message: string, public readonly statusCode: number) {
+    super(message);
+    this.name = "KnowledgeError";
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -106,7 +113,7 @@ async function extractFromPdfWithOcr(buffer: Buffer): Promise<string> {
   logger.info({ totalPages: pageNum, pagesWithText: pages.length }, "OCR extraction complete");
 
   if (pages.length === 0) {
-    throw new Error("OCR could not extract text from this PDF. The document may contain only images or unsupported content.");
+    throw new KnowledgeError("OCR could not extract text from this PDF. The document may contain only images or unsupported content.", 422);
   }
 
   return pages.join("\n\n");
@@ -133,13 +140,13 @@ async function extractFromUrl(url: string): Promise<string> {
     });
 
     if (!res.ok) {
-      throw new Error(`URL returned HTTP ${res.status}`);
+      throw new KnowledgeError(`URL returned HTTP ${res.status}`, 422);
     }
 
     const contentType = res.headers.get("content-type") || "";
     const contentLength = parseInt(res.headers.get("content-length") || "0", 10);
     if (contentLength > 5 * 1024 * 1024) {
-      throw new Error("Page too large (>5MB)");
+      throw new KnowledgeError("Page too large (>5MB)", 413);
     }
 
     // If the URL points to a PDF, extract via pdf-parse
@@ -150,7 +157,7 @@ async function extractFromUrl(url: string): Promise<string> {
 
     const html = await res.text();
     if (html.length > 5 * 1024 * 1024) {
-      throw new Error("Page too large (>5MB)");
+      throw new KnowledgeError("Page too large (>5MB)", 413);
     }
 
     const cheerio = await import("cheerio");
@@ -274,7 +281,7 @@ async function extractText(buffer: Buffer, mimeType: string): Promise<string> {
     case "text/markdown":
       return extractFromMd(buffer);
     default:
-      throw new Error(`Unsupported file type: ${mimeType}`);
+      throw new KnowledgeError(`Unsupported file type: ${mimeType}`, 415);
   }
 }
 
@@ -287,11 +294,11 @@ function validateUrlSafety(url: string): void {
   try {
     parsed = new URL(url);
   } catch {
-    throw new Error("Invalid URL format");
+    throw new KnowledgeError("Invalid URL format", 400);
   }
 
   if (!["http:", "https:"].includes(parsed.protocol)) {
-    throw new Error("Only HTTP and HTTPS URLs are allowed");
+    throw new KnowledgeError("Only HTTP and HTTPS URLs are allowed", 400);
   }
 
   const hostname = parsed.hostname;
@@ -319,7 +326,7 @@ function validateUrlSafety(url: string): void {
   ];
 
   if (blocked.some((re) => re.test(hostname)) || blockedHosts.includes(hostname.toLowerCase())) {
-    throw new Error("URL not allowed: private or reserved address");
+    throw new KnowledgeError("URL not allowed: private or reserved address", 400);
   }
 }
 
@@ -806,8 +813,8 @@ export async function reEmbedDocument(documentId: number): Promise<void> {
     .from(knowledgeDocument)
     .where(eq(knowledgeDocument.documentId, documentId));
 
-  if (!doc) throw new Error("DOCUMENT_NOT_FOUND");
-  if (doc.status === "processing") throw new Error("ALREADY_PROCESSING");
+  if (!doc) throw new KnowledgeError("DOCUMENT_NOT_FOUND", 404);
+  if (doc.status === "processing") throw new KnowledgeError("ALREADY_PROCESSING", 409);
 
   // Set to processing
   await db

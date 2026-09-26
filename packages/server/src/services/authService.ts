@@ -28,6 +28,17 @@ import { sendVerificationEmail, sendPasswordResetEmail } from "./emailService.js
 import { encryptUserPii, decryptUserPii, hashForLookup } from "./piiService.js";
 import { getAllSettings } from "./settingsService.js";
 
+export class AuthError extends Error {
+  constructor(
+    message: string,
+    public readonly code: string,
+    public readonly statusCode: number,
+  ) {
+    super(message);
+    this.name = "AuthError";
+  }
+}
+
 const DEFAULT_REGISTERED_SESSIONS = 10;
 
 const BCRYPT_ROUNDS = parseInt(process.env.BCRYPT_ROUNDS ?? "12", 10);
@@ -88,7 +99,7 @@ export async function registerUser(
     .where(eq(user.userEmail, email.toLowerCase()));
 
   if (existing.length > 0) {
-    throw new Error("EMAIL_EXISTS");
+    throw new AuthError("EMAIL_EXISTS", "EMAIL_EXISTS", 409);
   }
 
   const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
@@ -186,24 +197,24 @@ export async function loginUser(
     );
 
   if (!row || !row.userPasswordHash) {
-    throw new Error("INVALID_CREDENTIALS");
+    throw new AuthError("INVALID_CREDENTIALS", "INVALID_CREDENTIALS", 401);
   }
 
   const passwordValid = await bcrypt.compare(password, row.userPasswordHash);
   if (!passwordValid) {
-    throw new Error("INVALID_CREDENTIALS");
+    throw new AuthError("INVALID_CREDENTIALS", "INVALID_CREDENTIALS", 401);
   }
 
   if (!row.emailVerifiedInd) {
-    throw new Error("EMAIL_NOT_VERIFIED");
+    throw new AuthError("EMAIL_NOT_VERIFIED", "EMAIL_NOT_VERIFIED", 403);
   }
 
   if (row.userStatus === "suspended") {
-    throw new Error("ACCOUNT_SUSPENDED");
+    throw new AuthError("ACCOUNT_SUSPENDED", "ACCOUNT_SUSPENDED", 403);
   }
 
   if (row.userStatus === "cancelled") {
-    throw new Error("ACCOUNT_CANCELLED");
+    throw new AuthError("ACCOUNT_CANCELLED", "ACCOUNT_CANCELLED", 403);
   }
 
   // If MFA is enabled, return a temporary session token instead of full auth
@@ -247,7 +258,7 @@ export async function getUserWithRolesAndPermissions(
     })
     .from(user)
     .where(eq(user.userId, userId));
-  if (!row) throw new Error("USER_NOT_FOUND");
+  if (!row) throw new AuthError("USER_NOT_FOUND", "USER_NOT_FOUND", 404);
 
   // Decrypt PII fields (falls back to plaintext if encrypted values not yet populated)
   const pii = decryptUserPii(row as unknown as Record<string, unknown>);
@@ -365,7 +376,7 @@ export async function refreshAccessToken(rawToken: string) {
     .where(eq(refreshToken.tokenHash, tokenHash));
 
   if (!stored) {
-    throw new Error("INVALID_REFRESH_TOKEN");
+    throw new AuthError("INVALID_REFRESH_TOKEN", "INVALID_REFRESH_TOKEN", 401);
   }
 
   if (stored.expiresAtDttm < new Date()) {
@@ -373,7 +384,7 @@ export async function refreshAccessToken(rawToken: string) {
     await db
       .delete(refreshToken)
       .where(eq(refreshToken.refreshTokenId, stored.refreshTokenId));
-    throw new Error("REFRESH_TOKEN_EXPIRED");
+    throw new AuthError("REFRESH_TOKEN_EXPIRED", "REFRESH_TOKEN_EXPIRED", 401);
   }
 
   const authUser = await getUserWithRolesAndPermissions(stored.userId);
@@ -421,15 +432,15 @@ export async function verifyEmail(token: string): Promise<void> {
     .where(eq(emailVerification.verificationToken, token));
 
   if (!row) {
-    throw new Error("INVALID_TOKEN");
+    throw new AuthError("INVALID_TOKEN", "INVALID_TOKEN", 400);
   }
 
   if (row.usedInd) {
-    throw new Error("TOKEN_ALREADY_USED");
+    throw new AuthError("TOKEN_ALREADY_USED", "TOKEN_ALREADY_USED", 400);
   }
 
   if (row.expiresAtDttm < new Date()) {
-    throw new Error("TOKEN_EXPIRED");
+    throw new AuthError("TOKEN_EXPIRED", "TOKEN_EXPIRED", 400);
   }
 
   // Mark token as used
@@ -460,7 +471,7 @@ export async function resendVerification(email: string): Promise<void> {
   }
 
   if (row.emailVerifiedInd) {
-    throw new Error("ALREADY_VERIFIED");
+    throw new AuthError("ALREADY_VERIFIED", "ALREADY_VERIFIED", 400);
   }
 
   const token = crypto.randomBytes(32).toString("hex");
@@ -521,7 +532,7 @@ export async function resetPassword(
     .where(eq(passwordReset.resetToken, token));
 
   if (!row || row.usedInd || row.expiresAtDttm < new Date()) {
-    throw new Error("Invalid or expired reset token");
+    throw new AuthError("Invalid or expired reset token", "INVALID_RESET_TOKEN", 400);
   }
 
   const passwordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
@@ -587,7 +598,7 @@ async function getGoogleUserInfo(code: string): Promise<OAuthUserInfo> {
     }),
   });
   const tokens = await tokenRes.json();
-  if (!tokens.access_token) throw new Error("OAUTH_TOKEN_FAILED");
+  if (!tokens.access_token) throw new AuthError("OAUTH_TOKEN_FAILED", "OAUTH_TOKEN_FAILED", 502);
 
   // Fetch user profile
   const profileRes = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
@@ -767,22 +778,22 @@ export async function verifyGoogleIdToken(idToken: string): Promise<OAuthUserInf
   ].filter((x): x is string => Boolean(x));
 
   if (audience.length === 0) {
-    throw new Error("OAUTH_NOT_CONFIGURED");
+    throw new AuthError("OAUTH_NOT_CONFIGURED", "OAUTH_NOT_CONFIGURED", 503);
   }
 
   let ticket;
   try {
     ticket = await googleIdTokenClient.verifyIdToken({ idToken, audience });
   } catch {
-    throw new Error("INVALID_ID_TOKEN");
+    throw new AuthError("INVALID_ID_TOKEN", "INVALID_ID_TOKEN", 401);
   }
 
   const payload = ticket.getPayload();
   if (!payload || !payload.sub || !payload.email) {
-    throw new Error("INVALID_ID_TOKEN");
+    throw new AuthError("INVALID_ID_TOKEN", "INVALID_ID_TOKEN", 401);
   }
   if (payload.email_verified === false) {
-    throw new Error("EMAIL_NOT_VERIFIED_BY_GOOGLE");
+    throw new AuthError("EMAIL_NOT_VERIFIED_BY_GOOGLE", "EMAIL_NOT_VERIFIED_BY_GOOGLE", 403);
   }
 
   return {
@@ -803,7 +814,7 @@ export async function verifyGoogleIdToken(idToken: string): Promise<OAuthUserInf
  */
 export async function generateMfaSecret(userId: number) {
   const [row] = await db.select().from(user).where(eq(user.userId, userId));
-  if (!row) throw new Error("USER_NOT_FOUND");
+  if (!row) throw new AuthError("USER_NOT_FOUND", "USER_NOT_FOUND", 404);
 
   const secret = otpGenerateSecret();
   const otpauthUrl = generateURI({ secret, issuer: "CulinAIre Kitchen", label: row.userEmail });
@@ -833,7 +844,7 @@ async function verifyMfaToken(userId: number, token: string): Promise<boolean> {
  */
 export async function enableMfa(userId: number, token: string): Promise<void> {
   const valid = await verifyMfaToken(userId, token);
-  if (!valid) throw new Error("INVALID_MFA_CODE");
+  if (!valid) throw new AuthError("INVALID_MFA_CODE", "INVALID_MFA_CODE", 401);
 
   await db
     .update(user)
@@ -864,13 +875,13 @@ export async function completeMfaLogin(
   try {
     decoded = jwt.verify(mfaSessionToken, mfaSessionSecret()) as unknown as typeof decoded;
   } catch {
-    throw new Error("INVALID_MFA_SESSION");
+    throw new AuthError("INVALID_MFA_SESSION", "INVALID_MFA_SESSION", 401);
   }
 
-  if (decoded.purpose !== "mfa") throw new Error("INVALID_MFA_SESSION");
+  if (decoded.purpose !== "mfa") throw new AuthError("INVALID_MFA_SESSION", "INVALID_MFA_SESSION", 401);
 
   const valid = await verifyMfaToken(decoded.sub, totpCode);
-  if (!valid) throw new Error("INVALID_MFA_CODE");
+  if (!valid) throw new AuthError("INVALID_MFA_CODE", "INVALID_MFA_CODE", 401);
 
   return getUserWithRolesAndPermissions(decoded.sub);
 }
