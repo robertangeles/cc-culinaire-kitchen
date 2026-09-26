@@ -2,7 +2,7 @@
 title: Staff Compliance Vault
 category: entity
 created: 2026-08-07
-updated: 2026-09-20
+updated: 2026-09-26
 related: [[compliance-expiry-engine]], [[document-storage-cloudinary-private]], [[scheduled-job-daily-claim]], [[store-locations-system]], [[tenant-isolation-remediation]], [[roster-core]]
 ---
 
@@ -55,7 +55,10 @@ The second CHECK's `store_location_id IS NOT NULL` term is load-bearing, not dec
 ## Services and routes
 
 - `documentStorageService.ts` — Cloudinary private storage, magic-byte sniffing, signed URLs. See [[document-storage-cloudinary-private]] for the security reasoning; this is the most important file in Phase 1.
-- `complianceService.ts` — verification workflow (`createDocument` / `verifyDocument` / `rejectDocument`), the org-wide dashboard aggregate, and the staff × required-document-type matrix. See [[compliance-expiry-engine]] for how status is computed and reconciled.
+- `complianceService.ts` — barrel re-export; split into three modules in Phase 2c (PR #119):
+  - `complianceErrors.ts` — `ComplianceError` class
+  - `complianceDocumentService.ts` — document CRUD (`createDocument` / `verifyDocument` / `rejectDocument`), org-wide dashboard aggregate, staff × required-document-type matrix, stats, report PDF. See [[compliance-expiry-engine]] for status computation.
+  - `complianceExpiryService.ts` — expiry rule library (`listExpiryRules` / `upsertExpiryRule`); global, not org-scoped (a jurisdiction rule applies the same law for every org).
 - `complianceExpiryMath.ts` / `complianceExpiryJob.ts` — the daily expiry scan. See [[compliance-expiry-engine]] and [[scheduled-job-daily-claim]].
 - `routes/compliance.ts` — all routes under `authenticate`, gated by four permissions: `compliance:read-own` (view/upload/edit/delete your own documents), `compliance:read-all` (view all staff), `compliance:verify` (approve/reject), `compliance:manage-rules` (expiry rules + org document requirements). `/documents/mine` and `/documents/upload` are registered before `/documents/:id` so the parameterised route never swallows them. The upload route uses `multer.memoryStorage()` directly — never `middleware/upload.ts`'s `uploadFileBuffer` (see [[document-storage-cloudinary-private]]).
 - `PUT`/`DELETE /api/compliance/documents/:id` — self-service edit and delete, added so a staff member can fix a typo'd certificate number or remove a mistaken upload without a manager. Same `compliance:read-own` gate as the rest of "my documents," with ownership decided inside `complianceService` (404, not 403, on a non-owner — same reasoning as `/documents/:id/view-url` below). Both are owner-only AND status-gated to Pending/Rejected only: once a document is Verified it's the record a manager signed off on, and `updateDocument`/`deleteDocument` refuse it server-side even if the client UI is bypassed. An edit on a Rejected document clears the rejection and resets it to Pending (the resubmit flow). Delete destroys the Cloudinary blob before the row, inside one transaction that row-locks against a concurrent `verifyDocument()`. Both routes sit behind the new `complianceDocumentEditRateLimit` (20/min per user) — a deliberately roomier limit than `complianceDocumentViewRateLimit` since `deleteDocument` holds a DB row lock for the duration of an external Cloudinary call, and an unlimited caller could burn the connection pool. `notes` is deliberately not editable through this route — it's manager-only free text about the staff member, not their own certificate metadata.
