@@ -4,6 +4,17 @@ Append-only. Newest entry on top.
 
 ---
 
+## 2026-09-26 — Phase 2c refactor: complianceService barrel split
+
+- `refactor/ck-web/phase-2c-compliance-service-split`: Phase 2c of the refactoring plan. Split `complianceService.ts` (1288 lines) into a barrel re-exporting three focused modules:
+  - `complianceErrors.ts` — `ComplianceError` class
+  - `complianceDocumentService.ts` — document CRUD, dashboard, stats, required docs, report PDF (1110 lines)
+  - `complianceExpiryService.ts` — expiry rule library, global jurisdiction rules (184 lines)
+- No behavior change. Public import path (`complianceService`) unchanged — barrel re-exports all symbols.
+- Updated `wiki/entities/staff-compliance-vault.md` "Services and routes" section to reflect the split.
+
+---
+
 ## 2026-09-26 — Phase 1 refactor: JSDoc + typed domain errors
 
 - `refactor/ck-web/phase-1-jsdoc-typed-errors` (PR #116): Phase 1 of the refactoring plan
