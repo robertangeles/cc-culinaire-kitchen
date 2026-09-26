@@ -4,6 +4,17 @@ Append-only. Newest entry on top.
 
 ---
 
+## 2026-09-26 — Phase 2d refactor: stockTakeService barrel split
+
+- `refactor/ck-web/phase-2d-stocktake-service-split`: Phase 2d of the refactoring plan. Split `stockTakeService.ts` (1286 lines) into a barrel re-exporting three focused modules:
+  - `stockTakeErrors.ts` (27 lines) — 4 shared error classes: `ConflictError`, `InvalidStateError`, `NotFoundError`, `ValidationError`
+  - `stockTakeCountService.ts` (346 lines) — category state machine + line-item counting: `claimCategory`, `submitCategory`, `saveLineItem`, `getCategoryLines`, `getPreviousCountLines`
+  - `stockTakeSessionService.ts` (928 lines) — session lifecycle, HQ review actions, dashboard queries: `openSession`, `openOpeningCount`, `getActiveSession`, `getSessionDetail`, `submitSessionForReview`, `approveSession`, `flagSession`, `getLocationDashboard`, `getOrgDashboardSummary`, `getPendingReviewSessions`, `getApprovedSessions`
+- Includes a stale-comment fix (`ceeae57`): state machine comment in `stockTakeSessionService.ts` corrected (FLAGGED → PENDING_REVIEW direct path, no intermediate OPEN step).
+- No behavior change. Public import path (`stockTakeService`) unchanged — barrel re-exports all symbols.
+
+---
+
 ## 2026-09-26 — Phase 2c refactor: complianceService barrel split
 
 - `refactor/ck-web/phase-2c-compliance-service-split`: Phase 2c of the refactoring plan. Split `complianceService.ts` (1288 lines) into a barrel re-exporting three focused modules:
