@@ -1708,3 +1708,19 @@ show every role (`user.roles.join(", ")`) instead of picking one arbitrarily. 5 
 - Outside voice (native Claude subagent): 8 findings, 5 novel, all addressed
 
 Plan effective PR count: 17 → 15 (Tasks 1+2 pre-done).
+
+## 2026-09-27 — Phase 2e: prepService barrel split
+
+`refactor/ck-web/phase-2e-prep-service-split` shipped. `prepService.ts` (1304 lines) split into three focused modules:
+
+- `prepErrors.ts` — shared `PrepError` class and `parseTimeToMinutes` helper
+- `prepMenuService.ts` — menu planning domain (dish selection, suggestions, high-impact analysis)
+- `prepTaskService.ts` — task management domain (session lifecycle, task generation, status updates, history)
+- `prepService.ts` is now a barrel re-export; all callers continue to import from here
+
+Integration test added: `prepService.integration.test.ts` (150 lines, 3 suites).
+
+8 pre-existing bugs surfaced by the review (all present in original file, none introduced by split). All documented in `tasks/todo.md` under "Pre-existing bugs surfaced by Phase 2e review". Lessons #90-92 added to `tasks/lessons.md`:
+- #90: Barrel splits surface pre-existing bugs — treat as a full re-audit
+- #91: `inArray(col, [])` with empty array generates invalid SQL in PostgreSQL
+- #92: `parseInt(s) / parseInt(s)` can return Infinity for "1/0" fraction inputs
