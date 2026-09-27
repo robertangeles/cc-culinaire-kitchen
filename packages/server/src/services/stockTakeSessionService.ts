@@ -157,6 +157,18 @@ export async function openOpeningCount(
     throw new ConflictError("An opening inventory session is already in progress.");
   }
 
+  // Guard: location must belong to this org (prevents cross-tenant opening count via guessed locId)
+  const [loc] = await db
+    .select({ storeLocationId: storeLocation.storeLocationId })
+    .from(storeLocation)
+    .where(
+      and(
+        eq(storeLocation.storeLocationId, storeLocationId),
+        eq(storeLocation.organisationId, organisationId),
+      ),
+    );
+  if (!loc) throw new NotFoundError("Location not found");
+
   // Guard: location must have activated items
   const activeItems = await db
     .select({ ingredientId: locationIngredient.ingredientId, category: ingredient.ingredientCategory })
@@ -206,7 +218,7 @@ export async function openOpeningCount(
   const categoryRows = Array.from(categorySet).map((cat) => ({
     sessionId: session.sessionId,
     categoryName: cat,
-    categoryStatus: "NOT_STARTED",
+    categoryStatus: "NOT_STARTED" as const,
   }));
 
   if (categoryRows.length) {
@@ -378,9 +390,15 @@ export async function submitSessionForReview(sessionId: string, orgId: number) {
       submittedDttm: new Date(),
       updatedDttm: new Date(),
     })
-    .where(eq(stockTakeSession.sessionId, sessionId))
+    .where(
+      and(
+        eq(stockTakeSession.sessionId, sessionId),
+        inArray(stockTakeSession.sessionStatus, ["OPEN", "FLAGGED"]),
+      ),
+    )
     .returning();
 
+  if (!updated) throw new ConflictError("Session was modified concurrently; retry");
   return updated;
 }
 

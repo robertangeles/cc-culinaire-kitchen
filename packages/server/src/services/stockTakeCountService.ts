@@ -61,8 +61,8 @@ export async function claimCategory(
 
   const cat = rows[0];
   if (!cat) throw new NotFoundError(`Category "${categoryName}" not found in session`);
-  if (cat.sessionStatus !== "OPEN") {
-    throw new InvalidStateError(`Cannot claim category: session is ${cat.sessionStatus}, expected OPEN`);
+  if (cat.sessionStatus !== "OPEN" && cat.sessionStatus !== "FLAGGED") {
+    throw new InvalidStateError(`Cannot claim category: session is ${cat.sessionStatus}, expected OPEN or FLAGGED`);
   }
 
   // Allow claiming if NOT_STARTED, or if already claimed by same user and IN_PROGRESS

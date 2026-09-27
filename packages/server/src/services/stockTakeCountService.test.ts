@@ -76,6 +76,20 @@ describe("claimCategory", () => {
     await expect(claimCategory("s1", "proteins", 1)).rejects.toThrow(InvalidStateError);
   });
 
+  it("throws InvalidStateError when session is not OPEN or FLAGGED", async () => {
+    mockSelect([{ categoryStatus: "NOT_STARTED", claimedByUserId: null, categoryId: "c1", sessionStatus: "PENDING_REVIEW" }]);
+    await expect(claimCategory("s1", "proteins", 1)).rejects.toThrow(InvalidStateError);
+  });
+
+  it("transitions FLAGGED category to IN_PROGRESS in a FLAGGED session (recount flow)", async () => {
+    const cat = { categoryStatus: "FLAGGED", claimedByUserId: null, categoryId: "c1", sessionStatus: "FLAGGED" };
+    const updated = { ...cat, categoryStatus: "IN_PROGRESS", claimedByUserId: 1 };
+    mockSelect([cat]);
+    mockUpdate([updated]);
+    const result = await claimCategory("s1", "proteins", 1);
+    expect(result).toEqual(updated);
+  });
+
   it("transitions NOT_STARTED to IN_PROGRESS", async () => {
     const cat = { categoryStatus: "NOT_STARTED", claimedByUserId: null, categoryId: "c1", sessionStatus: "OPEN" };
     const updated = { ...cat, categoryStatus: "IN_PROGRESS", claimedByUserId: 1 };
