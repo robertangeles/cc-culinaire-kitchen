@@ -360,6 +360,16 @@ export async function submitSessionForReview(sessionId: string, orgId: number) {
     );
   }
 
+  // OPENING sessions auto-approve atomically — skip PENDING_REVIEW to avoid stuck state if approve throws
+  if (session.sessionType === "OPENING") {
+    await autoApproveOpeningSession(sessionId, session.storeLocationId);
+    const [approved] = await db
+      .select()
+      .from(stockTakeSession)
+      .where(eq(stockTakeSession.sessionId, sessionId));
+    return approved;
+  }
+
   const [updated] = await db
     .update(stockTakeSession)
     .set({
@@ -369,16 +379,6 @@ export async function submitSessionForReview(sessionId: string, orgId: number) {
     })
     .where(eq(stockTakeSession.sessionId, sessionId))
     .returning();
-
-  // Auto-approve opening inventory sessions
-  if (session.sessionType === "OPENING") {
-    await autoApproveOpeningSession(sessionId, session.storeLocationId);
-    const [approved] = await db
-      .select()
-      .from(stockTakeSession)
-      .where(eq(stockTakeSession.sessionId, sessionId));
-    return approved;
-  }
 
   return updated;
 }
@@ -424,10 +424,20 @@ export async function approveSession(sessionId: string, userId: number, orgId: n
       .where(eq(stockTakeCategory.sessionId, sessionId));
 
     if (lines.length > 0) {
+      // Deduplicate by ingredientId — same ingredient can appear in multiple categories; SUM quantities
+      const byIngredient = new Map<string, { ingredientId: string; countedQty: string; countedByUserId: number }>();
+      for (const line of lines) {
+        const existing = byIngredient.get(line.ingredientId);
+        if (existing) {
+          existing.countedQty = String(Number(existing.countedQty) + Number(line.countedQty));
+        } else {
+          byIngredient.set(line.ingredientId, { ...line });
+        }
+      }
       await tx
         .insert(stockLevel)
         .values(
-          lines.map((line) => ({
+          [...byIngredient.values()].map((line) => ({
             storeLocationId: session.storeLocationId,
             ingredientId: line.ingredientId,
             currentQty: String(Number(line.countedQty)),
@@ -887,11 +897,12 @@ async function autoApproveOpeningSession(sessionId: string, storeLocationId: str
         ),
       );
 
-    // 2. Update session to APPROVED
+    // 2. Update session to APPROVED (submittedDttm set here — OPENING skips PENDING_REVIEW)
     await tx
       .update(stockTakeSession)
       .set({
         sessionStatus: "APPROVED",
+        submittedDttm: new Date(),
         closedDttm: new Date(),
         updatedDttm: new Date(),
       })
@@ -909,10 +920,20 @@ async function autoApproveOpeningSession(sessionId: string, storeLocationId: str
       .where(eq(stockTakeCategory.sessionId, sessionId));
 
     if (lines.length > 0) {
+      // Deduplicate by ingredientId — same ingredient can appear in multiple categories; SUM quantities
+      const byIngredient = new Map<string, { ingredientId: string; countedQty: string; countedByUserId: number }>();
+      for (const line of lines) {
+        const existing = byIngredient.get(line.ingredientId);
+        if (existing) {
+          existing.countedQty = String(Number(existing.countedQty) + Number(line.countedQty));
+        } else {
+          byIngredient.set(line.ingredientId, { ...line });
+        }
+      }
       await tx
         .insert(stockLevel)
         .values(
-          lines.map((line) => ({
+          [...byIngredient.values()].map((line) => ({
             storeLocationId,
             ingredientId: line.ingredientId,
             currentQty: line.countedQty,

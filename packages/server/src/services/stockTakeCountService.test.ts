@@ -110,6 +110,28 @@ describe("submitCategory", () => {
     const result = await submitCategory("s1", "proteins");
     expect(result).toEqual(cat);
   });
+
+  it("transitions IN_PROGRESS to SUBMITTED", async () => {
+    const cat = { categoryStatus: "IN_PROGRESS", categoryId: "c1" };
+    const submitted = { ...cat, categoryStatus: "SUBMITTED" };
+    // First select: category lookup
+    (db.select as ReturnType<typeof vi.fn>).mockReturnValueOnce({
+      from: vi.fn().mockReturnValue({
+        where: vi.fn().mockResolvedValue([cat]),
+      }),
+    });
+    mockUpdate([submitted]);
+    // Second select: checkAndAdvanceSession counts — not all claimed done, no advance
+    mockSelect([{ claimed: 0, blocking: 0 }]);
+    const result = await submitCategory("s1", "proteins");
+    expect(result).toEqual(submitted);
+  });
+
+  it("throws ConflictError when concurrent submit wins the race", async () => {
+    mockSelect([{ categoryStatus: "IN_PROGRESS", categoryId: "c1" }]);
+    mockUpdate([]); // 0 rows — concurrent change updated status predicate first
+    await expect(submitCategory("s1", "proteins")).rejects.toThrow(ConflictError);
+  });
 });
 
 describe("saveLineItem", () => {

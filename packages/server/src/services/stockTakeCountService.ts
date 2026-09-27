@@ -83,7 +83,7 @@ export async function claimCategory(
     )
     .returning();
 
-  if (!updated) throw new ConflictError(`Category "${cat.categoryId}" was claimed concurrently; retry`);
+  if (!updated) throw new ConflictError(`Category "${categoryName}" was claimed concurrently; retry`);
   return updated;
 }
 
@@ -119,8 +119,10 @@ export async function submitCategory(sessionId: string, categoryName: string) {
       submittedDttm: new Date(),
       updatedDttm: new Date(),
     })
-    .where(eq(stockTakeCategory.categoryId, cat.categoryId))
+    .where(and(eq(stockTakeCategory.categoryId, cat.categoryId), eq(stockTakeCategory.categoryStatus, "IN_PROGRESS")))
     .returning();
+
+  if (!updated) throw new ConflictError(`Category "${categoryName}" was modified concurrently; retry`);
 
   // Check if ALL categories are now SUBMITTED → auto-advance session
   await checkAndAdvanceSession(sessionId);
@@ -306,15 +308,15 @@ async function getExpectedOnHand(
 
 /** Auto-check: if all claimed categories are SUBMITTED, advance session to PENDING_REVIEW. */
 async function checkAndAdvanceSession(sessionId: string) {
-  const categories = await db
-    .select()
+  const [counts] = await db
+    .select({
+      claimed: sql<number>`count(*) filter (where ${stockTakeCategory.categoryStatus} != 'NOT_STARTED')`,
+      blocking: sql<number>`count(*) filter (where ${stockTakeCategory.categoryStatus} not in ('NOT_STARTED', 'SUBMITTED', 'APPROVED'))`,
+    })
     .from(stockTakeCategory)
     .where(eq(stockTakeCategory.sessionId, sessionId));
 
-  const claimed = categories.filter((c) => c.categoryStatus !== "NOT_STARTED");
-  const allClaimedDone = claimed.length > 0 && claimed.every(
-    (c) => c.categoryStatus === "SUBMITTED" || c.categoryStatus === "APPROVED",
-  );
+  const allClaimedDone = counts && Number(counts.claimed) > 0 && Number(counts.blocking) === 0;
 
   if (allClaimedDone) {
     // ponytail: count service owns a session-domain write; move to sessionService if circular-import constraint is ever lifted
