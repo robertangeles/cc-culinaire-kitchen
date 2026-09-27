@@ -448,8 +448,9 @@ export async function approveSession(sessionId: string, userId: number, orgId: n
         });
     }
 
-    // Approve session last — idempotent guard above ensures a failed retry can re-enter
-    const [result] = await tx
+    // Approve session last — idempotent guard above ensures a failed retry can re-enter.
+    // Status predicate prevents a concurrent approve from double-writing after we entered the tx.
+    const result = await tx
       .update(stockTakeSession)
       .set({
         sessionStatus: "APPROVED",
@@ -457,10 +458,11 @@ export async function approveSession(sessionId: string, userId: number, orgId: n
         closedDttm: new Date(),
         updatedDttm: new Date(),
       })
-      .where(eq(stockTakeSession.sessionId, sessionId))
+      .where(and(eq(stockTakeSession.sessionId, sessionId), eq(stockTakeSession.sessionStatus, "PENDING_REVIEW")))
       .returning();
 
-    return result;
+    if (result.length === 0) throw new InvalidStateError("Session was modified concurrently; retry");
+    return result[0];
   });
 
   // Brain org memory (spec T12): fire after commit — not inside the transaction
@@ -495,40 +497,47 @@ export async function flagSession(
       `Cannot flag: session is ${session.sessionStatus}, expected PENDING_REVIEW`,
     );
   }
+  if (flaggedCategories.length === 0) {
+    throw new ValidationError("At least one category must be flagged");
+  }
 
-  // Flag specified categories — one batch UPDATE instead of N per-row updates
-  await db
-    .update(stockTakeCategory)
-    .set({ categoryStatus: "FLAGGED", flagReason: reason, updatedDttm: new Date() })
-    .where(
-      and(
-        eq(stockTakeCategory.sessionId, sessionId),
-        inArray(stockTakeCategory.categoryName, flaggedCategories),
-      ),
-    );
+  const updated = await db.transaction(async (tx) => {
+    // Flag specified categories — one batch UPDATE instead of N per-row updates
+    await tx
+      .update(stockTakeCategory)
+      .set({ categoryStatus: "FLAGGED", flagReason: reason, updatedDttm: new Date() })
+      .where(
+        and(
+          eq(stockTakeCategory.sessionId, sessionId),
+          inArray(stockTakeCategory.categoryName, flaggedCategories),
+        ),
+      );
 
-  // Approve non-flagged SUBMITTED categories — one batch UPDATE
-  await db
-    .update(stockTakeCategory)
-    .set({ categoryStatus: "APPROVED", updatedDttm: new Date() })
-    .where(
-      and(
-        eq(stockTakeCategory.sessionId, sessionId),
-        eq(stockTakeCategory.categoryStatus, "SUBMITTED"),
-        notInArray(stockTakeCategory.categoryName, flaggedCategories),
-      ),
-    );
+    // Approve non-flagged SUBMITTED categories — one batch UPDATE
+    await tx
+      .update(stockTakeCategory)
+      .set({ categoryStatus: "APPROVED", updatedDttm: new Date() })
+      .where(
+        and(
+          eq(stockTakeCategory.sessionId, sessionId),
+          eq(stockTakeCategory.categoryStatus, "SUBMITTED"),
+          notInArray(stockTakeCategory.categoryName, flaggedCategories),
+        ),
+      );
 
-  // Update session
-  const [updated] = await db
-    .update(stockTakeSession)
-    .set({
-      sessionStatus: "FLAGGED",
-      flagReason: reason,
-      updatedDttm: new Date(),
-    })
-    .where(eq(stockTakeSession.sessionId, sessionId))
-    .returning();
+    // Update session
+    const [result] = await tx
+      .update(stockTakeSession)
+      .set({
+        sessionStatus: "FLAGGED",
+        flagReason: reason,
+        updatedDttm: new Date(),
+      })
+      .where(eq(stockTakeSession.sessionId, sessionId))
+      .returning();
+
+    return result;
+  });
 
   return updated;
 }
@@ -866,66 +875,68 @@ async function enrichCategoriesForSessions(sessionIds: string[]) {
 
 /** Auto-approve an opening session: create stock levels + mark location active */
 async function autoApproveOpeningSession(sessionId: string, storeLocationId: string) {
-  // 1. Approve all SUBMITTED categories
-  await db
-    .update(stockTakeCategory)
-    .set({ categoryStatus: "APPROVED", updatedDttm: new Date() })
-    .where(
-      and(
-        eq(stockTakeCategory.sessionId, sessionId),
-        eq(stockTakeCategory.categoryStatus, "SUBMITTED"),
-      ),
-    );
+  await db.transaction(async (tx) => {
+    // 1. Approve all SUBMITTED categories
+    await tx
+      .update(stockTakeCategory)
+      .set({ categoryStatus: "APPROVED", updatedDttm: new Date() })
+      .where(
+        and(
+          eq(stockTakeCategory.sessionId, sessionId),
+          eq(stockTakeCategory.categoryStatus, "SUBMITTED"),
+        ),
+      );
 
-  // 2. Update session to APPROVED
-  await db
-    .update(stockTakeSession)
-    .set({
-      sessionStatus: "APPROVED",
-      closedDttm: new Date(),
-      updatedDttm: new Date(),
-    })
-    .where(eq(stockTakeSession.sessionId, sessionId));
+    // 2. Update session to APPROVED
+    await tx
+      .update(stockTakeSession)
+      .set({
+        sessionStatus: "APPROVED",
+        closedDttm: new Date(),
+        updatedDttm: new Date(),
+      })
+      .where(eq(stockTakeSession.sessionId, sessionId));
 
-  // 3. Create/update stock levels from counted lines
-  const lines = await db
-    .select({
-      ingredientId: stockTakeLine.ingredientId,
-      countedQty: stockTakeLine.countedQty,
-      countedByUserId: stockTakeLine.countedByUserId,
-    })
-    .from(stockTakeLine)
-    .innerJoin(stockTakeCategory, eq(stockTakeCategory.categoryId, stockTakeLine.categoryId))
-    .where(eq(stockTakeCategory.sessionId, sessionId));
+    // 3. Create/update stock levels from counted lines
+    const lines = await tx
+      .select({
+        ingredientId: stockTakeLine.ingredientId,
+        countedQty: stockTakeLine.countedQty,
+        countedByUserId: stockTakeLine.countedByUserId,
+      })
+      .from(stockTakeLine)
+      .innerJoin(stockTakeCategory, eq(stockTakeCategory.categoryId, stockTakeLine.categoryId))
+      .where(eq(stockTakeCategory.sessionId, sessionId));
 
-  if (lines.length > 0) {
-    await db
-      .insert(stockLevel)
-      .values(
-        lines.map((line) => ({
-          storeLocationId,
-          ingredientId: line.ingredientId,
-          currentQty: line.countedQty,
-          lastCountedDttm: new Date(),
-          lastCountedByUserId: line.countedByUserId,
-          version: 0,
-        })),
-      )
-      .onConflictDoUpdate({
-        target: [stockLevel.storeLocationId, stockLevel.ingredientId],
-        set: {
-          currentQty: sql`excluded.current_qty`,
-          lastCountedDttm: sql`excluded.last_counted_dttm`,
-          lastCountedByUserId: sql`excluded.last_counted_by_user_id`,
-          updatedDttm: new Date(),
-        },
-      });
-  }
+    if (lines.length > 0) {
+      await tx
+        .insert(stockLevel)
+        .values(
+          lines.map((line) => ({
+            storeLocationId,
+            ingredientId: line.ingredientId,
+            currentQty: line.countedQty,
+            lastCountedDttm: new Date(),
+            lastCountedByUserId: line.countedByUserId,
+            version: 0,
+          })),
+        )
+        .onConflictDoUpdate({
+          target: [stockLevel.storeLocationId, stockLevel.ingredientId],
+          set: {
+            currentQty: sql`excluded.current_qty`,
+            lastCountedDttm: sql`excluded.last_counted_dttm`,
+            lastCountedByUserId: sql`excluded.last_counted_by_user_id`,
+            updatedDttm: new Date(),
+          },
+        });
+    }
 
-  // 4. Mark location as inventory-active
-  await db
-    .update(storeLocation)
-    .set({ inventoryActive: true, updatedDttm: new Date() })
-    .where(eq(storeLocation.storeLocationId, storeLocationId));
+    // 4. Mark location as inventory-active
+    await tx
+      .update(storeLocation)
+      .set({ inventoryActive: true, updatedDttm: new Date() })
+      .where(eq(storeLocation.storeLocationId, storeLocationId));
+  });
 }
 

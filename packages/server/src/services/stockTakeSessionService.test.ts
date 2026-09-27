@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { ConflictError, InvalidStateError, NotFoundError } from "./stockTakeErrors.js";
+import { ConflictError, InvalidStateError, NotFoundError, ValidationError } from "./stockTakeErrors.js";
 
 vi.mock("../db/index.js", () => {
   const tx = {
@@ -97,7 +97,7 @@ describe("flagSession", () => {
         }),
       }),
     });
-    await expect(flagSession("s1", 1, [], "reason")).rejects.toThrow(NotFoundError);
+    await expect(flagSession("s1", ["proteins"], "reason", 1)).rejects.toThrow(NotFoundError);
   });
 
   it("throws InvalidStateError when session is not PENDING_REVIEW", async () => {
@@ -107,6 +107,16 @@ describe("flagSession", () => {
         where: vi.fn().mockResolvedValue([session]),
       }),
     });
-    await expect(flagSession("s1", 1, [], "reason")).rejects.toThrow(InvalidStateError);
+    await expect(flagSession("s1", ["proteins"], "reason", 1)).rejects.toThrow(InvalidStateError);
+  });
+
+  it("throws ValidationError when no categories flagged", async () => {
+    const session = { sessionId: "s1", sessionStatus: "PENDING_REVIEW", organisationId: 1 };
+    (db.select as ReturnType<typeof vi.fn>).mockReturnValue({
+      from: vi.fn().mockReturnValue({
+        where: vi.fn().mockResolvedValue([session]),
+      }),
+    });
+    await expect(flagSession("s1", [], "reason", 1)).rejects.toThrow(ValidationError);
   });
 });

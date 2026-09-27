@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { NotFoundError, InvalidStateError, ValidationError } from "./stockTakeErrors.js";
+import { NotFoundError, InvalidStateError, ValidationError, ConflictError } from "./stockTakeErrors.js";
 
 vi.mock("../db/index.js", () => ({
   db: {
@@ -83,6 +83,13 @@ describe("claimCategory", () => {
     mockUpdate([updated]);
     const result = await claimCategory("s1", "proteins", 1);
     expect(result).toEqual(updated);
+  });
+
+  it("throws ConflictError when concurrent claim wins the race", async () => {
+    const cat = { categoryStatus: "NOT_STARTED", claimedByUserId: null, categoryId: "c1" };
+    mockSelect([cat]);
+    mockUpdate([]); // 0 rows — another claim updated the status predicate first
+    await expect(claimCategory("s1", "proteins", 1)).rejects.toThrow(ConflictError);
   });
 });
 

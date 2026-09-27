@@ -11,7 +11,7 @@
  *          getPreviousCountLines
  */
 
-import { eq, and, sql, desc, getTableColumns } from "drizzle-orm";
+import { eq, and, inArray, sql, desc, getTableColumns } from "drizzle-orm";
 import { db } from "../db/index.js";
 import {
   stockTakeSession,
@@ -31,6 +31,7 @@ import {
   NotFoundError,
   InvalidStateError,
   ValidationError,
+  ConflictError,
 } from "./stockTakeErrors.js";
 
 // ─── Category state machine ──────────────────────────────────────
@@ -74,8 +75,15 @@ export async function claimCategory(
       claimedByUserId: userId,
       updatedDttm: new Date(),
     })
-    .where(eq(stockTakeCategory.categoryId, cat.categoryId))
+    .where(
+      and(
+        eq(stockTakeCategory.categoryId, cat.categoryId),
+        inArray(stockTakeCategory.categoryStatus, ["NOT_STARTED", "FLAGGED"]),
+      ),
+    )
     .returning();
+
+  if (!updated) throw new ConflictError(`Category "${cat.categoryId}" was claimed concurrently; retry`);
   return updated;
 }
 
@@ -151,36 +159,7 @@ export async function saveLineItem(
       ? calcVariancePct(varianceQtyVal!, expectedQty)
       : null;
 
-  // Upsert: insert or update if this ingredient was already counted in this category
-  const existing = await db
-    .select()
-    .from(stockTakeLine)
-    .where(
-      and(
-        eq(stockTakeLine.categoryId, categoryId),
-        eq(stockTakeLine.ingredientId, ingredientId),
-      ),
-    );
-
-  if (existing.length > 0) {
-    const [updated] = await db
-      .update(stockTakeLine)
-      .set({
-        countedQty: String(baseQty),
-        countedUnit: baseUnit,
-        rawQty: String(rawQty),
-        expectedQty: expectedQty !== null ? String(expectedQty) : null,
-        varianceQty: varianceQtyVal !== null ? String(varianceQtyVal) : null,
-        variancePct: variancePctVal !== null ? String(variancePctVal) : null,
-        countedByUserId: userId,
-        countedDttm: new Date(),
-        updatedDttm: new Date(),
-      })
-      .where(eq(stockTakeLine.lineId, existing[0].lineId))
-      .returning();
-    return updated;
-  }
-
+  // Atomic upsert — eliminates select-then-insert race for concurrent saves on same item
   const [row] = await db
     .insert(stockTakeLine)
     .values({
@@ -193,6 +172,20 @@ export async function saveLineItem(
       varianceQty: varianceQtyVal !== null ? String(varianceQtyVal) : null,
       variancePct: variancePctVal !== null ? String(variancePctVal) : null,
       countedByUserId: userId,
+    })
+    .onConflictDoUpdate({
+      target: [stockTakeLine.categoryId, stockTakeLine.ingredientId],
+      set: {
+        countedQty: sql`excluded.counted_qty`,
+        countedUnit: sql`excluded.counted_unit`,
+        rawQty: sql`excluded.raw_qty`,
+        expectedQty: sql`excluded.expected_qty`,
+        varianceQty: sql`excluded.variance_qty`,
+        variancePct: sql`excluded.variance_pct`,
+        countedByUserId: sql`excluded.counted_by_user_id`,
+        countedDttm: new Date(),
+        updatedDttm: new Date(),
+      },
     })
     .returning();
 
@@ -325,6 +318,7 @@ async function checkAndAdvanceSession(sessionId: string) {
 
   if (allClaimedDone) {
     // ponytail: count service owns a session-domain write; move to sessionService if circular-import constraint is ever lifted
+    // Status predicate makes concurrent submits idempotent — 0 rows affected = already advanced, ok
     await db
       .update(stockTakeSession)
       .set({
@@ -332,6 +326,6 @@ async function checkAndAdvanceSession(sessionId: string) {
         submittedDttm: new Date(),
         updatedDttm: new Date(),
       })
-      .where(eq(stockTakeSession.sessionId, sessionId));
+      .where(and(eq(stockTakeSession.sessionId, sessionId), eq(stockTakeSession.sessionStatus, "OPEN")));
   }
 }
