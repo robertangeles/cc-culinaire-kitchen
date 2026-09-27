@@ -1,5 +1,17 @@
 # CulinAIre Kitchen — TODO
 
+## Pre-existing SSRF vulnerabilities surfaced by Phase 2f review (2026-09-27)
+
+All pre-existing in the original `knowledgeManagementService.ts` — extracted unchanged by the barrel split. Neither introduced by Phase 2f.
+
+**P1 — SSRF redirect bypass via `redirect: "follow"` in `extractFromUrl` / `crawlSite`**
+`knowledgeIngestService.ts` (was `knowledgeManagementService.ts`): `fetch(url, { redirect: "follow" })` follows HTTP 3xx redirects automatically. An attacker can supply an external URL that redirects to a private IP (e.g. `http://attacker.com/redirect → http://192.168.1.1/`). `validateUrlSafety` runs only on the initial URL, not the redirect target. Fix: set `redirect: "manual"`, read the `Location` header on 3xx responses, call `validateUrlSafety()` on the resolved URL, and follow with a hop counter (≤5). Apply to both `extractFromUrl` and the `crawlSite` fetch loop.
+
+**P1 — SSRF DNS rebinding: hostname regex check doesn't resolve IPs**
+`validateUrlSafety` blocks private IP ranges by regex on the hostname string. An attacker can register a domain that resolves to a private IP (`http://evil.com` → `169.254.169.254`). The hostname check passes because `evil.com` isn't a private IP literal; the fetch later resolves to the private address. Fix: after parsing hostname, call `dns.promises.lookup(hostname, { all: true })`, validate every returned IP against the private-range blocklist using `ipaddr.js` or a manual CIDR check. Repeat for every redirect hop.
+
+---
+
 ## Pre-existing bugs surfaced by Phase 2e review (2026-09-27)
 
 All pre-existing in the original `prepService.ts` — extracted unchanged by the barrel split. None introduced by Phase 2e. Each needs its own fix PR before merging to production paths that reach prep.
