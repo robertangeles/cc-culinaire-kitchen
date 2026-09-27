@@ -57,7 +57,23 @@ export async function listDocuments(page = 1, limit = 20) {
  */
 export async function getDocument(documentId: number) {
   const [doc] = await db
-    .select()
+    .select({
+      documentId: knowledgeDocument.documentId,
+      title: knowledgeDocument.title,
+      category: knowledgeDocument.category,
+      tags: knowledgeDocument.tags,
+      body: knowledgeDocument.body,
+      contentHash: knowledgeDocument.contentHash,
+      sourceType: knowledgeDocument.sourceType,
+      sourceUrl: knowledgeDocument.sourceUrl,
+      originalFilename: knowledgeDocument.originalFilename,
+      fileSizeBytes: knowledgeDocument.fileSizeBytes,
+      chunkCount: knowledgeDocument.chunkCount,
+      status: knowledgeDocument.status,
+      errorMessage: knowledgeDocument.errorMessage,
+      createdDttm: knowledgeDocument.createdDttm,
+      updatedDttm: knowledgeDocument.updatedDttm,
+    })
     .from(knowledgeDocument)
     .where(eq(knowledgeDocument.documentId, documentId));
   return doc || null;
