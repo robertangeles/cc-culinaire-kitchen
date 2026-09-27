@@ -584,23 +584,23 @@ Synthesized from this review's findings. Each task derives from a specific findi
 
 - [ ] **T1 (P1, human: ~3h / CC: ~25min)** — stockTakeService — Guard AREA-mode approval against uncounted areas
   - Surfaced by: Architecture — spec claimed "existing category-status machinery already enforces this"; verified FALSE at stockTakeService.ts:518-521 and :389
-  - Files: `packages/server/src/services/stockTakeService.ts`
+  - Files: `packages/server/src/services/stockTakeSessionService.ts` (`submitSessionForReview`), `packages/server/src/services/stockTakeCountService.ts` (`checkAndAdvanceSession`)
   - Verify: integration test — one area NOT_STARTED → ValidationError on BOTH `submitSessionForReview` and `checkAndAdvanceSession`; `stock_level` unchanged
 - [ ] **T2 (P1, human: ~2h / CC: ~15min)** — stockTakeService — Replace per-line upsert with GROUP BY SUM for AREA mode
   - Surfaced by: spec's own critical finding, re-verified at stockTakeService.ts:872-897
-  - Files: `packages/server/src/services/stockTakeService.ts`
+  - Files: `packages/server/src/services/stockTakeSessionService.ts` (`updateStockLevelsFromSession`)
   - Verify: 5 cellar + 1.5 bar → assert `stock_level.current_qty` = 6.5 (not the return value)
 - [ ] **T3 (P1, human: ~1h / CC: ~10min)** — stockTakeService — CATEGORY-mode regression suite
   - Surfaced by: Test review REGRESSION RULE — B2 modifies 3 functions on the existing CATEGORY path
-  - Files: `packages/server/src/services/stockTakeService.test.ts`
+  - Files: `packages/server/src/services/stockTakeCountService.test.ts` (category state machine), `packages/server/src/services/stockTakeSessionService.test.ts` (approval flow)
   - Verify: cycle count with NOT_STARTED categories still approves; CATEGORY approval byte-identical
 - [ ] **T4 (P1, human: ~1h / CC: ~10min)** — stockTakeService — Resolve session mode in `saveLineItem`, NULL variance for area lines
   - Surfaced by: Outside voice #3 — the NULL guarantee had no code behind it; `getPreviousCount` (:800-813) returns an arbitrary area's count
-  - Files: `packages/server/src/services/stockTakeService.ts`
+  - Files: `packages/server/src/services/stockTakeCountService.ts` (`saveLineItem`, `getPreviousCountLines`)
   - Verify: unit — AREA line → expected/variance/variancePct NULL; CATEGORY line unchanged
 - [ ] **T5 (P2, human: ~2h / CC: ~15min)** — stockTakeService — Exempt spot checks from session lock + HQ gate
   - Surfaced by: Outside voice #4 — F1 + `inventory:hq` (inventory.ts:150) made spot checks slower than full counts
-  - Files: `packages/server/src/services/stockTakeService.ts`, `packages/server/src/routes/inventory.ts`
+  - Files: `packages/server/src/services/stockTakeSessionService.ts` (`openSession`), `packages/server/src/routes/inventory.ts`
   - Verify: spot check opens while a full count is active; self-approves; `stock_level` unchanged; reachable with `inventory:count` only
 - [ ] **T6 (P2, human: ~1h / CC: ~10min)** — storageAreaService — Snapshot query via `category_id` join + `closed_dttm`
   - Surfaced by: Architecture — spec's query joined `l.session_id`, which does not exist (schema.ts:1674-1678); no approval-timestamp column exists
