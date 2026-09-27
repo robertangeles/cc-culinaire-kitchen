@@ -28,13 +28,7 @@ vi.mock("./stockMath.js", () => ({
 }));
 
 const { db } = await import("../db/index.js");
-const {
-  claimCategory,
-  submitCategory,
-  saveLineItem,
-  getCategoryLines,
-  getPreviousCountLines,
-} = await import("./stockTakeCountService.js");
+const { claimCategory, submitCategory, saveLineItem } = await import("./stockTakeCountService.js");
 
 function mockSelect(rows: unknown[]) {
   (db.select as ReturnType<typeof vi.fn>).mockReturnValue({
