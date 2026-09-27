@@ -1713,10 +1713,10 @@ Plan effective PR count: 17 → 15 (Tasks 1+2 pre-done).
 
 `refactor/ck-web/phase-2e-prep-service-split` shipped. `prepService.ts` (1304 lines) split into three focused modules:
 
-- `prepErrors.ts` — shared `PrepError` class and `parseTimeToMinutes` helper
+- `prepErrors.ts` — `PrepError` class + three internal parse helpers (`parseTimeToMinutes`, `parseYieldToServings`, `parseAmountToNumber`); consumed directly by the two split modules
 - `prepMenuService.ts` — menu planning domain (dish selection, suggestions, high-impact analysis)
 - `prepTaskService.ts` — task management domain (session lifecycle, task generation, status updates, history)
-- `prepService.ts` is now a barrel re-export; all callers continue to import from here
+- `prepService.ts` is now a barrel re-export; re-exports only `PrepError` (not the parse helpers — those are internal); all callers continue to import from here
 
 Integration test added: `prepService.integration.test.ts` (150 lines, 3 suites).
 
