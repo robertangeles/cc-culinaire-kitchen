@@ -1,5 +1,35 @@
 # CulinAIre Kitchen — TODO
 
+## Pre-existing bugs surfaced by Phase 2e review (2026-09-27)
+
+All pre-existing in the original `prepService.ts` — extracted unchanged by the barrel split. None introduced by Phase 2e. Each needs its own fix PR before merging to production paths that reach prep.
+
+**P1 — `inArray()` crash on empty `orgMemberUserIds` in teamView**
+When a user is the sole member of an org (`orgIds.length > 0` but `orgMemberUserIds = []`), every teamView call in `prepMenuService.ts:107` and `prepTaskService.ts:~400` passes an empty array to `inArray()`, generating invalid SQL (`WHERE col IN ()`). PostgreSQL rejects it with a syntax error. Fix: guard every `orgMemberUserIds` fanout with `orgCtx.orgMemberUserIds.length > 0 ? inArray(col, orgCtx.orgMemberUserIds) : eq(col, userId)`. Affects 8+ call sites across both files.
+
+**P1 — double stock deduction via concurrent task completion**
+`updateTaskStatus` (prepTaskService.ts:482) reads `prevStatus` outside a transaction. Two simultaneous `PATCH status=completed` requests both read `prevStatus='pending'`, both compute `becomingCompleted=true`, and both call `deductStock`. Fix: wrap the status read + update in a `db.transaction()`, or use a conditional UPDATE that checks the old status atomically.
+
+**P1 — `generateTasksFromSelections` TOCTOU**
+Same pattern as `saveMenuSelections`: `isEndedInd` is checked at prepTaskService.ts:136 outside the transaction that regenerates tasks. A concurrent `endSession` between the guard and the write allows tasks to be regenerated on a closed session. Fix: recheck `isEndedInd` inside the transaction.
+
+**P1 — `parseAmountToNumber` division-by-zero returns Infinity**
+`prepErrors.ts:61`: the regex `^(\d+)\/(\d+)$` matches `"1/0"`; `parseInt("0",10) = 0` → `return Infinity`. PostgreSQL rejects `Infinity` for numeric columns with a syntax error, crashing the `generateTasksFromSelections` transaction. Fix: `if (parseInt(fracMatch[2],10) === 0) return 0;` before the division.
+
+**P1 — IDOR: `saveMenuSelections` and `generateTasksFromSelections` don't validate recipeId/menuItemId ownership**
+An attacker with their own session can supply a victim's `menuItemId` (guessed UUID) in `saveMenuSelections` (prepMenuService.ts:242). `generateTasksFromSelections` then fetches that menu item's ingredients at prepTaskService.ts:164–181 with no ownership filter, leaking cross-tenant ingredient names and quantities into the attacker's task descriptions. Fix: validate each supplied `menuItemId`/`recipeId` against `userId` ownership in `saveMenuSelections`, or add user-scoped filters in `generateTasksFromSelections`.
+
+**P1 — `getTodaySession` teamView mixes tasks from all org member sessions**
+prepTaskService.ts:424–431: when `teamView=true`, `existing` can contain multiple sessions. `sessionIds` is mapped from all of them, and `prepTask` is fetched across all sessions. But the response is `{ session: toSessionRow(existing[0]), tasks: ... }` — tasks from every member paired with an arbitrary single session. Any caller using `session.prepSessionId` to correlate will operate on the wrong session. Fix: either return multiple sessions each with their own task list, or enforce `LIMIT 1` and scope tasks to that one session.
+
+**P2 — full ingredient table scan in `generateTasksFromSelections`**
+prepTaskService.ts:203: `db.select().from(ingredient)` with no WHERE clause fetches the entire ingredients table to build a name→category map. Fix: collect ingredient names from recipe data first, then `inArray(ingredient.ingredientName, namesArray)`.
+
+**P2 — N+1 inserts per task and per cross-usage line**
+prepTaskService.ts:330 inserts one `prepTask` row per iteration; prepTaskService.ts:357 inserts one `ingredientCrossUsage` row per iteration. Fix: collect all values objects, then a single `tx.insert(...).values(allValues)` call each.
+
+---
+
 ## Two live bugs on `main`, found by the reachability check (2026-08-09)
 
 Neither came from the compliance branch. Both are allowlisted in
