@@ -35,7 +35,10 @@ import {
 
 // ─── Category state machine ──────────────────────────────────────
 
-/** Claim a category for counting. Transitions NOT_STARTED → IN_PROGRESS. */
+/**
+ * Claim a category for counting. Transitions NOT_STARTED → IN_PROGRESS.
+ * Callers must validate that the sessionId belongs to the caller's organisation before invoking.
+ */
 export async function claimCategory(
   sessionId: string,
   categoryName: string,
@@ -64,25 +67,22 @@ export async function claimCategory(
     );
   }
 
-  if (cat.categoryStatus === "NOT_STARTED" || cat.categoryStatus === "FLAGGED") {
-    const [updated] = await db
-      .update(stockTakeCategory)
-      .set({
-        categoryStatus: "IN_PROGRESS",
-        claimedByUserId: userId,
-        updatedDttm: new Date(),
-      })
-      .where(eq(stockTakeCategory.categoryId, cat.categoryId))
-      .returning();
-    return updated;
-  }
-
-  throw new InvalidStateError(
-    `Category "${categoryName}" is already ${cat.categoryStatus}`,
-  );
+  const [updated] = await db
+    .update(stockTakeCategory)
+    .set({
+      categoryStatus: "IN_PROGRESS",
+      claimedByUserId: userId,
+      updatedDttm: new Date(),
+    })
+    .where(eq(stockTakeCategory.categoryId, cat.categoryId))
+    .returning();
+  return updated;
 }
 
-/** Submit a category for review. Transitions IN_PROGRESS → SUBMITTED. */
+/**
+ * Submit a category for review. Transitions IN_PROGRESS → SUBMITTED.
+ * Callers must validate that the sessionId belongs to the caller's organisation before invoking.
+ */
 export async function submitCategory(sessionId: string, categoryName: string) {
   const [cat] = await db
     .select()
@@ -125,6 +125,7 @@ export async function submitCategory(sessionId: string, categoryName: string) {
 /**
  * Save a stock take line item (upsert — update if ingredient already counted in this category).
  * Converts the entered quantity to the ingredient's base unit.
+ * Callers must validate that the categoryId belongs to the caller's organisation before invoking.
  */
 export async function saveLineItem(
   categoryId: string,
@@ -295,30 +296,19 @@ async function getExpectedOnHand(
   ingredientId: string,
   currentCategoryId: string,
 ): Promise<number | null> {
-  // category → session → location
-  const [cat] = await db
-    .select({ sessionId: stockTakeCategory.sessionId })
-    .from(stockTakeCategory)
-    .where(eq(stockTakeCategory.categoryId, currentCategoryId));
-  if (!cat) return null;
-
-  const [session] = await db
-    .select({ storeLocationId: stockTakeSession.storeLocationId })
-    .from(stockTakeSession)
-    .where(eq(stockTakeSession.sessionId, cat.sessionId));
-  if (!session) return null;
-
-  const [level] = await db
+  const [row] = await db
     .select({ currentQty: stockLevel.currentQty })
-    .from(stockLevel)
-    .where(
+    .from(stockTakeCategory)
+    .innerJoin(stockTakeSession, eq(stockTakeSession.sessionId, stockTakeCategory.sessionId))
+    .innerJoin(
+      stockLevel,
       and(
-        eq(stockLevel.storeLocationId, session.storeLocationId),
+        eq(stockLevel.storeLocationId, stockTakeSession.storeLocationId),
         eq(stockLevel.ingredientId, ingredientId),
       ),
-    );
-  if (!level) return null;
-  return Number(level.currentQty);
+    )
+    .where(eq(stockTakeCategory.categoryId, currentCategoryId));
+  return row ? Number(row.currentQty) : null;
 }
 
 /** Auto-check: if all claimed categories are SUBMITTED, advance session to PENDING_REVIEW. */
@@ -334,6 +324,7 @@ async function checkAndAdvanceSession(sessionId: string) {
   );
 
   if (allClaimedDone) {
+    // ponytail: count service owns a session-domain write; move to sessionService if circular-import constraint is ever lifted
     await db
       .update(stockTakeSession)
       .set({

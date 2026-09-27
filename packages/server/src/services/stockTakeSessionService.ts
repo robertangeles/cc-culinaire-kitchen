@@ -18,7 +18,7 @@
  *          getPendingReviewSessions, getApprovedSessions
  */
 
-import { eq, and, ne, sql, desc, inArray, getTableColumns } from "drizzle-orm";
+import { eq, and, ne, sql, desc, inArray, notInArray, getTableColumns } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "../db/index.js";
 import {
@@ -32,7 +32,7 @@ import {
   storeLocation,
 } from "../db/schema.js";
 import { recordOpsEvent } from "./brainCaptureService.js";
-import { getCategoryLines } from "./stockTakeCountService.js";
+
 import {
   ConflictError,
   InvalidStateError,
@@ -70,7 +70,8 @@ export async function openSession(
   userId: number,
   categories?: string[],
 ) {
-  // Check for existing active session
+  // ponytail: TOCTOU — two concurrent opens can both pass this check before either inserts.
+  // Upgrade path: UNIQUE INDEX ON stock_take_session(store_location_id) WHERE session_status NOT IN ('ARCHIVED','APPROVED').
   const existing = await db
     .select({ sessionId: stockTakeSession.sessionId })
     .from(stockTakeSession)
@@ -273,13 +274,47 @@ export async function getSessionDetail(sessionId: string, organisationId: number
 
   const categories = await enrichCategoriesWithUserNames(sessionId);
 
-  // Get line counts per category
-  const categoriesWithCounts = await Promise.all(
-    categories.map(async (cat) => {
-      const lines = await getCategoryLines(cat.categoryId);
-      return { ...cat, lineCount: lines.length, lines };
-    }),
-  );
+  // Batch-fetch all lines in one query instead of N per-category round trips
+  const categoryIds = categories.map((c) => c.categoryId);
+  const allLines =
+    categoryIds.length > 0
+      ? await db
+          .select({
+            ...getTableColumns(stockTakeLine),
+            ingredientName: ingredient.ingredientName,
+            ingredientCategory: ingredient.ingredientCategory,
+            baseUnit: ingredient.baseUnit,
+            countedByUserName: user.userName,
+            unitCost: sql<
+              string | null
+            >`coalesce(${locationIngredient.weightedAverageCost}, ${locationIngredient.unitCost}, ${ingredient.preferredUnitCost})`,
+          })
+          .from(stockTakeLine)
+          .innerJoin(ingredient, eq(ingredient.ingredientId, stockTakeLine.ingredientId))
+          .innerJoin(user, eq(user.userId, stockTakeLine.countedByUserId))
+          .innerJoin(stockTakeCategory, eq(stockTakeCategory.categoryId, stockTakeLine.categoryId))
+          .innerJoin(stockTakeSession, eq(stockTakeSession.sessionId, stockTakeCategory.sessionId))
+          .leftJoin(
+            locationIngredient,
+            and(
+              eq(locationIngredient.ingredientId, stockTakeLine.ingredientId),
+              eq(locationIngredient.storeLocationId, stockTakeSession.storeLocationId),
+            ),
+          )
+          .where(inArray(stockTakeLine.categoryId, categoryIds))
+      : [];
+
+  const linesByCategory = new Map<string, typeof allLines>();
+  for (const line of allLines) {
+    const arr = linesByCategory.get(line.categoryId) ?? [];
+    arr.push(line);
+    linesByCategory.set(line.categoryId, arr);
+  }
+
+  const categoriesWithCounts = categories.map((cat) => {
+    const lines = linesByCategory.get(cat.categoryId) ?? [];
+    return { ...cat, lineCount: lines.length, lines };
+  });
 
   return { ...session, categories: categoriesWithCounts };
 }
@@ -358,40 +393,77 @@ export async function approveSession(sessionId: string, userId: number, orgId: n
     .where(and(eq(stockTakeSession.sessionId, sessionId), eq(stockTakeSession.organisationId, orgId)));
 
   if (!session) throw new NotFoundError("Session not found");
-
-  if (session.sessionStatus === "APPROVED") return session; // Idempotent
-
+  if (session.sessionStatus === "APPROVED") return session; // Idempotent — checked before transaction so retry is safe
   if (session.sessionStatus !== "PENDING_REVIEW") {
     throw new InvalidStateError(
       `Cannot approve: session is ${session.sessionStatus}, expected PENDING_REVIEW`,
     );
   }
 
-  // Approve all SUBMITTED categories
-  await db
-    .update(stockTakeCategory)
-    .set({ categoryStatus: "APPROVED", updatedDttm: new Date() })
-    .where(
-      and(
-        eq(stockTakeCategory.sessionId, sessionId),
-        eq(stockTakeCategory.categoryStatus, "SUBMITTED"),
-      ),
-    );
+  const updated = await db.transaction(async (tx) => {
+    // Approve all SUBMITTED categories
+    await tx
+      .update(stockTakeCategory)
+      .set({ categoryStatus: "APPROVED", updatedDttm: new Date() })
+      .where(
+        and(
+          eq(stockTakeCategory.sessionId, sessionId),
+          eq(stockTakeCategory.categoryStatus, "SUBMITTED"),
+        ),
+      );
 
-  // Update session status
-  const [updated] = await db
-    .update(stockTakeSession)
-    .set({
-      sessionStatus: "APPROVED",
-      approvedByUserId: userId,
-      closedDttm: new Date(),
-      updatedDttm: new Date(),
-    })
-    .where(eq(stockTakeSession.sessionId, sessionId))
-    .returning();
+    // Batch-upsert stock levels: single JOIN query + one INSERT ON CONFLICT (replaces N+1 loop)
+    const lines = await tx
+      .select({
+        ingredientId: stockTakeLine.ingredientId,
+        countedQty: stockTakeLine.countedQty,
+        countedByUserId: stockTakeLine.countedByUserId,
+      })
+      .from(stockTakeLine)
+      .innerJoin(stockTakeCategory, eq(stockTakeCategory.categoryId, stockTakeLine.categoryId))
+      .where(eq(stockTakeCategory.sessionId, sessionId));
 
-  // Brain org memory (spec T12): remember this stock count was approved.
-  // Fire-after-commit; the idempotent early-return above skips re-captures.
+    if (lines.length > 0) {
+      await tx
+        .insert(stockLevel)
+        .values(
+          lines.map((line) => ({
+            storeLocationId: session.storeLocationId,
+            ingredientId: line.ingredientId,
+            currentQty: String(Number(line.countedQty)),
+            lastCountedDttm: new Date(),
+            lastCountedByUserId: line.countedByUserId,
+            version: 0,
+          })),
+        )
+        .onConflictDoUpdate({
+          target: [stockLevel.storeLocationId, stockLevel.ingredientId],
+          set: {
+            currentQty: sql`excluded.current_qty`,
+            lastCountedDttm: sql`excluded.last_counted_dttm`,
+            lastCountedByUserId: sql`excluded.last_counted_by_user_id`,
+            updatedDttm: new Date(),
+            version: sql`${stockLevel.version} + 1`,
+          },
+        });
+    }
+
+    // Approve session last — idempotent guard above ensures a failed retry can re-enter
+    const [result] = await tx
+      .update(stockTakeSession)
+      .set({
+        sessionStatus: "APPROVED",
+        approvedByUserId: userId,
+        closedDttm: new Date(),
+        updatedDttm: new Date(),
+      })
+      .where(eq(stockTakeSession.sessionId, sessionId))
+      .returning();
+
+    return result;
+  });
+
+  // Brain org memory (spec T12): fire after commit — not inside the transaction
   void recordOpsEvent({
     userId,
     sourceType: "stock",
@@ -401,9 +473,6 @@ export async function approveSession(sessionId: string, userId: number, orgId: n
     title: "Stock count approved",
     locationDescription: session.storeLocationId ?? null,
   });
-
-  // Update stock levels from approved counts
-  await updateStockLevelsFromSession(sessionId, session.storeLocationId);
 
   return updated;
 }
@@ -427,40 +496,28 @@ export async function flagSession(
     );
   }
 
-  // Flag specified categories
-  for (const catName of flaggedCategories) {
-    await db
-      .update(stockTakeCategory)
-      .set({
-        categoryStatus: "FLAGGED",
-        flagReason: reason,
-        updatedDttm: new Date(),
-      })
-      .where(
-        and(
-          eq(stockTakeCategory.sessionId, sessionId),
-          eq(stockTakeCategory.categoryName, catName),
-        ),
-      );
-  }
+  // Flag specified categories — one batch UPDATE instead of N per-row updates
+  await db
+    .update(stockTakeCategory)
+    .set({ categoryStatus: "FLAGGED", flagReason: reason, updatedDttm: new Date() })
+    .where(
+      and(
+        eq(stockTakeCategory.sessionId, sessionId),
+        inArray(stockTakeCategory.categoryName, flaggedCategories),
+      ),
+    );
 
-  // Approve non-flagged SUBMITTED categories
-  const allCategories = await db
-    .select()
-    .from(stockTakeCategory)
-    .where(eq(stockTakeCategory.sessionId, sessionId));
-
-  for (const cat of allCategories) {
-    if (
-      cat.categoryStatus === "SUBMITTED" &&
-      !flaggedCategories.includes(cat.categoryName)
-    ) {
-      await db
-        .update(stockTakeCategory)
-        .set({ categoryStatus: "APPROVED", updatedDttm: new Date() })
-        .where(eq(stockTakeCategory.categoryId, cat.categoryId));
-    }
-  }
+  // Approve non-flagged SUBMITTED categories — one batch UPDATE
+  await db
+    .update(stockTakeCategory)
+    .set({ categoryStatus: "APPROVED", updatedDttm: new Date() })
+    .where(
+      and(
+        eq(stockTakeCategory.sessionId, sessionId),
+        eq(stockTakeCategory.categoryStatus, "SUBMITTED"),
+        notInArray(stockTakeCategory.categoryName, flaggedCategories),
+      ),
+    );
 
   // Update session
   const [updated] = await db
@@ -599,36 +656,70 @@ export async function getOrgDashboardSummary(organisationId: number) {
     .from(storeLocation)
     .where(eq(storeLocation.organisationId, organisationId));
 
-  return Promise.all(
-    locations.map(async (loc) => {
-      // Get stock levels + par for this location
-      const levels = await db
-        .select({
-          currentQty: stockLevel.currentQty,
-          parLevel: locationIngredient.parLevel,
-          unitCost: locationIngredient.unitCost,
-          orgUnitCost: ingredient.unitCost,
-        })
-        .from(stockLevel)
-        .innerJoin(ingredient, eq(ingredient.ingredientId, stockLevel.ingredientId))
-        .leftJoin(
-          locationIngredient,
-          and(
-            eq(locationIngredient.ingredientId, stockLevel.ingredientId),
-            eq(locationIngredient.storeLocationId, loc.storeLocationId),
-          ),
-        )
-        .where(
-          and(
-            eq(stockLevel.storeLocationId, loc.storeLocationId),
-            eq(ingredient.organisationId, organisationId),
-          ),
-        );
+  if (locations.length === 0) return [];
 
-      let totalItems = levels.length;
-      let lowStock = 0;
-      let critical = 0;
-      let inventoryValue = 0;
+  const locationIds = locations.map((l) => l.storeLocationId);
+
+  // Batch-fetch stock levels for all locations (replaces N per-location queries)
+  const allLevels = await db
+    .select({
+      storeLocationId: stockLevel.storeLocationId,
+      currentQty: stockLevel.currentQty,
+      parLevel: locationIngredient.parLevel,
+      unitCost: locationIngredient.unitCost,
+      orgUnitCost: ingredient.unitCost,
+    })
+    .from(stockLevel)
+    .innerJoin(ingredient, eq(ingredient.ingredientId, stockLevel.ingredientId))
+    .leftJoin(
+      locationIngredient,
+      and(
+        eq(locationIngredient.ingredientId, stockLevel.ingredientId),
+        eq(locationIngredient.storeLocationId, stockLevel.storeLocationId),
+      ),
+    )
+    .where(
+      and(
+        inArray(stockLevel.storeLocationId, locationIds),
+        eq(ingredient.organisationId, organisationId),
+      ),
+    );
+
+  // Batch-fetch last approved session per location (replaces N per-location queries)
+  const approvedSessions = await db
+    .select({
+      storeLocationId: stockTakeSession.storeLocationId,
+      closedDttm: stockTakeSession.closedDttm,
+    })
+    .from(stockTakeSession)
+    .where(
+      and(
+        inArray(stockTakeSession.storeLocationId, locationIds),
+        eq(stockTakeSession.sessionStatus, "APPROVED"),
+      ),
+    )
+    .orderBy(desc(stockTakeSession.closedDttm));
+
+  const lastSessionByLocation = new Map<string, Date | null>();
+  for (const s of approvedSessions) {
+    if (!lastSessionByLocation.has(s.storeLocationId)) {
+      lastSessionByLocation.set(s.storeLocationId, s.closedDttm);
+    }
+  }
+
+  const levelsByLocation = new Map<string, typeof allLevels>();
+  for (const lvl of allLevels) {
+    const arr = levelsByLocation.get(lvl.storeLocationId) ?? [];
+    arr.push(lvl);
+    levelsByLocation.set(lvl.storeLocationId, arr);
+  }
+
+  return locations.map((loc) => {
+    const levels = levelsByLocation.get(loc.storeLocationId) ?? [];
+    let totalItems = levels.length;
+    let lowStock = 0;
+    let critical = 0;
+    let inventoryValue = 0;
 
       for (const l of levels) {
         const qty = Number(l.currentQty || 0);
@@ -642,19 +733,6 @@ export async function getOrgDashboardSummary(organisationId: number) {
         }
       }
 
-      // Last count
-      const [lastSession] = await db
-        .select({ closedDttm: stockTakeSession.closedDttm })
-        .from(stockTakeSession)
-        .where(
-          and(
-            eq(stockTakeSession.storeLocationId, loc.storeLocationId),
-            eq(stockTakeSession.sessionStatus, "APPROVED"),
-          ),
-        )
-        .orderBy(desc(stockTakeSession.closedDttm))
-        .limit(1);
-
       return {
         ...loc,
         inventoryActive: loc.inventoryActive,
@@ -662,10 +740,9 @@ export async function getOrgDashboardSummary(organisationId: number) {
         lowStock,
         critical,
         inventoryValue,
-        lastCountDttm: lastSession?.closedDttm ?? null,
+        lastCountDttm: lastSessionByLocation.get(loc.storeLocationId) ?? null,
       };
-    }),
-  );
+    });
 }
 
 // ─── Cross-location review queries ──────────────────────────────
@@ -698,21 +775,19 @@ export async function getPendingReviewSessions(organisationId: number) {
     )
     .orderBy(desc(stockTakeSession.submittedDttm));
 
-  // Attach category summaries
-  return Promise.all(
-    sessions.map(async (s) => {
-      const cats = await enrichCategoriesWithUserNames(s.sessionId);
-      const submittedCount = cats.filter(
+  if (sessions.length === 0) return [];
+  const catsBySession = await enrichCategoriesForSessions(sessions.map((s) => s.sessionId));
+  return sessions.map((s) => {
+    const cats = catsBySession.get(s.sessionId) ?? [];
+    return {
+      ...s,
+      categoryCount: cats.length,
+      submittedCount: cats.filter(
         (c) => c.categoryStatus === "SUBMITTED" || c.categoryStatus === "APPROVED",
-      ).length;
-      return {
-        ...s,
-        categoryCount: cats.length,
-        submittedCount,
-        categories: cats,
-      };
-    }),
-  );
+      ).length,
+      categories: cats,
+    };
+  });
 }
 
 /**
@@ -747,34 +822,46 @@ export async function getApprovedSessions(organisationId: number) {
     )
     .orderBy(desc(stockTakeSession.closedDttm));
 
-  return Promise.all(
-    sessions.map(async (s) => {
-      const cats = await enrichCategoriesWithUserNames(s.sessionId);
-      const submittedCount = cats.filter(
+  if (sessions.length === 0) return [];
+  const catsBySession = await enrichCategoriesForSessions(sessions.map((s) => s.sessionId));
+  return sessions.map((s) => {
+    const cats = catsBySession.get(s.sessionId) ?? [];
+    return {
+      ...s,
+      categoryCount: cats.length,
+      submittedCount: cats.filter(
         (c) => c.categoryStatus === "SUBMITTED" || c.categoryStatus === "APPROVED",
-      ).length;
-      return {
-        ...s,
-        categoryCount: cats.length,
-        submittedCount,
-        categories: cats,
-      };
-    }),
-  );
+      ).length,
+      categories: cats,
+    };
+  });
 }
 
 // ─── Private helpers ─────────────────────────────────────────────
 
-/** Enrich categories with claimedByUserName via LEFT JOIN. */
 async function enrichCategoriesWithUserNames(sessionId: string) {
-  return db
+  const map = await enrichCategoriesForSessions([sessionId]);
+  return map.get(sessionId) ?? [];
+}
+
+/** Batch-enrich categories for multiple sessions. Returns a Map keyed by sessionId. */
+async function enrichCategoriesForSessions(sessionIds: string[]) {
+  const rows = await db
     .select({
       ...getTableColumns(stockTakeCategory),
       claimedByUserName: user.userName,
     })
     .from(stockTakeCategory)
     .leftJoin(user, eq(user.userId, stockTakeCategory.claimedByUserId))
-    .where(eq(stockTakeCategory.sessionId, sessionId));
+    .where(inArray(stockTakeCategory.sessionId, sessionIds));
+
+  const map = new Map<string, typeof rows>();
+  for (const row of rows) {
+    const existing = map.get(row.sessionId);
+    if (existing) existing.push(row);
+    else map.set(row.sessionId, [row]);
+  }
+  return map;
 }
 
 /** Auto-approve an opening session: create stock levels + mark location active */
@@ -811,23 +898,25 @@ async function autoApproveOpeningSession(sessionId: string, storeLocationId: str
     .innerJoin(stockTakeCategory, eq(stockTakeCategory.categoryId, stockTakeLine.categoryId))
     .where(eq(stockTakeCategory.sessionId, sessionId));
 
-  for (const line of lines) {
+  if (lines.length > 0) {
     await db
       .insert(stockLevel)
-      .values({
-        storeLocationId,
-        ingredientId: line.ingredientId,
-        currentQty: line.countedQty,
-        lastCountedDttm: new Date(),
-        lastCountedByUserId: line.countedByUserId,
-        version: 0,
-      })
-      .onConflictDoUpdate({
-        target: [stockLevel.storeLocationId, stockLevel.ingredientId],
-        set: {
+      .values(
+        lines.map((line) => ({
+          storeLocationId,
+          ingredientId: line.ingredientId,
           currentQty: line.countedQty,
           lastCountedDttm: new Date(),
           lastCountedByUserId: line.countedByUserId,
+          version: 0,
+        })),
+      )
+      .onConflictDoUpdate({
+        target: [stockLevel.storeLocationId, stockLevel.ingredientId],
+        set: {
+          currentQty: sql`excluded.current_qty`,
+          lastCountedDttm: sql`excluded.last_counted_dttm`,
+          lastCountedByUserId: sql`excluded.last_counted_by_user_id`,
           updatedDttm: new Date(),
         },
       });
@@ -840,89 +929,3 @@ async function autoApproveOpeningSession(sessionId: string, storeLocationId: str
     .where(eq(storeLocation.storeLocationId, storeLocationId));
 }
 
-/** Update stock levels from an approved session's counted quantities. */
-async function updateStockLevelsFromSession(
-  sessionId: string,
-  storeLocationId: string,
-) {
-  // Get all lines from all categories in this session
-  const categories = await db
-    .select()
-    .from(stockTakeCategory)
-    .where(eq(stockTakeCategory.sessionId, sessionId));
-
-  for (const cat of categories) {
-    const lines = await db
-      .select()
-      .from(stockTakeLine)
-      .where(eq(stockTakeLine.categoryId, cat.categoryId));
-
-    for (const line of lines) {
-      await upsertStockLevel(
-        storeLocationId,
-        line.ingredientId,
-        Number(line.countedQty),
-        line.countedByUserId,
-      );
-    }
-  }
-}
-
-/**
- * Upsert a stock level with optimistic locking.
- * On version conflict, retries once with fresh data.
- */
-async function upsertStockLevel(
-  storeLocationId: string,
-  ingredientId: string,
-  qty: number,
-  userId: number,
-  retryCount = 0,
-): Promise<void> {
-  const existing = await db
-    .select()
-    .from(stockLevel)
-    .where(
-      and(
-        eq(stockLevel.storeLocationId, storeLocationId),
-        eq(stockLevel.ingredientId, ingredientId),
-      ),
-    );
-
-  if (existing.length === 0) {
-    // Insert new stock level
-    await db.insert(stockLevel).values({
-      storeLocationId,
-      ingredientId,
-      currentQty: String(qty),
-      lastCountedDttm: new Date(),
-      lastCountedByUserId: userId,
-      version: 0,
-    });
-    return;
-  }
-
-  // Update with optimistic lock
-  const current = existing[0];
-  const result = await db
-    .update(stockLevel)
-    .set({
-      currentQty: String(qty),
-      lastCountedDttm: new Date(),
-      lastCountedByUserId: userId,
-      version: current.version + 1,
-      updatedDttm: new Date(),
-    })
-    .where(
-      and(
-        eq(stockLevel.stockLevelId, current.stockLevelId),
-        eq(stockLevel.version, current.version),
-      ),
-    )
-    .returning();
-
-  if (result.length === 0 && retryCount < 2) {
-    // Version conflict — retry with fresh data
-    await upsertStockLevel(storeLocationId, ingredientId, qty, userId, retryCount + 1);
-  }
-}
