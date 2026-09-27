@@ -4,6 +4,17 @@ Append-only. Newest entry on top.
 
 ---
 
+## 2026-09-27 — Phase 2d pre-landing review: race fixes, IDOR fix, 53 tests
+
+- `refactor/ck-web/phase-2d-stocktake-service-split` (PR #120): adversarial review passes + pre-landing fixes on the stockTake barrel split.
+- Race conditions closed: `claimCategory` and `submitCategory` now carry the triggering status in the UPDATE WHERE clause (ConflictError on 0 rows updated). `saveLineItem` replaced select-then-insert with `INSERT ON CONFLICT DO UPDATE`. `autoApproveOpeningSession` made idempotent by checking `sessionStatus === "APPROVED"` before the transaction.
+- IDOR fix: `openOpeningCount` moved org-scope check before the active-session state check — a foreign session ID no longer leaks existence via a 409 Conflict (lesson #89).
+- `approveSession` wrapped in a single transaction; idempotent guard placed before the transaction; `recordOpsEvent` moved after (fire-and-forget, must not roll back). Batch INSERT replaces N per-row UPDATE loops.
+- N+1 eliminated in `getPendingReviewSessions`, `getApprovedSessions`, `getSessionDetail` via `inArray` + JS Map grouping helper.
+- Test suite: 53 unit tests across all three split modules (up from 0 pre-split).
+
+---
+
 ## 2026-09-26 — Phase 2d refactor: stockTakeService barrel split
 
 - `refactor/ck-web/phase-2d-stocktake-service-split`: Phase 2d of the refactoring plan. Split `stockTakeService.ts` (1286 lines) into a barrel re-exporting three focused modules:
