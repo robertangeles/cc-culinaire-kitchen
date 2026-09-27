@@ -45,9 +45,13 @@ export async function claimCategory(
   categoryName: string,
   userId: number,
 ) {
-  const [cat] = await db
-    .select()
+  const rows = await db
+    .select({
+      ...getTableColumns(stockTakeCategory),
+      sessionStatus: stockTakeSession.sessionStatus,
+    })
     .from(stockTakeCategory)
+    .innerJoin(stockTakeSession, eq(stockTakeSession.sessionId, stockTakeCategory.sessionId))
     .where(
       and(
         eq(stockTakeCategory.sessionId, sessionId),
@@ -55,7 +59,11 @@ export async function claimCategory(
       ),
     );
 
+  const cat = rows[0];
   if (!cat) throw new NotFoundError(`Category "${categoryName}" not found in session`);
+  if (cat.sessionStatus !== "OPEN") {
+    throw new InvalidStateError(`Cannot claim category: session is ${cat.sessionStatus}, expected OPEN`);
+  }
 
   // Allow claiming if NOT_STARTED, or if already claimed by same user and IN_PROGRESS
   if (cat.categoryStatus === "IN_PROGRESS" && cat.claimedByUserId === userId) {
@@ -104,7 +112,11 @@ export async function submitCategory(sessionId: string, categoryName: string) {
 
   if (!cat) throw new NotFoundError(`Category "${categoryName}" not found`);
 
-  if (cat.categoryStatus === "SUBMITTED") return cat; // Idempotent
+  if (cat.categoryStatus === "SUBMITTED") {
+    // Idempotent — but still advance session in case a prior call succeeded here but failed on advance
+    await checkAndAdvanceSession(sessionId);
+    return cat;
+  }
 
   if (cat.categoryStatus !== "IN_PROGRESS") {
     throw new InvalidStateError(

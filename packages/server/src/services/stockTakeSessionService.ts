@@ -87,13 +87,14 @@ export async function openSession(
     throw new ConflictError("A stock take session is already active at this location");
   }
 
-  // Guard: require opening inventory before regular stock takes
+  // Guard: require opening inventory before regular stock takes; also validates org ownership
   const [loc] = await db
     .select({ inventoryActive: storeLocation.inventoryActive })
     .from(storeLocation)
-    .where(eq(storeLocation.storeLocationId, storeLocationId));
+    .where(and(eq(storeLocation.storeLocationId, storeLocationId), eq(storeLocation.organisationId, organisationId)));
 
-  if (loc && !loc.inventoryActive) {
+  if (!loc) throw new NotFoundError("Location not found");
+  if (!loc.inventoryActive) {
     throw new ValidationError(
       "Complete opening inventory before starting a regular stock take. Go to Setup to begin your opening count.",
     );
@@ -511,6 +512,17 @@ export async function flagSession(
     throw new ValidationError("At least one category must be flagged");
   }
 
+  // Validate all flagged category names exist in this session — unknown names silently produce a dead FLAGGED state
+  const sessionCategories = await db
+    .select({ categoryName: stockTakeCategory.categoryName })
+    .from(stockTakeCategory)
+    .where(eq(stockTakeCategory.sessionId, sessionId));
+  const validNames = new Set(sessionCategories.map((c) => c.categoryName));
+  const unknown = flaggedCategories.filter((name) => !validNames.has(name));
+  if (unknown.length > 0) {
+    throw new ValidationError(`Unknown categories: ${unknown.join(", ")}`);
+  }
+
   const updated = await db.transaction(async (tx) => {
     // Flag specified categories — one batch UPDATE instead of N per-row updates
     await tx
@@ -535,7 +547,7 @@ export async function flagSession(
         ),
       );
 
-    // Update session
+    // Update session — status predicate prevents overwriting a concurrently-approved session
     const [result] = await tx
       .update(stockTakeSession)
       .set({
@@ -543,9 +555,10 @@ export async function flagSession(
         flagReason: reason,
         updatedDttm: new Date(),
       })
-      .where(eq(stockTakeSession.sessionId, sessionId))
+      .where(and(eq(stockTakeSession.sessionId, sessionId), eq(stockTakeSession.sessionStatus, "PENDING_REVIEW")))
       .returning();
 
+    if (!result) throw new ConflictError("Session was approved concurrently; retry");
     return result;
   });
 
@@ -705,6 +718,7 @@ export async function getOrgDashboardSummary(organisationId: number) {
     );
 
   // Batch-fetch last approved session per location (replaces N per-location queries)
+  // ponytail: bounded at 100 per location; use DISTINCT ON when unbounded history becomes a concern
   const approvedSessions = await db
     .select({
       storeLocationId: stockTakeSession.storeLocationId,
@@ -717,7 +731,8 @@ export async function getOrgDashboardSummary(organisationId: number) {
         eq(stockTakeSession.sessionStatus, "APPROVED"),
       ),
     )
-    .orderBy(desc(stockTakeSession.closedDttm));
+    .orderBy(desc(stockTakeSession.closedDttm))
+    .limit(locationIds.length * 100);
 
   const lastSessionByLocation = new Map<string, Date | null>();
   for (const s of approvedSessions) {

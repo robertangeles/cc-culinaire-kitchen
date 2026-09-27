@@ -65,19 +65,19 @@ describe("claimCategory", () => {
   });
 
   it("returns cat idempotently when already IN_PROGRESS by same user", async () => {
-    const cat = { categoryStatus: "IN_PROGRESS", claimedByUserId: 1, categoryId: "c1" };
+    const cat = { categoryStatus: "IN_PROGRESS", claimedByUserId: 1, categoryId: "c1", sessionStatus: "OPEN" };
     mockSelect([cat]);
     const result = await claimCategory("s1", "proteins", 1);
     expect(result).toEqual(cat);
   });
 
   it("throws InvalidStateError when category is SUBMITTED", async () => {
-    mockSelect([{ categoryStatus: "SUBMITTED", claimedByUserId: 2, categoryId: "c1" }]);
+    mockSelect([{ categoryStatus: "SUBMITTED", claimedByUserId: 2, categoryId: "c1", sessionStatus: "OPEN" }]);
     await expect(claimCategory("s1", "proteins", 1)).rejects.toThrow(InvalidStateError);
   });
 
   it("transitions NOT_STARTED to IN_PROGRESS", async () => {
-    const cat = { categoryStatus: "NOT_STARTED", claimedByUserId: null, categoryId: "c1" };
+    const cat = { categoryStatus: "NOT_STARTED", claimedByUserId: null, categoryId: "c1", sessionStatus: "OPEN" };
     const updated = { ...cat, categoryStatus: "IN_PROGRESS", claimedByUserId: 1 };
     mockSelect([cat]);
     mockUpdate([updated]);
@@ -86,7 +86,7 @@ describe("claimCategory", () => {
   });
 
   it("throws ConflictError when concurrent claim wins the race", async () => {
-    const cat = { categoryStatus: "NOT_STARTED", claimedByUserId: null, categoryId: "c1" };
+    const cat = { categoryStatus: "NOT_STARTED", claimedByUserId: null, categoryId: "c1", sessionStatus: "OPEN" };
     mockSelect([cat]);
     mockUpdate([]); // 0 rows — another claim updated the status predicate first
     await expect(claimCategory("s1", "proteins", 1)).rejects.toThrow(ConflictError);
