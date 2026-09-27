@@ -300,7 +300,8 @@ function validateUrlSafety(url: string): void {
     throw new KnowledgeError("Only HTTP and HTTPS URLs are allowed", 400);
   }
 
-  const hostname = parsed.hostname;
+  // Strip IPv6 brackets: new URL("http://[::1]/").hostname === "[::1]"
+  const hostname = parsed.hostname.replace(/^\[(.+)\]$/, "$1");
 
   // Block private/reserved IP ranges
   const blocked = [
