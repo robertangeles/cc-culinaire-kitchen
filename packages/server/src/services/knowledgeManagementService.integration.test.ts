@@ -19,6 +19,10 @@ import { knowledgeDocument, knowledgeChunk } from "../db/schema.js";
 import {
   KnowledgeError,
   ingestManual,
+  ingestFile,
+  ingestUrl,
+  reEmbedDocument,
+  recoverStaleDocuments,
   listDocuments,
   getDocument,
   deleteDocument,
@@ -110,5 +114,119 @@ describe.skipIf(!RUN)("knowledgeManagementService barrel — baseline integratio
   it("deleteDocument — returns false for a non-existent id", async () => {
     const deleted = await deleteDocument(999999999);
     expect(deleted).toBe(false);
+  });
+
+  it("ingestFile — returns a document id immediately for text/plain buffer", async () => {
+    const buf = Buffer.from("Pork belly prep: slice to 2cm thickness, cure 24h, smoke at 82C.\n");
+    const newId = await ingestFile({
+      buffer: buf,
+      mimeType: "text/plain",
+      originalFilename: `${tag}-test.txt`,
+      title: `${tag}-file-test`,
+      category: "test",
+      tags: ["test"],
+    });
+    expect(typeof newId).toBe("number");
+    expect(newId).toBeGreaterThan(0);
+    // Clean up — processing is async, chunk may not exist yet
+    setTimeout(async () => {
+      await db.delete(knowledgeChunk).where(eq(knowledgeChunk.documentId, newId));
+      await db.delete(knowledgeDocument).where(eq(knowledgeDocument.documentId, newId));
+    }, 5000);
+    // immediate cleanup attempt
+    await db.delete(knowledgeChunk).where(eq(knowledgeChunk.documentId, newId));
+    await db.delete(knowledgeDocument).where(eq(knowledgeDocument.documentId, newId));
+  });
+
+  it("reEmbedDocument — throws KnowledgeError(404) for non-existent id", async () => {
+    await expect(reEmbedDocument(999999999)).rejects.toThrow(KnowledgeError);
+    await expect(reEmbedDocument(999999999)).rejects.toMatchObject({ statusCode: 404 });
+  });
+
+  it("reEmbedDocument — throws KnowledgeError(409) if document is already processing", async () => {
+    const [row] = await db
+      .insert(knowledgeDocument)
+      .values({
+        title: `${tag}-processing`,
+        category: "test",
+        tags: [],
+        body: "processing state test",
+        contentHash: `${tag}-proc-hash`,
+        sourceType: "manual",
+        status: "processing",
+      })
+      .returning({ documentId: knowledgeDocument.documentId });
+
+    try {
+      await expect(reEmbedDocument(row.documentId)).rejects.toThrow(KnowledgeError);
+      await expect(reEmbedDocument(row.documentId)).rejects.toMatchObject({ statusCode: 409 });
+    } finally {
+      await db.delete(knowledgeChunk).where(eq(knowledgeChunk.documentId, row.documentId));
+      await db.delete(knowledgeDocument).where(eq(knowledgeDocument.documentId, row.documentId));
+    }
+  });
+
+  it("recoverStaleDocuments — resets stale processing docs to failed", async () => {
+    const staleDate = new Date(Date.now() - 15 * 60 * 1000); // 15 min ago
+    const [row] = await db
+      .insert(knowledgeDocument)
+      .values({
+        title: `${tag}-stale`,
+        category: "test",
+        tags: [],
+        body: "",
+        contentHash: `${tag}-stale-hash`,
+        sourceType: "manual",
+        status: "processing",
+        updatedDttm: staleDate,
+      })
+      .returning({ documentId: knowledgeDocument.documentId });
+
+    try {
+      const recovered = await recoverStaleDocuments();
+      expect(recovered).toBeGreaterThanOrEqual(1);
+
+      const doc = await getDocument(row.documentId);
+      expect(doc?.status).toBe("failed");
+      expect(doc?.errorMessage).toContain("server restart");
+    } finally {
+      await db.delete(knowledgeChunk).where(eq(knowledgeChunk.documentId, row.documentId));
+      await db.delete(knowledgeDocument).where(eq(knowledgeDocument.documentId, row.documentId));
+    }
+  });
+});
+
+// SSRF guard tests — no DB required, run in CI
+describe("ingestUrl — SSRF validation (no DB)", () => {
+  it("rejects private IPv4 addresses", async () => {
+    await expect(ingestUrl({ url: "http://192.168.1.1/data", title: "x", category: "test", tags: [] }))
+      .rejects.toThrow(KnowledgeError);
+    await expect(ingestUrl({ url: "http://192.168.1.1/data", title: "x", category: "test", tags: [] }))
+      .rejects.toMatchObject({ statusCode: 400 });
+  });
+
+  it("rejects loopback addresses", async () => {
+    await expect(ingestUrl({ url: "http://127.0.0.1/secret", title: "x", category: "test", tags: [] }))
+      .rejects.toThrow(KnowledgeError);
+  });
+
+  it("rejects localhost", async () => {
+    await expect(ingestUrl({ url: "http://localhost:3000/api", title: "x", category: "test", tags: [] }))
+      .rejects.toThrow(KnowledgeError);
+  });
+
+  it("rejects non-http protocols", async () => {
+    await expect(ingestUrl({ url: "file:///etc/passwd", title: "x", category: "test", tags: [] }))
+      .rejects.toThrow(KnowledgeError);
+  });
+
+  it("rejects cloud metadata endpoints", async () => {
+    await expect(ingestUrl({ url: "http://169.254.169.254/latest/meta-data", title: "x", category: "test", tags: [] }))
+      .rejects.toThrow(KnowledgeError);
+  });
+
+  it("rejects 10.x private range", async () => {
+    await expect(ingestUrl({ url: "http://10.0.0.1/admin", title: "x", category: "test", tags: [] }))
+      .rejects.toThrow(KnowledgeError);
   });
 });
