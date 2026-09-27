@@ -1,5 +1,41 @@
 # CulinAIre Kitchen — TODO
 
+## Pre-existing bugs surfaced by Phase 2f specialist + red-team review (2026-09-27)
+
+All pre-existing in the original `knowledgeManagementService.ts` — extracted unchanged by the barrel split. None introduced by Phase 2f. Each needs its own fix PR.
+
+**P1 — SSRF redirect bypass via `redirect: "follow"` in `extractFromUrl` / `crawlSite`**
+`knowledgeIngestService.ts`: `fetch(url, { redirect: "follow" })` follows HTTP 3xx redirects automatically. An attacker can supply an external URL that redirects to a private IP (e.g. `http://attacker.com/redirect → http://192.168.1.1/`). `validateUrlSafety` runs only on the initial URL, not the redirect target. Fix: set `redirect: "manual"`, read the `Location` header on 3xx responses, call `validateUrlSafety()` on the resolved URL, and follow with a hop counter (≤5). Apply to both `extractFromUrl` and the `crawlSite` fetch loop.
+
+**P1 — SSRF DNS rebinding: hostname regex check doesn't resolve IPs**
+`validateUrlSafety` blocks private IP ranges by regex on the hostname string. An attacker can register a domain that resolves to a private IP (`http://evil.com` → `169.254.169.254`). The hostname check passes because `evil.com` isn't a private IP literal; the fetch later resolves to the private address. Fix: after parsing hostname, call `dns.promises.lookup(hostname, { all: true })`, validate every returned IP against the private-range blocklist using `ipaddr.js` or a manual CIDR check. Repeat for every redirect hop.
+
+**P1 — `crawlSite` same-origin check uses string prefix match (allows `example.comevil.com`)**
+`knowledgeIngestService.ts:230`: `resolved.startsWith(origin)` where `origin = new URL(startUrl).origin` (e.g. `http://example.com`). String prefix matching incorrectly accepts domains that begin with the same string (e.g. `http://example.comevil.com/`). The crawler exits the intended domain and fetches arbitrary same-prefix foreign domains. Fix: replace with URL-aware hostname comparison: `new URL(resolved).hostname === new URL(startUrl).hostname`.
+
+**P1 — Unbounded PDF buffer when `Content-Length` header is absent**
+`knowledgeIngestService.ts:153`: when a URL returns `Content-Type: application/pdf`, `res.arrayBuffer()` is called with no size guard. The `Content-Length` check at line 146 only fires when the header is present; absent it parses as 0 and the guard is skipped. A server that omits `Content-Length` and streams a 1GB+ PDF will fully buffer it in memory, causing the worker to OOM. Fix: stream the response body with a byte counter; abort and reject if size exceeds 5MB before completing the download.
+
+**P1 — N+1 INSERT: up to 500 sequential DB round-trips per document ingest**
+`knowledgeIngestService.ts` in `processDocument`: the chunk persist loop issues one `db.insert(knowledgeChunk).values({...})` per chunk inside a `for` loop, up to 500 sequential round-trips per document. Fix: replace with a single bulk insert: `db.insert(knowledgeChunk).values(chunks.map((c, i) => ({ documentId, chunkIndex: i, ... })))`.
+
+**P1 — `reEmbedDocument` TOCTOU: concurrent calls can double-process a document**
+`knowledgeIngestService.ts` in `reEmbedDocument`: reads `doc.status` then separately sets `status = 'processing'`. Two concurrent calls both see `status !== 'processing'`, both pass the guard, and both launch async re-embedding — deleting and reinserting all chunks twice. Fix: replace the SELECT+UPDATE with an atomic conditional UPDATE: `UPDATE WHERE documentId=X AND status != 'processing' RETURNING documentId` and throw 409 if no rows returned.
+
+**P2 — `clearTimeout` not in `finally` block in `crawlSite` inner fetch**
+`knowledgeIngestService.ts:203`: `clearTimeout(timeout)` is called inline after `await fetch(...)` resolves, not in a `finally` block. If `fetch` throws (DNS failure, connection refused), the catch block runs without clearing the timeout, leaving a live 15-second timer per failed URL. With `CRAWL_MAX_PAGES=20`, up to 20 dangling timers per crawl can prevent clean process shutdown. Fix: declare `timeout` outside the try block, add `clearTimeout(timeout)` in the catch.
+
+**P2 — Prompt injection: document content directly concatenated into LLM tag-generation prompt**
+`knowledgeIngestService.ts:~549` in `processDocument`: `prompt: \`...${snippet}\`` passes the first 3000 chars of user-uploaded document content directly into the LLM prompt. A crafted document could inject instructions into the tag-generation call. The zod output schema provides structural validation but doesn't prevent mid-prompt manipulation. Fix: wrap the snippet in XML-style delimiters (`<document>…</document>`) and add a system instruction treating everything inside as data.
+
+**P1 — `ingestManual` missing body size cap (financial DoS)**
+`packages/server/src/controllers/knowledgeController.ts:~51`: `ManualSchema` defines `body: z.string().min(10)` with no `.max()`. All file/URL ingest paths cap at 5MB, but the manual text endpoint has no ceiling. An admin can POST a 100MB+ text body, triggering LLM tag generation, up to 500 chunk embeddings, and up to 500 serial DB inserts in one request. Fix: add `.max(5_000_000)` to `ManualSchema.body`.
+
+**P2 — No OCR page ceiling in `extractFromPdfWithOcr`**
+`knowledgeIngestService.ts:100–116`: `for await (const pageImage of pdfDoc)` iterates every page of a PDF with no page limit. A 500-page compressed scanned PDF can fit within the 5MB file size limit while triggering Tesseract serially on all 500 pages — unbounded CPU and memory. Fix: add a page counter, break after 200 pages.
+
+---
+
 ## Pre-existing bugs surfaced by Phase 2e review (2026-09-27)
 
 All pre-existing in the original `prepService.ts` — extracted unchanged by the barrel split. None introduced by Phase 2e. Each needs its own fix PR before merging to production paths that reach prep.
