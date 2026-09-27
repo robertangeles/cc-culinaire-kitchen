@@ -24,7 +24,7 @@ export async function deleteDocument(documentId: number): Promise<boolean> {
  * List all documents for admin view (paginated).
  */
 export async function listDocuments(page = 1, limit = 20) {
-  const offset = (page - 1) * limit;
+  const offset = (Math.max(1, page) - 1) * limit;
   const docs = await db
     .select({
       documentId: knowledgeDocument.documentId,

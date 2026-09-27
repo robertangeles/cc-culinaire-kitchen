@@ -128,12 +128,6 @@ describe.skipIf(!RUN)("knowledgeManagementService barrel — baseline integratio
     });
     expect(typeof newId).toBe("number");
     expect(newId).toBeGreaterThan(0);
-    // Clean up — processing is async, chunk may not exist yet
-    setTimeout(async () => {
-      await db.delete(knowledgeChunk).where(eq(knowledgeChunk.documentId, newId));
-      await db.delete(knowledgeDocument).where(eq(knowledgeDocument.documentId, newId));
-    }, 5000);
-    // immediate cleanup attempt
     await db.delete(knowledgeChunk).where(eq(knowledgeChunk.documentId, newId));
     await db.delete(knowledgeDocument).where(eq(knowledgeDocument.documentId, newId));
   });
@@ -228,5 +222,40 @@ describe("ingestUrl — SSRF validation (no DB)", () => {
   it("rejects 10.x private range", async () => {
     await expect(ingestUrl({ url: "http://10.0.0.1/admin", title: "x", category: "test", tags: [] }))
       .rejects.toThrow(KnowledgeError);
+  });
+
+  it("rejects 172.16.x.x private range", async () => {
+    await expect(ingestUrl({ url: "http://172.16.0.1/secret", title: "x", category: "test", tags: [] }))
+      .rejects.toMatchObject({ statusCode: 400 });
+  });
+
+  it("rejects .local suffix", async () => {
+    await expect(ingestUrl({ url: "http://server.local/data", title: "x", category: "test", tags: [] }))
+      .rejects.toThrow(KnowledgeError);
+  });
+
+  it("rejects .internal suffix", async () => {
+    await expect(ingestUrl({ url: "http://k8s-api.internal/", title: "x", category: "test", tags: [] }))
+      .rejects.toThrow(KnowledgeError);
+  });
+
+  it("rejects metadata.google.com", async () => {
+    await expect(ingestUrl({ url: "http://metadata.google.com/", title: "x", category: "test", tags: [] }))
+      .rejects.toThrow(KnowledgeError);
+  });
+
+  it("rejects IPv6 loopback", async () => {
+    await expect(ingestUrl({ url: "http://[::1]/secret", title: "x", category: "test", tags: [] }))
+      .rejects.toThrow(KnowledgeError);
+  });
+
+  it("rejects malformed URL", async () => {
+    await expect(ingestUrl({ url: "not-a-url", title: "x", category: "test", tags: [] }))
+      .rejects.toMatchObject({ statusCode: 400 });
+  });
+
+  it("SSRF guard still fires when crawl:true", async () => {
+    await expect(ingestUrl({ url: "http://192.168.1.1/", title: "x", category: "test", tags: [], crawl: true }))
+      .rejects.toMatchObject({ statusCode: 400 });
   });
 });
