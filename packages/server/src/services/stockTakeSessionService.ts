@@ -136,6 +136,18 @@ export async function openOpeningCount(
   organisationId: number,
   userId: number,
 ) {
+  // Guard: location must belong to this org (prevents IDOR error oracle via guessed locId)
+  const [loc] = await db
+    .select({ storeLocationId: storeLocation.storeLocationId })
+    .from(storeLocation)
+    .where(
+      and(
+        eq(storeLocation.storeLocationId, storeLocationId),
+        eq(storeLocation.organisationId, organisationId),
+      ),
+    );
+  if (!loc) throw new NotFoundError("Location not found");
+
   // Guard: no prior OPENING session (completed or in-progress)
   const existing = await db
     .select({ sessionId: stockTakeSession.sessionId, sessionStatus: stockTakeSession.sessionStatus })
@@ -144,6 +156,7 @@ export async function openOpeningCount(
       and(
         eq(stockTakeSession.storeLocationId, storeLocationId),
         eq(stockTakeSession.sessionType, "OPENING"),
+        eq(stockTakeSession.organisationId, organisationId),
       ),
     );
 
@@ -156,18 +169,6 @@ export async function openOpeningCount(
   if (inProgress) {
     throw new ConflictError("An opening inventory session is already in progress.");
   }
-
-  // Guard: location must belong to this org (prevents cross-tenant opening count via guessed locId)
-  const [loc] = await db
-    .select({ storeLocationId: storeLocation.storeLocationId })
-    .from(storeLocation)
-    .where(
-      and(
-        eq(storeLocation.storeLocationId, storeLocationId),
-        eq(storeLocation.organisationId, organisationId),
-      ),
-    );
-  if (!loc) throw new NotFoundError("Location not found");
 
   // Guard: location must have activated items
   const activeItems = await db
@@ -931,7 +932,8 @@ async function autoApproveOpeningSession(sessionId: string, storeLocationId: str
       );
 
     // 2. Update session to APPROVED (submittedDttm set here — OPENING skips PENDING_REVIEW)
-    await tx
+    // Status predicate prevents a concurrent re-submit from overwriting closedDttm on an already-approved session.
+    const [approvedSession] = await tx
       .update(stockTakeSession)
       .set({
         sessionStatus: "APPROVED",
@@ -939,7 +941,10 @@ async function autoApproveOpeningSession(sessionId: string, storeLocationId: str
         closedDttm: new Date(),
         updatedDttm: new Date(),
       })
-      .where(eq(stockTakeSession.sessionId, sessionId));
+      .where(and(eq(stockTakeSession.sessionId, sessionId), eq(stockTakeSession.sessionStatus, "OPEN")))
+      .returning();
+
+    if (!approvedSession) return; // Concurrent submit already approved — idempotent, skip stock level writes
 
     // 3. Create/update stock levels from counted lines
     const lines = await tx

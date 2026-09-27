@@ -76,6 +76,11 @@ describe("claimCategory", () => {
     await expect(claimCategory("s1", "proteins", 1)).rejects.toThrow(InvalidStateError);
   });
 
+  it("throws InvalidStateError when category is IN_PROGRESS by a different user", async () => {
+    mockSelect([{ categoryStatus: "IN_PROGRESS", claimedByUserId: 2, categoryId: "c1", sessionStatus: "OPEN" }]);
+    await expect(claimCategory("s1", "proteins", 1)).rejects.toThrow(InvalidStateError);
+  });
+
   it("throws InvalidStateError when session is not OPEN or FLAGGED", async () => {
     mockSelect([{ categoryStatus: "NOT_STARTED", claimedByUserId: null, categoryId: "c1", sessionStatus: "PENDING_REVIEW" }]);
     await expect(claimCategory("s1", "proteins", 1)).rejects.toThrow(InvalidStateError);

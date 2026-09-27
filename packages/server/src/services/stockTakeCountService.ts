@@ -206,7 +206,10 @@ export async function saveLineItem(
   return row;
 }
 
-/** Get line items for a category — enriched with ingredient + user names. */
+/**
+ * Get line items for a category — enriched with ingredient + user names.
+ * Callers must validate that the categoryId belongs to the caller's organisation before invoking.
+ */
 export async function getCategoryLines(categoryId: string) {
   return db
     .select({
@@ -240,6 +243,7 @@ export async function getCategoryLines(categoryId: string) {
 /**
  * Get the previous count lines for "Copy Last Count" pre-fill.
  * Returns all line items from the most recent APPROVED session at a location.
+ * Callers must validate that the storeLocationId belongs to the caller's organisation before invoking.
  */
 export async function getPreviousCountLines(
   storeLocationId: string,
