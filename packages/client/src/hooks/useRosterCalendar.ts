@@ -117,8 +117,9 @@ export function useShifts(storeLocationId: string | null) {
     }) => {
       const res = await fetch(`${BASE}/shifts`, { ...jsonOpts, method: "POST", body: JSON.stringify(data) });
       if (!res.ok) throw await parseError(res, "Failed to create shift");
+      const created = (await res.json()) as Shift;
       await refresh();
-      return (await res.json()) as Shift;
+      return created;
     },
     [refresh],
   );
@@ -234,8 +235,9 @@ export function useRosterTemplates(storeLocationId: string | null) {
     async (data: TemplateRowInput) => {
       const res = await fetch(`${BASE}/templates`, { ...jsonOpts, method: "POST", body: JSON.stringify(data) });
       if (!res.ok) throw await parseError(res, "Failed to create template row");
+      const created = (await res.json()) as RosterShiftTemplate;
       await refresh();
-      return (await res.json()) as RosterShiftTemplate;
+      return created;
     },
     [refresh],
   );
@@ -336,7 +338,7 @@ export function useRosterCalendar(storeLocationId: string | null, from: string, 
     if (!hasLoadedOnce.current) setIsLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${BASE}/shifts/calendar?storeLocationId=${storeLocationId}&from=${from}&to=${to}`, opts);
+      const res = await fetch(`${BASE}/shifts/calendar?storeLocationId=${storeLocationId}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`, opts);
       if (res.ok) setCalendarShifts(await res.json());
       else setError((await parseError(res, "Failed to load the roster calendar")).message);
     } finally {
@@ -349,8 +351,9 @@ export function useRosterCalendar(storeLocationId: string | null, from: string, 
     async (data: { storeLocationId: string; rosterRoleId: string; startDatetime: string; endDatetime: string }) => {
       const res = await fetch(`${BASE}/shifts`, { ...jsonOpts, method: "POST", body: JSON.stringify(data) });
       if (!res.ok) throw await parseError(res, "Failed to create shift");
+      const created = (await res.json()) as Shift;
       await refresh();
-      return (await res.json()) as Shift;
+      return created;
     },
     [refresh],
   );

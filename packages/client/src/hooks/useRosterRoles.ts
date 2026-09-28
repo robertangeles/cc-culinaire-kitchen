@@ -38,7 +38,7 @@ export async function parseError(
   fallback: string,
 ): Promise<Error & { blocked?: AssignmentBlocked; conflicts?: RoleVenueConflict[] }> {
   const body = await res.json().catch(() => ({}));
-  const err = new Error(body.error || fallback) as Error & {
+  const err = new Error(typeof body.error === "string" ? body.error : fallback) as Error & {
     blocked?: AssignmentBlocked;
     conflicts?: RoleVenueConflict[];
   };
@@ -76,8 +76,9 @@ export function useRosterRoles() {
     async (data: { roleName: string; storeLocationId?: string | null }) => {
       const res = await fetch(`${BASE}/roles`, { ...jsonOpts, method: "POST", body: JSON.stringify(data) });
       if (!res.ok) throw await parseError(res, "Failed to create role");
+      const created = (await res.json()) as RosterRole;
       await refresh();
-      return (await res.json()) as RosterRole;
+      return created;
     },
     [refresh],
   );
