@@ -242,10 +242,10 @@ export function MenuItemFormModal({
   }, []);
 
   useEffect(() => {
-    if (mode === "import" && importRecipes.length === 0 && !importLoading) {
+    if (mode === "import" && importRecipes.length === 0 && !importLoading && !importError) {
       fetchRecipesForImport();
     }
-  }, [mode, importRecipes.length, importLoading, fetchRecipesForImport]);
+  }, [mode, importRecipes.length, importLoading, importError, fetchRecipesForImport]);
 
   // Filter recipes by search term
   const filteredRecipes = useMemo(() => {
@@ -284,6 +284,7 @@ export function MenuItemFormModal({
     setCategory(DOMAIN_CATEGORY_MAP[recipe.domain] ?? "");
     setSellingPrice("");
     setServings(parseServingsFromYield(recipe.yield));
+    setServingsPerSale(1);
 
     const mapped: IngredientRow[] = recipe.ingredients.map((ing) => {
       const mappedUnit = UNIT_MAP[ing.unit.toLowerCase()] ?? UNIT_MAP[ing.unit] ?? "each";
@@ -359,6 +360,7 @@ export function MenuItemFormModal({
     }
 
     setSaving(true);
+    let savedItemId: string | undefined;
     try {
       const result = await onSave({
         name: name.trim(),
@@ -369,36 +371,40 @@ export function MenuItemFormModal({
         qFactorPct: qFactorPct || "0",
         unitsSold,
       });
-
-      const validIngredients = ingredients.filter(
-        (r) => r.ingredientName.trim() && r.quantity
-      );
-      if (validIngredients.length > 0) {
-        const itemId = editItem?.menuItemId ?? (result as string);
-        if (itemId) {
-          await onSaveIngredients(
-            itemId,
-            validIngredients.map((r) => ({
-              ingredientId: r.ingredientId ?? null,
-              ingredientName: r.ingredientName.trim(),
-              note: r.note ?? null,
-              quantity: r.quantity,
-              unit: r.unit,
-              unitCost: r.unitCost || undefined,
-              yieldPct: r.yieldPct || "100",
-            }))
-          );
-        }
-      }
-
-      onClose();
+      savedItemId = editItem?.menuItemId ?? (result as string);
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to save menu item."
-      );
-    } finally {
+      setError(err instanceof Error ? err.message : "Failed to save menu item.");
       setSaving(false);
+      return;
     }
+
+    const validIngredients = ingredients.filter(
+      (r) => r.ingredientName.trim() && r.quantity
+    );
+    if (validIngredients.length > 0 && savedItemId) {
+      try {
+        await onSaveIngredients(
+          savedItemId,
+          validIngredients.map((r) => ({
+            ingredientId: r.ingredientId ?? null,
+            ingredientName: r.ingredientName.trim(),
+            note: r.note ?? null,
+            quantity: r.quantity,
+            unit: r.unit,
+            unitCost: r.unitCost || undefined,
+            yieldPct: r.yieldPct || "100",
+          }))
+        );
+      } catch (err) {
+        // Item was created but ingredients failed — keep modal open; user can retry ingredients.
+        setError("Item saved, but ingredients failed to save. Edit the item to add them.");
+        setSaving(false);
+        return;
+      }
+    }
+
+    setSaving(false);
+    onClose();
   }
 
   return (

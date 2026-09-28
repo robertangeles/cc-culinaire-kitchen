@@ -1,5 +1,5 @@
 import { type Dispatch, type SetStateAction } from "react";
-import { Loader2, Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import type { MenuItem, MenuIngredient } from "../../hooks/useMenuItems.js";
 import { IngredientPickerInline } from "../inventory/IngredientPickerInline.js";
 import { resolveQtyToKitchen, resolvableUnits, type CustomConversion } from "@culinaire/shared";
