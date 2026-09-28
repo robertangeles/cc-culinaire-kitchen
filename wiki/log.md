@@ -4,6 +4,19 @@ Append-only. Newest entry on top.
 
 ---
 
+## 2026-09-28 — Phase 3c: MenuItemFormModal section split
+
+- `refactor/ck-web/phase-3c-menu-item-form-modal-split`: Phase 3c of the refactoring plan.
+- Split `MenuItemFormModal.tsx` (1226 lines) into three focused section components:
+  - `RecipeImportPanel.tsx` — mode toggle + recipe import search/list UI; owns `ImportIngredient`, `ImportRecipe` types and `DOMAIN_BADGE` constant
+  - `IngredientsSection.tsx` — ingredient rows table + empty state; owns `IngredientRow` type, `UNITS` constant, and all cost utilities (`calcLineCost`, `toKitchenQty`, `buildConversionText`, etc.)
+  - `CostSummary.tsx` — 4-metric cost panel (batch cost, food cost/serving, food cost %, contribution margin)
+- `MenuItemFormModal.tsx` becomes the orchestrator (~460 lines, down from 1226).
+- No behavior change. All existing callers unchanged; all exports unchanged.
+- 411/411 tests pass.
+
+---
+
 ## 2026-09-27 — Phase 2d pre-landing review: race fixes, IDOR fix, 53 tests
 
 - `refactor/ck-web/phase-2d-stocktake-service-split` (PR #120): adversarial review passes + pre-landing fixes on the stockTake barrel split.
