@@ -30,6 +30,9 @@ import { TransactionHistory } from "./TransactionHistory.js";
 import { CATEGORIES, ITEM_TYPES, ITEM_TYPE_KEYS, FIFO_MODES, FIFO_DEFAULTS, getCategoriesForType, suggestDensity, type ItemTypeKey, type FifoModeKey } from "@culinaire/shared";
 import { IngredientFilters } from "./IngredientFilters.js";
 import { IngredientTable } from "./IngredientTable.js";
+import { ALLERGEN_DEFS, type AllergenKey } from "./allergenDefs.js";
+
+export { ALLERGEN_DEFS, type AllergenKey };
 
 const UNITS = [
   "kg", "g", "mg",
@@ -45,17 +48,6 @@ const UNITS = [
  * recipes can measure out of them.
  */
 const MEASURED_UNITS = ["kg", "g", "mg", "L", "mL", "tsp", "tbsp", "cup", "fl oz"];
-
-export const ALLERGEN_DEFS = [
-  { key: "containsDairyInd" as const, label: "Dairy", color: "bg-blue-500/20 text-blue-400 border-blue-500/30" },
-  { key: "containsGlutenInd" as const, label: "Gluten", color: "bg-amber-500/20 text-amber-400 border-amber-500/30" },
-  { key: "containsNutsInd" as const, label: "Nuts", color: "bg-orange-500/20 text-orange-400 border-orange-500/30" },
-  { key: "containsShellfishInd" as const, label: "Shellfish", color: "bg-red-500/20 text-red-400 border-red-500/30" },
-  { key: "containsEggsInd" as const, label: "Eggs", color: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30" },
-  { key: "isVegetarianInd" as const, label: "Veg", color: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" },
-];
-
-export type AllergenKey = typeof ALLERGEN_DEFS[number]["key"];
 
 export function IngredientCatalog() {
   const { ingredients, isLoading, create, update, checkUsage, remove } = useIngredients();

@@ -1,5 +1,5 @@
 import { Search, Plus } from "lucide-react";
-import { ALLERGEN_DEFS, type AllergenKey } from "./IngredientCatalog.js";
+import { ALLERGEN_DEFS, type AllergenKey } from "./allergenDefs.js";
 
 interface IngredientFiltersProps {
   search: string;
