@@ -395,7 +395,7 @@ export function MenuItemFormModal({
             yieldPct: r.yieldPct || "100",
           }))
         );
-      } catch (err) {
+      } catch {
         // Item was created but ingredients failed — keep modal open; user can retry ingredients.
         setError("Item saved, but ingredients failed to save. Edit the item to add them.");
         setSaving(false);
