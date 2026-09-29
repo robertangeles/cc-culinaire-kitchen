@@ -4,6 +4,19 @@ Append-only. Newest entry on top.
 
 ---
 
+## 2026-09-29 — Phase 3d: IngredientCatalog section split
+
+- `refactor/ck-web/phase-3d-ingredient-catalog-split`: Phase 3d of the refactoring plan.
+- Split `IngredientCatalog.tsx` (~1171 lines) into three focused files:
+  - `allergenDefs.ts` (10 lines) — shared allergen constant definitions; extracted first to break the circular import that would have formed between the two new sibling components
+  - `IngredientFilters.tsx` (93 lines) — filter bar UI: search, allergen, category, and status filters; owns filter state types and allergen badge rendering
+  - `IngredientTable.tsx` (137 lines) — ingredient table rows, column definitions, and row-level actions; owns row rendering and per-item interactions
+- `IngredientCatalog.tsx` becomes the orchestrator (~1002 lines, down from ~1171; remaining logic not yet split).
+- No behavior change. All existing callers unchanged.
+- Circular dep resolved by extracting `allergenDefs.ts` before splitting (see lesson #93).
+
+---
+
 ## 2026-09-28 — Phase 3c: MenuItemFormModal section split
 
 - `refactor/ck-web/phase-3c-menu-item-form-modal-split`: Phase 3c of the refactoring plan.
