@@ -19,9 +19,7 @@ import {
 import { useLocation } from "../../context/LocationContext.js";
 import {
   Plus,
-  Search,
   Loader2,
-  Utensils,
   X,
   Check,
   DollarSign,
@@ -30,6 +28,11 @@ import {
 } from "lucide-react";
 import { TransactionHistory } from "./TransactionHistory.js";
 import { CATEGORIES, ITEM_TYPES, ITEM_TYPE_KEYS, FIFO_MODES, FIFO_DEFAULTS, getCategoriesForType, suggestDensity, type ItemTypeKey, type FifoModeKey } from "@culinaire/shared";
+import { IngredientFilters } from "./IngredientFilters.js";
+import { IngredientTable } from "./IngredientTable.js";
+import { ALLERGEN_DEFS, type AllergenKey } from "./allergenDefs.js";
+
+export { ALLERGEN_DEFS, type AllergenKey };
 
 const UNITS = [
   "kg", "g", "mg",
@@ -45,32 +48,6 @@ const UNITS = [
  * recipes can measure out of them.
  */
 const MEASURED_UNITS = ["kg", "g", "mg", "L", "mL", "tsp", "tbsp", "cup", "fl oz"];
-
-const ALLERGEN_DEFS = [
-  { key: "containsDairyInd" as const, label: "Dairy", color: "bg-blue-500/20 text-blue-400 border-blue-500/30" },
-  { key: "containsGlutenInd" as const, label: "Gluten", color: "bg-amber-500/20 text-amber-400 border-amber-500/30" },
-  { key: "containsNutsInd" as const, label: "Nuts", color: "bg-orange-500/20 text-orange-400 border-orange-500/30" },
-  { key: "containsShellfishInd" as const, label: "Shellfish", color: "bg-red-500/20 text-red-400 border-red-500/30" },
-  { key: "containsEggsInd" as const, label: "Eggs", color: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30" },
-  { key: "isVegetarianInd" as const, label: "Veg", color: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" },
-];
-
-type AllergenKey = typeof ALLERGEN_DEFS[number]["key"];
-
-function getStockStatus(locData?: LocationIngredient): "healthy" | "low" | "critical" | "none" {
-  if (!locData?.currentQty || !locData?.parLevel) return "none";
-  const ratio = Number(locData.currentQty) / Number(locData.parLevel);
-  if (ratio <= 0.25) return "critical";
-  if (ratio <= 0.75) return "low";
-  return "healthy";
-}
-
-const STATUS_LABEL: Record<string, { text: string; className: string }> = {
-  healthy: { text: "OK", className: "text-emerald-400" },
-  low: { text: "Low", className: "text-amber-400" },
-  critical: { text: "Crit", className: "text-red-400" },
-  none: { text: "—", className: "text-dark-500" },
-};
 
 export function IngredientCatalog() {
   const { ingredients, isLoading, create, update, checkUsage, remove } = useIngredients();
@@ -149,74 +126,17 @@ export function IngredientCatalog() {
 
   return (
     <div className="space-y-3 animate-[fadeInUp_200ms_ease-out]">
-      {/* Toolbar */}
-      <div className="flex items-center gap-3">
-        <div className="relative flex-1 max-w-xs">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-dark-500" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search items..."
-            className="w-full pl-10 pr-4 py-1.5 rounded-lg bg-dark-50 border border-dark-200 text-sm text-white placeholder-dark-500 focus:outline-none focus:border-gold/50 transition-all"
-          />
-        </div>
-        <select
-          value={typeFilter}
-          onChange={(e) => handleTypeFilterChange(e.target.value)}
-          className="px-3 py-1.5 rounded-lg bg-dark-50 border border-dark-200 text-sm text-white appearance-none cursor-pointer focus:outline-none"
-        >
-          <option value="all">All Types</option>
-          <option value="KITCHEN_INGREDIENT">Kitchen</option>
-          <option value="FOH_CONSUMABLE">FOH</option>
-          <option value="OPERATIONAL_SUPPLY">Operational</option>
-        </select>
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="px-3 py-1.5 rounded-lg bg-dark-50 border border-dark-200 text-sm text-white appearance-none cursor-pointer focus:outline-none"
-        >
-          <option value="">All Status</option>
-          <option value="low">Low</option>
-          <option value="critical">Critical</option>
-        </select>
-        <select
-          value={allergenFilter || ""}
-          onChange={(e) => setAllergenFilter((e.target.value || null) as AllergenKey | null)}
-          className="px-3 py-1.5 rounded-lg bg-dark-50 border border-dark-200 text-sm text-white appearance-none cursor-pointer focus:outline-none"
-        >
-          <option value="">Allergens</option>
-          {ALLERGEN_DEFS.map((a) => <option key={a.key} value={a.key}>{a.label}</option>)}
-        </select>
-        <button
-          onClick={() => { setShowAdd(true); setError(null); }}
-          className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-gradient-to-r from-gold to-gold-hover text-dark text-sm font-semibold hover:shadow-[0_0_12px_rgba(212,165,116,0.2)] transition-all active:scale-[0.98]"
-        >
-          <Plus className="size-4" />
-          Add
-        </button>
-      </div>
-
-      {/* Legend */}
-      <div className="flex items-center gap-4 text-[10px] text-[#777]">
-        <span className="uppercase tracking-wider text-[#555]">Legend:</span>
-        <span className="flex items-center gap-1.5">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-          <span>OK — stock above 75% of par</span>
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-          <span>Low — stock between 25–75% of par</span>
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
-          <span>Critical — stock below 25% of par</span>
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="w-1.5 h-1.5 rounded-full bg-[#555]" />
-          <span>No par level set</span>
-        </span>
-      </div>
+      <IngredientFilters
+        search={search}
+        onSearchChange={setSearch}
+        typeFilter={typeFilter}
+        onTypeFilterChange={handleTypeFilterChange}
+        statusFilter={statusFilter}
+        onStatusFilterChange={setStatusFilter}
+        allergenFilter={allergenFilter}
+        onAllergenFilterChange={setAllergenFilter}
+        onAdd={() => { setShowAdd(true); setError(null); }}
+      />
 
       {error && <p className="text-sm text-red-400">{error}</p>}
 
@@ -253,110 +173,21 @@ export function IngredientCatalog() {
         </div>
       )}
 
-      {/* Two-column layout: sidebar + table */}
       {!isLoading && (
-        <div className="flex rounded-xl border border-dark-100 overflow-hidden max-h-[calc(100vh-280px)]">
-          {/* Category sidebar */}
-          <div className="flex-shrink-0 w-52 bg-dark border-r border-dark-100 overflow-y-auto">
-            {availableCategories.map((cat) => {
-              const counts = categoryCounts[cat.key];
-              const total = counts?.total || 0;
-              const hasCritical = (counts?.critical || 0) > 0;
-              const hasLow = (counts?.low || 0) > 0;
-              const isActive = selectedCategory === cat.key;
-
-              return (
-                <button
-                  key={cat.key}
-                  onClick={() => setSelectedCategory(cat.key)}
-                  className={`w-full flex items-center justify-between px-3 py-2 text-left text-sm transition-colors ${
-                    isActive
-                      ? "bg-dark-100 text-white border-l-2 border-gold"
-                      : "text-[#888] hover:text-white hover:bg-dark-50 border-l-2 border-transparent"
-                  }`}
-                >
-                  <span className="truncate">{cat.label}</span>
-                  <span className="flex items-center gap-1.5 shrink-0 ml-2">
-                    {hasCritical && <span className="size-1.5 rounded-full bg-red-400" />}
-                    {!hasCritical && hasLow && <span className="size-1.5 rounded-full bg-amber-400" />}
-                    <span className={`text-xs tabular-nums ${isActive ? "text-dark-600" : "text-[#555]"}`}>
-                      {total}
-                    </span>
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Item table */}
-          <div className="flex-1 min-w-0 bg-[#111] overflow-y-auto">
-            {/* Table header */}
-            <div className="sticky top-0 z-10 grid grid-cols-12 gap-1 px-4 py-1.5 text-[10px] text-dark-500 uppercase tracking-wider border-b border-dark-100 bg-[#111]">
-              <div className="col-span-4">Name</div>
-              <div className="col-span-1">UOM</div>
-              <div className="col-span-2 text-right">Cost</div>
-              <div className="col-span-2 text-right">Stock</div>
-              <div className="col-span-1 text-right">Par</div>
-              <div className="col-span-2 text-right">Status</div>
-            </div>
-
-            {filtered.length === 0 && (
-              <div className="text-center py-12">
-                <Utensils className="size-8 mx-auto text-gold mb-3" />
-                <p className="text-sm text-white font-medium mb-1">
-                  {search ? "No matching items" : "No items in this category"}
-                </p>
-                <p className="text-xs text-dark-600">
-                  {search ? "Try a different search." : "Add your first item."}
-                </p>
-              </div>
-            )}
-
-            {/* Rows */}
-            {filtered.map((ing) => {
-              const loc = locMap.get(ing.ingredientId);
-              const status = getStockStatus(loc);
-              const sl = STATUS_LABEL[status];
-              const cost = loc?.locationUnitCost || ing.unitCost;
-              // Kitchen-unit model: stock, par, and display all live in the
-              // item's kitchen unit (baseUnit — bottle, g, each). No lens.
-              const qty = loc?.currentQty ? Number(loc.currentQty) : null;
-              const par = loc?.parLevel ? Number(loc.parLevel) : ing.parLevel ? Number(ing.parLevel) : null;
-              const isLowStock = qty !== null && par !== null && par > 0 && qty / par <= 0.75;
-              const fmtStock = (n: number) => (n % 1 === 0 ? n.toString() : n.toFixed(1));
-
-              return (
-                <button
-                  key={ing.ingredientId}
-                  onClick={() => setEditIngredient(ing)}
-                  className="w-full grid grid-cols-12 gap-1 px-4 py-1.5 text-sm hover:bg-[#1A1A1A] cursor-pointer transition-colors text-left items-center"
-                >
-                  <div className="col-span-4 text-white truncate">{ing.ingredientName}</div>
-                  <div className="col-span-1 text-dark-500">{ing.baseUnit}</div>
-                  <div className="col-span-2 text-right text-dark-600 font-mono tabular-nums">
-                    {cost
-                      ? `$${(ing.packQty ? (Number(cost) * Number(ing.packQty)).toFixed(2) : Number(cost).toFixed(2))}`
-                      : "—"}
-                  </div>
-                  <div className={`col-span-2 text-right font-mono tabular-nums ${isLowStock ? "text-amber-400" : "text-white"}`}>
-                    {qty !== null ? fmtStock(qty) : "—"}
-                  </div>
-                  <div className="col-span-1 text-right text-dark-500 font-mono tabular-nums">
-                    {par !== null ? fmtStock(par) : "—"}
-                  </div>
-                  <div className={`col-span-2 text-right text-xs font-medium ${sl.className}`}>
-                    {sl.text}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
+        <IngredientTable
+          availableCategories={availableCategories}
+          categoryCounts={categoryCounts}
+          selectedCategory={selectedCategory}
+          onCategoryChange={setSelectedCategory}
+          filtered={filtered}
+          locMap={locMap}
+          search={search}
+          onEditIngredient={setEditIngredient}
+        />
       )}
 
       <p className="text-xs text-dark-500 text-center">{filtered.length} items</p>
 
-      {/* Edit modal */}
       {editIngredient && (
         <EditIngredientModal
           ingredient={editIngredient}

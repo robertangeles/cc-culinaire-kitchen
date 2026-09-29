@@ -1107,3 +1107,9 @@ builds all tables with CHECKs enforcing. Stop it again when done.
 - **Problem**: `parseAmountToNumber` in `prepErrors.ts` uses `/^(\d+)\/(\d+)$/` to match fraction strings. "1/0" matches, returns `1/0 = Infinity`. When this value is later multiplied and stored in a PostgreSQL `numeric` column, PostgreSQL rejects `'Infinity'` as `"invalid input syntax for type numeric"`. The entire `generateTasksFromSelections` transaction rolls back, leaving the session with zero tasks.
 - **Fix**: `if (parseInt(fracMatch[2], 10) === 0) return 0;` before the division.
 - **Rule**: Any user-controlled fraction parsing must guard against denominator zero. `parseInt()` never throws — it returns 0 for "0" — so the guard must be explicit.
+
+## #93 — React component split: extract shared constants/types to break circular imports (2026-09-29)
+
+- **Problem**: Splitting `IngredientCatalog.tsx` into `IngredientFilters.tsx` + `IngredientTable.tsx` created a circular import: `IngredientFilters` needed allergen constants originally defined in `IngredientCatalog`, and `IngredientCatalog` (now the orchestrator) imported from `IngredientFilters`. Both modules would have imported from each other.
+- **Fix**: Extract shared constants and types to a standalone file (`allergenDefs.ts`) before splitting. Both sibling components and the orchestrator import from the shared file — circular dependency never forms.
+- **Rule**: Before splitting a component, identify any constants, types, or utilities that will be needed by MULTIPLE of the resulting files. Extract those to a separate neutral file first, then do the split. A circular import between sibling components (A imports B which imports A) is always a sign that shared definitions haven't been lifted yet.
