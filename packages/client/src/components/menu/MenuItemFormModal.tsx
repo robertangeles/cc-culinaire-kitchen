@@ -7,14 +7,12 @@
  */
 
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { X, Plus, Trash2, Loader2, DollarSign, Search, BookOpen, PenTool } from "lucide-react";
+import { X, Loader2 } from "lucide-react";
 import type { MenuItem, MenuIngredient } from "../../hooks/useMenuItems.js";
-import { IngredientPickerInline } from "../inventory/IngredientPickerInline.js";
-import {
-  resolveQtyToKitchen,
-  resolvableUnits,
-  type CustomConversion,
-} from "@culinaire/shared";
+import type { CustomConversion } from "@culinaire/shared";
+import { CostSummary } from "./CostSummary.js";
+import { RecipeImportPanel, type ImportRecipe } from "./RecipeImportPanel.js";
+import { IngredientsSection, type IngredientRow, calcLineCost } from "./IngredientsSection.js";
 
 const API = import.meta.env.VITE_API_URL ?? "";
 
@@ -32,13 +30,6 @@ const DEFAULT_CATEGORIES = [
   "Beverages",
   "Cocktails",
   "Brunch",
-];
-
-const UNITS = [
-  "kg", "g", "mg",
-  "L", "mL", "tsp", "tbsp", "cup", "fl oz",
-  "each", "dozen", "portion",
-  "bottle", "can", "bag", "box", "case", "bunch",
 ];
 
 /* ---- Unit mapping from recipe units to menu-compatible units ---- */
@@ -59,6 +50,14 @@ const UNIT_MAP: Record<string, string> = {
   bunch: "each",
 };
 
+/* ---- Domain → category mapping ---- */
+
+const DOMAIN_CATEGORY_MAP: Record<string, string> = {
+  recipe: "Entrees",
+  patisserie: "Desserts",
+  spirits: "Beverages",
+};
+
 /* ---- Quantity sanitizer ----
    Server expects /^\d+(\.\d{1,3})?$/. Recipe amounts can be "1/2", "to taste",
    "" — coerce to a numeric string, defaulting to "0" when no number is found. */
@@ -71,161 +70,6 @@ function parseServingsFromYield(yieldStr: string | undefined): number {
   if (!yieldStr) return 1;
   const match = yieldStr.match(/(\d+)/);
   return match ? Math.max(1, parseInt(match[1], 10)) : 1;
-}
-
-/* ---- Domain → category mapping ---- */
-
-const DOMAIN_CATEGORY_MAP: Record<string, string> = {
-  recipe: "Entrees",
-  patisserie: "Desserts",
-  spirits: "Beverages",
-};
-
-/* ---- Domain badge styling ---- */
-
-const DOMAIN_BADGE: Record<string, { label: string; bg: string; text: string }> = {
-  recipe: { label: "Recipe Lab", bg: "bg-gold/20", text: "text-gold" },
-  patisserie: { label: "Patisserie", bg: "bg-pink-500/20", text: "text-pink-400" },
-  spirits: { label: "Spirits", bg: "bg-blue-500/20", text: "text-blue-400" },
-};
-
-/* ---- Import recipe types ---- */
-
-interface ImportIngredient {
-  name: string;
-  amount: string;
-  unit: string;
-  note?: string;
-}
-
-interface ImportRecipe {
-  recipeId: string;
-  title: string;
-  domain: string;
-  ownerName?: string;
-  yield?: string;
-  ingredients: ImportIngredient[];
-}
-
-/* ---- Ingredient row type ---- */
-
-interface IngredientRow {
-  tempId: number;
-  existingId?: number;
-  ingredientId?: string | null;
-  ingredientName: string;
-  note?: string | null;
-  quantity: string;
-  unit: string;
-  /** The catalog ingredient's KITCHEN unit (what unitCost is denominated in). */
-  baseUnit?: string;
-  /** Content equivalence: 1 kitchen unit contains contentQty contentUnit (1 bottle = 750 ml). */
-  contentQty?: string | null;
-  contentUnit?: string | null;
-  /** Purchase packaging (resolver step 2): label + kitchen units per pack. */
-  purchaseUnit?: string | null;
-  packQty?: string | null;
-  /** Density g/mL — the resolver's volume↔mass bridge (weigh liquids). */
-  densityGPerMl?: string | null;
-  /** Catalog row's last update — cost provenance age in the breakdown. */
-  costUpdatedAt?: string | null;
-  unitCost: string;
-  yieldPct: string;
-  costStaleInd?: boolean;
-}
-
-/**
- * Convert a recipe-line qty to the ingredient's KITCHEN unit via THE shared
- * 6-step resolver (`@culinaire/shared` — the same code the server's stock
- * flows run, so the preview can never drift from depletion again). Custom
- * `unit_conversion` rows arrive via the per-ingredient conversions cache.
- * Returns null when no path exists (unit mismatch, D3 render).
- */
-function toKitchenQty(
-  row: IngredientRow,
-  qty: number,
-  conversions: CustomConversion[],
-): number | null {
-  if (!row.baseUnit || row.unit === row.baseUnit) return qty;
-  try {
-    return resolveQtyToKitchen(
-      {
-        baseUnit: row.baseUnit,
-        purchaseUnit: row.purchaseUnit ?? null,
-        packQty: row.packQty ?? null,
-        contentQty: row.contentQty ?? null,
-        contentUnit: row.contentUnit ?? null,
-        densityGPerMl: row.densityGPerMl ?? null,
-      },
-      qty,
-      row.unit,
-      conversions,
-    );
-  } catch {
-    // IncompatibleUnitsError — no resolution path (setup issue, never a guess).
-    return null;
-  }
-}
-
-function calcLineCost(row: IngredientRow, conversions: CustomConversion[]): number {
-  const qty = parseFloat(row.quantity) || 0;
-  const cost = parseFloat(row.unitCost) || 0;
-  const yld = parseFloat(row.yieldPct) || 100;
-  if (yld === 0) return 0;
-
-  const qtyInBase = toKitchenQty(row, qty, conversions);
-  if (qtyInBase === null) return 0;
-  const raw = (qtyInBase * cost) / (yld / 100);
-  return Math.round(raw * 100) / 100;
-}
-
-function hasUnitMismatch(row: IngredientRow, conversions: CustomConversion[]): boolean {
-  if (!row.baseUnit || !row.ingredientId || row.unit === row.baseUnit) return false;
-  return toKitchenQty(row, 1, conversions) === null;
-}
-
-/** Linked row with no cost anywhere (never received, no supplier cost): a zero
- *  would be a claim; a dash is an honest absence. */
-function hasNoCostData(row: IngredientRow): boolean {
-  return Boolean(row.ingredientId) && !(parseFloat(row.unitCost) > 0);
-}
-
-/** Relative age for cost provenance ("3d ago"); null when unknown or fresh. */
-function costAge(row: IngredientRow): string | null {
-  if (!row.costUpdatedAt) return null;
-  const ms = Date.now() - new Date(row.costUpdatedAt).getTime();
-  if (!Number.isFinite(ms) || ms < 0) return null;
-  const days = Math.floor(ms / 86_400_000);
-  if (days < 1) return "today";
-  return `${days}d ago`;
-}
-
-function buildConversionText(row: IngredientRow, conversions: CustomConversion[]): string | null {
-  if (!row.ingredientId || !row.baseUnit) return null;
-  const qty = parseFloat(row.quantity) || 0;
-  const cost = parseFloat(row.unitCost) || 0;
-  const yld = parseFloat(row.yieldPct) || 100;
-  if (qty === 0 && cost === 0) return null;
-
-  const resolved = toKitchenQty(row, qty, conversions);
-  const qtyInBase = resolved ?? qty;
-  const converted = resolved !== null && row.unit !== row.baseUnit;
-
-  const qtyStr = converted
-    ? `${qty}${row.unit} = ${Number(qtyInBase.toFixed(4))} ${row.baseUnit}`
-    : `${Number(qtyInBase.toFixed(4))} ${row.baseUnit}`;
-  const costStr = `$${cost.toFixed(4)}/${row.baseUnit}`;
-  const lineCost = yld > 0 ? (qtyInBase * cost) / (yld / 100) : 0;
-
-  // Cost provenance: v1 shows org-level cost; age from the catalog row's
-  // last update when known (honestly stale beats silently wrong).
-  const age = costAge(row);
-  const provenance = ` · org cost${age ? `, ${age}` : ""}`;
-
-  if (yld !== 100) {
-    return `${qtyStr} × ${costStr} / ${yld}% yield = $${lineCost.toFixed(2)}${provenance}`;
-  }
-  return `${qtyStr} × ${costStr} = $${lineCost.toFixed(2)}${provenance}`;
 }
 
 /* ---- Component ---- */
@@ -255,10 +99,6 @@ interface MenuItemFormModalProps {
       yieldPct: string;
     }[]
   ) => Promise<void>;
-  /**
-   * Phase 3: refresh a Catalog-linked row's cost from the Catalog. Optional;
-   * the chip's Refresh affordance only renders when this is provided.
-   */
   onRefreshIngredientCost?: (itemId: string, rowId: number) => Promise<MenuIngredient>;
   onClose: () => void;
 }
@@ -335,13 +175,11 @@ export function MenuItemFormModal({
   const conversionsLoading = (ingredientId?: string | null): boolean =>
     Boolean(ingredientId) && conversionsCache.current.get(ingredientId!) === "loading";
 
-  // Prefetch custom conversions for every linked row as soon as rows exist —
-  // saved recipes must never flash a false "unit mismatch" just because the
-  // lazy fetch hadn't run yet (a line like "95 g milk" resolves via its
-  // conversion row / density the moment the data is loaded).
+  // Prefetch custom conversions for every linked row as soon as rows exist.
   useEffect(() => {
     for (const row of ingredients) ensureConversions(row.ingredientId);
   }, [ingredients, ensureConversions]);
+
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -404,10 +242,10 @@ export function MenuItemFormModal({
   }, []);
 
   useEffect(() => {
-    if (mode === "import" && importRecipes.length === 0 && !importLoading) {
+    if (mode === "import" && importRecipes.length === 0 && !importLoading && !importError) {
       fetchRecipesForImport();
     }
-  }, [mode, importRecipes.length, importLoading, fetchRecipesForImport]);
+  }, [mode, importRecipes.length, importLoading, importError, fetchRecipesForImport]);
 
   // Filter recipes by search term
   const filteredRecipes = useMemo(() => {
@@ -429,13 +267,11 @@ export function MenuItemFormModal({
       if (!groups[key]) groups[key] = [];
       groups[key].push(r);
     }
-    // Sort domains in a fixed order
     const order = ["recipe", "patisserie", "spirits"];
     const sorted: [string, ImportRecipe[]][] = [];
     for (const d of order) {
       if (groups[d]) sorted.push([d, groups[d]]);
     }
-    // Any other domains
     for (const [k, v] of Object.entries(groups)) {
       if (!order.includes(k)) sorted.push([k, v]);
     }
@@ -443,17 +279,15 @@ export function MenuItemFormModal({
   }, [filteredRecipes]);
 
   // Handle recipe selection for import.
-  // Ingredients import as-is with ingredientId: null. The chef manually
-  // links each one to a Catalog item via the IngredientPicker on the row.
   function handleSelectRecipe(recipe: ImportRecipe) {
     setName(recipe.title);
     setCategory(DOMAIN_CATEGORY_MAP[recipe.domain] ?? "");
     setSellingPrice("");
     setServings(parseServingsFromYield(recipe.yield));
+    setServingsPerSale(1);
 
     const mapped: IngredientRow[] = recipe.ingredients.map((ing) => {
       const mappedUnit = UNIT_MAP[ing.unit.toLowerCase()] ?? UNIT_MAP[ing.unit] ?? "each";
-
       return {
         tempId: nextTempId++,
         ingredientId: null,
@@ -471,24 +305,7 @@ export function MenuItemFormModal({
     setMode("scratch");
   }
 
-  // Auto-calculated totals
-  const totalBatchCost = useMemo(
-    () => ingredients.reduce((sum, row) => sum + calcLineCost(row, conversionsFor(row.ingredientId)), 0),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- conversionsVersion invalidates when a conversions fetch lands
-    [ingredients, conversionsVersion]
-  );
-  const perServingCost = servings > 1 ? totalBatchCost / servings : totalBatchCost;
-  const qPct = parseFloat(qFactorPct) || 0;
-  const foodCostWithQ = qPct > 0 ? perServingCost * (1 + qPct / 100) : perServingCost;
-
-  const price = parseFloat(sellingPrice) || 0;
-  // The selling price covers `servingsPerSale` servings (a 12-pack sold for
-  // $15); FC% and margin must compare like with like — cost per SALE.
-  const salePack = Math.max(1, servingsPerSale || 1);
-  const foodCostPerSale = foodCostWithQ * salePack;
-  const foodCostPct = price > 0 ? (foodCostPerSale / price) * 100 : 0;
-  const contributionMargin = price - foodCostPerSale;
-
+  // Ingredient row helpers
   function addIngredientRow() {
     setIngredients((prev) => [
       ...prev,
@@ -509,15 +326,27 @@ export function MenuItemFormModal({
     setIngredients((prev) => prev.filter((r) => r.tempId !== tempId));
   }
 
-  function updateIngredient(
-    tempId: number,
-    field: keyof IngredientRow,
-    value: string
-  ) {
+  function updateIngredient(tempId: number, field: keyof IngredientRow, value: string) {
     setIngredients((prev) =>
       prev.map((r) => (r.tempId === tempId ? { ...r, [field]: value } : r))
     );
   }
+
+  // Auto-calculated totals
+  const totalBatchCost = useMemo(
+    () => ingredients.reduce((sum, row) => sum + calcLineCost(row, conversionsFor(row.ingredientId)), 0),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- conversionsVersion invalidates when a conversions fetch lands
+    [ingredients, conversionsVersion]
+  );
+  const perServingCost = servings > 1 ? totalBatchCost / servings : totalBatchCost;
+  const qPct = parseFloat(qFactorPct) || 0;
+  const foodCostWithQ = qPct > 0 ? perServingCost * (1 + qPct / 100) : perServingCost;
+
+  const price = parseFloat(sellingPrice) || 0;
+  const salePack = Math.max(1, servingsPerSale || 1);
+  const foodCostPerSale = foodCostWithQ * salePack;
+  const foodCostPct = price > 0 ? (foodCostPerSale / price) * 100 : 0;
+  const contributionMargin = price - foodCostPerSale;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -531,6 +360,7 @@ export function MenuItemFormModal({
     }
 
     setSaving(true);
+    let savedItemId: string | undefined;
     try {
       const result = await onSave({
         name: name.trim(),
@@ -541,37 +371,40 @@ export function MenuItemFormModal({
         qFactorPct: qFactorPct || "0",
         unitsSold,
       });
-
-      // Save ingredients if we have any
-      const validIngredients = ingredients.filter(
-        (r) => r.ingredientName.trim() && r.quantity
-      );
-      if (validIngredients.length > 0) {
-        const itemId = editItem?.menuItemId ?? (result as string);
-        if (itemId) {
-          await onSaveIngredients(
-            itemId,
-            validIngredients.map((r) => ({
-              ingredientId: r.ingredientId ?? null,
-              ingredientName: r.ingredientName.trim(),
-              note: r.note ?? null,
-              quantity: r.quantity,
-              unit: r.unit,
-              unitCost: r.unitCost || undefined,
-              yieldPct: r.yieldPct || "100",
-            }))
-          );
-        }
-      }
-
-      onClose();
+      savedItemId = editItem?.menuItemId ?? (result as string);
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to save menu item."
-      );
-    } finally {
+      setError(err instanceof Error ? err.message : "Failed to save menu item.");
       setSaving(false);
+      return;
     }
+
+    const validIngredients = ingredients.filter(
+      (r) => r.ingredientName.trim() && r.quantity
+    );
+    if (validIngredients.length > 0 && savedItemId) {
+      try {
+        await onSaveIngredients(
+          savedItemId,
+          validIngredients.map((r) => ({
+            ingredientId: r.ingredientId ?? null,
+            ingredientName: r.ingredientName.trim(),
+            note: r.note ?? null,
+            quantity: r.quantity,
+            unit: r.unit,
+            unitCost: r.unitCost || undefined,
+            yieldPct: r.yieldPct || "100",
+          }))
+        );
+      } catch {
+        // Item was created but ingredients failed — keep modal open; user can retry ingredients.
+        setError("Item saved, but ingredients failed to save. Edit the item to add them.");
+        setSaving(false);
+        return;
+      }
+    }
+
+    setSaving(false);
+    onClose();
   }
 
   return (
@@ -595,125 +428,20 @@ export function MenuItemFormModal({
         </div>
 
         <div className="px-6 py-5 space-y-6">
-          {/* Mode toggle — only for new items */}
-          {!isEdit && !importedFromRecipe && (
-            <div className="flex gap-1 p-1 bg-dark rounded-xl border border-dark-200">
-              <button
-                type="button"
-                onClick={() => setMode("import")}
-                className={`flex items-center gap-2 flex-1 px-4 py-2.5 text-sm font-medium rounded-lg transition-colors ${
-                  mode === "import"
-                    ? "bg-gold text-dark"
-                    : "bg-dark-100 text-dark-600 hover:text-[#FAFAFA]"
-                }`}
-              >
-                <BookOpen className="size-4" />
-                Import from Recipe
-              </button>
-              <button
-                type="button"
-                onClick={() => setMode("scratch")}
-                className={`flex items-center gap-2 flex-1 px-4 py-2.5 text-sm font-medium rounded-lg transition-colors ${
-                  mode === "scratch"
-                    ? "bg-gold text-dark"
-                    : "bg-dark-100 text-dark-600 hover:text-[#FAFAFA]"
-                }`}
-              >
-                <PenTool className="size-4" />
-                Create from Scratch
-              </button>
-            </div>
-          )}
-
-          {/* Import mode UI */}
-          {mode === "import" && !isEdit && (
-            <div className="space-y-4">
-              {/* Search bar */}
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-dark-500" />
-                <input
-                  type="text"
-                  value={importSearch}
-                  onChange={(e) => setImportSearch(e.target.value)}
-                  placeholder="Search recipes..."
-                  className="w-full pl-10 pr-4 py-2.5 text-sm bg-dark border border-dark-200 rounded-xl text-[#FAFAFA] placeholder-dark-500 focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-gold/50 min-h-[44px]"
-                />
-              </div>
-
-              {/* Recipe list */}
-              {importLoading && (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 className="size-5 animate-spin text-gold" />
-                  <span className="ml-2 text-sm text-dark-600">Loading recipes...</span>
-                </div>
-              )}
-
-              {importError && (
-                <div className="px-4 py-3 bg-red-500/10 border border-red-500/20 rounded-xl text-sm text-red-400">
-                  {importError}
-                </div>
-              )}
-
-              {!importLoading && !importError && filteredRecipes.length === 0 && (
-                <div className="text-center py-8">
-                  <p className="text-sm text-dark-500">
-                    {importRecipes.length === 0
-                      ? "No saved recipes found. Create recipes in the Recipe Lab first."
-                      : "No recipes match your search."}
-                  </p>
-                </div>
-              )}
-
-              {!importLoading && groupedRecipes.length > 0 && (
-                <div className="bg-dark border border-dark-200 rounded-xl max-h-[300px] overflow-y-auto">
-                  {groupedRecipes.map(([domain, recipes]) => {
-                    const badge = DOMAIN_BADGE[domain] ?? {
-                      label: domain,
-                      bg: "bg-dark-200",
-                      text: "text-dark-600",
-                    };
-                    return (
-                      <div key={domain}>
-                        {/* Domain header */}
-                        <div className="sticky top-0 bg-dark px-4 py-2 border-b border-dark-200">
-                          <span
-                            className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded ${badge.bg} ${badge.text}`}
-                          >
-                            {badge.label}
-                          </span>
-                        </div>
-                        {/* Recipe items */}
-                        {recipes.map((recipe) => (
-                          <button
-                            key={recipe.recipeId}
-                            type="button"
-                            onClick={() => handleSelectRecipe(recipe)}
-                            className="w-full text-left hover:bg-dark-100 px-4 py-3 cursor-pointer transition-colors border-b border-dark-200/50 last:border-b-0"
-                          >
-                            <div className="flex items-center justify-between">
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm text-[#FAFAFA] font-medium truncate">
-                                  {recipe.title}
-                                  {recipe.ownerName && (
-                                    <span className="text-dark-500 font-normal ml-1.5">
-                                      (by {recipe.ownerName})
-                                    </span>
-                                  )}
-                                </p>
-                              </div>
-                              <span className="ml-3 text-xs text-dark-500 whitespace-nowrap">
-                                {recipe.ingredients.length} ingredient{recipe.ingredients.length !== 1 ? "s" : ""}
-                              </span>
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
+          <RecipeImportPanel
+            isEdit={isEdit}
+            mode={mode}
+            importedFromRecipe={importedFromRecipe}
+            recipes={importRecipes}
+            loading={importLoading}
+            error={importError}
+            search={importSearch}
+            groupedRecipes={groupedRecipes}
+            filteredRecipes={filteredRecipes}
+            onModeChange={setMode}
+            onSearchChange={setImportSearch}
+            onSelectRecipe={handleSelectRecipe}
+          />
 
           {/* Form (scratch mode or after import selection) */}
           {(mode === "scratch" || isEdit) && (
@@ -800,11 +528,14 @@ export function MenuItemFormModal({
                         min="1"
                         max="999"
                         value={servingsPerSale}
-                        onChange={(e) => setServingsPerSale(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                        onChange={(e) =>
+                          setServingsPerSale(Math.max(1, parseInt(e.target.value, 10) || 1))
+                        }
                         className="w-14 px-2 py-1 text-xs bg-dark border border-dark-200 rounded-lg text-[#FAFAFA] text-center focus:outline-none focus:ring-1 focus:ring-gold/50"
                       />
                       <span className="text-[10px] text-dark-500">
-                        serving{servingsPerSale === 1 ? "" : "s"}{servingsPerSale > 1 ? " (pack pricing)" : " (sold singly)"}
+                        serving{servingsPerSale === 1 ? "" : "s"}
+                        {servingsPerSale > 1 ? " (pack pricing)" : " (sold singly)"}
                       </span>
                     </div>
                   </div>
@@ -857,347 +588,38 @@ export function MenuItemFormModal({
                       placeholder="0"
                       className="w-full px-4 py-2.5 text-sm bg-dark border border-dark-200 rounded-xl text-[#FAFAFA] placeholder-dark-500 focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-gold/50 min-h-[44px]"
                     />
-                    <p className="mt-1 text-[10px] text-dark-500">
-                      From POS or manual entry
-                    </p>
+                    <p className="mt-1 text-[10px] text-dark-500">From POS or manual entry</p>
                   </div>
                 </div>
               </div>
 
-              {/* Ingredients sub-section */}
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-semibold text-[#FAFAFA]">
-                    Ingredients
-                  </h3>
-                  <button
-                    type="button"
-                    onClick={addIngredientRow}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gold bg-gold/10 rounded-lg border border-gold/20 hover:bg-gold/20 transition-colors min-h-[36px]"
-                  >
-                    <Plus className="size-3" />
-                    Add Ingredient
-                  </button>
-                </div>
+              <IngredientsSection
+                ingredients={ingredients}
+                expandedCostRow={expandedCostRow}
+                editItem={editItem}
+                onRefreshIngredientCost={onRefreshIngredientCost}
+                setIngredients={setIngredients}
+                setExpandedCostRow={setExpandedCostRow}
+                setError={setError}
+                conversionsFor={conversionsFor}
+                conversionsLoading={conversionsLoading}
+                ensureConversions={ensureConversions}
+                onAdd={addIngredientRow}
+                onRemove={removeIngredientRow}
+                onUpdate={updateIngredient}
+              />
 
-                {ingredients.length > 0 && (
-                  <div className="space-y-2">
-                    {/* Header row */}
-                    <div
-                      className="grid gap-2 text-[10px] uppercase text-dark-500 font-medium px-1"
-                      style={{ gridTemplateColumns: "1fr 80px 70px 85px 65px 80px 36px" }}
-                    >
-                      <div>Name</div>
-                      <div>Qty</div>
-                      <div>Unit</div>
-                      <div>Cost</div>
-                      <div>Yield %</div>
-                      <div className="text-right">Line Cost</div>
-                      <div />
-                    </div>
-
-                    {ingredients.map((row) => {
-                      const rowConversions = conversionsFor(row.ingredientId);
-                      const lineCost = calcLineCost(row, rowConversions);
-                      const unitMismatch = hasUnitMismatch(row, rowConversions);
-                      const breakdown = expandedCostRow === row.tempId ? buildConversionText(row, rowConversions) : null;
-                      const noCost = hasNoCostData(row);
-                      // Smart dropdown: only units that resolve for this
-                      // ingredient. The row's current unit stays selectable even
-                      // when it no longer resolves (legacy rows keep D3 intact).
-                      const rowUnits = row.ingredientId && row.baseUnit
-                        ? (() => {
-                            const opts = resolvableUnits(
-                              {
-                                baseUnit: row.baseUnit,
-                                purchaseUnit: row.purchaseUnit ?? null,
-                                packQty: row.packQty ?? null,
-                                contentQty: row.contentQty ?? null,
-                                contentUnit: row.contentUnit ?? null,
-                                densityGPerMl: row.densityGPerMl ?? null,
-                              },
-                              rowConversions,
-                            );
-                            if (!opts.some((u) => u.toLowerCase() === row.unit.toLowerCase())) {
-                              opts.unshift(row.unit);
-                            }
-                            return opts;
-                          })()
-                        : UNITS;
-                      return (
-                        <div key={row.tempId}>
-                        <div
-                          className="grid gap-2 items-start"
-                          style={{ gridTemplateColumns: "1fr 80px 70px 85px 65px 80px 36px" }}
-                        >
-                          <div className="min-w-0">
-                            <IngredientPickerInline
-                              linkedId={row.ingredientId}
-                              displayName={row.ingredientName}
-                              costStale={row.costStaleInd}
-                              onRefresh={
-                                row.existingId && onRefreshIngredientCost && editItem
-                                  ? async () => {
-                                      try {
-                                        const updated = await onRefreshIngredientCost(
-                                          editItem.menuItemId,
-                                          row.existingId!,
-                                        );
-                                        setIngredients((prev) =>
-                                          prev.map((r) =>
-                                            r.tempId === row.tempId
-                                              ? {
-                                                  ...r,
-                                                  unitCost: updated.unitCost,
-                                                  costStaleInd: false,
-                                                }
-                                              : r,
-                                          ),
-                                        );
-                                      } catch (e) {
-                                        setError(
-                                          e instanceof Error
-                                            ? e.message
-                                            : "Failed to refresh cost",
-                                        );
-                                      }
-                                    }
-                                  : undefined
-                              }
-                              onPick={(picked) => {
-                                // Pre-warm the custom conversions for the smart
-                                // unit dropdown (lazy, cached per ingredient).
-                                ensureConversions(picked.ingredientId);
-                                setIngredients((prev) =>
-                                  prev.map((r) =>
-                                    r.tempId === row.tempId
-                                      ? {
-                                          ...r,
-                                          ingredientId: picked.ingredientId,
-                                          ingredientName: picked.ingredientName,
-                                          baseUnit: picked.baseUnit || r.unit,
-                                          contentQty: picked.contentQty ?? null,
-                                          contentUnit: picked.contentUnit ?? null,
-                                          densityGPerMl: picked.densityGPerMl ?? null,
-                                          purchaseUnit: picked.purchaseUnit ?? null,
-                                          packQty: picked.packQty ?? null,
-                                          costUpdatedAt: picked.updatedDttm ?? null,
-                                          // Recipes default to the MEASURED unit when the item
-                                          // has a content equivalence (pour wine in mL even
-                                          // though it's counted in bottles); else the kitchen unit.
-                                          unit: picked.contentUnit || picked.baseUnit || r.unit,
-                                          // T10 unified cost chain: preferred → catalog WAC → keep row value.
-                                          unitCost: picked.preferredUnitCost || picked.unitCost || r.unitCost,
-                                          costStaleInd: false,
-                                        }
-                                      : r,
-                                  ),
-                                );
-                              }}
-                              onTextChange={(text) =>
-                                updateIngredient(row.tempId, "ingredientName", text)
-                              }
-                            />
-                            {row.note && (
-                              <div className="mt-1 px-2 py-1 text-[10px] text-dark-600 italic truncate" title={row.note}>
-                                {row.note}
-                              </div>
-                            )}
-                          </div>
-                          <input
-                            type="number"
-                            step="any"
-                            min="0"
-                            max="999.99"
-                            value={row.quantity}
-                            onChange={(e) =>
-                              updateIngredient(
-                                row.tempId,
-                                "quantity",
-                                e.target.value
-                              )
-                            }
-                            placeholder="0"
-                            className="w-full px-2 py-2 text-xs bg-dark border border-dark-200 rounded-lg text-[#FAFAFA] placeholder-dark-500 focus:outline-none focus:ring-1 focus:ring-gold/50 min-h-[36px]"
-                          />
-                          <select
-                            value={row.unit}
-                            onFocus={() => ensureConversions(row.ingredientId)}
-                            onChange={(e) =>
-                              updateIngredient(
-                                row.tempId,
-                                "unit",
-                                e.target.value
-                              )
-                            }
-                            className="w-full px-1.5 py-2 text-xs bg-dark border border-dark-200 rounded-lg text-[#FAFAFA] focus:outline-none focus:ring-1 focus:ring-gold/50 min-h-[36px]"
-                          >
-                            {rowUnits.map((u) => (
-                              <option key={u} value={u}>
-                                {u}
-                              </option>
-                            ))}
-                            {conversionsLoading(row.ingredientId) && (
-                              <option disabled value="__loading">
-                                loading units…
-                              </option>
-                            )}
-                          </select>
-                          <div className="relative">
-                            <input
-                              type="number"
-                              step="any"
-                              min="0"
-                              value={row.unitCost}
-                              onChange={(e) =>
-                                updateIngredient(
-                                  row.tempId,
-                                  "unitCost",
-                                  e.target.value
-                                )
-                              }
-                              placeholder="0.00"
-                              className="w-full px-2 py-2 text-xs bg-dark border border-dark-200 rounded-lg text-[#FAFAFA] placeholder-dark-500 focus:outline-none focus:ring-1 focus:ring-gold/50 min-h-[36px]"
-                            />
-                          </div>
-                          <input
-                            type="number"
-                            step="1"
-                            min="1"
-                            max="200"
-                            value={row.yieldPct}
-                            onChange={(e) =>
-                              updateIngredient(
-                                row.tempId,
-                                "yieldPct",
-                                e.target.value
-                              )
-                            }
-                            onBlur={(e) => {
-                              // Clamp [1,200]: 0 divides by zero; >200 is a typo, not shrinkage.
-                              const v = parseInt(e.target.value, 10);
-                              const clamped = Number.isFinite(v) ? Math.min(200, Math.max(1, v)) : 100;
-                              if (String(clamped) !== e.target.value) {
-                                updateIngredient(row.tempId, "yieldPct", String(clamped));
-                              }
-                            }}
-                            className="w-full px-1.5 py-2 text-xs bg-dark border border-dark-200 rounded-lg text-[#FAFAFA] focus:outline-none focus:ring-1 focus:ring-gold/50 min-h-[36px] text-center"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setExpandedCostRow(expandedCostRow === row.tempId ? null : row.tempId)}
-                            className="text-xs text-dark-600 font-mono min-h-[36px] flex items-center justify-end hover:text-gold transition-colors cursor-pointer"
-                            title={
-                              noCost
-                                ? "No cost yet — receive a PO or set a supplier cost"
-                                : row.ingredientId ? "Tap to see cost breakdown" : undefined
-                            }
-                          >
-                            {noCost ? "—" : `$${lineCost.toFixed(2)}`}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => removeIngredientRow(row.tempId)}
-                            className="p-1.5 rounded-lg hover:bg-dark-200 text-dark-500 hover:text-red-400 transition-colors flex items-center justify-center min-h-[36px]"
-                          >
-                            <Trash2 className="size-3.5" />
-                          </button>
-                        </div>
-                        {breakdown && (
-                          <div className="px-2 pb-1 text-[10px] text-gold/80 font-mono">
-                            {breakdown}
-                          </div>
-                        )}
-                        {unitMismatch && (
-                          <div className="px-2 pb-1 text-[10px] text-red-400">
-                            Unit mismatch: {row.unit} cannot convert to {row.baseUnit}. Change the unit to calculate cost.
-                          </div>
-                        )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-
-                {ingredients.length === 0 && (
-                  <p className="text-xs text-dark-500 py-4 text-center">
-                    No ingredients added yet. Click "Add Ingredient" to build the
-                    cost breakdown.
-                  </p>
-                )}
-              </div>
-
-              {/* Cost summary */}
-              <div className="bg-dark rounded-xl border border-dark-200 p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <DollarSign className="size-4 text-gold" />
-                  <h4 className="text-sm font-semibold text-[#FAFAFA]">
-                    Cost Summary
-                  </h4>
-                </div>
-                <div className="grid grid-cols-4 gap-4">
-                  <div>
-                    <p className="text-[10px] uppercase text-dark-500 mb-0.5">
-                      Batch Cost
-                    </p>
-                    <p className="text-lg font-bold text-[#FAFAFA]">
-                      ${totalBatchCost.toFixed(2)}
-                    </p>
-                    <p className="text-[10px] text-dark-500">
-                      Sum of {ingredients.length} ingredient line{ingredients.length === 1 ? "" : "s"}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] uppercase text-dark-500 mb-0.5">
-                      Food Cost / Serving
-                    </p>
-                    <p className="text-lg font-bold text-[#FAFAFA]">
-                      ${foodCostWithQ.toFixed(2)}
-                    </p>
-                    {(servings > 1 || qPct > 0) && (
-                      <p className="text-[10px] text-dark-500">
-                        {servings > 1 && <>÷ {servings} servings</>}
-                        {servings > 1 && qPct > 0 && " · "}
-                        {qPct > 0 && <>+{qPct}% Q Factor</>}
-                      </p>
-                    )}
-                  </div>
-                  <div>
-                    <p className="text-[10px] uppercase text-dark-500 mb-0.5">
-                      Food Cost %
-                    </p>
-                    <p
-                      className={`text-lg font-bold ${
-                        foodCostPct > 35 ? "text-red-400" : "text-[#FAFAFA]"
-                      }`}
-                    >
-                      {foodCostPct.toFixed(1)}%
-                    </p>
-                    {salePack > 1 && (
-                      <p className="text-[10px] text-dark-500">
-                        ${foodCostPerSale.toFixed(2)} per sale of {salePack}
-                      </p>
-                    )}
-                  </div>
-                  <div>
-                    <p className="text-[10px] uppercase text-dark-500 mb-0.5">
-                      Contribution Margin
-                    </p>
-                    <p
-                      className={`text-lg font-bold ${
-                        contributionMargin < 0 ? "text-red-400" : "text-green-400"
-                      }`}
-                    >
-                      ${contributionMargin.toFixed(2)}
-                    </p>
-                    {salePack > 1 && (
-                      <p className="text-[10px] text-dark-500">
-                        per sale of {salePack} servings
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </div>
+              <CostSummary
+                totalBatchCost={totalBatchCost}
+                ingredientCount={ingredients.length}
+                servings={servings}
+                qPct={qPct}
+                foodCostWithQ={foodCostWithQ}
+                salePack={salePack}
+                foodCostPerSale={foodCostPerSale}
+                foodCostPct={foodCostPct}
+                contributionMargin={contributionMargin}
+              />
 
               {/* Actions */}
               <div className="flex items-center justify-end gap-3 pt-2">
