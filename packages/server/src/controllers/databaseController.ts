@@ -28,7 +28,7 @@ export async function handleDatabaseStats(
     const [totalResult] = await db.execute(
       sql`SELECT pg_size_pretty(pg_database_size(current_database())) as total_size,
                pg_database_size(current_database()) as total_bytes`
-    ) as unknown as [{ total_size: string; total_bytes: string }][];
+    ) as unknown as { total_size: string; total_bytes: string }[];
 
     // Per-table breakdown
     const tables = await db.execute(
@@ -43,9 +43,9 @@ export async function handleDatabaseStats(
           ORDER BY pg_total_relation_size(relid) DESC`
     ) as unknown as {
       table_name: string;
-      row_count: number;
+      row_count: string;
       total_size: string;
-      total_bytes: number;
+      total_bytes: string;
       data_size: string;
       index_size: string;
     }[];
@@ -55,7 +55,7 @@ export async function handleDatabaseStats(
     try {
       const [result] = await db.execute(
         sql`SELECT COUNT(*) as count FROM knowledge_chunk WHERE embedding IS NOT NULL`
-      ) as unknown as [{ count: string }][];
+      ) as unknown as { count: string }[];
       embeddingCount = parseInt(result?.count ?? "0", 10);
     } catch {
       // Table might not exist yet

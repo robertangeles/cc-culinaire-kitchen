@@ -84,7 +84,9 @@ export async function handleWebhookEvent(
       if (!userId) break;
 
       const subscriptionId = session.subscription as string;
-      const sub = await getStripe().subscriptions.retrieve(subscriptionId) as Stripe.Subscription;
+      // Stripe SDK v20 moved current_period_end to SubscriptionItem; the REST API
+      // still returns it on the Subscription object when no explicit apiVersion is set.
+      const sub = await getStripe().subscriptions.retrieve(subscriptionId) as Stripe.Subscription & { current_period_end?: number | null };
 
       await db
         .update(user)
@@ -123,7 +125,8 @@ export async function handleWebhookEvent(
     }
 
     case "customer.subscription.updated": {
-      const subscription = event.data.object as Stripe.Subscription;
+      // See comment on sub cast above — same Stripe v20 / current_period_end note applies.
+      const subscription = event.data.object as Stripe.Subscription & { current_period_end?: number | null };
       const customerId = subscription.customer as string;
 
       const rows = await db

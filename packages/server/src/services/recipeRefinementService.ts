@@ -177,7 +177,7 @@ export async function refineRecipe(
     const searchQuery = `${instruction} ${recipeName}`;
     const results = await searchKnowledge(searchQuery, "3");
     if (results.length > 0) {
-      ragContext = `## Culinary Reference Knowledge:\n${results.map((r) => r.text ?? r.content ?? "").join("\n\n")}\n\n`;
+      ragContext = `## Culinary Reference Knowledge:\n${results.map((r) => r.snippet).join("\n\n")}\n\n`;
     }
   } catch {
     // Knowledge search failed — continue without RAG context
