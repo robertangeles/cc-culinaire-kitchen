@@ -37,73 +37,14 @@ import {
   Share2,
   FileText,
 } from "lucide-react";
-
-/** User data shape expected by the panel (same as UsersTab UserRow). */
-interface UserRow {
-  userId: number;
-  userName: string;
-  userEmail: string;
-  emailVerifiedInd: boolean;
-  userPhotoPath: string | null;
-  freeSessions: number;
-  subscriptionStatus: string;
-  subscriptionTier: string;
-  userStatus: string;
-  createdDttm: string;
-  roles: string[];
-  organisation: string | null;
-}
-
-interface RoleOption {
-  roleId: number;
-  roleName: string;
-}
-
-/** Full profile returned by GET /api/users/:id */
-interface FullProfile {
-  userBio?: string | null;
-  userAddressLine1?: string | null;
-  userAddressLine2?: string | null;
-  userSuburb?: string | null;
-  userState?: string | null;
-  userCountry?: string | null;
-  userPostcode?: string | null;
-  userFacebook?: string | null;
-  userInstagram?: string | null;
-  userTiktok?: string | null;
-  userPinterest?: string | null;
-  userLinkedin?: string | null;
-}
-
-interface OrgDetails {
-  organisationId?: number;
-  organisationName?: string;
-  organisationEmail?: string | null;
-  organisationAddressLine1?: string | null;
-  organisationAddressLine2?: string | null;
-  organisationSuburb?: string | null;
-  organisationState?: string | null;
-  organisationCountry?: string | null;
-  organisationPostcode?: string | null;
-  organisationWebsite?: string | null;
-  organisationFacebook?: string | null;
-  organisationInstagram?: string | null;
-  organisationTiktok?: string | null;
-  organisationPinterest?: string | null;
-  organisationLinkedin?: string | null;
-}
-
-/** Props for {@link UserDetailPanel}. */
-interface UserDetailPanelProps {
-  /** The user to display. */
-  user: UserRow;
-  /** Available roles for assignment. */
-  availableRoles: RoleOption[];
-  /** Called when the panel should close. */
-  onClose: () => void;
-  /** Called after any change so the parent can refresh. */
-  onRefresh: () => void;
-}
+import { UserRolesSection } from "./UserRolesSection.js";
+import type {
+  UserRow,
+  RoleOption,
+  FullProfile,
+  OrgDetails,
+  UserDetailPanelProps,
+} from "./userDetailTypes.js";
 
 /**
  * Formats an ISO timestamp into a human-readable date string.
@@ -259,28 +200,6 @@ export function UserDetailPanel({ user, availableRoles, onClose, onRefresh }: Us
     }
   }
 
-  /** Assign a role to the user. */
-  async function handleAssignRole(roleId: number) {
-    await fetch(`/api/users/${user.userId}/roles`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ roleId }),
-    });
-    refreshAll();
-  }
-
-  /** Remove a role from the user. */
-  async function handleRemoveRole(roleName: string) {
-    const r = availableRoles.find((role) => role.roleName === roleName);
-    if (!r) return;
-    await fetch(`/api/users/${user.userId}/roles/${r.roleId}`, {
-      method: "DELETE",
-      credentials: "include",
-    });
-    refreshAll();
-  }
-
   /** Remove user from their organisation. */
   async function handleRemoveOrg() {
     setRemovingOrg(true);
@@ -362,10 +281,6 @@ export function UserDetailPanel({ user, availableRoles, onClose, onRefresh }: Us
     .join("")
     .toUpperCase()
     .slice(0, 2);
-
-  const unassignedRoles = availableRoles.filter(
-    (r) => !user.roles.includes(r.roleName)
-  );
 
   /** Build a comma-joined address string from available parts. */
   function formatAddress(p: FullProfile) {
@@ -592,39 +507,12 @@ export function UserDetailPanel({ user, availableRoles, onClose, onRefresh }: Us
 
           {/* Roles — editable inline */}
           <Section icon={Shield} title="Roles">
-            <div className="flex flex-wrap gap-1.5">
-              {user.roles.length > 0 ? (
-                user.roles.map((r) => (
-                  <span
-                    key={r}
-                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-gold/10 text-gold border border-gold/20 cursor-pointer hover:bg-red-900/40 hover:text-red-400 hover:border-red-700/40 transition-colors"
-                    title={`Click to remove ${r}`}
-                    onClick={() => handleRemoveRole(r)}
-                  >
-                    {r}
-                    <XCircle className="size-3" />
-                  </span>
-                ))
-              ) : (
-                <span className="text-sm text-dark-600 italic">No roles assigned</span>
-              )}
-              {unassignedRoles.length > 0 && (
-                <select
-                  className="text-xs border border-dark-200 rounded px-1.5 py-0.5 text-dark-600"
-                  value=""
-                  onChange={(e) => {
-                    if (e.target.value) handleAssignRole(parseInt(e.target.value));
-                  }}
-                >
-                  <option value="">+ Add role</option>
-                  {unassignedRoles.map((r) => (
-                    <option key={r.roleId} value={r.roleId}>
-                      {r.roleName}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </div>
+            <UserRolesSection
+              userId={user.userId}
+              roles={user.roles}
+              availableRoles={availableRoles}
+              onRefresh={refreshAll}
+            />
           </Section>
 
           {/* Organisation — name + full details */}

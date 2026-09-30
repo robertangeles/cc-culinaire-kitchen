@@ -1113,3 +1113,15 @@ builds all tables with CHECKs enforcing. Stop it again when done.
 - **Problem**: Splitting `IngredientCatalog.tsx` into `IngredientFilters.tsx` + `IngredientTable.tsx` created a circular import: `IngredientFilters` needed allergen constants originally defined in `IngredientCatalog`, and `IngredientCatalog` (now the orchestrator) imported from `IngredientFilters`. Both modules would have imported from each other.
 - **Fix**: Extract shared constants and types to a standalone file (`allergenDefs.ts`) before splitting. Both sibling components and the orchestrator import from the shared file — circular dependency never forms.
 - **Rule**: Before splitting a component, identify any constants, types, or utilities that will be needed by MULTIPLE of the resulting files. Extract those to a separate neutral file first, then do the split. A circular import between sibling components (A imports B which imports A) is always a sign that shared definitions haven't been lifted yet.
+
+## #94 — React Testing Library: labels without htmlFor/id won't match getByLabelText (2026-09-30)
+
+- **Problem**: `screen.getByLabelText(/Organisation Name/i)` failed in `OrgTab.test.tsx` because OrgTab's `<label>` elements are siblings of their `<input>` with no `htmlFor`/`id` connection. RTL's `getByLabelText` requires the pairing to be explicit — wrapping label or `htmlFor`/`id`.
+- **Fix**: Use `screen.getAllByRole("textbox")[0]` to target the first textbox in a form when the label isn't associated.
+- **Rule**: When writing tests for existing components that lack explicit `htmlFor`/`id` on labels, use role-based queries with index or `getByPlaceholderText` rather than `getByLabelText`. Only add `getByLabelText` after verifying the label/input association exists in the source.
+
+## #95 — Always-mounted CSS wrapper preserves OrgTab state across profile tab switches (2026-09-30)
+
+- **Problem**: After extracting OrgTab from ProfilePage, using conditional `{activeTab === "kitchen" && <OrgTab />}` unmounts OrgTab on every tab switch. This discards in-progress form edits and re-fires the org fetch every time the user returns to the kitchen tab — worse than before the split.
+- **Fix**: CSS hidden wrapper: `<div className={activeTab !== "kitchen" ? "hidden" : ""}><OrgTab /></div>`. OrgTab stays mounted, state is preserved, org fetch fires once.
+- **Rule**: When extracting a component that previously lived inline in a page (and was always rendered), check if the orchestrator conditionally renders it. If it does, verify the original was also conditional. If the original was always rendered, keep the extracted component always mounted via CSS `hidden` rather than `&&` — unmounting resets all local state.
