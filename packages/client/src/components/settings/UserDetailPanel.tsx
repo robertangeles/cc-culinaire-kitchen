@@ -39,8 +39,6 @@ import {
 } from "lucide-react";
 import { UserRolesSection } from "./UserRolesSection.js";
 import type {
-  UserRow,
-  RoleOption,
   FullProfile,
   OrgDetails,
   UserDetailPanelProps,
