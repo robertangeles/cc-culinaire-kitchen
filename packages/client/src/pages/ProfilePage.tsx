@@ -8,147 +8,22 @@
 import { useState, useEffect, useRef, type FormEvent, type ElementType, type KeyboardEvent } from "react";
 import {
   User,
-  Key,
-  Loader2,
-  AlertCircle,
-  CheckCircle2,
-  Copy,
   ShieldCheck,
-  Camera,
   UtensilsCrossed,
-  MapPin,
-  Info,
   FileText,
 } from "lucide-react";
-import { MyKitchenTab } from "../components/profile/MyKitchenTab.js";
-import { MfaSection } from "../components/profile/MfaSection.js";
+import { AccountTab } from "../components/profile/AccountTab.js";
+import { SecurityTab } from "../components/profile/SecurityTab.js";
+import { OrgTab } from "../components/profile/OrgTab.js";
+import { MyDocumentsTab } from "../components/compliance/MyDocumentsTab.js";
+import { ImageCropModal } from "../components/ui/ImageCropModal.js";
 import { useAuth } from "../context/AuthContext.js";
 import { useHasPermission } from "../hooks/useHasPermission.js";
-import { ImageCropModal } from "../components/ui/ImageCropModal.js";
-import { StoreLocationsSection } from "../components/location/StoreLocationsSection.js";
-import { MyDocumentsTab } from "../components/compliance/MyDocumentsTab.js";
-
-interface Organisation {
-  organisationId: number;
-  organisationName: string;
-  organisationAddressLine1: string | null;
-  organisationAddressLine2: string | null;
-  organisationSuburb: string | null;
-  organisationState: string | null;
-  organisationCountry: string | null;
-  organisationPostcode: string | null;
-  organisationWebsite: string | null;
-  organisationEmail: string | null;
-  organisationPhone: string | null;
-  organisationFacebook: string | null;
-  organisationInstagram: string | null;
-  organisationTiktok: string | null;
-  organisationPinterest: string | null;
-  organisationLinkedin: string | null;
-  joinKey: string;
-  createdBy: number;
-}
-
-interface OrgMember {
-  userId: number;
-  displayName: string;
-  photoPath: string | null;
-  bio: string | null;
-  role: "admin" | "member";
-  joinedAt: string;
-}
-
-/** Inline component for org owners to edit their My Kitchen bench banner */
-function OrgBenchBanner({ orgId }: { orgId: number }) {
-  const [banner, setBanner] = useState("");
-  const [loaded, setLoaded] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-
-  const channelKey = `org_${orgId}`;
-  const API = import.meta.env.VITE_API_URL ?? "";
-
-  useEffect(() => {
-    async function load() {
-      try {
-        const res = await fetch(`${API}/api/bench/channels`, { credentials: "include" });
-        if (!res.ok) return;
-        const channels = await res.json();
-        const ch = channels.find((c: any) => c.channelKey === channelKey);
-        if (ch?.channelBanner) setBanner(ch.channelBanner);
-      } catch {
-        // silent
-      } finally {
-        setLoaded(true);
-      }
-    }
-    load();
-  }, [channelKey]);
-
-  async function handleSave() {
-    setSaving(true);
-    setSaved(false);
-    try {
-      await fetch(`${API}/api/bench/channels/${channelKey}/banner`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ banner }),
-      });
-      setSaved(true);
-      setTimeout(() => setSaved(false), 3000);
-    } catch {
-      // silent
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  if (!loaded) return null;
-
-  return (
-    <div className="border-t border-dark-200 pt-3 mt-3">
-      <label className="block text-sm font-medium text-[#E5E5E5] mb-1">
-        My Kitchen Banner
-      </label>
-      <p className="text-xs text-dark-500 mb-2">
-        This message appears at the top of your organisation's chat channel in The Bench.
-      </p>
-      <textarea
-        value={banner}
-        onChange={(e) => setBanner(e.target.value.slice(0, 500))}
-        rows={2}
-        maxLength={500}
-        placeholder="e.g., Team — menu tasting Friday 3pm. Bring your best seasonal dish idea."
-        className="w-full rounded-xl border border-dark-200 px-3 py-2 text-sm text-white bg-dark placeholder-dark-400 focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-transparent resize-none"
-      />
-      <div className="flex items-center justify-between mt-1">
-        <span className={`text-xs ${banner.length > 450 ? "text-gold" : "text-dark-500"}`}>
-          {banner.length}/500
-        </span>
-        <div className="flex items-center gap-2">
-          {saved && <span className="text-xs text-emerald-400">Saved</span>}
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={saving}
-            className="px-3 py-1 text-xs font-medium text-dark bg-gold rounded-xl hover:bg-gold-hover disabled:opacity-50 transition-colors"
-          >
-            {saving ? "Saving..." : "Save Banner"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 export function ProfilePage() {
   const { user, refreshUser } = useAuth();
   const hasPermission = useHasPermission();
 
-  // Tabs — My Documents only appears once the user actually holds the
-  // permission its endpoints require, so the tab and the data behind it
-  // never disagree.
   const tabs: { id: "account" | "security" | "kitchen" | "documents"; label: string; Icon: ElementType }[] = [
     { id: "account", label: "Account Details", Icon: User },
     { id: "security", label: "Security", Icon: ShieldCheck },
@@ -159,7 +34,7 @@ export function ProfilePage() {
   }
   const [activeTab, setActiveTab] = useState<"account" | "security" | "kitchen" | "documents">("account");
 
-  // Profile
+  // Profile state (kept here for autosave-on-tab-switch dirty check)
   const [name, setName] = useState(user?.userName ?? "");
   const [bio, setBio] = useState("");
   const [addressLine1, setAddressLine1] = useState("");
@@ -177,50 +52,7 @@ export function ProfilePage() {
   const [profileError, setProfileError] = useState("");
   const [savingProfile, setSavingProfile] = useState(false);
 
-  // Password
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [passwordMsg, setPasswordMsg] = useState("");
-  const [passwordError, setPasswordError] = useState("");
-  const [savingPassword, setSavingPassword] = useState(false);
-
-  // Organisation
-  const [org, setOrg] = useState<Organisation | null>(null);
-  const [orgLoading, setOrgLoading] = useState(true);
-  const [myOrgRole, setMyOrgRole] = useState<string>("member");
-  const [orgTab, setOrgTab] = useState<"create" | "join">("create");
-  const [orgSubTab, setOrgSubTab] = useState<"overview" | "locations">("overview");
-  const [orgName, setOrgName] = useState("");
-  const [orgWebsite, setOrgWebsite] = useState("");
-  const [orgEmail, setOrgEmail] = useState("");
-  const [orgPhone, setOrgPhone] = useState("");
-  const [orgFacebook, setOrgFacebook] = useState("");
-  const [orgInstagram, setOrgInstagram] = useState("");
-  const [orgTiktok, setOrgTiktok] = useState("");
-  const [orgPinterest, setOrgPinterest] = useState("");
-  const [orgLinkedin, setOrgLinkedin] = useState("");
-  const [joinKey, setJoinKey] = useState("");
-  const [orgMsg, setOrgMsg] = useState("");
-  const [orgError, setOrgError] = useState("");
-  const [savingOrg, setSavingOrg] = useState(false);
-  const [copiedKey, setCopiedKey] = useState(false);
-  const [editingOrg, setEditingOrg] = useState(false);
-  const [editOrgName, setEditOrgName] = useState("");
-  const [editOrgAddressLine1, setEditOrgAddressLine1] = useState("");
-  const [editOrgAddressLine2, setEditOrgAddressLine2] = useState("");
-  const [editOrgSuburb, setEditOrgSuburb] = useState("");
-  const [editOrgStateProv, setEditOrgStateProv] = useState("");
-  const [editOrgCountry, setEditOrgCountry] = useState("");
-  const [editOrgPostcode, setEditOrgPostcode] = useState("");
-  const [editOrgWebsite, setEditOrgWebsite] = useState("");
-  const [editOrgEmail, setEditOrgEmail] = useState("");
-  const [editOrgPhone, setEditOrgPhone] = useState("");
-  const [editOrgFacebook, setEditOrgFacebook] = useState("");
-  const [editOrgInstagram, setEditOrgInstagram] = useState("");
-  const [editOrgTiktok, setEditOrgTiktok] = useState("");
-  const [editOrgPinterest, setEditOrgPinterest] = useState("");
-  const [editOrgLinkedin, setEditOrgLinkedin] = useState("");
-
+  // Avatar state
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const [avatarError, setAvatarError] = useState("");
   const [cropImageSrc, setCropImageSrc] = useState<string | null>(null);
@@ -242,43 +74,7 @@ export function ProfilePage() {
     linkedin: "",
   });
 
-  async function handleAvatarUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setAvatarError("");
-
-    // Read file as data URL and open crop modal
-    const reader = new FileReader();
-    reader.onload = () => {
-      setCropImageSrc(reader.result as string);
-    };
-    reader.readAsDataURL(file);
-    e.target.value = "";
-  }
-
-  async function handleCroppedUpload(blob: Blob) {
-    setCropImageSrc(null);
-    const formData = new FormData();
-    formData.append("file", blob, "avatar.jpg");
-
-    try {
-      const res = await fetch("/api/users/profile/avatar", {
-        method: "POST",
-        credentials: "include",
-        body: formData,
-      });
-      if (res.ok) {
-        refreshUser();
-      } else if (res.status === 401) {
-        setAvatarError("Session expired. Please refresh the page and try again.");
-      } else {
-        const data = await res.json().catch(() => ({}));
-        setAvatarError(data.error ?? "Upload failed. Check file size (max 2 MB) and type.");
-      }
-    } catch {
-      setAvatarError("Network error — please try again.");
-    }
-  }
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   useEffect(() => {
     const n = user?.userName ?? "";
@@ -327,40 +123,40 @@ export function ProfilePage() {
     })();
   }, []);
 
-  // Fetch user's organisation on mount — and again if `user` resolves later.
-  // AuthContext's `user` starts null and only populates after its own async
-  // GET /api/auth/me; depending on user?.userId (not just [] once) closes
-  // that race instead of permanently capturing a null user from whichever
-  // fetch happened to finish first. Depending on the id specifically, not
-  // the whole `user` object, avoids an unnecessary refetch on every
-  // unrelated user-object refresh (e.g. after an avatar upload).
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch("/api/organisations/mine", { credentials: "include" });
-        if (res.ok) {
-          const data = await res.json();
-          const fetchedOrg = data.organisation;
-          setOrg(fetchedOrg);
-          // Fetch current user's role from members list
-          if (fetchedOrg) {
-            try {
-              const mRes = await fetch(`/api/organisations/${fetchedOrg.organisationId}/members`, { credentials: "include" });
-              if (mRes.ok) {
-                const mData = await mRes.json();
-                const me = (mData.members ?? []).find((m: OrgMember) => m.userId === user?.userId);
-                if (me) setMyOrgRole(me.role);
-              }
-            } catch { /* ignore */ }
-          }
-        }
-      } catch {
-        // ignore
-      } finally {
-        setOrgLoading(false);
+  async function handleAvatarUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setAvatarError("");
+    const reader = new FileReader();
+    reader.onload = () => {
+      setCropImageSrc(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  }
+
+  async function handleCroppedUpload(blob: Blob) {
+    setCropImageSrc(null);
+    const formData = new FormData();
+    formData.append("file", blob, "avatar.jpg");
+    try {
+      const res = await fetch("/api/users/profile/avatar", {
+        method: "POST",
+        credentials: "include",
+        body: formData,
+      });
+      if (res.ok) {
+        refreshUser();
+      } else if (res.status === 401) {
+        setAvatarError("Session expired. Please refresh the page and try again.");
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setAvatarError(data.error ?? "Upload failed. Check file size (max 2 MB) and type.");
       }
-    })();
-  }, [user?.userId]);
+    } catch {
+      setAvatarError("Network error — please try again.");
+    }
+  }
 
   async function handleSaveProfile(e: FormEvent) {
     e.preventDefault();
@@ -399,176 +195,6 @@ export function ProfilePage() {
       setSavingProfile(false);
     }
   }
-
-  async function handleChangePassword(e: FormEvent) {
-    e.preventDefault();
-    setPasswordMsg("");
-    setPasswordError("");
-    setSavingPassword(true);
-    try {
-      const res = await fetch("/api/users/change-password", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ currentPassword, newPassword }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed to change password");
-      setPasswordMsg("Password changed.");
-      setCurrentPassword("");
-      setNewPassword("");
-    } catch (err: unknown) {
-      setPasswordError(err instanceof Error ? err.message : "Change failed");
-    } finally {
-      setSavingPassword(false);
-    }
-  }
-
-  async function handleCreateOrg(e: FormEvent) {
-    e.preventDefault();
-    setOrgMsg("");
-    setOrgError("");
-    setSavingOrg(true);
-    try {
-      const res = await fetch("/api/organisations", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          name: orgName,
-          website: orgWebsite || undefined,
-          email: orgEmail || undefined,
-          phone: orgPhone || undefined,
-          facebook: orgFacebook || undefined,
-          instagram: orgInstagram || undefined,
-          tiktok: orgTiktok || undefined,
-          pinterest: orgPinterest || undefined,
-          linkedin: orgLinkedin || undefined,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed to create organisation");
-      setOrg(data.organisation);
-      // Creator is the org admin (organisationService assigns role "admin").
-      // Set it locally so admin-only UI (e.g. Locations) renders without a reload.
-      setMyOrgRole("admin");
-      setOrgMsg("Organisation created!");
-    } catch (err: unknown) {
-      setOrgError(err instanceof Error ? err.message : "Creation failed");
-    } finally {
-      setSavingOrg(false);
-    }
-  }
-
-  async function handleJoinOrg(e: FormEvent) {
-    e.preventDefault();
-    setOrgMsg("");
-    setOrgError("");
-    setSavingOrg(true);
-    try {
-      const res = await fetch("/api/organisations/join", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ joinKey }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed to join organisation");
-      setOrg(data.organisation);
-      setOrgMsg("Joined organisation!");
-    } catch (err: unknown) {
-      setOrgError(err instanceof Error ? err.message : "Join failed");
-    } finally {
-      setSavingOrg(false);
-    }
-  }
-
-  async function handleLeaveOrg() {
-    if (!org) return;
-    setSavingOrg(true);
-    try {
-      await fetch(`/api/organisations/${org.organisationId}/leave`, {
-        method: "DELETE",
-        credentials: "include",
-      });
-      setOrg(null);
-      setOrgMsg("Left organisation.");
-    } catch {
-      setOrgError("Failed to leave organisation.");
-    } finally {
-      setSavingOrg(false);
-    }
-  }
-
-  function startEditingOrg() {
-    if (!org) return;
-    setEditOrgName(org.organisationName);
-    setEditOrgAddressLine1(org.organisationAddressLine1 ?? "");
-    setEditOrgAddressLine2(org.organisationAddressLine2 ?? "");
-    setEditOrgSuburb(org.organisationSuburb ?? "");
-    setEditOrgStateProv(org.organisationState ?? "");
-    setEditOrgCountry(org.organisationCountry ?? "");
-    setEditOrgPostcode(org.organisationPostcode ?? "");
-    setEditOrgWebsite(org.organisationWebsite ?? "");
-    setEditOrgEmail(org.organisationEmail ?? "");
-    setEditOrgPhone(org.organisationPhone ?? "");
-    setEditOrgFacebook(org.organisationFacebook ?? "");
-    setEditOrgInstagram(org.organisationInstagram ?? "");
-    setEditOrgTiktok(org.organisationTiktok ?? "");
-    setEditOrgPinterest(org.organisationPinterest ?? "");
-    setEditOrgLinkedin(org.organisationLinkedin ?? "");
-    setEditingOrg(true);
-  }
-
-  async function handleUpdateOrg(e: FormEvent) {
-    e.preventDefault();
-    if (!org) return;
-    setOrgMsg("");
-    setOrgError("");
-    setSavingOrg(true);
-    try {
-      const res = await fetch(`/api/organisations/${org.organisationId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          name: editOrgName,
-          addressLine1: editOrgAddressLine1 || undefined,
-          addressLine2: editOrgAddressLine2 || undefined,
-          suburb: editOrgSuburb || undefined,
-          state: editOrgStateProv || undefined,
-          country: editOrgCountry || undefined,
-          postcode: editOrgPostcode || undefined,
-          website: editOrgWebsite || undefined,
-          email: editOrgEmail || undefined,
-          phone: editOrgPhone || undefined,
-          facebook: editOrgFacebook || undefined,
-          instagram: editOrgInstagram || undefined,
-          tiktok: editOrgTiktok || undefined,
-          pinterest: editOrgPinterest || undefined,
-          linkedin: editOrgLinkedin || undefined,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed to update organisation");
-      setOrg(data.organisation);
-      setOrgMsg("Organisation updated!");
-      setEditingOrg(false);
-    } catch (err: unknown) {
-      setOrgError(err instanceof Error ? err.message : "Update failed");
-    } finally {
-      setSavingOrg(false);
-    }
-  }
-
-  async function handleCopyKey() {
-    if (!org) return;
-    await navigator.clipboard.writeText(org.joinKey);
-    setCopiedKey(true);
-    setTimeout(() => setCopiedKey(false), 2000);
-  }
-
-  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   function isAccountDirty(): boolean {
     const s = savedProfileRef.current;
@@ -638,9 +264,6 @@ export function ProfilePage() {
     document.getElementById(`profile-tab-${tabs[next].id}`)?.focus();
   }
 
-  const inputClass =
-    "w-full rounded-xl border border-dark-200 px-3 py-2 text-sm text-white bg-dark placeholder-dark-400 focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-transparent";
-
   return (
     <div className="flex-1 overflow-y-auto p-6 bg-dark">
       {/* Was max-w-2xl (42rem/672px). 25% wider is 840px = 52.5rem, which has
@@ -673,484 +296,43 @@ export function ProfilePage() {
           ))}
         </div>
 
-        {/* Account Details Tab */}
         {activeTab === "account" && (
-          <form onSubmit={handleSaveProfile} role="tabpanel" id="profile-tabpanel-account" aria-labelledby="profile-tab-account" className="bg-dark-50 rounded-2xl border border-dark-200 p-6 space-y-4">
-            {profileMsg && (
-              <div className="flex items-center gap-2 text-sm text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-2">
-                <CheckCircle2 className="size-4 flex-shrink-0" /> {profileMsg}
-              </div>
-            )}
-            {profileError && (
-              <div className="flex items-center gap-2 text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
-                <AlertCircle className="size-4 flex-shrink-0" /> {profileError}
-              </div>
-            )}
-
-            <div className="flex items-center gap-4 mb-6 pb-6 border-b border-dark-200">
-              <div className="relative">
-                <div className="size-24 rounded-full bg-dark-200 flex items-center justify-center overflow-hidden">
-                  {user?.userPhotoPath ? (
-                    <img src={user.userPhotoPath} alt="Avatar" className="size-full object-cover" />
-                  ) : (
-                    <span className="text-2xl font-bold text-dark-500">{user?.userName?.charAt(0)?.toUpperCase() ?? "?"}</span>
-                  )}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => avatarInputRef.current?.click()}
-                  className="absolute -bottom-1 -right-1 p-1.5 bg-gold text-dark rounded-full hover:bg-gold-hover transition-colors"
-                >
-                  <Camera className="size-4" />
-                </button>
-              </div>
-              <div>
-                <p className="font-medium text-[#FAFAFA]">{user?.userName}</p>
-                <p className="text-sm text-dark-600">{user?.userEmail}</p>
-              </div>
-              <input
-                ref={avatarInputRef}
-                type="file"
-                accept=".png,.jpg,.jpeg,.webp"
-                className="hidden"
-                onChange={handleAvatarUpload}
-              />
-            </div>
-            {avatarError && (
-              <div className="flex items-center gap-2 text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
-                <AlertCircle className="size-4 flex-shrink-0" /> {avatarError}
-              </div>
-            )}
-
-            <div>
-              <label className="block text-sm font-medium text-[#E5E5E5] mb-1">Email</label>
-              <input type="email" value={user?.userEmail ?? ""} disabled className={`${inputClass} bg-dark-100 text-dark-500`} />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-[#E5E5E5] mb-1">Name</label>
-              <input type="text" value={name} onChange={(e) => setName(e.target.value)} required className={inputClass} />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-[#E5E5E5] mb-1">Bio</label>
-              <textarea
-                value={bio}
-                onChange={(e) => setBio(e.target.value.slice(0, 300))}
-                maxLength={300}
-                rows={3}
-                placeholder="Tell us about yourself..."
-                className={`${inputClass} resize-none`}
-              />
-              <p className="text-xs text-dark-500 mt-1">{bio.length}/300</p>
-            </div>
-
-            <div className="border-t border-dark-200 pt-4 mt-2">
-              <h3 className="text-sm font-semibold text-[#E5E5E5] mb-3">Address</h3>
-              <div className="space-y-3">
-                <div>
-                  <label className="block text-xs text-dark-600 mb-1">Address Line 1</label>
-                  <input type="text" value={addressLine1} onChange={(e) => setAddressLine1(e.target.value)} className={inputClass} />
-                </div>
-                <div>
-                  <label className="block text-xs text-dark-600 mb-1">Address Line 2</label>
-                  <input type="text" value={addressLine2} onChange={(e) => setAddressLine2(e.target.value)} className={inputClass} />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs text-dark-600 mb-1">Suburb / City</label>
-                    <input type="text" value={suburb} onChange={(e) => setSuburb(e.target.value)} className={inputClass} />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-dark-600 mb-1">State / Province</label>
-                    <input type="text" value={stateProv} onChange={(e) => setStateProv(e.target.value)} className={inputClass} />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs text-dark-600 mb-1">Country</label>
-                    <input type="text" value={country} onChange={(e) => setCountry(e.target.value)} className={inputClass} />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-dark-600 mb-1">Postcode</label>
-                    <input type="text" value={postcode} onChange={(e) => setPostcode(e.target.value)} className={inputClass} />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="border-t border-dark-200 pt-4 mt-2">
-              <h3 className="text-sm font-semibold text-[#E5E5E5] mb-3">Social Media Accounts</h3>
-              <div className="space-y-3">
-                <div>
-                  <label className="block text-xs text-dark-600 mb-1">Facebook</label>
-                  <input type="url" value={facebook} onChange={(e) => setFacebook(e.target.value)} placeholder="https://facebook.com/yourpage" className={inputClass} />
-                </div>
-                <div>
-                  <label className="block text-xs text-dark-600 mb-1">Instagram</label>
-                  <input type="url" value={instagram} onChange={(e) => setInstagram(e.target.value)} placeholder="https://instagram.com/yourhandle" className={inputClass} />
-                </div>
-                <div>
-                  <label className="block text-xs text-dark-600 mb-1">TikTok</label>
-                  <input type="url" value={tiktok} onChange={(e) => setTiktok(e.target.value)} placeholder="https://tiktok.com/@yourhandle" className={inputClass} />
-                </div>
-                <div>
-                  <label className="block text-xs text-dark-600 mb-1">Pinterest</label>
-                  <input type="url" value={pinterest} onChange={(e) => setPinterest(e.target.value)} placeholder="https://pinterest.com/yourpage" className={inputClass} />
-                </div>
-                <div>
-                  <label className="block text-xs text-dark-600 mb-1">LinkedIn</label>
-                  <input type="url" value={linkedin} onChange={(e) => setLinkedin(e.target.value)} placeholder="https://linkedin.com/in/yourprofile" className={inputClass} />
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <button
-                type="submit"
-                disabled={savingProfile}
-                className="px-4 py-2 text-sm font-medium text-dark bg-gold rounded-xl hover:bg-gold-hover disabled:opacity-50 transition-colors"
-              >
-                {savingProfile && <Loader2 className="size-4 animate-spin inline mr-1" />}
-                Save
-              </button>
-            </div>
-          </form>
+          <AccountTab
+            user={user}
+            name={name} setName={setName}
+            bio={bio} setBio={setBio}
+            addressLine1={addressLine1} setAddressLine1={setAddressLine1}
+            addressLine2={addressLine2} setAddressLine2={setAddressLine2}
+            suburb={suburb} setSuburb={setSuburb}
+            stateProv={stateProv} setStateProv={setStateProv}
+            country={country} setCountry={setCountry}
+            postcode={postcode} setPostcode={setPostcode}
+            facebook={facebook} setFacebook={setFacebook}
+            instagram={instagram} setInstagram={setInstagram}
+            tiktok={tiktok} setTiktok={setTiktok}
+            pinterest={pinterest} setPinterest={setPinterest}
+            linkedin={linkedin} setLinkedin={setLinkedin}
+            profileMsg={profileMsg}
+            profileError={profileError}
+            savingProfile={savingProfile}
+            handleSaveProfile={handleSaveProfile}
+            avatarInputRef={avatarInputRef}
+            avatarError={avatarError}
+            handleAvatarUpload={handleAvatarUpload}
+          />
         )}
 
-        {/* Security Tab — Change Password + Two-Factor Authentication */}
-        {activeTab === "security" && (
-          <div role="tabpanel" id="profile-tabpanel-security" aria-labelledby="profile-tab-security" className="space-y-4">
-            <form onSubmit={handleChangePassword} className="bg-dark-50 rounded-2xl border border-dark-200 p-6 space-y-4">
-              <div className="flex items-center gap-2">
-                <Key className="size-4 text-gold" />
-                <h3 className="text-sm font-semibold text-[#E5E5E5]">Change Password</h3>
-              </div>
+        {activeTab === "security" && <SecurityTab />}
 
-              {passwordMsg && (
-                <div className="flex items-center gap-2 text-sm text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-2">
-                  <CheckCircle2 className="size-4 flex-shrink-0" /> {passwordMsg}
-                </div>
-              )}
-              {passwordError && (
-                <div className="flex items-center gap-2 text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
-                  <AlertCircle className="size-4 flex-shrink-0" /> {passwordError}
-                </div>
-              )}
+        <div className={activeTab !== "kitchen" ? "hidden" : ""}>
+          <OrgTab />
+        </div>
 
-              <div>
-                <label className="block text-sm font-medium text-[#E5E5E5] mb-1">Current Password</label>
-                <input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} required className={inputClass} />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-[#E5E5E5] mb-1">New Password</label>
-                <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required minLength={8} className={inputClass} placeholder="Min 8 chars" />
-              </div>
-
-              <button
-                type="submit"
-                disabled={savingPassword}
-                className="px-4 py-2 text-sm font-medium text-dark bg-gold rounded-xl hover:bg-gold-hover disabled:opacity-50 transition-colors"
-              >
-                {savingPassword && <Loader2 className="size-4 animate-spin inline mr-1" />}
-                Change Password
-              </button>
-            </form>
-
-            <MfaSection />
-          </div>
-        )}
-
-        {/* Organisation Tab */}
-        {activeTab === "kitchen" && (
-          <div role="tabpanel" id="profile-tabpanel-kitchen" aria-labelledby="profile-tab-kitchen" className="bg-dark-50 rounded-2xl border border-dark-200 p-6 space-y-4">
-            {orgMsg && (
-              <div className="flex items-center gap-2 text-sm text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-2">
-                <CheckCircle2 className="size-4 flex-shrink-0" /> {orgMsg}
-              </div>
-            )}
-            {orgError && (
-              <div className="flex items-center gap-2 text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
-                <AlertCircle className="size-4 flex-shrink-0" /> {orgError}
-              </div>
-            )}
-
-            {orgLoading ? (
-              <div className="flex justify-center py-4">
-                <Loader2 className="size-5 animate-spin text-dark-500" />
-              </div>
-            ) : org ? (
-              <div>
-                {/* Sub-tab navigation */}
-                <div className="flex gap-1 mb-4">
-                  {([
-                    { id: "overview" as const, label: "Overview", Icon: Info },
-                    { id: "locations" as const, label: "Locations", Icon: MapPin },
-                  ]).map(({ id, label, Icon }) => (
-                    <button
-                      key={id}
-                      type="button"
-                      onClick={() => setOrgSubTab(id)}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg transition-colors ${
-                        orgSubTab === id
-                          ? "bg-gold text-dark font-medium"
-                          : "bg-dark-100 text-dark-600 hover:bg-dark-200"
-                      }`}
-                    >
-                      <Icon className="size-3.5" />
-                      {label}
-                    </button>
-                  ))}
-                </div>
-
-                {/* ── Overview sub-tab ─────────────────────────────── */}
-                {orgSubTab === "overview" && (
-                  <div className="space-y-4">
-                    {user && myOrgRole === "admin" && editingOrg ? (
-                      <form onSubmit={handleUpdateOrg} className="space-y-3">
-                        <div>
-                          <label className="block text-sm font-medium text-[#E5E5E5] mb-1">Organisation Name *</label>
-                          <input type="text" value={editOrgName} onChange={(e) => setEditOrgName(e.target.value)} required className={inputClass} />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-[#E5E5E5] mb-1">Website</label>
-                          <input type="text" value={editOrgWebsite} onChange={(e) => setEditOrgWebsite(e.target.value)} className={inputClass} />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-[#E5E5E5] mb-1">Email</label>
-                          <input type="email" value={editOrgEmail} onChange={(e) => setEditOrgEmail(e.target.value)} className={inputClass} />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-[#E5E5E5] mb-1">Phone</label>
-                          <input type="tel" value={editOrgPhone} onChange={(e) => setEditOrgPhone(e.target.value)} placeholder="e.g. +61 3 9999 0000" className={inputClass} />
-                        </div>
-                        <div className="border-t border-dark-200 pt-3 mt-1">
-                          <h4 className="text-sm font-semibold text-[#E5E5E5] mb-3">Social Media Accounts</h4>
-                          <div className="space-y-3">
-                            <div>
-                              <label className="block text-xs text-dark-600 mb-1">Facebook</label>
-                              <input type="url" value={editOrgFacebook} onChange={(e) => setEditOrgFacebook(e.target.value)} placeholder="https://facebook.com/yourpage" className={inputClass} />
-                            </div>
-                            <div>
-                              <label className="block text-xs text-dark-600 mb-1">Instagram</label>
-                              <input type="url" value={editOrgInstagram} onChange={(e) => setEditOrgInstagram(e.target.value)} placeholder="https://instagram.com/yourhandle" className={inputClass} />
-                            </div>
-                            <div>
-                              <label className="block text-xs text-dark-600 mb-1">TikTok</label>
-                              <input type="url" value={editOrgTiktok} onChange={(e) => setEditOrgTiktok(e.target.value)} placeholder="https://tiktok.com/@yourhandle" className={inputClass} />
-                            </div>
-                            <div>
-                              <label className="block text-xs text-dark-600 mb-1">Pinterest</label>
-                              <input type="url" value={editOrgPinterest} onChange={(e) => setEditOrgPinterest(e.target.value)} placeholder="https://pinterest.com/yourpage" className={inputClass} />
-                            </div>
-                            <div>
-                              <label className="block text-xs text-dark-600 mb-1">LinkedIn</label>
-                              <input type="url" value={editOrgLinkedin} onChange={(e) => setEditOrgLinkedin(e.target.value)} placeholder="https://linkedin.com/company/yourorg" className={inputClass} />
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex gap-2">
-                          <button type="submit" disabled={savingOrg} className="px-4 py-2 text-sm font-medium text-dark bg-gold rounded-xl hover:bg-gold-hover disabled:opacity-50 transition-colors">
-                            {savingOrg && <Loader2 className="size-4 animate-spin inline mr-1" />}
-                            Save Changes
-                          </button>
-                          <button type="button" onClick={() => setEditingOrg(false)} className="px-4 py-2 text-sm font-medium text-[#E5E5E5] bg-dark-100 border border-dark-200 rounded-xl hover:bg-dark-200 transition-colors">
-                            Cancel
-                          </button>
-                        </div>
-                      </form>
-                    ) : (
-                      <>
-                        <div className="grid grid-cols-2 gap-3 text-sm">
-                          <div>
-                            <span className="text-dark-600">Name:</span>
-                            <p className="font-medium text-[#FAFAFA]">{org.organisationName}</p>
-                          </div>
-                          {org.organisationWebsite && (
-                            <div>
-                              <span className="text-dark-600">Website:</span>
-                              <p className="font-medium text-[#FAFAFA]">{org.organisationWebsite}</p>
-                            </div>
-                          )}
-                          {org.organisationEmail && (
-                            <div>
-                              <span className="text-dark-600">Email:</span>
-                              <p className="font-medium text-[#FAFAFA]">{org.organisationEmail}</p>
-                            </div>
-                          )}
-                        </div>
-
-                        {(org.organisationFacebook || org.organisationInstagram || org.organisationTiktok || org.organisationPinterest || org.organisationLinkedin) && (
-                          <div className="border-t border-dark-200 pt-3">
-                            <p className="text-xs text-dark-600 mb-2">Social Media</p>
-                            <div className="flex flex-wrap gap-2 text-sm">
-                              {org.organisationFacebook && <a href={org.organisationFacebook} target="_blank" rel="noopener noreferrer" className="text-gold hover:text-gold-hover hover:underline">Facebook</a>}
-                              {org.organisationInstagram && <a href={org.organisationInstagram} target="_blank" rel="noopener noreferrer" className="text-gold hover:text-gold-hover hover:underline">Instagram</a>}
-                              {org.organisationTiktok && <a href={org.organisationTiktok} target="_blank" rel="noopener noreferrer" className="text-gold hover:text-gold-hover hover:underline">TikTok</a>}
-                              {org.organisationPinterest && <a href={org.organisationPinterest} target="_blank" rel="noopener noreferrer" className="text-gold hover:text-gold-hover hover:underline">Pinterest</a>}
-                              {org.organisationLinkedin && <a href={org.organisationLinkedin} target="_blank" rel="noopener noreferrer" className="text-gold hover:text-gold-hover hover:underline">LinkedIn</a>}
-                            </div>
-                          </div>
-                        )}
-
-                        {user && myOrgRole === "admin" && (
-                          <button type="button" onClick={startEditingOrg} className="text-sm text-gold hover:text-gold-hover transition-colors">
-                            Edit Organisation
-                          </button>
-                        )}
-
-                        {user && myOrgRole === "admin" && (
-                          <OrgBenchBanner orgId={org.organisationId} />
-                        )}
-                      </>
-                    )}
-
-                    {/* Join Key + Leave */}
-                    <div className="border-t border-dark-200 pt-3 space-y-3">
-                      <div className="flex items-center gap-2 bg-dark border border-dark-200 rounded-lg px-3 py-2">
-                        <span className="text-sm text-dark-600">Org Join Key:</span>
-                        <code className="text-sm font-mono font-medium text-[#FAFAFA]">{org.joinKey}</code>
-                        <button type="button" onClick={handleCopyKey} className="ml-auto text-dark-500 hover:text-[#E5E5E5] transition-colors" title="Copy join key">
-                          {copiedKey ? <CheckCircle2 className="size-4 text-green-500" /> : <Copy className="size-4" />}
-                        </button>
-                      </div>
-                      <button type="button" onClick={handleLeaveOrg} disabled={savingOrg} className="text-sm text-red-400 hover:text-red-300 transition-colors">
-                        Leave Organisation
-                      </button>
-                    </div>
-
-                    {/* ── Kitchen Profile ──────────────────────────── */}
-                    <div className="border-t border-dark-200 pt-4 mt-4">
-                      <MyKitchenTab isOrgAdmin={myOrgRole === "admin"} />
-                    </div>
-                  </div>
-                )}
-
-                {/* ── Locations sub-tab ───────────────────────────── */}
-                {orgSubTab === "locations" && user && myOrgRole === "admin" && (
-                  <StoreLocationsSection orgId={org.organisationId} />
-                )}
-                {orgSubTab === "locations" && myOrgRole !== "admin" && (
-                  <p className="text-sm text-dark-500 py-4">Only organisation admins can manage store locations.</p>
-                )}
-              </div>
-            ) : (
-              <div>
-                <div role="tablist" aria-label="Organisation action" className="flex gap-2 mb-4">
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={orgTab === "create"}
-                    aria-controls="org-tabpanel-create"
-                    id="org-tab-create"
-                    onClick={() => setOrgTab("create")}
-                    className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${orgTab === "create" ? "bg-gold text-dark" : "bg-dark-100 text-dark-600 hover:bg-dark-200"}`}
-                  >
-                    Create
-                  </button>
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={orgTab === "join"}
-                    aria-controls="org-tabpanel-join"
-                    id="org-tab-join"
-                    onClick={() => setOrgTab("join")}
-                    className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${orgTab === "join" ? "bg-gold text-dark" : "bg-dark-100 text-dark-600 hover:bg-dark-200"}`}
-                  >
-                    Join
-                  </button>
-                </div>
-
-                {orgTab === "create" ? (
-                  <form onSubmit={handleCreateOrg} role="tabpanel" id="org-tabpanel-create" aria-labelledby="org-tab-create" className="space-y-3">
-                    <div>
-                      <label className="block text-sm font-medium text-[#E5E5E5] mb-1">Organisation Name *</label>
-                      <input type="text" value={orgName} onChange={(e) => setOrgName(e.target.value)} required className={inputClass} />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-[#E5E5E5] mb-1">Website</label>
-                      <input type="text" value={orgWebsite} onChange={(e) => setOrgWebsite(e.target.value)} className={inputClass} />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-[#E5E5E5] mb-1">Email</label>
-                      <input type="email" value={orgEmail} onChange={(e) => setOrgEmail(e.target.value)} className={inputClass} />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-[#E5E5E5] mb-1">Phone</label>
-                      <input type="tel" value={orgPhone} onChange={(e) => setOrgPhone(e.target.value)} placeholder="e.g. +61 3 9999 0000" className={inputClass} />
-                    </div>
-
-                    <div className="border-t border-dark-200 pt-3 mt-1">
-                      <h4 className="text-sm font-semibold text-[#E5E5E5] mb-3">Social Media Accounts</h4>
-                      <div className="space-y-3">
-                        <div>
-                          <label className="block text-xs text-dark-600 mb-1">Facebook</label>
-                          <input type="url" value={orgFacebook} onChange={(e) => setOrgFacebook(e.target.value)} placeholder="https://facebook.com/yourpage" className={inputClass} />
-                        </div>
-                        <div>
-                          <label className="block text-xs text-dark-600 mb-1">Instagram</label>
-                          <input type="url" value={orgInstagram} onChange={(e) => setOrgInstagram(e.target.value)} placeholder="https://instagram.com/yourhandle" className={inputClass} />
-                        </div>
-                        <div>
-                          <label className="block text-xs text-dark-600 mb-1">TikTok</label>
-                          <input type="url" value={orgTiktok} onChange={(e) => setOrgTiktok(e.target.value)} placeholder="https://tiktok.com/@yourhandle" className={inputClass} />
-                        </div>
-                        <div>
-                          <label className="block text-xs text-dark-600 mb-1">Pinterest</label>
-                          <input type="url" value={orgPinterest} onChange={(e) => setOrgPinterest(e.target.value)} placeholder="https://pinterest.com/yourpage" className={inputClass} />
-                        </div>
-                        <div>
-                          <label className="block text-xs text-dark-600 mb-1">LinkedIn</label>
-                          <input type="url" value={orgLinkedin} onChange={(e) => setOrgLinkedin(e.target.value)} placeholder="https://linkedin.com/company/yourorg" className={inputClass} />
-                        </div>
-                      </div>
-                    </div>
-
-                    <button
-                      type="submit"
-                      disabled={savingOrg}
-                      className="px-4 py-2 text-sm font-medium text-dark bg-gold rounded-xl hover:bg-gold-hover disabled:opacity-50 transition-colors"
-                    >
-                      {savingOrg && <Loader2 className="size-4 animate-spin inline mr-1" />}
-                      Create Organisation
-                    </button>
-                  </form>
-                ) : (
-                  <form onSubmit={handleJoinOrg} role="tabpanel" id="org-tabpanel-join" aria-labelledby="org-tab-join" className="space-y-3">
-                    <div>
-                      <label className="block text-sm font-medium text-[#E5E5E5] mb-1">Join Key</label>
-                      <input
-                        type="text"
-                        value={joinKey}
-                        onChange={(e) => setJoinKey(e.target.value)}
-                        required
-                        className={inputClass}
-                        placeholder="Enter the join key from your organisation"
-                      />
-                    </div>
-                    <button
-                      type="submit"
-                      disabled={savingOrg}
-                      className="px-4 py-2 text-sm font-medium text-dark bg-gold rounded-xl hover:bg-gold-hover disabled:opacity-50 transition-colors"
-                    >
-                      {savingOrg && <Loader2 className="size-4 animate-spin inline mr-1" />}
-                      Join Organisation
-                    </button>
-                  </form>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* My Documents Tab */}
         {activeTab === "documents" && (
           <div role="tabpanel" id="profile-tabpanel-documents" aria-labelledby="profile-tab-documents" className="bg-dark-50 rounded-2xl border border-dark-200 p-6">
             <MyDocumentsTab />
           </div>
         )}
-
       </div>
 
       {cropImageSrc && (
