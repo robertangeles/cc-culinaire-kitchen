@@ -84,9 +84,11 @@ export async function handleWebhookEvent(
       if (!userId) break;
 
       const subscriptionId = session.subscription as string;
-      // Stripe SDK v20 moved current_period_end to SubscriptionItem; the REST API
-      // still returns it on the Subscription object when no explicit apiVersion is set.
+      // Stripe SDK v20 moved current_period_end to SubscriptionItem. Read both
+      // locations: REST API accounts on older API versions still return it at the
+      // subscription level; newer API versions return it on items.data[0].
       const sub = await getStripe().subscriptions.retrieve(subscriptionId) as Stripe.Subscription & { current_period_end?: number | null };
+      const periodEnd = sub.current_period_end ?? sub.items.data[0]?.current_period_end ?? null;
 
       await db
         .update(user)
@@ -94,9 +96,7 @@ export async function handleWebhookEvent(
           stripeSubscriptionId: subscriptionId,
           subscriptionStatus: "active",
           subscriptionTier: determineTier(sub),
-          currentPeriodEndDttm: sub.current_period_end
-            ? new Date(sub.current_period_end * 1000)
-            : null,
+          currentPeriodEndDttm: periodEnd ? new Date(periodEnd * 1000) : null,
           updatedDttm: new Date(),
         })
         .where(eq(user.userId, userId));
@@ -125,9 +125,10 @@ export async function handleWebhookEvent(
     }
 
     case "customer.subscription.updated": {
-      // See comment on sub cast above — same Stripe v20 / current_period_end note applies.
+      // Read current_period_end from both locations (see checkout handler comment).
       const subscription = event.data.object as Stripe.Subscription & { current_period_end?: number | null };
       const customerId = subscription.customer as string;
+      const subPeriodEnd = subscription.current_period_end ?? subscription.items.data[0]?.current_period_end ?? null;
 
       const rows = await db
         .select({ userId: user.userId })
@@ -141,9 +142,7 @@ export async function handleWebhookEvent(
         .set({
           subscriptionStatus: mapStatus(subscription.status),
           subscriptionTier: determineTier(subscription),
-          currentPeriodEndDttm: subscription.current_period_end
-            ? new Date(subscription.current_period_end * 1000)
-            : null,
+          currentPeriodEndDttm: subPeriodEnd ? new Date(subPeriodEnd * 1000) : null,
           updatedDttm: new Date(),
         })
         .where(eq(user.userId, rows[0].userId));
