@@ -69,7 +69,7 @@ async function extractFromPdf(buffer: Buffer): Promise<string> {
   // Try pdf-parse first (fast, works for text-based PDFs)
   // @ts-ignore
   const mod = await import("pdf-parse");
-  const parse = (mod as any).default ?? mod;
+  const parse = (mod as { default?: unknown }).default ?? mod;
   const data = await parse(buffer);
   const text = (data.text ?? "").replace(/\x00/g, "").trim();
 

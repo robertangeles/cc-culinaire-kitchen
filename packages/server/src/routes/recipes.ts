@@ -55,7 +55,7 @@ function withUsageTracking(domain: "recipe" | "patisserie" | "spirits") {
 
   return [
     // Usage check middleware (guest vs authenticated)
-    (req: any, res: any, next: any) => {
+    (req, res, next) => {
       if (req.user) {
         checkUsageLimit(req, res, next);
       } else {
@@ -63,7 +63,7 @@ function withUsageTracking(domain: "recipe" | "patisserie" | "spirits") {
       }
     },
     // Handler + decrement
-    async (req: any, res: any, next: any) => {
+    async (req, res, next) => {
       let succeeded = false;
       try {
         await handler(req, res, next);

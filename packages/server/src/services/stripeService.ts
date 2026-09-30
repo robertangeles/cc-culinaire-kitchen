@@ -84,14 +84,14 @@ export async function handleWebhookEvent(
       if (!userId) break;
 
       const subscriptionId = session.subscription as string;
-      const sub = await getStripe().subscriptions.retrieve(subscriptionId) as any;
+      const sub = await getStripe().subscriptions.retrieve(subscriptionId) as Stripe.Subscription;
 
       await db
         .update(user)
         .set({
           stripeSubscriptionId: subscriptionId,
           subscriptionStatus: "active",
-          subscriptionTier: determineTierFromAny(sub),
+          subscriptionTier: determineTier(sub),
           currentPeriodEndDttm: sub.current_period_end
             ? new Date(sub.current_period_end * 1000)
             : null,
@@ -123,7 +123,7 @@ export async function handleWebhookEvent(
     }
 
     case "customer.subscription.updated": {
-      const subscription = event.data.object as any;
+      const subscription = event.data.object as Stripe.Subscription;
       const customerId = subscription.customer as string;
 
       const rows = await db
@@ -137,7 +137,7 @@ export async function handleWebhookEvent(
         .update(user)
         .set({
           subscriptionStatus: mapStatus(subscription.status),
-          subscriptionTier: determineTierFromAny(subscription),
+          subscriptionTier: determineTier(subscription),
           currentPeriodEndDttm: subscription.current_period_end
             ? new Date(subscription.current_period_end * 1000)
             : null,
@@ -148,7 +148,7 @@ export async function handleWebhookEvent(
     }
 
     case "customer.subscription.deleted": {
-      const subscription = event.data.object as any;
+      const subscription = event.data.object as Stripe.Subscription;
       const customerId = subscription.customer as string;
 
       const rows = await db
@@ -229,8 +229,7 @@ export async function createCustomerPortalSession(userId: number) {
   return { url: session.url };
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function determineTierFromAny(subscription: any): string {
+function determineTier(subscription: Stripe.Subscription): string {
   const interval = subscription?.items?.data?.[0]?.price?.recurring?.interval;
   if (interval === "month") return "monthly";
   if (interval === "year") return "yearly";

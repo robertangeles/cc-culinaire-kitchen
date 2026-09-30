@@ -141,7 +141,7 @@ export async function generateImage(prompt: string): Promise<GeneratedImage | nu
   // OpenRouter returns images in multiple possible locations:
   // 1. message.images[] — array of base64 data URLs (Gemini models)
   // 2. message.content[] — array of parts with type "image_url" (OpenAI models)
-  const images = (message as any).images as string[] | undefined;
+  const images = (message as Record<string, unknown>).images as (string | Record<string, unknown>)[] | undefined;
   const content = message.content;
 
   // Collect all image data URLs from either location
@@ -153,13 +153,13 @@ export async function generateImage(prompt: string): Promise<GeneratedImage | nu
       if (typeof img === "string") {
         imageUrls.push(img);
       } else if (img && typeof img === "object") {
-        const url = (img as any).image_url?.url
-          || (img as any).url
-          || (img as any).data;
+        const url = ((img as Record<string, unknown>).image_url as Record<string, unknown> | undefined)?.url as string | undefined
+          || (img as Record<string, unknown>).url as string | undefined
+          || (img as Record<string, unknown>).data as string | undefined;
         if (url) { imageUrls.push(url); continue; }
         // Handle { b64_json, content_type } format
-        const b64 = (img as any).b64_json;
-        const ct = (img as any).content_type ?? "image/png";
+        const b64 = (img as Record<string, unknown>).b64_json as string | undefined;
+        const ct = ((img as Record<string, unknown>).content_type as string | undefined) ?? "image/png";
         if (b64) imageUrls.push(`data:${ct};base64,${b64}`);
       }
     }
@@ -168,8 +168,8 @@ export async function generateImage(prompt: string): Promise<GeneratedImage | nu
   if (Array.isArray(content)) {
     for (const part of content) {
       const url = part.image_url?.url
-        || (part as any).image?.url
-        || ((part.type === "image_url" || part.type === "image") && (part as any).url);
+        || (part as { image?: { url?: string } }).image?.url
+        || ((part.type === "image_url" || part.type === "image") && (part as { url?: string }).url);
       if (url) imageUrls.push(url);
     }
   }

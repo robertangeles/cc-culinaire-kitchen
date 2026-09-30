@@ -85,9 +85,10 @@ export async function handleStartSession(
 
     logger.info({ sessionId: result.session.sessionId, poId: parsed.data.poId, userId }, "Receiving session started");
     res.status(201).json(result);
-  } catch (err: any) {
-    if (err.message?.includes("not found") || err.message?.includes("Cannot") || err.message?.includes("already in progress")) {
-      res.status(400).json({ error: err.message });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("not found") || msg.includes("Cannot") || msg.includes("already in progress")) {
+      res.status(400).json({ error: msg });
       return;
     }
     next(err);
@@ -135,9 +136,10 @@ export async function handleActionLine(
 
     logger.info({ sessionId, receivingLineId, status: parsed.data.status }, "Receiving line actioned");
     res.json(result);
-  } catch (err: any) {
-    if (err.message?.includes("not found") || err.message?.includes("not active") || err.message?.includes("no longer active")) {
-      res.status(400).json({ error: err.message });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("not found") || msg.includes("not active") || msg.includes("no longer active")) {
+      res.status(400).json({ error: msg });
       return;
     }
     next(err);
@@ -156,9 +158,10 @@ export async function handleConfirmReceipt(
 
     logger.info({ sessionId, poStatus: result.poStatus }, "Receipt confirmed");
     res.json(result);
-  } catch (err: any) {
-    if (err.message?.includes("not found") || err.message?.includes("Cannot transition")) {
-      res.status(400).json({ error: err.message });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("not found") || msg.includes("Cannot transition")) {
+      res.status(400).json({ error: msg });
       return;
     }
     next(err);
@@ -177,9 +180,10 @@ export async function handleCancelSession(
 
     logger.info({ sessionId }, "Receiving session cancelled");
     res.json({ success: true });
-  } catch (err: any) {
-    if (err.message?.includes("not found") || err.message?.includes("Cannot transition")) {
-      res.status(400).json({ error: err.message });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("not found") || msg.includes("Cannot transition")) {
+      res.status(400).json({ error: msg });
       return;
     }
     next(err);
@@ -211,9 +215,10 @@ export async function handleCreateCreditNote(
 
     logger.info({ creditNoteId: result.creditNoteId, userId }, "Credit note created");
     res.status(201).json(result);
-  } catch (err: any) {
-    if (err.message?.includes("not found") || err.message?.includes("already resolved")) {
-      res.status(400).json({ error: err.message });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("not found") || msg.includes("already resolved")) {
+      res.status(400).json({ error: msg });
       return;
     }
     next(err);

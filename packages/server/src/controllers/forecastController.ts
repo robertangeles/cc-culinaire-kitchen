@@ -106,9 +106,10 @@ export async function handleDismiss(
 
     const rec = await forecastService.dismissRecommendation(req.params.id as string, orgId);
     res.json(rec);
-  } catch (err: any) {
-    if (err.message?.includes("not found")) {
-      res.status(404).json({ error: err.message });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("not found")) {
+      res.status(404).json({ error: msg });
       return;
     }
     logger.error(err, "handleDismiss failed");
@@ -128,9 +129,10 @@ export async function handleMarkOrdered(
 
     const rec = await forecastService.markOrdered(req.params.id as string, orgId);
     res.json(rec);
-  } catch (err: any) {
-    if (err.message?.includes("not found")) {
-      res.status(404).json({ error: err.message });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("not found")) {
+      res.status(404).json({ error: msg });
       return;
     }
     logger.error(err, "handleMarkOrdered failed");

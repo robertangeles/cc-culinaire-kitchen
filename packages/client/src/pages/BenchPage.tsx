@@ -103,8 +103,8 @@ function BenchContent() {
       try {
         const res = await fetch(`${API}/api/bench/channels`, { credentials: "include" });
         if (!res.ok) return;
-        const channels = await res.json();
-        const orgCh = channels.find((c: any) => c.channelType === "organisation");
+        const channels = await res.json() as Array<{ channelKey: string; channelType?: string; channelBanner?: string }>;
+        const orgCh = channels.find((c) => c.channelType === "organisation");
         if (orgCh) {
           setHasOrg(true);
           setOrgChannelKey(orgCh.channelKey);

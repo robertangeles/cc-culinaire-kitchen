@@ -140,8 +140,8 @@ export function useReceiving() {
       setSessionData(data);
       saveToLocal(data.session.sessionId, data);
       return data;
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to start receiving session");
       throw err;
     } finally {
       setIsLoading(false);
@@ -268,14 +268,14 @@ export function useReceiving() {
       clearLocal(sessionId);
       setSessionData(null);
       return result;
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (!navigator.onLine) {
         // Queue for later sync
         setIsOffline(true);
         setError("Saved locally — will sync when online");
         throw err;
       }
-      setError(err.message);
+      setError(err instanceof Error ? err.message : "Failed to confirm receipt");
       throw err;
     } finally {
       setIsSyncing(false);

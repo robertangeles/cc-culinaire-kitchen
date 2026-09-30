@@ -62,8 +62,8 @@ export function useAutoPoSuggestions(storeLocationId: string | null | undefined)
         return;
       }
       setResult(await res.json());
-    } catch (err: any) {
-      setError(err?.message ?? "Failed to load suggestions");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to load suggestions");
     } finally {
       setLoading(false);
     }

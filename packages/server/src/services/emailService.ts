@@ -310,8 +310,9 @@ export async function sendRecipeEmail(
   // Image URLs from our server are relative (/uploads/generated/...) so we
   // need the full URL. Resend's `path` requires http(s).
   // If the URL is relative, we fetch the image ourselves and send as base64 content.
+  type EmailAttachment = { filename?: string; path?: string; content?: Buffer; contentId?: string };
   let heroImgTag = "";
-  const attachments: any[] = [];
+  const attachments: EmailAttachment[] = [];
 
   if (imageUrl) {
     try {
@@ -415,7 +416,7 @@ export async function sendRecipeEmail(
     to,
     subject: `${recipeData.name} — CulinAIre Kitchen`,
     html,
-    ...(attachments.length > 0 ? { attachments: attachments as any } : {}),
+    ...(attachments.length > 0 ? { attachments: attachments as { filename?: string; content?: Buffer | string; path?: string }[] } : {}),
   });
 
   if (error) {

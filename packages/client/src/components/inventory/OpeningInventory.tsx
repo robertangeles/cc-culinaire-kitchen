@@ -85,8 +85,8 @@ export function OpeningInventory() {
         throw new Error(body?.error || "Failed to start opening inventory");
       }
       await refreshSession();
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to start opening inventory");
       setIsLoading(false);
     }
   };
@@ -110,8 +110,8 @@ export function OpeningInventory() {
       }
       await refreshSession();
       return true;
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to claim category");
       return false;
     }
   };
@@ -135,8 +135,8 @@ export function OpeningInventory() {
       // Refresh locations so inventoryActive flips to true
       if (refreshLocations) await refreshLocations();
       await refreshSession();
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to submit opening inventory");
     } finally {
       setIsSubmitting(false);
     }

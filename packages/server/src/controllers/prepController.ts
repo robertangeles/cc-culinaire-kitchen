@@ -78,7 +78,7 @@ const saveSelectionsSchema = z.object({
 
 /** POST /api/prep/sessions */
 export async function handleCreateSession(req: Request, res: Response) {
-  const userId = (req as any).user?.sub;
+  const userId = req.user!.sub;
   if (!userId) {
     res.status(401).json({ error: "Sign in to create a prep session" });
     return;
@@ -96,7 +96,7 @@ export async function handleCreateSession(req: Request, res: Response) {
 
 /** GET /api/prep/sessions/today */
 export async function handleGetTodaySession(req: Request, res: Response) {
-  const userId = (req as any).user?.sub;
+  const userId = req.user!.sub;
   if (!userId) {
     res.status(401).json({ error: "Sign in to view today's session" });
     return;
@@ -116,7 +116,7 @@ export async function handleGetTodaySession(req: Request, res: Response) {
 
 /** GET /api/prep/sessions/:id */
 export async function handleGetSession(req: Request, res: Response) {
-  const userId = (req as any).user?.sub;
+  const userId = req.user!.sub;
   if (!userId) {
     res.status(401).json({ error: "Sign in to view prep sessions" });
     return;
@@ -141,7 +141,7 @@ export async function handleGetSession(req: Request, res: Response) {
 
 /** PATCH /api/prep/tasks/:id */
 export async function handleUpdateTask(req: Request, res: Response) {
-  const userId = (req as any).user?.sub;
+  const userId = req.user!.sub;
   if (!userId) {
     res.status(401).json({ error: "Sign in to update tasks" });
     return;
@@ -169,7 +169,7 @@ export async function handleUpdateTask(req: Request, res: Response) {
 
 /** GET /api/prep/cross-usage/:sessionId */
 export async function handleGetCrossUsage(req: Request, res: Response) {
-  const userId = (req as any).user?.sub;
+  const userId = req.user!.sub;
   if (!userId) {
     res.status(401).json({ error: "Sign in to view cross-usage data" });
     return;
@@ -190,7 +190,7 @@ export async function handleGetCrossUsage(req: Request, res: Response) {
 
 /** GET /api/prep/high-impact */
 export async function handleGetHighImpact(req: Request, res: Response) {
-  const userId = (req as any).user?.sub;
+  const userId = req.user!.sub;
   if (!userId) {
     res.status(401).json({ error: "Sign in to view high-impact dishes" });
     return;
@@ -205,7 +205,7 @@ export async function handleGetHighImpact(req: Request, res: Response) {
 
 /** GET /api/prep/history */
 export async function handleGetHistory(req: Request, res: Response) {
-  const userId = (req as any).user?.sub;
+  const userId = req.user!.sub;
   if (!userId) {
     res.status(401).json({ error: "Sign in to view session history" });
     return;
@@ -223,7 +223,7 @@ export async function handleGetHistory(req: Request, res: Response) {
 
 /** PATCH /api/prep/sessions/:id/end */
 export async function handleEndSession(req: Request, res: Response) {
-  const userId = (req as any).user?.sub;
+  const userId = req.user!.sub;
   if (!userId) {
     res.status(401).json({ error: "Sign in to end a session" });
     return;
@@ -255,7 +255,7 @@ export async function handleEndSession(req: Request, res: Response) {
 
 /** GET /api/prep/menu — dishes available for selection */
 export async function handleGetMenuForSelection(req: Request, res: Response) {
-  const userId = (req as any).user?.sub;
+  const userId = req.user!.sub;
   if (!userId) {
     res.status(401).json({ error: "Sign in to view the menu" });
     return;
@@ -270,7 +270,7 @@ export async function handleGetMenuForSelection(req: Request, res: Response) {
 
 /** GET /api/prep/forecast-suggest?covers=N — suggested per-item portions from a cover forecast */
 export async function handleForecastSuggest(req: Request, res: Response) {
-  const userId = (req as any).user?.sub;
+  const userId = req.user!.sub;
   if (!userId) {
     res.status(401).json({ error: "Sign in to forecast prep" });
     return;
@@ -293,7 +293,7 @@ export async function handleForecastSuggest(req: Request, res: Response) {
 
 /** POST /api/prep/sessions/:id/selections — save dish selections */
 export async function handleSaveSelections(req: Request, res: Response) {
-  const userId = (req as any).user?.sub;
+  const userId = req.user!.sub;
   if (!userId) {
     res.status(401).json({ error: "Sign in to save selections" });
     return;
@@ -325,7 +325,7 @@ export async function handleSaveSelections(req: Request, res: Response) {
 
 /** POST /api/prep/sessions/:id/generate — generate tasks from selections */
 export async function handleGenerateFromSelections(req: Request, res: Response) {
-  const userId = (req as any).user?.sub;
+  const userId = req.user!.sub;
   if (!userId) {
     res.status(401).json({ error: "Sign in to generate prep tasks" });
     return;
@@ -351,7 +351,7 @@ export async function handleGenerateFromSelections(req: Request, res: Response) 
 
 /** GET /api/prep/sessions/:id/selections — get selections for a session */
 export async function handleGetSelections(req: Request, res: Response) {
-  const userId = (req as any).user?.sub;
+  const userId = req.user!.sub;
   if (!userId) {
     res.status(401).json({ error: "Sign in to view selections" });
     return;
@@ -372,7 +372,7 @@ export async function handleGetSelections(req: Request, res: Response) {
 
 /** GET /api/prep/previous-selections — get most recent session's selections */
 export async function handleGetPreviousSelections(req: Request, res: Response) {
-  const userId = (req as any).user?.sub;
+  const userId = req.user!.sub;
   if (!userId) {
     res.status(401).json({ error: "Sign in to view previous selections" });
     return;

@@ -184,8 +184,8 @@ export default function PurchaseOrderList({ focusPoId }: { focusPoId?: string | 
         delete copy[poId];
         return copy;
       });
-    } catch (err: any) {
-      alert(err.message);
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Failed to submit order");
     }
   }, [submitPO]);
 
@@ -198,8 +198,8 @@ export default function PurchaseOrderList({ focusPoId }: { focusPoId?: string | 
         delete copy[poId];
         return copy;
       });
-    } catch (err: any) {
-      alert(err.message);
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Failed to cancel order");
     }
   }, [cancelPO]);
 
@@ -220,8 +220,8 @@ export default function PurchaseOrderList({ focusPoId }: { focusPoId?: string | 
     try {
       await approvePO(poId);
       setDetailCache((prev) => { const c = { ...prev }; delete c[poId]; return c; });
-    } catch (err: any) {
-      alert(err.message);
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Failed to approve order");
     }
   }, [approvePO]);
 
@@ -232,8 +232,8 @@ export default function PurchaseOrderList({ focusPoId }: { focusPoId?: string | 
       setRejectModalPO(null);
       setRejectReason("");
       setDetailCache((prev) => { const c = { ...prev }; delete c[rejectModalPO]; return c; });
-    } catch (err: any) {
-      alert(err.message);
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Failed to reject order");
     }
   }, [rejectPO, rejectModalPO, rejectReason]);
 
@@ -244,16 +244,16 @@ export default function PurchaseOrderList({ focusPoId }: { focusPoId?: string | 
       if (result.skippedItems?.length > 0) {
         alert(`PO cloned. ${result.skippedItems.length} item(s) skipped (at or above par level).`);
       }
-    } catch (err: any) {
-      alert(err.message);
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Failed to clone order");
     }
   }, [clonePO, selectedLocationId]);
 
   const handleDownloadPdf = useCallback(async (poId: string, poNumber: string) => {
     try {
       await downloadPdf(poId, poNumber);
-    } catch (err: any) {
-      alert(err.message);
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Failed to download PDF");
     }
   }, [downloadPdf]);
 
@@ -266,8 +266,8 @@ export default function PurchaseOrderList({ focusPoId }: { focusPoId?: string | 
         // No supplier email on file, or email not set up on this server.
         alert(result.message);
       }
-    } catch (err: any) {
-      alert(err.message);
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Failed to send email");
     }
   }, [emailPOToSupplier]);
 

@@ -104,8 +104,8 @@ export function ActivationWizard() {
           map[item.ingredientId] = item.isActive !== false;
         }
         setLocalActiveMap(map);
-      } catch (err: any) {
-        if (!cancelled) setError(err.message ?? "Failed to load data");
+      } catch (err: unknown) {
+        if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load data");
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -218,8 +218,8 @@ export function ActivationWizard() {
       setLocalActiveMap(map);
       setCopySuccess(true);
       setTimeout(() => setCopySuccess(false), 3000);
-    } catch (err: any) {
-      setError(err.message ?? "Copy failed");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Copy failed");
     } finally {
       setCopying(false);
     }

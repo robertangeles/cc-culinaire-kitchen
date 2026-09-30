@@ -24,8 +24,8 @@ export default function SpendThresholdSettings() {
     try {
       await setOrgDefault(amount);
       setOrgAmount("");
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to complete action");
     }
   }, [orgAmount, setOrgDefault]);
 
@@ -38,8 +38,8 @@ export default function SpendThresholdSettings() {
       await setLocationOverride(locId, amount);
       setLocId("");
       setLocAmount("");
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to complete action");
     }
   }, [locId, locAmount, setLocationOverride]);
 

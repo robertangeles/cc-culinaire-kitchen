@@ -14,8 +14,9 @@ export default tseslint.config(
       "**/.turbo/**",
       "**/drizzle/**",
       "**/coverage/**",
-      // Stale JS build artifacts in src/ dirs (TS-only project)
+      // Stale build artifacts in src/ dirs (TS-only project)
       "packages/*/src/**/*.js",
+      "packages/*/src/**/*.d.ts",
     ],
   },
 
@@ -35,7 +36,7 @@ export default tseslint.config(
         "error",
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
       ],
-      "@typescript-eslint/no-explicit-any": "off",
+      "@typescript-eslint/no-explicit-any": "error",
       "@typescript-eslint/no-empty-object-type": "off",
       "@typescript-eslint/no-namespace": "warn",
       "@typescript-eslint/ban-ts-comment": "warn",
@@ -93,5 +94,13 @@ export default tseslint.config(
   // Shared: no extra globals (pure TS)
   {
     files: ["packages/shared/src/**/*.ts"],
+  },
+
+  // Test files: relax no-explicit-any (mocks and vi.fn() stubs are legitimately any)
+  {
+    files: ["**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "**/*.spec.tsx"],
+    rules: {
+      "@typescript-eslint/no-explicit-any": "off",
+    },
   }
 );

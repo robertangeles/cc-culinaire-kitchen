@@ -160,8 +160,8 @@ export default function ConsumptionLogger({
       handleClearItem();
       refreshItems(); // reload stock levels after deduction/return
       setTimeout(() => setShowSuccess(false), 1500);
-    } catch (err: any) {
-      setError(err.message || "Failed to log consumption");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to log consumption");
     } finally {
       setSaving(false);
     }

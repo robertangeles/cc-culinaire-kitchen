@@ -269,8 +269,8 @@ function ApproveForm({
                   throw new Error(err.error || "Failed to approve");
                 }
                 await onConfirm();
-              } catch (err: any) {
-                setError(err.message);
+              } catch (err: unknown) {
+                setError(err instanceof Error ? err.message : "Failed to approve");
               } finally {
                 setSaving(false);
               }
@@ -341,8 +341,8 @@ function RejectForm({
                 throw new Error(err.error || "Failed to reject");
               }
               await onConfirm();
-            } catch (err: any) {
-              setError(err.message);
+            } catch (err: unknown) {
+              setError(err instanceof Error ? err.message : "Failed to reject");
             } finally {
               setSaving(false);
             }

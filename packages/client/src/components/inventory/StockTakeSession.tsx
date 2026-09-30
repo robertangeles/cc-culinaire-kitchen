@@ -79,8 +79,8 @@ export function StockTakeSession() {
                 try {
                   setError(null);
                   await openSession(); // all categories
-                } catch (err: any) {
-                  setError(err.message);
+                } catch (err: unknown) {
+                  setError(err instanceof Error ? err.message : "Failed to open session");
                 }
               }}
               className="px-6 py-3 rounded-xl bg-dark-100 border border-dark-200 text-white font-semibold text-sm hover:bg-dark-200 transition-all active:scale-[0.98]"
@@ -123,8 +123,8 @@ export function StockTakeSession() {
                     setError(null);
                     await openSession([...selectedNewCats]);
                     setShowCategoryPicker(false);
-                  } catch (err: any) {
-                    setError(err.message);
+                  } catch (err: unknown) {
+                    setError(err instanceof Error ? err.message : "Failed to open session");
                   }
                 }}
                 disabled={selectedNewCats.size === 0}
@@ -205,16 +205,16 @@ export function StockTakeSession() {
                   await claimCategory(session.sessionId, cat.categoryName);
                 }
                 setActiveCategory(cat.categoryName);
-              } catch (err: any) {
-                setError(err.message);
+              } catch (err: unknown) {
+                setError(err instanceof Error ? err.message : "Failed to open category");
               }
             }}
             onSubmit={async () => {
               try {
                 setError(null);
                 await submitCategory(session.sessionId, cat.categoryName);
-              } catch (err: any) {
-                setError(err.message);
+              } catch (err: unknown) {
+                setError(err instanceof Error ? err.message : "Failed to submit category");
               }
             }}
           />
@@ -232,8 +232,8 @@ export function StockTakeSession() {
                 setIsSubmitting(true);
                 setError(null);
                 await submitForReview(session.sessionId);
-              } catch (err: any) {
-                setError(err.message);
+              } catch (err: unknown) {
+                setError(err instanceof Error ? err.message : "Failed to submit for review");
               } finally {
                 setIsSubmitting(false);
               }

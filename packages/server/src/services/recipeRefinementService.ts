@@ -150,7 +150,7 @@ export async function refineRecipe(
 ): Promise<{ refinedData: Record<string, unknown>; changeSummary: string }> {
   const model = getModel();
 
-  const recipeName = (currentRecipeData as any).name ?? "";
+  const recipeName = (currentRecipeData.name as string | undefined) ?? "";
 
   // Brain recall (spec T13): ground the refinement in the chef's + kitchen memory.
   // Fired concurrently with the RAG search below; null on every miss/flag-off path.
@@ -177,7 +177,7 @@ export async function refineRecipe(
     const searchQuery = `${instruction} ${recipeName}`;
     const results = await searchKnowledge(searchQuery, "3");
     if (results.length > 0) {
-      ragContext = `## Culinary Reference Knowledge:\n${results.map((r: any) => r.text ?? r.content ?? "").join("\n\n")}\n\n`;
+      ragContext = `## Culinary Reference Knowledge:\n${results.map((r) => r.text ?? r.content ?? "").join("\n\n")}\n\n`;
     }
   } catch {
     // Knowledge search failed — continue without RAG context

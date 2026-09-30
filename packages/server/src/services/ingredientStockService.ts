@@ -426,7 +426,7 @@ export async function getIngredientTransactions(
   const endDate = `${nextMonth}-01T00:00:00.000Z`;
 
   // 1. Stock take lines for this ingredient in this month
-  let stockTakeRows: any[] = [];
+  let stockTakeRows: Record<string, unknown>[] = [];
   try {
     const stResult = await db.execute(sql`
       SELECT stl.line_id as id, stl.counted_qty as quantity, stl.counted_unit as unit,
@@ -440,7 +440,7 @@ export async function getIngredientTransactions(
         AND stl.counted_dttm >= ${startDate}::timestamptz
         AND stl.counted_dttm < ${endDate}::timestamptz
     `);
-    stockTakeRows = (stResult as any).rows ?? stResult ?? [];
+    stockTakeRows = (stResult as { rows?: Record<string, unknown>[] }).rows ?? (stResult as Record<string, unknown>[]) ?? [];
   } catch { stockTakeRows = []; }
 
   // 2. Consumption log entries (using Drizzle ORM)
@@ -469,7 +469,7 @@ export async function getIngredientTransactions(
   } catch { consumptionRows = []; }
 
   // 3. Waste log entries — uses ingredient_name (text), not ingredient_id (FK)
-  let wasteRows: any[] = [];
+  let wasteRows: Record<string, unknown>[] = [];
   try {
     const [ing] = await db
       .select({ name: ingredient.ingredientName })
@@ -487,12 +487,12 @@ export async function getIngredientTransactions(
           AND wl.logged_at >= ${startDate}::timestamptz
           AND wl.logged_at < ${endDate}::timestamptz
       `);
-      wasteRows = (wResult as any).rows ?? wResult ?? [];
+      wasteRows = (wResult as { rows?: Record<string, unknown>[] }).rows ?? (wResult as Record<string, unknown>[]) ?? [];
     }
   } catch { wasteRows = []; }
 
   // 4. Inter-location transfers (sent or received for this ingredient)
-  let transferRows: any[] = [];
+  let transferRows: Record<string, unknown>[] = [];
   try {
     const trResult = await db.execute(sql`
       SELECT tl.line_id as id, tl.sent_qty as quantity, tl.sent_unit as unit,
@@ -512,14 +512,14 @@ export async function getIngredientTransactions(
         AND t.created_dttm >= ${startDate}::timestamptz
         AND t.created_dttm < ${endDate}::timestamptz
     `);
-    transferRows = (trResult as any).rows ?? trResult ?? [];
+    transferRows = (trResult as { rows?: Record<string, unknown>[] }).rows ?? (trResult as Record<string, unknown>[]) ?? [];
   } catch { transferRows = []; }
 
   // 5. Area-to-area moves within one site (Stock Room → Bar).
   //    These have ZERO stock effect — the item never left the venue. They appear
   //    here so "where did my stock go?" has an honest answer: it didn't go
   //    anywhere, someone carried it to the bar.
-  let movementRows: any[] = [];
+  let movementRows: Record<string, unknown>[] = [];
   try {
     const mvResult = await db.execute(sql`
       SELECT sm.stock_movement_id as id, sm.quantity, sm.unit,
@@ -534,7 +534,7 @@ export async function getIngredientTransactions(
         AND sm.moved_at >= ${startDate}::timestamptz
         AND sm.moved_at < ${endDate}::timestamptz
     `);
-    movementRows = (mvResult as any).rows ?? mvResult ?? [];
+    movementRows = (mvResult as { rows?: Record<string, unknown>[] }).rows ?? (mvResult as Record<string, unknown>[]) ?? [];
   } catch { movementRows = []; }
 
   // 6. Deliveries received. Stock's single largest INBOUND movement, and it was
@@ -549,7 +549,7 @@ export async function getIngredientTransactions(
   // Quantity is reported in the ORDERED unit (e.g. "4 bag"), which is what the
   // kitchen actually took delivery of; the base-unit equivalent is already
   // visible in stock on hand.
-  let receiptRows: any[] = [];
+  let receiptRows: Record<string, unknown>[] = [];
   try {
     const rcResult = await db.execute(sql`
       SELECT pol.line_id AS id,
@@ -572,12 +572,12 @@ export async function getIngredientTransactions(
          AND pol.received_dttm >= ${startDate}::timestamptz
          AND pol.received_dttm < ${endDate}::timestamptz
     `);
-    receiptRows = (rcResult as any).rows ?? rcResult ?? [];
+    receiptRows = (rcResult as { rows?: Record<string, unknown>[] }).rows ?? (rcResult as Record<string, unknown>[]) ?? [];
   } catch { receiptRows = []; }
 
   // Merge all into unified TransactionEvent[]
   const transactions = [
-    ...stockTakeRows.map((r: any) => ({
+    ...stockTakeRows.map((r) => ({
       id: r.id,
       type: "stock_take" as const,
       link: null,
@@ -587,7 +587,7 @@ export async function getIngredientTransactions(
       userName: r.userName || "Unknown",
       occurredAt: r.occurredAt instanceof Date ? r.occurredAt.toISOString() : String(r.occurredAt),
     })),
-    ...consumptionRows.map((r: any) => ({
+    ...consumptionRows.map((r) => ({
       id: r.id,
       type: "transfer" as const,
       link: null,
@@ -597,7 +597,7 @@ export async function getIngredientTransactions(
       userName: r.userName || "Unknown",
       occurredAt: r.occurredAt instanceof Date ? r.occurredAt.toISOString() : String(r.occurredAt),
     })),
-    ...wasteRows.map((r: any) => ({
+    ...wasteRows.map((r) => ({
       id: r.id || r.waste_log_id,
       type: "waste" as const,
       link: null,
@@ -605,34 +605,34 @@ export async function getIngredientTransactions(
       unit: r.unit,
       reason: r.reason,
       userName: r.user_name || r.userName || "Unknown",
-      occurredAt: typeof r.occurred_at === "string" ? r.occurred_at : r.occurred_at?.toISOString?.() || "",
+      occurredAt: typeof r.occurred_at === "string" ? r.occurred_at : (r.occurred_at as Date | null | undefined)?.toISOString?.() ?? "",
     })),
-    ...transferRows.map((r: any) => ({
+    ...transferRows.map((r) => ({
       id: r.id,
       type: "transfer_loc" as const,
       // Transfers are the only other event with a real record-level destination:
       // TransferList expands a specific transfer by id. Stock takes are HQ-gated
       // (linking a chef into a 403 is worse than not linking), and area moves /
       // usage have only entry forms, no browsable list to land on.
-      link: r.transferId ? `/inventory?tab=log&view=transfers&transfer=${r.transferId}` : null,
+      link: r.transferId ? `/inventory?tab=log&view=transfers&transfer=${String(r.transferId)}` : null,
       quantity: String(r.quantity),
       unit: r.unit,
-      reason: `${r.fromLocation} → ${r.toLocation}`,
+      reason: `${String(r.fromLocation)} → ${String(r.toLocation)}`,
       userName: r.userName || "Unknown",
       occurredAt: r.occurredAt instanceof Date ? r.occurredAt.toISOString() : String(r.occurredAt || r.created_dttm || ""),
     })),
-    ...movementRows.map((r: any) => ({
+    ...movementRows.map((r) => ({
       id: r.id,
       type: "movement" as const,
       link: null,
       quantity: String(r.quantity),
       unit: r.unit,
       // Mirrors how transfer_loc formats its detail line.
-      reason: `${r.fromArea} → ${r.toArea}`,
+      reason: `${String(r.fromArea)} → ${String(r.toArea)}`,
       userName: r.userName || "Unknown",
       occurredAt: r.occurredAt instanceof Date ? r.occurredAt.toISOString() : String(r.occurredAt),
     })),
-    ...receiptRows.map((r: any) => ({
+    ...receiptRows.map((r) => ({
       id: r.id,
       type: "receipt" as const,
       quantity: String(r.quantity),
@@ -651,7 +651,7 @@ export async function getIngredientTransactions(
       occurredAt: r.occurredAt instanceof Date ? r.occurredAt.toISOString() : String(r.occurredAt),
       // Deep-link to the order this delivery came from. The other event types
       // have no destination yet — see the audit before wiring any more.
-      link: r.poId ? `/purchasing?tab=orders&po=${r.poId}` : null,
+      link: r.poId ? `/purchasing?tab=orders&po=${String(r.poId)}` : null,
     })),
   ].sort((a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime());
 

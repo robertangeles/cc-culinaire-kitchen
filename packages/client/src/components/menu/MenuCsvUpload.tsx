@@ -34,7 +34,7 @@ export function MenuCsvUpload({ onComplete }: MenuCsvUploadProps) {
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        throw new Error((body as any).error ?? "Upload failed");
+        throw new Error((body as { error?: string }).error ?? "Upload failed");
       }
       const data = await res.json();
       setResult(data);

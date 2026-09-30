@@ -115,7 +115,7 @@ export function SupplierManager() {
           title="New Supplier"
           onSave={async (data) => {
             try { setError(null); await create(data); setShowAdd(false); }
-            catch (err: any) { setError(err.message); }
+            catch (err: unknown) { setError(err instanceof Error ? err.message : "Failed to create supplier"); }
           }}
           onCancel={() => setShowAdd(false)}
         />
@@ -208,12 +208,12 @@ export function SupplierManager() {
                           setError(null);
                           await update(sup.supplierId, data);
                           setEditSupplierId(null);
-                        } catch (err: any) { setError(err.message); }
+                        } catch (err: unknown) { setError(err instanceof Error ? err.message : "Failed to update supplier"); }
                       }}
                       onCancel={() => setEditSupplierId(null)}
                       onDelete={async () => {
                         try { setError(null); await remove(sup.supplierId); setEditSupplierId(null); }
-                        catch (err: any) { setError(err.message); }
+                        catch (err: unknown) { setError(err instanceof Error ? err.message : "Failed to delete supplier"); }
                       }}
                     />
                   </div>
@@ -296,7 +296,7 @@ function SupplierForm({
 }: {
   title: string;
   initial?: Supplier;
-  onSave: (data: any) => Promise<void>;
+  onSave: (data: { supplierName: string } & Record<string, unknown>) => Promise<void>;
   onCancel: () => void;
   onDelete?: () => Promise<void>;
 }) {
@@ -330,7 +330,7 @@ function SupplierForm({
     if (!initial) return;
     fetch(`/api/inventory/suppliers/${initial.supplierId}/locations`, { credentials: "include" })
       .then((r) => r.ok ? r.json() : [])
-      .then((locs: any[]) => setSelectedLocs(new Set(locs.filter((l) => l.activeInd).map((l) => l.storeLocationId))));
+      .then((locs: Array<{ storeLocationId: string; activeInd: boolean }>) => setSelectedLocs(new Set(locs.filter((l) => l.activeInd).map((l) => l.storeLocationId))));
   }, [initial]);
 
   const toggleDay = (day: string) => {

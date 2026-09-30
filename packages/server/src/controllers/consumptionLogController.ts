@@ -167,12 +167,13 @@ export async function handleEditLog(
     });
 
     res.json(updated);
-  } catch (err: any) {
-    if (err.message === "not found") {
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg === "not found") {
       res.status(404).json({ error: "Consumption log entry not found" });
-    } else if (err.message === "not authorized") {
+    } else if (msg === "not authorized") {
       res.status(403).json({ error: "You can only edit your own log entries" });
-    } else if (err.message === "expired") {
+    } else if (msg === "expired") {
       res.status(400).json({ error: "Edit window has expired for this entry" });
     } else {
       logger.error(err, "handleEditLog failed");
@@ -198,12 +199,13 @@ export async function handleDeleteLog(
     await consumptionLogService.deleteConsumptionLog(id, orgId, userId, isAdmin);
 
     res.json({ success: true });
-  } catch (err: any) {
-    if (err.message === "not found") {
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg === "not found") {
       res.status(404).json({ error: "Consumption log entry not found" });
-    } else if (err.message === "not authorized") {
+    } else if (msg === "not authorized") {
       res.status(403).json({ error: "You can only delete your own log entries" });
-    } else if (err.message === "expired") {
+    } else if (msg === "expired") {
       res.status(400).json({ error: "Delete window has expired for this entry" });
     } else {
       logger.error(err, "handleDeleteLog failed");

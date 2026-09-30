@@ -174,8 +174,8 @@ export function StockTakeReview({ session, onActionComplete, readOnly = false }:
               setError(null);
               await approveSession(session.sessionId);
               onActionComplete();
-            } catch (err: any) {
-              setError(err.message);
+            } catch (err: unknown) {
+              setError(err instanceof Error ? err.message : "Failed to approve");
             } finally {
               setIsSubmitting(false);
             }
@@ -251,8 +251,8 @@ export function StockTakeReview({ session, onActionComplete, readOnly = false }:
                     setFlaggedCats(new Set());
                     setFlagReason("");
                     onActionComplete();
-                  } catch (err: any) {
-                    setError(err.message);
+                  } catch (err: unknown) {
+                    setError(err instanceof Error ? err.message : "Failed to flag");
                   } finally {
                     setIsSubmitting(false);
                   }

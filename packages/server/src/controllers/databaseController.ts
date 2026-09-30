@@ -56,16 +56,16 @@ export async function handleDatabaseStats(
       const [result] = await db.execute(
         sql`SELECT COUNT(*) as count FROM knowledge_chunk WHERE embedding IS NOT NULL`
       ) as unknown as [{ count: string }][];
-      embeddingCount = parseInt((result as any).count ?? "0", 10);
+      embeddingCount = parseInt(result?.count ?? "0", 10);
     } catch {
       // Table might not exist yet
     }
 
     res.json({
-      totalSize: (totalResult as any)?.total_size ?? "Unknown",
-      totalBytes: parseInt((totalResult as any)?.total_bytes ?? "0", 10),
+      totalSize: totalResult?.total_size ?? "Unknown",
+      totalBytes: parseInt(totalResult?.total_bytes ?? "0", 10),
       embeddingCount,
-      tables: (tables as any[]).map((t) => ({
+      tables: tables.map((t) => ({
         tableName: t.table_name,
         rowCount: parseInt(t.row_count ?? "0", 10),
         totalSize: t.total_size,
@@ -106,7 +106,7 @@ export async function handleDatabaseQuery(
       return;
     }
 
-    logger.info({ query: trimmed.slice(0, 200), userId: (req as any).user?.sub }, "Admin SQL query executed");
+    logger.info({ query: trimmed.slice(0, 200), userId: req.user?.sub }, "Admin SQL query executed");
 
     const start = Date.now();
     const pgSql = postgres(process.env.DATABASE_URL!, {
@@ -132,10 +132,10 @@ export async function handleDatabaseQuery(
     } finally {
       await pgSql.end();
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
     // Return SQL errors as user-facing messages
     res.status(400).json({
-      error: err.message ?? "Query execution failed",
+      error: err instanceof Error ? err.message : "Query execution failed",
     });
   }
 }

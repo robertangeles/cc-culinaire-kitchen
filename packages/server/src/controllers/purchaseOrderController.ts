@@ -169,9 +169,10 @@ export async function handleSubmitPO(
       title: `PO ${result.poNumber} submitted`,
     });
     res.json(result);
-  } catch (err: any) {
-    if (err.message?.includes("Cannot submit") || err.message?.includes("not found")) {
-      res.status(400).json({ error: err.message });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("Cannot submit") || msg.includes("not found")) {
+      res.status(400).json({ error: msg });
       return;
     }
     next(err);
@@ -220,9 +221,10 @@ export async function handleReceiveLine(
       title: "Stock received on a purchase order",
     });
     res.json(result);
-  } catch (err: any) {
-    if (err.message?.includes("Cannot receive") || err.message?.includes("not found") || err.message?.includes("already received")) {
-      res.status(400).json({ error: err.message });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("Cannot receive") || msg.includes("not found") || msg.includes("already received")) {
+      res.status(400).json({ error: msg });
       return;
     }
     next(err);
@@ -242,9 +244,10 @@ export async function handleCancelPO(
     const result = await cancelPO(poId, orgId, userId);
     logger.info({ poId, userId }, "Purchase order cancelled");
     res.json(result);
-  } catch (err: any) {
-    if (err.message?.includes("Cannot cancel") || err.message?.includes("not found")) {
-      res.status(400).json({ error: err.message });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("Cannot cancel") || msg.includes("not found")) {
+      res.status(400).json({ error: msg });
       return;
     }
     next(err);
@@ -278,9 +281,10 @@ export async function handleApprovePO(
       title: `PO ${result.poNumber} approved`,
     });
     res.json(result);
-  } catch (err: any) {
-    if (err.message?.includes("Cannot") || err.message?.includes("not found")) {
-      res.status(400).json({ error: err.message });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("Cannot") || msg.includes("not found")) {
+      res.status(400).json({ error: msg });
       return;
     }
     next(err);
@@ -311,13 +315,14 @@ export async function handleEmailPOToSupplier(
 
     logger.info({ poId, to: result.to }, "Purchase order emailed to supplier");
     res.json({ emailed: true, emailedAt: result.emailedAt, to: result.to });
-  } catch (err: any) {
-    if (err.message?.includes("not found")) {
-      res.status(404).json({ error: err.message });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("not found")) {
+      res.status(404).json({ error: msg });
       return;
     }
-    if (err.message?.includes("Only a sent")) {
-      res.status(400).json({ error: err.message });
+    if (msg.includes("Only a sent")) {
+      res.status(400).json({ error: msg });
       return;
     }
     next(err);
@@ -349,9 +354,10 @@ export async function handleRejectPO(
     const result = await rejectPO(poId, orgId, userId, parsed.data.reason);
     logger.info({ poId, userId }, "Purchase order rejected");
     res.json(result);
-  } catch (err: any) {
-    if (err.message?.includes("Cannot") || err.message?.includes("not found") || err.message?.includes("required")) {
-      res.status(400).json({ error: err.message });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("Cannot") || msg.includes("not found") || msg.includes("required")) {
+      res.status(400).json({ error: msg });
       return;
     }
     next(err);
@@ -383,9 +389,10 @@ export async function handleClonePO(
     const result = await clonePO(sourcePOId, orgId, parsed.data.storeLocationId, userId);
     logger.info({ sourcePOId, newPOId: result.poId, userId }, "Purchase order cloned");
     res.status(201).json(result);
-  } catch (err: any) {
-    if (err.message?.includes("not found") || err.message?.includes("inactive") || err.message?.includes("No items")) {
-      res.status(400).json({ error: err.message });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("not found") || msg.includes("inactive") || msg.includes("No items")) {
+      res.status(400).json({ error: msg });
       return;
     }
     next(err);
@@ -489,12 +496,13 @@ export async function handleDownloadPOPdf(
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `attachment; filename="${poNumber}.pdf"`);
     res.send(buffer);
-  } catch (err: any) {
-    if (err.message?.includes("not found")) {
-      res.status(404).json({ error: err.message });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("not found")) {
+      res.status(404).json({ error: msg });
       return;
     }
-    if (err.message?.includes("timed out")) {
+    if (msg.includes("timed out")) {
       res.status(500).json({ error: "PDF generation timed out — please try again" });
       return;
     }

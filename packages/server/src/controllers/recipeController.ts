@@ -640,29 +640,29 @@ export async function handleEmailRecipe(
         temperature: data.temperature as string | undefined,
         glassware: data.glassware as string | undefined,
         garnish: data.garnish as string | undefined,
-        ingredients: (data.ingredients as any[]) ?? [],
-        steps: (data.steps as any[]) ?? [],
+        ingredients: (data.ingredients as unknown[]) ?? [],
+        steps: (data.steps as unknown[]) ?? [],
         proTips: data.proTips as string[] | undefined,
         allergenNote: (data.allergenNote as string) ?? "",
         confidenceNote: data.confidenceNote as string | undefined,
         whyThisWorks: data.whyThisWorks as string | undefined,
         theResult: data.theResult as string | undefined,
-        flavorBalance: data.flavorBalance as any,
+        flavorBalance: data.flavorBalance as unknown,
         storageAndSafety: data.storageAndSafety as string | undefined,
         platingGuide: data.platingGuide as string | undefined,
         storyBehindTheDish: data.storyBehindTheDish as string | undefined,
         textureContrast: data.textureContrast as string | undefined,
         criticalTemperatures: data.criticalTemperatures as string | undefined,
         makeAheadComponents: data.makeAheadComponents as string[] | undefined,
-        winePairing: data.winePairing as any,
+        winePairing: data.winePairing as unknown,
         abv: data.abv as string | undefined,
         standardDrinks: data.standardDrinks as string | undefined,
         buildTime: data.buildTime as string | undefined,
         ice: data.ice as string | undefined,
         venueType: data.venueType as string | undefined,
-        batchSpec: data.batchSpec as any,
-        variations: data.variations as any,
-        foodPairing: data.foodPairing as any,
+        batchSpec: data.batchSpec as unknown,
+        variations: data.variations as unknown,
+        foodPairing: data.foodPairing as unknown,
         hashtags: data.hashtags as string[] | undefined,
       },
       rec.imageUrl,
@@ -743,7 +743,7 @@ export async function handleRegenerateImage(
   next: NextFunction,
 ): Promise<void> {
   try {
-    const userId = (req as any).user?.sub;
+    const userId = req.user?.sub;
     const recipeId = req.params.id as string;
 
     const [recipe] = await db
@@ -831,7 +831,7 @@ export async function handleMigrateImages(
     const users = await db.execute(sql`SELECT user_id, user_photo_path FROM "user" WHERE user_photo_path LIKE '/uploads/%'`);
     const settings = await db.execute(sql`SELECT setting_key, setting_value FROM site_setting WHERE setting_value LIKE '/uploads/%'`);
 
-    logger.info({ recipeCount: recipes.length, userCount: (users as any[]).length, settingCount: (settings as any[]).length }, "Migrating local images to Cloudinary");
+    logger.info({ recipeCount: recipes.length, userCount: (users as Array<Record<string, unknown>>).length, settingCount: (settings as Array<Record<string, unknown>>).length }, "Migrating local images to Cloudinary");
 
     let success = 0;
     let failed = 0;
@@ -848,43 +848,43 @@ export async function handleMigrateImages(
         await db.update(recipeTable).set({ imageUrl: cloudUrl }).where(eq(recipeTable.recipeId, r.recipeId));
         success++;
         results.push({ type: "recipe", name: r.title, status: "ok" });
-      } catch (err: any) {
+      } catch (err: unknown) {
         failed++;
-        results.push({ type: "recipe", name: r.title, status: err.message ?? "failed" });
+        results.push({ type: "recipe", name: r.title, status: err instanceof Error ? err.message : "failed" });
       }
     }
 
     // Migrate user photos
-    for (const u of users as any[]) {
+    for (const u of users as Array<Record<string, unknown>>) {
       try {
-        const localPath = join(rootDir, u.user_photo_path);
+        const localPath = join(rootDir, u.user_photo_path as string);
         const buffer = await readFile(localPath);
-        const cloudUrl = await uploadFileBuffer(buffer, u.user_photo_path, "culinaire/profiles");
+        const cloudUrl = await uploadFileBuffer(buffer, u.user_photo_path as string, "culinaire/profiles");
         await db.execute(sql`UPDATE "user" SET user_photo_path = ${cloudUrl} WHERE user_id = ${u.user_id}`);
         success++;
         results.push({ type: "user_photo", name: `user_${u.user_id}`, status: "ok" });
-      } catch (err: any) {
+      } catch (err: unknown) {
         failed++;
-        results.push({ type: "user_photo", name: `user_${u.user_id}`, status: err.message ?? "failed" });
+        results.push({ type: "user_photo", name: `user_${u.user_id}`, status: err instanceof Error ? err.message : "failed" });
       }
     }
 
     // Migrate site settings (logo, favicon)
-    for (const s of settings as any[]) {
+    for (const s of settings as Array<Record<string, unknown>>) {
       try {
-        const localPath = join(rootDir, s.setting_value);
+        const localPath = join(rootDir, s.setting_value as string);
         const buffer = await readFile(localPath);
-        const cloudUrl = await uploadFileBuffer(buffer, s.setting_value, "culinaire/site");
+        const cloudUrl = await uploadFileBuffer(buffer, s.setting_value as string, "culinaire/site");
         await db.execute(sql`UPDATE site_setting SET setting_value = ${cloudUrl} WHERE setting_key = ${s.setting_key}`);
         success++;
-        results.push({ type: "setting", name: s.setting_key, status: "ok" });
-      } catch (err: any) {
+        results.push({ type: "setting", name: s.setting_key as string, status: "ok" });
+      } catch (err: unknown) {
         failed++;
-        results.push({ type: "setting", name: s.setting_key, status: err.message ?? "failed" });
+        results.push({ type: "setting", name: s.setting_key as string, status: err instanceof Error ? err.message : "failed" });
       }
     }
 
-    res.json({ total: recipes.length + (users as any[]).length + (settings as any[]).length, success, failed, results });
+    res.json({ total: recipes.length + (users as Array<Record<string, unknown>>).length + (settings as Array<Record<string, unknown>>).length, success, failed, results });
   } catch (err) {
     next(err);
   }
@@ -957,10 +957,10 @@ export async function handleGetRecipesForImport(
     // Map to lightweight response — extract ingredients + yield from recipeData
     const result: ImportRecipeRow[] = recipes.map((r) => {
       const data = r.recipeData as Record<string, unknown> | null;
-      const rawIngredients = (data?.ingredients as any[]) ?? [];
+      const rawIngredients = (data?.ingredients as Array<Record<string, unknown>>) ?? [];
       const recipeYield = typeof data?.yield === "string" ? data.yield : undefined;
 
-      const ingredients: ImportIngredient[] = rawIngredients.map((ing: any) => ({
+      const ingredients: ImportIngredient[] = rawIngredients.map((ing) => ({
         name: typeof ing.name === "string" ? ing.name : (ing.ingredient ?? ""),
         amount: String(ing.amount ?? ing.quantity ?? ""),
         unit: typeof ing.unit === "string" ? ing.unit : "each",

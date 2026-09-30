@@ -408,7 +408,7 @@ export async function updateRecipeContent(
     changeDescription?: string;
     changeType?: string;
   },
-): Promise<{ recipe: any; versionNumber: number } | null> {
+): Promise<{ recipe: Record<string, unknown>; versionNumber: number } | null> {
   // Verify ownership
   const [existing] = await db
     .select()
@@ -467,7 +467,7 @@ export async function updateRecipeContent(
 export async function getRecipeVersions(
   recipeId: string,
   userId: number,
-): Promise<any[] | null> {
+): Promise<unknown[] | null> {
   // Verify ownership
   const [existing] = await db
     .select({ recipeId: recipe.recipeId })
@@ -499,7 +499,7 @@ export async function getRecipeVersion(
   recipeId: string,
   versionId: string,
   userId: number,
-): Promise<any | null> {
+): Promise<unknown> {
   // Verify ownership
   const [existing] = await db
     .select({ recipeId: recipe.recipeId })
@@ -531,7 +531,7 @@ export async function revertToVersion(
   recipeId: string,
   versionId: string,
   userId: number,
-): Promise<{ recipe: any; versionNumber: number } | null> {
+): Promise<{ recipe: Record<string, unknown>; versionNumber: number } | null> {
   // Verify ownership
   const [existing] = await db
     .select({ recipeId: recipe.recipeId })
