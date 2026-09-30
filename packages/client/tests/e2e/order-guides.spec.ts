@@ -23,9 +23,9 @@ import { test, expect, type Page } from "@playwright/test";
 
 async function openNewPoForm(page: Page) {
   await page.goto("/purchasing");
-  await page.waitForLoadState("networkidle");
-  await page.locator('button:has-text("New Purchase Order")').first().click();
-  await expect(page.getByText("New Purchase Order").first()).toBeVisible();
+  // No waitForLoadState — networkidle never resolves (socket.io); domcontentloaded fires before React renders.
+  // Button was renamed from "New Purchase Order" to "New PO".
+  await page.locator('button:has-text("New PO")').first().click({ timeout: 30_000 });
 }
 
 /** Clicks the first guide pill. Returns false when the dataset has no guides. */

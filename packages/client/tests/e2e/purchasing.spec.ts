@@ -14,8 +14,9 @@ async function openOrdersTab(page: Page) {
   // Purchasing is its own route since the sidebar restructure (commit 9d77f81).
   // "Orders" is the default tab on /purchasing, so a single goto is enough.
   await page.goto("/purchasing");
-  await page.waitForLoadState("networkidle");
-  await expect(page.getByRole("heading", { name: /Purchase Orders/i })).toBeVisible();
+  // Scope to main: the guide panel also has "Purchase Orders" headings (strict-mode violation).
+  // No waitForLoadState — networkidle never resolves (socket.io); domcontentloaded fires before React renders.
+  await expect(page.getByRole("main").getByRole("heading", { name: "Purchase Orders", exact: true })).toBeVisible({ timeout: 30_000 });
   // networkidle is not enough — the list query may still be settling.
   // Wait until either a PO row is rendered OR the empty-state text appears.
   await expect(async () => {
