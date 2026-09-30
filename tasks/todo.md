@@ -730,3 +730,10 @@ All pre-existing in the original `useRoster.ts` monolith — extracted unchanged
 
 **DESIGN — Extract `parseError` + its types to `rosterUtils.ts`**
 `useRosterCalendar.ts` imports `parseError` from `useRosterRoles.ts` — the function is a generic HTTP-error utility, not a roles-domain concept. Creates one-directional sibling coupling. Fix: extract `parseError`, `AssignmentBlocked`, `RoleVenueConflict` to `packages/client/src/hooks/rosterUtils.ts`; re-export from `useRosterRoles.ts`; import from `rosterUtils.ts` in both sub-modules.
+
+## 2026-09-30 — Deferred from Phase 4 (no-explicit-any refactor)
+
+Coverage gate (5% < 60%) was overridden on ship — TypeScript compiler enforces the `instanceof Error` pattern in all 36 catch blocks, so CI (`tsc --noEmit`) would catch any regression before runtime. However, the plan called for 6 error-path tests.
+
+**P1 — Add `catalogRequestController.test.ts` (6 error-path tests)**
+Deferred from plan: `~/.gstack/projects/robertangeles-cc-culinaire-kitchen/robangeles-refactor-ck-web-phase-4-no-explicit-any-ship-test-plan-*.md`. Cover the `instanceof Error` guard behavior in `catalogRequestController`: test that a non-Error thrown object returns `String(err)` (not `undefined`) for the error message in HTTP 500 responses. Pattern from `ingredientController.test.ts` tests for `createSupplier` / `updateSupplier` error paths. 6 tests covering: createCatalogRequest, updateCatalogRequest, deleteCatalogRequest error paths (both Error and non-Error throws).
