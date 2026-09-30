@@ -161,7 +161,7 @@ export function IngredientCatalog() {
                 });
               }
               setShowAdd(false);
-            } catch (err: any) { setError(err.message); }
+            } catch (err: unknown) { setError(err instanceof Error ? err.message : "Failed to add ingredient"); }
           }}
           onCancel={() => setShowAdd(false)}
         />
@@ -196,8 +196,8 @@ export function IngredientCatalog() {
               setError(null);
               await update(editIngredient.ingredientId, data);
               setEditIngredient(null);
-            } catch (err: any) {
-              setError(err.message);
+            } catch (err: unknown) {
+              setError(err instanceof Error ? err.message : "Failed to update ingredient");
             }
           }}
           onDelete={async () => {
@@ -205,8 +205,8 @@ export function IngredientCatalog() {
               setError(null);
               await remove(editIngredient.ingredientId);
               setEditIngredient(null);
-            } catch (err: any) {
-              setError(err.message);
+            } catch (err: unknown) {
+              setError(err instanceof Error ? err.message : "Failed to delete ingredient");
             }
           }}
           onCheckUsage={() => checkUsage(editIngredient.ingredientId)}
@@ -786,7 +786,7 @@ function EditIngredientModal({
                   containsShellfishInd: allergens.has("containsShellfishInd"),
                   containsEggsInd: allergens.has("containsEggsInd"),
                   isVegetarianInd: allergens.has("isVegetarianInd"),
-                } as any);
+                } as Partial<Ingredient>);
               } finally {
                 setSaving(false);
               }

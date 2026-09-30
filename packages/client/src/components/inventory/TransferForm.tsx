@@ -96,11 +96,11 @@ export default function TransferForm({ onClose, editTransferId, editData }: Tran
 
   // Filter out current location from destination options
   const destinationOptions = (locations || []).filter(
-    (loc: any) => loc.storeLocationId !== selectedLocationId,
+    (loc) => loc.storeLocationId !== selectedLocationId,
   );
 
   const selectedDest = destinationOptions.find(
-    (loc: any) => loc.storeLocationId === toLocationId,
+    (loc) => loc.storeLocationId === toLocationId,
   );
 
   // Filter items by search
@@ -218,8 +218,8 @@ export default function TransferForm({ onClose, editTransferId, editData }: Tran
       }
       onClose();
       return true;
-    } catch (err: any) {
-      setError(err.message || "Failed to save transfer");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to save transfer");
       return false;
     } finally {
       setSaving(false);
@@ -267,9 +267,9 @@ export default function TransferForm({ onClose, editTransferId, editData }: Tran
                 <>
                   <span
                     className="w-2 h-2 rounded-full"
-                    style={{ backgroundColor: (selectedDest as any).colorAccent || "var(--color-gold)" }}
+                    style={{ backgroundColor: selectedDest.colorAccent || "var(--color-gold)" }}
                   />
-                  <span>{(selectedDest as any).locationName}</span>
+                  <span>{selectedDest.locationName}</span>
                 </>
               ) : (
                 <span>Select destination...</span>
@@ -287,7 +287,7 @@ export default function TransferForm({ onClose, editTransferId, editData }: Tran
                 boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
               }}
             >
-              {destinationOptions.map((loc: any) => (
+              {destinationOptions.map((loc) => (
                 <button
                   key={loc.storeLocationId}
                   onClick={() => {

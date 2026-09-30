@@ -34,7 +34,7 @@ import {
 /** GET /api/bench/channels */
 export async function handleGetChannels(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = (req as any).user.sub;
+    const userId = req.user!.sub;
     const channels = await getUserChannels(userId);
     res.json(channels);
   } catch (err) {
@@ -45,7 +45,7 @@ export async function handleGetChannels(req: Request, res: Response, next: NextF
 /** GET /api/bench/channels/:key/messages */
 export async function handleGetMessages(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = (req as any).user.sub;
+    const userId = req.user!.sub;
     const channelKey = req.params.key as string;
 
     const channel = await getChannelByKey(channelKey);
@@ -75,7 +75,7 @@ export async function handleGetMessages(req: Request, res: Response, next: NextF
 /** GET /api/bench/channels/:key/pins */
 export async function handleGetPins(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = (req as any).user.sub;
+    const userId = req.user!.sub;
     const channelKey = req.params.key as string;
     const channel = await getChannelByKey(channelKey);
     if (!channel) {
@@ -102,7 +102,7 @@ const pinSchema = z.object({ messageId: z.string().uuid() });
 /** POST /api/bench/channels/:key/pins */
 export async function handlePinMessage(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = (req as any).user.sub;
+    const userId = req.user!.sub;
     const channelKey = req.params.key as string;
     const parsed = pinSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -144,7 +144,7 @@ export async function handlePinMessage(req: Request, res: Response, next: NextFu
 /** DELETE /api/bench/pins/:messageId */
 export async function handleUnpinMessage(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = (req as any).user.sub;
+    const userId = req.user!.sub;
     const messageId = req.params.messageId as string;
 
     const pin = await getPinWithChannel(messageId);
@@ -172,7 +172,7 @@ export async function handleUnpinMessage(req: Request, res: Response, next: Next
 /** GET /api/bench/channels/:key/search */
 export async function handleSearchMessages(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = (req as any).user.sub;
+    const userId = req.user!.sub;
     const channelKey = req.params.key as string;
     const channel = await getChannelByKey(channelKey);
     if (!channel) {
@@ -207,7 +207,7 @@ export async function handleSearchMessages(req: Request, res: Response, next: Ne
 /** GET /api/bench/mentions/unread */
 export async function handleGetUnreadMentions(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = (req as any).user.sub;
+    const userId = req.user!.sub;
     const result = await getUnreadMentions(userId);
     res.json(result);
   } catch (err) {
@@ -218,7 +218,7 @@ export async function handleGetUnreadMentions(req: Request, res: Response, next:
 /** POST /api/bench/mentions/read */
 export async function handleMarkMentionsRead(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = (req as any).user.sub;
+    const userId = req.user!.sub;
     await markMentionsRead(userId);
     res.json({ ok: true });
   } catch (err) {
@@ -229,7 +229,7 @@ export async function handleMarkMentionsRead(req: Request, res: Response, next: 
 /** POST /api/bench/channels/org — Create/get org channel for user's org */
 export async function handleGetOrCreateOrgChannel(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = (req as any).user.sub;
+    const userId = req.user!.sub;
     const orgIds = await getUserOrganisationIds(userId);
     if (orgIds.length === 0) {
       res.status(404).json({ error: "Not a member of any organisation" });
@@ -247,7 +247,7 @@ export async function handleGetOrCreateOrgChannel(req: Request, res: Response, n
 /** PATCH /api/bench/channels/:key/banner — Update channel banner (org owner only) */
 export async function handleUpdateChannelBanner(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = (req as any).user.sub;
+    const userId = req.user!.sub;
     const channelKey = req.params.key as string;
 
     const channel = await getChannelByKey(channelKey);
@@ -285,7 +285,7 @@ export async function handleUpdateChannelBanner(req: Request, res: Response, nex
 /** GET /api/bench/dm/threads */
 export async function handleGetDmThreads(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = (req as any).user.sub;
+    const userId = req.user!.sub;
     const threads = await getThreadsForUser(userId);
     res.json(threads);
   } catch (err) {
@@ -296,7 +296,7 @@ export async function handleGetDmThreads(req: Request, res: Response, next: Next
 /** GET /api/bench/dm/threads/:threadId/messages */
 export async function handleGetDmMessages(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = (req as any).user.sub;
+    const userId = req.user!.sub;
     const threadId = parseInt(req.params.threadId as string, 10);
     if (isNaN(threadId)) {
       res.status(400).json({ error: "Invalid thread ID" });
@@ -322,7 +322,7 @@ export async function handleGetDmMessages(req: Request, res: Response, next: Nex
 /** POST /api/bench/dm/threads — create or get thread { recipientId } */
 export async function handleCreateDmThread(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = (req as any).user.sub;
+    const userId = req.user!.sub;
     const recipientId = req.body.recipientId;
     if (!recipientId || typeof recipientId !== "number") {
       res.status(400).json({ error: "recipientId required" });

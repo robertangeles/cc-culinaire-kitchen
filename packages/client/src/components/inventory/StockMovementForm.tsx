@@ -101,8 +101,8 @@ export default function StockMovementForm({
       setShowSuccess(true);
       clear();
       setTimeout(() => setShowSuccess(false), 1500);
-    } catch (err: any) {
-      setError(err.message || "Couldn't record that move");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Couldn't record that move");
     } finally {
       setSaving(false);
     }

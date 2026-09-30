@@ -209,8 +209,8 @@ export function KitchenCopilotPage() {
   };
 
   /** Called when PrepMenuSelector finishes generating tasks. */
-  const handleGenerated = (data: PrepSessionWithTasks) => {
-    setSessionData(data);
+  const handleGenerated = (data: unknown) => {
+    setSessionData(data as PrepSessionWithTasks);
     setCopilotState("prepping");
   };
 

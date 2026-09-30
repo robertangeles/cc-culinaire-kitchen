@@ -108,8 +108,8 @@ function AreaItemsEditor({
         })),
       );
       onClose();
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to save");
     } finally {
       setSaving(false);
     }
@@ -274,8 +274,8 @@ export default function StorageAreasTab() {
     try {
       await create(name, areas.length);
       setNewName("");
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to create area");
     } finally {
       setCreating(false);
     }
@@ -288,8 +288,8 @@ export default function StorageAreasTab() {
     try {
       await update(areaId, { areaName: name });
       setEditingId(null);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to rename area");
     }
   }, [editName, update]);
 
@@ -305,8 +305,8 @@ export default function StorageAreasTab() {
     setError(null);
     try {
       await deactivate(area.storageAreaId);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to deactivate area");
     }
   }, [deactivate]);
 

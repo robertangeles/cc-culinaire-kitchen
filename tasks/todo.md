@@ -730,3 +730,7 @@ All pre-existing in the original `useRoster.ts` monolith — extracted unchanged
 
 **DESIGN — Extract `parseError` + its types to `rosterUtils.ts`**
 `useRosterCalendar.ts` imports `parseError` from `useRosterRoles.ts` — the function is a generic HTTP-error utility, not a roles-domain concept. Creates one-directional sibling coupling. Fix: extract `parseError`, `AssignmentBlocked`, `RoleVenueConflict` to `packages/client/src/hooks/rosterUtils.ts`; re-export from `useRosterRoles.ts`; import from `rosterUtils.ts` in both sub-modules.
+
+## 2026-10-01 — Phase 4 (no-explicit-any refactor) — tests completed
+
+Coverage gate deferred on 2026-09-30 has been resolved. `catalogRequestController.test.ts` (6 tests), `consumptionLogController.test.ts` (5 tests), and `purchaseOrderController.test.ts` (5 tests) added on 2026-10-01. All 16 tests pass. No open items from Phase 4.

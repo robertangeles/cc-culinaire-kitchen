@@ -84,17 +84,19 @@ export async function handleWebhookEvent(
       if (!userId) break;
 
       const subscriptionId = session.subscription as string;
-      const sub = await getStripe().subscriptions.retrieve(subscriptionId) as any;
+      // Stripe SDK v20 moved current_period_end to SubscriptionItem. Read both
+      // locations: REST API accounts on older API versions still return it at the
+      // subscription level; newer API versions return it on items.data[0].
+      const sub = await getStripe().subscriptions.retrieve(subscriptionId) as Stripe.Subscription & { current_period_end?: number | null };
+      const periodEnd = sub.current_period_end ?? sub.items.data[0]?.current_period_end ?? null;
 
       await db
         .update(user)
         .set({
           stripeSubscriptionId: subscriptionId,
           subscriptionStatus: "active",
-          subscriptionTier: determineTierFromAny(sub),
-          currentPeriodEndDttm: sub.current_period_end
-            ? new Date(sub.current_period_end * 1000)
-            : null,
+          subscriptionTier: determineTier(sub),
+          currentPeriodEndDttm: periodEnd ? new Date(periodEnd * 1000) : null,
           updatedDttm: new Date(),
         })
         .where(eq(user.userId, userId));
@@ -123,8 +125,10 @@ export async function handleWebhookEvent(
     }
 
     case "customer.subscription.updated": {
-      const subscription = event.data.object as any;
+      // Read current_period_end from both locations (see checkout handler comment).
+      const subscription = event.data.object as Stripe.Subscription & { current_period_end?: number | null };
       const customerId = subscription.customer as string;
+      const subPeriodEnd = subscription.current_period_end ?? subscription.items.data[0]?.current_period_end ?? null;
 
       const rows = await db
         .select({ userId: user.userId })
@@ -137,10 +141,8 @@ export async function handleWebhookEvent(
         .update(user)
         .set({
           subscriptionStatus: mapStatus(subscription.status),
-          subscriptionTier: determineTierFromAny(subscription),
-          currentPeriodEndDttm: subscription.current_period_end
-            ? new Date(subscription.current_period_end * 1000)
-            : null,
+          subscriptionTier: determineTier(subscription),
+          currentPeriodEndDttm: subPeriodEnd ? new Date(subPeriodEnd * 1000) : null,
           updatedDttm: new Date(),
         })
         .where(eq(user.userId, rows[0].userId));
@@ -148,7 +150,7 @@ export async function handleWebhookEvent(
     }
 
     case "customer.subscription.deleted": {
-      const subscription = event.data.object as any;
+      const subscription = event.data.object as Stripe.Subscription;
       const customerId = subscription.customer as string;
 
       const rows = await db
@@ -229,8 +231,7 @@ export async function createCustomerPortalSession(userId: number) {
   return { url: session.url };
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function determineTierFromAny(subscription: any): string {
+function determineTier(subscription: Stripe.Subscription): string {
   const interval = subscription?.items?.data?.[0]?.price?.recurring?.interval;
   if (interval === "month") return "monthly";
   if (interval === "year") return "yearly";

@@ -68,7 +68,7 @@ const suggestionsQuerySchema = z.object({
 
 /** POST /api/waste */
 export async function handleLogWaste(req: Request, res: Response) {
-  const userId = (req as any).user?.sub;
+  const userId = req.user!.sub;
   if (!userId) {
     res.status(401).json({ error: "Sign in to log waste" });
     return;
@@ -86,7 +86,7 @@ export async function handleLogWaste(req: Request, res: Response) {
 
 /** GET /api/waste */
 export async function handleGetWasteLogs(req: Request, res: Response) {
-  const userId = (req as any).user?.sub;
+  const userId = req.user!.sub;
   if (!userId) {
     res.status(401).json({ error: "Sign in to view waste logs" });
     return;
@@ -105,7 +105,7 @@ export async function handleGetWasteLogs(req: Request, res: Response) {
 
 /** DELETE /api/waste/:id */
 export async function handleDeleteWasteLog(req: Request, res: Response) {
-  const userId = (req as any).user?.sub;
+  const userId = req.user!.sub;
   if (!userId) {
     res.status(401).json({ error: "Sign in required" });
     return;
@@ -128,7 +128,7 @@ export async function handleDeleteWasteLog(req: Request, res: Response) {
 
 /** PATCH /api/waste/:id */
 export async function handleEditWasteLog(req: Request, res: Response) {
-  const userId = (req as any).user?.sub;
+  const userId = req.user!.sub;
   if (!userId) {
     res.status(401).json({ error: "Sign in required" });
     return;
@@ -157,7 +157,7 @@ export async function handleEditWasteLog(req: Request, res: Response) {
 
 /** GET /api/waste/summary */
 export async function handleGetWasteSummary(req: Request, res: Response) {
-  const userId = (req as any).user?.sub;
+  const userId = req.user!.sub;
   if (!userId) {
     res.status(401).json({ error: "Sign in to view waste summary" });
     return;
@@ -175,7 +175,7 @@ export async function handleGetWasteSummary(req: Request, res: Response) {
 
 /** GET /api/waste/suggestions */
 export async function handleGetIngredientSuggestions(req: Request, res: Response) {
-  const userId = (req as any).user?.sub;
+  const userId = req.user!.sub;
   if (!userId) {
     res.status(401).json({ error: "Sign in required" });
     return;
@@ -193,7 +193,7 @@ export async function handleGetIngredientSuggestions(req: Request, res: Response
 
 /** POST /api/waste/reuse */
 export async function handleGenerateReuseSuggestions(req: Request, res: Response) {
-  const userId = (req as any).user?.sub;
+  const userId = req.user!.sub;
   if (!userId) {
     res.status(401).json({ error: "Sign in to get reuse suggestions" });
     return;
@@ -210,7 +210,7 @@ export async function handleGenerateReuseSuggestions(req: Request, res: Response
 
 /** GET /api/waste/org-context */
 export async function handleGetOrgContext(req: Request, res: Response) {
-  const userId = (req as any).user?.sub;
+  const userId = req.user!.sub;
   if (!userId) {
     res.status(401).json({ error: "Sign in required" });
     return;

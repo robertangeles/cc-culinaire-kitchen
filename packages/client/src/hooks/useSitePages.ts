@@ -54,8 +54,8 @@ export function usePagesAdmin(surface: Surface) {
         return;
       }
       setPages(await res.json());
-    } catch (err: any) {
-      setError(err?.message ?? "Failed to load pages");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to load pages");
     } finally {
       setLoading(false);
     }
@@ -131,8 +131,8 @@ export function usePublicPage(slug: string, surface: Surface = "web"): PublicPag
         }
         const page = (await res.json()) as SitePage;
         setState({ status: "ok", page });
-      } catch (err: any) {
-        if (!cancelled) setState({ status: "error", message: err?.message ?? "Network error" });
+      } catch (err: unknown) {
+        if (!cancelled) setState({ status: "error", message: err instanceof Error ? err.message : "Network error" });
       }
     })();
     return () => { cancelled = true; };

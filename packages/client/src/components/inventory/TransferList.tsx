@@ -7,7 +7,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useLocation } from "../../context/LocationContext.js";
-import { useTransfers, useLocationIngredients, type Transfer, type LocationIngredient } from "../../hooks/useInventory.js";
+import { useTransfers, useLocationIngredients, type Transfer, type TransferDetail, type LocationIngredient } from "../../hooks/useInventory.js";
 import {
   ArrowRightLeft,
   Plus,
@@ -77,7 +77,7 @@ function TransferRow({
   locationItems: LocationIngredient[];
 }) {
   const [expanded, setExpanded] = useState(defaultExpanded);
-  const [detail, setDetail] = useState<any>(null);
+  const [detail, setDetail] = useState<TransferDetail | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [showAddItems, setShowAddItems] = useState(false);
   const [addingItems, setAddingItems] = useState(false);
@@ -163,7 +163,7 @@ function TransferRow({
                   <span className="text-[10px] text-dark-500 uppercase tracking-wider">Item</span>
                   <span className="text-[10px] text-dark-500 uppercase tracking-wider">Quantity</span>
                 </div>
-                {(detail.lines as any[]).map((line: any) => (
+                {detail.lines.map((line) => (
                   <div key={line.lineId} className="flex items-center justify-between px-3 py-2">
                     <span className="text-sm text-[#ccc]">{line.ingredientName || line.ingredientId}</span>
                     {isEditable ? (
@@ -223,7 +223,7 @@ function TransferRow({
                           className={`px-2 py-0.5 rounded-full text-[10px] font-medium border transition-colors ${!addActiveCat ? "bg-gold/15 text-gold border-gold/30" : "bg-white/[0.03] text-[#888] border-white/5 hover:text-[#ccc]"}`}
                         >All</button>
                         {(() => {
-                          const available = locationItems.filter((i) => i.activeInd !== false && Number(i.currentQty || 0) > 0 && !(detail.lines as any[]).some((l: any) => l.ingredientId === i.ingredientId));
+                          const available = locationItems.filter((i) => i.activeInd !== false && Number(i.currentQty || 0) > 0 && !detail.lines.some((l) => l.ingredientId === i.ingredientId));
                           const cats = [...new Set(available.map(i => i.ingredientCategory))].sort();
                           return cats.map(cat => {
                             const label = cat.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
@@ -246,7 +246,7 @@ function TransferRow({
                         {(() => {
                           const available = locationItems
                             .filter((i) => i.activeInd !== false && Number(i.currentQty || 0) > 0)
-                            .filter((i) => !(detail.lines as any[]).some((l: any) => l.ingredientId === i.ingredientId))
+                            .filter((i) => !detail.lines.some((l) => l.ingredientId === i.ingredientId))
                             .filter((i) => !addSearchQuery || i.ingredientName.toLowerCase().includes(addSearchQuery.toLowerCase()))
                             .filter((i) => !addActiveCat || i.ingredientCategory === addActiveCat);
                           const grouped = new Map<string, typeof available>();
@@ -377,7 +377,15 @@ export default function TransferList({ focusTransferId }: { focusTransferId?: st
   const { items: locationItems } = useLocationIngredients(selectedLocationId);
 
   const [showForm, setShowForm] = useState(false);
-  const [editingTransfer, setEditingTransfer] = useState<{ id: string; data: any } | null>(null);
+  const [editingTransfer, setEditingTransfer] = useState<{
+    id: string;
+    data: {
+      toLocationId: string;
+      toLocationName: string;
+      notes: string;
+      lines: Array<{ ingredientId: string; ingredientName: string; sentQty: string; sentUnit: string }>;
+    };
+  } | null>(null);
   const [receivingId, setReceivingId] = useState<string | null>(null);
   const [sending, setSending] = useState<string | null>(null);
 
@@ -420,9 +428,9 @@ export default function TransferList({ focusTransferId }: { focusTransferId?: st
           id: transfer.transferId,
           data: {
             toLocationId: transfer.toLocationId,
-            toLocationName: transfer.toLocationName,
+            toLocationName: transfer.toLocationName ?? "",
             notes: det.notes || "",
-            lines: (det.lines || []).map((l: any) => ({
+            lines: (det.lines as Array<{ ingredientId: string; ingredientName?: string; sentQty: number | string; sentUnit: string }> || []).map((l) => ({
               ingredientId: l.ingredientId,
               ingredientName: l.ingredientName || l.ingredientId,
               sentQty: String(l.sentQty),

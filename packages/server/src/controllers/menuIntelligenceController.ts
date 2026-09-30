@@ -36,7 +36,7 @@ import { getUserLocationContext } from "../services/locationContextService.js";
 
 /** Resolve the caller's org id from their location context. */
 async function resolveSalesOrgId(req: Request, res: Response): Promise<number | null> {
-  const ctx = await getUserLocationContext((req as any).user.sub);
+  const ctx = await getUserLocationContext(req.user!.sub);
   const orgId = ctx.locations[0]?.organisationId ?? ctx.organisationId;
   if (orgId === null) {
     res.status(400).json({ error: "You are not a member of any organisation" });
@@ -59,7 +59,7 @@ export async function handleRecordSale(req: Request, res: Response, next: NextFu
   try {
     const orgId = await resolveSalesOrgId(req, res);
     if (orgId === null) return;
-    const userId = (req as any).user.sub;
+    const userId = req.user!.sub;
     const { qtySold, soldAt, locationId } = req.body ?? {};
     if (qtySold === undefined || Number(qtySold) <= 0) {
       res.status(400).json({ error: "qtySold must be greater than 0" });
@@ -84,7 +84,7 @@ export async function handleVoidSale(req: Request, res: Response, next: NextFunc
   try {
     const orgId = await resolveSalesOrgId(req, res);
     if (orgId === null) return;
-    const result = await voidSale(orgId, (req as any).user.sub, req.params.saleId as string);
+    const result = await voidSale(orgId, req.user!.sub, req.params.saleId as string);
     res.json(result);
   } catch (err) {
     handleSaleError(err, res, next);
@@ -119,7 +119,7 @@ export async function handleRecordConsumableSale(req: Request, res: Response, ne
   try {
     const orgId = await resolveSalesOrgId(req, res);
     if (orgId === null) return;
-    const userId = (req as any).user.sub;
+    const userId = req.user!.sub;
     const { qtySold, soldAt, locationId } = req.body ?? {};
     if (qtySold === undefined || Number(qtySold) <= 0) {
       res.status(400).json({ error: "qtySold must be greater than 0" });
@@ -142,7 +142,7 @@ export async function handleRecordConsumableSale(req: Request, res: Response, ne
 /** POST /sales/import/preview — match a CSV to menu items (deplete nothing). */
 export async function handleSalesCsvPreview(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = (req as any).user.sub;
+    const userId = req.user!.sub;
     const file = req.file;
     if (!file) { res.status(400).json({ error: "CSV file required" }); return; }
     res.json(await previewSalesCsv(userId, file.buffer.toString("utf-8")));
@@ -156,7 +156,7 @@ export async function handleSalesCsvCommit(req: Request, res: Response, next: Ne
   try {
     const orgId = await resolveSalesOrgId(req, res);
     if (orgId === null) return;
-    const userId = (req as any).user.sub;
+    const userId = req.user!.sub;
     const lines = req.body?.lines;
     if (!Array.isArray(lines) || lines.length === 0) {
       res.status(400).json({ error: "lines must be a non-empty array" });
@@ -195,7 +195,7 @@ const ingredientSchema = z.object({
 
 export async function handleListMenuItems(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = (req as any).user.sub;
+    const userId = req.user!.sub;
     const category = req.query.category as string | undefined;
     const storeLocationId = req.query.storeLocationId as string | undefined;
     const items = await getMenuItems(userId, category, storeLocationId);
@@ -205,7 +205,7 @@ export async function handleListMenuItems(req: Request, res: Response, next: Nex
 
 export async function handleCreateMenuItem(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = (req as any).user.sub;
+    const userId = req.user!.sub;
     const parsed = menuItemSchema.safeParse(req.body);
     if (!parsed.success) { res.status(400).json({ error: parsed.error.issues[0].message }); return; }
     const item = await createMenuItem(userId, parsed.data);
@@ -225,7 +225,7 @@ const updateMenuItemSchema = z.object({
 
 export async function handleUpdateMenuItem(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = (req as any).user.sub;
+    const userId = req.user!.sub;
     const id = req.params.id as string;
     const parsed = updateMenuItemSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -240,7 +240,7 @@ export async function handleUpdateMenuItem(req: Request, res: Response, next: Ne
 
 export async function handleDeleteMenuItem(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = (req as any).user.sub;
+    const userId = req.user!.sub;
     await deleteMenuItem(req.params.id as string, userId);
     res.json({ ok: true });
   } catch (err) { next(err); }
@@ -250,7 +250,7 @@ export async function handleDeleteMenuItem(req: Request, res: Response, next: Ne
 
 export async function handleAddIngredient(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = (req as any).user.sub;
+    const userId = req.user!.sub;
     const parsed = ingredientSchema.safeParse(req.body);
     if (!parsed.success) { res.status(400).json({ error: parsed.error.issues[0].message }); return; }
     const menuItemId = req.params.id as string;
@@ -263,7 +263,7 @@ export async function handleAddIngredient(req: Request, res: Response, next: Nex
 
 export async function handleListIngredients(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = (req as any).user.sub;
+    const userId = req.user!.sub;
     const menuItemId = req.params.id as string;
     const item = await getMenuItem(menuItemId, userId);
     if (!item) { res.status(404).json({ error: "Item not found" }); return; }
@@ -274,7 +274,7 @@ export async function handleListIngredients(req: Request, res: Response, next: N
 
 export async function handleDeleteIngredient(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = (req as any).user.sub;
+    const userId = req.user!.sub;
     const menuItemId = req.params.id as string;
     const item = await getMenuItem(menuItemId, userId);
     if (!item) { res.status(404).json({ error: "Item not found" }); return; }
@@ -291,20 +291,21 @@ export async function handleDeleteIngredient(req: Request, res: Response, next: 
  */
 export async function handleRefreshCost(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = (req as any).user.sub;
+    const userId = req.user!.sub;
     const menuItemId = req.params.id as string;
     const item = await getMenuItem(menuItemId, userId);
     if (!item) { res.status(404).json({ error: "Item not found" }); return; }
     const rowId = parseInt(req.params.ingredientId as string, 10);
     const updated = await refreshIngredientCost(rowId, menuItemId);
     res.json(updated);
-  } catch (err: any) {
-    if (err.message?.includes("not found")) {
-      res.status(404).json({ error: err.message });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("not found")) {
+      res.status(404).json({ error: msg });
       return;
     }
-    if (err.message?.includes("unlinked")) {
-      res.status(400).json({ error: err.message });
+    if (msg.includes("unlinked")) {
+      res.status(400).json({ error: msg });
       return;
     }
     next(err);
@@ -319,15 +320,16 @@ export async function handleRefreshCost(req: Request, res: Response, next: NextF
  */
 export async function handleGetPandLCost(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = (req as any).user.sub;
+    const userId = req.user!.sub;
     const menuItemId = req.params.id as string;
     const item = await getMenuItem(menuItemId, userId);
     if (!item) { res.status(404).json({ error: "Item not found" }); return; }
     const total = await getPandLFoodCost(menuItemId);
     res.json({ menuItemId, foodCost: total });
-  } catch (err: any) {
-    if (err.message?.includes("not found")) {
-      res.status(404).json({ error: err.message });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("not found")) {
+      res.status(404).json({ error: msg });
       return;
     }
     next(err);
@@ -338,7 +340,7 @@ export async function handleGetPandLCost(req: Request, res: Response, next: Next
 
 export async function handleGetAnalysis(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = (req as any).user.sub;
+    const userId = req.user!.sub;
     const category = req.query.category as string | undefined;
     const analysis = await getMenuAnalysis(userId, category);
     res.json(analysis);
@@ -347,7 +349,7 @@ export async function handleGetAnalysis(req: Request, res: Response, next: NextF
 
 export async function handleRecalculate(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = (req as any).user.sub;
+    const userId = req.user!.sub;
     const category = req.body.category as string | undefined;
     await recalculateMenu(userId, category);
     res.json({ ok: true });
@@ -358,7 +360,7 @@ export async function handleRecalculate(req: Request, res: Response, next: NextF
 
 export async function handleGetCategories(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = (req as any).user.sub;
+    const userId = req.user!.sub;
     const settings = await getCategorySettings(userId);
     res.json(settings);
   } catch (err) { next(err); }
@@ -366,7 +368,7 @@ export async function handleGetCategories(req: Request, res: Response, next: Nex
 
 export async function handleUpdateCategory(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = (req as any).user.sub;
+    const userId = req.user!.sub;
     const categoryName = req.params.name as string;
     const { targetFoodCostPct } = req.body;
     if (!targetFoodCostPct) { res.status(400).json({ error: "targetFoodCostPct required" }); return; }
@@ -379,7 +381,7 @@ export async function handleUpdateCategory(req: Request, res: Response, next: Ne
 
 export async function handleImportSales(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = (req as any).user.sub;
+    const userId = req.user!.sub;
     const file = req.file;
     if (!file) { res.status(400).json({ error: "CSV file required" }); return; }
     const csvContent = file.buffer.toString("utf-8");
@@ -392,7 +394,7 @@ export async function handleImportSales(req: Request, res: Response, next: NextF
 
 export async function handleGetRecommendations(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = (req as any).user.sub;
+    const userId = req.user!.sub;
     const id = req.params.id as string;
     const recommendations = await getItemRecommendations(id, userId);
     res.json(recommendations);
@@ -403,7 +405,7 @@ export async function handleGetRecommendations(req: Request, res: Response, next
 
 export async function handleGetWasteImpact(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = (req as any).user.sub;
+    const userId = req.user!.sub;
     const impacts = await getWasteImpactForMenuItems(userId);
     res.json(impacts);
   } catch (err) { next(err); }
@@ -411,7 +413,7 @@ export async function handleGetWasteImpact(req: Request, res: Response, next: Ne
 
 export async function handleGenerateReplacement(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = (req as any).user.sub;
+    const userId = req.user!.sub;
     const id = req.params.id as string;
     const item = await getMenuItem(id, userId);
     if (!item) { res.status(404).json({ error: "Item not found" }); return; }
@@ -428,15 +430,16 @@ export async function handleGenerateReplacement(req: Request, res: Response, nex
  */
 export async function handleGetYieldVariance(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = (req as any).user.sub;
+    const userId = req.user!.sub;
     const id = req.params.id as string;
     const item = await getMenuItem(id, userId);
     if (!item) { res.status(404).json({ error: "Item not found" }); return; }
     const result = await getYieldVariance(id);
     res.json(result);
-  } catch (err: any) {
-    if (err.message === "Menu item not found") {
-      res.status(404).json({ error: err.message });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg === "Menu item not found") {
+      res.status(404).json({ error: msg });
       return;
     }
     next(err);
@@ -449,7 +452,7 @@ export async function handleGetYieldVariance(req: Request, res: Response, next: 
  */
 export async function handleListYieldVariance(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = (req as any).user.sub;
+    const userId = req.user!.sub;
     const results = await listYieldVariance(userId);
     res.json(results);
   } catch (err) { next(err); }

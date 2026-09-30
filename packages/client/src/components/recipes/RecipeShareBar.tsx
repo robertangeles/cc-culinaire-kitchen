@@ -99,7 +99,7 @@ export function RecipeShareBar({
         setTimeout(() => { setEmailOpen(false); setEmailResult(null); setEmailTo(""); }, 2000);
       } else {
         const data = await res.json().catch(() => ({}));
-        setEmailResult((data as any).error ?? "Failed to send");
+        setEmailResult((data as { error?: string }).error ?? "Failed to send");
       }
     } catch {
       setEmailResult("Failed to send email");

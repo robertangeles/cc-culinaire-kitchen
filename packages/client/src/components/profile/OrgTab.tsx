@@ -29,8 +29,8 @@ function OrgBenchBanner({ orgId }: { orgId: number }) {
       try {
         const res = await fetch(`${API}/api/bench/channels`, { credentials: "include" });
         if (!res.ok) return;
-        const channels = await res.json();
-        const ch = channels.find((c: any) => c.channelKey === channelKey);
+        const channels = await res.json() as Array<{ channelKey: string; channelBanner?: string }>;
+        const ch = channels.find((c) => c.channelKey === channelKey);
         if (ch?.channelBanner) setBanner(ch.channelBanner);
       } catch {
         // silent

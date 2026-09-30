@@ -7,7 +7,7 @@
  */
 
 import { useState } from "react";
-import { type PendingReviewSession } from "../../hooks/useInventory.js";
+import { type PendingReviewSession, type StockTakeSession } from "../../hooks/useInventory.js";
 import { StockTakeReview } from "./StockTakeReview.js";
 import {
   CheckCircle2, MapPin, User, Clock,
@@ -160,7 +160,7 @@ function ReviewCard({
       {isExpanded && (
         <div className="border-t border-dark-200 p-4 animate-[fadeIn_150ms_ease-out]">
           <StockTakeReview
-            session={fullSession as any}
+            session={fullSession as StockTakeSession}
             onActionComplete={onActionComplete}
             readOnly={readOnly}
           />

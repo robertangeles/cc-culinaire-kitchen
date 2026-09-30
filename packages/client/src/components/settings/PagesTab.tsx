@@ -116,8 +116,8 @@ export function PagesTab({ surface = "web" }: PagesTabProps = {}) {
       setSelectedSlug(saved.slug);
       setDraft(draftFrom(saved));
       setFeedback({ kind: "ok", msg: "Saved" });
-    } catch (err: any) {
-      setFeedback({ kind: "err", msg: err?.message ?? "Save failed" });
+    } catch (err: unknown) {
+      setFeedback({ kind: "err", msg: err instanceof Error ? err.message : "Save failed" });
     } finally {
       setSaving(false);
     }
@@ -133,8 +133,8 @@ export function PagesTab({ surface = "web" }: PagesTabProps = {}) {
       setSelectedSlug(null);
       setDraft(null);
       setFeedback({ kind: "ok", msg: "Page deleted" });
-    } catch (err: any) {
-      setFeedback({ kind: "err", msg: err?.message ?? "Delete failed" });
+    } catch (err: unknown) {
+      setFeedback({ kind: "err", msg: err instanceof Error ? err.message : "Delete failed" });
     } finally {
       setDeleting(false);
     }

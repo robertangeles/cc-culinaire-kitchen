@@ -98,8 +98,8 @@ export async function handleCreateAlias(
 
     const row = await createAlias(orgId, ingredientId, parsed.data.aliasText, req.user!.sub);
     res.status(201).json(row);
-  } catch (err: any) {
-    if (err.code === "23505") {
+  } catch (err: unknown) {
+    if ((err as { code?: string }).code === "23505") {
       res.status(409).json({ error: "An alias with this text already exists in your organisation" });
       return;
     }
@@ -117,9 +117,10 @@ export async function handleDeleteAlias(
     const aliasId = req.params.aliasId as string;
     await deleteAlias(aliasId, orgId, req.user!.sub);
     res.json({ ok: true });
-  } catch (err: any) {
-    if (err.message?.includes("not found")) {
-      res.status(404).json({ error: err.message });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("not found")) {
+      res.status(404).json({ error: msg });
       return;
     }
     next(err);

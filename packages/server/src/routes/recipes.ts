@@ -7,7 +7,7 @@
  *   authenticateOrGuest → usageCheck → generate → sessionDecrement
  */
 
-import { Router } from "express";
+import { Router, type Request, type Response, type NextFunction } from "express";
 import { authenticateOrGuest } from "../middleware/guestAuth.js";
 import { authenticate, requireRole } from "../middleware/auth.js";
 import { checkUsageLimit, decrementFreeSessions } from "../middleware/usage.js";
@@ -55,7 +55,7 @@ function withUsageTracking(domain: "recipe" | "patisserie" | "spirits") {
 
   return [
     // Usage check middleware (guest vs authenticated)
-    (req: any, res: any, next: any) => {
+    (req: Request, res: Response, next: NextFunction) => {
       if (req.user) {
         checkUsageLimit(req, res, next);
       } else {
@@ -63,7 +63,7 @@ function withUsageTracking(domain: "recipe" | "patisserie" | "spirits") {
       }
     },
     // Handler + decrement
-    async (req: any, res: any, next: any) => {
+    async (req: Request, res: Response, next: NextFunction) => {
       let succeeded = false;
       try {
         await handler(req, res, next);

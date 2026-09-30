@@ -362,7 +362,7 @@ export async function handleGetMe(
   next: NextFunction,
 ) {
   try {
-    const tokenUser = (req as any).user;
+    const tokenUser = req.user;
     if (!tokenUser) {
       res.status(401).json({ error: "Not authenticated." });
       return;

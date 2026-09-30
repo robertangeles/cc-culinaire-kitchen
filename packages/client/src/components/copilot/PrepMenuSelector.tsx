@@ -60,7 +60,7 @@ interface PreviousSelection {
 
 interface Props {
   sessionId: string;
-  onGenerated: (sessionData: any) => void;
+  onGenerated: (sessionData: Record<string, unknown>) => void;
 }
 
 /* ------------------------------------------------------------------ */

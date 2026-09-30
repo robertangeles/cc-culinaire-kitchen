@@ -77,8 +77,8 @@ export function CategoryCounter({ sessionId, category, onBack }: Props) {
       }
       await loadLines();
       setNotice(null);
-    } catch (err: any) {
-      setNotice({ kind: "error", text: err.message });
+    } catch (err: unknown) {
+      setNotice({ kind: "error", text: err instanceof Error ? err.message : "Failed to load lines" });
     }
   }, [sessionId, category.categoryName, getPreviousLines, saveLine, loadLines]);
 
@@ -109,8 +109,8 @@ export function CategoryCounter({ sessionId, category, onBack }: Props) {
         idx > currentIdx && !lines.some((l) => l.ingredientId === i.ingredientId),
       );
       setActiveIngredient(nextUncounted?.ingredientId ?? null);
-    } catch (err: any) {
-      setNotice({ kind: "error", text: err.message });
+    } catch (err: unknown) {
+      setNotice({ kind: "error", text: err instanceof Error ? err.message : "Failed to save" });
     } finally {
       setIsSaving(false);
     }

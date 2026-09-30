@@ -67,9 +67,10 @@ export async function handleInitiateTransfer(
     );
 
     res.status(201).json(transfer);
-  } catch (err: any) {
-    if (err.message?.includes("not found") || err.message?.includes("must be different")) {
-      res.status(400).json({ error: err.message });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("not found") || msg.includes("must be different")) {
+      res.status(400).json({ error: msg });
       return;
     }
     logger.error(err, "handleInitiateTransfer failed");
@@ -92,13 +93,14 @@ export async function handleConfirmSent(
     );
 
     res.json(transfer);
-  } catch (err: any) {
-    if (err.message?.includes("not found")) {
-      res.status(404).json({ error: err.message });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("not found")) {
+      res.status(404).json({ error: msg });
       return;
     }
-    if (err.message?.includes("Cannot send")) {
-      res.status(400).json({ error: err.message });
+    if (msg.includes("Cannot send")) {
+      res.status(400).json({ error: msg });
       return;
     }
     logger.error(err, "handleConfirmSent failed");
@@ -128,13 +130,14 @@ export async function handleConfirmReceived(
     );
 
     res.json(transfer);
-  } catch (err: any) {
-    if (err.message?.includes("not found")) {
-      res.status(404).json({ error: err.message });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("not found")) {
+      res.status(404).json({ error: msg });
       return;
     }
-    if (err.message?.includes("Cannot receive")) {
-      res.status(400).json({ error: err.message });
+    if (msg.includes("Cannot receive")) {
+      res.status(400).json({ error: msg });
       return;
     }
     logger.error(err, "handleConfirmReceived failed");
@@ -157,13 +160,14 @@ export async function handleCancelTransfer(
     );
 
     res.json(transfer);
-  } catch (err: any) {
-    if (err.message?.includes("not found")) {
-      res.status(404).json({ error: err.message });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("not found")) {
+      res.status(404).json({ error: msg });
       return;
     }
-    if (err.message?.includes("Only INITIATED")) {
-      res.status(400).json({ error: err.message });
+    if (msg.includes("Only INITIATED")) {
+      res.status(400).json({ error: msg });
       return;
     }
     logger.error(err, "handleCancelTransfer failed");
@@ -271,11 +275,12 @@ export async function handleUpdateTransfer(
 
     const result = await transferService.updateTransfer(id, orgId, { lines, notes });
     res.json(result);
-  } catch (err: any) {
-    if (err.message === "not found") {
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg === "not found") {
       res.status(404).json({ error: "Transfer not found" });
-    } else if (err.message?.includes("no longer editable")) {
-      res.status(409).json({ error: err.message });
+    } else if (msg.includes("no longer editable")) {
+      res.status(409).json({ error: msg });
     } else {
       logger.error(err, "handleUpdateTransfer failed");
       next(err);
@@ -301,11 +306,12 @@ export async function handleAddLines(
 
     const result = await transferService.addLinesToTransfer(id, orgId, lines);
     res.json(result);
-  } catch (err: any) {
-    if (err.message === "not found") {
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg === "not found") {
       res.status(404).json({ error: "Transfer not found" });
-    } else if (err.message?.includes("no longer editable")) {
-      res.status(409).json({ error: err.message });
+    } else if (msg.includes("no longer editable")) {
+      res.status(409).json({ error: msg });
     } else {
       logger.error(err, "handleAddLines failed");
       next(err);

@@ -178,8 +178,8 @@ export function IntegrationsTab() {
       cancelEditing(key);
       await fetchCredentials();
       await refreshGlobalSettings();
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to complete action");
     } finally {
       setSavingKey(null);
     }
@@ -202,8 +202,8 @@ export function IntegrationsTab() {
       setSuccess(`${key} removed from database`);
       await fetchCredentials();
       await refreshGlobalSettings();
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to complete action");
     } finally {
       setDeletingKey(null);
     }
@@ -238,8 +238,8 @@ export function IntegrationsTab() {
         next.add(key);
         return next;
       });
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to complete action");
     } finally {
       setRevealingKey(null);
     }

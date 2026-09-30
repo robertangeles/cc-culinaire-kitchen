@@ -104,13 +104,14 @@ export async function handleApproveRequest(
       "Catalog item request approved",
     );
     res.json(result);
-  } catch (err: any) {
-    if (err.message === "Request not found") {
-      res.status(404).json({ error: err.message });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg === "Request not found") {
+      res.status(404).json({ error: msg });
       return;
     }
-    if (err.message === "Request already reviewed") {
-      res.status(409).json({ error: err.message });
+    if (msg === "Request already reviewed") {
+      res.status(409).json({ error: msg });
       return;
     }
     next(err);
@@ -146,13 +147,14 @@ export async function handleRejectRequest(
       "Catalog item request rejected",
     );
     res.json(result);
-  } catch (err: any) {
-    if (err.message === "Request not found") {
-      res.status(404).json({ error: err.message });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg === "Request not found") {
+      res.status(404).json({ error: msg });
       return;
     }
-    if (err.message === "Request already reviewed") {
-      res.status(409).json({ error: err.message });
+    if (msg === "Request already reviewed") {
+      res.status(409).json({ error: msg });
       return;
     }
     next(err);

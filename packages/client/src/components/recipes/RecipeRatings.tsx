@@ -117,8 +117,8 @@ export default function RecipeRatings({ recipeId, compact }: RecipeRatingsProps)
     setError("");
     try {
       await submitRating(rating);
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to complete action");
     }
   }
 
@@ -133,8 +133,8 @@ export default function RecipeRatings({ recipeId, compact }: RecipeRatingsProps)
       setReviewTitle("");
       setReviewBody("");
       setReviewRating(0);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to complete action");
     } finally {
       setSubmitting(false);
     }
@@ -143,8 +143,8 @@ export default function RecipeRatings({ recipeId, compact }: RecipeRatingsProps)
   async function handleDelete(reviewId: number) {
     try {
       await deleteReview(reviewId);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to complete action");
     }
   }
 

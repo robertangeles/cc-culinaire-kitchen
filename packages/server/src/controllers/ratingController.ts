@@ -29,7 +29,7 @@ const reviewSchema = z.object({
 /** GET /api/recipes/:id/ratings */
 export async function handleGetRatings(req: Request, res: Response) {
   const recipeId = req.params.id as string;
-  const currentUserId = (req as any).user?.sub;
+  const currentUserId = req.user?.sub;
   const summary = await getRatingsSummary(recipeId, currentUserId);
   res.json(summary);
 }
@@ -37,7 +37,7 @@ export async function handleGetRatings(req: Request, res: Response) {
 /** POST /api/recipes/:id/ratings */
 export async function handleSubmitRating(req: Request, res: Response) {
   const recipeId = req.params.id as string;
-  const userId = (req as any).user?.sub;
+  const userId = req.user?.sub;
   if (!userId) {
     res.status(401).json({ error: "Sign in to rate recipes" });
     return;
@@ -56,7 +56,7 @@ export async function handleSubmitRating(req: Request, res: Response) {
 /** POST /api/recipes/:id/reviews */
 export async function handleSubmitReview(req: Request, res: Response) {
   const recipeId = req.params.id as string;
-  const user = (req as any).user;
+  const user = req.user;
   if (!user?.sub) {
     res.status(401).json({ error: "Sign in to write reviews" });
     return;
@@ -72,12 +72,12 @@ export async function handleSubmitReview(req: Request, res: Response) {
   const [dbUser] = await db
     .select({ userName: userTable.userName })
     .from(userTable)
-    .where(eq(userTable.userId, user.sub))
+    .where(eq(userTable.userId, user!.sub))
     .limit(1);
 
   const reviewId = await submitReview(
     recipeId,
-    user.sub,
+    user!.sub,
     dbUser?.userName ?? "Anonymous",
     parsed.data.title ?? null,
     parsed.data.body,
@@ -88,7 +88,7 @@ export async function handleSubmitReview(req: Request, res: Response) {
 
 /** DELETE /api/recipes/:id/reviews/:reviewId */
 export async function handleDeleteReview(req: Request, res: Response) {
-  const user = (req as any).user;
+  const user = req.user;
   if (!user?.sub) {
     res.status(401).json({ error: "Sign in required" });
     return;
@@ -101,8 +101,8 @@ export async function handleDeleteReview(req: Request, res: Response) {
   }
 
   // Admins can delete any review; regular users can only delete their own
-  const isAdmin = user.roles?.includes("Administrator");
-  const deleted = await deleteReview(reviewId, isAdmin ? undefined : user.sub);
+  const isAdmin = user!.roles?.includes("Administrator");
+  const deleted = await deleteReview(reviewId, isAdmin ? undefined : user!.sub);
   if (!deleted) {
     res.status(404).json({ error: "Review not found or not yours" });
     return;

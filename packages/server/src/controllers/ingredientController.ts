@@ -232,8 +232,8 @@ export async function handleCreateIngredient(
     const row = await createIngredient(orgId, parsed.data);
     logger.info({ ingredientId: row.ingredientId, userId: req.user!.sub }, "Ingredient created");
     res.status(201).json(row);
-  } catch (err: any) {
-    if (err.code === "23505") {
+  } catch (err: unknown) {
+    if ((err as { code?: string }).code === "23505") {
       res.status(409).json({ error: "An ingredient with this name already exists" });
       return;
     }
@@ -277,8 +277,8 @@ export async function handleUpdateIngredient(
 
     logger.info({ ingredientId: row.ingredientId, userId: req.user!.sub }, "Ingredient updated");
     res.json(row);
-  } catch (err: any) {
-    if (err.code === "23505") {
+  } catch (err: unknown) {
+    if ((err as { code?: string }).code === "23505") {
       res.status(409).json({ error: "An ingredient with this name already exists" });
       return;
     }
@@ -308,8 +308,8 @@ export async function handleAddConversion(
     invalidateConversionCache(req.params.id as string);
     logger.info({ ingredientId: req.params.id as string, fromUnit: parsed.data.fromUnit }, "Unit conversion added");
     res.status(201).json(row);
-  } catch (err: any) {
-    if (err.code === "23505") {
+  } catch (err: unknown) {
+    if ((err as { code?: string }).code === "23505") {
       res.status(409).json({ error: "A conversion for this unit already exists" });
       return;
     }
@@ -469,8 +469,8 @@ export async function handleAssignSupplier(
     const row = await assignSupplierToIngredient(req.params.id as string, supplierId, data);
     logger.info({ ingredientId: req.params.id, supplierId, userId: req.user!.sub }, "Supplier assigned to ingredient");
     res.status(201).json(row);
-  } catch (err: any) {
-    if (err.code === "23505") {
+  } catch (err: unknown) {
+    if ((err as { code?: string }).code === "23505") {
       res.status(409).json({ error: "This supplier is already assigned to this item" });
       return;
     }
@@ -682,9 +682,10 @@ export async function handleBulkActivate(
 
     const result = await bulkActivateItems(req.params.locId as string, ingredientIds, orgId);
     res.json(result);
-  } catch (err: any) {
-    if (err.message?.includes("not found in organisation")) {
-      res.status(400).json({ error: err.message });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("not found in organisation")) {
+      res.status(400).json({ error: msg });
       return;
     }
     next(err);
@@ -728,9 +729,10 @@ export async function handleCopyActivation(
 
     const result = await copyActivationFromLocation(sourceLocationId, req.params.locId as string, orgId);
     res.json(result);
-  } catch (err: any) {
-    if (err.message?.includes("no activated items")) {
-      res.status(400).json({ error: err.message });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("no activated items")) {
+      res.status(400).json({ error: msg });
       return;
     }
     next(err);
@@ -830,9 +832,10 @@ export async function handleSoftDeleteIngredient(
     const deleted = await softDeleteIngredient(req.params.id as string, orgId, req.user!.sub);
     logger.info({ ingredientId: req.params.id, userId: req.user!.sub }, "Ingredient soft-deleted");
     res.json(deleted);
-  } catch (err: any) {
-    if (err.message?.includes("not found") || err.message?.includes("already soft-deleted")) {
-      res.status(404).json({ error: err.message });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("not found") || msg.includes("already soft-deleted")) {
+      res.status(404).json({ error: msg });
       return;
     }
     next(err);

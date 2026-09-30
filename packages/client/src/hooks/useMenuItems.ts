@@ -76,16 +76,16 @@ export function useMenuItems(category?: string) {
       const res = await fetch(`${API}/api/menu/items${params}`, { credentials: "include" });
       if (!res.ok) return;
       const data = await res.json();
-      setItems(data.map((i: any) => ({
+      setItems((data as MenuItem[]).map((i) => ({
         ...i,
-        sellingPrice: parseFloat(i.sellingPrice ?? "0"),
+        sellingPrice: parseFloat(String(i.sellingPrice ?? "0")),
         servings: i.servings ?? 1,
         servingsPerSale: i.servingsPerSale ?? 1,
-        qFactorPct: parseFloat(i.qFactorPct ?? "0"),
-        foodCost: parseFloat(i.foodCost ?? "0"),
-        foodCostPct: parseFloat(i.foodCostPct ?? "0"),
-        contributionMargin: parseFloat(i.contributionMargin ?? "0"),
-        menuMixPct: parseFloat(i.menuMixPct ?? "0"),
+        qFactorPct: parseFloat(String(i.qFactorPct ?? "0")),
+        foodCost: parseFloat(String(i.foodCost ?? "0")),
+        foodCostPct: parseFloat(String(i.foodCostPct ?? "0")),
+        contributionMargin: parseFloat(String(i.contributionMargin ?? "0")),
+        menuMixPct: parseFloat(String(i.menuMixPct ?? "0")),
       })));
     } catch {
       // silent

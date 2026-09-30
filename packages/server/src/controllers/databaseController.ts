@@ -28,7 +28,7 @@ export async function handleDatabaseStats(
     const [totalResult] = await db.execute(
       sql`SELECT pg_size_pretty(pg_database_size(current_database())) as total_size,
                pg_database_size(current_database()) as total_bytes`
-    ) as unknown as [{ total_size: string; total_bytes: string }][];
+    ) as unknown as { total_size: string; total_bytes: string }[];
 
     // Per-table breakdown
     const tables = await db.execute(
@@ -43,9 +43,9 @@ export async function handleDatabaseStats(
           ORDER BY pg_total_relation_size(relid) DESC`
     ) as unknown as {
       table_name: string;
-      row_count: number;
+      row_count: string;
       total_size: string;
-      total_bytes: number;
+      total_bytes: string;
       data_size: string;
       index_size: string;
     }[];
@@ -55,17 +55,17 @@ export async function handleDatabaseStats(
     try {
       const [result] = await db.execute(
         sql`SELECT COUNT(*) as count FROM knowledge_chunk WHERE embedding IS NOT NULL`
-      ) as unknown as [{ count: string }][];
-      embeddingCount = parseInt((result as any).count ?? "0", 10);
+      ) as unknown as { count: string }[];
+      embeddingCount = parseInt(result?.count ?? "0", 10);
     } catch {
       // Table might not exist yet
     }
 
     res.json({
-      totalSize: (totalResult as any)?.total_size ?? "Unknown",
-      totalBytes: parseInt((totalResult as any)?.total_bytes ?? "0", 10),
+      totalSize: totalResult?.total_size ?? "Unknown",
+      totalBytes: parseInt(totalResult?.total_bytes ?? "0", 10),
       embeddingCount,
-      tables: (tables as any[]).map((t) => ({
+      tables: tables.map((t) => ({
         tableName: t.table_name,
         rowCount: parseInt(t.row_count ?? "0", 10),
         totalSize: t.total_size,
@@ -106,7 +106,7 @@ export async function handleDatabaseQuery(
       return;
     }
 
-    logger.info({ query: trimmed.slice(0, 200), userId: (req as any).user?.sub }, "Admin SQL query executed");
+    logger.info({ query: trimmed.slice(0, 200), userId: req.user?.sub }, "Admin SQL query executed");
 
     const start = Date.now();
     const pgSql = postgres(process.env.DATABASE_URL!, {
@@ -132,10 +132,10 @@ export async function handleDatabaseQuery(
     } finally {
       await pgSql.end();
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
     // Return SQL errors as user-facing messages
     res.status(400).json({
-      error: err.message ?? "Query execution failed",
+      error: err instanceof Error ? err.message : "Query execution failed",
     });
   }
 }

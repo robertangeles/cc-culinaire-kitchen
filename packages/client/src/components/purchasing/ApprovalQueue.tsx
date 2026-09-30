@@ -28,8 +28,8 @@ export default function ApprovalQueue() {
     if (!confirm("Approve this purchase order?")) return;
     try {
       await approvePO(poId);
-    } catch (err: any) {
-      alert(err.message);
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "An error occurred");
     }
   }, [approvePO]);
 
@@ -39,8 +39,8 @@ export default function ApprovalQueue() {
       await rejectPO(rejectingId, rejectReason.trim());
       setRejectingId(null);
       setRejectReason("");
-    } catch (err: any) {
-      alert(err.message);
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "An error occurred");
     }
   }, [rejectPO, rejectingId, rejectReason]);
 
