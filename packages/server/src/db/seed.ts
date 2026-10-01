@@ -142,6 +142,9 @@ async function seed() {
     { permissionKey: "purchasing:approve", permissionDescription: "Approve or reject purchase orders above spend threshold (HQ only)" },
     { permissionKey: "purchasing:receive", permissionDescription: "Start receiving sessions and confirm delivery receipt" },
     { permissionKey: "purchasing:credit", permissionDescription: "Log credit notes against delivery discrepancies" },
+    // FOH Sales permissions
+    { permissionKey: "sales:record", permissionDescription: "Record front-of-house sales, restock FOH shelf, count and log waste" },
+    { permissionKey: "sales:read", permissionDescription: "View FOH sales history and revenue reports" },
     // Kitchen Operations module permissions (gate the Menu & Costing, Waste, and Prep modules)
     { permissionKey: "menu:read", permissionDescription: "View Menu & Costing — menu engineering, food cost %, and P&L per item" },
     { permissionKey: "waste:read", permissionDescription: "View Waste analytics and log wastage" },
@@ -187,6 +190,7 @@ async function seed() {
       "chat:access", "chat:unlimited", "org:create-organisation", "org:manage-organisation",
       "inventory:count", "inventory:manage", "inventory:transfer", "inventory:hq",
       "purchasing:draft", "purchasing:submit", "purchasing:approve", "purchasing:receive", "purchasing:credit",
+      "sales:record", "sales:read",
       "menu:read", "waste:read", "prep:manage",
       "brain:read", "brain:manage",
       "compliance:read-own", "compliance:read-all", "compliance:verify", "compliance:manage-rules",
@@ -198,6 +202,7 @@ async function seed() {
     // captured must be able to view and delete their own memories.
     Subscriber: [
       "chat:access", "org:create-organisation", "inventory:count", "purchasing:draft", "purchasing:receive",
+      "sales:record", "sales:read",
       "menu:read", "waste:read", "prep:manage",
       "brain:read", "brain:manage",
       "compliance:read-own",
@@ -213,6 +218,7 @@ async function seed() {
       "chat:access", "chat:unlimited", "org:create-organisation",
       "inventory:count", "inventory:manage", "inventory:transfer",
       "purchasing:draft", "purchasing:submit", "purchasing:receive", "purchasing:credit",
+      "sales:record", "sales:read",
       "menu:read", "waste:read", "prep:manage",
       "brain:read", "brain:manage",
       "compliance:read-own", "compliance:read-all", "compliance:verify",

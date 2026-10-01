@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+// ─── FOH stock zone ───────────────────────────────────────────────────────────
+export type StockZoneKey = "BOH" | "FOH";
+
 // Message roles
 export const MessageRole = z.enum(["user", "assistant"]);
 export type MessageRole = z.infer<typeof MessageRole>;

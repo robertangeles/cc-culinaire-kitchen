@@ -6,6 +6,7 @@
  */
 
 import { eq, and, desc, sql, gte, lte, count } from "drizzle-orm";
+import type { StockZoneKey } from "@culinaire/shared";
 import { db } from "../db/index.js";
 import { resolveToBase } from "./unitConversionService.js";
 import {
@@ -36,6 +37,8 @@ interface LogConsumptionData {
   reason: string;
   notes?: string;
   shift?: string;
+  /** Which stock zone to deduct from. Defaults to 'BOH'. Pass 'FOH' for front-of-house waste. */
+  zone?: StockZoneKey;
 }
 
 interface ListOpts {
@@ -73,6 +76,7 @@ async function deductStockLevel(
   ingredientId: string,
   deductQty: number,
   retryCount = 0,
+  zone: StockZoneKey = "BOH",
 ): Promise<void> {
   const existing = await db
     .select()
@@ -81,6 +85,7 @@ async function deductStockLevel(
       and(
         eq(stockLevel.storeLocationId, storeLocationId),
         eq(stockLevel.ingredientId, ingredientId),
+        eq(stockLevel.zone, zone),
       ),
     );
 
@@ -89,6 +94,7 @@ async function deductStockLevel(
     await db.insert(stockLevel).values({
       storeLocationId,
       ingredientId,
+      zone,
       currentQty: String(-deductQty),
       version: 0,
     });
@@ -113,7 +119,7 @@ async function deductStockLevel(
     .returning();
 
   if (result.length === 0 && retryCount < 2) {
-    await deductStockLevel(storeLocationId, ingredientId, deductQty, retryCount + 1);
+    await deductStockLevel(storeLocationId, ingredientId, deductQty, retryCount + 1, zone);
   }
 }
 
@@ -126,6 +132,7 @@ async function restoreStockLevel(
   ingredientId: string,
   restoreQty: number,
   retryCount = 0,
+  zone: StockZoneKey = "BOH",
 ): Promise<void> {
   const existing = await db
     .select()
@@ -134,6 +141,7 @@ async function restoreStockLevel(
       and(
         eq(stockLevel.storeLocationId, storeLocationId),
         eq(stockLevel.ingredientId, ingredientId),
+        eq(stockLevel.zone, zone),
       ),
     );
 
@@ -142,6 +150,7 @@ async function restoreStockLevel(
     await db.insert(stockLevel).values({
       storeLocationId,
       ingredientId,
+      zone,
       currentQty: String(restoreQty),
       version: 0,
     });
@@ -166,7 +175,7 @@ async function restoreStockLevel(
     .returning();
 
   if (result.length === 0 && retryCount < 2) {
-    await restoreStockLevel(storeLocationId, ingredientId, restoreQty, retryCount + 1);
+    await restoreStockLevel(storeLocationId, ingredientId, restoreQty, retryCount + 1, zone);
   }
 }
 
@@ -220,10 +229,11 @@ export async function logConsumption(
 
   // Adjust stock level — deduct for usage, add back for returns. The log row
   // keeps the entered qty + unit for display; base_qty is the kitchen-unit truth.
+  const zone = data.zone ?? "BOH";
   if (data.reason === "return_to_stock") {
-    await restoreStockLevel(locationId, data.ingredientId, baseQty);
+    await restoreStockLevel(locationId, data.ingredientId, baseQty, 0, zone);
   } else {
-    await deductStockLevel(locationId, data.ingredientId, baseQty);
+    await deductStockLevel(locationId, data.ingredientId, baseQty, 0, zone);
   }
 
   return entry;
