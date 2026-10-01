@@ -3,6 +3,14 @@
 All notable changes to CulinAIre Kitchen are documented here.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.1.0] — 2026-10-01 (Phase 5)
+
+### Changed
+
+- **Scheduler extracted from `index.ts` into `scheduler.ts`.** All background job logic (~253 lines) — 10 jobs, the `isProductionProcess` gate, and graceful shutdown — moved to `packages/server/src/scheduler.ts`. `index.ts` shrinks from 684 to 431 lines. No runtime behaviour changed; the scheduler is called via `startScheduler(log)` which returns a `clearAll()` cleanup function used in the SIGINT/SIGTERM handlers.
+
+---
+
 ## [0.1.0] — 2026-10-01
 
 ### Fixed
