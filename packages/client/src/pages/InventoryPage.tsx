@@ -25,18 +25,19 @@ import { CatalogRequestQueue } from "../components/inventory/CatalogRequestQueue
 import ConsumptionLogger from "../components/inventory/ConsumptionLogger.js";
 import TransferList from "../components/inventory/TransferList.js";
 import StorageAreasTab from "../components/inventory/StorageAreasTab.js";
+import { FohTab } from "../components/inventory/FohTab.js";
 import StockMovementForm, { type MovementPrefill } from "../components/inventory/StockMovementForm.js";
 import { Tooltip } from "../components/ui/Tooltip.js";
-import { Package, ClipboardCheck, Utensils, ShieldCheck, Settings, FileQuestion, FileEdit, ArrowRightLeft, Boxes, History } from "lucide-react";
+import { Package, ClipboardCheck, Utensils, ShieldCheck, Settings, FileQuestion, FileEdit, ArrowRightLeft, Boxes, History, ShoppingBag } from "lucide-react";
 
 type TransferSubView = "usage" | "transfers" | "movement";
 
-type InventoryTab = "dashboard" | "setup" | "stock-take" | "log" | "ingredients" | "requests" | "areas";
+type InventoryTab = "dashboard" | "setup" | "stock-take" | "log" | "ingredients" | "requests" | "areas" | "foh";
 // Review + History are HQ-only sub-views WITHIN Stock Take (not top-level).
 type StockTakeView = "count" | "review" | "history";
 
 const INVENTORY_TABS: InventoryTab[] = [
-  "dashboard", "setup", "stock-take", "log", "ingredients", "requests", "areas",
+  "dashboard", "setup", "stock-take", "log", "ingredients", "requests", "areas", "foh",
 ];
 const TRANSFER_SUBVIEWS: TransferSubView[] = ["usage", "transfers", "movement"];
 
@@ -74,6 +75,7 @@ export function InventoryPage() {
   // Par editing writes location_ingredient — same gate as the route (inventory:manage).
   // Hiding it isn't the security boundary, it just avoids showing a control that 403s.
   const canManageInventory = useHasPermission()("inventory:manage");
+  const canFoh = useHasPermission()("sales:record");
   // Derived from the router's search string, NOT read once on mount. Navigating
   // from /inventory to /inventory?tab=log&view=transfers does not remount this
   // page, so a mount-only read left the URL updated and the page unchanged —
@@ -114,8 +116,11 @@ export function InventoryPage() {
     if (isOrgAdmin) {
       t.push({ key: "requests", label: "Requests", icon: FileQuestion });
     }
+    if (canFoh) {
+      t.push({ key: "foh", label: "FOH Sales", icon: ShoppingBag });
+    }
     return t;
-  }, [isOrgAdmin]);
+  }, [isOrgAdmin, canFoh]);
 
   if (isGuest || !user) {
     return (
@@ -308,6 +313,7 @@ export function InventoryPage() {
           )}
           {activeTab === "requests" && isOrgAdmin && <CatalogRequestQueue />}
           {activeTab === "areas" && isOrgAdmin && <StorageAreasTab />}
+          {activeTab === "foh" && canFoh && <FohTab locationId={selectedLocationId} />}
         </div>
       </div>
 

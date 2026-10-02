@@ -137,6 +137,10 @@ const UpdateLocationIngredientSchema = z.object({
     (v) => !isNaN(Number(v)) && Number(v) >= 0,
     "Must be a non-negative number",
   ).optional(),
+  fohParLevel: z.string().refine(
+    (v) => !isNaN(Number(v)) && Number(v) >= 0,
+    "Must be a non-negative number",
+  ).nullable().optional(),
   unitCost: z.string().refine(
     (v) => !isNaN(Number(v)) && Number(v) >= 0,
     "Must be a non-negative number",

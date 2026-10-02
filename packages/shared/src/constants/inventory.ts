@@ -38,6 +38,19 @@ export const ITEM_TYPES = {
 export type ItemTypeKey = keyof typeof ITEM_TYPES;
 export const ITEM_TYPE_KEYS = Object.keys(ITEM_TYPES) as ItemTypeKey[];
 
+// ── Stock Zones ─────────────────────────────────────────────
+// Where stock physically sits within one store location. BOH is the
+// warehouse/supply room (everything today); FOH is the front-of-house
+// sellable shelf that a POS sale deducts. Only FOH consumables use FOH.
+
+export const STOCK_ZONES = {
+  BOH: { key: "BOH", label: "Back of House" },
+  FOH: { key: "FOH", label: "Front of House" },
+} as const;
+
+// StockZoneKey is defined in types/index.ts — do not re-export here to avoid duplicate export conflict.
+export const STOCK_ZONE_KEYS = ["BOH", "FOH"] as const;
+
 // ── FIFO Modes ──────────────────────────────────────────────
 
 export const FIFO_MODES = {

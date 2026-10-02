@@ -82,7 +82,7 @@ export async function generateForecasts(locationId: string, orgId: number) {
       currentQty: stockLevel.currentQty,
     })
     .from(stockLevel)
-    .where(eq(stockLevel.storeLocationId, locationId));
+    .where(and(eq(stockLevel.storeLocationId, locationId), eq(stockLevel.zone, "BOH")));
 
   const stockMap = new Map(levels.map((l) => [l.ingredientId, Number(l.currentQty)]));
 
@@ -201,6 +201,7 @@ export async function listRecommendations(
       and(
         eq(forecastRecommendation.ingredientId, stockLevel.ingredientId),
         eq(forecastRecommendation.storeLocationId, stockLevel.storeLocationId),
+        eq(stockLevel.zone, "BOH"),
       ),
     )
     .where(and(...conditions))

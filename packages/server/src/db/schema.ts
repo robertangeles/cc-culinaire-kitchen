@@ -1585,6 +1585,8 @@ export const locationIngredient = pgTable(
     suggestedParLevel: numeric("suggested_par_level"),
     suggestedParSource: varchar("suggested_par_source", { length: 30 }),
     suggestedParAt: timestamp("suggested_par_at", { withTimezone: true }),
+    /** FOH shelf par: how many units to keep on the FOH counter. NULL = no FOH par set. */
+    fohParLevel: numeric("foh_par_level"),
     createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
     updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
   },
@@ -1920,6 +1922,8 @@ export const stockLevel = pgTable(
     stockLevelId: uuid("stock_level_id").defaultRandom().primaryKey(),
     storeLocationId: uuid("store_location_id").notNull().references(() => storeLocation.storeLocationId),
     ingredientId: uuid("ingredient_id").notNull().references(() => ingredient.ingredientId),
+    /** 'BOH' (back-of-house warehouse) or 'FOH' (front-of-house shelf). Default 'BOH' for all existing rows. */
+    zone: varchar("zone", { length: 3 }).notNull().default("BOH"),
     currentQty: numeric("current_qty").notNull().default("0"),
     lastCountedDttm: timestamp("last_counted_dttm", { withTimezone: true }),
     lastCountedByUserId: integer("last_counted_by_user_id").references(() => user.userId),
@@ -1928,8 +1932,8 @@ export const stockLevel = pgTable(
     updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
-    // One stock level per ingredient per location
-    uniqueIndex("idx_stock_level_unique").on(table.storeLocationId, table.ingredientId),
+    // One stock level per ingredient per location per zone
+    uniqueIndex("idx_stock_level_unique").on(table.storeLocationId, table.ingredientId, table.zone),
     // FK index: "get all stock levels at a location"
     index("idx_stock_level_location").on(table.storeLocationId),
     // FK index: "get stock level for an ingredient across locations"
@@ -2010,6 +2014,47 @@ export const sale = pgTable(
     index("idx_sale_location").on(table.storeLocationId, table.soldAt),
     // Per-menu-item sales history
     index("idx_sale_menu_item").on(table.menuItemId),
+  ],
+);
+
+/**
+ * The `foh_sale` table records a direct FOH consumable sale (a physical item
+ * sold over the counter — a can of drink, a prepacked snack). Unlike `sale`
+ * (which routes through menu items and recipes), this is a flat deduction
+ * from `stock_level zone='FOH'` for each sold unit.
+ *
+ * Oversold rows (negative FOH qty after deduction) are allowed and flagged
+ * for reconciliation — the sale already happened at the counter.
+ *
+ * OLTP table, 2NF — every non-key column depends on foh_sale_id.
+ */
+export const fohSale = pgTable(
+  "foh_sale",
+  {
+    fohSaleId: uuid("foh_sale_id").defaultRandom().primaryKey(),
+    organisationId: integer("organisation_id").notNull().references(() => organisation.organisationId),
+    storeLocationId: uuid("store_location_id").notNull().references(() => storeLocation.storeLocationId),
+    ingredientId: uuid("ingredient_id").notNull().references(() => ingredient.ingredientId),
+    quantity: numeric("quantity", { precision: 10, scale: 3 }).notNull(),
+    unitPrice: numeric("unit_price", { precision: 10, scale: 4 }),
+    lineTotal: numeric("line_total", { precision: 12, scale: 4 }),
+    /** 'MANUAL' | 'CSV'. */
+    source: varchar("source", { length: 20 }).notNull(),
+    /** True when FOH qty went negative after this sale (oversold). */
+    oversoldInd: boolean("oversold_ind").notNull().default(false),
+    soldAt: timestamp("sold_at", { withTimezone: true }).notNull(),
+    createdBy: integer("created_by").references(() => user.userId),
+    createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // Audit / FOH tab: "all sales at this location, newest first"
+    index("idx_foh_sale_location").on(table.storeLocationId, table.soldAt),
+    // Revenue report: "all sales for an org over a period"
+    index("idx_foh_sale_org").on(table.organisationId, table.soldAt),
+    // Per-item sales history
+    index("idx_foh_sale_ingredient").on(table.ingredientId),
+    // FK index: created_by → user
+    index("idx_foh_sale_created_by").on(table.createdBy),
   ],
 );
 

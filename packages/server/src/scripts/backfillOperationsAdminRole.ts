@@ -38,6 +38,7 @@ export const OPERATIONS_ADMIN_PERMISSION_KEYS = [
   "org:create-organisation", "org:manage-organisation",
   "inventory:count", "inventory:manage", "inventory:transfer", "inventory:hq",
   "purchasing:draft", "purchasing:submit", "purchasing:approve", "purchasing:receive", "purchasing:credit",
+  "sales:record", "sales:read",
   "menu:read", "waste:read", "prep:manage",
   "brain:read", "brain:manage",
   "compliance:read-own", "compliance:read-all", "compliance:verify", "compliance:manage-rules",

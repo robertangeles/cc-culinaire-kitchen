@@ -4,6 +4,28 @@ Append-only. Newest entry on top.
 
 ---
 
+## 2026-10-01 — Phase 5: Scheduler extraction (PR #131)
+
+- `refactor/ck-web/phase-5-scheduler-extraction`: Phase 5 of the 15-PR refactor plan — final phase.
+- Extracted all background job logic (~253 lines) from `packages/server/src/index.ts` into new `packages/server/src/scheduler.ts`.
+- `index.ts`: 684 → 431 lines. `scheduler.ts`: 275 lines (new file).
+- `startScheduler(log: Logger): () => void` — takes a pino Logger, sets up all 10 jobs, returns `clearAll()` for graceful shutdown.
+- No runtime behaviour changed. Pure structural relocation.
+- Side effect: found and deleted 3 pre-existing stale untracked compiled `.js` artifacts (compliancePdfService.js, pdfService.js, PurchaseOrderPdf.js) that were blocking 6 tests with JSX parse errors.
+- Tests: 1385 passed / 0 failed. tsc: clean. PR #131 merged 2026-10-01. Refactor plan complete.
+
+---
+
+## 2026-10-01 — Phase 4 shipped: no-explicit-any refactor + bug fixes (PR #130)
+
+- Removed 238 explicit `any` usages across 57 server files; enforced `no-explicit-any: error` in eslint.config.js.
+- Fixed real functional bug: `recipeRefinementService` was reading `.text`/`.content` (non-existent) instead of `.snippet` from `SearchResult` — RAG context was silently empty on every recipe refinement.
+- Fixed Stripe SDK v20 `current_period_end` dual-location read (subscription + items.data[0]).
+- Added 16 new catch-handler tests across `catalogRequestController`, `consumptionLogController`, `purchaseOrderController`.
+- PR #130 merged 2026-10-01.
+
+---
+
 ## 2026-09-29 — Phase 3d: IngredientCatalog section split
 
 - `refactor/ck-web/phase-3d-ingredient-catalog-split`: Phase 3d of the refactoring plan.
