@@ -106,6 +106,16 @@ import {
   handleDeleteAlias,
 } from "../controllers/ingredientAliasController.js";
 import { handleGetAutoPoSuggestions } from "../controllers/autoPoController.js";
+import {
+  handleGetFohStock,
+  handleRestockFoh,
+  handleGetRestockSuggestions,
+  handleCountFoh,
+  handleLogFohWaste,
+  handleRecordSales,
+  handleListSales,
+  handleSalesReport,
+} from "../controllers/fohController.js";
 
 const router = Router();
 router.use(authenticate);
@@ -297,6 +307,17 @@ router.get("/credit-notes", requirePermission("purchasing:credit"), receivingCon
 // ─── Phase 4c: Auto-PO Suggestions ────────────────────────────────
 
 router.get("/auto-po-suggestions", requirePermission("inventory:manage"), handleGetAutoPoSuggestions);
+
+// ─── Front-of-House Stock & Sales ────────────────────────────────
+
+router.get("/locations/:locId/foh", requirePermission("sales:record"), handleGetFohStock);
+router.post("/locations/:locId/foh/restock", requirePermission("sales:record"), handleRestockFoh);
+router.get("/locations/:locId/foh/restock-suggestions", requirePermission("sales:record"), handleGetRestockSuggestions);
+router.post("/locations/:locId/foh/count", requirePermission("sales:record"), handleCountFoh);
+router.post("/locations/:locId/foh/waste", requirePermission("sales:record"), handleLogFohWaste);
+router.post("/locations/:locId/sales", requirePermission("sales:record"), handleRecordSales);
+router.get("/locations/:locId/foh/sales", requirePermission("sales:read"), handleListSales);
+router.get("/locations/:locId/foh/sales-report", requirePermission("sales:read"), handleSalesReport);
 
 // ─── Notifications ───────────────────────────────────────────────
 

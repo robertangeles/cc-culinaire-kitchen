@@ -7,6 +7,7 @@
  */
 
 import { eq, and } from "drizzle-orm";
+import type { StockZoneKey } from "@culinaire/shared";
 import { db } from "../db/index.js";
 import type { DbOrTx } from "./auditService.js";
 import { stockLevel } from "../db/schema.js";
@@ -25,6 +26,7 @@ export async function addStock(
   ingredientId: string,
   addQty: number,
   tx: DbOrTx = db,
+  zone: StockZoneKey = "BOH",
   retryCount = 0,
 ): Promise<void> {
   const [current] = await tx
@@ -34,6 +36,7 @@ export async function addStock(
       and(
         eq(stockLevel.storeLocationId, storeLocationId),
         eq(stockLevel.ingredientId, ingredientId),
+        eq(stockLevel.zone, zone),
       ),
     );
 
@@ -42,6 +45,7 @@ export async function addStock(
     await tx.insert(stockLevel).values({
       storeLocationId,
       ingredientId,
+      zone,
       currentQty: String(addQty),
       version: 0,
     });
@@ -67,7 +71,7 @@ export async function addStock(
     .returning();
 
   if (result.length === 0 && retryCount < MAX_RETRIES) {
-    await addStock(storeLocationId, ingredientId, addQty, tx, retryCount + 1);
+    await addStock(storeLocationId, ingredientId, addQty, tx, zone, retryCount + 1);
   } else if (result.length === 0) {
     throw new Error(
       `Stock level update conflict after ${MAX_RETRIES} retries for ingredient ${ingredientId} at location ${storeLocationId}`,
@@ -87,6 +91,7 @@ export async function deductStock(
   ingredientId: string,
   deductQty: number,
   tx: DbOrTx = db,
+  zone: StockZoneKey = "BOH",
   retryCount = 0,
 ): Promise<void> {
   const [current] = await tx
@@ -96,12 +101,13 @@ export async function deductStock(
       and(
         eq(stockLevel.storeLocationId, storeLocationId),
         eq(stockLevel.ingredientId, ingredientId),
+        eq(stockLevel.zone, zone),
       ),
     );
 
   if (!current) {
     throw new Error(
-      `No stock level found for ingredient ${ingredientId} at location ${storeLocationId}`,
+      `No stock level found for ingredient ${ingredientId} at location ${storeLocationId} (zone=${zone})`,
     );
   }
 
@@ -124,7 +130,7 @@ export async function deductStock(
     .returning();
 
   if (result.length === 0 && retryCount < MAX_RETRIES) {
-    await deductStock(storeLocationId, ingredientId, deductQty, tx, retryCount + 1);
+    await deductStock(storeLocationId, ingredientId, deductQty, tx, zone, retryCount + 1);
   } else if (result.length === 0) {
     throw new Error(
       `Stock level update conflict after ${MAX_RETRIES} retries for ingredient ${ingredientId} at location ${storeLocationId}`,
