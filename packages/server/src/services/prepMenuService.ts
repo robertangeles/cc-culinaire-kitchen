@@ -104,7 +104,7 @@ export async function getMenuForSelection(
   let userIds: number[];
   if (teamView) {
     const orgCtx = await getUserOrgContext(userId);
-    userIds = orgCtx.orgIds.length > 0 ? orgCtx.orgMemberUserIds : [userId];
+    userIds = orgCtx.orgMemberUserIds.length > 0 ? orgCtx.orgMemberUserIds : [userId];
   } else {
     userIds = [userId];
   }
@@ -159,7 +159,7 @@ export async function suggestSelections(
   let userIds: number[];
   if (teamView) {
     const orgCtx = await getUserOrgContext(userId);
-    userIds = orgCtx.orgIds.length > 0 ? orgCtx.orgMemberUserIds : [userId];
+    userIds = orgCtx.orgMemberUserIds.length > 0 ? orgCtx.orgMemberUserIds : [userId];
   } else {
     userIds = [userId];
   }
@@ -265,7 +265,7 @@ export async function getSelections(
   let ownerFilter;
   if (teamView) {
     const orgCtx = await getUserOrgContext(userId);
-    ownerFilter = orgCtx.orgIds.length > 0
+    ownerFilter = orgCtx.orgMemberUserIds.length > 0
       ? and(eq(prepSession.prepSessionId, sessionId), inArray(prepSession.userId, orgCtx.orgMemberUserIds))
       : and(eq(prepSession.prepSessionId, sessionId), eq(prepSession.userId, userId));
   } else {
@@ -295,7 +295,7 @@ export async function getPreviousSelections(
   let userFilter;
   if (teamView) {
     const orgCtx = await getUserOrgContext(userId);
-    userFilter = orgCtx.orgIds.length > 0
+    userFilter = orgCtx.orgMemberUserIds.length > 0
       ? inArray(prepSession.userId, orgCtx.orgMemberUserIds)
       : eq(prepSession.userId, userId);
   } else {
@@ -335,7 +335,7 @@ export async function getHighImpactDishes(
   let userIds: number[];
   if (teamView) {
     const orgCtx = await getUserOrgContext(userId);
-    userIds = orgCtx.orgIds.length > 0 ? orgCtx.orgMemberUserIds : [userId];
+    userIds = orgCtx.orgMemberUserIds.length > 0 ? orgCtx.orgMemberUserIds : [userId];
   } else {
     userIds = [userId];
   }

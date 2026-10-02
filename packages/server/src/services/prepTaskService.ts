@@ -397,7 +397,7 @@ export async function getTodaySession(
   let userFilter;
   if (teamView) {
     const orgCtx = await getUserOrgContext(userId);
-    userFilter = orgCtx.orgIds.length > 0
+    userFilter = orgCtx.orgMemberUserIds.length > 0
       ? inArray(prepSession.userId, orgCtx.orgMemberUserIds)
       : eq(prepSession.userId, userId);
   } else {
@@ -438,7 +438,7 @@ export async function getPrepSession(
   let ownerFilter;
   if (teamView) {
     const orgCtx = await getUserOrgContext(userId);
-    ownerFilter = orgCtx.orgIds.length > 0
+    ownerFilter = orgCtx.orgMemberUserIds.length > 0
       ? and(eq(prepSession.prepSessionId, sessionId), inArray(prepSession.userId, orgCtx.orgMemberUserIds))
       : and(eq(prepSession.prepSessionId, sessionId), eq(prepSession.userId, userId));
   } else {
@@ -597,7 +597,7 @@ export async function getIngredientCrossUsage(
   let sessionFilter;
   if (teamView && userId) {
     const orgCtx = await getUserOrgContext(userId);
-    if (orgCtx.orgIds.length > 0) {
+    if (orgCtx.orgMemberUserIds.length > 0) {
       const [reqSession] = await db
         .select({ prepDate: prepSession.prepDate })
         .from(prepSession)
@@ -659,7 +659,7 @@ export async function getSessionHistory(
   let userFilter;
   if (teamView) {
     const orgCtx = await getUserOrgContext(userId);
-    userFilter = orgCtx.orgIds.length > 0
+    userFilter = orgCtx.orgMemberUserIds.length > 0
       ? inArray(prepSession.userId, orgCtx.orgMemberUserIds)
       : eq(prepSession.userId, userId);
   } else {
