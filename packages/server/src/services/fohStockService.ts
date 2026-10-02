@@ -115,7 +115,11 @@ export async function recountFoh(
 
   return db.transaction(async (tx) => {
     const [existing] = await tx
-      .select()
+      .select({
+        stockLevelId: stockLevel.stockLevelId,
+        currentQty: stockLevel.currentQty,
+        version: stockLevel.version,
+      })
       .from(stockLevel)
       .where(
         and(

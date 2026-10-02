@@ -2053,6 +2053,8 @@ export const fohSale = pgTable(
     index("idx_foh_sale_org").on(table.organisationId, table.soldAt),
     // Per-item sales history
     index("idx_foh_sale_ingredient").on(table.ingredientId),
+    // FK index: created_by → user
+    index("idx_foh_sale_created_by").on(table.createdBy),
   ],
 );
 
