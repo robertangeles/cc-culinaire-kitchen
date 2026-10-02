@@ -101,6 +101,7 @@ export async function getAutoPoSuggestions(
     LEFT JOIN stock_level sl
       ON sl.ingredient_id = i.ingredient_id
       AND sl.store_location_id = ${storeLocationId}::uuid
+      AND sl.zone = 'BOH'
     LEFT JOIN location_ingredient li
       ON li.ingredient_id = i.ingredient_id
       AND li.store_location_id = ${storeLocationId}::uuid

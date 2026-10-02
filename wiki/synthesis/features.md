@@ -56,9 +56,10 @@ The running-a-kitchen toolkit (authenticated, location-scoped). See [[store-loca
 - **Setup/Activation wizard** + opening inventory
 - **Stock takes** — session-based counts, smart keypad, HQ review/approval queue
 - **Transfers** — consumption logging + inter-location transfers (sent → received)
-- **Catalog** (admin) — master ingredient catalog, unit conversions, ingredient aliases, catalog request queue
+- **Catalog** (admin) — master ingredient catalog, unit conversions, ingredient aliases, catalog request queue; FOH consumables show a **BOH / FOH** split in the Stock column
+- **FOH** — front-of-house shelf for FOH consumables: BOH vs FOH quantity, stock-the-fridge (BOH→FOH move), FOH par + low-FOH alerts + restock-to-par suggestions, FOH count/reconcile, front-shelf waste, **record sale → deduct FOH** (manual + CSV; oversell allowed & flagged), and a revenue/COGS/margin sales report. No POS is built — sales post to a pluggable boundary (`sales:record` / `sales:read` gated). See [[foh-stock-and-sales]]
 - **Suppliers** — multi-supplier per ingredient
-- FIFO batch tracking, optimistic-locking stock math, transaction history
+- FIFO batch tracking, optimistic-locking stock math, transaction history; stock is zoned (`BOH` default / `FOH`) per `(location, ingredient)`
 
 ### Purchasing & Receiving (`/purchasing`)
 - **Purchase orders** — full lifecycle: Draft → Pending Approval → Sent → Receiving → Received/Partial

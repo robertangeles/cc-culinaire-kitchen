@@ -149,6 +149,9 @@ async function seed() {
     { permissionKey: "menu:read", permissionDescription: "View Menu & Costing — menu engineering, food cost %, and P&L per item" },
     { permissionKey: "waste:read", permissionDescription: "View Waste analytics and log wastage" },
     { permissionKey: "prep:manage", permissionDescription: "Create and manage Prep (mise en place) sessions and tasks" },
+    // Front-of-House sales permissions (gate the FOH tab: stock the fridge, record sales that deduct FOH, reconcile/waste, and sales reporting)
+    { permissionKey: "sales:record", permissionDescription: "Stock the FOH fridge, record FOH sales, count and log FOH waste" },
+    { permissionKey: "sales:read", permissionDescription: "View FOH sales history and the revenue/COGS/margin report" },
     // The Brain — per-user AI memory (docs/specs/brain-memory.md)
     { permissionKey: "brain:read", permissionDescription: "View Your Brain — the memories CulinAIre has captured for you" },
     { permissionKey: "brain:manage", permissionDescription: "Delete and correct Brain memories (own memories; org admins also manage org-shared memories)" },

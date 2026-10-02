@@ -64,6 +64,7 @@ async function deductStockLevel(
       and(
         eq(stockLevel.storeLocationId, storeLocationId),
         eq(stockLevel.ingredientId, ingredientId),
+        eq(stockLevel.zone, "BOH"),
       ),
     );
 
@@ -71,6 +72,7 @@ async function deductStockLevel(
     await db.insert(stockLevel).values({
       storeLocationId,
       ingredientId,
+      zone: "BOH",
       currentQty: String(-deductQty),
       version: 0,
     });
@@ -112,6 +114,7 @@ async function addStockLevel(
       and(
         eq(stockLevel.storeLocationId, storeLocationId),
         eq(stockLevel.ingredientId, ingredientId),
+        eq(stockLevel.zone, "BOH"),
       ),
     );
 
@@ -119,6 +122,7 @@ async function addStockLevel(
     await db.insert(stockLevel).values({
       storeLocationId,
       ingredientId,
+      zone: "BOH",
       currentQty: String(addQty),
       version: 0,
     });
