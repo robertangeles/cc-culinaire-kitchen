@@ -48,7 +48,7 @@ const ManualSchema = z.object({
   title: z.string().min(1, "Title is required").max(200),
   category: z.string().min(1, "Category is required").max(100),
   tags: z.array(z.string()).default([]),
-  body: z.string().min(10, "Content must be at least 10 characters"),
+  body: z.string().min(10, "Content must be at least 10 characters").max(5_000_000, "Content must be under 5 MB"),
 });
 
 // ---------------------------------------------------------------------------

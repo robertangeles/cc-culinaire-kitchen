@@ -58,13 +58,17 @@ export function parseAmountToNumber(amount: string): number {
   // Mixed fraction: "1 1/2"
   const mixedMatch = s.match(/^(\d+)\s+(\d+)\/(\d+)$/);
   if (mixedMatch) {
-    return parseInt(mixedMatch[1], 10) + parseInt(mixedMatch[2], 10) / parseInt(mixedMatch[3], 10);
+    const denom = parseInt(mixedMatch[3], 10);
+    if (denom === 0) return parseInt(mixedMatch[1], 10);
+    return parseInt(mixedMatch[1], 10) + parseInt(mixedMatch[2], 10) / denom;
   }
 
   // Simple fraction: "1/2", "3/4"
   const fracMatch = s.match(/^(\d+)\/(\d+)$/);
   if (fracMatch) {
-    return parseInt(fracMatch[1], 10) / parseInt(fracMatch[2], 10);
+    const denom = parseInt(fracMatch[2], 10);
+    if (denom === 0) return 0;
+    return parseInt(fracMatch[1], 10) / denom;
   }
 
   // Decimal or integer
