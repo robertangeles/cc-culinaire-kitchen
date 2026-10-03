@@ -153,15 +153,24 @@ export async function generateTasksFromSelections(
   const menuItemIds = selections.map((s) => s.menuItemId).filter((id): id is string => id !== null);
   const recipeIds = selections.map((s) => s.recipeId).filter((id): id is string => id !== null);
 
+  // IDOR guard: scope menu items and recipes to the caller's org so a selection
+  // can't reference another user's data by guessing a UUID.
+  const orgCtx = await getUserOrgContext(userId);
+  const authorisedUserIds = orgCtx.orgMemberUserIds.length > 0 ? orgCtx.orgMemberUserIds : [userId];
+
   const menuItemsMap = new Map<string, typeof menuItem.$inferSelect>();
   if (menuItemIds.length > 0) {
-    const mis = await db.select().from(menuItem).where(inArray(menuItem.menuItemId, menuItemIds));
+    const mis = await db.select().from(menuItem).where(
+      and(inArray(menuItem.menuItemId, menuItemIds), inArray(menuItem.userId, authorisedUserIds)),
+    );
     for (const mi of mis) menuItemsMap.set(mi.menuItemId, mi);
   }
 
   const recipesMap = new Map<string, typeof recipe.$inferSelect>();
   if (recipeIds.length > 0) {
-    const recs = await db.select().from(recipe).where(inArray(recipe.recipeId, recipeIds));
+    const recs = await db.select().from(recipe).where(
+      and(inArray(recipe.recipeId, recipeIds), inArray(recipe.userId, authorisedUserIds)),
+    );
     for (const r of recs) recipesMap.set(r.recipeId, r);
   }
 
@@ -323,6 +332,16 @@ export async function generateTasksFromSelections(
   // Persist atomically: clearing + re-inserting a session's tasks must never be
   // observable half-written, and a mid-write failure must roll back cleanly.
   const taskRows: PrepTaskRow[] = await db.transaction(async (tx) => {
+    // FOR UPDATE serializes concurrent generateTasksFromSelections calls on the
+    // same session — the second caller blocks until the first commits/rolls back.
+    const [locked] = await tx
+      .select({ isEndedInd: prepSession.isEndedInd })
+      .from(prepSession)
+      .where(and(eq(prepSession.prepSessionId, sessionId), eq(prepSession.userId, userId)))
+      .for("update");
+    if (!locked) throw new PrepError("Prep session not found or not yours", 404);
+    if (locked.isEndedInd) throw new PrepError("Cannot modify an ended prep session", 409);
+
     await tx.delete(prepTask).where(eq(prepTask.prepSessionId, sessionId));
     await tx.delete(ingredientCrossUsage).where(eq(ingredientCrossUsage.prepSessionId, sessionId));
 
@@ -415,11 +434,13 @@ export async function getTodaySession(
 
   if (existing.length === 0) return null;
 
-  const sessionIds = existing.map((s) => s.prepSessionId);
+  // Return the most-recent session and its tasks only — not tasks from every
+  // org-member session (which were only fetched to let the user see THEIR session
+  // even when another member started one today).
   const tasks = await db
     .select()
     .from(prepTask)
-    .where(inArray(prepTask.prepSessionId, sessionIds))
+    .where(eq(prepTask.prepSessionId, existing[0].prepSessionId))
     .orderBy(desc(prepTask.priorityScore));
 
   return { session: toSessionRow(existing[0]), tasks: tasks.map(toTaskRow) };
@@ -497,10 +518,13 @@ export async function updateTaskStatus(
   if (status === "completed") updateValues.completedAt = new Date();
   else updateValues.completedAt = null;
 
+  // CAS guard: only update if the status in the DB still matches what we read above.
+  // Without this, two concurrent calls both read prevStatus="pending", both pass the
+  // becomingCompleted check, and both deduct stock.
   const [updated] = await db
     .update(prepTask)
     .set(updateValues)
-    .where(and(eq(prepTask.prepTaskId, taskId), eq(prepTask.userId, userId)))
+    .where(and(eq(prepTask.prepTaskId, taskId), eq(prepTask.userId, userId), eq(prepTask.status, prevStatus)))
     .returning();
 
   if (!updated) return null;
