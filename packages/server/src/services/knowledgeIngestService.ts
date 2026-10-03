@@ -16,7 +16,7 @@ import { createHash } from "node:crypto";
 import pino from "pino";
 import { db } from "../db/index.js";
 import { knowledgeDocument, knowledgeChunk } from "../db/schema.js";
-import { eq, sql, and, lt } from "drizzle-orm";
+import { eq, sql, and, lt, ne } from "drizzle-orm";
 import { embedText } from "./knowledgeService.js";
 
 const logger = pino({ name: "knowledgeIngest" });
@@ -577,18 +577,18 @@ async function processDocument(
       embeddings = new Array(chunks.length).fill(null);
     }
 
-    // Persist chunks
+    // Persist chunks — single batch insert
     const now = new Date();
-    for (let i = 0; i < chunks.length; i++) {
-      await db.insert(knowledgeChunk).values({
+    await db.insert(knowledgeChunk).values(
+      chunks.map((chunk, i) => ({
         documentId,
         chunkIndex: i,
-        chunkText: chunks[i].text,
-        tokenCount: chunks[i].tokenCount,
+        chunkText: chunk.text,
+        tokenCount: chunk.tokenCount,
         embedding: embeddings[i],
         embeddedAtDttm: embeddings[i] ? now : null,
-      });
-    }
+      })),
+    );
 
     const hasEmbeddings = embeddings.some((e) => e !== null);
 
@@ -808,19 +808,28 @@ export async function ingestManual(params: IngestManualParams): Promise<number> 
  * Throws if the document is already processing.
  */
 export async function reEmbedDocument(documentId: number): Promise<void> {
-  const [doc] = await db
-    .select({ status: knowledgeDocument.status, body: knowledgeDocument.body })
-    .from(knowledgeDocument)
-    .where(eq(knowledgeDocument.documentId, documentId));
-
-  if (!doc) throw new KnowledgeError("DOCUMENT_NOT_FOUND", 404);
-  if (doc.status === "processing") throw new KnowledgeError("ALREADY_PROCESSING", 409);
-
-  // Set to processing
-  await db
+  // Atomic CAS: only flip to processing if the doc is NOT already processing.
+  // Two concurrent callers both reading status="ready" then both updating would
+  // cause double chunk deletion + double reprocessing. The WHERE ne(...) makes
+  // the UPDATE a no-op for the second caller.
+  const updated = await db
     .update(knowledgeDocument)
     .set({ status: "processing", errorMessage: null, updatedDttm: new Date() })
-    .where(eq(knowledgeDocument.documentId, documentId));
+    .where(and(
+      eq(knowledgeDocument.documentId, documentId),
+      ne(knowledgeDocument.status, "processing"),
+    ))
+    .returning({ body: knowledgeDocument.body });
+
+  if (updated.length === 0) {
+    // Either not found or already processing — check to give the right error
+    const [doc] = await db
+      .select({ status: knowledgeDocument.status })
+      .from(knowledgeDocument)
+      .where(eq(knowledgeDocument.documentId, documentId));
+    if (!doc) throw new KnowledgeError("DOCUMENT_NOT_FOUND", 404);
+    throw new KnowledgeError("ALREADY_PROCESSING", 409);
+  }
 
   // Delete old chunks
   await db.delete(knowledgeChunk).where(eq(knowledgeChunk.documentId, documentId));
@@ -828,7 +837,7 @@ export async function reEmbedDocument(documentId: number): Promise<void> {
   // Re-process async
   (async () => {
     try {
-      await processDocument(documentId, doc.body);
+      await processDocument(documentId, updated[0].body);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Re-embedding failed";
       await setDocumentFailed(documentId, message);
