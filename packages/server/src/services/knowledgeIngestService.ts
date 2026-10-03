@@ -303,6 +303,9 @@ const PRIVATE_IP_PATTERNS = [
   /^fc00:/i, /^fd00:/i,              // IPv6 unique local
   /^fe80:/i,                          // IPv6 link-local
   /^::1$/,                            // IPv6 loopback
+  // IPv4-mapped IPv6 (::ffff:127.0.0.1 etc.) — bypasses the IPv4 checks above
+  /^::ffff:(127\.|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|169\.254\.)/i,
+  /^::ffff:0:(7f|0a|ac1[0-9a-f]|c0a8|a9fe)/i, // same ranges in compressed hex
   /^localhost$/i,
   /\.local$/i,
   /\.internal$/i,
