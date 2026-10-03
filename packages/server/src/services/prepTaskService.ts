@@ -207,12 +207,22 @@ export async function generateTasksFromSelections(
   }
 
   // Name-based category lookup for recipe-path ingredients (P1-5: recipe station assignment).
+  // Scoped to names present in selected recipes — avoids a full ingredient table scan.
   const categoryByName = new Map<string, string>();
   if (recipeIds.length > 0) {
-    const allCats = await db
-      .select({ name: ingredient.ingredientName, category: ingredient.ingredientCategory })
-      .from(ingredient);
-    for (const c of allCats) categoryByName.set(c.name.toLowerCase().trim(), c.category);
+    const recipeIngredientNames = [...new Set(
+      [...recipesMap.values()].flatMap((r) => {
+        const ings = (r.recipeData as Record<string, unknown>).ingredients as Array<{ name?: string }> | undefined;
+        return Array.isArray(ings) ? ings.map((i) => i.name).filter((n): n is string => !!n) : [];
+      }),
+    )];
+    if (recipeIngredientNames.length > 0) {
+      const cats = await db
+        .select({ name: ingredient.ingredientName, category: ingredient.ingredientCategory })
+        .from(ingredient)
+        .where(inArray(ingredient.ingredientName, recipeIngredientNames));
+      for (const c of cats) categoryByName.set(c.name.toLowerCase().trim(), c.category);
+    }
   }
 
   const sourceLines: PrepSourceLine[] = [];
@@ -345,37 +355,34 @@ export async function generateTasksFromSelections(
     await tx.delete(prepTask).where(eq(prepTask.prepSessionId, sessionId));
     await tx.delete(ingredientCrossUsage).where(eq(ingredientCrossUsage.prepSessionId, sessionId));
 
-    const rows: PrepTaskRow[] = [];
-    for (let i = 0; i < scored.length; i++) {
-      const { line, priorityScore } = scored[i];
+    const taskValues = scored.map(({ line, priorityScore }, i) => {
       const tier = i < topCutoff ? "start_first" : i < midCutoff ? "then_these" : "can_wait";
-      const [row] = await tx
-        .insert(prepTask)
-        .values({
-          prepSessionId: sessionId,
-          userId,
-          menuItemId: line.menuItemIds[0] ?? null,
-          recipeId: line.recipeIds[0] ?? null,
-          ingredientId: line.ingredientId,
-          taskDescription: `Prep ${line.ingredientName} for ${line.dishes.join(", ")}`,
-          ingredientName: line.ingredientName,
-          quantityNeeded: String(Math.round(line.totalQuantity * 1000) / 1000),
-          unit: line.unit,
-          prepTimeMinutes: line.prepTimeMinutes > 0 ? line.prepTimeMinutes : null,
-          priorityScore: String(Math.round(priorityScore * 100) / 100),
-          priorityTier: tier,
-          station: line.station,
-          onHandQty: line.onHandQty != null ? String(line.onHandQty) : null,
-          prepNeeded: line.prepNeeded != null ? String(line.prepNeeded) : null,
-        })
-        .returning();
-      rows.push(toTaskRow(row));
-    }
+      return {
+        prepSessionId: sessionId,
+        userId,
+        menuItemId: line.menuItemIds[0] ?? null,
+        recipeId: line.recipeIds[0] ?? null,
+        ingredientId: line.ingredientId,
+        taskDescription: `Prep ${line.ingredientName} for ${line.dishes.join(", ")}`,
+        ingredientName: line.ingredientName,
+        quantityNeeded: String(Math.round(line.totalQuantity * 1000) / 1000),
+        unit: line.unit,
+        prepTimeMinutes: line.prepTimeMinutes > 0 ? line.prepTimeMinutes : null,
+        priorityScore: String(Math.round(priorityScore * 100) / 100),
+        priorityTier: tier,
+        station: line.station,
+        onHandQty: line.onHandQty != null ? String(line.onHandQty) : null,
+        prepNeeded: line.prepNeeded != null ? String(line.prepNeeded) : null,
+      };
+    });
+    const rows = taskValues.length > 0
+      ? (await tx.insert(prepTask).values(taskValues).returning()).map(toTaskRow)
+      : [];
 
-    // Cross-usage: ingredients shared by 2+ dishes.
-    for (const line of aggregated) {
-      if (line.dishes.length < 2) continue;
-      await tx.insert(ingredientCrossUsage).values({
+    // Cross-usage: ingredients shared by 2+ dishes — batch insert.
+    const crossUsageValues = aggregated
+      .filter((line) => line.dishes.length >= 2)
+      .map((line) => ({
         userId,
         prepSessionId: sessionId,
         ingredientId: line.ingredientId,
@@ -384,7 +391,9 @@ export async function generateTasksFromSelections(
         totalQuantity: String(Math.round(line.totalQuantity * 1000) / 1000),
         unit: line.unit,
         dishNames: line.dishes,
-      });
+      }));
+    if (crossUsageValues.length > 0) {
+      await tx.insert(ingredientCrossUsage).values(crossUsageValues);
     }
 
     await tx
