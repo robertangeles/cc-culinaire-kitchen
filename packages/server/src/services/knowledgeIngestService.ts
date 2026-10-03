@@ -13,6 +13,7 @@
  */
 
 import { createHash } from "node:crypto";
+import { promises as dns } from "node:dns";
 import pino from "pino";
 import { db } from "../db/index.js";
 import { knowledgeDocument, knowledgeChunk } from "../db/schema.js";
@@ -125,16 +126,15 @@ async function extractFromDocx(buffer: Buffer): Promise<string> {
 }
 
 async function extractFromUrl(url: string): Promise<string> {
-  // SSRF protection: block private IPs and cloud metadata endpoints
-  validateUrlSafety(url);
+  // SSRF protection: block private IPs, cloud metadata, and redirect chains.
+  await validateUrlSafety(url);
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15_000);
 
   try {
-    const res = await fetch(url, {
+    const res = await fetchWithSafeRedirects(url, {
       signal: controller.signal,
-      redirect: "follow",
       headers: { "User-Agent": "CulinAIre-Knowledge-Bot/1.0" },
     });
 
@@ -183,7 +183,7 @@ const CRAWL_MAX_PAGES = 20;
 async function crawlSite(
   startUrl: string,
 ): Promise<{ pageUrl: string; text: string; title: string }[]> {
-  validateUrlSafety(startUrl);
+  await validateUrlSafety(startUrl);
 
   const origin = new URL(startUrl).origin;
   const visited = new Set<string>();
@@ -198,16 +198,19 @@ async function crawlSite(
     visited.add(normalized);
 
     try {
-      validateUrlSafety(url);
+      await validateUrlSafety(url);
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 15_000);
 
-      const res = await fetch(url, {
-        signal: controller.signal,
-        redirect: "follow",
-        headers: { "User-Agent": "CulinAIre-Knowledge-Bot/1.0" },
-      });
-      clearTimeout(timeout);
+      let res: Response;
+      try {
+        res = await fetchWithSafeRedirects(url, {
+          signal: controller.signal,
+          headers: { "User-Agent": "CulinAIre-Knowledge-Bot/1.0" },
+        });
+      } finally {
+        clearTimeout(timeout);
+      }
 
       if (!res.ok) continue;
 
@@ -227,7 +230,7 @@ async function crawlSite(
             const href = $(el).attr("href");
             if (!href) return;
             const resolved = new URL(href, url).href.replace(/#.*$/, "").replace(/\/$/, "");
-            if (resolved.startsWith(origin) && !visited.has(resolved) && !queue.includes(resolved)) {
+            if (new URL(resolved).origin === origin && !visited.has(resolved) && !queue.includes(resolved)) {
               queue.push(resolved);
             }
           } catch { /* invalid URL, skip */ }
@@ -288,7 +291,32 @@ async function extractText(buffer: Buffer, mimeType: string): Promise<string> {
 // SSRF Protection
 // ---------------------------------------------------------------------------
 
-function validateUrlSafety(url: string): void {
+// Private/reserved IP ranges — applied to both the literal hostname and every
+// resolved IP so DNS rebinding (evil.com → 192.168.x.x) is also blocked.
+const PRIVATE_IP_PATTERNS = [
+  /^127\./,                           // loopback
+  /^10\./,                            // Class A private
+  /^172\.(1[6-9]|2\d|3[01])\./,       // Class B private
+  /^192\.168\./,                      // Class C private
+  /^169\.254\./,                      // link-local (AWS/GCP metadata)
+  /^0\./,                             // current network
+  /^fc00:/i, /^fd00:/i,              // IPv6 unique local
+  /^fe80:/i,                          // IPv6 link-local
+  /^::1$/,                            // IPv6 loopback
+  // IPv4-mapped IPv6 (::ffff:127.0.0.1 etc.) — bypasses the IPv4 checks above
+  /^::ffff:(127\.|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|169\.254\.)/i,
+  /^::ffff:0:(7f|0a|ac1[0-9a-f]|c0a8|a9fe)/i, // same ranges in compressed hex
+  /^localhost$/i,
+  /\.local$/i,
+  /\.internal$/i,
+];
+
+const BLOCKED_HOSTS = [
+  "metadata.google.internal",
+  "metadata.google.com",
+];
+
+async function validateUrlSafety(url: string): Promise<void> {
   let parsed: URL;
   try {
     parsed = new URL(url);
@@ -303,31 +331,46 @@ function validateUrlSafety(url: string): void {
   // Strip IPv6 brackets: new URL("http://[::1]/").hostname === "[::1]"
   const hostname = parsed.hostname.replace(/^\[(.+)\]$/, "$1");
 
-  // Block private/reserved IP ranges
-  const blocked = [
-    /^127\./,                           // loopback
-    /^10\./,                            // Class A private
-    /^172\.(1[6-9]|2\d|3[01])\./,       // Class B private
-    /^192\.168\./,                      // Class C private
-    /^169\.254\./,                      // link-local
-    /^0\./,                             // current network
-    /^fc00:/i, /^fd00:/i,              // IPv6 unique local
-    /^fe80:/i,                          // IPv6 link-local
-    /^::1$/,                            // IPv6 loopback
-    /^localhost$/i,
-    /\.local$/i,
-    /\.internal$/i,
-  ];
-
-  // Block cloud metadata endpoints
-  const blockedHosts = [
-    "metadata.google.internal",
-    "metadata.google.com",
-  ];
-
-  if (blocked.some((re) => re.test(hostname)) || blockedHosts.includes(hostname.toLowerCase())) {
+  if (PRIVATE_IP_PATTERNS.some((re) => re.test(hostname)) || BLOCKED_HOSTS.includes(hostname.toLowerCase())) {
     throw new KnowledgeError("URL not allowed: private or reserved address", 400);
   }
+
+  // DNS rebinding guard: resolve the hostname and block any private IP it maps to.
+  // An attacker can register evil.com → 169.254.169.254; the hostname check above
+  // would pass, but this lookup catches it.
+  let records: { address: string }[];
+  try {
+    records = await dns.lookup(hostname, { all: true });
+  } catch {
+    throw new KnowledgeError("URL not allowed: hostname could not be resolved", 400);
+  }
+  for (const { address } of records) {
+    if (PRIVATE_IP_PATTERNS.some((re) => re.test(address))) {
+      throw new KnowledgeError("URL not allowed: resolves to a private address", 400);
+    }
+  }
+}
+
+const MAX_REDIRECTS = 5;
+
+// Follow redirects manually so every hop is validated against validateUrlSafety.
+// fetch({redirect:"follow"}) would silently follow a redirect to a private IP
+// that passed the initial check.
+async function fetchWithSafeRedirects(
+  url: string,
+  opts: RequestInit,
+  hops = 0,
+): Promise<Response> {
+  if (hops > MAX_REDIRECTS) throw new KnowledgeError("Too many redirects", 422);
+  const res = await fetch(url, { ...opts, redirect: "manual" });
+  if (res.status >= 300 && res.status < 400) {
+    const location = res.headers.get("location");
+    if (!location) throw new KnowledgeError("Redirect with no Location header", 422);
+    const redirectUrl = new URL(location, url).href;
+    await validateUrlSafety(redirectUrl);
+    return fetchWithSafeRedirects(redirectUrl, opts, hops + 1);
+  }
+  return res;
 }
 
 // ---------------------------------------------------------------------------
@@ -665,7 +708,7 @@ export async function ingestFile(params: IngestFileParams): Promise<number> {
  */
 export async function ingestUrl(params: IngestUrlParams): Promise<number> {
   // Validate URL before creating document
-  validateUrlSafety(params.url);
+  await validateUrlSafety(params.url);
 
   if (params.crawl) {
     return ingestUrlCrawl(params);
