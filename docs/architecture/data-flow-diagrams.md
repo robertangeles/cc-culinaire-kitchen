@@ -295,7 +295,7 @@
    ├─ cors()                Origin validation
    ├─ express.json()        Parse JSON body
    ├─ cookieParser()        Parse cookies
-   ├─ rateLimit()           60 req/min per IP
+   ├─ globalApiRateLimit()  300 req/min per signed-in user, 60 per IP anonymous
    │
    ├─ Route matched?
    │   │
