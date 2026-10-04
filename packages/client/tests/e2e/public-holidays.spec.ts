@@ -19,7 +19,8 @@
  * creates at the end, so the shared dev DB stays clean.
  */
 
-import { test, expect, type Page } from "@playwright/test";
+import type { Page } from "@playwright/test";
+import { test, expect } from "./_helpers/test";
 
 const TEST_YEAR = "2099";
 

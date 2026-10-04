@@ -19,7 +19,8 @@
  * Run:   pnpm --filter @culinaire/client test:e2e order-guides
  */
 
-import { test, expect, type Page } from "@playwright/test";
+import type { Page } from "@playwright/test";
+import { test, expect } from "./_helpers/test";
 
 async function openNewPoForm(page: Page) {
   await page.goto("/purchasing");

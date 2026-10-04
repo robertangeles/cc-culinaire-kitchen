@@ -22,7 +22,8 @@
  * any more.
  */
 
-import { test, expect, type Page } from "@playwright/test";
+import type { Page } from "@playwright/test";
+import { test, expect } from "./_helpers/test";
 
 async function openCompliance(page: Page) {
   await page.goto("/organisation");

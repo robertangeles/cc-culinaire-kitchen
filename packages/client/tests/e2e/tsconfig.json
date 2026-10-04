@@ -1,0 +1,12 @@
+{
+  "extends": "../../../../tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "noEmit": true,
+    "declaration": false,
+    "declarationMap": false,
+    "types": ["node"]
+  },
+  "include": ["./**/*.ts", "../../playwright.config.ts"],
+  "exclude": ["./**/*.d.ts", "./_artifacts"]
+}

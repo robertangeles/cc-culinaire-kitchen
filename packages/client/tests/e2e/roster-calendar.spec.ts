@@ -17,7 +17,8 @@
  * call are all wired together correctly end to end.
  */
 
-import { test, expect, type Page } from "@playwright/test";
+import type { Page } from "@playwright/test";
+import { test, expect } from "./_helpers/test";
 
 async function openCalendar(page: Page) {
   await page.goto("/roster");

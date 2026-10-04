@@ -2,6 +2,7 @@ import { defineConfig, devices } from "@playwright/test";
 import { config as loadEnv } from "dotenv";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { assertLocalTarget, e2eBaseUrl, newRunId } from "./tests/e2e/_helpers/safety";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -12,6 +13,14 @@ loadEnv({ path: path.resolve(__dirname, "../../.env") });
 // both files would silently use the app value.
 loadEnv({ path: path.resolve(__dirname, ".env.test"), override: true });
 
+// One run id for the whole run; workers inherit it through the environment.
+process.env.E2E_RUN_ID ??= newRunId();
+
+const baseURL = e2eBaseUrl();
+assertLocalTarget(baseURL);
+
+const isCI = !!process.env.CI;
+
 export default defineConfig({
   testDir: "./tests/e2e",
   testMatch: "**/*.spec.ts",
@@ -21,11 +30,19 @@ export default defineConfig({
   // remote dev database, so 30s is tight enough to fail on latency rather than
   // on a real defect.
   timeout: 60_000,
-  retries: 0,
+  forbidOnly: isCI,
+  retries: isCI ? 1 : 0,
   workers: 1,
-  reporter: [["list"], ["html", { open: "never" }]],
+  // The JSON report feeds scripts/checkE2eSkips.mjs. It lives outside outputDir,
+  // which Playwright wipes at the start of every run.
+  reporter: [
+    ["list"],
+    ["html", { open: "never" }],
+    ["json", { outputFile: "./tests/e2e/_reports/results.json" }],
+  ],
+  expect: { toHaveScreenshot: { maxDiffPixelRatio: 0.01 } },
   use: {
-    baseURL: process.env.E2E_BASE_URL ?? "http://localhost:5179",
+    baseURL,
     screenshot: "only-on-failure",
     trace: "retain-on-failure",
     viewport: { width: 1280, height: 900 },

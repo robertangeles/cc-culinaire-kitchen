@@ -8,7 +8,8 @@
  * Run:   pnpm --filter @culinaire/client test:e2e
  */
 
-import { test, expect, type Page } from "@playwright/test";
+import type { Page } from "@playwright/test";
+import { test, expect } from "./_helpers/test";
 
 async function openOrdersTab(page: Page) {
   // Purchasing is its own route since the sidebar restructure (commit 9d77f81).
