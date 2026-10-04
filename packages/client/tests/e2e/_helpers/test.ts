@@ -1,7 +1,7 @@
 import { test as base, expect, request, type APIRequestContext } from "@playwright/test";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { runCleanups, type Defer } from "./data";
+import { runCleanups, waitForRateBudget, type Defer } from "./data";
 import { e2eBaseUrl } from "./safety";
 
 const STORAGE_STATE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../_auth/storageState.json");
@@ -20,7 +20,10 @@ const STORAGE_STATE = path.resolve(path.dirname(fileURLToPath(import.meta.url)),
 /** Empty by default. Each entry needs a comment naming the endpoint and why it is tolerated. */
 const ALLOWED_5XX: ReadonlyArray<{ method: string; path: RegExp }> = [];
 
-export const test = base.extend<{ failOnBackgroundErrors: void }, { api: APIRequestContext; defer: Defer }>({
+/** A page load costs ~15 /api requests and a test usually adds a few more. */
+const RATE_BUDGET_PER_TEST = 30;
+
+export const test = base.extend<{ failOnBackgroundErrors: void; rateBudget: void }, { api: APIRequestContext; defer: Defer }>({
   /** Authenticated API client (the cached E2E session) for seeding and cleanup. */
   api: [
     // eslint-disable-next-line no-empty-pattern
@@ -39,7 +42,16 @@ export const test = base.extend<{ failOnBackgroundErrors: void }, { api: APIRequ
       await use((label, undo) => void entries.push({ label, undo }));
       await runCleanups(entries);
     },
-    { scope: "worker" },
+    // Cleanup retries through rate-limit windows (see apiCall), which can take a minute or more.
+    { scope: "worker", timeout: 180_000 },
+  ],
+  /** The server allows 60 /api requests a minute per IP; start each test with enough left that its own page loads are not answered 429. */
+  rateBudget: [
+    async ({ api }, use) => {
+      await waitForRateBudget(api, RATE_BUDGET_PER_TEST);
+      await use();
+    },
+    { auto: true, timeout: 90_000 },
   ],
   failOnBackgroundErrors: [
     async ({ page }, use) => {

@@ -52,16 +52,25 @@ test.describe("Roster week calendar", () => {
       const lane = page.locator(`[data-day-iso][data-role-id="${role.rosterRoleId}"]`).first();
       await expect(lane, "seeded role must get a lane on the calendar").toBeVisible({ timeout: 15_000 });
       await lane.scrollIntoViewIfNeeded();
-      const box = await lane.boundingBox();
-      expect(box, "lane must have a bounding box").not.toBeNull();
 
-      const x = box!.x + box!.width / 2;
-      const startY = box!.y + 40;
-      const endY = startY + 150; // a few hours' worth at this grid's hour height
+      // The lane is 24h tall inside a 420px scroller, so only part of it is on screen.
+      // Pick a point in the visible part that hits the lane itself (not a gridline), with
+      // room below for a ~150px drag (a few hours at this grid's hour height).
+      const point = await lane.evaluate((el) => {
+        const scroller = el.parentElement!.parentElement!.getBoundingClientRect();
+        const l = el.getBoundingClientRect();
+        const x = l.left + l.width / 2;
+        const bottom = Math.min(scroller.bottom, window.innerHeight);
+        for (let y = Math.max(l.top, scroller.top) + 10; y + 150 < bottom; y++) {
+          if (document.elementFromPoint(x, y) === el && document.elementFromPoint(x, y + 150) === el) return { x, y };
+        }
+        return null;
+      });
+      expect(point, "a draggable spot must be visible in the lane").not.toBeNull();
 
-      await page.mouse.move(x, startY);
+      await page.mouse.move(point!.x, point!.y);
       await page.mouse.down();
-      await page.mouse.move(x, endY, { steps: 5 });
+      await page.mouse.move(point!.x, point!.y + 150, { steps: 5 });
       await page.mouse.up();
 
       await expect(page.getByText("Shift created.")).toBeVisible({ timeout: 10_000 });

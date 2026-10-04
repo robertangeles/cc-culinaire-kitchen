@@ -4,6 +4,14 @@ Append-only. Newest entry on top.
 
 ---
 
+## 2026-10-04 — Post-refactor E2E suite (PR1)
+
+- `fix/ck-web/e2e-functional-suite`: Playwright suite is now self-seeding and self-cleaning (run-prefixed rows, API seeding, `cleanupE2eData.ts` sweep), fails on page errors and `/api` 5xx, targets localhost only, and has a skip gate (`checkE2eSkips.mjs`).
+- New specs: `route-smoke` (every `App.tsx` route) and `refactor-flows` (MenuItemFormModal, IngredientCatalog, ProfilePage, UserDetailPanel, useInventory, useRoster). Purchasing, order-guide, roster, holiday and compliance specs no longer skip for missing data.
+- Result: 79 passed, 0 skipped, twice. A full run takes ~22 min because of the server's 60 req/min limit (follow-up in `tasks/todo.md`). See `docs/e2e.md`.
+
+---
+
 ## 2026-10-01 — Phase 5: Scheduler extraction (PR #131)
 
 - `refactor/ck-web/phase-5-scheduler-extraction`: Phase 5 of the 15-PR refactor plan — final phase.

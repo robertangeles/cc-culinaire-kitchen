@@ -11,13 +11,42 @@ import type { APIRequestContext } from "@playwright/test";
 
 export type Defer = (label: string, undo: () => Promise<void>) => void;
 
+/**
+ * The server rate-limits every /api route except /api/auth to 60 requests a
+ * minute per IP (index.ts), and the browser, seeding and cleanup all share that
+ * one budget. One page load alone costs ~15 requests, so a run exhausts it.
+ * The server reports the budget in `RateLimit: "..."; r=<remaining>; t=<seconds to reset>`.
+ */
+function rateLimitState(res: { headers(): Record<string, string> }): { remaining: number; resetSeconds: number } | null {
+  const m = /r=(\d+);\s*t=(\d+)/.exec(res.headers()["ratelimit"] ?? "");
+  return m ? { remaining: Number(m[1]), resetSeconds: Number(m[2]) } : null;
+}
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+/** Blocks until at least `needed` requests are left in the current rate-limit window. Costs one request per check. */
+export async function waitForRateBudget(api: APIRequestContext, needed: number): Promise<void> {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const res = await api.get("/api/health");
+    const state = rateLimitState(res);
+    if (!state || (res.status() !== 429 && state.remaining >= needed)) return;
+    await sleep((state.resetSeconds + 1) * 1000);
+  }
+  throw new Error(`rate-limit budget of ${needed} requests never became available`);
+}
+
 export async function apiCall<T = unknown>(
   api: APIRequestContext,
   method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
   url: string,
   data?: unknown,
 ): Promise<T> {
-  const res = await api.fetch(url, { method, data });
+  let res = await api.fetch(url, { method, data });
+  // A 429 is rejected before any handler runs, so retrying a write is safe.
+  for (let attempt = 0; res.status() === 429 && attempt < 3; attempt++) {
+    await sleep(((rateLimitState(res)?.resetSeconds ?? 60) + 1) * 1000);
+    res = await api.fetch(url, { method, data });
+  }
   if (!res.ok()) {
     throw new Error(`${method} ${url} -> ${res.status()}: ${(await res.text()).slice(0, 500)}`);
   }

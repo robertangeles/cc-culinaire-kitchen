@@ -24,7 +24,7 @@ describe("findUnexpectedSkips", () => {
   });
 
   it("does not let a same-title test in another file ride on the allow list", () => {
-    const d = ALLOWED_SKIPS[1];
+    const d = ALLOWED_SKIPS[0];
     const report = { suites: [{ specs: [spec("other.spec.ts", d.title, "skipped")] }] };
     expect(findUnexpectedSkips(report).unexpected).toHaveLength(1);
   });

@@ -734,3 +734,11 @@ All pre-existing in the original `useRoster.ts` monolith — extracted unchanged
 ## 2026-10-01 — Phase 4 (no-explicit-any refactor) — tests completed
 
 Coverage gate deferred on 2026-09-30 has been resolved. `catalogRequestController.test.ts` (6 tests), `consumptionLogController.test.ts` (5 tests), and `purchaseOrderController.test.ts` (5 tests) added on 2026-10-01. All 16 tests pass. No open items from Phase 4.
+
+## E2E suite follow-ups (from 2026-10-04 eng review)
+
+- **Exhausted-guest client fix**: when the guest limit is reached `isGuest` is false and `AuthenticatedOnly` renders gated pages. Fix in the client, then add it to the logged-out boundary spec.
+- **Firefox and WebKit projects** for the E2E suite.
+- **Mobile viewport project** (doubles smoke runtime).
+- **Second role for permission specs** (un-skips public-holidays "lacks roster:manage"); blocked by the single-test-user rule.
+- **Full run takes ~22 min**, almost all of it waiting out the server's 60 `/api` req/min per-IP limit (`rateBudget` fixture). CI has a 25 min budget (PR3): make the limit env-configurable for the CI server (`RATE_LIMIT_PER_MINUTE`), or the suite will time out there.

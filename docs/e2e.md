@@ -1,0 +1,43 @@
+# End-to-end tests (Playwright)
+
+Browser tests in `packages/client/tests/e2e/`. They drive a real Chromium against the local Vite dev server (5179) and Express API (3009), logged in as the E2E account.
+
+## Run
+
+```bash
+# terminal 1
+ALLOW_REMOTE_DEV_DB=1 pnpm --filter @culinaire/server dev
+# terminal 2
+pnpm --filter @culinaire/client dev
+# terminal 3
+pnpm --filter @culinaire/client test:e2e        # all specs
+pnpm --filter @culinaire/client test:e2e:ci     # all specs, then the skip gate
+```
+
+Credentials come from `.env.test` (`E2E_USER_EMAIL`, `E2E_USER_PASSWORD`, `E2E_USER_TOTP_SECRET`). Only ONE Playwright process may run at a time: TOTP codes are single-use per 30 s, and concurrent runs share `_auth/storageState.json`. That is why the suite uses one worker.
+
+## Rules every spec follows
+
+1. **Import `test`/`expect` from `./_helpers/test`**, never `@playwright/test` (ESLint enforces this). The shared `test` fails any test where the page throws an uncaught error or an `/api/*` call returns 5xx, even if the test's own assertions pass. 401/403 are allowed. Tolerating a 5xx needs an entry in `ALLOWED_5XX` with a comment.
+2. **Local only.** `playwright.config.ts` refuses any `E2E_BASE_URL` that is not localhost/127.0.0.1, because the suite writes real rows.
+3. **Self-seeding, self-cleaning.** A spec creates what it needs through the API (`api` fixture + `apiCall`), names every row with `currentPrefix()` (`e2e-<runId>-...`), and registers undo with `defer(label, undo)` or a `try/finally`. Missing data is a failure, never a `test.skip`.
+4. **No `waitForLoadState("networkidle")`** (socket.io never idles) and no fixed sleeps. Wait on an element or `expect.poll`.
+5. **No skips** except the one deliberate one in `scripts/checkE2eSkips.mjs`: the public-holidays permission skip (the E2E account lacks `roster:manage`). `test:e2e:ci` fails if any other test is skipped.
+
+## Rate limit
+
+The server allows 60 `/api` requests a minute per IP, and a page load costs about 15. The shared `test` has an auto fixture (`rateBudget`) that waits until 30 requests of budget are free before each test, and `apiCall` retries a 429. This is why a full run takes about 20 minutes; do not add sleeps or retries of your own.
+
+## Rows the API cannot delete
+
+Purchase orders and shifts can only be cancelled, and a role with shifts cannot be deleted. Those rows pile up in the dev DB. Sweep them with:
+
+```bash
+ALLOW_REMOTE_DEV_DB=1 pnpm --filter @culinaire/server exec tsx src/scripts/cleanupE2eData.ts
+```
+
+It deletes only `e2e-*` rows older than 60 minutes, and refuses to run in a production process.
+
+## Route table
+
+`_helpers/routes.ts` lists every page route in `App.tsx`, classed `gated`, `guest-open` or `public`. `route-smoke.spec.ts` renders each as the E2E user. When you add a route to `App.tsx`, add it there.

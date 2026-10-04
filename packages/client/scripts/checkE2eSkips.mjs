@@ -17,11 +17,6 @@ export const ALLOWED_SKIPS = [
       "CRITICAL: saving a holiday for a different jurisdiction than the active filter switches the filter to match, and the new holiday is visible",
     reason: "E2E account lacks roster:manage (needs a second role, deferred)",
   },
-  {
-    file: "roster-calendar.spec.ts",
-    title: "dragging on an empty lane creates a Draft shift",
-    reason: "lane scrolled out of view / viewport-dependent",
-  },
 ];
 
 function* walk(suite) {
