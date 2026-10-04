@@ -1149,3 +1149,15 @@ builds all tables with CHECKs enforcing. Stop it again when done.
 - **Problem**: Four new refactor-flow tests failed on first run: Inventory tabs are `role="tab"` (not buttons), "Add Menu Item" sits on the "Menu Items" tab and opens in "Import from Recipe" mode, Store Locations lives on a "Locations" sub-tab, and clicking a user row's centre hits the role dropdown. The roster drag test aimed at the lane's top, which was scrolled out of the 420px scroller.
 - **Fix**: Read the component markup and the failure screenshot before writing the selector; for pointer drags, pick a point inside the visible part of the scroller using `elementFromPoint`.
 - **Rule**: Open the failure screenshot first. Prefer `getByRole` with the real role from the source, and for drag tests compute the target from the visible rect, not the element's full bounding box.
+
+## #100 — Don't hand a finding back as a caveat; act on it (2026-10-04)
+
+- **Problem**: The E2E run showed the server's 60/min per-IP limit throttling the whole suite (~22 min), and I reported it as a caveat. The same limit was breaking the real UI after ~4 page loads. The user's reply: reporting a problem and doing nothing about it is no use.
+- **Fix**: Root-caused it, shipped the per-user limiter as its own branch and PR (#141) with tests, live check and browser QA, and updated the E2E docs.
+- **Rule**: When a run exposes a defect in the product, open the fix as its own branch in the same session. Only park it with a `tasks/todo.md` entry if the user says to.
+
+## #101 — A "denied" write may have run; verify state before retrying (2026-10-04)
+
+- **Problem**: The auto-mode classifier reported a dev-DB UPDATE as denied after it had executed. Retrying blind would have double-applied it.
+- **Fix**: Read the state back (a SELECT) before deciding anything. If the read-back is also blocked, stop and ask rather than route around it.
+- **Rule**: After any "denied" write, check the actual state with a read before retrying, and never retry a denied action by another route.

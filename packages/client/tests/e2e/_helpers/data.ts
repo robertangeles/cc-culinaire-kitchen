@@ -12,9 +12,10 @@ import type { APIRequestContext } from "@playwright/test";
 export type Defer = (label: string, undo: () => Promise<void>) => void;
 
 /**
- * The server rate-limits every /api route except /api/auth to 60 requests a
- * minute per IP (index.ts), and the browser, seeding and cleanup all share that
- * one budget. One page load alone costs ~15 requests, so a run exhausts it.
+ * The server rate-limits every /api route except /api/auth to 300 requests a
+ * minute per signed-in user (middleware/globalRateLimit.ts), and the browser,
+ * seeding and cleanup all share the E2E user's budget. One page load costs ~15
+ * requests, so a busy run can still exhaust it.
  * The server reports the budget in `RateLimit: "..."; r=<remaining>; t=<seconds to reset>`.
  */
 function rateLimitState(res: { headers(): Record<string, string> }): { remaining: number; resetSeconds: number } | null {

@@ -26,7 +26,7 @@ Credentials come from `.env.test` (`E2E_USER_EMAIL`, `E2E_USER_PASSWORD`, `E2E_U
 
 ## Rate limit
 
-The server allows 60 `/api` requests a minute per IP, and a page load costs about 15. The shared `test` has an auto fixture (`rateBudget`) that waits until 30 requests of budget are free before each test, and `apiCall` retries a 429. This is why a full run takes about 20 minutes; do not add sleeps or retries of your own.
+The server allows 300 `/api` requests a minute per signed-in user (60 per IP for anonymous traffic), and a page load costs about 15. The shared `test` has an auto fixture (`rateBudget`) that waits until 30 requests of budget are free before each test, and `apiCall` retries a 429. With the per-user limit the wait rarely triggers; do not add sleeps or retries of your own.
 
 ## Rows the API cannot delete
 
