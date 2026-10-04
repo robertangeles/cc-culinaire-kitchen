@@ -19,6 +19,8 @@
 
 import type { Page } from "@playwright/test";
 import { test, expect } from "./_helpers/test";
+import { apiCall } from "./_helpers/data";
+import { currentPrefix } from "./_helpers/safety";
 
 async function openCalendar(page: Page) {
   await page.goto("/roster");
@@ -39,32 +41,40 @@ test.describe("Roster week calendar", () => {
     }).toPass({ timeout: 15_000 });
   });
 
-  test("dragging on an empty lane creates a Draft shift", async ({ page }) => {
-    await openCalendar(page);
+  test("dragging on an empty lane creates a Draft shift", async ({ page, api }) => {
+    // Own role so the lane exists in any environment and the created shift is ours to clean up.
+    const role = await apiCall<{ rosterRoleId: string }>(api, "POST", "/api/roster/roles", {
+      roleName: `${currentPrefix()}role`,
+    });
+    try {
+      await openCalendar(page);
 
-    const lane = page.locator("[data-day-iso][data-role-id]").first();
-    if ((await lane.count()) === 0) {
-      test.skip(true, "No roles configured in this environment — nothing to drag onto");
-      return;
+      const lane = page.locator(`[data-day-iso][data-role-id="${role.rosterRoleId}"]`).first();
+      await expect(lane, "seeded role must get a lane on the calendar").toBeVisible({ timeout: 15_000 });
+      await lane.scrollIntoViewIfNeeded();
+      const box = await lane.boundingBox();
+      expect(box, "lane must have a bounding box").not.toBeNull();
+
+      const x = box!.x + box!.width / 2;
+      const startY = box!.y + 40;
+      const endY = startY + 150; // a few hours' worth at this grid's hour height
+
+      await page.mouse.move(x, startY);
+      await page.mouse.down();
+      await page.mouse.move(x, endY, { steps: 5 });
+      await page.mouse.up();
+
+      await expect(page.getByText("Shift created.")).toBeVisible({ timeout: 10_000 });
+      // The block itself renders inside the lane once the calendar refetches.
+      await expect(lane.locator("[data-shift-id]").first()).toBeVisible({ timeout: 10_000 });
+    } finally {
+      // Shifts cannot be deleted through the API, only cancelled. A role that still has
+      // shifts cannot be deleted either, so it is left for scripts/cleanupE2eData.
+      const shifts = (
+        await apiCall<Array<{ shiftId: string; rosterRoleId: string }>>(api, "GET", "/api/roster/shifts")
+      ).filter((sh) => sh.rosterRoleId === role.rosterRoleId);
+      for (const sh of shifts) await apiCall(api, "POST", `/api/roster/shifts/${sh.shiftId}/cancel`);
+      if (shifts.length === 0) await apiCall(api, "DELETE", `/api/roster/roles/${role.rosterRoleId}`);
     }
-
-    const box = await lane.boundingBox();
-    if (!box) {
-      test.skip(true, "Lane not visible — likely scrolled out of view");
-      return;
-    }
-
-    const x = box.x + box.width / 2;
-    const startY = box.y + 40;
-    const endY = startY + 150; // a few hours' worth at this grid's hour height
-
-    await page.mouse.move(x, startY);
-    await page.mouse.down();
-    await page.mouse.move(x, endY, { steps: 5 });
-    await page.mouse.up();
-
-    await expect(page.getByText("Shift created.")).toBeVisible({ timeout: 10_000 });
-    // The block itself renders inside the lane once the calendar refetches.
-    await expect(lane.locator("[data-shift-id]").first()).toBeVisible({ timeout: 10_000 });
   });
 });

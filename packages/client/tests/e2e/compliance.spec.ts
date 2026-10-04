@@ -80,10 +80,9 @@ test.describe("Staff Compliance Vault — Phase 1", () => {
     await openCompliance(page);
 
     const headline = page.getByText(/\d+ of \d+ staff are compliant/i);
-    if ((await headline.count()) === 0) {
-      test.skip(true, "No staff/requirements configured in this environment — nothing to reconcile");
-      return;
-    }
+    // Every org member counts as staff (getComplianceDashboard), so the E2E account
+    // guarantees at least one row. A bare count() here raced the skeleton and skipped.
+    await expect(headline.first()).toBeVisible({ timeout: 15_000 });
 
     const text = (await headline.first().textContent()) ?? "";
     const [, compliant, total] = text.match(/(\d+) of (\d+)/) ?? [];
