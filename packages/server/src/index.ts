@@ -3,7 +3,6 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import cookieParser from "cookie-parser";
-import { rateLimit } from "express-rate-limit";
 import { pino } from "pino";
 import { join, dirname, resolve } from "path";
 import { fileURLToPath } from "url";
@@ -36,6 +35,7 @@ import { recipesRouter } from "./routes/recipes.js";
 import { personalisationOptionsRouter, adminPersonalisationOptionsRouter } from "./routes/personalisationOptions.js";
 import { handleWebhook } from "./controllers/stripeController.js";
 import { errorHandler } from "./middleware/errorHandler.js";
+import { globalApiRateLimit } from "./middleware/globalRateLimit.js";
 import { CLIENT_URL, PORT } from "./utils/env.js";
 import { knowledgeRouter } from "./routes/knowledge.js";
 import { modelOptionsRouter } from "./routes/modelOptions.js";
@@ -112,16 +112,7 @@ app.use(cors({
 }));
 app.use(express.json({ limit: "10mb" }));
 app.use(cookieParser());
-app.use(
-  rateLimit({
-    windowMs: 60 * 1000,
-    limit: 60,
-    standardHeaders: "draft-8",
-    legacyHeaders: false,
-    skip: (req) => req.path.startsWith("/api/auth/"),
-    message: { error: "Too many requests, please try again later." },
-  })
-);
+app.use(globalApiRateLimit);
 
 // Routes
 app.use("/api/health", healthRouter);

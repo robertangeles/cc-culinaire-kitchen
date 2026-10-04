@@ -3,6 +3,14 @@
 All notable changes to CulinAIre Kitchen are documented here.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased]
+
+### Fixed
+
+- **Global `/api` rate limit no longer locks signed-in users out.** The old per-IP 60/min limit broke the UI after about four page loads (a page load costs ~15 requests) and made everyone behind one office/NAT IP share a single budget. Signed-in users are now limited per user id at 300/min (override with `RATE_LIMIT_PER_MINUTE`). Anonymous traffic, and requests with a forged or expired token, stay on the per-IP 60/min bucket. `/api/auth/*` remains exempt. New: `packages/server/src/middleware/globalRateLimit.ts`.
+
+---
+
 ## [0.1.0] — 2026-10-01 (Phase 5)
 
 ### Changed
