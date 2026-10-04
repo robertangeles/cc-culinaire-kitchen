@@ -73,7 +73,7 @@ React App  ──────>  Express API Server  ──────>  AI Prov
 - **API keys and OAuth secrets** are encrypted with AES-256-GCM before storage in the database
 - **Email verification** is required before a user can log in
 - **Multi-factor authentication** (TOTP-based) is available for additional account security
-- **Rate limiting** prevents abuse (60 requests per minute per IP)
+- **Rate limiting** prevents abuse (per signed-in user, 300/min by default via `RATE_LIMIT_PER_MINUTE`; anonymous traffic 60/min per IP)
 - **Input validation** on every API endpoint using Zod schemas
 - **CORS and Helmet** headers protect against common web attacks
 

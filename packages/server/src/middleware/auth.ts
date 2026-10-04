@@ -23,7 +23,7 @@ declare global {
  * header (preferred for native mobile clients) or the `access_token` cookie
  * (used by the web client). Returns null if neither is present.
  */
-function extractAccessToken(req: Request): string | null {
+export function extractAccessToken(req: Request): string | null {
   const authHeader = req.headers.authorization;
   if (authHeader && authHeader.startsWith("Bearer ")) {
     const headerToken = authHeader.slice(7).trim();
