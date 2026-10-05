@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { runCleanups, waitForRateBudget, type Defer } from "./data";
 import { e2eBaseUrl } from "./safety";
 
-const STORAGE_STATE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../_auth/storageState.json");
+export const STORAGE_STATE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../_auth/storageState.json");
 
 /**
  * Every spec imports `test` from here, never from "@playwright/test" (enforced
