@@ -6,7 +6,7 @@
  * Run:   pnpm --filter @culinaire/client test:e2e -- purchase-orders.screenshots
  */
 
-import { test } from "@playwright/test";
+import { test } from "./_helpers/test";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 

@@ -1125,3 +1125,40 @@ builds all tables with CHECKs enforcing. Stop it again when done.
 - **Problem**: After extracting OrgTab from ProfilePage, using conditional `{activeTab === "kitchen" && <OrgTab />}` unmounts OrgTab on every tab switch. This discards in-progress form edits and re-fires the org fetch every time the user returns to the kitchen tab — worse than before the split.
 - **Fix**: CSS hidden wrapper: `<div className={activeTab !== "kitchen" ? "hidden" : ""}><OrgTab /></div>`. OrgTab stays mounted, state is preserved, org fetch fires once.
 - **Rule**: When extracting a component that previously lived inline in a page (and was always rendered), check if the orchestrator conditionally renders it. If it does, verify the original was also conditional. If the original was always rendered, keep the extracted component always mounted via CSS `hidden` rather than `&&` — unmounting resets all local state.
+
+## #96 — E2E: a bare `locator.count()` right after navigation races the page load and turns into a silent skip (2026-10-04)
+
+- **Problem**: compliance.spec.ts "headline count reconciles" called `headline.count()`, got 0 because the dashboard was still on its skeleton, and `test.skip`ped. The suite reported green while the test never ran. The same pattern (data-dependent `test.skip`) hid 13 tests in total.
+- **Fix**: Wait for the element with an auto-retrying assertion (`await expect(headline.first()).toBeVisible()`), seed the data a test needs through the API, and gate CI on the skip count (`scripts/checkE2eSkips.mjs`).
+- **Rule**: In Playwright, never branch on `count()` immediately after navigation. A missing prerequisite is a failure, not a skip. Only the deliberate skips named in `checkE2eSkips.mjs` are allowed.
+
+## #97 — E2E: shared-DB specs need unique, prefixed, try/finally-cleaned rows; and env must be read lazily (2026-10-04)
+
+- **Problem**: public-holidays.spec.ts used a fixed 2099-07-15 and cleaned up only on the happy path, so one failed run left an `E2E Test Holiday` row that failed the next run. Separately, `E2E_BASE_URL` was captured as a module constant before `playwright.config.ts` loaded `.env.test`, so the host guard saw the default.
+- **Fix**: Names come from `currentPrefix()` (`e2e-<runId>-`), dates are randomised, cleanup runs in `finally` through the API, and `e2eBaseUrl()` is a function. `cleanupE2eData.ts` sweeps rows the API cannot delete. This also clarifies lesson #64: the single canonical test account is for manual testing and E2E login; rows a test creates must still clean themselves up.
+- **Rule**: Any E2E row on a shared DB is named with the run prefix, removed in `finally`, and registered with the sweep script if the API cannot delete it. Read env at call time, not import time, when a config file loads dotenv after its imports.
+
+## #98 — Root `pnpm tsc` emits `.js` next to every source file and breaks vitest (2026-10-04)
+
+- **Problem**: Running `pnpm tsc` at the repo root (not a defined script, so it runs the bare compiler) wrote ~3000 `.js`/`.d.ts` files into `packages/*/src`. Vitest then resolved `LocationChip.js` before `LocationChip.tsx` and 57 client suites failed with "invalid JS syntax".
+- **Fix**: Deleted the git-ignored emitted files; typecheck with `pnpm tsc:check` (`--noEmit`, and it includes the e2e tests tsconfig).
+- **Rule**: The regression protocol's "pnpm tsc" means `pnpm tsc:check`. If vitest suddenly fails whole files with a JSX parse error, look for stale `.js` beside the `.tsx` first.
+- **Addendum (2026-10-05)**: I ran bare `pnpm tsc` again during `/ship` and it re-emitted the files. A running Vite dev server cached `/src/App.js` in its module graph, so after the files were deleted every page was blank (404) and a full E2E run failed 67/78. `touch packages/client/src/main.tsx` made Vite re-resolve without a restart. After cleaning emitted files, reload the app in a browser before any E2E run.
+
+## #99 — E2E: tests written against remembered UI fail on tab roles, sub-tabs and click targets (2026-10-04)
+
+- **Problem**: Four new refactor-flow tests failed on first run: Inventory tabs are `role="tab"` (not buttons), "Add Menu Item" sits on the "Menu Items" tab and opens in "Import from Recipe" mode, Store Locations lives on a "Locations" sub-tab, and clicking a user row's centre hits the role dropdown. The roster drag test aimed at the lane's top, which was scrolled out of the 420px scroller.
+- **Fix**: Read the component markup and the failure screenshot before writing the selector; for pointer drags, pick a point inside the visible part of the scroller using `elementFromPoint`.
+- **Rule**: Open the failure screenshot first. Prefer `getByRole` with the real role from the source, and for drag tests compute the target from the visible rect, not the element's full bounding box.
+
+## #100 — Don't hand a finding back as a caveat; act on it (2026-10-04)
+
+- **Problem**: The E2E run showed the server's 60/min per-IP limit throttling the whole suite (~22 min), and I reported it as a caveat. The same limit was breaking the real UI after ~4 page loads. The user's reply: reporting a problem and doing nothing about it is no use.
+- **Fix**: Root-caused it, shipped the per-user limiter as its own branch and PR (#141) with tests, live check and browser QA, and updated the E2E docs.
+- **Rule**: When a run exposes a defect in the product, open the fix as its own branch in the same session. Only park it with a `tasks/todo.md` entry if the user says to.
+
+## #101 — A "denied" write may have run; verify state before retrying (2026-10-04)
+
+- **Problem**: The auto-mode classifier reported a dev-DB UPDATE as denied after it had executed. Retrying blind would have double-applied it.
+- **Fix**: Read the state back (a SELECT) before deciding anything. If the read-back is also blocked, stop and ask rather than route around it.
+- **Rule**: After any "denied" write, check the actual state with a read before retrying, and never retry a denied action by another route.

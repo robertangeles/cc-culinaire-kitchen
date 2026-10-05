@@ -4,6 +4,33 @@ Append-only. Newest entry on top.
 
 ---
 
+## 2026-10-05 — Per-user global rate limit (PR #141)
+
+- `fix/ck-web/rate-limit-per-user`: the global `/api` limiter was 60/min per IP, so the UI broke after about four page loads (a page load costs ~15 requests) and one office IP shared one budget. Now signed-in users are keyed by verified JWT user id at 300/min (`RATE_LIMIT_PER_MINUTE` overrides); anonymous and forged-token traffic stay on per-IP 60/min; `/api/auth/*` exempt. Code: `middleware/globalRateLimit.ts`.
+- Verified: 7 unit tests, `pnpm tsc:check` clean, integration suite green (one remote-DB timeout in `awardRuleService.integration.test.ts` passed alone), live `RateLimit` header, browser QA, independent review. CI green, merged.
+- Open, pre-existing: anonymous keying uses raw `req.ip` (IPv6 /64 rotation), and the in-memory store is per process.
+- Supersedes the "60 req/min" note in the E2E entry below; `docs/e2e.md` updated.
+
+---
+
+## 2026-10-04 — Post-refactor E2E suite (PR1)
+
+- `fix/ck-web/e2e-functional-suite`: Playwright suite is now self-seeding and self-cleaning (run-prefixed rows, API seeding, `cleanupE2eData.ts` sweep), fails on page errors and `/api` 5xx, targets localhost only, and has a skip gate (`checkE2eSkips.mjs`).
+- New specs: `route-smoke` (every `App.tsx` route) and `refactor-flows` (MenuItemFormModal, IngredientCatalog, ProfilePage, UserDetailPanel, useInventory, useRoster). Purchasing, order-guide, roster, holiday and compliance specs no longer skip for missing data.
+- Result: 79 passed, 0 skipped, twice. A full run takes ~22 min because of the server's 60 req/min limit (follow-up in `tasks/todo.md`). See `docs/e2e.md`.
+
+---
+
+## 2026-10-04 — Bug-fix sprint: security + performance (PRs #136–#140)
+
+- PR #136: SSRF hardening in `knowledgeIngestService.ts` — IPv4-mapped IPv6 bypass patterns added.
+- PR #137: `reEmbedDocument` TOCTOU fixed (atomic CAS UPDATE); N+1 chunk INSERT replaced with single batch.
+- PR #138: Four P1 bugs in `prepTaskService.ts` — task mixing, double deduction, TOCTOU, IDOR.
+- PR #139: Knowledge ingest P1+P2s — unbounded PDF buffer capped (`readBodyCapped`), OCR page ceiling (200), prompt injection defense (XML delimiters).
+- PR #140: Prep P2s — full ingredient table scan scoped via `inArray`, N+1 `prepTask` inserts batched, N+1 `ingredientCrossUsage` inserts batched.
+
+---
+
 ## 2026-10-01 — Phase 5: Scheduler extraction (PR #131)
 
 - `refactor/ck-web/phase-5-scheduler-extraction`: Phase 5 of the 15-PR refactor plan — final phase.

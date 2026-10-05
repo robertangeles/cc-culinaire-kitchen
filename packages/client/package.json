@@ -9,11 +9,12 @@
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "test": "vitest run",
-    "lint": "eslint src/",
-    "tsc:check": "tsc -b --noEmit",
+    "lint": "eslint src/ tests/e2e/",
+    "tsc:check": "tsc -b --noEmit && tsc -p tests/e2e/tsconfig.json",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
-    "test:e2e:ui": "playwright test --ui"
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:ci": "playwright test && node scripts/checkE2eSkips.mjs"
   },
   "dependencies": {
     "@ai-sdk/react": "^1",

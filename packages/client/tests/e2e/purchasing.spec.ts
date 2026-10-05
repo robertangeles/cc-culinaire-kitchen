@@ -5,10 +5,26 @@
  *   pnpm --filter @culinaire/server dev     # port 3009
  *   pnpm --filter @culinaire/client dev     # port 5179
  *
- * Run:   pnpm --filter @culinaire/client test:e2e
+ * Self-seeding: beforeAll creates a prefixed supplier and one purchase order per
+ * status the tests need, and the worker's cleanup cancels them. Tests locate
+ * their order by its id, so other people's orders cannot affect them.
+ *
+ * Run:   pnpm --filter @culinaire/client test:e2e purchasing
  */
 
-import { test, expect, type Page } from "@playwright/test";
+import type { Page } from "@playwright/test";
+import { test, expect } from "./_helpers/test";
+import { seedPurchaseOrders } from "./_helpers/purchasingData";
+
+let seed: Awaited<ReturnType<typeof seedPurchaseOrders>>;
+
+test.beforeAll(async ({ api, defer }) => {
+  test.setTimeout(180_000);
+  seed = await seedPurchaseOrders(api, defer);
+});
+
+/** The list card for one seeded order. */
+const poRow = (page: Page, poId: string) => page.locator(`[data-po-id="${poId}"]`);
 
 async function openOrdersTab(page: Page) {
   // Purchasing is its own route since the sidebar restructure (commit 9d77f81).
@@ -17,21 +33,14 @@ async function openOrdersTab(page: Page) {
   // Scope to main: the guide panel also has "Purchase Orders" headings (strict-mode violation).
   // No waitForLoadState — networkidle never resolves (socket.io); domcontentloaded fires before React renders.
   await expect(page.getByRole("main").getByRole("heading", { name: "Purchase Orders", exact: true })).toBeVisible({ timeout: 30_000 });
-  // networkidle is not enough — the list query may still be settling.
-  // Wait until either a PO row is rendered OR the empty-state text appears.
-  await expect(async () => {
-    const rowCount = await page.locator('[class*="rounded-xl"][class*="border"]').count();
-    const empty = await page.getByText(/No purchase orders/i).count();
-    expect(rowCount > 0 || empty > 0, "PO list must finish loading").toBe(true);
-  }).toPass({ timeout: 10_000 });
 }
 
-async function expandFirstRowWithBadge(page: Page, badgeText: string) {
-  const badge = page.locator(`span:has-text("${badgeText}")`).first();
-  if ((await badge.count()) === 0) return false;
-  await badge.locator("..").locator("..").locator("..").click();
-  await page.waitForTimeout(800);
-  return true;
+/** Expands a seeded order's card and returns it. The row header is the card's first button. */
+async function expandRow(page: Page, poId: string) {
+  const row = poRow(page, poId);
+  await expect(row).toBeVisible({ timeout: 15_000 });
+  await row.getByRole("button").first().click();
+  return row;
 }
 
 test.describe("Purchasing & Receiving v1", () => {
@@ -39,76 +48,51 @@ test.describe("Purchasing & Receiving v1", () => {
     await openOrdersTab(page);
   });
 
-  // KNOWN-FLAKY: per-test login races with the LocationContext fetch and
-  // sometimes lands on the "no location" gate. Re-enable after switching to
-  // global storageState auth (see follow-up).
-  test.skip("renders PO list with status badges", async ({ page }) => {
-    // Realistic check: list shows at least one row, and at least one badge from the
-    // known status vocabulary appears. Specific statuses depend on live data.
-    const knownLabels = ["Draft", "Pending Approval", "Sent", "Receiving", "Partial", "Received", "Cancelled"];
-    const body = (await page.textContent("body")) ?? "";
-    const present = knownLabels.filter((s) => body.includes(s));
-    expect(present.length, `expected at least one known status badge to render, got: ${present.join(", ")}`).toBeGreaterThan(0);
+  test("renders PO list with status badges", async ({ page }) => {
+    const { draft, pending, sent } = seed.pos;
+    await expect(poRow(page, draft.id).getByText("Draft", { exact: true })).toBeVisible({ timeout: 15_000 });
+    await expect(poRow(page, pending.id).getByText("Pending Approval", { exact: true })).toBeVisible();
+    await expect(poRow(page, sent.id).getByText("Sent", { exact: true })).toBeVisible();
   });
 
-  // KNOWN-FLAKY: same login/LocationContext race as the badges test.
-  test.skip("first PO row expands to show detail", async ({ page }) => {
-    const poRows = page.locator('[class*="rounded-xl"][class*="border"]');
-    await expect(poRows.first()).toBeVisible();
-    await poRows.first().click();
-    await page.waitForTimeout(800);
-    // Expanded detail renders additional content below the row; body height grows.
-    // Soft check: some detail-specific affordance (Approve/Reject/Submit/Receive) should appear.
+  test("first PO row expands to show detail", async ({ page }) => {
+    const row = await expandRow(page, seed.pos.draft.id);
     // After expansion, every PO shows at least one action button regardless of status:
     // active statuses → Approve/Reject/Submit/Receive Delivery + PDF; terminal → Reorder.
-    const anyAction = page.locator(
-      'button:has-text("Approve"), button:has-text("Reject"), button:has-text("Submit"), button:has-text("Receive Delivery"), button:has-text("PDF"), button:has-text("Reorder")',
-    );
-    await expect(anyAction.first()).toBeVisible({ timeout: 3000 });
+    const anyAction = row.getByRole("button", { name: /Approve|Reject|Submit|Receive Delivery|PDF|Reorder/ });
+    await expect(anyAction.first()).toBeVisible({ timeout: 10_000 });
   });
 
   test("Pending Approval PO exposes Approve and Reject buttons", async ({ page }) => {
-    const found = await expandFirstRowWithBadge(page, "Pending Approval");
-    test.skip(!found, "No Pending Approval PO in current dataset");
-    await expect(page.locator('button:has-text("Approve")').first()).toBeVisible();
-    await expect(page.locator('button:has-text("Reject")').first()).toBeVisible();
+    const row = await expandRow(page, seed.pos.pending.id);
+    await expect(row.getByRole("button", { name: "Approve" })).toBeVisible({ timeout: 10_000 });
+    await expect(row.getByRole("button", { name: "Reject" })).toBeVisible();
   });
 
-  // KNOWN-FLAKY: same login/LocationContext race; passes inconsistently even
-  // when "Receive Delivery flow" below (which does the same setup) succeeds.
-  test.skip("Sent PO exposes Receive Delivery button", async ({ page }) => {
-    const found = await expandFirstRowWithBadge(page, "Sent");
-    test.skip(!found, "No Sent PO in current dataset");
-    await expect(page.locator('button:has-text("Receive Delivery")').first()).toBeVisible();
+  test("Sent PO exposes Receive Delivery button", async ({ page }) => {
+    const row = await expandRow(page, seed.pos.sent.id);
+    await expect(row.getByRole("button", { name: "Receive Delivery" })).toBeVisible({ timeout: 10_000 });
   });
 
   test("Draft PO exposes Submit button", async ({ page }) => {
-    const found = await expandFirstRowWithBadge(page, "Draft");
-    test.skip(!found, "No Draft PO in current dataset");
-    await expect(page.locator('button:has-text("Submit")').first()).toBeVisible();
+    const row = await expandRow(page, seed.pos.draft.id);
+    await expect(row.getByRole("button", { name: "Submit" })).toBeVisible({ timeout: 10_000 });
   });
 
   test("Receive Delivery flow opens receiving screen with Confirm action", async ({ page }) => {
-    const found = await expandFirstRowWithBadge(page, "Sent");
-    test.skip(!found, "No Sent PO in current dataset");
+    const row = await expandRow(page, seed.pos.sentToReceive.id);
+    await row.getByRole("button", { name: "Receive Delivery" }).click({ timeout: 10_000 });
 
-    const receiveBtn = page.locator('button:has-text("Receive Delivery")').first();
-    await expect(receiveBtn).toBeVisible();
-    await receiveBtn.click();
-    await page.waitForTimeout(1500);
-
-    await expect(page.locator('button:has-text("Confirm Receipt")').first()).toBeVisible();
+    await expect(page.getByRole("button", { name: /Confirm Receipt/ }).first()).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText(/Receiving:/i).first()).toBeVisible();
   });
 
   test('"Sent" status filter narrows the list', async ({ page }) => {
-    const sentFilter = page.locator('button:has-text("Sent")').first();
-    await expect(sentFilter).toBeVisible();
-    await sentFilter.click();
-    await page.waitForTimeout(500);
-    // After filter: every visible status chip should read "Sent" (or the row is hidden).
-    // Sanity check: the word "Draft" should not appear as a badge in the filtered list.
-    const draftBadges = page.locator('span:has-text("Draft")');
-    expect(await draftBadges.count()).toBe(0);
+    const { draft, pending, sent } = seed.pos;
+    // Exact name: the order cards' buttons have long names and cannot match.
+    await page.getByRole("button", { name: "Sent", exact: true }).click();
+    await expect(poRow(page, sent.id)).toBeVisible({ timeout: 15_000 });
+    await expect(poRow(page, draft.id)).toHaveCount(0);
+    await expect(poRow(page, pending.id)).toHaveCount(0);
   });
 });

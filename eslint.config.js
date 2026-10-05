@@ -17,6 +17,10 @@ export default tseslint.config(
       // Stale build artifacts in src/ dirs (TS-only project)
       "packages/*/src/**/*.js",
       "packages/*/src/**/*.d.ts",
+      // Local tsc output next to the E2E sources (gitignored)
+      "packages/client/tests/e2e/**/*.js",
+      "packages/client/tests/e2e/**/*.d.ts",
+      "packages/client/tests/e2e/_artifacts/**",
     ],
   },
 
@@ -94,6 +98,37 @@ export default tseslint.config(
   // Shared: no extra globals (pure TS)
   {
     files: ["packages/shared/src/**/*.ts"],
+  },
+
+  // E2E: Node globals; specs must take `test` from the shared export so the
+  // page-error / 5xx guard cannot be bypassed.
+  {
+    files: ["packages/client/tests/e2e/**/*.ts"],
+    languageOptions: {
+      globals: globals.node,
+    },
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "@playwright/test",
+              importNames: ["test"],
+              message:
+                'Import { test } from "./_helpers/test" so the page-error and 5xx guard applies.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: [
+      "packages/client/tests/e2e/auth.setup.ts",
+      "packages/client/tests/e2e/_helpers/test.ts",
+    ],
+    rules: { "no-restricted-imports": "off" },
   },
 
   // Test files: relax no-explicit-any (mocks and vi.fn() stubs are legitimately any)

@@ -4,7 +4,7 @@
  * storageState (test.use below overrides it per-file), since "/" must work
  * for a logged-out visitor.
  */
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./_helpers/test";
 import { STORAGE_STATE } from "./auth.setup.js";
 
 test.use({ storageState: { cookies: [], origins: [] } });

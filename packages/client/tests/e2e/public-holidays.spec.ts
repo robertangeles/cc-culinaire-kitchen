@@ -15,11 +15,15 @@
  * is covered by PublicHolidaysTab.test.tsx and is not re-tested here.
  *
  * Uses NT/SA and year 2099 — a jurisdiction+year combination that will
- * never collide with real roster-publish data — and deletes the row it
- * creates at the end, so the shared dev DB stays clean.
+ * never collide with real roster-publish data. The holiday name carries the
+ * run prefix and the row is removed in a finally block (via the API, so a
+ * UI failure cannot leave an orphan behind).
  */
 
-import { test, expect, type Page } from "@playwright/test";
+import type { Page } from "@playwright/test";
+import { test, expect } from "./_helpers/test";
+import { apiCall } from "./_helpers/data";
+import { currentPrefix } from "./_helpers/safety";
 
 const TEST_YEAR = "2099";
 
@@ -50,6 +54,7 @@ test.describe("Public Holidays — jurisdiction+year filter", () => {
 
   test("CRITICAL: saving a holiday for a different jurisdiction than the active filter switches the filter to match, and the new holiday is visible", async ({
     page,
+    api,
   }) => {
     await openPublicHolidays(page);
 
@@ -64,21 +69,32 @@ test.describe("Public Holidays — jurisdiction+year filter", () => {
     }
     await addButton.click();
 
-    const holidayName = `E2E Test Holiday ${Date.now()}`;
-    await page.getByLabel("Holiday jurisdiction", { exact: true }).selectOption("SA");
-    await page.getByLabel("Date", { exact: true }).fill(`${TEST_YEAR}-07-15`);
-    await page.getByLabel("Holiday name", { exact: true }).fill(holidayName);
-    await page.getByRole("button", { name: "Save", exact: true }).click();
+    const holidayName = `${currentPrefix()}holiday`;
+    const holidayDate = `${TEST_YEAR}-${String(1 + Math.floor(Math.random() * 12)).padStart(2, "0")}-${String(1 + Math.floor(Math.random() * 28)).padStart(2, "0")}`;
+    try {
+      await page.getByLabel("Holiday jurisdiction", { exact: true }).selectOption("SA");
+      await page.getByLabel("Date", { exact: true }).fill(holidayDate);
+      await page.getByLabel("Holiday name", { exact: true }).fill(holidayName);
+      await page.getByRole("button", { name: "Save", exact: true }).click();
 
-    // The active filter must follow the save — SA/2099, not NT.
-    await expect(page.getByRole("tab", { name: "SA", exact: true })).toHaveAttribute("aria-selected", "true", {
-      timeout: 10_000,
-    });
-    await expect(page.getByLabel("Year", { exact: true })).toHaveValue(TEST_YEAR);
-    await expect(page.getByText(holidayName, { exact: true })).toBeVisible();
+      // The active filter must follow the save — SA/2099, not NT.
+      await expect(page.getByRole("tab", { name: "SA", exact: true })).toHaveAttribute("aria-selected", "true", {
+        timeout: 10_000,
+      });
+      await expect(page.getByLabel("Year", { exact: true })).toHaveValue(TEST_YEAR);
+      await expect(page.getByText(holidayName, { exact: true })).toBeVisible();
 
-    // Clean up — this hits the shared dev DB, so leave nothing behind.
-    await page.getByRole("button", { name: `Remove ${holidayName}`, exact: true }).click();
-    await expect(page.getByText(holidayName, { exact: true })).toHaveCount(0);
+      await page.getByRole("button", { name: `Remove ${holidayName}`, exact: true }).click();
+      await expect(page.getByText(holidayName, { exact: true })).toHaveCount(0);
+    } finally {
+      const rows = await apiCall<Array<{ id: string; holidayName: string }>>(
+        api,
+        "GET",
+        `/api/roster/public-holidays?jurisdiction=SA&year=${TEST_YEAR}`,
+      );
+      for (const row of rows.filter((r) => r.holidayName === holidayName)) {
+        await apiCall(api, "DELETE", `/api/roster/public-holidays/${row.id}`);
+      }
+    }
   });
 });
