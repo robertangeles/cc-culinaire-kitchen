@@ -288,15 +288,18 @@ jobs:
           tail -n 40 server.log client.log
           exit 1
 
+      # --max-failures stops a broken run early with a full error report; retries
+      # are off so one genuinely failing test does not double the run time.
       - name: Run Playwright suite and skip gate
-        run: pnpm --filter @culinaire/client test:e2e:ci
+        working-directory: packages/client
+        run: pnpm exec playwright test --retries=0 --max-failures=10 && node scripts/checkE2eSkips.mjs
 
       - name: Show server log on failure
-        if: failure()
+        if: always()
         run: tail -n 100 server.log
 
       - name: Upload Playwright report
-        if: failure()
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: playwright-artifacts
