@@ -4,6 +4,14 @@ Append-only. Newest entry on top.
 
 ---
 
+## 2026-10-05 — E2E in CI (PR3)
+
+- `fix/ck-web/e2e-ci-job`: new `e2e` job in `ci.yml` runs the Playwright suite on every PR against a throwaway pgvector Postgres. New `seedE2eCiData.ts` seeds the MFA-enabled E2E user, one org and one HQ location through the app's own services (localhost-only guard, unit tested). Credentials are throwaway literals in the workflow env (fork PRs get no secrets).
+- Scope cut from the plan: the S5 supplier/ingredient seed is not needed because the specs self-seed those through the API.
+- Not verifiable locally (no Docker or local Postgres here): the first proof is the job's own run on the PR. Whether it is a required check is a branch-protection setting.
+
+---
+
 ## 2026-10-05 — Logged-out boundary spec (PR2)
 
 - `fix/ck-web/e2e-logged-out-boundary`: new `auth-boundary.spec.ts` runs with an empty session. Every `gated` route must redirect to `/chat/new` or show the access-denied card; 29 protected API endpoints (GET/POST/PUT/PATCH/DELETE) must return 401; a bad bearer token must return 401.

@@ -92,3 +92,7 @@ CLAUDE.md also describes Husky + lint-staged pre-commit hooks. Those don't exist
 ## Related
 - [[technical-architecture]] — pnpm + Turborepo + per-package build commands
 - [[culinaire-kitchen-platform]]
+
+## 2026-10-05 — Browser E2E job
+
+A third job, `e2e`, runs the Playwright suite (`docs/e2e.md`) on a throwaway Postgres with a seeded MFA user. It catches what unit and integration tests cannot: a refactor that compiles and passes tests but renders a blank page or opens a gated route. It is separate from `ci` so the fast pipeline stays fast. Whether it blocks merging is a branch-protection setting.

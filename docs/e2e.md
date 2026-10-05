@@ -43,3 +43,7 @@ It deletes only `e2e-*` rows older than 60 minutes, and refuses to run in a prod
 `_helpers/routes.ts` lists every page route in `App.tsx`, classed `gated`, `guest-open` or `public`. `route-smoke.spec.ts` renders each as the E2E user. When you add a route to `App.tsx`, add it there.
 
 `auth-boundary.spec.ts` runs with an empty session: every `gated` route must redirect to `/chat/new` or show the "This tool isn't on your plan" card, and a table of protected API endpoints must return 401. Add new protected endpoints to its `PROTECTED_API` list. Anonymous traffic is limited to 60 requests a minute per IP, so that spec waits out a 429 rather than failing on it.
+
+## CI
+
+The `Browser E2E (Playwright)` job in `.github/workflows/ci.yml` runs this suite on every PR against a throwaway pgvector Postgres: `db:push`, `db:seed`, then `src/scripts/seedE2eCiData.ts` (the MFA-enabled E2E user with the Administrator, Subscriber and Operations Admin roles, one organisation, one HQ location), then the API (tsx) and the Vite dev server (it proxies `/api`), then `test:e2e:ci`. The credentials are throwaway literals in the workflow env, because fork PRs get no secrets. The seed refuses any non-localhost database. On failure the traces, screenshots and server log are uploaded. Whether the job blocks merging is a branch-protection setting (required status checks), not part of the workflow.
