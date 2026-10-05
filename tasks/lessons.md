@@ -1162,3 +1162,9 @@ builds all tables with CHECKs enforcing. Stop it again when done.
 - **Problem**: The auto-mode classifier reported a dev-DB UPDATE as denied after it had executed. Retrying blind would have double-applied it.
 - **Fix**: Read the state back (a SELECT) before deciding anything. If the read-back is also blocked, stop and ask rather than route around it.
 - **Rule**: After any "denied" write, check the actual state with a read before retrying, and never retry a denied action by another route.
+
+## #102 — A client route guard keyed on "is guest" misses the visitor who is neither (2026-10-05)
+
+- **Problem**: `AuthenticatedOnly` redirected only `isGuest && !isAuthenticated`. When guest session creation failed (429 or guest cap) both flags were false, and `/settings`, `/profile` and `/my-shelf` rendered the admin shell to a logged-out visitor. Found by the new logged-out E2E spec, not by any logged-in test.
+- **Fix**: Redirect on `!isAuthenticated`.
+- **Rule**: Guard on the positive condition you require (authenticated), never on the negative one you expect (guest). Every gated route needs a logged-out test, and anonymous rate-limit failures are a state to test, not noise.

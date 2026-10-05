@@ -4,6 +4,14 @@ Append-only. Newest entry on top.
 
 ---
 
+## 2026-10-05 — Logged-out boundary spec (PR2)
+
+- `fix/ck-web/e2e-logged-out-boundary`: new `auth-boundary.spec.ts` runs with an empty session. Every `gated` route must redirect to `/chat/new` or show the access-denied card; 29 protected API endpoints (GET/POST/PUT/PATCH/DELETE) must return 401; a bad bearer token must return 401.
+- Found a real client guard hole: `AuthenticatedOnly` keyed on `isGuest`, so when `POST /api/guest/session` failed (429) the visitor rendered `/settings`, `/profile` and `/my-shelf`. Server data stayed 401. Fixed in `App.tsx` (`!isAuthenticated`).
+- Result: 92 passed, 0 skipped, skip gate ok (10.8 min).
+
+---
+
 ## 2026-10-05 — Per-user global rate limit (PR #141)
 
 - `fix/ck-web/rate-limit-per-user`: the global `/api` limiter was 60/min per IP, so the UI broke after about four page loads (a page load costs ~15 requests) and one office IP shared one budget. Now signed-in users are keyed by verified JWT user id at 300/min (`RATE_LIMIT_PER_MINUTE` overrides); anonymous and forged-token traffic stay on per-IP 60/min; `/api/auth/*` exempt. Code: `middleware/globalRateLimit.ts`.

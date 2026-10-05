@@ -45,7 +45,7 @@ export const test = base.extend<{ failOnBackgroundErrors: void; rateBudget: void
     // Cleanup retries through rate-limit windows (see apiCall), which can take a minute or more.
     { scope: "worker", timeout: 180_000 },
   ],
-  /** The server allows 60 /api requests a minute per IP; start each test with enough left that its own page loads are not answered 429. */
+  /** The server allows 300 /api requests a minute per signed-in user; start each test with enough left that its own page loads are not answered 429. */
   rateBudget: [
     async ({ api }, use) => {
       await waitForRateBudget(api, RATE_BUDGET_PER_TEST);
