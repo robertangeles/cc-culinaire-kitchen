@@ -7,6 +7,7 @@
  */
 
 import { test } from "./_helpers/test";
+import { seedPurchaseOrders } from "./_helpers/purchasingData";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -23,6 +24,12 @@ async function gotoPoTab(page: import("@playwright/test").Page) {
 test.describe.configure({ mode: "serial" });
 
 test.describe("Purchase Orders — reference snapshots", () => {
+  // The expanded-detail shot needs a PO on the page; a fresh database has none.
+  test.beforeAll(async ({ api, defer }) => {
+    test.setTimeout(180_000);
+    await seedPurchaseOrders(api, defer);
+  });
+
   test.beforeEach(async ({ page }) => {
     await gotoPoTab(page);
   });

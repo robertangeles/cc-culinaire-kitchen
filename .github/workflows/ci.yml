@@ -197,3 +197,114 @@ jobs:
 
       - name: Run daily-run-claim integration tests
         run: pnpm --filter @culinaire/server exec vitest run src/utils/dailyRunClaim.integration.test.ts
+
+  # Browser E2E (Playwright) against a real app on a throwaway Postgres: pushes
+  # the schema, seeds RBAC plus one MFA-enabled E2E user/org/location, starts the
+  # API and the Vite dev server (it proxies /api), then runs the full suite and
+  # the skip gate. Specs create their own suppliers, ingredients and orders.
+  # Login goes through the API, so Cloudflare Turnstile is never involved.
+  e2e:
+    name: Browser E2E (Playwright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: culinaire_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 15
+
+    env:
+      APP_ENV: dev
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/culinaire_e2e
+      DEV_DATABASE_URL: postgresql://ci:ci@localhost:5432/culinaire_e2e
+      CLIENT_URL: http://localhost:5179
+      # Throwaway values for this ephemeral, destroyed-after-the-run database
+      # only, same convention as the integration job above. Fork PRs receive no
+      # GitHub secrets, so none of these can be secrets.
+      PII_ENCRYPTION_KEY: b5f9b9838d8ed457094872d51a841a91cf1d2be1a0dc5745fbf5d456cfa9fad7
+      PII_HMAC_KEY: 240e45c0ca546021838cbd7ef3f6db89ae7db670a08bf2e74cdec5019e57657a
+      CREDENTIALS_ENCRYPTION_KEY: c0dd5eaba08873f966f913dae031a0c95d492c58196e49097e18173fd58eaae4
+      E2E_USER_EMAIL: e2e-ci@culinaire.test
+      E2E_USER_PASSWORD: E2e-Ci-Throwaway-Pass-1!
+      E2E_USER_TOTP_SECRET: JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.31.0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared package
+        run: pnpm --filter @culinaire/shared build
+
+      - name: Enable pgvector extension
+        run: PGPASSWORD=ci psql -h localhost -U ci -d culinaire_e2e -c "CREATE EXTENSION IF NOT EXISTS vector"
+
+      - name: Push schema
+        run: pnpm --filter @culinaire/server db:push
+
+      - name: Seed roles and permissions
+        run: pnpm --filter @culinaire/server db:seed
+
+      - name: Seed E2E user, organisation and location
+        run: pnpm --filter @culinaire/server exec tsx src/scripts/seedE2eCiData.ts
+
+      - name: Install Chromium
+        run: pnpm --filter @culinaire/client exec playwright install --with-deps chromium
+
+      - name: Start API and web server
+        run: |
+          pnpm --filter @culinaire/server exec tsx src/index.ts > server.log 2>&1 &
+          pnpm --filter @culinaire/client dev > client.log 2>&1 &
+          for i in $(seq 1 60); do
+            curl -sf http://localhost:3009/api/health > /dev/null && curl -sf http://localhost:5179/ > /dev/null && exit 0
+            sleep 2
+          done
+          echo "API or web server did not come up"
+          tail -n 40 server.log client.log
+          exit 1
+
+      # --max-failures stops a broken run early with a full error report; retries
+      # are off so one genuinely failing test does not double the run time.
+      - name: Run Playwright suite and skip gate
+        working-directory: packages/client
+        run: pnpm exec playwright test --retries=0 --max-failures=10 && node scripts/checkE2eSkips.mjs
+
+      - name: Show server log on failure
+        if: always()
+        run: tail -n 100 server.log
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-artifacts
+          path: |
+            packages/client/playwright-report
+            packages/client/tests/e2e/_artifacts
+            packages/client/tests/e2e/_reports
+          retention-days: 7

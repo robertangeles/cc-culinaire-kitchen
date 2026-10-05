@@ -1168,3 +1168,9 @@ builds all tables with CHECKs enforcing. Stop it again when done.
 - **Problem**: `AuthenticatedOnly` redirected only `isGuest && !isAuthenticated`. When guest session creation failed (429 or guest cap) both flags were false, and `/settings`, `/profile` and `/my-shelf` rendered the admin shell to a logged-out visitor. Found by the new logged-out E2E spec, not by any logged-in test.
 - **Fix**: Redirect on `!isAuthenticated`.
 - **Rule**: Guard on the positive condition you require (authenticated), never on the negative one you expect (guest). Every gated route needs a logged-out test, and anonymous rate-limit failures are a state to test, not noise.
+
+## #103 — A suite green on a long-lived dev DB fails on an empty one; CI is the first empty database (2026-10-05)
+
+- **Problem**: The first CI run of the E2E suite failed 67 of 91 tests. Causes: the onboarding wizard covered every page for a new user, roster/workforce feature flags ship off in `db:seed` (routes 404), the holiday heading locator matched the empty-state heading too, the PO screenshot spec assumed an existing PO, and `landing.spec.ts` imported `auth.setup.ts`, which locally resolved to a stale compiled `.js`.
+- **Fix**: The CI seed marks onboarding done and enables the flags; specs seed their own data and use exact locators; stale compiled files in `tests/e2e` were deleted.
+- **Rule**: A spec that passes against the dev DB proves nothing about a fresh one. Make specs self-seed, use `exact: true` on heading locators, and never keep emitted `.js` beside test sources (it masks CI-only failures).
