@@ -29,7 +29,7 @@ const TEST_YEAR = "2099";
 
 async function openPublicHolidays(page: Page) {
   await page.goto("/settings?tab=publicHolidays");
-  await page.getByRole("heading", { name: "Public Holidays" }).waitFor({ state: "visible", timeout: 20_000 });
+  await page.getByRole("heading", { name: "Public Holidays", exact: true }).waitFor({ state: "visible", timeout: 20_000 });
 }
 
 test.describe("Public Holidays — jurisdiction+year filter", () => {
