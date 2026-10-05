@@ -1143,6 +1143,7 @@ builds all tables with CHECKs enforcing. Stop it again when done.
 - **Problem**: Running `pnpm tsc` at the repo root (not a defined script, so it runs the bare compiler) wrote ~3000 `.js`/`.d.ts` files into `packages/*/src`. Vitest then resolved `LocationChip.js` before `LocationChip.tsx` and 57 client suites failed with "invalid JS syntax".
 - **Fix**: Deleted the git-ignored emitted files; typecheck with `pnpm tsc:check` (`--noEmit`, and it includes the e2e tests tsconfig).
 - **Rule**: The regression protocol's "pnpm tsc" means `pnpm tsc:check`. If vitest suddenly fails whole files with a JSX parse error, look for stale `.js` beside the `.tsx` first.
+- **Addendum (2026-10-05)**: I ran bare `pnpm tsc` again during `/ship` and it re-emitted the files. A running Vite dev server cached `/src/App.js` in its module graph, so after the files were deleted every page was blank (404) and a full E2E run failed 67/78. `touch packages/client/src/main.tsx` made Vite re-resolve without a restart. After cleaning emitted files, reload the app in a browser before any E2E run.
 
 ## #99 — E2E: tests written against remembered UI fail on tab roles, sub-tabs and click targets (2026-10-04)
 
