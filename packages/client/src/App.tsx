@@ -73,10 +73,15 @@ function NewChatPage() {
   return <ChatPage key={chatKey} />;
 }
 
-/** Redirects guest users to chat — used for routes that require full auth. */
+/**
+ * Redirects anyone without a real session to chat — used for routes that
+ * require full auth. Keyed on `!isAuthenticated`, not `isGuest`: when the guest
+ * session cannot start (rate limit, guest cap) the visitor is neither, and must
+ * still be turned away.
+ */
 function AuthenticatedOnly({ children }: { children: React.ReactNode }) {
-  const { isGuest, isAuthenticated } = useAuth();
-  if (isGuest && !isAuthenticated) {
+  const { isAuthenticated } = useAuth();
+  if (!isAuthenticated) {
     return <Navigate to="/chat/new" replace />;
   }
   return <>{children}</>;
