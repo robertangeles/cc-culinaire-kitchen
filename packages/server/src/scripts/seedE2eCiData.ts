@@ -3,8 +3,10 @@
  *
  * Seeds the minimum a Playwright run needs into an EMPTY throwaway database (the
  * CI `e2e` job): the MFA-enabled E2E user (Administrator + Subscriber +
- * Operations Admin, like the dev account), one organisation and one HQ location
- * the user is assigned to. Specs create every other row (suppliers, ingredients,
+ * Operations Admin, like the dev account) with onboarding marked done (the
+ * wizard would otherwise cover every page), one organisation and one HQ location
+ * the user is assigned to, and the roster and workforce feature flags switched
+ * on (db:seed ships them off, so their routes would 404). Specs create every other row (suppliers, ingredients,
  * pars, orders) through the API themselves.
  *
  * Refuses to run against anything but a localhost database, so it can never
@@ -24,7 +26,7 @@ applyEnvPrefix();
 
 import { eq } from "drizzle-orm";
 import { db } from "../db/index.js";
-import { role, user, userRole } from "../db/schema.js";
+import { kitchenProfile, role, siteSetting, user, userRole } from "../db/schema.js";
 import { registerUser } from "../services/authService.js";
 import { createOrganisation } from "../services/organisationService.js";
 import { assignStaffToLocation, createStoreLocation } from "../services/storeLocationService.js";
@@ -54,6 +56,15 @@ export async function seedE2eCiData(email: string, password: string, totpSecret:
   const [admin] = await db.select({ roleId: role.roleId }).from(role).where(eq(role.roleName, "Administrator"));
   if (!admin) throw new Error("Administrator role not found. Run db:seed first.");
   await db.insert(userRole).values({ userId, roleId: admin.roleId });
+
+  await db.insert(kitchenProfile).values({ userId, onboardingDoneInd: true });
+
+  for (const settingKey of ["roster_enabled", "workforce_enabled"]) {
+    await db
+      .insert(siteSetting)
+      .values({ settingKey, settingValue: "true" })
+      .onConflictDoUpdate({ target: siteSetting.settingKey, set: { settingValue: "true", updatedDttm: new Date() } });
+  }
 
   // Also grants Operations Admin and adds the user as an organisation admin.
   const org = await createOrganisation(userId, { name: "E2E Kitchen" });
