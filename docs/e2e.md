@@ -47,3 +47,16 @@ It deletes only `e2e-*` rows older than 60 minutes, and refuses to run in a prod
 ## CI
 
 The `Browser E2E (Playwright)` job in `.github/workflows/ci.yml` runs this suite on every PR against a throwaway pgvector Postgres: `db:push`, `db:seed`, then `src/scripts/seedE2eCiData.ts` (the MFA-enabled E2E user with the Administrator, Subscriber and Operations Admin roles and onboarding marked done, one organisation, one HQ location, and the `roster_enabled` and `workforce_enabled` flags switched on, because `db:seed` ships them off and their routes 404), then the API (tsx) and the Vite dev server (it proxies `/api`), then `test:e2e:ci`. The credentials are throwaway literals in the workflow env, because fork PRs get no secrets. The seed refuses any non-localhost database. The run stops after 10 failures and does not retry, so a broken run reports fast. On failure the traces, screenshots and server log are uploaded. Whether the job blocks merging is a branch-protection setting (required status checks), not part of the workflow.
+
+## Visual snapshots
+
+`components.visual.spec.ts` compares screenshots of the five components split in the 2026 refactor (ProfilePage, StoreLocationsSection, UserDetailPanel, MenuItemFormModal, IngredientCatalog) against baselines in `tests/e2e/visual-baselines/`, with a 1% pixel tolerance. It is its own Playwright project (`visual`), declared before `chromium` so it runs first on the seeded database. It runs only in CI, or locally with `E2E_VISUAL=1`: the baselines are drawn by the CI runner, and another machine renders text slightly differently, so a local run will show diffs that are not real.
+
+To create or refresh a baseline:
+
+1. Push the change. The CI `Browser E2E` job fails on the missing or changed screenshot and uploads `playwright-artifacts`.
+2. `gh run download <run-id> -n playwright-artifacts`, then copy each `<name>-actual.png` from the failing test's folder under `tests/e2e/_artifacts/` to `tests/e2e/visual-baselines/components.visual.spec.ts/<name>.png`.
+3. Open the images and check they show the right screen, not a spinner or an error, then commit them.
+
+Dynamic content (dates, random keys) must be masked in the spec with `mask: [...]`, or the baseline will fail on the next run. The old `purchase-orders.screenshots.spec.ts` is a separate helper that writes reference PNGs to the gitignored `__snapshots__/`; it asserts nothing.
+

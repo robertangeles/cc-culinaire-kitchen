@@ -20,6 +20,11 @@ const baseURL = e2eBaseUrl();
 assertLocalTarget(baseURL);
 
 const isCI = !!process.env.CI;
+// Screenshot baselines are drawn by the CI runner (Linux, bundled Chromium); a
+// different machine renders text differently, so the visual project only runs
+// in CI or when E2E_VISUAL=1 is set deliberately.
+const runVisual = isCI || process.env.E2E_VISUAL === "1";
+const authState = "./tests/e2e/_auth/storageState.json";
 
 export default defineConfig({
   testDir: "./tests/e2e",
@@ -40,6 +45,7 @@ export default defineConfig({
     ["html", { open: "never" }],
     ["json", { outputFile: "./tests/e2e/_reports/results.json" }],
   ],
+  snapshotPathTemplate: "{testDir}/visual-baselines/{testFilePath}/{arg}{ext}",
   expect: { toHaveScreenshot: { maxDiffPixelRatio: 0.01 } },
   use: {
     baseURL,
@@ -52,12 +58,22 @@ export default defineConfig({
     // TOTP is single-use per 30-second window, so a per-test login is
     // guaranteed to hit replay rejections when tests run back to back.
     { name: "setup", testMatch: /auth\.setup\.ts/ },
+    // Declared before "chromium" so it runs first, on the database as seeded,
+    // before other specs add rows that would change what the pages show.
+    ...(runVisual
+      ? [
+          {
+            name: "visual",
+            testMatch: /.*\.visual\.spec\.ts/,
+            use: { ...devices["Desktop Chrome"], storageState: authState },
+            dependencies: ["setup"],
+          },
+        ]
+      : []),
     {
       name: "chromium",
-      use: {
-        ...devices["Desktop Chrome"],
-        storageState: "./tests/e2e/_auth/storageState.json",
-      },
+      testIgnore: /.*\.visual\.spec\.ts/,
+      use: { ...devices["Desktop Chrome"], storageState: authState },
       dependencies: ["setup"],
     },
   ],
