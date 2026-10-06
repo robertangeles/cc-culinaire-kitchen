@@ -4,6 +4,13 @@ Append-only. Newest entry on top.
 
 ---
 
+## 2026-10-06 — Visual snapshots (PR4)
+
+- `fix/ck-web/e2e-visual-snapshots`: `components.visual.spec.ts` screenshot-compares the 5 refactored components (ProfilePage, StoreLocationsSection, UserDetailPanel, MenuItemFormModal, IngredientCatalog) in a separate `visual` Playwright project that runs first on the seeded DB, in CI or with `E2E_VISUAL=1`. Baselines in `tests/e2e/visual-baselines/` are drawn by the CI runner.
+- Deviation from the plan (S2): the `__snapshots__/` gitignore line stays. That directory holds the PO helper's untracked output; baselines live in a new tracked directory so the helper does not dirty the tree.
+
+---
+
 ## 2026-10-05 — E2E in CI (PR3)
 
 - `fix/ck-web/e2e-ci-job`: new `e2e` job in `ci.yml` runs the Playwright suite on every PR against a throwaway pgvector Postgres. New `seedE2eCiData.ts` seeds the MFA-enabled E2E user, one org and one HQ location through the app's own services (localhost-only guard, unit tested). Credentials are throwaway literals in the workflow env (fork PRs get no secrets).
