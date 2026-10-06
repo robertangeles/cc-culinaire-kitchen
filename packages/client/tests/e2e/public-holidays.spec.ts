@@ -47,8 +47,14 @@ test.describe("Public Holidays — jurisdiction+year filter", () => {
   test("switching the jurisdiction pill filters the list without a page reload", async ({ page }) => {
     await openPublicHolidays(page);
 
-    await page.getByRole("tab", { name: "NT", exact: true }).click();
-    await expect(page.getByRole("tab", { name: "NT", exact: true })).toHaveAttribute("aria-selected", "true");
+    // React StrictMode runs the tab's load() twice in the dev server, and the
+    // second response resets the jurisdiction to the default. Retry the click
+    // until the selection sticks instead of racing that reload.
+    const ntTab = page.getByRole("tab", { name: "NT", exact: true });
+    await expect(async () => {
+      await ntTab.click();
+      await expect(ntTab).toHaveAttribute("aria-selected", "true", { timeout: 1_000 });
+    }).toPass({ timeout: 15_000 });
     await expect(page.getByRole("tab", { name: "NSW", exact: true })).toHaveAttribute("aria-selected", "false");
   });
 

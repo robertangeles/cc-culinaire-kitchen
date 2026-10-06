@@ -20,7 +20,7 @@ async function settled(page: Page) {
 const shot = { animations: "disabled", caret: "hide" } as const;
 
 test.describe("Refactored components: visual", () => {
-  test("ProfilePage: Profile tab", async ({ page }) => {
+  test("ProfilePage: default tab", async ({ page }) => {
     await page.goto("/profile");
     await expect(page.getByRole("heading", { name: "Profile", level: 1 })).toBeVisible({ timeout: 20_000 });
     await settled(page);
@@ -65,6 +65,9 @@ test.describe("Refactored components: visual", () => {
     await page.goto("/inventory");
     await page.getByRole("tab", { name: "Catalog", exact: true }).click({ timeout: 20_000 });
     await expect(page.getByPlaceholder("Search items...")).toBeVisible({ timeout: 15_000 });
+    // Move off the tab so its hover tooltip is not in the shot.
+    await page.mouse.move(1, 1);
+    await expect(page.getByText("Master catalogue", { exact: false })).toHaveCount(0);
     await settled(page);
     await expect(page).toHaveScreenshot("ingredient-catalog.png", shot);
   });
