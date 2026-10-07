@@ -21,7 +21,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
-import { Camera, Eye, ImageOff, Loader2, Pencil, Trash2, X } from "lucide-react";
+import { Camera, Eye, ImageOff, Loader2, Pencil, RotateCcw, Trash2, X } from "lucide-react";
 import { formatAuDate, NUDGE_ELIGIBLE_AFTER_HOURS } from "@culinaire/shared";
 import { EmptyState } from "../ui/EmptyState.js";
 import { StatusPill, type StatusPillVariant } from "../ui/StatusPill.js";
@@ -111,7 +111,22 @@ export function MyDocumentsList({ onUploadClick }: { onUploadClick?: () => void 
   }
 
   if (error) {
-    return <p className="p-4 text-sm text-red-400">{error}</p>;
+    return (
+      <div role="alert" className="p-4 text-center">
+        <p className="text-sm text-red-400">{error}</p>
+        <button
+          type="button"
+          onClick={() => {
+            setError(null);
+            void fetchDocuments();
+          }}
+          className="mt-4 inline-flex min-h-11 items-center gap-1.5 rounded-lg bg-gold px-4 py-2 text-sm font-semibold text-dark transition-all duration-200 hover:-translate-y-0.5 hover:bg-gold-hover"
+        >
+          <RotateCcw className="size-4" aria-hidden="true" />
+          Retry
+        </button>
+      </div>
+    );
   }
 
   if (documents === null) {

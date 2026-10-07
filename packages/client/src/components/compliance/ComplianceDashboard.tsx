@@ -56,6 +56,8 @@ const INITIAL_STATE: LoadedState = {
   pendingVerification: 0,
 };
 
+const API = import.meta.env.VITE_API_URL ?? "";
+
 async function fetchJson<T>(url: string): Promise<T> {
   const res = await fetch(url, { credentials: "include" });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -104,9 +106,9 @@ export function ComplianceDashboard() {
     setState((s) => ({ ...s, status: "loading" }));
     try {
       const [dashboard, stats, staff] = await Promise.all([
-        fetchJson<DashboardTotals>("/api/compliance/dashboard"),
-        fetchJson<StatsTotals>("/api/compliance/stats"),
-        fetchJson<StaffComplianceRow[]>("/api/compliance/staff"),
+        fetchJson<DashboardTotals>(`${API}/api/compliance/dashboard`),
+        fetchJson<StatsTotals>(`${API}/api/compliance/stats`),
+        fetchJson<StaffComplianceRow[]>(`${API}/api/compliance/staff`),
       ]);
       setState({
         status: "ready",
