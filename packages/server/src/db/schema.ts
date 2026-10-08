@@ -3120,6 +3120,12 @@ export const complianceDocument = pgTable(
     index("idx_compliance_document_subject_location").on(table.subjectStoreLocationId),
     // FK index: "all documents at one location".
     index("idx_compliance_document_location").on(table.storeLocationId),
+    // FK index: "all documents uploaded by one user" (and the constraint check
+    // when that user is deleted).
+    index("idx_compliance_document_uploaded_by").on(table.uploadedBy),
+    // FK index: "all documents verified by one user" (and the constraint check
+    // when that user is deleted).
+    index("idx_compliance_document_verified_by").on(table.verifiedBy),
     // Assignment gate + duplicate-upload guard. Partial so rows without a
     // number (or venue documents) do not collide.
     uniqueIndex("idx_compliance_document_unique")
