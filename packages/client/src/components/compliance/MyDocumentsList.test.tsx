@@ -46,6 +46,25 @@ describe("MyDocumentsList", () => {
     await waitFor(() => expect(screen.getByText("Add your first certificate")).toBeInTheDocument());
   });
 
+  it("offers a retry when the documents fail to load, and recovers on success", async () => {
+    let calls = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        calls += 1;
+        if (calls === 1) return { ok: false, json: async () => ({}) } as Response;
+        return { ok: true, json: async () => [] } as Response;
+      }),
+    );
+    render(<MyDocumentsList />);
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Couldn't load your documents."));
+
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+
+    await waitFor(() => expect(screen.getByText("Add your first certificate")).toBeInTheDocument());
+    expect(calls).toBe(2);
+  });
+
   it("tells a pending document's owner who has it and since when", async () => {
     stubDocuments([
       {

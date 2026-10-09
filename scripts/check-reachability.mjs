@@ -53,11 +53,6 @@ const ALLOWED_ORPHANS = {
   ],
   components: [
     { pattern: /pages\/LandingPage\.tsx$/, reason: "rendered by the marketing shell, not imported" },
-    // KNOWN DEAD CODE, not an exception on merit. 295 lines on main that
-    // nothing imports. Listed rather than deleted because it is unrelated to
-    // the branch that added this checker — see tasks/todo.md. Delete the file
-    // and this entry together.
-    { pattern: /components\/inventory\/DeliveryReceiving\.tsx$/, reason: "dead code, pending deletion" },
   ],
   /**
    * Client paths knowingly pointing at nothing. Empty, and it should stay that
