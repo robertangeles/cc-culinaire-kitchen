@@ -1,72 +1,20 @@
 # CulinAIre Kitchen — TODO
 
-## Pre-existing bugs surfaced by Phase 2f specialist + red-team review (2026-09-27)
+## Review-found bugs: knowledge ingest (2f) and prep (2e) — ALL FIXED (verified 2026-10-08)
 
-All pre-existing in the original `knowledgeManagementService.ts` — extracted unchanged by the barrel split. None introduced by Phase 2f. Each needs its own fix PR.
-
-**P1 — SSRF redirect bypass via `redirect: "follow"` in `extractFromUrl` / `crawlSite`**
-`knowledgeIngestService.ts`: `fetch(url, { redirect: "follow" })` follows HTTP 3xx redirects automatically. An attacker can supply an external URL that redirects to a private IP (e.g. `http://attacker.com/redirect → http://192.168.1.1/`). `validateUrlSafety` runs only on the initial URL, not the redirect target. Fix: set `redirect: "manual"`, read the `Location` header on 3xx responses, call `validateUrlSafety()` on the resolved URL, and follow with a hop counter (≤5). Apply to both `extractFromUrl` and the `crawlSite` fetch loop.
-
-**P1 — SSRF DNS rebinding: hostname regex check doesn't resolve IPs**
-`validateUrlSafety` blocks private IP ranges by regex on the hostname string. An attacker can register a domain that resolves to a private IP (`http://evil.com` → `169.254.169.254`). The hostname check passes because `evil.com` isn't a private IP literal; the fetch later resolves to the private address. Fix: after parsing hostname, call `dns.promises.lookup(hostname, { all: true })`, validate every returned IP against the private-range blocklist using `ipaddr.js` or a manual CIDR check. Repeat for every redirect hop.
-
-**P1 — `crawlSite` same-origin check uses string prefix match (allows `example.comevil.com`)**
-`knowledgeIngestService.ts:230`: `resolved.startsWith(origin)` where `origin = new URL(startUrl).origin` (e.g. `http://example.com`). String prefix matching incorrectly accepts domains that begin with the same string (e.g. `http://example.comevil.com/`). The crawler exits the intended domain and fetches arbitrary same-prefix foreign domains. Fix: replace with URL-aware hostname comparison: `new URL(resolved).hostname === new URL(startUrl).hostname`.
-
-**P1 — Unbounded PDF buffer when `Content-Length` header is absent**
-`knowledgeIngestService.ts:153`: when a URL returns `Content-Type: application/pdf`, `res.arrayBuffer()` is called with no size guard. The `Content-Length` check at line 146 only fires when the header is present; absent it parses as 0 and the guard is skipped. A server that omits `Content-Length` and streams a 1GB+ PDF will fully buffer it in memory, causing the worker to OOM. Fix: stream the response body with a byte counter; abort and reject if size exceeds 5MB before completing the download.
-
-**P1 — N+1 INSERT: up to 500 sequential DB round-trips per document ingest**
-`knowledgeIngestService.ts` in `processDocument`: the chunk persist loop issues one `db.insert(knowledgeChunk).values({...})` per chunk inside a `for` loop, up to 500 sequential round-trips per document. Fix: replace with a single bulk insert: `db.insert(knowledgeChunk).values(chunks.map((c, i) => ({ documentId, chunkIndex: i, ... })))`.
-
-**P1 — `reEmbedDocument` TOCTOU: concurrent calls can double-process a document**
-`knowledgeIngestService.ts` in `reEmbedDocument`: reads `doc.status` then separately sets `status = 'processing'`. Two concurrent calls both see `status !== 'processing'`, both pass the guard, and both launch async re-embedding — deleting and reinserting all chunks twice. Fix: replace the SELECT+UPDATE with an atomic conditional UPDATE: `UPDATE WHERE documentId=X AND status != 'processing' RETURNING documentId` and throw 409 if no rows returned.
-
-**P2 — `clearTimeout` not in `finally` block in `crawlSite` inner fetch**
-`knowledgeIngestService.ts:203`: `clearTimeout(timeout)` is called inline after `await fetch(...)` resolves, not in a `finally` block. If `fetch` throws (DNS failure, connection refused), the catch block runs without clearing the timeout, leaving a live 15-second timer per failed URL. With `CRAWL_MAX_PAGES=20`, up to 20 dangling timers per crawl can prevent clean process shutdown. Fix: declare `timeout` outside the try block, add `clearTimeout(timeout)` in the catch.
-
-**P2 — Prompt injection: document content directly concatenated into LLM tag-generation prompt**
-`knowledgeIngestService.ts:~549` in `processDocument`: `prompt: \`...${snippet}\`` passes the first 3000 chars of user-uploaded document content directly into the LLM prompt. A crafted document could inject instructions into the tag-generation call. The zod output schema provides structural validation but doesn't prevent mid-prompt manipulation. Fix: wrap the snippet in XML-style delimiters (`<document>…</document>`) and add a system instruction treating everything inside as data.
-
-**P1 — `ingestManual` missing body size cap (financial DoS)**
-`packages/server/src/controllers/knowledgeController.ts:~51`: `ManualSchema` defines `body: z.string().min(10)` with no `.max()`. All file/URL ingest paths cap at 5MB, but the manual text endpoint has no ceiling. An admin can POST a 100MB+ text body, triggering LLM tag generation, up to 500 chunk embeddings, and up to 500 serial DB inserts in one request. Fix: add `.max(5_000_000)` to `ManualSchema.body`.
-
-**P2 — No OCR page ceiling in `extractFromPdfWithOcr`**
-`knowledgeIngestService.ts:100–116`: `for await (const pageImage of pdfDoc)` iterates every page of a PDF with no page limit. A 500-page compressed scanned PDF can fit within the 5MB file size limit while triggering Tesseract serially on all 500 pages — unbounded CPU and memory. Fix: add a page counter, break after 200 pages.
-
----
-
-## Pre-existing bugs surfaced by Phase 2e review (2026-09-27)
-
-All pre-existing in the original `prepService.ts` — extracted unchanged by the barrel split. None introduced by Phase 2e. Each needs its own fix PR before merging to production paths that reach prep.
-
-**P1 — `inArray()` crash on empty `orgMemberUserIds` in teamView**
-When a user is the sole member of an org (`orgIds.length > 0` but `orgMemberUserIds = []`), every teamView call in `prepMenuService.ts:107` and `prepTaskService.ts:~400` passes an empty array to `inArray()`, generating invalid SQL (`WHERE col IN ()`). PostgreSQL rejects it with a syntax error. Fix: guard every `orgMemberUserIds` fanout with `orgCtx.orgMemberUserIds.length > 0 ? inArray(col, orgCtx.orgMemberUserIds) : eq(col, userId)`. Affects 8+ call sites across both files.
-
-**P1 — double stock deduction via concurrent task completion**
-`updateTaskStatus` (prepTaskService.ts:482) reads `prevStatus` outside a transaction. Two simultaneous `PATCH status=completed` requests both read `prevStatus='pending'`, both compute `becomingCompleted=true`, and both call `deductStock`. Fix: wrap the status read + update in a `db.transaction()`, or use a conditional UPDATE that checks the old status atomically.
-
-**P1 — `generateTasksFromSelections` TOCTOU**
-Same pattern as `saveMenuSelections`: `isEndedInd` is checked at prepTaskService.ts:136 outside the transaction that regenerates tasks. A concurrent `endSession` between the guard and the write allows tasks to be regenerated on a closed session. Fix: recheck `isEndedInd` inside the transaction.
-
-**P1 — `parseAmountToNumber` division-by-zero returns Infinity**
-`prepErrors.ts:61`: the regex `^(\d+)\/(\d+)$` matches `"1/0"`; `parseInt("0",10) = 0` → `return Infinity`. PostgreSQL rejects `Infinity` for numeric columns with a syntax error, crashing the `generateTasksFromSelections` transaction. Fix: `if (parseInt(fracMatch[2],10) === 0) return 0;` before the division.
-
-**P1 — IDOR: `saveMenuSelections` and `generateTasksFromSelections` don't validate recipeId/menuItemId ownership**
-An attacker with their own session can supply a victim's `menuItemId` (guessed UUID) in `saveMenuSelections` (prepMenuService.ts:242). `generateTasksFromSelections` then fetches that menu item's ingredients at prepTaskService.ts:164–181 with no ownership filter, leaking cross-tenant ingredient names and quantities into the attacker's task descriptions. Fix: validate each supplied `menuItemId`/`recipeId` against `userId` ownership in `saveMenuSelections`, or add user-scoped filters in `generateTasksFromSelections`.
-
-**P1 — `getTodaySession` teamView mixes tasks from all org member sessions**
-prepTaskService.ts:424–431: when `teamView=true`, `existing` can contain multiple sessions. `sessionIds` is mapped from all of them, and `prepTask` is fetched across all sessions. But the response is `{ session: toSessionRow(existing[0]), tasks: ... }` — tasks from every member paired with an arbitrary single session. Any caller using `session.prepSessionId` to correlate will operate on the wrong session. Fix: either return multiple sessions each with their own task list, or enforce `LIMIT 1` and scope tasks to that one session.
-
-**P2 — full ingredient table scan in `generateTasksFromSelections`**
-prepTaskService.ts:203: `db.select().from(ingredient)` with no WHERE clause fetches the entire ingredients table to build a name→category map. Fix: collect ingredient names from recipe data first, then `inArray(ingredient.ingredientName, namesArray)`.
-
-**P2 — N+1 inserts per task and per cross-usage line**
-prepTaskService.ts:330 inserts one `prepTask` row per iteration; prepTaskService.ts:357 inserts one `ingredientCrossUsage` row per iteration. Fix: collect all values objects, then a single `tx.insert(...).values(allValues)` call each.
+Surfaced by the Phase 2e/2f specialist and red-team reviews (2026-09-27). Fixed in PRs #136–#140
+and earlier: SSRF redirect and DNS-rebinding checks (`fetchWithSafeRedirects`, `dns.lookup`),
+crawler same-origin check, PDF and manual-body size caps, OCR page ceiling, `clearTimeout` in
+`finally`, prompt-injection delimiters, `reEmbedDocument` atomic CAS, chunk/task/cross-usage
+batch inserts, prep `inArray` empty-org guards, double stock deduction, `generateTasksFromSelections`
+TOCTOU and IDOR, `parseAmountToNumber` division by zero, `getTodaySession` teamView, ingredient
+table scan. Nothing left from these two reviews.
 
 ---
 
 ## Two live bugs on `main`, found by the reachability check (2026-08-09)
+
+**Status 2026-10-08: both resolved.** `useSales.ts` now uses `/api/menu`; `DeliveryReceiving.tsx` is deleted and its reachability allowlist entry removed. The text below is the original report.
 
 Neither came from the compliance branch. Both are allowlisted in
 `scripts/check-reachability.mjs` purely so that check could go into CI without
@@ -89,6 +37,8 @@ On main, imported by nothing. Either wire it or delete it; per CLAUDE.md it was
 flagged rather than removed, since it is unrelated to the branch that found it.
 
 ## Compliance Vault Phase 1 — follow-ups (2026-08-09)
+
+**Status 2026-10-08:** fixed — audit PDF route wired, expiry-scan test no longer asserts a global count, `MyDocumentsList` retry, `ComplianceDashboard` `${API}` prefix, `backfillCompliancePermissions` test. **Still open:** the two unindexed `compliance_document` FKs (`uploaded_by`, `verified_by`; schema change, needs a prod migration) and the two routes with no UI caller (`GET /api/compliance/documents/:id`, `GET /api/compliance/staff/:userId/documents`; wire a UI or delete, a product decision). The text below is the original report.
 
 Found by a pre-push audit of `feature/ck-web/compliance-vault`. The critical one
 was fixed on that branch; everything below is real debt that does NOT gate the push.

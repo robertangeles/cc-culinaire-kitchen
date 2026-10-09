@@ -4,6 +4,14 @@ Append-only. Newest entry on top.
 
 ---
 
+## 2026-10-08 — Compliance hygiene + stale backlog cleanup
+
+- `fix/ck-web/compliance-hygiene`: verified the old bug backlog against current code. Nearly all of it was already fixed (knowledge-ingest and prep review items via #136–#140, `useSales` base path, audit PDF route, expiry-scan test, dead `DeliveryReceiving`). Closed the rest of the small items: `MyDocumentsList` retry button, `ComplianceDashboard` `${API}` prefix, `backfillCompliancePermissions` test (mutation-checked), and the stale reachability allowlist entry. `tasks/todo.md` now records what is resolved.
+- Still open and deliberately not in this PR: two unindexed `compliance_document` FKs (schema change, prod migration) and two compliance routes with no UI caller (product decision).
+- Unexplained: one local `pnpm test` run had 3 failures in a single server test file; three reruns were green. File not captured.
+
+---
+
 ## 2026-10-06 — Visual snapshots (PR4)
 
 - `fix/ck-web/e2e-visual-snapshots`: `components.visual.spec.ts` screenshot-compares the 5 refactored components (ProfilePage, StoreLocationsSection, UserDetailPanel, MenuItemFormModal, IngredientCatalog) in a separate `visual` Playwright project that runs first on the seeded DB, in CI or with `E2E_VISUAL=1`. Baselines in `tests/e2e/visual-baselines/` are drawn by the CI runner.
