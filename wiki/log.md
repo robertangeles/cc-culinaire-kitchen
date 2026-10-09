@@ -4,6 +4,14 @@ Append-only. Newest entry on top.
 
 ---
 
+## 2026-10-08 — compliance_document FK indexes
+
+- `fix/ck-web/compliance-fk-indexes`: `compliance_document.uploaded_by` and `.verified_by` (FKs to `user`) had no index, against the every-FK-gets-an-index rule. Added both to `schema.ts` (plain btree, query comments), a guard test that every FK on the table is indexed, and the idempotent `addComplianceDocumentFkIndexes.ts` (SET LOCAL lock_timeout, post-verify of definition and validity, rollback in the header). Advisor-reviewed: plain over CONCURRENTLY for a tiny table; plain over partial to match siblings.
+- Found by pre-checking before the run: **dev already had both indexes** (identical definitions, no repo commit creates them) while **prod had neither** (table empty there). Dev had been changed out of band. The script is a verified no-op on dev; prod still needs it, run by the owner.
+- Audit finding, not fixed here: about 59 FKs across the schema have no index on their leading column (upper bound; unique constraints not counted). Mostly audit columns (`created_by`), but some hot ones (`waste_log.user_id`, `prep_task.user_id`, `fifo_batch.ingredient_id`, `receiving_line.ingredient_id`). Needs its own plan and prod migration.
+
+---
+
 ## 2026-10-08 — Compliance hygiene + stale backlog cleanup
 
 - `fix/ck-web/compliance-hygiene`: verified the old bug backlog against current code. Nearly all of it was already fixed (knowledge-ingest and prep review items via #136–#140, `useSales` base path, audit PDF route, expiry-scan test, dead `DeliveryReceiving`). Closed the rest of the small items: `MyDocumentsList` retry button, `ComplianceDashboard` `${API}` prefix, `backfillCompliancePermissions` test (mutation-checked), and the stale reachability allowlist entry. `tasks/todo.md` now records what is resolved.

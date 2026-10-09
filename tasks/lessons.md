@@ -1174,3 +1174,9 @@ builds all tables with CHECKs enforcing. Stop it again when done.
 - **Problem**: The first CI run of the E2E suite failed 67 of 91 tests. Causes: the onboarding wizard covered every page for a new user, roster/workforce feature flags ship off in `db:seed` (routes 404), the holiday heading locator matched the empty-state heading too, the PO screenshot spec assumed an existing PO, and `landing.spec.ts` imported `auth.setup.ts`, which locally resolved to a stale compiled `.js`.
 - **Fix**: The CI seed marks onboarding done and enables the flags; specs seed their own data and use exact locators; stale compiled files in `tests/e2e` were deleted.
 - **Rule**: A spec that passes against the dev DB proves nothing about a fresh one. Make specs self-seed, use `exact: true` on heading locators, and never keep emitted `.js` beside test sources (it masks CI-only failures).
+
+## #104 — Check the live database before writing a migration; dev can be ahead of the repo (2026-10-08)
+
+- **Problem**: The backlog said `compliance_document.uploaded_by`/`verified_by` had no index. Dev already had both (valid, identical to what I was about to add) with no commit in the repo creating them, while prod had neither. A script written from the backlog alone would have been wrong about dev and unverified for prod.
+- **Fix**: Read `pg_indexes` on dev and (forced read-only) prod before running anything. Made the script idempotent and gave it a post-run verify that checks definition and `indisvalid`, not just that the names exist.
+- **Rule**: Before any schema migration, query the target database for the current state. A repo/dev mismatch means something changed out of band: put it into `schema.ts` and a script so a fresh database (CI) matches, and treat prod separately.
