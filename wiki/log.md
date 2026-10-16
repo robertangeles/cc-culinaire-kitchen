@@ -4,6 +4,15 @@ Append-only. Newest entry on top.
 
 ---
 
+## 2026-10-16 — Foreign-key index alignment (items 1 and 2 of the FK pass)
+
+- `fix/ck-web/fk-index-schema-alignment`: declared the 6 indexes that already existed live but not in `schema.ts` (`prep_session`, `prep_menu_selection`), and added 51 missing FK indexes across 33 tables (`schema.ts` plus idempotent `addForeignKeyIndexes.ts`). `foreignKeyIndexes.test.ts` now asserts EVERY FK in the schema has a leading-column index, that the script and `schema.ts` list the same indexes, and that identifiers are safe for unquoted DDL. Mutation-checked. Replaces the compliance-only guard test.
+- First dev run failed: `user` is a reserved word, so unquoted `CREATE INDEX ... ON user` is a syntax error (the transaction rolled back, nothing applied). The Advisor had flagged exactly this. DDL now quotes identifiers. Dev: 51 created, second run a verified no-op. Dev catalog afterwards: only the 3 bench FKs unindexed.
+- Read-only findings for item 3 (not yet acted on): 36 FKs declared in `schema.ts` have no constraint in prod, on whole tables built by old raw-SQL scripts (waste_log, prep_*, receiving_*, credit_note, spend_threshold, notification, ...). Orphan check: prod has 18 orphan rows, all `ingredient_cross_usage.prep_session_id` (18 of 22 rows point at deleted prep sessions); dev has those plus 31 notifications pointing at missing users/orgs. Prod is also missing the `roster_shift_template` table that `schema.ts` declares.
+- Separate decision, not touched: `schema.ts` declares `message_id` UNIQUE on `bench_mention` and `bench_pin`; prod has no such constraint (and for `bench_mention` it looks wrong, a message can mention several users).
+
+---
+
 ## 2026-10-08 — compliance_document FK indexes
 
 - `fix/ck-web/compliance-fk-indexes`: `compliance_document.uploaded_by` and `.verified_by` (FKs to `user`) had no index, against the every-FK-gets-an-index rule. Added both to `schema.ts` (plain btree, query comments), a guard test that every FK on the table is indexed, and the idempotent `addComplianceDocumentFkIndexes.ts` (SET LOCAL lock_timeout, post-verify of definition and validity, rollback in the header). Advisor-reviewed: plain over CONCURRENTLY for a tiny table; plain over partial to match siblings.
