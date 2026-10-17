@@ -19,6 +19,9 @@ export function Tooltip({ text, children, position = "bottom", delay = 300 }: To
   const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   function handleEnter() {
+    // A click fires mouseenter and focus; without this the first timer leaks and
+    // opens the tooltip after the pointer has left.
+    clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => setVisible(true), delay);
   }
 
