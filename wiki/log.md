@@ -4,6 +4,13 @@ Append-only. Newest entry on top.
 
 ---
 
+## 2026-10-17 — Tooltip leaked timer (found by CI on PR #148)
+
+- `fix/ck-web/tooltip-leaked-timer`: `ui/Tooltip.tsx` started a 300 ms timer on mouse-enter and again on focus without clearing the first. A click fires both, so the first timer leaked: leave only cancelled the second, and the first opened the tooltip after the pointer had gone, leaving it stuck. Fixed with a `clearTimeout` in `handleEnter`; `Tooltip.test.tsx` reproduces it (red, then green).
+- It surfaced as an intermittent failure of the IngredientCatalog visual spec on the FK-index PR (the spec waits for the tooltip to disappear). It had passed three times before, which is what a timing race looks like.
+
+---
+
 ## 2026-10-08 — compliance_document FK indexes
 
 - `fix/ck-web/compliance-fk-indexes`: `compliance_document.uploaded_by` and `.verified_by` (FKs to `user`) had no index, against the every-FK-gets-an-index rule. Added both to `schema.ts` (plain btree, query comments), a guard test that every FK on the table is indexed, and the idempotent `addComplianceDocumentFkIndexes.ts` (SET LOCAL lock_timeout, post-verify of definition and validity, rollback in the header). Advisor-reviewed: plain over CONCURRENTLY for a tiny table; plain over partial to match siblings.
