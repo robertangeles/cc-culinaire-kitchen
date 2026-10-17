@@ -4,6 +4,13 @@ Append-only. Newest entry on top.
 
 ---
 
+## 2026-10-17 — Tooltip leaked timer (found by CI on PR #148 and on main)
+
+- `fix/ck-web/tooltip-leaked-timer`: `ui/Tooltip.tsx` started a 300 ms timer on mouse-enter and again on focus without clearing the first. A click fires both, so the first timer leaked: leave only cancelled the second, and the first opened the tooltip after the pointer had gone, leaving it stuck. Fixed with a `clearTimeout` in `handleEnter`; `Tooltip.test.tsx` reproduces it (red, then green).
+- It surfaced as a failing IngredientCatalog visual spec (the spec waits for the tooltip to disappear). Main's Browser E2E was red from 2026-10-09 (after the #146 and #147 merges) until this merged; it had passed on #145's own runs, so it was first mistaken for a flake. Lesson: a repeat failure is a bug until proven otherwise, and main's post-merge runs must be checked.
+
+---
+
 ## 2026-10-16 — Foreign-key index alignment (items 1 and 2 of the FK pass)
 
 - `fix/ck-web/fk-index-schema-alignment`: declared the 6 indexes that already existed live but not in `schema.ts` (`prep_session`, `prep_menu_selection`), and added 51 missing FK indexes across 33 tables (`schema.ts` plus idempotent `addForeignKeyIndexes.ts`). `foreignKeyIndexes.test.ts` now asserts EVERY FK in the schema has a leading-column index, that the script and `schema.ts` list the same indexes, and that identifiers are safe for unquoted DDL. Mutation-checked. Replaces the compliance-only guard test.
