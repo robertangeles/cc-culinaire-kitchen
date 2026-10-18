@@ -4,10 +4,19 @@ Append-only. Newest entry on top.
 
 ---
 
-## 2026-10-17 — Tooltip leaked timer (found by CI on PR #148)
+## 2026-10-17 — Tooltip leaked timer (found by CI on PR #148 and on main)
 
 - `fix/ck-web/tooltip-leaked-timer`: `ui/Tooltip.tsx` started a 300 ms timer on mouse-enter and again on focus without clearing the first. A click fires both, so the first timer leaked: leave only cancelled the second, and the first opened the tooltip after the pointer had gone, leaving it stuck. Fixed with a `clearTimeout` in `handleEnter`; `Tooltip.test.tsx` reproduces it (red, then green).
-- It surfaced as an intermittent failure of the IngredientCatalog visual spec on the FK-index PR (the spec waits for the tooltip to disappear). It had passed three times before, which is what a timing race looks like.
+- It surfaced as a failing IngredientCatalog visual spec (the spec waits for the tooltip to disappear). Main's Browser E2E was red from 2026-10-09 (after the #146 and #147 merges) until this merged; it had passed on #145's own runs, so it was first mistaken for a flake. Lesson: a repeat failure is a bug until proven otherwise, and main's post-merge runs must be checked.
+
+---
+
+## 2026-10-16 — Foreign-key index alignment (items 1 and 2 of the FK pass)
+
+- `fix/ck-web/fk-index-schema-alignment`: declared the 6 indexes that already existed live but not in `schema.ts` (`prep_session`, `prep_menu_selection`), and added 51 missing FK indexes across 33 tables (`schema.ts` plus idempotent `addForeignKeyIndexes.ts`). `foreignKeyIndexes.test.ts` now asserts EVERY FK in the schema has a leading-column index, that the script and `schema.ts` list the same indexes, and that identifiers are safe for unquoted DDL. Mutation-checked. Replaces the compliance-only guard test.
+- First dev run failed: `user` is a reserved word, so unquoted `CREATE INDEX ... ON user` is a syntax error (the transaction rolled back, nothing applied). The Advisor had flagged exactly this. DDL now quotes identifiers. Dev: 51 created, second run a verified no-op. Dev catalog afterwards: only the 3 bench FKs unindexed.
+- Read-only findings for item 3 (not yet acted on): 36 FKs declared in `schema.ts` have no constraint in prod, on whole tables built by old raw-SQL scripts (waste_log, prep_*, receiving_*, credit_note, spend_threshold, notification, ...). Orphan check: prod has 18 orphan rows, all `ingredient_cross_usage.prep_session_id` (18 of 22 rows point at deleted prep sessions); dev has those plus 31 notifications pointing at missing users/orgs. Prod is also missing the `roster_shift_template` table that `schema.ts` declares.
+- Separate decision, not touched: `schema.ts` declares `message_id` UNIQUE on `bench_mention` and `bench_pin`; prod has no such constraint (and for `bench_mention` it looks wrong, a message can mention several users).
 
 ---
 

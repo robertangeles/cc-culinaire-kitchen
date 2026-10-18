@@ -1180,3 +1180,9 @@ builds all tables with CHECKs enforcing. Stop it again when done.
 - **Problem**: The backlog said `compliance_document.uploaded_by`/`verified_by` had no index. Dev already had both (valid, identical to what I was about to add) with no commit in the repo creating them, while prod had neither. A script written from the backlog alone would have been wrong about dev and unverified for prod.
 - **Fix**: Read `pg_indexes` on dev and (forced read-only) prod before running anything. Made the script idempotent and gave it a post-run verify that checks definition and `indisvalid`, not just that the names exist.
 - **Rule**: Before any schema migration, query the target database for the current state. A repo/dev mismatch means something changed out of band: put it into `schema.ts` and a script so a fresh database (CI) matches, and treat prod separately.
+
+## #105 — Quote identifiers in generated DDL; "user" is a reserved word (2026-10-16)
+
+- **Problem**: A script that built `CREATE INDEX ... ON ${table}` from a list failed on the first dev run with `syntax error at or near "user"`, because the `user` table name is reserved. It rolled back cleanly because everything ran in one transaction.
+- **Fix**: Double-quote every identifier in the DDL, compare index definitions with quotes stripped (Postgres prints `"user"`), and test that names are plain lowercase identifiers.
+- **Rule**: Any script that interpolates table or column names quotes them, and runs in one transaction. Run it on dev before anything else; the dev run is what finds this class of bug.

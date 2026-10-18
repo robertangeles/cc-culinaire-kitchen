@@ -253,6 +253,8 @@ export const user = pgTable("user", {
   index("idx_user_brain_nudges_opt_in")
     .on(table.userId)
     .where(sql`brain_nudges_opt_in = true`),
+  // FK index: "user rows for one organisation", and the constraint check when that organisation row is deleted.
+  index("idx_user_selected_organisation_id").on(table.selectedOrganisationId),
 ]);
 
 /**
@@ -649,7 +651,12 @@ export const recipeVersion = pgTable("recipe_version", {
   changedBy: integer("changed_by").references(() => user.userId),
   changeType: varchar("change_type", { length: 20 }).notNull(), // "original" | "manual" | "ai_refinement" | "revert"
   createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
-});
+}, (table) => [
+  // FK index: "recipe version rows for one recipe", and the constraint check when that recipe row is deleted.
+  index("idx_recipe_version_recipe_id").on(table.recipeId),
+  // FK index: "recipe version rows for one user", and the constraint check when that user row is deleted.
+  index("idx_recipe_version_changed_by").on(table.changedBy),
+]);
 
 /**
  * The `recipe_rating` table stores per-user star ratings (1-5) for recipes.
@@ -847,6 +854,8 @@ export const menuItem = pgTable("menu_item", {
   // FOH direct sale: one auto-generated 1:1 link per (user, consumable) — the
   // partial unique makes "create once, reuse forever" race-safe.
   uniqueIndex("idx_menu_item_linked_ingredient").on(table.userId, table.linkedIngredientId).where(sql`linked_ingredient_id IS NOT NULL`),
+  // FK index: "menu item rows for one ingredient", and the constraint check when that ingredient row is deleted.
+  index("idx_menu_item_linked_ingredient_id").on(table.linkedIngredientId),
 ]);
 
 /**
@@ -954,6 +963,10 @@ export const wasteLog = pgTable("waste_log", {
   updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
   index("idx_waste_log_store").on(table.storeLocationId),
+  // FK index: "waste log rows for one user", and the constraint check when that user row is deleted.
+  index("idx_waste_log_user_id").on(table.userId),
+  // FK index: "waste log rows for one organisation", and the constraint check when that organisation row is deleted.
+  index("idx_waste_log_organisation_id").on(table.organisationId),
 ]);
 
 // ---------------------------------------------------------------------------
@@ -982,7 +995,14 @@ export const prepSession = pgTable("prep_session", {
   isEndedInd: boolean("is_ended_ind").notNull().default(false),
   createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
   updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
-});
+}, (table) => [
+  // FK index: "a user's prep session for today" (getTodaySession).
+  index("idx_prep_session_user").on(table.userId),
+  // FK index: "prep sessions for an organisation" (team view).
+  index("idx_prep_session_org").on(table.organisationId),
+  // FK index: "prep sessions at one location".
+  index("idx_prep_session_location").on(table.storeLocationId),
+]);
 
 /**
  * The `prep_task` table stores individual prep tasks within a session.
@@ -1029,6 +1049,12 @@ export const prepTask = pgTable("prep_task", {
   index("idx_prep_task_ingredient").on(table.ingredientId),
   // FK index: tasks for a given prepped component.
   index("idx_prep_task_prep_component").on(table.prepComponentId),
+  // FK index: "prep task rows for one user", and the constraint check when that user row is deleted.
+  index("idx_prep_task_user_id").on(table.userId),
+  // FK index: "prep task rows for one menu item", and the constraint check when that menu item row is deleted.
+  index("idx_prep_task_menu_item_id").on(table.menuItemId),
+  // FK index: "prep task rows for one recipe", and the constraint check when that recipe row is deleted.
+  index("idx_prep_task_recipe_id").on(table.recipeId),
 ]);
 
 /**
@@ -1056,7 +1082,10 @@ export const guide = pgTable("guide", {
   updatedBy: integer("updated_by").references(() => user.userId),
   createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
   updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
-});
+}, (table) => [
+  // FK index: "guide rows for one user", and the constraint check when that user row is deleted.
+  index("idx_guide_updated_by").on(table.updatedBy),
+]);
 
 /**
  * The `prep_menu_selection` table stores the chef's selected dishes
@@ -1073,7 +1102,14 @@ export const prepMenuSelection = pgTable("prep_menu_selection", {
   expectedPortions: integer("expected_portions").notNull(),
   category: varchar("category", { length: 50 }),
   createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
-});
+}, (table) => [
+  // FK index: "the dishes selected for a prep session" (generateTasksFromSelections).
+  index("idx_prep_menu_selection_session").on(table.prepSessionId),
+  // FK index: "selections that use one recipe".
+  index("idx_prep_menu_selection_recipe").on(table.recipeId),
+  // FK index: "selections that use one menu item".
+  index("idx_prep_menu_selection_menu_item").on(table.menuItemId),
+]);
 
 export const ingredientCrossUsage = pgTable("ingredient_cross_usage", {
   crossUsageId: uuid("cross_usage_id").defaultRandom().primaryKey(),
@@ -1092,7 +1128,14 @@ export const ingredientCrossUsage = pgTable("ingredient_cross_usage", {
   unit: varchar("unit", { length: 20 }).notNull(),
   dishNames: jsonb("dish_names").notNull(),
   createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
-});
+}, (table) => [
+  // FK index: "ingredient cross usage rows for one user", and the constraint check when that user row is deleted.
+  index("idx_ingredient_cross_usage_user_id").on(table.userId),
+  // FK index: "ingredient cross usage rows for one prep session", and the constraint check when that prep session row is deleted.
+  index("idx_ingredient_cross_usage_prep_session_id").on(table.prepSessionId),
+  // FK index: "ingredient cross usage rows for one ingredient", and the constraint check when that ingredient row is deleted.
+  index("idx_ingredient_cross_usage_ingredient_id").on(table.ingredientId),
+]);
 
 /**
  * The `prep_component` table is a chef-defined sub-recipe / prepped component
@@ -1230,6 +1273,8 @@ export const storeLocation = pgTable(
     uniqueIndex("idx_store_location_hq_unique")
       .on(table.organisationId)
       .where(sql`classification = 'hq'`),
+  // FK index: "store location rows for one user", and the constraint check when that user row is deleted.
+  index("idx_store_location_created_by").on(table.createdBy),
   ],
 );
 
@@ -1261,6 +1306,8 @@ export const userStoreLocation = pgTable(
     index("idx_user_store_location_loc").on(table.storeLocationId),
     // FK index: "get all locations for a user"
     index("idx_user_store_location_user").on(table.userId),
+  // FK index: "user store location rows for one user", and the constraint check when that user row is deleted.
+  index("idx_user_store_location_assigned_by").on(table.assignedBy),
   ],
 );
 
@@ -1317,6 +1364,8 @@ export const userLocationPreference = pgTable(
     uniqueIndex("idx_user_location_pref_unique").on(table.userId, table.moduleKey),
     // FK index: "get all preferences for a user"
     index("idx_user_location_pref_user").on(table.userId),
+  // FK index: "user location preference rows for one store location", and the constraint check when that store location row is deleted.
+  index("idx_user_location_preference_store_location_id").on(table.storeLocationId),
   ],
 );
 
@@ -1430,6 +1479,10 @@ export const ingredient = pgTable(
     // "give me all active ingredients in an org" — partial index serves the
     // hot path because soft-deleted rows are rare and skipped by every picker.
     index("idx_ingredient_active").on(table.organisationId).where(sql`deleted_at IS NULL`),
+  // FK index: "ingredient rows for one user", and the constraint check when that user row is deleted.
+  index("idx_ingredient_deleted_by").on(table.deletedBy),
+  // FK index: "ingredient rows for one supplier", and the constraint check when that supplier row is deleted.
+  index("idx_ingredient_preferred_supplier_id").on(table.preferredSupplierId),
   ],
 );
 
@@ -1824,6 +1877,10 @@ export const stockTakeSession = pgTable(
     index("idx_stock_take_session_org").on(table.organisationId),
     // Composite: "get active (non-archived) sessions at a location"
     index("idx_stock_take_session_active").on(table.storeLocationId, table.sessionStatus),
+  // FK index: "stock take session rows for one user", and the constraint check when that user row is deleted.
+  index("idx_stock_take_session_opened_by_user_id").on(table.openedByUserId),
+  // FK index: "stock take session rows for one user", and the constraint check when that user row is deleted.
+  index("idx_stock_take_session_approved_by_user_id").on(table.approvedByUserId),
   ],
 );
 
@@ -1859,6 +1916,8 @@ export const stockTakeCategory = pgTable(
     uniqueIndex("idx_stock_take_category_unique").on(table.sessionId, table.categoryName),
     // FK index: "get all categories for a session"
     index("idx_stock_take_category_session").on(table.sessionId),
+  // FK index: "stock take category rows for one user", and the constraint check when that user row is deleted.
+  index("idx_stock_take_category_claimed_by_user_id").on(table.claimedByUserId),
   ],
 );
 
@@ -1938,6 +1997,8 @@ export const stockLevel = pgTable(
     index("idx_stock_level_location").on(table.storeLocationId),
     // FK index: "get stock level for an ingredient across locations"
     index("idx_stock_level_ingredient").on(table.ingredientId),
+  // FK index: "stock level rows for one user", and the constraint check when that user row is deleted.
+  index("idx_stock_level_last_counted_by_user_id").on(table.lastCountedByUserId),
   ],
 );
 
@@ -1973,6 +2034,12 @@ export const pendingCatalogRequest = pgTable(
     index("idx_pending_request_org").on(table.organisationId, table.status),
     // Location view: "get requests from this location"
     index("idx_pending_request_location").on(table.storeLocationId),
+  // FK index: "pending catalog request rows for one user", and the constraint check when that user row is deleted.
+  index("idx_pending_catalog_request_requested_by_user_id").on(table.requestedByUserId),
+  // FK index: "pending catalog request rows for one user", and the constraint check when that user row is deleted.
+  index("idx_pending_catalog_request_reviewed_by_user_id").on(table.reviewedByUserId),
+  // FK index: "pending catalog request rows for one ingredient", and the constraint check when that ingredient row is deleted.
+  index("idx_pending_catalog_request_created_ingredient_id").on(table.createdIngredientId),
   ],
 );
 
@@ -2014,6 +2081,10 @@ export const sale = pgTable(
     index("idx_sale_location").on(table.storeLocationId, table.soldAt),
     // Per-menu-item sales history
     index("idx_sale_menu_item").on(table.menuItemId),
+  // FK index: "sale rows for one user", and the constraint check when that user row is deleted.
+  index("idx_sale_voided_by").on(table.voidedBy),
+  // FK index: "sale rows for one user", and the constraint check when that user row is deleted.
+  index("idx_sale_created_by").on(table.createdBy),
   ],
 );
 
@@ -2114,6 +2185,8 @@ export const consumptionLog = pgTable(
     index("idx_consumption_log_menu_item").on(table.menuItemId, table.loggedAt),
     // voidSale: "get all consumption rows a sale produced"
     index("idx_consumption_log_sale").on(table.saleId),
+  // FK index: "consumption log rows for one user", and the constraint check when that user row is deleted.
+  index("idx_consumption_log_user_id").on(table.userId),
   ],
 );
 
@@ -2153,6 +2226,10 @@ export const purchaseOrder = pgTable(
     index("idx_po_supplier").on(table.supplierId),
     // Overdue delivery checker: "get SENT POs past expected delivery"
     index("idx_po_status_delivery").on(table.status, table.expectedDeliveryDate),
+  // FK index: "purchase order rows for one user", and the constraint check when that user row is deleted.
+  index("idx_purchase_order_created_by_user_id").on(table.createdByUserId),
+  // FK index: "purchase order rows for one user", and the constraint check when that user row is deleted.
+  index("idx_purchase_order_approved_by_user_id").on(table.approvedByUserId),
   ],
 );
 
@@ -2178,6 +2255,10 @@ export const purchaseOrderLine = pgTable(
   (table) => [
     index("idx_po_line_po").on(table.poId),
     index("idx_po_line_ingredient").on(table.ingredientId),
+  // FK index: "purchase order line rows for one ingredient", and the constraint check when that ingredient row is deleted.
+  index("idx_purchase_order_line_substituted_ingredient_id").on(table.substitutedIngredientId),
+  // FK index: "purchase order line rows for one user", and the constraint check when that user row is deleted.
+  index("idx_purchase_order_line_received_by_user_id").on(table.receivedByUserId),
   ],
 );
 
@@ -2214,6 +2295,10 @@ export const orderGuide = pgTable(
     index("idx_order_guide_org_location").on(table.organisationId, table.storeLocationId),
     // FK index: "get all guides for a supplier"
     index("idx_order_guide_supplier").on(table.supplierId),
+  // FK index: "order guide rows for one store location", and the constraint check when that store location row is deleted.
+  index("idx_order_guide_store_location_id").on(table.storeLocationId),
+  // FK index: "order guide rows for one user", and the constraint check when that user row is deleted.
+  index("idx_order_guide_created_by_user_id").on(table.createdByUserId),
   ],
 );
 
@@ -2263,6 +2348,8 @@ export const fifoBatch = pgTable(
   (table) => [
     index("idx_fifo_batch_location_item").on(table.storeLocationId, table.ingredientId, table.isDepleted),
     index("idx_fifo_batch_po_line").on(table.sourcePoLineId),
+  // FK index: "fifo batch rows for one ingredient", and the constraint check when that ingredient row is deleted.
+  index("idx_fifo_batch_ingredient_id").on(table.ingredientId),
   ],
 );
 
@@ -2291,6 +2378,12 @@ export const inventoryTransfer = pgTable(
     index("idx_transfer_org_status").on(table.organisationId, table.status),
     index("idx_transfer_from").on(table.fromLocationId),
     index("idx_transfer_to").on(table.toLocationId),
+  // FK index: "inventory transfer rows for one user", and the constraint check when that user row is deleted.
+  index("idx_inventory_transfer_initiated_by_user_id").on(table.initiatedByUserId),
+  // FK index: "inventory transfer rows for one user", and the constraint check when that user row is deleted.
+  index("idx_inventory_transfer_sent_by_user_id").on(table.sentByUserId),
+  // FK index: "inventory transfer rows for one user", and the constraint check when that user row is deleted.
+  index("idx_inventory_transfer_received_by_user_id").on(table.receivedByUserId),
   ],
 );
 
@@ -2311,6 +2404,8 @@ export const inventoryTransferLine = pgTable(
   (table) => [
     index("idx_transfer_line_transfer").on(table.transferId),
     index("idx_transfer_line_ingredient").on(table.ingredientId),
+  // FK index: "inventory transfer line rows for one fifo batch", and the constraint check when that fifo batch row is deleted.
+  index("idx_inventory_transfer_line_fifo_batch_id").on(table.fifoBatchId),
   ],
 );
 
@@ -2355,6 +2450,8 @@ export const receivingSession = pgTable(
     index("idx_receiving_session_location").on(table.storeLocationId),
     // Active session guard: "is there already an active session for this PO?"
     index("idx_receiving_session_active").on(table.poId, table.status),
+  // FK index: "receiving session rows for one user", and the constraint check when that user row is deleted.
+  index("idx_receiving_session_received_by_user_id").on(table.receivedByUserId),
   ],
 );
 
@@ -2387,6 +2484,8 @@ export const receivingLine = pgTable(
     index("idx_receiving_line_session").on(table.sessionId),
     // FK index: "link back to original PO line"
     index("idx_receiving_line_po_line").on(table.poLineId),
+  // FK index: "receiving line rows for one ingredient", and the constraint check when that ingredient row is deleted.
+  index("idx_receiving_line_ingredient_id").on(table.ingredientId),
   ],
 );
 
@@ -2436,6 +2535,10 @@ export const receivingDiscrepancy = pgTable(
     index("idx_discrepancy_type").on(table.type),
     // Unresolved: "get outstanding discrepancies for an org"
     index("idx_discrepancy_resolved").on(table.isResolved),
+  // FK index: "receiving discrepancy rows for one receiving line", and the constraint check when that receiving line row is deleted.
+  index("idx_receiving_discrepancy_receiving_line_id").on(table.receivingLineId),
+  // FK index: "receiving discrepancy rows for one ingredient", and the constraint check when that ingredient row is deleted.
+  index("idx_receiving_discrepancy_substituted_ingredient_id").on(table.substitutedIngredientId),
   ],
 );
 
@@ -2461,6 +2564,8 @@ export const discrepancyPhoto = pgTable(
   (table) => [
     // FK index: "get all photos for a discrepancy"
     index("idx_photo_discrepancy").on(table.discrepancyId),
+  // FK index: "discrepancy photo rows for one user", and the constraint check when that user row is deleted.
+  index("idx_discrepancy_photo_uploaded_by_user_id").on(table.uploadedByUserId),
   ],
 );
 
@@ -2493,6 +2598,8 @@ export const creditNote = pgTable(
     index("idx_credit_org").on(table.organisationId),
     // FK index: "get credit for a discrepancy"
     index("idx_credit_discrepancy").on(table.discrepancyId),
+  // FK index: "credit note rows for one user", and the constraint check when that user row is deleted.
+  index("idx_credit_note_created_by_user_id").on(table.createdByUserId),
   ],
 );
 
@@ -2522,6 +2629,10 @@ export const spendThreshold = pgTable(
     uniqueIndex("idx_spend_threshold_unique").on(table.organisationId, table.storeLocationId),
     // FK index: "get thresholds for an org"
     index("idx_spend_threshold_org").on(table.organisationId),
+  // FK index: "spend threshold rows for one store location", and the constraint check when that store location row is deleted.
+  index("idx_spend_threshold_store_location_id").on(table.storeLocationId),
+  // FK index: "spend threshold rows for one user", and the constraint check when that user row is deleted.
+  index("idx_spend_threshold_created_by_user_id").on(table.createdByUserId),
   ],
 );
 
@@ -2586,6 +2697,8 @@ export const forecastRecommendation = pgTable(
   (table) => [
     index("idx_forecast_location_status").on(table.storeLocationId, table.status),
     index("idx_forecast_ingredient").on(table.ingredientId),
+  // FK index: "forecast recommendation rows for one organisation", and the constraint check when that organisation row is deleted.
+  index("idx_forecast_recommendation_organisation_id").on(table.organisationId),
   ],
 );
 
@@ -2715,6 +2828,8 @@ export const ingredientAlias = pgTable(
     index("idx_ingredient_alias_ingredient").on(table.ingredientId),
     // Recipe import hot path: "match this alias text in this org"
     index("idx_ingredient_alias_org").on(table.organisationId),
+  // FK index: "ingredient alias rows for one user", and the constraint check when that user row is deleted.
+  index("idx_ingredient_alias_created_by_user_id").on(table.createdByUserId),
   ],
 );
 
@@ -3443,6 +3558,8 @@ export const shift = pgTable(
       table.sourceTemplateRowId,
       table.generatedForWeekStart,
     ),
+  // FK index: "shift rows for one user", and the constraint check when that user row is deleted.
+  index("idx_shift_created_by").on(table.createdBy),
   ],
 );
 
@@ -3672,5 +3789,7 @@ export const shiftSwapRequest = pgTable(
     index("idx_shift_swap_request_from_user").on(table.fromUserId),
     // FK index: "swaps this person has claimed".
     index("idx_shift_swap_request_to_user").on(table.toUserId),
+  // FK index: "shift swap request rows for one shift assignment", and the constraint check when that shift assignment row is deleted.
+  index("idx_shift_swap_request_from_assignment_id").on(table.fromAssignmentId),
   ],
 );
