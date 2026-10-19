@@ -244,7 +244,7 @@ export function UserDetailPanel({ user, availableRoles, onClose, onRefresh }: Us
     }
   }
 
-  /** Delete this user permanently. */
+  /** Delete this user's account: personal data removed, business records kept anonymously. */
   async function handleDelete() {
     setDeleting(true);
     setDeleteError("");
@@ -739,10 +739,10 @@ export function UserDetailPanel({ user, availableRoles, onClose, onRefresh }: Us
             {showDeleteConfirm ? (
               <div className="bg-red-900/30 border border-red-700/40 rounded-lg p-4 space-y-3">
                 <p className="text-sm text-red-400 font-medium">
-                  Permanently delete {user.userName}?
+                  Delete {user.userName}&apos;s account?
                 </p>
                 <p className="text-xs text-red-400">
-                  This will remove all messages, conversations, roles, and associated data. This action cannot be undone.
+                  This removes their personal data (name, email, conversations, preferences, roles) and cancels any subscription. Orders, waste logs and other business records stay, with no name attached. This cannot be undone.
                 </p>
                 <div className="flex gap-2">
                   <button
@@ -751,7 +751,7 @@ export function UserDetailPanel({ user, availableRoles, onClose, onRefresh }: Us
                     className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors"
                   >
                     {deleting ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
-                    Delete Permanently
+                    Delete Account
                   </button>
                   <button
                     onClick={() => setShowDeleteConfirm(false)}

@@ -212,6 +212,20 @@ export async function cancelSubscription(userId: number) {
     .where(eq(user.userId, userId));
 }
 
+/**
+ * Cancel a subscription immediately (account deletion). A subscription Stripe no
+ * longer has (already cancelled or deleted) counts as done, so a retry after a
+ * partial failure does not get stuck.
+ */
+export async function cancelSubscriptionNow(subscriptionId: string): Promise<void> {
+  try {
+    await getStripe().subscriptions.cancel(subscriptionId);
+  } catch (err) {
+    if (err instanceof Stripe.errors.StripeInvalidRequestError && err.code === "resource_missing") return;
+    throw err;
+  }
+}
+
 /** Create a Stripe customer portal session. */
 export async function createCustomerPortalSession(userId: number) {
   const rows = await db

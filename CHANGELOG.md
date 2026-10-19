@@ -5,6 +5,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- **Deleting a user now anonymises the account instead of removing the row.** Personal data (conversations, credentials, roles, notifications, saved recipes, preferences) is removed, the name, email and other identity fields are scrubbed, any Stripe subscription is cancelled immediately, and the user row is kept so orders, waste logs and the audit trail stay valid with no name attached. Previously the hard delete failed for any user with business history and left orphan rows (for example notifications) behind for the rest. Deleted users are hidden from the admin user list. `userAnonymisationService.ts`; the admin confirmation text now says what actually happens.
+
 ### Fixed
 
 - **`/settings`, `/profile` and `/my-shelf` no longer render for a visitor with no session.** `AuthenticatedOnly` only redirected guests, so when the guest session could not start (rate limit or guest cap) the visitor was neither guest nor authenticated and saw the Settings admin shell. The server still returned 401 for all data. It now redirects anyone who is not authenticated to `/chat/new`.

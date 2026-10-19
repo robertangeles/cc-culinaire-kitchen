@@ -5,7 +5,7 @@
  */
 
 import bcrypt from "bcrypt";
-import { eq, ilike, or, desc, sql } from "drizzle-orm";
+import { and, eq, ilike, ne, or, desc, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { decryptUserPii } from "./piiService.js";
 import { encryptPii, hashForLookup } from "../utils/crypto.js";
@@ -15,11 +15,6 @@ import {
   userRole,
   userOrganisation,
   organisation,
-  conversation,
-  message,
-  refreshToken,
-  emailVerification,
-  oauthAccount,
 } from "../db/schema.js";
 
 const BCRYPT_ROUNDS = parseInt(process.env.BCRYPT_ROUNDS ?? "12", 10);
@@ -168,21 +163,19 @@ export async function listAllUsers(
     })
     .from(user);
 
+  // Deleted accounts are scrubbed placeholders (see userAnonymisationService); never list them.
+  const notDeleted = ne(user.userStatus, "deleted");
   const whereClause = search
-    ? or(
-        ilike(user.userName, `%${search}%`),
-        ilike(user.userEmail, `%${search}%`)
+    ? and(
+        notDeleted,
+        or(ilike(user.userName, `%${search}%`), ilike(user.userEmail, `%${search}%`)),
       )
-    : undefined;
+    : notDeleted;
 
-  const rows = whereClause
-    ? await baseQuery.where(whereClause).orderBy(desc(user.createdDttm)).limit(limit).offset(offset)
-    : await baseQuery.orderBy(desc(user.createdDttm)).limit(limit).offset(offset);
+  const rows = await baseQuery.where(whereClause).orderBy(desc(user.createdDttm)).limit(limit).offset(offset);
 
   // Get total count
-  const countResult = whereClause
-    ? await db.select({ count: sql<number>`count(*)::int` }).from(user).where(whereClause)
-    : await db.select({ count: sql<number>`count(*)::int` }).from(user);
+  const countResult = await db.select({ count: sql<number>`count(*)::int` }).from(user).where(whereClause);
 
   // Decrypt PII for each user row
   const decryptedRows = rows.map((u) => {
@@ -320,46 +313,3 @@ export async function removeRole(userId: number, roleId: number) {
     );
 }
 
-/**
- * Permanently delete a user and all associated data.
- *
- * Cascade order (respects FK dependencies):
- * 1. messages (via user's conversations)
- * 2. conversations
- * 3. user_role
- * 4. user_organisation
- * 5. refresh_token
- * 6. email_verification
- * 7. oauth_account
- * 8. user
- *
- * @param userId - The user ID to delete.
- * @throws {Error} If the user is not found.
- */
-export async function deleteUser(userId: number) {
-  const rows = await db.select({ userId: user.userId }).from(user).where(eq(user.userId, userId));
-  if (rows.length === 0) throw new Error("User not found");
-
-  // 1. Delete messages for user's conversations
-  const convRows = await db
-    .select({ conversationId: conversation.conversationId })
-    .from(conversation)
-    .where(eq(conversation.userId, userId));
-
-  for (const c of convRows) {
-    await db.delete(message).where(eq(message.conversationId, c.conversationId));
-  }
-
-  // 2. Delete conversations
-  await db.delete(conversation).where(eq(conversation.userId, userId));
-
-  // 3-7. Delete related records
-  await db.delete(userRole).where(eq(userRole.userId, userId));
-  await db.delete(userOrganisation).where(eq(userOrganisation.userId, userId));
-  await db.delete(refreshToken).where(eq(refreshToken.userId, userId));
-  await db.delete(emailVerification).where(eq(emailVerification.userId, userId));
-  await db.delete(oauthAccount).where(eq(oauthAccount.userId, userId));
-
-  // 8. Delete the user
-  await db.delete(user).where(eq(user.userId, userId));
-}

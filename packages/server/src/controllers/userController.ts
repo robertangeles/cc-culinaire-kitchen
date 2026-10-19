@@ -20,12 +20,12 @@ import {
   updateFreeSessions,
   assignRole,
   removeRole,
-  deleteUser,
   adminUpdateUser,
   updateSubscription,
   removeUserOrganisation,
 } from "../services/userService.js";
 import { getUserOrganisation } from "../services/organisationService.js";
+import { anonymiseUser, UserAnonymisationError } from "../services/userAnonymisationService.js";
 import { sendDirectEmail } from "../services/emailService.js";
 
 /** GET /api/users/profile — get current user's profile. */
@@ -251,10 +251,11 @@ export async function handleRemoveRole(req: Request, res: Response, next: NextFu
 }
 
 /**
- * DELETE /api/users/:id — permanently delete a user and all associated data.
+ * DELETE /api/users/:id — delete a user's account (admin only).
  *
- * Cascade-deletes messages, conversations, roles, org memberships,
- * refresh tokens, email verifications, OAuth accounts, then the user.
+ * Deletes the account by anonymising it: personal data is removed and the user
+ * row is scrubbed but kept, so business records stay valid and anonymous.
+ * See userAnonymisationService.
  */
 export async function handleDeleteUser(req: Request, res: Response, next: NextFunction) {
   try {
@@ -263,11 +264,15 @@ export async function handleDeleteUser(req: Request, res: Response, next: NextFu
       res.status(400).json({ error: "Cannot delete your own account" });
       return;
     }
-    await deleteUser(userId);
+    await anonymiseUser(userId, req.user?.sub ?? null);
     res.json({ success: true });
   } catch (err) {
     if (err instanceof Error && err.message === "User not found") {
       res.status(404).json({ error: err.message });
+      return;
+    }
+    if (err instanceof UserAnonymisationError) {
+      res.status(502).json({ error: err.message });
       return;
     }
     next(err);

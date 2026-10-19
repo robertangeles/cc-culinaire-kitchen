@@ -4,6 +4,16 @@ Append-only. Newest entry on top.
 
 ---
 
+## 2026-10-20 — Account deletion: scrub and keep the row
+
+- `feature/ck-web/anonymise-user-on-delete`: new `userAnonymisationService.anonymiseUser` replaces the hard `deleteUser`. Decisions (user, 2026-10-20): scrub and keep the row; promise 30 days; cancel the Stripe subscription. Order: Stripe first (outside the transaction), then one transaction that deletes personal rows, scrubs the `user` row and writes an `anonymised` audit entry. Business and audit rows are kept.
+- Driver: the published pages promise "no personally identifiable information is retained" and a right to erasure, but the only path was an admin hard-delete that fails for users with business history and leaves orphans. Australian position (briefing, not legal advice): no general erasure right, but APP 11.2 destroy-or-de-identify when no longer needed unless law requires retention; Fair Work 7-year employee records.
+- Guards: every `user` column must be scrubbed or deliberately kept, and every FK to `user` must be classified handled or kept (both mutation-checked). Integration test against the real DB covers scrub, kept business history, idempotence, not-found, and Stripe-first ordering.
+- This unblocks adding the 35 missing FK constraints to prod (a hard delete is no longer the path that would hit them).
+- Not done: in-app "Delete my account" button, aligning the two published pages to 30 days (admin UI content), Stripe customer deletion, compliance documents on user deletion.
+
+---
+
 ## 2026-10-17 — Tooltip leaked timer (found by CI on PR #148 and on main)
 
 - `fix/ck-web/tooltip-leaked-timer`: `ui/Tooltip.tsx` started a 300 ms timer on mouse-enter and again on focus without clearing the first. A click fires both, so the first timer leaked: leave only cancelled the second, and the first opened the tooltip after the pointer had gone, leaving it stuck. Fixed with a `clearTimeout` in `handleEnter`; `Tooltip.test.tsx` reproduces it (red, then green).

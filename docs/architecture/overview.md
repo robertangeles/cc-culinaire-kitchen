@@ -89,3 +89,19 @@ culinaire-kitchen/
   docs/            Documentation (you are here)
   uploads/         Uploaded files (logos, favicons)
 ```
+
+## Account deletion
+
+Deleting a user (admin: `DELETE /api/users/:id`) anonymises the account instead of removing the row. `userAnonymisationService.anonymiseUser`:
+
+1. Cancels the Stripe subscription immediately. If that fails, nothing else is changed and the API answers 502, so a user is never left billed with their data gone.
+2. Removes personal data: conversations and messages, credentials and sign-in links, roles, organisation and location membership, notifications, preferences, Brain memories, saved recipes and reviews. Community posts become empty deleted messages.
+3. Scrubs the `user` row: name becomes "Deleted user", email a unique `deleted-<id>@deleted.invalid` placeholder, and password, MFA secret, photo, bio, address and every encrypted PII column are cleared. The row and its id stay, with status `deleted`.
+4. Keeps business and audit records (orders, waste, receiving, stock, audit log). They keep pointing at the scrubbed row, so they no longer identify a person.
+
+Staff compliance documents follow their own retention lifecycle (7 years for employee records) and are not touched. Deleted users are hidden from the admin user list.
+
+Guards in `userAnonymisation.test.ts` fail the build when a new `user` column or a new foreign key to `user` has not been classified (scrubbed or kept).
+
+Known limits: an access token already issued works until it expires, and the Stripe customer object keeps its name and email until the customer is deleted on the Stripe side.
+
