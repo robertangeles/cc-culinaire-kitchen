@@ -1,5 +1,17 @@
 # CulinAIre Kitchen — TODO
 
+## Account deletion follow-ups (2026-10-20)
+
+`anonymiseUser` shipped (scrub and keep the row; see docs/architecture/overview.md). Still open:
+- **Self-serve "Delete my account" in the web app.** The privacy policy claims it exists; today it is an email request or an admin action.
+- **Align the published pages to 30 days.** `delete-account` says 7 business days, `privacy` says 30 days. Edit via the admin UI (site pages are DB content). The delete-account page also lists what is deleted; it should mention that business records stay, with no name attached.
+- **Stripe customer deletion.** The subscription is cancelled, but the Stripe customer keeps name and email. Deleting the customer removes the personal data and keeps payment records.
+- **Staff compliance documents on user deletion** follow the 7-year retention lifecycle; decide whether deleting an account should trigger the archive step.
+- **Profile photo file.** `userPhotoPath` is cleared; confirm whether the uploaded file itself is removed from storage.
+- **Then:** add the 35 missing FK constraints to prod (the 36th, `ingredient_cross_usage.prep_session_id`, has 18 orphan rows and needs a decision).
+
+---
+
 ## Review-found bugs: knowledge ingest (2f) and prep (2e) — ALL FIXED (verified 2026-10-08)
 
 Surfaced by the Phase 2e/2f specialist and red-team reviews (2026-09-27). Fixed in PRs #136–#140

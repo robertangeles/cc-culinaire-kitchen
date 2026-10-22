@@ -1186,3 +1186,9 @@ builds all tables with CHECKs enforcing. Stop it again when done.
 - **Problem**: A script that built `CREATE INDEX ... ON ${table}` from a list failed on the first dev run with `syntax error at or near "user"`, because the `user` table name is reserved. It rolled back cleanly because everything ran in one transaction.
 - **Fix**: Double-quote every identifier in the DDL, compare index definitions with quotes stripped (Postgres prints `"user"`), and test that names are plain lowercase identifiers.
 - **Rule**: Any script that interpolates table or column names quotes them, and runs in one transaction. Run it on dev before anything else; the dev run is what finds this class of bug.
+
+## #106 — `beforeEach(() => mock.mockReset())` returns the mock, and vitest calls it as cleanup (2026-10-20)
+
+- **Problem**: Three tests that configured `mockRejectedValue` failed with the rejected error as an "unhandled" failure, although the handler under test handled it correctly. The arrow body `vi.mocked(fn).mockReset()` returns the mock function, and vitest treats a function returned from `beforeEach` as a teardown callback, so it called the mock after each test.
+- **Fix**: Use a block body: `beforeEach(() => { vi.mocked(fn).mockReset(); })`.
+- **Rule**: Hooks never return a value. When a test fails with an error that the code under test demonstrably handles, check the test's own hooks before the code.

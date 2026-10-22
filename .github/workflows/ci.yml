@@ -198,6 +198,9 @@ jobs:
       - name: Run daily-run-claim integration tests
         run: pnpm --filter @culinaire/server exec vitest run src/utils/dailyRunClaim.integration.test.ts
 
+      - name: Run user anonymisation integration tests
+        run: pnpm --filter @culinaire/server exec vitest run src/services/userAnonymisation.integration.test.ts
+
   # Browser E2E (Playwright) against a real app on a throwaway Postgres: pushes
   # the schema, seeds RBAC plus one MFA-enabled E2E user/org/location, starts the
   # API and the Vite dev server (it proxies /api), then runs the full suite and

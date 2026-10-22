@@ -48,7 +48,10 @@ export type AuditAction =
   // not just a generic 403 in access logs. `action.length` stays under
   // varchar(30) — checked, per this codebase's own "check length before
   // naming a new type" lesson.
-  | "access_denied";
+  | "access_denied"
+  // Account deletion: the user row was scrubbed and kept (userAnonymisationService).
+  // Distinct from "soft_delete" because the personal data is gone, not hidden.
+  | "anonymised";
 
 export interface LogParams {
   entityType: string;
