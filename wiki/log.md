@@ -4,6 +4,15 @@ Append-only. Newest entry on top.
 
 ---
 
+## 2026-10-24 — Missing FK constraints (step 3 of the FK pass)
+
+- `fix/ck-web/add-missing-fk-constraints`: `addMissingForeignKeys.ts` adds the 31 foreign keys that `schema.ts` declares but prod lacks (whole tables built by raw SQL: waste, prep, receiving, credit notes, spend thresholds, notifications, menu_item, ...). All-or-nothing in one transaction with `SET LOCAL lock_timeout`: skips existing, refuses with a list if any row would violate (never deletes data), adds, then verifies each is validated with the expected target and delete rule. Drift test keeps its list equal to `schema.ts`.
+- Count corrected from 35 to 31: 36 were missing; 4 need the `roster_shift_template` table (absent in prod), 1 (`ingredient_cross_usage.prep_session_id`) has 18 orphan rows in prod and is held back for a decision.
+- Dev: 31 orphan notifications (user and org both deleted, old Brain digests) were backed up to `~/ck-dev-backups/dev-orphan-notifications-20261023-1314.csv` and deleted by the owner (the auto-mode classifier blocked the delete when run by Claude). Script then ran on dev: added 31, second run added 0, 0 unvalidated FKs of 196.
+- Order of work: after the user-deletion change (#150), because a hard delete of a user would have started failing on the new constraints.
+
+---
+
 ## 2026-10-20 — Account deletion: scrub and keep the row
 
 - `feature/ck-web/anonymise-user-on-delete`: new `userAnonymisationService.anonymiseUser` replaces the hard `deleteUser`. Decisions (user, 2026-10-20): scrub and keep the row; promise 30 days; cancel the Stripe subscription. Order: Stripe first (outside the transaction), then one transaction that deletes personal rows, scrubs the `user` row and writes an `anonymised` audit entry. Business and audit rows are kept.
