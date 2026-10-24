@@ -5,12 +5,6 @@
  * REFERENCES, so production could hold rows pointing at nothing while CI, which
  * builds its database from schema.ts, could not.
  *
- * Deliberately NOT in this list:
- *   - ingredient_cross_usage.prep_session_id: production has 18 orphan rows (18 of
- *     22) pointing at deleted prep sessions. Needs a decision on those rows first.
- *   - roster_shift_template.* and shift.source_template_row_id: the
- *     roster_shift_template table does not exist in production yet.
- *
  * Strict and all-or-nothing, in one transaction with SET LOCAL lock_timeout:
  *   1. Skip any foreign key that already exists on that column (idempotent).
  *   2. Refuse, changing nothing, if any row would violate a constraint it is about to
@@ -50,6 +44,7 @@ const FOREIGN_KEYS: ReadonlyArray<readonly [string, string, string, string, Dele
   ["credit_note", "supplier_id", "supplier", "supplier_id", "NO ACTION"],
   ["discrepancy_photo", "discrepancy_id", "receiving_discrepancy", "discrepancy_id", "NO ACTION"],
   ["discrepancy_photo", "uploaded_by_user_id", "user", "user_id", "NO ACTION"],
+  ["ingredient_cross_usage", "prep_session_id", "prep_session", "prep_session_id", "NO ACTION"],
   ["ingredient_cross_usage", "user_id", "user", "user_id", "NO ACTION"],
   ["menu_item", "store_location_id", "store_location", "store_location_id", "NO ACTION"],
   ["menu_item", "user_id", "user", "user_id", "NO ACTION"],
