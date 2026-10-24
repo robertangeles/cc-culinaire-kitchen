@@ -1,6 +1,6 @@
 /**
  * One-off: index every foreign key that had no index on its leading column
- * (51 of them, found by comparing schema.ts and the live catalog). Without an
+ * (53 of them, found by comparing schema.ts and the live catalog). Without an
  * index, deleting a parent row (a user, a location, an ingredient) makes
  * Postgres scan the whole child table to check the constraint, and any lookup by
  * that column is a full scan. House rule: every FK gets an index.
@@ -35,22 +35,24 @@ const { db } = await import("../db/index.js");
 
 // [index name, table, column]
 const FK_INDEXES: ReadonlyArray<readonly [string, string, string]> = [
+  ["idx_bench_mention_message_id", "bench_mention", "message_id"],
+  ["idx_bench_pin_channel_id", "bench_pin", "channel_id"],
   ["idx_consumption_log_user_id", "consumption_log", "user_id"],
   ["idx_credit_note_created_by_user_id", "credit_note", "created_by_user_id"],
   ["idx_discrepancy_photo_uploaded_by_user_id", "discrepancy_photo", "uploaded_by_user_id"],
   ["idx_fifo_batch_ingredient_id", "fifo_batch", "ingredient_id"],
   ["idx_forecast_recommendation_organisation_id", "forecast_recommendation", "organisation_id"],
   ["idx_guide_updated_by", "guide", "updated_by"],
-  ["idx_ingredient_deleted_by", "ingredient", "deleted_by"],
-  ["idx_ingredient_preferred_supplier_id", "ingredient", "preferred_supplier_id"],
   ["idx_ingredient_alias_created_by_user_id", "ingredient_alias", "created_by_user_id"],
   ["idx_ingredient_cross_usage_ingredient_id", "ingredient_cross_usage", "ingredient_id"],
   ["idx_ingredient_cross_usage_prep_session_id", "ingredient_cross_usage", "prep_session_id"],
   ["idx_ingredient_cross_usage_user_id", "ingredient_cross_usage", "user_id"],
+  ["idx_ingredient_deleted_by", "ingredient", "deleted_by"],
+  ["idx_ingredient_preferred_supplier_id", "ingredient", "preferred_supplier_id"],
   ["idx_inventory_transfer_initiated_by_user_id", "inventory_transfer", "initiated_by_user_id"],
+  ["idx_inventory_transfer_line_fifo_batch_id", "inventory_transfer_line", "fifo_batch_id"],
   ["idx_inventory_transfer_received_by_user_id", "inventory_transfer", "received_by_user_id"],
   ["idx_inventory_transfer_sent_by_user_id", "inventory_transfer", "sent_by_user_id"],
-  ["idx_inventory_transfer_line_fifo_batch_id", "inventory_transfer_line", "fifo_batch_id"],
   ["idx_menu_item_linked_ingredient_id", "menu_item", "linked_ingredient_id"],
   ["idx_order_guide_created_by_user_id", "order_guide", "created_by_user_id"],
   ["idx_order_guide_store_location_id", "order_guide", "store_location_id"],
@@ -81,8 +83,8 @@ const FK_INDEXES: ReadonlyArray<readonly [string, string, string]> = [
   ["idx_stock_take_session_approved_by_user_id", "stock_take_session", "approved_by_user_id"],
   ["idx_stock_take_session_opened_by_user_id", "stock_take_session", "opened_by_user_id"],
   ["idx_store_location_created_by", "store_location", "created_by"],
-  ["idx_user_selected_organisation_id", "user", "selected_organisation_id"],
   ["idx_user_location_preference_store_location_id", "user_location_preference", "store_location_id"],
+  ["idx_user_selected_organisation_id", "user", "selected_organisation_id"],
   ["idx_user_store_location_assigned_by", "user_store_location", "assigned_by"],
   ["idx_waste_log_organisation_id", "waste_log", "organisation_id"],
   ["idx_waste_log_user_id", "waste_log", "user_id"],
