@@ -4,6 +4,14 @@ Append-only. Newest entry on top.
 
 ---
 
+## 2026-10-24 — Bench tables aligned with the live database; prod schema drift found
+
+- `fix/ck-web/bench-schema-align`: prod and dev both enforce three cascade FKs on the bench tables (`bench_mention.message_id`, `bench_pin.message_id`, `bench_pin.channel_id`) that `schema.ts` never declared, and had no index on any of them; `bench_pin.message_id` is `.unique()` in `schema.ts` (and `pinMessage` relies on it via `ON CONFLICT DO NOTHING`) but neither database had the constraint, so a double pin would create duplicate rows. `schema.ts` now declares the FKs, the two missing indexes and the live `idx_bench_mention_user`; `addBenchPinUnique.ts` adds the constraint (refuses on duplicates; never deletes); the two indexes join `addForeignKeyIndexes.ts` (now 53). Both tables are empty in prod and dev. Dev: scripts run twice, second run no-op.
+- Correction: I had said `bench_mention.message_id` was UNIQUE in `schema.ts` and "looked wrong". That was a misreading; it is not declared unique. Only `bench_pin.message_id` is.
+- Found while checking item 2 (rostering): **prod is missing 1 table and 8 columns that the deployed code expects** (`organisation` x5: logo path, colour accent, default timezone, currency, jurisdiction; `public_holiday.partial_day_from_time`; `shift` x2 and the `roster_shift_template` table). A full-row `organisation` select fails on prod ("column organisation_logo_path does not exist"), so `getUserOrganisation`/`getOrganisation` error for the org page and profile org tab. The migration scripts exist and are idempotent (`applyOrganisationSettingsSchema.ts`, `addPublicHolidayPartialDayColumn.ts`, `addRosterShiftTemplate.ts`) but were never run on prod.
+
+---
+
 ## 2026-10-24 — Missing FK constraints (step 3 of the FK pass)
 
 - `fix/ck-web/add-missing-fk-constraints`: `addMissingForeignKeys.ts` adds the 31 foreign keys that `schema.ts` declares but prod lacks (whole tables built by raw SQL: waste, prep, receiving, credit notes, spend thresholds, notifications, menu_item, ...). All-or-nothing in one transaction with `SET LOCAL lock_timeout`: skips existing, refuses with a list if any row would violate (never deletes data), adds, then verifies each is validated with the expected target and delete rule. Drift test keeps its list equal to `schema.ts`.
@@ -35,7 +43,7 @@ Append-only. Newest entry on top.
 - `fix/ck-web/fk-index-schema-alignment`: declared the 6 indexes that already existed live but not in `schema.ts` (`prep_session`, `prep_menu_selection`), and added 51 missing FK indexes across 33 tables (`schema.ts` plus idempotent `addForeignKeyIndexes.ts`). `foreignKeyIndexes.test.ts` now asserts EVERY FK in the schema has a leading-column index, that the script and `schema.ts` list the same indexes, and that identifiers are safe for unquoted DDL. Mutation-checked. Replaces the compliance-only guard test.
 - First dev run failed: `user` is a reserved word, so unquoted `CREATE INDEX ... ON user` is a syntax error (the transaction rolled back, nothing applied). The Advisor had flagged exactly this. DDL now quotes identifiers. Dev: 51 created, second run a verified no-op. Dev catalog afterwards: only the 3 bench FKs unindexed.
 - Read-only findings for item 3 (not yet acted on): 36 FKs declared in `schema.ts` have no constraint in prod, on whole tables built by old raw-SQL scripts (waste_log, prep_*, receiving_*, credit_note, spend_threshold, notification, ...). Orphan check: prod has 18 orphan rows, all `ingredient_cross_usage.prep_session_id` (18 of 22 rows point at deleted prep sessions); dev has those plus 31 notifications pointing at missing users/orgs. Prod is also missing the `roster_shift_template` table that `schema.ts` declares.
-- Separate decision, not touched: `schema.ts` declares `message_id` UNIQUE on `bench_mention` and `bench_pin`; prod has no such constraint (and for `bench_mention` it looks wrong, a message can mention several users).
+- Bench tables: see the 2026-10-24 bench entry. (An earlier version of this line wrongly said `bench_mention.message_id` is UNIQUE in `schema.ts`; only `bench_pin.message_id` is.)
 
 ---
 

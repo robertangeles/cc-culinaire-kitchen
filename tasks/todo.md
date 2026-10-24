@@ -8,7 +8,8 @@
 - **Stripe customer deletion.** The subscription is cancelled, but the Stripe customer keeps name and email. Deleting the customer removes the personal data and keeps payment records.
 - **Staff compliance documents on user deletion** follow the 7-year retention lifecycle; decide whether deleting an account should trigger the archive step.
 - **Profile photo file.** `userPhotoPath` is cleared; confirm whether the uploaded file itself is removed from storage.
-- **FK constraints:** done on prod 2026-10-25 (201 FKs, 0 unvalidated): 31 from `addMissingForeignKeys.ts`, the 4 roster ones after the roster migrations, and `ingredient_cross_usage.prep_session_id` after its 18 orphan rows were deleted (backups in `~/ck-prod-backups/`). Dev still has those 18 orphans; the script refuses until they are deleted.
+- **Prod schema drift:** fixed 2026-10-24 (organisation settings columns, public-holiday partial-day column, `roster_shift_template`; scripts `applyOrganisationSettingsSchema.ts`, `addPublicHolidayPartialDayColumn.ts`, `addRosterShiftTemplate.ts`).
+- **FK constraints:** done on prod and dev 2026-10-25 (prod 201 FKs, 0 unvalidated): 31 from `addMissingForeignKeys.ts`, the 4 roster ones, and `ingredient_cross_usage.prep_session_id` after its 18 orphan rows were deleted (backups in `~/ck-prod-backups/` and `~/ck-dev-backups/`).
 
 ---
 
