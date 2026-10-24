@@ -752,11 +752,17 @@ export const benchReaction = pgTable(
  */
 export const benchMention = pgTable("bench_mention", {
   mentionId: serial("mention_id").primaryKey(),
-  messageId: uuid("message_id").notNull(),
+  // Production and dev already enforce this FK (cascade); schema.ts just did not say so.
+  messageId: uuid("message_id").notNull().references(() => benchMessage.messageId, { onDelete: "cascade" }),
   mentionedUserId: integer("mentioned_user_id").notNull(),
   readInd: boolean("read_ind").notNull().default(false),
   createdDttm: timestamp("created_dttm").notNull().defaultNow(),
-});
+}, (table) => [
+  // "unread mentions for a user" (already live; declared so a fresh database matches).
+  index("idx_bench_mention_user").on(table.mentionedUserId, table.readInd),
+  // FK index: "bench mention rows for one bench message", and the constraint check when that message row is deleted.
+  index("idx_bench_mention_message_id").on(table.messageId),
+]);
 
 /**
  * The `bench_pin` table stores pinned messages per channel.
@@ -764,11 +770,17 @@ export const benchMention = pgTable("bench_mention", {
  */
 export const benchPin = pgTable("bench_pin", {
   pinId: serial("pin_id").primaryKey(),
-  messageId: uuid("message_id").notNull().unique(),
-  channelId: integer("channel_id").notNull(),
+  // One pin per message: pinMessage relies on this for ON CONFLICT DO NOTHING. The unique
+  // index also serves as the FK index for message_id. Production and dev already enforce the
+  // FKs (cascade); schema.ts just did not say so.
+  messageId: uuid("message_id").notNull().unique().references(() => benchMessage.messageId, { onDelete: "cascade" }),
+  channelId: integer("channel_id").notNull().references(() => benchChannel.channelId, { onDelete: "cascade" }),
   pinnedBy: integer("pinned_by").notNull(),
   createdDttm: timestamp("created_dttm").notNull().defaultNow(),
-});
+}, (table) => [
+  // FK index: "pins in one channel" (the pinned-messages list), and the constraint check when that channel row is deleted.
+  index("idx_bench_pin_channel_id").on(table.channelId),
+]);
 
 /**
  * The `bench_dm_thread` table represents a direct message conversation
