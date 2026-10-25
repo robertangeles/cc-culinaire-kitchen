@@ -7,6 +7,7 @@
 import { Router } from "express";
 import multer from "multer";
 import { authenticate, requireRole } from "../middleware/auth.js";
+import { authRateLimit } from "../middleware/rateLimiter.js";
 import { upload } from "../middleware/upload.js";
 import {
   handleGetProfile,
@@ -22,6 +23,7 @@ import {
   handleAssignRole,
   handleRemoveRole,
   handleDeleteUser,
+  handleDeleteOwnAccount,
   handleSendEmail,
   handleAdminUpdateUser,
   handleUpdateSubscription,
@@ -52,6 +54,8 @@ router.get("/kitchen-profile", handleGetKitchenProfile);
 router.put("/kitchen-profile", handleUpsertKitchenProfile);
 router.patch("/profile", handleUpdateProfile);
 router.post("/change-password", handleChangePassword);
+// Self-service account deletion. Password/MFA guesses are limited like login.
+router.post("/delete-account", authRateLimit, handleDeleteOwnAccount);
 router.post("/profile/avatar", (req, res, next) => {
   upload.single("file")(req, res, (err: unknown) => {
     if (err instanceof multer.MulterError) {

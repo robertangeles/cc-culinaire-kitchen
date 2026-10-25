@@ -5,6 +5,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Delete my account.** Profile -> Security now has a "Delete account" section. The user confirms with their password (Google-only accounts type their email; accounts with MFA also enter their authenticator code), the account is anonymised exactly like an admin deletion, and they are signed out. Google-only accounts must also have signed in within the last 10 minutes. Blocked, with a clear message, for the only Administrator and for the only admin of an organisation that still has other members. `POST /api/users/delete-account`, `accountDeletionService.ts`. The profile response now includes `hasPassword`.
+
 ### Changed
 
 - **Deleting a user now anonymises the account instead of removing the row.** Personal data (conversations, credentials, roles, notifications, saved recipes, preferences) is removed, the name, email and other identity fields are scrubbed, any Stripe subscription is cancelled immediately, and the user row is kept so orders, waste logs and the audit trail stay valid with no name attached. Previously the hard delete failed for any user with business history and left orphan rows (for example notifications) behind for the rest. Deleted users are hidden from the admin user list. `userAnonymisationService.ts`; the admin confirmation text now says what actually happens.

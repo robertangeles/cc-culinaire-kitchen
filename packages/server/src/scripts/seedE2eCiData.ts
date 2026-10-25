@@ -13,6 +13,7 @@
  * touch the shared dev or the prod database. Run after `db:push` and `db:seed`:
  *
  *   E2E_USER_EMAIL=... E2E_USER_PASSWORD=... E2E_USER_TOTP_SECRET=... \
+ *   E2E_DELETE_USER_EMAIL=... E2E_DELETE_USER_PASSWORD=... \
  *     pnpm --filter @culinaire/server exec tsx src/scripts/seedE2eCiData.ts
  */
 
@@ -74,6 +75,16 @@ export async function seedE2eCiData(email: string, password: string, totpSecret:
   return { userId, organisationId: org.organisationId, storeLocationId: location.storeLocationId };
 }
 
+/**
+ * A second, plain user (no MFA, no admin role, no organisation) that the account-deletion
+ * spec signs in as and deletes. It must not be the main E2E user, which every other spec shares.
+ */
+export async function seedE2eDeleteUser(email: string, password: string) {
+  const userId = await registerUser("E2E Delete User", email, password);
+  await db.insert(kitchenProfile).values({ userId, onboardingDoneInd: true });
+  return userId;
+}
+
 // Auto-run only when invoked directly (not when imported by a test).
 if (process.argv[1]?.endsWith("seedE2eCiData.ts")) {
   (async () => {
@@ -83,6 +94,7 @@ if (process.argv[1]?.endsWith("seedE2eCiData.ts")) {
       requireEnv("E2E_USER_PASSWORD"),
       requireEnv("E2E_USER_TOTP_SECRET"),
     );
+    await seedE2eDeleteUser(requireEnv("E2E_DELETE_USER_EMAIL"), requireEnv("E2E_DELETE_USER_PASSWORD"));
     console.log(`Seeded E2E data: user ${seeded.userId}, organisation ${seeded.organisationId}, location ${seeded.storeLocationId}`);
     process.exit(0);
   })().catch((err) => {

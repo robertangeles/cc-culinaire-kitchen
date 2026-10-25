@@ -403,6 +403,25 @@ export async function refreshAccessToken(rawToken: string) {
 }
 
 /**
+ * When the sign-in that created this refresh token happened, or null if the token is
+ * unknown or belongs to another user. Refresh tokens are not rotated, so this is the
+ * time the user last actually authenticated, unlike an access token's `iat`, which
+ * resets on every silent refresh.
+ */
+export async function getSignInTime(rawToken: string | undefined, userId: number): Promise<Date | null> {
+  if (!rawToken) return null;
+  const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
+  const [stored] = await db
+    .select({ userId: refreshToken.userId, expiresAtDttm: refreshToken.expiresAtDttm })
+    .from(refreshToken)
+    .where(eq(refreshToken.tokenHash, tokenHash));
+  if (!stored || stored.userId !== userId) return null;
+  // Derived from the expiry the app wrote, not the column default `now()`, whose zone
+  // depends on the database session and would skew a minutes-wide check.
+  return new Date(stored.expiresAtDttm.getTime() - REFRESH_EXPIRY_MS);
+}
+
+/**
  * Revokes a refresh token by deleting its hash from the database.
  */
 export async function revokeRefreshToken(rawToken: string) {
@@ -832,7 +851,7 @@ export async function generateMfaSecret(userId: number) {
 /**
  * Verifies a TOTP code against the user's stored MFA secret.
  */
-async function verifyMfaToken(userId: number, token: string): Promise<boolean> {
+export async function verifyMfaToken(userId: number, token: string): Promise<boolean> {
   const [row] = await db.select().from(user).where(eq(user.userId, userId));
   if (!row || !row.mfaSecret) return false;
   const result = await otpVerify({ token, secret: row.mfaSecret });

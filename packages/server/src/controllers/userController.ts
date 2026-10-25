@@ -27,6 +27,9 @@ import {
 import { getUserOrganisation } from "../services/organisationService.js";
 import { anonymiseUser, UserAnonymisationError } from "../services/userAnonymisationService.js";
 import { sendDirectEmail } from "../services/emailService.js";
+import { AccountDeletionError, deleteOwnAccount } from "../services/accountDeletionService.js";
+import { clearAuthCookies } from "./authController.js";
+import { getSignInTime } from "../services/authService.js";
 
 /** GET /api/users/profile — get current user's profile. */
 export async function handleGetProfile(req: Request, res: Response, next: NextFunction) {
@@ -92,6 +95,42 @@ export async function handleChangePassword(req: Request, res: Response, next: Ne
   } catch (err: unknown) {
     if (err instanceof Error) {
       res.status(400).json({ error: err.message });
+      return;
+    }
+    next(err);
+  }
+}
+
+const DeleteOwnAccountSchema = z.object({
+  password: z.string().max(200).optional(),
+  confirmEmail: z.string().max(320).optional(),
+  mfaCode: z.string().max(12).optional(),
+});
+
+/**
+ * POST /api/users/delete-account — the signed-in user deletes their own account.
+ *
+ * Needs proof of identity (see accountDeletionService). On success the auth cookies are
+ * cleared so the browser is signed out; the refresh tokens were already removed.
+ */
+export async function handleDeleteOwnAccount(req: Request, res: Response, next: NextFunction) {
+  try {
+    const parsed = DeleteOwnAccountSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.flatten() });
+      return;
+    }
+    const signedInAt = await getSignInTime(req.cookies?.refresh_token, req.user!.sub);
+    await deleteOwnAccount(req.user!.sub, parsed.data, signedInAt);
+    clearAuthCookies(res);
+    res.json({ success: true });
+  } catch (err) {
+    if (err instanceof AccountDeletionError) {
+      res.status(err.statusCode).json({ error: err.message, code: err.code });
+      return;
+    }
+    if (err instanceof UserAnonymisationError) {
+      res.status(502).json({ error: err.message });
       return;
     }
     next(err);

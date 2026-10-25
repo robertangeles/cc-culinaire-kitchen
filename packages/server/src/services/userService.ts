@@ -33,7 +33,8 @@ export async function getUserProfile(userId: number) {
   // the password hash and the MFA secret.
   const { userPasswordHash: _userPasswordHash, mfaSecret: _mfaSecret, ...rest } = rows[0];
   const pii = decryptUserPii(rest as Record<string, unknown>);
-  return { ...rest, ...pii };
+  // hasPassword lets the client ask Google-only accounts for their email instead of a password.
+  return { ...rest, ...pii, hasPassword: _userPasswordHash !== null };
 }
 
 /** Update profile fields (name, photo, bio, address). */
