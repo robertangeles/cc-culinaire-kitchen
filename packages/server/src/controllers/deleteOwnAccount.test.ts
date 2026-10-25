@@ -1,12 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { Request, Response } from "express";
 
+vi.mock("../services/authService.js", async () => {
+  const actual = await vi.importActual<typeof import("../services/authService.js")>("../services/authService.js");
+  return { ...actual, getSignInTime: vi.fn() };
+});
 vi.mock("../services/accountDeletionService.js", async () => {
   const actual = await vi.importActual<typeof import("../services/accountDeletionService.js")>("../services/accountDeletionService.js");
   return { ...actual, deleteOwnAccount: vi.fn() };
 });
 
 import { AccountDeletionError, deleteOwnAccount } from "../services/accountDeletionService.js";
+import { getSignInTime } from "../services/authService.js";
 import { UserAnonymisationError } from "../services/userAnonymisationService.js";
 import { handleDeleteOwnAccount } from "./userController.js";
 import usersRouter from "../routes/users.js";
@@ -19,19 +24,23 @@ function fakeRes() {
 const call = (body: unknown) => {
   const res = fakeRes();
   const next = vi.fn();
-  const req = { user: { sub: 5 }, body } as unknown as Request;
+  const req = { user: { sub: 5 }, body, cookies: { refresh_token: "raw-refresh" } } as unknown as Request;
   return handleDeleteOwnAccount(req, res as unknown as Response, next).then(() => ({ res, next }));
 };
 
 beforeEach(() => {
   vi.mocked(deleteOwnAccount).mockReset();
+  vi.mocked(getSignInTime).mockReset();
 });
 
 describe("POST /api/users/delete-account handler", () => {
   it("deletes the caller's own account (from the token, never from the body) and signs them out", async () => {
+    const signedIn = new Date("2026-10-26T09:58:00Z");
+    vi.mocked(getSignInTime).mockResolvedValue(signedIn);
     vi.mocked(deleteOwnAccount).mockResolvedValue(undefined);
     const { res } = await call({ password: "pw", userId: 999 });
-    expect(deleteOwnAccount).toHaveBeenCalledWith(5, { password: "pw" });
+    expect(getSignInTime).toHaveBeenCalledWith("raw-refresh", 5);
+    expect(deleteOwnAccount).toHaveBeenCalledWith(5, { password: "pw" }, signedIn);
     expect(res.json).toHaveBeenCalledWith({ success: true });
     expect(res.clearCookie).toHaveBeenCalledWith("access_token", { path: "/" });
     expect(res.clearCookie).toHaveBeenCalledWith("refresh_token", { path: "/" });

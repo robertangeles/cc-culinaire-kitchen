@@ -29,6 +29,7 @@ import { anonymiseUser, UserAnonymisationError } from "../services/userAnonymisa
 import { sendDirectEmail } from "../services/emailService.js";
 import { AccountDeletionError, deleteOwnAccount } from "../services/accountDeletionService.js";
 import { clearAuthCookies } from "./authController.js";
+import { getSignInTime } from "../services/authService.js";
 
 /** GET /api/users/profile — get current user's profile. */
 export async function handleGetProfile(req: Request, res: Response, next: NextFunction) {
@@ -119,7 +120,8 @@ export async function handleDeleteOwnAccount(req: Request, res: Response, next: 
       res.status(400).json({ error: parsed.error.flatten() });
       return;
     }
-    await deleteOwnAccount(req.user!.sub, parsed.data);
+    const signedInAt = await getSignInTime(req.cookies?.refresh_token, req.user!.sub);
+    await deleteOwnAccount(req.user!.sub, parsed.data, signedInAt);
     clearAuthCookies(res);
     res.json({ success: true });
   } catch (err) {

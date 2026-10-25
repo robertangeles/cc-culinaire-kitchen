@@ -7,7 +7,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
-- **Delete my account.** Profile -> Security now has a "Delete account" section. The user confirms with their password (Google-only accounts type their email; accounts with MFA also enter their authenticator code), the account is anonymised exactly like an admin deletion, and they are signed out. Blocked, with a clear message, for the only Administrator and for the only admin of an organisation that still has other members. `POST /api/users/delete-account`, `accountDeletionService.ts`. The profile response now includes `hasPassword`.
+- **Delete my account.** Profile -> Security now has a "Delete account" section. The user confirms with their password (Google-only accounts type their email; accounts with MFA also enter their authenticator code), the account is anonymised exactly like an admin deletion, and they are signed out. Google-only accounts without MFA must also have signed in within the last 10 minutes. Blocked, with a clear message, for the only Administrator and for the only admin of an organisation that still has other members. `POST /api/users/delete-account`, `accountDeletionService.ts`. The profile response now includes `hasPassword`.
 
 ### Changed
 

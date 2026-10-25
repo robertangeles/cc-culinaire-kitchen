@@ -6,7 +6,7 @@ Append-only. Newest entry on top.
 
 ## 2026-10-26 — Self-service "Delete my account"
 
-Profile -> Security -> Delete account, `POST /api/users/delete-account`, `accountDeletionService.deleteOwnAccount` then `anonymiseUser(userId, userId)`. Confirmation: password; typed email for Google-only accounts; authenticator code when MFA is on. Blocked (409) for the only Administrator and for the only admin of an organisation that still has other members. Deletes instantly (matches the published "30 days maximum"). Profile response gained `hasPassword`. Tests: pure rules, controller and route wiring, real-DB integration (7 cases), component, and a Playwright spec using a dedicated throwaway user seeded in CI. Left out: Stripe customer deletion, the mobile app's own button.
+Profile -> Security -> Delete account, `POST /api/users/delete-account`, `accountDeletionService.deleteOwnAccount` then `anonymiseUser(userId, userId)`. Confirmation: password; typed email for Google-only accounts; authenticator code when MFA is on. Blocked (409) for the only Administrator and for the only admin of an organisation that still has other members. A Google-only account without MFA must also have signed in within 10 minutes (a typed email alone is not a credential; found by the automated security review). Deletes instantly (matches the published "30 days maximum"). Profile response gained `hasPassword`. Tests: pure rules, controller and route wiring, real-DB integration (7 cases), component, and a Playwright spec using a dedicated throwaway user seeded in CI. Left out: Stripe customer deletion, the mobile app's own button.
 
 ## 2026-10-25 — Prod schema cleanup closed; PII HMAC key fixed; drift checker added
 

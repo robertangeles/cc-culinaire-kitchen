@@ -6,7 +6,9 @@
  * is userAnonymisationService.anonymiseUser.
  *
  * Proof of identity: the password for password accounts, the account email typed back for
- * Google-only accounts (no password exists), and a current MFA code when MFA is on.
+ * Google-only accounts (no password exists), and a current MFA code when MFA is on. A typed
+ * email is only a confirmation, not a credential, so a Google-only account without MFA must
+ * also have signed in within the last 10 minutes (a stolen older session is not enough).
  *
  * Blocked, with a message that says what to do: the only platform Administrator, and the
  * only admin of an organisation that still has other members (it would be left with nobody
@@ -24,7 +26,7 @@ import { anonymiseUser } from "./userAnonymisationService.js";
 export class AccountDeletionError extends Error {
   constructor(
     message: string,
-    public readonly code: "INVALID_CREDENTIALS" | "MFA_REQUIRED" | "INVALID_MFA_CODE" | "OWNERSHIP_TRANSFER_REQUIRED" | "LAST_ADMINISTRATOR",
+    public readonly code: "INVALID_CREDENTIALS" | "RECENT_SIGN_IN_REQUIRED" | "MFA_REQUIRED" | "INVALID_MFA_CODE" | "OWNERSHIP_TRANSFER_REQUIRED" | "LAST_ADMINISTRATOR",
     public readonly statusCode: number,
   ) {
     super(message);
@@ -36,6 +38,13 @@ export interface DeleteAccountInput {
   password?: string;
   confirmEmail?: string;
   mfaCode?: string;
+}
+
+/** How recently the user must have signed in when nothing but their typed email proves who they are. */
+export const RECENT_SIGN_IN_MS = 10 * 60 * 1000;
+
+export function isRecentSignIn(signedInAt: Date | null, now: Date = new Date()): boolean {
+  return signedInAt !== null && now.getTime() - signedInAt.getTime() <= RECENT_SIGN_IN_MS;
 }
 
 /** An organisation is left unmanaged when its only admin leaves while other members remain. */
@@ -83,7 +92,11 @@ async function isLastAdministrator(userId: number): Promise<boolean> {
  * @throws {AccountDeletionError} 403 for wrong password / email / MFA code, 409 when blocked.
  * @throws {UserAnonymisationError} when the Stripe subscription could not be cancelled.
  */
-export async function deleteOwnAccount(userId: number, input: DeleteAccountInput): Promise<void> {
+export async function deleteOwnAccount(
+  userId: number,
+  input: DeleteAccountInput,
+  signedInAt: Date | null,
+): Promise<void> {
   const [row] = await db.select().from(user).where(eq(user.userId, userId));
   if (!row || row.userStatus === "deleted") throw new AccountDeletionError("Account not found.", "INVALID_CREDENTIALS", 403);
 
@@ -95,6 +108,14 @@ export async function deleteOwnAccount(userId: number, input: DeleteAccountInput
     if (input.confirmEmail?.trim().toLowerCase() !== email) {
       throw new AccountDeletionError("Type your account email address exactly to confirm.", "INVALID_CREDENTIALS", 403);
     }
+  }
+
+  if (!row.userPasswordHash && !row.mfaEnabledInd && !isRecentSignIn(signedInAt)) {
+    throw new AccountDeletionError(
+      "For your security, sign out, sign back in, and then delete your account.",
+      "RECENT_SIGN_IN_REQUIRED",
+      403,
+    );
   }
 
   if (row.mfaEnabledInd) {

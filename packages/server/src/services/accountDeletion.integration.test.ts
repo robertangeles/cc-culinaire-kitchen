@@ -56,7 +56,7 @@ describe.skipIf(!RUN)("deleteOwnAccount (real DB)", { timeout: 120_000 }, () => 
   it("refuses a wrong or missing password and changes nothing", async () => {
     const { userId } = await makeUser("pw");
     for (const input of [{ password: "wrong-password" }, {}]) {
-      const err = await refusal(deleteOwnAccount(userId, input));
+      const err = await refusal(deleteOwnAccount(userId, input, null));
       expect(err).toBeInstanceOf(AccountDeletionError);
       expect(err?.statusCode).toBe(403);
       expect(err?.code).toBe("INVALID_CREDENTIALS");
@@ -75,7 +75,7 @@ describe.skipIf(!RUN)("deleteOwnAccount (real DB)", { timeout: 120_000 }, () => 
 
   it("deletes the account with the right password", async () => {
     const { userId } = await makeUser("pw-ok");
-    await deleteOwnAccount(userId, { password: PASSWORD });
+    await deleteOwnAccount(userId, { password: PASSWORD }, null);
     expect(await statusOf(userId)).toBe("deleted");
     const [row] = await db.select().from(user).where(eq(user.userId, userId));
     expect(row.userName).toBe("Deleted user");
@@ -85,23 +85,52 @@ describe.skipIf(!RUN)("deleteOwnAccount (real DB)", { timeout: 120_000 }, () => 
 
   it("a deleted account cannot delete again", async () => {
     const { userId } = await makeUser("twice");
-    await deleteOwnAccount(userId, { password: PASSWORD });
-    const err = await refusal(deleteOwnAccount(userId, { password: PASSWORD }));
+    await deleteOwnAccount(userId, { password: PASSWORD }, null);
+    const err = await refusal(deleteOwnAccount(userId, { password: PASSWORD }, null));
     expect(err?.statusCode).toBe(403);
   });
 
-  it("Google-only account (no password): needs the email typed back, any case", async () => {
+  it("Google-only account (no password, no MFA): needs the email typed back AND a recent sign-in", async () => {
     const { userId, email } = await makeUser("oauth");
     await db.update(user).set({ userPasswordHash: null }).where(eq(user.userId, userId));
+    const fresh = new Date();
 
     for (const input of [{}, { confirmEmail: "someone-else@it.test" }, { password: PASSWORD }]) {
-      const err = await refusal(deleteOwnAccount(userId, input));
+      const err = await refusal(deleteOwnAccount(userId, input, fresh));
+      expect(err?.code).toBe("INVALID_CREDENTIALS");
+    }
+
+    // The right email is not enough with an old, unknown or missing sign-in time.
+    const typed = { confirmEmail: `  ${email.toUpperCase()} ` };
+    for (const signedInAt of [null, new Date(Date.now() - 11 * 60 * 1000), new Date(Date.now() - 3 * 24 * 3600 * 1000)]) {
+      const err = await refusal(deleteOwnAccount(userId, typed, signedInAt));
+      expect(err?.code).toBe("RECENT_SIGN_IN_REQUIRED");
       expect(err?.statusCode).toBe(403);
     }
     expect(await statusOf(userId)).not.toBe("deleted");
 
-    await deleteOwnAccount(userId, { confirmEmail: `  ${email.toUpperCase()} ` });
+    await deleteOwnAccount(userId, typed, fresh);
     expect(await statusOf(userId)).toBe("deleted");
+  });
+
+  it("a password account does not need a recent sign-in (the password is the proof)", async () => {
+    const { userId } = await makeUser("pw-old-session");
+    await deleteOwnAccount(userId, { password: PASSWORD }, new Date(Date.now() - 3 * 24 * 3600 * 1000));
+    expect(await statusOf(userId)).toBe("deleted");
+  });
+
+  it("getSignInTime: the sign-in time of the caller's own refresh token, nothing for someone else's or an unknown one", async () => {
+    const { userId } = await makeUser("signin");
+    const other = await makeUser("signin-other");
+    const { generateTokens, getSignInTime } = await import("./authService.js");
+    const before = Date.now();
+    const tokens = await generateTokens({ userId, roles: [], permissions: [] } as never);
+    const at = await getSignInTime(tokens.refreshToken, userId);
+    expect(at).not.toBeNull();
+    expect(Math.abs(at!.getTime() - before)).toBeLessThan(60_000);
+    expect(await getSignInTime(tokens.refreshToken, other.userId)).toBeNull();
+    expect(await getSignInTime("not-a-real-token", userId)).toBeNull();
+    expect(await getSignInTime(undefined, userId)).toBeNull();
   });
 
   it("with MFA on: needs a valid current code in addition to the password", async () => {
@@ -109,12 +138,12 @@ describe.skipIf(!RUN)("deleteOwnAccount (real DB)", { timeout: 120_000 }, () => 
     const secret = otpGenerateSecret();
     await db.update(user).set({ mfaEnabledInd: true, mfaSecret: secret }).where(eq(user.userId, userId));
 
-    expect((await refusal(deleteOwnAccount(userId, { password: PASSWORD })))?.code).toBe("MFA_REQUIRED");
-    expect((await refusal(deleteOwnAccount(userId, { password: PASSWORD, mfaCode: "000000" })))?.code).toBe("INVALID_MFA_CODE");
-    expect((await refusal(deleteOwnAccount(userId, { password: "wrong", mfaCode: await otpGenerate({ secret }) })))?.code).toBe("INVALID_CREDENTIALS");
+    expect((await refusal(deleteOwnAccount(userId, { password: PASSWORD }, null)))?.code).toBe("MFA_REQUIRED");
+    expect((await refusal(deleteOwnAccount(userId, { password: PASSWORD, mfaCode: "000000" }, null)))?.code).toBe("INVALID_MFA_CODE");
+    expect((await refusal(deleteOwnAccount(userId, { password: "wrong", mfaCode: await otpGenerate({ secret }) }, null)))?.code).toBe("INVALID_CREDENTIALS");
     expect(await statusOf(userId)).not.toBe("deleted");
 
-    await deleteOwnAccount(userId, { password: PASSWORD, mfaCode: await otpGenerate({ secret }) });
+    await deleteOwnAccount(userId, { password: PASSWORD, mfaCode: await otpGenerate({ secret }) }, null);
     expect(await statusOf(userId)).toBe("deleted");
   });
 
@@ -125,7 +154,7 @@ describe.skipIf(!RUN)("deleteOwnAccount (real DB)", { timeout: 120_000 }, () => 
     orgIds.push(org.organisationId);
     await db.insert(userOrganisation).values({ userId: member.userId, organisationId: org.organisationId, role: "member" });
 
-    const err = await refusal(deleteOwnAccount(owner.userId, { password: PASSWORD }));
+    const err = await refusal(deleteOwnAccount(owner.userId, { password: PASSWORD }, null));
     expect(err?.statusCode).toBe(409);
     expect(err?.code).toBe("OWNERSHIP_TRANSFER_REQUIRED");
     expect(err?.message).toContain(`${tag}-org`);
@@ -135,7 +164,7 @@ describe.skipIf(!RUN)("deleteOwnAccount (real DB)", { timeout: 120_000 }, () => 
       .update(userOrganisation)
       .set({ role: "admin" })
       .where(and(eq(userOrganisation.userId, member.userId), eq(userOrganisation.organisationId, org.organisationId)));
-    await deleteOwnAccount(owner.userId, { password: PASSWORD });
+    await deleteOwnAccount(owner.userId, { password: PASSWORD }, null);
     expect(await statusOf(owner.userId)).toBe("deleted");
   });
 
@@ -143,7 +172,7 @@ describe.skipIf(!RUN)("deleteOwnAccount (real DB)", { timeout: 120_000 }, () => 
     const solo = await makeUser("solo");
     const org = await createOrganisation(solo.userId, { name: `${tag}-solo-org` });
     orgIds.push(org.organisationId);
-    await deleteOwnAccount(solo.userId, { password: PASSWORD });
+    await deleteOwnAccount(solo.userId, { password: PASSWORD }, null);
     expect(await statusOf(solo.userId)).toBe("deleted");
   });
 });
