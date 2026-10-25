@@ -103,5 +103,11 @@ Staff compliance documents follow their own retention lifecycle (7 years for emp
 
 Guards in `userAnonymisation.test.ts` fail the build when a new `user` column or a new foreign key to `user` has not been classified (scrubbed or kept).
 
+### Self-service deletion
+
+A signed-in user deletes their own account with `POST /api/users/delete-account` (Profile -> Security -> Delete account), handled by `accountDeletionService.deleteOwnAccount`, which then calls `anonymiseUser(userId, userId)`. The user id always comes from the token, never the body. The route is behind `authenticate` and `authRateLimit`.
+
+Proof of identity, checked before anything is deleted (403 on failure, nothing changes): the password; for Google-only accounts (no password) the account email typed back; and a current authenticator code when MFA is on. Deletion is blocked with 409, and a message saying what to do, when the user is the only active Administrator, or the only admin of an organisation that still has other members. An Administrator can still delete such a user from Settings. On success the auth cookies are cleared and the browser signs out; the web app sends the user to the home page.
+
 Known limits: an access token already issued works until it expires, and the Stripe customer object keeps its name and email until the customer is deleted on the Stripe side.
 
