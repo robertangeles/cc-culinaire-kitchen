@@ -4,6 +4,14 @@ Append-only. Newest entry on top.
 
 ---
 
+## 2026-10-25 — Prod schema cleanup closed; PII HMAC key fixed; drift checker added
+
+Prod runs, each after a verified `pg_dump` in `~/ck-prod-backups/`: the 31 FK constraints (#151); the three schema scripts that added 1 table and 8 columns the deployed code needed (`organisation` settings, `public_holiday.partial_day_from_time`, `shift`, `roster_shift_template`) — before this, full-row organisation reads failed on prod; `addBenchPinUnique.ts` and the 53-entry `addForeignKeyIndexes.ts` (#152); 18 orphan `ingredient_cross_usage` rows deleted (CSV + table dump), then the last FK (#153). Prod now: 201 FKs, 0 unvalidated, 376 indexes, none invalid.
+
+Found while checking keys: Render had no `PII_HMAC_KEY`, so `ensurePiiKeys()` made a new random one on every boot and `user_email_hash` matched nothing (Google sign-in looks users up by that hash; password login hid it by falling back to plaintext email). Fixed by setting a fixed key on Render, rehashing the live users (`rehashUserEmails.ts`, #154) and redeploying. Boot now refuses to generate a missing key in production. My earlier "stale local key" claim was wrong: local `PROD_PII_ENCRYPTION_KEY` / `PROD_CREDENTIALS_ENCRYPTION_KEY` were empty, so `APP_ENV=prod` fell back to an unprefixed key.
+
+Stripe is not configured in prod (no credentials, no customers). Cancel-on-delete verified against Stripe test mode on dev: cancel, repeat cancel and unknown id all resolve. `checkSchemaDrift.ts` (read-only) compares types, NOT NULL and unique constraints with `schema.ts`; it found 5 missing UNIQUEs, 5 missing NOT NULLs and 1 missing roster_role index on prod.
+
 ## 2026-10-24 — Bench tables aligned with the live database; prod schema drift found
 
 - `fix/ck-web/bench-schema-align`: prod and dev both enforce three cascade FKs on the bench tables (`bench_mention.message_id`, `bench_pin.message_id`, `bench_pin.channel_id`) that `schema.ts` never declared, and had no index on any of them; `bench_pin.message_id` is `.unique()` in `schema.ts` (and `pinMessage` relies on it via `ON CONFLICT DO NOTHING`) but neither database had the constraint, so a double pin would create duplicate rows. `schema.ts` now declares the FKs, the two missing indexes and the live `idx_bench_mention_user`; `addBenchPinUnique.ts` adds the constraint (refuses on duplicates; never deletes); the two indexes join `addForeignKeyIndexes.ts` (now 53). Both tables are empty in prod and dev. Dev: scripts run twice, second run no-op.
