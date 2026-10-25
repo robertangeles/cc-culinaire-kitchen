@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import crypto from "node:crypto";
 
 // A valid 32-byte hex key for testing
@@ -104,6 +104,39 @@ describe("ensureEncryptionKey", () => {
     ensureEncryptionKey();
 
     expect(process.env.CREDENTIALS_ENCRYPTION_KEY).toBe(TEST_KEY);
+  });
+});
+
+describe("required keys in production", () => {
+  afterEach(() => {
+    delete process.env.CREDENTIALS_ENCRYPTION_KEY;
+    delete process.env.PII_ENCRYPTION_KEY;
+    delete process.env.PII_HMAC_KEY;
+    vi.unstubAllEnvs();
+  });
+
+  it("ensureEncryptionKey refuses to generate a key", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    delete process.env.CREDENTIALS_ENCRYPTION_KEY;
+    const { ensureEncryptionKey } = await import("./crypto.js");
+    expect(() => ensureEncryptionKey()).toThrow("CREDENTIALS_ENCRYPTION_KEY is not set");
+    expect(process.env.CREDENTIALS_ENCRYPTION_KEY).toBeUndefined();
+  });
+
+  it("ensurePiiKeys refuses to generate the HMAC key when only the encryption key is set", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    process.env.PII_ENCRYPTION_KEY = TEST_KEY;
+    delete process.env.PII_HMAC_KEY;
+    const { ensurePiiKeys } = await import("./crypto.js");
+    expect(() => ensurePiiKeys()).toThrow("PII_HMAC_KEY is not set");
+  });
+
+  it("ensurePiiKeys passes when both keys are set", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    process.env.PII_ENCRYPTION_KEY = TEST_KEY;
+    process.env.PII_HMAC_KEY = TEST_KEY;
+    const { ensurePiiKeys } = await import("./crypto.js");
+    expect(() => ensurePiiKeys()).not.toThrow();
   });
 });
 

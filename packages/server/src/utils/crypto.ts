@@ -13,6 +13,7 @@ import { existsSync, readFileSync, appendFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { pino } from "pino";
+import { isProductionProcess } from "./envShim.js";
 
 const log = pino({ transport: { target: "pino-pretty" } });
 
@@ -26,6 +27,17 @@ function getEnvPath(): string {
 }
 
 /**
+ * In production a missing key must stop the boot. Generating one would silently
+ * make existing encrypted data unreadable (or, for the HMAC key, change every
+ * stored email hash) on each restart, and Render's disk is wiped on deploy.
+ */
+function requireKeyInProduction(keyName: string): void {
+  if (isProductionProcess()) {
+    throw new Error(`${keyName} is not set. Refusing to generate one in production: set it in the environment.`);
+  }
+}
+
+/**
  * Ensures `CREDENTIALS_ENCRYPTION_KEY` exists in `process.env`.
  * If missing, generates a random 32-byte key, appends it to `.env`,
  * and sets it on `process.env`. Call this once at server startup
@@ -33,6 +45,7 @@ function getEnvPath(): string {
  */
 export function ensureEncryptionKey(): void {
   if (process.env.CREDENTIALS_ENCRYPTION_KEY) return;
+  requireKeyInProduction("CREDENTIALS_ENCRYPTION_KEY");
 
   const envPath = getEnvPath();
 
@@ -154,6 +167,7 @@ export function ensurePiiKeys(): void {
 
   for (const keyName of ["PII_ENCRYPTION_KEY", "PII_HMAC_KEY"] as const) {
     if (process.env[keyName]) continue;
+    requireKeyInProduction(keyName);
 
     try {
       if (existsSync(envPath)) {
