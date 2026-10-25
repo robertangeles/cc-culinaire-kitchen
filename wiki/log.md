@@ -4,6 +4,10 @@ Append-only. Newest entry on top.
 
 ---
 
+## 2026-10-26 — Jev (TypeSafe) pilot for coding work
+
+Evaluated TypeSafe's Jev (a "System One" model: typed Choice/Score/Noul answers, not a coding LLM; about $0.042 per million input tokens, output free; pinned `jev-1.14.0`). Pilot over four candidate uses. **Semantic lint of diffs against CLAUDE.md rules: adopted as advisory** (`scripts/jev/lint.mjs`): 10/10 seeded violations caught; on 22 real merged PRs x 5 rules, 1 false flag (PR #100 endpoint_without_permission at 0.57; the routes do have `requirePermission`); 94k input tokens, under half a cent. Recall on subtle violations is untested. **CI failure triage: dropped**: of 20 failed CI runs none passed on rerun of the same commit, so there is no flaky class to detect and the failing step name already classifies. **Skill routing: dropped**: Claude Code injects the skill roster itself, so a router cannot cut that cost. **Log scanning: dropped**: grep decides. Data rule: only source diffs leave the machine. A first mistake worth remembering: the real-PR half of the first pilot run silently measured nothing (a git pathspec matched no files), so "0 false flags" was empty until the per-PR sizes were printed.
+
 ## 2026-10-25 — Prod schema cleanup closed; PII HMAC key fixed; drift checker added
 
 Prod runs, each after a verified `pg_dump` in `~/ck-prod-backups/`: the 31 FK constraints (#151); the three schema scripts that added 1 table and 8 columns the deployed code needed (`organisation` settings, `public_holiday.partial_day_from_time`, `shift`, `roster_shift_template`) — before this, full-row organisation reads failed on prod; `addBenchPinUnique.ts` and the 53-entry `addForeignKeyIndexes.ts` (#152); 18 orphan `ingredient_cross_usage` rows deleted (CSV + table dump), then the last FK (#153). Prod now: 201 FKs, 0 unvalidated, 376 indexes, none invalid.

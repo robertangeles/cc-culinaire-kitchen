@@ -42,6 +42,8 @@ Stop when you catch any of these.
 
 **Verification** — never mark done without proof. Ask: "Would a staff engineer approve this?" Update `docs/` before closing any user-facing task.
 
+**Jev semantic lint (advisory)** — before opening a PR, run `node --env-file=.env scripts/jev/lint.mjs` (needs `TYPESAFE_API_KEY` in `.env`; costs a fraction of a cent). It asks TypeSafe's Jev model whether the branch diff breaks the rules in `scripts/jev/rules.mjs` (business logic in routes, LLM called outside `aiService`, hardcoded secrets/config, endpoint without permission, FK without index). Read every flag and decide; flags are leads, never verdicts, and never block a merge. **Data rule:** only source diffs go out — never prod data, secrets or user details. Rules and thresholds live only in `rules.mjs`. Add a rule only after testing it on `scripts/jev/lintPilot.mjs` cases. Jev is for narrow yes/no or scored decisions; it cannot write or edit code. Skip it where grep, types or tests already decide.
+
 **Demand Elegance** — ask "Is there a more elegant solution?" If hacky, refactor before presenting.
 
 **Autonomous Bug Fixing** — investigate logs and resolve without requiring user guidance. Fix failing tests and CI independently. Always follow Debugging Protocol.
