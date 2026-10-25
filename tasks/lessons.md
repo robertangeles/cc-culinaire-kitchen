@@ -1192,3 +1192,22 @@ builds all tables with CHECKs enforcing. Stop it again when done.
 - **Problem**: Three tests that configured `mockRejectedValue` failed with the rejected error as an "unhandled" failure, although the handler under test handled it correctly. The arrow body `vi.mocked(fn).mockReset()` returns the mock function, and vitest treats a function returned from `beforeEach` as a teardown callback, so it called the mock after each test.
 - **Fix**: Use a block body: `beforeEach(() => { vi.mocked(fn).mockReset(); })`.
 - **Rule**: Hooks never return a value. When a test fails with an error that the code under test demonstrably handles, check the test's own hooks before the code.
+
+## #107 — Compare everything the schema declares, not just the thing you came for (2026-10-25)
+
+- **Problem**: A foreign-key audit of prod found missing indexes, then missing columns and a missing table, then missing unique constraints and NOT NULLs, each only after the previous fix. Production was built from raw SQL and had silently drifted from `schema.ts` in every dimension.
+- **Fix**: `checkSchemaDrift.ts` compares types, NOT NULL and unique/primary keys for every table; the FK, FK-index and column scripts cover the rest.
+- **Rule**: When one kind of drift is found, diff every kind at once (tables, columns, types, nullability, defaults, uniques, FKs, indexes) before declaring the database aligned.
+
+## #108 — Never auto-generate a secret in production (2026-10-25)
+
+- **Problem**: `ensurePiiKeys()` created a random `PII_HMAC_KEY` whenever none was set. On Render the file it wrote to is wiped each deploy, so prod got a new key on every boot and every stored email hash went stale. Nothing failed loudly; it surfaced only through an unrelated key check.
+- **Fix**: In production a missing key now throws at boot (`requireKeyInProduction`). The key is set on Render and the hashes were rebuilt.
+- **Rule**: Key bootstrap that "helps" in development must fail hard in production. A secret that changes on restart is a data-loss bug, not a convenience.
+
+## #109 — Empty `PROD_` lines in `.env` silently select the wrong key (2026-10-25)
+
+- **Problem**: `applyEnvPrefix` copies `PROD_X` over `X` only when it is non-empty. Empty `PROD_PII_ENCRYPTION_KEY=` lines left an unrelated unprefixed key in force, so prod decrypts failed locally and I wrongly reported a "stale key".
+- **Fix**: Filled the `PROD_` lines with the values Render uses (compared by hash, never printed).
+- **Rule**: Before calling a credential stale, prove which value the process actually resolved. Compare fingerprints with the deployed value, and test a decrypt on a real row.
+
