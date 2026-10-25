@@ -1897,3 +1897,7 @@ Integration test added: `prepService.integration.test.ts` (150 lines, 3 suites).
 - #90: Barrel splits surface pre-existing bugs — treat as a full re-audit
 - #91: `inArray(col, [])` with empty array generates invalid SQL in PostgreSQL
 - #92: `parseInt(s) / parseInt(s)` can return Infinity for "1/0" fraction inputs
+
+## 2026-10-26 — Offsite backup
+
+Daily encrypted prod dump to Google Drive (`scripts/backup/prodOffsiteBackup.sh`, hourly cron that works once a day, 30-day retention). First run uploaded 65.6 MB; restored from Drive into a throwaway PG18 with all 105 tables and every row count matching live prod. Existing dumps from `~/culinaire-prod-backups` and `~/ck-prod-backups` uploaded once to `prod/archive/`. Runbook: `docs/architecture/offsite-backup.md`. Decision page `db-backup-location` updated; the two-folder drift is left for the owner to settle. Lesson #110.

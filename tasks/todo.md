@@ -1,5 +1,14 @@
 # CulinAIre Kitchen — TODO
 
+## Offsite backup follow-ups (2026-10-26)
+
+Shipped: daily encrypted prod dump to Google Drive (`docs/architecture/offsite-backup.md`). Still open:
+- **Passphrase copy.** `~/.config/ck-backup/passphrase` must also be in the password manager. Until it is, losing the laptop loses the ability to read every backup.
+- **Own Google client ID.** rclone's shared one is retired during 2026; uploads will fail until the remote has its own.
+- **Failure signal.** A failed run is silent; the only tell is a stale `~/.local/state/ck-backup/last_success`. Add an alert if that proves too easy to miss.
+- **Two backup folders.** `~/culinaire-prod-backups` (wiki rule) and `~/ck-prod-backups` (Oct 2026 work) both exist; pick one.
+- **Dev database** is not backed up offsite (it is a shared cloud DB, lower stakes).
+
 ## Account deletion follow-ups (2026-10-20)
 
 `anonymiseUser` shipped (scrub and keep the row; see docs/architecture/overview.md). Still open:
