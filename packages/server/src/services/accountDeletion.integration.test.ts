@@ -40,6 +40,20 @@ describe.skipIf(!RUN)("deleteOwnAccount (real DB)", { timeout: 120_000 }, () => 
   }
   const statusOf = async (userId: number) =>
     (await db.select({ s: user.userStatus }).from(user).where(eq(user.userId, userId)))[0].s;
+  /**
+   * A TOTP is only valid inside its 30-second step and each DB round trip to the remote dev
+   * database can take seconds, so a code generated just before a step boundary can be stale by
+   * the time the server checks it. Retry with a fresh code; any other failure surfaces at once.
+   */
+  async function deleteWithFreshCode(userId: number, base: { password?: string; confirmEmail?: string }, secret: string, signedInAt: Date | null) {
+    for (let attempt = 1; ; attempt++) {
+      try {
+        return await deleteOwnAccount(userId, { ...base, mfaCode: await otpGenerate({ secret }) }, signedInAt);
+      } catch (e) {
+        if (attempt >= 3 || !(e instanceof AccountDeletionError) || e.code !== "INVALID_MFA_CODE") throw e;
+      }
+    }
+  }
   const refusal = async (p: Promise<unknown>) => p.then(() => null, (e) => e as AccountDeletionError);
 
   afterAll(async () => {
@@ -90,7 +104,7 @@ describe.skipIf(!RUN)("deleteOwnAccount (real DB)", { timeout: 120_000 }, () => 
     expect(err?.statusCode).toBe(403);
   });
 
-  it("Google-only account (no password, no MFA): needs the email typed back AND a recent sign-in", async () => {
+  it("Google-only account (no password): needs the email typed back AND a recent sign-in", async () => {
     const { userId, email } = await makeUser("oauth");
     await db.update(user).set({ userPasswordHash: null }).where(eq(user.userId, userId));
     const fresh = new Date();
@@ -110,6 +124,21 @@ describe.skipIf(!RUN)("deleteOwnAccount (real DB)", { timeout: 120_000 }, () => 
     expect(await statusOf(userId)).not.toBe("deleted");
 
     await deleteOwnAccount(userId, typed, fresh);
+    expect(await statusOf(userId)).toBe("deleted");
+  });
+
+  it("Google-only account WITH MFA still needs a recent sign-in (a session thief could have enrolled their own authenticator)", async () => {
+    const { userId, email } = await makeUser("oauth-mfa");
+    const secret = otpGenerateSecret();
+    await db.update(user).set({ userPasswordHash: null, mfaEnabledInd: true, mfaSecret: secret }).where(eq(user.userId, userId));
+    const input = { confirmEmail: email, mfaCode: await otpGenerate({ secret }) };
+
+    const stale = new Date(Date.now() - 3 * 24 * 3600 * 1000);
+    expect((await refusal(deleteOwnAccount(userId, input, stale)))?.code).toBe("RECENT_SIGN_IN_REQUIRED");
+    expect((await refusal(deleteOwnAccount(userId, input, null)))?.code).toBe("RECENT_SIGN_IN_REQUIRED");
+    expect(await statusOf(userId)).not.toBe("deleted");
+
+    await deleteWithFreshCode(userId, { confirmEmail: email }, secret, new Date());
     expect(await statusOf(userId)).toBe("deleted");
   });
 
@@ -143,7 +172,7 @@ describe.skipIf(!RUN)("deleteOwnAccount (real DB)", { timeout: 120_000 }, () => 
     expect((await refusal(deleteOwnAccount(userId, { password: "wrong", mfaCode: await otpGenerate({ secret }) }, null)))?.code).toBe("INVALID_CREDENTIALS");
     expect(await statusOf(userId)).not.toBe("deleted");
 
-    await deleteOwnAccount(userId, { password: PASSWORD, mfaCode: await otpGenerate({ secret }) }, null);
+    await deleteWithFreshCode(userId, { password: PASSWORD }, secret, null);
     expect(await statusOf(userId)).toBe("deleted");
   });
 

@@ -7,8 +7,9 @@
  *
  * Proof of identity: the password for password accounts, the account email typed back for
  * Google-only accounts (no password exists), and a current MFA code when MFA is on. A typed
- * email is only a confirmation, not a credential, so a Google-only account without MFA must
- * also have signed in within the last 10 minutes (a stolen older session is not enough).
+ * email is only a confirmation, not a credential, so a Google-only account must also have
+ * signed in within the last 10 minutes (a stolen older session is not enough). MFA does not
+ * lift that: a session alone can enrol an authenticator.
  *
  * Blocked, with a message that says what to do: the only platform Administrator, and the
  * only admin of an organisation that still has other members (it would be left with nobody
@@ -110,7 +111,10 @@ export async function deleteOwnAccount(
     }
   }
 
-  if (!row.userPasswordHash && !row.mfaEnabledInd && !isRecentSignIn(signedInAt)) {
+  // Required for every account without a password, MFA or not: /api/auth/mfa/setup and /enable
+  // need only a session, so a session thief could enrol their own authenticator and otherwise
+  // slip past this rule.
+  if (!row.userPasswordHash && !isRecentSignIn(signedInAt)) {
     throw new AccountDeletionError(
       "For your security, sign out, sign back in, and then delete your account.",
       "RECENT_SIGN_IN_REQUIRED",
