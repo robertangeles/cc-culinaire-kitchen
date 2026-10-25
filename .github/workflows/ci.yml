@@ -201,6 +201,9 @@ jobs:
       - name: Run user anonymisation integration tests
         run: pnpm --filter @culinaire/server exec vitest run src/services/userAnonymisation.integration.test.ts
 
+      - name: Run self-service account deletion integration tests
+        run: pnpm --filter @culinaire/server exec vitest run src/services/accountDeletion.integration.test.ts
+
   # Browser E2E (Playwright) against a real app on a throwaway Postgres: pushes
   # the schema, seeds RBAC plus one MFA-enabled E2E user/org/location, starts the
   # API and the Vite dev server (it proxies /api), then runs the full suite and
@@ -242,6 +245,8 @@ jobs:
       E2E_USER_EMAIL: e2e-ci@culinaire.test
       E2E_USER_PASSWORD: E2e-Ci-Throwaway-Pass-1!
       E2E_USER_TOTP_SECRET: JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP
+      E2E_DELETE_USER_EMAIL: e2e-delete-ci@culinaire.test
+      E2E_DELETE_USER_PASSWORD: E2e-Delete-Throwaway-Pass-1!
 
     steps:
       - name: Checkout

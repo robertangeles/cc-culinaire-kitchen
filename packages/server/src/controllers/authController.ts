@@ -137,7 +137,7 @@ export function setAuthCookies(
 }
 
 /** Clears auth cookies from the response. */
-function clearAuthCookies(res: Response) {
+export function clearAuthCookies(res: Response) {
   res.clearCookie("access_token", { path: "/" });
   res.clearCookie("refresh_token", { path: "/" });
 }

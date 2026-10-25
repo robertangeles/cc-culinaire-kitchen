@@ -3,7 +3,7 @@
 ## Account deletion follow-ups (2026-10-20)
 
 `anonymiseUser` shipped (scrub and keep the row; see docs/architecture/overview.md). Still open:
-- **Self-serve "Delete my account" in the web app.** The privacy policy claims it exists; today it is an email request or an admin action.
+- ~~Self-serve "Delete my account" in the web app~~ done: Profile -> Security -> Delete account (`POST /api/users/delete-account`). The mobile app still needs its own in-app button (Google Play requirement); the web page link covers it for now.
 - **Align the published pages to 30 days.** `delete-account` says 7 business days, `privacy` says 30 days. Edit via the admin UI (site pages are DB content). The delete-account page also lists what is deleted; it should mention that business records stay, with no name attached.
 - **Stripe customer deletion.** The subscription is cancelled, but the Stripe customer keeps name and email. Deleting the customer removes the personal data and keeps payment records.
 - **Staff compliance documents on user deletion** follow the 7-year retention lifecycle; decide whether deleting an account should trigger the archive step.

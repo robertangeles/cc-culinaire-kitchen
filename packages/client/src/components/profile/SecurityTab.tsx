@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Key, Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
 import { MfaSection } from "./MfaSection.js";
+import { DeleteAccountSection } from "./DeleteAccountSection.js";
 
 const inputClass =
   "w-full rounded-xl border border-dark-200 px-3 py-2 text-sm text-white bg-dark placeholder-dark-400 focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-transparent";
@@ -76,6 +77,8 @@ export function SecurityTab() {
       </form>
 
       <MfaSection />
+
+      <DeleteAccountSection />
     </div>
   );
 }

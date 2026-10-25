@@ -4,6 +4,10 @@ Append-only. Newest entry on top.
 
 ---
 
+## 2026-10-26 — Self-service "Delete my account"
+
+Profile -> Security -> Delete account, `POST /api/users/delete-account`, `accountDeletionService.deleteOwnAccount` then `anonymiseUser(userId, userId)`. Confirmation: password; typed email for Google-only accounts; authenticator code when MFA is on. Blocked (409) for the only Administrator and for the only admin of an organisation that still has other members. A Google-only account must also have signed in within 10 minutes, MFA or not (a session alone can enrol an authenticator, found by the second automated review) (a typed email alone is not a credential; found by the automated security review). Deletes instantly (matches the published "30 days maximum"). Profile response gained `hasPassword`. Tests: pure rules, controller and route wiring, real-DB integration (7 cases), component, and a Playwright spec using a dedicated throwaway user seeded in CI. Left out: Stripe customer deletion, the mobile app's own button.
+
 ## 2026-10-25 — Prod schema cleanup closed; PII HMAC key fixed; drift checker added
 
 Prod runs, each after a verified `pg_dump` in `~/ck-prod-backups/`: the 31 FK constraints (#151); the three schema scripts that added 1 table and 8 columns the deployed code needed (`organisation` settings, `public_holiday.partial_day_from_time`, `shift`, `roster_shift_template`) — before this, full-row organisation reads failed on prod; `addBenchPinUnique.ts` and the 53-entry `addForeignKeyIndexes.ts` (#152); 18 orphan `ingredient_cross_usage` rows deleted (CSV + table dump), then the last FK (#153). Prod now: 201 FKs, 0 unvalidated, 376 indexes, none invalid.
