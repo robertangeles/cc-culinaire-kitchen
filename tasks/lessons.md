@@ -1217,3 +1217,10 @@ builds all tables with CHECKs enforcing. Stop it again when done.
 - **Problem**: While waiting on the backup, `ps aux | awk '{print $11,$12,$13}'` printed the full `pg_dump postgresql://user:password@host/db` command line, so the prod database password landed in the session transcript.
 - **Fix**: Told the owner straight away and offered rotating the prod database password. Checked progress through the log and the temp file size instead.
 - **Rule**: To see whether a job is running, use `pgrep -c <name>` or check its output file. Never print `ps` arguments for a process started with a connection string or key.
+
+## #111 — Anything that changes how a person proves who they are needs re-proof (2026-10-26)
+
+- **Problem**: `/api/auth/mfa/setup` and `/disable` trusted the session alone. `setup` even overwrote the stored secret of an account that already had MFA, and `disable` took no code. A stolen session could lock the owner out or remove the second factor. It was found while reviewing a different feature (self-service deletion), not by looking at MFA.
+- **Fix**: `requireProofToChangeMfa` (password, or a sign-in within 10 minutes for Google-only accounts, plus a current code when MFA is on); `setup` refuses while MFA is on; the three routes got `authRateLimit`.
+- **Rule**: Endpoints that add, replace or remove a credential or factor (MFA, password, email, recovery) must demand proof beyond the session, and must never silently overwrite a live secret. When a review finds one such gap, check its siblings in the same file the same day.
+

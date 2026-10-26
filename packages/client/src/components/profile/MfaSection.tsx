@@ -5,6 +5,10 @@
  * Profile → Security tab. Lets an authenticated user set up, enable,
  * or disable TOTP MFA. On enable/disable it refreshes the app-wide
  * auth user so `user.mfaEnabled` stays in sync everywhere.
+ *
+ * The server decides what is allowed; this only collects the proof it asks for: the password
+ * (accounts that have one) to start setup, and the password plus a current authenticator code
+ * to turn MFA off.
  */
 
 import { useState, useEffect, type FormEvent } from "react";
@@ -20,16 +24,20 @@ export function MfaSection() {
   const [success, setSuccess] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [mfaEnabled, setMfaEnabled] = useState<boolean | null>(null);
+  const [hasPassword, setHasPassword] = useState(true);
+  const [asking, setAsking] = useState<"setup" | "disable" | null>(null);
+  const [password, setPassword] = useState("");
   const [isChecking, setIsChecking] = useState(true);
 
-  // Check current MFA status on mount
+  // Check current MFA status and whether the account has a password on mount
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch("/api/auth/me", { credentials: "include" });
+        const res = await fetch("/api/users/profile", { credentials: "include" });
         if (res.ok) {
-          const data = await res.json();
-          setMfaEnabled(data.user.mfaEnabled);
+          const { profile } = await res.json();
+          setMfaEnabled(profile.mfaEnabledInd);
+          setHasPassword(profile.hasPassword);
         }
       } catch {
         // ignore
@@ -39,19 +47,31 @@ export function MfaSection() {
     })();
   }, []);
 
-  async function handleSetup() {
+  function closeProofForm() {
+    setAsking(null);
+    setPassword("");
+    setCode("");
+    setError("");
+  }
+
+  async function handleSetup(e?: FormEvent) {
+    e?.preventDefault();
     setError("");
     setSuccess("");
     setIsLoading(true);
     try {
       const res = await fetch("/api/auth/mfa/setup", {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
         credentials: "include",
+        body: JSON.stringify({ password }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Setup failed");
       setQrDataUrl(data.qrCodeDataUrl);
       setSecret(data.secret);
+      setAsking(null);
+      setPassword("");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Setup failed");
     } finally {
@@ -86,18 +106,24 @@ export function MfaSection() {
     }
   }
 
-  async function handleDisable() {
+  async function handleDisable(e: FormEvent) {
+    e.preventDefault();
     setError("");
     setSuccess("");
     setIsLoading(true);
     try {
       const res = await fetch("/api/auth/mfa/disable", {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
         credentials: "include",
+        body: JSON.stringify({ password, mfaCode: code }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Disable failed");
       setMfaEnabled(false);
+      setAsking(null);
+      setPassword("");
+      setCode("");
       setSuccess("MFA has been disabled.");
       await refreshUser();
     } catch (err: unknown) {
@@ -105,6 +131,30 @@ export function MfaSection() {
     } finally {
       setIsLoading(false);
     }
+  }
+
+  const passwordField = hasPassword && (
+    <div>
+      <label htmlFor="mfaPassword" className="block text-sm font-medium text-[#E5E5E5] mb-1">
+        Your password
+      </label>
+      <input
+        id="mfaPassword"
+        type="password"
+        autoComplete="current-password"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        required
+        autoFocus
+        className="w-full rounded-lg border border-dark-200 px-3 py-2 text-sm text-[#FAFAFA] bg-dark focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-transparent"
+      />
+    </div>
+  );
+
+  function openProofForm(which: "setup" | "disable") {
+    setError("");
+    setSuccess("");
+    setAsking(which);
   }
 
   return (
@@ -115,7 +165,7 @@ export function MfaSection() {
       </div>
 
       {error && (
-        <div className="flex items-center gap-2 text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
+        <div role="alert" className="flex items-center gap-2 text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
           <AlertCircle className="size-4 flex-shrink-0" /> {error}
         </div>
       )}
@@ -136,14 +186,54 @@ export function MfaSection() {
             <ShieldCheck className="size-4 flex-shrink-0" />
             MFA is currently enabled on your account.
           </div>
-          <button
-            onClick={handleDisable}
-            disabled={isLoading}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-red-400 bg-red-900/30 rounded-lg hover:bg-red-900/40 disabled:opacity-50 transition-colors"
-          >
-            {isLoading ? <Loader2 className="size-4 animate-spin" /> : <ShieldOff className="size-4" />}
-            Disable MFA
-          </button>
+          {asking === "disable" ? (
+            <form onSubmit={handleDisable} className="space-y-3">
+              {passwordField}
+              <div>
+                <label htmlFor="mfaDisableCode" className="block text-sm font-medium text-[#E5E5E5] mb-1">
+                  Authenticator code
+                </label>
+                <input
+                  id="mfaDisableCode"
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={6}
+                  value={code}
+                  onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+                  required
+                  autoFocus={!hasPassword}
+                  className="w-full rounded-lg border border-dark-200 px-3 py-2 text-sm text-[#FAFAFA] text-center tracking-[0.5em] font-mono bg-dark focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-transparent"
+                  placeholder="000000"
+                />
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="submit"
+                  disabled={isLoading || code.length !== 6 || (hasPassword && !password)}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-red-400 bg-red-900/30 rounded-lg hover:bg-red-900/40 disabled:opacity-50 transition-colors"
+                >
+                  {isLoading ? <Loader2 className="size-4 animate-spin" /> : <ShieldOff className="size-4" />}
+                  Turn off MFA
+                </button>
+                <button
+                  type="button"
+                  onClick={closeProofForm}
+                  disabled={isLoading}
+                  className="px-4 py-2 text-sm font-medium text-[#E5E5E5] rounded-lg hover:bg-dark-100 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          ) : (
+            <button
+              onClick={() => openProofForm("disable")}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-red-400 bg-red-900/30 rounded-lg hover:bg-red-900/40 transition-colors"
+            >
+              <ShieldOff className="size-4" />
+              Disable MFA
+            </button>
+          )}
         </div>
       ) : qrDataUrl ? (
         <form onSubmit={handleEnable} className="space-y-4">
@@ -190,14 +280,38 @@ export function MfaSection() {
             Add an extra layer of security to your account by enabling two-factor authentication.
             You'll need an authenticator app like Google Authenticator or Authy.
           </p>
-          <button
-            onClick={handleSetup}
-            disabled={isLoading}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-gold rounded-lg hover:bg-gold-hover disabled:opacity-50 transition-colors"
-          >
-            {isLoading ? <Loader2 className="size-4 animate-spin" /> : <ShieldCheck className="size-4" />}
-            Set Up MFA
-          </button>
+          {asking === "setup" ? (
+            <form onSubmit={handleSetup} className="space-y-3">
+              {passwordField}
+              <div className="flex gap-2">
+                <button
+                  type="submit"
+                  disabled={isLoading || !password}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-gold rounded-lg hover:bg-gold-hover disabled:opacity-50 transition-colors"
+                >
+                  {isLoading ? <Loader2 className="size-4 animate-spin" /> : <ShieldCheck className="size-4" />}
+                  Continue
+                </button>
+                <button
+                  type="button"
+                  onClick={closeProofForm}
+                  disabled={isLoading}
+                  className="px-4 py-2 text-sm font-medium text-[#E5E5E5] rounded-lg hover:bg-dark-100 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          ) : (
+            <button
+              onClick={() => (hasPassword ? openProofForm("setup") : handleSetup())}
+              disabled={isLoading}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-gold rounded-lg hover:bg-gold-hover disabled:opacity-50 transition-colors"
+            >
+              {isLoading ? <Loader2 className="size-4 animate-spin" /> : <ShieldCheck className="size-4" />}
+              Set Up MFA
+            </button>
+          )}
         </div>
       )}
     </div>

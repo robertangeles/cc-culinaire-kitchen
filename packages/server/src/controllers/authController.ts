@@ -24,10 +24,12 @@ import {
   generateMfaSecret,
   enableMfa,
   disableMfa,
+  getSignInTime,
   completeMfaLogin,
   requestPasswordReset,
   resetPassword,
   AuthError,
+  type MfaChangeProof,
 } from "../services/authService.js";
 import { linkGuestConversations } from "../services/guestService.js";
 import { verifyTurnstileToken } from "../services/turnstileService.js";
@@ -628,7 +630,15 @@ export async function handleGoogleCallback(
 // MFA handlers
 // ---------------------------------------------------------------------------
 
-/** POST /api/auth/mfa/setup — Generates a TOTP secret and QR code. */
+function mfaProofFrom(body: unknown): MfaChangeProof {
+  const { password, mfaCode } = (body ?? {}) as Record<string, unknown>;
+  return {
+    password: typeof password === "string" ? password : undefined,
+    mfaCode: typeof mfaCode === "string" ? mfaCode : undefined,
+  };
+}
+
+/** POST /api/auth/mfa/setup — Generates a TOTP secret and QR code. Needs proof of identity. */
 export async function handleMfaSetup(
   req: Request,
   res: Response,
@@ -638,11 +648,16 @@ export async function handleMfaSetup(
     const userId = req.user?.sub;
     if (!userId) { res.status(401).json({ error: "Not authenticated." }); return; }
 
-    const result = await generateMfaSecret(userId);
+    const signedInAt = await getSignInTime(req.cookies?.refresh_token, userId);
+    const result = await generateMfaSecret(userId, mfaProofFrom(req.body), signedInAt);
     res.json({ secret: result.secret, qrCodeDataUrl: result.qrCodeDataUrl });
   } catch (err) {
     if (isAuthError(err, "USER_NOT_FOUND")) {
       res.status(401).json({ error: "Not authenticated." });
+      return;
+    }
+    if (isAuthError(err)) {
+      res.status(err.statusCode).json({ error: err.message, code: err.code });
       return;
     }
     next(err);
@@ -676,7 +691,7 @@ export async function handleMfaEnable(
   }
 }
 
-/** POST /api/auth/mfa/disable — Disables MFA for the current user. */
+/** POST /api/auth/mfa/disable — Disables MFA for the current user. Needs proof of identity. */
 export async function handleMfaDisable(
   req: Request,
   res: Response,
@@ -686,9 +701,18 @@ export async function handleMfaDisable(
     const userId = req.user?.sub;
     if (!userId) { res.status(401).json({ error: "Not authenticated." }); return; }
 
-    await disableMfa(userId);
+    const signedInAt = await getSignInTime(req.cookies?.refresh_token, userId);
+    await disableMfa(userId, mfaProofFrom(req.body), signedInAt);
     res.json({ message: "MFA disabled." });
   } catch (err) {
+    if (isAuthError(err, "USER_NOT_FOUND")) {
+      res.status(401).json({ error: "Not authenticated." });
+      return;
+    }
+    if (isAuthError(err)) {
+      res.status(err.statusCode).json({ error: err.message, code: err.code });
+      return;
+    }
     next(err);
   }
 }

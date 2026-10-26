@@ -9,7 +9,8 @@
  * Google-only accounts (no password exists), and a current MFA code when MFA is on. A typed
  * email is only a confirmation, not a credential, so a Google-only account must also have
  * signed in within the last 10 minutes (a stolen older session is not enough). MFA does not
- * lift that: a session alone can enrol an authenticator.
+ * lift that: until MFA changes needed proof, a session alone could enrol an authenticator,
+ * and any such enrolment would still be in place.
  *
  * Blocked, with a message that says what to do: the only platform Administrator, and the
  * only admin of an organisation that still has other members (it would be left with nobody
@@ -20,7 +21,7 @@ import bcrypt from "bcrypt";
 import { and, count, eq, ne, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { organisation, role, user, userOrganisation, userRole } from "../db/schema.js";
-import { verifyMfaToken } from "./authService.js";
+import { isRecentSignIn, verifyMfaToken } from "./authService.js";
 import { decryptUserPii } from "./piiService.js";
 import { anonymiseUser } from "./userAnonymisationService.js";
 
@@ -39,13 +40,6 @@ export interface DeleteAccountInput {
   password?: string;
   confirmEmail?: string;
   mfaCode?: string;
-}
-
-/** How recently the user must have signed in when nothing but their typed email proves who they are. */
-export const RECENT_SIGN_IN_MS = 10 * 60 * 1000;
-
-export function isRecentSignIn(signedInAt: Date | null, now: Date = new Date()): boolean {
-  return signedInAt !== null && now.getTime() - signedInAt.getTime() <= RECENT_SIGN_IN_MS;
 }
 
 /** An organisation is left unmanaged when its only admin leaves while other members remain. */
@@ -111,8 +105,8 @@ export async function deleteOwnAccount(
     }
   }
 
-  // Required for every account without a password, MFA or not: /api/auth/mfa/setup and /enable
-  // need only a session, so a session thief could enrol their own authenticator and otherwise
+  // Required for every account without a password, MFA or not: before MFA changes needed proof,
+  // a session thief could enrol their own authenticator, and that enrolment would otherwise
   // slip past this rule.
   if (!row.userPasswordHash && !isRecentSignIn(signedInAt)) {
     throw new AccountDeletionError(

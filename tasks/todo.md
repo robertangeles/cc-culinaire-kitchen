@@ -1,5 +1,12 @@
 # CulinAIre Kitchen — TODO
 
+## MFA follow-ups (2026-10-26)
+
+Shipped on `fix/ck-web/mfa-change-needs-proof`: setup/disable need proof (docs/architecture/overview.md, "Changing two-factor settings"). Still open:
+- **`POST /api/auth/mfa/verify` has no rate limit.** `/api/auth/*` is exempt from the global limiter, so a 6-digit login code can be guessed for as long as the MFA session token lives (5 minutes). Add `authRateLimit` and consider a per-token attempt cap.
+- **Other credential changes** (change password, change email) were not reviewed for the same session-only weakness.
+- **Mobile**: `api-contracts.md` G.1 documents the new proof. If the mobile app ever adds MFA setup it must send the password.
+
 ## Offsite backup follow-ups (2026-10-26)
 
 Shipped: daily encrypted prod dump to Google Drive (`docs/architecture/offsite-backup.md`). Still open:
