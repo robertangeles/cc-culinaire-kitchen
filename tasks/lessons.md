@@ -1211,3 +1211,9 @@ builds all tables with CHECKs enforcing. Stop it again when done.
 - **Fix**: Filled the `PROD_` lines with the values Render uses (compared by hash, never printed).
 - **Rule**: Before calling a credential stale, prove which value the process actually resolved. Compare fingerprints with the deployed value, and test a decrypt on a real row.
 
+
+## #110 — Never list process arguments when a command carries a secret (2026-10-26)
+
+- **Problem**: While waiting on the backup, `ps aux | awk '{print $11,$12,$13}'` printed the full `pg_dump postgresql://user:password@host/db` command line, so the prod database password landed in the session transcript.
+- **Fix**: Told the owner straight away and offered rotating the prod database password. Checked progress through the log and the temp file size instead.
+- **Rule**: To see whether a job is running, use `pgrep -c <name>` or check its output file. Never print `ps` arguments for a process started with a connection string or key.
