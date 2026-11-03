@@ -55,9 +55,9 @@ router.get("/google/callback", handleGoogleCallback);
 router.post("/google/idtoken", handleGoogleIdToken);
 
 // MFA
-router.post("/mfa/setup", authenticate, handleMfaSetup);
-router.post("/mfa/enable", authenticate, handleMfaEnable);
-router.post("/mfa/disable", authenticate, handleMfaDisable);
+router.post("/mfa/setup", authenticate, authRateLimit, handleMfaSetup);
+router.post("/mfa/enable", authenticate, authRateLimit, handleMfaEnable);
+router.post("/mfa/disable", authenticate, authRateLimit, handleMfaDisable);
 router.post("/mfa/verify", handleMfaVerify);
 
 export default router;

@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { isOnlyAdministrator, isRecentSignIn, leavesOrganisationUnmanaged, RECENT_SIGN_IN_MS } from "./accountDeletionService.js";
+import { isOnlyAdministrator, leavesOrganisationUnmanaged } from "./accountDeletionService.js";
+import { isRecentSignIn, RECENT_SIGN_IN_MS } from "./authService.js";
 
 describe("isOnlyAdministrator", () => {
   it("is true only for the single active Administrator", () => {

@@ -352,9 +352,9 @@ POST /api/stripe/webhook (Stripe signature verified)
 | GET | /api/auth/google/callback | No | Google OAuth callback |
 | GET | /api/auth/microsoft | No | Start Microsoft OAuth |
 | GET | /api/auth/microsoft/callback | No | Microsoft OAuth callback |
-| POST | /api/auth/mfa/setup | Yes | Generate MFA secret + QR |
+| POST | /api/auth/mfa/setup | Yes | Generate MFA secret + QR. Body `{ password }` (Google-only accounts: sign-in within 10 min instead). 409 if MFA is already on |
 | POST | /api/auth/mfa/enable | Yes | Enable MFA with TOTP code |
-| POST | /api/auth/mfa/disable | Yes | Disable MFA |
+| POST | /api/auth/mfa/disable | Yes | Disable MFA. Body `{ password, mfaCode }` (Google-only accounts: sign-in within 10 min instead of the password) |
 | POST | /api/auth/mfa/verify | No | Verify TOTP during login |
 | POST | /api/chat | Yes | Stream AI chat response |
 | POST | /api/conversations | Yes | Create conversation |

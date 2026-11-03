@@ -24,6 +24,7 @@ vi.mock("../services/authService.js", () => {
   generateMfaSecret: vi.fn(),
   enableMfa: vi.fn(),
   disableMfa: vi.fn(),
+  getSignInTime: vi.fn(),
   completeMfaLogin: vi.fn(),
   requestPasswordReset: vi.fn(),
   resetPassword: vi.fn(),
@@ -53,7 +54,9 @@ import {
   handleResendVerification,
   handleResetPassword,
   handleGoogleIdToken,
+  handleMfaSetup,
   handleMfaEnable,
+  handleMfaDisable,
   handleMfaVerify,
 } from "./authController.js";
 import {
@@ -66,6 +69,9 @@ import {
   resendVerification,
   resetPassword,
   enableMfa,
+  generateMfaSecret,
+  disableMfa,
+  getSignInTime,
   completeMfaLogin,
   verifyGoogleIdToken,
   findOrCreateOAuthUser,
@@ -609,6 +615,72 @@ describe("handleMfaEnable", () => {
     const res = mockRes();
     await handleMfaEnable(req, res, vi.fn());
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringContaining("enabled") }));
+  });
+});
+
+describe.each([
+  ["handleMfaSetup", handleMfaSetup, generateMfaSecret],
+  ["handleMfaDisable", handleMfaDisable, disableMfa],
+] as const)("%s", (_name, handler, service) => {
+  beforeEach(() => vi.clearAllMocks());
+  const authed = (body: unknown = {}) =>
+    ({ ...mockReq({ body, cookies: { refresh_token: "rt-cookie" } as any }), user: { sub: 7 } }) as any;
+
+  it("returns 401 when not authenticated", async () => {
+    const res = mockRes();
+    await handler(mockReq(), res, vi.fn());
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(service).not.toHaveBeenCalled();
+  });
+
+  it("hands the service the proof from the body and the time of the current sign-in", async () => {
+    const signedInAt = new Date("2026-10-26T10:00:00Z");
+    vi.mocked(getSignInTime).mockResolvedValue(signedInAt);
+    vi.mocked(service as any).mockResolvedValue({ secret: "s", qrCodeDataUrl: "q" });
+    await handler(authed({ password: "pw", mfaCode: "123456", extra: "ignored" }), mockRes(), vi.fn());
+    expect(getSignInTime).toHaveBeenCalledWith("rt-cookie", 7);
+    expect(service).toHaveBeenCalledWith(7, { password: "pw", mfaCode: "123456" }, signedInAt);
+  });
+
+  it("ignores a password or code that is not a string", async () => {
+    vi.mocked(getSignInTime).mockResolvedValue(null);
+    vi.mocked(service as any).mockResolvedValue({ secret: "s", qrCodeDataUrl: "q" });
+    await handler(authed({ password: { $ne: "" }, mfaCode: 123456 }), mockRes(), vi.fn());
+    expect(service).toHaveBeenCalledWith(7, { password: undefined, mfaCode: undefined }, null);
+  });
+
+  it.each([
+    ["INVALID_CREDENTIALS", 403],
+    ["RECENT_SIGN_IN_REQUIRED", 403],
+    ["MFA_REQUIRED", 403],
+    ["INVALID_MFA_CODE", 403],
+    ["MFA_ALREADY_ENABLED", 409],
+  ])("answers %s with its status and code, so the client can say what to do", async (code, status) => {
+    vi.mocked(service as any).mockRejectedValue(new AuthError("Say what to do.", code, status));
+    const res = mockRes();
+    const next = vi.fn();
+    await handler(authed(), res, next);
+    expect(res.status).toHaveBeenCalledWith(status);
+    expect(res.json).toHaveBeenCalledWith({ error: "Say what to do.", code });
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("answers 401 when the account no longer exists, not a raw 404", async () => {
+    vi.mocked(service as any).mockRejectedValue(new AuthError("USER_NOT_FOUND", "USER_NOT_FOUND", 404));
+    const res = mockRes();
+    const next = vi.fn();
+    await handler(authed(), res, next);
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.json).toHaveBeenCalledWith({ error: "Not authenticated." });
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("passes an unexpected failure on to the error handler", async () => {
+    const boom = new Error("db down");
+    vi.mocked(service as any).mockRejectedValue(boom);
+    const next = vi.fn();
+    await handler(authed(), mockRes(), next);
+    expect(next).toHaveBeenCalledWith(boom);
   });
 });
 

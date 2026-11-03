@@ -421,6 +421,13 @@ export async function getSignInTime(rawToken: string | undefined, userId: number
   return new Date(stored.expiresAtDttm.getTime() - REFRESH_EXPIRY_MS);
 }
 
+/** How recently the user must have signed in when nothing but a session proves who they are. */
+export const RECENT_SIGN_IN_MS = 10 * 60 * 1000;
+
+export function isRecentSignIn(signedInAt: Date | null, now: Date = new Date()): boolean {
+  return signedInAt !== null && now.getTime() - signedInAt.getTime() <= RECENT_SIGN_IN_MS;
+}
+
 /**
  * Revokes a refresh token by deleting its hash from the database.
  */
@@ -827,13 +834,59 @@ export async function verifyGoogleIdToken(idToken: string): Promise<OAuthUserInf
 // MFA / TOTP
 // ---------------------------------------------------------------------------
 
+/** What the caller must show to change two-factor settings. */
+export interface MfaChangeProof {
+  password?: string;
+  mfaCode?: string;
+}
+
+/**
+ * Two-factor settings are an account-takeover lever: a new secret locks the owner out and
+ * switching MFA off removes the second factor. A session alone is therefore not enough.
+ * Password accounts give their password; Google-only accounts, which have none, must have
+ * signed in within the last 10 minutes; an account with MFA on also gives a current code.
+ */
+async function requireProofToChangeMfa(
+  row: typeof user.$inferSelect,
+  proof: MfaChangeProof,
+  signedInAt: Date | null,
+): Promise<void> {
+  if (row.userPasswordHash) {
+    const ok = proof.password ? await bcrypt.compare(proof.password, row.userPasswordHash) : false;
+    if (!ok) throw new AuthError("Incorrect password.", "INVALID_CREDENTIALS", 403);
+  } else if (!isRecentSignIn(signedInAt)) {
+    throw new AuthError(
+      "For your security, sign out, sign back in, and then change your two-factor settings.",
+      "RECENT_SIGN_IN_REQUIRED",
+      403,
+    );
+  }
+  if (row.mfaEnabledInd) {
+    if (!proof.mfaCode) throw new AuthError("Enter your authenticator code.", "MFA_REQUIRED", 403);
+    if (!(await verifyMfaToken(row.userId, proof.mfaCode))) {
+      throw new AuthError("That authenticator code is not valid.", "INVALID_MFA_CODE", 403);
+    }
+  }
+}
+
 /**
  * Generates a new TOTP secret for MFA setup. Returns the secret,
  * the otpauth URL, and a data URL for the QR code image.
+ *
+ * @throws {AuthError} 409 when MFA is already on (the secret is never replaced under a live
+ *   account), 403 when the proof is missing or wrong.
  */
-export async function generateMfaSecret(userId: number) {
+export async function generateMfaSecret(userId: number, proof: MfaChangeProof, signedInAt: Date | null) {
   const [row] = await db.select().from(user).where(eq(user.userId, userId));
   if (!row) throw new AuthError("USER_NOT_FOUND", "USER_NOT_FOUND", 404);
+  if (row.mfaEnabledInd) {
+    throw new AuthError(
+      "Two-factor authentication is already on. Turn it off first if you want to set it up again.",
+      "MFA_ALREADY_ENABLED",
+      409,
+    );
+  }
+  await requireProofToChangeMfa(row, proof, signedInAt);
 
   const secret = otpGenerateSecret();
   const otpauthUrl = generateURI({ secret, issuer: "CulinAIre Kitchen", label: row.userEmail });
@@ -873,8 +926,14 @@ export async function enableMfa(userId: number, token: string): Promise<void> {
 
 /**
  * Disables MFA and clears the stored secret.
+ *
+ * @throws {AuthError} 403 when the proof is missing or wrong.
  */
-export async function disableMfa(userId: number): Promise<void> {
+export async function disableMfa(userId: number, proof: MfaChangeProof, signedInAt: Date | null): Promise<void> {
+  const [row] = await db.select().from(user).where(eq(user.userId, userId));
+  if (!row) throw new AuthError("USER_NOT_FOUND", "USER_NOT_FOUND", 404);
+  await requireProofToChangeMfa(row, proof, signedInAt);
+
   await db
     .update(user)
     .set({ mfaEnabledInd: false, mfaSecret: null, updatedDttm: new Date() })

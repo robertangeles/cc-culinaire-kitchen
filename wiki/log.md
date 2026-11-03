@@ -1901,3 +1901,8 @@ Integration test added: `prepService.integration.test.ts` (150 lines, 3 suites).
 ## 2026-10-26 — Offsite backup
 
 Daily encrypted prod dump to Google Drive (`scripts/backup/prodOffsiteBackup.sh`, hourly cron that works once a day, 30-day retention). First run uploaded 65.6 MB; restored from Drive into a throwaway PG18 with all 105 tables and every row count matching live prod. Existing dumps from `~/culinaire-prod-backups` and `~/ck-prod-backups` uploaded once to `prod/archive/`. Runbook: `docs/architecture/offsite-backup.md`. Decision page `db-backup-location` updated; the two-folder drift is left for the owner to settle. Lesson #110.
+
+## 2026-10-26 — MFA changes need proof
+
+`fix/ck-web/mfa-change-needs-proof`: `/api/auth/mfa/setup` and `/disable` trusted the session alone (setup also overwrote a live secret). Now password or recent sign-in, plus a current code when MFA is on; setup refused (409) while MFA is on; all three MFA routes rate limited. Shared 10-minute rule moved from `accountDeletionService` to `authService.isRecentSignIn`. Open: `/mfa/verify` has no rate limit. Lesson #111.
+
