@@ -22,6 +22,16 @@ function handlersFor(path: string): unknown[] {
   return (layer as any).route.stack.map((l: any) => l.handle);
 }
 
+// /mfa/verify takes no session (the MFA session token is the credential), so the rate limit is its
+// only brake on someone guessing the 6-digit login code during the token's 5 minutes.
+describe("POST /mfa/verify", () => {
+  it("rate limits before the handler runs", () => {
+    const handlers = handlersFor("/mfa/verify");
+    expect(handlers).toHaveLength(2);
+    expect(handlers[0]).toBe(authRateLimit);
+  });
+});
+
 describe.each(["/mfa/setup", "/mfa/enable", "/mfa/disable"])("POST %s", (path) => {
   it("checks the token first, then rate limits, before the handler runs", () => {
     const handlers = handlersFor(path);
