@@ -355,7 +355,7 @@ POST /api/stripe/webhook (Stripe signature verified)
 | POST | /api/auth/mfa/setup | Yes | Generate MFA secret + QR. Body `{ password }` (Google-only accounts: sign-in within 10 min instead). 409 if MFA is already on |
 | POST | /api/auth/mfa/enable | Yes | Enable MFA with TOTP code |
 | POST | /api/auth/mfa/disable | Yes | Disable MFA. Body `{ password, mfaCode }` (Google-only accounts: sign-in within 10 min instead of the password) |
-| POST | /api/auth/mfa/verify | No | Verify TOTP during login |
+| POST | /api/auth/mfa/verify | No | Verify TOTP during login. Rate limited (`authRateLimit`, 20/min per IP, shared with login) |
 | POST | /api/chat | Yes | Stream AI chat response |
 | POST | /api/conversations | Yes | Create conversation |
 | GET | /api/conversations | Yes | List user's conversations |

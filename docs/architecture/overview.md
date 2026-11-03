@@ -111,7 +111,7 @@ Proof of identity, checked before anything is deleted (403 on failure, nothing c
 
 ### Changing two-factor settings
 
-`POST /api/auth/mfa/setup` and `/disable` (Profile -> Security) need proof, not just a session, because a new secret locks the owner out and switching MFA off removes the second factor. Checked in `authService.requireProofToChangeMfa` (403, nothing changes): the password for password accounts, or a sign-in within the last 10 minutes for Google-only accounts (`getSignInTime`, same rule as deletion); and a current authenticator code whenever MFA is on. `setup` is refused outright (409) while MFA is on, so a live secret is never replaced. All three MFA routes sit behind `authRateLimit`.
+`POST /api/auth/mfa/setup` and `/disable` (Profile -> Security) need proof, not just a session, because a new secret locks the owner out and switching MFA off removes the second factor. Checked in `authService.requireProofToChangeMfa` (403, nothing changes): the password for password accounts, or a sign-in within the last 10 minutes for Google-only accounts (`getSignInTime`, same rule as deletion); and a current authenticator code whenever MFA is on. `setup` is refused outright (409) while MFA is on, so a live secret is never replaced. All three MFA routes sit behind `authRateLimit`, and so does `/mfa/verify` (the login step, which takes no session; the limiter is its only brake on guessing the 6-digit code during the 5-minute MFA session token).
 
 Known limits: an access token already issued works until it expires, and the Stripe customer object keeps its name and email until the customer is deleted on the Stripe side.
 
