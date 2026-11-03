@@ -3,7 +3,7 @@
 ## MFA follow-ups (2026-10-26)
 
 Shipped on `fix/ck-web/mfa-change-needs-proof`: setup/disable need proof (docs/architecture/overview.md, "Changing two-factor settings"). Still open:
-- **`POST /api/auth/mfa/verify` has no rate limit.** `/api/auth/*` is exempt from the global limiter, so a 6-digit login code can be guessed for as long as the MFA session token lives (5 minutes). Add `authRateLimit` and consider a per-token attempt cap.
+- ~~`POST /api/auth/mfa/verify` has no rate limit.~~ Done: it sits behind `authRateLimit` (20/min per IP). Still open: a per-token attempt cap, since the limiter is per IP and an attacker rotating IPs has the 5-minute window to themselves.
 - **Other credential changes** (change password, change email) were not reviewed for the same session-only weakness.
 - **Mobile**: `api-contracts.md` G.1 documents the new proof. If the mobile app ever adds MFA setup it must send the password. The Google-only "signed in within 10 minutes" check reads the `refresh_token` cookie only (`getSignInTime`), so a bearer-only mobile client could never pass it; accept the body `refreshToken` first. `/users/delete-account` has the same limit.
 - **Clear leftover pending secrets after deploy.** Before this change `/mfa/setup` needed no proof, so a stolen session could leave a pending secret (`mfa_secret` set, `mfa_enabled_ind` false) that `/mfa/enable` still accepts with just a session and a code. Check prod for such rows (read-only count) as soon as the new code is live. After the deploy, back up, then null `mfa_secret` where `mfa_enabled_ind` is false. Longer term, make `enableMfa` take the same proof as setup.

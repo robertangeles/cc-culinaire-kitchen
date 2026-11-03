@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
-import type { Router } from "express";
+import express, { type Router } from "express";
+import type { AddressInfo } from "node:net";
 
 vi.mock("../services/authService.js", () => ({ AuthError: class extends Error {} }));
 vi.mock("../services/turnstileService.js", () => ({}));
@@ -21,6 +22,43 @@ function handlersFor(path: string): unknown[] {
   if (!layer) throw new Error(`no POST ${path} on the auth router`);
   return (layer as any).route.stack.map((l: any) => l.handle);
 }
+
+// /mfa/verify takes no session (the MFA session token is the credential), so the rate limit is its
+// only brake on someone guessing the 6-digit login code during the token's 5 minutes.
+describe("POST /mfa/verify", () => {
+  it("rate limits before the handler runs", () => {
+    const handlers = handlersFor("/mfa/verify");
+    expect(handlers).toHaveLength(2);
+    expect(handlers[0]).toBe(authRateLimit);
+  });
+});
+
+// The wiring test above only proves the limiter is in the stack. This one sends real requests
+// through the real router and real limiter, so a broken limit or key shows up as no 429.
+describe("POST /mfa/verify over HTTP", () => {
+  it("answers 429 on the 21st attempt from one address inside a minute", async () => {
+    const app = express();
+    app.use(express.json());
+    app.use("/api/auth", authRouter);
+    const server = app.listen(0);
+    try {
+      const { port } = server.address() as AddressInfo;
+      const statuses: number[] = [];
+      for (let i = 0; i < 21; i++) {
+        const res = await fetch(`http://127.0.0.1:${port}/api/auth/mfa/verify`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: "{}",
+        });
+        statuses.push(res.status);
+      }
+      expect(statuses.slice(0, 20)).not.toContain(429);
+      expect(statuses[20]).toBe(429);
+    } finally {
+      server.close();
+    }
+  });
+});
 
 describe.each(["/mfa/setup", "/mfa/enable", "/mfa/disable"])("POST %s", (path) => {
   it("checks the token first, then rate limits, before the handler runs", () => {

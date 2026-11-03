@@ -58,6 +58,6 @@ router.post("/google/idtoken", handleGoogleIdToken);
 router.post("/mfa/setup", authenticate, authRateLimit, handleMfaSetup);
 router.post("/mfa/enable", authenticate, authRateLimit, handleMfaEnable);
 router.post("/mfa/disable", authenticate, authRateLimit, handleMfaDisable);
-router.post("/mfa/verify", handleMfaVerify);
+router.post("/mfa/verify", authRateLimit, handleMfaVerify);
 
 export default router;
