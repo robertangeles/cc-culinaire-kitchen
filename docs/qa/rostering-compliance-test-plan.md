@@ -93,7 +93,7 @@ A private vault for staff and venue compliance documents (RSA, Food Safety Super
 
 ### CV-B — OCR pre-fill
 
-**What it does:** On upload, the client downscales the photo (~1600px) and the server runs OCR (tesseract, one warm worker, serialised) inside a 5-second budget. Recognised fields pre-fill the form with a visible marker; anything OCR can't read falls back to manual entry with no error shown to the user.
+**What it does:** On upload, the client downscales the photo (~1600px) and the server runs OCR (tesseract, one warm worker, serialised) inside a 5-second budget. OCR runs on JPEG/PNG only; PDF uploads skip it (tesseract cannot read PDFs) and return an empty result straight away, so the form is manual entry. Recognised fields pre-fill the form with a visible marker; anything OCR can't read falls back to manual entry with no error shown to the user.
 
 **Where:** Same upload flow as CV-A.
 
