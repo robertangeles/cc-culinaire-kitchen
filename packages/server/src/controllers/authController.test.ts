@@ -665,6 +665,16 @@ describe.each([
     expect(next).not.toHaveBeenCalled();
   });
 
+  it("answers 401 when the account no longer exists, not a raw 404", async () => {
+    vi.mocked(service as any).mockRejectedValue(new AuthError("USER_NOT_FOUND", "USER_NOT_FOUND", 404));
+    const res = mockRes();
+    const next = vi.fn();
+    await handler(authed(), res, next);
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.json).toHaveBeenCalledWith({ error: "Not authenticated." });
+    expect(next).not.toHaveBeenCalled();
+  });
+
   it("passes an unexpected failure on to the error handler", async () => {
     const boom = new Error("db down");
     vi.mocked(service as any).mockRejectedValue(boom);
