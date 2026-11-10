@@ -53,7 +53,8 @@ router.get("/profile", handleGetProfile);
 router.get("/kitchen-profile", handleGetKitchenProfile);
 router.put("/kitchen-profile", handleUpsertKitchenProfile);
 router.patch("/profile", handleUpdateProfile);
-router.post("/change-password", handleChangePassword);
+// Current-password guesses are limited like login.
+router.post("/change-password", authRateLimit, handleChangePassword);
 // Self-service account deletion. Password/MFA guesses are limited like login.
 router.post("/delete-account", authRateLimit, handleDeleteOwnAccount);
 router.post("/profile/avatar", (req, res, next) => {

@@ -5,6 +5,7 @@
  */
 
 import bcrypt from "bcrypt";
+import crypto from "node:crypto";
 import { and, eq, ilike, ne, or, desc, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { decryptUserPii } from "./piiService.js";
@@ -15,6 +16,7 @@ import {
   userRole,
   userOrganisation,
   organisation,
+  refreshToken,
 } from "../db/schema.js";
 
 const BCRYPT_ROUNDS = parseInt(process.env.BCRYPT_ROUNDS ?? "12", 10);
@@ -110,11 +112,15 @@ export async function updateUserProfile(
     .where(eq(user.userId, userId));
 }
 
-/** Change password (requires current password verification). */
+/**
+ * Change password (requires current password verification). Every other sign-in is ended, as a
+ * password reset does; `keepRefreshToken` is the caller's own session, which stays signed in.
+ */
 export async function changePassword(
   userId: number,
   currentPassword: string,
-  newPassword: string
+  newPassword: string,
+  keepRefreshToken?: string
 ) {
   const rows = await db
     .select({ hash: user.userPasswordHash })
@@ -135,6 +141,17 @@ export async function changePassword(
     .update(user)
     .set({ userPasswordHash: hash, updatedDttm: new Date() })
     .where(eq(user.userId, userId));
+
+  const keepHash = keepRefreshToken
+    ? crypto.createHash("sha256").update(keepRefreshToken).digest("hex")
+    : null;
+  await db
+    .delete(refreshToken)
+    .where(
+      keepHash
+        ? and(eq(refreshToken.userId, userId), ne(refreshToken.tokenHash, keepHash))
+        : eq(refreshToken.userId, userId)
+    );
 }
 
 // ---------------------------------------------------------------------------

@@ -115,3 +115,7 @@ Proof of identity, checked before anything is deleted (403 on failure, nothing c
 
 Known limits: an access token already issued works until it expires, and the Stripe customer object keeps its name and email until the customer is deleted on the Stripe side.
 
+### Changing the password
+
+Changing a password (`POST /api/users/change-password`) needs the current password and is behind `authRateLimit`. It then deletes every refresh token of the account except the caller's own (identified by the `refresh_token` cookie), as a password reset deletes them all. A bearer-token client sends no cookie, so all its sessions end.
+

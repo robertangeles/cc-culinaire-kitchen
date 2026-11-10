@@ -90,7 +90,12 @@ export async function handleChangePassword(req: Request, res: Response, next: Ne
       res.status(400).json({ error: parsed.error.flatten() });
       return;
     }
-    await changePassword(req.user!.sub, parsed.data.currentPassword, parsed.data.newPassword);
+    await changePassword(
+      req.user!.sub,
+      parsed.data.currentPassword,
+      parsed.data.newPassword,
+      req.cookies?.refresh_token
+    );
     res.json({ success: true });
   } catch (err: unknown) {
     if (err instanceof Error) {
