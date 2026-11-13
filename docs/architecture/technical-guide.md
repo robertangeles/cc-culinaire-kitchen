@@ -375,6 +375,7 @@ POST /api/stripe/webhook (Stripe signature verified)
 | GET | /api/credentials | Admin | List all credentials (masked) |
 | PUT | /api/credentials/:key | Admin | Save/update credential |
 | DELETE | /api/credentials/:key | Admin | Delete credential |
+| POST | /api/users/change-password | Yes | Change own password. Body `{ currentPassword, newPassword, refreshToken? }`. Ends the account's other sessions; the caller's own (`refresh_token` cookie, or `refreshToken` in the body for bearer clients) stays. 400 on wrong or missing password. Rate limited (`authRateLimit`, 20/min per IP, shared with login) |
 | GET | /api/users | Admin | List users (paginated, searchable) |
 | DELETE | /api/users/:id | Admin | Delete user (cascade) |
 | PATCH | /api/users/:id/suspend | Admin | Suspend user |
