@@ -7,6 +7,7 @@ import { applyEnvPrefix } from "../utils/envShim.js";
 config({ path: resolve(dirname(fileURLToPath(import.meta.url)), "../../../../.env") });
 applyEnvPrefix();
 
+import crypto from "node:crypto";
 import { eq } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { refreshToken, user, userRole } from "../db/schema.js";
@@ -38,8 +39,10 @@ describe.skipIf(!RUN)("changing the password (real DB)", { timeout: 120_000 }, (
     };
     return { userId, first: await signIn(), second: await signIn() };
   }
-  const sessions = async (userId: number) =>
-    (await db.select({ id: refreshToken.refreshTokenId }).from(refreshToken).where(eq(refreshToken.userId, userId))).length;
+  const sessionHashes = async (userId: number) =>
+    (await db.select({ hash: refreshToken.tokenHash }).from(refreshToken).where(eq(refreshToken.userId, userId))).map((r) => r.hash);
+  const sessions = async (userId: number) => (await sessionHashes(userId)).length;
+  const sha256 = (raw: string) => crypto.createHash("sha256").update(raw).digest("hex");
 
   afterAll(async () => {
     for (const id of userIds) {
@@ -53,7 +56,7 @@ describe.skipIf(!RUN)("changing the password (real DB)", { timeout: 120_000 }, (
     const { userId, first } = await makeUserWithTwoSessions("keep");
     expect(await sessions(userId)).toBe(2);
     await changePassword(userId, PASSWORD, NEW_PASSWORD, first);
-    expect(await sessions(userId)).toBe(1);
+    expect(await sessionHashes(userId)).toEqual([sha256(first)]);
   });
 
   it("ends every session when the caller's own cannot be identified", async () => {

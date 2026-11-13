@@ -137,21 +137,23 @@ export async function changePassword(
   if (!valid) throw new Error("Current password is incorrect.");
 
   const hash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
-  await db
-    .update(user)
-    .set({ userPasswordHash: hash, updatedDttm: new Date() })
-    .where(eq(user.userId, userId));
-
   const keepHash = keepRefreshToken
     ? crypto.createHash("sha256").update(keepRefreshToken).digest("hex")
     : null;
-  await db
-    .delete(refreshToken)
-    .where(
-      keepHash
-        ? and(eq(refreshToken.userId, userId), ne(refreshToken.tokenHash, keepHash))
-        : eq(refreshToken.userId, userId)
-    );
+  // One transaction: a failed sign-out must not leave a changed password with the old sessions alive.
+  await db.transaction(async (tx) => {
+    await tx
+      .update(user)
+      .set({ userPasswordHash: hash, updatedDttm: new Date() })
+      .where(eq(user.userId, userId));
+    await tx
+      .delete(refreshToken)
+      .where(
+        keepHash
+          ? and(eq(refreshToken.userId, userId), ne(refreshToken.tokenHash, keepHash))
+          : eq(refreshToken.userId, userId)
+      );
+  });
 }
 
 // ---------------------------------------------------------------------------
