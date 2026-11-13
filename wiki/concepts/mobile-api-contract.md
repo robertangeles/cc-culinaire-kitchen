@@ -2,7 +2,7 @@
 title: Mobile API Contract
 category: concept
 created: 2026-04-29
-updated: 2026-06-30
+updated: 2026-11-14
 related: [[culinaire-kitchen-platform]], [[prompt-system]], [[technical-architecture]], [[turnstile-bot-protection]]
 ---
 
@@ -22,6 +22,8 @@ Same JWT system as the web client, but **token transport differs**:
 | Mobile | `Authorization: Bearer <token>` header | response body field, stored in mobile keychain |
 
 The unified `authenticate` middleware ([packages/server/src/middleware/auth.ts:25-52](../../packages/server/src/middleware/auth.ts)) accepts either Bearer or cookie — every protected route works for both clients without route-level branching.
+
+- **Changing the password (2026-11-14).** `POST /api/users/change-password` now ends every other session of the account, as a password reset does. A bearer client must send its own `refreshToken` in the body (next to `currentPassword` and `newPassword`) to stay signed in; without it, all sessions end, its own included. The route shares the 20 req/min `authRateLimit` (429 with `Retry-After`). A wrong or missing password answers 400.
 
 ### Mobile-specific entry point
 - `POST /api/auth/google/idtoken` ([routes/auth.ts:47](../../packages/server/src/routes/auth.ts), [authController.ts:473-476](../../packages/server/src/controllers/authController.ts)) — accepts a Google ID token from the React Native Google Sign-In library and returns `{ user, tokens: { accessToken, refreshToken } }`. Web clients hit the same shape but ignore `tokens` and read cookies instead. **Not** Turnstile-gated.
@@ -99,6 +101,7 @@ The schema and registration path are wired; **actual FCM/APNs dispatch is not ye
 |---|---|---|
 | 30 req/min per user | `GET /api/mobile/prompts/:slug` | [rateLimiter.ts:37-47](../../packages/server/src/middleware/rateLimiter.ts) |
 | 20 req/min per user | chat (web) | rateLimiter.ts |
+| 20 req/min per IP (hashed) | `authRateLimit`: auth login, register, forgot-password, mfa setup/enable/disable/verify; users change-password, delete-account | rateLimiter.ts |
 | Default global | everything else | rateLimiter.ts |
 
 All limiters use draft-8 RateLimit headers so mobile can introspect remaining quota.
