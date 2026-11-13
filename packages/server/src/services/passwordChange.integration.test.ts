@@ -57,6 +57,15 @@ describe.skipIf(!RUN)("changing the password (real DB)", { timeout: 120_000 }, (
     expect(await sessions(userId)).toBe(2);
     await changePassword(userId, PASSWORD, NEW_PASSWORD, first);
     expect(await sessionHashes(userId)).toEqual([sha256(first)]);
+    // The password really changed, in the same commit as the sign-out.
+    expect((await loginUser(`${tag}-keep@it.test`, NEW_PASSWORD)).requiresMfa).toBe(false);
+    await expect(loginUser(`${tag}-keep@it.test`, PASSWORD)).rejects.toThrow();
+  });
+
+  it("ends every session when the cookie matches none, since nothing proves which is the caller's", async () => {
+    const { userId } = await makeUserWithTwoSessions("stale");
+    await changePassword(userId, PASSWORD, NEW_PASSWORD, "a-token-no-row-has");
+    expect(await sessions(userId)).toBe(0);
   });
 
   it("ends every session when the caller's own cannot be identified", async () => {
@@ -71,5 +80,6 @@ describe.skipIf(!RUN)("changing the password (real DB)", { timeout: 120_000 }, (
       "Current password is incorrect."
     );
     expect(await sessions(userId)).toBe(2);
+    expect((await loginUser(`${tag}-wrong@it.test`, PASSWORD)).requiresMfa).toBe(false);
   });
 });

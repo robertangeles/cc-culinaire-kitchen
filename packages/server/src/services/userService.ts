@@ -112,6 +112,9 @@ export async function updateUserProfile(
     .where(eq(user.userId, userId));
 }
 
+/** A refusal the caller can act on (wrong password, no password set); anything else is a server fault. */
+export class PasswordChangeError extends Error {}
+
 /**
  * Change password (requires current password verification). Every other sign-in is ended, as a
  * password reset does; `keepRefreshToken` is the caller's own session, which stays signed in.
@@ -127,14 +130,14 @@ export async function changePassword(
     .from(user)
     .where(eq(user.userId, userId));
 
-  if (rows.length === 0) throw new Error("User not found.");
+  if (rows.length === 0) throw new PasswordChangeError("User not found.");
 
   if (!rows[0].hash) {
-    throw new Error("Account uses OAuth login. Set a password via profile settings.");
+    throw new PasswordChangeError("Account uses OAuth login. Set a password via profile settings.");
   }
 
   const valid = await bcrypt.compare(currentPassword, rows[0].hash);
-  if (!valid) throw new Error("Current password is incorrect.");
+  if (!valid) throw new PasswordChangeError("Current password is incorrect.");
 
   const hash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
   const keepHash = keepRefreshToken

@@ -117,5 +117,5 @@ Known limits: an access token already issued works until it expires, and the Str
 
 ### Changing the password
 
-Changing a password (`POST /api/users/change-password`) needs the current password and is behind `authRateLimit`. It then deletes every refresh token of the account except the caller's own (identified by the `refresh_token` cookie), as a password reset deletes them all. A bearer-token client sends no cookie, so all its sessions end.
+Changing a password (`POST /api/users/change-password`) needs the current password and is behind `authRateLimit` (per address, shared with login, so it slows guessing without capping it per account). In one transaction it updates the hash and deletes every refresh token of the account except the caller's own, identified by the `refresh_token` cookie or, for a bearer client, `refreshToken` in the body; with neither, all are deleted, as a password reset deletes them all. Known limits: an access token already issued works until it expires (up to an hour), and a login with the old password that is already in flight can still create a session. Wrong-password and no-password refusals answer 400; any other failure goes to the error handler.
 

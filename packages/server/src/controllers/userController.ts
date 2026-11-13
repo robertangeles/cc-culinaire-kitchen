@@ -13,6 +13,7 @@ import {
   getUserProfile,
   updateUserProfile,
   changePassword,
+  PasswordChangeError,
   listAllUsers,
   suspendUser,
   reactivateUser,
@@ -80,6 +81,8 @@ export async function handleUpdateProfile(req: Request, res: Response, next: Nex
 const ChangePasswordSchema = z.object({
   currentPassword: z.string().min(1),
   newPassword: z.string().min(8),
+  // Bearer (mobile) clients hold their refresh token in the body, as /refresh and /logout accept it.
+  refreshToken: z.string().max(500).optional(),
 });
 
 /** POST /api/users/change-password — change password. */
@@ -94,11 +97,11 @@ export async function handleChangePassword(req: Request, res: Response, next: Ne
       req.user!.sub,
       parsed.data.currentPassword,
       parsed.data.newPassword,
-      req.cookies?.refresh_token
+      req.cookies?.refresh_token ?? parsed.data.refreshToken
     );
     res.json({ success: true });
   } catch (err: unknown) {
-    if (err instanceof Error) {
+    if (err instanceof PasswordChangeError) {
       res.status(400).json({ error: err.message });
       return;
     }
