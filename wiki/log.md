@@ -1925,3 +1925,7 @@ Daily encrypted prod dump to Google Drive (`scripts/backup/prodOffsiteBackup.sh`
 ## 2026-11-15 — CI: pin the E2E runner
 
 `fix/ck-web/ci-pin-e2e-runner`: `ubuntu-latest` became Ubuntu 26.04 and Playwright 1.59.1 refused to install chromium there, failing Browser E2E on every PR (seen on #168). The `e2e` job is pinned to `ubuntu-24.04`. Other jobs were unaffected and stay on `ubuntu-latest`.
+
+## 2026-11-15 — E2E: status-pill selector
+
+`fix/ck-web/e2e-status-pill-selector`: `compliance.spec.ts` "status is never conveyed by colour alone" matched the EmptyState hero icon as a pill when it counted before data loaded (failed on #171 after passing on identical code). `StatusPill` gets `data-status-pill`; the spec counts only that.
