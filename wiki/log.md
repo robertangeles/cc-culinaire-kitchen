@@ -1948,4 +1948,4 @@ Daily encrypted prod dump to Google Drive (`scripts/backup/prodOffsiteBackup.sh`
 
 ## 2026-11-15 — PillTabs (E2)
 
-`refactor/ck-web/pill-tabs`: shared `components/ui/PillTabs.tsx` (WAI-ARIA tabs: arrows, Home/End, roving tabindex, `min-h-11`), 11 strips migrated; sidebar rows + PromptsTab list got `min-h-11` only. 11 new tests. Profile Playwright baseline refreshed.
+`refactor/ck-web/pill-tabs`: shared `components/ui/PillTabs.tsx` (WAI-ARIA tabs: arrows, Home/End, roving tabindex, `min-h-11`), 11 strips migrated; sidebar rows + PromptsTab list got `min-h-11` only. 11 new tests. store-locations and ingredient-catalog Playwright baselines refreshed; user-detail spec picks the E2E user by email (the seed also creates E2E Delete User).
