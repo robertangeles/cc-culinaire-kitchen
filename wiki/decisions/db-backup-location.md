@@ -2,7 +2,7 @@
 title: Database Backup Location — one canonical folder on every machine
 category: decision
 created: 2026-07-14
-updated: 2026-10-26
+updated: 2026-11-15
 related: [[dev-prod-db-separation]], [[single-env-file]], [[lessons-index]], [[tenant-isolation-remediation]]
 ---
 
@@ -35,7 +35,7 @@ Restore to a *scratch* database first when validating a dump; only `--clean` a l
 ## Offsite tier (added 2026-10-26)
 The folder above only protects against a bad change, not against losing this machine. A daily encrypted dump of prod now also goes to Google Drive (`culinaire-offsite-backups/prod/daily/`, 30 days kept). Script, schedule, passphrase handling and restore steps: `docs/architecture/offsite-backup.md`. The existing dumps were uploaded once to `prod/archive/`.
 
-Drift noted the same day: the October 2026 schema and FK work wrote its dumps to `~/ck-prod-backups/` (and dev CSVs to `~/ck-dev-backups/`), not to the canonical folder, so two folders hold dumps today. Both were uploaded to the archive. Which one wins is an open call for the owner.
+Drift noted 2026-10-26: the October 2026 schema and FK work wrote its dumps to `~/ck-prod-backups/` (and dev CSVs to `~/ck-dev-backups/`), so two folders held dumps. Resolved 2026-11-15: the 11 files in `~/ck-prod-backups/` were moved into `~/culinaire-prod-backups/` (all had already been uploaded to `prod/archive/`) and the old folder removed. The canonical folder stands. `~/ck-dev-backups/` is dev data only and is left as is.
 
 ## Why this exists
 The mandatory "backup before any destructive/irreversible prod op" rule (lesson #63, auto-memory `feedback_backup-before-destructive-prod`) is only useful if the next session can *find* the backup. Without a fixed location, dumps land in `/tmp`, scratchpads, or random repo folders and are lost or committed by accident. One canonical home-relative folder makes backups consistent across machines and safe from version control. First dump under this rule: the full prod snapshot taken 2026-07-14 before the pending sample-catalog cleanup ([[tenant-isolation-remediation]] follow-up).
