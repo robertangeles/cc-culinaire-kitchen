@@ -26,6 +26,11 @@ vi.mock("express-rate-limit", () => ({
   rateLimit: mockRateLimit,
 }));
 
+// Only a token the real service would accept names an account; the mock accepts "tok-7" as user 7.
+vi.mock("../services/authService.js", () => ({
+  mfaSessionUserId: (t: unknown) => (t === "tok-7" ? 7 : null),
+}));
+
 describe("rateLimiter — chatRateLimit config", () => {
   beforeEach(() => {
     mockRateLimit.mockClear();
@@ -35,11 +40,12 @@ describe("rateLimiter — chatRateLimit config", () => {
   it("constructs with 20 requests per 60 seconds", async () => {
     await import("./rateLimiter.js");
 
-    // Eight limiters are constructed: chat + mobile prompt + mobile RAG +
+    // Ten limiters are constructed: chat + mobile prompt + mobile RAG +
     // mobile feedback + auth + compliance document view + compliance
-    // document edit + compliance report. Assert call count first so we
-    // catch any future limiter being added or removed silently.
-    expect(mockRateLimit).toHaveBeenCalledTimes(8);
+    // document edit + compliance report + MFA verify + MFA account. Assert
+    // call count first so we catch any future limiter being added or removed
+    // silently.
+    expect(mockRateLimit).toHaveBeenCalledTimes(10);
 
     const chatConfig = mockRateLimit.mock.calls[0][0] as Record<string, unknown>;
     expect(chatConfig.limit).toBe(20);
@@ -385,5 +391,68 @@ describe("rateLimiter — complianceReportRateLimit config", () => {
     const config = mockRateLimit.mock.calls[7][0] as Record<string, unknown>;
     expect(config.standardHeaders).toBe("draft-8");
     expect(config.legacyHeaders).toBe(false);
+  });
+});
+
+describe("rateLimiter — MFA limiters config", () => {
+  type Cfg = {
+    limit: number;
+    windowMs: number;
+    skipSuccessfulRequests: boolean;
+    requestWasSuccessful?: (req: unknown, res: { statusCode: number }) => boolean;
+    skip?: (req: unknown) => boolean;
+    keyGenerator: (req: unknown) => string;
+  };
+  beforeEach(() => {
+    mockRateLimit.mockClear();
+    vi.resetModules();
+  });
+
+  it("mfaVerifyRateLimit: 20 failures a minute per hashed address, in its own bucket", async () => {
+    await import("./rateLimiter.js");
+    const config = mockRateLimit.mock.calls[8][0] as Cfg;
+    expect(config.limit).toBe(20);
+    expect(config.windowMs).toBe(60 * 1000);
+    // Successful sign-ins must not count, or a kitchen behind one NAT throttles itself.
+    expect(config.skipSuccessfulRequests).toBe(true);
+    const key = config.keyGenerator({ ip: "203.0.113.7" });
+    expect(key).toMatch(/^mfa-verify-ip-[0-9a-f]{32}$/);
+    expect(key).not.toContain("203.0.113.7");
+    // Not the login bucket.
+    const authKey = (mockRateLimit.mock.calls[4][0] as Cfg).keyGenerator({ ip: "203.0.113.7" });
+    expect(key).not.toBe(authKey);
+  });
+
+  it("mfaAccountRateLimit: 5 failures per 15 minutes, keyed by the account", async () => {
+    await import("./rateLimiter.js");
+    const config = mockRateLimit.mock.calls[9][0] as Cfg;
+    expect(config.limit).toBe(5);
+    expect(config.windowMs).toBe(15 * 60 * 1000);
+    expect(config.skipSuccessfulRequests).toBe(true);
+    // Same account from two addresses shares one bucket; that is the point.
+    expect(config.keyGenerator({ user: { sub: 42 }, ip: "1.1.1.1" })).toBe("mfa-account-42");
+    expect(config.keyGenerator({ user: { sub: 42 }, ip: "2.2.2.2" })).toBe("mfa-account-42");
+  });
+
+  it("mfaAccountRateLimit: counts refused proofs, not the 409 'already enabled' answer that checks no proof", async () => {
+    await import("./rateLimiter.js");
+    const wasOk = (mockRateLimit.mock.calls[9][0] as Cfg).requestWasSuccessful!;
+    for (const statusCode of [200, 204]) expect(wasOk({}, { statusCode })).toBe(true);
+    expect(wasOk({}, { statusCode: 409 })).toBe(true);
+    // Wrong password/code, bad token, and the limiter's own 429 all stay counted.
+    for (const statusCode of [400, 401, 403, 429, 500]) expect(wasOk({}, { statusCode })).toBe(false);
+  });
+
+  it("mfaAccountRateLimit: takes the account from a verified MFA token, never from an unverified one", async () => {
+    await import("./rateLimiter.js");
+    const config = mockRateLimit.mock.calls[9][0] as Cfg;
+    expect(config.keyGenerator({ body: { mfaSessionToken: "tok-7" } })).toBe("mfa-account-7");
+    // A forged token names no account, so it is skipped (left to the per-address limiter) and
+    // cannot be aimed at another user's bucket.
+    expect(config.skip?.({ body: { mfaSessionToken: "forged" } })).toBe(true);
+    expect(config.skip?.({ body: {} })).toBe(true);
+    expect(config.skip?.({})).toBe(true);
+    expect(config.skip?.({ body: { mfaSessionToken: "tok-7" } })).toBe(false);
+    expect(config.skip?.({ user: { sub: 3 } })).toBe(false);
   });
 });
