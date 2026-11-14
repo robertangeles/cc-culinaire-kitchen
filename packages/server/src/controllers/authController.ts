@@ -523,6 +523,7 @@ export async function handleResetPassword(
 // ---------------------------------------------------------------------------
 
 import { CLIENT_URL } from "../utils/env.js";
+import { presentedRefreshToken } from "../utils/presentedRefreshToken.js";
 
 /** GET /api/auth/google — Redirects to Google OAuth consent screen. */
 export function handleGoogleRedirect(_req: Request, res: Response) {
@@ -648,7 +649,7 @@ export async function handleMfaSetup(
     const userId = req.user?.sub;
     if (!userId) { res.status(401).json({ error: "Not authenticated." }); return; }
 
-    const signedInAt = await getSignInTime(req.cookies?.refresh_token, userId);
+    const signedInAt = await getSignInTime(presentedRefreshToken(req), userId);
     const result = await generateMfaSecret(userId, mfaProofFrom(req.body), signedInAt);
     res.json({ secret: result.secret, qrCodeDataUrl: result.qrCodeDataUrl });
   } catch (err) {
@@ -701,7 +702,7 @@ export async function handleMfaDisable(
     const userId = req.user?.sub;
     if (!userId) { res.status(401).json({ error: "Not authenticated." }); return; }
 
-    const signedInAt = await getSignInTime(req.cookies?.refresh_token, userId);
+    const signedInAt = await getSignInTime(presentedRefreshToken(req), userId);
     await disableMfa(userId, mfaProofFrom(req.body), signedInAt);
     res.json({ message: "MFA disabled." });
   } catch (err) {

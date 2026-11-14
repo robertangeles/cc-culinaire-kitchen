@@ -642,6 +642,14 @@ describe.each([
     expect(service).toHaveBeenCalledWith(7, { password: "pw", mfaCode: "123456" }, signedInAt);
   });
 
+  it("takes the sign-in time from a body refreshToken when a bearer client sends no cookie", async () => {
+    vi.mocked(getSignInTime).mockResolvedValue(null);
+    vi.mocked(service as any).mockResolvedValue({ secret: "s", qrCodeDataUrl: "q" });
+    const req = { ...mockReq({ body: { password: "pw", refreshToken: "rt-body" }, cookies: {} as any }), user: { sub: 7 } } as any;
+    await handler(req, mockRes(), vi.fn());
+    expect(getSignInTime).toHaveBeenCalledWith("rt-body", 7);
+  });
+
   it("ignores a password or code that is not a string", async () => {
     vi.mocked(getSignInTime).mockResolvedValue(null);
     vi.mocked(service as any).mockResolvedValue({ secret: "s", qrCodeDataUrl: "q" });
