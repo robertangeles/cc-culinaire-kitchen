@@ -8,7 +8,8 @@ import { applyEnvPrefix } from "../utils/envShim.js";
 config({ path: resolve(dirname(fileURLToPath(import.meta.url)), "../../../../.env") });
 applyEnvPrefix();
 
-vi.mock("./stripeService.js", () => ({ cancelSubscriptionNow: vi.fn() }));
+vi.mock("./stripeService.js", () => ({ cancelSubscriptionNow: vi.fn(), deleteCustomer: vi.fn() }));
+vi.mock("../middleware/upload.js", async (orig) => ({ ...(await orig<typeof import("../middleware/upload.js")>()), deleteProfilePhoto: vi.fn() }));
 
 import { and, eq } from "drizzle-orm";
 import { db } from "../db/index.js";
@@ -29,7 +30,8 @@ import {
 } from "../db/schema.js";
 import { registerUser, loginUser } from "./authService.js";
 import { createOrganisation } from "./organisationService.js";
-import { cancelSubscriptionNow } from "./stripeService.js";
+import { cancelSubscriptionNow, deleteCustomer } from "./stripeService.js";
+import { deleteProfilePhoto } from "../middleware/upload.js";
 import { anonymiseUser, UserAnonymisationError } from "./userAnonymisationService.js";
 import { listAllUsers } from "./userService.js";
 
@@ -193,5 +195,75 @@ describe.skipIf(!RUN)("anonymiseUser (real DB)", { timeout: 120_000 }, () => {
     expect(cancelSubscriptionNow).toHaveBeenLastCalledWith("sub_it_test");
     const [done] = await db.select().from(user).where(eq(user.userId, userId));
     expect(done.userStatus).toBe("deleted");
+  });
+  it("deletes the Stripe customer, and does nothing else if that fails", async () => {
+    const { userId, email } = await makeUser("customer");
+    await db.update(user).set({ stripeCustomerId: "cus_it_test" }).where(eq(user.userId, userId));
+    const ids = await seedPersonalAndBusinessRows(userId);
+
+    vi.mocked(deleteCustomer).mockRejectedValueOnce(new Error("stripe down"));
+    await expect(anonymiseUser(userId, adminId)).rejects.toBeInstanceOf(UserAnonymisationError);
+    const [untouched] = await db.select().from(user).where(eq(user.userId, userId));
+    expect(untouched.userEmail).toBe(email);
+    expect(untouched.userStatus).not.toBe("deleted");
+    expect(await db.select().from(conversation).where(eq(conversation.conversationId, ids.conversationId))).toHaveLength(1);
+
+    vi.mocked(deleteCustomer).mockResolvedValueOnce(undefined);
+    await anonymiseUser(userId, adminId);
+    expect(deleteCustomer).toHaveBeenLastCalledWith("cus_it_test");
+    const [done] = await db.select().from(user).where(eq(user.userId, userId));
+    expect(done.userStatus).toBe("deleted");
+  });
+
+  it("with a customer on file, deleting it is the only Stripe call (it cancels the subscription too)", async () => {
+    const { userId } = await makeUser("both");
+    await db.update(user).set({ stripeCustomerId: "cus_it_both", stripeSubscriptionId: "sub_it_both" }).where(eq(user.userId, userId));
+    vi.mocked(deleteCustomer).mockClear();
+    vi.mocked(cancelSubscriptionNow).mockClear();
+    await anonymiseUser(userId, adminId);
+    expect(deleteCustomer).toHaveBeenCalledWith("cus_it_both");
+    expect(cancelSubscriptionNow).not.toHaveBeenCalled();
+  });
+
+  it("does not call Stripe for a user who never had a customer", async () => {
+    const { userId } = await makeUser("nocustomer");
+    vi.mocked(deleteCustomer).mockClear();
+    await anonymiseUser(userId, adminId);
+    expect(deleteCustomer).not.toHaveBeenCalled();
+  });
+
+  it("removes the avatar file, and goes on deleting even if the file cannot be removed", async () => {
+    const photo = `https://res.cloudinary.com/it/image/upload/v1/culinaire/profiles/${tag}-a.jpg`;
+    const a = await makeUser("photo-a");
+    await db.update(user).set({ userPhotoPath: photo }).where(eq(user.userId, a.userId));
+    vi.mocked(deleteProfilePhoto).mockClear().mockResolvedValueOnce(true);
+    await anonymiseUser(a.userId, adminId);
+    expect(deleteProfilePhoto).toHaveBeenCalledWith(photo);
+    const [rowA] = await db.select().from(user).where(eq(user.userId, a.userId));
+    expect(rowA.userPhotoPath).toBeNull();
+
+    const photoB = `https://res.cloudinary.com/it/image/upload/v1/culinaire/profiles/${tag}-b.jpg`;
+    const b = await makeUser("photo-b");
+    await db.update(user).set({ userPhotoPath: photoB }).where(eq(user.userId, b.userId));
+    vi.mocked(deleteProfilePhoto).mockRejectedValueOnce(new Error("cloudinary down"));
+    await expect(anonymiseUser(b.userId, adminId)).resolves.toBeUndefined();
+    const [rowB] = await db.select().from(user).where(eq(user.userId, b.userId));
+    expect(rowB.userStatus).toBe("deleted");
+  });
+
+  it("leaves a photo alone when another account points at it, so a profile cannot be aimed at someone else's avatar", async () => {
+    const photo = `https://res.cloudinary.com/it/image/upload/v1/culinaire/profiles/${tag}-shared.jpg`;
+    const owner = await makeUser("photo-owner");
+    const copier = await makeUser("photo-copier");
+    await db.update(user).set({ userPhotoPath: photo }).where(eq(user.userId, owner.userId));
+    // The same file under a different URL (new version, other extension) must still count as shared.
+    const variant = `https://res.cloudinary.com/other/image/upload/v2/culinaire/profiles/${tag}-shared.png`;
+    await db.update(user).set({ userPhotoPath: variant }).where(eq(user.userId, copier.userId));
+    vi.mocked(deleteProfilePhoto).mockClear();
+
+    await anonymiseUser(copier.userId, adminId);
+    expect(deleteProfilePhoto).not.toHaveBeenCalled();
+    const [ownerRow] = await db.select().from(user).where(eq(user.userId, owner.userId));
+    expect(ownerRow.userPhotoPath).toBe(photo);
   });
 });

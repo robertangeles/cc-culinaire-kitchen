@@ -94,10 +94,11 @@ culinaire-kitchen/
 
 Deleting a user (admin: `DELETE /api/users/:id`) anonymises the account instead of removing the row. `userAnonymisationService.anonymiseUser`:
 
-1. Cancels the Stripe subscription immediately. If that fails, nothing else is changed and the API answers 502, so a user is never left billed with their data gone.
-2. Removes personal data: conversations and messages, credentials and sign-in links, roles, organisation and location membership, notifications, preferences, Brain memories, saved recipes and reviews. Community posts become empty deleted messages.
-3. Scrubs the `user` row: name becomes "Deleted user", email a unique `deleted-<id>@deleted.invalid` placeholder, and password, MFA secret, photo, bio, address and every encrypted PII column are cleared. The row and its id stay, with status `deleted`.
-4. Keeps business and audit records (orders, waste, receiving, stock, audit log). They keep pointing at the scrubbed row, so they no longer identify a person.
+1. Deletes the Stripe customer (its name and email; Stripe keeps invoices and payment records), which also cancels its subscriptions at once; a subscription with no customer id on file is cancelled directly. If that fails, nothing else is changed and the API answers 502, so a user is never left billed, or with personal data at Stripe, once their data is gone. A customer Stripe no longer has counts as done, so a retry is safe.
+2. Removes the uploaded avatar file from Cloudinary (`deleteProfilePhoto`; only files in `culinaire/profiles/`, never a Google avatar or any other URL, not a URL naming another Cloudinary account, and not a file another account also points at, judged on the public_id not the URL text, since `userPhotoPath` is user-editable). The price of that rule is an orphan, never a wrong deletion: if another account still points at the photo, or two such accounts are deleted at the same moment, the file stays until it is removed by hand. Unlike Stripe this is best effort: a failure is logged as `profile_photo_not_removed` with the URL, and the deletion goes on. A local `/uploads/` avatar (the no-Cloudinary dev fallback) is not removed from disk.
+3. Removes personal data: conversations and messages, credentials and sign-in links, roles, organisation and location membership, notifications, preferences, Brain memories, saved recipes and reviews. Community posts become empty deleted messages.
+4. Scrubs the `user` row: name becomes "Deleted user", email a unique `deleted-<id>@deleted.invalid` placeholder, and password, MFA secret, photo, bio, address and every encrypted PII column are cleared. The row and its id stay, with status `deleted`.
+5. Keeps business and audit records (orders, waste, receiving, stock, audit log). They keep pointing at the scrubbed row, so they no longer identify a person.
 
 Staff compliance documents follow their own retention lifecycle (7 years for employee records) and are not touched. Deleted users are hidden from the admin user list.
 
@@ -113,7 +114,7 @@ Proof of identity, checked before anything is deleted (403 on failure, nothing c
 
 `POST /api/auth/mfa/setup` and `/disable` (Profile -> Security) need proof, not just a session, because a new secret locks the owner out and switching MFA off removes the second factor. Checked in `authService.requireProofToChangeMfa` (403, nothing changes): the password for password accounts, or a sign-in within the last 10 minutes for Google-only accounts (`getSignInTime`, same rule as deletion); and a current authenticator code whenever MFA is on. `setup` is refused outright (409) while MFA is on, so a live secret is never replaced. All four MFA routes are brake-limited on failures only (successes never count, and neither does the 409 that `setup` answers while MFA is on, because no proof was checked). `setup`/`enable`/`disable` sit behind `mfaAccountRateLimit`: 5 failures per 15 minutes per account, keyed by the session user, so rotating IPs does not help an attacker. `/mfa/verify` (the login step, which takes no session) sits behind `mfaVerifyRateLimit` (20 failures a minute per address, its own bucket so MFA sign-ins do not spend the login budget) and then `mfaAccountRateLimit`, keyed by the user inside the MFA session token. The key is taken only from a token that `mfaSessionUserId` has verified; a forged token names no account and is skipped, so nobody can burn another user's attempts. Known limits: counters are in memory (reset on deploy, not shared across instances), and an attacker who already has the password can lock the owner's MFA step for 15 minutes.
 
-Known limits: an access token already issued works until it expires, and the Stripe customer object keeps its name and email until the customer is deleted on the Stripe side.
+Known limits: an access token already issued works until it expires.
 
 ### Changing the password
 

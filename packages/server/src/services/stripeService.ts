@@ -226,6 +226,20 @@ export async function cancelSubscriptionNow(subscriptionId: string): Promise<voi
   }
 }
 
+/**
+ * Delete a Stripe customer, which removes its name and email (Stripe keeps invoices and payment
+ * records). Deleting also cancels any subscription the customer still has. A customer Stripe no
+ * longer has counts as done, so a retry after a partial failure does not get stuck.
+ */
+export async function deleteCustomer(customerId: string): Promise<void> {
+  try {
+    await getStripe().customers.del(customerId);
+  } catch (err) {
+    if (err instanceof Stripe.errors.StripeInvalidRequestError && err.code === "resource_missing") return;
+    throw err;
+  }
+}
+
 /** Create a Stripe customer portal session. */
 export async function createCustomerPortalSession(userId: number) {
   const rows = await db
