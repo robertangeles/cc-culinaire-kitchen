@@ -38,9 +38,11 @@ test.describe("Refactored components: visual", () => {
 
   test("UserDetailPanel: detail dialog", async ({ page }) => {
     await page.goto("/settings?tab=users");
-    const firstRow = page.locator("tbody tr").first();
-    await expect(firstRow).toBeVisible({ timeout: 20_000 });
-    await firstRow.locator("td").first().click();
+    // By email, not "first row": the seed also creates a second user (E2E Delete User), and which
+    // one sorts first must not decide what the screenshot shows.
+    const row = page.locator("tbody tr", { hasText: process.env.E2E_USER_EMAIL ?? "e2e-ci@culinaire.test" });
+    await expect(row).toBeVisible({ timeout: 20_000 });
+    await row.locator("td").first().click();
     const dialog = page.getByRole("dialog", { name: /^User details:/ });
     await expect(dialog).toBeVisible();
     await settled(page);
