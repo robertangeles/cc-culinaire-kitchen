@@ -399,6 +399,7 @@ describe("rateLimiter — MFA limiters config", () => {
     limit: number;
     windowMs: number;
     skipSuccessfulRequests: boolean;
+    requestWasSuccessful?: (req: unknown, res: { statusCode: number }) => boolean;
     skip?: (req: unknown) => boolean;
     keyGenerator: (req: unknown) => string;
   };
@@ -431,6 +432,15 @@ describe("rateLimiter — MFA limiters config", () => {
     // Same account from two addresses shares one bucket; that is the point.
     expect(config.keyGenerator({ user: { sub: 42 }, ip: "1.1.1.1" })).toBe("mfa-account-42");
     expect(config.keyGenerator({ user: { sub: 42 }, ip: "2.2.2.2" })).toBe("mfa-account-42");
+  });
+
+  it("mfaAccountRateLimit: counts refused proofs, not the 409 'already enabled' answer that checks no proof", async () => {
+    await import("./rateLimiter.js");
+    const wasOk = (mockRateLimit.mock.calls[9][0] as Cfg).requestWasSuccessful!;
+    for (const statusCode of [200, 204]) expect(wasOk({}, { statusCode })).toBe(true);
+    expect(wasOk({}, { statusCode: 409 })).toBe(true);
+    // Wrong password/code, bad token, and the limiter's own 429 all stay counted.
+    for (const statusCode of [400, 401, 403, 429, 500]) expect(wasOk({}, { statusCode })).toBe(false);
   });
 
   it("mfaAccountRateLimit: takes the account from a verified MFA token, never from an unverified one", async () => {

@@ -8,7 +8,7 @@
 
 import { rateLimit } from "express-rate-limit";
 import { createHash } from "crypto";
-import type { Request } from "express";
+import type { Request, Response } from "express";
 import { mfaSessionUserId } from "../services/authService.js";
 
 /**
@@ -249,6 +249,8 @@ export const mfaAccountRateLimit = rateLimit({
   standardHeaders: "draft-8",
   legacyHeaders: false,
   skipSuccessfulRequests: true,
+  // 409 MFA_ALREADY_ENABLED is refused before any password or code is checked, so it is not a failed guess.
+  requestWasSuccessful: (_req: Request, res: Response) => res.statusCode < 400 || res.statusCode === 409,
   skip: (req: Request) => mfaAccountOf(req) == null,
   keyGenerator: (req: Request) => `mfa-account-${mfaAccountOf(req)}`,
   message: { error: "Too many failed attempts — please wait 15 minutes before trying again." },
