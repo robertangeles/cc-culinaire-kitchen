@@ -1937,3 +1937,7 @@ Daily encrypted prod dump to Google Drive (`scripts/backup/prodOffsiteBackup.sh`
 ## 2026-11-15 — E2E: status-pill selector
 
 `fix/ck-web/e2e-status-pill-selector`: `compliance.spec.ts` "status is never conveyed by colour alone" matched the EmptyState hero icon as a pill when it counted before data loaded (failed on #171 after passing on identical code). `StatusPill` gets `data-status-pill`; the spec counts only that.
+
+## 2026-11-15 — Dev DB offsite backup (C5)
+
+`fix/ck-web/dev-offsite-backup`: `prodOffsiteBackup.sh [prod|dev]`; dev state in `last_success_dev`, remote `dev/daily`. First real run OK (65526944 bytes). Cron `47 * * * * ck-prod-backup dev` added.
