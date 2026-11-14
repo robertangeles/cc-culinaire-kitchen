@@ -20,7 +20,7 @@ import SpendThresholdSettings from "../components/purchasing/SpendThresholdSetti
 import { AutoPoSuggestionsTable } from "../components/purchasing/AutoPoSuggestionsTable.js";
 import OrderGuideManager from "../components/purchasing/OrderGuideManager.js";
 import { useHasPermission } from "../hooks/useHasPermission.js";
-import { Tooltip } from "../components/ui/Tooltip.js";
+import { PillTabs } from "../components/ui/PillTabs.js";
 import { ShoppingCart, Package, Truck, ClipboardCheck, Settings, FileText, Sparkles, BookOpen } from "lucide-react";
 
 type PurchasingTab = "orders" | "guides" | "suggestions" | "receive" | "suppliers" | "approvals" | "settings";
@@ -136,39 +136,26 @@ export function PurchasingPage() {
           </div>
 
           <div className="flex items-center gap-3">
-            <div
+            <PillTabs
+              tabs={tabs.map(({ key, label, icon, badge }) => ({
+                id: key,
+                label,
+                icon,
+                tooltip: label,
+                badge: (badge ?? 0) > 0 && (
+                  <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold min-w-[18px] text-center leading-none ${
+                    key === "approvals" ? "bg-amber-500 text-dark" : "bg-emerald-500 text-white"
+                  }`}>
+                    {badge}
+                  </span>
+                ),
+              }))}
+              active={activeTab}
+              onChange={setActiveTab}
               className="flex gap-1 p-1 rounded-xl bg-dark-50 border border-dark-200 w-fit"
-              role="tablist"
-            >
-              {tabs.map((tab) => {
-                const Icon = tab.icon;
-                const isActive = activeTab === tab.key;
-                return (
-                  <Tooltip key={tab.key} text={tab.label} position="bottom">
-                    <button
-                      role="tab"
-                      aria-selected={isActive}
-                      onClick={() => setActiveTab(tab.key)}
-                      className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                        isActive
-                          ? "bg-dark-100 text-white shadow-[0_0_8px_rgba(212,165,116,0.1)]"
-                          : "text-dark-600 hover:text-white hover:bg-dark-100/50"
-                      }`}
-                    >
-                      <Icon className="size-4" />
-                      {tab.label}
-                      {(tab.badge ?? 0) > 0 && (
-                        <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold min-w-[18px] text-center leading-none ${
-                          tab.key === "approvals" ? "bg-amber-500 text-dark" : "bg-emerald-500 text-white"
-                        }`}>
-                          {tab.badge}
-                        </span>
-                      )}
-                    </button>
-                  </Tooltip>
-                );
-              })}
-            </div>
+              activeClassName="bg-dark-100 text-white shadow-[0_0_8px_rgba(212,165,116,0.1)]"
+              inactiveClassName="text-dark-600 hover:text-white hover:bg-dark-100/50"
+            />
           </div>
         </div>
       </div>

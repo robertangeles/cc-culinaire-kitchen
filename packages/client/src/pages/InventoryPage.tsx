@@ -27,7 +27,7 @@ import TransferList from "../components/inventory/TransferList.js";
 import StorageAreasTab from "../components/inventory/StorageAreasTab.js";
 import { FohTab } from "../components/inventory/FohTab.js";
 import StockMovementForm, { type MovementPrefill } from "../components/inventory/StockMovementForm.js";
-import { Tooltip } from "../components/ui/Tooltip.js";
+import { PillTabs } from "../components/ui/PillTabs.js";
 import { Package, ClipboardCheck, Utensils, ShieldCheck, Settings, FileQuestion, FileEdit, ArrowRightLeft, Boxes, History, ShoppingBag } from "lucide-react";
 
 type TransferSubView = "usage" | "transfers" | "movement";
@@ -154,39 +154,27 @@ export function InventoryPage() {
 
           {/* Tab bar + help button */}
           <div className="flex items-center gap-3">
-            <div
-              className="flex gap-1 p-1 rounded-xl bg-dark-50 border border-dark-200 w-fit"
-              role="tablist"
-            >
-              {tabs.map((tab) => {
-                const Icon = tab.icon;
-                const isActive = activeTab === tab.key;
-                const pendingCount = tab.key === "stock-take" && canReview ? pendingReviews.length : 0;
-                const guide = INVENTORY_TAB_GUIDES[tab.key];
-                return (
-                  <Tooltip key={tab.key} text={guide?.tooltip ?? tab.label} position="bottom">
-                    <button
-                      role="tab"
-                      aria-selected={isActive}
-                      onClick={() => setActiveTab(tab.key)}
-                      className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                        isActive
-                          ? "bg-dark-100 text-white shadow-[0_0_8px_rgba(212,165,116,0.1)]"
-                          : "text-dark-600 hover:text-white hover:bg-dark-100/50"
-                      }`}
-                    >
-                      <Icon className="size-4" />
-                      {tab.label}
-                      {pendingCount > 0 && (
-                        <span className="ml-1 px-1.5 py-0.5 rounded-full bg-red-500 text-white text-[10px] font-bold min-w-[18px] text-center leading-none">
-                          {pendingCount}
-                        </span>
-                      )}
-                    </button>
-                  </Tooltip>
-                );
+            <PillTabs
+              tabs={tabs.map(({ key, label, icon }) => {
+                const pendingCount = key === "stock-take" && canReview ? pendingReviews.length : 0;
+                return {
+                  id: key,
+                  label,
+                  icon,
+                  tooltip: INVENTORY_TAB_GUIDES[key]?.tooltip ?? label,
+                  badge: pendingCount > 0 && (
+                    <span className="ml-1 px-1.5 py-0.5 rounded-full bg-red-500 text-white text-[10px] font-bold min-w-[18px] text-center leading-none">
+                      {pendingCount}
+                    </span>
+                  ),
+                };
               })}
-            </div>
+              active={activeTab}
+              onChange={setActiveTab}
+              className="flex gap-1 p-1 rounded-xl bg-dark-50 border border-dark-200 w-fit"
+              activeClassName="bg-dark-100 text-white shadow-[0_0_8px_rgba(212,165,116,0.1)]"
+              inactiveClassName="text-dark-600 hover:text-white hover:bg-dark-100/50"
+            />
 
           </div>
         </div>

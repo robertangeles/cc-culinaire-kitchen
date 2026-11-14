@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.js";
 import { MyKitchenTab } from "./MyKitchenTab.js";
+import { PillTabs } from "../ui/PillTabs.js";
 import { StoreLocationsSection } from "../location/StoreLocationsSection.js";
 import type { Organisation, OrgMember } from "./profileTypes.js";
 
@@ -489,30 +490,20 @@ export function OrgTab() {
         </div>
       ) : (
         <div>
-          <div role="tablist" aria-label="Organisation action" className="flex gap-2 mb-4">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={orgTab === "create"}
-              aria-controls="org-tabpanel-create"
-              id="org-tab-create"
-              onClick={() => setOrgTab("create")}
-              className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${orgTab === "create" ? "bg-gold text-dark" : "bg-dark-100 text-dark-600 hover:bg-dark-200"}`}
-            >
-              Create
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={orgTab === "join"}
-              aria-controls="org-tabpanel-join"
-              id="org-tab-join"
-              onClick={() => setOrgTab("join")}
-              className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${orgTab === "join" ? "bg-gold text-dark" : "bg-dark-100 text-dark-600 hover:bg-dark-200"}`}
-            >
-              Join
-            </button>
-          </div>
+          <PillTabs
+            tabs={[
+              { id: "create", label: "Create" },
+              { id: "join", label: "Join" },
+            ]}
+            active={orgTab}
+            onChange={setOrgTab}
+            ariaLabel="Organisation action"
+            idPrefix="org"
+            className="flex gap-2 mb-4"
+            tabClassName="px-3 text-sm rounded-lg transition-colors"
+            activeClassName="bg-gold text-dark"
+            inactiveClassName="bg-dark-100 text-dark-600 hover:bg-dark-200"
+          />
 
           {orgTab === "create" ? (
             <form onSubmit={handleCreateOrg} role="tabpanel" id="org-tabpanel-create" aria-labelledby="org-tab-create" className="space-y-3">

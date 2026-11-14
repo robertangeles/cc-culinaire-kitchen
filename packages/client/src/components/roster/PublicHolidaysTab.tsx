@@ -23,6 +23,7 @@ import {
   type PublicHoliday,
 } from "../../hooks/useRoster.js";
 import { EmptyState } from "../ui/EmptyState.js";
+import { PillTabs } from "../ui/PillTabs.js";
 
 const JURISDICTIONS = ["NSW", "VIC", "QLD", "WA", "SA", "TAS", "ACT", "NT"];
 
@@ -291,28 +292,16 @@ export function PublicHolidaysTab() {
       <div className="flex flex-wrap items-start gap-4">
         <div>
           <p className="mb-2 text-xs font-medium text-dark-600">Jurisdiction</p>
-          <div
-            role="tablist"
-            aria-label="Jurisdiction filter"
+          <PillTabs
+            tabs={JURISDICTIONS.map((j) => ({ id: j, label: j }))}
+            active={activeJurisdiction}
+            onChange={selectJurisdiction}
+            ariaLabel="Jurisdiction filter"
             className="flex max-w-full gap-1 overflow-x-auto rounded-xl border border-dark-200 bg-dark-50 p-1"
-          >
-            {JURISDICTIONS.map((j) => (
-              <button
-                key={j}
-                type="button"
-                role="tab"
-                aria-selected={activeJurisdiction === j}
-                onClick={() => selectJurisdiction(j)}
-                className={`shrink-0 rounded-lg px-4 py-2 text-sm font-medium transition-all ${
-                  activeJurisdiction === j
-                    ? "bg-gold text-dark"
-                    : "text-dark-600 hover:bg-dark-100/50 hover:text-white"
-                }`}
-              >
-                {j}
-              </button>
-            ))}
-          </div>
+            tabClassName="shrink-0 rounded-lg px-4 text-sm font-medium transition-all"
+            activeClassName="bg-gold text-dark"
+            inactiveClassName="text-dark-600 hover:bg-dark-100/50 hover:text-white"
+          />
         </div>
         <div>
           <label className="mb-2 block text-xs font-medium text-dark-600" htmlFor="public-holidays-year">

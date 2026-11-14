@@ -38,6 +38,7 @@ import {
 } from "lucide-react";
 import { useHasPermission } from "../../hooks/useHasPermission.js";
 import { useAuth } from "../../context/AuthContext.js";
+import { PillTabs } from "../ui/PillTabs.js";
 
 /** Which app surface — or feature domain — a settings tab primarily affects. */
 export type SettingsGroup = "web" | "mobile" | "rosteringCompliance" | "shared" | "unassigned";
@@ -256,7 +257,7 @@ export function SettingsLayout({
                     tabIndex={isRosteringActive ? 0 : -1}
                     onClick={() => onTabChange(isRosteringActive ? activeTab : rosteringTabs[0].id)}
                     onKeyDown={handleTabKeyDown}
-                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
+                    className={`w-full min-h-11 flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
                       isRosteringActive
                         ? "bg-dark-100 text-[#FAFAFA] shadow-sm"
                         : "text-dark-600 hover:bg-dark-100/60 hover:text-[#FAFAFA]"
@@ -277,7 +278,7 @@ export function SettingsLayout({
                       onClick={() => !disabled && onTabChange(id)}
                       onKeyDown={!disabled ? handleTabKeyDown : undefined}
                       disabled={disabled}
-                      className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
+                      className={`w-full min-h-11 flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
                         activeTab === id
                           ? "bg-dark-100 text-[#FAFAFA] shadow-sm"
                           : disabled
@@ -311,30 +312,16 @@ export function SettingsLayout({
         className="flex-1 overflow-y-auto bg-dark"
       >
         {isRosteringActive && (
-          <div
-            role="tablist"
-            aria-label={GROUP_ORDER.find((g) => g.id === "rosteringCompliance")?.label}
+          <PillTabs
+            tabs={rosteringTabs}
+            active={activeTab}
+            onChange={onTabChange}
+            ariaLabel={GROUP_ORDER.find((g) => g.id === "rosteringCompliance")?.label}
+            idPrefix="settings"
             className="flex gap-1 p-1 mx-6 mt-6 rounded-xl bg-dark-50 border border-dark-200 w-fit"
-          >
-            {rosteringTabs.map(({ id, label, icon: Icon }) => (
-              <button
-                key={id}
-                role="tab"
-                aria-selected={activeTab === id}
-                aria-controls={`settings-tabpanel-${id}`}
-                id={`settings-tab-${id}`}
-                onClick={() => onTabChange(id)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                  activeTab === id
-                    ? "bg-dark-100 text-white shadow-[0_0_8px_rgba(212,165,116,0.1)]"
-                    : "text-dark-600 hover:text-white hover:bg-dark-100/50"
-                }`}
-              >
-                <Icon className="size-4" />
-                {label}
-              </button>
-            ))}
-          </div>
+            activeClassName="bg-dark-100 text-white shadow-[0_0_8px_rgba(212,165,116,0.1)]"
+            inactiveClassName="text-dark-600 hover:text-white hover:bg-dark-100/50"
+          />
         )}
         {children}
       </div>
