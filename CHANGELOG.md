@@ -7,6 +7,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+- **Mobile compliance contract.** `web-needs.md` in the shared context now records what the server does today for certificate upload, own documents, own roster, s.114 consent and notifications, with what is not built (push, a mobile roster payload). It also surfaced follow-ups, logged in `tasks/todo.md`.
 - **Offsite database backup.** A daily dump of prod is checked, encrypted (AES256) and uploaded to Google Drive, and uploads older than 30 days are removed. Until now every backup lived only on one laptop. `scripts/backup/prodOffsiteBackup.sh`; setup, health check and restore steps in `docs/architecture/offsite-backup.md`.
 - **Delete my account.** Profile -> Security now has a "Delete account" section. The user confirms with their password (Google-only accounts type their email; accounts with MFA also enter their authenticator code), the account is anonymised exactly like an admin deletion, and they are signed out. Google-only accounts must also have signed in within the last 10 minutes. Blocked, with a clear message, for the only Administrator and for the only admin of an organisation that still has other members. `POST /api/users/delete-account`, `accountDeletionService.ts`. The profile response now includes `hasPassword`.
 
