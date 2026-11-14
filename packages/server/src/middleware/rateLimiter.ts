@@ -9,6 +9,7 @@
 import { rateLimit } from "express-rate-limit";
 import { createHash } from "crypto";
 import type { Request } from "express";
+import { mfaSessionUserId } from "../services/authService.js";
 
 /**
  * Rate limiter for the chat endpoint.
@@ -210,4 +211,45 @@ export const complianceReportRateLimit = rateLimit({
     return req.ip ?? "unknown";
   },
   message: { error: "Too many report requests — please wait a few minutes before trying again." },
+});
+
+/**
+ * Per-address brake on `POST /api/auth/mfa/verify`, in its own bucket so MFA sign-ins do not
+ * spend the login budget. Only failed codes count (`skipSuccessfulRequests`), so a kitchen of
+ * staff signing in behind one NAT is not throttled by its own successes. IP hashed as above.
+ */
+export const mfaVerifyRateLimit = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 20,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
+  keyGenerator: (req: Request) => {
+    const ip = req.ip ?? "unknown";
+    return `mfa-verify-ip-${createHash("sha256").update(ip).digest("hex").slice(0, 32)}`;
+  },
+  message: { error: "Too many attempts — please wait a minute before trying again." },
+});
+
+const mfaAccountOf = (req: Request): number | null =>
+  req.user?.sub ?? mfaSessionUserId(req.body?.mfaSessionToken);
+
+/**
+ * Per-account cap on failed MFA proofs: wrong codes on `/mfa/verify`, wrong password or code on
+ * `/mfa/setup`, `/mfa/enable` and `/mfa/disable`. 5 failures per 15 minutes per account, so an
+ * attacker rotating IPs against one account is still stopped. Successful requests do not count.
+ *
+ * The account comes from the session (`req.user`) or, on `/mfa/verify`, from a *verified* MFA
+ * session token. A request that names no account is skipped here and left to the per-address
+ * limiter: an unverified claim must never pick the bucket.
+ */
+export const mfaAccountRateLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 5,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
+  skip: (req: Request) => mfaAccountOf(req) == null,
+  keyGenerator: (req: Request) => `mfa-account-${mfaAccountOf(req)}`,
+  message: { error: "Too many failed attempts — please wait 15 minutes before trying again." },
 });

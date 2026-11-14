@@ -1906,3 +1906,6 @@ Daily encrypted prod dump to Google Drive (`scripts/backup/prodOffsiteBackup.sh`
 
 `fix/ck-web/mfa-change-needs-proof`: `/api/auth/mfa/setup` and `/disable` trusted the session alone (setup also overwrote a live secret). Now password or recent sign-in, plus a current code when MFA is on; setup refused (409) while MFA is on; all three MFA routes rate limited. Shared 10-minute rule moved from `accountDeletionService` to `authService.isRecentSignIn`. Open: `/mfa/verify` has no rate limit. Lesson #111.
 
+## 2026-11-14 — MFA attempt limits
+
+`fix/ck-web/mfa-attempt-limits`: `/mfa/verify` no longer shares the login rate-limit bucket (`mfaVerifyRateLimit`, failures only), and all four MFA routes get a per-account cap of 5 failures / 15 min (`mfaAccountRateLimit`, keyed by the session user or a verified MFA token via `authService.mfaSessionUserId`). Added `services/mfaProof.test.ts` (ungated unit test for `requireProofToChangeMfa`). Prod: backed up, then cleared the one leftover pending `mfa_secret`. Open: change-password/delete-account still use the per-address `authRateLimit`; counters are in memory.

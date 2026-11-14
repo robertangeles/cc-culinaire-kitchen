@@ -27,7 +27,7 @@ import {
   handleTurnstileConfig,
 } from "../controllers/authController.js";
 import { authenticate } from "../middleware/auth.js";
-import { authRateLimit } from "../middleware/rateLimiter.js";
+import { authRateLimit, mfaVerifyRateLimit, mfaAccountRateLimit } from "../middleware/rateLimiter.js";
 
 const router = Router();
 
@@ -55,9 +55,9 @@ router.get("/google/callback", handleGoogleCallback);
 router.post("/google/idtoken", handleGoogleIdToken);
 
 // MFA
-router.post("/mfa/setup", authenticate, authRateLimit, handleMfaSetup);
-router.post("/mfa/enable", authenticate, authRateLimit, handleMfaEnable);
-router.post("/mfa/disable", authenticate, authRateLimit, handleMfaDisable);
-router.post("/mfa/verify", authRateLimit, handleMfaVerify);
+router.post("/mfa/setup", authenticate, mfaAccountRateLimit, handleMfaSetup);
+router.post("/mfa/enable", authenticate, mfaAccountRateLimit, handleMfaEnable);
+router.post("/mfa/disable", authenticate, mfaAccountRateLimit, handleMfaDisable);
+router.post("/mfa/verify", mfaVerifyRateLimit, mfaAccountRateLimit, handleMfaVerify);
 
 export default router;
