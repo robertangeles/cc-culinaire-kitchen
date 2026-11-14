@@ -165,7 +165,7 @@ export function RosterCalendarView() {
   );
   const roleIds = useMemo(() => venueRoles.map((r) => r.rosterRoleId), [venueRoles]);
 
-  const { members } = useOrgMembers(orgId);
+  const { members, error: membersError } = useOrgMembers(orgId);
   const [weekStart, setWeekStart] = useState(() => mondayOfWeek(todayIso()));
   const weekEnd = addDaysIso(weekStart, 6);
   const days = useMemo(() => Array.from({ length: 7 }, (_, i) => addDaysIso(weekStart, i)), [weekStart]);
@@ -748,6 +748,7 @@ export function RosterCalendarView() {
         </div>
       )}
       {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
+      {membersError && <p className="mt-3 text-sm text-red-400">{membersError}</p>}
       <p className="mt-3 text-xs text-dark-600">
         Draft shifts can be dragged and resized; drag a name from Staff onto one to assign it.{" "}
         {canManage ? "Cancel a shift from the Shifts tab." : "You have view-only access."}

@@ -152,7 +152,7 @@ export function ShiftsManager() {
   const { shifts, isLoading, error, refresh, create, update, cancel, assign, removeAssignment } =
     useShifts(selectedLocationId);
   const { roles } = useRosterRoles();
-  const { members } = useOrgMembers(orgId);
+  const { members, error: membersError } = useOrgMembers(orgId);
 
   const [showCreate, setShowCreate] = useState(false);
   const [showPublish, setShowPublish] = useState(false);
@@ -249,6 +249,7 @@ export function ShiftsManager() {
       </div>
 
       {error && <p className="text-sm text-red-400">{error}</p>}
+      {membersError && <p className="text-sm text-red-400">{membersError}</p>}
 
       {showPublish && selectedLocationId && (
         <PublishPanel storeLocationId={selectedLocationId} onClose={() => setShowPublish(false)} onPublished={refresh} />

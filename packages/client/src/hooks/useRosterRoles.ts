@@ -5,6 +5,9 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { parseError, useLatestSignal } from "./rosterUtils.js";
+
+export { parseError, type AssignmentBlocked, type RoleVenueConflict } from "./rosterUtils.js";
 
 const API = import.meta.env.VITE_API_URL ?? "";
 const BASE = `${API}/api/roster`;
@@ -22,31 +25,6 @@ export interface RosterRole {
   updatedDttm: string;
 }
 
-export interface AssignmentBlocked {
-  documentType: string;
-  reason: string;
-  expiryDate: string | null;
-}
-
-export interface RoleVenueConflict {
-  storeLocationId: string;
-  locationName: string;
-}
-
-export async function parseError(
-  res: Response,
-  fallback: string,
-): Promise<Error & { blocked?: AssignmentBlocked; conflicts?: RoleVenueConflict[] }> {
-  const body = await res.json().catch(() => ({}));
-  const err = new Error(typeof body.error === "string" ? body.error : fallback) as Error & {
-    blocked?: AssignmentBlocked;
-    conflicts?: RoleVenueConflict[];
-  };
-  if (body.blocked) err.blocked = body.blocked;
-  if (body.conflicts) err.conflicts = body.conflicts;
-  return err;
-}
-
 // ─── Roles ────────────────────────────────────────────────────────
 
 export function useRosterRoles() {
@@ -58,19 +36,30 @@ export function useRosterRoles() {
   // its in-progress document-requirement edit) on every create/remove.
   // Only the true first load should show that spinner.
   const hasLoadedOnce = useRef(false);
+  const nextSignal = useLatestSignal();
 
   const refresh = useCallback(async () => {
+    const signal = nextSignal();
     if (!hasLoadedOnce.current) setIsLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${BASE}/roles`, opts);
-      if (res.ok) setRoles(await res.json());
-      else setError((await parseError(res, "Failed to load roles")).message);
+      const res = await fetch(`${BASE}/roles`, { ...opts, signal });
+      if (res.ok) {
+        const data = await res.json();
+        if (!signal.aborted) setRoles(data);
+      } else {
+        const message = (await parseError(res, "Failed to load roles")).message;
+        if (!signal.aborted) setError(message);
+      }
+    } catch (err) {
+      if (!signal.aborted) throw err;
     } finally {
-      setIsLoading(false);
-      hasLoadedOnce.current = true;
+      if (!signal.aborted) {
+        setIsLoading(false);
+        hasLoadedOnce.current = true;
+      }
     }
-  }, []);
+  }, [nextSignal]);
 
   const create = useCallback(
     async (data: { roleName: string; storeLocationId?: string | null }) => {
@@ -141,8 +130,10 @@ export interface OrgMember {
 export function useOrgMembers(orgId: number | null) {
   const [members, setMembers] = useState<OrgMember[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    setError(null);
     if (!orgId) {
       setMembers([]);
       setIsLoading(false);
@@ -151,7 +142,10 @@ export function useOrgMembers(orgId: number | null) {
     let cancelled = false;
     setIsLoading(true);
     fetch(`${API}/api/organisations/${orgId}/members`, opts)
-      .then((res) => (res.ok ? res.json() : { members: [] }))
+      .then(async (res) => {
+        if (!res.ok) throw await parseError(res, "Failed to load staff");
+        return res.json();
+      })
       .then((data) => {
         if (cancelled) return;
         setMembers(
@@ -162,8 +156,10 @@ export function useOrgMembers(orgId: number | null) {
           })),
         );
       })
-      .catch(() => {
-        if (!cancelled) setMembers([]);
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setMembers([]);
+        setError(err instanceof Error ? err.message : "Failed to load staff");
       })
       .finally(() => {
         if (!cancelled) setIsLoading(false);
@@ -173,7 +169,7 @@ export function useOrgMembers(orgId: number | null) {
     };
   }, [orgId]);
 
-  return { members, isLoading };
+  return { members, isLoading, error };
 }
 
 // ─── Public holidays ──────────────────────────────────────────────
