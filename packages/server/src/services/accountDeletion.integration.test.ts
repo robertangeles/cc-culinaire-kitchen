@@ -7,7 +7,7 @@ import { applyEnvPrefix } from "../utils/envShim.js";
 config({ path: resolve(dirname(fileURLToPath(import.meta.url)), "../../../../.env") });
 applyEnvPrefix();
 
-vi.mock("./stripeService.js", () => ({ cancelSubscriptionNow: vi.fn() }));
+vi.mock("./stripeService.js", () => ({ cancelSubscriptionNow: vi.fn(), deleteCustomer: vi.fn() }));
 
 import { and, eq } from "drizzle-orm";
 import { generate as otpGenerate, generateSecret as otpGenerateSecret } from "otplib";

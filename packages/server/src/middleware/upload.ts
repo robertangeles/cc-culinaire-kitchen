@@ -93,6 +93,32 @@ export async function uploadFileBuffer(
   return url;
 }
 
+/** A profile photo we uploaded: Cloudinary, image, in the avatar folder. Captures the public_id. */
+const PROFILE_PHOTO_URL = /^https:\/\/res\.cloudinary\.com\/[^/]+\/image\/upload\/(?:v\d+\/)?(culinaire\/profiles\/[\w-]+)\.\w+$/;
+
+/**
+ * Remove a profile photo from Cloudinary. Returns false, touching nothing, for any URL that is
+ * not one of our avatar uploads (a Google avatar, a local `/uploads/` file, anything a user typed
+ * into their profile): only the avatar folder is ever deleted from. A photo Cloudinary no longer
+ * has counts as done.
+ *
+ * @throws when it is one of ours but Cloudinary is not configured or refuses.
+ */
+export async function deleteProfilePhoto(url: string): Promise<boolean> {
+  const match = PROFILE_PHOTO_URL.exec(url);
+  if (!match) return false;
+
+  const { getCredentialValueWithFallback } = await import("../services/credentialService.js");
+  const cloudName = await getCredentialValueWithFallback("CLOUDINARY_CLOUD_NAME");
+  const apiKey = await getCredentialValueWithFallback("CLOUDINARY_API_KEY");
+  const apiSecret = await getCredentialValueWithFallback("CLOUDINARY_API_SECRET");
+  if (!cloudName || !apiKey || !apiSecret) throw new Error("Cloudinary is not configured");
+
+  cloudinary.config({ cloud_name: cloudName, api_key: apiKey, api_secret: apiSecret });
+  await cloudinary.uploader.destroy(match[1], { resource_type: "image" });
+  return true;
+}
+
 // ---------------------------------------------------------------------------
 // Knowledge document uploads (PDF, DOCX, TXT, MD)
 // ---------------------------------------------------------------------------

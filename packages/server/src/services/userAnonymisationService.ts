@@ -16,12 +16,16 @@
  * If that fails nothing is deleted and the caller can retry; the reverse (data gone,
  * subscription still billing) is the failure to avoid.
  *
+ * The Stripe customer is deleted too (name and email; Stripe keeps its payment records), and
+ * so is the uploaded avatar file.
+ *
  * Limits: an access token already issued stays valid until it expires (short-lived;
- * `authenticate` does not re-read the user), and the Stripe customer object keeps its
- * own name/email until the customer is deleted on the Stripe side.
+ * `authenticate` does not re-read the user). A local `/uploads/` avatar (the no-Cloudinary dev
+ * fallback) is not removed from disk.
  */
 
-import { eq, inArray, or } from "drizzle-orm";
+import pino from "pino";
+import { and, eq, inArray, ne, or } from "drizzle-orm";
 import { db } from "../db/index.js";
 import {
   benchMention,
@@ -48,8 +52,11 @@ import {
   userRole,
   userStoreLocation,
 } from "../db/schema.js";
-import { cancelSubscriptionNow } from "./stripeService.js";
+import { cancelSubscriptionNow, deleteCustomer } from "./stripeService.js";
+import { deleteProfilePhoto } from "../middleware/upload.js";
 import * as auditService from "./auditService.js";
+
+const logger = pino({ name: "userAnonymisationService" });
 
 export class UserAnonymisationError extends Error {
   constructor(message: string, options?: { cause?: unknown }) {
@@ -109,7 +116,7 @@ export function scrubbedUserFields(userId: number, now: Date) {
 export const KEPT_USER_COLUMNS: Record<string, string> = {
   userId: "primary key; business history references it",
   freeSessions: "usage counter, not personal data",
-  stripeCustomerId: "no personal data by itself; lets Stripe-side records be reconciled or the customer deleted later",
+  stripeCustomerId: "the customer is deleted at Stripe; the id is a dead reference that lets payment records be reconciled",
   stripeSubscriptionId: "no personal data by itself; the subscription is cancelled",
   createdDttm: "account creation time; not identifying once the row is scrubbed",
 };
@@ -179,6 +186,30 @@ export const KEPT_USER_REFERENCES: readonly string[] = [
 ];
 
 /**
+ * Remove the uploaded avatar file, which `userPhotoPath = null` alone would leave public at its
+ * URL. Best effort, unlike Stripe: a failure is logged (with the URL, the only handle left once
+ * the row is scrubbed, so the file can be removed by hand) and the deletion goes on, because
+ * refusing to delete an account over an orphaned image is the worse outcome.
+ *
+ * A `userPhotoPath` is user-editable, so one shared with another account is left alone: a user
+ * must not be able to delete someone else's photo by pointing their own profile at it.
+ */
+async function removeProfilePhoto(userId: number, photoPath: string | null): Promise<void> {
+  if (!photoPath) return;
+  try {
+    const [shared] = await db
+      .select({ userId: user.userId })
+      .from(user)
+      .where(and(eq(user.userPhotoPath, photoPath), ne(user.userId, userId)))
+      .limit(1);
+    if (shared) return;
+    await deleteProfilePhoto(photoPath);
+  } catch (err) {
+    logger.error({ err, userId, photoPath, alert: "profile_photo_not_removed" }, "Could not remove a deleted user's profile photo");
+  }
+}
+
+/**
  * Anonymise a user. Idempotent: an already-deleted user returns without error.
  *
  * @throws {Error} "User not found" when the id does not exist.
@@ -187,7 +218,12 @@ export const KEPT_USER_REFERENCES: readonly string[] = [
  */
 export async function anonymiseUser(userId: number, actorUserId: number | null = null): Promise<void> {
   const [row] = await db
-    .select({ userStatus: user.userStatus, stripeSubscriptionId: user.stripeSubscriptionId })
+    .select({
+      userStatus: user.userStatus,
+      stripeSubscriptionId: user.stripeSubscriptionId,
+      stripeCustomerId: user.stripeCustomerId,
+      userPhotoPath: user.userPhotoPath,
+    })
     .from(user)
     .where(eq(user.userId, userId));
   if (!row) throw new Error("User not found");
@@ -203,6 +239,21 @@ export async function anonymiseUser(userId: number, actorUserId: number | null =
       );
     }
   }
+
+  // The customer holds the name and email; deleting it keeps Stripe's payment records. Same rule
+  // as the subscription: if it fails nothing is deleted and the caller can retry.
+  if (row.stripeCustomerId) {
+    try {
+      await deleteCustomer(row.stripeCustomerId);
+    } catch (err) {
+      throw new UserAnonymisationError(
+        "Could not delete the user's payment profile, so the account was not deleted. Try again.",
+        { cause: err },
+      );
+    }
+  }
+
+  await removeProfilePhoto(userId, row.userPhotoPath);
 
   await db.transaction(async (tx) => {
     // Conversations and their messages.

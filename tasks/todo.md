@@ -32,9 +32,9 @@ Shipped: daily encrypted prod dump to Google Drive (`docs/architecture/offsite-b
 `anonymiseUser` shipped (scrub and keep the row; see docs/architecture/overview.md). Still open:
 - ~~Self-serve "Delete my account" in the web app~~ done: Profile -> Security -> Delete account (`POST /api/users/delete-account`). The mobile app still needs its own in-app button (Google Play requirement); the web page link covers it for now.
 - **Align the published pages to 30 days.** `delete-account` says 7 business days, `privacy` says 30 days. Edit via the admin UI (site pages are DB content). The delete-account page also lists what is deleted; it should mention that business records stay, with no name attached.
-- **Stripe customer deletion.** The subscription is cancelled, but the Stripe customer keeps name and email. Deleting the customer removes the personal data and keeps payment records.
+- ~~**Stripe customer deletion.**~~ Done: `anonymiseUser` deletes the customer after cancelling the subscription (`stripeService.deleteCustomer`); a failure refuses the deletion.
 - **Staff compliance documents on user deletion** follow the 7-year retention lifecycle; decide whether deleting an account should trigger the archive step.
-- **Profile photo file.** `userPhotoPath` is cleared; confirm whether the uploaded file itself is removed from storage.
+- ~~**Profile photo file.**~~ It was NOT removed (the Cloudinary file stayed public at its URL). Now removed best effort (`deleteProfilePhoto`, avatar folder only). Still open: re-uploading an avatar orphans the previous Cloudinary file (never deleted); a local `/uploads/` avatar is not removed.
 - **Prod schema drift:** fixed 2026-10-24 (organisation settings columns, public-holiday partial-day column, `roster_shift_template`; scripts `applyOrganisationSettingsSchema.ts`, `addPublicHolidayPartialDayColumn.ts`, `addRosterShiftTemplate.ts`).
 - **FK constraints:** done on prod and dev 2026-10-25 (prod 201 FKs, 0 unvalidated): 31 from `addMissingForeignKeys.ts`, the 4 roster ones, and `ingredient_cross_usage.prep_session_id` after its 18 orphan rows were deleted (backups in `~/ck-prod-backups/` and `~/ck-dev-backups/`).
 

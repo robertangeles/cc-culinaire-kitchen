@@ -1906,3 +1906,6 @@ Daily encrypted prod dump to Google Drive (`scripts/backup/prodOffsiteBackup.sh`
 
 `fix/ck-web/mfa-change-needs-proof`: `/api/auth/mfa/setup` and `/disable` trusted the session alone (setup also overwrote a live secret). Now password or recent sign-in, plus a current code when MFA is on; setup refused (409) while MFA is on; all three MFA routes rate limited. Shared 10-minute rule moved from `accountDeletionService` to `authService.isRecentSignIn`. Open: `/mfa/verify` has no rate limit. Lesson #111.
 
+## 2026-11-14 — Account deletion removes the Stripe customer and avatar file
+
+`fix/ck-web/delete-stripe-customer-and-photo`: `anonymiseUser` now deletes the Stripe customer (blocking, like the subscription cancel) and the Cloudinary avatar (best effort, avatar folder only, skipped when another account shares the URL because `userPhotoPath` is user-editable). Before this the avatar file stayed public at its URL after deletion. Open: re-uploading an avatar orphans the old file.
