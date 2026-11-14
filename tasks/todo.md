@@ -395,13 +395,13 @@ Three items the review deferred rather than built:
   rather than just warnings — wait until `award_rule` has run in production for one cycle.
   Effort: L (human ~1.5w) → M with CC. Depends on: Phase 2 shipped.
 
-- [ ] **P2 — Write the mobile compliance contract into `web-needs.md`.** Decision 7 shipped
-  the module web-only, so the two most phone-native actions in it — a staff member
-  photographing a certificate, and a staff member accepting a public-holiday shift — have no
-  native path. Record the contract (document upload, own-documents view, roster view, s.114
-  consent response, push payload shapes) in `../cc-culinaire-shared-context/web-needs.md`,
-  which this repo owns, so mobile is not guessing. Effort: S.
-  Depends on: Phase 1 + 2 schema settled.
+- [x] ~~**P2 — Write the mobile compliance contract into `web-needs.md`.**~~ DONE 2026-11-15: entry "Mobile compliance contract" in `../cc-culinaire-shared-context/web-needs.md`, read from the code. Follow-ups it found, all open:
+  - **`GET /api/compliance/documents/mine` returns every column** (`listDocumentsForUser` does `select()`), including manager-only `notes`, `verifiedBy` and `storagePublicId`. Return an explicit field list. P1: data exposure to the document's own subject.
+  - **`GET /api/roster/shifts/mine` returns Draft shifts** (`listMyShifts` filters only `Cancelled`), so staff see unpublished assignments. Filter to Published, or confirm that is intended.
+  - **`POST /api/compliance/documents/upload` has no handler for an oversize file or a wrong field name**: the multer error falls to the generic handler as `500`, not `413`/`400` (`routes/users.ts` shows the `MulterError` pattern to copy). It also has no per-route rate limit although each call hits Cloudinary and runs OCR.
+  - **No machine-readable `code`** on compliance or roster errors; mobile can only branch on status.
+  - **Push is not built**: `register-device` stores a token and nothing sends. No notification when a document is verified/rejected or a roster is published. No mobile-friendly roster payload (venue name, timezone, `isPublicHoliday`, date range) and no way for the client to discover which flags are on.
+  - `api-contracts.md` lacks `/api/inventory/notifications` and `register-device`, and its 401 body text is stale.
 
 ---
 
