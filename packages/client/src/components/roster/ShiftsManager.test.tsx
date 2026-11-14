@@ -13,6 +13,7 @@ const create = vi.fn(async (_d: any) => ({}));
 const update = vi.fn(async (_id: string, _d: any) => ({}));
 
 let mockShifts: any[] = [];
+let mockMembersError: string | null = null;
 let mockCanManage = true;
 
 vi.mock("../../context/LocationContext.js", () => ({
@@ -39,7 +40,7 @@ vi.mock("../../hooks/useRoster.js", () => ({
     removeAssignment: vi.fn(),
   }),
   useRosterRoles: () => ({ roles: [{ rosterRoleId: "role-1", roleName: "Cook" }] }),
-  useOrgMembers: () => ({ members: [] }),
+  useOrgMembers: () => ({ members: [], error: mockMembersError }),
   fetchShiftAssignments: vi.fn(async () => []),
   requestConsent: vi.fn(async () => {}),
 }));
@@ -65,6 +66,15 @@ beforeEach(() => {
   update.mockClear();
   mockShifts = [draftShift];
   mockCanManage = true;
+  mockMembersError = null;
+});
+
+describe("ShiftsManager staff list", () => {
+  it("says so when the staff list failed to load, instead of showing an empty picker", () => {
+    mockMembersError = "Failed to load staff";
+    render(<ShiftsManager />);
+    expect(screen.getByText("Failed to load staff")).toBeTruthy();
+  });
 });
 
 describe("ShiftsManager create-form gate", () => {
