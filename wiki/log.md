@@ -1914,6 +1914,10 @@ Daily encrypted prod dump to Google Drive (`scripts/backup/prodOffsiteBackup.sh`
 
 `fix/ck-web/mfa-attempt-limits`: `/mfa/verify` no longer shares the login rate-limit bucket (`mfaVerifyRateLimit`, failures only), and all four MFA routes get a per-account cap of 5 failures / 15 min (`mfaAccountRateLimit`, keyed by the session user or a verified MFA token via `authService.mfaSessionUserId`). Added `services/mfaProof.test.ts` (ungated unit test for `requireProofToChangeMfa`). Prod: backed up, then cleared the one leftover pending `mfa_secret`. Open: change-password/delete-account still use the per-address `authRateLimit`; counters are in memory.
 
+## 2026-11-15 — Bearer sign-in time (B3)
+
+`fix/ck-web/bearer-sign-in-time`: `getSignInTime` callers (`/mfa/setup`, `/mfa/disable`, `/users/delete-account`) now use `presentedRefreshToken(req)`: cookie first, then body `refreshToken`. A mobile client can pass the Google-only recent-sign-in check. api-contracts G.1 wording updated in the shared-context repo.
+
 ## 2026-11-15 — CI: pin the E2E runner
 
 `fix/ck-web/ci-pin-e2e-runner`: `ubuntu-latest` became Ubuntu 26.04 and Playwright 1.59.1 refused to install chromium there, failing Browser E2E on every PR (seen on #168). The `e2e` job is pinned to `ubuntu-24.04`. Other jobs were unaffected and stay on `ubuntu-latest`.
