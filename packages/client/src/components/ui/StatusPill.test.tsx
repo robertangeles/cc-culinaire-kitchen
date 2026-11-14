@@ -22,6 +22,11 @@ describe("StatusPill", () => {
     expect(screen.getByText("Expired")).toHaveAttribute("aria-label", "RSA: expired 15 June 2026");
   });
 
+  it("marks itself data-status-pill so the colour-alone E2E check finds pills and nothing else", () => {
+    render(<StatusPill variant="compliant">Compliant</StatusPill>);
+    expect(screen.getByText("Compliant")).toHaveAttribute("data-status-pill");
+  });
+
   it("has no aria-label when none is given", () => {
     render(<StatusPill variant="compliant">Compliant</StatusPill>);
     expect(screen.getByText("Compliant")).not.toHaveAttribute("aria-label");

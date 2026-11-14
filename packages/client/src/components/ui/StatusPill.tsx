@@ -30,6 +30,7 @@ export interface StatusPillProps {
 export function StatusPill({ variant, children, ariaLabel }: StatusPillProps) {
   return (
     <span
+      data-status-pill
       className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${VARIANT_STYLES[variant]}`}
       aria-label={ariaLabel}
     >
