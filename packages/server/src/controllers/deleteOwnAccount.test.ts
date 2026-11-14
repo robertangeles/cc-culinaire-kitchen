@@ -21,10 +21,10 @@ function fakeRes() {
   res.status.mockReturnValue(res);
   return res;
 }
-const call = (body: unknown) => {
+const call = (body: unknown, cookies: Record<string, string> = { refresh_token: "raw-refresh" }) => {
   const res = fakeRes();
   const next = vi.fn();
-  const req = { user: { sub: 5 }, body, cookies: { refresh_token: "raw-refresh" } } as unknown as Request;
+  const req = { user: { sub: 5 }, body, cookies } as unknown as Request;
   return handleDeleteOwnAccount(req, res as unknown as Response, next).then(() => ({ res, next }));
 };
 
@@ -44,6 +44,14 @@ describe("POST /api/users/delete-account handler", () => {
     expect(res.json).toHaveBeenCalledWith({ success: true });
     expect(res.clearCookie).toHaveBeenCalledWith("access_token", { path: "/" });
     expect(res.clearCookie).toHaveBeenCalledWith("refresh_token", { path: "/" });
+  });
+
+  it("takes the sign-in time from a body refreshToken when a bearer client sends no cookie", async () => {
+    vi.mocked(getSignInTime).mockResolvedValue(new Date());
+    vi.mocked(deleteOwnAccount).mockResolvedValue(undefined);
+    await call({ confirmEmail: "a@b.test", refreshToken: "body-refresh" }, {});
+    expect(getSignInTime).toHaveBeenCalledWith("body-refresh", 5);
+    expect(deleteOwnAccount).toHaveBeenCalledWith(5, { confirmEmail: "a@b.test" }, expect.any(Date));
   });
 
   it("returns the service's status and code when the request is refused, without signing out", async () => {
