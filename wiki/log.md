@@ -1929,3 +1929,11 @@ Daily encrypted prod dump to Google Drive (`scripts/backup/prodOffsiteBackup.sh`
 ## 2026-11-15 — Mobile compliance contract (F2)
 
 `fix/ck-web/mobile-compliance-contract-followups`: contract written into `../cc-culinaire-shared-context/web-needs.md` from the code. Found: own-documents returns all columns, own-shifts returns Drafts, upload has no oversize handling or rate limit, push is not built. Logged in `tasks/todo.md`.
+
+## 2026-11-15 — Local integration DB (H1)
+
+`fix/ck-web/local-integration-db`: `scripts/localIntegrationDb.sh` (start/env/stop) runs a throwaway local Postgres + pgvector for the real-DB suites. roster.integration 39 tests: 0.4 s local vs 400+ s against the Render dev DB; mfaChange + accountDeletion + roster (58 tests): 8 s local vs 190+ s for 19 tests remote. Root cause of the old timeout is round-trip latency to Render. CLAUDE.md regression protocol points to it.
+
+## 2026-11-15 — E2E: status-pill selector
+
+`fix/ck-web/e2e-status-pill-selector`: `compliance.spec.ts` "status is never conveyed by colour alone" matched the EmptyState hero icon as a pill when it counted before data loaded (failed on #171 after passing on identical code). `StatusPill` gets `data-status-pill`; the spec counts only that.

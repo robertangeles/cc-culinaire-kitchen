@@ -60,7 +60,7 @@ Every new service function needs a unit test. Every new API endpoint needs an in
 
 **Regression protocol before closing any task:**
 1. `pnpm test`
-2. `pnpm test:integration`
+2. `pnpm test:integration` (against the Render dev DB these suites are very slow; for the real-DB ones run `scripts/localIntegrationDb.sh start`, then `eval "$(scripts/localIntegrationDb.sh env)"`; 58 tests take 8 s there)
 3. `pnpm tsc:check` (never bare `pnpm tsc`: it emits `.js` files into `src/` and breaks vitest)
 4. Schema changed → `drizzle-kit push` from `packages/server/`
 5. Verify every touched route: 200 happy path, 401 no auth, 400/404 bad params — frontend wired only after backend verified
