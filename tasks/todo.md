@@ -712,16 +712,16 @@ The handler logic is preserved in git history. If product decides to wire a UI f
 
 All pre-existing in the original `useRoster.ts` monolith — extracted unchanged. None introduced by Phase 3b barrel split. Fixed in this PR: `from`/`to` URL encoding, create-before-refresh ordering, `parseError` string coercion, barrel test completeness.
 
-**P2 — `useOrgMembers` swallows fetch errors silently, no error state**
+**P2 — ~~`useOrgMembers` swallows fetch errors silently, no error state~~** DONE 2026-11-15 (error state + banner in ShiftsManager and RosterCalendarView; a non-OK response now counts as an error too)
 `packages/client/src/hooks/useRosterRoles.ts`: the `.catch()` block sets `members = []` but exposes no `error` state. All other hooks in the module expose `error: string | null`. A failed fetch produces an empty staff picker with no error banner — the user sees an empty dropdown and cannot distinguish a network failure from a location with no staff. Fix: add `const [error, setError] = useState<string|null>(null)` and set it in the catch block.
 
-**P2 — No `AbortController` on reactive hooks — concurrent refreshes race**
+**P2 — ~~No `AbortController` on reactive hooks — concurrent refreshes race~~** DONE 2026-11-15 (`useLatestSignal` in `rosterUtils.ts`, used by all six hooks)
 `packages/client/src/hooks/useRosterCalendar.ts` and `useRosterRoles.ts`: fast venue switches can fire two concurrent `refresh()` calls; the second resolution clobbers the first regardless of order. `useOrgMembers` uses a `cancelled` flag correctly; the remaining hooks don't. Benign at normal user pace but observable on flaky networks. Fix: add `AbortController` to `useShifts`, `useRosterTemplates`, `useRosterCalendar`, `useRosterRoles`, `useMyShifts`, and `useMyAvailability` — abort on next call.
 
-**P3 — No behavioral test coverage for most hooks**
+**P3 — ~~No behavioral test coverage for most hooks~~** DONE 2026-11-15 for the hooks named plus `parseError`, `getRoleDocuments`, `listPublicHolidays` (55 new tests). Still untested: `setRoleDocuments`, `fetchShiftAssignments`, `requestConsent`, public-holiday create/delete, award-rule functions
 `useShifts`, `useRosterRoles`, `useOrgMembers`, `usePublish`, `useMyShifts`, `useMyAvailability` and all 12 standalone async functions (e.g. `parseError`, `getRoleDocuments`, `listPublicHolidays`) have zero unit test coverage. Pattern to follow: `useRosterCalendar.test.ts` and `useRosterTemplates.test.ts`.
 
-**DESIGN — Extract `parseError` + its types to `rosterUtils.ts`**
+**DESIGN — ~~Extract `parseError` + its types to `rosterUtils.ts`~~** DONE 2026-11-15
 `useRosterCalendar.ts` imports `parseError` from `useRosterRoles.ts` — the function is a generic HTTP-error utility, not a roles-domain concept. Creates one-directional sibling coupling. Fix: extract `parseError`, `AssignmentBlocked`, `RoleVenueConflict` to `packages/client/src/hooks/rosterUtils.ts`; re-export from `useRosterRoles.ts`; import from `rosterUtils.ts` in both sub-modules.
 
 ## 2026-10-01 — Phase 4 (no-explicit-any refactor) — tests completed

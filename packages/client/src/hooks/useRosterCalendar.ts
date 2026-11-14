@@ -5,7 +5,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { parseError } from "./useRosterRoles.js";
+import { parseError, useLatestSignal } from "./rosterUtils.js";
 
 const API = import.meta.env.VITE_API_URL ?? "";
 const BASE = `${API}/api/roster`;
@@ -88,8 +88,10 @@ export function useShifts(storeLocationId: string | null) {
   // a spinner while isLoading is true, which would unmount an open
   // PublishPanel and wipe its just-shown result out from under the user.
   const hasLoadedOnce = useRef(false);
+  const nextSignal = useLatestSignal();
 
   const refresh = useCallback(async () => {
+    const signal = nextSignal();
     if (!storeLocationId) {
       setShifts([]);
       setIsLoading(false);
@@ -98,14 +100,23 @@ export function useShifts(storeLocationId: string | null) {
     if (!hasLoadedOnce.current) setIsLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${BASE}/shifts?storeLocationId=${storeLocationId}`, opts);
-      if (res.ok) setShifts(await res.json());
-      else setError((await parseError(res, "Failed to load shifts")).message);
+      const res = await fetch(`${BASE}/shifts?storeLocationId=${storeLocationId}`, { ...opts, signal });
+      if (res.ok) {
+        const data = await res.json();
+        if (!signal.aborted) setShifts(data);
+      } else {
+        const message = (await parseError(res, "Failed to load shifts")).message;
+        if (!signal.aborted) setError(message);
+      }
+    } catch (err) {
+      if (!signal.aborted) throw err;
     } finally {
-      setIsLoading(false);
-      hasLoadedOnce.current = true;
+      if (!signal.aborted) {
+        setIsLoading(false);
+        hasLoadedOnce.current = true;
+      }
     }
-  }, [storeLocationId]);
+  }, [storeLocationId, nextSignal]);
 
   const create = useCallback(
     async (data: {
@@ -212,8 +223,10 @@ export function useRosterTemplates(storeLocationId: string | null) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const hasLoadedOnce = useRef(false);
+  const nextSignal = useLatestSignal();
 
   const refresh = useCallback(async () => {
+    const signal = nextSignal();
     if (!storeLocationId) {
       setTemplates([]);
       setIsLoading(false);
@@ -222,14 +235,23 @@ export function useRosterTemplates(storeLocationId: string | null) {
     if (!hasLoadedOnce.current) setIsLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${BASE}/templates?storeLocationId=${storeLocationId}`, opts);
-      if (res.ok) setTemplates(await res.json());
-      else setError((await parseError(res, "Failed to load templates")).message);
+      const res = await fetch(`${BASE}/templates?storeLocationId=${storeLocationId}`, { ...opts, signal });
+      if (res.ok) {
+        const data = await res.json();
+        if (!signal.aborted) setTemplates(data);
+      } else {
+        const message = (await parseError(res, "Failed to load templates")).message;
+        if (!signal.aborted) setError(message);
+      }
+    } catch (err) {
+      if (!signal.aborted) throw err;
     } finally {
-      setIsLoading(false);
-      hasLoadedOnce.current = true;
+      if (!signal.aborted) {
+        setIsLoading(false);
+        hasLoadedOnce.current = true;
+      }
     }
-  }, [storeLocationId]);
+  }, [storeLocationId, nextSignal]);
 
   const create = useCallback(
     async (data: TemplateRowInput) => {
@@ -328,8 +350,10 @@ export function useRosterCalendar(storeLocationId: string | null, from: string, 
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const hasLoadedOnce = useRef(false);
+  const nextSignal = useLatestSignal();
 
   const refresh = useCallback(async () => {
+    const signal = nextSignal();
     if (!storeLocationId) {
       setCalendarShifts([]);
       setIsLoading(false);
@@ -338,14 +362,23 @@ export function useRosterCalendar(storeLocationId: string | null, from: string, 
     if (!hasLoadedOnce.current) setIsLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${BASE}/shifts/calendar?storeLocationId=${storeLocationId}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`, opts);
-      if (res.ok) setCalendarShifts(await res.json());
-      else setError((await parseError(res, "Failed to load the roster calendar")).message);
+      const res = await fetch(`${BASE}/shifts/calendar?storeLocationId=${storeLocationId}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`, { ...opts, signal });
+      if (res.ok) {
+        const data = await res.json();
+        if (!signal.aborted) setCalendarShifts(data);
+      } else {
+        const message = (await parseError(res, "Failed to load the roster calendar")).message;
+        if (!signal.aborted) setError(message);
+      }
+    } catch (err) {
+      if (!signal.aborted) throw err;
     } finally {
-      setIsLoading(false);
-      hasLoadedOnce.current = true;
+      if (!signal.aborted) {
+        setIsLoading(false);
+        hasLoadedOnce.current = true;
+      }
     }
-  }, [storeLocationId, from, to]);
+  }, [storeLocationId, from, to, nextSignal]);
 
   const create = useCallback(
     async (data: { storeLocationId: string; rosterRoleId: string; startDatetime: string; endDatetime: string }) => {
@@ -437,18 +470,27 @@ export function useMyShifts() {
   const [shifts, setShifts] = useState<MyShift[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const nextSignal = useLatestSignal();
 
   const refresh = useCallback(async () => {
+    const signal = nextSignal();
     setIsLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${BASE}/shifts/mine`, opts);
-      if (res.ok) setShifts(await res.json());
-      else setError((await parseError(res, "Failed to load your shifts")).message);
+      const res = await fetch(`${BASE}/shifts/mine`, { ...opts, signal });
+      if (res.ok) {
+        const data = await res.json();
+        if (!signal.aborted) setShifts(data);
+      } else {
+        const message = (await parseError(res, "Failed to load your shifts")).message;
+        if (!signal.aborted) setError(message);
+      }
+    } catch (err) {
+      if (!signal.aborted) throw err;
     } finally {
-      setIsLoading(false);
+      if (!signal.aborted) setIsLoading(false);
     }
-  }, []);
+  }, [nextSignal]);
 
   const respond = useCallback(
     async (assignmentId: string, response: "Confirmed" | "Declined") => {
@@ -488,18 +530,27 @@ export function useMyAvailability() {
   const [availability, setAvailability] = useState<Availability[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const nextSignal = useLatestSignal();
 
   const refresh = useCallback(async () => {
+    const signal = nextSignal();
     setIsLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${BASE}/availability/mine`, opts);
-      if (res.ok) setAvailability(await res.json());
-      else setError((await parseError(res, "Failed to load your availability")).message);
+      const res = await fetch(`${BASE}/availability/mine`, { ...opts, signal });
+      if (res.ok) {
+        const data = await res.json();
+        if (!signal.aborted) setAvailability(data);
+      } else {
+        const message = (await parseError(res, "Failed to load your availability")).message;
+        if (!signal.aborted) setError(message);
+      }
+    } catch (err) {
+      if (!signal.aborted) throw err;
     } finally {
-      setIsLoading(false);
+      if (!signal.aborted) setIsLoading(false);
     }
-  }, []);
+  }, [nextSignal]);
 
   const create = useCallback(
     async (data: {
