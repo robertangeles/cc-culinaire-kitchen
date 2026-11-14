@@ -23,7 +23,7 @@ Only the encrypted file leaves the machine.
 | Passphrase | `~/.config/ck-backup/passphrase`. **Keep a copy in the password manager.** The file lives on the laptop being protected, and without the passphrase every backup is unreadable |
 | Drive access | rclone remote `googledrive:` in `~/.config/rclone/rclone.conf` |
 | Log and state | `~/.local/state/ck-backup/` (`backup.log`, `last_success`) |
-| Older dumps | `culinaire-offsite-backups/prod/archive/`, uploaded once on 2026-10-26 from `~/culinaire-prod-backups` and `~/ck-prod-backups` |
+| Older dumps | `culinaire-offsite-backups/prod/archive/`, uploaded once on 2026-10-26 from `~/culinaire-prod-backups` and `~/ck-prod-backups` (since merged into the first) |
 
 ## Is it working
 
@@ -33,8 +33,10 @@ tail -3 ~/.local/state/ck-backup/backup.log     # "OK prod-<stamp>.dump.gpg (<by
 rclone ls googledrive:culinaire-offsite-backups/prod/daily
 ```
 
-A failed run does not retry until the next hour and tells nobody, so a stale `last_success` is the only
-signal. Check it at the start of a session.
+A failed run retries at the next hourly cron tick. If `last_success` is 2 or more days old, a second job
+(`scripts/backup/checkBackupFresh.sh`, installed as `~/.local/bin/ck-backup-check`, cron `37 * * * *`) shows a
+critical desktop notification and writes an `ALERT` line to `backup.log`, at most once a day. It cannot fire
+while the laptop is off, so also check `last_success` at the start of a session.
 
 ## Restore
 

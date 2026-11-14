@@ -116,7 +116,9 @@ test.describe("Staff Compliance Vault — Phase 1", () => {
 
     // Every status pill must carry text, so it survives greyscale and
     // colour-blindness. A pill rendered as a bare coloured dot fails this.
-    const pills = page.locator('[data-status-pill], [class*="rounded-full"][class*="border"]');
+    // Only StatusPill: the old class match also caught the empty-state hero icon (rounded-full, border,
+    // no text), so the test failed whenever it counted before the table had loaded.
+    const pills = page.locator("[data-status-pill]");
     const n = await pills.count();
     for (let i = 0; i < Math.min(n, 20); i += 1) {
       const pill = pills.nth(i);
