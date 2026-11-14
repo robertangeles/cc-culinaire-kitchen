@@ -215,6 +215,16 @@ describe.skipIf(!RUN)("anonymiseUser (real DB)", { timeout: 120_000 }, () => {
     expect(done.userStatus).toBe("deleted");
   });
 
+  it("with a customer on file, deleting it is the only Stripe call (it cancels the subscription too)", async () => {
+    const { userId } = await makeUser("both");
+    await db.update(user).set({ stripeCustomerId: "cus_it_both", stripeSubscriptionId: "sub_it_both" }).where(eq(user.userId, userId));
+    vi.mocked(deleteCustomer).mockClear();
+    vi.mocked(cancelSubscriptionNow).mockClear();
+    await anonymiseUser(userId, adminId);
+    expect(deleteCustomer).toHaveBeenCalledWith("cus_it_both");
+    expect(cancelSubscriptionNow).not.toHaveBeenCalled();
+  });
+
   it("does not call Stripe for a user who never had a customer", async () => {
     const { userId } = await makeUser("nocustomer");
     vi.mocked(deleteCustomer).mockClear();

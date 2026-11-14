@@ -12,12 +12,13 @@
  * compliance documents follow their own retention lifecycle (complianceRetentionService,
  * Fair Work 7-year records) and are not touched here.
  *
- * Order matters: the Stripe subscription is cancelled FIRST, outside the transaction.
- * If that fails nothing is deleted and the caller can retry; the reverse (data gone,
- * subscription still billing) is the failure to avoid.
+ * Order matters: Stripe billing is settled FIRST, outside the transaction (the customer is
+ * deleted, which cancels its subscriptions; a subscription with no customer on file is
+ * cancelled directly). If that fails nothing is deleted and the caller can retry; the
+ * reverse (data gone, subscription still billing) is the failure to avoid.
  *
- * The Stripe customer is deleted too (name and email; Stripe keeps its payment records), and
- * so is the uploaded avatar file.
+ * The Stripe customer is deleted (name and email; Stripe keeps its payment records), and so
+ * is the uploaded avatar file.
  *
  * Limits: an access token already issued stays valid until it expires (short-lived;
  * `authenticate` does not re-read the user). A local `/uploads/` avatar (the no-Cloudinary dev
@@ -203,7 +204,7 @@ async function removeProfilePhoto(userId: number, photoPath: string | null): Pro
     const [shared] = await db
       .select({ userId: user.userId })
       .from(user)
-      .where(and(like(user.userPhotoPath, `%/${publicId}.%`), ne(user.userId, userId)))
+      .where(and(like(user.userPhotoPath, `%/${publicId.replaceAll("_", "\\_")}.%`), ne(user.userId, userId)))
       .limit(1);
     if (shared) return;
     await deleteProfilePhoto(photoPath);
@@ -232,25 +233,27 @@ export async function anonymiseUser(userId: number, actorUserId: number | null =
   if (!row) throw new Error("User not found");
   if (row.userStatus === "deleted") return;
 
-  if (row.stripeSubscriptionId) {
-    try {
-      await cancelSubscriptionNow(row.stripeSubscriptionId);
-    } catch (err) {
-      throw new UserAnonymisationError(
-        "Could not cancel the user's subscription, so the account was not deleted. Try again.",
-        { cause: err },
-      );
-    }
-  }
-
-  // The customer holds the name and email; deleting it keeps Stripe's payment records. Same rule
-  // as the subscription: if it fails nothing is deleted and the caller can retry.
+  // Billing first, outside the transaction: if Stripe refuses, nothing is deleted and the caller can retry.
+  // The customer holds the name and email, and deleting it also cancels its subscriptions at once
+  // (Stripe keeps the invoices and payment records), so it is the only call when there is one. That
+  // also keeps a retry after a partial failure clean: a customer Stripe no longer has counts as done,
+  // where re-cancelling an already-cancelled subscription might not. Only a subscription with no
+  // customer id on file is cancelled directly.
   if (row.stripeCustomerId) {
     try {
       await deleteCustomer(row.stripeCustomerId);
     } catch (err) {
       throw new UserAnonymisationError(
         "Could not delete the user's payment profile, so the account was not deleted. Try again.",
+        { cause: err },
+      );
+    }
+  } else if (row.stripeSubscriptionId) {
+    try {
+      await cancelSubscriptionNow(row.stripeSubscriptionId);
+    } catch (err) {
+      throw new UserAnonymisationError(
+        "Could not cancel the user's subscription, so the account was not deleted. Try again.",
         { cause: err },
       );
     }
