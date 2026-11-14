@@ -23,12 +23,12 @@ test("a session alone cannot replace the secret or switch MFA off, and the UI sa
     expect((await setup.json()).code).toBe("MFA_ALREADY_ENABLED");
   }
 
-  // Disabling with nothing, a wrong password, or the password but no authenticator code.
+  // Disabling with nothing, or with the password but no authenticator code. Each refusal counts toward
+  // the account's 5-failure MFA cap, and the account is shared by the whole run, so only the two main
+  // takeover moves are probed here; wrong password and wrong code are covered by services/mfaProof.test.ts.
   const refusals: Array<[Record<string, string>, number, string]> = [
     [{}, 403, "INVALID_CREDENTIALS"],
-    [{ password: "definitely-not-the-password", mfaCode: "000000" }, 403, "INVALID_CREDENTIALS"],
     [{ password: password! }, 403, "MFA_REQUIRED"],
-    [{ password: password!, mfaCode: "000000" }, 403, "INVALID_MFA_CODE"],
   ];
   for (const [data, status, code] of refusals) {
     const res = await api.post("/api/auth/mfa/disable", { data });

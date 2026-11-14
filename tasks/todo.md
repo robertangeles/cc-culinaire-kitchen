@@ -3,7 +3,7 @@
 ## MFA follow-ups (2026-10-26)
 
 Shipped on `fix/ck-web/mfa-change-needs-proof`: setup/disable need proof (docs/architecture/overview.md, "Changing two-factor settings"). Still open:
-- ~~`POST /api/auth/mfa/verify` has no rate limit.~~ Done: it sits behind `authRateLimit` (20/min per IP). Still open: a per-token attempt cap, since the limiter is per IP and an attacker rotating IPs has the 5-minute window to themselves.
+- ~~`POST /api/auth/mfa/verify` has no rate limit.~~ Done: it sits behind `authRateLimit` (20/min per IP). ~~Still open: a per-token attempt cap.~~ Done (`mfaAccountRateLimit`, 5 failures / 15 min per account, keyed by the verified MFA token).
 - ~~**Other credential changes** (change password, change email) were not reviewed for the same session-only weakness.~~ Reviewed: there is no self-service email change; change password now has the rate limit and ends other sessions. Still open on change password:
   - A login with the old password that is already in flight can insert a refresh token after the delete, so the session survives (needs a row lock shared with login).
   - Outstanding password-reset links stay usable after a password change (`resetPassword` has the same property): mark the user's unused `password_reset` rows used in the same transaction.
@@ -13,8 +13,9 @@ Shipped on `fix/ck-web/mfa-change-needs-proof`: setup/disable need proof (docs/a
   - The route test asserts wiring only; an HTTP 429 test needs a signed-in test client because `authenticate` runs first.
 - **Mobile**: `api-contracts.md` G.1 documents the new proof. If the mobile app ever adds MFA setup it must send the password. The Google-only "signed in within 10 minutes" check reads the `refresh_token` cookie only (`getSignInTime`), so a bearer-only mobile client could never pass it; accept the body `refreshToken` first. `/users/delete-account` has the same limit.
 - **Clear leftover pending secrets after deploy.** Before this change `/mfa/setup` needed no proof, so a stolen session could leave a pending secret (`mfa_secret` set, `mfa_enabled_ind` false) that `/mfa/enable` still accepts with just a session and a code. Check prod for such rows (read-only count) as soon as the new code is live. After the deploy, back up, then null `mfa_secret` where `mfa_enabled_ind` is false. Longer term, make `enableMfa` take the same proof as setup.
-- **No per-account attempt cap on the MFA proof.** `authRateLimit` is 20/min per IP, shared with login and register, so a session thief rotating IPs is not stopped per account, and a TOTP code can be replayed inside its window. Consider a per-user failure counter.
-- **No ungated unit test for `requireProofToChangeMfa`.** It is covered by `mfaChange.integration.test.ts` (now run in CI) but a plain `pnpm test` can pass with it broken. Add a mocked-db unit test. The Google-only + MFA-on + valid-code disable path is untested anywhere.
+- ~~**No per-account attempt cap on the MFA proof.**~~ Done: `mfaAccountRateLimit` on setup/enable/disable/verify; `/mfa/verify` has its own per-address bucket (`mfaVerifyRateLimit`), no longer shared with login. Still open: a TOTP code can be replayed inside its window; counters are in memory (reset on deploy, not shared across instances).
+- **Per-account MFA cap can be used to lock a user out of their MFA step.** Someone who already holds a user's password (credential stuffing) can send 5 bad codes to `/mfa/verify` and block that user's MFA sign-in for 15 minutes, and repeat each window. Inherent to a per-account cap; consider notifying the user or an unlock path if it shows up. Also `mfaAccountOf` verifies the token twice per request (skip + key); harmless.
+- ~~**No ungated unit test for `requireProofToChangeMfa`.**~~ Done: `services/mfaProof.test.ts` (mocked db, includes the Google-only + MFA-on + valid-code disable path).
 - **Profile fetch failure in `MfaSection`** leaves `hasPassword` true and `mfaEnabled` null, so a Google-only user sees a password box they cannot fill.
 - **Nothing is revoked when MFA is turned off** (other sessions and refresh tokens stay valid, no notification). Existed before this change.
 

@@ -941,6 +941,21 @@ export async function disableMfa(userId: number, proof: MfaChangeProof, signedIn
 }
 
 /**
+ * The user an MFA session token belongs to, or null if it is missing, forged or expired. Only a
+ * verified token may name an account: the rate limiter keys on this, and an unverified `sub`
+ * would let anyone burn another user's attempts.
+ */
+export function mfaSessionUserId(mfaSessionToken: unknown): number | null {
+  if (typeof mfaSessionToken !== "string") return null;
+  try {
+    const decoded = jwt.verify(mfaSessionToken, mfaSessionSecret()) as unknown as { sub: number; purpose: string };
+    return decoded.purpose === "mfa" ? decoded.sub : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Completes MFA verification during login.
  * Validates the TOTP code against the mfaSessionToken, then returns
  * the full AuthUser for token generation.
