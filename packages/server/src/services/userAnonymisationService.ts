@@ -25,7 +25,7 @@
  */
 
 import pino from "pino";
-import { and, eq, inArray, ne, or } from "drizzle-orm";
+import { and, eq, inArray, like, ne, or } from "drizzle-orm";
 import { db } from "../db/index.js";
 import {
   benchMention,
@@ -53,7 +53,7 @@ import {
   userStoreLocation,
 } from "../db/schema.js";
 import { cancelSubscriptionNow, deleteCustomer } from "./stripeService.js";
-import { deleteProfilePhoto } from "../middleware/upload.js";
+import { deleteProfilePhoto, profilePhotoPublicId } from "../middleware/upload.js";
 import * as auditService from "./auditService.js";
 
 const logger = pino({ name: "userAnonymisationService" });
@@ -191,16 +191,19 @@ export const KEPT_USER_REFERENCES: readonly string[] = [
  * the row is scrubbed, so the file can be removed by hand) and the deletion goes on, because
  * refusing to delete an account over an orphaned image is the worse outcome.
  *
- * A `userPhotoPath` is user-editable, so one shared with another account is left alone: a user
- * must not be able to delete someone else's photo by pointing their own profile at it.
+ * A `userPhotoPath` is user-editable, so a file another account also points at is left alone: a
+ * user must not be able to delete someone else's photo by pointing their own profile at it. "Also
+ * points at" is judged on the public_id, not the URL text, because different URLs (version,
+ * extension) name the same file.
  */
 async function removeProfilePhoto(userId: number, photoPath: string | null): Promise<void> {
-  if (!photoPath) return;
+  const publicId = photoPath ? profilePhotoPublicId(photoPath) : null;
+  if (!photoPath || !publicId) return;
   try {
     const [shared] = await db
       .select({ userId: user.userId })
       .from(user)
-      .where(and(eq(user.userPhotoPath, photoPath), ne(user.userId, userId)))
+      .where(and(like(user.userPhotoPath, `%/${publicId}.%`), ne(user.userId, userId)))
       .limit(1);
     if (shared) return;
     await deleteProfilePhoto(photoPath);

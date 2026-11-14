@@ -8,7 +8,7 @@ vi.mock("../services/credentialService.js", () => ({
   getCredentialValueWithFallback: async (key: string) => creds.values[key],
 }));
 
-import { deleteProfilePhoto } from "./upload.js";
+import { deleteProfilePhoto, profilePhotoPublicId } from "./upload.js";
 
 /**
  * Account deletion removes the avatar file. The URL is user-editable, so this must delete only what
@@ -40,6 +40,7 @@ describe("deleteProfilePhoto", () => {
     ["a path that climbs out of the avatar folder", "https://res.cloudinary.com/demo/image/upload/v1/culinaire/profiles/../uploads/logo.png"],
     ["a query string on an avatar URL", `${OURS}?x=/culinaire/uploads/logo`],
     ["a lookalike host", "https://res.cloudinary.com.evil.test/demo/image/upload/v1/culinaire/profiles/a.jpg"],
+    ["a URL on another Cloudinary account with the same public_id", "https://res.cloudinary.com/someone-else/image/upload/v1/culinaire/profiles/abc123_XY-z.jpg"],
     ["plain text", "not a url"],
   ])("leaves %s alone and calls nothing", async (_label, url) => {
     await expect(deleteProfilePhoto(url)).resolves.toBe(false);
@@ -55,5 +56,20 @@ describe("deleteProfilePhoto", () => {
   it("propagates a Cloudinary failure", async () => {
     destroy.mockRejectedValue(new Error("cloudinary down"));
     await expect(deleteProfilePhoto(OURS)).rejects.toThrow("cloudinary down");
+  });
+});
+
+describe("profilePhotoPublicId", () => {
+  it("is the same for every URL form of one file, so 'same photo?' cannot be dodged by editing the URL", () => {
+    const id = "culinaire/profiles/abc123_XY-z";
+    expect(profilePhotoPublicId(OURS)).toBe(id);
+    expect(profilePhotoPublicId("https://res.cloudinary.com/demo/image/upload/v9/culinaire/profiles/abc123_XY-z.png")).toBe(id);
+    expect(profilePhotoPublicId("https://res.cloudinary.com/other/image/upload/culinaire/profiles/abc123_XY-z.webp")).toBe(id);
+  });
+
+  it("is null for anything that is not an avatar upload", () => {
+    expect(profilePhotoPublicId("https://lh3.googleusercontent.com/a/abc")).toBeNull();
+    expect(profilePhotoPublicId("/uploads/1-2.jpg")).toBeNull();
+    expect(profilePhotoPublicId("")).toBeNull();
   });
 });

@@ -9,7 +9,7 @@ config({ path: resolve(dirname(fileURLToPath(import.meta.url)), "../../../../.en
 applyEnvPrefix();
 
 vi.mock("./stripeService.js", () => ({ cancelSubscriptionNow: vi.fn(), deleteCustomer: vi.fn() }));
-vi.mock("../middleware/upload.js", () => ({ deleteProfilePhoto: vi.fn() }));
+vi.mock("../middleware/upload.js", async (orig) => ({ ...(await orig<typeof import("../middleware/upload.js")>()), deleteProfilePhoto: vi.fn() }));
 
 import { and, eq } from "drizzle-orm";
 import { db } from "../db/index.js";
@@ -246,7 +246,9 @@ describe.skipIf(!RUN)("anonymiseUser (real DB)", { timeout: 120_000 }, () => {
     const owner = await makeUser("photo-owner");
     const copier = await makeUser("photo-copier");
     await db.update(user).set({ userPhotoPath: photo }).where(eq(user.userId, owner.userId));
-    await db.update(user).set({ userPhotoPath: photo }).where(eq(user.userId, copier.userId));
+    // The same file under a different URL (new version, other extension) must still count as shared.
+    const variant = `https://res.cloudinary.com/other/image/upload/v2/culinaire/profiles/${tag}-shared.png`;
+    await db.update(user).set({ userPhotoPath: variant }).where(eq(user.userId, copier.userId));
     vi.mocked(deleteProfilePhoto).mockClear();
 
     await anonymiseUser(copier.userId, adminId);

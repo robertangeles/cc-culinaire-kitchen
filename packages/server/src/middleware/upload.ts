@@ -93,14 +93,23 @@ export async function uploadFileBuffer(
   return url;
 }
 
-/** A profile photo we uploaded: Cloudinary, image, in the avatar folder. Captures the public_id. */
-const PROFILE_PHOTO_URL = /^https:\/\/res\.cloudinary\.com\/[^/]+\/image\/upload\/(?:v\d+\/)?(culinaire\/profiles\/[\w-]+)\.\w+$/;
+/** A profile photo we uploaded: Cloudinary, image, in the avatar folder. Captures cloud name and public_id. */
+const PROFILE_PHOTO_URL = /^https:\/\/res\.cloudinary\.com\/([^/]+)\/image\/upload\/(?:v\d+\/)?(culinaire\/profiles\/[\w-]+)\.\w+$/;
+
+/**
+ * The Cloudinary public_id of an avatar upload, or null for any other URL. Different URLs can
+ * name the same file (version segment, extension, cloud name), so callers that ask "is this
+ * the same photo?" must compare this, never the URL text.
+ */
+export function profilePhotoPublicId(url: string): string | null {
+  return PROFILE_PHOTO_URL.exec(url)?.[2] ?? null;
+}
 
 /**
  * Remove a profile photo from Cloudinary. Returns false, touching nothing, for any URL that is
- * not one of our avatar uploads (a Google avatar, a local `/uploads/` file, anything a user typed
- * into their profile): only the avatar folder is ever deleted from. A photo Cloudinary no longer
- * has counts as done.
+ * not one of our avatar uploads (a Google avatar, a local `/uploads/` file, a URL on another
+ * Cloudinary account, anything a user typed into their profile): only our own avatar folder is
+ * ever deleted from. A photo Cloudinary no longer has counts as done.
  *
  * @throws when it is one of ours but Cloudinary is not configured or refuses.
  */
@@ -113,9 +122,12 @@ export async function deleteProfilePhoto(url: string): Promise<boolean> {
   const apiKey = await getCredentialValueWithFallback("CLOUDINARY_API_KEY");
   const apiSecret = await getCredentialValueWithFallback("CLOUDINARY_API_SECRET");
   if (!cloudName || !apiKey || !apiSecret) throw new Error("Cloudinary is not configured");
+  // destroy() acts on OUR account whatever cloud the URL names, so a URL naming another cloud
+  // must not be allowed to reach a same-named file in ours.
+  if (match[1] !== cloudName) return false;
 
   cloudinary.config({ cloud_name: cloudName, api_key: apiKey, api_secret: apiSecret });
-  await cloudinary.uploader.destroy(match[1], { resource_type: "image" });
+  await cloudinary.uploader.destroy(match[2], { resource_type: "image" });
   return true;
 }
 
