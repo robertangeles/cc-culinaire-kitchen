@@ -1941,3 +1941,7 @@ Daily encrypted prod dump to Google Drive (`scripts/backup/prodOffsiteBackup.sh`
 ## 2026-11-15 — Roster hooks cleanup (E1)
 
 `refactor/ck-web/roster-hooks-cleanup`: `useOrgMembers` error state (+ banners), `useLatestSignal` abort-previous on six hooks, `parseError`/types extracted to `rosterUtils.ts` (re-exported from `useRosterRoles.ts`), 55 hook tests. Not done: tests for the remaining standalone fetch functions (listed in todo).
+
+## 2026-11-15 — Dev DB offsite backup (C5)
+
+`fix/ck-web/dev-offsite-backup`: `prodOffsiteBackup.sh [prod|dev]`; dev state in `last_success_dev`, remote `dev/daily`. First real run OK (65526944 bytes). Cron `47 * * * * ck-prod-backup dev` added.

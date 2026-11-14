@@ -15,6 +15,11 @@ Once a day, `scripts/backup/prodOffsiteBackup.sh`:
 
 Only the encrypted file leaves the machine.
 
+The dev database is backed up the same way with `ck-prod-backup dev` (cron `47 * * * *`): same script, same
+passphrase, `culinaire-offsite-backups/dev/daily/`, state in `last_success_dev` and `lock_dev`. The stale-backup
+alert watches prod only. A dev run takes about 30 minutes from this laptop (the dump runs over the network to Render,
+then 65 MB uploads); `flock` stops overlapping runs.
+
 | Piece | Where |
 |---|---|
 | Source of truth | `scripts/backup/prodOffsiteBackup.sh` |
