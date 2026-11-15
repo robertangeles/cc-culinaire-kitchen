@@ -657,7 +657,9 @@ and server suite (unit + `TENANT_IT=1` integration) green.
   check `role === "admin"`, matching `updateMemberRole`/`removeMember`'s existing pattern.
 - Cleanup: swept 84 untracked stray `tsc -b` build artifacts across all three packages.
 
-**Not fixed — flagged for review before deciding whether to build/finish or remove:**
+**Resolved 2026-11-15 (E3, `feature/ck-web/org-admin-loose-ends`):** regenerate-key got a button (admins only, with a confirm); `joinedAt` removed from the member type and the server payload; the dead address state removed from `OrgTab` (the form never had inputs, and the PATCH schema dropped the values anyway). Left alone on purpose: the `organisation_address_*` and `org_address_enc` columns, the encrypt/decrypt helpers and the read-only address line in `UserDetailPanel`. Dropping the columns is a prod schema change and needs its own decision. If an organisation address is wanted later, build it end to end: inputs, schema, service write.
+
+**Original notes (kept for history):**
 - Organisation address fields (line1/2/suburb/state/country/postcode): DB column + working PII
   encryption exist, but no input UI, not in the create/update service function's own input type,
   not displayed in the read view. `encryptOrgPii` is always called with `null` for these.
