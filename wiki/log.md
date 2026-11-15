@@ -1965,3 +1965,7 @@ Daily encrypted prod dump to Google Drive (`scripts/backup/prodOffsiteBackup.sh`
 ## 2026-11-14 — Change-password hardening (#164)
 
 Backfilled entry (merged 2026-11-14 UTC): PR #164 `fix/ck-web/change-password-hardening` added the sign-in rate limit on change-password and made a password change end the other sessions (see CHANGELOG).
+
+## 2026-11-15 — Deleted accounts keep compliance documents 7 years (D3)
+
+`fix/ck-web/deleted-account-doc-retention`: owner decided to leave staff compliance documents on the 7-year schedule on account deletion. Found that the orphan sweep would purge a deleted account's documents after 2 years; `isOrphanedInactive` now uses `EMPLOYEE_RETENTION_YEARS` for `user_status = 'deleted'`. New decision page and index entry.

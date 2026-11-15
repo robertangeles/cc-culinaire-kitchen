@@ -157,6 +157,23 @@ describe("isOrphanedInactive", () => {
     expect(isOrphanedInactive(doc, subject, TODAY)).toBe(false);
   });
 
+  it("keeps a deleted account's document for 7 years, not 2 (Fair Work records)", async () => {
+    const { isOrphanedInactive } = await import("./complianceRetentionService.js");
+    const doc = { employmentEndDate: null, userId: 42 };
+    // Deleted 3 years before TODAY: past the 2-year orphan window, inside the 7-year one.
+    const deleted3y = { userStatus: "deleted", updatedDttm: new Date("2023-08-05T00:00:00.000Z") };
+    expect(isOrphanedInactive(doc, deleted3y, TODAY)).toBe(false);
+  });
+
+  it("flags a deleted account's document only once it is OVER 7 years since deletion", async () => {
+    const { isOrphanedInactive } = await import("./complianceRetentionService.js");
+    const doc = { employmentEndDate: null, userId: 42 };
+    const atBoundary = { userStatus: "deleted", updatedDttm: new Date("2019-08-06T00:00:00.000Z") };
+    const over = { userStatus: "deleted", updatedDttm: new Date("2019-08-05T00:00:00.000Z") };
+    expect(isOrphanedInactive(doc, atBoundary, TODAY)).toBe(false);
+    expect(isOrphanedInactive(doc, over, TODAY)).toBe(true);
+  });
+
   it("does not flag a still-active subject regardless of updatedDttm", async () => {
     const { isOrphanedInactive } = await import("./complianceRetentionService.js");
     const doc = { employmentEndDate: null, userId: 42 };

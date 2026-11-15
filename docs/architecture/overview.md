@@ -100,7 +100,7 @@ Deleting a user (admin: `DELETE /api/users/:id`) anonymises the account instead 
 4. Scrubs the `user` row: name becomes "Deleted user", email a unique `deleted-<id>@deleted.invalid` placeholder, and password, MFA secret, photo, bio, address and every encrypted PII column are cleared. The row and its id stay, with status `deleted`.
 5. Keeps business and audit records (orders, waste, receiving, stock, audit log). They keep pointing at the scrubbed row, so they no longer identify a person.
 
-Staff compliance documents follow their own retention lifecycle (7 years for employee records) and are not touched. Deleted users are hidden from the admin user list.
+Staff compliance documents follow their own retention lifecycle (7 years for employee records) and are not touched: deleting an account does not archive them. If the person was never offboarded, the daily purge removes their documents only once the account has been deleted for over 7 years (a suspended or cancelled account: over 2 years). Decided 2026-11-15, see `wiki/decisions/deleted-account-compliance-documents.md`. Deleted users are hidden from the admin user list.
 
 Guards in `userAnonymisation.test.ts` fail the build when a new `user` column or a new foreign key to `user` has not been classified (scrubbed or kept).
 
