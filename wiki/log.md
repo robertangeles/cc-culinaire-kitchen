@@ -1953,3 +1953,7 @@ Daily encrypted prod dump to Google Drive (`scripts/backup/prodOffsiteBackup.sh`
 ## 2026-11-15 — E2E follow-ups status (E4)
 
 `fix/ck-web/e2e-followups-status`: closed the exhausted-guest and 22-minute-run items in `tasks/todo.md` (already fixed by earlier work; verified in `auth-boundary.spec.ts` and `globalRateLimit.ts`). Browser matrix, mobile viewport and second-role specs stay open with reasons. Also recorded that F1 (labour cost x menu costing) and F3 (storage-area follow-ups) are gated on production usage that does not exist yet (read-only check), so nothing was built.
+
+## 2026-11-15 — Script exec bits
+
+`fix/ck-web/script-exec-bits`: mode 100755 on `localIntegrationDb.sh`, `checkBackupFresh.sh`, `prodOffsiteBackup.sh` (they were 100644).
