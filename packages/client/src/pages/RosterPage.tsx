@@ -18,6 +18,7 @@ import { MyShiftsView } from "../components/roster/MyShiftsView.js";
 import { MyAvailabilityManager } from "../components/roster/MyAvailabilityManager.js";
 import { WorkforceDemandView } from "../components/roster/WorkforceDemandView.js";
 import { StaffingCoverageView } from "../components/roster/StaffingCoverageView.js";
+import { PillTabs } from "../components/ui/PillTabs.js";
 
 type RosterTab = "shifts" | "calendar" | "roles" | "mine" | "availability" | "demand" | "coverage";
 
@@ -67,30 +68,15 @@ export function RosterPage() {
         </header>
 
         {tabs.length > 1 && (
-          <div
+          <PillTabs
+            tabs={tabs.map(({ key, label, icon }) => ({ id: key, label, icon }))}
+            active={activeTab}
+            onChange={setSelectedTab}
             className="mb-6 flex flex-wrap gap-1 rounded-xl border border-dark-200 bg-dark-100 p-1"
-            role="tablist"
-          >
-            {tabs.map((tab) => {
-              const Icon = tab.icon;
-              const isActive = activeTab === tab.key;
-              return (
-                <button
-                  key={tab.key}
-                  type="button"
-                  role="tab"
-                  aria-selected={isActive}
-                  onClick={() => setSelectedTab(tab.key)}
-                  className={`flex min-h-11 items-center gap-2 rounded-lg px-4 text-sm font-medium transition-all duration-200 ${
-                    isActive ? "bg-dark-200 text-[#FAFAFA]" : "text-dark-600 hover:text-[#FAFAFA]"
-                  }`}
-                >
-                  <Icon className="size-4" aria-hidden="true" />
-                  {tab.label}
-                </button>
-              );
-            })}
-          </div>
+            tabClassName="gap-2 rounded-lg px-4 text-sm font-medium transition-all duration-200"
+            activeClassName="bg-dark-200 text-[#FAFAFA]"
+            inactiveClassName="text-dark-600 hover:text-[#FAFAFA]"
+          />
         )}
 
         {activeTab === "shifts" && <ShiftsManager />}

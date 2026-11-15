@@ -7,10 +7,11 @@
  */
 
 import type { ScopeFilter } from "../../hooks/useBrainMemories.js";
+import { PillTabs } from "../ui/PillTabs.js";
 
-const TABS: ReadonlyArray<{ key: ScopeFilter; label: string }> = [
-  { key: "user", label: "Private to you" },
-  { key: "org", label: "Shared with your kitchen" },
+const TABS: ReadonlyArray<{ id: ScopeFilter; label: string }> = [
+  { id: "user", label: "Private to you" },
+  { id: "org", label: "Shared with your kitchen" },
 ];
 
 export function ScopeToggle({
@@ -21,30 +22,15 @@ export function ScopeToggle({
   onChange: (value: ScopeFilter) => void;
 }) {
   return (
-    <div
-      role="tablist"
-      aria-label="Memory scope"
+    <PillTabs
+      tabs={TABS}
+      active={value}
+      onChange={onChange}
+      ariaLabel="Memory scope"
       className="inline-flex rounded-full border border-dark-100 bg-[#111111] p-0.5"
-    >
-      {TABS.map((tab) => {
-        const active = value === tab.key;
-        return (
-          <button
-            key={tab.key}
-            type="button"
-            role="tab"
-            aria-selected={active}
-            onClick={() => onChange(tab.key)}
-            className={`rounded-full px-3 py-1 text-xs font-medium transition-colors motion-reduce:transition-none focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60 ${
-              active
-                ? "bg-gold/15 text-gold shadow-[0_0_12px_var(--color-gold-muted)]"
-                : "text-dark-600 hover:text-[#E5E5E5]"
-            }`}
-          >
-            {tab.label}
-          </button>
-        );
-      })}
-    </div>
+      tabClassName="rounded-full px-3 text-xs font-medium transition-colors motion-reduce:transition-none focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
+      activeClassName="bg-gold/15 text-gold shadow-[0_0_12px_var(--color-gold-muted)]"
+      inactiveClassName="text-dark-600 hover:text-[#E5E5E5]"
+    />
   );
 }

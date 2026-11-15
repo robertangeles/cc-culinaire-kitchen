@@ -1945,3 +1945,7 @@ Daily encrypted prod dump to Google Drive (`scripts/backup/prodOffsiteBackup.sh`
 ## 2026-11-15 — Dev DB offsite backup (C5)
 
 `fix/ck-web/dev-offsite-backup`: `prodOffsiteBackup.sh [prod|dev]`; dev state in `last_success_dev`, remote `dev/daily`. First real run OK (65526944 bytes). Cron `47 * * * * ck-prod-backup dev` added.
+
+## 2026-11-15 — PillTabs (E2)
+
+`refactor/ck-web/pill-tabs`: shared `components/ui/PillTabs.tsx` (WAI-ARIA tabs: arrows, Home/End, roving tabindex, `min-h-11`), 11 strips migrated; sidebar rows + PromptsTab list got `min-h-11` only. 11 new tests. store-locations and ingredient-catalog Playwright baselines refreshed; user-detail spec picks the E2E user by email (the seed also creates E2E Delete User).

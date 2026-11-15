@@ -5,18 +5,20 @@
  * and organisation create/join functionality.
  */
 
-import { useState, useEffect, useRef, type FormEvent, type ElementType, type KeyboardEvent } from "react";
+import { useState, useEffect, useRef, type FormEvent } from "react";
 import {
   User,
   ShieldCheck,
   UtensilsCrossed,
   FileText,
+  type LucideIcon,
 } from "lucide-react";
 import { AccountTab } from "../components/profile/AccountTab.js";
 import { SecurityTab } from "../components/profile/SecurityTab.js";
 import { OrgTab } from "../components/profile/OrgTab.js";
 import { MyDocumentsTab } from "../components/compliance/MyDocumentsTab.js";
 import { ImageCropModal } from "../components/ui/ImageCropModal.js";
+import { PillTabs } from "../components/ui/PillTabs.js";
 import { useAuth } from "../context/AuthContext.js";
 import { useHasPermission } from "../hooks/useHasPermission.js";
 
@@ -24,7 +26,7 @@ export function ProfilePage() {
   const { user, refreshUser } = useAuth();
   const hasPermission = useHasPermission();
 
-  const tabs: { id: "account" | "security" | "kitchen" | "documents"; label: string; Icon: ElementType }[] = [
+  const tabs: { id: "account" | "security" | "kitchen" | "documents"; label: string; Icon: LucideIcon }[] = [
     { id: "account", label: "Account Details", Icon: User },
     { id: "security", label: "Security", Icon: ShieldCheck },
     { id: "kitchen", label: "Profile", Icon: UtensilsCrossed },
@@ -252,18 +254,6 @@ export function ProfilePage() {
     setActiveTab(newTab);
   }
 
-  function handleProfileTabKeyDown(e: KeyboardEvent<HTMLButtonElement>) {
-    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
-    e.preventDefault();
-    const idx = tabs.findIndex((t) => t.id === activeTab);
-    const next =
-      e.key === "ArrowRight"
-        ? (idx + 1) % tabs.length
-        : (idx - 1 + tabs.length) % tabs.length;
-    switchTab(tabs[next].id);
-    document.getElementById(`profile-tab-${tabs[next].id}`)?.focus();
-  }
-
   return (
     <div className="flex-1 overflow-y-auto p-6 bg-dark">
       {/* Was max-w-2xl (42rem/672px). 25% wider is 840px = 52.5rem, which has
@@ -273,28 +263,17 @@ export function ProfilePage() {
         <h1 className="text-xl font-bold text-[#FAFAFA]">Profile</h1>
 
         {/* Tab Bar */}
-        <div role="tablist" aria-label="Profile" className="flex gap-1 bg-dark-50 rounded-xl p-1 border border-dark-200">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              role="tab"
-              aria-selected={activeTab === tab.id}
-              aria-controls={`profile-tabpanel-${tab.id}`}
-              id={`profile-tab-${tab.id}`}
-              tabIndex={activeTab === tab.id ? 0 : -1}
-              onClick={() => switchTab(tab.id)}
-              onKeyDown={handleProfileTabKeyDown}
-              className={`flex items-center gap-2 flex-1 justify-center rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-                activeTab === tab.id
-                  ? "bg-gold text-dark"
-                  : "text-dark-600 hover:text-[#E5E5E5]"
-              }`}
-            >
-              <tab.Icon className="size-4" />
-              {tab.label}
-            </button>
-          ))}
-        </div>
+        <PillTabs
+          tabs={tabs.map(({ id, label, Icon }) => ({ id, label, icon: Icon }))}
+          active={activeTab}
+          onChange={switchTab}
+          ariaLabel="Profile"
+          idPrefix="profile"
+          className="flex gap-1 bg-dark-50 rounded-xl p-1 border border-dark-200"
+          tabClassName="gap-2 flex-1 justify-center rounded-lg px-4 text-sm font-medium transition-colors"
+          activeClassName="bg-gold text-dark"
+          inactiveClassName="text-dark-600 hover:text-[#E5E5E5]"
+        />
 
         {activeTab === "account" && (
           <AccountTab

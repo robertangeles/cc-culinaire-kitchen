@@ -102,7 +102,7 @@ export default function OrganisationPage() {
               tabIndex={tab === id ? 0 : -1}
               onClick={() => setSelectedTab(id)}
               onKeyDown={handleTabKeyDown}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
+              className={`w-full min-h-11 flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
                 tab === id
                   ? "bg-dark-100 text-[#FAFAFA] shadow-sm"
                   : "text-dark-600 hover:bg-dark-100/60 hover:text-[#FAFAFA]"

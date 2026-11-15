@@ -131,7 +131,7 @@ function PromptListItem({ prompt, isActive, onClick }: PromptListItemProps) {
       role="tab"
       aria-selected={isActive}
       onClick={onClick}
-      className={`w-full text-left px-4 py-2.5 transition-colors ${
+      className={`w-full min-h-11 text-left px-4 py-2.5 transition-colors ${
         isActive
           ? "bg-gold/10 border-r-2 border-gold text-[#FAFAFA]"
           : "text-[#E5E5E5] hover:bg-dark hover:text-[#FAFAFA]"

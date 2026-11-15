@@ -12,6 +12,7 @@
 import { useState, useEffect } from "react";
 import { useSettings } from "../../context/SettingsContext.js";
 import { AIFeaturesPanel, ModelRegistryPanel } from "./AIConfigTab.js";
+import { PillTabs } from "../ui/PillTabs.js";
 import {
   Save,
   Loader2,
@@ -387,37 +388,31 @@ export function IntegrationsTab() {
 
       {/* Category sub-tabs */}
       <div className="px-8 pt-4 border-b border-dark-200">
-        <div role="tablist" aria-label="Integration categories" className="flex gap-1">
-          {categories.map((cat) => {
-            const Icon = CATEGORY_ICONS[cat.id] ?? KeyRound;
+        <PillTabs
+          tabs={categories.map((cat) => {
             const catCount = credentials.filter((c) => c.category === cat.id).length;
-            const isActive = activeTab === cat.id;
-
-            return (
-              <button
-                key={cat.id}
-                role="tab"
-                aria-selected={isActive}
-                aria-controls={`integrations-tabpanel-${cat.id}`}
-                id={`integrations-tab-${cat.id}`}
-                onClick={() => setActiveTab(cat.id)}
-                className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-t-lg transition-colors border-b-2 -mb-px ${
-                  isActive
-                    ? "text-gold border-gold bg-gold/10/50"
-                    : "text-dark-600 border-transparent hover:text-[#E5E5E5] hover:bg-dark"
-                }`}
-              >
-                <Icon className="size-3.5" />
-                {cat.label}
+            return {
+              id: cat.id,
+              label: cat.label,
+              icon: CATEGORY_ICONS[cat.id] ?? KeyRound,
+              badge: (
                 <span className={`text-xs px-1.5 py-0.5 rounded-full ${
-                  isActive ? "bg-gold/15 text-gold" : "bg-dark-100 text-dark-600"
+                  activeTab === cat.id ? "bg-gold/15 text-gold" : "bg-dark-100 text-dark-600"
                 }`}>
                   {catCount}
                 </span>
-              </button>
-            );
+              ),
+            };
           })}
-        </div>
+          active={activeTab}
+          onChange={setActiveTab}
+          ariaLabel="Integration categories"
+          idPrefix="integrations"
+          className="flex gap-1"
+          tabClassName="gap-1.5 px-3 text-sm font-medium rounded-t-lg transition-colors border-b-2 -mb-px"
+          activeClassName="text-gold border-gold bg-gold/10/50"
+          inactiveClassName="text-dark-600 border-transparent hover:text-[#E5E5E5] hover:bg-dark"
+        />
       </div>
 
       {/* AI inner tabs (shown only when AI Configuration category is active) */}

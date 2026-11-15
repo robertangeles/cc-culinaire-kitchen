@@ -672,7 +672,9 @@ and server suite (unit + `TENANT_IT=1` integration) green.
 - **P2** server-side catalog search/pagination (catalog is now a fallback)
 - **P2** cross-supplier order guides (schema is forward-compatible)
 
-## Pill/tab touch targets below 44px guideline (found during Public Holidays design review, 2026-09-20)
+## ~~Pill/tab touch targets below 44px guideline~~ DONE 2026-11-15 (shared `PillTabs`, `min-h-11`, arrow keys; found during Public Holidays design review, 2026-09-20)
+
+Done: 11 horizontal strips migrated to `components/ui/PillTabs.tsx` (arrow keys, Home/End, roving tabindex, 44px); the Organisation and Settings sidebar rows and `PromptsTab` list items got `min-h-11` only. Not done: `PromptsTab` list arrow-key navigation. Original notes follow.
 
 `role="tab"` pill buttons across the app use `px-4 py-2` (~36px tall), below
 the 44px touch-target minimum. Spans 13 instances across 10 files:
