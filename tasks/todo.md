@@ -387,7 +387,7 @@ Three items the review deferred rather than built:
   document expiry rules (new Document Expiry Rules tab). Who actually keeps the rows
   current over time is still an operational (non-engineering) question.
 
-- [ ] **P2 — Labour cost joined to menu costing (E4).** Roll roster hours × award rate per
+- [ ] **P2 — Labour cost joined to menu costing (E4).** *Gate not met 2026-11-15: the roster is not live in production, so no award run has happened to wait one cycle on. Build after the roster flags are on and award rules have run in production.* Roll roster hours × award rate per
   shift and attribute to menu items via recorded sales, so Menu Intelligence can report
   "food $4.20 + labour $2.80" instead of food cost % alone. This is the 10x play: the
   platform already computes food cost per menu item, and no roster tool can compute the
@@ -434,6 +434,8 @@ See "Implementation status" appendix in `docs/specs/brain-memory.md` for the 5 d
 ---
 
 ## Storage Areas — post-v1 backlog (deferred 2026-07-15, CEO review)
+
+*Status 2026-11-15: all three gates unmet. Production has no storage-area or stock-take usage yet, so there are no operator reports of stale count-date figures, no count cycles to analyse, and areas are not yet habitual. Do not build until real counts exist.*
 
 Context: v1 ships storage areas as count sheets (industry pattern: one venue stock number;
 areas organize the stocktake walk, hold per-area pars, snapshots from counts, zero-sum
@@ -730,8 +732,10 @@ Coverage gate deferred on 2026-09-30 has been resolved. `catalogRequestControlle
 
 ## E2E suite follow-ups (from 2026-10-04 eng review)
 
-- **Exhausted-guest client fix**: when the guest limit is reached `isGuest` is false and `AuthenticatedOnly` renders gated pages. Fix in the client, then add it to the logged-out boundary spec.
-- **Firefox and WebKit projects** for the E2E suite.
-- **Mobile viewport project** (doubles smoke runtime).
+Status 2026-11-15:
+
+- ~~**Exhausted-guest client fix**~~ DONE: `AuthenticatedOnly` redirects anyone who is not authenticated, and `auth-boundary.spec.ts` covers every gated route (`/settings`, `/profile`, `/my-shelf` included).
+- ~~**Full run takes ~22 min**~~ DONE: the global limit is per-user 300/min (`RATE_LIMIT_PER_MINUTE`, `globalRateLimit.ts`); the `rateBudget` fixture is gone and the CI E2E job takes about 5 minutes.
+- **Firefox and WebKit projects** for the E2E suite. OPEN, deliberately: roughly doubles to triples CI time and the visual baselines are chromium-only. If wanted, start with a smoke subset (`auth-boundary`, login, profile) rather than the whole suite. Main requires the E2E check to pass, so a flaky extra browser would block every PR.
+- **Mobile viewport project** (doubles smoke runtime). OPEN, same cost question.
 - **Second role for permission specs** (un-skips public-holidays "lacks roster:manage"); blocked by the single-test-user rule.
-- **Full run takes ~22 min**, almost all of it waiting out the server's 60 `/api` req/min per-IP limit (`rateBudget` fixture). CI has a 25 min budget (PR3): make the limit env-configurable for the CI server (`RATE_LIMIT_PER_MINUTE`), or the suite will time out there.
