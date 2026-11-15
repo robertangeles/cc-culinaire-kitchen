@@ -107,7 +107,7 @@ export interface SubjectUser {
  * Catches the staff member who left without ever being formally offboarded:
  * a user-subject document with no employment_end_date, whose subject account
  * has been non-active (userStatus !== "active") for over
- * ORPHAN_INACTIVE_YEARS.
+ * ORPHAN_INACTIVE_YEARS, or over EMPLOYEE_RETENTION_YEARS when the account was deleted.
  *
  * user.updatedDttm is the only signal this schema carries for "when did this
  * account go inactive" — userService's suspend/cancel paths stamp updatedDttm
@@ -124,7 +124,10 @@ export function isOrphanedInactive(
   if (doc.userId === null || subject === null) return false;
   if (subject.userStatus === "active") return false;
 
-  const cutoff = new Date(`${yearsAgo(today, ORPHAN_INACTIVE_YEARS)}T00:00:00.000Z`);
+  // A deleted account (see userAnonymisationService) keeps its documents for the full Fair Work
+  // 7 years; the shorter window is for suspended or cancelled accounts that were never offboarded.
+  const years = subject.userStatus === "deleted" ? EMPLOYEE_RETENTION_YEARS : ORPHAN_INACTIVE_YEARS;
+  const cutoff = new Date(`${yearsAgo(today, years)}T00:00:00.000Z`);
   return subject.updatedDttm < cutoff;
 }
 
