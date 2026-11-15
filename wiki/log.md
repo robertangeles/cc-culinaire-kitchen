@@ -1957,3 +1957,11 @@ Daily encrypted prod dump to Google Drive (`scripts/backup/prodOffsiteBackup.sh`
 ## 2026-11-15 — Script exec bits
 
 `fix/ck-web/script-exec-bits`: mode 100755 on `localIntegrationDb.sh`, `checkBackupFresh.sh`, `prodOffsiteBackup.sh` (they were 100644).
+
+## 2026-11-15 — Backup keeps the password out of ps; lessons
+
+`fix/ck-web/backup-keep-password-out-of-ps`: `prodOffsiteBackup.sh` splits the connection URL (no password in argv, password in `PGPASSWORD`); tested through the script path with a one-table dump. `tasks/lessons.md` gets seven entries from the day (ps password repeat of #110, no prod counts in public text, ubuntu-latest 26.04, unstable selectors, strict up-to-date merge loop, vitest beforeEach cleanup, per-account cap vs shared E2E account).
+
+## 2026-10-27 — Change-password hardening (#164)
+
+Backfilled entry: PR #164 `fix/ck-web/change-password-hardening` added the sign-in rate limit on change-password and made a password change end the other sessions (see CHANGELOG).

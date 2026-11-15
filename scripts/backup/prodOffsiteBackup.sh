@@ -37,8 +37,20 @@ trap 'log "FAILED ($TARGET) at line $LINENO"' ERR
 url=$(grep -m1 "^$URL_VAR=" "$ENV_FILE" | cut -d= -f2-)
 [ -n "$url" ] || { log "FAILED: $URL_VAR missing from $ENV_FILE"; exit 1; }
 
+# The password goes in PGPASSWORD, not on the command line: `ps` shows argv to every process on the machine.
+# The URL itself reaches python through stdin for the same reason.
+mapfile -t parts < <(printf %s "$url" | python3 -c '
+import sys, urllib.parse as u
+p = u.urlsplit(sys.stdin.read().strip())
+user = u.quote(p.username or "", safe="")
+print(p._replace(netloc=(user + "@" if user else "") + p.netloc.rsplit("@", 1)[-1]).geturl())
+print(u.unquote(p.password or ""))
+')
+export PGPASSWORD="${parts[1]}"
+unset url
+
 name="$TARGET-$(date +%Y%m%d-%H%M).dump"
-nice -n 10 pg_dump "$url" -Fc --no-owner --no-privileges -f "$work/$name"
+nice -n 10 pg_dump "${parts[0]}" -Fc --no-owner --no-privileges -f "$work/$name"
 pg_restore -l "$work/$name" > /dev/null
 
 gpg --batch --yes --quiet --pinentry-mode loopback --passphrase-file "$PASSPHRASE_FILE" \
