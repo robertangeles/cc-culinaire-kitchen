@@ -1224,3 +1224,45 @@ builds all tables with CHECKs enforcing. Stop it again when done.
 - **Fix**: `requireProofToChangeMfa` (password, or a sign-in within 10 minutes for Google-only accounts, plus a current code when MFA is on); `setup` refuses while MFA is on; the three routes got `authRateLimit`.
 - **Rule**: Endpoints that add, replace or remove a credential or factor (MFA, password, email, recovery) must demand proof beyond the session, and must never silently overwrite a live secret. When a review finds one such gap, check its siblings in the same file the same day.
 
+## 2026-11-15 — Repeated #110: `ps` printed a database password, again
+
+- **Problem**: Checking on the dev backup with `ps aux | grep pg_dump` printed the start of the dev connection string, including the first characters of the password, because `prodOffsiteBackup.sh` passed the URL to `pg_dump` as an argument. Lesson #110 already said never to do this; the script made it easy to do by accident.
+- **Fix**: The script now splits the URL: `pg_dump` gets the URL without the password and the password goes in `PGPASSWORD`. The URL reaches python through stdin. Told the owner, who can rotate the dev password.
+- **Rule**: A lesson is not a control. When a tool puts a secret in argv, change the tool so `ps` is safe; never rely on remembering not to look. Check a job with `pgrep -c <name>` or its output file.
+
+## 2026-11-15 — Prod row counts do not belong in docs or PR bodies
+
+- **Problem**: A docs note and a PR body were about to quote how many rows prod has in three tables to justify "gate not met". The repo is public.
+- **Fix**: Rewrote both as "production has no usage yet". The auto-mode classifier stopped the first attempt, correctly.
+- **Rule**: Say what a read-only prod check showed in words, never as figures, in the repo, the changelog, the wiki or a PR. Counts stay in the conversation.
+
+## 2026-11-15 — `ubuntu-latest` moved to 26.04 and broke Playwright on every PR
+
+- **Problem**: Browser E2E failed after 38 s on every PR: `Playwright does not support chromium on ubuntu26.04-x64`. It looked like each PR's own fault.
+- **Fix**: Pinned the `e2e` job to `ubuntu-24.04` (#169) and left the other jobs on `ubuntu-latest`.
+- **Rule**: When every PR fails the same job at the same step, read the log's first error before touching the PR; check what the runner image or a dependency did. Pin browser jobs to a named image.
+
+## 2026-11-15 — A selector that matches a loading or empty state turns a test into a coin flip
+
+- **Problem**: "Status is never conveyed by colour alone" counted every `rounded-full border` element, which also matches the empty-state hero icon, so it failed whenever it counted before the table loaded. The visual spec for the user dialog opened "the first row", but the seed creates two users and the row order was not stable.
+- **Fix**: `StatusPill` carries `data-status-pill` and the spec counts only that; the visual spec picks the E2E user by email.
+- **Rule**: A test that fails on code that just passed has a race or an unstable input. Find which, and select by a stable marker (data attribute, email), not by position or by a class that other elements share.
+
+## 2026-11-15 — Required "up to date" checks make every merge a six-minute loop
+
+- **Problem**: `main` requires branches to be current, so merging one PR makes every other open PR behind and sends it back through CI. Four open PRs cost four rounds, each with the same conflicts in `CHANGELOG.md` and `wiki/log.md`.
+- **Fix**: Merge one at a time, merge `main` in, keep both sides of the conflict, wait for CI.
+- **Rule**: Open fewer PRs at once, and put changelog and wiki-log entries in the last commit so conflicts stay trivial.
+
+## 2026-11-15 — vitest treats a returned mock as cleanup
+
+- **Problem**: `beforeEach(() => del.mockClear())` returns the mock, and vitest calls whatever `beforeEach` returns as teardown, so the mock was called and the test saw a rejection that was not there.
+- **Fix**: Block body: `beforeEach(() => { del.mockReset(); })`.
+- **Rule**: Never use an expression-bodied arrow for `beforeEach` when the expression returns a function.
+
+## 2026-11-15 — A per-account failure cap saturates a shared E2E account
+
+- **Problem**: The MFA spec made 6 to 7 refused requests against the one shared E2E account, over the cap of 5 per 15 minutes, so a later request got 429.
+- **Fix**: A 409 is not a failed guess and no longer counts; the spec makes 2 refusals, not 7.
+- **Rule**: When adding a per-account limit, count how many requests the E2E suite makes against its single shared account, and keep it well under the cap.
+
