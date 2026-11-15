@@ -1973,3 +1973,7 @@ Backfilled entry (merged 2026-11-14 UTC): PR #164 `fix/ck-web/change-password-ha
 ## 2026-11-15 — Offsite backups move from Drive to GitHub releases (C2)
 
 `fix/ck-web/backup-to-github-releases`: owner chose GitHub as a temporary home rather than set up their own Google client ID. `prodOffsiteBackup.sh` now uploads a release per dump to a private repo and prunes by age; real prod run downloaded and decrypted. Docs, decision page and CHANGELOG updated. Old Drive files left in place, no longer pruned.
+
+## 2026-11-15 — Organisation admin loose ends (E3)
+
+`feature/ck-web/org-admin-loose-ends`: finished the join-key regenerate button, removed `joinedAt` and the dead address state. Found the address "form" had state and a PATCH payload but no inputs, and the server dropped it. Columns left; see `tasks/todo.md` for why.

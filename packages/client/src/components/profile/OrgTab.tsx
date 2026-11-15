@@ -6,6 +6,7 @@ import {
   Copy,
   Info,
   MapPin,
+  RefreshCw,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.js";
 import { MyKitchenTab } from "./MyKitchenTab.js";
@@ -129,12 +130,6 @@ export function OrgTab() {
   // Edit-org form
   const [editingOrg, setEditingOrg] = useState(false);
   const [editOrgName, setEditOrgName] = useState("");
-  const [editOrgAddressLine1, setEditOrgAddressLine1] = useState("");
-  const [editOrgAddressLine2, setEditOrgAddressLine2] = useState("");
-  const [editOrgSuburb, setEditOrgSuburb] = useState("");
-  const [editOrgStateProv, setEditOrgStateProv] = useState("");
-  const [editOrgCountry, setEditOrgCountry] = useState("");
-  const [editOrgPostcode, setEditOrgPostcode] = useState("");
   const [editOrgWebsite, setEditOrgWebsite] = useState("");
   const [editOrgEmail, setEditOrgEmail] = useState("");
   const [editOrgPhone, setEditOrgPhone] = useState("");
@@ -248,15 +243,28 @@ export function OrgTab() {
     }
   }
 
+  async function handleRegenerateKey() {
+    if (!org) return;
+    if (!window.confirm("Regenerate the join key? The old key will stop working immediately.")) return;
+    setOrgMsg("");
+    setOrgError("");
+    try {
+      const res = await fetch(`/api/organisations/${org.organisationId}/regenerate-key`, {
+        method: "POST",
+        credentials: "include",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to regenerate the join key");
+      setOrg({ ...org, joinKey: data.joinKey });
+      setOrgMsg("Join key regenerated. The old key no longer works.");
+    } catch (err: unknown) {
+      setOrgError(err instanceof Error ? err.message : "Failed to regenerate the join key");
+    }
+  }
+
   function startEditingOrg() {
     if (!org) return;
     setEditOrgName(org.organisationName);
-    setEditOrgAddressLine1(org.organisationAddressLine1 ?? "");
-    setEditOrgAddressLine2(org.organisationAddressLine2 ?? "");
-    setEditOrgSuburb(org.organisationSuburb ?? "");
-    setEditOrgStateProv(org.organisationState ?? "");
-    setEditOrgCountry(org.organisationCountry ?? "");
-    setEditOrgPostcode(org.organisationPostcode ?? "");
     setEditOrgWebsite(org.organisationWebsite ?? "");
     setEditOrgEmail(org.organisationEmail ?? "");
     setEditOrgPhone(org.organisationPhone ?? "");
@@ -281,12 +289,6 @@ export function OrgTab() {
         credentials: "include",
         body: JSON.stringify({
           name: editOrgName,
-          addressLine1: editOrgAddressLine1 || undefined,
-          addressLine2: editOrgAddressLine2 || undefined,
-          suburb: editOrgSuburb || undefined,
-          state: editOrgStateProv || undefined,
-          country: editOrgCountry || undefined,
-          postcode: editOrgPostcode || undefined,
           website: editOrgWebsite || undefined,
           email: editOrgEmail || undefined,
           phone: editOrgPhone || undefined,
@@ -467,6 +469,11 @@ export function OrgTab() {
                   <button type="button" onClick={handleCopyKey} className="ml-auto text-dark-500 hover:text-[#E5E5E5] transition-colors" title="Copy join key">
                     {copiedKey ? <CheckCircle2 className="size-4 text-green-500" /> : <Copy className="size-4" />}
                   </button>
+                  {myOrgRole === "admin" && (
+                    <button type="button" onClick={handleRegenerateKey} className="text-dark-500 hover:text-[#E5E5E5] transition-colors" title="Regenerate join key" aria-label="Regenerate join key">
+                      <RefreshCw className="size-4" />
+                    </button>
+                  )}
                 </div>
                 <button type="button" onClick={handleLeaveOrg} disabled={savingOrg} className="text-sm text-red-400 hover:text-red-300 transition-colors">
                   Leave Organisation

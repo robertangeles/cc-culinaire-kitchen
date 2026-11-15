@@ -10,8 +10,8 @@ import { TeamMembersSection } from "./TeamMembersSection.js";
  * a plain member and for the admin's own row (no self-service demotion).
  */
 
-const admin = { userId: 1, displayName: "Alex Admin", photoPath: null, bio: null, role: "admin" as const, joinedAt: "2026-01-01" };
-const member = { userId: 2, displayName: "Sam Staff", photoPath: null, bio: null, role: "member" as const, joinedAt: "2026-01-02" };
+const admin = { userId: 1, displayName: "Alex Admin", photoPath: null, bio: null, role: "admin" as const };
+const member = { userId: 2, displayName: "Sam Staff", photoPath: null, bio: null, role: "member" as const };
 
 function mockFetchOnce(...responses: Array<{ ok: boolean; json: () => Promise<unknown> }>) {
   const fetchMock = vi.fn();

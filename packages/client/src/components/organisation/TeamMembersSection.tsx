@@ -16,7 +16,6 @@ interface OrgMember {
   photoPath: string | null;
   bio: string | null;
   role: "admin" | "member";
-  joinedAt: string;
 }
 
 /** Derive a deterministic background color from a userId */

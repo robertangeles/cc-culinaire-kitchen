@@ -21,12 +21,6 @@ function signedIn(userId = 1) {
 const mockOrg = {
   organisationId: 5,
   organisationName: "Test Org",
-  organisationAddressLine1: null,
-  organisationAddressLine2: null,
-  organisationSuburb: null,
-  organisationState: null,
-  organisationCountry: null,
-  organisationPostcode: null,
   organisationWebsite: null,
   organisationEmail: null,
   organisationPhone: null,
@@ -215,6 +209,73 @@ describe("OrgTab", () => {
       await waitFor(() =>
         expect(screen.getByRole("tab", { name: "Create" })).toBeInTheDocument(),
       );
+    });
+
+    describe("regenerate join key", () => {
+      const regenerated = "NEW-KEY";
+      let calls: { url: string; method?: string }[];
+
+      function stubOrgFetch(role: "admin" | "member", regenerate: { ok: boolean; body: unknown }) {
+        calls = [];
+        vi.stubGlobal(
+          "fetch",
+          vi.fn(async (url: string, opts?: RequestInit) => {
+            calls.push({ url, method: opts?.method });
+            if (url === "/api/organisations/mine")
+              return { ok: true, json: async () => ({ organisation: mockOrg }) };
+            if (url.endsWith("/members"))
+              return { ok: true, json: async () => ({ members: [{ userId: 1, role, displayName: "Test User" }] }) };
+            if (url === "/api/organisations/5/regenerate-key") return { ok: regenerate.ok, json: async () => regenerate.body };
+            return { ok: true, json: async () => ({}) };
+          }),
+        );
+      }
+      const regenerateCalls = () => calls.filter((c) => c.url.endsWith("/regenerate-key"));
+
+      it("swaps in the new key after the admin confirms", async () => {
+        stubOrgFetch("admin", { ok: true, body: { joinKey: regenerated } });
+        vi.spyOn(window, "confirm").mockReturnValue(true);
+        render(<OrgTab />);
+        await waitFor(() => screen.getByText("TEST-KEY"));
+
+        fireEvent.click(screen.getByRole("button", { name: /Regenerate join key/i }));
+
+        await waitFor(() => expect(screen.getByText(regenerated)).toBeInTheDocument());
+        expect(screen.queryByText("TEST-KEY")).not.toBeInTheDocument();
+        expect(regenerateCalls()).toEqual([{ url: "/api/organisations/5/regenerate-key", method: "POST" }]);
+      });
+
+      it("changes nothing when the admin cancels the confirm", async () => {
+        stubOrgFetch("admin", { ok: true, body: { joinKey: regenerated } });
+        vi.spyOn(window, "confirm").mockReturnValue(false);
+        render(<OrgTab />);
+        await waitFor(() => screen.getByText("TEST-KEY"));
+
+        fireEvent.click(screen.getByRole("button", { name: /Regenerate join key/i }));
+
+        expect(regenerateCalls()).toEqual([]);
+        expect(screen.getByText("TEST-KEY")).toBeInTheDocument();
+      });
+
+      it("shows the server's error and keeps the old key when it fails", async () => {
+        stubOrgFetch("admin", { ok: false, body: { error: "Only organisation admins can regenerate the join key." } });
+        vi.spyOn(window, "confirm").mockReturnValue(true);
+        render(<OrgTab />);
+        await waitFor(() => screen.getByText("TEST-KEY"));
+
+        fireEvent.click(screen.getByRole("button", { name: /Regenerate join key/i }));
+
+        await waitFor(() => expect(screen.getByText(/Only organisation admins can regenerate/)).toBeInTheDocument());
+        expect(screen.getByText("TEST-KEY")).toBeInTheDocument();
+      });
+
+      it("is not offered to a plain member", async () => {
+        stubOrgFetch("member", { ok: true, body: { joinKey: regenerated } });
+        render(<OrgTab />);
+        await waitFor(() => screen.getByText("TEST-KEY"));
+
+        expect(screen.queryByRole("button", { name: /Regenerate join key/i })).not.toBeInTheDocument();
+      });
     });
   });
 });

@@ -363,7 +363,6 @@ export async function getOrganisationMembers(organisationId: number) {
       photoPath: row.userPhotoPath,
       bio: pii.userBio,
       role: row.role,
-      joinedAt: null, // userOrganisation table has no timestamp column
     };
   });
 }

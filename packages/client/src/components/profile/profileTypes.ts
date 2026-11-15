@@ -1,12 +1,6 @@
 export interface Organisation {
   organisationId: number;
   organisationName: string;
-  organisationAddressLine1: string | null;
-  organisationAddressLine2: string | null;
-  organisationSuburb: string | null;
-  organisationState: string | null;
-  organisationCountry: string | null;
-  organisationPostcode: string | null;
   organisationWebsite: string | null;
   organisationEmail: string | null;
   organisationPhone: string | null;
@@ -25,5 +19,4 @@ export interface OrgMember {
   photoPath: string | null;
   bio: string | null;
   role: "admin" | "member";
-  joinedAt: string;
 }

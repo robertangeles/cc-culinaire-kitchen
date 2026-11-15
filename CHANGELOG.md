@@ -7,6 +7,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Changed
 
+- **Organisation admins can regenerate the join key.** A refresh button next to the key on Profile → Kitchen (admins only), with a confirm because the old key stops working at once. The route and service already existed with no screen. Removed two dead leftovers: the member `joinedAt` field (the table has no date column, the server always sent null, nothing showed it) and the unused address state in `OrgTab` (the form never had inputs and the server ignored the values). The address columns stay in the database, unused.
 - **Offsite backups now go to a private GitHub repo, not Google Drive.** `prodOffsiteBackup.sh` uploads each encrypted dump as a release in `robertangeles/culinaire-offsite-backups`, checks the stored size, and prunes releases over 30 days old (prod and dev, by tag prefix). Reason: rclone's shared Google login is being retired in 2026. Temporary until a proper backup store is chosen. Tried for real: a prod dump uploaded, downloaded, decrypted and listed 958 objects. Files already on Drive stay there and are no longer pruned.
 
 ### Added
