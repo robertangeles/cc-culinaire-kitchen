@@ -33,7 +33,7 @@ pg_restore --clean --if-exists --no-owner -d "<target DATABASE_URL>" <file>
 Restore to a *scratch* database first when validating a dump; only `--clean` a live target deliberately.
 
 ## Offsite tier (added 2026-10-26)
-The folder above only protects against a bad change, not against losing this machine. A daily encrypted dump of prod now also goes to Google Drive (`culinaire-offsite-backups/prod/daily/`, 30 days kept). Script, schedule, passphrase handling and restore steps: `docs/architecture/offsite-backup.md`. The existing dumps were uploaded once to `prod/archive/`.
+The folder above only protects against a bad change, not against losing this machine. A daily encrypted dump of prod now also goes offsite (30 days kept): Google Drive until 2026-11-15, then a private GitHub repo, one release per dump, as a temporary home (rclone's shared Google login is being retired and fixing it was not worth the setup). Script, schedule, passphrase handling and restore steps: `docs/architecture/offsite-backup.md`. The existing dumps were uploaded once to `prod/archive/`.
 
 Drift noted 2026-10-26: the October 2026 schema and FK work wrote its dumps to `~/ck-prod-backups/` (and dev CSVs to `~/ck-dev-backups/`), so two folders held dumps. Resolved 2026-11-15: the 11 files in `~/ck-prod-backups/` were moved into `~/culinaire-prod-backups/` (all had already been uploaded to `prod/archive/`) and the old folder removed. The canonical folder stands. `~/ck-dev-backups/` is dev data only and is left as is.
 

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Encrypted offsite backup of the prod (default) or dev database: dump, check it restores, encrypt, upload, prune.
+# Home: one release per backup in the private GitHub repo below. Temporary, until a proper backup store replaces it.
 # Install: install -m 755 scripts/backup/prodOffsiteBackup.sh ~/.local/bin/ck-prod-backup
 # Cron:    17 * * * * $HOME/.local/bin/ck-prod-backup       (hourly; does the work once per day, so a laptop
 #          that was off at the usual time still backs up when it wakes)
@@ -20,7 +21,7 @@ case "$TARGET" in
   dev)  URL_VAR=DEV_DATABASE_URL;  SUFFIX="_dev" ;;
   *)    echo "usage: ck-prod-backup [prod|dev]" >&2; exit 2 ;;
 esac
-REMOTE="googledrive:culinaire-offsite-backups/$TARGET/daily"
+REPO="robertangeles/culinaire-offsite-backups"
 
 mkdir -p "$STATE"
 exec 9>"$STATE/lock$SUFFIX"
@@ -56,9 +57,15 @@ pg_restore -l "$work/$name" > /dev/null
 gpg --batch --yes --quiet --pinentry-mode loopback --passphrase-file "$PASSPHRASE_FILE" \
   --symmetric --cipher-algo AES256 --compress-algo none -o "$work/$name.gpg" "$work/$name"
 
-rclone copyto "$work/$name.gpg" "$REMOTE/$name.gpg" --checksum >> "$STATE/backup.log" 2>&1
-# Runs only after a successful upload, so the newest backup always survives the prune.
-rclone delete "$REMOTE" --min-age "${KEEP_DAYS}d" >> "$STATE/backup.log" 2>&1
+tag="${name%.dump}"
+gh release create "$tag" "$work/$name.gpg" --repo "$REPO" --title "$tag" --notes "Encrypted $TARGET database dump." >> "$STATE/backup.log" 2>&1
+# GitHub accepted the upload; confirm it stored every byte before this counts as a backup.
+[ "$(gh release view "$tag" --repo "$REPO" --json assets --jq '.assets[0].size')" = "$(stat -c%s "$work/$name.gpg")" ]
+# Runs only after a verified upload, so the newest backup always survives the prune.
+cutoff=$(date -u -d "-${KEEP_DAYS} days" +%FT%TZ)
+gh release list --repo "$REPO" --limit 1000 --json tagName,createdAt \
+  --jq ".[] | select(.createdAt < \"$cutoff\" and (.tagName | startswith(\"$TARGET-\"))) | .tagName" |
+  while read -r old; do gh release delete "$old" --repo "$REPO" --cleanup-tag --yes >> "$STATE/backup.log" 2>&1; done
 
 echo "$today" > "$STATE/last_success$SUFFIX"
 log "OK $TARGET $name.gpg ($(stat -c%s "$work/$name.gpg") bytes)"
