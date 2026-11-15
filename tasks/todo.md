@@ -387,7 +387,7 @@ Three items the review deferred rather than built:
   document expiry rules (new Document Expiry Rules tab). Who actually keeps the rows
   current over time is still an operational (non-engineering) question.
 
-- [ ] **P2 — Labour cost joined to menu costing (E4).** Roll roster hours × award rate per
+- [ ] **P2 — Labour cost joined to menu costing (E4).** *Gate not met 2026-11-15: the roster is not live in production, so no award run has happened to wait one cycle on. Build after the roster flags are on and award rules have run in production.* Roll roster hours × award rate per
   shift and attribute to menu items via recorded sales, so Menu Intelligence can report
   "food $4.20 + labour $2.80" instead of food cost % alone. This is the 10x play: the
   platform already computes food cost per menu item, and no roster tool can compute the
@@ -434,6 +434,8 @@ See "Implementation status" appendix in `docs/specs/brain-memory.md` for the 5 d
 ---
 
 ## Storage Areas — post-v1 backlog (deferred 2026-07-15, CEO review)
+
+*Status 2026-11-15: all three gates unmet. Production has no storage-area or stock-take usage yet, so there are no operator reports of stale count-date figures, no count cycles to analyse, and areas are not yet habitual. Do not build until real counts exist.*
 
 Context: v1 ships storage areas as count sheets (industry pattern: one venue stock number;
 areas organize the stocktake walk, hold per-area pars, snapshots from counts, zero-sum
