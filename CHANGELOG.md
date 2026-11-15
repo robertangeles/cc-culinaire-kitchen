@@ -5,6 +5,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- **Offsite backups now go to a private GitHub repo, not Google Drive.** `prodOffsiteBackup.sh` uploads each encrypted dump as a release in `robertangeles/culinaire-offsite-backups`, checks the stored size, and prunes releases over 30 days old (prod and dev, by tag prefix). Reason: rclone's shared Google login is being retired in 2026. Temporary until a proper backup store is chosen. Tried for real: a prod dump uploaded, downloaded, decrypted and listed 958 objects. Files already on Drive stay there and are no longer pruned.
+
 ### Added
 
 - **The dev database now has a daily encrypted offsite backup too.** `ck-prod-backup dev` (same script, `prodOffsiteBackup.sh` takes an optional `prod|dev` argument) dumps the Render dev DB, restore-checks it, encrypts it and uploads it to `culinaire-offsite-backups/dev/daily/`, keeping 30 days. Prod behaviour and state files are unchanged. Tried once for real: a 65 MB encrypted dump uploaded and listed on Drive.

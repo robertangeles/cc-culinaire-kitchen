@@ -1969,3 +1969,7 @@ Backfilled entry (merged 2026-11-14 UTC): PR #164 `fix/ck-web/change-password-ha
 ## 2026-11-15 — Deleted accounts keep compliance documents 7 years (D3)
 
 `fix/ck-web/deleted-account-doc-retention`: owner decided to leave staff compliance documents on the 7-year schedule on account deletion. Found that the orphan sweep would purge a deleted account's documents after 2 years; `isOrphanedInactive` now uses `EMPLOYEE_RETENTION_YEARS` for `user_status = 'deleted'`. New decision page and index entry.
+
+## 2026-11-15 — Offsite backups move from Drive to GitHub releases (C2)
+
+`fix/ck-web/backup-to-github-releases`: owner chose GitHub as a temporary home rather than set up their own Google client ID. `prodOffsiteBackup.sh` now uploads a release per dump to a private repo and prunes by age; real prod run downloaded and decrypted. Docs, decision page and CHANGELOG updated. Old Drive files left in place, no longer pruned.
