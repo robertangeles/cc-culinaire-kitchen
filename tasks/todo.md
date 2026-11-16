@@ -2,7 +2,7 @@
 
 ## MFA follow-ups (2026-10-26)
 
-Shipped on `fix/ck-web/mfa-change-needs-proof`: setup/disable need proof (docs/architecture/overview.md, "Changing two-factor settings"). Still open:
+Shipped on `fix/ck-web/mfa-change-needs-proof`: setup/disable need proof (brain page `architecture/overview`, "Changing two-factor settings"). Still open:
 - ~~`POST /api/auth/mfa/verify` has no rate limit.~~ Done: it sits behind `authRateLimit` (20/min per IP). ~~Still open: a per-token attempt cap.~~ Done (`mfaAccountRateLimit`, 5 failures / 15 min per account, keyed by the verified MFA token).
 - ~~**Other credential changes** (change password, change email) were not reviewed for the same session-only weakness.~~ Reviewed: there is no self-service email change; change password now has the rate limit and ends other sessions. Still open on change password:
   - A login with the old password that is already in flight can insert a refresh token after the delete, so the session survives (needs a row lock shared with login).
@@ -21,7 +21,7 @@ Shipped on `fix/ck-web/mfa-change-needs-proof`: setup/disable need proof (docs/a
 
 ## Offsite backup follow-ups (2026-10-26)
 
-Shipped: daily encrypted prod dump to Google Drive (`docs/architecture/offsite-backup.md`). Still open:
+Shipped: daily encrypted prod dump to Google Drive (brain page `architecture/offsite-backup`). Still open:
 - **Passphrase copy.** `~/.config/ck-backup/passphrase` must also be in the password manager. Until it is, losing the laptop loses the ability to read every backup.
 - ~~Own Google client ID~~ Dropped 2026-11-15: backups moved to a private GitHub repo (temporary). Replace with a proper backup store; then delete the old Drive files by hand.
 - **Failure signal.** A failed run is silent; the only tell is a stale `~/.local/state/ck-backup/last_success`. Add an alert if that proves too easy to miss.
@@ -30,11 +30,11 @@ Shipped: daily encrypted prod dump to Google Drive (`docs/architecture/offsite-b
 
 ## Account deletion follow-ups (2026-10-20)
 
-`anonymiseUser` shipped (scrub and keep the row; see docs/architecture/overview.md). Still open:
+`anonymiseUser` shipped (scrub and keep the row; see brain page `architecture/overview`). Still open:
 - ~~Self-serve "Delete my account" in the web app~~ done: Profile -> Security -> Delete account (`POST /api/users/delete-account`). The mobile app still needs its own in-app button (Google Play requirement); the web page link covers it for now.
 - **Align the published pages to 30 days.** `delete-account` says 7 business days, `privacy` says 30 days. Edit via the admin UI (site pages are DB content). The delete-account page also lists what is deleted; it should mention that business records stay, with no name attached.
 - ~~**Stripe customer deletion.**~~ Done: `anonymiseUser` deletes the customer, which cancels its subscriptions (`stripeService.deleteCustomer`); a failure refuses the deletion. Note it also refuses when a user row has a `stripe_customer_id` but `STRIPE_SECRET_KEY` is unset or rotated (as it already did for a subscription id); no prod or dev user has a Stripe id today. Not verified against live Stripe (no key here): that deleting a customer cancels its subscriptions is from Stripe's API reference.
-- ~~**Staff compliance documents on user deletion**~~ DECIDED 2026-11-15 (owner): leave them on the 7-year schedule; deleting an account does not archive them. The orphan sweep now waits 7 years for a deleted account (it was 2). See `wiki/decisions/deleted-account-compliance-documents.md`.
+- ~~**Staff compliance documents on user deletion**~~ DECIDED 2026-11-15 (owner): leave them on the 7-year schedule; deleting an account does not archive them. The orphan sweep now waits 7 years for a deleted account (it was 2). See brain page `decisions/deleted-account-compliance-documents`.
 - ~~**Profile photo file.**~~ It was NOT removed (the Cloudinary file stayed public at its URL). Now removed best effort (`deleteProfilePhoto`, avatar folder only). Still open: re-uploading an avatar orphans the previous Cloudinary file (never deleted); a local `/uploads/` avatar is not removed.
 - **Prod schema drift:** fixed 2026-10-24 (organisation settings columns, public-holiday partial-day column, `roster_shift_template`; scripts `applyOrganisationSettingsSchema.ts`, `addPublicHolidayPartialDayColumn.ts`, `addRosterShiftTemplate.ts`).
 - **FK constraints:** done on prod and dev 2026-10-25 (prod 201 FKs, 0 unvalidated): 31 from `addMissingForeignKeys.ts`, the 4 roster ones, and `ingredient_cross_usage.prep_session_id` after its 18 orphan rows were deleted (backups in `~/ck-prod-backups/` and `~/ck-dev-backups/`).
@@ -143,7 +143,7 @@ with zero rules seeded rather than waiting — see the P2 entry further down.
 Yesterday ended clean: **PR #76 (storage areas B1)** and **PR #77 (cleanup chore)** are both
 merged to `main`, CI green, prod schema applied and verified. Nothing is half-finished.
 
-### 1. UAT — `docs/qa/uom-recipe-selling-uat.md`
+### 1. UAT — brain page `qa/uom-recipe-selling-uat`
 Sections **A–H** (kitchen-unit model) were never walked; **section I** (storage areas) is new.
 The fixture is already seeded — say "re-seed UAT" to reset it.
 
@@ -163,7 +163,7 @@ None are urgent. Each is "should this exist?", which is yours to answer, not a l
 | 5 | The **create-organisation form has no address inputs**. It sent 6 address fields that were permanently empty, so every org is created with no address. | Add the inputs, or is address captured elsewhere? |
 
 ### 3. Then: B2 — AREA-mode counting
-`docs/specs/storage-areas-count-sheets.md`, branch `feature/ck-web/storage-areas-count-sheets`.
+brain page `specs/storage-areas-count-sheets`, branch `feature/ck-web/storage-areas-count-sheets`.
 **This is the only branch that changes stock writes.** It carries the two critical guards:
 - `updateStockLevelsFromSession` must GROUP BY SUM, not upsert per line (last-area-wins would
   silently delete stock).
@@ -200,7 +200,7 @@ Dev ingredient total went 171 → 167; dev and prod now match (167 each).
 
 _Last updated: 2026-04-22. Reflects actual codebase state, not aspirational._
 
-> **Feature Catalog:** the complete "what exists now" feature list lives in the wiki at [`wiki/synthesis/features.md`](../wiki/synthesis/features.md). When you ship, change, or remove a feature, update that catalog (and bump its `updated:` date) as part of the work — this TODO tracks *what's planned*, the catalog tracks *what's built*.
+> **Feature Catalog:** the complete "what exists now" feature list lives in the wiki at brain page `synthesis/features`. When you ship, change, or remove a feature, update that catalog (and bump its `updated:` date) as part of the work — this TODO tracks *what's planned*, the catalog tracks *what's built*.
 
 ---
 
@@ -318,7 +318,7 @@ _Last updated: 2026-04-22. Reflects actual codebase state, not aspirational._
 - [x] **Two pre-existing bugs fixed**: legacy PO `receiveLine` added raw qty (no conversion); consumption summaries summed mixed units
 - [x] `sale` header + `recordSale` (preflight/commit, org boundary) → fractional kitchen-unit depletion feeding yield variance; `voidSale`; idempotency; two-phase CSV (per-row-content keys)
 - [x] FOH consumables sell **directly** (hidden auto 1:1 link); op supplies manual-log only
-- [x] Item setup = Counted in / Contains / Purchased as; PO in packaging units w/ per-case cost; auto-PO suggests whole packages; 31-case real-DB E2E (`UOM_IT=1`). See [[uom-and-recipe-selling]], `docs/qa/uom-recipe-selling-uat.md`
+- [x] Item setup = Counted in / Contains / Purchased as; PO in packaging units w/ per-case cost; auto-PO suggests whole packages; 31-case real-DB E2E (`UOM_IT=1`). See [[uom-and-recipe-selling]], brain page `qa/uom-recipe-selling-uat`
 - [ ] Follow-up (backlog, named in the plan): per-order supply allowance; prep-as-stock; central-kitchen BOM; live POS adapter; true FIFO/FEFO layer depletion (whole-app); density conversions
 
 ### Phase 13 — Landing + Admin UX
@@ -338,7 +338,7 @@ _Last updated: 2026-04-22. Reflects actual codebase state, not aspirational._
 _Nothing confirmed outstanding. New work to be defined._
 
 ### Cleanup
-- [x] Remove duplicate prompt file `prompts/recipe/recipeRefinementPrompt.md` (resolved 2026-05-03 — canonical at `prompts/chatbot/recipeRefinementPrompt.md` is preserved as the runtime fallback; recipe-lab prompts are DB-only since Phase 8). See `wiki/decisions/duplicate-recipe-refinement-prompt.md`.
+- [x] Remove duplicate prompt file `prompts/recipe/recipeRefinementPrompt.md` (resolved 2026-05-03 — canonical at `prompts/chatbot/recipeRefinementPrompt.md` is preserved as the runtime fallback; recipe-lab prompts are DB-only since Phase 8). See brain page `decisions/duplicate-recipe-refinement-prompt`.
 - [x] Install eslint + flat config + per-package overrides (resolved 2026-06-01 — eslint v10, typescript-eslint, react-hooks, react-refresh. Root eslint.config.js with per-package overrides. All rules start as warnings. Lint step re-enabled in CI).
 - [x] Configure GitHub branch protection on `main` (resolved 2026-06-01 — CI check `ci / Typecheck, test, build` now required before merge via GitHub API).
 
@@ -407,7 +407,7 @@ Three items the review deferred rather than built:
 
 ## The Brain — per-user + per-org AI memory (APPROVED, ready to build)
 
-Canonical plan: **`docs/specs/brain-memory.md`** (CEO + Eng + Design reviewed, 2026-07-04). "Brief me on the current plan" → read that file.
+Canonical plan: **brain page `specs/brain-memory`** (CEO + Eng + Design reviewed, 2026-07-04). "Brief me on the current plan" → read that file.
 
 Build on `feature/ck-web/brain-spine`, verify against a local DB, then commit/push/merge per CLAUDE.md.
 
@@ -426,7 +426,7 @@ Build on `feature/ck-web/brain-spine`, verify against a local DB, then commit/pu
 - [x] D-T2 `BrainEmptyState` + `MemoryRow` + `ProvenanceChip` + interaction states (learning chip, skeleton, retry, warm empty)
 - [x] D-T3 responsive (375px walkthrough) + a11y (aria-expanded, focus rings, reduced-motion, ≥44px targets)
 
-See "Implementation status" appendix in `docs/specs/brain-memory.md` for the 5 documented deviations + prod rollout checklist.
+See "Implementation status" appendix in brain page `specs/brain-memory` for the 5 documented deviations + prod rollout checklist.
 
 **Phase 2:** org tier + ops capture + Labs/Copilot recall + rich Your-Brain UI + org-admin mgmt + org digests (T11-T15, D-T4).
 **Phase 3:** compaction + nudges + ranking tuning (T16-T18, D-T5).
@@ -459,7 +459,7 @@ considered and deliberately deferred:
 ## ⏸ RESUME HERE (parked 2026-07-15) — mid-B1 on `feature/ck-web/storage-areas-and-movements`
 
 PR #75 (kitchen-unit model + recipe selling) is MERGED. Eng review of the storage-areas spec
-is DONE and the spec is hardened — `docs/specs/storage-areas-count-sheets.md` is now the
+is DONE and the spec is hardened — brain page `specs/storage-areas-count-sheets` is now the
 source of truth and is CEO + ENG CLEARED, zero unresolved decisions. **Read it before
 anything else.** It ships as THREE sequential branches (see its Build order table).
 
@@ -595,7 +595,7 @@ Deferred:
 
 ## Roster Scheduling Templates — shipped, unreviewed (2026-09-07)
 
-Full design: `docs/designs/roster-scheduling-templates.md` (CEO review → office-hours →
+Full design: brain page `designs/roster-scheduling-templates` (CEO review → office-hours →
 eng-review → design-review, all approved). Built end to end via TDD per the design doc's
 Implementation Tasks (T1-T9), all tests green (unit, integration incl. concurrency/DST, permission
 boundary, client hook, component). Not yet code-reviewed or shipped/PR'd — do that next.
@@ -645,7 +645,7 @@ role (no `ORDER BY` server-side) instead of showing all of them. Fixed: shows ev
 
 User report: "Alex Charasse is org admin but can't view the Org Admin page." Both a client
 stale-closure bug and a server auth-model gap were found and fixed with TDD — full detail in
-`tasks/lessons.md` #73, `wiki/log.md` same date. `pnpm tsc:check` clean, full client suite (227)
+`tasks/lessons.md` #73, brain page `log` same date. `pnpm tsc:check` clean, full client suite (227)
 and server suite (unit + `TENANT_IT=1` integration) green.
 
 - Fixed: `ProfilePage.tsx`'s org-role effect (`myOrgRole`) — was `useEffect(..., [])`, raced
