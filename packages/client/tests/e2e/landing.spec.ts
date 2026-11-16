@@ -1,5 +1,5 @@
 /**
- * Landing page (docs/designs/landing-page-hospitality-redesign.md).
+ * Landing page (dev brain page designs/landing-page-hospitality-redesign).
  * Public/unauthenticated — deliberately does not use the shared authenticated
  * storageState (test.use below overrides it per-file), since "/" must work
  * for a logged-out visitor.
