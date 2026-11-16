@@ -5,6 +5,7 @@
 # Cron:    17 * * * * $HOME/.local/bin/ck-prod-backup       (hourly; does the work once per day, so a laptop
 #          that was off at the usual time still backs up when it wakes)
 #          47 * * * * $HOME/.local/bin/ck-prod-backup dev   (the dev database, same way)
+#          57 * * * * $HOME/.local/bin/ck-prod-backup brain (the dev brain on HERMES, over its own SSH tunnel)
 # Restore: docs/architecture/offsite-backup.md
 set -euo pipefail
 export PATH=/usr/local/bin:/usr/bin:/bin
@@ -16,10 +17,14 @@ STATE="$HOME/.local/state/ck-backup"
 
 # prod keeps the original state file names (the stale-backup check reads last_success).
 TARGET="${1:-prod}"
+DUMP_ARGS=()
 case "$TARGET" in
   prod) URL_VAR=PROD_DATABASE_URL; SUFFIX="" ;;
   dev)  URL_VAR=DEV_DATABASE_URL;  SUFFIX="_dev" ;;
-  *)    echo "usage: ck-prod-backup [prod|dev]" >&2; exit 2 ;;
+  # HERMES loads the Apache AGE add-on server-wide, so the brain database carries an empty `age` extension
+  # as a workaround. It holds no brain data and the brain role may not read it: leave it out of the dump.
+  brain) URL_VAR=DEV_BRAIN_DATABASE_URL; SUFFIX="_brain"; DUMP_ARGS=(--exclude-extension=age --exclude-schema=ag_catalog) ;;
+  *)    echo "usage: ck-prod-backup [prod|dev|brain]" >&2; exit 2 ;;
 esac
 REPO="robertangeles/culinaire-offsite-backups"
 
@@ -50,8 +55,15 @@ print(u.unquote(p.password or ""))
 export PGPASSWORD="${parts[1]}"
 unset url
 
+# The brain database lives on HERMES, which only listens on itself: reach it through a private SSH tunnel on
+# 5433 for the length of this run. If a tunnel is already up (an open Claude Code session), use that one.
+if [ "$TARGET" = brain ] && ! (exec 3<>/dev/tcp/127.0.0.1/5433) 2>/dev/null; then
+  ssh -M -S "$work/tunnel" -f -N -o BatchMode=yes -o ExitOnForwardFailure=yes -L 5433:127.0.0.1:5432 hermes
+  trap 'ssh -S "$work/tunnel" -O exit hermes 2>/dev/null; rm -rf "$work"' EXIT
+fi
+
 name="$TARGET-$(date +%Y%m%d-%H%M).dump"
-nice -n 10 pg_dump "${parts[0]}" -Fc --no-owner --no-privileges -f "$work/$name"
+nice -n 10 pg_dump "${parts[0]}" -Fc --no-owner --no-privileges "${DUMP_ARGS[@]}" -f "$work/$name"
 pg_restore -l "$work/$name" > /dev/null
 
 gpg --batch --yes --quiet --pinentry-mode loopback --passphrase-file "$PASSPHRASE_FILE" \

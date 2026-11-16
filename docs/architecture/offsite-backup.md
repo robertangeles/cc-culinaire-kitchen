@@ -22,6 +22,15 @@ passphrase, tag `dev-<stamp>` in the same repo, state in `last_success_dev` and 
 alert watches prod only. A dev run takes about 30 minutes from this laptop (the dump runs over the network to Render,
 then 65 MB uploads); `flock` stops overlapping runs.
 
+The dev brain (the gbrain database `culinaire_dev_brain` on the HERMES home server) is backed up with
+`ck-prod-backup brain` (cron `57 * * * *`): same script, passphrase and repo, tag `brain-<stamp>`, state in
+`last_success_brain`. It reads `DEV_BRAIN_DATABASE_URL` from `.env` (host `localhost:5433`, the SSH tunnel to HERMES)
+and opens that tunnel itself for the length of the run, so `ssh hermes` must work without a password. The dump
+skips the empty `age` extension that HERMES needs as a workaround. A run takes about 10 seconds (2 MB). The
+stale-backup alert does not watch it: check `last_success_brain` yourself. Restore to a scratch database that has
+`vector`, `pg_trgm` and `pgcrypto`, as a superuser (the dump carries an event trigger); tested 2026-11-16: 78 pages,
+477 chunks, 82 links back.
+
 | Piece | Where |
 |---|---|
 | Source of truth | `scripts/backup/prodOffsiteBackup.sh` |
