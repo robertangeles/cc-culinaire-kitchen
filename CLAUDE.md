@@ -40,7 +40,7 @@ Stop when you catch any of these.
 
 **Self-Improvement Loop** — after ANY user correction or significant implementation: update `tasks/lessons.md`. Format: Problem / Fix / Rule. Review at session start.
 
-**Verification** — never mark done without proof. Ask: "Would a staff engineer approve this?" Update `docs/` before closing any user-facing task.
+**Verification** — never mark done without proof. Ask: "Would a staff engineer approve this?" Update the matching dev brain page (`architecture/`, `specs/`) before closing any user-facing task.
 
 **Jev semantic lint (advisory)** — before opening a PR, run `node --env-file=.env scripts/jev/lint.mjs` (needs `TYPESAFE_API_KEY` in `.env`; costs a fraction of a cent). It asks TypeSafe's Jev model whether the branch diff breaks the rules in `scripts/jev/rules.mjs` (business logic in routes, LLM called outside `aiService`, hardcoded secrets/config, endpoint without permission, FK without index). Read every flag and decide; flags are leads, never verdicts, and never block a merge. **Data rule:** only source diffs go out — never prod data, secrets or user details. Rules and thresholds live only in `rules.mjs`. Add a rule only after testing it on `scripts/jev/lintPilot.mjs` cases. Jev is for narrow yes/no or scored decisions; it cannot write or edit code. Skip it where grep, types or tests already decide.
 
@@ -112,10 +112,9 @@ packages/
   shared/src/
     types/ | utils/
 prompts/chatbot/
-docs/architecture/ | docs/specs/
 tasks/todo.md | tasks/lessons.md
-wiki/
 ```
+Notes, plans and docs are not in the repo: they live in the dev brain (see Dev Brain below).
 
 Never create files at repo root under `client/`, `server/`, or `shared/`. Always use `packages/client/`, `packages/server/`, `packages/shared/`.
 
@@ -266,20 +265,23 @@ Commit format: `<verb> <area>: <detail>`
 
 ---
 
-## Wiki
+## Dev Brain (gbrain)
 
-Read `wiki/index.md` at every session start.
+Project notes, plans, decisions and design docs live in the **dev brain**, a gbrain database on the HERMES home server, not as files in this repo. It replaces the old `wiki/` and `docs/` folders (still in git history). Not the same as the Knowledge Base above, which is product data for customers.
 
-Folders:
-- `entities/` — named things (Antoine, RAG pipeline, subscription system)
-- `concepts/` — patterns and ideas (architecture, data flow, RAG, voice persona)
-- `decisions/` — architectural decisions with date and rationale
-- `synthesis/` — cross-cutting analysis, open questions
-- `raw-index/` — pointer pages to `prompts/`, briefs (wiki documents these, never relocates them)
+**Reach it.** The database only listens on HERMES, so open the SSH tunnel first (away from home, Tailscale must be on):
+```bash
+ssh -f -N -L 5433:127.0.0.1:5432 hermes
+export GBRAIN_HOME=~/.gbrain-culinaire-dev    # CLI config; Claude Code uses the same through its `gbrain` MCP server
+gbrain stats                                  # ~81 pages. A connection error means the tunnel is down: say so, do not work around it
+```
+New machine: see the README in the private repo `robertangeles/culinaire-dev-brain`.
 
-Note: `raw/` is conceptual only — no literal `raw/` folder. `prompts/*` stays where it is; code reads it at runtime.
+Run `gbrain get index` at every session start.
 
-**Page format:**
+**Slugs** are paths, no `.md`: `entities/`, `concepts/`, `decisions/` (with date and rationale), `synthesis/`, `raw-index/` (pointers to `prompts/` and briefs, which stay where they are: code reads `prompts/*` at runtime), `architecture/`, `specs/`, `designs/`, `qa/`, `security/`; plus top-level `index` and `log`. `tasks/todo.md` and `tasks/lessons.md` stay files in this repo; the brain's `todo` and `lessons` pages are old snapshots, never edit them.
+
+**Page format** (front matter, then the body; link pages with `[[slug]]`):
 ```
 ---
 title:
@@ -290,23 +292,23 @@ related: [[slug]]
 ---
 ```
 
-Always update `wiki/index.md` when creating a page. Always append `wiki/log.md` after every session.
+**Read and search** (keyword search only; embeddings are off on purpose, turning them on needs the owner's consent):
+`gbrain search "<keywords>"` · `gbrain get <slug>` · `gbrain graph <slug>` · `gbrain backlinks <slug>` · `gbrain orphans`. Search and follow links before opening full pages.
 
-**Ingest** (`pnpm wiki:ingest --url <url>` | `--file <path>` | `--paste --slug <slug>`):
-1. `--in-repo` for small public sources. Else `--external` → `wiki/raw-index/`
-2. Read the placed page in full
-3. Open every overlapping page — update, add `[[slug]]` cross-ref, bump `updated:`
-4. Create new `entities/` or `concepts/` pages if source introduces new subjects
-5. Update `wiki/index.md`
-6. Append `wiki/log.md` with `## YYYY-MM-DD — Ingest: <title>`
-7. `pnpm wiki:graph build`
-8. `pnpm wiki:lint`
+**Write:**
+- New page: `gbrain put <slug> < page.md`
+- Change a page: read its revision with `gbrain get <slug> --json`, edit, then `gbrain put <slug> --expected-revision <rev> < page.md`. Never `--force`.
+- Always add a new page to `index`, and bump `updated:` on any page you change.
+- After adding `[[slug]]` links run `gbrain extract links --source db`.
+- Reusable synthesis goes in `synthesis/`.
 
-**Lint** (`pnpm wiki:lint`) — run at session start (>50 pages), before any PR touching `wiki/`, after every ingest. Fix hard errors first. Surface contradictions to user — never silently overwrite.
+**Log.** After every session, append a `## YYYY-MM-DD — <title>` entry to the end of the `log` page: `gbrain append log < entry.md`. (Newest is last now; the old file had newest first.)
 
-**Query** — `pnpm wiki:search` and `pnpm wiki:graph neighbors <slug>` before opening full pages. Reusable synthesis → `wiki/synthesis/`.
+**Ingest** (a source worth keeping): write it as a page, open every overlapping page and cross-link it, create `entities/` or `concepts/` pages for new subjects, update `index`, append to `log`, run `gbrain extract links --source db`.
 
-**Graph** (`pnpm wiki:graph`): `build`, `stats`, `neighbors <slug>`, `orphans`, `category <name>`, `broken`. Run `build` after any `related:` or `[[slug]]` edit.
+**Lint.** `gbrain doctor` after any bulk change. Surface contradictions between pages to the user; never silently overwrite.
+
+**Backup.** `ck-prod-backup brain` runs daily from the owner's laptop to the private offsite repo (brain page `architecture/offsite-backup`). Check `~/.local/state/ck-backup/last_success_brain` at session start.
 
 ---
 
