@@ -164,6 +164,36 @@ export async function assertAreaSheetComplete(sessionId: string, categoryName: s
   }
 }
 
+/**
+ * D4: true when this category row is an area of an AREA session and the item sits in more than
+ * one of that session's areas. Such a line is only one share of the item's stock, so it must not
+ * be compared with the whole book (that would show a false shortage); the review screen and the
+ * phone compare the item's total instead (shared `ingredientVariance`).
+ */
+export async function isSharedAreaItem(categoryId: string, ingredientId: string): Promise<boolean> {
+  const [cat] = await db
+    .select({
+      sessionId: stockTakeCategory.sessionId,
+      countMode: stockTakeSession.countMode,
+      storeLocationId: stockTakeSession.storeLocationId,
+    })
+    .from(stockTakeCategory)
+    .innerJoin(stockTakeSession, eq(stockTakeSession.sessionId, stockTakeCategory.sessionId))
+    .where(eq(stockTakeCategory.categoryId, categoryId));
+  if (!cat || cat.countMode !== "AREA") return false;
+
+  const sessionAreas = await db
+    .select({ name: stockTakeCategory.categoryName })
+    .from(stockTakeCategory)
+    .where(eq(stockTakeCategory.sessionId, cat.sessionId));
+
+  const { itemAreas } = await loadAreaSheets(cat.storeLocationId);
+  const areas = itemAreas.get(ingredientId);
+  if (!areas) return false;
+  const inSession = new Set(sessionAreas.map((c) => c.name));
+  return [...areas].filter((a) => inSession.has(a)).length > 1;
+}
+
 /** D9: true while an area count at this location is open, in review or flagged. */
 export async function hasOpenAreaSession(storeLocationId: string): Promise<boolean> {
   const rows = await db

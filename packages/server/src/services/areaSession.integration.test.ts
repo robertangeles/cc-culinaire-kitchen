@@ -203,6 +203,30 @@ describe.skipIf(!RUN)("stock take by storage area (real DB)", () => {
     expect(await sessionStatus(s.sessionId)).toBe("PENDING_REVIEW");
   });
 
+  it("D4: a line for an item in two areas stores no variance; single-area and category lines still do", async () => {
+    await closeSession(fx.sessionIds.pop()!);
+    const s = await openSession(fx.locId, fx.orgId, fx.userA, undefined, "AREA");
+    fx.sessionIds.push(s.sessionId);
+    const bar = await categoryId(s.sessionId, "Bar");
+    const kitchen = await categoryId(s.sessionId, "Kitchen");
+
+    const shared = await saveLineItem(bar, fx.ing.Shiraz, 3, "kg", fx.userA); // in Bar and Stock Room, book 1
+    expect(shared.varianceQty).toBeNull();
+    expect(shared.variancePct).toBeNull();
+    expect(Number(shared.expectedQty)).toBe(1); // the book stays on the line for the total comparison
+
+    const single = await saveLineItem(kitchen, fx.ing.Flour, 3, "kg", fx.userA); // Kitchen only, book 1
+    expect(Number(single.varianceQty)).toBe(2);
+
+    await closeSession(s.sessionId);
+    fx.sessionIds.pop();
+    const cat = await openSession(fx.locId, fx.orgId, fx.userA, ["spirits"]);
+    fx.sessionIds.push(cat.sessionId);
+    const spirits = await categoryId(cat.sessionId, "spirits");
+    const plain = await saveLineItem(spirits, fx.ing.Shiraz, 3, "kg", fx.userA);
+    expect(Number(plain.varianceQty)).toBe(2); // category sessions are unchanged
+  });
+
   it("D3: an AREA session stays open while a listed area was never started (a category count would advance)", async () => {
     // The previous session is PENDING_REVIEW; close it to open a fresh one.
     await closeSession(fx.sessionIds.pop()!);

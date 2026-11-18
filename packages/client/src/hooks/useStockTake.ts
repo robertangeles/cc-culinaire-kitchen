@@ -63,6 +63,8 @@ export interface StockTakeSession {
   openedDttm: string;
   submittedDttm: string | null;
   closedDttm: string | null;
+  /** CATEGORY counts by item category; AREA counts by storage area (mobile release 1). */
+  countMode?: "CATEGORY" | "AREA";
   categories: StockTakeCategory[];
   // Enriched fields (from JOINs)
   openedByUserName?: string;

@@ -34,7 +34,7 @@ import {
   ConflictError,
   ForbiddenError,
 } from "./stockTakeErrors.js";
-import { assertAreaSheetComplete, isAreaSession } from "./areaSessionService.js";
+import { assertAreaSheetComplete, isAreaSession, isSharedAreaItem } from "./areaSessionService.js";
 
 // ─── Category state machine ──────────────────────────────────────
 
@@ -194,11 +194,11 @@ export async function saveLineItem(
   // units. A cycle count reconciles the physical count against the book.
   const expectedQty = await getExpectedOnHand(ingredientId, categoryId);
 
-  const varianceQtyVal = expectedQty !== null ? calcVarianceQty(baseQty, expectedQty) : null;
-  const variancePctVal =
-    expectedQty !== null
-      ? calcVariancePct(varianceQtyVal!, expectedQty)
-      : null;
+  // An item counted in several areas of an area session stores no per-line variance: one
+  // area's count against the whole book is a false shortage (D4). Review shows the total.
+  const comparable = expectedQty !== null && !(await isSharedAreaItem(categoryId, ingredientId));
+  const varianceQtyVal = comparable ? calcVarianceQty(baseQty, expectedQty) : null;
+  const variancePctVal = comparable ? calcVariancePct(varianceQtyVal!, expectedQty) : null;
 
   // Atomic upsert — eliminates select-then-insert race for concurrent saves on same item
   const [row] = await db
