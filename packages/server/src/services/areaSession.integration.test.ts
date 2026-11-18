@@ -29,7 +29,6 @@ import {
   claimCategory,
   submitCategory,
   saveLineItem,
-  submitSessionForReview,
   approveSession,
   getSessionDetail,
   ConflictError,
