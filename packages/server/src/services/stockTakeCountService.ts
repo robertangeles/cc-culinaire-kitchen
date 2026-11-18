@@ -8,7 +8,7 @@
  *   FLAGGED → IN_PROGRESS (recount)
  *
  * Exports: claimCategory, submitCategory, saveLineItem, getCategoryLines,
- *          getPreviousCountLines
+ *          getPreviousCountLines, assertCanCount
  */
 
 import { eq, and, inArray, sql, desc, getTableColumns } from "drizzle-orm";
@@ -32,9 +32,30 @@ import {
   InvalidStateError,
   ValidationError,
   ConflictError,
+  ForbiddenError,
 } from "./stockTakeErrors.js";
 
 // ─── Category state machine ──────────────────────────────────────
+
+/**
+ * Who may count into, or submit, a claimed category (mobile eng decisions D5 and D10).
+ * Only the claimant, or a manager (`inventory:manage`, passed in by the caller), may write.
+ * When the caller names the claim revision it was queued under, it must match the current
+ * one, so a late replay from an earlier claim by the same chef is rejected.
+ * Pure: the caller passes the category row it already loaded.
+ */
+export function assertCanCount(
+  cat: { claimedByUserId: number | null; claimRevision: number },
+  userId: number,
+  opts: { isManager: boolean; claimRevision?: number },
+): void {
+  if (!opts.isManager && cat.claimedByUserId !== userId) {
+    throw new ForbiddenError("Only the person who claimed this category can count or submit it");
+  }
+  if (opts.claimRevision !== undefined && opts.claimRevision !== cat.claimRevision) {
+    throw new ForbiddenError("This count was queued under an earlier claim; recount under the current claim");
+  }
+}
 
 /**
  * Claim a category for counting. Transitions NOT_STARTED → IN_PROGRESS.
@@ -81,6 +102,8 @@ export async function claimCategory(
     .set({
       categoryStatus: "IN_PROGRESS",
       claimedByUserId: userId,
+      // New claim, new revision: queued commands from an earlier claim are now stale.
+      claimRevision: sql`${stockTakeCategory.claimRevision} + 1`,
       updatedDttm: new Date(),
     })
     .where(

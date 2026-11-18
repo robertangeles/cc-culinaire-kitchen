@@ -20,6 +20,14 @@ export class InvalidStateError extends Error {
   }
 }
 
+/** The caller may not write to this category (not the claimant, or a stale claim). Maps to 403. */
+export class ForbiddenError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ForbiddenError";
+  }
+}
+
 export class NotFoundError extends Error {
   constructor(message: string) {
     super(message);
