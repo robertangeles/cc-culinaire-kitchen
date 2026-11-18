@@ -275,10 +275,11 @@ export function useStockTake() {
     }
   }, []);
 
-  const openSession = useCallback(async (categories?: string[]) => {
+  /** `categories` are item categories, or storage area names when `mode` is "AREA" (omit for all). */
+  const openSession = useCallback(async (categories?: string[], mode?: "CATEGORY" | "AREA") => {
     const res = await fetch(`${API}/stock-takes`, {
       ...jsonOpts, method: "POST",
-      body: JSON.stringify(categories ? { categories } : {}),
+      body: JSON.stringify({ ...(categories ? { categories } : {}), ...(mode ? { mode } : {}) }),
     });
     if (!res.ok) {
       const err = await res.json();
