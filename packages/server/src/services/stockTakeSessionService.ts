@@ -467,7 +467,7 @@ export async function approveSession(sessionId: string, userId: number, orgId: n
           })),
         )
         .onConflictDoUpdate({
-          target: [stockLevel.storeLocationId, stockLevel.ingredientId],
+          target: [stockLevel.storeLocationId, stockLevel.ingredientId, stockLevel.zone],
           set: {
             currentQty: sql`excluded.current_qty`,
             lastCountedDttm: sql`excluded.last_counted_dttm`,
@@ -981,7 +981,7 @@ async function autoApproveOpeningSession(sessionId: string, storeLocationId: str
           })),
         )
         .onConflictDoUpdate({
-          target: [stockLevel.storeLocationId, stockLevel.ingredientId],
+          target: [stockLevel.storeLocationId, stockLevel.ingredientId, stockLevel.zone],
           set: {
             currentQty: sql`excluded.current_qty`,
             lastCountedDttm: sql`excluded.last_counted_dttm`,
