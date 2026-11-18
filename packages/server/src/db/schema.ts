@@ -1873,6 +1873,9 @@ export const stockTakeSession = pgTable(
     organisationId: integer("organisation_id").notNull().references(() => organisation.organisationId),
     sessionStatus: varchar("session_status", { length: 20 }).notNull().default("OPEN"),
     sessionType: varchar("session_type", { length: 20 }).notNull().default("REGULAR"),
+    // CATEGORY: category rows are item categories. AREA: category rows are storage area
+    // names plus the reserved "Unassigned" bucket (mobile release 1, X1).
+    countMode: varchar("count_mode", { length: 10 }).notNull().default("CATEGORY"),
     openedByUserId: integer("opened_by_user_id").notNull().references(() => user.userId),
     approvedByUserId: integer("approved_by_user_id").references(() => user.userId),
     flagReason: text("flag_reason"),
@@ -1918,6 +1921,10 @@ export const stockTakeCategory = pgTable(
     categoryName: varchar("category_name", { length: 50 }).notNull(),
     categoryStatus: varchar("category_status", { length: 20 }).notNull().default("NOT_STARTED"),
     claimedByUserId: integer("claimed_by_user_id").references(() => user.userId),
+    // Bumped on every fresh claim (including a recount re-claim). A queued phone
+    // command carries the revision it was queued under, so a late replay from an
+    // earlier claim by the same chef is rejected (mobile eng decision D10).
+    claimRevision: integer("claim_revision").notNull().default(0),
     flagReason: text("flag_reason"),
     submittedDttm: timestamp("submitted_dttm", { withTimezone: true }),
     createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),

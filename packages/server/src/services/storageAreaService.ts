@@ -17,6 +17,7 @@
 import { eq, and, sql, asc, inArray } from "drizzle-orm";
 import { db } from "../db/index.js";
 import type { DbOrTx } from "./auditService.js";
+import { hasOpenAreaSession } from "./areaSessionService.js";
 import {
   storageArea,
   ingredientStorageArea,
@@ -267,7 +268,15 @@ export async function setAreaItems(
   orgId: number,
   items: AreaItemAssignment[],
 ) {
-  await getAreaInOrg(areaId, orgId);
+  const area = await getAreaInOrg(areaId, orgId);
+
+  // D9: the lists cannot change under the counters while an area count is open or in review.
+  if (await hasOpenAreaSession(area.storeLocationId)) {
+    throw new StorageAreaError(
+      "A count by storage area is in progress at this location. Finish or approve it before changing an area's items.",
+      409,
+    );
+  }
 
   const ingredientIds = items.map((i) => i.ingredientId);
   if (new Set(ingredientIds).size !== ingredientIds.length) {

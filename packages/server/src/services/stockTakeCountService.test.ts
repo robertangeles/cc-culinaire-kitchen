@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { NotFoundError, InvalidStateError, ValidationError, ConflictError } from "./stockTakeErrors.js";
+import { NotFoundError, InvalidStateError, ValidationError, ConflictError, ForbiddenError } from "./stockTakeErrors.js";
 
 vi.mock("../db/index.js", () => ({
   db: {
@@ -28,7 +28,7 @@ vi.mock("./stockMath.js", () => ({
 }));
 
 const { db } = await import("../db/index.js");
-const { claimCategory, submitCategory, saveLineItem } = await import("./stockTakeCountService.js");
+const { claimCategory, submitCategory, saveLineItem, assertCanCount } = await import("./stockTakeCountService.js");
 
 function mockSelect(rows: unknown[]) {
   (db.select as ReturnType<typeof vi.fn>).mockReturnValue({
@@ -160,5 +160,28 @@ describe("saveLineItem", () => {
 
   it("throws ValidationError when quantity exceeds 99999", async () => {
     await expect(saveLineItem("c1", "i1", 100000, "kg", 1)).rejects.toThrow(ValidationError);
+  });
+});
+
+describe("assertCanCount (claimant, manager override, claim revision)", () => {
+  const cat = { claimedByUserId: 7, claimRevision: 2 };
+
+  it("lets the claimant through, with or without a revision", () => {
+    expect(() => assertCanCount(cat, 7, { isManager: false })).not.toThrow();
+    expect(() => assertCanCount(cat, 7, { isManager: false, claimRevision: 2 })).not.toThrow();
+  });
+
+  it("rejects another user, and lets a manager through", () => {
+    expect(() => assertCanCount(cat, 8, { isManager: false })).toThrow(ForbiddenError);
+    expect(() => assertCanCount(cat, 8, { isManager: true })).not.toThrow();
+  });
+
+  it("rejects an unclaimed category for a non-manager", () => {
+    expect(() => assertCanCount({ claimedByUserId: null, claimRevision: 0 }, 7, { isManager: false })).toThrow(ForbiddenError);
+  });
+
+  it("rejects a stale revision even for the claimant or a manager", () => {
+    expect(() => assertCanCount(cat, 7, { isManager: false, claimRevision: 1 })).toThrow(ForbiddenError);
+    expect(() => assertCanCount(cat, 8, { isManager: true, claimRevision: 1 })).toThrow(ForbiddenError);
   });
 });

@@ -27,7 +27,7 @@ applyEnvPrefix();
 
 import { eq } from "drizzle-orm";
 import { db } from "../db/index.js";
-import { kitchenProfile, role, siteSetting, user, userRole } from "../db/schema.js";
+import { kitchenProfile, role, siteSetting, storeLocation, user, userRole } from "../db/schema.js";
 import { registerUser } from "../services/authService.js";
 import { createOrganisation } from "../services/organisationService.js";
 import { assignStaffToLocation, createStoreLocation } from "../services/storeLocationService.js";
@@ -71,6 +71,10 @@ export async function seedE2eCiData(email: string, password: string, totpSecret:
   const org = await createOrganisation(userId, { name: "E2E Kitchen" });
   const location = await createStoreLocation(org.organisationId, { locationName: "E2E HQ", classification: "hq" }, userId);
   await assignStaffToLocation(location.storeLocationId, userId, userId);
+
+  // A regular stock take refuses to open until opening inventory is done. Specs that open one (the
+  // by-area count) need the location past that gate; the opening-count flow itself is not under test here.
+  await db.update(storeLocation).set({ inventoryActive: true }).where(eq(storeLocation.storeLocationId, location.storeLocationId));
 
   return { userId, organisationId: org.organisationId, storeLocationId: location.storeLocationId };
 }

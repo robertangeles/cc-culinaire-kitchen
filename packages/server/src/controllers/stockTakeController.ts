@@ -30,7 +30,10 @@ import {
   InvalidStateError,
   NotFoundError,
   ValidationError,
+  ForbiddenError,
+  assertCanCount,
 } from "../services/stockTakeService.js";
+import { hasPermission } from "../middleware/auth.js";
 
 const logger = pino({ name: "stockTakeController" });
 
@@ -38,6 +41,12 @@ const SaveLineItemSchema = z.object({
   ingredientId: z.string().uuid(),
   rawQty: z.number().min(0).max(99999),
   countedUnit: z.string().min(1).max(20),
+  // The claim revision the phone queued this line under (mobile eng D10). Optional: the web does not send it.
+  claimRevision: z.number().int().min(0).optional(),
+});
+
+const SubmitCategorySchema = z.object({
+  claimRevision: z.number().int().min(0).optional(),
 });
 
 const FlagSessionSchema = z.object({
@@ -50,6 +59,8 @@ const FlagSessionSchema = z.object({
 function handleServiceError(err: unknown, res: Response, next: NextFunction): void {
   if (err instanceof ConflictError) {
     res.status(409).json({ error: err.message });
+  } else if (err instanceof ForbiddenError) {
+    res.status(403).json({ error: err.message });
   } else if (err instanceof InvalidStateError) {
     res.status(400).json({ error: err.message });
   } else if (err instanceof NotFoundError) {
@@ -90,7 +101,12 @@ export async function handleOpenSession(
     }
 
     const categories = Array.isArray(req.body?.categories) ? req.body.categories : undefined;
-    const session = await openSession(ctx.selectedLocationId, ctx.orgId, req.user!.sub, categories);
+    const mode = req.body?.mode ?? "CATEGORY";
+    if (mode !== "CATEGORY" && mode !== "AREA") {
+      res.status(400).json({ error: 'mode must be "CATEGORY" or "AREA"' });
+      return;
+    }
+    const session = await openSession(ctx.selectedLocationId, ctx.orgId, req.user!.sub, categories, mode);
 
     logger.info(
       { sessionId: session.sessionId, locationId: ctx.selectedLocationId, userId: req.user!.sub },
@@ -187,6 +203,11 @@ export async function handleSaveLineItem(
       return;
     }
 
+    assertCanCount(cat, req.user!.sub, {
+      isManager: hasPermission(req.user!, "inventory:manage"),
+      claimRevision: parsed.data.claimRevision,
+    });
+
     const line = await saveLineItem(
       cat.categoryId,
       parsed.data.ingredientId,
@@ -231,6 +252,20 @@ export async function handleSubmitCategory(
     const sessionId = req.params.id as string;
     const session = await getSessionDetail(sessionId, ctx.orgId);
     if (!session) { res.status(404).json({ error: "Session not found" }); return; }
+
+    const parsed = SubmitCategorySchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      res.status(400).json({ error: "Validation failed", details: parsed.error.flatten() });
+      return;
+    }
+
+    const target = session.categories.find((c) => c.categoryName === req.params.cat as string);
+    if (target) {
+      assertCanCount(target, req.user!.sub, {
+        isManager: hasPermission(req.user!, "inventory:manage"),
+        claimRevision: parsed.data.claimRevision,
+      });
+    }
 
     const cat = await submitCategory(sessionId, req.params.cat as string);
 

@@ -8,7 +8,7 @@
  * - Approve all or flag specific categories with reason
  */
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import {
   useStockTake,
   type StockTakeSession,
@@ -17,6 +17,7 @@ import {
 } from "../../hooks/useInventory.js";
 import { useLocation } from "../../context/LocationContext.js";
 import { useHasPermission } from "../../hooks/useHasPermission.js";
+import { buildIngredientTotals, effectiveVariance, type IngredientTotal } from "./stockTakeTotals.js";
 import {
   ShieldCheck,
   CheckCircle2,
@@ -90,6 +91,16 @@ export function StockTakeReview({ session, onActionComplete, readOnly = false }:
     setExpandedCats(next);
   };
 
+  // An area count shows each shared item's TOTAL across areas (D4), so every submitted area's
+  // lines are loaded up front; a category count loads a category when it is expanded.
+  useEffect(() => {
+    if (session.countMode !== "AREA") return;
+    for (const c of submittedCats) void loadCatLines(c.categoryName);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session.sessionId, session.countMode]);
+
+  const totals = useMemo(() => buildIngredientTotals(Object.values(catLines).flat()), [catLines]);
+
   // Categories start collapsed — click to expand (no scrolling)
 
   return (
@@ -158,6 +169,7 @@ export function StockTakeReview({ session, onActionComplete, readOnly = false }:
           key={cat.categoryId}
           category={cat}
           lines={catLines[cat.categoryName] ?? []}
+          totals={totals}
           isExpanded={expandedCats.has(cat.categoryName)}
           isLoading={loadingCat === cat.categoryName}
           onToggle={() => toggleCategory(cat.categoryName)}
@@ -272,17 +284,19 @@ export function StockTakeReview({ session, onActionComplete, readOnly = false }:
 }
 
 function CategoryReviewCard({
-  category, lines, isExpanded, isLoading, onToggle,
+  category, lines, totals, isExpanded, isLoading, onToggle,
 }: {
   category: StockTakeCategory;
   lines: StockTakeLine[];
+  totals: Map<string, IngredientTotal>;
   isExpanded: boolean;
   isLoading: boolean;
   onToggle: () => void;
 }) {
-  const hasVarianceIssues = lines.some(
-    (l) => l.variancePct && Math.abs(Number(l.variancePct)) > 10,
-  );
+  const hasVarianceIssues = lines.some((l) => {
+    const { pct } = effectiveVariance(l, totals.get(l.ingredientId));
+    return pct !== null && Math.abs(pct) > 10;
+  });
 
   return (
     <div className={`rounded-xl border overflow-hidden transition-all ${
@@ -340,7 +354,7 @@ function CategoryReviewCard({
                 <div className="col-span-3 text-right">By</div>
               </div>
               {lines.map((line) => (
-                <LineItemRow key={line.lineId} line={line} />
+                <LineItemRow key={line.lineId} line={line} total={totals.get(line.ingredientId)} />
               ))}
             </div>
           )}
@@ -350,9 +364,8 @@ function CategoryReviewCard({
   );
 }
 
-function LineItemRow({ line }: { line: StockTakeLine }) {
-  const variance = line.varianceQty ? Number(line.varianceQty) : null;
-  const variancePct = line.variancePct ? Number(line.variancePct) : null;
+function LineItemRow({ line, total }: { line: StockTakeLine; total?: IngredientTotal }) {
+  const { qty: variance, pct: variancePct } = effectiveVariance(line, total);
   const isHigh = variancePct !== null && Math.abs(variancePct) > 10;
   // Variance $ value = variance × cost of one counting unit (bottle, bag, each).
   // Computed at display only — never stored.
@@ -389,6 +402,7 @@ function LineItemRow({ line }: { line: StockTakeLine }) {
               {variancePct !== null && (
                 <span className="text-[10px]">({variancePct.toFixed(0)}%)</span>
               )}
+              {total && <span className="text-[10px] text-dark-500" title={`Total across ${total.areas} areas`}>total</span>}
             </>
           ) : "—"}
         </div>
@@ -421,7 +435,7 @@ function LineItemRow({ line }: { line: StockTakeLine }) {
           <span>{line.countedByUserName ?? `#${line.countedByUserId}`} · {new Date(line.countedDttm).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
           {variance !== null && (
             <span className={variance > 0 ? "text-emerald-400" : variance < 0 ? "text-red-400" : "text-dark-600"}>
-              {variance > 0 ? "+" : ""}{variance.toFixed(1)} ({variancePct?.toFixed(0)}%)
+              {variance > 0 ? "+" : ""}{variance.toFixed(1)} ({variancePct?.toFixed(0)}%){total ? " total" : ""}
             </span>
           )}
         </div>

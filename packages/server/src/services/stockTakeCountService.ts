@@ -8,7 +8,7 @@
  *   FLAGGED → IN_PROGRESS (recount)
  *
  * Exports: claimCategory, submitCategory, saveLineItem, getCategoryLines,
- *          getPreviousCountLines
+ *          getPreviousCountLines, assertCanCount
  */
 
 import { eq, and, inArray, sql, desc, getTableColumns } from "drizzle-orm";
@@ -32,9 +32,31 @@ import {
   InvalidStateError,
   ValidationError,
   ConflictError,
+  ForbiddenError,
 } from "./stockTakeErrors.js";
+import { assertAreaSheetComplete, isAreaSession, isSharedAreaItem } from "./areaSessionService.js";
 
 // ─── Category state machine ──────────────────────────────────────
+
+/**
+ * Who may count into, or submit, a claimed category (mobile eng decisions D5 and D10).
+ * Only the claimant, or a manager (`inventory:manage`, passed in by the caller), may write.
+ * When the caller names the claim revision it was queued under, it must match the current
+ * one, so a late replay from an earlier claim by the same chef is rejected.
+ * Pure: the caller passes the category row it already loaded.
+ */
+export function assertCanCount(
+  cat: { claimedByUserId: number | null; claimRevision: number },
+  userId: number,
+  opts: { isManager: boolean; claimRevision?: number },
+): void {
+  if (!opts.isManager && cat.claimedByUserId !== userId) {
+    throw new ForbiddenError("Only the person who claimed this category can count or submit it");
+  }
+  if (opts.claimRevision !== undefined && opts.claimRevision !== cat.claimRevision) {
+    throw new ForbiddenError("This count was queued under an earlier claim; recount under the current claim");
+  }
+}
 
 /**
  * Claim a category for counting. Transitions NOT_STARTED → IN_PROGRESS.
@@ -81,6 +103,8 @@ export async function claimCategory(
     .set({
       categoryStatus: "IN_PROGRESS",
       claimedByUserId: userId,
+      // New claim, new revision: queued commands from an earlier claim are now stale.
+      claimRevision: sql`${stockTakeCategory.claimRevision} + 1`,
       updatedDttm: new Date(),
     })
     .where(
@@ -123,6 +147,9 @@ export async function submitCategory(sessionId: string, categoryName: string) {
       `Cannot submit: category is ${cat.categoryStatus}, expected IN_PROGRESS`,
     );
   }
+
+  // D8: an area with items shared with another area cannot be submitted until each is counted.
+  await assertAreaSheetComplete(sessionId, categoryName);
 
   const [updated] = await db
     .update(stockTakeCategory)
@@ -167,11 +194,11 @@ export async function saveLineItem(
   // units. A cycle count reconciles the physical count against the book.
   const expectedQty = await getExpectedOnHand(ingredientId, categoryId);
 
-  const varianceQtyVal = expectedQty !== null ? calcVarianceQty(baseQty, expectedQty) : null;
-  const variancePctVal =
-    expectedQty !== null
-      ? calcVariancePct(varianceQtyVal!, expectedQty)
-      : null;
+  // An item counted in several areas of an area session stores no per-line variance: one
+  // area's count against the whole book is a false shortage (D4). Review shows the total.
+  const comparable = expectedQty !== null && !(await isSharedAreaItem(categoryId, ingredientId));
+  const varianceQtyVal = comparable ? calcVarianceQty(baseQty, expectedQty) : null;
+  const variancePctVal = comparable ? calcVariancePct(varianceQtyVal!, expectedQty) : null;
 
   // Atomic upsert — eliminates select-then-insert race for concurrent saves on same item
   const [row] = await db
@@ -328,11 +355,20 @@ async function checkAndAdvanceSession(sessionId: string) {
     .select({
       claimed: sql<number>`count(*) filter (where ${stockTakeCategory.categoryStatus} != 'NOT_STARTED')`,
       blocking: sql<number>`count(*) filter (where ${stockTakeCategory.categoryStatus} not in ('NOT_STARTED', 'SUBMITTED', 'APPROVED'))`,
+      notStarted: sql<number>`count(*) filter (where ${stockTakeCategory.categoryStatus} = 'NOT_STARTED')`,
     })
     .from(stockTakeCategory)
     .where(eq(stockTakeCategory.sessionId, sessionId));
 
-  const allClaimedDone = counts && Number(counts.claimed) > 0 && Number(counts.blocking) === 0;
+  // A category count advances once every CLAIMED category is done (cycle counts leave the rest
+  // untouched). An area count advances only when EVERY area is submitted, so an item shared by
+  // two areas can never be approved from one area's count alone (D3).
+  const mustFinishAll = await isAreaSession(sessionId);
+  const allClaimedDone =
+    counts &&
+    Number(counts.claimed) > 0 &&
+    Number(counts.blocking) === 0 &&
+    (!mustFinishAll || Number(counts.notStarted) === 0);
 
   if (allClaimedDone) {
     // ponytail: count service owns a session-domain write; move to sessionService if circular-import constraint is ever lifted

@@ -9,6 +9,8 @@
 import { useState } from "react";
 import { useStockTake, type StockTakeCategory } from "../../hooks/useInventory.js";
 import { CategoryCounter } from "./CategoryCounter.js";
+import { useLocation } from "../../context/LocationContext.js";
+import { useStorageAreas } from "../../hooks/useStorageAreas.js";
 import {
   ClipboardCheck,
   Play,
@@ -42,6 +44,13 @@ export function StockTakeSession() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [selectedNewCats, setSelectedNewCats] = useState<Set<string>>(new Set(ALL_CATEGORIES.map(c => c.key)));
+  const { selectedLocationId } = useLocation();
+  const { areas } = useStorageAreas(selectedLocationId);
+  const activeAreas = areas.filter((a) => a.activeInd);
+  const [showAreaPicker, setShowAreaPicker] = useState(false);
+  // Area names left unticked; tracking the exceptions keeps "all areas" the default as areas load.
+  const [leftOutAreas, setLeftOutAreas] = useState<Set<string>>(new Set());
+  const chosenAreas = activeAreas.filter((a) => !leftOutAreas.has(a.areaName)).map((a) => a.areaName);
 
   if (isLoading) {
     return (
@@ -66,7 +75,61 @@ export function StockTakeSession() {
           <p className="text-sm text-red-400 mb-4">{error}</p>
         )}
 
-        {!showCategoryPicker ? (
+        {showAreaPicker ? (
+          <div className="max-w-sm mx-auto animate-[scaleIn_200ms_ease-out]">
+            <p className="text-xs text-dark-600 mb-1 text-left">Select storage areas to count:</p>
+            <p className="text-[11px] text-dark-500 mb-3 text-left">
+              Areas that share an item must be counted together. Counting happens in the phone app.
+            </p>
+            {activeAreas.length === 0 ? (
+              <p className="text-sm text-dark-600 mb-4 text-left">No storage areas yet. Add them under Inventory, Areas.</p>
+            ) : (
+              <div className="space-y-1.5 mb-4">
+                {activeAreas.map((area) => (
+                  <label key={area.storageAreaId} className="flex items-center gap-3 p-2.5 rounded-lg bg-dark-50 border border-dark-200 hover:border-dark-300 cursor-pointer transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={!leftOutAreas.has(area.areaName)}
+                      onChange={(e) => {
+                        const next = new Set(leftOutAreas);
+                        if (e.target.checked) next.delete(area.areaName);
+                        else next.add(area.areaName);
+                        setLeftOutAreas(next);
+                      }}
+                      className="rounded border-dark-300 bg-dark text-gold focus:ring-gold/50"
+                    />
+                    <span className="text-sm text-white">{area.areaName}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowAreaPicker(false)}
+                className="flex-1 px-4 py-2.5 rounded-xl text-sm text-dark-600 hover:text-white border border-dark-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  if (chosenAreas.length === 0) return;
+                  try {
+                    setError(null);
+                    // Every area ticked means "all areas", which also brings in the Unassigned items.
+                    await openSession(chosenAreas.length === activeAreas.length ? undefined : chosenAreas, "AREA");
+                    setShowAreaPicker(false);
+                  } catch (err: unknown) {
+                    setError(err instanceof Error ? err.message : "Failed to open session");
+                  }
+                }}
+                disabled={chosenAreas.length === 0}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-gradient-to-r from-gold to-gold-hover text-dark font-semibold text-sm disabled:opacity-50 active:scale-[0.98] transition-all"
+              >
+                Start ({chosenAreas.length})
+              </button>
+            </div>
+          </div>
+        ) : !showCategoryPicker ? (
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <button
               onClick={() => setShowCategoryPicker(true)}
@@ -86,6 +149,12 @@ export function StockTakeSession() {
               className="px-6 py-3 rounded-xl bg-dark-100 border border-dark-200 text-white font-semibold text-sm hover:bg-dark-200 transition-all active:scale-[0.98]"
             >
               Full Inventory
+            </button>
+            <button
+              onClick={() => setShowAreaPicker(true)}
+              className="px-6 py-3 rounded-xl bg-dark-100 border border-dark-200 text-white font-semibold text-sm hover:bg-dark-200 transition-all active:scale-[0.98]"
+            >
+              Count by Area
             </button>
           </div>
         ) : (
@@ -192,12 +261,19 @@ export function StockTakeSession() {
         </div>
       )}
 
+      {session.countMode === "AREA" && (
+        <p className="text-sm text-dark-600">
+          This stock take counts by storage area. Count each area in the phone app; this page shows progress and sends it for review.
+        </p>
+      )}
+
       {/* Category cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {session.categories.map((cat) => (
           <CategoryCard
             key={cat.categoryId}
             category={cat}
+            phoneOnly={session.countMode === "AREA"}
             onSelect={async () => {
               try {
                 setError(null);
@@ -255,16 +331,18 @@ export function StockTakeSession() {
 }
 
 function CategoryCard({
-  category, onSelect, onSubmit,
+  category, onSelect, onSubmit, phoneOnly = false,
 }: {
   category: StockTakeCategory;
   onSelect: () => void;
   onSubmit: () => void;
+  /** Area counts are counted on the phone; the web card only shows status. */
+  phoneOnly?: boolean;
 }) {
   const config = STATUS_CONFIG[category.categoryStatus] || STATUS_CONFIG.NOT_STARTED;
   const Icon = config.icon;
-  const canCount = ["NOT_STARTED", "IN_PROGRESS", "FLAGGED"].includes(category.categoryStatus);
-  const canSubmit = category.categoryStatus === "IN_PROGRESS";
+  const canCount = !phoneOnly && ["NOT_STARTED", "IN_PROGRESS", "FLAGGED"].includes(category.categoryStatus);
+  const canSubmit = !phoneOnly && category.categoryStatus === "IN_PROGRESS";
   const isLocked = ["SUBMITTED", "APPROVED"].includes(category.categoryStatus);
 
   return (
