@@ -101,7 +101,12 @@ export async function handleOpenSession(
     }
 
     const categories = Array.isArray(req.body?.categories) ? req.body.categories : undefined;
-    const session = await openSession(ctx.selectedLocationId, ctx.orgId, req.user!.sub, categories);
+    const mode = req.body?.mode ?? "CATEGORY";
+    if (mode !== "CATEGORY" && mode !== "AREA") {
+      res.status(400).json({ error: 'mode must be "CATEGORY" or "AREA"' });
+      return;
+    }
+    const session = await openSession(ctx.selectedLocationId, ctx.orgId, req.user!.sub, categories, mode);
 
     logger.info(
       { sessionId: session.sessionId, locationId: ctx.selectedLocationId, userId: req.user!.sub },

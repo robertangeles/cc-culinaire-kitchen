@@ -32,6 +32,7 @@ import {
   storeLocation,
 } from "../db/schema.js";
 import { recordOpsEvent } from "./brainCaptureService.js";
+import { resolveSessionAreaNames } from "./areaSessionService.js";
 
 import {
   ConflictError,
@@ -63,12 +64,15 @@ const DEFAULT_CATEGORIES = [
  * Open a new stock take session at a location.
  * @param categories - which categories to count. If empty/omitted, defaults to all.
  *   Supports cycle counts (e.g., ["proteins", "dairy"]) and full counts.
+ *   In AREA mode these are storage area names (see areaSessionService).
+ * @param mode - CATEGORY (default) counts by item category; AREA counts by storage area.
  */
 export async function openSession(
   storeLocationId: string,
   organisationId: number,
   userId: number,
   categories?: string[],
+  mode: "CATEGORY" | "AREA" = "CATEGORY",
 ) {
   // ponytail: TOCTOU — two concurrent opens can both pass this check before either inserts.
   // Upgrade path: UNIQUE INDEX ON stock_take_session(store_location_id) WHERE session_status NOT IN ('ARCHIVED','APPROVED').
@@ -100,6 +104,14 @@ export async function openSession(
     );
   }
 
+  // Work out the rows to create first, so a rejected area choice leaves no empty session behind.
+  // Category rows: selected categories or all defaults. Area rows: area names (closed set, D3).
+  const selectedCategories = mode === "AREA"
+    ? await resolveSessionAreaNames(storeLocationId, categories)
+    : categories && categories.length > 0
+      ? categories.filter((c) => DEFAULT_CATEGORIES.includes(c))
+      : DEFAULT_CATEGORIES;
+
   // Create session
   const [session] = await db
     .insert(stockTakeSession)
@@ -108,13 +120,9 @@ export async function openSession(
       organisationId,
       openedByUserId: userId,
       sessionStatus: "OPEN",
+      countMode: mode,
     })
     .returning();
-
-  // Create category rows — selected categories or all defaults
-  const selectedCategories = categories && categories.length > 0
-    ? categories.filter((c) => DEFAULT_CATEGORIES.includes(c))
-    : DEFAULT_CATEGORIES;
 
   const categoryValues = selectedCategories.map((name) => ({
     sessionId: session.sessionId,

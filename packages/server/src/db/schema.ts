@@ -1873,6 +1873,9 @@ export const stockTakeSession = pgTable(
     organisationId: integer("organisation_id").notNull().references(() => organisation.organisationId),
     sessionStatus: varchar("session_status", { length: 20 }).notNull().default("OPEN"),
     sessionType: varchar("session_type", { length: 20 }).notNull().default("REGULAR"),
+    // CATEGORY: category rows are item categories. AREA: category rows are storage area
+    // names plus the reserved "Unassigned" bucket (mobile release 1, X1).
+    countMode: varchar("count_mode", { length: 10 }).notNull().default("CATEGORY"),
     openedByUserId: integer("opened_by_user_id").notNull().references(() => user.userId),
     approvedByUserId: integer("approved_by_user_id").references(() => user.userId),
     flagReason: text("flag_reason"),

@@ -34,6 +34,7 @@ import {
   ConflictError,
   ForbiddenError,
 } from "./stockTakeErrors.js";
+import { assertAreaSheetComplete, isAreaSession } from "./areaSessionService.js";
 
 // ─── Category state machine ──────────────────────────────────────
 
@@ -146,6 +147,9 @@ export async function submitCategory(sessionId: string, categoryName: string) {
       `Cannot submit: category is ${cat.categoryStatus}, expected IN_PROGRESS`,
     );
   }
+
+  // D8: an area with items shared with another area cannot be submitted until each is counted.
+  await assertAreaSheetComplete(sessionId, categoryName);
 
   const [updated] = await db
     .update(stockTakeCategory)
@@ -351,11 +355,20 @@ async function checkAndAdvanceSession(sessionId: string) {
     .select({
       claimed: sql<number>`count(*) filter (where ${stockTakeCategory.categoryStatus} != 'NOT_STARTED')`,
       blocking: sql<number>`count(*) filter (where ${stockTakeCategory.categoryStatus} not in ('NOT_STARTED', 'SUBMITTED', 'APPROVED'))`,
+      notStarted: sql<number>`count(*) filter (where ${stockTakeCategory.categoryStatus} = 'NOT_STARTED')`,
     })
     .from(stockTakeCategory)
     .where(eq(stockTakeCategory.sessionId, sessionId));
 
-  const allClaimedDone = counts && Number(counts.claimed) > 0 && Number(counts.blocking) === 0;
+  // A category count advances once every CLAIMED category is done (cycle counts leave the rest
+  // untouched). An area count advances only when EVERY area is submitted, so an item shared by
+  // two areas can never be approved from one area's count alone (D3).
+  const mustFinishAll = await isAreaSession(sessionId);
+  const allClaimedDone =
+    counts &&
+    Number(counts.claimed) > 0 &&
+    Number(counts.blocking) === 0 &&
+    (!mustFinishAll || Number(counts.notStarted) === 0);
 
   if (allClaimedDone) {
     // ponytail: count service owns a session-domain write; move to sessionService if circular-import constraint is ever lifted
