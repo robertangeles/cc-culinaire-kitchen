@@ -1,7 +1,7 @@
 name: CI
 
 # Implements all 5 steps declared in CLAUDE.md:
-#   1. pnpm install --frozen-lockfile (web jobs skip the phone app; the `mobile` job has its own)
+#   1. pnpm install --frozen-lockfile
 #   2. Lint (eslint flat config)
 #   3. TypeScript check (tsc --noEmit)
 #   4. Unit tests (vitest)
@@ -42,10 +42,8 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      # The web jobs skip the phone app's dependencies (Expo and React Native are hundreds of
-      # packages). Render's build command uses the same filter, so CI installs what prod does.
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile --filter '!@culinaire/mobile'
+        run: pnpm install --frozen-lockfile
 
       - name: Lint
         run: pnpm lint
@@ -135,7 +133,7 @@ jobs:
           cache: pnpm
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile --filter '!@culinaire/mobile'
+        run: pnpm install --frozen-lockfile
 
       # @culinaire/shared resolves to ./dist; the server suite imports it, so it
       # must be built before vitest can resolve the package.
@@ -274,7 +272,7 @@ jobs:
           cache: pnpm
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile --filter '!@culinaire/mobile'
+        run: pnpm install --frozen-lockfile
 
       - name: Build shared package
         run: pnpm --filter @culinaire/shared build
