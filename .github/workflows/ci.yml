@@ -210,6 +210,20 @@ jobs:
       - name: Run password-change integration tests
         run: pnpm --filter @culinaire/server exec vitest run src/services/passwordChange.integration.test.ts
 
+      # Stock take: claim rules, area sessions, offline-replay outcomes, and the approval
+      # upsert (a regression test for approval failing on the zone-aware stock_level index).
+      - name: Run stock take claim-rule integration tests
+        run: pnpm --filter @culinaire/server exec vitest run src/services/stockTakeClaim.integration.test.ts
+
+      - name: Run stock take area-session integration tests
+        run: pnpm --filter @culinaire/server exec vitest run src/services/areaSession.integration.test.ts
+
+      - name: Run stock take offline-replay integration tests
+        run: pnpm --filter @culinaire/server exec vitest run src/services/mobileReplay.integration.test.ts
+
+      - name: Run stock take approval integration tests
+        run: pnpm --filter @culinaire/server exec vitest run src/services/stockTakeApprove.integration.test.ts
+
   # Browser E2E (Playwright) against a real app on a throwaway Postgres: pushes
   # the schema, seeds RBAC plus one MFA-enabled E2E user/org/location, starts the
   # API and the Vite dev server (it proxies /api), then runs the full suite and
