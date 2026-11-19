@@ -73,3 +73,10 @@ packages/client/tests/e2e/_auth/
 # tesseract.js downloads its language model beside the server package the
 # first time documentOcrService runs. 5 MB, regenerable, never committed.
 *.traineddata
+
+# Phone app (Expo): export output, local Metro state, generated native projects (continuous native generation)
+mobile/dist-check/
+mobile/.expo/
+mobile/android/
+mobile/ios/
+mobile/expo-env.d.ts

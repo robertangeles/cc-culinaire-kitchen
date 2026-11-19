@@ -1,7 +1,7 @@
 name: CI
 
 # Implements all 5 steps declared in CLAUDE.md:
-#   1. pnpm install --frozen-lockfile
+#   1. pnpm install --frozen-lockfile (web jobs skip the phone app; the `mobile` job has its own)
 #   2. Lint (eslint flat config)
 #   3. TypeScript check (tsc --noEmit)
 #   4. Unit tests (vitest)
@@ -42,8 +42,10 @@ jobs:
           node-version: 22
           cache: pnpm
 
+      # The web jobs skip the phone app's dependencies (Expo and React Native are hundreds of
+      # packages). Render's build command uses the same filter, so CI installs what prod does.
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --filter '!@culinaire/mobile'
 
       - name: Lint
         run: pnpm lint
@@ -133,7 +135,7 @@ jobs:
           cache: pnpm
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --filter '!@culinaire/mobile'
 
       # @culinaire/shared resolves to ./dist; the server suite imports it, so it
       # must be built before vitest can resolve the package.
@@ -272,7 +274,7 @@ jobs:
           cache: pnpm
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --filter '!@culinaire/mobile'
 
       - name: Build shared package
         run: pnpm --filter @culinaire/shared build
@@ -324,3 +326,78 @@ jobs:
             packages/client/tests/e2e/_artifacts
             packages/client/tests/e2e/_reports
           retention-days: 7
+
+  # Phone app (Expo). Typecheck, lint, unit tests and a Metro bundle. Runs only when the
+  # phone app or something it consumes changed, so web-only PRs skip the steps; the job still
+  # reports success when skipped, so it can stay a required check. No EAS build here
+  # (release 1 builds are manual). The bundle step needs packages/shared built first, because
+  # Metro follows the package's `main` into dist/ while tsc follows `types` into src/.
+  mobile:
+    name: Phone app (typecheck, lint, test, bundle)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Decide whether the phone app is affected
+        id: changes
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          if [ "$EVENT" = "pull_request" ]; then
+            changed=$(git diff --name-only "origin/$BASE_REF...HEAD") || changed="?"
+          else
+            changed=$(git diff --name-only "$BEFORE_SHA" HEAD) || changed="?"
+          fi
+          # An unreadable diff (new branch, rewritten history) runs the checks rather than skipping them.
+          if [ "$changed" = "?" ] || echo "$changed" | grep -qE '^(mobile/|packages/shared/|pnpm-lock\.yaml|pnpm-workspace\.yaml|package\.json|\.npmrc|eslint\.config\.js|\.github/workflows/ci\.yml)'; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "No phone app, shared package or workspace changes: skipping."
+          fi
+
+      - name: Set up pnpm
+        if: steps.changes.outputs.run == 'true'
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.31.0
+
+      - name: Set up Node
+        if: steps.changes.outputs.run == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        if: steps.changes.outputs.run == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared package
+        if: steps.changes.outputs.run == 'true'
+        run: pnpm --filter @culinaire/shared build
+
+      - name: Typecheck
+        if: steps.changes.outputs.run == 'true'
+        run: pnpm --filter @culinaire/mobile run check:types
+
+      - name: Lint
+        if: steps.changes.outputs.run == 'true'
+        run: pnpm --filter @culinaire/mobile run check:lint
+
+      - name: Test
+        if: steps.changes.outputs.run == 'true'
+        run: pnpm --filter @culinaire/mobile run check:test
+
+      - name: Bundle
+        if: steps.changes.outputs.run == 'true'
+        env:
+          CI: "1"
+        run: pnpm --filter @culinaire/mobile run check:bundle

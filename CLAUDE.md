@@ -112,11 +112,14 @@ packages/
   shared/src/
     types/ | utils/
 prompts/chatbot/
+mobile/                       (Expo phone app; a workspace member, imports @culinaire/shared)
 tasks/todo.md | tasks/lessons.md
 ```
 Notes, plans and docs are not in the repo: they live in the dev brain (see Dev Brain below).
 
 Never create files at repo root under `client/`, `server/`, or `shared/`. Always use `packages/client/`, `packages/server/`, `packages/shared/`.
+
+**Phone app (`mobile/`).** Its scripts are named `check:types`, `check:lint`, `check:test`, `check:bundle` on purpose: turbo's `lint`/`tsc:check`/`test`/`build` skip it, and the web CI jobs and Render install with `--filter '!@culinaire/mobile'`. CI's separate `mobile` job runs them (build `packages/shared` first: Metro follows `main` into `dist/`). Locally: `pnpm --filter @culinaire/mobile run check:types` etc. Never add a `build` script to `mobile/package.json` (the web deploy runs `turbo run build`). React is pinned to one version for the whole workspace in `pnpm-workspace.yaml` `overrides`; bump it together with the Expo SDK, never separately. Screens never call `fetch` (lint rule); only `mobile/src/api` does.
 
 Rules:
 - Routes must never call LLM APIs directly → `aiService` only

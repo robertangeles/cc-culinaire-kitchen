@@ -21,6 +21,11 @@ export default tseslint.config(
       "packages/client/tests/e2e/**/*.js",
       "packages/client/tests/e2e/**/*.d.ts",
       "packages/client/tests/e2e/_artifacts/**",
+      // Expo export output and generated native projects
+      "mobile/dist-check/**",
+      "mobile/.expo/**",
+      "mobile/android/**",
+      "mobile/ios/**",
     ],
   },
 
@@ -94,6 +99,22 @@ export default tseslint.config(
       ],
     },
   },
+
+  // Phone app: screens and hooks never touch the network; only the API client in
+  // mobile/src/api may call fetch, so auth headers, retries and the offline outbox
+  // live in one place (mobile/src/lintRules.test.ts proves this rule fires).
+  {
+    files: ["mobile/**/*.{ts,tsx}"],
+    languageOptions: { globals: { __DEV__: "readonly" } },
+    rules: {
+      "no-restricted-globals": [
+        "error",
+        { name: "fetch", message: "Call the API client in mobile/src/api, not fetch." },
+        { name: "XMLHttpRequest", message: "Call the API client in mobile/src/api, not XMLHttpRequest." },
+      ],
+    },
+  },
+  { files: ["mobile/src/api/**/*.ts"], rules: { "no-restricted-globals": "off" } },
 
   // Shared: no extra globals (pure TS)
   {
