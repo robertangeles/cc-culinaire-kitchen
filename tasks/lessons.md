@@ -1266,3 +1266,27 @@ builds all tables with CHECKs enforcing. Stop it again when done.
 - **Fix**: A 409 is not a failed guess and no longer counts; the spec makes 2 refusals, not 7.
 - **Rule**: When adding a per-account limit, count how many requests the E2E suite makes against its single shared account, and keep it well under the cap.
 
+
+## 2026-11-19 — pnpm `--filter` does not exclude a workspace under `node-linker=hoisted`
+
+- **Problem**: The plan said web CI and Render could install with `--filter '!@culinaire/mobile'` to skip Expo's ~490 packages. In a clean clone, `mobile/node_modules` and `expo` were still installed (927 MB) with `!@culinaire/mobile`, `!./mobile` and a positive `--filter server... --filter client...`. The CI comment and CLAUDE.md already said otherwise.
+- **Fix**: Removed the filter and the claims. The only guard left for web deploys is Render's path filter ignoring `mobile/**`.
+- **Rule**: Run the exact command in a clean clone and look at what landed on disk before writing "this skips X" anywhere.
+
+## 2026-11-19 — The machine's pnpm (9.15.9) is not the repo's (10.31.0)
+
+- **Problem**: `pnpm -v` here prints 9.15.9, but CI and `packageManager` use 10.31.0, and workspace-level `overrides:` in `pnpm-workspace.yaml` only exist in 10. An install with 9 would have written a lockfile CI could not reproduce.
+- **Fix**: For lockfile or workspace changes run `corepack pnpm@10.31.0 <command>`.
+- **Rule**: Before touching `pnpm-lock.yaml`, check that the local pnpm matches `packageManager`.
+
+## 2026-11-19 — One React for a hoisted workspace that holds an Expo app
+
+- **Problem**: Expo SDK 58 pins `react` 19.3.0 exactly; the web lockfile had 19.2.4. With hoisted installs `react-native` sits at the root and resolves the root `react`, so two Reacts break the phone app at runtime.
+- **Fix**: `overrides:` in `pnpm-workspace.yaml` pins `react`, `react-dom`, `@types/react`, `@types/react-dom` to 19.3.0 for every package. Metro follows `shared`'s `main` into `dist/` (so CI builds shared first) while tsc follows `types` into `src/` (a typecheck passes without a build; only the bundle step catches a missing `dist`).
+- **Rule**: Bump the React override together with the Expo SDK, never separately, and check `find . -path "*/node_modules/react/package.json"` shows one copy.
+
+## 2026-11-19 — A CI job that runs integration suites by filename hides new suites
+
+- **Problem**: PR #186 added four real-DB suites (including the regression test for approval failing on the zone index) and none was added to the `integration` job, which lists files by name. They ran locally and never in CI.
+- **Fix**: Own PR adds a step per suite.
+- **Rule**: A new `*.integration.test.ts` is not finished until `ci.yml` has a step for it; grep `ci.yml` for the file name before closing the task.

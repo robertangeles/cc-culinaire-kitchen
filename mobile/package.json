@@ -1,0 +1,27 @@
+{
+  "name": "@culinaire/mobile",
+  "version": "0.1.0",
+  "private": true,
+  "main": "index.ts",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "check:types": "tsc --noEmit",
+    "check:lint": "eslint .",
+    "check:test": "vitest run",
+    "check:bundle": "expo export --platform android --output-dir dist-check"
+  },
+  "dependencies": {
+    "@culinaire/shared": "workspace:*",
+    "expo": "~58.0.26",
+    "expo-status-bar": "~58.0.5",
+    "react": "19.3.0",
+    "react-native": "0.88.1"
+  },
+  "devDependencies": {
+    "@types/react": "~19.3.0",
+    "typescript": "~6.0.3",
+    "vitest": "^3"
+  }
+}
