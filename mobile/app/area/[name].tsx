@@ -2,7 +2,7 @@ import { useState } from "react";
 import { AccessibilityInfo, Alert, Pressable, ScrollView, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useCount } from "../../src/app/countContext";
+import { useCount } from "../../src/runtime/countContext";
 import { firstUncounted, reviewRows, submitCheck, type Answer, type SaveState } from "../../src/count/countFlow";
 import { limitMessage, parseEntry, press, type Key } from "../../src/count/keypad";
 import { CardTransition } from "../../src/ui/CardTransition";

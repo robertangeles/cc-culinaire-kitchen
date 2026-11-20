@@ -5,7 +5,7 @@ import { useSyncExternalStore } from "react";
 import { makeHarness } from "./harness";
 import { reduceMotion, routerMock, searchParams } from "../testing/mocks";
 
-vi.mock("../src/app/countContext", async () => {
+vi.mock("../src/runtime/countContext", async () => {
   const { harness } = await import("./harness");
   return {
     useCount: () => {

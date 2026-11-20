@@ -1,5 +1,5 @@
 import { Pressable } from "react-native";
-import { session, useSession } from "../src/app/appContext";
+import { session, useSession } from "../src/runtime/appContext";
 import { Screen } from "../src/ui/Screen";
 import { Text } from "../src/ui/Text";
 import { Button } from "../src/ui/Button";
