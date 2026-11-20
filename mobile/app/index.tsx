@@ -94,6 +94,7 @@ export default function Areas() {
             })
           : null}
 
+        {state.locations.length > 1 ? <Button kind="quiet" label="Change location" onPress={() => session.changeLocation()} /> : null}
         <Button kind="quiet" label="Sign out" onPress={() => void session.signOut()} />
       </ScrollView>
     </SafeAreaView>

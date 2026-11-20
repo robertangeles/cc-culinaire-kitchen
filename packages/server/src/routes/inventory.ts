@@ -13,6 +13,7 @@
 
 import { Router } from "express";
 import { authenticate, requirePermission } from "../middleware/auth.js";
+import { requireSupportedMobileVersion } from "../middleware/mobileVersionPolicy.js";
 import {
   handleListAreas,
   handleCreateArea,
@@ -202,7 +203,7 @@ router.get("/stock-takes/history", requirePermission("inventory:hq"), handleGetH
 
 // Parameterized session routes
 router.get("/stock-takes/:id", requirePermission("inventory:count"), handleGetSessionDetail);
-router.get("/stock-takes/:id/count-sheets", requirePermission("inventory:count"), handleGetCountSheets);
+router.get("/stock-takes/:id/count-sheets", requirePermission("inventory:count"), requireSupportedMobileVersion(), handleGetCountSheets);
 router.post("/stock-takes/:id/submit-for-review", requirePermission("inventory:count"), handleSubmitForReview);
 router.post("/stock-takes/:id/approve", requirePermission("inventory:hq"), handleApproveSession);
 router.post("/stock-takes/:id/flag", requirePermission("inventory:hq"), handleFlagSession);

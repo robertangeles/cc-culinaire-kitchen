@@ -28,6 +28,7 @@ import {
 } from "../controllers/authController.js";
 import { authenticate } from "../middleware/auth.js";
 import { authRateLimit, mfaVerifyRateLimit, mfaAccountRateLimit } from "../middleware/rateLimiter.js";
+import { requireSupportedMobileVersion } from "../middleware/mobileVersionPolicy.js";
 
 const router = Router();
 
@@ -38,7 +39,7 @@ router.get("/turnstile-config", handleTurnstileConfig);
 // enforced only for browser requests, so native/scripted clients are throttled
 // here instead (20/min per IP).
 router.post("/register", authRateLimit, handleRegister);
-router.post("/login", authRateLimit, handleLogin);
+router.post("/login", authRateLimit, requireSupportedMobileVersion(), handleLogin);
 router.post("/logout", handleLogout);
 router.post("/refresh", handleRefresh);
 router.get("/me", authenticate, handleGetMe);
@@ -58,6 +59,6 @@ router.post("/google/idtoken", handleGoogleIdToken);
 router.post("/mfa/setup", authenticate, mfaAccountRateLimit, handleMfaSetup);
 router.post("/mfa/enable", authenticate, mfaAccountRateLimit, handleMfaEnable);
 router.post("/mfa/disable", authenticate, mfaAccountRateLimit, handleMfaDisable);
-router.post("/mfa/verify", mfaVerifyRateLimit, mfaAccountRateLimit, handleMfaVerify);
+router.post("/mfa/verify", mfaVerifyRateLimit, mfaAccountRateLimit, requireSupportedMobileVersion(), handleMfaVerify);
 
 export default router;

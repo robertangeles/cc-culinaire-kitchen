@@ -55,6 +55,7 @@ export function SiteSettingsTab() {
     default_guest_sessions: "10",
     default_registered_sessions: "10",
     recipes_per_page: "20",
+    mobile_min_app_version: "0.0.0",
   });
 
   /** Track whether the form has been initialized from settings. */
@@ -75,6 +76,7 @@ export function SiteSettingsTab() {
         default_guest_sessions: settings.default_guest_sessions ?? "10",
         default_registered_sessions: settings.default_registered_sessions ?? "10",
         recipes_per_page: settings.recipes_per_page ?? "20",
+        mobile_min_app_version: settings.mobile_min_app_version ?? "0.0.0",
       });
       initialized.current = true;
     }
@@ -309,6 +311,28 @@ export function SiteSettingsTab() {
                 updateField("guest_session_idle_hours", e.target.value)
               }
               className="w-20 rounded-lg border border-dark-200 bg-dark px-3 py-1.5 text-sm text-[#FAFAFA] text-right focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-transparent"
+            />
+          </div>
+
+          {/* Oldest phone app that may sign in or download a count */}
+          <div className="flex items-center justify-between rounded-lg border border-dark-200 bg-dark-50 px-4 py-3">
+            <div>
+              <label htmlFor="mobile-min-app-version" className="text-sm font-medium text-[#FAFAFA]">
+                Minimum phone app version
+              </label>
+              <p className="text-xs text-dark-600 mt-0.5">
+                A phone running an older version is asked to update when it signs in or downloads a count. Counts already
+                waiting on that phone can still be sent. Use 0.0.0 to allow every version.
+              </p>
+            </div>
+            <input
+              id="mobile-min-app-version"
+              type="text"
+              inputMode="numeric"
+              placeholder="0.0.0"
+              value={form.mobile_min_app_version}
+              onChange={(e) => updateField("mobile_min_app_version", e.target.value)}
+              className="w-24 rounded-lg border border-dark-200 bg-dark px-3 py-1.5 text-sm text-[#FAFAFA] text-right focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-transparent"
             />
           </div>
 

@@ -1326,3 +1326,15 @@ builds all tables with CHECKs enforcing. Stop it again when done.
 - **Problem**: Keying the cached stock take by account (so one chef never sees another's claims) made the phone E2E fail: its store was built before sign-in, so it was keyed to "no user".
 - **Fix**: Build the store after sign-in, as the app does.
 - **Rule**: When a key gains a user id, check every place that builds the thing before a user exists.
+
+## 2026-11-20 — A settings screen that hides the server's reason is half a feature
+
+- **Problem**: The new "Minimum phone app version" field was validated on the server, but the shared settings hook threw a generic "Failed to save settings", so an admin who typed a bad value never learned why. The browser spec caught it (the validation sentence never appeared).
+- **Fix**: `useSiteSettings.save` shows the server's `error` string when it sends one.
+- **Rule**: When adding server validation, find the screen that calls it and check the reason reaches the person. A browser test that asserts the sentence is on screen is the cheapest check.
+
+## 2026-11-20 — A test that pins a middleware list pins the order, not the length
+
+- **Problem**: Adding the phone version check to `/mfa/verify` broke `authMfaRoutes.test.ts`, which asserted the handler stack had exactly 3 entries.
+- **Fix**: Reread what it protects (the two rate limits run first, before anything touches the request); kept that, and made the new length and position explicit.
+- **Rule**: When a wiring test fails after a legitimate addition, restate the invariant in the test instead of just bumping the number.

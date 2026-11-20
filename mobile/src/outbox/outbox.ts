@@ -267,6 +267,15 @@ export function createOutbox({ store, send, now, newId, getUserId }: OutboxDeps)
       });
     },
 
+    /** Housekeeping: forget counts accepted longer ago than this. Waiting, stuck and discarded entries are never pruned. */
+    pruneAccepted(olderThanMs: number) {
+      return locked(async () => {
+        const cutoff = now() - olderThanMs;
+        await store.remove((await store.list()).filter((e) => e.status === "ACCEPTED" && e.updatedAt < cutoff).map((e) => e.id));
+        notify();
+      });
+    },
+
     /** Every entry the signed-in account has for one area, oldest first (screens turn these into save states). */
     async entriesFor(sessionId: string, categoryName: string): Promise<OutboxEntry[]> {
       const userId = getUserId();

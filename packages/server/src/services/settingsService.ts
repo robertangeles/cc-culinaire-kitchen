@@ -36,6 +36,8 @@ const SETTING_DEFAULTS: Record<string, string> = {
   // has an authored prompt slug, reviewer signoff, and an eval pass per
   // shared-context/mobile-needs.md.
   mobile_languages_enabled: '["en"]',
+  // Lowest phone app version allowed to sign in or download a count. 0.0.0 blocks nobody.
+  mobile_min_app_version: "0.0.0",
 };
 
 /**

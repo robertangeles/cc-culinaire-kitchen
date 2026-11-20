@@ -264,6 +264,23 @@ describe("recovery, accounts and submit gating", () => {
   });
 });
 
+describe("pruning", () => {
+  it("removes counts accepted more than the given time ago, and keeps everything else (including discard records)", async () => {
+    const { outbox, rows, clock, store } = setup();
+    await outbox.enqueue(line({ ingredientId: "old" }));
+    await outbox.enqueue(line({ ingredientId: "recent" }));
+    await outbox.enqueue(line({ ingredientId: "waiting" }));
+    await outbox.enqueue(line({ ingredientId: "dropped" }));
+    const byItem = (id: string) => rows().find((r) => r.command.ingredientId === id)!;
+    await store.put({ ...byItem("old"), status: "ACCEPTED", updatedAt: clock.t - 8 * 86_400_000 });
+    await store.put({ ...byItem("recent"), status: "ACCEPTED", updatedAt: clock.t - 1 * 86_400_000 });
+    await store.put({ ...byItem("dropped"), status: "DISCARDED", updatedAt: clock.t - 90 * 86_400_000 });
+
+    await outbox.pruneAccepted(7 * 86_400_000);
+    expect(rows().map((r) => r.command.ingredientId).sort()).toEqual(["dropped", "recent", "waiting"]);
+  });
+});
+
 describe("races between saving and sending (found in review)", () => {
   /** A send that waits until the test lets it finish, so we can act while it is in flight. */
   function gated() {

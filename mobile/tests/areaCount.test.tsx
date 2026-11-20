@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { useSyncExternalStore } from "react";
 import { makeHarness } from "./harness";
-import { routerMock, searchParams } from "../testing/mocks";
+import { reduceMotion, routerMock, searchParams } from "../testing/mocks";
 
 vi.mock("../src/app/countContext", async () => {
   const { harness } = await import("./harness");
@@ -95,6 +95,27 @@ describe("count screen", () => {
     await screen.findByText("Saved on this phone");
     await outbox.drain();
     await screen.findByText("Accepted");
+  });
+});
+
+describe("card motion", () => {
+  it("advances to the next item with motion on", async () => {
+    await makeHarness();
+    render(<AreaCount />);
+    fireEvent.click(screen.getByRole("button", { name: "Skip" }));
+    await atItem(2);
+    expect(screen.getByText("Gin")).toBeTruthy();
+  });
+
+  it("advances just the same, with no animation, when the phone asks to reduce motion", async () => {
+    reduceMotion.current = true;
+    await makeHarness();
+    render(<AreaCount />);
+    fireEvent.click(screen.getByRole("button", { name: "Skip" }));
+    await atItem(2);
+    // No in-flight transform: the card is at rest the moment it appears.
+    const card = screen.getByText("Count in L").closest("div[style*='transform']") as HTMLElement | null;
+    expect(card?.style.opacity === "" || card?.style.opacity === "1").toBe(true);
   });
 });
 

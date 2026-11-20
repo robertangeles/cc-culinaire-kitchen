@@ -97,6 +97,18 @@ describe("supplier read-gating", () => {
   });
 });
 
+// The phone's "update to continue" rule sits on sign-in and the count download only, never on count writes.
+describe("mobile version policy placement", () => {
+  const names = (method: Method, path: string) => (router as any).stack.find((l: any) => l.route?.path === path && l.route?.methods?.[method]).route.stack.map((l: any) => l.handle.name || "anonymous");
+  it("is on the count download", () => {
+    expect(names("get", "/stock-takes/:id/count-sheets").length).toBe(3); // permission, version policy, handler
+  });
+  it("is not on saving a line or submitting an area, so counts waiting on an old phone can still be sent", () => {
+    expect(names("post", "/stock-takes/:id/categories/:cat/lines").length).toBe(2);
+    expect(names("post", "/stock-takes/:id/categories/:cat/submit").length).toBe(2);
+  });
+});
+
 // The phone's pre-count download is a counter-level read: needs inventory:count, nothing more.
 describe("stock take count sheets — inventory:count", () => {
   it("403s a user without inventory:count", () => {

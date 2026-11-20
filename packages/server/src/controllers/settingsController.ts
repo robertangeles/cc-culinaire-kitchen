@@ -59,6 +59,12 @@ export async function handleUpdateSettings(
       return;
     }
 
+    const minVersion = parsed.data.mobile_min_app_version;
+    if (minVersion !== undefined && !/^\d+\.\d+\.\d+$/.test(minVersion)) {
+      res.status(400).json({ error: "The minimum phone app version must look like 1.2.3 (0.0.0 allows every version)." });
+      return;
+    }
+
     await upsertSettings(parsed.data);
     log.info({ keys: Object.keys(parsed.data) }, "Settings updated");
     res.json({ success: true });
