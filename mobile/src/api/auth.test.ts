@@ -1,0 +1,63 @@
+import { describe, it, expect, vi } from "vitest";
+import { createAuthApi } from "./auth";
+import type { ApiClient, TokenStore } from "./client";
+
+const user = { userId: 7, userName: "Chef", userEmail: "c@x.test", mfaEnabled: false, roles: [], permissions: ["inventory:count"] };
+
+function setup(replies: unknown[]) {
+  const request = vi.fn(async () => replies.shift());
+  const tokenStore: TokenStore = { load: vi.fn(async () => ({ accessToken: "A", refreshToken: "R" })), save: vi.fn(async () => {}), clear: vi.fn(async () => {}) };
+  return { api: createAuthApi({ request } as unknown as ApiClient, tokenStore), request, tokenStore };
+}
+
+describe("sign in", () => {
+  it("saves the tokens and returns the user when no second step is needed", async () => {
+    const { api, request, tokenStore } = setup([{ user, tokens: { accessToken: "A1", refreshToken: "R1" } }]);
+    expect(await api.signIn("c@x.test", "pw")).toEqual({ status: "signedIn", user });
+    expect(request).toHaveBeenCalledWith("POST", "/api/auth/login", { body: { email: "c@x.test", password: "pw" }, auth: false });
+    expect(tokenStore.save).toHaveBeenCalledWith({ accessToken: "A1", refreshToken: "R1" });
+  });
+
+  it("asks for the six-digit code and saves nothing when the account uses MFA", async () => {
+    const { api, tokenStore } = setup([{ requiresMfa: true, mfaSessionToken: "M" }]);
+    expect(await api.signIn("c@x.test", "pw")).toEqual({ status: "mfa", mfaSessionToken: "M" });
+    expect(tokenStore.save).not.toHaveBeenCalled();
+  });
+
+  it("finishes the MFA step with the session token and code, then saves the tokens", async () => {
+    const { api, request, tokenStore } = setup([{ user, tokens: { accessToken: "A2", refreshToken: "R2" } }]);
+    expect(await api.verifyMfa("M", "123456")).toEqual(user);
+    expect(request).toHaveBeenCalledWith("POST", "/api/auth/mfa/verify", { body: { mfaSessionToken: "M", code: "123456" }, auth: false });
+    expect(tokenStore.save).toHaveBeenCalledWith({ accessToken: "A2", refreshToken: "R2" });
+  });
+});
+
+describe("session and location", () => {
+  it("reads the current user from /auth/me", async () => {
+    const { api } = setup([{ user }]);
+    expect(await api.me()).toEqual(user);
+  });
+
+  it("signs out on the server best-effort and always clears the device tokens", async () => {
+    const failing = setup([]);
+    failing.request.mockRejectedValueOnce(new Error("offline"));
+    await api_signOut(failing);
+
+    const ok = setup([{}]);
+    await api_signOut(ok);
+    expect(ok.request).toHaveBeenCalledWith("POST", "/api/auth/logout", { body: { refreshToken: "R" }, auth: false });
+  });
+
+  it("reads the location context and switches location", async () => {
+    const ctx = { locations: [], selectedLocationId: null, organisationId: 1, isOrgAdmin: false, hasLocationAccess: true };
+    const { api, request } = setup([ctx, { success: true, selectedLocationId: "L1" }]);
+    expect(await api.locationContext()).toEqual(ctx);
+    await api.selectLocation("L1");
+    expect(request).toHaveBeenLastCalledWith("PATCH", "/api/users/selected-location", { body: { storeLocationId: "L1" } });
+  });
+});
+
+async function api_signOut(s: ReturnType<typeof setup>) {
+  await s.api.signOut();
+  expect(s.tokenStore.clear).toHaveBeenCalled();
+}

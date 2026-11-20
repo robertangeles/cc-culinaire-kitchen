@@ -27,4 +27,8 @@ describe("phone lint rule: only the API client may call the network", () => {
   it("allows fetch in the API client", async () => {
     expect(await messages('export const x = () => fetch("/api");', "mobile/src/api/client.ts")).toEqual([]);
   });
+
+  it("allows fetch in the end-to-end test that talks to a real server", async () => {
+    expect(await messages('export const x = () => fetch("/api");', "mobile/e2e/phoneFlow.e2e.test.ts")).toEqual([]);
+  });
 });
