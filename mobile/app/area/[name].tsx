@@ -139,12 +139,12 @@ export default function AreaCount() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: c.bg }}>
       <ScrollView contentContainerStyle={{ padding: space.xl, gap: space.lg }} keyboardShouldPersistTaps="handled">
-        <Text variant="muted">{name} · item {view.index + 1} of {items.length}</Text>
+        <Text variant="meta">{name} · item {view.index + 1} of {items.length}</Text>
         {snap.offline ? <OfflineBanner text="You're offline. Counts are saved on this phone." /> : null}
         <CardTransition itemKey={item.ingredientId}>
           <Text variant="title" style={{ fontSize: fontSize.item }}>{item.ingredientName}</Text>
-          {item.alsoIn.length > 0 ? <Text variant="muted">Also in {item.alsoIn.join(", ")}</Text> : null}
-          <Text variant="muted">Count in {item.countUnit}</Text>
+          {item.alsoIn.length > 0 ? <Text variant="meta">Also in {item.alsoIn.join(", ")}</Text> : null}
+          <Text variant="meta">Count in {item.countUnit}</Text>
           <Text
             accessibilityLiveRegion="polite"
             accessibilityLabel={`${item.ingredientName}, ${item.countUnit}, ${entry === "" ? "nothing typed" : entry}`}

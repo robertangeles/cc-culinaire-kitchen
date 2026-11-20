@@ -96,8 +96,8 @@ export default function Areas() {
                     <Text style={{ fontFamily: fontFamily.title, fontSize: 20, flexShrink: 1 }}>{area.name}</Text>
                     <Chip label={done ? "Sent for review" : `${area.counted} of ${area.total}`} />
                   </View>
-                  {area.sharesWith.length > 0 ? <Text variant="muted">Shares items with {area.sharesWith.join(", ")}</Text> : null}
-                  {area.heldBy ? <Text variant="muted">{area.heldBy} is counting this</Text> : null}
+                  {area.sharesWith.length > 0 ? <Text variant="meta">Shares items with {area.sharesWith.join(", ")}</Text> : null}
+                  {area.heldBy ? <Text variant="meta">{area.heldBy} is counting this</Text> : null}
                   {area.needsAttention > 0 ? <Text variant="error">⚠ {area.needsAttention} need attention</Text> : null}
                 </Pressable>
               );

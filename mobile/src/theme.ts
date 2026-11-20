@@ -79,9 +79,10 @@ export const size = { tap: 56, key: 72, keyGap: 8, primaryButton: 64 } as const;
 /** pt. Nothing below 16; everything must scale to 200% without clipping the typed number. */
 export const fontSize = { title: 32, item: 28, number: 72, body: 16 } as const;
 
-/** Loaded in app/_layout.tsx. Fraunces for titles and item names, Inter for UI and tabular numerals. */
+/** Loaded in app/_layout.tsx. Fraunces for titles, item names and sentences (as in the first app), Inter for buttons, labels, short facts and tabular numerals. */
 export const fontFamily = {
   title: "Fraunces_600SemiBold",
+  body: "Fraunces_400Regular",
   ui: "Inter_400Regular",
   uiStrong: "Inter_600SemiBold",
 } as const;
