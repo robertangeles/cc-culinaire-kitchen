@@ -40,7 +40,7 @@ export function Keypad({ entry, onKey }: Props) {
               style={({ pressed }) => [styles.key, { backgroundColor: c.surface, borderColor: c.border, opacity: pressed ? 0.7 : 1 }]}
             >
               <Text style={{ fontFamily: fontFamily.uiStrong, fontSize: fontSize.item }}>{k.label}</Text>
-              {k.hint ? <Text variant="muted" style={{ fontSize: fontSize.body }}>{k.hint}</Text> : null}
+              {k.hint ? <Text variant="meta" style={{ fontSize: fontSize.body }}>{k.hint}</Text> : null}
             </Pressable>
           ))}
         </View>

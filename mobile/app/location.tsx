@@ -26,7 +26,7 @@ export default function ChooseLocation() {
           style={[{ minHeight: size.tap + 8, justifyContent: "center", paddingHorizontal: space.lg, paddingVertical: space.sm, opacity: busy ? 0.5 : 1 }, rowDivider(index, c.border)]}
         >
           <Text style={{ fontFamily: fontFamily.title, fontSize: 20 }}>{l.locationName}</Text>
-          {l.storeLocationId === state.current?.storeLocationId ? <Text variant="muted">Current location</Text> : null}
+          {l.storeLocationId === state.current?.storeLocationId ? <Text variant="meta">Current location</Text> : null}
         </Pressable>
       ))}
       </Surface>
