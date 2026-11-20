@@ -1,7 +1,6 @@
-import { useColorScheme } from "react-native";
 import { palettes, type Palette } from "../theme";
 
-/** Dark follows the phone setting; there is no manual toggle. */
+/** The phone app is light paper only, like the first CulinAIre app; the dark palette is kept for when dark mode is wanted. */
 export function useColors(): Palette {
-  return useColorScheme() === "dark" ? palettes.dark : palettes.light;
+  return palettes.light;
 }
