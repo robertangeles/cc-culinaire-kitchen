@@ -22,6 +22,7 @@ export default function Areas() {
   if (state.phase !== "ready") return null;
 
   const attention = Object.values(snap.entries).flat().filter((e) => e.status === "NEEDS_ATTENTION").length;
+  const attentionText = `${attention} ${attention === 1 ? "count needs" : "counts need"} attention`;
   const waiting = Object.values(snap.entries).flat().filter((e) => e.status === "SAVED_LOCAL" || e.status === "SENDING").length;
 
   async function open(name: string) {
@@ -46,8 +47,8 @@ export default function Areas() {
         <Text variant="title">{state.location.locationName}</Text>
         {snap.offline ? <OfflineBanner text="You're offline. Counts are saved on this phone and sent when you're back." /> : null}
         {attention > 0 ? (
-          <Pressable accessibilityRole="button" accessibilityLabel={`${attention} counts need attention`} onPress={() => router.push("/attention")} style={{ minHeight: size.tap, justifyContent: "center" }}>
-            <Text variant="error">⚠ {attention} {attention === 1 ? "count needs" : "counts need"} attention</Text>
+          <Pressable accessibilityRole="button" accessibilityLabel={attentionText} onPress={() => router.push("/attention")} style={{ minHeight: size.tap, justifyContent: "center" }}>
+            <Text variant="error">⚠ {attentionText}</Text>
           </Pressable>
         ) : null}
         {waiting > 0 ? <Text variant="muted">{waiting} waiting to send</Text> : null}
