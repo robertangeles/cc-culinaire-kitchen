@@ -1,0 +1,81 @@
+import type { ApiClient, TokenStore, Tokens } from "./client";
+
+/** What `/auth/login` and `/auth/me` return for a person (only the fields the phone reads). */
+export interface AuthUser {
+  userId: number;
+  userName: string;
+  userEmail: string;
+  mfaEnabled: boolean;
+  roles: string[];
+  permissions: string[];
+}
+
+export interface StoreLocation {
+  storeLocationId: string;
+  organisationId: number;
+  locationName: string;
+  classification: string;
+}
+
+export interface LocationContext {
+  locations: StoreLocation[];
+  selectedLocationId: string | null;
+  organisationId: number | null;
+  isOrgAdmin: boolean;
+  hasLocationAccess: boolean;
+}
+
+export type SignInResult = { status: "signedIn"; user: AuthUser } | { status: "mfa"; mfaSessionToken: string };
+
+interface LoginReply {
+  user?: AuthUser;
+  tokens?: Tokens;
+  requiresMfa?: boolean;
+  mfaSessionToken?: string;
+}
+
+/** Sign-in, session and location calls. Tokens are saved here the moment the server hands them out. */
+export function createAuthApi(client: ApiClient, tokenStore: TokenStore) {
+  async function finish(reply: LoginReply): Promise<AuthUser> {
+    await tokenStore.save({ accessToken: reply.tokens!.accessToken, refreshToken: reply.tokens!.refreshToken });
+    return reply.user!;
+  }
+
+  return {
+    async signIn(email: string, password: string): Promise<SignInResult> {
+      const reply = await client.request<LoginReply>("POST", "/api/auth/login", { body: { email, password }, auth: false });
+      if (reply.requiresMfa) return { status: "mfa", mfaSessionToken: reply.mfaSessionToken! };
+      return { status: "signedIn", user: await finish(reply) };
+    },
+
+    async verifyMfa(mfaSessionToken: string, code: string): Promise<AuthUser> {
+      return finish(await client.request<LoginReply>("POST", "/api/auth/mfa/verify", { body: { mfaSessionToken, code }, auth: false }));
+    },
+
+    async me(): Promise<AuthUser> {
+      return (await client.request<{ user: AuthUser }>("GET", "/api/auth/me")).user;
+    },
+
+    /** Revoke the refresh token on the server if we can; the device tokens go either way. */
+    async signOut(): Promise<void> {
+      const tokens = await tokenStore.load();
+      try {
+        if (tokens) await client.request("POST", "/api/auth/logout", { body: { refreshToken: tokens.refreshToken }, auth: false });
+      } catch {
+        // Offline sign-out still ends the session on this phone; the refresh token expires on its own.
+      } finally {
+        await tokenStore.clear();
+      }
+    },
+
+    locationContext(): Promise<LocationContext> {
+      return client.request<LocationContext>("GET", "/api/users/location-context");
+    },
+
+    selectLocation(storeLocationId: string): Promise<void> {
+      return client.request("PATCH", "/api/users/selected-location", { body: { storeLocationId } });
+    },
+  };
+}
+
+export type AuthApi = ReturnType<typeof createAuthApi>;
