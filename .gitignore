@@ -78,5 +78,6 @@ packages/client/tests/e2e/_auth/
 mobile/dist-check/
 mobile/.expo/
 mobile/android/
+mobile/device/_shots/
 mobile/ios/
 mobile/expo-env.d.ts
