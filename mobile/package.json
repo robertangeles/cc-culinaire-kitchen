@@ -11,7 +11,8 @@
     "check:lint": "eslint .",
     "check:test": "vitest run",
     "check:bundle": "expo export --platform android --output-dir dist-check",
-    "check:e2e": "vitest run --config vitest.e2e.config.ts"
+    "check:e2e": "vitest run --config vitest.e2e.config.ts",
+    "check:device": "vitest run --config vitest.device.config.ts"
   },
   "dependencies": {
     "@culinaire/shared": "workspace:*",

@@ -1338,3 +1338,15 @@ builds all tables with CHECKs enforcing. Stop it again when done.
 - **Problem**: Adding the phone version check to `/mfa/verify` broke `authMfaRoutes.test.ts`, which asserted the handler stack had exactly 3 entries.
 - **Fix**: Reread what it protects (the two rate limits run first, before anything touches the request); kept that, and made the new length and position explicit.
 - **Rule**: When a wiring test fails after a legitimate addition, restate the invariant in the test instead of just bumping the number.
+
+## 2026-11-20 — The emulator found bugs that 243 phone tests and the phone-to-server E2E could not
+
+- **Problem**: The first real Android run showed three bugs no jsdom or node test could: (1) `mobile/src/app` made expo-router treat `src/app` as the route root instead of `mobile/app`, so every screen was an unmatched route ("?"); (2) the areas list followed the server's row order, which changes as rows are updated, not the shelf order of the count sheets; (3) the status bar had light icons on the light paper. Later the walk also showed that changing the system text size restarts the Android activity (`fontScale` is not in the manifest's `configChanges`) and drops the app to the areas list.
+- **Fix**: Renamed `src/app` to `src/runtime`; sorted areas by sheet order; one root `StatusBar` that follows the colour scheme. The text-size restart is a known limit (the Android folder is generated, so it needs a config plugin).
+- **Rule**: Never let a folder named `app` live under `src/` next to an `app/` routes folder. A screen is not "done" until it has been looked at on a runtime; keep `pnpm check:device` green.
+
+## 2026-11-20 — Driving a device: four things that look like app bugs and are not
+
+- **Problem**: (a) With `CI=1` Metro disables file watching, so the device ran stale JavaScript after every edit. (b) A TOTP code is only valid for the rest of its 30 s step, so a code generated early fails by the time the keypad is tapped. (c) The dev-only warning toast sits over the lower screen and swallows swipes and taps. (d) A test string matching two views (a row and its label) taps the wrong one.
+- **Fix**: Start Metro without `CI`; generate the code late (at least 12 s left); start swipes above the toast; match the full accessibility label.
+- **Rule**: When a device step fails, look at the screenshot before changing the app. Most failures were the test.
