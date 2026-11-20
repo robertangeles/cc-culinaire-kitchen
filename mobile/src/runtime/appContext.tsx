@@ -5,7 +5,8 @@ import { createSession, type Session } from "../auth/session";
 import { createSecureTokenStore } from "../auth/secureTokenStore";
 import { createSnapshotStore } from "../auth/snapshotStore";
 import { sqliteKv } from "../storage/kv";
-import { apiBaseUrl, appVersion } from "../config";
+import { googleIdToken } from "../auth/googleSignIn";
+import { apiBaseUrl, appVersion, googleEnabled } from "../config";
 
 // One of each for the whole app. The client's "session ended" callback reaches the session through this binding.
 const tokenStore = createSecureTokenStore();
@@ -17,9 +18,10 @@ session = createSession({
   api: authApi,
   hasTokens: async () => (await tokenStore.load()) !== null,
   snapshots: createSnapshotStore(sqliteKv),
+  googleIdToken: googleEnabled ? googleIdToken : undefined,
 });
 
-export { session };
+export { session, googleEnabled };
 
 /** The current screen state and busy flag, re-rendering when either changes. */
 export function useSession() {
