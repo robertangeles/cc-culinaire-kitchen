@@ -1,7 +1,10 @@
 import { describe, it, expect, vi } from "vitest";
 import type { Request, Response } from "express";
 
-vi.mock("../services/settingsService.js", () => ({ getAllSettings: vi.fn(), upsertSettings: vi.fn(async () => {}) }));
+vi.mock("../services/settingsService.js", async () => {
+  const actual = await vi.importActual<typeof import("../services/settingsService.js")>("../services/settingsService.js");
+  return { ...actual, getAllSettings: vi.fn(), upsertSettings: vi.fn(async () => {}) };
+});
 import { handleUpdateSettings } from "./settingsController.js";
 import { upsertSettings } from "../services/settingsService.js";
 

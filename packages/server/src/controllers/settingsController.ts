@@ -14,6 +14,7 @@ import { pino } from "pino";
 import {
   getAllSettings,
   upsertSettings,
+  validateSettingsUpdate,
 } from "../services/settingsService.js";
 
 const log = pino({ transport: { target: "pino-pretty" } });
@@ -59,9 +60,9 @@ export async function handleUpdateSettings(
       return;
     }
 
-    const minVersion = parsed.data.mobile_min_app_version;
-    if (minVersion !== undefined && !/^\d+\.\d+\.\d+$/.test(minVersion)) {
-      res.status(400).json({ error: "The minimum phone app version must look like 1.2.3 (0.0.0 allows every version)." });
+    const problem = validateSettingsUpdate(parsed.data);
+    if (problem) {
+      res.status(400).json({ error: problem });
       return;
     }
 

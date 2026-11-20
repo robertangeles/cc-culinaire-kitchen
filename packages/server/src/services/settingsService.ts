@@ -96,3 +96,18 @@ export async function upsertSettings(
   // Invalidate cache so next read picks up changes
   cache = null;
 }
+
+/**
+ * Check a settings update before it is saved.
+ *
+ * @param updates - key-value pairs about to be upserted.
+ * @returns A plain sentence for the first problem found, or null when the update is acceptable.
+ */
+export function validateSettingsUpdate(updates: Record<string, string>): string | null {
+  const minVersion = updates.mobile_min_app_version;
+  if (minVersion !== undefined && !/^\d+\.\d+\.\d+$/.test(minVersion)) {
+    return "The minimum phone app version must look like 1.2.3 (0.0.0 allows every version).";
+  }
+  return null;
+}
+
