@@ -23,6 +23,7 @@ export function CountProvider({ locationId, children }: { locationId: string; ch
   );
   useEffect(() => {
     void store.refresh();
+    return () => store.dispose();
   }, [store]);
   return <Ctx.Provider value={store}>{children}</Ctx.Provider>;
 }

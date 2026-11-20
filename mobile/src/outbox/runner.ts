@@ -16,9 +16,15 @@ export function createRunner({ outbox, now, setTimer, clearTimer }: RunnerDeps) 
   function kick() {
     if (timer !== null) clearTimer(timer);
     timer = null;
-    void outbox.drain().then(({ nextWakeAt }) => {
-      if (nextWakeAt !== null) timer = setTimer(kick, Math.max(1_000, nextWakeAt - now()));
-    });
+    outbox.drain().then(
+      ({ nextWakeAt }) => {
+        if (nextWakeAt !== null) timer = setTimer(kick, Math.max(1_000, nextWakeAt - now()));
+      },
+      // A failed drain (say a database error) must not stop sending for good: look again shortly.
+      () => {
+        timer = setTimer(kick, 30_000);
+      },
+    );
   }
   return { kick };
 }

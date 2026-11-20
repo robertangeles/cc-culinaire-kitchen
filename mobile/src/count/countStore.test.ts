@@ -26,13 +26,14 @@ function setup(over: Partial<Mocks> = {}) {
   } as Mocks;
   const kvMap = new Map<string, string>();
   const kv: KvStore = { get: async (k) => kvMap.get(k) ?? null, set: async (k, v) => void kvMap.set(k, v), delete: async (k) => void kvMap.delete(k) };
+  const keys = () => [...kvMap.keys()];
   const rows = new Map<string, OutboxEntry>();
   const store: OutboxStore = { list: async () => [...rows.values()].sort((a, b) => a.createdAt - b.createdAt), put: async (e) => void rows.set(e.id, { ...e }), remove: async (ids) => ids.forEach((i) => rows.delete(i)) };
   let n = 0;
   const outbox = createOutbox({ store, send: async () => {}, now: () => 1000 + n, newId: () => `e${++n}`, getUserId: () => mine });
   const kick = vi.fn();
   const counts = createCountStore({ api: api as unknown as CountApi, kv, outbox, getUserId: () => mine, locationId: "L1", kick });
-  return { counts, api, outbox, kick, kv };
+  return { counts, api, outbox, kick, kv, keys, rows };
 }
 const state = (c: ReturnType<typeof setup>["counts"]) => c.getSnapshot();
 
@@ -154,3 +155,38 @@ describe("submitting an area", () => {
     expect(await counts.submit("Bar")).toMatchObject({ ok: false, reason: "error", message: "Can't reach the server. Try again." });
   });
 });
+
+describe("stuck counts and other accounts (found in review)", () => {
+  it("shows stuck counts from any stock take, not only the open one", async () => {
+    const { counts, outbox, rows } = setup();
+    await counts.refresh();
+    await outbox.enqueue({ sessionId: "OLD", categoryName: "Cellar", ingredientId: "x", ingredientName: "Rum", rawQty: 2, countedUnit: "kg", claimRevision: 1 });
+    const [old] = [...rows.values()];
+    rows.set(old.id, { ...old, status: "NEEDS_ATTENTION", attention: { reason: "area_closed", message: "Cannot count: category is SUBMITTED" } });
+    await counts.refresh();
+    expect(state(counts).stuck.map((e) => e.command.ingredientName)).toEqual(["Rum"]);
+  });
+
+  it("counts unsent counts that belong to another account", async () => {
+    const { counts, rows } = setup();
+    rows.set("other", { id: "other", userId: 99, status: "SAVED_LOCAL", attempts: 0, nextAttemptAt: 0, createdAt: 1, updatedAt: 1, command: { sessionId: "S1", categoryName: "Bar", ingredientId: "i1", ingredientName: "Shiraz", rawQty: 1, countedUnit: "kg", claimRevision: 1 } });
+    await counts.refresh();
+    expect(state(counts).otherAccountPending).toBe(1);
+  });
+
+  it("keeps each account's downloaded stock take under its own key", async () => {
+    const { keys, counts } = setup();
+    await counts.refresh();
+    expect(keys()).toEqual(["count.1.L1"]);
+  });
+
+  it("stops listening to the outbox when disposed", async () => {
+    const { counts, outbox } = setup();
+    await counts.refresh();
+    counts.dispose();
+    const before = state(counts);
+    await outbox.enqueue({ sessionId: "S1", categoryName: "Bar", ingredientId: "i1", ingredientName: "Shiraz", rawQty: 5, countedUnit: "kg", claimRevision: 2 });
+    expect(state(counts)).toBe(before);
+  });
+});
+

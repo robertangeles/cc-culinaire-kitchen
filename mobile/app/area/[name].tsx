@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { AccessibilityInfo, Pressable, ScrollView, View } from "react-native";
+import { AccessibilityInfo, Alert, Pressable, ScrollView, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useCount } from "../../src/app/countContext";
@@ -42,6 +42,15 @@ export default function AreaCount() {
     setView({ mode: "count", index: i });
     setEntry(prefill(i));
     setMessage(null);
+  };
+  // A typed number that was not saved is never dropped silently: ask first.
+  const unsaved = view.mode === "count" && entry !== prefill(view.index) && parseEntry(entry) !== null;
+  const leave = (action: () => void) => {
+    if (!unsaved) return action();
+    Alert.alert("Discard the number you typed?", "It has not been saved.", [
+      { text: "Keep typing", style: "cancel" },
+      { text: "Discard", style: "destructive", onPress: action },
+    ]);
   };
   const advance = (from: number) => (from + 1 < items.length ? goTo(from + 1) : (setView({ mode: "review", index: 0 }), setMessage(null)));
 
@@ -144,14 +153,14 @@ export default function AreaCount() {
         <Keypad entry={entry} onKey={onKey} />
         <Button label={busy ? "Saving…" : "Save and next"} disabled={value === null || busy} onPress={() => void save()} />
         <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-          <Button kind="quiet" label="Previous" disabled={view.index === 0} onPress={() => goTo(view.index - 1)} />
-          <Button kind="quiet" label="Skip" onPress={() => advance(view.index)} />
-          <Button kind="quiet" label="Review" onPress={() => setView({ mode: "review", index: 0 })} />
+          <Button kind="quiet" label="Previous" disabled={view.index === 0} onPress={() => leave(() => goTo(view.index - 1))} />
+          <Button kind="quiet" label="Skip" onPress={() => leave(() => advance(view.index))} />
+          <Button kind="quiet" label="Review" onPress={() => leave(() => setView({ mode: "review", index: 0 }))} />
         </View>
 
         {items.slice(view.index + 1, view.index + 3).map((next, i) => (
-          <Pressable key={next.ingredientId} accessibilityRole="button" accessibilityLabel={`Jump to ${next.ingredientName}`} onPress={() => goTo(view.index + 1 + i)} style={{ minHeight: size.tap, justifyContent: "center", opacity: 0.55 }}>
-            <Text>{next.ingredientName}</Text>
+          <Pressable key={next.ingredientId} accessibilityRole="button" accessibilityLabel={`Jump to ${next.ingredientName}`} onPress={() => leave(() => goTo(view.index + 1 + i))} style={{ minHeight: size.tap, justifyContent: "center" }}>
+            <Text variant="muted">{next.ingredientName}</Text>
           </Pressable>
         ))}
       </ScrollView>

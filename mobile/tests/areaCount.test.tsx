@@ -98,6 +98,35 @@ describe("count screen", () => {
   });
 });
 
+describe("a typed number is never dropped silently", () => {
+  it("asks before Previous, Skip or Review throws away a number that was not saved, and keeps it on Keep typing", async () => {
+    const { Alert } = await import("react-native");
+    const alert = vi.spyOn(Alert, "alert").mockImplementation(() => {});
+    await makeHarness();
+    render(<AreaCount />);
+    type("7");
+    fireEvent.click(screen.getByRole("button", { name: "Skip" }));
+    expect(alert).toHaveBeenCalledWith("Discard the number you typed?", "It has not been saved.", expect.any(Array));
+    expect(screen.getByLabelText("Shiraz, kg, 7")).toBeTruthy(); // still there, still on item 1
+
+    const buttons = alert.mock.calls[0][2] as Array<{ text: string; onPress?: () => void }>;
+    buttons.find((b) => b.text === "Discard")!.onPress!();
+    await atItem(2);
+    alert.mockRestore();
+  });
+
+  it("does not ask when nothing unsaved is typed", async () => {
+    const { Alert } = await import("react-native");
+    const alert = vi.spyOn(Alert, "alert").mockImplementation(() => {});
+    await makeHarness();
+    render(<AreaCount />);
+    fireEvent.click(screen.getByRole("button", { name: "Skip" }));
+    await atItem(2);
+    expect(alert).not.toHaveBeenCalled();
+    alert.mockRestore();
+  });
+});
+
 describe("review and submit", () => {
   async function countBoth() {
     const h = await makeHarness();

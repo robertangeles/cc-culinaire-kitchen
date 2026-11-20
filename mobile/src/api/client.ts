@@ -98,15 +98,15 @@ export function createApiClient(opts: ApiClientOptions) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     let res: Response;
+    let text: string;
     try {
       res = await fetchFn(`${baseUrl}${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), signal: controller.signal });
+      text = await res.text(); // inside the timeout too: a server that sends headers and then stalls must not hang the queue
     } catch (err) {
       throw new ApiError(err instanceof Error && err.name === "AbortError" ? "timeout" : "network");
     } finally {
       clearTimeout(timer);
     }
-
-    const text = await res.text();
     let parsed: unknown;
     try {
       parsed = text ? JSON.parse(text) : undefined;

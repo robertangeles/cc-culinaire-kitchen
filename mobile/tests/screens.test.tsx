@@ -97,6 +97,15 @@ describe("areas list", () => {
     expect(routerMock.push).toHaveBeenCalledWith("/attention");
   });
 
+  it("tells the chef when another account's counts are waiting on this phone", async () => {
+    const { rows, counts } = await makeHarness();
+    // Left by someone who signed out with a count unsent.
+    rows.set("theirs", { id: "theirs", userId: 99, status: "SAVED_LOCAL", attempts: 0, nextAttemptAt: 0, createdAt: 1, updatedAt: 1, command: { sessionId: "S1", categoryName: "Bar", ingredientId: "i1", ingredientName: "Shiraz", rawQty: 1, countedUnit: "kg", claimRevision: 1 } });
+    await counts.refresh();
+    render(<Areas />);
+    expect(screen.getByText(/1 count from another account is waiting on this phone/)).toBeTruthy();
+  });
+
   it("says when no stock take is open", async () => {
     await makeHarness({ api: { activeSession: vi.fn(async () => null) } });
     render(<Areas />);
@@ -127,7 +136,7 @@ describe("needs attention", () => {
     await stuck("This count was queued under an earlier claim; recount under the current claim", 403, "forbidden");
     render(<Attention />);
     fireEvent.click(screen.getByRole("button", { name: "Enter it again" }));
-    expect(routerMock.push).toHaveBeenCalledWith({ pathname: "/area/[name]", params: { name: "Bar" } });
+    await waitFor(() => expect(routerMock.push).toHaveBeenCalledWith({ pathname: "/area/[name]", params: { name: "Bar" } }));
   });
 
   it("asks before discarding, naming the item and quantity, and keeps a record when confirmed", async () => {
@@ -141,6 +150,18 @@ describe("needs attention", () => {
     buttons.find((b) => b.text === "Discard")!.onPress!();
     await waitFor(async () => expect((await outbox.entriesFor("S1", "Bar"))[0].status).toBe("DISCARDED"));
     alert.mockRestore();
+  });
+
+  it("does not offer Enter it again for a count from a stock take that is no longer open", async () => {
+    const { ApiError } = await import("../src/api/client");
+    const h = await makeHarness({ sendFails: new ApiError("forbidden", "This count was queued under an earlier claim; recount under the current claim", 403) });
+    await h.outbox.enqueue({ sessionId: "OLD-SESSION", categoryName: "Cellar", ingredientId: "x", ingredientName: "Rum", rawQty: 2, countedUnit: "kg", claimRevision: 1 });
+    await h.outbox.drain();
+    await h.counts.refresh();
+    render(<Attention />);
+    expect(screen.getByText("Rum · Cellar")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Enter it again" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Discard this count" })).toBeTruthy();
   });
 
   it("says so when nothing is stuck", async () => {

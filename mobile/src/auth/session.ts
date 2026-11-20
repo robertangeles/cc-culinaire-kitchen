@@ -102,13 +102,15 @@ export function createSession({ api, hasTokens, snapshots }: SessionDeps) {
 
     /** App start: reuse saved tokens if the server still accepts them. */
     async restore() {
-      if (!(await hasTokens())) return set({ state: { phase: "signedOut" } });
+      // A secure store that throws (say after a keystore reset) means there is no usable session, not a frozen splash screen.
+      const saved = await hasTokens().catch(() => false);
+      if (!saved) return set({ state: { phase: "signedOut" } });
       try {
         await open(await api.me());
       } catch (err) {
         if (err instanceof ApiError && err.code === "unauthorized") return set({ state: { phase: "signedOut" } });
         // No signal is not a reason to lock a chef out of counting: open from the last known user and location.
-        const last = err instanceof ApiError && (err.code === "network" || err.code === "timeout") ? await snapshots.load() : null;
+        const last = err instanceof ApiError && (err.code === "network" || err.code === "timeout") ? await snapshots.load().catch(() => null) : null;
         if (last) return set({ state: { phase: "ready", ...last, offline: true } });
         set({ state: { phase: "signedOut", error: err instanceof ApiError ? err.message : GENERIC } });
       }

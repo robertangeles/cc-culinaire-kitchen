@@ -13,7 +13,7 @@ import type { KvStore } from "../src/storage/kv";
  * Release-1 phone flow against a real server, with the phone's own code and no UI: sign in with MFA, find the
  * open area count, claim two areas that share an item, count with no signal, reconnect and send, submit, and see
  * a late count into a submitted area come back as needs-attention. Needs the server on E2E_API_URL (default
- * http://localhost:3009) and the seeded E2E user, so it only runs when E2E_USER_EMAIL is set.
+ * http://localhost:3009) and the seeded E2E user. Skipped locally without credentials; fails in CI without them.
  */
 const email = process.env.E2E_USER_EMAIL;
 const password = process.env.E2E_USER_PASSWORD;
@@ -24,7 +24,8 @@ const tag = `ph${Date.now().toString(36)}-`;
 const API = "/api/inventory";
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-describe.skipIf(!email || !password || !totpSecret)("phone flow against the real server", () => {
+// Locally it skips without credentials; in CI a missing credential must fail the run, not skip it silently.
+describe.skipIf(!process.env.CI && (!email || !password || !totpSecret))("phone flow against the real server", () => {
   // The phone's pieces, wired the way appContext wires them, with memory storage and a fetch we can cut.
   let airplane = false;
   let tokens: Tokens | null = null;
@@ -75,6 +76,7 @@ describe.skipIf(!email || !password || !totpSecret)("phone flow against the real
     }
     const opened = await client.request<{ sessionId: string }>("POST", `${API}/stock-takes`, { body: { mode: "AREA", categories: [names.a, names.b] } });
     sessionId = opened.sessionId;
+    store = counts();
   });
 
   afterAll(async () => {
@@ -90,9 +92,10 @@ describe.skipIf(!email || !password || !totpSecret)("phone flow against the real
     for (const undo of cleanups.reverse()) await undo().catch(() => {});
   });
 
+  // Built after sign-in, like the app does: the downloaded stock take is cached under the signed-in account.
   const counts = () =>
     createCountStore({ api: createCountApi(client), kv, outbox, getUserId: () => userId!, locationId: "e2e", kick: () => {} });
-  const store = counts();
+  let store: ReturnType<typeof counts>;
 
   it("downloads the open stock take with each area's items in shelf order and the shared item marked", async () => {
     await store.refresh();

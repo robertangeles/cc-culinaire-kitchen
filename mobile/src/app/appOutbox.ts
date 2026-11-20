@@ -33,5 +33,9 @@ export function startOutbox(): void {
   started = true;
   void outbox.recover().then(runner.kick);
   AppState.addEventListener("change", (s) => s === "active" && runner.kick());
-  session.subscribe(() => session.getSnapshot().state.phase === "ready" && runner.kick());
+  session.subscribe(() => {
+    if (session.getSnapshot().state.phase !== "ready") return;
+    // Counts parked because the session ended ("Sign in again and this count will be sent") go back in the queue.
+    void outbox.requeueSignedOut().then(runner.kick);
+  });
 }

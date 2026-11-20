@@ -71,6 +71,13 @@ describe("restoring a saved session", () => {
     expect(snapshots.save).toHaveBeenLastCalledWith(null);
   });
 
+  it("shows sign-in instead of hanging when the secure store itself fails", async () => {
+    const { session, hasTokens } = setup();
+    hasTokens.mockRejectedValueOnce(new Error("keystore reset"));
+    await session.restore();
+    expect(state(session)).toEqual({ phase: "signedOut" });
+  });
+
   it("explains an unreachable server on the sign-in screen and keeps the tokens (no signOut call)", async () => {
     const { session, api } = setup({ me: vi.fn(async () => { throw new ApiError("network"); }) });
     await session.restore();

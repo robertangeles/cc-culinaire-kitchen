@@ -55,13 +55,13 @@ describe("enqueue", () => {
     expect(rows()).toHaveLength(2);
   });
 
-  it("queues a new entry behind one that is already sending, so neither number is lost", async () => {
+  it("a newer number for an item that is being sent replaces it in the same entry, so the old send cannot win", async () => {
     const { outbox, store, rows } = setup();
     await outbox.enqueue(line({ rawQty: 3 }));
     const [first] = rows();
     await store.put({ ...first, status: "SENDING" });
     await outbox.enqueue(line({ rawQty: 4 }));
-    expect(rows().map((r) => [r.status, r.command.rawQty])).toEqual([["SENDING", 3], ["SAVED_LOCAL", 4]]);
+    expect(rows().map((r) => [r.status, r.command.rawQty])).toEqual([["SENDING", 4]]);
   });
 
   it("editing a stuck count puts it back in the queue with the new number", async () => {
@@ -232,18 +232,6 @@ describe("recovery, accounts and submit gating", () => {
     expect(await outbox2.otherAccountPending()).toBe(0);
   });
 
-  it("lists what blocks submitting an area: anything not yet accepted or discarded", async () => {
-    const { outbox, rows } = setup(async (e) => { if (e.command.ingredientId === "bad") throw new ApiError("bad_request", "Quantity cannot exceed 99,999", 400); });
-    await outbox.enqueue(line({ ingredientId: "ok" }));
-    await outbox.enqueue(line({ ingredientId: "bad", ingredientName: "Rum" }));
-    await outbox.enqueue(line({ ingredientId: "other", categoryName: "Kitchen" }));
-    await outbox.drain();
-    const blocking = await outbox.unresolved("S1", "Bar");
-    expect(blocking.map((e) => e.command.ingredientName)).toEqual(["Rum"]);
-    await outbox.discard(rows().find((r) => r.command.ingredientId === "bad")!.id);
-    expect(await outbox.unresolved("S1", "Bar")).toEqual([]);
-  });
-
   it("lists one area's entries for the signed-in account only", async () => {
     const { outbox } = setup();
     await outbox.enqueue(line({ ingredientId: "a" }));
@@ -252,15 +240,130 @@ describe("recovery, accounts and submit gating", () => {
     expect(await outbox.entriesFor("S2", "Bar")).toEqual([]);
   });
 
-  it("summarises the queue for the screens and tells subscribers when it changes", async () => {
-    const { outbox } = setup(async (e) => { if (e.command.ingredientId === "bad") throw new ApiError("forbidden", "x", 403); });
-    const listener = vi.fn();
-    outbox.subscribe(listener);
-    await outbox.enqueue(line({ ingredientId: "ok" }));
-    await outbox.enqueue(line({ ingredientId: "bad" }));
-    expect(await outbox.summary()).toEqual({ waiting: 2, needsAttention: 0, accepted: 0 });
+  it("lists every stuck count of the signed-in account, from any stock take", async () => {
+    const { outbox } = setup(async () => { throw new ApiError("bad_request", "Cannot count: category is SUBMITTED", 400); });
+    await outbox.enqueue(line({ sessionId: "OLD", ingredientId: "a" }));
+    await outbox.enqueue(line({ sessionId: "S1", ingredientId: "b" }));
     await outbox.drain();
-    expect(await outbox.summary()).toEqual({ waiting: 0, needsAttention: 1, accepted: 1 });
-    expect(listener).toHaveBeenCalled();
+    expect((await outbox.attention()).map((e) => e.command.sessionId).sort()).toEqual(["OLD", "S1"]);
+  });
+
+  it("puts counts that were parked because the session ended back in the queue after signing in again", async () => {
+    let fail = true;
+    const { outbox, rows, clock } = setup(async () => { if (fail) throw new ApiError("unauthorized"); });
+    await outbox.enqueue(line({ ingredientId: "a" }));
+    await outbox.enqueue(line({ ingredientId: "b" }));
+    await outbox.drain();
+    await outbox.enqueue(line({ ingredientId: "c" })); // a stuck-for-another-reason count must NOT be requeued
+    fail = false;
+    await outbox.requeueSignedOut();
+    expect(rows().filter((r) => r.attention?.reason === "signed_out")).toEqual([]);
+    clock.t += 1;
+    const out = await outbox.drain();
+    expect(out.sent).toBe(3);
   });
 });
+
+describe("races between saving and sending (found in review)", () => {
+  /** A send that waits until the test lets it finish, so we can act while it is in flight. */
+  function gated() {
+    const sent: number[] = [];
+    let release: Array<() => void> = [];
+    let failNext: Error | null = null;
+    const send = async (e: OutboxEntry) => {
+      sent.push(e.command.rawQty);
+      await new Promise<void>((r) => release.push(r));
+      if (failNext) {
+        const err = failNext;
+        failNext = null;
+        throw err;
+      }
+    };
+    return { send, sent, finish: () => { const r = release; release = []; r.forEach((f) => f()); }, failNext: (e: Error) => void (failNext = e) };
+  }
+  const tick = () => new Promise((r) => setTimeout(r, 0));
+
+  it("changing a count while it is being sent still ends with the new number sent and accepted", async () => {
+    const g = gated();
+    const { outbox, rows } = setup(g.send);
+    await outbox.enqueue(line({ rawQty: 1 }));
+    const draining = outbox.drain();
+    await tick();
+    await outbox.enqueue(line({ rawQty: 2 })); // the chef edits while the 1 is in flight
+    g.finish();
+    await tick();
+    g.finish();
+    await draining;
+    expect(g.sent).toEqual([1, 2]);
+    expect(rows()).toHaveLength(1);
+    expect(rows()[0]).toMatchObject({ status: "ACCEPTED", command: { rawQty: 2 } });
+  });
+
+  it("an old send that fails never comes back to overwrite the newer number", async () => {
+    const g = gated();
+    const { outbox, rows, clock } = setup(g.send);
+    await outbox.enqueue(line({ rawQty: 1 }));
+    const draining = outbox.drain();
+    await tick();
+    await outbox.enqueue(line({ rawQty: 2 }));
+    g.failNext(new ApiError("network"));
+    g.finish();
+    await tick();
+    g.finish();
+    await draining;
+    expect(g.sent).toEqual([1, 2]); // never [1, 2, 1]
+    clock.t += 10 * 60_000;
+    g.finish();
+    await outbox.drain();
+    expect(rows()[0]).toMatchObject({ status: "ACCEPTED", command: { rawQty: 2 } });
+  });
+
+  it("discarding a count that is being sent stays discarded when the send finishes", async () => {
+    const g = gated();
+    const { outbox, rows } = setup(g.send);
+    const entry = await outbox.enqueue(line({ rawQty: 1 }));
+    const draining = outbox.drain();
+    await tick();
+    await outbox.discard(entry.id);
+    g.finish();
+    await draining;
+    expect(rows()[0].status).toBe("DISCARDED");
+  });
+
+  it("a drain asked for while one is finishing still picks up the count saved in between", async () => {
+    const g = gated();
+    const { outbox, rows, clock } = setup(g.send);
+    await outbox.enqueue(line({ ingredientId: "a" }));
+    const first = outbox.drain();
+    await tick();
+    clock.t += 1;
+    await outbox.enqueue(line({ ingredientId: "b" }));
+    const second = outbox.drain(); // joins the running drain, which must go round again
+    g.finish();
+    await tick();
+    g.finish();
+    await Promise.all([first, second]);
+    expect(rows().map((r) => r.status)).toEqual(["ACCEPTED", "ACCEPTED"]);
+  });
+
+  it("stops sending the first account's counts when a different account signs in mid-drain", async () => {
+    const g = gated();
+    let user = 1;
+    const store = memoryStore();
+    const clock = { t: 5_000 };
+    let n = 0;
+    const outbox = createOutbox({ store, send: g.send, now: () => clock.t, newId: () => `id${++n}`, getUserId: () => user });
+    await outbox.enqueue(line({ ingredientId: "a" }));
+    clock.t += 1;
+    await outbox.enqueue(line({ ingredientId: "b" }));
+    const draining = outbox.drain();
+    await tick();
+    user = 2; // someone else signs in while the first send is in flight
+    g.finish();
+    await draining;
+    expect(g.sent).toHaveLength(1);
+    const left = [...store.rows.values()].find((r) => r.command.ingredientId === "b")!;
+    expect(left).toMatchObject({ userId: 1, status: "SAVED_LOCAL" });
+  });
+});
+

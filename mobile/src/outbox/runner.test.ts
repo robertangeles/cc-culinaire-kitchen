@@ -1,8 +1,12 @@
 import { describe, it, expect, vi } from "vitest";
 import { createRunner } from "./runner";
 
-function setup(results: Array<{ sent: number; nextWakeAt: number | null }>) {
-  const drain = vi.fn(async () => results.shift() ?? { sent: 0, nextWakeAt: null });
+function setup(results: Array<{ sent: number; nextWakeAt: number | null } | Error>) {
+  const drain = vi.fn(async () => {
+    const next = results.shift() ?? { sent: 0, nextWakeAt: null };
+    if (next instanceof Error) throw next;
+    return next;
+  });
   const timers: Array<{ fn: () => void; ms: number; cleared: boolean }> = [];
   const clock = { t: 10_000 };
   const runner = createRunner({
@@ -46,5 +50,16 @@ describe("outbox runner", () => {
     await flush();
     expect(timers[0].cleared).toBe(true);
     expect(timers).toHaveLength(2);
+  });
+
+  it("tries again in 30 seconds when a drain fails (a database error must not stop all sending for good)", async () => {
+    const { runner, drain, timers } = setup([new Error("SQLITE_BUSY")]);
+    runner.kick();
+    await flush();
+    expect(timers).toHaveLength(1);
+    expect(timers[0].ms).toBe(30_000);
+    timers[0].fn();
+    await flush();
+    expect(drain).toHaveBeenCalledTimes(2);
   });
 });

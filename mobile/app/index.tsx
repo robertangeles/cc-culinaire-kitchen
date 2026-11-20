@@ -21,7 +21,7 @@ export default function Areas() {
   const [refreshing, setRefreshing] = useState(false);
   if (state.phase !== "ready") return null;
 
-  const attention = Object.values(snap.entries).flat().filter((e) => e.status === "NEEDS_ATTENTION").length;
+  const attention = snap.stuck.length;
   const attentionText = `${attention} ${attention === 1 ? "count needs" : "counts need"} attention`;
   const waiting = Object.values(snap.entries).flat().filter((e) => e.status === "SAVED_LOCAL" || e.status === "SENDING").length;
 
@@ -52,6 +52,11 @@ export default function Areas() {
           </Pressable>
         ) : null}
         {waiting > 0 ? <Text variant="muted">{waiting} waiting to send</Text> : null}
+        {snap.otherAccountPending > 0 ? (
+          <Text variant="muted">
+            {snap.otherAccountPending} {snap.otherAccountPending === 1 ? "count" : "counts"} from another account {snap.otherAccountPending === 1 ? "is" : "are"} waiting on this phone. They are sent when that account signs in.
+          </Text>
+        ) : null}
         {notice ? <Text variant="error" accessibilityLiveRegion="polite">{notice}</Text> : null}
 
         {snap.phase === "loading" ? <Text variant="muted">Loading the stock take…</Text> : null}

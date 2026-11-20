@@ -20,7 +20,12 @@ export interface CountSnapshot {
   /** Areas this chef holds, with the claim their counts are made under. */
   claims: Record<string, { claimRevision: number }>;
   serverLines: Record<string, ServerLine[]>;
+  /** This account's outbox entries for the open stock take, by area. */
   entries: Record<string, OutboxEntry[]>;
+  /** Every stuck count this account has, from any stock take (a closed one can still hold counts the chef must see). */
+  stuck: OutboxEntry[];
+  /** Unsent counts on this phone that belong to another account. */
+  otherAccountPending: number;
 }
 
 type Downloaded = Pick<CountSnapshot, "session" | "sheets" | "claims" | "serverLines">;
@@ -46,8 +51,9 @@ export interface CountStoreDeps {
 const isOffline = (err: unknown) => err instanceof ApiError && (err.code === "network" || err.code === "timeout");
 
 export function createCountStore({ api, kv, outbox, getUserId, locationId, kick }: CountStoreDeps) {
-  const cacheKey = `count.${locationId}`;
-  let snapshot: CountSnapshot = { phase: "loading", offline: false, session: null, sheets: [], claims: {}, serverLines: {}, entries: {} };
+  // Per account: another chef signing in on this phone must never see this chef's claims or counts.
+  const cacheKey = `count.${getUserId()}.${locationId}`;
+  let snapshot: CountSnapshot = { phase: "loading", offline: false, session: null, sheets: [], claims: {}, serverLines: {}, entries: {}, stuck: [], otherAccountPending: 0 };
   const listeners = new Set<() => void>();
 
   function set(next: Partial<CountSnapshot>) {
@@ -62,11 +68,10 @@ export function createCountStore({ api, kv, outbox, getUserId, locationId, kick 
 
   async function loadEntries() {
     const { session, sheets } = snapshot;
-    if (!session) return set({ entries: {} });
-    const pairs = await Promise.all(sheets.map(async (s) => [s.categoryName, await outbox.entriesFor(session.sessionId, s.categoryName)] as const));
-    set({ entries: Object.fromEntries(pairs) });
+    const pairs = session ? await Promise.all(sheets.map(async (s) => [s.categoryName, await outbox.entriesFor(session.sessionId, s.categoryName)] as const)) : [];
+    set({ entries: Object.fromEntries(pairs), stuck: await outbox.attention(), otherAccountPending: await outbox.otherAccountPending() });
   }
-  outbox.subscribe(() => void loadEntries());
+  const unsubscribeOutbox = outbox.subscribe(() => void loadEntries());
 
   async function download(): Promise<void> {
     const session = await api.activeSession();
@@ -89,6 +94,11 @@ export function createCountStore({ api, kv, outbox, getUserId, locationId, kick 
     subscribe(listener: () => void) {
       listeners.add(listener);
       return () => void listeners.delete(listener);
+    },
+
+    /** Stop listening to the outbox (the provider calls this when it goes away). */
+    dispose() {
+      unsubscribeOutbox();
     },
 
     /** Download the current stock take, or fall back to the last download when there is no signal. */

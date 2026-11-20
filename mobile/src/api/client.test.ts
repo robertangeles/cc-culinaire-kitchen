@@ -142,6 +142,15 @@ describe("error mapping (the offline queue branches on these codes)", () => {
     expect(err).toMatchObject({ code: "server", message: "The server had a problem. Try again." });
   });
 
+  it("times out a response whose body stalls after the headers, instead of hanging forever", async () => {
+    const stalledBody = (req: Request) => {
+      const body = new ReadableStream({ start(controller) { req.signal.addEventListener("abort", () => controller.error(new DOMException("aborted", "AbortError"))); } });
+      return new Response(body, { status: 200 });
+    };
+    const { client } = setup([stalledBody]);
+    await expect(client.request("GET", "/api/x")).rejects.toMatchObject({ code: "timeout" });
+  });
+
   it("maps a failed fetch to network and a stalled one to timeout", async () => {
     const down = setup([new TypeError("Network request failed")]);
     await expect(down.client.request("GET", "/api/x")).rejects.toMatchObject({ code: "network", message: "Can't reach the server. Try again." });

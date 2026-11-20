@@ -1314,3 +1314,15 @@ builds all tables with CHECKs enforcing. Stop it again when done.
 - **Problem**: The phone's end-to-end test got a bare 404 ("That wasn't found.") because the server running from the phone branch did not have the count-sheets route from the server branch.
 - **Fix**: Merged the server branch into the phone branch so the stack builds and tests together.
 - **Rule**: When an end-to-end test touches a route from a sibling branch, merge that branch in first. A 404 with no message is a missing route until proven otherwise.
+
+## 2026-11-20 — A queue that reads, awaits, then writes back loses edits made in between
+
+- **Problem**: Review of the phone outbox reproduced two silent-loss bugs. `enqueue` read the list, awaited, then wrote the old row back, while `drain` finished a send by writing its stale copy as ACCEPTED: a count changed from 1 to 2 mid-send ended as "Accepted 1" with the server holding 1. A newer count in a second row could be sent before a failing older one was retried, so the older number won. A drain asked for while one was finishing missed the new row, and an account switch mid-drain would have sent the first account's counts with the second one's token.
+- **Fix**: One lock for every queue change; a send's result is applied to the freshly read row (a changed command means "send the new one next", a discarded row stays discarded); one row per item even while it is sending; the account is re-checked before every send; a drain requested mid-drain goes round again.
+- **Rule**: Anything that does read, await, write on shared state needs either one lock or a re-read before the write. Write the race as a failing test with a gated fake (a send that waits for the test) before touching the code; the reviewer's repro is the test.
+
+## 2026-11-20 — Per-account cache keys break any test that builds the store before sign-in
+
+- **Problem**: Keying the cached stock take by account (so one chef never sees another's claims) made the phone E2E fail: its store was built before sign-in, so it was keyed to "no user".
+- **Fix**: Build the store after sign-in, as the app does.
+- **Rule**: When a key gains a user id, check every place that builds the thing before a user exists.
