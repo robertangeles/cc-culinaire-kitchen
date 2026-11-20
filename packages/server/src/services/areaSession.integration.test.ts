@@ -8,6 +8,7 @@ import { applyEnvPrefix } from "../utils/envShim.js";
 config({ path: resolve(dirname(fileURLToPath(import.meta.url)), "../../../../.env") });
 applyEnvPrefix();
 import { eq, and, inArray } from "drizzle-orm";
+import type { Request, Response } from "express";
 import { db } from "../db/index.js";
 import {
   organisation,
@@ -32,9 +33,13 @@ import {
   approveSession,
   getSessionDetail,
   ConflictError,
+  NotFoundError,
+  SheetIncompleteError,
   ValidationError,
 } from "./stockTakeService.js";
 import { setAreaItems } from "./storageAreaService.js";
+import { getAreaCountSheets } from "./areaSessionService.js";
+import { handleSubmitCategory } from "../controllers/stockTakeController.js";
 
 /**
  * Mobile release 1, PR 1 (E1): counting a stock take by storage area (X1, CEO-D18).
@@ -42,7 +47,7 @@ import { setAreaItems } from "./storageAreaService.js";
  * D8 (shared items must be counted on each area's own sheet; zero counts), D9 (no item-list
  * edits while an area count is open). Gated on TENANT_IT=1. Self-cleaning.
  *
- * Fixture: Bar and Stock Room share Shiraz; Kitchen holds Flour; Salt is in no area.
+ * Fixture: Bar and Stock Room share Shiraz; Kitchen holds Sugar then Flour; Salt is in no area.
  */
 const RUN = process.env.TENANT_IT === "1";
 
@@ -110,7 +115,7 @@ describe.skipIf(!RUN)("stock take by storage area (real DB)", () => {
       fx.areaIds[name] = id;
     }
 
-    for (const [name, category] of [["Shiraz", "spirits"], ["Flour", "dry_goods"], ["Salt", "dry_goods"]] as const) {
+    for (const [name, category] of [["Shiraz", "spirits"], ["Flour", "dry_goods"], ["Salt", "dry_goods"], ["Sugar", "dry_goods"]] as const) {
       const [{ id }] = await db
         .insert(ingredient)
         .values({
@@ -129,7 +134,8 @@ describe.skipIf(!RUN)("stock take by storage area (real DB)", () => {
     await db.insert(ingredientStorageArea).values([
       { ingredientId: fx.ing.Shiraz, storageAreaId: fx.areaIds.Bar },
       { ingredientId: fx.ing.Shiraz, storageAreaId: fx.areaIds["Stock Room"] },
-      { ingredientId: fx.ing.Flour, storageAreaId: fx.areaIds.Kitchen },
+      { ingredientId: fx.ing.Flour, storageAreaId: fx.areaIds.Kitchen, sortOrder: 1 },
+      { ingredientId: fx.ing.Sugar, storageAreaId: fx.areaIds.Kitchen, sortOrder: 0 },
     ]);
   });
 
@@ -188,8 +194,12 @@ describe.skipIf(!RUN)("stock take by storage area (real DB)", () => {
     await claimCategory(s.sessionId, "Stock Room", fx.userB);
 
     // D8: Shiraz is in both areas; submitting Stock Room without counting it is blocked, with the item named.
-    await expect(submitCategory(s.sessionId, "Stock Room")).rejects.toThrow(ValidationError);
+    await expect(submitCategory(s.sessionId, "Stock Room")).rejects.toThrow(SheetIncompleteError);
     await expect(submitCategory(s.sessionId, "Stock Room")).rejects.toThrow(/Shiraz/);
+    // E13: the phone reads the gaps from a structured list, not from the message text.
+    await expect(submitCategory(s.sessionId, "Stock Room")).rejects.toMatchObject({
+      missing: [{ ingredientId: fx.ing.Shiraz, ingredientName: `${fx.tag}-Shiraz`, areaNames: ["Bar"] }],
+    });
 
     // Zero is a count.
     await saveLineItem(room, fx.ing.Shiraz, 0, "kg", fx.userB);
@@ -268,5 +278,73 @@ describe.skipIf(!RUN)("stock take by storage area (real DB)", () => {
     expect(Number(level.q)).toBe(7);
 
     await expect(setAreaItems(fx.areaIds.Kitchen, fx.orgId, [{ ingredientId: fx.ing.Flour }])).resolves.toBeTruthy();
+  });
+
+  it("E13: the submit controller answers 409 with { error, missing } for a skipped shared item", async () => {
+    await closeSession(fx.sessionIds.pop()!);
+    const s = await openSession(fx.locId, fx.orgId, fx.userA, ["Bar", "Stock Room"], "AREA");
+    fx.sessionIds.push(s.sessionId);
+    await claimCategory(s.sessionId, "Stock Room", fx.userA);
+
+    const out = await new Promise<{ status: number; body: any }>((resolveCall, reject) => {
+      let status = 200;
+      const res = {
+        status(code: number) { status = code; return this; },
+        json(b: unknown) { resolveCall({ status, body: b }); return this; },
+      } as unknown as Response;
+      const req = {
+        user: { sub: fx.userA, roles: [], permissions: ["inventory:count"] },
+        params: { id: s.sessionId, cat: "Stock Room" },
+        body: {},
+      } as unknown as Request;
+      handleSubmitCategory(req, res, (e) => reject(e)).catch(reject);
+    });
+    expect(out.status).toBe(409);
+    expect(out.body.error).toMatch(/Shiraz/);
+    expect(out.body.missing).toEqual([{ ingredientId: fx.ing.Shiraz, ingredientName: `${fx.tag}-Shiraz`, areaNames: ["Bar"] }]);
+  });
+
+  describe("count sheets (what the phone downloads before counting)", () => {
+    it("lists each area's items in shelf order, with the other areas that share an item, and an Unassigned bucket", async () => {
+      await closeSession(fx.sessionIds.pop()!);
+      // Shelf order is the array order the web sets: Sugar first, though Flour sorts first by name.
+      await setAreaItems(fx.areaIds.Kitchen, fx.orgId, [{ ingredientId: fx.ing.Sugar }, { ingredientId: fx.ing.Flour }]);
+      const s = await openSession(fx.locId, fx.orgId, fx.userA, undefined, "AREA");
+      fx.sessionIds.push(s.sessionId);
+
+      const sheets = await getAreaCountSheets(s.sessionId, fx.orgId);
+      expect(sheets.map((a) => a.categoryName)).toEqual(["Bar", "Stock Room", "Kitchen", "Unassigned"]);
+
+      const byArea = Object.fromEntries(sheets.map((a) => [a.categoryName, a]));
+      expect(byArea.Bar.categoryId).toBe(await categoryId(s.sessionId, "Bar"));
+      expect(byArea.Bar.items).toEqual([
+        { ingredientId: fx.ing.Shiraz, ingredientName: `${fx.tag}-Shiraz`, countUnit: "kg", alsoIn: ["Stock Room"] },
+      ]);
+      expect(byArea["Stock Room"].items[0].alsoIn).toEqual(["Bar"]);
+      // Shelf order, not alphabetical: Sugar was put ahead of Flour.
+      expect(byArea.Kitchen.items.map((i) => i.ingredientName)).toEqual([`${fx.tag}-Sugar`, `${fx.tag}-Flour`]);
+      expect(byArea.Kitchen.items.every((i) => i.alsoIn.length === 0)).toBe(true);
+      expect(byArea.Unassigned.items.map((i) => i.ingredientName)).toEqual([`${fx.tag}-Salt`]);
+    });
+
+    it("counts in the location's unit override when one is set", async () => {
+      await db.update(locationIngredient).set({ unitOverride: "g" }).where(and(eq(locationIngredient.storeLocationId, fx.locId), eq(locationIngredient.ingredientId, fx.ing.Flour)));
+      const [s] = await db.select({ id: stockTakeSession.sessionId }).from(stockTakeSession).where(eq(stockTakeSession.storeLocationId, fx.locId));
+      const sheets = await getAreaCountSheets(s.id, fx.orgId);
+      const flour = sheets.find((a) => a.categoryName === "Kitchen")!.items.find((i) => i.ingredientId === fx.ing.Flour)!;
+      expect(flour.countUnit).toBe("g");
+    });
+
+    it("another organisation's session reads as not found", async () => {
+      const [s] = await db.select({ id: stockTakeSession.sessionId }).from(stockTakeSession).where(eq(stockTakeSession.storeLocationId, fx.locId));
+      await expect(getAreaCountSheets(s.id, fx.orgId + 1_000_000)).rejects.toThrow(NotFoundError);
+    });
+
+    it("a category count has no area sheets", async () => {
+      await closeSession(fx.sessionIds.pop()!);
+      const cat = await openSession(fx.locId, fx.orgId, fx.userA, ["dairy"]);
+      fx.sessionIds.push(cat.sessionId);
+      await expect(getAreaCountSheets(cat.sessionId, fx.orgId)).rejects.toThrow(ValidationError);
+    });
   });
 });
