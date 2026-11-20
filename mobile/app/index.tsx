@@ -8,7 +8,8 @@ import { summarizeArea } from "../src/count/countFlow";
 import { OfflineBanner } from "../src/ui/Banner";
 import { Text } from "../src/ui/Text";
 import { Button } from "../src/ui/Button";
-import { size, space } from "../src/theme";
+import { Chip, Surface, rowDivider } from "../src/ui/Surface";
+import { fontFamily, size, space } from "../src/theme";
 import { useColors } from "../src/ui/theme";
 
 const sheetIndex = (sheets: Array<{ categoryName: string }>, name: string) => {
@@ -74,11 +75,12 @@ export default function Areas() {
           </>
         ) : null}
 
-        {snap.phase === "ready" && snap.session
-          ? [...snap.session.categories]
+        {snap.phase === "ready" && snap.session ? (
+          <Surface>
+            {[...snap.session.categories]
               // Shelf order (the order of the count sheets), not the server's row order, which changes as rows are updated.
               .sort((a, b) => sheetIndex(snap.sheets, a.categoryName) - sheetIndex(snap.sheets, b.categoryName))
-              .map((category) => {
+              .map((category, index) => {
               const sheet = snap.sheets.find((s) => s.categoryName === category.categoryName);
               const area = summarizeArea({ items: sheet?.items ?? [], category, answers: store.answers(category.categoryName), currentUserId: state.user.userId });
               const done = area.status === "SUBMITTED" || area.status === "APPROVED";
@@ -88,19 +90,20 @@ export default function Areas() {
                   accessibilityRole="button"
                   accessibilityLabel={`${area.name}, ${area.counted} of ${area.total} counted${area.heldBy ? `, held by ${area.heldBy}` : ""}${done ? ", sent for review" : ""}`}
                   onPress={() => void open(area.name)}
-                  style={{ minHeight: size.tap, justifyContent: "center", paddingVertical: space.md, borderBottomWidth: 1, borderBottomColor: c.border, gap: space.xs }}
+                  style={[{ minHeight: size.tap + 14, justifyContent: "center", paddingVertical: space.md, paddingHorizontal: space.lg, gap: space.xs }, rowDivider(index, c.border)]}
                 >
-                  <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                    <Text>{area.name}</Text>
-                    <Text variant="muted">{done ? "Sent for review" : `${area.counted} of ${area.total}`}</Text>
+                  <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: space.md }}>
+                    <Text style={{ fontFamily: fontFamily.title, fontSize: 20, flexShrink: 1 }}>{area.name}</Text>
+                    <Chip label={done ? "Sent for review" : `${area.counted} of ${area.total}`} />
                   </View>
                   {area.sharesWith.length > 0 ? <Text variant="muted">Shares items with {area.sharesWith.join(", ")}</Text> : null}
                   {area.heldBy ? <Text variant="muted">{area.heldBy} is counting this</Text> : null}
                   {area.needsAttention > 0 ? <Text variant="error">⚠ {area.needsAttention} need attention</Text> : null}
                 </Pressable>
               );
-            })
-          : null}
+            })}
+          </Surface>
+        ) : null}
 
         {state.locations.length > 1 ? <Button kind="quiet" label="Change location" onPress={() => session.changeLocation()} /> : null}
         <Button kind="quiet" label="Sign out" onPress={() => void session.signOut()} />
