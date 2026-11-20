@@ -6,8 +6,8 @@
  * download. A build below the admin-set minimum gets 426 there, and count writes (saving a line,
  * submitting) are never gated, so counts waiting on an old phone can still be sent.
  *
- * No header (the web app, scripts) passes. A minimum that is unset, malformed or unreadable also
- * passes: a settings problem must never lock every chef out of signing in.
+ * No header (the web app, scripts) passes, and so does a header that is not a version. A minimum that is
+ * unset, malformed or unreadable also passes: a settings problem must never lock every chef out of signing in.
  *
  * The minimum lives in the `mobile_min_app_version` site setting (Settings, Site Settings).
  * `mobileVersionGuard` is the older, separate guard of the feedback endpoint and is unrelated.
@@ -32,10 +32,8 @@ export function requireSupportedMobileVersion(getMin: () => Promise<string | und
     const raw = req.headers["x-mobile-app-version"];
     const version = Array.isArray(raw) ? raw[0] : raw;
     if (!version) return next();
-    if (!APP_VERSION_RE.test(version)) {
-      res.status(400).json({ error: "The app version is not valid." });
-      return;
-    }
+    // A version we cannot read says nothing about whether the build is too old: let it through, like every other doubt here.
+    if (!APP_VERSION_RE.test(version)) return next();
 
     let min: string | undefined;
     try {

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { AccessibilityInfo, Animated, Easing, Platform } from "react-native";
 import { cardMotion } from "./motion";
 
@@ -20,22 +20,25 @@ export function useReduceMotion(): boolean {
 /** Slides and fades the item card in when the item changes. Not on first show, and not at all with reduce motion. */
 export function CardTransition({ itemKey, children }: { itemKey: string; children: ReactNode }) {
   const reduce = useReduceMotion();
+  const reduceRef = useRef(reduce);
+  reduceRef.current = reduce;
   const progress = useRef(new Animated.Value(1)).current;
-  const firstShow = useRef(true);
+  const shownKey = useRef<string | null>(null);
 
-  useEffect(() => {
-    if (firstShow.current) {
-      firstShow.current = false;
-      return;
-    }
-    const { durationMs } = cardMotion(reduce);
+  // Layout effect, so the new card never paints once at rest before it starts to move. Keyed on the item only:
+  // flipping the reduce-motion setting mid-use must not replay the slide on the same item.
+  useLayoutEffect(() => {
+    const first = shownKey.current === null;
+    shownKey.current = itemKey;
+    if (first) return;
+    const { durationMs } = cardMotion(reduceRef.current);
     if (durationMs === 0) {
       progress.setValue(1);
       return;
     }
     progress.setValue(0);
     Animated.timing(progress, { toValue: 1, duration: durationMs, easing: Easing.out(Easing.cubic), useNativeDriver: Platform.OS !== "web" }).start();
-  }, [itemKey, reduce, progress]);
+  }, [itemKey, progress]);
 
   return (
     <Animated.View

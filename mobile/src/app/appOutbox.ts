@@ -32,7 +32,7 @@ export function startOutbox(): void {
   if (started) return;
   started = true;
   // Accepted counts only need to stay a week (the server holds them); stuck and discarded ones are never pruned.
-  void outbox.recover().then(() => outbox.pruneAccepted(7 * 86_400_000)).then(runner.kick);
+  void outbox.recover().then(() => outbox.pruneAccepted(7 * 86_400_000)).catch(() => {}).then(runner.kick); // housekeeping must never stop the first send
   AppState.addEventListener("change", (s) => s === "active" && runner.kick());
   session.subscribe(() => {
     if (session.getSnapshot().state.phase !== "ready") return;

@@ -53,11 +53,13 @@ describe("mobile version policy (sign-in and count download only)", () => {
     expect(block.status).toHaveBeenCalledWith(426);
   });
 
-  it("answers 400 for a header that is not a version", async () => {
-    const r = run("not-a-version", async () => "1.0.0");
-    await r.done;
-    expect(r.next).not.toHaveBeenCalled();
-    expect(r.status).toHaveBeenCalledWith(400);
+  it("lets a version it cannot read through, with or without a minimum, rather than locking a chef out over a typo", async () => {
+    for (const header of ["not-a-version", "1.0", "1.0.0.1", "1.2.3, 1.2.3"]) {
+      const r = run(header, async () => "1.0.0");
+      await r.done;
+      expect(r.next, header).toHaveBeenCalled();
+      expect(r.status, header).not.toHaveBeenCalled();
+    }
   });
 
   it("fails open: an unreadable or malformed minimum never locks every phone out of signing in", async () => {
