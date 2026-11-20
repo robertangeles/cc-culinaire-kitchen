@@ -97,6 +97,19 @@ describe("supplier read-gating", () => {
   });
 });
 
+// The phone's pre-count download is a counter-level read: needs inventory:count, nothing more.
+describe("stock take count sheets — inventory:count", () => {
+  it("403s a user without inventory:count", () => {
+    const { passed, status } = runGate(findGate("get", "/stock-takes/:id/count-sheets"), ["chat:access"]);
+    expect(passed).toBe(false);
+    expect(status).toHaveBeenCalledWith(403);
+  });
+
+  it("passes a counter (inventory:count)", () => {
+    expect(runGate(findGate("get", "/stock-takes/:id/count-sheets"), SUBSCRIBER).passed).toBe(true);
+  });
+});
+
 // Approving/flagging a stock take and viewing the review + history queues are
 // HQ-only (inventory:hq) — a counter or a plain manager must NOT get in.
 const HQ = [...MANAGER, "inventory:hq"];

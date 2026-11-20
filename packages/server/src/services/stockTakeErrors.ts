@@ -13,6 +13,21 @@ export class ConflictError extends Error {
   }
 }
 
+/**
+ * An area cannot be submitted yet: shared items still have no count on its sheet (D8).
+ * A ConflictError (409) that also carries the gaps, so the phone lists them without parsing text.
+ * `areaNames` are the other areas in the session that hold the same item.
+ */
+export class SheetIncompleteError extends ConflictError {
+  constructor(
+    message: string,
+    public readonly missing: Array<{ ingredientId: string; ingredientName: string; areaNames: string[] }>,
+  ) {
+    super(message);
+    this.name = "SheetIncompleteError";
+  }
+}
+
 export class InvalidStateError extends Error {
   constructor(message: string) {
     super(message);
