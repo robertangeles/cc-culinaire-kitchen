@@ -35,6 +35,8 @@ export interface SessionDeps {
   /** True when the device holds saved tokens. */
   hasTokens: () => Promise<boolean>;
   snapshots: { load: () => Promise<Snapshot | null>; save: (snapshot: Snapshot | null) => Promise<void> };
+  /** Opens the Google account picker and returns its ID token, or null when the person closes it. Absent when the build has no Google client ID. */
+  googleIdToken?: () => Promise<string | null>;
 }
 
 const GENERIC = "Something went wrong. Try again.";
@@ -49,7 +51,7 @@ function signInMessage(err: unknown): string {
   return err.code === "unauthorized" ? "Email or password is wrong." : err.message;
 }
 
-export function createSession({ api, hasTokens, snapshots }: SessionDeps) {
+export function createSession({ api, hasTokens, snapshots, googleIdToken }: SessionDeps) {
   let snapshot: SessionSnapshot = { state: { phase: "restoring" }, busy: false };
   const listeners = new Set<() => void>();
 
@@ -125,6 +127,26 @@ export function createSession({ api, hasTokens, snapshots }: SessionDeps) {
           await open(result.user);
         } catch (err) {
           set({ state: { phase: "signedOut", error: signInMessage(err) } });
+        }
+      });
+    },
+
+    signInWithGoogle() {
+      if (!googleIdToken) return Promise.resolve();
+      return run(async () => {
+        let idToken: string | null;
+        try {
+          idToken = await googleIdToken();
+        } catch {
+          return set({ state: { phase: "signedOut", error: "Google sign-in didn't work. Try again." } });
+        }
+        if (idToken === null) return; // closed the picker: nothing to say
+        try {
+          const result = await api.googleSignIn(idToken);
+          if (result.status === "mfa") return set({ state: { phase: "mfa", mfaSessionToken: result.mfaSessionToken } });
+          await open(result.user);
+        } catch (err) {
+          set({ state: { phase: "signedOut", error: err instanceof ApiError ? err.message : GENERIC } });
         }
       });
     },

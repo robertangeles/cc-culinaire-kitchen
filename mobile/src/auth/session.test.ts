@@ -9,9 +9,10 @@ const bystander: AuthUser = { ...counter, permissions: ["chat:access"] };
 const loc = (id: string): StoreLocation => ({ storeLocationId: id, organisationId: 1, locationName: `Loc ${id}`, classification: "branch" });
 const ctx = (locations: StoreLocation[], selectedLocationId: string | null = null): LocationContext => ({ locations, selectedLocationId, organisationId: 1, isOrgAdmin: false, hasLocationAccess: locations.length > 0 });
 
-function setup(overrides: Partial<Record<keyof AuthApi, unknown>> = {}) {
+function setup(overrides: Partial<Record<keyof AuthApi, unknown>> = {}, googleIdToken?: () => Promise<string | null>) {
   const api = {
     signIn: vi.fn(async () => ({ status: "signedIn" as const, user: counter })),
+    googleSignIn: vi.fn(async () => ({ status: "signedIn" as const, user: counter })),
     verifyMfa: vi.fn(async () => counter),
     me: vi.fn(async () => counter),
     signOut: vi.fn(async () => {}),
@@ -22,7 +23,7 @@ function setup(overrides: Partial<Record<keyof AuthApi, unknown>> = {}) {
   const hasTokens = vi.fn(async () => true);
   let saved: Snapshot | null = null;
   const snapshots = { load: vi.fn(async () => saved), save: vi.fn(async (s: Snapshot | null) => void (saved = s)) };
-  const session = createSession({ api: api as unknown as AuthApi, hasTokens, snapshots });
+  const session = createSession({ api: api as unknown as AuthApi, hasTokens, snapshots, googleIdToken });
   return { session, api, hasTokens, snapshots, setSaved: (s: Snapshot | null) => void (saved = s) };
 }
 
@@ -254,3 +255,39 @@ describe("changing location after sign-in", () => {
   });
 });
 
+
+describe("signing in with Google", () => {
+  it("takes the ID token from the Google account picker and opens the areas like a password sign-in", async () => {
+    const { session, api } = setup({}, async () => "ID-TOKEN");
+    await session.signInWithGoogle();
+    expect(api.googleSignIn).toHaveBeenCalledWith("ID-TOKEN");
+    expect(state(session)).toMatchObject({ phase: "ready", user: counter });
+  });
+
+  it("does nothing, and says nothing, when the person closes the account picker", async () => {
+    const { session, api } = setup({}, async () => null);
+    await session.signInWithGoogle();
+    expect(api.googleSignIn).not.toHaveBeenCalled();
+    expect(state(session)).toEqual({ phase: "restoring" });
+    expect(session.getSnapshot().busy).toBe(false);
+  });
+
+  it("says plainly when the account picker itself fails", async () => {
+    const { session, api } = setup({}, async () => { throw new Error("DEVELOPER_ERROR"); });
+    await session.signInWithGoogle();
+    expect(api.googleSignIn).not.toHaveBeenCalled();
+    expect(state(session)).toEqual({ phase: "signedOut", error: "Google sign-in didn't work. Try again." });
+  });
+
+  it("shows the server's reason when it refuses the Google account", async () => {
+    const { session } = setup({ googleSignIn: vi.fn(async () => { throw new ApiError("forbidden", "This Google account can't sign in here."); }) }, async () => "ID-TOKEN");
+    await session.signInWithGoogle();
+    expect(state(session)).toEqual({ phase: "signedOut", error: "This Google account can't sign in here." });
+  });
+
+  it("goes to the code step when the account uses MFA", async () => {
+    const { session } = setup({ googleSignIn: vi.fn(async () => ({ status: "mfa" as const, mfaSessionToken: "M" })) }, async () => "ID-TOKEN");
+    await session.signInWithGoogle();
+    expect(state(session)).toMatchObject({ phase: "mfa", mfaSessionToken: "M" });
+  });
+});

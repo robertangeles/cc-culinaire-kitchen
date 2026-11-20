@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { Pressable } from "react-native";
+import { Pressable, View } from "react-native";
 import { useRouter } from "expo-router";
-import { authApi, session, useSession } from "../src/runtime/appContext";
+import { authApi, googleEnabled, session, useSession } from "../src/runtime/appContext";
 import { Brand } from "../src/ui/Brand";
+import { GoogleMark } from "../src/ui/GoogleMark";
 import { Screen } from "../src/ui/Screen";
 import { Segmented } from "../src/ui/Segmented";
 import { Text } from "../src/ui/Text";
@@ -89,6 +90,16 @@ export default function SignIn() {
         </Text>
       ) : null}
       <Button label={register ? (busy ? "Creating…" : "Create account") : busy ? "Signing in…" : "Sign in"} disabled={!canSubmit} onPress={submit} />
+      {googleEnabled ? (
+        <>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+            <View style={{ flex: 1, height: 1, backgroundColor: c.border }} />
+            <Text style={{ fontFamily: "Inter_600SemiBold", fontSize: 12, letterSpacing: 1.8, color: c.textMuted }}>OR</Text>
+            <View style={{ flex: 1, height: 1, backgroundColor: c.border }} />
+          </View>
+          <Button kind="ghost" label="Continue with Google" leading={<GoogleMark />} disabled={signingIn} onPress={() => void session.signInWithGoogle()} />
+        </>
+      ) : null}
     </Screen>
   );
 }
