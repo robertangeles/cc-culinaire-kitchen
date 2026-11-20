@@ -1350,3 +1350,9 @@ builds all tables with CHECKs enforcing. Stop it again when done.
 - **Problem**: (a) With `CI=1` Metro disables file watching, so the device ran stale JavaScript after every edit. (b) A TOTP code is only valid for the rest of its 30 s step, so a code generated early fails by the time the keypad is tapped. (c) The dev-only warning toast sits over the lower screen and swallows swipes and taps. (d) A test string matching two views (a row and its label) taps the wrong one.
 - **Fix**: Start Metro without `CI`; generate the code late (at least 12 s left); start swipes above the toast; match the full accessibility label.
 - **Rule**: When a device step fails, look at the screenshot before changing the app. Most failures were the test.
+
+## 2026-11-20 — A form that fits on an emulator can hide its lower fields behind the keyboard on a real phone
+
+- **Problem**: On the moto g86 (Android 16, edge-to-edge) the keyboard did not resize the window, and `Screen` only lifted above it on iOS. The two-field sign-in was fine; the three-field Register form had Email and Password behind the keyboard, so a tap on them hit a key. The emulator walk never showed it because the sign-in form was short enough.
+- **Fix**: `KeyboardAvoidingView behavior="padding"` on every platform.
+- **Rule**: Check every form with the keyboard open on a real phone, and make the longest form the test. Match the first app's look from its running screen, not from its source: the source did not show the welcome carousel, the segment or the field styling.

@@ -12,8 +12,9 @@ const tokenStore = createSecureTokenStore();
 // eslint-disable-next-line prefer-const -- assigned after the client that calls into it
 let session: Session;
 export const client = createApiClient({ baseUrl: apiBaseUrl, tokenStore, appVersion, onSessionExpired: () => session.sessionExpired() });
+export const authApi = createAuthApi(client, tokenStore);
 session = createSession({
-  api: createAuthApi(client, tokenStore),
+  api: authApi,
   hasTokens: async () => (await tokenStore.load()) !== null,
   snapshots: createSnapshotStore(sqliteKv),
 });

@@ -31,6 +31,8 @@ export default function RootLayout() {
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Protected guard={state.phase === "signedOut"}>
           <Stack.Screen name="sign-in" />
+          <Stack.Screen name="forgot-password" />
+          <Stack.Screen name="check-email" />
         </Stack.Protected>
         <Stack.Protected guard={state.phase === "mfa"}>
           <Stack.Screen name="mfa" />

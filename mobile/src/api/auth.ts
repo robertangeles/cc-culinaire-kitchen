@@ -48,6 +48,21 @@ export function createAuthApi(client: ApiClient, tokenStore: TokenStore) {
       return { status: "signedIn", user: await finish(reply) };
     },
 
+    /** Creates the account only: nobody is signed in, and the person finishes verifying from the email the server sends. */
+    async register(name: string, email: string, password: string): Promise<{ autoVerified: boolean }> {
+      const reply = await client.request<{ autoVerified?: boolean }>("POST", "/api/auth/register", { body: { name, email, password }, auth: false });
+      return { autoVerified: reply.autoVerified === true };
+    },
+
+    /** The server answers the same whether or not the address has an account, so neither do we. */
+    async forgotPassword(email: string): Promise<void> {
+      await client.request("POST", "/api/auth/forgot-password", { body: { email }, auth: false });
+    },
+
+    async resendVerification(email: string): Promise<void> {
+      await client.request("POST", "/api/auth/resend-verification", { body: { email }, auth: false });
+    },
+
     async verifyMfa(mfaSessionToken: string, code: string): Promise<AuthUser> {
       return finish(await client.request<LoginReply>("POST", "/api/auth/mfa/verify", { body: { mfaSessionToken, code }, auth: false }));
     },

@@ -4,7 +4,7 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { Alert } from "react-native";
 import { useSyncExternalStore } from "react";
 import { harness, makeHarness } from "./harness";
-import { routerMock, sessionMock, sessionState } from "../testing/mocks";
+import { authApiMock, routerMock, sessionMock, sessionState } from "../testing/mocks";
 
 vi.mock("../src/runtime/countContext", async () => {
   const { harness } = await import("./harness");
@@ -17,7 +17,7 @@ vi.mock("../src/runtime/countContext", async () => {
 });
 vi.mock("../src/runtime/appContext", async () => {
   const { sessionMock, sessionState } = await import("../testing/mocks");
-  return { session: sessionMock, useSession: () => sessionState.current };
+  return { session: sessionMock, authApi: authApiMock, useSession: () => sessionState.current };
 });
 vi.mock("../src/runtime/appOutbox", async () => {
   const { harness } = await import("./harness");
@@ -28,6 +28,9 @@ import Areas from "../app/index";
 import Attention from "../app/attention";
 import SignIn from "../app/sign-in";
 import Mfa from "../app/mfa";
+import ForgotPassword from "../app/forgot-password";
+import CheckEmail from "../app/check-email";
+import { searchParams } from "../testing/mocks";
 import ChooseLocation from "../app/location";
 
 const chef = { userId: 1, userName: "Chef", userEmail: "c@x.test", mfaEnabled: false, roles: [], permissions: ["inventory:count"] };
@@ -247,5 +250,84 @@ describe("sign-in screens", () => {
     fireEvent.click(screen.getByRole("button", { name: "Second Kitchen" }));
     expect(sessionMock.chooseLocation).toHaveBeenCalledWith("L2");
     expect(harness).toBeTruthy();
+  });
+});
+
+describe("registration and password help", () => {
+  beforeEach(() => {
+    sessionState.current = { state: { phase: "signedOut" }, busy: false };
+    authApiMock.register.mockReset();
+    authApiMock.forgotPassword.mockReset();
+    authApiMock.resendVerification.mockReset();
+    routerMock.push.mockReset();
+  });
+
+  it("switches to Register, asks for a name too, and sends the account to the check-your-email screen", async () => {
+    authApiMock.register.mockResolvedValue({ autoVerified: false });
+    render(<SignIn />);
+    expect(screen.queryByLabelText("Name")).toBeNull();
+    fireEvent.click(screen.getByRole("tab", { name: "Register" }));
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: " Chef Ana " } });
+    fireEvent.change(screen.getByLabelText("Email"), { target: { value: " ana@x.test " } });
+    fireEvent.change(screen.getByLabelText("Password"), { target: { value: "Str0ng!pass" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create account" }));
+    await waitFor(() => expect(authApiMock.register).toHaveBeenCalledWith("Chef Ana", "ana@x.test", "Str0ng!pass"));
+    await waitFor(() => expect(routerMock.push).toHaveBeenCalledWith({ pathname: "/check-email", params: { kind: "verify", email: "ana@x.test" } }));
+  });
+
+  it("shows the server's reason when registration is refused and stays on the form", async () => {
+    authApiMock.register.mockRejectedValue(Object.assign(new Error("That email is already registered."), { code: "conflict" }));
+    render(<SignIn />);
+    fireEvent.click(screen.getByRole("tab", { name: "Register" }));
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Ana" } });
+    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "ana@x.test" } });
+    fireEvent.change(screen.getByLabelText("Password"), { target: { value: "Str0ng!pass" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create account" }));
+    expect(await screen.findByText("That email is already registered.")).toBeTruthy();
+    expect(routerMock.push).not.toHaveBeenCalled();
+  });
+
+  it("keeps Create account off until name, email and password are all filled", () => {
+    render(<SignIn />);
+    fireEvent.click(screen.getByRole("tab", { name: "Register" }));
+    expect(screen.getByRole("button", { name: "Create account" }).getAttribute("aria-disabled")).toBe("true");
+  });
+
+  it("sends a reset email from Forgot password and moves on without saying whether the account exists", async () => {
+    authApiMock.forgotPassword.mockResolvedValue(undefined);
+    render(<ForgotPassword />);
+    expect(screen.getByRole("button", { name: "Send reset link" }).getAttribute("aria-disabled")).toBe("true");
+    fireEvent.change(screen.getByLabelText("Email"), { target: { value: " ana@x.test " } });
+    fireEvent.click(screen.getByRole("button", { name: "Send reset link" }));
+    await waitFor(() => expect(authApiMock.forgotPassword).toHaveBeenCalledWith("ana@x.test"));
+    await waitFor(() => expect(routerMock.push).toHaveBeenCalledWith({ pathname: "/check-email", params: { kind: "reset", email: "ana@x.test" } }));
+  });
+
+  it("says plainly when the reset email could not be requested, and stays put", async () => {
+    authApiMock.forgotPassword.mockRejectedValue(Object.assign(new Error("Can't reach the server. Try again."), { code: "network" }));
+    render(<ForgotPassword />);
+    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "ana@x.test" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send reset link" }));
+    expect(await screen.findByText("Can't reach the server. Try again.")).toBeTruthy();
+    expect(routerMock.push).not.toHaveBeenCalled();
+  });
+
+  it("after registering, says where the email went and can send it again", async () => {
+    searchParams.current = { kind: "verify", email: "ana@x.test" };
+    authApiMock.resendVerification.mockResolvedValue(undefined);
+    render(<CheckEmail />);
+    expect(screen.getByText(/ana@x\.test/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Send it again" }));
+    await waitFor(() => expect(authApiMock.resendVerification).toHaveBeenCalledWith("ana@x.test"));
+    expect(await screen.findByText("Sent again.")).toBeTruthy();
+  });
+
+  it("after a reset request, explains the browser step and offers no resend", () => {
+    searchParams.current = { kind: "reset", email: "ana@x.test" };
+    render(<CheckEmail />);
+    expect(screen.getByText(/reset your password/i)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Send it again" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Back to sign in" }));
+    expect(routerMock.replace).toHaveBeenCalledWith("/sign-in");
   });
 });
