@@ -148,7 +148,8 @@ describe.skipIf(!email || !password || !totpSecret)("phone flow against the real
   });
 
   it("a late count into a submitted area comes back as needs-attention with the server's words", async () => {
-    await store.saveCount(names.a, { ingredientId: ids.soloA, ingredientName: "soloA", rawQty: 9, countedUnit: "kg" });
+    // A count queued earlier (say on another phone) that reaches the server after the area was submitted.
+    await outbox.enqueue({ sessionId, categoryName: names.a, ingredientId: ids.soloA, ingredientName: "soloA", rawQty: 9, countedUnit: "kg", claimRevision: 1 });
     clock += 60_000;
     await outbox.drain();
     const [stuck] = (await outbox.entriesFor(sessionId, names.a)).filter((e) => e.status === "NEEDS_ATTENTION");

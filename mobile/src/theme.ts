@@ -4,7 +4,7 @@
  * Colours start from the approved palette. Five were nudged just far enough to reach 4.5:1 text
  * contrast, which the design's own accessibility rule requires (measured, see theme.test.ts):
  * light muted text #6B6F76 -> #696D74, light ember #C24A28 -> #BA4726, copper used as TEXT
- * #B87840 -> #956134 (the original stays as a fill), primary button gradient start #B87840 ->
+ * #B87840 -> #956134, primary button gradient start #B87840 ->
  * #A26A38 (white text), dark herb/ember/muted lightened. Saffron is only ever a fill; text on it is ink.
  */
 
@@ -18,8 +18,6 @@ export interface Palette {
   textMuted: string;
   /** Copper as text or link. */
   accentText: string;
-  /** Copper as a fill or glow (never text). */
-  accentFill: string;
   /** Primary button gradient and its text. */
   buttonFrom: string;
   buttonTo: string;
@@ -41,7 +39,6 @@ export const palettes: Record<"light" | "dark", Palette> = {
     text: "#101418",
     textMuted: "#696D74",
     accentText: "#956134",
-    accentFill: "#B87840",
     buttonFrom: "#A26A38",
     buttonTo: "#8A5530",
     buttonText: "#FFFFFF",
@@ -57,7 +54,6 @@ export const palettes: Record<"light" | "dark", Palette> = {
     text: "#EDE6D7",
     textMuted: "#84878D",
     accentText: "#D89868",
-    accentFill: "#D89868",
     buttonFrom: "#D89868",
     buttonTo: "#B87840",
     buttonText: "#101418",
@@ -71,7 +67,7 @@ export const palettes: Record<"light" | "dark", Palette> = {
 export const space = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 } as const;
 
 /** Rows are dividers, not cards, so they have no radius. */
-export const radius = { key: 16, button: 14, banner: 12, row: 0 } as const;
+export const radius = { key: 16, button: 14, banner: 12 } as const;
 
 /** dp. Taps are at least 56; keypad keys 72 with 8 gaps; the primary button 64. */
 export const size = { tap: 56, key: 72, keyGap: 8, primaryButton: 64 } as const;
@@ -84,10 +80,4 @@ export const fontFamily = {
   title: "Fraunces_600SemiBold",
   ui: "Inter_400Regular",
   uiStrong: "Inter_600SemiBold",
-} as const;
-
-/** Two elevation levels, always with an offset (a zero-offset halo is only allowed as the dark-mode glow). */
-export const elevation = {
-  low: { shadowColor: "#000", shadowOpacity: 0.12, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
-  high: { shadowColor: "#000", shadowOpacity: 0.16, shadowRadius: 16, shadowOffset: { width: 0, height: 6 }, elevation: 6 },
 } as const;

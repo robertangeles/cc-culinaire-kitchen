@@ -324,6 +324,11 @@ jobs:
         working-directory: packages/client
         run: pnpm exec playwright test --retries=0 --max-failures=10 && node scripts/checkE2eSkips.mjs
 
+      # The phone's own client, session, count store and outbox against this API: sign in with MFA, count
+      # with no signal, reconnect, submit. No emulator, no UI; the screens are covered by the mobile job.
+      - name: Run phone flow end-to-end test
+        run: pnpm --filter @culinaire/mobile run check:e2e
+
       - name: Show server log on failure
         if: always()
         run: tail -n 100 server.log

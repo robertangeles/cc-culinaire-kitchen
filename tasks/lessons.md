@@ -1290,3 +1290,27 @@ builds all tables with CHECKs enforcing. Stop it again when done.
 - **Problem**: PR #186 added four real-DB suites (including the regression test for approval failing on the zone index) and none was added to the `integration` job, which lists files by name. They ran locally and never in CI.
 - **Fix**: Own PR adds a step per suite.
 - **Rule**: A new `*.integration.test.ts` is not finished until `ci.yml` has a step for it; grep `ci.yml` for the file name before closing the task.
+
+## 2026-11-20 — Waiting for text that appears twice makes a UI test pass by luck
+
+- **Problem**: A screen test waited for the text "Gin" to know the count screen had moved on, but the faded "next items" list also shows "Gin", so the wait returned at once and later assertions passed or failed on timing.
+- **Fix**: Wait for something only the new state shows (the "item 2 of 2" header). `getByLabelText` for the typed number, because the same digit is also a keypad key.
+- **Rule**: When a screen shows the same words in two places, a text wait proves nothing. Pick the one element that exists only after the change.
+
+## 2026-11-20 — A save that returns before the screen's data reloads
+
+- **Problem**: `saveCount` enqueued the count and returned, while the entries the screen reads were reloaded by a fire-and-forget subscriber. The caller read answers straight after and saw the old state (found by a screen test).
+- **Fix**: `saveCount` awaits the reload before returning.
+- **Rule**: If the caller reads derived state right after a write, the write must wait for that state to refresh. Do not rely on a subscriber.
+
+## 2026-11-20 — This machine's network is about 20 KB/s: no multi-GB downloads
+
+- **Problem**: Installing an Android emulator system image (about 1.5 GB) would have taken around 20 hours; the Expo install also logged sub-50 KB/s warnings. `adb devices` shows no phone.
+- **Fix**: Cancelled and cleaned the partial download. Phone screens are tested by rendering the real screens through react-native-web in jsdom; the phone-to-server seam by `mobile/e2e` against the real API. Neither is a device walk.
+- **Rule**: Measure throughput (`du` twice, 20 seconds apart) before committing to a big download. A real device or emulator run is still owed before a pilot.
+
+## 2026-11-20 — A new route is invisible to a branch that does not contain it
+
+- **Problem**: The phone's end-to-end test got a bare 404 ("That wasn't found.") because the server running from the phone branch did not have the count-sheets route from the server branch.
+- **Fix**: Merged the server branch into the phone branch so the stack builds and tests together.
+- **Rule**: When an end-to-end test touches a route from a sibling branch, merge that branch in first. A 404 with no message is a missing route until proven otherwise.

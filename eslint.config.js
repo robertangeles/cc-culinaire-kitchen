@@ -114,7 +114,8 @@ export default tseslint.config(
       ],
     },
   },
-  { files: ["mobile/src/api/**/*.ts"], rules: { "no-restricted-globals": "off" } },
+  // The API client and the end-to-end test (which talks to a real server) are the only places that may touch the network.
+  { files: ["mobile/src/api/**/*.ts", "mobile/e2e/**/*.ts"], rules: { "no-restricted-globals": "off" } },
 
   // Shared: no extra globals (pure TS)
   {
