@@ -5,6 +5,8 @@ import { useFonts, Fraunces_600SemiBold } from "@expo-google-fonts/fraunces";
 import { Inter_400Regular, Inter_600SemiBold } from "@expo-google-fonts/inter";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { session, useSession } from "../src/app/appContext";
+import { startOutbox } from "../src/app/appOutbox";
+import { CountProvider } from "../src/app/countContext";
 
 void SplashScreen.preventAutoHideAsync();
 
@@ -13,6 +15,7 @@ export default function RootLayout() {
   const { state } = useSession();
 
   useEffect(() => {
+    startOutbox();
     void session.restore();
   }, []);
 
@@ -23,8 +26,7 @@ export default function RootLayout() {
   if (!ready) return null;
 
   // Each screen exists only in its phase, so the back button can never reach a screen from the wrong state.
-  return (
-    <SafeAreaProvider>
+  const stack = (
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Protected guard={state.phase === "signedOut"}>
           <Stack.Screen name="sign-in" />
@@ -40,8 +42,15 @@ export default function RootLayout() {
         </Stack.Protected>
         <Stack.Protected guard={state.phase === "ready"}>
           <Stack.Screen name="index" />
+          <Stack.Screen name="area/[name]" />
+          <Stack.Screen name="attention" />
         </Stack.Protected>
       </Stack>
+  );
+
+  return (
+    <SafeAreaProvider>
+      {state.phase === "ready" ? <CountProvider locationId={state.location.storeLocationId}>{stack}</CountProvider> : stack}
     </SafeAreaProvider>
   );
 }

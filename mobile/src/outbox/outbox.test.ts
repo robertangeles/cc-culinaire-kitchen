@@ -244,6 +244,14 @@ describe("recovery, accounts and submit gating", () => {
     expect(await outbox.unresolved("S1", "Bar")).toEqual([]);
   });
 
+  it("lists one area's entries for the signed-in account only", async () => {
+    const { outbox } = setup();
+    await outbox.enqueue(line({ ingredientId: "a" }));
+    await outbox.enqueue(line({ ingredientId: "b", categoryName: "Kitchen" }));
+    expect((await outbox.entriesFor("S1", "Bar")).map((e) => e.command.ingredientId)).toEqual(["a"]);
+    expect(await outbox.entriesFor("S2", "Bar")).toEqual([]);
+  });
+
   it("summarises the queue for the screens and tells subscribers when it changes", async () => {
     const { outbox } = setup(async (e) => { if (e.command.ingredientId === "bad") throw new ApiError("forbidden", "x", 403); });
     const listener = vi.fn();

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { createSession } from "./session";
+import { createSession, type Snapshot } from "./session";
 import { ApiError } from "../api/client";
 import type { AuthApi, AuthUser, LocationContext, StoreLocation } from "../api/auth";
 
@@ -20,8 +20,10 @@ function setup(overrides: Partial<Record<keyof AuthApi, unknown>> = {}) {
     ...overrides,
   };
   const hasTokens = vi.fn(async () => true);
-  const session = createSession({ api: api as unknown as AuthApi, hasTokens });
-  return { session, api, hasTokens };
+  let saved: Snapshot | null = null;
+  const snapshots = { load: vi.fn(async () => saved), save: vi.fn(async (s: Snapshot | null) => void (saved = s)) };
+  const session = createSession({ api: api as unknown as AuthApi, hasTokens, snapshots });
+  return { session, api, hasTokens, snapshots, setSaved: (s: Snapshot | null) => void (saved = s) };
 }
 
 const state = (s: ReturnType<typeof setup>["session"]) => s.getSnapshot().state;
@@ -45,6 +47,28 @@ describe("restoring a saved session", () => {
     const { session } = setup({ me: vi.fn(async () => { throw new ApiError("unauthorized"); }) });
     await session.restore();
     expect(state(session)).toEqual({ phase: "signedOut" });
+  });
+
+  it("opens offline from the last known user and location when the server can't be reached", async () => {
+    const { session, setSaved } = setup({ me: vi.fn(async () => { throw new ApiError("network"); }) });
+    setSaved({ user: counter, location: loc("L1"), locations: [loc("L1"), loc("L2")] });
+    await session.restore();
+    expect(state(session)).toEqual({ phase: "ready", user: counter, location: loc("L1"), locations: [loc("L1"), loc("L2")], offline: true });
+  });
+
+  it("does not open offline for a session the server has refused", async () => {
+    const { session, setSaved } = setup({ me: vi.fn(async () => { throw new ApiError("unauthorized"); }) });
+    setSaved({ user: counter, location: loc("L1"), locations: [loc("L1")] });
+    await session.restore();
+    expect(state(session)).toEqual({ phase: "signedOut" });
+  });
+
+  it("remembers the user and location each time it opens, and forgets them on sign-out", async () => {
+    const { session, snapshots } = setup();
+    await session.restore();
+    expect(snapshots.save).toHaveBeenCalledWith({ user: counter, location: loc("L1"), locations: [loc("L1")] });
+    await session.signOut();
+    expect(snapshots.save).toHaveBeenLastCalledWith(null);
   });
 
   it("explains an unreachable server on the sign-in screen and keeps the tokens (no signOut call)", async () => {

@@ -13,7 +13,8 @@ export type SessionState =
   | { phase: "mfa"; mfaSessionToken: string; error?: string }
   | { phase: "noAccess"; reason: string }
   | { phase: "chooseLocation"; user: AuthUser; locations: StoreLocation[]; error?: string }
-  | { phase: "ready"; user: AuthUser; location: StoreLocation; locations: StoreLocation[] };
+  /** `offline` is true when opened from the last known user and location because the server could not be reached. */
+  | { phase: "ready"; user: AuthUser; location: StoreLocation; locations: StoreLocation[]; offline?: true };
 
 export interface SessionSnapshot {
   state: SessionState;
@@ -21,10 +22,18 @@ export interface SessionSnapshot {
   busy: boolean;
 }
 
+/** The last known user and location, kept on the phone so the app can open with no signal. */
+export interface Snapshot {
+  user: AuthUser;
+  location: StoreLocation;
+  locations: StoreLocation[];
+}
+
 export interface SessionDeps {
   api: AuthApi;
   /** True when the device holds saved tokens. */
   hasTokens: () => Promise<boolean>;
+  snapshots: { load: () => Promise<Snapshot | null>; save: (snapshot: Snapshot | null) => Promise<void> };
 }
 
 const GENERIC = "Something went wrong. Try again.";
@@ -39,7 +48,7 @@ function signInMessage(err: unknown): string {
   return err.code === "unauthorized" ? "Email or password is wrong." : err.message;
 }
 
-export function createSession({ api, hasTokens }: SessionDeps) {
+export function createSession({ api, hasTokens, snapshots }: SessionDeps) {
   let snapshot: SessionSnapshot = { state: { phase: "restoring" }, busy: false };
   const listeners = new Set<() => void>();
 
@@ -57,6 +66,11 @@ export function createSession({ api, hasTokens }: SessionDeps) {
     }
   }
 
+  async function ready(user: AuthUser, location: StoreLocation, locations: StoreLocation[]) {
+    await snapshots.save({ user, location, locations });
+    set({ state: { phase: "ready", user, location, locations } });
+  }
+
   /** After the person is known: check they may count, then find their location. */
   async function open(user: AuthUser) {
     if (!canCount(user)) {
@@ -70,10 +84,10 @@ export function createSession({ api, hasTokens }: SessionDeps) {
     }
     const selected = ctx.locations.find((l) => l.storeLocationId === ctx.selectedLocationId);
     if (selected) {
-      set({ state: { phase: "ready", user, location: selected, locations: ctx.locations } });
+      await ready(user, selected, ctx.locations);
     } else if (ctx.locations.length === 1) {
       await api.selectLocation(ctx.locations[0].storeLocationId);
-      set({ state: { phase: "ready", user, location: ctx.locations[0], locations: ctx.locations } });
+      await ready(user, ctx.locations[0], ctx.locations);
     } else {
       set({ state: { phase: "chooseLocation", user, locations: ctx.locations } });
     }
@@ -93,6 +107,9 @@ export function createSession({ api, hasTokens }: SessionDeps) {
         await open(await api.me());
       } catch (err) {
         if (err instanceof ApiError && err.code === "unauthorized") return set({ state: { phase: "signedOut" } });
+        // No signal is not a reason to lock a chef out of counting: open from the last known user and location.
+        const last = err instanceof ApiError && (err.code === "network" || err.code === "timeout") ? await snapshots.load() : null;
+        if (last) return set({ state: { phase: "ready", ...last, offline: true } });
         set({ state: { phase: "signedOut", error: err instanceof ApiError ? err.message : GENERIC } });
       }
     },
@@ -133,7 +150,7 @@ export function createSession({ api, hasTokens }: SessionDeps) {
         if (!location) return;
         try {
           await api.selectLocation(storeLocationId);
-          set({ state: { phase: "ready", user: current.user, location, locations: current.locations } });
+          await ready(current.user, location, current.locations);
         } catch (err) {
           set({ state: { ...current, error: err instanceof ApiError ? err.message : GENERIC } });
         }
@@ -143,12 +160,14 @@ export function createSession({ api, hasTokens }: SessionDeps) {
     signOut() {
       return run(async () => {
         await api.signOut();
+        await snapshots.save(null);
         set({ state: { phase: "signedOut" } });
       });
     },
 
     /** The API client calls this when the server refuses the refresh token. */
     sessionExpired() {
+      void snapshots.save(null);
       set({ state: { phase: "signedOut", error: "Your session ended. Sign in again." } });
     },
   };

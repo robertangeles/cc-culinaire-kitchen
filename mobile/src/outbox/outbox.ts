@@ -186,6 +186,12 @@ export function createOutbox({ store, send, now, newId, getUserId }: OutboxDeps)
       return (await store.list()).filter((e) => e.userId === userId && OPEN.includes(e.status) && e.command.sessionId === sessionId && e.command.categoryName === categoryName);
     },
 
+    /** Every entry the signed-in account has for one area, oldest first (screens turn these into save states). */
+    async entriesFor(sessionId: string, categoryName: string): Promise<OutboxEntry[]> {
+      const userId = getUserId();
+      return (await store.list()).filter((e) => e.userId === userId && e.command.sessionId === sessionId && e.command.categoryName === categoryName);
+    },
+
     /** Unsent counts that belong to a different account than the one signed in (shown as a warning). */
     async otherAccountPending(): Promise<number> {
       const userId = getUserId();
