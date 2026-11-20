@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { session, useSession } from "../src/runtime/appContext";
+import { Brand } from "../src/ui/Brand";
 import { Screen } from "../src/ui/Screen";
 import { Text } from "../src/ui/Text";
 import { TextField } from "../src/ui/TextField";
@@ -13,6 +14,7 @@ export default function Mfa() {
 
   return (
     <Screen>
+      <Brand size={140} />
       <Text variant="title">Enter your 6-digit code</Text>
       <Text variant="muted">Open your authenticator app and type the code for CulinAIre Kitchen.</Text>
       <TextField label="Code" value={code} onChangeText={(t) => setCode(t.replace(/\D/g, "").slice(0, 6))} keyboardType="number-pad" autoComplete="one-time-code" textContentType="oneTimeCode" maxLength={6} returnKeyType="go" onSubmitEditing={() => canSubmit && void session.submitCode(code)} />

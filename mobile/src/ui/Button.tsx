@@ -22,7 +22,7 @@ export function Button({ label, onPress, disabled, kind = "primary" }: Props) {
     );
   }
   return (
-    <Pressable accessibilityRole="button" accessibilityState={{ disabled: !!disabled }} disabled={disabled} onPress={onPress} style={({ pressed }) => [{ opacity: disabled ? 0.5 : pressed ? 0.88 : 1 }]}>
+    <Pressable accessibilityRole="button" accessibilityState={{ disabled: !!disabled }} disabled={disabled} onPress={onPress} style={({ pressed }) => [{ opacity: disabled ? 0.5 : 1, transform: [{ scale: pressed ? 0.97 : 1 }] }]}>
       <LinearGradient colors={[c.buttonFrom, c.buttonTo]} style={styles.primary}>
         <Text style={{ color: c.buttonText, fontFamily: fontFamily.uiStrong, fontSize: fontSize.body + 2 }}>{label}</Text>
       </LinearGradient>

@@ -13,6 +13,8 @@ export interface Palette {
   bg: string;
   /** Cards, keypad, sheets. */
   surface: string;
+  /** Text field background (the old app's paperDeep). */
+  field: string;
   border: string;
   text: string;
   textMuted: string;
@@ -35,6 +37,7 @@ export const palettes: Record<"light" | "dark", Palette> = {
   light: {
     bg: "#F3EFE4",
     surface: "#F8F4EA",
+    field: "#E8E2D6",
     border: "#C9C2B3",
     text: "#101418",
     textMuted: "#696D74",
@@ -50,6 +53,7 @@ export const palettes: Record<"light" | "dark", Palette> = {
   dark: {
     bg: "#101418",
     surface: "#1B2027",
+    field: "#1B2027",
     border: "#2A2F36",
     text: "#EDE6D7",
     textMuted: "#84878D",
