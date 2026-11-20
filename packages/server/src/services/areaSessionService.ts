@@ -15,7 +15,7 @@
  * count services can import it without a cycle.
  */
 
-import { eq, and, inArray, notInArray, asc } from "drizzle-orm";
+import { eq, and, inArray, notInArray, asc, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import {
   stockTakeSession,
@@ -26,7 +26,7 @@ import {
   locationIngredient,
   ingredient,
 } from "../db/schema.js";
-import { ConflictError, ValidationError } from "./stockTakeErrors.js";
+import { ConflictError, NotFoundError, SheetIncompleteError, ValidationError } from "./stockTakeErrors.js";
 
 /** Reserved name of the bucket for items that belong to no area (see storage_area_name_not_reserved). */
 export const UNASSIGNED_AREA = "Unassigned";
@@ -124,7 +124,7 @@ export async function isAreaSession(sessionId: string): Promise<boolean> {
  * D8: block submitting an area until every item it shares with another area in this
  * session has a count on this area's own sheet. Zero counts. Items in one area only
  * may still be skipped, as in a category count. No-op for category sessions.
- * @throws ValidationError listing the items still to count.
+ * @throws SheetIncompleteError (409) listing the items still to count.
  */
 export async function assertAreaSheetComplete(sessionId: string, categoryName: string): Promise<void> {
   const [session] = await db
@@ -156,10 +156,17 @@ export async function assertAreaSheetComplete(sessionId: string, categoryName: s
     .from(stockTakeLine)
     .where(and(eq(stockTakeLine.categoryId, cat.categoryId), inArray(stockTakeLine.ingredientId, shared)));
   const done = new Set(counted.map((l) => l.ingredientId));
-  const missing = shared.filter((id) => !done.has(id)).map((id) => itemNames.get(id) ?? id);
+  const missing = shared
+    .filter((id) => !done.has(id))
+    .map((id) => ({
+      ingredientId: id,
+      ingredientName: itemNames.get(id) ?? id,
+      areaNames: [...(itemAreas.get(id) ?? [])].filter((a) => a !== categoryName && inSession.has(a)),
+    }));
   if (missing.length > 0) {
-    throw new ValidationError(
-      `Count these items in ${categoryName} before submitting (enter 0 if none are there): ${missing.join(", ")}`,
+    throw new SheetIncompleteError(
+      `Count these items in ${categoryName} before submitting (enter 0 if none are there): ${missing.map((m) => m.ingredientName).join(", ")}`,
+      missing,
     );
   }
 }
@@ -208,4 +215,119 @@ export async function hasOpenAreaSession(storeLocationId: string): Promise<boole
     )
     .limit(1);
   return rows.length > 0;
+}
+
+export interface AreaCountSheetItem {
+  ingredientId: string;
+  ingredientName: string;
+  /** The unit the chef counts in: the location's override, else the item's base unit. */
+  countUnit: string;
+  /** Other areas in this session that hold the same item (it is counted in each, then compared as a total). */
+  alsoIn: string[];
+}
+
+export interface AreaCountSheet {
+  categoryId: string;
+  categoryName: string;
+  items: AreaCountSheetItem[];
+}
+
+/**
+ * What the phone downloads before counting an AREA session: for each area row, the items on its
+ * sheet in shelf order, plus the reserved "Unassigned" bucket. Areas come in sheet order with
+ * "Unassigned" last. The list is the same one D8 and D4 reason over (active areas of the
+ * location), so a gap D8 reports is always an item the chef can see and count.
+ * @throws NotFoundError when the session is not in this organisation.
+ * @throws ValidationError for a category count.
+ */
+export async function getAreaCountSheets(sessionId: string, organisationId: number): Promise<AreaCountSheet[]> {
+  const [session] = await db
+    .select({ countMode: stockTakeSession.countMode, storeLocationId: stockTakeSession.storeLocationId })
+    .from(stockTakeSession)
+    .where(and(eq(stockTakeSession.sessionId, sessionId), eq(stockTakeSession.organisationId, organisationId)));
+  if (!session) throw new NotFoundError("Session not found");
+  if (session.countMode !== "AREA") {
+    throw new ValidationError("This stock take counts by category, so it has no area sheets.");
+  }
+
+  const rows = await db
+    .select({ categoryId: stockTakeCategory.categoryId, categoryName: stockTakeCategory.categoryName })
+    .from(stockTakeCategory)
+    .where(eq(stockTakeCategory.sessionId, sessionId));
+  const inSession = new Map(rows.map((r) => [r.categoryName, r.categoryId]));
+
+  const countUnit = sql<string>`coalesce(${locationIngredient.unitOverride}, ${ingredient.baseUnit})`;
+  const assigned = await db
+    .select({
+      areaName: storageArea.areaName,
+      ingredientId: ingredientStorageArea.ingredientId,
+      ingredientName: ingredient.ingredientName,
+      countUnit,
+    })
+    .from(ingredientStorageArea)
+    .innerJoin(storageArea, eq(storageArea.storageAreaId, ingredientStorageArea.storageAreaId))
+    .innerJoin(ingredient, eq(ingredient.ingredientId, ingredientStorageArea.ingredientId))
+    .leftJoin(
+      locationIngredient,
+      and(
+        eq(locationIngredient.ingredientId, ingredientStorageArea.ingredientId),
+        eq(locationIngredient.storeLocationId, session.storeLocationId),
+      ),
+    )
+    .where(and(eq(storageArea.storeLocationId, session.storeLocationId), eq(storageArea.activeInd, true)))
+    .orderBy(
+      asc(storageArea.sortOrder),
+      asc(storageArea.areaName),
+      asc(ingredientStorageArea.sortOrder),
+      asc(ingredient.ingredientName),
+    );
+
+  // Every active-area assignment, so an item shared with an area outside this session still counts as assigned.
+  const assignedIds = new Set(assigned.map((r) => r.ingredientId));
+  const areasOfItem = new Map<string, string[]>(); // ingredient -> session area names, in sheet order
+  for (const r of assigned) {
+    if (!inSession.has(r.areaName)) continue;
+    areasOfItem.set(r.ingredientId, [...(areasOfItem.get(r.ingredientId) ?? []), r.areaName]);
+  }
+
+  // Active areas of the location in sheet order; an area in the session with no items still appears, empty.
+  const areaOrder = await db
+    .select({ areaName: storageArea.areaName })
+    .from(storageArea)
+    .where(and(eq(storageArea.storeLocationId, session.storeLocationId), eq(storageArea.activeInd, true)))
+    .orderBy(asc(storageArea.sortOrder), asc(storageArea.areaName));
+
+  const ordered: AreaCountSheet[] = [];
+  for (const { areaName } of areaOrder) {
+    const categoryId = inSession.get(areaName);
+    if (!categoryId) continue;
+    ordered.push({
+      categoryId,
+      categoryName: areaName,
+      items: assigned
+        .filter((r) => r.areaName === areaName)
+        .map((r) => ({
+          ingredientId: r.ingredientId,
+          ingredientName: r.ingredientName,
+          countUnit: r.countUnit,
+          alsoIn: (areasOfItem.get(r.ingredientId) ?? []).filter((a) => a !== areaName),
+        })),
+    });
+  }
+
+  const unassignedId = inSession.get(UNASSIGNED_AREA);
+  if (unassignedId) {
+    const loose = await db
+      .select({ ingredientId: locationIngredient.ingredientId, ingredientName: ingredient.ingredientName, countUnit })
+      .from(locationIngredient)
+      .innerJoin(ingredient, eq(ingredient.ingredientId, locationIngredient.ingredientId))
+      .where(and(eq(locationIngredient.storeLocationId, session.storeLocationId), eq(locationIngredient.activeInd, true)))
+      .orderBy(asc(ingredient.ingredientName));
+    ordered.push({
+      categoryId: unassignedId,
+      categoryName: UNASSIGNED_AREA,
+      items: loose.filter((i) => !assignedIds.has(i.ingredientId)).map((i) => ({ ...i, alsoIn: [] })),
+    });
+  }
+  return ordered;
 }

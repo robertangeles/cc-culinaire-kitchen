@@ -27,6 +27,7 @@ import {
   getOrgDashboardSummary,
   openOpeningCount,
   ConflictError,
+  SheetIncompleteError,
   InvalidStateError,
   NotFoundError,
   ValidationError,
@@ -34,6 +35,7 @@ import {
   assertCanCount,
 } from "../services/stockTakeService.js";
 import { hasPermission } from "../middleware/auth.js";
+import { getAreaCountSheets } from "../services/areaSessionService.js";
 
 const logger = pino({ name: "stockTakeController" });
 
@@ -57,7 +59,9 @@ const FlagSessionSchema = z.object({
 // ─── Helpers ──────────────────────────────────────────────────────
 
 function handleServiceError(err: unknown, res: Response, next: NextFunction): void {
-  if (err instanceof ConflictError) {
+  if (err instanceof SheetIncompleteError) {
+    res.status(409).json({ error: err.message, missing: err.missing });
+  } else if (err instanceof ConflictError) {
     res.status(409).json({ error: err.message });
   } else if (err instanceof ForbiddenError) {
     res.status(403).json({ error: err.message });
@@ -150,6 +154,21 @@ export async function handleGetSessionDetail(
     res.json(session);
   } catch (err) {
     next(err);
+  }
+}
+
+/** GET /stock-takes/:id/count-sheets: the items on each area's sheet, in shelf order (the phone's pre-count download). */
+export async function handleGetCountSheets(
+  req: Request, res: Response, next: NextFunction,
+): Promise<void> {
+  try {
+    const ctx = await resolveContext(req, res);
+    if (!ctx) return;
+
+    const areas = await getAreaCountSheets(req.params.id as string, ctx.orgId);
+    res.json({ sessionId: req.params.id, areas });
+  } catch (err) {
+    handleServiceError(err, res, next);
   }
 }
 
