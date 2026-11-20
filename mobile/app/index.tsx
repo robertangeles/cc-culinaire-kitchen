@@ -2,14 +2,19 @@ import { useState } from "react";
 import { Pressable, RefreshControl, ScrollView, View } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { session, useSession } from "../src/app/appContext";
-import { useCount } from "../src/app/countContext";
+import { session, useSession } from "../src/runtime/appContext";
+import { useCount } from "../src/runtime/countContext";
 import { summarizeArea } from "../src/count/countFlow";
 import { OfflineBanner } from "../src/ui/Banner";
 import { Text } from "../src/ui/Text";
 import { Button } from "../src/ui/Button";
 import { size, space } from "../src/theme";
 import { useColors } from "../src/ui/theme";
+
+const sheetIndex = (sheets: Array<{ categoryName: string }>, name: string) => {
+  const i = sheets.findIndex((s) => s.categoryName === name);
+  return i === -1 ? Number.MAX_SAFE_INTEGER : i;
+};
 
 /** The areas list of the open stock take: progress per area, what needs attention, who holds what. */
 export default function Areas() {
@@ -70,7 +75,10 @@ export default function Areas() {
         ) : null}
 
         {snap.phase === "ready" && snap.session
-          ? snap.session.categories.map((category) => {
+          ? [...snap.session.categories]
+              // Shelf order (the order of the count sheets), not the server's row order, which changes as rows are updated.
+              .sort((a, b) => sheetIndex(snap.sheets, a.categoryName) - sheetIndex(snap.sheets, b.categoryName))
+              .map((category) => {
               const sheet = snap.sheets.find((s) => s.categoryName === category.categoryName);
               const area = summarizeArea({ items: sheet?.items ?? [], category, answers: store.answers(category.categoryName), currentUserId: state.user.userId });
               const done = area.status === "SUBMITTED" || area.status === "APPROVED";

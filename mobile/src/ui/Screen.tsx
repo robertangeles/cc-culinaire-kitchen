@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { StatusBar } from "expo-status-bar";
 import { space } from "../theme";
 import { useColors } from "./theme";
 
@@ -10,7 +9,6 @@ export function Screen({ children }: { children: ReactNode }) {
   const c = useColors();
   return (
     <SafeAreaView style={[styles.fill, { backgroundColor: c.bg }]}>
-      <StatusBar style={c.bg === "#101418" ? "light" : "dark"} />
       <KeyboardAvoidingView style={styles.fill} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           {children}

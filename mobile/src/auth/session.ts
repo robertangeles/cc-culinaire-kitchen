@@ -1,6 +1,6 @@
 /**
  * Who is signed in and which screen that means, as plain logic with no React in it.
- * `createSession` is wired to the real API in `src/app/appContext` and to fakes in the tests.
+ * `createSession` is wired to the real API in `src/runtime/appContext` and to fakes in the tests.
  * It never discards saved tokens on a network failure: only the server refusing them ends a session.
  */
 

@@ -1,9 +1,9 @@
 import { Alert, ScrollView, View } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { session } from "../src/app/appContext";
-import { outbox } from "../src/app/appOutbox";
-import { useCount } from "../src/app/countContext";
+import { session } from "../src/runtime/appContext";
+import { outbox } from "../src/runtime/appOutbox";
+import { useCount } from "../src/runtime/countContext";
 import { attentionCopy, describeCount } from "../src/count/attentionCopy";
 import { Button } from "../src/ui/Button";
 import { Text } from "../src/ui/Text";
