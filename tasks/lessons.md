@@ -1303,11 +1303,11 @@ builds all tables with CHECKs enforcing. Stop it again when done.
 - **Fix**: `saveCount` awaits the reload before returning.
 - **Rule**: If the caller reads derived state right after a write, the write must wait for that state to refresh. Do not rely on a subscriber.
 
-## 2026-11-20 — This machine's network is about 20 KB/s: no multi-GB downloads
+## 2026-11-20 — "The network is slow" was one tool's bad stretch, not a measurement
 
-- **Problem**: Installing an Android emulator system image (about 1.5 GB) would have taken around 20 hours; the Expo install also logged sub-50 KB/s warnings. `adb devices` shows no phone.
-- **Fix**: Cancelled and cleaned the partial download. Phone screens are tested by rendering the real screens through react-native-web in jsdom; the phone-to-server seam by `mobile/e2e` against the real API. Neither is a device walk.
-- **Rule**: Measure throughput (`du` twice, 20 seconds apart) before committing to a big download. A real device or emulator run is still owed before a pilot.
+- **Problem**: The Android SDK manager showed about 19 KB/s for a 1.5 GB emulator image, and pnpm printed slow-download warnings, so I wrote "this machine's network is about 20 KB/s", cancelled the download, and built the test plan around having no emulator. The owner's line is 160 Mbit/s. Measured properly with curl afterwards: Google's host 40 Mbit/s, Cloudflare 80, GitHub 30, and the same SDK manager 1.3 MB/s on a retry.
+- **Fix**: Retried the download, corrected the notes that repeated the claim, and reopened the emulator option.
+- **Rule**: Never state a limit about the environment from one tool. Check with a neutral host (`curl -r 0-60000000 -w '%{speed_download}'` against a CDN) and retry once before the claim goes into a note, a PR or a plan.
 
 ## 2026-11-20 — A new route is invisible to a branch that does not contain it
 
