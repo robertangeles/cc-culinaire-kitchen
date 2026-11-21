@@ -4,16 +4,15 @@
 
 Native iOS/Android chef app (stock count first, then delivery receiving). Plan and decisions: brain pages `designs/mobile-app-*`, `qa/mobile-test-strategy`, `qa/mobile-device-walk`, `specs/mobile-feature-checklist` (the checklist rows for Register, Forgot password and Google are not added yet). The app is `mobile/` in this monorepo.
 
-**Where things are**
-- PR #192 (EAS profiles and dev client) MERGED 2026-11-21 (`e578609`); PR #191 (PR 3e: update-the-app rule, location switch, card motion, outbox pruning) MERGED 2026-11-21 (`cd194fc`) after a `/qa` pass (report in `.gstack/qa-reports/run-20261121T054426Z/`, gitignored: no defects; not covered: a non-administrator refused on the setting, no hands-on browser session). Main's CI passed for #192; check main's CI and the Render deploy for #191 if not yet recorded here. Merging mobile changes still redeploys the web service until Render's ignored path `mobile/**` is set.
-- Branch `feature/ck-web/mobile-old-ui` (pushed, no PR): stacked on #191 and #192 through a local merge commit. Holds: the three emulator bug fixes (`src/app` renamed `src/runtime`, areas in shelf order, root status bar), the automated Android walk, the first app's look, Register / Forgot password / Check your email, Continue with Google, the Android keyboard fix, Fraunces for sentences. NEXT: rebase it onto main (it now carries only its own commits after the merge commits drop out) and split into reviewable PRs (1 walk and bug fixes, 2 look, 3 account flows, 4 Google).
-- Working copies: main tree on `feature/ck-web/mobile-pr3e-finish`; a second worktree `~/walk/ck` on `feature/ck-web/mobile-old-ui`.
-- Build order: PR 0-3 done, PR 3e (open as #191), then PR 4 receiving, a demand gate (one real pilot count), then PR 5-8.
+**Where things are** (2026-11-22)
+- Merged to `main`: #192 (EAS profiles, dev client), #191 (PR 3e: update-the-app rule, location switch, card motion, outbox pruning), #193 (route-root fix, shelf order, status bar, the automated Android walk), #194 (the first app's look), #195 (Register, Forgot password, Check your email, Android keyboard fix), #196 (Continue with Google). Main's CI and the Render deploy were checked after each merge (all green, prod health 200). `/qa` on #191: no defects.
+- Nothing mobile is open. Next in the build order: PR 4 receiving, then a demand gate (one real pilot count), then PR 5-8.
+- Stale local and remote branches to delete once the owner agrees: `feature/ck-web/mobile-old-ui` (pushed), `feature/ck-web/mobile-device-walk` (local only), and the merged `mobile-pr3*` and `mobile-device-testing` branches. The main working tree may still be on `feature/ck-web/mobile-pr3e-finish` (merged): switch it to `main` and pull. A second worktree `~/walk/ck` exists (its `.env` and `packages/client/.env.test` are copies).
 
 **Owner decisions already made**
 - Reuse the first app's (`../cc-culinaire-kitchen-mob`) look wherever it has one: light paper only (no dark mode), lockup logo, copper capitals field labels, chips, Fraunces for sentences and Inter for labels and buttons. Reference: its `LoginScreen.tsx`, `src/components/ui/*`, `src/constants/theme.ts`. To see it live: run its Metro on 8082 and `adb reverse tcp:8081 tcp:8082` (never use host 8081: it is the owner's llama-server).
 - Build Register, Forgot password and Google sign-in. Email links go to the web app, so the phone ends at "Check your email".
-- Review the count screens against the first app's kitchen screens (areas, review and location lists are done; the count screen and the attention screen are not yet compared).
+- Review the count screens against the first app's kitchen screens: the areas, review and location lists are done; the count screen itself and the attention screen are not yet compared.
 
 **Open, needs the owner**
 - Render ignored path `mobile/**` (dashboard). Add "Phone app" to main's required checks (`gh api`).
