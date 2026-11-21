@@ -62,7 +62,11 @@ export function useSiteSettings(): UseSiteSettingsReturn {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(updates),
       });
-      if (!res.ok) throw new Error("Failed to save settings");
+      if (!res.ok) {
+        // Show the server's own sentence when it sent one (for example, a minimum app version that is not a version).
+        const body = (await res.json().catch(() => null)) as { error?: unknown } | null;
+        throw new Error(typeof body?.error === "string" ? body.error : "Failed to save settings");
+      }
       setSettings((prev) => ({ ...prev, ...updates }));
       await refreshGlobalSettings();
       setSuccess("Settings saved successfully");

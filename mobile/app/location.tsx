@@ -18,12 +18,13 @@ export default function ChooseLocation() {
         <Pressable
           key={l.storeLocationId}
           accessibilityRole="button"
-          accessibilityLabel={l.locationName}
+          accessibilityLabel={l.storeLocationId === state.current?.storeLocationId ? `${l.locationName}, current location` : l.locationName}
           disabled={busy}
           onPress={() => void session.chooseLocation(l.storeLocationId)}
           style={{ minHeight: size.tap, justifyContent: "center", borderBottomWidth: 1, borderBottomColor: c.border, opacity: busy ? 0.5 : 1 }}
         >
           <Text>{l.locationName}</Text>
+          {l.storeLocationId === state.current?.storeLocationId ? <Text variant="muted">Current location</Text> : null}
         </Pressable>
       ))}
       {state.error ? (
@@ -31,6 +32,7 @@ export default function ChooseLocation() {
           {state.error}
         </Text>
       ) : null}
+      {state.current ? <Button kind="quiet" label="Cancel" onPress={() => session.cancelChangeLocation()} /> : null}
       <Button kind="quiet" label="Sign out" onPress={() => void session.signOut()} />
     </Screen>
   );

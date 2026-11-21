@@ -206,3 +206,51 @@ describe("MFA, location choice and sign-out", () => {
     expect(listener).toHaveBeenCalled();
   });
 });
+
+describe("changing location after sign-in", () => {
+  async function readyAt(selected: string, ids = ["L1", "L2"]) {
+    const h = setup({ locationContext: vi.fn(async () => ctx(ids.map(loc), selected)) });
+    await h.session.restore();
+    return h;
+  }
+
+  it("goes back to the picker with the current location marked, when the account has several", async () => {
+    const { session } = await readyAt("L1");
+    session.changeLocation();
+    expect(state(session)).toMatchObject({ phase: "chooseLocation", current: { storeLocationId: "L1" }, locations: [{ storeLocationId: "L1" }, { storeLocationId: "L2" }] });
+  });
+
+  it("does nothing for an account with one location", async () => {
+    const { session } = await readyAt("L1", ["L1"]);
+    session.changeLocation();
+    expect(state(session).phase).toBe("ready");
+  });
+
+  it("Cancel returns to the same location without asking the server", async () => {
+    const { session, api } = await readyAt("L1");
+    session.changeLocation();
+    session.cancelChangeLocation();
+    expect(state(session)).toMatchObject({ phase: "ready", location: { storeLocationId: "L1" } });
+    expect(api.selectLocation).not.toHaveBeenCalled();
+  });
+
+  it("choosing another location selects it on the server and opens it", async () => {
+    const { session, api, snapshots } = await readyAt("L1");
+    session.changeLocation();
+    await session.chooseLocation("L2");
+    expect(api.selectLocation).toHaveBeenCalledWith("L2");
+    expect(state(session)).toMatchObject({ phase: "ready", location: { storeLocationId: "L2" } });
+    expect(snapshots.save).toHaveBeenLastCalledWith(expect.objectContaining({ location: loc("L2") }));
+  });
+
+  it("a failed switch keeps the picker open with a sentence, and the old location is still the saved one", async () => {
+    const { session } = await readyAt("L1");
+    session.changeLocation();
+    const failing = setup({ locationContext: vi.fn(async () => ctx([loc("L1"), loc("L2")], "L1")), selectLocation: vi.fn(async () => { throw new ApiError("network"); }) });
+    await failing.session.restore();
+    failing.session.changeLocation();
+    await failing.session.chooseLocation("L2");
+    expect(state(failing.session)).toMatchObject({ phase: "chooseLocation", error: "Can't reach the server. Try again.", current: { storeLocationId: "L1" } });
+  });
+});
+

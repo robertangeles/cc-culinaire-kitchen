@@ -12,7 +12,8 @@ export type SessionState =
   | { phase: "signedOut"; error?: string }
   | { phase: "mfa"; mfaSessionToken: string; error?: string }
   | { phase: "noAccess"; reason: string }
-  | { phase: "chooseLocation"; user: AuthUser; locations: StoreLocation[]; error?: string }
+  /** `current` is set when a chef already counting at a location came back to the picker, so they can cancel. */
+  | { phase: "chooseLocation"; user: AuthUser; locations: StoreLocation[]; current?: StoreLocation; error?: string }
   /** `offline` is true when opened from the last known user and location because the server could not be reached. */
   | { phase: "ready"; user: AuthUser; location: StoreLocation; locations: StoreLocation[]; offline?: true };
 
@@ -157,6 +158,20 @@ export function createSession({ api, hasTokens, snapshots }: SessionDeps) {
           set({ state: { ...current, error: err instanceof ApiError ? err.message : GENERIC } });
         }
       });
+    },
+
+    /** From the areas list: pick a different location (only for accounts that have more than one). */
+    changeLocation() {
+      const current = snapshot.state;
+      if (current.phase !== "ready" || current.locations.length < 2) return;
+      set({ state: { phase: "chooseLocation", user: current.user, locations: current.locations, current: current.location } });
+    },
+
+    /** Back out of a location change: the same location, no server call. */
+    cancelChangeLocation() {
+      const current = snapshot.state;
+      if (current.phase !== "chooseLocation" || !current.current) return;
+      set({ state: { phase: "ready", user: current.user, location: current.current, locations: current.locations } });
     },
 
     signOut() {

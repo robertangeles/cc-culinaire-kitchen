@@ -106,6 +106,19 @@ describe("areas list", () => {
     expect(screen.getByText(/1 count from another account is waiting on this phone/)).toBeTruthy();
   });
 
+  it("offers Change location only to an account with more than one location", async () => {
+    await makeHarness();
+    const { unmount } = render(<Areas />);
+    expect(screen.queryByRole("button", { name: "Change location" })).toBeNull();
+    unmount();
+
+    const other = { ...main, storeLocationId: "L2", locationName: "Second Kitchen" };
+    sessionState.current = { state: { phase: "ready", user: chef, location: main, locations: [main, other] }, busy: false };
+    render(<Areas />);
+    fireEvent.click(screen.getByRole("button", { name: "Change location" }));
+    expect(sessionMock.changeLocation).toHaveBeenCalled();
+  });
+
   it("says when no stock take is open", async () => {
     await makeHarness({ api: { activeSession: vi.fn(async () => null) } });
     render(<Areas />);
@@ -201,6 +214,21 @@ describe("sign-in screens", () => {
     expect((screen.getByLabelText("Code") as HTMLInputElement).value).toBe("123456");
     fireEvent.click(screen.getByRole("button", { name: "Verify" }));
     expect(sessionMock.submitCode).toHaveBeenCalledWith("123456");
+  });
+
+  it("marks the current location and lets the chef cancel a change", () => {
+    const other = { ...main, storeLocationId: "L2", locationName: "Second Kitchen" };
+    sessionState.current = { state: { phase: "chooseLocation", user: chef, locations: [main, other], current: main }, busy: false };
+    render(<ChooseLocation />);
+    expect(screen.getByRole("button", { name: "Main Kitchen, current location" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(sessionMock.cancelChangeLocation).toHaveBeenCalled();
+  });
+
+  it("has no Cancel on the first sign-in picker", () => {
+    sessionState.current = { state: { phase: "chooseLocation", user: chef, locations: [main] }, busy: false };
+    render(<ChooseLocation />);
+    expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
   });
 
   it("lists the locations and chooses the tapped one", () => {

@@ -1,5 +1,6 @@
 import { afterEach, vi } from "vitest";
 import { createElement, type ReactNode } from "react";
+import { reduceMotion as reduceMotionState } from "./testing/mocks";
 
 // Screen tests render the real screens with react-native-web in jsdom. Only native-only modules are faked here.
 vi.mock("expo-haptics", () => ({ impactAsync: vi.fn(), ImpactFeedbackStyle: { Light: "light" } }));
@@ -20,7 +21,23 @@ vi.mock("expo-router", async () => {
   return { useRouter: () => routerMock, useLocalSearchParams: () => searchParams.current };
 });
 
+if (typeof window !== "undefined") {
+  // jsdom has no matchMedia; react-native-web reads the reduce-motion setting through it.
+  window.matchMedia = (query: string) =>
+    ({
+      matches: query.includes("prefers-reduced-motion") ? reduceMotionState.current : false,
+      media: query,
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+    }) as unknown as MediaQueryList;
+}
+
 afterEach(async () => {
+  reduceMotionState.current = false;
   const { cleanup } = await import("@testing-library/react");
   cleanup();
   vi.clearAllMocks();

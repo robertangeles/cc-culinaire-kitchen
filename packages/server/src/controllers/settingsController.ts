@@ -14,6 +14,7 @@ import { pino } from "pino";
 import {
   getAllSettings,
   upsertSettings,
+  validateSettingsUpdate,
 } from "../services/settingsService.js";
 
 const log = pino({ transport: { target: "pino-pretty" } });
@@ -56,6 +57,12 @@ export async function handleUpdateSettings(
     const parsed = UpdateSettingsSchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({ error: parsed.error.flatten() });
+      return;
+    }
+
+    const problem = validateSettingsUpdate(parsed.data);
+    if (problem) {
+      res.status(400).json({ error: problem });
       return;
     }
 

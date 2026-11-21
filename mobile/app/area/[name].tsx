@@ -5,6 +5,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useCount } from "../../src/app/countContext";
 import { firstUncounted, reviewRows, submitCheck, type Answer, type SaveState } from "../../src/count/countFlow";
 import { limitMessage, parseEntry, press, type Key } from "../../src/count/keypad";
+import { CardTransition } from "../../src/ui/CardTransition";
 import { Keypad } from "../../src/ui/Keypad";
 import { OfflineBanner } from "../../src/ui/Banner";
 import { Button } from "../../src/ui/Button";
@@ -137,17 +138,19 @@ export default function AreaCount() {
       <ScrollView contentContainerStyle={{ padding: space.xl, gap: space.lg }} keyboardShouldPersistTaps="handled">
         <Text variant="muted">{name} · item {view.index + 1} of {items.length}</Text>
         {snap.offline ? <OfflineBanner text="You're offline. Counts are saved on this phone." /> : null}
-        <Text variant="title" style={{ fontSize: fontSize.item }}>{item.ingredientName}</Text>
-        {item.alsoIn.length > 0 ? <Text variant="muted">Also in {item.alsoIn.join(", ")}</Text> : null}
-        <Text variant="muted">Count in {item.countUnit}</Text>
-        <Text
-          accessibilityLiveRegion="polite"
-          accessibilityLabel={`${item.ingredientName}, ${item.countUnit}, ${entry === "" ? "nothing typed" : entry}`}
-          style={{ fontFamily: fontFamily.uiStrong, fontSize: fontSize.number, fontVariant: ["tabular-nums"] }}
-        >
-          {entry === "" ? "–" : entry}
-        </Text>
-        {current ? <Text variant={current.saveState === "needs_attention" ? "error" : "muted"}>{SAVE_LABEL[current.saveState]}</Text> : null}
+        <CardTransition itemKey={item.ingredientId}>
+          <Text variant="title" style={{ fontSize: fontSize.item }}>{item.ingredientName}</Text>
+          {item.alsoIn.length > 0 ? <Text variant="muted">Also in {item.alsoIn.join(", ")}</Text> : null}
+          <Text variant="muted">Count in {item.countUnit}</Text>
+          <Text
+            accessibilityLiveRegion="polite"
+            accessibilityLabel={`${item.ingredientName}, ${item.countUnit}, ${entry === "" ? "nothing typed" : entry}`}
+            style={{ fontFamily: fontFamily.uiStrong, fontSize: fontSize.number, fontVariant: ["tabular-nums"] }}
+          >
+            {entry === "" ? "–" : entry}
+          </Text>
+          {current ? <Text variant={current.saveState === "needs_attention" ? "error" : "muted"}>{SAVE_LABEL[current.saveState]}</Text> : null}
+        </CardTransition>
         {message ? <Text variant="error" accessibilityLiveRegion="polite">{message}</Text> : null}
 
         <Keypad entry={entry} onKey={onKey} />

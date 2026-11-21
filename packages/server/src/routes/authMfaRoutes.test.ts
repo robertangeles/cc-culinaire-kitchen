@@ -32,7 +32,8 @@ function handlersFor(path: string): unknown[] {
 describe("POST /mfa/verify", () => {
   it("rate limits per address, then per account, before the handler runs", () => {
     const handlers = handlersFor("/mfa/verify");
-    expect(handlers).toHaveLength(3);
+    // limiter, limiter, then the phone's version check, then the handler: guessing is braked before anything else runs
+    expect(handlers).toHaveLength(4);
     expect(handlers[0]).toBe(mfaVerifyRateLimit);
     expect(handlers[1]).toBe(mfaAccountRateLimit);
   });
