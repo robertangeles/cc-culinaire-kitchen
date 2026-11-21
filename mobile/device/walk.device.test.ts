@@ -36,7 +36,13 @@ async function signIn(password = credentials.password) {
   await clearField("Password");
   await typeInto("Password", password);
   await hideKeyboard();
-  await tap("Sign in");
+  // "Sign in" is both the tab and the button; the button is the lower one.
+  const labelled = await findAll("Sign in");
+  const button = labelled[labelled.length - 1];
+  await tapAt(Math.round((button.x1 + button.x2) / 2), Math.round((button.y1 + button.y2) / 2));
+  // A real phone offers to save the password in Google Password Manager. Dismiss it with Back: that neither saves it nor changes a setting.
+  await sleep(2500);
+  if (await has("Save password to Google Password Manager?")) await back();
 }
 
 async function enterCode(code: string) {

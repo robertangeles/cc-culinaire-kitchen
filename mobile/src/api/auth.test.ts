@@ -32,6 +32,23 @@ describe("sign in", () => {
   });
 });
 
+describe("accounts", () => {
+  it("registers with name, email and password, and signs nobody in", async () => {
+    const { api, request, tokenStore } = setup([{ userId: 9, message: "Registration successful.", autoVerified: false }]);
+    expect(await api.register("Chef", "c@x.test", "Str0ng!pass")).toEqual({ autoVerified: false });
+    expect(request).toHaveBeenCalledWith("POST", "/api/auth/register", { body: { name: "Chef", email: "c@x.test", password: "Str0ng!pass" }, auth: false });
+    expect(tokenStore.save).not.toHaveBeenCalled();
+  });
+
+  it("asks for a password-reset email and a fresh verification email", async () => {
+    const { api, request } = setup([{}, {}]);
+    await api.forgotPassword("c@x.test");
+    expect(request).toHaveBeenLastCalledWith("POST", "/api/auth/forgot-password", { body: { email: "c@x.test" }, auth: false });
+    await api.resendVerification("c@x.test");
+    expect(request).toHaveBeenLastCalledWith("POST", "/api/auth/resend-verification", { body: { email: "c@x.test" }, auth: false });
+  });
+});
+
 describe("session and location", () => {
   it("reads the current user from /auth/me", async () => {
     const { api } = setup([{ user }]);

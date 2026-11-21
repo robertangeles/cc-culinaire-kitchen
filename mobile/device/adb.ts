@@ -140,8 +140,9 @@ export async function typeInto(label: Matcher, text: string): Promise<void> {
   if (!field) throw new Error(`no text field labelled ${String(label)}\nOn screen: ${(await texts()).join(" | ")}`);
   const { x, y } = center(field);
   await tapAt(x, y);
+  await sleep(500); // focus moves a beat after the tap when another field has the keyboard open
   shell("input", "text", escapeForInput(text));
-  await sleep(300);
+  await sleep(1200); // the keyboard resizes the window; let the layout settle before the next field is looked up
 }
 
 export async function key(code: string): Promise<void> {
