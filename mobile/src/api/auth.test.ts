@@ -32,6 +32,21 @@ describe("sign in", () => {
   });
 });
 
+describe("google sign-in", () => {
+  it("trades a Google ID token for a session, saving the tokens like a password sign-in", async () => {
+    const { api, request, tokenStore } = setup([{ user, tokens: { accessToken: "G1", refreshToken: "GR1" } }]);
+    expect(await api.googleSignIn("ID-TOKEN")).toEqual({ status: "signedIn", user });
+    expect(request).toHaveBeenCalledWith("POST", "/api/auth/google/idtoken", { body: { idToken: "ID-TOKEN" }, auth: false });
+    expect(tokenStore.save).toHaveBeenCalledWith({ accessToken: "G1", refreshToken: "GR1" });
+  });
+
+  it("asks for the six-digit code when the Google account uses MFA", async () => {
+    const { api, tokenStore } = setup([{ requiresMfa: true, mfaSessionToken: "M" }]);
+    expect(await api.googleSignIn("ID-TOKEN")).toEqual({ status: "mfa", mfaSessionToken: "M" });
+    expect(tokenStore.save).not.toHaveBeenCalled();
+  });
+});
+
 describe("accounts", () => {
   it("registers with name, email and password, and signs nobody in", async () => {
     const { api, request, tokenStore } = setup([{ userId: 9, message: "Registration successful.", autoVerified: false }]);

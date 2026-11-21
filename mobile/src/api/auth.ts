@@ -41,11 +41,19 @@ export function createAuthApi(client: ApiClient, tokenStore: TokenStore) {
     return reply.user!;
   }
 
+  async function result(reply: LoginReply): Promise<SignInResult> {
+    if (reply.requiresMfa) return { status: "mfa", mfaSessionToken: reply.mfaSessionToken! };
+    return { status: "signedIn", user: await finish(reply) };
+  }
+
   return {
     async signIn(email: string, password: string): Promise<SignInResult> {
-      const reply = await client.request<LoginReply>("POST", "/api/auth/login", { body: { email, password }, auth: false });
-      if (reply.requiresMfa) return { status: "mfa", mfaSessionToken: reply.mfaSessionToken! };
-      return { status: "signedIn", user: await finish(reply) };
+      return result(await client.request<LoginReply>("POST", "/api/auth/login", { body: { email, password }, auth: false }));
+    },
+
+    /** The ID token comes from the phone's Google account picker; the server checks it with Google and answers like a password sign-in. */
+    async googleSignIn(idToken: string): Promise<SignInResult> {
+      return result(await client.request<LoginReply>("POST", "/api/auth/google/idtoken", { body: { idToken }, auth: false }));
     },
 
     /** Creates the account only: nobody is signed in, and the person finishes verifying from the email the server sends. */

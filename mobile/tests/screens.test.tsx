@@ -4,7 +4,7 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { Alert } from "react-native";
 import { useSyncExternalStore } from "react";
 import { harness, makeHarness } from "./harness";
-import { authApiMock, routerMock, sessionMock, sessionState } from "../testing/mocks";
+import { authApiMock, googleConfig, routerMock, sessionMock, sessionState } from "../testing/mocks";
 
 vi.mock("../src/runtime/countContext", async () => {
   const { harness } = await import("./harness");
@@ -17,7 +17,7 @@ vi.mock("../src/runtime/countContext", async () => {
 });
 vi.mock("../src/runtime/appContext", async () => {
   const { sessionMock, sessionState } = await import("../testing/mocks");
-  return { session: sessionMock, authApi: authApiMock, useSession: () => sessionState.current };
+  return { session: sessionMock, authApi: authApiMock, get googleEnabled() { return googleConfig.enabled; }, useSession: () => sessionState.current };
 });
 vi.mock("../src/runtime/appOutbox", async () => {
   const { harness } = await import("./harness");
@@ -329,5 +329,24 @@ describe("registration and password help", () => {
     expect(screen.queryByRole("button", { name: "Send it again" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Back to sign in" }));
     expect(routerMock.replace).toHaveBeenCalledWith("/sign-in");
+  });
+});
+
+describe("continue with Google", () => {
+  beforeEach(() => {
+    sessionState.current = { state: { phase: "signedOut" }, busy: false };
+    sessionMock.signInWithGoogle.mockReset();
+  });
+
+  it("offers the button only when this build has a Google client ID, and starts Google sign-in on tap", () => {
+    googleConfig.enabled = false;
+    const { unmount } = render(<SignIn />);
+    expect(screen.queryByRole("button", { name: "Continue with Google" })).toBeNull();
+    unmount();
+    googleConfig.enabled = true;
+    render(<SignIn />);
+    fireEvent.click(screen.getByRole("button", { name: "Continue with Google" }));
+    expect(sessionMock.signInWithGoogle).toHaveBeenCalled();
+    googleConfig.enabled = false;
   });
 });

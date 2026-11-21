@@ -1,5 +1,38 @@
 # CulinAIre Kitchen — TODO
 
+## ▶ MOBILE APP: RESUME HERE (updated 2026-11-21)
+
+Native iOS/Android chef app (stock count first, then delivery receiving). Plan and decisions: brain pages `designs/mobile-app-*`, `qa/mobile-test-strategy`, `qa/mobile-device-walk`, `specs/mobile-feature-checklist` (the checklist rows for Register, Forgot password and Google are not added yet). The app is `mobile/` in this monorepo.
+
+**Where things are**
+- PR #192 (EAS profiles and dev client) MERGED 2026-11-21 (`e578609`); PR #191 (PR 3e: update-the-app rule, location switch, card motion, outbox pruning) MERGED 2026-11-21 (`cd194fc`) after a `/qa` pass (report in `.gstack/qa-reports/run-20261121T054426Z/`, gitignored: no defects; not covered: a non-administrator refused on the setting, no hands-on browser session). Main's CI passed for #192; check main's CI and the Render deploy for #191 if not yet recorded here. Merging mobile changes still redeploys the web service until Render's ignored path `mobile/**` is set.
+- Branch `feature/ck-web/mobile-old-ui` (pushed, no PR): stacked on #191 and #192 through a local merge commit. Holds: the three emulator bug fixes (`src/app` renamed `src/runtime`, areas in shelf order, root status bar), the automated Android walk, the first app's look, Register / Forgot password / Check your email, Continue with Google, the Android keyboard fix, Fraunces for sentences. NEXT: rebase it onto main (it now carries only its own commits after the merge commits drop out) and split into reviewable PRs (1 walk and bug fixes, 2 look, 3 account flows, 4 Google).
+- Working copies: main tree on `feature/ck-web/mobile-pr3e-finish`; a second worktree `~/walk/ck` on `feature/ck-web/mobile-old-ui`.
+- Build order: PR 0-3 done, PR 3e (open as #191), then PR 4 receiving, a demand gate (one real pilot count), then PR 5-8.
+
+**Owner decisions already made**
+- Reuse the first app's (`../cc-culinaire-kitchen-mob`) look wherever it has one: light paper only (no dark mode), lockup logo, copper capitals field labels, chips, Fraunces for sentences and Inter for labels and buttons. Reference: its `LoginScreen.tsx`, `src/components/ui/*`, `src/constants/theme.ts`. To see it live: run its Metro on 8082 and `adb reverse tcp:8081 tcp:8082` (never use host 8081: it is the owner's llama-server).
+- Build Register, Forgot password and Google sign-in. Email links go to the web app, so the phone ends at "Check your email".
+- Review the count screens against the first app's kitchen screens (areas, review and location lists are done; the count screen and the attention screen are not yet compared).
+
+**Open, needs the owner**
+- Render ignored path `mobile/**` (dashboard). Add "Phone app" to main's required checks (`gh api`).
+- Google Cloud: an Android OAuth client for `com.culinairekitchen.chef` with the debug key's SHA-1 `5E:8F:16:06:2E:A3:CD:2C:4A:0D:54:78:76:BA:A6:F3:8C:AB:F6:25` (and the release key later). Without it, choosing an account may fail with DEVELOPER_ERROR. The web client ID goes in `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` (public value); no ID means no Google button.
+- Offline scenarios on the real phone need port 3009 open to the LAN in `ufw` (not changed): `sudo ufw allow from 192.168.1.0/24 to any port 3009`, and the API URL set to `http://<LAN IP>:3009` instead of the USB tunnel (airplane mode does not cut a USB tunnel).
+- Design calls: pin "Save and next" and Previous / Skip / Review below the scroll area at large text; phone landscape (lock to portrait, tablets keep landscape, or two columns).
+- Known limit: changing the system text size restarts the Android activity (`fontScale` is not in `configChanges`; the Android folder is generated, so it needs a config plugin).
+- Not covered by the automated walk: W10 two accounts, W12 two locations, W16 long session, W17 server down, TalkBack and haptics, a release build, anything on iOS (needs an Apple Developer account).
+
+**How to run it**
+- Package manager: `corepack pnpm@10.31.0 ...` (the machine default is 9.15.9).
+- Android SDK is `~/android-sdk` (`ANDROID_HOME`). Real phone: moto g86 power 5G, serial `ZY32MB62DD`, Android 16, arm64, USB debugging on, stay awake while plugged in. An x86_64 emulator `emulator-5554` also exists: ALWAYS set `ANDROID_SERIAL`.
+- Server: local throwaway DB (`scripts/localIntegrationDb.sh start`, port 55432; seed per `qa/mobile-device-walk`), then `PORT=3009 pnpm --filter @culinaire/server exec tsx src/index.ts`. E2E user credentials are in `packages/client/.env.test` (gitignored).
+- Metro on port 8088, started from `mobile/` WITHOUT `CI=1` (CI mode turns file watching off and the phone runs stale code): `EXPO_PUBLIC_API_URL=http://localhost:3009 EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID=<id> corepack pnpm@10.31.0 exec expo start --dev-client --port 8088 --host lan --clear`. Then `adb reverse tcp:8088 tcp:8088; adb reverse tcp:3009 tcp:3009`.
+- Phone build (the generated `mobile/android` is gitignored): `cd mobile/android && ANDROID_HOME=~/android-sdk ./gradlew assembleDebug -PreactNativeArchitectures=arm64-v8a`, then `adb -s <serial> install -r app/build/outputs/apk/debug/app-debug.apk`. Open the app with `exp+culinaire-kitchen://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8088&disableOnboarding=1`.
+- Automated walk: `corepack pnpm@10.31.0 --filter @culinaire/mobile run check:device` (14 scenarios, green on the emulator 2026-11-20; run 12). Screenshots land in `mobile/device/_shots` (gitignored): look at them before changing the app, most failures were the test.
+- The phone offers "Save password to Google Password Manager?" after a real sign-in. Dismiss it with Back. Never tap Save.
+- Phone checks: `check:types`, `check:lint`, `check:test` (260 tests), `check:bundle`, `check:e2e`.
+
 ## MFA follow-ups (2026-10-26)
 
 Shipped on `fix/ck-web/mfa-change-needs-proof`: setup/disable need proof (brain page `architecture/overview`, "Changing two-factor settings"). Still open:
