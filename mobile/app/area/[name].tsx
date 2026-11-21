@@ -10,6 +10,7 @@ import { Keypad } from "../../src/ui/Keypad";
 import { OfflineBanner } from "../../src/ui/Banner";
 import { Button } from "../../src/ui/Button";
 import { Text } from "../../src/ui/Text";
+import { Surface, rowDivider } from "../../src/ui/Surface";
 import { fontFamily, fontSize, size, space } from "../../src/theme";
 import { useColors } from "../../src/ui/theme";
 
@@ -90,18 +91,20 @@ export default function AreaCount() {
         <ScrollView contentContainerStyle={{ padding: space.xl, gap: space.md }}>
           <Text variant="title">Review {name}</Text>
           {snap.offline ? <OfflineBanner text="You're offline. Counts are saved on this phone." /> : null}
+          <Surface>
           {rows.map((r, i) => (
             <Pressable
               key={r.ingredientId}
               accessibilityRole="button"
               accessibilityLabel={`${r.name}: ${rowText(r.kind, r.answer, r.alsoIn)}`}
               onPress={() => goTo(i)}
-              style={{ minHeight: size.tap, justifyContent: "center", borderBottomWidth: 1, borderBottomColor: c.border, paddingVertical: space.sm }}
+              style={[{ minHeight: size.tap + 8, justifyContent: "center", paddingVertical: space.sm, paddingHorizontal: space.lg }, rowDivider(i, c.border)]}
             >
-              <Text>{r.name}</Text>
+              <Text style={{ fontFamily: fontFamily.title, fontSize: 20 }}>{r.name}</Text>
               <Text variant={r.kind === "needs_attention" || r.kind === "shared_gap" ? "error" : "muted"}>{rowText(r.kind, r.answer, r.alsoIn)}</Text>
             </Pressable>
           ))}
+          </Surface>
           {blockers.map((b) => <Text key={b as string} variant="muted">{b}</Text>)}
           {message ? <Text variant="error" accessibilityLiveRegion="polite">{message}</Text> : null}
           <Button label={busy ? "Submitting…" : "Submit area"} disabled={!check.ok || busy} onPress={() => void submit()} />
