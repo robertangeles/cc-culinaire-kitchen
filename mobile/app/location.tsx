@@ -3,7 +3,8 @@ import { session, useSession } from "../src/runtime/appContext";
 import { Screen } from "../src/ui/Screen";
 import { Text } from "../src/ui/Text";
 import { Button } from "../src/ui/Button";
-import { size } from "../src/theme";
+import { Surface, rowDivider } from "../src/ui/Surface";
+import { fontFamily, size, space } from "../src/theme";
 import { useColors } from "../src/ui/theme";
 
 export default function ChooseLocation() {
@@ -14,19 +15,21 @@ export default function ChooseLocation() {
   return (
     <Screen>
       <Text variant="title">Where are you counting?</Text>
-      {state.locations.map((l) => (
+      <Surface>
+      {state.locations.map((l, index) => (
         <Pressable
           key={l.storeLocationId}
           accessibilityRole="button"
           accessibilityLabel={l.storeLocationId === state.current?.storeLocationId ? `${l.locationName}, current location` : l.locationName}
           disabled={busy}
           onPress={() => void session.chooseLocation(l.storeLocationId)}
-          style={{ minHeight: size.tap, justifyContent: "center", borderBottomWidth: 1, borderBottomColor: c.border, opacity: busy ? 0.5 : 1 }}
+          style={[{ minHeight: size.tap + 8, justifyContent: "center", paddingHorizontal: space.lg, paddingVertical: space.sm, opacity: busy ? 0.5 : 1 }, rowDivider(index, c.border)]}
         >
-          <Text>{l.locationName}</Text>
-          {l.storeLocationId === state.current?.storeLocationId ? <Text variant="muted">Current location</Text> : null}
+          <Text style={{ fontFamily: fontFamily.title, fontSize: 20 }}>{l.locationName}</Text>
+          {l.storeLocationId === state.current?.storeLocationId ? <Text variant="meta">Current location</Text> : null}
         </Pressable>
       ))}
+      </Surface>
       {state.error ? (
         <Text variant="error" accessibilityLiveRegion="polite">
           {state.error}

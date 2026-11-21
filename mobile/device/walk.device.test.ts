@@ -341,7 +341,7 @@ describe("count walk on a device", () => {
 
     setDarkMode(true);
     await sleep(2500);
-    expect(darkIconsOnStatusBar()).toBe(false); // light icons on the dark ink
+    expect(darkIconsOnStatusBar()).toBe(true); // the app stays light paper, as the first app does, so the icons stay dark
     await screenshot("w15-count-dark");
     await back().catch(() => {});
     setDarkMode(false);
