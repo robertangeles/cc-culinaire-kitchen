@@ -1,18 +1,21 @@
 import { useEffect } from "react";
 import { Stack } from "expo-router";
+import { StatusBar } from "expo-status-bar";
+import { useColorScheme } from "react-native";
 import * as SplashScreen from "expo-splash-screen";
 import { useFonts, Fraunces_600SemiBold } from "@expo-google-fonts/fraunces";
 import { Inter_400Regular, Inter_600SemiBold } from "@expo-google-fonts/inter";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import { session, useSession } from "../src/app/appContext";
-import { startOutbox } from "../src/app/appOutbox";
-import { CountProvider } from "../src/app/countContext";
+import { session, useSession } from "../src/runtime/appContext";
+import { startOutbox } from "../src/runtime/appOutbox";
+import { CountProvider } from "../src/runtime/countContext";
 
 void SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({ Fraunces_600SemiBold, Inter_400Regular, Inter_600SemiBold });
   const { state } = useSession();
+  const scheme = useColorScheme();
 
   useEffect(() => {
     startOutbox();
@@ -50,6 +53,8 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
+      {/* One status bar for every screen: dark icons on the light paper, light icons on the dark ink. */}
+      <StatusBar style={scheme === "dark" ? "light" : "dark"} />
       {state.phase === "ready" ? <CountProvider locationId={state.location.storeLocationId}>{stack}</CountProvider> : stack}
     </SafeAreaProvider>
   );

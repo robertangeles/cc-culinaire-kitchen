@@ -6,7 +6,7 @@ import { useSyncExternalStore } from "react";
 import { harness, makeHarness } from "./harness";
 import { routerMock, sessionMock, sessionState } from "../testing/mocks";
 
-vi.mock("../src/app/countContext", async () => {
+vi.mock("../src/runtime/countContext", async () => {
   const { harness } = await import("./harness");
   return {
     useCount: () => {
@@ -15,11 +15,11 @@ vi.mock("../src/app/countContext", async () => {
     },
   };
 });
-vi.mock("../src/app/appContext", async () => {
+vi.mock("../src/runtime/appContext", async () => {
   const { sessionMock, sessionState } = await import("../testing/mocks");
   return { session: sessionMock, useSession: () => sessionState.current };
 });
-vi.mock("../src/app/appOutbox", async () => {
+vi.mock("../src/runtime/appOutbox", async () => {
   const { harness } = await import("./harness");
   return { get outbox() { return harness.outbox; }, runner: { kick: vi.fn() } };
 });
@@ -47,6 +47,15 @@ describe("areas list", () => {
     expect(screen.getAllByText("0 of 2").length).toBe(1);
     expect(screen.getByText("Shares items with Stock Room")).toBeTruthy();
     expect(screen.getByText("0 of 1")).toBeTruthy(); // Kitchen
+  });
+
+  it("lists areas in shelf order, whatever order the server returns its rows in (it changes as rows are updated)", async () => {
+    const cat = (name: string, over = {}) => ({ categoryId: `c-${name}`, categoryName: name, categoryStatus: "NOT_STARTED", claimedByUserId: null, claimedByUserName: null, claimRevision: 0, ...over });
+    // The server answers Kitchen first; the count sheets (shelf order) are Bar then Kitchen.
+    await makeHarness({ session: { categories: [cat("Kitchen"), cat("Bar", { categoryStatus: "IN_PROGRESS", claimedByUserId: 1, claimedByUserName: "Chef", claimRevision: 2 })] } });
+    render(<Areas />);
+    const labels = screen.getAllByRole("button").map((b) => b.getAttribute("aria-label") ?? "").filter((l) => /counted/.test(l));
+    expect(labels.map((l) => l.split(",")[0])).toEqual(["Bar", "Kitchen"]);
   });
 
   it("opens an area this chef holds without asking the server again", async () => {
