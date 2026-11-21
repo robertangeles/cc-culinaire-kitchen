@@ -5,8 +5,8 @@
 Native iOS/Android chef app (stock count first, then delivery receiving). Plan and decisions: brain pages `designs/mobile-app-*`, `qa/mobile-test-strategy`, `qa/mobile-device-walk`, `specs/mobile-feature-checklist` (the checklist rows for Register, Forgot password and Google are not added yet). The app is `mobile/` in this monorepo.
 
 **Where things are**
-- PR #192 (EAS profiles and dev client) and PR #191 (PR 3e: update-the-app rule, location switch, card motion, outbox pruning): both green on all four checks and mergeable, NOT merged. Waiting for the owner's "merge". Plan: #192 first, then #191, then check main's CI and the Render deploy. Optional `/qa` on #191 first.
-- Branch `feature/ck-web/mobile-old-ui` (pushed, no PR): stacked on #191 and #192 through a local merge commit. Holds: the three emulator bug fixes (`src/app` renamed `src/runtime`, areas in shelf order, root status bar), the automated Android walk, the first app's look, Register / Forgot password / Check your email, Continue with Google, the Android keyboard fix, Fraunces for sentences. After #191 and #192 merge: rebase onto main and split into reviewable PRs (1 walk and bug fixes, 2 look, 3 account flows, 4 Google).
+- PR #192 (EAS profiles and dev client) MERGED 2026-11-21 (`e578609`); PR #191 (PR 3e: update-the-app rule, location switch, card motion, outbox pruning) MERGED 2026-11-21 (`cd194fc`) after a `/qa` pass (report in `.gstack/qa-reports/run-20261121T054426Z/`, gitignored: no defects; not covered: a non-administrator refused on the setting, no hands-on browser session). Main's CI passed for #192; check main's CI and the Render deploy for #191 if not yet recorded here. Merging mobile changes still redeploys the web service until Render's ignored path `mobile/**` is set.
+- Branch `feature/ck-web/mobile-old-ui` (pushed, no PR): stacked on #191 and #192 through a local merge commit. Holds: the three emulator bug fixes (`src/app` renamed `src/runtime`, areas in shelf order, root status bar), the automated Android walk, the first app's look, Register / Forgot password / Check your email, Continue with Google, the Android keyboard fix, Fraunces for sentences. NEXT: rebase it onto main (it now carries only its own commits after the merge commits drop out) and split into reviewable PRs (1 walk and bug fixes, 2 look, 3 account flows, 4 Google).
 - Working copies: main tree on `feature/ck-web/mobile-pr3e-finish`; a second worktree `~/walk/ck` on `feature/ck-web/mobile-old-ui`.
 - Build order: PR 0-3 done, PR 3e (open as #191), then PR 4 receiving, a demand gate (one real pilot count), then PR 5-8.
 
@@ -16,7 +16,7 @@ Native iOS/Android chef app (stock count first, then delivery receiving). Plan a
 - Review the count screens against the first app's kitchen screens (areas, review and location lists are done; the count screen and the attention screen are not yet compared).
 
 **Open, needs the owner**
-- Merge #192 then #191. Render ignored path `mobile/**` (dashboard). Add "Phone app" to main's required checks (`gh api`).
+- Render ignored path `mobile/**` (dashboard). Add "Phone app" to main's required checks (`gh api`).
 - Google Cloud: an Android OAuth client for `com.culinairekitchen.chef` with the debug key's SHA-1 `5E:8F:16:06:2E:A3:CD:2C:4A:0D:54:78:76:BA:A6:F3:8C:AB:F6:25` (and the release key later). Without it, choosing an account may fail with DEVELOPER_ERROR. The web client ID goes in `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` (public value); no ID means no Google button.
 - Offline scenarios on the real phone need port 3009 open to the LAN in `ufw` (not changed): `sudo ufw allow from 192.168.1.0/24 to any port 3009`, and the API URL set to `http://<LAN IP>:3009` instead of the USB tunnel (airplane mode does not cut a USB tunnel).
 - Design calls: pin "Save and next" and Previous / Skip / Review below the scroll area at large text; phone landscape (lock to portrait, tablets keep landscape, or two columns).
