@@ -104,6 +104,15 @@ export interface ActionLineInput {
   substitutedIngredientId?: string;
 }
 
+/** The substitute must be one of the caller's own ingredients: it is client-supplied and becomes stock. */
+async function assertIngredientInOrg(tx: DbOrTx, ingredientId: string, orgId: number) {
+  const [row] = await tx
+    .select({ id: ingredient.ingredientId })
+    .from(ingredient)
+    .where(and(eq(ingredient.ingredientId, ingredientId), eq(ingredient.organisationId, orgId)));
+  if (!row) throw new Error("Substituted ingredient not found");
+}
+
 // ── startSession ─────────────────────────────────────────────────────
 
 /**
@@ -403,6 +412,9 @@ export async function actionLine(
       }
 
       if (input.status === "SUBSTITUTED") {
+        if (input.substitutedIngredientId) {
+          await assertIngredientInOrg(tx, input.substitutedIngredientId, orgId);
+        }
         discrepancyData.substitutedIngredientId = input.substitutedIngredientId;
       }
 
@@ -521,6 +533,8 @@ export async function confirmReceipt(sessionId: string, orgId: number) {
             (d) => d.receivingLineId === line.receivingLineId && d.substitutedIngredientId,
           );
           if (subDisc?.substitutedIngredientId) {
+            // Also covers rows stored before actionLine checked the substitute.
+            await assertIngredientInOrg(tx, subDisc.substitutedIngredientId, orgId);
             batchIngredientId = subDisc.substitutedIngredientId;
           }
         }

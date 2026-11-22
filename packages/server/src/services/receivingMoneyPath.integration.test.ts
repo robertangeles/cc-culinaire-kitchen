@@ -48,6 +48,8 @@ const fx = {
   supplierId: "",
   ingId: "",
   otherIngId: "",
+  foreignOrgId: 0,
+  foreignIngId: "",
   poIds: [] as string[],
   sessionIds: [] as string[],
 };
@@ -147,6 +149,21 @@ describe.skipIf(!RUN)("receiving money path (real DB)", () => {
       });
       await db.insert(stockLevel).values({ storeLocationId: fx.locId, ingredientId: fx[key], currentQty: "10" });
     }
+    // An ingredient that belongs to a different organisation.
+    [{ id: fx.foreignOrgId }] = await db
+      .insert(organisation)
+      .values({ organisationName: `${fx.tag}-foreign`, joinKey: `${fx.tag}-f`.slice(0, 25), createdBy: fx.userId })
+      .returning({ id: organisation.organisationId });
+    [{ id: fx.foreignIngId }] = await db
+      .insert(ingredient)
+      .values({
+        organisationId: fx.foreignOrgId,
+        ingredientName: `${fx.tag}-foreign-oats`,
+        ingredientCategory: "dry_goods",
+        itemType: "KITCHEN_INGREDIENT",
+        baseUnit: "kg",
+      })
+      .returning({ id: ingredient.ingredientId });
     [{ id: fx.supplierId }] = await db
       .insert(supplier)
       .values({ organisationId: fx.orgId, supplierName: `${fx.tag}-supplier` })
@@ -159,7 +176,7 @@ describe.skipIf(!RUN)("receiving money path (real DB)", () => {
       await db.delete(receivingLine).where(inArray(receivingLine.sessionId, fx.sessionIds));
       await db.delete(receivingSession).where(inArray(receivingSession.sessionId, fx.sessionIds));
     }
-    const ingIds = [fx.ingId, fx.otherIngId].filter(Boolean);
+    const ingIds = [fx.ingId, fx.otherIngId, fx.foreignIngId].filter(Boolean);
     if (ingIds.length) {
       await db.delete(fifoBatch).where(inArray(fifoBatch.ingredientId, ingIds));
       await db.delete(stockMovement).where(inArray(stockMovement.ingredientId, ingIds));
@@ -180,6 +197,7 @@ describe.skipIf(!RUN)("receiving money path (real DB)", () => {
       await db.delete(userOrganisation).where(eq(userOrganisation.organisationId, fx.orgId));
       await db.delete(organisation).where(eq(organisation.organisationId, fx.orgId));
     }
+    if (fx.foreignOrgId) await db.delete(organisation).where(eq(organisation.organisationId, fx.foreignOrgId));
     if (fx.userId) await db.delete(user).where(eq(user.userId, fx.userId));
   });
 
@@ -249,5 +267,35 @@ describe.skipIf(!RUN)("receiving money path (real DB)", () => {
 
     expect(await qty(fx.otherIngId)).toBe(arrivedBefore + 5);
     expect(await qty(fx.ingId)).toBe(orderedBefore);
+  });
+
+  it("refuses a substitute ingredient from another organisation", async () => {
+    const { sessionId, lineId } = await startedSession(6);
+
+    await expect(
+      receivingService.actionLine(
+        lineId,
+        sessionId,
+        { status: "SUBSTITUTED", receivedQty: "5", substitutedIngredientId: fx.foreignIngId },
+        fx.orgId,
+      ),
+    ).rejects.toThrow(/not found/i);
+  });
+
+  it("confirm will not stock another organisation's ingredient from an already-stored substitution", async () => {
+    // A row written before the check existed.
+    const { sessionId, lineId } = await startedSession(7);
+    await db.update(receivingLine).set({ status: "SUBSTITUTED" }).where(eq(receivingLine.receivingLineId, lineId));
+    await db.insert(receivingDiscrepancy).values({
+      receivingLineId: lineId,
+      sessionId,
+      supplierId: fx.supplierId,
+      type: "SUBSTITUTED",
+      substitutedIngredientId: fx.foreignIngId,
+    });
+
+    await expect(receivingService.confirmReceipt(sessionId, fx.orgId)).rejects.toThrow(/not found/i);
+
+    expect(await qty(fx.foreignIngId)).toBe(0);
   });
 });
