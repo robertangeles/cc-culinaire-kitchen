@@ -38,6 +38,7 @@ vi.mock("../services/brainCaptureService.js", () => ({
 import {
   handleSubmitPO,
   handleCancelPO,
+  handleApprovePO,
   handleEmailPOToSupplier,
   handleDownloadPOPdf,
 } from "./purchaseOrderController.js";
@@ -148,6 +149,7 @@ describe("PO submit / cancel on an order in the wrong state", () => {
   it.each([
     ["submit", handleSubmitPO, "submitPO"],
     ["cancel", handleCancelPO, "cancelPO"],
+    ["approve", handleApprovePO, "approvePO"],
   ] as const)("%s answers 409 INVALID_STATE through the error handler, not 500", async (_name, handler, serviceFn) => {
     vi.mocked(purchaseOrderService[serviceFn]).mockImplementation(async () => {
       validateTransition("RECEIVED", "CANCELLED", PO_TRANSITIONS, "purchase order");
@@ -164,5 +166,19 @@ describe("PO submit / cancel on an order in the wrong state", () => {
       error: "Cannot transition purchase order from RECEIVED to CANCELLED",
       code: "INVALID_STATE",
     });
+  });
+});
+
+describe("handleApprovePO plain-error mapping", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("still answers 400 for an order that is not awaiting approval", async () => {
+    vi.mocked(purchaseOrderService.approvePO).mockRejectedValue(new Error("Cannot approve PO with status DRAFT"));
+    const res = mockRes();
+    const next = vi.fn() as unknown as NextFunction;
+    await handleApprovePO(mockReq({ params: { id: "po-1" } }), res, next);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ error: "Cannot approve PO with status DRAFT" });
+    expect(next).not.toHaveBeenCalled();
   });
 });

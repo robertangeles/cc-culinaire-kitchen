@@ -166,7 +166,7 @@ export async function handleConfirmReceipt(
     res.json(result);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
-    if (msg.includes("not found") || msg.includes("Cannot transition")) {
+    if (msg.includes("not found")) {
       res.status(400).json({ error: msg });
       return;
     }
@@ -189,7 +189,7 @@ export async function handleCancelSession(
     res.json({ success: true });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
-    if (msg.includes("not found") || msg.includes("Cannot transition")) {
+    if (msg.includes("not found")) {
       res.status(400).json({ error: msg });
       return;
     }

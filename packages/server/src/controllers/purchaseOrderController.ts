@@ -287,7 +287,7 @@ export async function handleApprovePO(
     res.json(result);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
-    if (msg.includes("Cannot") || msg.includes("not found")) {
+    if (msg.includes("Cannot approve") || msg.includes("not found")) {
       res.status(400).json({ error: msg });
       return;
     }
