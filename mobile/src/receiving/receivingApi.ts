@@ -21,6 +21,7 @@ export interface PurchaseOrderDetail {
   poId: string;
   poNumber: string;
   status: string;
+  storeLocationId: string;
   supplierName: string | null;
   supplierPhone: string | null;
   totalValue: string | null;
