@@ -11,8 +11,10 @@ import crypto from "crypto";
 import { OAuth2Client } from "google-auth-library";
 import { generateSecret as otpGenerateSecret, generateURI, verify as otpVerify } from "otplib";
 import QRCode from "qrcode";
-import { eq, and, or, sql, desc, asc } from "drizzle-orm";
+import { eq, and, or, lt, sql, desc, asc } from "drizzle-orm";
 import { db } from "../db/index.js";
+import { ADVISORY_LOCK_KEYS } from "../db/advisoryLockKeys.js";
+import type { DbOrTx } from "./auditService.js";
 import {
   user,
   role,
@@ -52,13 +54,32 @@ const BCRYPT_ROUNDS = parseInt(process.env.BCRYPT_ROUNDS ?? "12", 10);
 function accessSecret(): string {
   return process.env.JWT_ACCESS_SECRET ?? "dev-access-secret";
 }
+/**
+ * Key for the 5-minute "password right, code still to come" token. Derived from the access secret
+ * with a label, never the access secret itself: a token signed with the access secret would pass for
+ * an access token on any route that only checks `authenticate`.
+ */
 function mfaSessionSecret(): string {
-  return process.env.JWT_ACCESS_SECRET ?? "dev-mfa-secret";
+  return crypto.createHmac("sha256", accessSecret()).update("mfa-session-v1").digest("hex");
+}
+/** Key that derives a refresh token's successor from the token itself, so a retried refresh gets the same answer. */
+function refreshChildSecret(): string {
+  return crypto.createHmac("sha256", accessSecret()).update("refresh-child-v1").digest("hex");
 }
 // NB: refresh tokens are random bytes hashed in the DB (see generateTokens),
 // NOT JWTs — there is intentionally no JWT_REFRESH_SECRET in use here.
 const ACCESS_EXPIRY = "1h";
-const REFRESH_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+/** Sliding: every refresh hands out a token that lives this long from now (owner decision: 30 days). */
+const REFRESH_EXPIRY_MS = 30 * 24 * 60 * 60 * 1000;
+/** Refresh tokens issued before rotation lived 7 days; used to date their sign-in. */
+const LEGACY_REFRESH_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000;
+/** A spent token is still honoured this long after it was spent: a reply lost on kitchen wifi, a second browser tab. */
+const REFRESH_GRACE_MS = 60 * 1000;
+/**
+ * A spent token whose successor has not been used yet is honoured this long (a reply lost on a poor
+ * connection, retried later). Past it, a spent token is a replay whatever its successor's state.
+ */
+const REFRESH_UNUSED_SUCCESSOR_MS = 10 * 60 * 1000;
 
 /** Shape of the JWT access token payload. */
 export interface TokenPayload {
@@ -328,11 +349,27 @@ export async function getUserWithRolesAndPermissions(
   };
 }
 
+const sha256 = (raw: string) => crypto.createHash("sha256").update(raw).digest("hex");
+
 /**
- * Generates a JWT access token and a refresh token.
- * The refresh token hash is stored in the database for revocation support.
+ * One refresh-token writer per user at a time. Without it a revoke (reuse, suspend, logout) can miss a
+ * token that a concurrent refresh commits a moment later, leaving a session alive that was meant to die.
  */
-export async function generateTokens(authUser: AuthUser) {
+async function lockUserTokens(tx: DbOrTx, userId: number): Promise<void> {
+  await tx.execute(sql`SELECT pg_advisory_xact_lock(${ADVISORY_LOCK_KEYS.refreshTokenUser}::int, ${userId}::int)`);
+}
+
+/** When the user actually signed in, for a token row (tokens from before rotation carry no such column). */
+function signInTimeOf(row: { signedInAtDttm: Date | null; expiresAtDttm: Date }): Date {
+  return row.signedInAtDttm ?? new Date(row.expiresAtDttm.getTime() - LEGACY_REFRESH_EXPIRY_MS);
+}
+
+/**
+ * Generates a JWT access token and a refresh token: a new sign-in, so a new token family.
+ * The refresh token hash is stored in the database for revocation support.
+ * `signedInAt` is for re-minting inside an existing session without resetting "recently signed in".
+ */
+export async function generateTokens(authUser: AuthUser, opts: { signedInAt?: Date } = {}) {
   const payload: TokenPayload = {
     sub: authUser.userId,
     roles: authUser.roles,
@@ -344,50 +381,102 @@ export async function generateTokens(authUser: AuthUser) {
   });
 
   const rawRefreshToken = crypto.randomBytes(64).toString("hex");
-  const tokenHash = crypto
-    .createHash("sha256")
-    .update(rawRefreshToken)
-    .digest("hex");
+  const now = new Date();
 
-  const expiresAt = new Date(Date.now() + REFRESH_EXPIRY_MS);
-
-  await db.insert(refreshToken).values({
-    userId: authUser.userId,
-    tokenHash,
-    expiresAtDttm: expiresAt,
+  await db.transaction(async (tx) => {
+    await lockUserTokens(tx, authUser.userId);
+    await tx.insert(refreshToken).values({
+      userId: authUser.userId,
+      tokenHash: sha256(rawRefreshToken),
+      expiresAtDttm: new Date(now.getTime() + REFRESH_EXPIRY_MS),
+      signedInAtDttm: opts.signedInAt ?? now,
+    });
+    await tx.delete(refreshToken).where(and(eq(refreshToken.userId, authUser.userId), lt(refreshToken.expiresAtDttm, now)));
   });
 
   return { accessToken, refreshToken: rawRefreshToken };
 }
 
+type RefreshVerdict =
+  | { kind: "ok"; userId: number; refreshToken: string }
+  | { kind: "invalid" | "expired" | "reused" | "suspended" | "cancelled" };
+
 /**
- * Verifies a refresh token and issues a new access token.
- * Returns the new access token and the auth user data.
+ * Exchanges a refresh token for a new access token AND a new refresh token (rotation, 30-day sliding).
+ *
+ * The successor is derived from the presented token (HMAC), so the same token always yields the same
+ * successor: a refresh whose reply was lost, or two browser tabs refreshing at once, converge on one chain
+ * instead of forking it. A spent token is honoured for a short grace window, or a few minutes while its
+ * successor is unused; after that it is a replay, and the whole sign-in (token family) is revoked.
  */
 export async function refreshAccessToken(rawToken: string) {
-  const tokenHash = crypto
-    .createHash("sha256")
-    .update(rawToken)
-    .digest("hex");
+  const tokenHash = sha256(rawToken);
 
-  const [stored] = await db
-    .select()
-    .from(refreshToken)
-    .where(eq(refreshToken.tokenHash, tokenHash));
+  // Whose rows are we about to touch? Read once to know whom to lock, then re-read under the lock.
+  const [peek] = await db.select({ userId: refreshToken.userId }).from(refreshToken).where(eq(refreshToken.tokenHash, tokenHash));
+  if (!peek) throw new AuthError("INVALID_REFRESH_TOKEN", "INVALID_REFRESH_TOKEN", 401);
 
-  if (!stored) {
-    throw new AuthError("INVALID_REFRESH_TOKEN", "INVALID_REFRESH_TOKEN", 401);
+  // The verdict is returned, not thrown, so what the transaction deleted (an expired row, a revoked
+  // family) is committed rather than rolled back with the error.
+  const verdict: RefreshVerdict = await db.transaction(async (tx): Promise<RefreshVerdict> => {
+    await lockUserTokens(tx, peek.userId);
+    const now = new Date();
+
+    const [stored] = await tx.select().from(refreshToken).where(eq(refreshToken.tokenHash, tokenHash));
+    if (!stored) return { kind: "invalid" };
+
+    if (stored.expiresAtDttm < now) {
+      await tx.delete(refreshToken).where(eq(refreshToken.refreshTokenId, stored.refreshTokenId));
+      return { kind: "expired" };
+    }
+
+    const [account] = await tx.select({ status: user.userStatus }).from(user).where(eq(user.userId, stored.userId));
+    if (account?.status === "suspended" || account?.status === "cancelled") {
+      await tx.delete(refreshToken).where(eq(refreshToken.userId, stored.userId));
+      return { kind: account.status };
+    }
+
+    const childRaw = crypto.createHmac("sha256", refreshChildSecret()).update(rawToken).digest("hex");
+    const childHash = sha256(childRaw);
+
+    if (stored.rotatedAtDttm === null) {
+      await tx.update(refreshToken).set({ rotatedAtDttm: now }).where(eq(refreshToken.refreshTokenId, stored.refreshTokenId));
+      await tx.insert(refreshToken).values({
+        userId: stored.userId,
+        tokenHash: childHash,
+        expiresAtDttm: new Date(now.getTime() + REFRESH_EXPIRY_MS),
+        familyId: stored.familyId,
+        signedInAtDttm: signInTimeOf(stored),
+      });
+      await tx.delete(refreshToken).where(and(eq(refreshToken.userId, stored.userId), lt(refreshToken.expiresAtDttm, now)));
+      return { kind: "ok", userId: stored.userId, refreshToken: childRaw };
+    }
+
+    // A spent token: a retry (reply lost, second tab) or a replay.
+    const [child] = await tx.select().from(refreshToken).where(eq(refreshToken.tokenHash, childHash));
+    const sinceSpent = now.getTime() - stored.rotatedAtDttm.getTime();
+    if (child && (sinceSpent <= REFRESH_GRACE_MS || (child.rotatedAtDttm === null && sinceSpent <= REFRESH_UNUSED_SUCCESSOR_MS))) {
+      return { kind: "ok", userId: stored.userId, refreshToken: childRaw };
+    }
+
+    await tx.delete(refreshToken).where(eq(refreshToken.familyId, stored.familyId));
+    return { kind: "reused" };
+  });
+
+  switch (verdict.kind) {
+    case "invalid":
+      throw new AuthError("INVALID_REFRESH_TOKEN", "INVALID_REFRESH_TOKEN", 401);
+    case "expired":
+      throw new AuthError("REFRESH_TOKEN_EXPIRED", "REFRESH_TOKEN_EXPIRED", 401);
+    case "reused":
+      throw new AuthError("REFRESH_TOKEN_REUSED", "REFRESH_TOKEN_REUSED", 401);
+    case "suspended":
+      throw new AuthError("ACCOUNT_SUSPENDED", "ACCOUNT_SUSPENDED", 403);
+    case "cancelled":
+      throw new AuthError("ACCOUNT_CANCELLED", "ACCOUNT_CANCELLED", 403);
   }
 
-  if (stored.expiresAtDttm < new Date()) {
-    // Clean up expired token
-    await db
-      .delete(refreshToken)
-      .where(eq(refreshToken.refreshTokenId, stored.refreshTokenId));
-    throw new AuthError("REFRESH_TOKEN_EXPIRED", "REFRESH_TOKEN_EXPIRED", 401);
-  }
-
-  const authUser = await getUserWithRolesAndPermissions(stored.userId);
+  const authUser = await getUserWithRolesAndPermissions(verdict.userId);
 
   const payload: TokenPayload = {
     sub: authUser.userId,
@@ -399,26 +488,22 @@ export async function refreshAccessToken(rawToken: string) {
     expiresIn: ACCESS_EXPIRY,
   });
 
-  return { accessToken, user: authUser };
+  return { accessToken, refreshToken: verdict.refreshToken, user: authUser };
 }
 
 /**
  * When the sign-in that created this refresh token happened, or null if the token is
- * unknown or belongs to another user. Refresh tokens are not rotated, so this is the
- * time the user last actually authenticated, unlike an access token's `iat`, which
- * resets on every silent refresh.
+ * unknown or belongs to another user. Unlike an access token's `iat` (which resets on every silent
+ * refresh) and the token's own age (rotation replaces it), this is carried unchanged along the family.
  */
 export async function getSignInTime(rawToken: string | undefined, userId: number): Promise<Date | null> {
   if (!rawToken) return null;
-  const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
   const [stored] = await db
-    .select({ userId: refreshToken.userId, expiresAtDttm: refreshToken.expiresAtDttm })
+    .select({ userId: refreshToken.userId, expiresAtDttm: refreshToken.expiresAtDttm, signedInAtDttm: refreshToken.signedInAtDttm })
     .from(refreshToken)
-    .where(eq(refreshToken.tokenHash, tokenHash));
+    .where(eq(refreshToken.tokenHash, sha256(rawToken)));
   if (!stored || stored.userId !== userId) return null;
-  // Derived from the expiry the app wrote, not the column default `now()`, whose zone
-  // depends on the database session and would skew a minutes-wide check.
-  return new Date(stored.expiresAtDttm.getTime() - REFRESH_EXPIRY_MS);
+  return signInTimeOf(stored);
 }
 
 /** How recently the user must have signed in when nothing but a session proves who they are. */
@@ -429,22 +514,60 @@ export function isRecentSignIn(signedInAt: Date | null, now: Date = new Date()):
 }
 
 /**
- * Revokes a refresh token by deleting its hash from the database.
+ * Ends the sign-in a refresh token belongs to (logout): every token of its family, not just this one,
+ * so an earlier copy of the token (another tab, a stolen one) dies with it.
  */
 export async function revokeRefreshToken(rawToken: string) {
-  const tokenHash = crypto
-    .createHash("sha256")
-    .update(rawToken)
-    .digest("hex");
+  const tokenHash = sha256(rawToken);
+  const [stored] = await db
+    .select({ userId: refreshToken.userId, familyId: refreshToken.familyId })
+    .from(refreshToken)
+    .where(eq(refreshToken.tokenHash, tokenHash));
+  if (!stored) return;
+  await db.transaction(async (tx) => {
+    await lockUserTokens(tx, stored.userId);
+    await tx.delete(refreshToken).where(eq(refreshToken.familyId, stored.familyId));
+  });
+}
 
-  await db.delete(refreshToken).where(eq(refreshToken.tokenHash, tokenHash));
+/**
+ * Ends every sign-in of a user (suspend, cancel, password reset, password change).
+ * `keepFamilyId` spares the caller's own sign-in, but only its live token: spent copies of it, which
+ * another holder may have, go too. Pass `tx` to make it part of the caller's transaction.
+ */
+export async function revokeAllRefreshTokens(userId: number, keepFamilyId?: string, tx?: DbOrTx) {
+  const run = async (t: DbOrTx) => {
+    await lockUserTokens(t, userId);
+    await t
+      .delete(refreshToken)
+      .where(
+        keepFamilyId
+          ? and(eq(refreshToken.userId, userId), sql`NOT (${refreshToken.familyId} = ${keepFamilyId} AND ${refreshToken.rotatedAtDttm} IS NULL)`)
+          : eq(refreshToken.userId, userId),
+      );
+  };
+  if (tx) await run(tx);
+  else await db.transaction(run);
+}
+
+/** The family of a refresh token that belongs to this user, if any. */
+export async function refreshTokenFamily(rawToken: string | undefined, userId: number): Promise<string | undefined> {
+  if (!rawToken) return undefined;
+  const [stored] = await db
+    .select({ userId: refreshToken.userId, familyId: refreshToken.familyId })
+    .from(refreshToken)
+    .where(eq(refreshToken.tokenHash, sha256(rawToken)));
+  return stored && stored.userId === userId ? stored.familyId : undefined;
 }
 
 /**
  * Verifies a JWT access token and returns the decoded payload.
  */
 export function verifyAccessToken(token: string): TokenPayload {
-  return jwt.verify(token, accessSecret()) as unknown as TokenPayload;
+  const payload = jwt.verify(token, accessSecret()) as unknown as TokenPayload & { purpose?: string };
+  // A token with a purpose (the MFA-pending one, in versions that signed it with this secret) is not a session.
+  if (payload.purpose !== undefined) throw new jwt.JsonWebTokenError("not an access token");
+  return payload;
 }
 
 /**
@@ -573,9 +696,7 @@ export async function resetPassword(
     .set({ usedInd: true })
     .where(eq(passwordReset.passwordResetId, row.passwordResetId));
 
-  await db
-    .delete(refreshToken)
-    .where(eq(refreshToken.userId, row.userId));
+  await revokeAllRefreshTokens(row.userId);
 }
 
 // ---------------------------------------------------------------------------

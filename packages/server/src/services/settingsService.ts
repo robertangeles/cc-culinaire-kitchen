@@ -38,6 +38,9 @@ const SETTING_DEFAULTS: Record<string, string> = {
   mobile_languages_enabled: '["en"]',
   // Lowest phone app version allowed to sign in or download a count. 0.0.0 blocks nobody.
   mobile_min_app_version: "0.0.0",
+  // Where the phone's "update the app" button goes. Empty until the store listings exist.
+  mobile_store_url_ios: "",
+  mobile_store_url_android: "",
 };
 
 /**
@@ -107,6 +110,12 @@ export function validateSettingsUpdate(updates: Record<string, string>): string 
   const minVersion = updates.mobile_min_app_version;
   if (minVersion !== undefined && !/^\d+\.\d+\.\d+$/.test(minVersion)) {
     return "The minimum phone app version must look like 1.2.3 (0.0.0 allows every version).";
+  }
+  for (const key of ["mobile_store_url_ios", "mobile_store_url_android"]) {
+    const url = updates[key];
+    if (url !== undefined && url !== "" && !/^https:\/\/\S+$/.test(url)) {
+      return "A store link must be a web address starting with https:// (leave it empty until the listing exists).";
+    }
   }
   return null;
 }

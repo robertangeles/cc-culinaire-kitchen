@@ -51,10 +51,10 @@ export function assertCanCount(
   opts: { isManager: boolean; claimRevision?: number },
 ): void {
   if (!opts.isManager && cat.claimedByUserId !== userId) {
-    throw new ForbiddenError("Only the person who claimed this category can count or submit it");
+    throw new ForbiddenError("Only the person who claimed this category can count or submit it", "STOCK_TAKE_CLAIMED_BY_OTHER");
   }
   if (opts.claimRevision !== undefined && opts.claimRevision !== cat.claimRevision) {
-    throw new ForbiddenError("This count was queued under an earlier claim; recount under the current claim");
+    throw new ForbiddenError("This count was queued under an earlier claim; recount under the current claim", "STOCK_TAKE_CLAIM_CHANGED");
   }
 }
 
@@ -95,6 +95,11 @@ export async function claimCategory(
   if (cat.categoryStatus !== "NOT_STARTED" && cat.categoryStatus !== "FLAGGED") {
     throw new InvalidStateError(
       `Cannot claim category: current status is ${cat.categoryStatus}`,
+      cat.categoryStatus === "IN_PROGRESS"
+        ? "STOCK_TAKE_AREA_HELD"
+        : cat.categoryStatus === "SUBMITTED" || cat.categoryStatus === "APPROVED"
+          ? "STOCK_TAKE_AREA_SUBMITTED"
+          : undefined,
     );
   }
 

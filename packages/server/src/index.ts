@@ -15,7 +15,7 @@ import { healthRouter } from "./routes/health.js";
 import { chatRouter } from "./routes/chat.js";
 import { promptsRouter } from "./routes/prompts.js";
 import { mobileRagRouter } from "./routes/mobileRag.js";
-import { mobileFeatureFlagsRouter } from "./routes/mobileFeatureFlags.js";
+import { mobileFeatureFlagsRouter, mobileConfigRouter } from "./routes/mobileFeatureFlags.js";
 import { mobileFeedbackRouter } from "./routes/mobileFeedback.js";
 import { assertFeedbackEmailConfig } from "./services/feedbackService.js";
 import { conversationsRouter } from "./routes/conversations.js";
@@ -36,6 +36,7 @@ import { personalisationOptionsRouter, adminPersonalisationOptionsRouter } from 
 import { handleWebhook } from "./controllers/stripeController.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { globalApiRateLimit } from "./middleware/globalRateLimit.js";
+import { mobileUpdateGate } from "./middleware/mobileVersionPolicy.js";
 import { CLIENT_URL, PORT } from "./utils/env.js";
 import { knowledgeRouter } from "./routes/knowledge.js";
 import { modelOptionsRouter } from "./routes/modelOptions.js";
@@ -113,6 +114,7 @@ app.use(cors({
 app.use(express.json({ limit: "10mb" }));
 app.use(cookieParser());
 app.use(globalApiRateLimit);
+app.use("/api", mobileUpdateGate());
 
 // Routes
 app.use("/api/health", healthRouter);
@@ -121,6 +123,7 @@ app.use("/api/chat", chatRouter);
 app.use("/api/prompts", promptsRouter);
 app.use("/api/mobile/rag", mobileRagRouter);
 app.use("/api/mobile/feature-flags", mobileFeatureFlagsRouter);
+app.use("/api/mobile/config", mobileConfigRouter);
 app.use("/api/mobile/feedback", mobileFeedbackRouter);
 app.use("/api/conversations", conversationsRouter);
 app.use("/api/settings", settingsRouter);
@@ -180,6 +183,7 @@ const CLIENT_DIST = join(__dirname, "../../client/dist");
 import { readFile as readFileAsync } from "fs/promises";
 import { getRecipe as getRecipeForSeo } from "./services/recipePersistenceService.js";
 import { getRatingsSummary } from "./services/ratingService.js";
+import { injectRecipeSeo } from "./utils/recipeSeoHtml.js";
 import { initBenchSocket } from "./services/benchSocketService.js";
 import { benchRouter } from "./routes/bench.js";
 import { menuIntelligenceRouter } from "./routes/menuIntelligence.js";
@@ -256,28 +260,7 @@ app.get("/kitchen-shelf/:slug", async (req, res, next) => {
 
     const jsonLd = JSON.stringify(jsonLdObj);
 
-    // Replace meta tags in HTML
-    html = html
-      .replace(/<title>[^<]*<\/title>/, `<title>${title}</title>`)
-      .replace(/(<meta\s+name="description"\s+content=")[^"]*"/, `$1${description}"`)
-      .replace(/(<meta\s+property="og:title"\s+content=")[^"]*"/, `$1${title}"`)
-      .replace(/(<meta\s+property="og:description"\s+content=")[^"]*"/, `$1${description}"`)
-      .replace(/(<meta\s+property="og:type"\s+content=")[^"]*"/, `$1article"`)
-      .replace(/(<meta\s+property="og:url"\s+content=")[^"]*"/, `$1${url}"`)
-      .replace(/(<meta\s+name="twitter:card"\s+content=")[^"]*"/, `$1summary_large_image"`)
-      .replace(/(<meta\s+name="twitter:title"\s+content=")[^"]*"/, `$1${title}"`)
-      .replace(/(<meta\s+name="twitter:description"\s+content=")[^"]*"/, `$1${description}"`);
-
-    // Inject og:image if recipe has one
-    if (image) {
-      html = html.replace("</head>", `  <meta property="og:image" content="${image}" />\n  <meta name="twitter:image" content="${image}" />\n</head>`);
-    }
-
-    // Replace the Organization JSON-LD with Recipe JSON-LD
-    html = html.replace(
-      /<script type="application\/ld\+json">[\s\S]*?<\/script>/,
-      `<script type="application/ld+json">${jsonLd}</script>`,
-    );
+    html = injectRecipeSeo(html, { title, description, image, url, jsonLd });
 
     res.send(html);
   } catch {

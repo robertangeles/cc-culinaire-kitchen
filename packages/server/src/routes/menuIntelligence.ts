@@ -8,6 +8,7 @@
 import { Router } from "express";
 import multer from "multer";
 import { authenticate, requirePermission } from "../middleware/auth.js";
+import { locationParamGuard } from "../middleware/locationAccess.js";
 import {
   handleListMenuItems,
   handleCreateMenuItem,
@@ -41,6 +42,7 @@ export const menuIntelligenceRouter = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 
 menuIntelligenceRouter.use(authenticate);
+menuIntelligenceRouter.param("locId", locationParamGuard);
 // Gate the whole module on the Menu & Costing permission (read gate covers the
 // module for v1; a menu:manage write split is a documented follow-up).
 menuIntelligenceRouter.use(requirePermission("menu:read"));

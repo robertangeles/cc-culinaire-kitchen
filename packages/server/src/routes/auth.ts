@@ -27,7 +27,20 @@ import {
   handleTurnstileConfig,
 } from "../controllers/authController.js";
 import { authenticate } from "../middleware/auth.js";
-import { authRateLimit, mfaVerifyRateLimit, mfaAccountRateLimit } from "../middleware/rateLimiter.js";
+import {
+  mfaVerifyRateLimit,
+  mfaAccountRateLimit,
+  loginRateLimit,
+  registerRateLimit,
+  forgotPasswordRateLimit,
+  resetPasswordRateLimit,
+  resendVerificationRateLimit,
+  verifyEmailRateLimit,
+  googleIdTokenRateLimit,
+  logoutRateLimit,
+  refreshRateLimit,
+  refreshTokenRateLimit,
+} from "../middleware/rateLimiter.js";
 import { requireSupportedMobileVersion } from "../middleware/mobileVersionPolicy.js";
 
 const router = Router();
@@ -35,25 +48,24 @@ const router = Router();
 // Public: site key for the browser-side Turnstile widget.
 router.get("/turnstile-config", handleTurnstileConfig);
 
-// authRateLimit is the abuse backstop for the non-browser path: Turnstile is
-// enforced only for browser requests, so native/scripted clients are throttled
-// here instead (20/min per IP).
-router.post("/register", authRateLimit, handleRegister);
-router.post("/login", authRateLimit, requireSupportedMobileVersion(), handleLogin);
-router.post("/logout", handleLogout);
-router.post("/refresh", handleRefresh);
+// Each public endpoint has its own rate-limit bucket (see rateLimiter.ts): they are the abuse backstop
+// for the non-browser path, since Turnstile is enforced only for browser requests.
+router.post("/register", registerRateLimit, handleRegister);
+router.post("/login", loginRateLimit, requireSupportedMobileVersion(), handleLogin);
+router.post("/logout", logoutRateLimit, handleLogout);
+router.post("/refresh", refreshRateLimit, refreshTokenRateLimit, handleRefresh);
 router.get("/me", authenticate, handleGetMe);
-router.get("/verify-email", handleVerifyEmail);
-router.post("/resend-verification", handleResendVerification);
-router.post("/forgot-password", authRateLimit, handleForgotPassword);
-router.post("/reset-password", handleResetPassword);
+router.get("/verify-email", verifyEmailRateLimit, handleVerifyEmail);
+router.post("/resend-verification", resendVerificationRateLimit, handleResendVerification);
+router.post("/forgot-password", forgotPasswordRateLimit, handleForgotPassword);
+router.post("/reset-password", resetPasswordRateLimit, handleResetPassword);
 
 // OAuth
 router.get("/google", handleGoogleRedirect);
 router.get("/google/callback", handleGoogleCallback);
 // Mobile native Google Sign-In: accepts an ID token from
 // @react-native-google-signin/google-signin and issues our JWTs.
-router.post("/google/idtoken", handleGoogleIdToken);
+router.post("/google/idtoken", googleIdTokenRateLimit, handleGoogleIdToken);
 
 // MFA
 router.post("/mfa/setup", authenticate, mfaAccountRateLimit, handleMfaSetup);

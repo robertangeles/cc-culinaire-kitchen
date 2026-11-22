@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+import crypto from "node:crypto";
 
 /**
  * requireProofToChangeMfa guards the account-takeover lever (a new secret locks the owner out, turning
@@ -143,7 +144,9 @@ describe("disableMfa: proof required to remove the second factor", () => {
 });
 
 describe("mfaSessionUserId: only a verified MFA token names an account", () => {
-  const secret = () => process.env.JWT_ACCESS_SECRET ?? "dev-mfa-secret";
+  // The MFA token has its own key, derived from the access secret: a token signed with the access secret itself must not count.
+  const accessSecret = () => process.env.JWT_ACCESS_SECRET ?? "dev-access-secret";
+  const secret = () => crypto.createHmac("sha256", accessSecret()).update("mfa-session-v1").digest("hex");
 
   it("returns the user of a valid MFA session token", () => {
     expect(mfaSessionUserId(jwt.sign({ sub: 7, purpose: "mfa" }, secret(), { expiresIn: "5m" }))).toBe(7);
@@ -153,6 +156,7 @@ describe("mfaSessionUserId: only a verified MFA token names an account", () => {
     expect(mfaSessionUserId(jwt.sign({ sub: 7, purpose: "mfa" }, "some-other-secret"))).toBeNull();
     expect(mfaSessionUserId(jwt.sign({ sub: 7, purpose: "mfa" }, secret(), { expiresIn: -10 }))).toBeNull();
     expect(mfaSessionUserId(jwt.sign({ sub: 7, purpose: "access" }, secret()))).toBeNull();
+    expect(mfaSessionUserId(jwt.sign({ sub: 7, purpose: "mfa" }, accessSecret(), { expiresIn: "5m" }))).toBeNull();
     expect(mfaSessionUserId(undefined)).toBeNull();
     expect(mfaSessionUserId({ sub: 7 })).toBeNull();
   });

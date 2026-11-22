@@ -9,7 +9,7 @@
 import type { Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import { getAutoPoSuggestions } from "../services/autoPoSuggestService.js";
-import { getUserLocationContext } from "../services/locationContextService.js";
+import { getUserLocationContext, assertLocationAccess } from "../services/locationContextService.js";
 
 const querySchema = z.object({
   storeLocationId: z.string().uuid("storeLocationId must be a UUID"),
@@ -33,6 +33,7 @@ export async function handleGetAutoPoSuggestions(
       res.status(400).json({ error: "You are not a member of any organisation" });
       return;
     }
+    await assertLocationAccess(req.user!, parsed.data.storeLocationId);
     const result = await getAutoPoSuggestions(parsed.data.storeLocationId, orgId);
     res.json(result);
   } catch (err) {

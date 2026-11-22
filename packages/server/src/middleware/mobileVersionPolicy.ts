@@ -2,9 +2,12 @@
  * @module middleware/mobileVersionPolicy
  *
  * The phone app's "update to continue" rule (owner decision, eng D12). The app sends
- * `X-Mobile-App-Version` on every call; this middleware is attached ONLY to sign-in and the count
- * download. A build below the admin-set minimum gets 426 there, and count writes (saving a line,
- * submitting) are never gated, so counts waiting on an old phone can still be sent.
+ * `X-Mobile-App-Version` on every call. A build below the admin-set minimum gets 426 on every read
+ * (`mobileUpdateGate`, mounted on all `/api` routes), while writes (saving a count line, submitting) are
+ * never gated, so work waiting on an old phone can still be sent. `requireSupportedMobileVersion()` with no
+ * options also guards sign-in and the count download directly, writes included. The 426 body carries
+ * `minVersion` and `storeUrls`, because the config call that also holds them needs a signed-in user, which
+ * an old build or a lapsed session may not have.
  *
  * No header (the web app, scripts) passes, and so does a header that is not a version. A minimum that is
  * unset, malformed or unreadable also passes: a settings problem must never lock every chef out of signing in.
@@ -16,7 +19,9 @@
 import type { Request, Response, NextFunction } from "express";
 import pino from "pino";
 import { compareSemver } from "./mobileVersionGuard.js";
+import type { MobileStoreUrls, UpgradeRequiredBody } from "@culinaire/shared";
 import { getAllSettings } from "../services/settingsService.js";
+import { storeUrlsFrom } from "../services/featureFlagsService.js";
 
 const log = pino({ name: "mobileVersionPolicy" });
 /** The minimum is exactly 1.2.3; the app's own version may carry a build tag (1.2.3-beta.1, 1.2.3+12). */
@@ -27,8 +32,18 @@ async function minimumFromSettings(): Promise<string | undefined> {
   return (await getAllSettings()).mobile_min_app_version;
 }
 
-export function requireSupportedMobileVersion(getMin: () => Promise<string | undefined> = minimumFromSettings) {
+async function storeUrlsFromSettings(): Promise<MobileStoreUrls> {
+  return storeUrlsFrom(await getAllSettings());
+}
+
+export function requireSupportedMobileVersion(
+  getMin: () => Promise<string | undefined> = minimumFromSettings,
+  opts: { allowWrites?: boolean; getStoreUrls?: () => Promise<MobileStoreUrls> } = {},
+) {
+  const getStoreUrls = opts.getStoreUrls ?? storeUrlsFromSettings;
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    // A write may be a command queued on an old phone (a count, later a waste log): it must still get through.
+    if (opts.allowWrites && !["GET", "HEAD", "OPTIONS"].includes(req.method)) return next();
     const raw = req.headers["x-mobile-app-version"];
     const version = Array.isArray(raw) ? raw[0] : raw;
     if (!version) return next();
@@ -45,9 +60,39 @@ export function requireSupportedMobileVersion(getMin: () => Promise<string | und
     if (!min || !MIN_RE.test(min)) return next();
 
     if (compareSemver(version, min) < 0) {
-      res.status(426).json({ error: "Update the app to continue.", code: "upgrade_required", minVersion: min });
+      const body: UpgradeRequiredBody = { error: "Update the app to continue.", code: "upgrade_required", minVersion: min };
+      try {
+        const { ios, android } = await getStoreUrls();
+        if (ios || android) body.storeUrls = { ...(ios && { ios }), ...(android && { android }) };
+      } catch (err) {
+        log.warn(err, "Could not read the store links; answering 426 without them");
+      }
+      res.status(426).json(body);
       return;
     }
     next();
+  };
+}
+
+/** Paths an out-of-date app must still reach: the config call, the health check, and signing out. */
+const GATE_EXEMPT = new Set(["/api/mobile/config", "/api/health", "/api/auth/logout"]);
+
+/**
+ * The update gate on EVERY phone route (mounted once, in index.ts): an old build reading anything gets
+ * 426 `upgrade_required` and shows its update screen, while writes still go through so queued work
+ * drains. The web sends no version header, so it is never gated.
+ *
+ * COMPATIBILITY RULE (tasks/lessons.md, "Server stays compatible with installed apps"): raising
+ * `mobile_min_app_version` is the only way an installed version stops working. Until the owner raises it,
+ * every response shape and error code an installed build parses must keep working.
+ */
+export function mobileUpdateGate(
+  getMin: () => Promise<string | undefined> = minimumFromSettings,
+  getStoreUrls?: () => Promise<MobileStoreUrls>,
+) {
+  const gate = requireSupportedMobileVersion(getMin, { allowWrites: true, getStoreUrls });
+  return (req: Request, res: Response, next: NextFunction): Promise<void> | void => {
+    if (GATE_EXEMPT.has(req.originalUrl.split("?")[0])) return next();
+    return gate(req, res, next);
   };
 }

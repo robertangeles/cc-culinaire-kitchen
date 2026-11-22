@@ -65,8 +65,12 @@ test.describe("Public Holidays — jurisdiction+year filter", () => {
     await openPublicHolidays(page);
 
     // Start on NT — deliberately different from the jurisdiction we'll save.
-    await page.getByRole("tab", { name: "NT", exact: true }).click();
-    await expect(page.getByRole("tab", { name: "NT", exact: true })).toHaveAttribute("aria-selected", "true");
+    // Retry the click: the StrictMode double load resets the jurisdiction (see above).
+    const ntTab = page.getByRole("tab", { name: "NT", exact: true });
+    await expect(async () => {
+      await ntTab.click();
+      await expect(ntTab).toHaveAttribute("aria-selected", "true", { timeout: 1_000 });
+    }).toPass({ timeout: 15_000 });
 
     const addButton = page.getByRole("button", { name: "Add holiday", exact: true });
     if ((await addButton.count()) === 0) {

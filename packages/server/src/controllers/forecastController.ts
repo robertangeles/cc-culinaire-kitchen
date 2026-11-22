@@ -7,7 +7,7 @@
 
 import type { Request, Response, NextFunction } from "express";
 import pino from "pino";
-import { getUserLocationContext, getLocationInOrg } from "../services/locationContextService.js";
+import { getUserLocationContext, assertLocationAccess } from "../services/locationContextService.js";
 import * as forecastService from "../services/forecastService.js";
 
 const logger = pino({ name: "forecastController" });
@@ -42,10 +42,7 @@ export async function handleGenerateForecasts(
       return;
     }
 
-    if (!await getLocationInOrg(storeLocationId, orgId)) {
-      res.status(400).json({ error: "Location not found" });
-      return;
-    }
+    await assertLocationAccess(req.user!, storeLocationId);
 
     const count = await forecastService.generateForecasts(storeLocationId, orgId);
 
@@ -73,10 +70,7 @@ export async function handleListRecommendations(
       return;
     }
 
-    if (!await getLocationInOrg(storeLocationId as string, orgId)) {
-      res.status(400).json({ error: "Location not found" });
-      return;
-    }
+    await assertLocationAccess(req.user!, storeLocationId as string);
 
     const recs = await forecastService.listRecommendations(
       storeLocationId as string,

@@ -7,7 +7,7 @@
  * Used by Kitchen Ops modules to scope data by location.
  */
 
-import { eq, and } from "drizzle-orm";
+import { eq, and, asc } from "drizzle-orm";
 import { db } from "../db/index.js";
 import {
   user,
@@ -19,6 +19,9 @@ import {
   getUserStoreLocations,
   getOrgStoreLocations,
 } from "./storeLocationService.js";
+import { hasPermission } from "../middleware/auth.js";
+import type { TokenPayload } from "./authService.js";
+import { AppError } from "../utils/appError.js";
 
 export interface LocationContext {
   /** All locations the user has access to (assigned + admin access) */
@@ -47,14 +50,16 @@ export interface LocationContext {
 export async function getUserLocationContext(
   userId: number
 ): Promise<LocationContext> {
-  // Get user's org memberships
+  // Get user's org memberships. The earliest membership is the primary org:
+  // without an ORDER BY the "first" row was whichever Postgres returned.
   const memberships = await db
     .select({
       organisationId: userOrganisation.organisationId,
       role: userOrganisation.role,
     })
     .from(userOrganisation)
-    .where(eq(userOrganisation.userId, userId));
+    .where(eq(userOrganisation.userId, userId))
+    .orderBy(asc(userOrganisation.userOrganisationId));
 
   if (memberships.length === 0) {
     return {
@@ -66,7 +71,9 @@ export async function getUserLocationContext(
     };
   }
 
-  const isOrgAdmin = memberships.some((m) => m.role === "admin");
+  // Admin rights belong to the org they were granted in: being admin of a
+  // second org must not open the primary org's locations.
+  const isOrgAdmin = memberships[0].role === "admin";
   const primaryOrgId = memberships[0].organisationId;
 
   // Get locations based on role
@@ -84,7 +91,9 @@ export async function getUserLocationContext(
     }));
   } else {
     // Staff sees only assigned locations
-    const assigned = await getUserStoreLocations(userId);
+    const assigned = (await getUserStoreLocations(userId)).filter(
+      (loc) => loc.organisationId === primaryOrgId,
+    );
     locations = assigned.map((loc) => ({
       storeLocationId: loc.storeLocationId,
       organisationId: loc.organisationId,
@@ -248,4 +257,26 @@ export async function getLocationInOrg(
       ),
     );
   return !!loc;
+}
+
+/**
+ * May this caller use `storeLocationId`? A location sent by the client must be one the
+ * caller is assigned to, which is what `getUserLocationContext` lists (org admins get every
+ * location of their organisation). Holders of `inventory:hq` oversee every location of their
+ * organisation. Being a member of the same organisation is not enough.
+ */
+export async function canAccessLocation(user: TokenPayload, storeLocationId: string): Promise<boolean> {
+  const ctx = await getUserLocationContext(user.sub);
+  if (ctx.locations.some((l) => l.storeLocationId === storeLocationId)) return true;
+  if (ctx.organisationId !== null && hasPermission(user, "inventory:hq")) {
+    return getLocationInOrg(storeLocationId, ctx.organisationId);
+  }
+  return false;
+}
+
+/** 403 LOCATION_NOT_ALLOWED unless {@link canAccessLocation}. Wrong organisation and not assigned answer the same. */
+export async function assertLocationAccess(user: TokenPayload, storeLocationId: string): Promise<void> {
+  if (!(await canAccessLocation(user, storeLocationId))) {
+    throw new AppError(403, "LOCATION_NOT_ALLOWED", "You do not have access to this location");
+  }
 }

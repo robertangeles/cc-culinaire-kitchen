@@ -7,7 +7,7 @@
 import type { Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import pino from "pino";
-import { getUserLocationContext } from "../services/locationContextService.js";
+import { getUserLocationContext, assertLocationAccess } from "../services/locationContextService.js";
 import {
   createPO,
   listPOs,
@@ -86,6 +86,8 @@ export async function handleCreatePO(
       return;
     }
 
+    await assertLocationAccess(req.user!, parsed.data.storeLocationId);
+
     const userId = req.user!.sub;
     const result = await createPO({
       orgId,
@@ -115,6 +117,8 @@ export async function handleListPOs(
     const storeLocationId = req.query.storeLocationId as string | undefined;
     const limit = req.query.limit ? Number(req.query.limit) : undefined;
     const offset = req.query.offset ? Number(req.query.offset) : undefined;
+
+    if (storeLocationId) await assertLocationAccess(req.user!, storeLocationId);
 
     const result = await listPOs(orgId, { status, storeLocationId, limit, offset });
     res.json(result);
@@ -283,7 +287,7 @@ export async function handleApprovePO(
     res.json(result);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
-    if (msg.includes("Cannot") || msg.includes("not found")) {
+    if (msg.includes("Cannot approve") || msg.includes("not found")) {
       res.status(400).json({ error: msg });
       return;
     }
@@ -385,6 +389,8 @@ export async function handleClonePO(
       res.status(400).json({ error: "Validation failed", details: parsed.error.flatten() });
       return;
     }
+
+    await assertLocationAccess(req.user!, parsed.data.storeLocationId);
 
     const result = await clonePO(sourcePOId, orgId, parsed.data.storeLocationId, userId);
     logger.info({ sourcePOId, newPOId: result.poId, userId }, "Purchase order cloned");

@@ -30,6 +30,8 @@ import {
   sale,
 } from "../db/schema.js";
 import { resolveToBase } from "./unitConversionService.js";
+import { assertLocationAccess } from "./locationContextService.js";
+import type { TokenPayload } from "./authService.js";
 
 export class SaleError extends Error {
   constructor(message: string, public statusCode: number) {
@@ -45,6 +47,8 @@ export interface RecordSaleInput {
   soldAt?: Date;
   locationId?: string;
   idempotencyKey?: string | null;
+  /** The signed-in caller; the location the sale resolves to must be one they can use. Omit only for system callers. */
+  actor?: TokenPayload;
 }
 
 interface DepletionLine {
@@ -214,6 +218,8 @@ export async function recordSale(orgId: number, userId: number, input: RecordSal
   if (!mi) throw new SaleError("Menu item not found", 404);
 
   const locationId = await resolveSaleLocation(orgId, input.locationId, mi.storeLocationId);
+  // Checked on the RESOLVED location: it can come from the menu item or the org's only location, not just the request.
+  if (input.actor) await assertLocationAccess(input.actor, locationId);
 
   // Preflight — resolve all depletions (D1). Throws before any write.
   const { depletions, skipped } = await planDepletions(orgId, input.menuItemId, mi.servings, input.qtySold);
@@ -397,7 +403,7 @@ async function getOrCreateConsumableLink(orgId: number, userId: number, ingredie
 export async function recordConsumableSale(
   orgId: number,
   userId: number,
-  input: { ingredientId: string; qtySold: number; soldAt?: Date; locationId?: string; idempotencyKey?: string | null },
+  input: { ingredientId: string; qtySold: number; soldAt?: Date; locationId?: string; idempotencyKey?: string | null; actor?: TokenPayload },
 ): Promise<RecordSaleResult> {
   const menuItemId = await getOrCreateConsumableLink(orgId, userId, input.ingredientId);
   return recordSale(orgId, userId, {
@@ -407,6 +413,7 @@ export async function recordConsumableSale(
     soldAt: input.soldAt,
     locationId: input.locationId,
     idempotencyKey: input.idempotencyKey,
+    actor: input.actor,
   });
 }
 
@@ -477,7 +484,7 @@ export async function previewSalesCsv(userId: number, csvContent: string): Promi
  * atomic — a bad row never rolls back the others). A per-row content-derived
  * idempotency key makes re-importing the same file a no-op.
  */
-export async function commitSalesCsv(orgId: number, userId: number, lines: CsvSaleLine[]) {
+export async function commitSalesCsv(orgId: number, userId: number, lines: CsvSaleLine[], actor?: TokenPayload) {
   const succeeded: Array<{ rowIndex: number; saleId: string }> = [];
   const alreadyExists: Array<{ rowIndex: number; saleId: string; voided: boolean }> = [];
   const failed: Array<{ rowIndex: number; reason: string }> = [];
@@ -504,6 +511,7 @@ export async function commitSalesCsv(orgId: number, userId: number, lines: CsvSa
         source: "CSV",
         soldAt: line.soldAt ? new Date(line.soldAt) : undefined,
         idempotencyKey: key,
+        actor,
       });
       if (res.alreadyExists) alreadyExists.push({ rowIndex: line.rowIndex, saleId: res.saleId, voided: !!res.voided });
       else succeeded.push({ rowIndex: line.rowIndex, saleId: res.saleId });

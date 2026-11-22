@@ -44,10 +44,12 @@ function makeQueryMock(rowsByCall: unknown[][] = [[]]) {
 
   const select = vi.fn(() => ({
     from: vi.fn(() => ({
-      where: vi.fn(async () => {
+      where: vi.fn(() => {
         const idx = callIdx;
         callIdx = Math.min(callIdx + 1, rowsByCall.length - 1);
-        return rowsByCall[idx] ?? [];
+        const rows = rowsByCall[idx] ?? [];
+        // confirmReceipt locks the session row with .for("update"); both forms resolve to the rows.
+        return Object.assign(Promise.resolve(rows), { for: vi.fn(async () => rows) });
       }),
       leftJoin: vi.fn(() => makeJoinable()),
       innerJoin: vi.fn(() => makeJoinable()),

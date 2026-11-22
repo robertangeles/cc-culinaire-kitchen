@@ -1,18 +1,24 @@
 import { describe, it, expect, vi } from "vitest";
 import type { Request, Response } from "express";
-import { requireSupportedMobileVersion } from "./mobileVersionPolicy.js";
+import { requireSupportedMobileVersion, mobileUpdateGate } from "./mobileVersionPolicy.js";
 
-function run(header: string | undefined, getMin: () => Promise<string | undefined>) {
+const NO_STORES = async () => ({ ios: null, android: null });
+
+function run(
+  header: string | undefined,
+  getMin: () => Promise<string | undefined>,
+  getStoreUrls: () => Promise<{ ios: string | null; android: string | null }> = NO_STORES,
+) {
   const req = { headers: header === undefined ? {} : { "x-mobile-app-version": header } } as unknown as Request;
   const json = vi.fn().mockReturnThis();
   const status = vi.fn().mockReturnThis();
   const res = { status, json } as unknown as Response;
   const next = vi.fn();
-  const done = requireSupportedMobileVersion(getMin)(req, res, next);
+  const done = requireSupportedMobileVersion(getMin, { getStoreUrls })(req, res, next);
   return { done, status, json, next, req };
 }
 
-describe("mobile version policy (sign-in and count download only)", () => {
+describe("mobile version policy (requireSupportedMobileVersion)", () => {
   it("lets web and any client that sends no version header through", async () => {
     const r = run(undefined, async () => "9.9.9");
     await r.done;
@@ -30,6 +36,29 @@ describe("mobile version policy (sign-in and count download only)", () => {
     expect(old.next).not.toHaveBeenCalled();
     expect(old.status).toHaveBeenCalledWith(426);
     expect(old.json).toHaveBeenCalledWith({ error: "Update the app to continue.", code: "upgrade_required", minVersion: "1.2.0" });
+  });
+
+  it("sends both store links in the 426 body when both are set, so a signed-out old build can show where to update", async () => {
+    const ios = "https://apps.apple.com/app/id1";
+    const android = "https://play.google.com/store/apps/details?id=x";
+    const r = run("1.1.9", async () => "1.2.0", async () => ({ ios, android }));
+    await r.done;
+    expect(r.status).toHaveBeenCalledWith(426);
+    expect(r.json).toHaveBeenCalledWith({ error: "Update the app to continue.", code: "upgrade_required", minVersion: "1.2.0", storeUrls: { ios, android } });
+  });
+
+  it("sends only the platform that has a listing, never a null placeholder", async () => {
+    const android = "https://play.google.com/store/apps/details?id=x";
+    const r = run("1.1.9", async () => "1.2.0", async () => ({ ios: null, android }));
+    await r.done;
+    expect(r.json).toHaveBeenCalledWith({ error: "Update the app to continue.", code: "upgrade_required", minVersion: "1.2.0", storeUrls: { android } });
+  });
+
+  it("leaves storeUrls out of the 426 body when the store links cannot be read", async () => {
+    const r = run("1.1.9", async () => "1.2.0", async () => { throw new Error("db down"); });
+    await r.done;
+    expect(r.status).toHaveBeenCalledWith(426);
+    expect(r.json).toHaveBeenCalledWith({ error: "Update the app to continue.", code: "upgrade_required", minVersion: "1.2.0" });
   });
 
   it("compares numbers, not text (0.10.0 is newer than 0.9.0)", async () => {
@@ -70,5 +99,54 @@ describe("mobile version policy (sign-in and count download only)", () => {
     const junk = run("0.1.0", async () => "banana");
     await junk.done;
     expect(junk.next).toHaveBeenCalled();
+  });
+});
+
+describe("update gate on every phone route (mobileUpdateGate)", () => {
+  function gate(method: string, url: string, version: string | undefined, min = "2.0.0") {
+    const req = {
+      method,
+      originalUrl: url,
+      headers: version === undefined ? {} : { "x-mobile-app-version": version },
+    } as unknown as Request;
+    const json = vi.fn().mockReturnThis();
+    const status = vi.fn().mockReturnThis();
+    const next = vi.fn();
+    const done = mobileUpdateGate(async () => min, NO_STORES)(req, { status, json } as unknown as Response, next);
+    return { done, status, json, next };
+  }
+
+  it("answers 426 upgrade_required to an old build reading any route", async () => {
+    for (const url of ["/api/inventory/stock-takes/active", "/api/auth/me", "/api/mobile/feature-flags?x=1"]) {
+      const r = gate("GET", url, "1.0.0");
+      await r.done;
+      expect(r.status, url).toHaveBeenCalledWith(426);
+      expect(r.json).toHaveBeenCalledWith(expect.objectContaining({ code: "upgrade_required", minVersion: "2.0.0" }));
+      expect(r.next).not.toHaveBeenCalled();
+    }
+  });
+
+  it("never blocks a write, so counts and other commands queued on an old phone can still be sent", async () => {
+    for (const method of ["POST", "PUT", "PATCH", "DELETE"]) {
+      const r = gate(method, "/api/inventory/stock-takes/abc/categories/dry/lines", "1.0.0");
+      await r.done;
+      expect(r.next, method).toHaveBeenCalled();
+    }
+  });
+
+  it("leaves the config endpoint, the health check and logout open, so a signed-in old build can still call them", async () => {
+    for (const [method, url] of [["GET", "/api/mobile/config"], ["GET", "/api/health"], ["POST", "/api/auth/logout"], ["GET", "/api/mobile/config?v=1"]]) {
+      const r = gate(method, url, "1.0.0");
+      await r.done;
+      expect(r.next, url).toHaveBeenCalled();
+    }
+  });
+
+  it("does not touch the web or a current build", async () => {
+    for (const version of [undefined, "2.0.0", "2.1.0"]) {
+      const r = gate("GET", "/api/inventory/stock-takes/active", version);
+      await r.done;
+      expect(r.next).toHaveBeenCalled();
+    }
   });
 });

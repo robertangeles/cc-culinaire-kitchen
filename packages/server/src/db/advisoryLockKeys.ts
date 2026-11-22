@@ -18,4 +18,8 @@ export const ADVISORY_LOCK_KEYS = {
   brainCompaction: 8_100_004,
   /** Daily Brain nudges (09:00) — Phase 3 T17. */
   brainNudge: 8_100_005,
+  /** Schema migration runner (src/migrations): one runner at a time per database. */
+  schemaMigrations: 8_100_006,
+  /** Namespace (first int4 key) of the per-user lock that serialises refresh-token writes; the second key is the user id. */
+  refreshTokenUser: 8_100_007,
 } as const;

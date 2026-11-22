@@ -9,8 +9,11 @@ import { z } from "zod";
 import {
   generateTokens,
   getUserWithRolesAndPermissions,
+  getSignInTime,
+  revokeRefreshToken,
 } from "../services/authService.js";
 import { setAuthCookies } from "./authController.js";
+import { presentedRefreshToken } from "../utils/presentedRefreshToken.js";
 import {
   createOrganisation,
   updateOrganisation,
@@ -72,9 +75,16 @@ export async function handleCreateOrganisation(req: Request, res: Response, next
     // access token so its permissions apply immediately without requiring
     // the user to log out and back in.
     const authUser = await getUserWithRolesAndPermissions(req.user!.sub);
-    const tokens = await generateTokens(authUser);
+    // Same sign-in, new permissions: keep when they really signed in, and end the old session
+    // instead of leaving it alive next to the new one.
+    const oldRefresh = presentedRefreshToken(req);
+    // Never "now" when the original sign-in cannot be found: re-minting must not count as signing in again.
+    const signedInAt = (await getSignInTime(oldRefresh, req.user!.sub)) ?? new Date(0);
+    if (oldRefresh) await revokeRefreshToken(oldRefresh);
+    const tokens = await generateTokens(authUser, { signedInAt });
     setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
-    res.status(201).json({ organisation: org });
+    // `tokens` is for bearer clients, whose old refresh token was just revoked; web ignores it.
+    res.status(201).json({ organisation: org, tokens });
   } catch (err) {
     next(err);
   }

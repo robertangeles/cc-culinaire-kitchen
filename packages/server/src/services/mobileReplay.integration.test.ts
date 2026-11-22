@@ -35,6 +35,7 @@ import { openSession, claimCategory, saveLineItem, submitCategory, getSessionDet
 import { handleSaveLineItem } from "../controllers/stockTakeController.js";
 import { handleConfirmReceipt } from "../controllers/receivingController.js";
 import * as receivingService from "./receivingService.js";
+import { errorHandler } from "../middleware/errorHandler.js";
 
 /**
  * Mobile release 1, PR 1 (E5): the three replay cases the design doc named as untested
@@ -43,7 +44,7 @@ import * as receivingService from "./receivingService.js";
  *
  *   1. a stale queued count arriving after a newer one            -> arrival order wins, one row
  *   2. a count replayed into an already-submitted category         -> rejected (400), nothing written
- *   3. a retried receiving confirm on a COMPLETED session          -> 400, stock not doubled,
+ *   3. a retried receiving confirm on a COMPLETED session          -> 409 ALREADY_CONFIRMED, stock not doubled,
  *                                                                     session reads COMPLETED
  *
  * Gated on TENANT_IT=1 (the repo's real-DB gate). Self-cleaning.
@@ -68,6 +69,7 @@ function call(handler: (req: Request, res: Response, next: (e?: unknown) => void
   return new Promise<{ status: number; body: unknown }>((resolveCall, reject) => {
     let status = 200;
     const res = {
+      headersSent: false,
       status(code: number) {
         status = code;
         return this;
@@ -77,7 +79,9 @@ function call(handler: (req: Request, res: Response, next: (e?: unknown) => void
         return this;
       },
     } as unknown as Response;
-    handler({ user: { sub: fx.userId }, ...req } as unknown as Request, res, (e) => reject(e)).catch(reject);
+    // next(err) goes through the real errorHandler, as it does under Express.
+    const next = (e?: unknown) => errorHandler(e as Error, {} as Request, res, () => {});
+    handler({ user: { sub: fx.userId }, ...req } as unknown as Request, res, next).catch(reject);
   });
 }
 
@@ -238,6 +242,7 @@ describe.skipIf(!RUN)("mobile replay cases (real DB)", () => {
 
     expect(out.status).toBe(400);
     expect((out.body as { error: string }).error).toMatch(/SUBMITTED/);
+    expect(out.body).toMatchObject({ code: "STOCK_TAKE_AREA_CLOSED" });
     const after = await db
       .select({ countedQty: stockTakeLine.countedQty })
       .from(stockTakeLine)
@@ -245,7 +250,7 @@ describe.skipIf(!RUN)("mobile replay cases (real DB)", () => {
     expect(after.map((r) => Number(r.countedQty))).toEqual(before.map((r) => Number(r.countedQty)));
   });
 
-  it("3. a retried receiving confirm returns 400, does not double the stock, and the session reads COMPLETED", async () => {
+  it("3. a retried receiving confirm returns 409 ALREADY_CONFIRMED, does not double the stock, and the session reads COMPLETED", async () => {
     const { session } = await receivingService.startSession(fx.poId, fx.locId, fx.userId, fx.orgId);
     fx.receivingSessionId = session.sessionId;
     const startQty = await currentQty();
@@ -255,7 +260,8 @@ describe.skipIf(!RUN)("mobile replay cases (real DB)", () => {
     expect(afterFirst).toBe(startQty + 5);
 
     const retry = await call(handleConfirmReceipt, { params: { sessionId: fx.receivingSessionId } });
-    expect(retry.status).toBe(400);
+    expect(retry.status).toBe(409);
+    expect(retry.body).toMatchObject({ code: "ALREADY_CONFIRMED" });
     expect(await currentQty()).toBe(afterFirst);
 
     // The client's recovery step: fetch the session and treat COMPLETED as done.

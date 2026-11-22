@@ -5,6 +5,19 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Fixed (mobile Wave 0, server)
+
+- **Public recipe pages escape recipe text.** A recipe title, description or image URL could close the page's `<title>`, a meta attribute or the JSON-LD script and run script for every visitor.
+- **Receiving and transfers are safe to retry.** Two confirms at once (two phones, a retried request) added the stock twice; now the second answers 409 `ALREADY_CONFIRMED`. "All good" after Short or Reject put the old quantity back; a substitution now lands as stock of the item that arrived (the substitute must belong to the organisation). A transfer checks both locations, ingredients and cost layer against the organisation and runs send, receive, cancel and edit in one locked transaction.
+- **Location scoping.** A location sent by the client must be one assigned to the user (org admins and `inventory:hq` holders keep their wider access): enforced on every `:locId` route and on consumption, transfers, receiving, forecasts, purchasing, order guides, catalogue requests and sales (checked on the resolved sale location). The organisation context no longer takes an arbitrary first membership, and admin of one organisation no longer opens another's locations.
+- **Errors a phone can act on.** `{ error, code }` (shared `ApiErrorBody`): unit conversion problems answer 422 `INCOMPATIBLE_UNITS`, illegal PO/receiving transitions 409 `INVALID_STATE`, consumption edit/delete refusals 404/403/409, stock-take refusals carry the codes the phone names. `error` is unchanged for the web.
+- **Auth.** Refresh tokens rotate (30-day sliding; a lost reply or second tab gets the same successor; replaying a spent token revokes the whole sign-in); suspend, cancel, password change and reset end sessions; the MFA-pending token no longer works as an access token; every public auth endpoint has its own rate-limit bucket, sign-in counts failures only. Bearer tokens are accepted on guest-or-user routes and the Bench socket.
+
+### Added (mobile Wave 0, server)
+
+- `GET /api/mobile/config` (module flags, minimum version, store links), a JSON `FEATURE_DISABLED` body on flagged-off routes, and the update gate on every phone read (queued writes still go through).
+- Numbered schema migrations (`src/migrations`, `src/scripts/migrate.ts`, `schema_migrations` ledger). Migration `0001_refresh_token_rotation` must be applied before this version deploys.
+
 ### Changed
 
 - **Organisation admins can regenerate the join key.** A refresh button next to the key on Profile → Kitchen (admins only), with a confirm because the old key stops working at once. The route and service already existed with no screen. Removed two dead leftovers: the member `joinedAt` field (the table has no date column, the server always sent null, nothing showed it) and the unused address state in `OrgTab` (the form never had inputs and the server ignored the values). The address columns stay in the database, unused.

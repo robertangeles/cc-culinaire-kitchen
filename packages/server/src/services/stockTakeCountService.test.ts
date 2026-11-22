@@ -81,6 +81,15 @@ describe("claimCategory", () => {
     await expect(claimCategory("s1", "proteins", 1)).rejects.toThrow(InvalidStateError);
   });
 
+  it.each([
+    ["SUBMITTED", "STOCK_TAKE_AREA_SUBMITTED"],
+    ["APPROVED", "STOCK_TAKE_AREA_SUBMITTED"],
+    ["IN_PROGRESS", "STOCK_TAKE_AREA_HELD"],
+  ])("a %s area answers with code %s", async (categoryStatus, code) => {
+    mockSelect([{ categoryStatus, claimedByUserId: 2, categoryId: "c1", sessionStatus: "OPEN" }]);
+    await expect(claimCategory("s1", "proteins", 1)).rejects.toMatchObject({ code });
+  });
+
   it("throws InvalidStateError when session is not OPEN or FLAGGED", async () => {
     mockSelect([{ categoryStatus: "NOT_STARTED", claimedByUserId: null, categoryId: "c1", sessionStatus: "PENDING_REVIEW" }]);
     await expect(claimCategory("s1", "proteins", 1)).rejects.toThrow(InvalidStateError);
@@ -174,6 +183,11 @@ describe("assertCanCount (claimant, manager override, claim revision)", () => {
   it("rejects another user, and lets a manager through", () => {
     expect(() => assertCanCount(cat, 8, { isManager: false })).toThrow(ForbiddenError);
     expect(() => assertCanCount(cat, 8, { isManager: true })).not.toThrow();
+  });
+
+  it("names the refusal so the phone's queue can branch on it", () => {
+    expect(() => assertCanCount(cat, 8, { isManager: false })).toThrow(expect.objectContaining({ code: "STOCK_TAKE_CLAIMED_BY_OTHER" }));
+    expect(() => assertCanCount(cat, 7, { isManager: false, claimRevision: 1 })).toThrow(expect.objectContaining({ code: "STOCK_TAKE_CLAIM_CHANGED" }));
   });
 
   it("rejects an unclaimed category for a non-manager", () => {

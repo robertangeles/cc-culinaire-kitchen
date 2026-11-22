@@ -35,6 +35,7 @@ import type { DbOrTx } from "./auditService.js";
 import * as wacService from "./wacService.js";
 import { resolveToBase } from "./unitConversionService.js";
 import { validateTransition, RECEIVING_SESSION_TRANSITIONS } from "../utils/stateTransition.js";
+import { AppError } from "../utils/appError.js";
 import pino from "pino";
 
 const logger = pino({ name: "receivingService" });
@@ -101,6 +102,15 @@ export interface ActionLineInput {
   rejectionReason?: RejectionReason;
   rejectionNote?: string;
   substitutedIngredientId?: string;
+}
+
+/** The substitute must be one of the caller's own ingredients: it is client-supplied and becomes stock. */
+async function assertIngredientInOrg(tx: DbOrTx, ingredientId: string, orgId: number) {
+  const [row] = await tx
+    .select({ id: ingredient.ingredientId })
+    .from(ingredient)
+    .where(and(eq(ingredient.ingredientId, ingredientId), eq(ingredient.organisationId, orgId)));
+  if (!row) throw new Error("Substituted ingredient not found");
 }
 
 // ── startSession ─────────────────────────────────────────────────────
@@ -281,6 +291,16 @@ export async function getSession(sessionId: string, orgId: number) {
   return { session, lines, discrepancies, photos };
 }
 
+/** The location a receiving session belongs to, for the caller's access check. Null when it is not in this organisation. */
+export async function getSessionLocationId(sessionId: string, orgId: number): Promise<string | null> {
+  const [row] = await db
+    .select({ storeLocationId: receivingSession.storeLocationId })
+    .from(receivingSession)
+    .innerJoin(purchaseOrder, eq(receivingSession.poId, purchaseOrder.poId))
+    .where(and(eq(receivingSession.sessionId, sessionId), eq(purchaseOrder.organisationId, orgId)));
+  return row?.storeLocationId ?? null;
+}
+
 // ── actionLine ───────────────────────────────────────────────────────
 
 /**
@@ -301,7 +321,8 @@ export async function actionLine(
     const [session] = await tx
       .select()
       .from(receivingSession)
-      .where(eq(receivingSession.sessionId, sessionId));
+      .where(eq(receivingSession.sessionId, sessionId))
+      .for("share");
 
     if (!session) throw new Error("Receiving session not found");
 
@@ -356,6 +377,13 @@ export async function actionLine(
       updateData.receivedQty = "0";
     }
 
+    // "All good" sends the status alone: put back what was ordered and the PO price,
+    // otherwise a Short or Reject (or a price change) made a moment ago stays on the line.
+    if (input.status === "RECEIVED") {
+      updateData.receivedQty ??= line.orderedQty;
+      updateData.actualUnitCost ??= poLine?.unitCost ?? line.actualUnitCost;
+    }
+
     const [updatedLine] = await tx
       .update(receivingLine)
       .set(updateData)
@@ -369,7 +397,8 @@ export async function actionLine(
         receivingLineId,
         sessionId,
         supplierId: po.supplierId,
-        type: input.status === "PRICE_VARIANCE" ? "PRICE_VARIANCE" : input.status,
+        // The line status is SUBSTITUTED; the discrepancy type is SUBSTITUTION (schema doc, confirmReceipt).
+        type: input.status === "SUBSTITUTED" ? "SUBSTITUTION" : input.status,
       };
 
       if (input.status === "SHORT") {
@@ -394,6 +423,9 @@ export async function actionLine(
       }
 
       if (input.status === "SUBSTITUTED") {
+        if (input.substitutedIngredientId) {
+          await assertIngredientInOrg(tx, input.substitutedIngredientId, orgId);
+        }
         discrepancyData.substitutedIngredientId = input.substitutedIngredientId;
       }
 
@@ -456,10 +488,13 @@ export async function confirmReceipt(sessionId: string, orgId: number) {
   // Wrap all DB writes in a single transaction so rollback is automatic on
   // any error (FIFO batch insert, stock update conflict, PO update, etc.).
   const result = await db.transaction(async (tx) => {
+    // FOR UPDATE: a second confirm (other phone, retried request) waits here
+    // until the first commits, then reads COMPLETED instead of adding the stock again.
     const [session] = await tx
       .select()
       .from(receivingSession)
-      .where(eq(receivingSession.sessionId, sessionId));
+      .where(eq(receivingSession.sessionId, sessionId))
+      .for("update");
 
     if (!session) throw new Error("Receiving session not found");
 
@@ -471,6 +506,10 @@ export async function confirmReceipt(sessionId: string, orgId: number) {
       .where(and(eq(purchaseOrder.poId, session.poId), eq(purchaseOrder.organisationId, orgId)));
 
     if (!po) throw new Error("Receiving session not found");
+
+    if (session.status === "COMPLETED") {
+      throw new AppError(409, "ALREADY_CONFIRMED", "This delivery has already been confirmed");
+    }
 
     validateTransition(session.status, "COMPLETED", RECEIVING_SESSION_TRANSITIONS, "receiving session");
 
@@ -499,10 +538,14 @@ export async function confirmReceipt(sessionId: string, orgId: number) {
         let batchIngredientId = line.ingredientId;
 
         if (line.status === "SUBSTITUTED") {
+          // Match on the substituted ingredient, not the type: sessions started before the
+          // type was fixed carry "SUBSTITUTED" rows.
           const subDisc = discrepancies.find(
-            (d) => d.receivingLineId === line.receivingLineId && d.type === "SUBSTITUTION",
+            (d) => d.receivingLineId === line.receivingLineId && d.substitutedIngredientId,
           );
           if (subDisc?.substitutedIngredientId) {
+            // Also covers rows stored before actionLine checked the substitute.
+            await assertIngredientInOrg(tx, subDisc.substitutedIngredientId, orgId);
             batchIngredientId = subDisc.substitutedIngredientId;
           }
         }
@@ -721,7 +764,8 @@ export async function cancelSession(sessionId: string, orgId: number) {
     const [session] = await tx
       .select()
       .from(receivingSession)
-      .where(eq(receivingSession.sessionId, sessionId));
+      .where(eq(receivingSession.sessionId, sessionId))
+      .for("update");
 
     if (!session) throw new Error("Receiving session not found");
 

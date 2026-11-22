@@ -13,7 +13,7 @@ vi.mock("../services/settingsService.js", () => ({
 function mockRes(): Response {
   return {
     status: vi.fn().mockReturnThis(),
-    end: vi.fn().mockReturnThis(),
+    json: vi.fn().mockReturnThis(),
   } as unknown as Response;
 }
 
@@ -31,14 +31,14 @@ describe("requireFlag", () => {
     expect(next).toHaveBeenCalledOnce();
   });
 
-  it("404s with no body when the flag is \"false\"", async () => {
+  it("404s with a JSON body carrying FEATURE_DISABLED when the flag is \"false\"", async () => {
     const { requireFlag } = await import("./requireFlag.js");
     mockSettings = { roster_enabled: "false" };
     const next = vi.fn() as unknown as NextFunction;
     const res = mockRes();
     await requireFlag("roster_enabled")({} as Request, res, next);
     expect(res.status).toHaveBeenCalledWith(404);
-    expect(res.end).toHaveBeenCalledOnce();
+    expect(res.json).toHaveBeenCalledWith({ error: "This feature is not available.", code: "FEATURE_DISABLED" });
     expect(next).not.toHaveBeenCalled();
   });
 

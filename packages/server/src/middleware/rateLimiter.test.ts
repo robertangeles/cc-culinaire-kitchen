@@ -40,12 +40,13 @@ describe("rateLimiter — chatRateLimit config", () => {
   it("constructs with 20 requests per 60 seconds", async () => {
     await import("./rateLimiter.js");
 
-    // Ten limiters are constructed: chat + mobile prompt + mobile RAG +
-    // mobile feedback + auth + compliance document view + compliance
-    // document edit + compliance report + MFA verify + MFA account. Assert
-    // call count first so we catch any future limiter being added or removed
-    // silently.
-    expect(mockRateLimit).toHaveBeenCalledTimes(10);
+    // Twenty limiters are constructed: chat + mobile prompt + mobile RAG +
+    // mobile feedback + account settings (auth) + compliance document view + compliance
+    // document edit + compliance report + MFA verify + MFA account, then the nine per-endpoint auth
+    // buckets (login, register, forgot, reset, resend, verify-email, google id token, logout, refresh)
+    // and the per-token refresh cap. Assert call count first so we catch any future limiter being
+    // added or removed silently.
+    expect(mockRateLimit).toHaveBeenCalledTimes(20);
 
     const chatConfig = mockRateLimit.mock.calls[0][0] as Record<string, unknown>;
     expect(chatConfig.limit).toBe(20);
@@ -454,5 +455,54 @@ describe("rateLimiter — MFA limiters config", () => {
     expect(config.skip?.({})).toBe(true);
     expect(config.skip?.({ body: { mfaSessionToken: "tok-7" } })).toBe(false);
     expect(config.skip?.({ user: { sub: 3 } })).toBe(false);
+  });
+});
+
+describe("rateLimiter — per-endpoint auth buckets", () => {
+  type Cfg = {
+    limit: number;
+    skipSuccessfulRequests?: boolean;
+    keyGenerator: (req: { ip?: string; cookies?: Record<string, string>; body?: Record<string, string> }) => string;
+  };
+
+  async function configs() {
+    mockRateLimit.mockClear();
+    vi.resetModules();
+    await import("./rateLimiter.js");
+    return mockRateLimit.mock.calls.map((c) => c[0] as unknown as Cfg);
+  }
+
+  const prefixes = ["login", "register", "forgot-password", "reset-password", "resend-verification", "verify-email", "google-idtoken", "logout", "refresh"];
+
+  it("gives each public auth endpoint its own bucket, so one cannot spend another's budget", async () => {
+    const all = await configs();
+    const keys = prefixes.map((p) => {
+      const cfg = all.find((c) => c.keyGenerator({ ip: "1.2.3.4" }).startsWith(`${p}-ip-`));
+      expect(cfg, `bucket for ${p}`).toBeDefined();
+      return cfg!.keyGenerator({ ip: "1.2.3.4" });
+    });
+    expect(new Set(keys).size).toBe(prefixes.length);
+    // and none of them is the account-settings bucket or leaks the address
+    for (const k of keys) expect(k).not.toContain("1.2.3.4");
+    expect(keys.some((k) => k.startsWith("auth-ip-"))).toBe(false);
+  });
+
+  it("counts only failed sign-ins, so successes behind one kitchen's NAT do not lock people out", async () => {
+    const all = await configs();
+    const login = all.find((c) => c.keyGenerator({ ip: "1.2.3.4" }).startsWith("login-ip-"))!;
+    expect(login.skipSuccessfulRequests).toBe(true);
+  });
+
+  it("refresh: a generous per-address cap plus a tight per-token cap", async () => {
+    const all = await configs();
+    const perIp = all.find((c) => c.keyGenerator({ ip: "1.2.3.4" }).startsWith("refresh-ip-"))!;
+    expect(perIp.limit).toBeGreaterThanOrEqual(100);
+    const perToken = all.find((c) => c.keyGenerator({ ip: "1.2.3.4", cookies: { refresh_token: "abc" } }).startsWith("refresh-token-"))!;
+    expect(perToken.limit).toBeLessThanOrEqual(20);
+    const a = perToken.keyGenerator({ ip: "1.2.3.4", cookies: { refresh_token: "abc" } });
+    const b = perToken.keyGenerator({ ip: "1.2.3.4", body: { refreshToken: "abc" } });
+    expect(a).toBe(b);
+    expect(a).not.toContain("abc");
+    expect(perToken.keyGenerator({ ip: "1.2.3.4", cookies: { refresh_token: "other" } })).not.toBe(a);
   });
 });

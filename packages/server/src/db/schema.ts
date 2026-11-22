@@ -377,12 +377,39 @@ export const oauthAccount = pgTable("oauth_account", {
  * management. Tokens can be revoked by deleting the row (logout, password
  * change, etc.).
  */
-export const refreshToken = pgTable("refresh_token", {
-  refreshTokenId: serial("refresh_token_id").primaryKey(),
-  userId: integer("user_id").notNull(),
-  tokenHash: varchar("token_hash", { length: 255 }).notNull(),
-  expiresAtDttm: timestamp("expires_at_dttm").notNull(),
-  createdDttm: timestamp("created_dttm").notNull().defaultNow(),
+export const refreshToken = pgTable(
+  "refresh_token",
+  {
+    refreshTokenId: serial("refresh_token_id").primaryKey(),
+    userId: integer("user_id").notNull(),
+    tokenHash: varchar("token_hash", { length: 255 }).notNull(),
+    expiresAtDttm: timestamp("expires_at_dttm").notNull(),
+    createdDttm: timestamp("created_dttm").notNull().defaultNow(),
+    /** One sign-in's chain of rotated tokens. Reuse of a spent token revokes the whole family. */
+    familyId: uuid("family_id").notNull().defaultRandom(),
+    /** When the user actually authenticated; copied to every rotated child. Null on tokens issued before rotation. */
+    signedInAtDttm: timestamp("signed_in_at_dttm"),
+    /** Set when this token was exchanged for a new one. Null = still the live token of its family. */
+    rotatedAtDttm: timestamp("rotated_at_dttm"),
+  },
+  (table) => [
+    // Refresh: "find the row for the token hash presented".
+    index("idx_refresh_token_hash").on(table.tokenHash),
+    // Sign-out everywhere, password change, suspend and the per-user purge: "all rows of one user".
+    index("idx_refresh_token_user_id").on(table.userId),
+    // Reuse detection: "all rows of one family".
+    index("idx_refresh_token_family_id").on(table.familyId),
+  ],
+);
+
+/**
+ * The `schema_migrations` ledger: which numbered migrations (src/migrations) a database has had applied.
+ * Written only by migrations/runner.ts. Keyed by the migration's own id (`0001_name`), not a UUID.
+ */
+export const schemaMigrations = pgTable("schema_migrations", {
+  migrationId: text("migration_id").primaryKey(),
+  description: text("description").notNull(),
+  appliedAt: timestamp("applied_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 /**

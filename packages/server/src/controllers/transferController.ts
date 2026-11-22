@@ -7,7 +7,8 @@
 
 import type { Request, Response, NextFunction } from "express";
 import pino from "pino";
-import { getUserLocationContext, getLocationInOrg } from "../services/locationContextService.js";
+import { getUserLocationContext, assertLocationAccess, canAccessLocation } from "../services/locationContextService.js";
+import { AppError } from "../utils/appError.js";
 import * as transferService from "../services/transferService.js";
 
 const logger = pino({ name: "transferController" });
@@ -23,6 +24,22 @@ async function resolveOrgId(req: Request, res: Response): Promise<number | null>
     return null;
   }
   return orgId;
+}
+
+/**
+ * A transfer is acted on from one of its ends: sending, cancelling and editing from the
+ * source, receiving at the destination. The caller must be able to use that end (a transfer
+ * that does not exist is left to the service to report).
+ */
+async function assertTransferAccess(
+  req: Request, transferId: string, orgId: number, ends: Array<"from" | "to">,
+): Promise<void> {
+  const t = await transferService.getTransferEndpoints(transferId, orgId);
+  if (!t) return;
+  for (const end of ends) {
+    if (await canAccessLocation(req.user!, end === "from" ? t.fromLocationId : t.toLocationId)) return;
+  }
+  throw new AppError(403, "LOCATION_NOT_ALLOWED", "You do not have access to this location");
 }
 
 // ─── Initiate transfer ──────────────────────────────────────────
@@ -62,6 +79,9 @@ export async function handleInitiateTransfer(
       }
     }
 
+    // Stock leaves the source, so it must be the caller's; the destination only has to be in the organisation.
+    await assertLocationAccess(req.user!, fromLocationId);
+
     const transfer = await transferService.initiateTransfer(
       orgId, fromLocationId, toLocationId, userId, lines, notes,
     );
@@ -88,6 +108,7 @@ export async function handleConfirmSent(
     const orgId = await resolveOrgId(req, res);
     if (orgId === null) return;
 
+    await assertTransferAccess(req, req.params.id as string, orgId, ["from"]);
     const transfer = await transferService.confirmSent(
       req.params.id as string, orgId, req.user!.sub,
     );
@@ -97,10 +118,6 @@ export async function handleConfirmSent(
     const msg = err instanceof Error ? err.message : String(err);
     if (msg.includes("not found")) {
       res.status(404).json({ error: msg });
-      return;
-    }
-    if (msg.includes("Cannot send")) {
-      res.status(400).json({ error: msg });
       return;
     }
     logger.error(err, "handleConfirmSent failed");
@@ -125,6 +142,7 @@ export async function handleConfirmReceived(
       return;
     }
 
+    await assertTransferAccess(req, req.params.id as string, orgId, ["to"]);
     const transfer = await transferService.confirmReceived(
       req.params.id as string, orgId, req.user!.sub, receivedLines,
     );
@@ -134,10 +152,6 @@ export async function handleConfirmReceived(
     const msg = err instanceof Error ? err.message : String(err);
     if (msg.includes("not found")) {
       res.status(404).json({ error: msg });
-      return;
-    }
-    if (msg.includes("Cannot receive")) {
-      res.status(400).json({ error: msg });
       return;
     }
     logger.error(err, "handleConfirmReceived failed");
@@ -155,6 +169,7 @@ export async function handleCancelTransfer(
     const orgId = await resolveOrgId(req, res);
     if (orgId === null) return;
 
+    await assertTransferAccess(req, req.params.id as string, orgId, ["from"]);
     const transfer = await transferService.cancelTransfer(
       req.params.id as string, orgId, req.user!.sub,
     );
@@ -164,10 +179,6 @@ export async function handleCancelTransfer(
     const msg = err instanceof Error ? err.message : String(err);
     if (msg.includes("not found")) {
       res.status(404).json({ error: msg });
-      return;
-    }
-    if (msg.includes("Only INITIATED")) {
-      res.status(400).json({ error: msg });
       return;
     }
     logger.error(err, "handleCancelTransfer failed");
@@ -186,6 +197,8 @@ export async function handleListTransfers(
     if (orgId === null) return;
 
     const { status, storeLocationId, limit } = req.query;
+
+    if (storeLocationId) await assertLocationAccess(req.user!, storeLocationId as string);
 
     const transfers = await transferService.listTransfers(orgId, {
       status: status as string | undefined,
@@ -210,6 +223,7 @@ export async function handleGetTransferDetail(
     const orgId = await resolveOrgId(req, res);
     if (orgId === null) return;
 
+    await assertTransferAccess(req, req.params.id as string, orgId, ["from", "to"]);
     const transfer = await transferService.getTransferDetail(req.params.id as string, orgId);
     if (!transfer) {
       res.status(404).json({ error: "Transfer not found" });
@@ -240,10 +254,7 @@ export async function handleListPending(
       return;
     }
 
-    if (!await getLocationInOrg(storeLocationId as string, orgId)) {
-      res.status(400).json({ error: "Location not found" });
-      return;
-    }
+    await assertLocationAccess(req.user!, storeLocationId as string);
 
     const transfers = await transferService.listPendingTransfers(
       storeLocationId as string,
@@ -273,6 +284,7 @@ export async function handleUpdateTransfer(
       return;
     }
 
+    await assertTransferAccess(req, id, orgId, ["from"]);
     const result = await transferService.updateTransfer(id, orgId, { lines, notes });
     res.json(result);
   } catch (err: unknown) {
@@ -281,6 +293,8 @@ export async function handleUpdateTransfer(
       res.status(404).json({ error: "Transfer not found" });
     } else if (msg.includes("no longer editable")) {
       res.status(409).json({ error: msg });
+    } else if (msg.includes("ingredients not found")) {
+      res.status(400).json({ error: msg });
     } else {
       logger.error(err, "handleUpdateTransfer failed");
       next(err);
@@ -304,6 +318,7 @@ export async function handleAddLines(
       return;
     }
 
+    await assertTransferAccess(req, id, orgId, ["from"]);
     const result = await transferService.addLinesToTransfer(id, orgId, lines);
     res.json(result);
   } catch (err: unknown) {
@@ -312,6 +327,8 @@ export async function handleAddLines(
       res.status(404).json({ error: "Transfer not found" });
     } else if (msg.includes("no longer editable")) {
       res.status(409).json({ error: msg });
+    } else if (msg.includes("ingredients not found")) {
+      res.status(400).json({ error: msg });
     } else {
       logger.error(err, "handleAddLines failed");
       next(err);

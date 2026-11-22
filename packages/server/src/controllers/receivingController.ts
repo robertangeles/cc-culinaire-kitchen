@@ -7,7 +7,7 @@
 import type { Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import pino from "pino";
-import { getUserLocationContext, getLocationInOrg } from "../services/locationContextService.js";
+import { getUserLocationContext, assertLocationAccess } from "../services/locationContextService.js";
 import * as receivingService from "../services/receivingService.js";
 import * as creditNoteService from "../services/creditNoteService.js";
 
@@ -25,6 +25,12 @@ async function resolveOrgId(req: Request, res: Response): Promise<number | null>
     return null;
   }
   return orgId;
+}
+
+/** A session is worked at its own location: the caller must be able to use it. Unknown sessions are left to the service to report. */
+async function assertSessionAccess(req: Request, sessionId: string, orgId: number): Promise<void> {
+  const locationId = await receivingService.getSessionLocationId(sessionId, orgId);
+  if (locationId) await assertLocationAccess(req.user!, locationId);
 }
 
 // ─── Schemas ─────────────────────────────────────────────────────
@@ -70,10 +76,7 @@ export async function handleStartSession(
       return;
     }
 
-    if (!await getLocationInOrg(parsed.data.storeLocationId, orgId)) {
-      res.status(400).json({ error: "Location not found" });
-      return;
-    }
+    await assertLocationAccess(req.user!, parsed.data.storeLocationId);
 
     const userId = req.user!.sub;
     const result = await receivingService.startSession(
@@ -103,6 +106,7 @@ export async function handleGetSession(
     if (orgId === null) return;
 
     const sessionId = req.params.sessionId as string;
+    await assertSessionAccess(req, sessionId, orgId);
     const result = await receivingService.getSession(sessionId, orgId);
 
     if (!result) {
@@ -132,6 +136,7 @@ export async function handleActionLine(
       return;
     }
 
+    await assertSessionAccess(req, sessionId, orgId);
     const result = await receivingService.actionLine(receivingLineId, sessionId, parsed.data, orgId);
 
     logger.info({ sessionId, receivingLineId, status: parsed.data.status }, "Receiving line actioned");
@@ -154,13 +159,14 @@ export async function handleConfirmReceipt(
     if (orgId === null) return;
 
     const sessionId = req.params.sessionId as string;
+    await assertSessionAccess(req, sessionId, orgId);
     const result = await receivingService.confirmReceipt(sessionId, orgId);
 
     logger.info({ sessionId, poStatus: result.poStatus }, "Receipt confirmed");
     res.json(result);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
-    if (msg.includes("not found") || msg.includes("Cannot transition")) {
+    if (msg.includes("not found")) {
       res.status(400).json({ error: msg });
       return;
     }
@@ -176,13 +182,14 @@ export async function handleCancelSession(
     if (orgId === null) return;
 
     const sessionId = req.params.sessionId as string;
+    await assertSessionAccess(req, sessionId, orgId);
     await receivingService.cancelSession(sessionId, orgId);
 
     logger.info({ sessionId }, "Receiving session cancelled");
     res.json({ success: true });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
-    if (msg.includes("not found") || msg.includes("Cannot transition")) {
+    if (msg.includes("not found")) {
       res.status(400).json({ error: msg });
       return;
     }

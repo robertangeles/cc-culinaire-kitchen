@@ -35,7 +35,7 @@ Read the **enclosing function** of every hunk — bugs in unchanged lines of a t
 **Project rules**
 - Separation of concerns: `routes/` thin (auth + gate + delegate), `controllers/` validate + format, `services/` domain logic. **Routes/controllers never call the model API directly** — that goes through `aiService`/service layer.
 - Drizzle: no `select *` (explicit columns); prefer `.prepare()` for hot repeated queries; review the generated SQL shape for anything obviously wrong.
-- **Migrations:** this DB bans whole-schema `drizzle-kit push` (lessons #52/#54). Schema changes ship as targeted, idempotent scripts (`ADD COLUMN IF NOT EXISTS` / `CREATE INDEX IF NOT EXISTS`, constraints guarded by `pg_constraint`). A schema change means a matching `scripts/` migration must exist and be idempotent.
+- **Migrations:** this DB bans whole-schema `drizzle-kit push` (lessons #52/#54). Schema changes ship as numbered, idempotent migrations in `packages/server/src/migrations/` (listed in `index.ts`, applied by `src/scripts/migrate.ts`; `ADD COLUMN IF NOT EXISTS` / `CREATE INDEX IF NOT EXISTS`, constraints guarded by `pg_constraint`). A schema change means a matching migration must exist and be idempotent.
 - Client/server validation **consistency** — if the client enforces a limit/shape, confirm the server (Zod) does too, and flag mismatches.
 - Every new/changed API route should have a test (route auth 200/401/403/404) and service changes a unit/integration test. Flag missing coverage on a new endpoint.
 

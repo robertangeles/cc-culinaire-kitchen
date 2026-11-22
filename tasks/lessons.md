@@ -1356,3 +1356,21 @@ builds all tables with CHECKs enforcing. Stop it again when done.
 - **Problem**: On the moto g86 (Android 16, edge-to-edge) the keyboard did not resize the window, and `Screen` only lifted above it on iOS. The two-field sign-in was fine; the three-field Register form had Email and Password behind the keyboard, so a tap on them hit a key. The emulator walk never showed it because the sign-in form was short enough.
 - **Fix**: `KeyboardAvoidingView behavior="padding"` on every platform.
 - **Rule**: Check every form with the keyboard open on a real phone, and make the longest form the test. Match the first app's look from its running screen, not from its source: the source did not show the welcome carousel, the segment or the field styling.
+
+## 2026-11-22 — The server stays compatible with installed phone apps
+
+- **Problem**: A phone app cannot be updated on demand: App Store review takes days and many chefs update late. A server change that renames an error code, drops a response field or tightens a route breaks every installed build at once, and a count queued offline replays into the new server days later.
+- **Fix**: `GET /api/mobile/config` carries the minimum version and store links; `mobileUpdateGate` (mounted on `/api`) answers 426 `upgrade_required` to an old build's reads, never to its writes, so queued commands still drain. The flagged-off routes answer a JSON body with `code: "FEATURE_DISABLED"`.
+- **Rule**: Until the owner raises `mobile_min_app_version`, every response shape and error code an installed build parses keeps working: add fields and codes, never rename or remove them; keep `error` text for the web and add `code` beside it; a phone parses leniently and ignores what it does not know. Raising the minimum is the only way to retire an old shape, and it is the owner's call. The one lowercase code (`upgrade_required`) stays as shipped.
+
+## 2026-11-22 — Schema changes reach a real database through numbered migrations, not `drizzle-kit push`
+
+- **Problem**: Production uses hand-run scripts and has drifted from `schema.ts`; `CLAUDE.md` still told workers to run `drizzle-kit push` after a schema change, against #50, #52 and #56. Nothing recorded which script had run where.
+- **Fix**: `packages/server/src/migrations/` holds numbered migrations (idempotent SQL); `src/scripts/migrate.ts` applies pending ones in order, one transaction and advisory lock each, and records them in `schema_migrations` (`--list`, `--dry-run`). Migration `0001` adds the refresh-token rotation columns. Scripts that predate the ledger stay valid and idempotent.
+- **Rule**: Add `NNNN_name.ts`, list it in `migrations/index.ts`, apply it BEFORE the server version that reads the change deploys, and keep every new column defaulted or nullable so the previous server version still runs. Never `drizzle-kit push` (or `--force`) against a shared database; it is for a throwaway local one. Run `checkSchemaDrift.ts` first when a database's state is in doubt.
+
+## 2026-11-22 — A token signed with the access secret is an access token
+
+- **Problem**: The 5-minute "password right, code still to come" MFA token was signed with the same secret as access tokens, so on any route guarded only by `authenticate` it passed for a session. Separately, a revoke can miss a token that a concurrent refresh commits a moment later, and a thrown error rolls back the deletes made before it.
+- **Fix**: The MFA token has its own derived key and `verifyAccessToken` rejects any token carrying a `purpose`. Refresh-token writes for one user run under a per-user advisory lock, `refreshAccessToken` returns a verdict instead of throwing inside its transaction, and every other path that revokes uses the same lock.
+- **Rule**: Every token type gets its own key (derive it, do not add an env var) and its own verifier. Anything that must survive a rejection (a revoked family, a purged row) is committed before the error is raised.

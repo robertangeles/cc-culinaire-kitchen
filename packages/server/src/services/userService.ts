@@ -5,10 +5,10 @@
  */
 
 import bcrypt from "bcrypt";
-import crypto from "node:crypto";
 import { and, eq, ilike, ne, or, desc, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { decryptUserPii } from "./piiService.js";
+import { revokeAllRefreshTokens, refreshTokenFamily } from "./authService.js";
 import { encryptPii, hashForLookup } from "../utils/crypto.js";
 import {
   user,
@@ -16,7 +16,6 @@ import {
   userRole,
   userOrganisation,
   organisation,
-  refreshToken,
 } from "../db/schema.js";
 
 const BCRYPT_ROUNDS = parseInt(process.env.BCRYPT_ROUNDS ?? "12", 10);
@@ -140,22 +139,15 @@ export async function changePassword(
   if (!valid) throw new PasswordChangeError("Current password is incorrect.");
 
   const hash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
-  const keepHash = keepRefreshToken
-    ? crypto.createHash("sha256").update(keepRefreshToken).digest("hex")
-    : null;
+  const keepFamily = await refreshTokenFamily(keepRefreshToken, userId);
   // One transaction: a failed sign-out must not leave a changed password with the old sessions alive.
+  // Every other sign-in ends (all of them when the caller's own cannot be identified); the caller keeps theirs.
   await db.transaction(async (tx) => {
     await tx
       .update(user)
       .set({ userPasswordHash: hash, updatedDttm: new Date() })
       .where(eq(user.userId, userId));
-    await tx
-      .delete(refreshToken)
-      .where(
-        keepHash
-          ? and(eq(refreshToken.userId, userId), ne(refreshToken.tokenHash, keepHash))
-          : eq(refreshToken.userId, userId)
-      );
+    await revokeAllRefreshTokens(userId, keepFamily, tx);
   });
 }
 
@@ -262,6 +254,8 @@ export async function adminUpdateUser(
     .update(user)
     .set({ ...data, ...encFields, updatedDttm: new Date() })
     .where(eq(user.userId, userId));
+
+  if (data.userStatus === "suspended" || data.userStatus === "cancelled") await revokeAllRefreshTokens(userId);
 }
 
 /** Suspend a user account. */
@@ -270,6 +264,8 @@ export async function suspendUser(userId: number) {
     .update(user)
     .set({ userStatus: "suspended", updatedDttm: new Date() })
     .where(eq(user.userId, userId));
+  // A suspended user's phone and browsers stop at their next refresh (their access token lasts at most an hour).
+  await revokeAllRefreshTokens(userId);
 }
 
 /** Reactivate a suspended user. */
@@ -286,6 +282,7 @@ export async function cancelUser(userId: number) {
     .update(user)
     .set({ userStatus: "cancelled", updatedDttm: new Date() })
     .where(eq(user.userId, userId));
+  await revokeAllRefreshTokens(userId);
 }
 
 /** Update free sessions for a user. */

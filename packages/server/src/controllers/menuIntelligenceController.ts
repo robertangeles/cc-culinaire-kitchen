@@ -32,7 +32,7 @@ import {
   listYieldVariance,
 } from "../services/yieldVarianceService.js";
 import { recordSale, voidSale, listSales, previewSalesCsv, commitSalesCsv, listSellableConsumables, recordConsumableSale, SaleError } from "../services/saleService.js";
-import { getUserLocationContext } from "../services/locationContextService.js";
+import { getUserLocationContext, assertLocationAccess } from "../services/locationContextService.js";
 
 /** Resolve the caller's org id from their location context. */
 async function resolveSalesOrgId(req: Request, res: Response): Promise<number | null> {
@@ -72,6 +72,7 @@ export async function handleRecordSale(req: Request, res: Response, next: NextFu
       soldAt: soldAt ? new Date(String(soldAt)) : undefined,
       locationId: locationId || undefined,
       idempotencyKey,
+      actor: req.user!,
     });
     res.status(201).json(result);
   } catch (err) {
@@ -132,6 +133,7 @@ export async function handleRecordConsumableSale(req: Request, res: Response, ne
       soldAt: soldAt ? new Date(String(soldAt)) : undefined,
       locationId: locationId || undefined,
       idempotencyKey,
+      actor: req.user!,
     });
     res.status(201).json(result);
   } catch (err) {
@@ -162,7 +164,7 @@ export async function handleSalesCsvCommit(req: Request, res: Response, next: Ne
       res.status(400).json({ error: "lines must be a non-empty array" });
       return;
     }
-    res.json(await commitSalesCsv(orgId, userId, lines));
+    res.json(await commitSalesCsv(orgId, userId, lines, req.user!));
   } catch (err) {
     handleSaleError(err, res, next);
   }
@@ -198,6 +200,7 @@ export async function handleListMenuItems(req: Request, res: Response, next: Nex
     const userId = req.user!.sub;
     const category = req.query.category as string | undefined;
     const storeLocationId = req.query.storeLocationId as string | undefined;
+    if (storeLocationId) await assertLocationAccess(req.user!, storeLocationId);
     const items = await getMenuItems(userId, category, storeLocationId);
     res.json(items);
   } catch (err) { next(err); }

@@ -7,6 +7,7 @@
 
 import type { Request, Response, NextFunction } from "express";
 import { verifyAccessToken } from "../services/authService.js";
+import { extractAccessToken } from "./auth.js";
 import { getGuestSession } from "../services/guestService.js";
 
 /** Extends Express Request with guest session info. */
@@ -19,13 +20,13 @@ declare global {
 }
 
 /**
- * Attempts JWT authentication first. If no JWT cookie is present,
+ * Attempts JWT authentication first. If no JWT (Bearer header or cookie) is present,
  * falls back to guest token authentication via X-Guest-Token header.
  * Returns 401 only if neither authentication method succeeds.
  */
 export async function authenticateOrGuest(req: Request, res: Response, next: NextFunction) {
   // Try JWT auth first
-  const token = req.cookies?.access_token;
+  const token = extractAccessToken(req);
   if (token) {
     try {
       req.user = verifyAccessToken(token);

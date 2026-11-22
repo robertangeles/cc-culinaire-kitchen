@@ -9,7 +9,7 @@
 import type { Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import pino from "pino";
-import { getUserLocationContext } from "../services/locationContextService.js";
+import { getUserLocationContext, assertLocationAccess } from "../services/locationContextService.js";
 import {
   listGuides,
   createGuide,
@@ -160,6 +160,7 @@ export async function handleGetGuideItems(
       res.status(400).json({ error: "A valid locationId is required" });
       return;
     }
+    await assertLocationAccess(req.user!, parsedLoc.data);
     res.json(await getGuideItems(req.params.guideId as string, ctx.orgId, parsedLoc.data));
   } catch (err) {
     handleServiceError(err, res, next);
