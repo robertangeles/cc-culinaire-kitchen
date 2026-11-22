@@ -212,6 +212,22 @@ export async function initiateTransfer(
       throw new Error("One or more ingredients not found in this organisation");
     }
 
+    // A line may name the cost layer it draws from; it must be this ingredient's stock at the source.
+    for (const line of lines) {
+      if (!line.fifoBatchId) continue;
+      const [batch] = await tx
+        .select({ id: fifoBatch.batchId })
+        .from(fifoBatch)
+        .where(
+          and(
+            eq(fifoBatch.batchId, line.fifoBatchId),
+            eq(fifoBatch.storeLocationId, fromLocId),
+            eq(fifoBatch.ingredientId, line.ingredientId),
+          ),
+        );
+      if (!batch) throw new Error("Stock batch not found at the source location");
+    }
+
     const [transfer] = await tx
       .insert(inventoryTransfer)
       .values({
@@ -368,7 +384,13 @@ export async function confirmReceived(
         const [srcBatch] = await tx
           .select()
           .from(fifoBatch)
-          .where(eq(fifoBatch.batchId, line.fifoBatchId));
+          .where(
+          and(
+            eq(fifoBatch.batchId, line.fifoBatchId),
+            eq(fifoBatch.storeLocationId, transfer.fromLocationId),
+            eq(fifoBatch.ingredientId, line.ingredientId),
+          ),
+        );
         if (srcBatch) {
           arrivalDate = srcBatch.arrivalDate;
           unitCost = srcBatch.unitCost;

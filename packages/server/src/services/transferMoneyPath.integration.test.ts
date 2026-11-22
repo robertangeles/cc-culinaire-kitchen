@@ -41,6 +41,7 @@ const fx = {
   locB1: "",
   ingId: "",
   ingEachId: "",
+  foreignBatchId: "",
   transferIds: [] as string[],
 };
 
@@ -99,6 +100,21 @@ describe.skipIf(!RUN)("transfer money path (real DB)", () => {
           baseUnit: unit,
         })
         .returning({ id: ingredient.ingredientId });
+      if (key === "ingId") {
+        // A cost layer at a location of ANOTHER organisation.
+        const [{ id }] = await db
+          .insert(fifoBatch)
+          .values({
+            storeLocationId: fx.locB1,
+            ingredientId: fx.ingId,
+            arrivalDate: new Date(),
+            quantityRemaining: "5",
+            originalQuantity: "5",
+            unitCost: "99",
+          })
+          .returning({ id: fifoBatch.batchId });
+        fx.foreignBatchId = id;
+      }
       for (const locId of [fx.locA1, fx.locA2]) {
         await db.insert(locationIngredient).values({ ingredientId: fx[key], storeLocationId: locId, activeInd: true, weightedAverageCost: "2" });
         await db.insert(stockLevel).values({ storeLocationId: locId, ingredientId: fx[key], currentQty: "10" });
@@ -108,6 +124,7 @@ describe.skipIf(!RUN)("transfer money path (real DB)", () => {
 
   afterAll(async () => {
     const ingIds = [fx.ingId, fx.ingEachId].filter(Boolean);
+    if (fx.foreignBatchId) await db.delete(fifoBatch).where(eq(fifoBatch.batchId, fx.foreignBatchId));
     if (fx.transferIds.length) {
       await db.delete(fifoBatch).where(inArray(fifoBatch.sourceTransferId, fx.transferIds));
       await db.delete(inventoryTransferLine).where(inArray(inventoryTransferLine.transferId, fx.transferIds));
@@ -181,5 +198,24 @@ describe.skipIf(!RUN)("transfer money path (real DB)", () => {
 
     expect(await qty(fx.locA1, fx.ingId)).toBe(before);
     expect(await statusOf(t.transferId)).toBe("INITIATED");
+  });
+
+  it("refuses a cost layer that is not the source location's own stock of that ingredient", async () => {
+    await expect(
+      transferService.initiateTransfer(fx.orgA, fx.locA1, fx.locA2, fx.userId, [
+        { ingredientId: fx.ingId, sentQty: 1, sentUnit: "kg", fifoBatchId: fx.foreignBatchId },
+      ]),
+    ).rejects.toThrow(/not found/i);
+  });
+
+  it("does not copy the cost of a foreign batch already stored on a line", async () => {
+    const t = await newTransfer([{ ingredientId: fx.ingId, sentQty: 1, sentUnit: "kg" }]);
+    await db.update(inventoryTransferLine).set({ fifoBatchId: fx.foreignBatchId }).where(eq(inventoryTransferLine.transferId, t.transferId));
+    await transferService.confirmSent(t.transferId, fx.orgA, fx.userId);
+
+    await transferService.confirmReceived(t.transferId, fx.orgA, fx.userId, []);
+
+    const [arrived] = await db.select().from(fifoBatch).where(eq(fifoBatch.sourceTransferId, t.transferId));
+    expect(Number(arrived.unitCost)).not.toBe(99);
   });
 });
