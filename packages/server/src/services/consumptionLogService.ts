@@ -347,69 +347,71 @@ export async function editConsumptionLog(
   isAdmin: boolean,
   data: EditData,
 ) {
-  // Fetch existing log
-  const [existing] = await db
-    .select()
-    .from(consumptionLog)
-    .where(
-      and(
-        eq(consumptionLog.consumptionLogId, logId),
-        eq(consumptionLog.organisationId, orgId),
-      ),
-    );
+  return db.transaction(async (tx) => {
+    // Fetch existing log
+    const [existing] = await tx
+      .select()
+      .from(consumptionLog)
+      .where(
+        and(
+          eq(consumptionLog.consumptionLogId, logId),
+          eq(consumptionLog.organisationId, orgId),
+        ),
+      );
 
-  if (!existing) {
-    throw new AppError(404, "NOT_FOUND", "Consumption log entry not found");
-  }
-
-  // Verify user is the logger OR is org admin
-  if (existing.userId !== userId && !isAdmin) {
-    throw new AppError(403, "FORBIDDEN", "Only the original logger or an admin can edit this entry");
-  }
-
-  // Verify logged_at is within 24 hours
-  const hoursAgo = (Date.now() - new Date(existing.loggedAt).getTime()) / (1000 * 60 * 60);
-  if (hoursAgo > 24) {
-    throw new AppError(409, "EDIT_WINDOW_EXPIRED", "Cannot edit entries older than 24 hours");
-  }
-
-  // If quantity changed, adjust stock level (convert the delta from the
-  // entry's unit to base — stock_level is in base units).
-  if (data.quantity !== undefined && data.quantity !== Number(existing.quantity)) {
-    const delta = data.quantity - Number(existing.quantity);
-    const { baseQty: baseDelta } = await resolveToBase(existing.ingredientId, Math.abs(delta), existing.unit);
-    if (delta > 0) {
-      // New qty is larger — deduct the difference
-      await deductStockLevel(existing.storeLocationId, existing.ingredientId, baseDelta);
-    } else {
-      // New qty is smaller — restore the difference
-      await restoreStockLevel(existing.storeLocationId, existing.ingredientId, baseDelta);
+    if (!existing) {
+      throw new AppError(404, "NOT_FOUND", "Consumption log entry not found");
     }
-  }
 
-  // Build update payload
-  const updates: Record<string, unknown> = { updatedDttm: new Date() };
-  if (data.quantity !== undefined) updates.quantity = String(data.quantity);
-  if (data.unit !== undefined) updates.unit = data.unit;
-  if (data.reason !== undefined) updates.reason = data.reason;
-  if (data.notes !== undefined) updates.notes = data.notes;
-  if (data.shift !== undefined) updates.shift = data.shift;
-  // Keep base_qty (the kitchen-unit truth aggregations sum) in step with any
-  // quantity/unit change.
-  if (data.quantity !== undefined || data.unit !== undefined) {
-    const effQty = data.quantity ?? Number(existing.quantity);
-    const effUnit = data.unit ?? existing.unit;
-    const { baseQty: newBaseQty } = await resolveToBase(existing.ingredientId, effQty, effUnit);
-    updates.baseQty = String(newBaseQty);
-  }
+    // Verify user is the logger OR is org admin
+    if (existing.userId !== userId && !isAdmin) {
+      throw new AppError(403, "FORBIDDEN", "Only the original logger or an admin can edit this entry");
+    }
 
-  const [updated] = await db
-    .update(consumptionLog)
-    .set(updates)
-    .where(eq(consumptionLog.consumptionLogId, logId))
-    .returning();
+    // Verify logged_at is within 24 hours
+    const hoursAgo = (Date.now() - new Date(existing.loggedAt).getTime()) / (1000 * 60 * 60);
+    if (hoursAgo > 24) {
+      throw new AppError(409, "EDIT_WINDOW_EXPIRED", "Cannot edit entries older than 24 hours");
+    }
 
-  return updated;
+    // If quantity changed, adjust stock level (convert the delta from the
+    // entry's unit to base — stock_level is in base units).
+    if (data.quantity !== undefined && data.quantity !== Number(existing.quantity)) {
+      const delta = data.quantity - Number(existing.quantity);
+      const { baseQty: baseDelta } = await resolveToBase(existing.ingredientId, Math.abs(delta), existing.unit);
+      if (delta > 0) {
+        // New qty is larger — deduct the difference
+        await deductStockLevel(existing.storeLocationId, existing.ingredientId, baseDelta, "BOH", tx);
+      } else {
+        // New qty is smaller — restore the difference
+        await restoreStockLevel(existing.storeLocationId, existing.ingredientId, baseDelta, "BOH", tx);
+      }
+    }
+
+    // Build update payload
+    const updates: Record<string, unknown> = { updatedDttm: new Date() };
+    if (data.quantity !== undefined) updates.quantity = String(data.quantity);
+    if (data.unit !== undefined) updates.unit = data.unit;
+    if (data.reason !== undefined) updates.reason = data.reason;
+    if (data.notes !== undefined) updates.notes = data.notes;
+    if (data.shift !== undefined) updates.shift = data.shift;
+    // Keep base_qty (the kitchen-unit truth aggregations sum) in step with any
+    // quantity/unit change.
+    if (data.quantity !== undefined || data.unit !== undefined) {
+      const effQty = data.quantity ?? Number(existing.quantity);
+      const effUnit = data.unit ?? existing.unit;
+      const { baseQty: newBaseQty } = await resolveToBase(existing.ingredientId, effQty, effUnit);
+      updates.baseQty = String(newBaseQty);
+    }
+
+    const [updated] = await tx
+      .update(consumptionLog)
+      .set(updates)
+      .where(eq(consumptionLog.consumptionLogId, logId))
+      .returning();
+
+    return updated;
+  });
 }
 
 // ---------------------------------------------------------------------------

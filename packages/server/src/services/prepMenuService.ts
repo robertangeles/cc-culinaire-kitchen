@@ -16,7 +16,7 @@ import { eq, desc, sql, and, inArray } from "drizzle-orm";
 import { getUserOrgContext } from "./orgContextService.js";
 import { computeSuggestedSelections } from "./prepMath.js";
 import { parseTimeToMinutes } from "./prepErrors.js";
-import { canManageSession } from "./prepAccess.js";
+import { canManageSession, canWorkSession } from "./prepAccess.js";
 import { AppError } from "../utils/appError.js";
 import type { TokenPayload } from "./authService.js";
 
@@ -258,21 +258,18 @@ export async function saveMenuSelections(
 /** Returns the dish selections saved for a given prep session. */
 export async function getSelections(
   sessionId: string,
-  userId: number,
+  user: TokenPayload,
   teamView?: boolean,
 ): Promise<MenuSelectionRow[]> {
-  let ownerFilter;
-  if (teamView) {
-    const orgCtx = await getUserOrgContext(userId);
-    ownerFilter = orgCtx.orgMemberUserIds.length > 0
-      ? and(eq(prepSession.prepSessionId, sessionId), inArray(prepSession.userId, orgCtx.orgMemberUserIds))
-      : and(eq(prepSession.prepSessionId, sessionId), eq(prepSession.userId, userId));
-  } else {
-    ownerFilter = and(eq(prepSession.prepSessionId, sessionId), eq(prepSession.userId, userId));
-  }
-
-  const [session] = await db.select().from(prepSession).where(ownerFilter);
+  const [session] = await db.select().from(prepSession).where(eq(prepSession.prepSessionId, sessionId));
   if (!session) return [];
+
+  let allowed = false;
+  if (teamView) {
+    const orgCtx = await getUserOrgContext(user.sub);
+    allowed = orgCtx.orgMemberUserIds.includes(session.userId);
+  }
+  if (!allowed && !(await canWorkSession(user, session))) return [];
 
   const rows = await db
     .select()

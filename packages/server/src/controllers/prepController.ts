@@ -389,7 +389,7 @@ export async function handleGetSelections(req: Request, res: Response) {
   const parsed = teamViewQuerySchema.safeParse(req.query);
   const teamView = parsed.success && parsed.data.teamView === "true";
 
-  const selections = await getSelections(sessionId, userId, teamView);
+  const selections = await getSelections(sessionId, req.user!, teamView);
   res.json(selections);
 }
 

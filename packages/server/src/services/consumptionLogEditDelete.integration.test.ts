@@ -118,4 +118,17 @@ describe.skipIf(!RUN)("consumption log edit/delete refusals (real DB)", () => {
     expect(out.status).toBe(409);
     expect(out.body).toMatchObject({ code: "EDIT_WINDOW_EXPIRED" });
   });
+
+  // The stock change and the entry update commit together: an update the database refuses must not leave the stock moved.
+  it("an edit whose entry update fails leaves the stock where it was", async () => {
+    const id = await newEntry();
+    const stock = async () => Number((await db.select().from(stockLevel).where(eq(stockLevel.ingredientId, fx.ingId)))[0].currentQty);
+    const before = await stock();
+
+    const out = await call(handleEditLog, fx.owner, { id }, { quantity: 3, shift: "x".repeat(30) });
+
+    expect(out.status).toBe(500);
+    expect(await stock()).toBe(before);
+    expect(Number((await db.select().from(consumptionLog).where(eq(consumptionLog.consumptionLogId, id)))[0].quantity)).toBe(1);
+  });
 });

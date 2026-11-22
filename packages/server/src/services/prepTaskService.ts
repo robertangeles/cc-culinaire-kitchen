@@ -693,7 +693,7 @@ async function adjustStockForTask(
   const [stockRow] = await tx
     .select({ id: stockLevel.stockLevelId })
     .from(stockLevel)
-    .where(and(eq(stockLevel.storeLocationId, sess.storeLocationId), eq(stockLevel.ingredientId, task.ingredientId)));
+    .where(and(eq(stockLevel.storeLocationId, sess.storeLocationId), eq(stockLevel.ingredientId, task.ingredientId), eq(stockLevel.zone, "BOH")));
   if (!stockRow) return;
 
   if (deduct) await deductStock(sess.storeLocationId, task.ingredientId, baseQty, tx);

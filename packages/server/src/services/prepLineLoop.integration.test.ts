@@ -18,7 +18,7 @@ import { randomUUID } from "node:crypto";
 import { db } from "../db/index.js";
 import { consumptionLog, menuItem, menuItemIngredient, prepSession, prepTask, stockLevel, user } from "../db/schema.js";
 import {
-  handleCreateSession, handleEndSession, handleGenerateFromSelections, handleGetSession, handleGetTodaySession, handleSaveSelections, handleUpdateTask,
+  handleCreateSession, handleEndSession, handleGenerateFromSelections, handleGetSelections, handleGetSession, handleGetTodaySession, handleSaveSelections, handleUpdateTask,
 } from "../controllers/prepController.js";
 import { deductStock } from "./stockService.js";
 import { asUser, callHandler, createLineLoopFx, removeLineLoopFx, type LineLoopFx } from "./lineLoopFixture.js";
@@ -230,6 +230,20 @@ describe.skipIf(!RUN)("prep line loop (real DB)", () => {
     });
   });
 
+  describe("stock held only outside the back of house", () => {
+    it("ticks and un-ticks without touching that stock or creating a back-of-house row", async () => {
+      await db.insert(stockLevel).values({ storeLocationId: fx.locA, ingredientId: fx.ingNoStockId, zone: "FOH", currentQty: "5" });
+      const taskId = await newTask(await newSession(), { ingredientId: fx.ingNoStockId, qty: 2 });
+
+      expect((await tick(cook, taskId, { status: "completed" })).status).toBe(200);
+      expect((await tick(cook, taskId, { status: "pending" })).status).toBe(200);
+
+      const rows = await db.select().from(stockLevel).where(eq(stockLevel.ingredientId, fx.ingNoStockId));
+      expect(rows.map((r) => [r.zone, Number(r.currentQty)])).toEqual([["FOH", 5]]);
+      await db.delete(stockLevel).where(eq(stockLevel.ingredientId, fx.ingNoStockId));
+    });
+  });
+
   describe("generate", () => {
     async function sessionWithSelection() {
       const [mi] = await db
@@ -334,6 +348,27 @@ describe.skipIf(!RUN)("prep line loop (real DB)", () => {
       const made = await callHandler(handleCreateSession, chef, { body: { prepDate: date, storeLocationId: fx.locA } });
       await callHandler(handleEndSession, chef, { params: { id: made.body.session.prepSessionId } });
       expect((await callHandler(handleGetTodaySession, cook, { query: { date, storeLocationId: fx.locA } })).status).toBe(404);
+    });
+  });
+
+  describe("reading selections", () => {
+    it("a member at the location reads a colleague's selections; a member of another location gets none", async () => {
+      const [mi] = await db
+        .insert(menuItem)
+        .values({ userId: fx.chef, name: `${fx.tag}-sel`, category: "mains", sellingPrice: "10", servings: 1 })
+        .returning({ id: menuItem.menuItemId });
+      const sessionId = await newSession();
+      const saved = await callHandler(handleSaveSelections, chef, {
+        params: { id: sessionId },
+        body: { selections: [{ menuItemId: mi.id, dishName: `${fx.tag}-sel`, expectedPortions: 2 }] },
+      });
+      expect(saved.status).toBe(201);
+
+      const asCook = await callHandler(handleGetSelections, cook, { params: { id: sessionId } });
+      expect(asCook.status).toBe(200);
+      expect(asCook.body).toHaveLength(1);
+      expect((await callHandler(handleGetSelections, stranger, { params: { id: sessionId } })).body).toEqual([]);
+      expect((await callHandler(handleGetSelections, cook, { params: { id: sessionId }, query: { teamView: "true" } })).body).toHaveLength(1);
     });
   });
 
