@@ -35,22 +35,30 @@ describe("mobile version policy (requireSupportedMobileVersion)", () => {
     await old.done;
     expect(old.next).not.toHaveBeenCalled();
     expect(old.status).toHaveBeenCalledWith(426);
-    expect(old.json).toHaveBeenCalledWith({ error: "Update the app to continue.", code: "upgrade_required", minVersion: "1.2.0", storeUrls: { ios: null, android: null } });
+    expect(old.json).toHaveBeenCalledWith({ error: "Update the app to continue.", code: "upgrade_required", minVersion: "1.2.0" });
   });
 
-  it("puts the store links in the 426 body, so a signed-out old build can show where to update", async () => {
-    const storeUrls = { ios: "https://apps.apple.com/app/id1", android: "https://play.google.com/store/apps/details?id=x" };
-    const r = run("1.1.9", async () => "1.2.0", async () => storeUrls);
+  it("sends both store links in the 426 body when both are set, so a signed-out old build can show where to update", async () => {
+    const ios = "https://apps.apple.com/app/id1";
+    const android = "https://play.google.com/store/apps/details?id=x";
+    const r = run("1.1.9", async () => "1.2.0", async () => ({ ios, android }));
     await r.done;
     expect(r.status).toHaveBeenCalledWith(426);
-    expect(r.json).toHaveBeenCalledWith(expect.objectContaining({ code: "upgrade_required", minVersion: "1.2.0", storeUrls }));
+    expect(r.json).toHaveBeenCalledWith({ error: "Update the app to continue.", code: "upgrade_required", minVersion: "1.2.0", storeUrls: { ios, android } });
   });
 
-  it("still answers 426 when the store links cannot be read", async () => {
+  it("sends only the platform that has a listing, never a null placeholder", async () => {
+    const android = "https://play.google.com/store/apps/details?id=x";
+    const r = run("1.1.9", async () => "1.2.0", async () => ({ ios: null, android }));
+    await r.done;
+    expect(r.json).toHaveBeenCalledWith({ error: "Update the app to continue.", code: "upgrade_required", minVersion: "1.2.0", storeUrls: { android } });
+  });
+
+  it("leaves storeUrls out of the 426 body when the store links cannot be read", async () => {
     const r = run("1.1.9", async () => "1.2.0", async () => { throw new Error("db down"); });
     await r.done;
     expect(r.status).toHaveBeenCalledWith(426);
-    expect(r.json).toHaveBeenCalledWith(expect.objectContaining({ minVersion: "1.2.0", storeUrls: { ios: null, android: null } }));
+    expect(r.json).toHaveBeenCalledWith({ error: "Update the app to continue.", code: "upgrade_required", minVersion: "1.2.0" });
   });
 
   it("compares numbers, not text (0.10.0 is newer than 0.9.0)", async () => {

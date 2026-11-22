@@ -16,11 +16,12 @@ export interface MobileConfig {
 
 /**
  * The 426 body a build below the minimum gets from sign-in and the update gate. It repeats `minVersion` and
- * `storeUrls` from the config call, which needs a signed-in user an old build may not have.
+ * `storeUrls` from the config call, which needs a signed-in user an old build may not have. `storeUrls` is
+ * absent until a listing is set, and holds only the platforms that have one.
  */
 export interface UpgradeRequiredBody {
   error: string;
   code: "upgrade_required";
   minVersion: string;
-  storeUrls: MobileStoreUrls;
+  storeUrls?: { ios?: string; android?: string };
 }

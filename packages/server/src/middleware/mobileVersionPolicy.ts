@@ -60,13 +60,13 @@ export function requireSupportedMobileVersion(
     if (!min || !MIN_RE.test(min)) return next();
 
     if (compareSemver(version, min) < 0) {
-      let storeUrls: MobileStoreUrls = { ios: null, android: null };
+      const body: UpgradeRequiredBody = { error: "Update the app to continue.", code: "upgrade_required", minVersion: min };
       try {
-        storeUrls = await getStoreUrls();
+        const { ios, android } = await getStoreUrls();
+        if (ios || android) body.storeUrls = { ...(ios && { ios }), ...(android && { android }) };
       } catch (err) {
         log.warn(err, "Could not read the store links; answering 426 without them");
       }
-      const body: UpgradeRequiredBody = { error: "Update the app to continue.", code: "upgrade_required", minVersion: min, storeUrls };
       res.status(426).json(body);
       return;
     }
