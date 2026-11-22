@@ -7,7 +7,7 @@
  *
  * Architecture:
  * - Attaches to the existing HTTP server (same port as Express)
- * - Auth via httpOnly JWT cookie (same as REST API)
+ * - Auth via the JWT access token: httpOnly cookie (web) or handshake auth/Bearer (phone)
  * - One Socket.io room per bench_channel (bench:everyone, bench:org_1, etc.)
  * - In-memory presence map (single-server; swap to Redis adapter for scale)
  */
@@ -16,15 +16,7 @@ import { Server as HttpServer } from "http";
 import { CLIENT_URL } from "../utils/env.js";
 import { Server, Socket } from "socket.io";
 import pino from "pino";
-/** Parse cookie header string into key-value pairs */
-function parseCookie(header: string): Record<string, string> {
-  const cookies: Record<string, string> = {};
-  for (const part of header.split(";")) {
-    const [key, ...rest] = part.trim().split("=");
-    if (key) cookies[key.trim()] = rest.join("=").trim();
-  }
-  return cookies;
-}
+import { extractHandshakeToken } from "../middleware/socketAuth.js";
 import { verifyAccessToken } from "./authService.js";
 import {
   createMessage,
@@ -107,11 +99,7 @@ export function initBenchSocket(httpServer: HttpServer): void {
   // ── Auth middleware ────────────────────────────────────────
   io.use((socket, next) => {
     try {
-      const cookieHeader = socket.handshake.headers.cookie;
-      if (!cookieHeader) return next(new Error("AUTH_REQUIRED"));
-
-      const cookies = parseCookie(cookieHeader);
-      const token = cookies["access_token"];
+      const token = extractHandshakeToken(socket.handshake);
       if (!token) return next(new Error("AUTH_REQUIRED"));
 
       const payload = verifyAccessToken(token);
