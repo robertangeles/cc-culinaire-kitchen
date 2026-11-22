@@ -134,7 +134,12 @@ export async function handleCreatePO(
 
     logger.info({ poId: result.poId, userId }, "Purchase order created");
     res.status(201).json(result);
-  } catch (err) {
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.endsWith("not found")) {
+      res.status(400).json({ error: msg });
+      return;
+    }
     next(err);
   }
 }

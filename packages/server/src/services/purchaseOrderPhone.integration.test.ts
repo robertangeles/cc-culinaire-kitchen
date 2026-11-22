@@ -23,7 +23,8 @@ import {
   auditLog,
 } from "../db/schema.js";
 import { handleListPOs, handleGetPODetail } from "../controllers/purchaseOrderController.js";
-import { listPOs, getPODetail } from "./purchaseOrderService.js";
+import { listPOs, getPODetail, createPO, clonePO } from "./purchaseOrderService.js";
+import { handleCreatePO, handleClonePO } from "../controllers/purchaseOrderController.js";
 
 /**
  * Wave 1 (receiving on the phone): the purchase-order list and detail the delivery queue reads.
@@ -49,6 +50,8 @@ const fx = {
   ingId: "",
   po: {} as Record<"draft" | "sentLate" | "sentSoon" | "sentNoDate" | "receiving", string>,
   sessionId: "",
+  // A second organisation: its ids must never be usable from the first.
+  other: { orgId: 0, locId: "", supplierId: "", ingId: "" },
 };
 
 /** Minimal Express req/res: the controllers only read user, params, query and call status/json. */
@@ -120,6 +123,36 @@ describe.skipIf(!RUN)("purchase order list and detail for the phone (real DB)", 
       .values({ organisationId: fx.orgId, supplierName: `${fx.tag}-supplier`, contactPhone: "0400 111 222" })
       .returning({ id: supplier.supplierId });
 
+    [{ id: fx.other.orgId }] = await db
+      .insert(organisation)
+      .values({ organisationName: `${fx.tag}-other`, joinKey: `${fx.tag}-o`.slice(0, 25), createdBy: fx.receiverId })
+      .returning({ id: organisation.organisationId });
+    [{ id: fx.other.locId }] = await db
+      .insert(storeLocation)
+      .values({
+        organisationId: fx.other.orgId,
+        locationName: `${fx.tag}-otherloc`,
+        classification: "branch",
+        storeKey: `${fx.tag}-os`.slice(0, 25),
+        createdBy: fx.receiverId,
+        inventoryActive: true,
+      })
+      .returning({ id: storeLocation.storeLocationId });
+    [{ id: fx.other.supplierId }] = await db
+      .insert(supplier)
+      .values({ organisationId: fx.other.orgId, supplierName: `${fx.tag}-othersupplier` })
+      .returning({ id: supplier.supplierId });
+    [{ id: fx.other.ingId }] = await db
+      .insert(ingredient)
+      .values({
+        organisationId: fx.other.orgId,
+        ingredientName: `${fx.tag}-otheringredient`,
+        ingredientCategory: "dry_goods",
+        itemType: "KITCHEN_INGREDIENT",
+        baseUnit: "kg",
+      })
+      .returning({ id: ingredient.ingredientId });
+
     const mk = async (
       key: keyof typeof fx.po,
       status: string,
@@ -168,9 +201,19 @@ describe.skipIf(!RUN)("purchase order list and detail for the phone (real DB)", 
       await db.delete(purchaseOrderLine).where(inArray(purchaseOrderLine.poId, poIds));
       await db.delete(purchaseOrder).where(inArray(purchaseOrder.poId, poIds));
     }
+    // POs the create/clone tests made, if any survived a failure.
+    const made = await db.select({ id: purchaseOrder.poId }).from(purchaseOrder).where(eq(purchaseOrder.organisationId, fx.orgId));
+    if (made.length) {
+      await db.delete(purchaseOrderLine).where(inArray(purchaseOrderLine.poId, made.map((m) => m.id)));
+      await db.delete(purchaseOrder).where(inArray(purchaseOrder.poId, made.map((m) => m.id)));
+    }
     if (fx.supplierId) await db.delete(supplier).where(eq(supplier.supplierId, fx.supplierId));
     if (fx.ingId) await db.delete(ingredient).where(eq(ingredient.ingredientId, fx.ingId));
     if (fx.locId) await db.delete(storeLocation).where(eq(storeLocation.storeLocationId, fx.locId));
+    if (fx.other.supplierId) await db.delete(supplier).where(eq(supplier.supplierId, fx.other.supplierId));
+    if (fx.other.ingId) await db.delete(ingredient).where(eq(ingredient.ingredientId, fx.other.ingId));
+    if (fx.other.locId) await db.delete(storeLocation).where(eq(storeLocation.storeLocationId, fx.other.locId));
+    if (fx.other.orgId) await db.delete(organisation).where(eq(organisation.organisationId, fx.other.orgId));
     if (fx.orgId) {
       await db.delete(auditLog).where(eq(auditLog.organisationId, fx.orgId));
       await db.delete(userOrganisation).where(eq(userOrganisation.organisationId, fx.orgId));
@@ -265,4 +308,41 @@ describe.skipIf(!RUN)("purchase order list and detail for the phone (real DB)", 
       expect(draft.status).toBe(404);
     });
   });
+
+describe("create and clone PO stay inside the caller's organisation (real DB)", () => {
+  const line = (ingredientId: string) => ({ ingredientId, orderedQty: "2", orderedUnit: "kg", unitCost: "3" });
+  const base = () => ({ orgId: fx.orgId, userId: fx.userId });
+  const poCount = async () =>
+    (await db.select({ id: purchaseOrder.poId }).from(purchaseOrder).where(eq(purchaseOrder.organisationId, fx.orgId))).length;
+
+  it("creates a PO from the caller's own location, supplier and ingredients", async () => {
+    const po = await createPO({ ...base(), locationId: fx.locId, supplierId: fx.supplierId, lines: [line(fx.ingId)] });
+    expect(po.lines).toHaveLength(1);
+  });
+
+  it.each([
+    ["another organisation's location", () => ({ locationId: fx.other.locId, supplierId: fx.supplierId, lines: [line(fx.ingId)] })],
+    ["another organisation's supplier", () => ({ locationId: fx.locId, supplierId: fx.other.supplierId, lines: [line(fx.ingId)] })],
+    ["another organisation's ingredient", () => ({ locationId: fx.locId, supplierId: fx.supplierId, lines: [line(fx.ingId), line(fx.other.ingId)] })],
+  ])("refuses a PO that uses %s, and writes nothing", async (_name, input) => {
+    const before = await poCount();
+    await expect(createPO({ ...base(), ...input() })).rejects.toThrow(/not found/);
+    expect(await poCount()).toBe(before);
+  });
+
+  it("answers 400 over HTTP for a foreign supplier", async () => {
+    const out = await call(handleCreatePO, {
+      body: { storeLocationId: fx.locId, supplierId: fx.other.supplierId, lines: [line(fx.ingId)] },
+    });
+    expect(out.status).toBe(400);
+  });
+
+  it("refuses to clone a PO into another organisation's location", async () => {
+    const before = await poCount();
+    await expect(clonePO(fx.po.sentSoon, fx.orgId, fx.other.locId, fx.userId)).rejects.toThrow(/not found/);
+    const out = await call(handleClonePO, { params: { id: fx.po.sentSoon }, body: { storeLocationId: fx.other.locId } });
+    expect(out.status).toBe(400);
+    expect(await poCount()).toBe(before);
+  });
+});
 });

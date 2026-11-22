@@ -85,7 +85,35 @@ const beingReceivedBy = sql<{ userId: number; userName: string; sessionId: strin
 
 // ─── createPO ─────────────────────────────────────────────────────
 
+/**
+ * The location, supplier and every ingredient must belong to the caller's organisation:
+ * a bare foreign key only proves the row exists somewhere, so without this a PO could be
+ * written against another tenant's records by UUID. Also guards clonePO, which creates through here.
+ */
+async function assertOwnedByOrg(input: CreatePOInput) {
+  const [loc] = await db
+    .select({ id: storeLocation.storeLocationId })
+    .from(storeLocation)
+    .where(and(eq(storeLocation.storeLocationId, input.locationId), eq(storeLocation.organisationId, input.orgId)));
+  if (!loc) throw new Error("Location not found");
+
+  const [sup] = await db
+    .select({ id: supplier.supplierId })
+    .from(supplier)
+    .where(and(eq(supplier.supplierId, input.supplierId), eq(supplier.organisationId, input.orgId)));
+  if (!sup) throw new Error("Supplier not found");
+
+  const ingredientIds = [...new Set(input.lines.map((l) => l.ingredientId))];
+  const owned = await db
+    .select({ id: ingredient.ingredientId })
+    .from(ingredient)
+    .where(and(inArray(ingredient.ingredientId, ingredientIds), eq(ingredient.organisationId, input.orgId)));
+  if (owned.length !== ingredientIds.length) throw new Error("Ingredient not found");
+}
+
 export async function createPO(input: CreatePOInput) {
+  await assertOwnedByOrg(input);
+
   const poNumber = `PO-${Date.now().toString(36).toUpperCase()}`;
 
   const [po] = await db
