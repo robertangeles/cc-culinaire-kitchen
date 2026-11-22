@@ -25,6 +25,7 @@ import {
 import { resolveToBase } from "./unitConversionService.js";
 import * as wacService from "./wacService.js";
 import type { DbOrTx } from "./auditService.js";
+import { AppError } from "../utils/appError.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -283,7 +284,8 @@ export async function confirmSent(
 
     if (!transfer) throw new Error("Transfer not found");
     if (transfer.status !== "INITIATED") {
-      throw new Error(`Cannot send a transfer with status ${transfer.status}`);
+      const sentAlready = transfer.status === "SENT" || transfer.status === "RECEIVED";
+      throw new AppError(409, sentAlready ? "ALREADY_CONFIRMED" : "INVALID_STATE", `Cannot send a transfer with status ${transfer.status}`);
     }
 
     const lines = await tx
@@ -339,7 +341,7 @@ export async function confirmReceived(
 
     if (!transfer) throw new Error("Transfer not found");
     if (transfer.status !== "SENT") {
-      throw new Error(`Cannot receive a transfer with status ${transfer.status}`);
+      throw new AppError(409, transfer.status === "RECEIVED" ? "ALREADY_CONFIRMED" : "INVALID_STATE", `Cannot receive a transfer with status ${transfer.status}`);
     }
 
     const lines = await tx
@@ -479,7 +481,7 @@ export async function cancelTransfer(
 
     if (!transfer) throw new Error("Transfer not found");
     if (transfer.status !== "INITIATED") {
-      throw new Error("Only INITIATED transfers can be cancelled");
+      throw new AppError(409, transfer.status === "CANCELLED" ? "ALREADY_CONFIRMED" : "INVALID_STATE", "Only INITIATED transfers can be cancelled");
     }
 
     const [updated] = await tx

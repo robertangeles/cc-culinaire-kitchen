@@ -120,10 +120,6 @@ export async function handleConfirmSent(
       res.status(404).json({ error: msg });
       return;
     }
-    if (msg.includes("Cannot send")) {
-      res.status(400).json({ error: msg });
-      return;
-    }
     logger.error(err, "handleConfirmSent failed");
     next(err);
   }
@@ -158,10 +154,6 @@ export async function handleConfirmReceived(
       res.status(404).json({ error: msg });
       return;
     }
-    if (msg.includes("Cannot receive")) {
-      res.status(400).json({ error: msg });
-      return;
-    }
     logger.error(err, "handleConfirmReceived failed");
     next(err);
   }
@@ -187,10 +179,6 @@ export async function handleCancelTransfer(
     const msg = err instanceof Error ? err.message : String(err);
     if (msg.includes("not found")) {
       res.status(404).json({ error: msg });
-      return;
-    }
-    if (msg.includes("Only INITIATED")) {
-      res.status(400).json({ error: msg });
       return;
     }
     logger.error(err, "handleCancelTransfer failed");

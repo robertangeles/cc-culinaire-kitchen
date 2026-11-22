@@ -36,6 +36,21 @@ describe("assertOrdered", () => {
   });
 });
 
+describe("reading the ledger", () => {
+  it("does not create it: a database that was never migrated reports nothing applied", async () => {
+    const statements: string[] = [];
+    const neverMigrated = {
+      execute: async (query: { queryChunks: Array<{ value?: string[] }> }) => {
+        statements.push(query.queryChunks.flatMap((c) => c.value ?? []).join(""));
+        return [{ present: false }];
+      },
+    };
+    expect(await appliedMigrationIds(neverMigrated as never)).toEqual([]);
+    expect(statements).toHaveLength(1);
+    expect(statements[0]).not.toMatch(/CREATE/i);
+  });
+});
+
 describe.skipIf(!RUN)("runMigrations (real DB)", () => {
   const scratch = `migration_runner_scratch_${Date.now().toString(36)}`;
   const first = make(1, [`CREATE TABLE IF NOT EXISTS ${scratch} (id int)`, `INSERT INTO ${scratch} VALUES (1)`]);

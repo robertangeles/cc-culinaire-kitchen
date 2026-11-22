@@ -83,7 +83,8 @@ export async function handleCreateOrganisation(req: Request, res: Response, next
     if (oldRefresh) await revokeRefreshToken(oldRefresh);
     const tokens = await generateTokens(authUser, { signedInAt });
     setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
-    res.status(201).json({ organisation: org });
+    // `tokens` is for bearer clients, whose old refresh token was just revoked; web ignores it.
+    res.status(201).json({ organisation: org, tokens });
   } catch (err) {
     next(err);
   }

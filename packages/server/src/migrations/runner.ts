@@ -48,7 +48,10 @@ async function ensureLedger(db: DbOrTx): Promise<void> {
 }
 
 export async function appliedMigrationIds(db: DbOrTx): Promise<string[]> {
-  await ensureLedger(db);
+  const [ledger] = (await db.execute(sql`SELECT to_regclass('schema_migrations') IS NOT NULL AS present`)) as unknown as Array<{
+    present: boolean;
+  }>;
+  if (!ledger.present) return [];
   const rows = (await db.execute(sql`SELECT migration_id FROM schema_migrations ORDER BY migration_id`)) as unknown as Array<{
     migration_id: string;
   }>;
@@ -63,6 +66,7 @@ export async function pendingMigrations(db: DbOrTx, all: Migration[]): Promise<M
 
 /** Applies every pending migration in order; returns the ids it applied. `dryRun` applies nothing. */
 export async function runMigrations(db: TransactionalDb, all: Migration[], opts: { dryRun?: boolean } = {}): Promise<string[]> {
+  if (!opts.dryRun) await ensureLedger(db);
   const pending = await pendingMigrations(db, all);
   if (opts.dryRun) return pending.map((m) => m.id);
 
