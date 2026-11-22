@@ -87,7 +87,7 @@ export function LineCard({ line, open, saving, error, onToggle, onSubmit }: Prop
           <Text style={{ fontFamily: fontFamily.title, fontSize: 20, flexShrink: 1 }}>{name}</Text>
           <Chip label={saving ? "Saving…" : STATUS_LABEL[line.status]} />
         </View>
-        <Text variant={flagged ? "error" : "meta"}>{lineSummary(line)}</Text>
+        <Text variant={line.status === "SHORT" || line.status === "REJECTED" ? "error" : "meta"}>{lineSummary(line)}</Text>
         {error ? <Text variant="error" accessibilityLiveRegion="polite">{error}</Text> : null}
       </Pressable>
 

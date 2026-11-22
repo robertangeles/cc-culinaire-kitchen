@@ -92,15 +92,18 @@ export default function ReceiveDelivery() {
           ))}
         </Surface>
 
+        <Button kind="quiet" label="Back to deliveries" onPress={() => router.back()} />
+        <Button kind="quiet" label="Cancel receiving" onPress={cancel} />
+      </ScrollView>
+      {/* Pinned, as on the web: Confirm is always under the thumb, however long the delivery. */}
+      <View style={{ padding: space.lg, gap: space.sm, borderTopWidth: 1, borderTopColor: c.border, backgroundColor: c.bg }}>
         {r.confirmError ? <Text variant="error" accessibilityLiveRegion="polite">{r.confirmError}</Text> : null}
         <Button
           label={r.confirming ? "Confirming…" : issues > 0 ? `Confirm delivery · ${issues} ${issues === 1 ? "issue" : "issues"}` : "Confirm delivery"}
           disabled={r.confirming || r.saving.size > 0}
           onPress={() => void r.confirm()}
         />
-        <Button kind="quiet" label="Back to deliveries" onPress={() => router.back()} />
-        <Button kind="quiet" label="Cancel receiving" onPress={cancel} />
-      </ScrollView>
+      </View>
     </SafeAreaView>
   );
 }
