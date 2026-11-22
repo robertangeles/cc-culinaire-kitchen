@@ -87,3 +87,4 @@ export interface OrderGuideItemView {
 }
 
 export * from "./apiError.js";
+export * from "./mobileConfig.js";

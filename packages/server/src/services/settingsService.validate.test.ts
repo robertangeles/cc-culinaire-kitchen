@@ -11,4 +11,11 @@ describe("validateSettingsUpdate", () => {
   it.each(["", "1.2", "v1.2.3", "banana", "1.2.3-beta"])("explains a minimum version of %j", (v) => {
     expect(validateSettingsUpdate({ mobile_min_app_version: v })).toBe("The minimum phone app version must look like 1.2.3 (0.0.0 allows every version).");
   });
+
+  it("accepts an https store link or an empty one, and refuses anything else", () => {
+    expect(validateSettingsUpdate({ mobile_store_url_ios: "https://apps.apple.com/app/id1" })).toBeNull();
+    expect(validateSettingsUpdate({ mobile_store_url_android: "" })).toBeNull();
+    expect(validateSettingsUpdate({ mobile_store_url_ios: "javascript:alert(1)" })).toMatch(/https:\/\//);
+    expect(validateSettingsUpdate({ mobile_store_url_android: "http://play.google.com/x" })).toMatch(/https:\/\//);
+  });
 });

@@ -2,7 +2,7 @@
  * @module middleware/requireFlag
  *
  * Express middleware factory that 404s an entire router when a boolean
- * `site_setting` flag is not `"true"`.
+ * `site_setting` flag is not `"true"`, with a JSON body `{ error, code: "FEATURE_DISABLED" }`.
  *
  * This is the rollback mechanism the compliance-vault and roster rollout
  * plans both promise ("flag OFF -> routes 404, < 1 minute") but that no
@@ -25,17 +25,20 @@
 import type { Request, Response, NextFunction } from "express";
 import { getAllSettings } from "../services/settingsService.js";
 
+/** A JSON body, so the phone can tell "switched off" from "no such route" and say so. */
+const FEATURE_DISABLED_BODY = { error: "This feature is not available.", code: "FEATURE_DISABLED" };
+
 export function requireFlag(settingKey: string) {
   return async (_req: Request, res: Response, next: NextFunction) => {
     try {
       const settings = await getAllSettings();
       if (settings[settingKey] !== "true") {
-        res.status(404).end();
+        res.status(404).json(FEATURE_DISABLED_BODY);
         return;
       }
       next();
     } catch {
-      res.status(404).end();
+      res.status(404).json(FEATURE_DISABLED_BODY);
     }
   };
 }

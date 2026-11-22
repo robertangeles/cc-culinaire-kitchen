@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import type { Request, Response } from "express";
-import { requireSupportedMobileVersion } from "./mobileVersionPolicy.js";
+import { requireSupportedMobileVersion, mobileUpdateGate } from "./mobileVersionPolicy.js";
 
 function run(header: string | undefined, getMin: () => Promise<string | undefined>) {
   const req = { headers: header === undefined ? {} : { "x-mobile-app-version": header } } as unknown as Request;
@@ -70,5 +70,54 @@ describe("mobile version policy (sign-in and count download only)", () => {
     const junk = run("0.1.0", async () => "banana");
     await junk.done;
     expect(junk.next).toHaveBeenCalled();
+  });
+});
+
+describe("update gate on every phone route (mobileUpdateGate)", () => {
+  function gate(method: string, url: string, version: string | undefined, min = "2.0.0") {
+    const req = {
+      method,
+      originalUrl: url,
+      headers: version === undefined ? {} : { "x-mobile-app-version": version },
+    } as unknown as Request;
+    const json = vi.fn().mockReturnThis();
+    const status = vi.fn().mockReturnThis();
+    const next = vi.fn();
+    const done = mobileUpdateGate(async () => min)(req, { status, json } as unknown as Response, next);
+    return { done, status, json, next };
+  }
+
+  it("answers 426 upgrade_required to an old build reading any route", async () => {
+    for (const url of ["/api/inventory/stock-takes/active", "/api/auth/me", "/api/mobile/feature-flags?x=1"]) {
+      const r = gate("GET", url, "1.0.0");
+      await r.done;
+      expect(r.status, url).toHaveBeenCalledWith(426);
+      expect(r.json).toHaveBeenCalledWith(expect.objectContaining({ code: "upgrade_required", minVersion: "2.0.0" }));
+      expect(r.next).not.toHaveBeenCalled();
+    }
+  });
+
+  it("never blocks a write, so counts and other commands queued on an old phone can still be sent", async () => {
+    for (const method of ["POST", "PUT", "PATCH", "DELETE"]) {
+      const r = gate(method, "/api/inventory/stock-takes/abc/categories/dry/lines", "1.0.0");
+      await r.done;
+      expect(r.next, method).toHaveBeenCalled();
+    }
+  });
+
+  it("leaves the config endpoint, the health check and logout open, so the app can learn where to update", async () => {
+    for (const [method, url] of [["GET", "/api/mobile/config"], ["GET", "/api/health"], ["POST", "/api/auth/logout"], ["GET", "/api/mobile/config?v=1"]]) {
+      const r = gate(method, url, "1.0.0");
+      await r.done;
+      expect(r.next, url).toHaveBeenCalled();
+    }
+  });
+
+  it("does not touch the web or a current build", async () => {
+    for (const version of [undefined, "2.0.0", "2.1.0"]) {
+      const r = gate("GET", "/api/inventory/stock-takes/active", version);
+      await r.done;
+      expect(r.next).toHaveBeenCalled();
+    }
   });
 });

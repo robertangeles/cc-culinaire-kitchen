@@ -13,6 +13,7 @@
  * at least the default locale to surface.
  */
 
+import type { MobileConfig } from "@culinaire/shared";
 import { getAllSettings } from "./settingsService.js";
 
 /** Shape of the mobile feature-flags response. Stable contract for mobile. */
@@ -53,6 +54,30 @@ function parseLanguagesEnabled(raw: string | undefined): string[] {
     (v): v is string => typeof v === "string" && /^[a-z]{2,8}$/.test(v),
   );
   return cleaned.length > 0 ? cleaned : DEFAULT_LANGUAGES;
+}
+
+const on = (v: string | undefined) => v === "true";
+
+/**
+ * Everything the phone reads at start-up, from an explicit list of settings: never the whole
+ * settings table (the public `GET /api/settings` returns every key).
+ */
+export async function getMobileConfig(): Promise<MobileConfig> {
+  const settings = await getAllSettings();
+  return {
+    flags: {
+      compliance: on(settings.compliance_enabled),
+      roster: on(settings.roster_enabled),
+      workforce: on(settings.workforce_enabled),
+      brain: on(settings.brain_enabled),
+    },
+    minVersion: settings.mobile_min_app_version || "0.0.0",
+    storeUrls: {
+      ios: settings.mobile_store_url_ios || null,
+      android: settings.mobile_store_url_android || null,
+    },
+    languages_enabled: parseLanguagesEnabled(settings.mobile_languages_enabled),
+  };
 }
 
 export const __test = { parseLanguagesEnabled, DEFAULT_LANGUAGES };

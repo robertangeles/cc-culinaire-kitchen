@@ -19,7 +19,7 @@
 import { Router } from "express";
 import { authenticate } from "../middleware/auth.js";
 import { mobilePromptRateLimit } from "../middleware/rateLimiter.js";
-import { handleGetMobileFeatureFlags } from "../controllers/mobileFeatureFlagsController.js";
+import { handleGetMobileFeatureFlags, handleGetMobileConfig } from "../controllers/mobileFeatureFlagsController.js";
 
 export const mobileFeatureFlagsRouter = Router();
 
@@ -29,3 +29,7 @@ mobileFeatureFlagsRouter.get(
   mobilePromptRateLimit,
   handleGetMobileFeatureFlags,
 );
+
+/** Mounted at `/api/mobile/config`. Reachable by a build that is too old (see `mobileUpdateGate`), so it can say where to update. */
+export const mobileConfigRouter = Router();
+mobileConfigRouter.get("/", authenticate, mobilePromptRateLimit, handleGetMobileConfig);

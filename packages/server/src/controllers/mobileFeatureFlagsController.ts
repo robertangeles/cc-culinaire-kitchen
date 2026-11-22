@@ -12,7 +12,7 @@
  */
 
 import type { Request, Response, NextFunction } from "express";
-import { getMobileFeatureFlags } from "../services/featureFlagsService.js";
+import { getMobileFeatureFlags, getMobileConfig } from "../services/featureFlagsService.js";
 
 /**
  * **GET /api/mobile/feature-flags** — Return the active mobile feature flags.
@@ -32,6 +32,20 @@ export async function handleGetMobileFeatureFlags(
     // flags are added — at that point the payload diverges per JWT.
     res.set("Cache-Control", "public, max-age=3600");
     res.json(flags);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * **GET /api/mobile/config** — start-up configuration: module flags, minimum app version,
+ * store links, languages. Authenticated, never cached by a shared cache: a flag flip or a
+ * raised minimum must reach the phone within a minute.
+ */
+export async function handleGetMobileConfig(_req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    res.set("Cache-Control", "private, max-age=60");
+    res.json(await getMobileConfig());
   } catch (err) {
     next(err);
   }

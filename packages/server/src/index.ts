@@ -15,7 +15,7 @@ import { healthRouter } from "./routes/health.js";
 import { chatRouter } from "./routes/chat.js";
 import { promptsRouter } from "./routes/prompts.js";
 import { mobileRagRouter } from "./routes/mobileRag.js";
-import { mobileFeatureFlagsRouter } from "./routes/mobileFeatureFlags.js";
+import { mobileFeatureFlagsRouter, mobileConfigRouter } from "./routes/mobileFeatureFlags.js";
 import { mobileFeedbackRouter } from "./routes/mobileFeedback.js";
 import { assertFeedbackEmailConfig } from "./services/feedbackService.js";
 import { conversationsRouter } from "./routes/conversations.js";
@@ -36,6 +36,7 @@ import { personalisationOptionsRouter, adminPersonalisationOptionsRouter } from 
 import { handleWebhook } from "./controllers/stripeController.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { globalApiRateLimit } from "./middleware/globalRateLimit.js";
+import { mobileUpdateGate } from "./middleware/mobileVersionPolicy.js";
 import { CLIENT_URL, PORT } from "./utils/env.js";
 import { knowledgeRouter } from "./routes/knowledge.js";
 import { modelOptionsRouter } from "./routes/modelOptions.js";
@@ -113,6 +114,7 @@ app.use(cors({
 app.use(express.json({ limit: "10mb" }));
 app.use(cookieParser());
 app.use(globalApiRateLimit);
+app.use("/api", mobileUpdateGate());
 
 // Routes
 app.use("/api/health", healthRouter);
@@ -121,6 +123,7 @@ app.use("/api/chat", chatRouter);
 app.use("/api/prompts", promptsRouter);
 app.use("/api/mobile/rag", mobileRagRouter);
 app.use("/api/mobile/feature-flags", mobileFeatureFlagsRouter);
+app.use("/api/mobile/config", mobileConfigRouter);
 app.use("/api/mobile/feedback", mobileFeedbackRouter);
 app.use("/api/conversations", conversationsRouter);
 app.use("/api/settings", settingsRouter);

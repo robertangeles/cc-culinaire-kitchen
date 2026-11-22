@@ -27,8 +27,13 @@ async function minimumFromSettings(): Promise<string | undefined> {
   return (await getAllSettings()).mobile_min_app_version;
 }
 
-export function requireSupportedMobileVersion(getMin: () => Promise<string | undefined> = minimumFromSettings) {
+export function requireSupportedMobileVersion(
+  getMin: () => Promise<string | undefined> = minimumFromSettings,
+  opts: { allowWrites?: boolean } = {},
+) {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    // A write may be a command queued on an old phone (a count, later a waste log): it must still get through.
+    if (opts.allowWrites && !["GET", "HEAD", "OPTIONS"].includes(req.method)) return next();
     const raw = req.headers["x-mobile-app-version"];
     const version = Array.isArray(raw) ? raw[0] : raw;
     if (!version) return next();
@@ -49,5 +54,25 @@ export function requireSupportedMobileVersion(getMin: () => Promise<string | und
       return;
     }
     next();
+  };
+}
+
+/** Paths an out-of-date app must still reach: where to update, the health check, and signing out. */
+const GATE_EXEMPT = new Set(["/api/mobile/config", "/api/health", "/api/auth/logout"]);
+
+/**
+ * The update gate on EVERY phone route (mounted once, in index.ts): an old build reading anything gets
+ * 426 `upgrade_required` and shows its update screen, while writes still go through so queued work
+ * drains. The web sends no version header, so it is never gated.
+ *
+ * COMPATIBILITY RULE (tasks/lessons.md, "Server stays compatible with installed apps"): raising
+ * `mobile_min_app_version` is the only way an installed version stops working. Until the owner raises it,
+ * every response shape and error code an installed build parses must keep working.
+ */
+export function mobileUpdateGate(getMin: () => Promise<string | undefined> = minimumFromSettings) {
+  const gate = requireSupportedMobileVersion(getMin, { allowWrites: true });
+  return (req: Request, res: Response, next: NextFunction): Promise<void> | void => {
+    if (GATE_EXEMPT.has(req.originalUrl.split("?")[0])) return next();
+    return gate(req, res, next);
   };
 }
