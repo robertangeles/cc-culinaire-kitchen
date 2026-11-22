@@ -5,7 +5,6 @@
  */
 
 import bcrypt from "bcrypt";
-import crypto from "node:crypto";
 import { and, eq, ilike, ne, or, desc, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { decryptUserPii } from "./piiService.js";
@@ -17,7 +16,6 @@ import {
   userRole,
   userOrganisation,
   organisation,
-  refreshToken,
 } from "../db/schema.js";
 
 const BCRYPT_ROUNDS = parseInt(process.env.BCRYPT_ROUNDS ?? "12", 10);
