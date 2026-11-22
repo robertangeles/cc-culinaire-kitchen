@@ -11,7 +11,7 @@ import crypto from "crypto";
 import { OAuth2Client } from "google-auth-library";
 import { generateSecret as otpGenerateSecret, generateURI, verify as otpVerify } from "otplib";
 import QRCode from "qrcode";
-import { eq, and, or, ne, lt, sql, desc, asc } from "drizzle-orm";
+import { eq, and, or, lt, sql, desc, asc } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { ADVISORY_LOCK_KEYS } from "../db/advisoryLockKeys.js";
 import type { DbOrTx } from "./auditService.js";
@@ -75,6 +75,11 @@ const REFRESH_EXPIRY_MS = 30 * 24 * 60 * 60 * 1000;
 const LEGACY_REFRESH_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000;
 /** A spent token is still honoured this long after it was spent: a reply lost on kitchen wifi, a second browser tab. */
 const REFRESH_GRACE_MS = 60 * 1000;
+/**
+ * A spent token whose successor has not been used yet is honoured this long (a reply lost on a poor
+ * connection, retried later). Past it, a spent token is a replay whatever its successor's state.
+ */
+const REFRESH_UNUSED_SUCCESSOR_MS = 10 * 60 * 1000;
 
 /** Shape of the JWT access token payload. */
 export interface TokenPayload {
@@ -401,8 +406,8 @@ type RefreshVerdict =
  *
  * The successor is derived from the presented token (HMAC), so the same token always yields the same
  * successor: a refresh whose reply was lost, or two browser tabs refreshing at once, converge on one chain
- * instead of forking it. A spent token is honoured while its successor is unused or for a short grace
- * window; after that it is a replay, and the whole sign-in (token family) is revoked.
+ * instead of forking it. A spent token is honoured for a short grace window, or a few minutes while its
+ * successor is unused; after that it is a replay, and the whole sign-in (token family) is revoked.
  */
 export async function refreshAccessToken(rawToken: string) {
   const tokenHash = sha256(rawToken);
@@ -449,8 +454,8 @@ export async function refreshAccessToken(rawToken: string) {
 
     // A spent token: a retry (reply lost, second tab) or a replay.
     const [child] = await tx.select().from(refreshToken).where(eq(refreshToken.tokenHash, childHash));
-    const withinGrace = now.getTime() - stored.rotatedAtDttm.getTime() <= REFRESH_GRACE_MS;
-    if (child && (withinGrace || child.rotatedAtDttm === null)) {
+    const sinceSpent = now.getTime() - stored.rotatedAtDttm.getTime();
+    if (child && (sinceSpent <= REFRESH_GRACE_MS || (child.rotatedAtDttm === null && sinceSpent <= REFRESH_UNUSED_SUCCESSOR_MS))) {
       return { kind: "ok", userId: stored.userId, refreshToken: childRaw };
     }
 
@@ -526,15 +531,20 @@ export async function revokeRefreshToken(rawToken: string) {
 }
 
 /**
- * Ends every sign-in of a user (suspend, cancel, password reset). `exceptFamilyId` keeps one, the caller's own.
- * Pass `tx` to make it part of the caller's transaction (it then commits or rolls back with it).
+ * Ends every sign-in of a user (suspend, cancel, password reset, password change).
+ * `keepFamilyId` spares the caller's own sign-in, but only its live token: spent copies of it, which
+ * another holder may have, go too. Pass `tx` to make it part of the caller's transaction.
  */
-export async function revokeAllRefreshTokens(userId: number, exceptFamilyId?: string, tx?: DbOrTx) {
+export async function revokeAllRefreshTokens(userId: number, keepFamilyId?: string, tx?: DbOrTx) {
   const run = async (t: DbOrTx) => {
     await lockUserTokens(t, userId);
     await t
       .delete(refreshToken)
-      .where(exceptFamilyId ? and(eq(refreshToken.userId, userId), ne(refreshToken.familyId, exceptFamilyId)) : eq(refreshToken.userId, userId));
+      .where(
+        keepFamilyId
+          ? and(eq(refreshToken.userId, userId), sql`NOT (${refreshToken.familyId} = ${keepFamilyId} AND ${refreshToken.rotatedAtDttm} IS NULL)`)
+          : eq(refreshToken.userId, userId),
+      );
   };
   if (tx) await run(tx);
   else await db.transaction(run);

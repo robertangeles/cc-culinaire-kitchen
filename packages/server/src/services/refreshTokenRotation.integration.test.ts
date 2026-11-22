@@ -22,7 +22,7 @@ import {
   verifyAccessToken,
   mfaSessionUserId,
 } from "./authService.js";
-import { suspendUser, cancelUser, adminUpdateUser } from "./userService.js";
+import { suspendUser, cancelUser, adminUpdateUser, changePassword } from "./userService.js";
 
 /**
  * Refresh-token rotation, real DB: every refresh hands back a new token (30-day sliding), a lost reply
@@ -119,15 +119,27 @@ describe.skipIf(!RUN)("refresh token rotation (real DB)", () => {
     expect((await refreshAccessToken(out.refreshToken)).refreshToken).toBeTruthy();
   });
 
-  it("a lost reply retried long after the grace window still works while its new token is unused", async () => {
+  it("a lost reply retried a few minutes later still works while its new token is unused", async () => {
     const first = await login();
     const out = await refreshAccessToken(first.refreshToken);
     await db
       .update(refreshToken)
-      .set({ rotatedAtDttm: new Date(Date.now() - 10 * 60_000) })
+      .set({ rotatedAtDttm: new Date(Date.now() - 5 * 60_000) })
       .where(eq(refreshToken.tokenHash, sha(first.refreshToken)));
 
     expect((await refreshAccessToken(first.refreshToken)).refreshToken).toBe(out.refreshToken);
+  });
+
+  it("but not half an hour later, even if its new token was never used: that is a replay", async () => {
+    const first = await login();
+    const out = await refreshAccessToken(first.refreshToken);
+    await db
+      .update(refreshToken)
+      .set({ rotatedAtDttm: new Date(Date.now() - 30 * 60_000) })
+      .where(eq(refreshToken.tokenHash, sha(first.refreshToken)));
+
+    await expectRejected(first.refreshToken, "REFRESH_TOKEN_REUSED");
+    await expectRejected(out.refreshToken, "INVALID_REFRESH_TOKEN");
   });
 
   it("two refreshes at once with the same token both succeed with the same new token", async () => {
@@ -201,6 +213,19 @@ describe.skipIf(!RUN)("refresh token rotation (real DB)", () => {
     for (const raw of [first.refreshToken, second.refreshToken, third.refreshToken]) {
       await expectRejected(raw, "INVALID_REFRESH_TOKEN");
     }
+  });
+
+  it("changing the password ends every other sign-in and every spent copy of the caller's own, keeping only its live token", async () => {
+    const other = await login();
+    const first = await login();
+    const head = await refreshAccessToken(first.refreshToken);
+
+    await changePassword(fx.userId, "Passw0rd!", "N3wPassw0rd!", head.refreshToken);
+
+    expect(await rowFor(other.refreshToken)).toBeUndefined();
+    expect(await rowFor(first.refreshToken)).toBeUndefined();
+    expect(await rowFor(head.refreshToken)).toBeDefined();
+    expect((await refreshAccessToken(head.refreshToken)).refreshToken).toBeTruthy();
   });
 
   describe("account status", () => {
