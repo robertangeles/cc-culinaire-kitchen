@@ -5,6 +5,7 @@
  * layer is logged via pino and mapped to an appropriate HTTP status code:
  *
  * - **ZodError** (validation failure) -> 400 with flattened error details.
+ * - **AppError** -> its own status, body `{ error, code }`.
  * - **AI provider errors** (missing/invalid API key, 401) -> 502 with a
  *   configuration hint.
  * - **All other errors** -> 500 generic internal server error.
@@ -17,6 +18,7 @@
 import type { Request, Response, NextFunction } from "express";
 import { pino } from "pino";
 import { ZodError } from "zod";
+import { AppError } from "../utils/appError.js";
 
 const log = pino({ transport: { target: "pino-pretty" } });
 
@@ -29,6 +31,7 @@ const log = pino({ transport: { target: "pino-pretty" } });
  * | Condition                        | Status | Response `error` value                                  |
  * |----------------------------------|--------|---------------------------------------------------------|
  * | `ZodError`                       | 400    | `"Validation error"` (includes `details`)               |
+ * | `AppError`                       | its own| the message, plus `code`                                |
  * | API-key / 401 provider message   | 502    | `"AI provider error. Check your API key configuration."` |
  * | Everything else                  | 500    | `"Internal server error"`                               |
  *
@@ -53,6 +56,11 @@ export function errorHandler(
 
   if (err instanceof ZodError) {
     res.status(400).json({ error: "Validation error", details: err.flatten() });
+    return;
+  }
+
+  if (err instanceof AppError) {
+    res.status(err.statusCode).json({ error: err.message, code: err.code });
     return;
   }
 
