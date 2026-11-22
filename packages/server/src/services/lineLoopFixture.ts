@@ -134,7 +134,7 @@ export function callHandler(
         return this;
       },
       json(b: unknown) {
-        resolveCall({ status, body: b });
+        resolveCall({ status, body: b as Answer["body"] });
         return this;
       },
     } as unknown as Response;
