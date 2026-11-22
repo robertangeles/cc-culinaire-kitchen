@@ -9,6 +9,8 @@ import { z } from "zod";
 import {
   generateTokens,
   getUserWithRolesAndPermissions,
+  getSignInTime,
+  revokeRefreshToken,
 } from "../services/authService.js";
 import { setAuthCookies } from "./authController.js";
 import {
@@ -72,7 +74,12 @@ export async function handleCreateOrganisation(req: Request, res: Response, next
     // access token so its permissions apply immediately without requiring
     // the user to log out and back in.
     const authUser = await getUserWithRolesAndPermissions(req.user!.sub);
-    const tokens = await generateTokens(authUser);
+    // Same sign-in, new permissions: keep when they really signed in, and end the old session
+    // instead of leaving it alive next to the new one.
+    const oldRefresh = req.cookies?.refresh_token as string | undefined;
+    const signedInAt = (await getSignInTime(oldRefresh, req.user!.sub)) ?? undefined;
+    if (oldRefresh) await revokeRefreshToken(oldRefresh);
+    const tokens = await generateTokens(authUser, { signedInAt });
     setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
     res.status(201).json({ organisation: org });
   } catch (err) {

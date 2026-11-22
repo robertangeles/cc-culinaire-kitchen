@@ -133,7 +133,7 @@ export function setAuthCookies(
     httpOnly: true,
     secure: IS_PROD,
     sameSite: "lax",
-    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days, sliding: every refresh sets a fresh cookie
     path: "/",
   });
 }
@@ -309,7 +309,7 @@ export async function handleLogout(
 /**
  * POST /api/auth/refresh
  *
- * Uses the refresh token cookie to issue a new access token.
+ * Exchanges the refresh token (cookie or body) for a new access token and a rotated refresh token.
  */
 export async function handleRefresh(
   req: Request,
@@ -324,27 +324,30 @@ export async function handleRefresh(
       return;
     }
 
-    const { accessToken, user: authUser } = await refreshAccessToken(rawRefreshToken);
+    const { accessToken, refreshToken: newRefreshToken, user: authUser } = await refreshAccessToken(rawRefreshToken);
 
-    setAuthCookies(res, accessToken, rawRefreshToken);
+    // Rotation: the cookie (web) and the body (native) both carry the NEW refresh token.
+    setAuthCookies(res, accessToken, newRefreshToken);
 
-    // `tokens.accessToken` is included for native clients that don't use cookies.
-    // Web ignores it.
+    // `tokens` is included for native clients that don't use cookies. Web ignores it.
     res.json({
       user: authUser,
-      tokens: { accessToken, refreshToken: rawRefreshToken },
+      tokens: { accessToken, refreshToken: newRefreshToken },
     });
   } catch (err: unknown) {
     if (isAuthError(err)) {
       if (
         (err as AuthError).code === "INVALID_REFRESH_TOKEN" ||
         (err as AuthError).code === "REFRESH_TOKEN_EXPIRED" ||
+        (err as AuthError).code === "REFRESH_TOKEN_REUSED" ||
+        (err as AuthError).code === "ACCOUNT_SUSPENDED" ||
+        (err as AuthError).code === "ACCOUNT_CANCELLED" ||
         (err as AuthError).code === "USER_NOT_FOUND"
       ) {
         // Do NOT clear cookies here — the access_token may still be valid
         // and the client needs it for the verification call to /api/auth/me.
         // Cookies expire naturally via maxAge. Only explicit logout clears them.
-        res.status(401).json({ error: "Session expired. Please log in again." });
+        res.status(401).json({ error: "Session expired. Please log in again.", code: (err as AuthError).code });
         return;
       }
     }
