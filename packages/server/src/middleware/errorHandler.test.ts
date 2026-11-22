@@ -3,6 +3,7 @@ import type { Request, Response, NextFunction } from "express";
 import { ZodError } from "zod";
 import { errorHandler } from "./errorHandler.js";
 import { AppError } from "../utils/appError.js";
+import { IncompatibleUnitsError } from "@culinaire/shared";
 
 /** Creates a mock Express response. */
 function mockRes(overrides: Partial<Response> = {}): Response {
@@ -19,6 +20,15 @@ const mockReq = {} as Request;
 const mockNext: NextFunction = vi.fn();
 
 describe("errorHandler", () => {
+  it("answers a unit that cannot be converted as 422 INCOMPATIBLE_UNITS, not 500", () => {
+    const res = mockRes();
+
+    errorHandler(new IncompatibleUnitsError("Cannot convert kg to each"), mockReq, res, mockNext);
+
+    expect(res.status).toHaveBeenCalledWith(422);
+    expect(res.json).toHaveBeenCalledWith({ error: "Cannot convert kg to each", code: "INCOMPATIBLE_UNITS" });
+  });
+
   it("answers an AppError with its status and machine-readable code", () => {
     const res = mockRes();
 

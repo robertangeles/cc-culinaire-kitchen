@@ -10,6 +10,11 @@ export const SERVER_ERROR_CODES = [
   "INCOMPATIBLE_UNITS",
   "INVALID_STATE",
   "NOT_FOUND",
+  "FORBIDDEN",
+  "CONFLICT",
+  "VALIDATION",
+  "SHEET_INCOMPLETE",
+  "EDIT_WINDOW_EXPIRED",
   "LOCATION_NOT_ALLOWED",
 ] as const;
 export type ServerErrorCode = (typeof SERVER_ERROR_CODES)[number];

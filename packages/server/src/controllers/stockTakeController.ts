@@ -59,18 +59,19 @@ const FlagSessionSchema = z.object({
 // ─── Helpers ──────────────────────────────────────────────────────
 
 function handleServiceError(err: unknown, res: Response, next: NextFunction): void {
+  // `code` lets the phone's offline queue branch on the kind of refusal; `error` stays the sentence the web shows.
   if (err instanceof SheetIncompleteError) {
-    res.status(409).json({ error: err.message, missing: err.missing });
+    res.status(409).json({ error: err.message, code: "SHEET_INCOMPLETE", missing: err.missing });
   } else if (err instanceof ConflictError) {
-    res.status(409).json({ error: err.message });
+    res.status(409).json({ error: err.message, code: "CONFLICT" });
   } else if (err instanceof ForbiddenError) {
-    res.status(403).json({ error: err.message });
+    res.status(403).json({ error: err.message, code: "FORBIDDEN" });
   } else if (err instanceof InvalidStateError) {
-    res.status(400).json({ error: err.message });
+    res.status(400).json({ error: err.message, code: "INVALID_STATE" });
   } else if (err instanceof NotFoundError) {
-    res.status(404).json({ error: err.message });
+    res.status(404).json({ error: err.message, code: "NOT_FOUND" });
   } else if (err instanceof ValidationError) {
-    res.status(400).json({ error: err.message });
+    res.status(400).json({ error: err.message, code: "VALIDATION" });
   } else {
     next(err);
   }
@@ -218,7 +219,7 @@ export async function handleSaveLineItem(
     if (!cat) { res.status(404).json({ error: `Category "${req.params.cat as string}" not found` }); return; }
 
     if (cat.categoryStatus !== "IN_PROGRESS") {
-      res.status(400).json({ error: `Cannot count: category is ${cat.categoryStatus}` });
+      res.status(400).json({ error: `Cannot count: category is ${cat.categoryStatus}`, code: "INVALID_STATE" });
       return;
     }
 

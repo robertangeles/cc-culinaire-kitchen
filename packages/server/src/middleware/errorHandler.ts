@@ -6,6 +6,7 @@
  *
  * - **ZodError** (validation failure) -> 400 with flattened error details.
  * - **AppError** -> its own status, body `{ error, code }`.
+ * - **IncompatibleUnitsError** -> 422 `INCOMPATIBLE_UNITS`.
  * - **AI provider errors** (missing/invalid API key, 401) -> 502 with a
  *   configuration hint.
  * - **All other errors** -> 500 generic internal server error.
@@ -18,6 +19,7 @@
 import type { Request, Response, NextFunction } from "express";
 import { pino } from "pino";
 import { ZodError } from "zod";
+import { IncompatibleUnitsError } from "@culinaire/shared";
 import { AppError } from "../utils/appError.js";
 
 const log = pino({ transport: { target: "pino-pretty" } });
@@ -32,6 +34,7 @@ const log = pino({ transport: { target: "pino-pretty" } });
  * |----------------------------------|--------|---------------------------------------------------------|
  * | `ZodError`                       | 400    | `"Validation error"` (includes `details`)               |
  * | `AppError`                       | its own| the message, plus `code`                                |
+ * | `IncompatibleUnitsError`         | 422    | the message, plus `code: "INCOMPATIBLE_UNITS"`          |
  * | API-key / 401 provider message   | 502    | `"AI provider error. Check your API key configuration."` |
  * | Everything else                  | 500    | `"Internal server error"`                               |
  *
@@ -61,6 +64,13 @@ export function errorHandler(
 
   if (err instanceof AppError) {
     res.status(err.statusCode).json({ error: err.message, code: err.code });
+    return;
+  }
+
+  // A unit that cannot be converted is a set-up problem the caller cannot fix by retrying:
+  // 422, not a 500 that an offline queue would retry forever.
+  if (err instanceof IncompatibleUnitsError) {
+    res.status(422).json({ error: err.message, code: "INCOMPATIBLE_UNITS" });
     return;
   }
 

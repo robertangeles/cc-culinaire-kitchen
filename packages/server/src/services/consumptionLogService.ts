@@ -9,6 +9,7 @@ import { eq, and, desc, sql, gte, lte, count } from "drizzle-orm";
 import type { StockZoneKey } from "@culinaire/shared";
 import { db } from "../db/index.js";
 import { resolveToBase } from "./unitConversionService.js";
+import { AppError } from "../utils/appError.js";
 import {
   consumptionLog,
   ingredient,
@@ -391,18 +392,18 @@ export async function editConsumptionLog(
     );
 
   if (!existing) {
-    throw new Error("Consumption log entry not found");
+    throw new AppError(404, "NOT_FOUND", "Consumption log entry not found");
   }
 
   // Verify user is the logger OR is org admin
   if (existing.userId !== userId && !isAdmin) {
-    throw new Error("Only the original logger or an admin can edit this entry");
+    throw new AppError(403, "FORBIDDEN", "Only the original logger or an admin can edit this entry");
   }
 
   // Verify logged_at is within 24 hours
   const hoursAgo = (Date.now() - new Date(existing.loggedAt).getTime()) / (1000 * 60 * 60);
   if (hoursAgo > 24) {
-    throw new Error("Cannot edit entries older than 24 hours");
+    throw new AppError(409, "EDIT_WINDOW_EXPIRED", "Cannot edit entries older than 24 hours");
   }
 
   // If quantity changed, adjust stock level (convert the delta from the
@@ -466,18 +467,18 @@ export async function deleteConsumptionLog(
     );
 
   if (!existing) {
-    throw new Error("Consumption log entry not found");
+    throw new AppError(404, "NOT_FOUND", "Consumption log entry not found");
   }
 
   // Verify user is the logger OR is org admin
   if (existing.userId !== userId && !isAdmin) {
-    throw new Error("Only the original logger or an admin can delete this entry");
+    throw new AppError(403, "FORBIDDEN", "Only the original logger or an admin can delete this entry");
   }
 
   // Verify logged_at is within 24 hours
   const hoursAgo = (Date.now() - new Date(existing.loggedAt).getTime()) / (1000 * 60 * 60);
   if (hoursAgo > 24) {
-    throw new Error("Cannot delete entries older than 24 hours");
+    throw new AppError(409, "EDIT_WINDOW_EXPIRED", "Cannot delete entries older than 24 hours");
   }
 
   // Restore stock (convert the entry's qty from its unit to base)
