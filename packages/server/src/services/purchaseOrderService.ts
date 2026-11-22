@@ -23,6 +23,7 @@ import {
   user,
   locationIngredient,
   organisation,
+  receivingSession,
 } from "../db/schema.js";
 import { validateTransition, PO_TRANSITIONS } from "../utils/stateTransition.js";
 import * as thresholdService from "./thresholdService.js";
@@ -54,11 +55,33 @@ export interface CreatePOInput {
 }
 
 export interface ListPOOpts {
-  status?: string;
+  /** Any of these statuses. Omitted = every status (the web's plain call). */
+  statuses?: string[];
   storeLocationId?: string;
   limit?: number;
   offset?: number;
+  /** "expected" = soonest expected delivery first, undated last. Default: newest created first. */
+  sort?: "created" | "expected";
 }
+
+/**
+ * Who has an ACTIVE receiving session on this PO right now, or null. A correlated
+ * subquery (newest session wins) rather than a join: before the per-PO start lock
+ * two ACTIVE sessions could exist for one PO, and a join would duplicate the row.
+ */
+const beingReceivedBy = sql<{ userId: number; userName: string; sessionId: string; startedAt: string } | null>`(
+  SELECT json_build_object(
+    'userId', ${receivingSession.receivedByUserId},
+    'userName', u.user_name,
+    'sessionId', ${receivingSession.sessionId},
+    'startedAt', ${receivingSession.startedAt}
+  )
+  FROM ${receivingSession}
+  JOIN "user" u ON u.user_id = ${receivingSession.receivedByUserId}
+  WHERE ${receivingSession.poId} = ${purchaseOrder.poId} AND ${receivingSession.status} = 'ACTIVE'
+  ORDER BY ${receivingSession.startedAt} DESC
+  LIMIT 1
+)`;
 
 // ─── createPO ─────────────────────────────────────────────────────
 
@@ -101,8 +124,8 @@ export async function createPO(input: CreatePOInput) {
 export async function listPOs(orgId: number, opts: ListPOOpts = {}) {
   const conditions = [eq(purchaseOrder.organisationId, orgId)];
 
-  if (opts.status) {
-    conditions.push(eq(purchaseOrder.status, opts.status));
+  if (opts.statuses?.length) {
+    conditions.push(inArray(purchaseOrder.status, opts.statuses));
   }
   if (opts.storeLocationId) {
     conditions.push(eq(purchaseOrder.storeLocationId, opts.storeLocationId));
@@ -133,6 +156,8 @@ export async function listPOs(orgId: number, opts: ListPOOpts = {}) {
       locationName: storeLocation.locationName,
       createdByUserName: user.userName,
       supplierOrderingMethod: supplier.orderingMethod,
+      supplierPhone: supplier.contactPhone,
+      beingReceivedBy,
       lineCount: sql<number>`(SELECT count(*) FROM purchase_order_line pol WHERE pol.po_id = ${purchaseOrder.poId})::int`,
     })
     .from(purchaseOrder)
@@ -140,7 +165,11 @@ export async function listPOs(orgId: number, opts: ListPOOpts = {}) {
     .leftJoin(storeLocation, eq(purchaseOrder.storeLocationId, storeLocation.storeLocationId))
     .leftJoin(user, eq(purchaseOrder.createdByUserId, user.userId))
     .where(and(...conditions))
-    .orderBy(desc(purchaseOrder.createdDttm))
+    .orderBy(
+      ...(opts.sort === "expected"
+        ? [sql`${purchaseOrder.expectedDeliveryDate} ASC NULLS LAST`, desc(purchaseOrder.createdDttm)]
+        : [desc(purchaseOrder.createdDttm)]),
+    )
     .limit(limit)
     .offset(offset);
 
@@ -157,7 +186,11 @@ export async function getPODetail(poId: string, orgId: number) {
       organisationId: purchaseOrder.organisationId,
       status: purchaseOrder.status,
       notes: purchaseOrder.notes,
+      rejectedReason: purchaseOrder.rejectedReason,
+      totalValue: purchaseOrder.totalValue,
       expectedDeliveryDate: purchaseOrder.expectedDeliveryDate,
+      submittedAt: purchaseOrder.submittedAt,
+      sentAt: purchaseOrder.sentAt,
       supplierEmailedAt: purchaseOrder.supplierEmailedAt,
       createdDttm: purchaseOrder.createdDttm,
       updatedDttm: purchaseOrder.updatedDttm,
@@ -165,8 +198,10 @@ export async function getPODetail(poId: string, orgId: number) {
       supplierId: purchaseOrder.supplierId,
       createdByUserId: purchaseOrder.createdByUserId,
       supplierName: supplier.supplierName,
+      supplierPhone: supplier.contactPhone,
       locationName: storeLocation.locationName,
       createdByUserName: user.userName,
+      beingReceivedBy,
     })
     .from(purchaseOrder)
     .leftJoin(supplier, eq(purchaseOrder.supplierId, supplier.supplierId))

@@ -8,6 +8,7 @@ import type { Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import pino from "pino";
 import { getUserLocationContext, assertLocationAccess } from "../services/locationContextService.js";
+import { hasPermission } from "../middleware/auth.js";
 import {
   createPO,
   listPOs,
@@ -57,7 +58,39 @@ const ReceiveLineSchema = z.object({
   ).nullable().optional(),
 });
 
+const PO_STATUSES = [
+  "DRAFT",
+  "PENDING_APPROVAL",
+  "SENT",
+  "RECEIVING",
+  "RECEIVED",
+  "PARTIAL_RECEIVED",
+  "CANCELLED",
+] as const;
+
+/** The only POs a user holding `purchasing:receive` but not `inventory:count` may see. */
+const RECEIVING_QUEUE = ["SENT", "RECEIVING"];
+
+// `status` is one status or a comma list; `limit` is a positive whole number, capped so one call
+// cannot pull the whole table (a bad value used to reach SQL and answer 500).
+const ListPOsQuerySchema = z.object({
+  status: z
+    .string()
+    .transform((v) => v.split(",").map((x) => x.trim()))
+    .pipe(z.array(z.enum(PO_STATUSES)).min(1))
+    .optional(),
+  storeLocationId: z.string().uuid().optional(),
+  limit: z.coerce.number().int().min(1).transform((n) => Math.min(n, 100)).optional(),
+  offset: z.coerce.number().int().min(0).optional(),
+  sort: z.enum(["created", "expected"]).optional(),
+});
+
 // ─── Helpers ──────────────────────────────────────────────────────
+
+/** A receiving-only user (no `inventory:count`) is confined to the receiving queue. */
+function isReceivingOnly(req: Request): boolean {
+  return !hasPermission(req.user!, "inventory:count");
+}
 
 async function resolveOrgId(req: Request, res: Response): Promise<number | null> {
   const ctx = await getUserLocationContext(req.user!.sub);
@@ -113,14 +146,25 @@ export async function handleListPOs(
     const orgId = await resolveOrgId(req, res);
     if (orgId === null) return;
 
-    const status = req.query.status as string | undefined;
-    const storeLocationId = req.query.storeLocationId as string | undefined;
-    const limit = req.query.limit ? Number(req.query.limit) : undefined;
-    const offset = req.query.offset ? Number(req.query.offset) : undefined;
+    const parsed = ListPOsQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      res.status(400).json({ error: "Validation failed", details: parsed.error.flatten() });
+      return;
+    }
+    const { status, ...rest } = parsed.data;
 
-    if (storeLocationId) await assertLocationAccess(req.user!, storeLocationId);
+    if (rest.storeLocationId) await assertLocationAccess(req.user!, rest.storeLocationId);
 
-    const result = await listPOs(orgId, { status, storeLocationId, limit, offset });
+    let statuses: string[] | undefined = status;
+    if (isReceivingOnly(req)) {
+      statuses = (statuses ?? RECEIVING_QUEUE).filter((s) => RECEIVING_QUEUE.includes(s));
+      if (statuses.length === 0) {
+        res.json([]);
+        return;
+      }
+    }
+
+    const result = await listPOs(orgId, { ...rest, statuses });
     res.json(result);
   } catch (err) {
     next(err);
@@ -137,7 +181,8 @@ export async function handleGetPODetail(
     const poId = req.params.id as string;
     const result = await getPODetail(poId, orgId);
 
-    if (!result) {
+    // 404, not 403: a receiving-only user cannot tell a draft from a PO that does not exist.
+    if (!result || (isReceivingOnly(req) && !RECEIVING_QUEUE.includes(result.status))) {
       res.status(404).json({ error: "Purchase order not found" });
       return;
     }
