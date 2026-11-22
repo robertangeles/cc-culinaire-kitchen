@@ -131,4 +131,16 @@ describe.skipIf(!RUN)("consumption log edit/delete refusals (real DB)", () => {
     expect(await stock()).toBe(before);
     expect(Number((await db.select().from(consumptionLog).where(eq(consumptionLog.consumptionLogId, id)))[0].quantity)).toBe(1);
   });
+
+  // A phone that times out resends the edit while the first is still running: the stock moves once, not twice.
+  it("two edits of the same entry at once move the stock by the difference once", async () => {
+    const id = await newEntry();
+    const stock = async () => Number((await db.select().from(stockLevel).where(eq(stockLevel.ingredientId, fx.ingId)))[0].currentQty);
+    const before = await stock();
+
+    const [a, b] = await Promise.all([call(handleEditLog, fx.owner, { id }, { quantity: 3 }), call(handleEditLog, fx.owner, { id }, { quantity: 3 })]);
+
+    expect([a.status, b.status]).toEqual([200, 200]);
+    expect(await stock()).toBe(before - 2);
+  });
 });

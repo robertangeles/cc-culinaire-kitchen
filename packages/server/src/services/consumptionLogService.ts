@@ -357,7 +357,8 @@ export async function editConsumptionLog(
           eq(consumptionLog.consumptionLogId, logId),
           eq(consumptionLog.organisationId, orgId),
         ),
-      );
+      )
+      .for("update");
 
     if (!existing) {
       throw new AppError(404, "NOT_FOUND", "Consumption log entry not found");
