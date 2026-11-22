@@ -3,6 +3,8 @@ import { ApiErrorBodySchema, UpgradeRequiredBodySchema, normaliseCode } from "./
 import { SitePageSchema } from "./legal.js";
 import { AuthUserSchema, LocationContextSchema, LoginReplySchema, RefreshReplySchema } from "./auth.js";
 import { ActiveSessionSchema, AreaLinesSchema, CountSheetsSchema, SubmitConflictBodySchema } from "./stockTake.js";
+import { WasteEntrySchema, WasteListSchema, WasteSuggestionsSchema } from "./waste.js";
+import { CatalogueSchema } from "./catalogue.js";
 
 // Payloads are shaped like the real server replies. Each lenient rule is one case: the point is that a server
 // that moved on (new field, new enum value, new null) does not break a phone that was installed last month.
@@ -110,5 +112,39 @@ describe("site page (terms, privacy)", () => {
   it("needs a title; a missing body is empty text", () => {
     expect(SitePageSchema.parse({ title: "Privacy" })).toEqual({ title: "Privacy", bodyMd: "" });
     expect(SitePageSchema.safeParse({ bodyMd: "x" }).success).toBe(false);
+  });
+});
+
+describe("waste schemas", () => {
+  const row = { wasteLogId: "w1", userId: 7, storeLocationId: "L1", ingredientName: "Chicken trim", quantity: 2.5, unit: "kg", estimatedCost: null, reason: "Trim/Peel", notes: null, shift: "Lunch", loggedAt: "2026-11-23T01:00:00.000Z", createdDttm: "2026-11-23T01:00:01.000Z", loggedBy: "Rob", brandNew: 1 };
+
+  it("reads a waste row, ignoring what it does not know, and numeric strings from older replies", () => {
+    expect(WasteEntrySchema.parse(row)).toMatchObject({ wasteLogId: "w1", quantity: 2.5, estimatedCost: null });
+    expect(WasteEntrySchema.parse({ ...row, quantity: "2.500", estimatedCost: "4.20" })).toMatchObject({ quantity: 2.5, estimatedCost: 4.2 });
+    expect(WasteEntrySchema.parse({ wasteLogId: "w2", ingredientName: "Basil", quantity: 1, unit: "bunch", loggedAt: "2026-11-23T01:00:00.000Z" })).toMatchObject({ reason: null, shift: null, notes: null, estimatedCost: null, storeLocationId: null });
+  });
+
+  it("one bad row in a list does not hide the others", () => {
+    const list = WasteListSchema.parse({ data: [row, { nonsense: true }, { ...row, wasteLogId: "w3" }], total: 3 });
+    expect(list.data.map((r) => r.wasteLogId)).toEqual(["w1", "w3"]);
+  });
+
+  it("reads suggestions, and no suggestions", () => {
+    expect(WasteSuggestionsSchema.parse({ ingredients: ["Basil", "Basmati"] })).toEqual(["Basil", "Basmati"]);
+    expect(WasteSuggestionsSchema.parse({})).toEqual([]);
+  });
+});
+
+describe("catalogue schema", () => {
+  it("keeps only what the picker needs and drops rows that cannot be picked", () => {
+    const rows = CatalogueSchema.parse([
+      { ingredientId: "i1", ingredientName: "Flour", baseUnit: "g", ingredientCategory: "Dry", unitCost: "0.0012", organisationId: 1 },
+      { ingredientName: "no id" },
+      { ingredientId: "i2", ingredientName: "Gin", baseUnit: "L" },
+    ]);
+    expect(rows).toEqual([
+      { ingredientId: "i1", ingredientName: "Flour", baseUnit: "g", ingredientCategory: "Dry" },
+      { ingredientId: "i2", ingredientName: "Gin", baseUnit: "L", ingredientCategory: "" },
+    ]);
   });
 });
