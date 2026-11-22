@@ -7,7 +7,7 @@
  * Used by Kitchen Ops modules to scope data by location.
  */
 
-import { eq, and } from "drizzle-orm";
+import { eq, and, asc } from "drizzle-orm";
 import { db } from "../db/index.js";
 import {
   user,
@@ -47,14 +47,16 @@ export interface LocationContext {
 export async function getUserLocationContext(
   userId: number
 ): Promise<LocationContext> {
-  // Get user's org memberships
+  // Get user's org memberships. The earliest membership is the primary org:
+  // without an ORDER BY the "first" row was whichever Postgres returned.
   const memberships = await db
     .select({
       organisationId: userOrganisation.organisationId,
       role: userOrganisation.role,
     })
     .from(userOrganisation)
-    .where(eq(userOrganisation.userId, userId));
+    .where(eq(userOrganisation.userId, userId))
+    .orderBy(asc(userOrganisation.userOrganisationId));
 
   if (memberships.length === 0) {
     return {
@@ -66,7 +68,9 @@ export async function getUserLocationContext(
     };
   }
 
-  const isOrgAdmin = memberships.some((m) => m.role === "admin");
+  // Admin rights belong to the org they were granted in: being admin of a
+  // second org must not open the primary org's locations.
+  const isOrgAdmin = memberships[0].role === "admin";
   const primaryOrgId = memberships[0].organisationId;
 
   // Get locations based on role
@@ -84,7 +88,9 @@ export async function getUserLocationContext(
     }));
   } else {
     // Staff sees only assigned locations
-    const assigned = await getUserStoreLocations(userId);
+    const assigned = (await getUserStoreLocations(userId)).filter(
+      (loc) => loc.organisationId === primaryOrgId,
+    );
     locations = assigned.map((loc) => ({
       storeLocationId: loc.storeLocationId,
       organisationId: loc.organisationId,
