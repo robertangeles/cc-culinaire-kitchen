@@ -17,12 +17,17 @@ import {
   generateReuseSuggestions,
 } from "../services/wasteService.js";
 import { getUserOrgContext } from "../services/orgContextService.js";
+import { assertLocationAccess } from "../services/locationContextService.js";
+import { hasPermission } from "../middleware/auth.js";
+import { AppError } from "../utils/appError.js";
 
 // ---------------------------------------------------------------------------
 // Zod schemas
 // ---------------------------------------------------------------------------
 
 const logWasteSchema = z.object({
+  wasteLogId: z.string().uuid().optional(),
+  storeLocationId: z.string().uuid().optional(),
   ingredientName: z.string().min(1, "Ingredient name is required").max(200),
   quantity: z.number().positive("Quantity must be positive"),
   unit: z.string().min(1).max(20),
@@ -80,8 +85,11 @@ export async function handleLogWaste(req: Request, res: Response) {
     return;
   }
 
-  const row = await logWaste(userId, parsed.data);
-  res.status(201).json(row);
+  // A location sent by the client must be one the caller works at.
+  if (parsed.data.storeLocationId) await assertLocationAccess(req.user!, parsed.data.storeLocationId);
+
+  const { row, replay } = await logWaste(userId, parsed.data);
+  res.status(replay ? 200 : 201).json(row);
 }
 
 /** GET /api/waste */
@@ -99,6 +107,11 @@ export async function handleGetWasteLogs(req: Request, res: Response) {
   }
 
   const { teamView, storeLocationId, ...rest } = parsed.data;
+  // Org-wide entries (who logged what, at what cost) are a report: waste:log alone does not open them.
+  if (teamView === "true" && !hasPermission(req.user!, "waste:read")) {
+    throw new AppError(403, "FORBIDDEN", "Team waste needs the waste reports permission");
+  }
+  if (storeLocationId) await assertLocationAccess(req.user!, storeLocationId);
   const result = await getWasteLogs(userId, { ...rest, teamView: teamView === "true", storeLocationId });
   res.json(result);
 }
@@ -118,11 +131,7 @@ export async function handleDeleteWasteLog(req: Request, res: Response) {
   }
 
   const orgCtx = await getUserOrgContext(userId);
-  const deleted = await deleteWasteLog(wasteLogId, userId, orgCtx);
-  if (!deleted) {
-    res.status(404).json({ error: "Waste log entry not found or not yours" });
-    return;
-  }
+  await deleteWasteLog(wasteLogId, userId, orgCtx);
   res.json({ ok: true });
 }
 
@@ -148,10 +157,7 @@ export async function handleEditWasteLog(req: Request, res: Response) {
 
   const orgCtx = await getUserOrgContext(userId);
   const updated = await editWasteLog(wasteLogId, userId, parsed.data, orgCtx);
-  if (!updated) {
-    res.status(404).json({ error: "Waste log entry not found or not yours" });
-    return;
-  }
+  if (!updated) throw new AppError(404, "NOT_FOUND", "Waste log entry not found or not yours");
   res.json(updated);
 }
 

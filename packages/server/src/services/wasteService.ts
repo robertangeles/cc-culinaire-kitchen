@@ -11,9 +11,12 @@ import { generateObject } from "ai";
 import { z } from "zod";
 import pino from "pino";
 import { db } from "../db/index.js";
-import { wasteLog, user } from "../db/schema.js";
+import { wasteLog, user, storeLocation } from "../db/schema.js";
 import { recipe } from "../db/schema.js";
 import { eq, desc, sql, and, gte, lte, ilike, inArray } from "drizzle-orm";
+import { AppError } from "../utils/appError.js";
+import { insertOnce, settleDelete } from "../utils/retrySafe.js";
+import { dayBounds } from "../utils/dateRange.js";
 import { getUserOrgContext, type OrgContext } from "./orgContextService.js";
 import { getModel } from "./providerService.js";
 import { recordOpsEvent } from "./brainCaptureService.js";
@@ -25,6 +28,10 @@ const logger = pino({ name: "wasteService" });
 // ---------------------------------------------------------------------------
 
 export interface WasteLogInput {
+  /** Chosen by the phone so a retried send finds its own row instead of making a second one. */
+  wasteLogId?: string;
+  /** Where the waste happened. Absent: the location saved on the user (the web sends none). */
+  storeLocationId?: string | null;
   ingredientName: string;
   quantity: number;
   unit: string;
@@ -38,6 +45,7 @@ export interface WasteLogInput {
 export interface WasteLogRow {
   wasteLogId: string;
   userId: number;
+  storeLocationId?: string | null;
   ingredientName: string;
   quantity: number;
   unit: string;
@@ -72,41 +80,67 @@ export interface ReuseSuggestion {
 // logWaste
 // ---------------------------------------------------------------------------
 
+/**
+ * Records a waste entry. The caller has already checked `data.storeLocationId` against their assigned locations.
+ * `replay` is true when `data.wasteLogId` was already stored by this user: nothing is written or remembered twice.
+ */
 export async function logWaste(
   userId: number,
   data: WasteLogInput,
-): Promise<WasteLogRow> {
-  const orgCtx = await getUserOrgContext(userId);
+): Promise<{ row: WasteLogRow; replay: boolean }> {
+  let organisationId: number | null;
+  let storeLocationId: string | null;
+  if (data.storeLocationId) {
+    // The request's location decides, not the user's saved one: a queued log may be sent after a switch.
+    const [loc] = await db
+      .select({ organisationId: storeLocation.organisationId })
+      .from(storeLocation)
+      .where(eq(storeLocation.storeLocationId, data.storeLocationId));
+    if (!loc) throw new AppError(404, "NOT_FOUND", "Location not found");
+    organisationId = loc.organisationId;
+    storeLocationId = data.storeLocationId;
+  } else {
+    const orgCtx = await getUserOrgContext(userId);
+    const [userRow] = await db
+      .select({ selectedLocationId: user.selectedLocationId })
+      .from(user)
+      .where(eq(user.userId, userId));
+    organisationId = orgCtx.primaryOrgId;
+    storeLocationId = userRow?.selectedLocationId ?? null;
+  }
 
-  const [userRow] = await db
-    .select({ selectedLocationId: user.selectedLocationId })
-    .from(user)
-    .where(eq(user.userId, userId));
-
-  const [row] = await db
-    .insert(wasteLog)
-    .values({
-      userId,
-      organisationId: orgCtx.primaryOrgId,
-      storeLocationId: userRow?.selectedLocationId ?? null,
-      ingredientName: data.ingredientName.trim(),
-      quantity: String(data.quantity),
-      unit: data.unit.trim(),
-      estimatedCost: data.estimatedCost != null ? String(data.estimatedCost) : null,
-      reason: data.reason ?? null,
-      notes: data.notes ?? null,
-      shift: data.shift ?? null,
-      loggedAt: data.loggedAt ? new Date(data.loggedAt) : new Date(),
-    })
-    .returning();
+  const { row, replay } = await insertOnce(
+    userId,
+    () =>
+      db
+        .insert(wasteLog)
+        .values({
+          wasteLogId: data.wasteLogId,
+          userId,
+          organisationId,
+          storeLocationId,
+          ingredientName: data.ingredientName.trim(),
+          quantity: String(data.quantity),
+          unit: data.unit.trim(),
+          estimatedCost: data.estimatedCost != null ? String(data.estimatedCost) : null,
+          reason: data.reason ?? null,
+          notes: data.notes ?? null,
+          shift: data.shift ?? null,
+          loggedAt: data.loggedAt ? new Date(data.loggedAt) : new Date(),
+        })
+        .onConflictDoNothing({ target: wasteLog.wasteLogId })
+        .returning(),
+    async () => (await db.select().from(wasteLog).where(eq(wasteLog.wasteLogId, data.wasteLogId!)))[0],
+  );
+  if (replay) return { row: toRow(row), replay };
 
   // Brain memory (spec T12): remember this waste event for the kitchen. Org-scoped
   // when the user has an org; falls back to private otherwise. Fire-after-commit.
   void recordOpsEvent({
     userId,
     sourceType: "waste",
-    scope: orgCtx.primaryOrgId ? "org" : "user",
-    organisationId: orgCtx.primaryOrgId,
+    scope: organisationId ? "org" : "user",
+    organisationId,
     sourceRef: row.wasteLogId,
     title: `Waste: ${row.ingredientName}`,
     ingredientName: row.ingredientName,
@@ -121,7 +155,7 @@ export async function logWaste(
     "Waste entry logged",
   );
 
-  return toRow(row);
+  return { row: toRow(row), replay };
 }
 
 // ---------------------------------------------------------------------------
@@ -147,8 +181,8 @@ export async function getWasteLogs(
 
   const conditions = [userFilter];
   if (opts.storeLocationId) conditions.push(eq(wasteLog.storeLocationId, opts.storeLocationId));
-  if (opts.startDate) conditions.push(gte(wasteLog.loggedAt, new Date(opts.startDate)));
-  if (opts.endDate) conditions.push(lte(wasteLog.loggedAt, new Date(opts.endDate)));
+  if (opts.startDate) conditions.push(gte(wasteLog.loggedAt, dayBounds(opts.startDate).start));
+  if (opts.endDate) conditions.push(lte(wasteLog.loggedAt, dayBounds(opts.endDate).end));
 
   const where = and(...conditions);
 
@@ -204,41 +238,29 @@ export async function getWasteLogs(
 // deleteWasteLog
 // ---------------------------------------------------------------------------
 
+/**
+ * Deletes an entry the caller may delete (their own; an org admin may delete any org member's).
+ * A repeat of a delete that already happened succeeds; an entry that exists but is not the caller's is 403 FORBIDDEN.
+ */
 export async function deleteWasteLog(
   wasteLogId: string,
   userId: number,
   orgCtx?: OrgContext,
-): Promise<boolean> {
-  // If org admin, allow deleting any entry from their org members
-  if (orgCtx?.isOrgAdmin && orgCtx.orgIds.length > 0) {
-    const result = await db
-      .delete(wasteLog)
-      .where(
-        and(
-          eq(wasteLog.wasteLogId, wasteLogId),
-          inArray(wasteLog.userId, orgCtx.orgMemberUserIds),
-        ),
-      )
-      .returning({ id: wasteLog.wasteLogId });
+): Promise<void> {
+  const orgAdmin = !!orgCtx?.isOrgAdmin && orgCtx.orgIds.length > 0;
+  const allowed = orgAdmin ? inArray(wasteLog.userId, orgCtx!.orgMemberUserIds) : eq(wasteLog.userId, userId);
 
-    const deleted = result.length > 0;
-    if (deleted) {
-      logger.info({ wasteLogId, userId, orgAdmin: true }, "Waste entry deleted by org admin");
-    }
-    return deleted;
-  }
-
-  // Regular member: only own entries
-  const result = await db
+  const removed = await db
     .delete(wasteLog)
-    .where(and(eq(wasteLog.wasteLogId, wasteLogId), eq(wasteLog.userId, userId)))
+    .where(and(eq(wasteLog.wasteLogId, wasteLogId), allowed))
     .returning({ id: wasteLog.wasteLogId });
 
-  const deleted = result.length > 0;
-  if (deleted) {
-    logger.info({ wasteLogId, userId }, "Waste entry deleted");
-  }
-  return deleted;
+  const verdict = await settleDelete(removed.length > 0, async () => {
+    const [still] = await db.select({ id: wasteLog.wasteLogId }).from(wasteLog).where(eq(wasteLog.wasteLogId, wasteLogId));
+    return !!still;
+  });
+  if (verdict === "not_yours") throw new AppError(403, "FORBIDDEN", "That waste entry is not yours to delete");
+  if (verdict === "deleted") logger.info({ wasteLogId, userId, orgAdmin }, "Waste entry deleted");
 }
 
 // ---------------------------------------------------------------------------
@@ -263,8 +285,8 @@ export async function getWasteSummary(
 
   const conditions = and(
     userFilter,
-    gte(wasteLog.loggedAt, new Date(startDate)),
-    lte(wasteLog.loggedAt, new Date(endDate)),
+    gte(wasteLog.loggedAt, dayBounds(startDate).start),
+    lte(wasteLog.loggedAt, dayBounds(endDate).end),
   );
 
   // Run all aggregation queries in parallel
@@ -375,25 +397,25 @@ export async function getIngredientSuggestions(
     : eq(wasteLog.userId, userId);
 
   // Search waste_log ingredient names (recent, distinct)
+  // (SELECT DISTINCT cannot order by a column it does not select, so group and order by the latest entry.)
   const wasteNames = db
-    .selectDistinct({ name: wasteLog.ingredientName })
+    .select({ name: wasteLog.ingredientName })
     .from(wasteLog)
     .where(and(wasteUserFilter, ilike(wasteLog.ingredientName, pattern)))
-    .orderBy(desc(wasteLog.loggedAt))
+    .groupBy(wasteLog.ingredientName)
+    .orderBy(desc(sql`max(${wasteLog.loggedAt})`))
     .limit(10);
 
-  // Search recipe JSONB ingredients
+  // Search recipe JSONB ingredients. A set-returning function is not allowed in WHERE, so the
+  // ingredient list is expanded in FROM and filtered there.
   const recipeNames = db
-    .select({
-      name: sql<string>`jsonb_array_elements(${recipe.recipeData} -> 'ingredients') ->> 'name'`,
-    })
+    .selectDistinct({ name: sql<string>`ing.value ->> 'name'` })
     .from(recipe)
-    .where(
-      and(
-        eq(recipe.userId, userId),
-        sql`jsonb_array_elements(${recipe.recipeData} -> 'ingredients') ->> 'name' ILIKE ${pattern}`,
-      ),
+    .innerJoin(
+      sql`lateral jsonb_array_elements(case when jsonb_typeof(${recipe.recipeData} -> 'ingredients') = 'array' then ${recipe.recipeData} -> 'ingredients' else '[]'::jsonb end) as ing(value)`,
+      sql`true`,
     )
+    .where(and(eq(recipe.userId, userId), sql`ing.value ->> 'name' ILIKE ${pattern}`))
     .limit(10);
 
   const [wasteResults, recipeResults] = await Promise.all([wasteNames, recipeNames]);
@@ -571,6 +593,7 @@ function toRow(r: typeof wasteLog.$inferSelect): WasteLogRow {
   return {
     wasteLogId: r.wasteLogId,
     userId: r.userId,
+    storeLocationId: r.storeLocationId,
     ingredientName: r.ingredientName,
     quantity: Number(r.quantity),
     unit: r.unit,
