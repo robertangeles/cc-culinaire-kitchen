@@ -242,7 +242,7 @@ describe.skipIf(!RUN)("mobile replay cases (real DB)", () => {
 
     expect(out.status).toBe(400);
     expect((out.body as { error: string }).error).toMatch(/SUBMITTED/);
-    expect(out.body).toMatchObject({ code: "INVALID_STATE" });
+    expect(out.body).toMatchObject({ code: "STOCK_TAKE_AREA_CLOSED" });
     const after = await db
       .select({ countedQty: stockTakeLine.countedQty })
       .from(stockTakeLine)

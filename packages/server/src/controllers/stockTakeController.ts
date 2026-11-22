@@ -65,9 +65,9 @@ function handleServiceError(err: unknown, res: Response, next: NextFunction): vo
   } else if (err instanceof ConflictError) {
     res.status(409).json({ error: err.message, code: "CONFLICT" });
   } else if (err instanceof ForbiddenError) {
-    res.status(403).json({ error: err.message, code: "FORBIDDEN" });
+    res.status(403).json({ error: err.message, code: err.code ?? "FORBIDDEN" });
   } else if (err instanceof InvalidStateError) {
-    res.status(400).json({ error: err.message, code: "INVALID_STATE" });
+    res.status(400).json({ error: err.message, code: err.code ?? "INVALID_STATE" });
   } else if (err instanceof NotFoundError) {
     res.status(404).json({ error: err.message, code: "NOT_FOUND" });
   } else if (err instanceof ValidationError) {
@@ -219,7 +219,7 @@ export async function handleSaveLineItem(
     if (!cat) { res.status(404).json({ error: `Category "${req.params.cat as string}" not found` }); return; }
 
     if (cat.categoryStatus !== "IN_PROGRESS") {
-      res.status(400).json({ error: `Cannot count: category is ${cat.categoryStatus}`, code: "INVALID_STATE" });
+      res.status(400).json({ error: `Cannot count: category is ${cat.categoryStatus}`, code: "STOCK_TAKE_AREA_CLOSED" });
       return;
     }
 

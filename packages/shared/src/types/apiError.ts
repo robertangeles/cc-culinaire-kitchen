@@ -16,6 +16,12 @@ export const SERVER_ERROR_CODES = [
   "SHEET_INCOMPLETE",
   "EDIT_WINDOW_EXPIRED",
   "LOCATION_NOT_ALLOWED",
+  // Stock take (the phone's count queue branches on these; names match packages/shared/src/schemas/stockTake.ts on the phone branch).
+  "STOCK_TAKE_AREA_HELD",
+  "STOCK_TAKE_AREA_SUBMITTED",
+  "STOCK_TAKE_AREA_CLOSED",
+  "STOCK_TAKE_CLAIMED_BY_OTHER",
+  "STOCK_TAKE_CLAIM_CHANGED",
 ] as const;
 export type ServerErrorCode = (typeof SERVER_ERROR_CODES)[number];
 

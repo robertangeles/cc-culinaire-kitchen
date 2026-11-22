@@ -165,6 +165,7 @@ describe.skipIf(!RUN)("stock take claim rules: claimant only, manager override, 
     const out = await save(chef(fx.otherId), { rawQty: 99 });
     expect(out.status).toBe(403);
     expect((out.body as { error: string }).error).toMatch(/claimed/);
+    expect(out.body).toMatchObject({ code: "STOCK_TAKE_CLAIMED_BY_OTHER" });
     const [line] = await db.select().from(stockTakeLine).where(eq(stockTakeLine.categoryId, fx.categoryId));
     expect(Number(line.countedQty)).toBe(3);
   });
@@ -180,6 +181,7 @@ describe.skipIf(!RUN)("stock take claim rules: claimant only, manager override, 
     const stale = await save(chef(fx.claimantId), { claimRevision: 0 });
     expect(stale.status).toBe(403);
     expect((stale.body as { error: string }).error).toMatch(/earlier claim/);
+    expect(stale.body).toMatchObject({ code: "STOCK_TAKE_CLAIM_CHANGED" });
     expect((await save(chef(fx.claimantId), { claimRevision: await revision() })).status).toBe(200);
   });
 

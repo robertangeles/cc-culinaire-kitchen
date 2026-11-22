@@ -29,7 +29,8 @@ export class SheetIncompleteError extends ConflictError {
 }
 
 export class InvalidStateError extends Error {
-  constructor(message: string) {
+  /** A code the phone branches on; the controller falls back to INVALID_STATE. */
+  constructor(message: string, public readonly code?: string) {
     super(message);
     this.name = "InvalidStateError";
   }
@@ -37,7 +38,8 @@ export class InvalidStateError extends Error {
 
 /** The caller may not write to this category (not the claimant, or a stale claim). Maps to 403. */
 export class ForbiddenError extends Error {
-  constructor(message: string) {
+  /** A code the phone branches on; the controller falls back to FORBIDDEN. */
+  constructor(message: string, public readonly code?: string) {
     super(message);
     this.name = "ForbiddenError";
   }
