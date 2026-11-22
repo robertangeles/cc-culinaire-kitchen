@@ -64,14 +64,25 @@ export function estimatedLineCost(
   return Number((suggestedQty * preferredUnitCost).toFixed(2));
 }
 
+/** A PO line cost that cannot be priced: missing, zero, negative or not a number. */
+export function isUnpriced(unitCost: string | number | null | undefined): boolean {
+  if (unitCost === null || unitCost === undefined || unitCost === "") return true;
+  const n = Number(unitCost);
+  return !Number.isFinite(n) || n <= 0;
+}
+
 /**
  * Determine whether a PO should route to HQ for approval.
  * null threshold = no threshold configured = always DIRECT.
+ *
+ * A PO with an unpriced line (the price is client-supplied and optional) has a total that
+ * under-counts, so it can never prove it is under the threshold: it goes to HQ.
  */
 export function shouldRouteToHQ(
   totalValue: number,
   thresholdAmount: number | null,
+  hasUnpricedLine = false,
 ): boolean {
   if (thresholdAmount === null) return false;
-  return totalValue >= thresholdAmount;
+  return hasUnpricedLine || totalValue >= thresholdAmount;
 }

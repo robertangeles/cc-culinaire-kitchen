@@ -5,6 +5,7 @@ import {
   toPurchasePackages,
   estimatedLineCost,
   shouldRouteToHQ,
+  isUnpriced,
 } from "./poMath.js";
 
 describe("Formula F-PO-01: sumPOLineTotal", () => {
@@ -240,5 +241,29 @@ describe("Formula F-PO-04: shouldRouteToHQ", () => {
     it("returns true when threshold is 0 and total is 0", () => {
       expect(shouldRouteToHQ(0, 0)).toBe(true);
     });
+  });
+
+  describe("Unpriced lines (a total that cannot be trusted)", () => {
+    it("routes to HQ when any line has no usable price, even if the known total is under the threshold", () => {
+      expect(shouldRouteToHQ(10, 500, true)).toBe(true);
+    });
+
+    it("an all-unpriced PO (total 0) can no longer slip under a threshold", () => {
+      expect(shouldRouteToHQ(0, 500, true)).toBe(true);
+    });
+
+    it("still goes direct when no threshold is configured, priced or not", () => {
+      expect(shouldRouteToHQ(0, null, true)).toBe(false);
+    });
+  });
+});
+
+describe("isUnpriced", () => {
+  it.each([null, undefined, "", "0", "0.00", "-1", "abc", 0])("treats %j as unpriced", (v) => {
+    expect(isUnpriced(v as string | null | undefined)).toBe(true);
+  });
+
+  it.each(["0.01", "4.75", 3])("treats %j as priced", (v) => {
+    expect(isUnpriced(v as string)).toBe(false);
   });
 });

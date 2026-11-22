@@ -23,7 +23,7 @@ import {
   auditLog,
 } from "../db/schema.js";
 import { handleListPOs, handleGetPODetail } from "../controllers/purchaseOrderController.js";
-import { listPOs, getPODetail, createPO, clonePO } from "./purchaseOrderService.js";
+import { listPOs, getPODetail, createPO, clonePO, submitPO } from "./purchaseOrderService.js";
 import { handleCreatePO, handleClonePO } from "../controllers/purchaseOrderController.js";
 
 /**
@@ -345,4 +345,26 @@ describe("create and clone PO stay inside the caller's organisation (real DB)", 
     expect(await poCount()).toBe(before);
   });
 });
+
+  describe("the spend threshold", () => {
+    it("routes a PO with no price on its lines to HQ instead of letting it slip under the threshold", async () => {
+      const base = { orgId: fx.orgId, userId: fx.userId };
+      await db.update(organisation).set({ defaultSpendThreshold: "500" }).where(eq(organisation.organisationId, fx.orgId));
+      const unpriced = await createPO({
+        ...base,
+        locationId: fx.locId,
+        supplierId: fx.supplierId,
+        lines: [{ ingredientId: fx.ingId, orderedQty: "2", orderedUnit: "kg" }],
+      });
+      const priced = await createPO({
+        ...base,
+        locationId: fx.locId,
+        supplierId: fx.supplierId,
+        lines: [{ ingredientId: fx.ingId, orderedQty: "2", orderedUnit: "kg", unitCost: "3" }],
+      });
+
+      expect((await submitPO(unpriced.poId, fx.orgId, fx.userId)).routing).toBe("HQ_APPROVAL");
+      expect((await submitPO(priced.poId, fx.orgId, fx.userId)).routing).toBe("DIRECT");
+    });
+  });
 });
