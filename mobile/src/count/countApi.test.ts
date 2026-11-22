@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { createCountApi } from "./countApi";
-import { ApiError, type ApiClient } from "../api/client";
+import { ApiError, createApiClient, type ApiClient } from "../api/client";
 
 function setup(replies: Array<unknown | Error>) {
   // Like the real client, run the reply through the schema the call asks for.
@@ -43,8 +43,13 @@ describe("a reply from a newer server", () => {
   });
 
   it("raises bad_response, not a half-read stock take, when a field the screen needs is missing", async () => {
-    const { api } = setup([{ sessionStatus: "OPEN", categories: [] }]);
-    await expect(api.activeSession()).rejects.toThrow();
+    const client = createApiClient({
+      baseUrl: "https://api.test",
+      tokenStore: { load: async () => ({ accessToken: "A", refreshToken: "R" }), save: async () => {}, clear: async () => {} },
+      appVersion: "0.1.0",
+      fetchFn: async () => new Response(JSON.stringify({ sessionStatus: "OPEN", categories: [] }), { status: 200 }),
+    });
+    await expect(createCountApi(client).activeSession()).rejects.toMatchObject({ code: "bad_response" });
   });
 });
 

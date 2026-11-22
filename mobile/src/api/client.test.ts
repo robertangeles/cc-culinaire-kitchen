@@ -99,6 +99,13 @@ describe("token refresh on 401", () => {
     expect(onSessionExpired).not.toHaveBeenCalled();
   });
 
+  it("keeps the tokens and raises bad_response when the refresh reply is not the expected shape", async () => {
+    const { client, store, onSessionExpired } = setup([json(401, {}), json(200, { html: "captive portal" })]);
+    await expect(client.request("GET", "/api/x")).rejects.toMatchObject({ code: "bad_response" });
+    expect(store.current).toEqual({ accessToken: "A1", refreshToken: "R1" });
+    expect(onSessionExpired).not.toHaveBeenCalled();
+  });
+
   it("does not refresh again when the retried request is still 401", async () => {
     const { client, fetchFn } = setup([json(401, {}), json(200, { tokens: { accessToken: "A2", refreshToken: "R1" } }), json(401, { error: "no" })]);
     await expect(client.request("GET", "/api/x")).rejects.toMatchObject({ code: "unauthorized" });

@@ -19,7 +19,11 @@ set -euo pipefail
 
 cd "$(git rev-parse --show-toplevel)"
 
-git fetch --tags --force --quiet origin 2>/dev/null || true
+# A failed fetch must not switch the check off: carry on only with release tags that are already here.
+if ! git fetch --tags --force --quiet origin; then
+  [ -n "$(git tag --list 'mobile-v*')" ] || { echo "Could not fetch release tags and none are present locally: cannot tell whether a release exists." >&2; exit 1; }
+  echo "Could not fetch release tags; using the mobile-v* tags already present locally." >&2
+fi
 ref="${RELEASED_REF:-$(git tag --list 'mobile-v*' --sort=-v:refname | head -n 1)}"
 if [ -z "$ref" ]; then
   echo "No mobile-v* release tag yet: no installed app to check against."
@@ -27,6 +31,7 @@ if [ -z "$ref" ]; then
 fi
 
 echo "Checking the schemas released as $ref against this server."
+git cat-file -e "$ref:packages/shared/src/schemas" 2>/dev/null || { echo "$ref has no packages/shared/src/schemas: it predates the shared schemas, so there is nothing to put back. Tag a newer release." >&2; exit 1; }
 git restore --source="$ref" -- packages/shared/src/schemas
 pnpm --filter @culinaire/shared build
 ${E2E_CMD:-pnpm --filter @culinaire/mobile run check:e2e}

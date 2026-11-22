@@ -24,6 +24,7 @@ export type LoginReply = z.infer<typeof LoginReplySchema>;
 
 /** `/auth/refresh`: the refresh token is only present when the server rotates it. */
 export const RefreshReplySchema = z.object({ tokens: z.object({ accessToken: z.string(), refreshToken: z.string().optional() }) });
+export type RefreshReply = z.infer<typeof RefreshReplySchema>;
 
 export const MeReplySchema = z.object({ user: AuthUserSchema });
 

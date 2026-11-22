@@ -13,6 +13,7 @@
  *   and an AbortSignal.
  */
 
+import { RefreshReplySchema, type RefreshReply } from "@culinaire/shared/schemas/auth";
 import { ApiErrorBodySchema, normaliseCode } from "@culinaire/shared/schemas/errors";
 
 export interface Tokens {
@@ -199,7 +200,7 @@ export function createApiClient(opts: ApiClientOptions) {
   function refresh(refreshToken: string): Promise<Tokens> {
     refreshing ??= (async () => {
       try {
-        const { value: out } = await send<{ tokens: { accessToken: string; refreshToken?: string } }>("json", "POST", "/api/auth/refresh", { body: { refreshToken } }, null);
+        const { value: out } = await send<RefreshReply>("json", "POST", "/api/auth/refresh", { body: { refreshToken }, schema: RefreshReplySchema }, null);
         const tokens = { accessToken: out.tokens.accessToken, refreshToken: out.tokens.refreshToken ?? refreshToken };
         await tokenStore.save(tokens);
         return tokens;

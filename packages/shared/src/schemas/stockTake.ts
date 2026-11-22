@@ -48,8 +48,8 @@ export type MissingItem = z.infer<typeof MissingItemSchema>;
 export const SubmitConflictBodySchema = z.object({ missing: z.array(MissingItemSchema) });
 
 /**
- * Codes the phone understands on the stock-take routes. The server may send them before or after this ships:
- * the phone accepts the code and, until the server sends it, the old English text (see `mobile/src/api/errors.ts`).
+ * Codes the phone understands on the stock-take routes. A forward contract: the server does not send them yet, so
+ * until it does the phone falls back to the old English text (`mobile/src/count/countApi.ts`, `mobile/src/outbox/outbox.ts`).
  */
 export const STOCK_TAKE_CODES = {
   areaHeld: "STOCK_TAKE_AREA_HELD",
