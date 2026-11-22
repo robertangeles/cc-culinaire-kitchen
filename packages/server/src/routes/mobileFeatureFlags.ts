@@ -30,6 +30,6 @@ mobileFeatureFlagsRouter.get(
   handleGetMobileFeatureFlags,
 );
 
-/** Mounted at `/api/mobile/config`. Reachable by a build that is too old (see `mobileUpdateGate`), so it can say where to update. */
+/** Mounted at `/api/mobile/config`. Needs a signed-in user; `mobileUpdateGate` lets an old build call it, and a build that cannot sign in reads the store links from the 426 body instead. */
 export const mobileConfigRouter = Router();
 mobileConfigRouter.get("/", authenticate, mobilePromptRateLimit, handleGetMobileConfig);

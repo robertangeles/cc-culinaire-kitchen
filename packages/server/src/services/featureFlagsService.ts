@@ -13,7 +13,7 @@
  * at least the default locale to surface.
  */
 
-import type { MobileConfig } from "@culinaire/shared";
+import type { MobileConfig, MobileStoreUrls } from "@culinaire/shared";
 import { getAllSettings } from "./settingsService.js";
 
 /** Shape of the mobile feature-flags response. Stable contract for mobile. */
@@ -58,6 +58,13 @@ function parseLanguagesEnabled(raw: string | undefined): string[] {
 
 const on = (v: string | undefined) => v === "true";
 
+export function storeUrlsFrom(settings: Record<string, string | undefined>): MobileStoreUrls {
+  return {
+    ios: settings.mobile_store_url_ios || null,
+    android: settings.mobile_store_url_android || null,
+  };
+}
+
 /**
  * Everything the phone reads at start-up, from an explicit list of settings: never the whole
  * settings table (the public `GET /api/settings` returns every key).
@@ -72,10 +79,7 @@ export async function getMobileConfig(): Promise<MobileConfig> {
       brain: on(settings.brain_enabled),
     },
     minVersion: settings.mobile_min_app_version || "0.0.0",
-    storeUrls: {
-      ios: settings.mobile_store_url_ios || null,
-      android: settings.mobile_store_url_android || null,
-    },
+    storeUrls: storeUrlsFrom(settings),
     languages_enabled: parseLanguagesEnabled(settings.mobile_languages_enabled),
   };
 }
