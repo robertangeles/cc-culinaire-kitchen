@@ -26,6 +26,9 @@ export const SERVER_ERROR_CODES = [
   "STOCK_TAKE_AREA_CLOSED",
   "STOCK_TAKE_CLAIMED_BY_OTHER",
   "STOCK_TAKE_CLAIM_CHANGED",
+  // Prep (Wave 2): the session was ended, or another device changed the task first. Both answer 409.
+  "PREP_SESSION_ENDED",
+  "PREP_TASK_CHANGED",
 ] as const;
 export type ServerErrorCode = (typeof SERVER_ERROR_CODES)[number];
 

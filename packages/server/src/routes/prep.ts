@@ -26,9 +26,9 @@ import {
 
 export const prepRouter = Router();
 
-// All prep routes require authentication + the Prep module permission.
+// All prep routes require authentication + prep:read (look, tick) or prep:manage (also create, generate, end).
 prepRouter.use(authenticate);
-prepRouter.use(requirePermission("prep:manage"));
+prepRouter.use(requirePermission("prep:read", "prep:manage"));
 
 // Named routes must be before parameterized routes to avoid collision
 prepRouter.get("/menu", handleGetMenuForSelection);
@@ -40,14 +40,14 @@ prepRouter.get("/history", handleGetHistory);
 prepRouter.get("/cross-usage/:sessionId", handleGetCrossUsage);
 
 // Session CRUD
-prepRouter.post("/sessions", handleCreateSession);
+prepRouter.post("/sessions", requirePermission("prep:manage"), handleCreateSession);
 prepRouter.get("/sessions/:id", handleGetSession);
-prepRouter.patch("/sessions/:id/end", handleEndSession);
+prepRouter.patch("/sessions/:id/end", requirePermission("prep:manage"), handleEndSession);
 
 // Menu-driven selection and generation routes
-prepRouter.post("/sessions/:id/selections", handleSaveSelections);
-prepRouter.post("/sessions/:id/generate", handleGenerateFromSelections);
+prepRouter.post("/sessions/:id/selections", requirePermission("prep:manage"), handleSaveSelections);
+prepRouter.post("/sessions/:id/generate", requirePermission("prep:manage"), handleGenerateFromSelections);
 prepRouter.get("/sessions/:id/selections", handleGetSelections);
 
-// Task updates
+// Task updates: any member at the session's location may tick (the service checks the location)
 prepRouter.patch("/tasks/:id", handleUpdateTask);

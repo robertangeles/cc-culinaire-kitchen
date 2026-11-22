@@ -20,18 +20,28 @@ import {
 
 export const wasteRouter = Router();
 
-// All waste routes require authentication + the Waste module permission.
+// All waste routes require authentication.
 wasteRouter.use(authenticate);
-wasteRouter.use(requirePermission("waste:read"));
+
+// The team/personal toggle of both the Waste and the Prep pages asks this, so a prep-only user must pass.
+// It answers only about the caller's own organisation. Registered before the module gate below.
+wasteRouter.get(
+  "/org-context",
+  requirePermission("waste:read", "waste:log", "prep:read", "prep:manage"),
+  handleGetOrgContext,
+);
+
+// The module needs waste:read (reports and cost) or waste:log (log your own entries); each route below says which.
+wasteRouter.use(requirePermission("waste:read", "waste:log"));
 
 // Summary must be before /:id to avoid route collision
-wasteRouter.get("/summary", handleGetWasteSummary);
+wasteRouter.get("/summary", requirePermission("waste:read"), handleGetWasteSummary);
 wasteRouter.get("/suggestions", handleGetIngredientSuggestions);
-wasteRouter.get("/org-context", handleGetOrgContext);
-wasteRouter.post("/reuse", handleGenerateReuseSuggestions);
+wasteRouter.post("/reuse", requirePermission("waste:read"), handleGenerateReuseSuggestions);
 
-// CRUD
-wasteRouter.post("/", handleLogWaste);
+// CRUD: reading the list is open to both keys (a logger sees their own entries; the controller refuses
+// teamView without waste:read); writing needs waste:log.
+wasteRouter.post("/", requirePermission("waste:log"), handleLogWaste);
 wasteRouter.get("/", handleGetWasteLogs);
-wasteRouter.patch("/:id", handleEditWasteLog);
-wasteRouter.delete("/:id", handleDeleteWasteLog);
+wasteRouter.patch("/:id", requirePermission("waste:log"), handleEditWasteLog);
+wasteRouter.delete("/:id", requirePermission("waste:log"), handleDeleteWasteLog);
