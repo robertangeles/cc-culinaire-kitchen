@@ -162,6 +162,7 @@ export const KEPT_USER_REFERENCES: readonly string[] = [
   "pending_catalog_request.requested_by_user_id",
   "pending_catalog_request.reviewed_by_user_id",
   "prep_session.user_id",
+  "prep_task.completed_by",
   "prep_task.user_id",
   "purchase_order.approved_by_user_id",
   "purchase_order.created_by_user_id",

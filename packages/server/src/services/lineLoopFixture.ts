@@ -115,7 +115,8 @@ export async function removeLineLoopFx(fx: LineLoopFx): Promise<void> {
 
 export interface Answer {
   status: number;
-  body: any;
+  /** The JSON the handler sent; tests read fields off it. */
+  body: Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 }
 
 /** Runs an Express handler the way the router would, with the real error handler behind it. */

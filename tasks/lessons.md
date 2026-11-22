@@ -1374,3 +1374,16 @@ builds all tables with CHECKs enforcing. Stop it again when done.
 - **Problem**: The 5-minute "password right, code still to come" MFA token was signed with the same secret as access tokens, so on any route guarded only by `authenticate` it passed for a session. Separately, a revoke can miss a token that a concurrent refresh commits a moment later, and a thrown error rolls back the deletes made before it.
 - **Fix**: The MFA token has its own derived key and `verifyAccessToken` rejects any token carrying a `purpose`. Refresh-token writes for one user run under a per-user advisory lock, `refreshAccessToken` returns a verdict instead of throwing inside its transaction, and every other path that revokes uses the same lock.
 - **Rule**: Every token type gets its own key (derive it, do not add an env var) and its own verifier. Anything that must survive a rejection (a revoked family, a purged row) is committed before the error is raised.
+
+## 2026-11-23 — A column added to `user`'s foreign keys must be classified for account deletion
+
+- **Problem**: Adding `prep_task.completed_by` (a foreign key to `user`) failed `userAnonymisation.test.ts`, which makes every user foreign key a conscious decision (handled or kept).
+- **Fix**: Listed it in `KEPT_USER_REFERENCES` (history stays valid after the user row is scrubbed), next to `prep_task.user_id`.
+- **Rule**: A new foreign key to `user` is not finished until `userAnonymisationService.ts` classifies it; run `pnpm test` before assuming a schema-only change is safe.
+
+## 2026-11-23 — "Insert on conflict do nothing" alone is not retry-safe when the insert has side effects
+
+- **Problem**: A retried send that finds its row already stored must skip the stock deduction, but if the row and the deduction are separate statements a crash between them leaves a row with no deduction, and the retry (which now "replays") never deducts. The old swallowed `try/catch` around the prep stock change hid the same gap.
+- **Fix**: `utils/retrySafe.ts` (`insertOnce`) tells the caller whether it was a replay; the caller runs the insert and every side effect in one transaction and skips the effects on replay. The stock row is locked while it changes instead of retrying on a version clash and giving up silently.
+- **Rule**: A retry-safe create is: client id, insert-or-read in the same transaction as its side effects, side effects only when `replay` is false. Write the concurrent case as a test (eight parallel creates: stock equals start minus entries that exist).
+

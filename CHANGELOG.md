@@ -5,6 +5,17 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Changed (mobile Wave 2, server: the line loop)
+
+**Apply migration `0002_prep_completed_by` by hand on production BEFORE this version deploys** (`pnpm --filter @culinaire/server exec tsx src/scripts/migrate.ts`, then `backfillWastePrepPermissions.ts`). Both new columns are nullable, so the previous server keeps working after the migration. The web behaves as before.
+
+- **Retried writes do not double up.** Waste, consumption, stock movements and prep sessions accept a client-made `id` (`wasteLogId`, `consumptionLogId`, `stockMovementId`, `prepSessionId`): a repeat answers 200 with the stored row and changes nothing (no second stock deduction); an id held by someone else is 409 `CONFLICT`. A repeat of a delete answers success. Prep generate takes an optional `requestId`; a repeat answers with the stored tasks and rebuilds nothing, so ticks survive. Without these fields everything behaves as before.
+- **Waste.** The location in the request decides where an entry lands (checked against the caller's locations), so a log replayed after a location switch stays where it was made. A date-only report range now includes its end day. The ingredient suggestions query works again (it was a Postgres error). The team/personal toggle context (`GET /api/waste/org-context`) no longer needs `waste:read`.
+- **Prep.** Any member who works at the session's location can tick tasks; the server records who (`completedBy`) and keeps the client's `completedAt` (never later than now). `expectedStatus` stops an assign reverting a task another device completed. Ended session, lost race and forbidden each answer with their own code. "Today's session" with `date` and `storeLocationId` is that day's open session at that location, whoever made it. The stock effect of a tick commits or rolls back with it. Generate, end and saving selections are for the creator or a `prep:manage` holder at the location.
+- **Consumption log and stock movements.** The log and its stock deduction commit together; concurrent entries take turns on the stock row. Refusals carry codes.
+- **Permissions.** New `waste:log` (log, edit, delete your own entries) and `prep:read` (read prep, tick tasks). `waste:read` is reports and the team view; `prep:manage` is create, generate and end. The backfill gives every role that holds the old key the new one, so no role loses access.
+- **New error codes** (shared `ApiErrorBody`): `PREP_SESSION_ENDED`, `PREP_TASK_CHANGED` (both 409).
+
 ### Fixed (mobile Wave 0, server)
 
 - **Public recipe pages escape recipe text.** A recipe title, description or image URL could close the page's `<title>`, a meta attribute or the JSON-LD script and run script for every visitor.

@@ -15,7 +15,7 @@ import {
 import { eq, desc, sql, and, inArray } from "drizzle-orm";
 import { getUserOrgContext } from "./orgContextService.js";
 import { computeSuggestedSelections } from "./prepMath.js";
-import { PrepError, parseTimeToMinutes } from "./prepErrors.js";
+import { parseTimeToMinutes } from "./prepErrors.js";
 import { canManageSession } from "./prepAccess.js";
 import { AppError } from "../utils/appError.js";
 import type { TokenPayload } from "./authService.js";
