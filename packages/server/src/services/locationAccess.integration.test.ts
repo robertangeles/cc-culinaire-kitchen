@@ -9,7 +9,8 @@ applyEnvPrefix();
 import { eq, inArray } from "drizzle-orm";
 import type { Request, Response } from "express";
 import { db } from "../db/index.js";
-import { organisation, user, userOrganisation, userStoreLocation, storeLocation, ingredient, locationIngredient, stockLevel, consumptionLog, auditLog } from "../db/schema.js";
+import { organisation, user, userOrganisation, userStoreLocation, storeLocation, ingredient, locationIngredient, stockLevel, consumptionLog, auditLog, menuItem, sale } from "../db/schema.js";
+import { recordSale, commitSalesCsv } from "./saleService.js";
 import { canAccessLocation, assertLocationAccess } from "./locationContextService.js";
 import { handleListLogs, handleLogConsumption } from "../controllers/consumptionLogController.js";
 import { handleInitiateTransfer, handleListTransfers } from "../controllers/transferController.js";
@@ -38,6 +39,7 @@ const fx = {
   a2: "",
   b1: "",
   ingId: "",
+  menuItemAtA2: "",
 };
 
 const principal = (sub: number, permissions: string[] = []): TokenPayload => ({ sub, roles: [], permissions });
@@ -94,6 +96,11 @@ describe.skipIf(!RUN)("location scoping (real DB)", () => {
       .insert(ingredient)
       .values({ organisationId: fx.orgA, ingredientName: `${fx.tag}-flour`, ingredientCategory: "dry_goods", itemType: "KITCHEN_INGREDIENT", baseUnit: "kg" })
       .returning({ id: ingredient.ingredientId });
+    // A dish the chef owns, but which belongs to a location they are not assigned to.
+    [{ id: fx.menuItemAtA2 }] = await db
+      .insert(menuItem)
+      .values({ userId: fx.chef, storeLocationId: fx.a2, name: `${fx.tag}-dish`, category: "mains", sellingPrice: "10", servings: 1 })
+      .returning({ id: menuItem.menuItemId });
     for (const locId of [fx.a1, fx.a2]) {
       await db.insert(locationIngredient).values({ ingredientId: fx.ingId, storeLocationId: locId, activeInd: true, weightedAverageCost: "2" });
       await db.insert(stockLevel).values({ storeLocationId: locId, ingredientId: fx.ingId, currentQty: "10" });
@@ -101,6 +108,8 @@ describe.skipIf(!RUN)("location scoping (real DB)", () => {
   });
 
   afterAll(async () => {
+    await db.delete(sale).where(eq(sale.menuItemId, fx.menuItemAtA2));
+    await db.delete(menuItem).where(eq(menuItem.menuItemId, fx.menuItemAtA2));
     await db.delete(consumptionLog).where(eq(consumptionLog.ingredientId, fx.ingId));
     await db.delete(stockLevel).where(eq(stockLevel.ingredientId, fx.ingId));
     await db.delete(locationIngredient).where(eq(locationIngredient.ingredientId, fx.ingId));
@@ -183,6 +192,26 @@ describe.skipIf(!RUN)("location scoping (real DB)", () => {
         body: { poId: "00000000-0000-4000-8000-000000000000", storeLocationId: fx.a2 },
       });
       expect(out.status).toBe(403);
+    });
+  });
+
+  describe("sales", () => {
+    it("refuses a sale whose location is the menu item's own, when the chef is not assigned there", async () => {
+      await expect(
+        recordSale(fx.orgA, fx.chef, { menuItemId: fx.menuItemAtA2, qtySold: 1, actor: principal(fx.chef) }),
+      ).rejects.toMatchObject({ statusCode: 403, code: "LOCATION_NOT_ALLOWED" });
+    });
+
+    it("refuses an explicit location the chef is not assigned to", async () => {
+      await expect(
+        recordSale(fx.orgA, fx.chef, { menuItemId: fx.menuItemAtA2, qtySold: 1, locationId: fx.a2, actor: principal(fx.chef) }),
+      ).rejects.toMatchObject({ code: "LOCATION_NOT_ALLOWED" });
+    });
+
+    it("fails a CSV row for the same reason and records nothing", async () => {
+      const res = await commitSalesCsv(fx.orgA, fx.chef, [{ rowIndex: 1, name: `${fx.tag}-dish`, qtySold: 1 }], principal(fx.chef));
+      expect(res.succeeded).toEqual([]);
+      expect(res.failed).toEqual([{ rowIndex: 1, reason: "You do not have access to this location" }]);
     });
   });
 });

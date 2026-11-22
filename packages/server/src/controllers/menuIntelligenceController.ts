@@ -65,7 +65,6 @@ export async function handleRecordSale(req: Request, res: Response, next: NextFu
       res.status(400).json({ error: "qtySold must be greater than 0" });
       return;
     }
-    if (locationId) await assertLocationAccess(req.user!, locationId);
     const idempotencyKey = (req.header("Idempotency-Key") as string | undefined) ?? undefined;
     const result = await recordSale(orgId, userId, {
       menuItemId: req.params.id as string,
@@ -73,6 +72,7 @@ export async function handleRecordSale(req: Request, res: Response, next: NextFu
       soldAt: soldAt ? new Date(String(soldAt)) : undefined,
       locationId: locationId || undefined,
       idempotencyKey,
+      actor: req.user!,
     });
     res.status(201).json(result);
   } catch (err) {
@@ -126,7 +126,6 @@ export async function handleRecordConsumableSale(req: Request, res: Response, ne
       res.status(400).json({ error: "qtySold must be greater than 0" });
       return;
     }
-    if (locationId) await assertLocationAccess(req.user!, locationId);
     const idempotencyKey = (req.header("Idempotency-Key") as string | undefined) ?? undefined;
     const result = await recordConsumableSale(orgId, userId, {
       ingredientId: req.params.ingredientId as string,
@@ -134,6 +133,7 @@ export async function handleRecordConsumableSale(req: Request, res: Response, ne
       soldAt: soldAt ? new Date(String(soldAt)) : undefined,
       locationId: locationId || undefined,
       idempotencyKey,
+      actor: req.user!,
     });
     res.status(201).json(result);
   } catch (err) {
@@ -164,7 +164,7 @@ export async function handleSalesCsvCommit(req: Request, res: Response, next: Ne
       res.status(400).json({ error: "lines must be a non-empty array" });
       return;
     }
-    res.json(await commitSalesCsv(orgId, userId, lines));
+    res.json(await commitSalesCsv(orgId, userId, lines, req.user!));
   } catch (err) {
     handleSaleError(err, res, next);
   }
