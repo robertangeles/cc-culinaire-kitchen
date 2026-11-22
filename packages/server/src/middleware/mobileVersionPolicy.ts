@@ -2,9 +2,10 @@
  * @module middleware/mobileVersionPolicy
  *
  * The phone app's "update to continue" rule (owner decision, eng D12). The app sends
- * `X-Mobile-App-Version` on every call; this middleware is attached ONLY to sign-in and the count
- * download. A build below the admin-set minimum gets 426 there, and count writes (saving a line,
- * submitting) are never gated, so counts waiting on an old phone can still be sent.
+ * `X-Mobile-App-Version` on every call. A build below the admin-set minimum gets 426 on every read
+ * (`mobileUpdateGate`, mounted on all `/api` routes), while writes (saving a count line, submitting) are
+ * never gated, so work waiting on an old phone can still be sent. `requireSupportedMobileVersion()` with no
+ * options also guards sign-in and the count download directly, writes included.
  *
  * No header (the web app, scripts) passes, and so does a header that is not a version. A minimum that is
  * unset, malformed or unreadable also passes: a settings problem must never lock every chef out of signing in.

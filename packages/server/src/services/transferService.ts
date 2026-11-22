@@ -284,7 +284,7 @@ export async function confirmSent(
 
     if (!transfer) throw new Error("Transfer not found");
     if (transfer.status !== "INITIATED") {
-      const sentAlready = transfer.status === "SENT" || transfer.status === "RECEIVED";
+      const sentAlready = transfer.status !== "INITIATED" && transfer.status !== "CANCELLED";
       throw new AppError(409, sentAlready ? "ALREADY_CONFIRMED" : "INVALID_STATE", `Cannot send a transfer with status ${transfer.status}`);
     }
 
@@ -341,7 +341,7 @@ export async function confirmReceived(
 
     if (!transfer) throw new Error("Transfer not found");
     if (transfer.status !== "SENT") {
-      throw new AppError(409, transfer.status === "RECEIVED" ? "ALREADY_CONFIRMED" : "INVALID_STATE", `Cannot receive a transfer with status ${transfer.status}`);
+      throw new AppError(409, transfer.status === "RECEIVED" || transfer.status === "DISCREPANCY" ? "ALREADY_CONFIRMED" : "INVALID_STATE", `Cannot receive a transfer with status ${transfer.status}`);
     }
 
     const lines = await tx

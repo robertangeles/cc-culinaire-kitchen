@@ -201,6 +201,17 @@ describe.skipIf(!RUN)("transfer money path (real DB)", () => {
     await expect(transferService.confirmSent(c.transferId, fx.orgA, fx.userId)).rejects.toMatchObject({ statusCode: 409, code: "INVALID_STATE" });
   });
 
+  it("a send or receive retried after a short delivery (DISCREPANCY) is a 409 ALREADY_CONFIRMED", async () => {
+    const t = await newTransfer([{ ingredientId: fx.ingId, sentQty: 4, sentUnit: "kg" }]);
+    await transferService.confirmSent(t.transferId, fx.orgA, fx.userId);
+    const short = [{ lineId: t.lines[0].lineId, receivedQty: 3 }];
+    await transferService.confirmReceived(t.transferId, fx.orgA, fx.userId, short);
+    expect(await statusOf(t.transferId)).toBe("DISCREPANCY");
+
+    await expect(transferService.confirmReceived(t.transferId, fx.orgA, fx.userId, short)).rejects.toMatchObject({ statusCode: 409, code: "ALREADY_CONFIRMED" });
+    await expect(transferService.confirmSent(t.transferId, fx.orgA, fx.userId)).rejects.toMatchObject({ statusCode: 409, code: "ALREADY_CONFIRMED" });
+  });
+
   it("a send that fails on its second line leaves the first line's stock and the status untouched", async () => {
     // 1 kg of a kg item, then 1 kg of an each-counted item: kg cannot convert to each.
     const t = await newTransfer([

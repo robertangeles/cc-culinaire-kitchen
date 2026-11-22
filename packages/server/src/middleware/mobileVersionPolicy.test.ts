@@ -12,7 +12,7 @@ function run(header: string | undefined, getMin: () => Promise<string | undefine
   return { done, status, json, next, req };
 }
 
-describe("mobile version policy (sign-in and count download only)", () => {
+describe("mobile version policy (requireSupportedMobileVersion)", () => {
   it("lets web and any client that sends no version header through", async () => {
     const r = run(undefined, async () => "9.9.9");
     await r.done;
