@@ -16,6 +16,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **Permissions.** New `waste:log` (log, edit, delete your own entries) and `prep:read` (read prep, tick tasks). `waste:read` is reports and the team view; `prep:manage` is create, generate and end. The backfill gives every role that holds the old key the new one, so no role loses access.
 - **New error codes** (shared `ApiErrorBody`): `PREP_SESSION_ENDED`, `PREP_TASK_CHANGED` (both 409).
 
+Where the plan and the code disagreed (the code won): the consumption log already checked the body `storeLocationId` and already coded its edit/delete refusals (PR 201), and `:locId` movement routes already pass the location guard, so those got only idempotency, atomic stock and codes. The waste suggestions failed twice (a set-returning function in `WHERE`, and `SELECT DISTINCT` ordered by an unselected column). Prep ticking is gated by location membership plus the module key (`prep:read` or `prep:manage`), not by a new `prep:execute` key. A delete of an entry that is gone answers success for waste and consumption (the 404 test for consumption was changed to say so).
+
 Route changes the phone can adopt (all additive; an old build keeps working):
 
 | Route | New |
