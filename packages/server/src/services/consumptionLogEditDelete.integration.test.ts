@@ -143,4 +143,17 @@ describe.skipIf(!RUN)("consumption log edit/delete refusals (real DB)", () => {
     expect([a.status, b.status]).toEqual([200, 200]);
     expect(await stock()).toBe(before - 2);
   });
+
+  // The delete restores what the entry held when it was removed, even when an edit changed it a moment before.
+  it("an edit and a delete of the same entry at once leave the stock where it was before the entry", async () => {
+    const stock = async () => Number((await db.select().from(stockLevel).where(eq(stockLevel.ingredientId, fx.ingId)))[0].currentQty);
+    const before = await stock();
+    const id = await newEntry();
+
+    const [edit, del] = await Promise.all([call(handleEditLog, fx.owner, { id }, { quantity: 3 }), call(handleDeleteLog, fx.owner, { id })]);
+
+    expect(del.status).toBe(200);
+    expect([200, 404]).toContain(edit.status);
+    expect(await stock()).toBe(before);
+  });
 });

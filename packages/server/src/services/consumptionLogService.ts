@@ -460,11 +460,11 @@ export async function deleteConsumptionLog(
 
     // Restore stock (convert the entry's qty from its unit to base)
     const { baseQty: baseRestore } = await resolveToBase(
-      existing.ingredientId,
-      Number(existing.quantity),
-      existing.unit,
+      deleted.ingredientId,
+      Number(deleted.quantity),
+      deleted.unit,
     );
-    await restoreStockLevel(existing.storeLocationId, existing.ingredientId, baseRestore, "BOH", tx);
+    await restoreStockLevel(deleted.storeLocationId, deleted.ingredientId, baseRestore, "BOH", tx);
 
     return deleted;
   });
