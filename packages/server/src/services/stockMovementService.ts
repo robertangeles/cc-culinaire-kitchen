@@ -24,15 +24,23 @@ import {
   user,
 } from "../db/schema.js";
 import { resolveToBase } from "./unitConversionService.js";
+import { insertOnce } from "../utils/retrySafe.js";
 
 export class StockMovementError extends Error {
   constructor(message: string, public statusCode: number) {
     super(message);
     this.name = "StockMovementError";
   }
+
+  /** What the phone branches on: 404 is NOT_FOUND, anything else here is a refused input. */
+  get code(): "NOT_FOUND" | "VALIDATION" {
+    return this.statusCode === 404 ? "NOT_FOUND" : "VALIDATION";
+  }
 }
 
 export interface CreateMovementInput {
+  /** Chosen by the phone so a retried send finds its own movement instead of making a second one. */
+  stockMovementId?: string;
   ingredientId: string;
   fromStorageAreaId: string;
   toStorageAreaId: string;
@@ -45,13 +53,14 @@ export interface CreateMovementInput {
  * Record a move. Validates that both areas are real, active, at the SAME
  * location, and in the caller's org — a move that crossed sites would be an
  * inventory transfer, which is a different thing with a real stock effect.
+ * `replay` is true when `input.stockMovementId` was already recorded by this user.
  */
 export async function createMovement(
   locationId: string,
   orgId: number,
   userId: number,
   input: CreateMovementInput,
-) {
+): Promise<{ movement: typeof stockMovement.$inferSelect; replay: boolean }> {
   if (!(input.quantity > 0)) {
     throw new StockMovementError("Enter how much is moving", 400);
   }
@@ -102,24 +111,31 @@ export async function createMovement(
   // consumption_log.base_qty is populated. Throws on an incompatible unit.
   const { baseQty } = await resolveToBase(input.ingredientId, input.quantity, input.unit);
 
-  const [created] = await db
-    .insert(stockMovement)
-    .values({
-      organisationId: orgId,
-      storeLocationId: locationId,
-      ingredientId: input.ingredientId,
-      fromStorageAreaId: input.fromStorageAreaId,
-      toStorageAreaId: input.toStorageAreaId,
-      quantity: String(input.quantity),
-      unit: input.unit,
-      baseQty: String(baseQty),
-      userId,
-      notes: input.notes?.trim() || null,
-    })
-    .returning();
+  const { row, replay } = await insertOnce(
+    userId,
+    () =>
+      db
+        .insert(stockMovement)
+        .values({
+          stockMovementId: input.stockMovementId,
+          organisationId: orgId,
+          storeLocationId: locationId,
+          ingredientId: input.ingredientId,
+          fromStorageAreaId: input.fromStorageAreaId,
+          toStorageAreaId: input.toStorageAreaId,
+          quantity: String(input.quantity),
+          unit: input.unit,
+          baseQty: String(baseQty),
+          userId,
+          notes: input.notes?.trim() || null,
+        })
+        .onConflictDoNothing({ target: stockMovement.stockMovementId })
+        .returning(),
+    async () => (await db.select().from(stockMovement).where(eq(stockMovement.stockMovementId, input.stockMovementId!)))[0],
+  );
 
   // Deliberately nothing else. No stock write. See the module docblock.
-  return created;
+  return { movement: row, replay };
 }
 
 /** Movements at a location, newest first. Optionally narrowed to one item. */

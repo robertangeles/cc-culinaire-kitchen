@@ -54,6 +54,7 @@ const SetAreaItemsSchema = z.object({
 });
 
 const CreateMovementSchema = z.object({
+  stockMovementId: z.string().uuid().optional(),
   ingredientId: z.string().uuid(),
   fromStorageAreaId: z.string().uuid(),
   toStorageAreaId: z.string().uuid(),
@@ -65,10 +66,12 @@ const CreateMovementSchema = z.object({
 // ─── Helpers ──────────────────────────────────────────────────────
 
 function handleServiceError(err: unknown, res: Response, next: NextFunction): void {
-  if (err instanceof StorageAreaError || err instanceof StockMovementError) {
+  if (err instanceof StorageAreaError) {
     res.status(err.statusCode).json({ error: err.message });
+  } else if (err instanceof StockMovementError) {
+    res.status(err.statusCode).json({ error: err.message, code: err.code });
   } else if (err instanceof IncompatibleUnitsError) {
-    res.status(400).json({ error: err.message });
+    res.status(400).json({ error: err.message, code: "INCOMPATIBLE_UNITS" });
   } else {
     next(err);
   }
@@ -228,7 +231,7 @@ export async function handleCreateMovement(
       return;
     }
 
-    const movement = await createMovement(
+    const { movement, replay } = await createMovement(
       req.params.locId as string,
       ctx.orgId,
       req.user!.sub,
@@ -243,7 +246,7 @@ export async function handleCreateMovement(
       },
       "Stock movement recorded",
     );
-    res.status(201).json(movement);
+    res.status(replay ? 200 : 201).json(movement);
   } catch (err) {
     handleServiceError(err, res, next);
   }

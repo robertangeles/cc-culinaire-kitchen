@@ -86,13 +86,16 @@ describe.skipIf(!RUN)("consumption log edit/delete refusals (real DB)", () => {
     for (const id of [fx.owner, fx.other]) await db.delete(user).where(eq(user.userId, id));
   });
 
-  it.each([
-    ["edit", handleEditLog],
-    ["delete", handleDeleteLog],
-  ] as const)("%s of an unknown entry is 404 NOT_FOUND", async (_n, handler) => {
-    const out = await call(handler, fx.owner, { id: "00000000-0000-4000-8000-000000000000" }, { quantity: 2 });
+  it("edit of an unknown entry is 404 NOT_FOUND", async () => {
+    const out = await call(handleEditLog, fx.owner, { id: "00000000-0000-4000-8000-000000000000" }, { quantity: 2 });
     expect(out.status).toBe(404);
     expect(out.body).toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  // A repeat of a delete that already happened must succeed (the phone resends until it hears back).
+  it("delete of an entry that is gone is a success", async () => {
+    const out = await call(handleDeleteLog, fx.owner, { id: "00000000-0000-4000-8000-000000000000" });
+    expect(out).toMatchObject({ status: 200, body: { success: true } });
   });
 
   it.each([
