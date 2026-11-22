@@ -2,15 +2,15 @@ import { useState } from "react";
 import { Pressable, RefreshControl, ScrollView, View } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { session, useSession } from "../src/runtime/appContext";
-import { useCount } from "../src/runtime/countContext";
-import { summarizeArea } from "../src/count/countFlow";
-import { OfflineBanner } from "../src/ui/Banner";
-import { Text } from "../src/ui/Text";
-import { Button } from "../src/ui/Button";
-import { Chip, Surface, rowDivider } from "../src/ui/Surface";
-import { fontFamily, size, space } from "../src/theme";
-import { useColors } from "../src/ui/theme";
+import { useSession } from "../../../src/runtime/appContext";
+import { useCount } from "../../../src/count/CountProvider";
+import { summarizeArea } from "../../../src/count/countFlow";
+import { OfflineBanner } from "../../../src/ui/Banner";
+import { Text } from "../../../src/ui/Text";
+import { Button } from "../../../src/ui/Button";
+import { Chip, Surface, rowDivider } from "../../../src/ui/Surface";
+import { fontFamily, size, space } from "../../../src/theme";
+import { useColors } from "../../../src/ui/theme";
 
 const sheetIndex = (sheets: Array<{ categoryName: string }>, name: string) => {
   const i = sheets.findIndex((s) => s.categoryName === name);
@@ -104,9 +104,6 @@ export default function Areas() {
             })}
           </Surface>
         ) : null}
-
-        {state.locations.length > 1 ? <Button kind="quiet" label="Change location" onPress={() => session.changeLocation()} /> : null}
-        <Button kind="quiet" label="Sign out" onPress={() => void session.signOut()} />
       </ScrollView>
     </SafeAreaView>
   );

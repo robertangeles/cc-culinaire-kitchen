@@ -138,14 +138,12 @@ describe("signing in", () => {
 });
 
 describe("access rules", () => {
-  it("tells an account without count permission it cannot count, and an Administrator can", async () => {
-    const no = setup({ me: vi.fn(async () => bystander) });
-    await no.session.restore();
-    expect(state(no.session)).toMatchObject({ phase: "noAccess", reason: "Your account can't count stock. Ask your manager." });
-
-    const yes = setup({ me: vi.fn(async () => admin) });
-    await yes.session.restore();
-    expect(state(yes.session)).toMatchObject({ phase: "ready" });
+  it("opens the app for any signed-in person with a location, whatever they may count: the shell's tab list decides what they see", async () => {
+    for (const person of [bystander, admin, counter]) {
+      const { session } = setup({ me: vi.fn(async () => person) });
+      await session.restore();
+      expect(state(session)).toMatchObject({ phase: "ready", user: person });
+    }
   });
 
   it("tells an account with no location to ask its manager", async () => {

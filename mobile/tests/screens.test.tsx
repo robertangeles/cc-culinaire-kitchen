@@ -6,7 +6,7 @@ import { useSyncExternalStore } from "react";
 import { harness, makeHarness } from "./harness";
 import { authApiMock, googleConfig, routerMock, sessionMock, sessionState } from "../testing/mocks";
 
-vi.mock("../src/runtime/countContext", async () => {
+vi.mock("../src/count/CountProvider", async () => {
   const { harness } = await import("./harness");
   return {
     useCount: () => {
@@ -24,14 +24,15 @@ vi.mock("../src/runtime/appOutbox", async () => {
   return { get outbox() { return harness.outbox; }, runner: { kick: vi.fn() } };
 });
 
-import Areas from "../app/index";
-import Attention from "../app/attention";
+import Areas from "../app/(app)/(count)/index";
+import Attention from "../app/(app)/(count)/attention";
 import SignIn from "../app/sign-in";
 import Mfa from "../app/mfa";
 import ForgotPassword from "../app/forgot-password";
 import CheckEmail from "../app/check-email";
 import { searchParams } from "../testing/mocks";
 import ChooseLocation from "../app/location";
+import Account from "../app/(app)/account";
 
 const chef = { userId: 1, userName: "Chef", userEmail: "c@x.test", mfaEnabled: false, roles: [], permissions: ["inventory:count"] };
 const main = { storeLocationId: "L1", organisationId: 1, locationName: "Main Kitchen", classification: "branch" };
@@ -116,19 +117,6 @@ describe("areas list", () => {
     await counts.refresh();
     render(<Areas />);
     expect(screen.getByText(/1 count from another account is waiting on this phone/)).toBeTruthy();
-  });
-
-  it("offers Change location only to an account with more than one location", async () => {
-    await makeHarness();
-    const { unmount } = render(<Areas />);
-    expect(screen.queryByRole("button", { name: "Change location" })).toBeNull();
-    unmount();
-
-    const other = { ...main, storeLocationId: "L2", locationName: "Second Kitchen" };
-    sessionState.current = { state: { phase: "ready", user: chef, location: main, locations: [main, other] }, busy: false };
-    render(<Areas />);
-    fireEvent.click(screen.getByRole("button", { name: "Change location" }));
-    expect(sessionMock.changeLocation).toHaveBeenCalled();
   });
 
   it("says when no stock take is open", async () => {
@@ -348,5 +336,35 @@ describe("continue with Google", () => {
     fireEvent.click(screen.getByRole("button", { name: "Continue with Google" }));
     expect(sessionMock.signInWithGoogle).toHaveBeenCalled();
     googleConfig.enabled = false;
+  });
+});
+
+describe("account tab", () => {
+  it("shows who is signed in and where, and signs out", () => {
+    render(<Account />);
+    expect(screen.getByText("Chef")).toBeTruthy();
+    expect(screen.getByText("c@x.test")).toBeTruthy();
+    expect(screen.getByText("Main Kitchen")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
+    expect(sessionMock.signOut).toHaveBeenCalled();
+  });
+
+  it("offers Change location only to an account with more than one location", () => {
+    const { unmount } = render(<Account />);
+    expect(screen.queryByRole("button", { name: "Change location" })).toBeNull();
+    unmount();
+
+    const other = { ...main, storeLocationId: "L2", locationName: "Second Kitchen" };
+    sessionState.current = { state: { phase: "ready", user: chef, location: main, locations: [main, other] }, busy: false };
+    render(<Account />);
+    fireEvent.click(screen.getByRole("button", { name: "Change location" }));
+    expect(sessionMock.changeLocation).toHaveBeenCalled();
+  });
+
+  it("says so, and still signs out, when nothing on the account opens on the phone", () => {
+    sessionState.current = { state: { phase: "ready", user: { ...chef, permissions: ["chat:access"] }, location: main, locations: [main] }, busy: false };
+    render(<Account />);
+    expect(screen.getByText(/Nothing on your account is available on the phone yet/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Sign out" })).toBeTruthy();
   });
 });

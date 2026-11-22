@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react";
+import { fetch as streamingFetch } from "expo/fetch";
 import { createApiClient } from "../api/client";
 import { createAuthApi } from "../api/auth";
 import { createSession, type Session } from "../auth/session";
@@ -12,7 +13,8 @@ import { apiBaseUrl, appVersion, googleEnabled } from "../config";
 const tokenStore = createSecureTokenStore();
 // eslint-disable-next-line prefer-const -- assigned after the client that calls into it
 let session: Session;
-export const client = createApiClient({ baseUrl: apiBaseUrl, tokenStore, appVersion, onSessionExpired: () => session.sessionExpired() });
+// The built-in fetch buffers a whole response; `expo/fetch` hands the body over as it arrives (chat answers stream).
+export const client = createApiClient({ baseUrl: apiBaseUrl, tokenStore, appVersion, streamFetchFn: streamingFetch as unknown as typeof fetch, onSessionExpired: () => session.sessionExpired() });
 export const authApi = createAuthApi(client, tokenStore);
 session = createSession({
   api: authApi,

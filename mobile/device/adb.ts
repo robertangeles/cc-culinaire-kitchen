@@ -17,6 +17,10 @@ export const PACKAGE = "com.culinairekitchen.chef";
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 export function adb(args: string[], input?: string): string {
+  // The phone and emulator are shared by every worker; device/lease.sh takes the lock and sets this.
+  if (process.env.CULINAIRE_DEVICE_LEASE !== "1") {
+    throw new Error("refusing to drive a device without the lease: run check:device (pnpm --filter @culinaire/mobile run check:device)");
+  }
   return execFileSync(ADB, args, { encoding: "utf8", input, maxBuffer: 64 * 1024 * 1024 });
 }
 const shell = (...args: string[]) => adb(["shell", ...args]);

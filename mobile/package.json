@@ -10,9 +10,10 @@
     "check:types": "tsc --noEmit",
     "check:lint": "eslint .",
     "check:test": "vitest run",
+    "check:test:logic": "vitest run src",
     "check:bundle": "expo export --platform android --output-dir dist-check",
     "check:e2e": "vitest run --config vitest.e2e.config.ts",
-    "check:device": "vitest run --config vitest.device.config.ts"
+    "check:device": "bash device/lease.sh vitest run --config vitest.device.config.ts"
   },
   "dependencies": {
     "@culinaire/shared": "workspace:*",

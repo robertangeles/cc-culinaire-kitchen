@@ -372,6 +372,8 @@ describe("count walk on a device", () => {
 
   it("W11 below the minimum app version the app is asked to update at sign-in, and works again once it is lifted", async () => {
     await fx.api.request("PUT", "/api/settings", { body: { mobile_min_app_version: "9.9.9" } });
+    await tap(/^Account/); // Sign out lives on the Account tab
+    await waitFor("Sign out", 20_000);
     await tap("Sign out");
     await waitFor("Sign in", 30_000);
     await signIn(); // the version check answers at the password step, before any code is asked for

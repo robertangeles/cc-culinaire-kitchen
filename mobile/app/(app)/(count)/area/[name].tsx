@@ -2,17 +2,17 @@ import { useState } from "react";
 import { AccessibilityInfo, Alert, Pressable, ScrollView, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useCount } from "../../src/runtime/countContext";
-import { firstUncounted, reviewRows, submitCheck, type Answer, type SaveState } from "../../src/count/countFlow";
-import { limitMessage, parseEntry, press, type Key } from "../../src/count/keypad";
-import { CardTransition } from "../../src/ui/CardTransition";
-import { Keypad } from "../../src/ui/Keypad";
-import { OfflineBanner } from "../../src/ui/Banner";
-import { Button } from "../../src/ui/Button";
-import { Text } from "../../src/ui/Text";
-import { Surface, rowDivider } from "../../src/ui/Surface";
-import { fontFamily, fontSize, size, space } from "../../src/theme";
-import { useColors } from "../../src/ui/theme";
+import { useCount } from "../../../../src/count/CountProvider";
+import { firstUncounted, reviewRows, submitCheck, type Answer, type SaveState } from "../../../../src/count/countFlow";
+import { limitMessage, parseEntry, press, type Key } from "../../../../src/count/keypad";
+import { CardTransition } from "../../../../src/ui/CardTransition";
+import { Keypad } from "../../../../src/ui/Keypad";
+import { OfflineBanner } from "../../../../src/ui/Banner";
+import { Button } from "../../../../src/ui/Button";
+import { Text } from "../../../../src/ui/Text";
+import { Surface, rowDivider } from "../../../../src/ui/Surface";
+import { fontFamily, fontSize, size, space } from "../../../../src/theme";
+import { useColors } from "../../../../src/ui/theme";
 
 const SAVE_LABEL: Record<SaveState, string> = {
   saved_on_phone: "Saved on this phone",
