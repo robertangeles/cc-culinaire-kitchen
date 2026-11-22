@@ -12,6 +12,8 @@
  *   // throws InvalidStateError if transition is not allowed
  */
 
+import { AppError } from "./appError.js";
+
 // ── PO status transitions ────────────────────────────────────────────
 export const PO_TRANSITIONS: Record<string, string[]> = {
   DRAFT: ["PENDING_APPROVAL", "SENT", "CANCELLED"],
@@ -32,7 +34,7 @@ export const RECEIVING_SESSION_TRANSITIONS: Record<string, string[]> = {
 
 /**
  * Validates that a state transition is allowed.
- * @throws Error with descriptive message if transition is invalid.
+ * @throws AppError (409 INVALID_STATE) if the transition is not allowed.
  */
 export function validateTransition(
   currentStatus: string,
@@ -47,7 +49,9 @@ export function validateTransition(
     );
   }
   if (!allowed.includes(targetStatus)) {
-    throw new Error(
+    throw new AppError(
+      409,
+      "INVALID_STATE",
       `Cannot transition ${entityName} from ${currentStatus} to ${targetStatus}`,
     );
   }
