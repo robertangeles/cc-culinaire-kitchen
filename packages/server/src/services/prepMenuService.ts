@@ -16,6 +16,9 @@ import { eq, desc, sql, and, inArray } from "drizzle-orm";
 import { getUserOrgContext } from "./orgContextService.js";
 import { computeSuggestedSelections } from "./prepMath.js";
 import { PrepError, parseTimeToMinutes } from "./prepErrors.js";
+import { canManageSession } from "./prepAccess.js";
+import { AppError } from "../utils/appError.js";
+import type { TokenPayload } from "./authService.js";
 
 const logger = pino({ name: "prepMenuService" });
 
@@ -207,20 +210,16 @@ export async function suggestSelections(
 /** Persists the chef's dish picks for a prep session. */
 export async function saveMenuSelections(
   sessionId: string,
-  userId: number,
+  user: TokenPayload,
   selections: MenuSelectionInput[],
 ): Promise<MenuSelectionRow[]> {
-  const [session] = await db
-    .select()
-    .from(prepSession)
-    .where(and(eq(prepSession.prepSessionId, sessionId), eq(prepSession.userId, userId)));
+  const [session] = await db.select().from(prepSession).where(eq(prepSession.prepSessionId, sessionId));
 
-  if (!session) {
-    throw new PrepError("Prep session not found or not yours", 404);
+  if (!session) throw new AppError(404, "NOT_FOUND", "Prep session not found or not yours");
+  if (!(await canManageSession(user, session))) {
+    throw new AppError(403, "FORBIDDEN", "Only the creator or a prep manager at this location can change the selections");
   }
-  if (session.isEndedInd) {
-    throw new PrepError("Cannot modify an ended prep session", 409);
-  }
+  if (session.isEndedInd) throw new AppError(409, "PREP_SESSION_ENDED", "Cannot modify an ended prep session");
 
   const rows = await db.transaction(async (tx) => {
     await tx

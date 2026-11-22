@@ -23,6 +23,7 @@ import {
   prepTask,
   ingredientCrossUsage,
 } from "../db/schema.js";
+import { asUser } from "./lineLoopFixture.js";
 import {
   createPrepSession,
   getMenuForSelection,
@@ -89,7 +90,7 @@ describe.skipIf(!RUN)("prepService — baseline integration (real DB)", () => {
   });
 
   it("createPrepSession — creates a session for a date", async () => {
-    const result = await createPrepSession(fx.userId, "2026-09-28", 40);
+    const result = await createPrepSession(asUser(fx.userId, ["prep:manage"]), { prepDate: "2026-09-28", expectedCovers: 40 });
     expect(result.session.prepSessionId).toBeTruthy();
     expect(result.session.prepDate).toBe("2026-09-28");
     expect(result.session.tasksTotal).toBe(0);
@@ -117,7 +118,7 @@ describe.skipIf(!RUN)("prepService — baseline integration (real DB)", () => {
   });
 
   it("saveMenuSelections — persists dish picks for a session", async () => {
-    const selections = await saveMenuSelections(fx.sessionId, fx.userId, [
+    const selections = await saveMenuSelections(fx.sessionId, asUser(fx.userId, ["prep:manage"]), [
       { menuItemId: fx.menuItemId, dishName: `${fx.tag}-burger`, expectedPortions: 10 },
     ]);
     expect(selections).toHaveLength(1);
@@ -126,7 +127,7 @@ describe.skipIf(!RUN)("prepService — baseline integration (real DB)", () => {
   });
 
   it("generateTasksFromSelections — generates tasks from saved selections", async () => {
-    const tasks = await generateTasksFromSelections(fx.sessionId, fx.userId);
+    const { tasks } = await generateTasksFromSelections(fx.sessionId, asUser(fx.userId, ["prep:manage"]));
     expect(tasks.length).toBeGreaterThan(0);
     const beefTask = tasks.find((t) => t.ingredientName === "Beef patty");
     expect(beefTask).toBeDefined();
@@ -136,15 +137,13 @@ describe.skipIf(!RUN)("prepService — baseline integration (real DB)", () => {
   });
 
   it("updateTaskStatus — marks a task in_progress", async () => {
-    const updated = await updateTaskStatus(fx.taskId, fx.userId, "in_progress");
-    expect(updated).not.toBeNull();
-    expect(updated!.status).toBe("in_progress");
+    const updated = await updateTaskStatus(fx.taskId, asUser(fx.userId, ["prep:manage"]), { status: "in_progress" });
+    expect(updated.status).toBe("in_progress");
   });
 
   it("updateTaskStatus — marks a task completed", async () => {
-    const updated = await updateTaskStatus(fx.taskId, fx.userId, "completed");
-    expect(updated).not.toBeNull();
-    expect(updated!.status).toBe("completed");
-    expect(updated!.completedAt).not.toBeNull();
+    const updated = await updateTaskStatus(fx.taskId, asUser(fx.userId, ["prep:manage"]), { status: "completed" });
+    expect(updated.status).toBe("completed");
+    expect(updated.completedAt).not.toBeNull();
   });
 });

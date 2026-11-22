@@ -29,14 +29,32 @@ import {
 // Zod schemas
 // ---------------------------------------------------------------------------
 
+const dateOnly = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use a date like 2026-03-05");
+
 const createSessionSchema = z.object({
-  prepDate: z.string().min(1, "prepDate is required"),
+  prepSessionId: z.string().uuid().optional(),
+  prepDate: dateOnly,
   expectedCovers: z.number().int().positive().optional(),
+  storeLocationId: z.string().uuid().optional(),
 });
 
+const taskStatus = z.enum(["pending", "in_progress", "completed", "skipped"]);
+
 const updateTaskSchema = z.object({
-  status: z.enum(["pending", "in_progress", "completed", "skipped"]),
-  assignedTo: z.string().max(100).optional(),
+  status: taskStatus,
+  assignedTo: z.string().max(100).nullable().optional(),
+  completedAt: z.string().datetime().optional(),
+  expectedStatus: taskStatus.optional(),
+});
+
+const generateSchema = z.object({
+  requestId: z.string().uuid().optional(),
+});
+
+const todayQuerySchema = z.object({
+  teamView: z.enum(["true", "false"]).optional(),
+  storeLocationId: z.string().uuid().optional(),
+  date: dateOnly.optional(),
 });
 
 const endSessionSchema = z.object({
@@ -90,8 +108,8 @@ export async function handleCreateSession(req: Request, res: Response) {
     return;
   }
 
-  const result = await createPrepSession(userId, parsed.data.prepDate, parsed.data.expectedCovers);
-  res.status(201).json(result);
+  const { session, replay } = await createPrepSession(req.user!, parsed.data);
+  res.status(replay ? 200 : 201).json({ session });
 }
 
 /** GET /api/prep/sessions/today */
@@ -102,11 +120,18 @@ export async function handleGetTodaySession(req: Request, res: Response) {
     return;
   }
 
-  const parsed = teamViewQuerySchema.safeParse(req.query);
-  const teamView = parsed.success && parsed.data.teamView === "true";
-  const storeLocationId = parsed.success ? parsed.data.storeLocationId : undefined;
+  const parsed = todayQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.issues[0].message });
+    return;
+  }
+  const { date, storeLocationId } = parsed.data;
+  if (date && !storeLocationId) {
+    res.status(400).json({ error: "storeLocationId is required with date" });
+    return;
+  }
 
-  const result = await getTodaySession(userId, teamView, storeLocationId);
+  const result = await getTodaySession(req.user!, parsed.data.teamView === "true", storeLocationId, date);
   if (!result) {
     res.status(404).json({ error: "No prep session for today" });
     return;
@@ -131,7 +156,7 @@ export async function handleGetSession(req: Request, res: Response) {
   const parsed = teamViewQuerySchema.safeParse(req.query);
   const teamView = parsed.success && parsed.data.teamView === "true";
 
-  const result = await getPrepSession(sessionId, userId, teamView);
+  const result = await getPrepSession(sessionId, req.user!, teamView);
   if (!result) {
     res.status(404).json({ error: "Prep session not found or not yours" });
     return;
@@ -159,11 +184,8 @@ export async function handleUpdateTask(req: Request, res: Response) {
     return;
   }
 
-  const updated = await updateTaskStatus(taskId, userId, parsed.data.status, parsed.data.assignedTo);
-  if (!updated) {
-    res.status(404).json({ error: "Task not found or not yours" });
-    return;
-  }
+  const { completedAt, ...rest } = parsed.data;
+  const updated = await updateTaskStatus(taskId, req.user!, { ...rest, completedAt: completedAt ? new Date(completedAt) : undefined });
   res.json(updated);
 }
 
@@ -184,7 +206,7 @@ export async function handleGetCrossUsage(req: Request, res: Response) {
   const parsed = teamViewQuerySchema.safeParse(req.query);
   const teamView = parsed.success && parsed.data.teamView === "true";
 
-  const data = await getIngredientCrossUsage(sessionId, userId, teamView);
+  const data = await getIngredientCrossUsage(sessionId, req.user!, teamView);
   res.json(data);
 }
 
@@ -241,12 +263,7 @@ export async function handleEndSession(req: Request, res: Response) {
     return;
   }
 
-  const result = await endSession(sessionId, userId, parsed.data.actualCovers);
-  if (!result) {
-    res.status(404).json({ error: "Prep session not found or not yours" });
-    return;
-  }
-  res.json(result);
+  res.json(await endSession(sessionId, req.user!, parsed.data.actualCovers));
 }
 
 // ---------------------------------------------------------------------------
@@ -312,7 +329,7 @@ export async function handleSaveSelections(req: Request, res: Response) {
   }
 
   try {
-    const selections = await saveMenuSelections(sessionId, userId, parsed.data.selections);
+    const selections = await saveMenuSelections(sessionId, req.user!, parsed.data.selections);
     res.status(201).json(selections);
   } catch (err: unknown) {
     if ((err instanceof Error && err.name === "PrepError") || err instanceof PrepError) {
@@ -337,9 +354,15 @@ export async function handleGenerateFromSelections(req: Request, res: Response) 
     return;
   }
 
+  const parsed = generateSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.issues[0].message });
+    return;
+  }
+
   try {
-    const tasks = await generateTasksFromSelections(sessionId, userId);
-    res.status(201).json(tasks);
+    const { tasks, replay } = await generateTasksFromSelections(sessionId, req.user!, parsed.data.requestId);
+    res.status(replay ? 200 : 201).json(tasks);
   } catch (err: unknown) {
     if ((err instanceof Error && err.name === "PrepError") || err instanceof PrepError) {
       res.status((err as PrepError).statusCode).json({ error: (err as Error).message });
