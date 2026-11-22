@@ -23,6 +23,7 @@ import {
   auditLog,
 } from "../db/schema.js";
 import { handleListPOs, handleGetPODetail } from "../controllers/purchaseOrderController.js";
+import { errorHandler } from "../middleware/errorHandler.js";
 import { listPOs, getPODetail, createPO, clonePO, submitPO } from "./purchaseOrderService.js";
 import { handleCreatePO, handleClonePO } from "../controllers/purchaseOrderController.js";
 
@@ -71,8 +72,10 @@ function call(
         resolveCall({ status, body });
         return this;
       },
+      headersSent: false,
     } as unknown as Response;
-    handler({ user: { sub: fx.userId, roles: [], permissions }, ...req } as unknown as Request, res, (e) => reject(e)).catch(reject);
+    // Errors the controller passes on reach the real error handler, as in the app.
+    handler({ user: { sub: fx.userId, roles: [], permissions }, ...req } as unknown as Request, res, (e) => errorHandler(e as Error, {} as Request, res, () => {})).catch(reject);
   });
 }
 
@@ -340,8 +343,9 @@ describe("create and clone PO stay inside the caller's organisation (real DB)", 
   it("refuses to clone a PO into another organisation's location", async () => {
     const before = await poCount();
     await expect(clonePO(fx.po.sentSoon, fx.orgId, fx.other.locId, fx.userId)).rejects.toThrow(/not found/);
+    // Over HTTP the location-access check answers first (403); the service itself still refuses it as "not found".
     const out = await call(handleClonePO, { params: { id: fx.po.sentSoon }, body: { storeLocationId: fx.other.locId } });
-    expect(out.status).toBe(400);
+    expect(out.status).toBe(403);
     expect(await poCount()).toBe(before);
   });
 });

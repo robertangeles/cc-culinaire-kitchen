@@ -142,10 +142,6 @@ export async function handleActionLine(
     logger.info({ sessionId, receivingLineId, status: parsed.data.status }, "Receiving line actioned");
     res.json(result);
   } catch (err: unknown) {
-    if (err instanceof receivingService.ReceivingValidationError) {
-      res.status(400).json({ error: err.message, code: err.code });
-      return;
-    }
     const msg = err instanceof Error ? err.message : String(err);
     if (msg.includes("not found") || msg.includes("not active") || msg.includes("no longer active")) {
       res.status(400).json({ error: msg });
@@ -169,10 +165,6 @@ export async function handleConfirmReceipt(
     logger.info({ sessionId, poStatus: result.poStatus }, "Receipt confirmed");
     res.json(result);
   } catch (err: unknown) {
-    if (err instanceof receivingService.ReceivingValidationError) {
-      res.status(400).json({ error: err.message, code: err.code });
-      return;
-    }
     const msg = err instanceof Error ? err.message : String(err);
     if (msg.includes("not found")) {
       res.status(400).json({ error: msg });

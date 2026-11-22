@@ -96,18 +96,21 @@ describe("receiving walk on a device", () => {
 
   afterAll(async () => {
     // Leave the phone as it was found: signed out, and without the tunnels this run added.
-    if (await has("Sign out")) await tap("Sign out").catch(() => {});
+    if (await has(/^Account/)) {
+      await tap(/^Account/).catch(() => {});
+      if (await has("Sign out")) await tap("Sign out").catch(() => {});
+    }
     for (const port of tunnels) adb(["reverse", "--remove", `tcp:${port}`]);
   });
 
-  it("R1 signs in and offers Receive deliveries on the home screen", async () => {
+  it("R1 signs in and the tab bar offers Receive", async () => {
     await signIn();
-    await waitFor("Receive deliveries", 60_000);
+    await waitFor(/^Receive/, 60_000);
     await screenshot("r01-home");
   });
 
   it("R2 the deliveries queue lists the sent orders, with the supplier and item count", async () => {
-    await tap("Receive deliveries");
+    await tap(/^Receive/);
     await waitFor(new RegExp(`^${supplierName}, order .*, 3 items`), 30_000);
     expect(await has(new RegExp(`^${supplierName}, order .*, 1 item`))).toBe(true);
     await screenshot("r02-queue");

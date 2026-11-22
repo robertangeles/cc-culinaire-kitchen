@@ -4,6 +4,7 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { Alert } from "react-native";
 import { routerMock, searchParams, sessionState } from "../testing/mocks";
 import { ApiError } from "../src/api/client";
+import { COLUMN_WIDTH } from "../src/ui/Screen";
 
 const api = vi.hoisted(() => ({
   queue: vi.fn(),
@@ -19,8 +20,8 @@ vi.mock("../src/runtime/appContext", async () => {
   return { useSession: () => sessionState.current };
 });
 
-import ReceiveQueue from "../app/receive/index";
-import ReceiveDelivery from "../app/receive/[poId]";
+import ReceiveQueue from "../app/(app)/(receive)/deliveries/index";
+import ReceiveDelivery from "../app/(app)/(receive)/deliveries/[poId]";
 
 const chef = { userId: 1, userName: "Chef", userEmail: "c@x.test", mfaEnabled: false, roles: [], permissions: ["purchasing:receive"] };
 const main = { storeLocationId: "L1", organisationId: 1, locationName: "Main Kitchen", classification: "branch" };
@@ -58,6 +59,46 @@ beforeEach(() => {
   api.confirm.mockResolvedValue({ sessionId: "S1", poId: "P1", poStatus: "RECEIVED", linesProcessed: 2, discrepancyCount: 0, isPerfectDelivery: true });
 });
 
+/** The nearest ancestor that is a centred, width-capped column, or null: what keeps a phone screen from stretching on an iPad. */
+function cappedColumn(from: HTMLElement): HTMLElement | null {
+  for (let el: HTMLElement | null = from; el; el = el.parentElement) {
+    if (el.style.maxWidth === `${COLUMN_WIDTH}px` && el.style.alignSelf === "center") return el;
+  }
+  return null;
+}
+
+describe("on an iPad-width window", () => {
+  beforeEach(() => {
+    window.innerWidth = 1024;
+    window.innerHeight = 1366;
+  });
+
+  it("keeps the deliveries queue in a centred column", async () => {
+    render(<ReceiveQueue />);
+    expect(cappedColumn(await screen.findByText("Fresh Farms"))).not.toBeNull();
+  });
+
+  it("keeps the checklist and its pinned Confirm bar in a centred column", async () => {
+    render(<ReceiveDelivery />);
+    expect(cappedColumn(await screen.findByText("Flour"))).not.toBeNull();
+    expect(cappedColumn(screen.getByRole("button", { name: "Confirm delivery" }))).not.toBeNull();
+  });
+
+  it("keeps the keypad panel inside the column too", async () => {
+    render(<ReceiveDelivery />);
+    await open("Flour");
+    key("Short");
+    expect(cappedColumn(screen.getByLabelText("Number keypad"))).not.toBeNull();
+  });
+
+  it("keeps the finished and failed states in the column", async () => {
+    render(<ReceiveDelivery />);
+    await screen.findByText("Flour");
+    fireEvent.click(screen.getByRole("button", { name: "Confirm delivery" }));
+    expect(cappedColumn(await screen.findByText("Delivery received"))).not.toBeNull();
+  });
+});
+
 describe("deliveries queue", () => {
   it("lists what is waiting, asking the server for this location only", async () => {
     render(<ReceiveQueue />);
@@ -69,7 +110,7 @@ describe("deliveries queue", () => {
   it("opens a delivery when tapped", async () => {
     render(<ReceiveQueue />);
     fireEvent.click(await screen.findByRole("button", { name: /Fresh Farms/ }));
-    expect(routerMock.push).toHaveBeenCalledWith({ pathname: "/receive/[poId]", params: { poId: "P1" } });
+    expect(routerMock.push).toHaveBeenCalledWith({ pathname: "/deliveries/[poId]", params: { poId: "P1" } });
   });
 
   it("marks one that you already started, and one another chef has open", async () => {
@@ -218,7 +259,7 @@ describe("receiving a delivery", () => {
     await screen.findByText("Flour");
     fireEvent.click(screen.getByRole("button", { name: "Cancel receiving" }));
     await waitFor(() => expect(api.cancel).toHaveBeenCalledWith("S1"));
-    await waitFor(() => expect(routerMock.replace).toHaveBeenCalledWith("/receive"));
+    await waitFor(() => expect(routerMock.replace).toHaveBeenCalledWith("/deliveries"));
     alert.mockRestore();
   });
 

@@ -93,25 +93,6 @@ async function selectLinesWithIngredient(sessionId: string, dbOrTx: DbOrTx) {
 
 // ── Types ────────────────────────────────────────────────────────────
 
-/**
- * A request the receiving rules refuse (bad quantity, missing price, unit with no
- * conversion). The controller answers 400 with `code`, so the phone branches on the
- * code, not on message text. The transaction it was thrown in has rolled back.
- */
-export class ReceivingValidationError extends Error {
-  constructor(
-    public readonly code:
-      | "SHORT_QTY_REQUIRED"
-      | "SHORT_QTY_NOT_LESS"
-      | "PRICE_REQUIRED"
-      | "UNIT_NOT_CONVERTIBLE",
-    message: string,
-  ) {
-    super(message);
-    this.name = "ReceivingValidationError";
-  }
-}
-
 export type LineActionType = "RECEIVED" | "SHORT" | "REJECTED" | "PRICE_VARIANCE" | "SUBSTITUTED";
 export type RejectionReason = "quality" | "damaged" | "temperature" | "expired" | "other";
 
@@ -394,10 +375,10 @@ export async function actionLine(
     // computed a shortage of the full order while keeping the full quantity received.
     if (input.status === "SHORT") {
       if (input.receivedQty === undefined) {
-        throw new ReceivingValidationError("SHORT_QTY_REQUIRED", "Enter the quantity that arrived");
+        throw new AppError(400, "SHORT_QTY_REQUIRED", "Enter the quantity that arrived");
       }
       if (Number(input.receivedQty) >= Number(line.orderedQty)) {
-        throw new ReceivingValidationError(
+        throw new AppError(400, 
           "SHORT_QTY_NOT_LESS",
           `A short delivery must be less than the ${line.orderedQty} ordered`,
         );
@@ -405,7 +386,7 @@ export async function actionLine(
     }
     // A price change with no new price recorded the new price as 0, i.e. a -100% variance.
     if (input.status === "PRICE_VARIANCE" && input.actualUnitCost === undefined) {
-      throw new ReceivingValidationError("PRICE_REQUIRED", "Enter the price charged");
+      throw new AppError(400, "PRICE_REQUIRED", "Enter the price charged");
     }
 
     // Update the line
@@ -613,7 +594,8 @@ export async function confirmReceipt(sessionId: string, orgId: number, actorUser
           return `${found?.name ?? u.ingredientId} (${u.unit} to ${found?.baseUnit ?? "base unit"})`;
         })
         .join(", ");
-      throw new ReceivingValidationError(
+      throw new AppError(
+        400,
         "UNIT_NOT_CONVERTIBLE",
         `Cannot receive ${detail}: no conversion between the ordered unit and the stock unit. ` +
           `Reject the line, or ask an admin to add the conversion.`,

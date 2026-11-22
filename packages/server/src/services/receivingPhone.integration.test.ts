@@ -30,6 +30,7 @@ import {
 } from "../db/schema.js";
 import { handleActionLine, handleConfirmReceipt } from "../controllers/receivingController.js";
 import * as receivingService from "./receivingService.js";
+import { errorHandler } from "../middleware/errorHandler.js";
 
 /**
  * Wave 1 (receiving on the phone): the receiving rules the phone relies on.
@@ -72,8 +73,10 @@ function call(
         resolveCall({ status, body });
         return this;
       },
+      headersSent: false,
     } as unknown as Response;
-    handler({ user: { sub: fx.userA }, ...req } as unknown as Request, res, (e) => reject(e)).catch(reject);
+    // Errors the controller passes on reach the real error handler, as in the app (that is where a 400 with a code comes from).
+    handler({ user: { sub: fx.userA }, ...req } as unknown as Request, res, (e) => errorHandler(e as Error, {} as Request, res, () => {})).catch(reject);
   });
 }
 

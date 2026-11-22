@@ -4,6 +4,7 @@ import Svg, { Path } from "react-native-svg";
 /** Simple line icons for the tab bar, 24 dp grid, drawn with the tab's own colour. */
 const paths = {
   count: "M8 5H6.5A1.5 1.5 0 0 0 5 6.5v13A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5v-13A1.5 1.5 0 0 0 17.5 5H16M9 3.5h6a1 1 0 0 1 1 1V6a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1zM9 13.5l2 2 4-4.5",
+  receive: "M3.5 7.5 12 3l8.5 4.5v9L12 21l-8.5-4.5v-9zM3.5 7.5 12 12l8.5-4.5M12 12v9",
   waste: "M4 7h16M10.5 11v6M13.5 11v6M6 7l1 12.5A1.5 1.5 0 0 0 8.5 21h7a1.5 1.5 0 0 0 1.5-1.5L18 7M9 7V4.5A1.5 1.5 0 0 1 10.5 3h3A1.5 1.5 0 0 1 15 4.5V7",
   prep: "M9 6h11M9 12h11M9 18h11M4.5 6l1 1 1.7-2M4.5 12l1 1 1.7-2M4.5 18l1 1 1.7-2",
   usage: "M5.5 5h13A1.5 1.5 0 0 1 20 6.5v11a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 17.5v-11A1.5 1.5 0 0 1 5.5 5zM8.5 12h7",

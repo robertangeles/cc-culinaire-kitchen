@@ -2,15 +2,16 @@ import { useCallback, useEffect, useState } from "react";
 import { Pressable, RefreshControl, ScrollView, View } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useSession } from "../../src/runtime/appContext";
-import { receivingApi } from "../../src/runtime/receiving";
-import { expectedLabel, failureMessage, type QueueItem } from "../../src/receiving/receivingFlow";
-import { OfflineBanner } from "../../src/ui/Banner";
-import { Button } from "../../src/ui/Button";
-import { Chip, Surface, rowDivider } from "../../src/ui/Surface";
-import { Text } from "../../src/ui/Text";
-import { fontFamily, size, space } from "../../src/theme";
-import { useColors } from "../../src/ui/theme";
+import { useSession } from "../../../../src/runtime/appContext";
+import { receivingApi } from "../../../../src/runtime/receiving";
+import { expectedLabel, failureMessage, type QueueItem } from "../../../../src/receiving/receivingFlow";
+import { OfflineBanner } from "../../../../src/ui/Banner";
+import { Button } from "../../../../src/ui/Button";
+import { Column } from "../../../../src/ui/Column";
+import { Chip, Surface, rowDivider } from "../../../../src/ui/Surface";
+import { Text } from "../../../../src/ui/Text";
+import { fontFamily, size, space } from "../../../../src/theme";
+import { useColors } from "../../../../src/ui/theme";
 
 /** Deliveries waiting at this location, soonest expected first. Tap one to receive it. */
 export default function ReceiveQueue() {
@@ -42,9 +43,10 @@ export default function ReceiveQueue() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: c.bg }}>
       <ScrollView
-        contentContainerStyle={{ padding: space.xl, gap: space.lg }}
+        contentContainerStyle={{ padding: space.xl }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }} />}
       >
+        <Column style={{ gap: space.lg }}>
         <View style={{ gap: space.xs }}>
           <Text variant="title">Deliveries</Text>
           <Text variant="meta">{state.location.locationName}</Text>
@@ -75,7 +77,7 @@ export default function ReceiveQueue() {
                   key={item.poId}
                   accessibilityRole="button"
                   accessibilityLabel={`${item.supplierName ?? "Supplier"}, order ${item.poNumber}, ${item.lineCount} ${item.lineCount === 1 ? "item" : "items"}${when ? `, ${when}` : ""}${other ? `, ${other} is receiving this` : ""}`}
-                  onPress={() => router.push({ pathname: "/receive/[poId]", params: { poId: item.poId } })}
+                  onPress={() => router.push({ pathname: "/deliveries/[poId]", params: { poId: item.poId } })}
                   style={[{ minHeight: size.tap + 14, justifyContent: "center", paddingVertical: space.md, paddingHorizontal: space.lg, gap: space.xs }, rowDivider(index, c.border)]}
                 >
                   <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: space.md }}>
@@ -92,6 +94,7 @@ export default function ReceiveQueue() {
             })}
           </Surface>
         ) : null}
+        </Column>
       </ScrollView>
     </SafeAreaView>
   );

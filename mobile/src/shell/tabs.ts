@@ -17,6 +17,7 @@ export interface ModuleTab {
 
 export const moduleTabs: ModuleTab[] = [
   { route: "(count)", title: "Count", icon: "count", anyPermission: ["inventory:count"] },
+  { route: "(receive)", title: "Receive", icon: "receive", anyPermission: ["purchasing:receive"] },
   // `waste:log` is the key to log, edit and delete your own entries (reports and the team view are `waste:read`, not on the phone yet).
   { route: "(waste)", title: "Waste", icon: "waste", anyPermission: ["waste:log"] },
   // `prep:read` looks and ticks, `prep:manage` also makes the list: the server lets either tick, for anyone who works at the location (any role can be given them).

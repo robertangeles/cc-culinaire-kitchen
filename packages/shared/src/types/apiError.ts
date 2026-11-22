@@ -26,6 +26,11 @@ export const SERVER_ERROR_CODES = [
   "STOCK_TAKE_AREA_CLOSED",
   "STOCK_TAKE_CLAIMED_BY_OTHER",
   "STOCK_TAKE_CLAIM_CHANGED",
+  // Receiving (Wave 1): a line the rules refuse. The delivery stays open; the chef fixes the line.
+  "SHORT_QTY_REQUIRED",
+  "SHORT_QTY_NOT_LESS",
+  "PRICE_REQUIRED",
+  "UNIT_NOT_CONVERTIBLE",
   // Prep (Wave 2): the session was ended, or another device changed the task first. Both answer 409.
   "PREP_SESSION_ENDED",
   "PREP_TASK_CHANGED",

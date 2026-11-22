@@ -2,17 +2,18 @@ import { useState } from "react";
 import { Alert, Linking, ScrollView, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useSession } from "../../src/runtime/appContext";
-import { receivingApi } from "../../src/runtime/receiving";
-import { useReceivingSession } from "../../src/receiving/useReceivingSession";
-import { LineCard } from "../../src/receiving/LineCard";
-import { confirmedMessage, issueCount } from "../../src/receiving/receivingFlow";
-import { OfflineBanner } from "../../src/ui/Banner";
-import { Button } from "../../src/ui/Button";
-import { Surface, rowDivider } from "../../src/ui/Surface";
-import { Text } from "../../src/ui/Text";
-import { space } from "../../src/theme";
-import { useColors } from "../../src/ui/theme";
+import { useSession } from "../../../../src/runtime/appContext";
+import { receivingApi } from "../../../../src/runtime/receiving";
+import { useReceivingSession } from "../../../../src/receiving/useReceivingSession";
+import { LineCard } from "../../../../src/receiving/LineCard";
+import { confirmedMessage, issueCount } from "../../../../src/receiving/receivingFlow";
+import { OfflineBanner } from "../../../../src/ui/Banner";
+import { Button } from "../../../../src/ui/Button";
+import { Column } from "../../../../src/ui/Column";
+import { Surface, rowDivider } from "../../../../src/ui/Surface";
+import { Text } from "../../../../src/ui/Text";
+import { space } from "../../../../src/theme";
+import { useColors } from "../../../../src/ui/theme";
 
 /**
  * Receive one delivery. Every line starts as "received in full", so a perfect delivery is: open, confirm.
@@ -27,34 +28,40 @@ export default function ReceiveDelivery() {
   const userId = state.phase === "ready" ? state.user.userId : -1;
   const r = useReceivingSession(receivingApi, poId, userId);
 
-  const toQueue = () => router.replace("/receive");
+  const toQueue = () => router.replace("/deliveries");
 
   if (r.phase.kind === "loading") {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: c.bg, padding: space.xl }}>
-        <Text variant="muted">Opening the delivery…</Text>
+      <SafeAreaView style={{ flex: 1, backgroundColor: c.bg }}>
+        <Column style={{ padding: space.xl }}>
+          <Text variant="muted">Opening the delivery…</Text>
+        </Column>
       </SafeAreaView>
     );
   }
   if (r.phase.kind === "error" || r.phase.kind === "gone") {
     const gone = r.phase.kind === "gone";
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: c.bg, padding: space.xl, gap: space.lg }}>
-        <Text variant="title">{gone ? "Already done" : "Couldn't open this delivery"}</Text>
-        <Text>{r.phase.message}</Text>
-        {gone ? null : <Button label="Try again" onPress={() => void r.reload()} />}
-        <Button kind={gone ? "primary" : "quiet"} label="Back to deliveries" onPress={toQueue} />
+      <SafeAreaView style={{ flex: 1, backgroundColor: c.bg }}>
+        <Column style={{ padding: space.xl, gap: space.lg }}>
+          <Text variant="title">{gone ? "Already done" : "Couldn't open this delivery"}</Text>
+          <Text>{r.phase.message}</Text>
+          {gone ? null : <Button label="Try again" onPress={() => void r.reload()} />}
+          <Button kind={gone ? "primary" : "quiet"} label="Back to deliveries" onPress={toQueue} />
+        </Column>
       </SafeAreaView>
     );
   }
   if (r.phase.kind === "done") {
     const done = confirmedMessage(r.phase.result);
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: c.bg, padding: space.xl, gap: space.lg, justifyContent: "center" }}>
-        <Text variant="title" accessibilityLiveRegion="polite">{done.title}</Text>
-        <Text>{r.po?.supplierName ? `${r.po.supplierName}, ` : ""}order {r.po?.poNumber}</Text>
-        <Text variant="muted">{done.detail}</Text>
-        <Button label="Back to deliveries" onPress={toQueue} />
+      <SafeAreaView style={{ flex: 1, backgroundColor: c.bg, justifyContent: "center" }}>
+        <Column style={{ padding: space.xl, gap: space.lg }}>
+          <Text variant="title" accessibilityLiveRegion="polite">{done.title}</Text>
+          <Text>{r.po?.supplierName ? `${r.po.supplierName}, ` : ""}order {r.po?.poNumber}</Text>
+          <Text variant="muted">{done.detail}</Text>
+          <Button label="Back to deliveries" onPress={toQueue} />
+        </Column>
       </SafeAreaView>
     );
   }
@@ -69,7 +76,8 @@ export default function ReceiveDelivery() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: c.bg }}>
-      <ScrollView contentContainerStyle={{ padding: space.xl, gap: space.lg }} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={{ padding: space.xl }} keyboardShouldPersistTaps="handled">
+        <Column style={{ gap: space.lg }}>
         <View style={{ gap: space.xs }}>
           <Text variant="title">{r.po?.supplierName ?? "Delivery"}</Text>
           <Text variant="meta">Order {r.po?.poNumber} · {r.lines.length} {r.lines.length === 1 ? "item" : "items"}</Text>
@@ -94,15 +102,18 @@ export default function ReceiveDelivery() {
 
         <Button kind="quiet" label="Back to deliveries" onPress={() => router.back()} />
         <Button kind="quiet" label="Cancel receiving" onPress={cancel} />
+        </Column>
       </ScrollView>
       {/* Pinned, as on the web: Confirm is always under the thumb, however long the delivery. */}
-      <View style={{ padding: space.lg, gap: space.sm, borderTopWidth: 1, borderTopColor: c.border, backgroundColor: c.bg }}>
+      <View style={{ padding: space.lg, borderTopWidth: 1, borderTopColor: c.border, backgroundColor: c.bg }}>
+        <Column style={{ gap: space.sm }}>
         {r.confirmError ? <Text variant="error" accessibilityLiveRegion="polite">{r.confirmError}</Text> : null}
         <Button
           label={r.confirming ? "Confirming…" : issues > 0 ? `Confirm delivery · ${issues} ${issues === 1 ? "issue" : "issues"}` : "Confirm delivery"}
           disabled={r.confirming || r.saving.size > 0}
           onPress={() => void r.confirm()}
         />
+        </Column>
       </View>
     </SafeAreaView>
   );
