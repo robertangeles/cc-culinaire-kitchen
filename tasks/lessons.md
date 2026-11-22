@@ -1429,3 +1429,9 @@ builds all tables with CHECKs enforcing. Stop it again when done.
 - **Problem**: HTTP-level tests read the session counter right after the response and saw no charge; the charge runs after the answer is sent.
 - **Fix**: `vi.waitFor` for "charged", a short settle before asserting "not charged".
 - **Rule**: Assert work done after `res.end()` with a wait, and assert its absence only after a pause.
+
+## 2026-11-22 — Two workers share one local test database folder, and the script picks the newest Postgres
+
+- **Problem**: `scripts/localIntegrationDb.sh start` always uses `~/.cache/ck-it-pg` and `ls ... | sort -V | tail -1`, so with Postgres 16, 18 and 19 installed it picked 19 against a folder another worker had made with 18 ("control file appears to be corrupt"), and a second worker running `db:push` there would race the first. The default `pnpm` (9.15.9) also refuses `--frozen-lockfile` because it reads `overrides` from `package.json`, not `pnpm-workspace.yaml`.
+- **Fix**: Made a private cluster under the session scratch folder (own port, own `initdb` from the version that made nothing else), pushed the schema and seeded it there, and ran every pnpm command as `npx pnpm@10.31.0`.
+- **Rule**: When several workers share a machine, give each its own database folder and port, and do not run `db:push` against a folder you did not create. Use the pnpm in `packageManager`.
