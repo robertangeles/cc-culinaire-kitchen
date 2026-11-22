@@ -19,6 +19,9 @@ import {
   getUserStoreLocations,
   getOrgStoreLocations,
 } from "./storeLocationService.js";
+import { hasPermission } from "../middleware/auth.js";
+import type { TokenPayload } from "./authService.js";
+import { AppError } from "../utils/appError.js";
 
 export interface LocationContext {
   /** All locations the user has access to (assigned + admin access) */
@@ -254,4 +257,26 @@ export async function getLocationInOrg(
       ),
     );
   return !!loc;
+}
+
+/**
+ * May this caller use `storeLocationId`? A location sent by the client must be one the
+ * caller is assigned to, which is what `getUserLocationContext` lists (org admins get every
+ * location of their organisation). Holders of `inventory:hq` oversee every location of their
+ * organisation. Being a member of the same organisation is not enough.
+ */
+export async function canAccessLocation(user: TokenPayload, storeLocationId: string): Promise<boolean> {
+  const ctx = await getUserLocationContext(user.sub);
+  if (ctx.locations.some((l) => l.storeLocationId === storeLocationId)) return true;
+  if (ctx.organisationId !== null && hasPermission(user, "inventory:hq")) {
+    return getLocationInOrg(storeLocationId, ctx.organisationId);
+  }
+  return false;
+}
+
+/** 403 LOCATION_NOT_ALLOWED unless {@link canAccessLocation}. Wrong organisation and not assigned answer the same. */
+export async function assertLocationAccess(user: TokenPayload, storeLocationId: string): Promise<void> {
+  if (!(await canAccessLocation(user, storeLocationId))) {
+    throw new AppError(403, "LOCATION_NOT_ALLOWED", "You do not have access to this location");
+  }
 }

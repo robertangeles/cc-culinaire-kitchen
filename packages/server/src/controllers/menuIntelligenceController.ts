@@ -32,7 +32,7 @@ import {
   listYieldVariance,
 } from "../services/yieldVarianceService.js";
 import { recordSale, voidSale, listSales, previewSalesCsv, commitSalesCsv, listSellableConsumables, recordConsumableSale, SaleError } from "../services/saleService.js";
-import { getUserLocationContext } from "../services/locationContextService.js";
+import { getUserLocationContext, assertLocationAccess } from "../services/locationContextService.js";
 
 /** Resolve the caller's org id from their location context. */
 async function resolveSalesOrgId(req: Request, res: Response): Promise<number | null> {
@@ -65,6 +65,7 @@ export async function handleRecordSale(req: Request, res: Response, next: NextFu
       res.status(400).json({ error: "qtySold must be greater than 0" });
       return;
     }
+    if (locationId) await assertLocationAccess(req.user!, locationId);
     const idempotencyKey = (req.header("Idempotency-Key") as string | undefined) ?? undefined;
     const result = await recordSale(orgId, userId, {
       menuItemId: req.params.id as string,
@@ -125,6 +126,7 @@ export async function handleRecordConsumableSale(req: Request, res: Response, ne
       res.status(400).json({ error: "qtySold must be greater than 0" });
       return;
     }
+    if (locationId) await assertLocationAccess(req.user!, locationId);
     const idempotencyKey = (req.header("Idempotency-Key") as string | undefined) ?? undefined;
     const result = await recordConsumableSale(orgId, userId, {
       ingredientId: req.params.ingredientId as string,
@@ -198,6 +200,7 @@ export async function handleListMenuItems(req: Request, res: Response, next: Nex
     const userId = req.user!.sub;
     const category = req.query.category as string | undefined;
     const storeLocationId = req.query.storeLocationId as string | undefined;
+    if (storeLocationId) await assertLocationAccess(req.user!, storeLocationId);
     const items = await getMenuItems(userId, category, storeLocationId);
     res.json(items);
   } catch (err) { next(err); }

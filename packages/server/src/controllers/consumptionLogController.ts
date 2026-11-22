@@ -7,7 +7,7 @@
 
 import type { Request, Response, NextFunction } from "express";
 import pino from "pino";
-import { getUserLocationContext, getLocationInOrg } from "../services/locationContextService.js";
+import { getUserLocationContext, assertLocationAccess } from "../services/locationContextService.js";
 import * as consumptionLogService from "../services/consumptionLogService.js";
 
 const logger = pino({ name: "consumptionLogController" });
@@ -61,6 +61,8 @@ export async function handleLogConsumption(
       return;
     }
 
+    await assertLocationAccess(req.user!, storeLocationId);
+
     const entry = await consumptionLogService.logConsumption(orgId, storeLocationId, userId, {
       ingredientId,
       menuItemId: menuItemId || null,
@@ -95,10 +97,7 @@ export async function handleListLogs(
       return;
     }
 
-    if (!await getLocationInOrg(storeLocationId as string, orgId)) {
-      res.status(400).json({ error: "Location not found" });
-      return;
-    }
+    await assertLocationAccess(req.user!, storeLocationId as string);
 
     const logs = await consumptionLogService.listConsumptionLogs(
       storeLocationId as string,

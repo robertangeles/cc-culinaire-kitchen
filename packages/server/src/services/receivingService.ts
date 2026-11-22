@@ -291,6 +291,16 @@ export async function getSession(sessionId: string, orgId: number) {
   return { session, lines, discrepancies, photos };
 }
 
+/** The location a receiving session belongs to, for the caller's access check. Null when it is not in this organisation. */
+export async function getSessionLocationId(sessionId: string, orgId: number): Promise<string | null> {
+  const [row] = await db
+    .select({ storeLocationId: receivingSession.storeLocationId })
+    .from(receivingSession)
+    .innerJoin(purchaseOrder, eq(receivingSession.poId, purchaseOrder.poId))
+    .where(and(eq(receivingSession.sessionId, sessionId), eq(purchaseOrder.organisationId, orgId)));
+  return row?.storeLocationId ?? null;
+}
+
 // ── actionLine ───────────────────────────────────────────────────────
 
 /**

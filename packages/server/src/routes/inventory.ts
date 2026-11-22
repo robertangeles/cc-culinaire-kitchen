@@ -14,6 +14,7 @@
 import { Router } from "express";
 import { authenticate, requirePermission } from "../middleware/auth.js";
 import { requireSupportedMobileVersion } from "../middleware/mobileVersionPolicy.js";
+import { locationParamGuard } from "../middleware/locationAccess.js";
 import {
   handleListAreas,
   handleCreateArea,
@@ -121,6 +122,7 @@ import {
 
 const router = Router();
 router.use(authenticate);
+router.param("locId", locationParamGuard);
 
 // ─── Ingredient catalog (org-wide) ────────────────────────────────
 

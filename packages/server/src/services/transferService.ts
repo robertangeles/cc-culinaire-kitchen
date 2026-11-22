@@ -158,6 +158,17 @@ async function addStockLevel(
   }
 }
 
+/** Every ingredient on a transfer must belong to the caller's organisation. */
+async function assertIngredientsInOrg(tx: DbOrTx, orgId: number, ingredientIds: string[]) {
+  const found = await tx
+    .select({ id: ingredient.ingredientId })
+    .from(ingredient)
+    .where(and(inArray(ingredient.ingredientId, ingredientIds), eq(ingredient.organisationId, orgId)));
+  if (found.length !== new Set(ingredientIds).size) {
+    throw new Error("One or more ingredients not found in this organisation");
+  }
+}
+
 // ---------------------------------------------------------------------------
 // 1. initiateTransfer
 // ---------------------------------------------------------------------------
@@ -197,20 +208,7 @@ export async function initiateTransfer(
       throw new Error("Location not found in this organisation");
     }
 
-    // Validate all ingredients belong to org
-    const ingredients = await tx
-      .select({ id: ingredient.ingredientId })
-      .from(ingredient)
-      .where(
-        and(
-          inArray(ingredient.ingredientId, ingredientIds),
-          eq(ingredient.organisationId, orgId),
-        ),
-      );
-
-    if (ingredients.length !== new Set(ingredientIds).size) {
-      throw new Error("One or more ingredients not found in this organisation");
-    }
+    await assertIngredientsInOrg(tx, orgId, ingredientIds);
 
     // A line may name the cost layer it draws from; it must be this ingredient's stock at the source.
     for (const line of lines) {
@@ -503,6 +501,15 @@ export async function cancelTransfer(
   });
 }
 
+/** The two ends of a transfer, for the caller's access check. Null when it does not exist in this organisation. */
+export async function getTransferEndpoints(transferId: string, orgId: number) {
+  const [row] = await db
+    .select({ fromLocationId: inventoryTransfer.fromLocationId, toLocationId: inventoryTransfer.toLocationId })
+    .from(inventoryTransfer)
+    .where(and(eq(inventoryTransfer.transferId, transferId), eq(inventoryTransfer.organisationId, orgId)));
+  return row ?? null;
+}
+
 // ---------------------------------------------------------------------------
 // 5. listTransfers
 // ---------------------------------------------------------------------------
@@ -657,46 +664,53 @@ export async function updateTransfer(
     notes?: string;
   },
 ) {
-  const [transfer] = await db
-    .select()
-    .from(inventoryTransfer)
-    .where(
-      and(
-        eq(inventoryTransfer.transferId, transferId),
-        eq(inventoryTransfer.organisationId, orgId),
-      ),
-    );
+  // One transaction: the old lines are deleted and the new ones written together, so a
+  // failure cannot leave the transfer with no lines.
+  return db.transaction(async (tx) => {
+    const [transfer] = await tx
+      .select()
+      .from(inventoryTransfer)
+      .where(
+        and(
+          eq(inventoryTransfer.transferId, transferId),
+          eq(inventoryTransfer.organisationId, orgId),
+        ),
+      )
+      .for("update");
 
-  if (!transfer) throw new Error("not found");
-  if (transfer.status !== "INITIATED") throw new Error("Transfer is no longer editable");
+    if (!transfer) throw new Error("not found");
+    if (transfer.status !== "INITIATED") throw new Error("Transfer is no longer editable");
 
-  // Delete existing lines and replace with new ones
-  await db
-    .delete(inventoryTransferLine)
-    .where(eq(inventoryTransferLine.transferId, transferId));
+    await assertIngredientsInOrg(tx, orgId, data.lines.map((l) => l.ingredientId));
 
-  for (const line of data.lines) {
-    await db
-      .insert(inventoryTransferLine)
-      .values({
-        transferId,
-        ingredientId: line.ingredientId,
-        sentQty: String(line.sentQty),
-        sentUnit: line.sentUnit,
-        lineStatus: "PENDING",
-      });
-  }
+    // Delete existing lines and replace with new ones
+    await tx
+      .delete(inventoryTransferLine)
+      .where(eq(inventoryTransferLine.transferId, transferId));
 
-  // Update notes
-  await db
-    .update(inventoryTransfer)
-    .set({
-      notes: data.notes ?? null,
-      updatedDttm: new Date(),
-    })
-    .where(eq(inventoryTransfer.transferId, transferId));
+    for (const line of data.lines) {
+      await tx
+        .insert(inventoryTransferLine)
+        .values({
+          transferId,
+          ingredientId: line.ingredientId,
+          sentQty: String(line.sentQty),
+          sentUnit: line.sentUnit,
+          lineStatus: "PENDING",
+        });
+    }
 
-  return { updated: true, lineCount: data.lines.length };
+    // Update notes
+    await tx
+      .update(inventoryTransfer)
+      .set({
+        notes: data.notes ?? null,
+        updatedDttm: new Date(),
+      })
+      .where(eq(inventoryTransfer.transferId, transferId));
+
+    return { updated: true, lineCount: data.lines.length };
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -708,41 +722,46 @@ export async function addLinesToTransfer(
   orgId: number,
   lines: Array<{ ingredientId: string; sentQty: number; sentUnit: string }>,
 ) {
-  const [transfer] = await db
-    .select()
-    .from(inventoryTransfer)
-    .where(
-      and(
-        eq(inventoryTransfer.transferId, transferId),
-        eq(inventoryTransfer.organisationId, orgId),
-      ),
-    );
+  return db.transaction(async (tx) => {
+    const [transfer] = await tx
+      .select()
+      .from(inventoryTransfer)
+      .where(
+        and(
+          eq(inventoryTransfer.transferId, transferId),
+          eq(inventoryTransfer.organisationId, orgId),
+        ),
+      )
+      .for("update");
 
-  if (!transfer) throw new Error("not found");
-  if (transfer.status !== "INITIATED") throw new Error("Transfer is no longer editable");
+    if (!transfer) throw new Error("not found");
+    if (transfer.status !== "INITIATED") throw new Error("Transfer is no longer editable");
 
-  // Duplicate check — reject items already in this transfer
-  const existingLines = await db
-    .select({ ingredientId: inventoryTransferLine.ingredientId })
-    .from(inventoryTransferLine)
-    .where(eq(inventoryTransferLine.transferId, transferId));
-  const existingIds = new Set(existingLines.map((l) => l.ingredientId));
-  const duplicates = lines.filter((l) => existingIds.has(l.ingredientId));
-  if (duplicates.length > 0) {
-    throw new Error("Item already exists in this transfer");
-  }
+    await assertIngredientsInOrg(tx, orgId, lines.map((l) => l.ingredientId));
 
-  for (const line of lines) {
-    await db
-      .insert(inventoryTransferLine)
-      .values({
-        transferId,
-        ingredientId: line.ingredientId,
-        sentQty: String(line.sentQty),
-        sentUnit: line.sentUnit,
-        lineStatus: "PENDING",
-      });
-  }
+    // Duplicate check — reject items already in this transfer
+    const existingLines = await tx
+      .select({ ingredientId: inventoryTransferLine.ingredientId })
+      .from(inventoryTransferLine)
+      .where(eq(inventoryTransferLine.transferId, transferId));
+    const existingIds = new Set(existingLines.map((l) => l.ingredientId));
+    const duplicates = lines.filter((l) => existingIds.has(l.ingredientId));
+    if (duplicates.length > 0) {
+      throw new Error("Item already exists in this transfer");
+    }
 
-  return { added: lines.length };
+    for (const line of lines) {
+      await tx
+        .insert(inventoryTransferLine)
+        .values({
+          transferId,
+          ingredientId: line.ingredientId,
+          sentQty: String(line.sentQty),
+          sentUnit: line.sentUnit,
+          lineStatus: "PENDING",
+        });
+    }
+
+    return { added: lines.length };
+  });
 }

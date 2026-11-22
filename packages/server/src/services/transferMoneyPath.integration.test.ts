@@ -124,12 +124,12 @@ describe.skipIf(!RUN)("transfer money path (real DB)", () => {
 
   afterAll(async () => {
     const ingIds = [fx.ingId, fx.ingEachId].filter(Boolean);
-    if (fx.foreignBatchId) await db.delete(fifoBatch).where(eq(fifoBatch.batchId, fx.foreignBatchId));
     if (fx.transferIds.length) {
       await db.delete(fifoBatch).where(inArray(fifoBatch.sourceTransferId, fx.transferIds));
       await db.delete(inventoryTransferLine).where(inArray(inventoryTransferLine.transferId, fx.transferIds));
       await db.delete(inventoryTransfer).where(inArray(inventoryTransfer.transferId, fx.transferIds));
     }
+    if (fx.foreignBatchId) await db.delete(fifoBatch).where(eq(fifoBatch.batchId, fx.foreignBatchId));
     if (ingIds.length) {
       await db.delete(stockMovement).where(inArray(stockMovement.ingredientId, ingIds));
       await db.delete(stockLevel).where(inArray(stockLevel.ingredientId, ingIds));

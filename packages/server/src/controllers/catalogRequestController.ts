@@ -7,7 +7,7 @@
 
 import type { Request, Response, NextFunction } from "express";
 import pino from "pino";
-import { getUserLocationContext } from "../services/locationContextService.js";
+import { getUserLocationContext, assertLocationAccess } from "../services/locationContextService.js";
 import {
   requestNewItem,
   listPendingRequests,
@@ -45,6 +45,8 @@ export async function handleRequestNewItem(
       res.status(400).json({ error: "itemName is required" });
       return;
     }
+
+    if (req.body.storeLocationId) await assertLocationAccess(req.user!, req.body.storeLocationId);
 
     const result = await requestNewItem(
       orgId,
