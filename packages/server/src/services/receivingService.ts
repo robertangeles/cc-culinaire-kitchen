@@ -321,7 +321,8 @@ export async function actionLine(
     const [session] = await tx
       .select()
       .from(receivingSession)
-      .where(eq(receivingSession.sessionId, sessionId));
+      .where(eq(receivingSession.sessionId, sessionId))
+      .for("share");
 
     if (!session) throw new Error("Receiving session not found");
 
@@ -763,7 +764,8 @@ export async function cancelSession(sessionId: string, orgId: number) {
     const [session] = await tx
       .select()
       .from(receivingSession)
-      .where(eq(receivingSession.sessionId, sessionId));
+      .where(eq(receivingSession.sessionId, sessionId))
+      .for("update");
 
     if (!session) throw new Error("Receiving session not found");
 

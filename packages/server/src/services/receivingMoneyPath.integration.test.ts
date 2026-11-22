@@ -227,6 +227,42 @@ describe.skipIf(!RUN)("receiving money path (real DB)", () => {
     expect(await qty(fx.ingId)).toBe(after);
   });
 
+  it("a confirm and a cancel at once: one wins, and a completed session is never overwritten by the cancel", async () => {
+    const { sessionId } = await startedSession(20);
+    const before = await qty(fx.ingId);
+
+    const [confirm, cancel] = await Promise.allSettled([
+      receivingService.confirmReceipt(sessionId, fx.orgId),
+      receivingService.cancelSession(sessionId, fx.orgId),
+    ]);
+
+    const [row] = await db.select({ s: receivingSession.status }).from(receivingSession).where(eq(receivingSession.sessionId, sessionId));
+    if (confirm.status === "fulfilled") {
+      expect(cancel.status).toBe("rejected");
+      expect(row.s).toBe("COMPLETED");
+      expect(await qty(fx.ingId)).toBe(before + 5);
+    } else {
+      expect(cancel.status).toBe("fulfilled");
+      expect(row.s).toBe("CANCELLED");
+      expect(await qty(fx.ingId)).toBe(before);
+    }
+  });
+
+  it("a line action racing a confirm either lands before the confirm books the stock or is refused", async () => {
+    const { sessionId, lineId } = await startedSession(21);
+    const before = await qty(fx.ingId);
+
+    const [action, confirm] = await Promise.allSettled([
+      receivingService.actionLine(lineId, sessionId, { status: "REJECTED", rejectionReason: "damaged" }, fx.orgId),
+      receivingService.confirmReceipt(sessionId, fx.orgId),
+    ]);
+
+    expect(confirm.status).toBe("fulfilled");
+    const [line] = await db.select({ s: receivingLine.status }).from(receivingLine).where(eq(receivingLine.receivingLineId, lineId));
+    expect(line.s).toBe(action.status === "fulfilled" ? "REJECTED" : "RECEIVED");
+    expect(await qty(fx.ingId)).toBe(line.s === "REJECTED" ? before : before + 5);
+  });
+
   it("'All good' after Short puts the ordered quantity back and drops the discrepancy", async () => {
     const { sessionId, lineId } = await startedSession(3);
     await receivingService.actionLine(lineId, sessionId, { status: "SHORT", receivedQty: "2" }, fx.orgId);
