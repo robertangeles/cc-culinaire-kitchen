@@ -16,15 +16,22 @@ import {
   ingredient,
   stockLevel,
   consumptionLog,
-  user,
+  storeLocation,
+  user as user_,
 } from "../db/schema.js";
 import { eq, desc, sql, and, inArray } from "drizzle-orm";
 import { getUserOrgContext } from "./orgContextService.js";
+import { assertLocationAccess } from "./locationContextService.js";
+import type { TokenPayload } from "./authService.js";
+import { canManageSession, canWorkSession } from "./prepAccess.js";
+import { AppError } from "../utils/appError.js";
+import { insertOnce } from "../utils/retrySafe.js";
 import { aggregatePrepLines, attachOnHand, type PrepSourceLine } from "./prepMath.js";
 import { convertUnit as sharedConvertUnit, normalizeUnit } from "@culinaire/shared";
 import { addStock, deductStock } from "./stockService.js";
 import { recordOpsEvent } from "./brainCaptureService.js";
-import { PrepError, parseTimeToMinutes, parseYieldToServings, parseAmountToNumber } from "./prepErrors.js";
+import type { DbOrTx } from "./auditService.js";
+import { parseTimeToMinutes, parseYieldToServings, parseAmountToNumber } from "./prepErrors.js";
 
 const logger = pino({ name: "prepTaskService" });
 
@@ -68,6 +75,8 @@ export interface PrepTaskRow {
   status: string;
   assignedTo: string | null;
   completedAt: string | null;
+  /** The user who ticked it. */
+  completedBy: number | null;
   createdDttm: string;
 }
 
@@ -84,57 +93,98 @@ export interface CrossUsageRow {
 // createPrepSession — creates session WITHOUT auto-generating tasks
 // ---------------------------------------------------------------------------
 
-/** Creates a prep session for the given user and date without auto-generating tasks. */
+export interface CreatePrepSessionInput {
+  /** Chosen by the phone so a retried send finds its own session instead of making a second one. */
+  prepSessionId?: string;
+  prepDate: string;
+  expectedCovers?: number;
+  /** Where the prep is for. Absent: the location saved on the user (the web sends none). */
+  storeLocationId?: string;
+}
+
+/**
+ * Creates a prep session without auto-generating tasks. A location named in the request must be one the
+ * caller works at. `replay` is true when `prepSessionId` was already created by this user.
+ */
 export async function createPrepSession(
-  userId: number,
-  prepDate: string,
-  expectedCovers?: number,
-): Promise<{ session: PrepSessionRow }> {
-  const orgCtx = await getUserOrgContext(userId);
+  user: TokenPayload,
+  input: CreatePrepSessionInput,
+): Promise<{ session: PrepSessionRow; replay: boolean }> {
+  const userId = user.sub;
+  let organisationId: number | null;
+  let storeLocationId: string | null;
+  if (input.storeLocationId) {
+    await assertLocationAccess(user, input.storeLocationId);
+    const [loc] = await db
+      .select({ organisationId: storeLocation.organisationId })
+      .from(storeLocation)
+      .where(eq(storeLocation.storeLocationId, input.storeLocationId));
+    if (!loc) throw new AppError(404, "NOT_FOUND", "Location not found");
+    organisationId = loc.organisationId;
+    storeLocationId = input.storeLocationId;
+  } else {
+    const orgCtx = await getUserOrgContext(userId);
+    const [userRow] = await db
+      .select({ selectedLocationId: user_.selectedLocationId })
+      .from(user_)
+      .where(eq(user_.userId, userId));
+    organisationId = orgCtx.primaryOrgId;
+    storeLocationId = userRow?.selectedLocationId ?? null;
+  }
 
-  const [userRow] = await db
-    .select({ selectedLocationId: user.selectedLocationId })
-    .from(user)
-    .where(eq(user.userId, userId));
-
-  const [row] = await db
-    .insert(prepSession)
-    .values({
-      userId,
-      organisationId: orgCtx.primaryOrgId,
-      storeLocationId: userRow?.selectedLocationId ?? null,
-      prepDate,
-      expectedCovers: expectedCovers ?? null,
-    })
-    .returning();
-
-  logger.info(
-    { prepSessionId: row.prepSessionId, userId, prepDate },
-    "Prep session created (menu-driven, no auto-generation)",
+  const { row, replay } = await insertOnce(
+    userId,
+    () =>
+      db
+        .insert(prepSession)
+        .values({
+          prepSessionId: input.prepSessionId,
+          userId,
+          organisationId,
+          storeLocationId,
+          prepDate: input.prepDate,
+          expectedCovers: input.expectedCovers ?? null,
+        })
+        .onConflictDoNothing({ target: prepSession.prepSessionId })
+        .returning(),
+    async () => (await db.select().from(prepSession).where(eq(prepSession.prepSessionId, input.prepSessionId!)))[0],
   );
 
-  return { session: toSessionRow(row) };
+  if (!replay) {
+    logger.info(
+      { prepSessionId: row.prepSessionId, userId, prepDate: input.prepDate },
+      "Prep session created (menu-driven, no auto-generation)",
+    );
+  }
+
+  return { session: toSessionRow(row), replay };
 }
 
 // ---------------------------------------------------------------------------
 // generateTasksFromSelections — THE KEY FUNCTION
 // ---------------------------------------------------------------------------
 
-/** Generates prep tasks from the saved menu selections for a session. */
+/**
+ * Generates prep tasks from the saved menu selections for a session (the creator, or a `prep:manage` holder
+ * at its location). Each call rebuilds the list, as the web expects. A `requestId` makes a retry safe: the
+ * second send of the same request answers with the stored tasks (`replay: true`) and rebuilds nothing, so
+ * ticks made since survive.
+ */
 export async function generateTasksFromSelections(
   sessionId: string,
-  userId: number,
-): Promise<PrepTaskRow[]> {
-  const [session] = await db
-    .select()
-    .from(prepSession)
-    .where(and(eq(prepSession.prepSessionId, sessionId), eq(prepSession.userId, userId)));
+  user: TokenPayload,
+  requestId?: string,
+): Promise<{ tasks: PrepTaskRow[]; replay: boolean }> {
+  const userId = user.sub;
+  const [session] = await db.select().from(prepSession).where(eq(prepSession.prepSessionId, sessionId));
 
-  if (!session) {
-    throw new PrepError("Prep session not found or not yours", 404);
+  if (!session) throw new AppError(404, "NOT_FOUND", "Prep session not found or not yours");
+  if (!(await canManageSession(user, session))) {
+    throw new AppError(403, "FORBIDDEN", "Only the creator or a prep manager at this location can generate tasks");
   }
-  if (session.isEndedInd) {
-    throw new PrepError("Cannot modify an ended prep session", 409);
+  if (session.isEndedInd) throw new AppError(409, "PREP_SESSION_ENDED", "Cannot modify an ended prep session");
+  if (requestId && session.generateRequestId === requestId) {
+    return { tasks: await storedTasks(sessionId), replay: true };
   }
 
   const selections = await db
@@ -341,16 +391,20 @@ export async function generateTasksFromSelections(
 
   // Persist atomically: clearing + re-inserting a session's tasks must never be
   // observable half-written, and a mid-write failure must roll back cleanly.
-  const taskRows: PrepTaskRow[] = await db.transaction(async (tx) => {
+  const { rows: taskRows, replay } = await db.transaction(async (tx) => {
     // FOR UPDATE serializes concurrent generateTasksFromSelections calls on the
     // same session — the second caller blocks until the first commits/rolls back.
     const [locked] = await tx
-      .select({ isEndedInd: prepSession.isEndedInd })
+      .select({ isEndedInd: prepSession.isEndedInd, generateRequestId: prepSession.generateRequestId })
       .from(prepSession)
-      .where(and(eq(prepSession.prepSessionId, sessionId), eq(prepSession.userId, userId)))
+      .where(eq(prepSession.prepSessionId, sessionId))
       .for("update");
-    if (!locked) throw new PrepError("Prep session not found or not yours", 404);
-    if (locked.isEndedInd) throw new PrepError("Cannot modify an ended prep session", 409);
+    if (!locked) throw new AppError(404, "NOT_FOUND", "Prep session not found or not yours");
+    if (locked.isEndedInd) throw new AppError(409, "PREP_SESSION_ENDED", "Cannot modify an ended prep session");
+    // The same request, sent twice at once: the second waited for the lock and finds the first one's work.
+    if (requestId && locked.generateRequestId === requestId) {
+      return { rows: await storedTasks(sessionId, tx), replay: true };
+    }
 
     await tx.delete(prepTask).where(eq(prepTask.prepSessionId, sessionId));
     await tx.delete(ingredientCrossUsage).where(eq(ingredientCrossUsage.prepSessionId, sessionId));
@@ -359,7 +413,7 @@ export async function generateTasksFromSelections(
       const tier = i < topCutoff ? "start_first" : i < midCutoff ? "then_these" : "can_wait";
       return {
         prepSessionId: sessionId,
-        userId,
+        userId: session.userId,
         menuItemId: line.menuItemIds[0] ?? null,
         recipeId: line.recipeIds[0] ?? null,
         ingredientId: line.ingredientId,
@@ -383,7 +437,7 @@ export async function generateTasksFromSelections(
     const crossUsageValues = aggregated
       .filter((line) => line.dishes.length >= 2)
       .map((line) => ({
-        userId,
+        userId: session.userId,
         prepSessionId: sessionId,
         ingredientId: line.ingredientId,
         ingredientName: line.ingredientName,
@@ -398,10 +452,10 @@ export async function generateTasksFromSelections(
 
     await tx
       .update(prepSession)
-      .set({ tasksTotal: rows.length, updatedDttm: new Date() })
+      .set({ tasksTotal: rows.length, generateRequestId: requestId ?? null, updatedDttm: new Date() })
       .where(eq(prepSession.prepSessionId, sessionId));
 
-    return rows;
+    return { rows, replay: false };
   });
 
   logger.info(
@@ -409,31 +463,50 @@ export async function generateTasksFromSelections(
     "Prep tasks generated from menu selections",
   );
 
-  return taskRows;
+  return { tasks: taskRows, replay };
+}
+
+/** The tasks a session already has, most urgent first. */
+async function storedTasks(sessionId: string, tx: DbOrTx = db): Promise<PrepTaskRow[]> {
+  const rows = await tx.select().from(prepTask).where(eq(prepTask.prepSessionId, sessionId)).orderBy(desc(prepTask.priorityScore));
+  return rows.map(toTaskRow);
 }
 
 // ---------------------------------------------------------------------------
 // getTodaySession — find existing session for today, no auto-create
 // ---------------------------------------------------------------------------
 
-/** Finds an existing prep session for today without creating one. */
+/**
+ * Finds an existing prep session for today without creating one.
+ *
+ * With `date` (the phone) "today" is that date's open session at `storeLocationId`, whoever created it:
+ * every cook at the location works from the same list. Without it (the web) it stays the caller's newest
+ * open session, optionally narrowed to a location.
+ */
 export async function getTodaySession(
-  userId: number,
+  user: TokenPayload,
   teamView?: boolean,
   storeLocationId?: string,
+  date?: string,
 ): Promise<{ session: PrepSessionRow; tasks: PrepTaskRow[] } | null> {
-  let userFilter;
-  if (teamView) {
-    const orgCtx = await getUserOrgContext(userId);
-    userFilter = orgCtx.orgMemberUserIds.length > 0
-      ? inArray(prepSession.userId, orgCtx.orgMemberUserIds)
-      : eq(prepSession.userId, userId);
+  const userId = user.sub;
+  const conditions = [eq(prepSession.isEndedInd, false)];
+  if (date && storeLocationId) {
+    await assertLocationAccess(user, storeLocationId);
+    conditions.push(eq(prepSession.prepDate, date), eq(prepSession.storeLocationId, storeLocationId));
   } else {
-    userFilter = eq(prepSession.userId, userId);
+    let userFilter;
+    if (teamView) {
+      const orgCtx = await getUserOrgContext(userId);
+      userFilter = orgCtx.orgMemberUserIds.length > 0
+        ? inArray(prepSession.userId, orgCtx.orgMemberUserIds)
+        : eq(prepSession.userId, userId);
+    } else {
+      userFilter = eq(prepSession.userId, userId);
+    }
+    conditions.push(userFilter);
+    if (storeLocationId) conditions.push(eq(prepSession.storeLocationId, storeLocationId));
   }
-
-  const conditions = [userFilter, eq(prepSession.isEndedInd, false)];
-  if (storeLocationId) conditions.push(eq(prepSession.storeLocationId, storeLocationId));
 
   const existing = await db
     .select()
@@ -459,28 +532,14 @@ export async function getTodaySession(
 // getPrepSession
 // ---------------------------------------------------------------------------
 
-/** Returns a prep session by ID, scoped to the given user. */
+/** Returns a prep session by ID: your own, a colleague's at a location you work at, or (team view) any in your organisation. */
 export async function getPrepSession(
   sessionId: string,
-  userId: number,
+  user: TokenPayload,
   teamView?: boolean,
 ): Promise<{ session: PrepSessionRow; tasks: PrepTaskRow[] } | null> {
-  let ownerFilter;
-  if (teamView) {
-    const orgCtx = await getUserOrgContext(userId);
-    ownerFilter = orgCtx.orgMemberUserIds.length > 0
-      ? and(eq(prepSession.prepSessionId, sessionId), inArray(prepSession.userId, orgCtx.orgMemberUserIds))
-      : and(eq(prepSession.prepSessionId, sessionId), eq(prepSession.userId, userId));
-  } else {
-    ownerFilter = and(eq(prepSession.prepSessionId, sessionId), eq(prepSession.userId, userId));
-  }
-
-  const [session] = await db
-    .select()
-    .from(prepSession)
-    .where(ownerFilter);
-
-  if (!session) return null;
+  const [session] = await db.select().from(prepSession).where(eq(prepSession.prepSessionId, sessionId));
+  if (!session || !(await canReadSession(user, session, teamView))) return null;
 
   const tasks = await db
     .select()
@@ -491,130 +550,169 @@ export async function getPrepSession(
   return { session: toSessionRow(session), tasks: tasks.map(toTaskRow) };
 }
 
+async function canReadSession(
+  user: TokenPayload,
+  session: typeof prepSession.$inferSelect,
+  teamView?: boolean,
+): Promise<boolean> {
+  if (await canWorkSession(user, session)) return true;
+  if (!teamView) return false;
+  const orgCtx = await getUserOrgContext(user.sub);
+  return orgCtx.orgMemberUserIds.includes(session.userId);
+}
+
 // ---------------------------------------------------------------------------
 // updateTaskStatus
 // ---------------------------------------------------------------------------
 
-/** Updates the status of a single prep task. */
+export interface TaskUpdate {
+  status: string;
+  /** `null` clears it. */
+  assignedTo?: string | null;
+  /** When the tick happened on the device (an offline tick); never later than now. */
+  completedAt?: Date;
+  /** The status the device last saw. If the task is somewhere else by now, nothing changes (409 PREP_TASK_CHANGED). */
+  expectedStatus?: string;
+}
+
+/**
+ * Updates one prep task. Any member who works at the session's location may; the server records who completed it.
+ * The status change and its stock effect commit together or not at all.
+ */
 export async function updateTaskStatus(
   taskId: string,
-  userId: number,
-  status: string,
-  assignedTo?: string,
-): Promise<PrepTaskRow | null> {
-  // Read previous status to detect real transitions (B10: prevent double-deduct).
-  const [existing] = await db
-    .select({ status: prepTask.status, prepSessionId: prepTask.prepSessionId })
-    .from(prepTask)
-    .where(and(eq(prepTask.prepTaskId, taskId), eq(prepTask.userId, userId)));
-  if (!existing) return null;
+  user: TokenPayload,
+  update: TaskUpdate,
+): Promise<PrepTaskRow> {
+  const userId = user.sub;
+  const { status } = update;
 
-  const prevStatus = existing.status;
+  const result = await db.transaction(async (tx) => {
+    // FOR UPDATE: two devices ticking the same task take turns, so exactly one sees the transition.
+    const [task] = await tx.select().from(prepTask).where(eq(prepTask.prepTaskId, taskId)).for("update");
+    if (!task) throw new AppError(404, "NOT_FOUND", "Task not found");
 
-  // B9: Guard against modifying ended sessions.
-  const [sess] = await db
-    .select({ isEndedInd: prepSession.isEndedInd, storeLocationId: prepSession.storeLocationId, organisationId: prepSession.organisationId })
-    .from(prepSession)
-    .where(eq(prepSession.prepSessionId, existing.prepSessionId));
-  if (sess?.isEndedInd) return null;
+    const [sess] = await tx.select().from(prepSession).where(eq(prepSession.prepSessionId, task.prepSessionId));
+    if (!sess || !(await canWorkSession(user, sess))) {
+      throw new AppError(403, "FORBIDDEN", "You do not work at this session's location");
+    }
+    if (sess.isEndedInd) throw new AppError(409, "PREP_SESSION_ENDED", "This prep session has ended");
 
-  const updateValues: Record<string, unknown> = {
-    status,
-    updatedDttm: new Date(),
-  };
+    const prevStatus = task.status;
+    const unchanged = prevStatus === status;
+    // Already where the device wants it (its own retry, or another device got there first): not a conflict.
+    if (!unchanged && update.expectedStatus !== undefined && update.expectedStatus !== prevStatus) {
+      throw new AppError(409, "PREP_TASK_CHANGED", `Another device changed this task to ${prevStatus}`);
+    }
 
-  if (assignedTo !== undefined) updateValues.assignedTo = assignedTo;
-  if (status === "completed") updateValues.completedAt = new Date();
-  else updateValues.completedAt = null;
-
-  // CAS guard: only update if the status in the DB still matches what we read above.
-  // Without this, two concurrent calls both read prevStatus="pending", both pass the
-  // becomingCompleted check, and both deduct stock.
-  const [updated] = await db
-    .update(prepTask)
-    .set(updateValues)
-    .where(and(eq(prepTask.prepTaskId, taskId), eq(prepTask.userId, userId), eq(prepTask.status, prevStatus)))
-    .returning();
-
-  if (!updated) return null;
-
-  // Stock deduction/restoration: only on real transitions to/from "completed".
-  const becomingCompleted = status === "completed" && prevStatus !== "completed";
-  const leavingCompleted = status !== "completed" && prevStatus === "completed";
-
-  if (updated.ingredientId && sess?.storeLocationId && (becomingCompleted || leavingCompleted)) {
-    const deductQty = Number(updated.quantityNeeded);
-    if (deductQty > 0) {
-      const [ing] = await db
-        .select({ baseUnit: ingredient.baseUnit })
-        .from(ingredient)
-        .where(eq(ingredient.ingredientId, updated.ingredientId));
-      const baseUnit = ing?.baseUnit ?? updated.unit;
-      const nFrom = normalizeUnit(updated.unit);
-      const nTo = normalizeUnit(baseUnit);
-      let baseQty = deductQty;
-      if (nFrom && nTo && nFrom !== nTo) {
-        try { baseQty = sharedConvertUnit(deductQty, nFrom, nTo); }
-        catch { baseQty = 0; }
-      }
-      if (baseQty > 0) {
-        // B11: Only add back if a stock_level row exists (don't create phantom stock).
-        try {
-          if (becomingCompleted) {
-            await deductStock(sess.storeLocationId, updated.ingredientId, baseQty);
-          } else {
-            const [stockRow] = await db
-              .select({ id: stockLevel.stockLevelId })
-              .from(stockLevel)
-              .where(and(eq(stockLevel.storeLocationId, sess.storeLocationId), eq(stockLevel.ingredientId, updated.ingredientId)));
-            if (stockRow) await addStock(sess.storeLocationId, updated.ingredientId, baseQty);
-          }
-          if (sess.organisationId) {
-            await db.insert(consumptionLog).values({
-              organisationId: sess.organisationId,
-              storeLocationId: sess.storeLocationId,
-              ingredientId: updated.ingredientId,
-              menuItemId: updated.menuItemId,
-              userId,
-              quantity: String(deductQty),
-              unit: updated.unit,
-              baseQty: String(baseQty),
-              reason: becomingCompleted ? "prep" : "return_to_stock",
-              notes: `Prep task: ${updated.taskDescription}`,
-            });
-          }
-        } catch (err) {
-          logger.warn({ taskId, ingredientId: updated.ingredientId, baseQty, err }, "Stock adjustment failed — task status still updated");
-        }
+    const values: Record<string, unknown> = { updatedDttm: new Date() };
+    if (update.assignedTo !== undefined) values.assignedTo = update.assignedTo;
+    if (!unchanged) {
+      values.status = status;
+      if (status === "completed") {
+        const now = new Date();
+        values.completedAt = update.completedAt && update.completedAt < now ? update.completedAt : now;
+        values.completedBy = userId;
+      } else {
+        values.completedAt = null;
+        values.completedBy = null;
       }
     }
+    const [updated] = await tx.update(prepTask).set(values).where(eq(prepTask.prepTaskId, taskId)).returning();
+
+    // Stock deduction/restoration: only on real transitions to/from "completed".
+    const becomingCompleted = status === "completed" && prevStatus !== "completed";
+    const leavingCompleted = status !== "completed" && prevStatus === "completed";
+    if (updated.ingredientId && sess.storeLocationId && (becomingCompleted || leavingCompleted)) {
+      await adjustStockForTask(tx, updated, sess, userId, becomingCompleted);
+    }
+
+    const [counts] = await tx
+      .select({
+        total: sql<number>`count(*)::int`,
+        completed: sql<number>`count(*) filter (where ${prepTask.status} = 'completed')::int`,
+        skipped: sql<number>`count(*) filter (where ${prepTask.status} = 'skipped')::int`,
+      })
+      .from(prepTask)
+      .where(eq(prepTask.prepSessionId, updated.prepSessionId));
+
+    await tx
+      .update(prepSession)
+      .set({
+        tasksTotal: Number(counts.total),
+        tasksCompleted: Number(counts.completed),
+        tasksSkipped: Number(counts.skipped),
+        updatedDttm: new Date(),
+      })
+      .where(eq(prepSession.prepSessionId, updated.prepSessionId));
+
+    return updated;
+  });
+
+  logger.info({ taskId, status, sessionId: result.prepSessionId, userId }, "Prep task status updated");
+
+  return toTaskRow(result);
+}
+
+/**
+ * Moves stock for a task that was just completed (deduct) or un-completed (add back), and writes the
+ * consumption row, inside the caller's transaction: if any of it fails the tick rolls back with it.
+ *
+ * Not tracked, so skipped on purpose: an ingredient with no stock row at this location, and a unit that
+ * cannot be converted to the ingredient's base unit (logged as a warning; the item's set-up needs fixing).
+ */
+async function adjustStockForTask(
+  tx: DbOrTx,
+  task: typeof prepTask.$inferSelect,
+  sess: typeof prepSession.$inferSelect,
+  userId: number,
+  deduct: boolean,
+): Promise<void> {
+  const deductQty = Number(task.quantityNeeded);
+  if (!(deductQty > 0) || !task.ingredientId || !sess.storeLocationId) return;
+
+  const [ing] = await tx
+    .select({ baseUnit: ingredient.baseUnit })
+    .from(ingredient)
+    .where(eq(ingredient.ingredientId, task.ingredientId));
+  const baseUnit = ing?.baseUnit ?? task.unit;
+  const nFrom = normalizeUnit(task.unit);
+  const nTo = normalizeUnit(baseUnit);
+  let baseQty = deductQty;
+  if (nFrom && nTo && nFrom !== nTo) {
+    try {
+      baseQty = sharedConvertUnit(deductQty, nFrom, nTo);
+    } catch {
+      logger.warn({ taskId: task.prepTaskId, ingredientId: task.ingredientId, from: task.unit, to: baseUnit }, "Prep task unit cannot be converted to the base unit: no stock adjustment");
+      return;
+    }
   }
+  if (!(baseQty > 0)) return;
 
-  const [counts] = await db
-    .select({
-      total: sql<number>`count(*)::int`,
-      completed: sql<number>`count(*) filter (where ${prepTask.status} = 'completed')::int`,
-      skipped: sql<number>`count(*) filter (where ${prepTask.status} = 'skipped')::int`,
-    })
-    .from(prepTask)
-    .where(eq(prepTask.prepSessionId, updated.prepSessionId));
+  // B11: never create phantom stock: no stock row here means this location does not track the item.
+  const [stockRow] = await tx
+    .select({ id: stockLevel.stockLevelId })
+    .from(stockLevel)
+    .where(and(eq(stockLevel.storeLocationId, sess.storeLocationId), eq(stockLevel.ingredientId, task.ingredientId), eq(stockLevel.zone, "BOH")));
+  if (!stockRow) return;
 
-  await db
-    .update(prepSession)
-    .set({
-      tasksTotal: Number(counts.total),
-      tasksCompleted: Number(counts.completed),
-      tasksSkipped: Number(counts.skipped),
-      updatedDttm: new Date(),
-    })
-    .where(eq(prepSession.prepSessionId, updated.prepSessionId));
+  if (deduct) await deductStock(sess.storeLocationId, task.ingredientId, baseQty, tx);
+  else await addStock(sess.storeLocationId, task.ingredientId, baseQty, tx);
 
-  logger.info(
-    { taskId, status, sessionId: updated.prepSessionId },
-    "Prep task status updated",
-  );
-
-  return toTaskRow(updated);
+  if (sess.organisationId) {
+    await tx.insert(consumptionLog).values({
+      organisationId: sess.organisationId,
+      storeLocationId: sess.storeLocationId,
+      ingredientId: task.ingredientId,
+      menuItemId: task.menuItemId,
+      userId,
+      quantity: String(deductQty),
+      unit: task.unit,
+      baseQty: String(baseQty),
+      reason: deduct ? "prep" : "return_to_stock",
+      notes: `Prep task: ${task.taskDescription}`,
+    });
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -624,9 +722,10 @@ export async function updateTaskStatus(
 /** Returns cross-usage data showing which ingredients appear across multiple prep tasks. */
 export async function getIngredientCrossUsage(
   sessionId: string,
-  userId?: number,
+  user: TokenPayload,
   teamView?: boolean,
 ): Promise<CrossUsageRow[]> {
+  const userId = user.sub;
   let sessionFilter;
   if (teamView && userId) {
     const orgCtx = await getUserOrgContext(userId);
@@ -652,13 +751,8 @@ export async function getIngredientCrossUsage(
       sessionFilter = eq(ingredientCrossUsage.prepSessionId, sessionId);
     }
   } else {
-    if (userId) {
-      const [own] = await db
-        .select({ id: prepSession.prepSessionId })
-        .from(prepSession)
-        .where(and(eq(prepSession.prepSessionId, sessionId), eq(prepSession.userId, userId)));
-      if (!own) return [];
-    }
+    const [session] = await db.select().from(prepSession).where(eq(prepSession.prepSessionId, sessionId));
+    if (!session || !(await canWorkSession(user, session))) return [];
     sessionFilter = eq(ingredientCrossUsage.prepSessionId, sessionId);
   }
 
@@ -716,12 +810,22 @@ export async function getSessionHistory(
 // endSession
 // ---------------------------------------------------------------------------
 
-/** Marks a prep session as ended and records actual covers. */
+/**
+ * Marks a prep session as ended and records actual covers. The creator, or a `prep:manage` holder at its
+ * location, may. A repeat (or an end by someone who got there first) succeeds with the session as it is.
+ */
 export async function endSession(
   sessionId: string,
-  userId: number,
+  user: TokenPayload,
   actualCovers?: number,
-): Promise<PrepSessionRow | null> {
+): Promise<PrepSessionRow> {
+  const userId = user.sub;
+  const [session] = await db.select().from(prepSession).where(eq(prepSession.prepSessionId, sessionId));
+  if (!session) throw new AppError(404, "NOT_FOUND", "Prep session not found or not yours");
+  if (!(await canManageSession(user, session))) {
+    throw new AppError(403, "FORBIDDEN", "Only the creator or a prep manager at this location can end this session");
+  }
+
   const updateValues: Record<string, unknown> = {
     isEndedInd: true,
     updatedDttm: new Date(),
@@ -731,10 +835,10 @@ export async function endSession(
   const [updated] = await db
     .update(prepSession)
     .set(updateValues)
-    .where(and(eq(prepSession.prepSessionId, sessionId), eq(prepSession.userId, userId), eq(prepSession.isEndedInd, false)))
+    .where(and(eq(prepSession.prepSessionId, sessionId), eq(prepSession.isEndedInd, false)))
     .returning();
 
-  if (!updated) return null;
+  if (!updated) return toSessionRow(session);
 
   const prepDateStr =
     typeof updated.prepDate === "string"
@@ -805,6 +909,7 @@ function toTaskRow(r: typeof prepTask.$inferSelect): PrepTaskRow {
     status: r.status,
     assignedTo: r.assignedTo,
     completedAt: r.completedAt?.toISOString() ?? null,
+    completedBy: r.completedBy,
     createdDttm: r.createdDttm.toISOString(),
   };
 }

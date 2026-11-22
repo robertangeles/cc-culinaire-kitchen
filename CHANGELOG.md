@@ -5,6 +5,36 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Changed (mobile Wave 2, server: the line loop)
+
+**Apply migration `0002_prep_completed_by` by hand on production BEFORE this version deploys** (`pnpm --filter @culinaire/server exec tsx src/scripts/migrate.ts`, then `backfillWastePrepPermissions.ts`). Both new columns are nullable, so the previous server keeps working after the migration. The web behaves as before.
+
+- **Retried writes do not double up.** Waste, consumption, stock movements and prep sessions accept a client-made `id` (`wasteLogId`, `consumptionLogId`, `stockMovementId`, `prepSessionId`): a repeat answers 200 with the stored row and changes nothing (no second stock deduction); an id held by someone else is 409 `CONFLICT`. A repeat of a delete answers success. Prep generate takes an optional `requestId`; a repeat answers with the stored tasks and rebuilds nothing, so ticks survive. Without these fields everything behaves as before.
+- **Waste.** The location in the request decides where an entry lands (checked against the caller's locations), so a log replayed after a location switch stays where it was made. A date-only report range now includes its end day. The ingredient suggestions query works again (it was a Postgres error). The team/personal toggle context (`GET /api/waste/org-context`) no longer needs `waste:read`.
+- **Prep.** Any member who works at the session's location can tick tasks; the server records who (`completedBy`) and keeps the client's `completedAt` (never later than now). `expectedStatus` stops an assign reverting a task another device completed. Ended session, lost race and forbidden each answer with their own code. "Today's session" with `date` and `storeLocationId` is that day's open session at that location, whoever made it. The stock effect of a tick commits or rolls back with it. Generate, end and saving selections are for the creator or a `prep:manage` holder at the location.
+- **Consumption log and stock movements.** The log, its edit and delete each commit together with their stock change; concurrent entries take turns on the stock row. Refusals carry codes.
+- **Permissions.** New `waste:log` (log, edit, delete your own entries) and `prep:read` (read prep, tick tasks). `waste:read` is reports and the team view; `prep:manage` is create, generate and end. The backfill gives every role that holds the old key the new one, so no role loses access.
+- **New error codes** (shared `ApiErrorBody`): `PREP_SESSION_ENDED`, `PREP_TASK_CHANGED` (both 409).
+
+Where the plan and the code disagreed (the code won): the consumption log already checked the body `storeLocationId` and already coded its edit/delete refusals (PR 201), and `:locId` movement routes already pass the location guard, so those got only idempotency, atomic stock and codes. The waste suggestions failed twice (a set-returning function in `WHERE`, and `SELECT DISTINCT` ordered by an unselected column). Prep ticking is gated by location membership plus the module key (`prep:read` or `prep:manage`), not by a new `prep:execute` key. A delete of an entry that is gone answers success for waste and consumption (the 404 test for consumption was changed to say so).
+
+Route changes the phone can adopt (all additive; an old build keeps working):
+
+| Route | New |
+|---|---|
+| `POST /api/waste` | body `wasteLogId` (uuid), `storeLocationId`; 200 on a repeat, 201 first time; 403 `LOCATION_NOT_ALLOWED`; 409 `CONFLICT`; row now carries `storeLocationId` |
+| `DELETE /api/waste/:id` | gone = 200 `{ok:true}`; someone else's = 403 `FORBIDDEN` (was 404); `PATCH` of a missing entry = 404 `NOT_FOUND` |
+| `GET /api/waste`, `/summary` | date-only `endDate` includes that day; `teamView=true` needs `waste:read` (403 `FORBIDDEN`) |
+| `GET /api/waste/org-context` | open to `waste:read`, `waste:log`, `prep:read`, `prep:manage` |
+| `POST /api/prep/sessions` | body `prepSessionId`, `storeLocationId`; `prepDate` must be `YYYY-MM-DD` (400); 200 on a repeat |
+| `GET /api/prep/sessions/today` | `?date=YYYY-MM-DD&storeLocationId=` returns that day's open session at the location (400 if only `date`) |
+| `PATCH /api/prep/tasks/:id` | body `completedAt`, `expectedStatus`, `assignedTo: null`; answers 403 `FORBIDDEN`, 404 `NOT_FOUND`, 409 `PREP_SESSION_ENDED`, 409 `PREP_TASK_CHANGED`; task rows carry `completedBy` |
+| `POST /api/prep/sessions/:id/generate` | body `requestId` (uuid); 200 with the stored tasks on a repeat, 201 on a rebuild |
+| `PATCH /api/prep/sessions/:id/end` | a repeat answers 200 with the session (was 404); 403 `FORBIDDEN`, 404 `NOT_FOUND` |
+| `POST /api/inventory/consumption-logs` | body `consumptionLogId`; 200 on a repeat; unknown ingredient 404 `NOT_FOUND` (was 500) |
+| `DELETE /api/inventory/consumption-logs/:id` | gone = 200 `{success:true}` (was 404) |
+| `POST /api/inventory/locations/:locId/stock-movements` | body `stockMovementId`; 200 on a repeat; refusals carry `VALIDATION`, `NOT_FOUND` or `INCOMPATIBLE_UNITS` |
+
 ### Fixed (mobile Wave 0, server)
 
 - **Public recipe pages escape recipe text.** A recipe title, description or image URL could close the page's `<title>`, a meta attribute or the JSON-LD script and run script for every visitor.

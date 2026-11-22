@@ -365,7 +365,7 @@ describe.skipIf(!RUN)("storage areas + stock movements — real DB", () => {
     const before = await readStock();
     expect(Number(before.currentQty)).toBe(24);
 
-    const moved = await createMovement(fx.locId, fx.orgId, fx.userId, {
+    const { movement: moved } = await createMovement(fx.locId, fx.orgId, fx.userId, {
       ingredientId: fx.wineId,
       fromStorageAreaId: room.storageAreaId,
       toStorageAreaId: bar.storageAreaId,
@@ -386,7 +386,7 @@ describe.skipIf(!RUN)("storage areas + stock movements — real DB", () => {
     const room = areas.find((a) => a.areaName === "Stock Room")!;
     const bar = areas.find((a) => a.areaName === "Bar")!;
 
-    const moved = await createMovement(fx.locId, fx.orgId, fx.userId, {
+    const { movement: moved } = await createMovement(fx.locId, fx.orgId, fx.userId, {
       ingredientId: fx.wineId,
       fromStorageAreaId: room.storageAreaId,
       toStorageAreaId: bar.storageAreaId,

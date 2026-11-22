@@ -147,8 +147,10 @@ async function seed() {
     { permissionKey: "sales:read", permissionDescription: "View FOH sales history and revenue reports" },
     // Kitchen Operations module permissions (gate the Menu & Costing, Waste, and Prep modules)
     { permissionKey: "menu:read", permissionDescription: "View Menu & Costing — menu engineering, food cost %, and P&L per item" },
-    { permissionKey: "waste:read", permissionDescription: "View Waste analytics and log wastage" },
+    { permissionKey: "waste:read", permissionDescription: "View Waste analytics, cost reports and the team view" },
+    { permissionKey: "waste:log", permissionDescription: "Log, edit and delete your own waste entries" },
     { permissionKey: "prep:manage", permissionDescription: "Create and manage Prep (mise en place) sessions and tasks" },
+    { permissionKey: "prep:read", permissionDescription: "View Prep sessions and tick prep tasks at your location" },
     // The Brain — per-user AI memory (docs/specs/brain-memory.md)
     { permissionKey: "brain:read", permissionDescription: "View Your Brain — the memories CulinAIre has captured for you" },
     { permissionKey: "brain:manage", permissionDescription: "Delete and correct Brain memories (own memories; org admins also manage org-shared memories)" },
@@ -191,7 +193,7 @@ async function seed() {
       "inventory:count", "inventory:manage", "inventory:transfer", "inventory:hq",
       "purchasing:draft", "purchasing:submit", "purchasing:approve", "purchasing:receive", "purchasing:credit",
       "sales:record", "sales:read",
-      "menu:read", "waste:read", "prep:manage",
+      "menu:read", "waste:read", "waste:log", "prep:manage", "prep:read",
       "brain:read", "brain:manage",
       "compliance:read-own", "compliance:read-all", "compliance:verify", "compliance:manage-rules",
       "roster:read-own", "roster:read-all", "roster:manage", "roster:publish", "roster:manage-award-rules",
@@ -203,7 +205,7 @@ async function seed() {
     Subscriber: [
       "chat:access", "org:create-organisation", "inventory:count", "purchasing:draft", "purchasing:receive",
       "sales:record", "sales:read",
-      "menu:read", "waste:read", "prep:manage",
+      "menu:read", "waste:read", "waste:log", "prep:manage", "prep:read",
       "brain:read", "brain:manage",
       "compliance:read-own",
       "roster:read-own",
@@ -219,7 +221,7 @@ async function seed() {
       "inventory:count", "inventory:manage", "inventory:transfer",
       "purchasing:draft", "purchasing:submit", "purchasing:receive", "purchasing:credit",
       "sales:record", "sales:read",
-      "menu:read", "waste:read", "prep:manage",
+      "menu:read", "waste:read", "waste:log", "prep:manage", "prep:read",
       "brain:read", "brain:manage",
       "compliance:read-own", "compliance:read-all", "compliance:verify",
       "roster:read-own", "roster:read-all", "roster:manage", "roster:publish",

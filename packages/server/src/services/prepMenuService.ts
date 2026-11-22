@@ -15,7 +15,10 @@ import {
 import { eq, desc, sql, and, inArray } from "drizzle-orm";
 import { getUserOrgContext } from "./orgContextService.js";
 import { computeSuggestedSelections } from "./prepMath.js";
-import { PrepError, parseTimeToMinutes } from "./prepErrors.js";
+import { parseTimeToMinutes } from "./prepErrors.js";
+import { canManageSession, canWorkSession } from "./prepAccess.js";
+import { AppError } from "../utils/appError.js";
+import type { TokenPayload } from "./authService.js";
 
 const logger = pino({ name: "prepMenuService" });
 
@@ -207,20 +210,16 @@ export async function suggestSelections(
 /** Persists the chef's dish picks for a prep session. */
 export async function saveMenuSelections(
   sessionId: string,
-  userId: number,
+  user: TokenPayload,
   selections: MenuSelectionInput[],
 ): Promise<MenuSelectionRow[]> {
-  const [session] = await db
-    .select()
-    .from(prepSession)
-    .where(and(eq(prepSession.prepSessionId, sessionId), eq(prepSession.userId, userId)));
+  const [session] = await db.select().from(prepSession).where(eq(prepSession.prepSessionId, sessionId));
 
-  if (!session) {
-    throw new PrepError("Prep session not found or not yours", 404);
+  if (!session) throw new AppError(404, "NOT_FOUND", "Prep session not found or not yours");
+  if (!(await canManageSession(user, session))) {
+    throw new AppError(403, "FORBIDDEN", "Only the creator or a prep manager at this location can change the selections");
   }
-  if (session.isEndedInd) {
-    throw new PrepError("Cannot modify an ended prep session", 409);
-  }
+  if (session.isEndedInd) throw new AppError(409, "PREP_SESSION_ENDED", "Cannot modify an ended prep session");
 
   const rows = await db.transaction(async (tx) => {
     await tx
@@ -259,21 +258,18 @@ export async function saveMenuSelections(
 /** Returns the dish selections saved for a given prep session. */
 export async function getSelections(
   sessionId: string,
-  userId: number,
+  user: TokenPayload,
   teamView?: boolean,
 ): Promise<MenuSelectionRow[]> {
-  let ownerFilter;
-  if (teamView) {
-    const orgCtx = await getUserOrgContext(userId);
-    ownerFilter = orgCtx.orgMemberUserIds.length > 0
-      ? and(eq(prepSession.prepSessionId, sessionId), inArray(prepSession.userId, orgCtx.orgMemberUserIds))
-      : and(eq(prepSession.prepSessionId, sessionId), eq(prepSession.userId, userId));
-  } else {
-    ownerFilter = and(eq(prepSession.prepSessionId, sessionId), eq(prepSession.userId, userId));
-  }
-
-  const [session] = await db.select().from(prepSession).where(ownerFilter);
+  const [session] = await db.select().from(prepSession).where(eq(prepSession.prepSessionId, sessionId));
   if (!session) return [];
+
+  let allowed = false;
+  if (teamView) {
+    const orgCtx = await getUserOrgContext(user.sub);
+    allowed = orgCtx.orgMemberUserIds.includes(session.userId);
+  }
+  if (!allowed && !(await canWorkSession(user, session))) return [];
 
   const rows = await db
     .select()

@@ -1032,6 +1032,8 @@ export const prepSession = pgTable("prep_session", {
   tasksSkipped: integer("tasks_skipped").default(0).notNull(),
   notes: text("notes"),
   isEndedInd: boolean("is_ended_ind").notNull().default(false),
+  /** Id of the last generate request that rebuilt this session's tasks; a replay of it must not rebuild them again. */
+  generateRequestId: uuid("generate_request_id"),
   createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
   updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
@@ -1079,6 +1081,8 @@ export const prepTask = pgTable("prep_task", {
   status: varchar("status", { length: 20 }).default("pending").notNull(),
   assignedTo: varchar("assigned_to", { length: 100 }),
   completedAt: timestamp("completed_at", { withTimezone: true }),
+  /** Who ticked the task. `user_id` stays the session creator; any member at the location may tick. */
+  completedBy: integer("completed_by").references(() => user.userId),
   createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
   updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
@@ -1094,6 +1098,8 @@ export const prepTask = pgTable("prep_task", {
   index("idx_prep_task_menu_item_id").on(table.menuItemId),
   // FK index: "prep task rows for one recipe", and the constraint check when that recipe row is deleted.
   index("idx_prep_task_recipe_id").on(table.recipeId),
+  // FK index: "prep task rows ticked by one user", and the constraint check when that user row is deleted.
+  index("idx_prep_task_completed_by").on(table.completedBy),
 ]);
 
 /**

@@ -6,5 +6,6 @@
  */
 import type { Migration } from "./runner.js";
 import { migration as m0001 } from "./0001_refresh_token_rotation.js";
+import { migration as m0002 } from "./0002_prep_completed_by.js";
 
-export const migrations: Migration[] = [m0001];
+export const migrations: Migration[] = [m0001, m0002];

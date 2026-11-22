@@ -86,13 +86,16 @@ describe.skipIf(!RUN)("consumption log edit/delete refusals (real DB)", () => {
     for (const id of [fx.owner, fx.other]) await db.delete(user).where(eq(user.userId, id));
   });
 
-  it.each([
-    ["edit", handleEditLog],
-    ["delete", handleDeleteLog],
-  ] as const)("%s of an unknown entry is 404 NOT_FOUND", async (_n, handler) => {
-    const out = await call(handler, fx.owner, { id: "00000000-0000-4000-8000-000000000000" }, { quantity: 2 });
+  it("edit of an unknown entry is 404 NOT_FOUND", async () => {
+    const out = await call(handleEditLog, fx.owner, { id: "00000000-0000-4000-8000-000000000000" }, { quantity: 2 });
     expect(out.status).toBe(404);
     expect(out.body).toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  // A repeat of a delete that already happened must succeed (the phone resends until it hears back).
+  it("delete of an entry that is gone is a success", async () => {
+    const out = await call(handleDeleteLog, fx.owner, { id: "00000000-0000-4000-8000-000000000000" });
+    expect(out).toMatchObject({ status: 200, body: { success: true } });
   });
 
   it.each([
@@ -114,5 +117,43 @@ describe.skipIf(!RUN)("consumption log edit/delete refusals (real DB)", () => {
     const out = await call(handler, fx.owner, { id }, { quantity: 2 });
     expect(out.status).toBe(409);
     expect(out.body).toMatchObject({ code: "EDIT_WINDOW_EXPIRED" });
+  });
+
+  // The stock change and the entry update commit together: an update the database refuses must not leave the stock moved.
+  it("an edit whose entry update fails leaves the stock where it was", async () => {
+    const id = await newEntry();
+    const stock = async () => Number((await db.select().from(stockLevel).where(eq(stockLevel.ingredientId, fx.ingId)))[0].currentQty);
+    const before = await stock();
+
+    const out = await call(handleEditLog, fx.owner, { id }, { quantity: 3, shift: "x".repeat(30) });
+
+    expect(out.status).toBe(500);
+    expect(await stock()).toBe(before);
+    expect(Number((await db.select().from(consumptionLog).where(eq(consumptionLog.consumptionLogId, id)))[0].quantity)).toBe(1);
+  });
+
+  // A phone that times out resends the edit while the first is still running: the stock moves once, not twice.
+  it("two edits of the same entry at once move the stock by the difference once", async () => {
+    const id = await newEntry();
+    const stock = async () => Number((await db.select().from(stockLevel).where(eq(stockLevel.ingredientId, fx.ingId)))[0].currentQty);
+    const before = await stock();
+
+    const [a, b] = await Promise.all([call(handleEditLog, fx.owner, { id }, { quantity: 3 }), call(handleEditLog, fx.owner, { id }, { quantity: 3 })]);
+
+    expect([a.status, b.status]).toEqual([200, 200]);
+    expect(await stock()).toBe(before - 2);
+  });
+
+  // The delete restores what the entry held when it was removed, even when an edit changed it a moment before.
+  it("an edit and a delete of the same entry at once leave the stock where it was before the entry", async () => {
+    const stock = async () => Number((await db.select().from(stockLevel).where(eq(stockLevel.ingredientId, fx.ingId)))[0].currentQty);
+    const before = await stock();
+    const id = await newEntry();
+
+    const [edit, del] = await Promise.all([call(handleEditLog, fx.owner, { id }, { quantity: 3 }), call(handleDeleteLog, fx.owner, { id })]);
+
+    expect(del.status).toBe(200);
+    expect([200, 404]).toContain(edit.status);
+    expect(await stock()).toBe(before);
   });
 });

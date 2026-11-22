@@ -224,6 +224,19 @@ jobs:
       - name: Run stock take approval integration tests
         run: pnpm --filter @culinaire/server exec vitest run src/services/stockTakeApprove.integration.test.ts
 
+      # Mobile Wave 2 (the line loop): retry-safe waste, prep, consumption and stock movements.
+      - name: Run waste retry-safe integration tests
+        run: pnpm --filter @culinaire/server exec vitest run src/services/wasteRetrySafe.integration.test.ts
+
+      - name: Run prep line-loop integration tests
+        run: pnpm --filter @culinaire/server exec vitest run src/services/prepLineLoop.integration.test.ts
+
+      - name: Run consumption and stock movement retry-safe integration tests
+        run: pnpm --filter @culinaire/server exec vitest run src/services/consumptionMovementRetrySafe.integration.test.ts src/services/consumptionLogEditDelete.integration.test.ts
+
+      - name: Run migration 0002 integration tests
+        run: pnpm --filter @culinaire/server exec vitest run src/migrations/0002_prep_completed_by.integration.test.ts
+
   # Browser E2E (Playwright) against a real app on a throwaway Postgres: pushes
   # the schema, seeds RBAC plus one MFA-enabled E2E user/org/location, starts the
   # API and the Vite dev server (it proxies /api), then runs the full suite and

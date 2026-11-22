@@ -7,6 +7,7 @@
 
 import type { Request, Response, NextFunction } from "express";
 import pino from "pino";
+import { z } from "zod";
 import { getUserLocationContext, assertLocationAccess } from "../services/locationContextService.js";
 import * as consumptionLogService from "../services/consumptionLogService.js";
 
@@ -36,7 +37,12 @@ export async function handleLogConsumption(
     if (orgId === null) return;
 
     const userId = req.user!.sub;
-    const { ingredientId, menuItemId, quantity, unit, reason, notes, shift, storeLocationId } = req.body;
+    const { consumptionLogId, ingredientId, menuItemId, quantity, unit, reason, notes, shift, storeLocationId } = req.body;
+
+    if (consumptionLogId !== undefined && !z.string().uuid().safeParse(consumptionLogId).success) {
+      res.status(400).json({ error: "consumptionLogId must be a UUID when provided", code: "VALIDATION" });
+      return;
+    }
 
     if (!ingredientId) {
       res.status(400).json({ error: "ingredientId is required" });
@@ -63,7 +69,8 @@ export async function handleLogConsumption(
 
     await assertLocationAccess(req.user!, storeLocationId);
 
-    const entry = await consumptionLogService.logConsumption(orgId, storeLocationId, userId, {
+    const { entry, replay } = await consumptionLogService.logConsumptionOnce(orgId, storeLocationId, userId, {
+      consumptionLogId,
       ingredientId,
       menuItemId: menuItemId || null,
       quantity: Number(quantity),
@@ -73,7 +80,7 @@ export async function handleLogConsumption(
       shift: shift || null,
     });
 
-    res.status(201).json(entry);
+    res.status(replay ? 200 : 201).json(entry);
   } catch (err) {
     logger.error(err, "handleLogConsumption failed");
     next(err);
