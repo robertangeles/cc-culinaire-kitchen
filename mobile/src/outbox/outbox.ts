@@ -20,6 +20,7 @@
  * beyond the send timestamps for the rate cap.
  */
 
+import { STOCK_TAKE_CODES } from "@culinaire/shared/schemas/stockTake";
 import { ApiError } from "../api/client";
 
 export interface SaveLineCommand {
@@ -77,17 +78,18 @@ const OPEN: OutboxStatus[] = ["SAVED_LOCAL", "SENDING", "NEEDS_ATTENTION"];
 
 type Outcome = { kind: "retry" } | { kind: "stop" } | { kind: "attention"; reason: AttentionReason; message: string };
 
+/** The server's code decides; the English text is the fallback until every server sends codes. */
 function classify(err: unknown): Outcome {
   if (!(err instanceof ApiError)) return { kind: "retry" };
   switch (err.code) {
     case "unauthorized":
       return { kind: "stop" };
     case "forbidden":
-      if (err.message.includes("claimed this category")) return { kind: "attention", reason: "not_yours", message: err.message };
-      if (err.message.includes("earlier claim")) return { kind: "attention", reason: "claim_changed", message: err.message };
+      if (err.hasCode(STOCK_TAKE_CODES.claimedByOther) || err.message.includes("claimed this category")) return { kind: "attention", reason: "not_yours", message: err.message };
+      if (err.hasCode(STOCK_TAKE_CODES.claimChanged) || err.message.includes("earlier claim")) return { kind: "attention", reason: "claim_changed", message: err.message };
       return { kind: "attention", reason: "no_access", message: err.message };
     case "bad_request":
-      return { kind: "attention", reason: /^Cannot count: category is/.test(err.message) ? "area_closed" : "rejected", message: err.message };
+      return { kind: "attention", reason: err.hasCode(STOCK_TAKE_CODES.areaClosed) || /^Cannot count: category is/.test(err.message) ? "area_closed" : "rejected", message: err.message };
     case "not_found":
     case "conflict":
     case "upgrade_required":

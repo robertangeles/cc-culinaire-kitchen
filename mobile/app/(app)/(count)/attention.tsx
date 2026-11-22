@@ -1,14 +1,14 @@
 import { Alert, ScrollView, View } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { session } from "../src/runtime/appContext";
-import { outbox } from "../src/runtime/appOutbox";
-import { useCount } from "../src/runtime/countContext";
-import { attentionCopy, describeCount } from "../src/count/attentionCopy";
-import { Button } from "../src/ui/Button";
-import { Text } from "../src/ui/Text";
-import { space } from "../src/theme";
-import { useColors } from "../src/ui/theme";
+import { session } from "../../../src/runtime/appContext";
+import { outbox } from "../../../src/runtime/appOutbox";
+import { useCount } from "../../../src/count/CountProvider";
+import { attentionCopy, describeCount } from "../../../src/count/attentionCopy";
+import { Button } from "../../../src/ui/Button";
+import { Text } from "../../../src/ui/Text";
+import { space } from "../../../src/theme";
+import { useColors } from "../../../src/ui/theme";
 
 /** Counts the server didn't take. Each keeps the number the chef typed and offers only what can work. */
 export default function Attention() {

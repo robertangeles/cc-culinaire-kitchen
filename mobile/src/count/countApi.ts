@@ -1,36 +1,21 @@
 import { ApiError, type ApiClient } from "../api/client";
-import type { ServerLine, SheetItem } from "./countFlow";
+import {
+  ActiveSessionSchema,
+  AreaCategorySchema,
+  AreaLinesSchema,
+  CountSheetsSchema,
+  STOCK_TAKE_CODES,
+  SubmitConflictBodySchema,
+  type ActiveSession,
+  type AreaCategory,
+  type AreaSheet,
+  type MissingItem,
+  type ServerLine,
+} from "@culinaire/shared/schemas/stockTake";
 
-export interface AreaCategory {
-  categoryId: string;
-  categoryName: string;
-  categoryStatus: string;
-  claimedByUserId: number | null;
-  claimedByUserName: string | null;
-  claimRevision: number;
-}
-
-export interface ActiveSession {
-  sessionId: string;
-  sessionStatus: string;
-  countMode: "CATEGORY" | "AREA";
-  locationName: string;
-  categories: AreaCategory[];
-}
-
-export interface AreaSheet {
-  categoryId: string;
-  categoryName: string;
-  items: SheetItem[];
-}
+export type { ActiveSession, AreaCategory, AreaSheet, MissingItem };
 
 export type ClaimResult = { status: "claimed"; categoryId: string; claimRevision: number } | { status: "held" } | { status: "submitted" };
-
-export interface MissingItem {
-  ingredientId: string;
-  ingredientName: string;
-  areaNames: string[];
-}
 
 export type SubmitResult = { ok: true } | { ok: false; missing: MissingItem[]; message: string };
 
@@ -40,29 +25,27 @@ const area = (name: string) => encodeURIComponent(name);
 /** The stock take calls the count screens make. Anything not listed here (offline, signed out) reaches the screen as an ApiError. */
 export function createCountApi(client: ApiClient) {
   return {
-    async activeSession(): Promise<ActiveSession | null> {
-      const s = await client.request<ActiveSession | null>("GET", `${BASE}/active`);
-      return s ?? null;
+    activeSession(): Promise<ActiveSession | null> {
+      return client.request("GET", `${BASE}/active`, { schema: ActiveSessionSchema });
     },
 
     async countSheets(sessionId: string): Promise<AreaSheet[]> {
-      return (await client.request<{ areas: AreaSheet[] }>("GET", `${BASE}/${sessionId}/count-sheets`)).areas;
+      return (await client.request("GET", `${BASE}/${sessionId}/count-sheets`, { schema: CountSheetsSchema })).areas;
     },
 
     async areaLines(sessionId: string, areaName: string): Promise<ServerLine[]> {
-      const rows = await client.request<Array<{ ingredientId: string; rawQty: string; countedUnit: string }>>("GET", `${BASE}/${sessionId}/categories/${area(areaName)}/lines`);
-      return rows.map((r) => ({ ingredientId: r.ingredientId, rawQty: Number(r.rawQty), countedUnit: r.countedUnit }));
+      return client.request("GET", `${BASE}/${sessionId}/categories/${area(areaName)}/lines`, { schema: AreaLinesSchema });
     },
 
-    /** Claiming is online-only. "Held" and "submitted" are answers, not errors. */
+    /** Claiming is online-only. "Held" and "submitted" are answers, not errors. The server's code decides; the English text is the fallback until every server sends codes. */
     async claimArea(sessionId: string, areaName: string): Promise<ClaimResult> {
       try {
-        const c = await client.request<AreaCategory>("POST", `${BASE}/${sessionId}/categories/${area(areaName)}/claim`);
+        const c = await client.request("POST", `${BASE}/${sessionId}/categories/${area(areaName)}/claim`, { schema: AreaCategorySchema });
         return { status: "claimed", categoryId: c.categoryId, claimRevision: c.claimRevision };
       } catch (err) {
         if (err instanceof ApiError && err.code === "bad_request") {
-          if (/current status is (SUBMITTED|APPROVED)/.test(err.message)) return { status: "submitted" };
-          if (/current status is IN_PROGRESS/.test(err.message)) return { status: "held" };
+          if (err.hasCode(STOCK_TAKE_CODES.areaSubmitted) || /current status is (SUBMITTED|APPROVED)/.test(err.message)) return { status: "submitted" };
+          if (err.hasCode(STOCK_TAKE_CODES.areaHeld) || /current status is IN_PROGRESS/.test(err.message)) return { status: "held" };
         }
         throw err;
       }
@@ -74,10 +57,8 @@ export function createCountApi(client: ApiClient) {
         await client.request("POST", `${BASE}/${sessionId}/categories/${area(areaName)}/submit`, { body: { claimRevision } });
         return { ok: true };
       } catch (err) {
-        const body = err instanceof ApiError ? (err.body as { missing?: MissingItem[] } | undefined) : undefined;
-        if (err instanceof ApiError && err.code === "conflict" && Array.isArray(body?.missing)) {
-          return { ok: false, missing: body.missing, message: err.message };
-        }
+        const conflict = err instanceof ApiError && err.code === "conflict" ? SubmitConflictBodySchema.safeParse(err.body) : null;
+        if (err instanceof ApiError && conflict?.success) return { ok: false, missing: conflict.data.missing, message: err.message };
         throw err;
       }
     },

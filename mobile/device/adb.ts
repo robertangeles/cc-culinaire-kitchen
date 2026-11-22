@@ -16,7 +16,15 @@ export const PACKAGE = "com.culinairekitchen.chef";
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
+function requireLease(): void {
+  // The phone and emulator are shared by every worker; device/lease.sh takes the lock and sets this.
+  if (process.env.CULINAIRE_DEVICE_LEASE !== "1") {
+    throw new Error("refusing to drive a device without the lease: run check:device (pnpm --filter @culinaire/mobile run check:device)");
+  }
+}
+
 export function adb(args: string[], input?: string): string {
+  requireLease();
   return execFileSync(ADB, args, { encoding: "utf8", input, maxBuffer: 64 * 1024 * 1024 });
 }
 const shell = (...args: string[]) => adb(["shell", ...args]);
@@ -160,6 +168,7 @@ export async function swipe(x1: number, y1: number, x2: number, y2: number, ms =
 }
 
 export async function screenshot(name: string): Promise<string> {
+  requireLease();
   mkdirSync(SHOTS, { recursive: true });
   const file = resolve(SHOTS, `${name}.png`);
   const png = execFileSync(ADB, ["exec-out", "screencap", "-p"], { maxBuffer: 64 * 1024 * 1024 });

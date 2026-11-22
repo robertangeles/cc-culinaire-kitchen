@@ -5,7 +5,11 @@ import type { ApiClient, TokenStore } from "./client";
 const user = { userId: 7, userName: "Chef", userEmail: "c@x.test", mfaEnabled: false, roles: [], permissions: ["inventory:count"] };
 
 function setup(replies: unknown[]) {
-  const request = vi.fn(async () => replies.shift());
+  // Like the real client, run the reply through the schema the call asks for.
+  const request = vi.fn(async (_method: string, _path: string, options?: { schema?: { parse(d: unknown): unknown } }) => {
+    const reply = replies.shift();
+    return options?.schema ? options.schema.parse(reply) : reply;
+  });
   const tokenStore: TokenStore = { load: vi.fn(async () => ({ accessToken: "A", refreshToken: "R" })), save: vi.fn(async () => {}), clear: vi.fn(async () => {}) };
   return { api: createAuthApi({ request } as unknown as ApiClient, tokenStore), request, tokenStore };
 }
@@ -14,7 +18,7 @@ describe("sign in", () => {
   it("saves the tokens and returns the user when no second step is needed", async () => {
     const { api, request, tokenStore } = setup([{ user, tokens: { accessToken: "A1", refreshToken: "R1" } }]);
     expect(await api.signIn("c@x.test", "pw")).toEqual({ status: "signedIn", user });
-    expect(request).toHaveBeenCalledWith("POST", "/api/auth/login", { body: { email: "c@x.test", password: "pw" }, auth: false });
+    expect(request).toHaveBeenCalledWith("POST", "/api/auth/login", expect.objectContaining({ body: { email: "c@x.test", password: "pw" }, auth: false }));
     expect(tokenStore.save).toHaveBeenCalledWith({ accessToken: "A1", refreshToken: "R1" });
   });
 
@@ -27,7 +31,7 @@ describe("sign in", () => {
   it("finishes the MFA step with the session token and code, then saves the tokens", async () => {
     const { api, request, tokenStore } = setup([{ user, tokens: { accessToken: "A2", refreshToken: "R2" } }]);
     expect(await api.verifyMfa("M", "123456")).toEqual(user);
-    expect(request).toHaveBeenCalledWith("POST", "/api/auth/mfa/verify", { body: { mfaSessionToken: "M", code: "123456" }, auth: false });
+    expect(request).toHaveBeenCalledWith("POST", "/api/auth/mfa/verify", expect.objectContaining({ body: { mfaSessionToken: "M", code: "123456" }, auth: false }));
     expect(tokenStore.save).toHaveBeenCalledWith({ accessToken: "A2", refreshToken: "R2" });
   });
 });
@@ -36,7 +40,7 @@ describe("google sign-in", () => {
   it("trades a Google ID token for a session, saving the tokens like a password sign-in", async () => {
     const { api, request, tokenStore } = setup([{ user, tokens: { accessToken: "G1", refreshToken: "GR1" } }]);
     expect(await api.googleSignIn("ID-TOKEN")).toEqual({ status: "signedIn", user });
-    expect(request).toHaveBeenCalledWith("POST", "/api/auth/google/idtoken", { body: { idToken: "ID-TOKEN" }, auth: false });
+    expect(request).toHaveBeenCalledWith("POST", "/api/auth/google/idtoken", expect.objectContaining({ body: { idToken: "ID-TOKEN" }, auth: false }));
     expect(tokenStore.save).toHaveBeenCalledWith({ accessToken: "G1", refreshToken: "GR1" });
   });
 
@@ -51,7 +55,7 @@ describe("accounts", () => {
   it("registers with name, email and password, and signs nobody in", async () => {
     const { api, request, tokenStore } = setup([{ userId: 9, message: "Registration successful.", autoVerified: false }]);
     expect(await api.register("Chef", "c@x.test", "Str0ng!pass")).toEqual({ autoVerified: false });
-    expect(request).toHaveBeenCalledWith("POST", "/api/auth/register", { body: { name: "Chef", email: "c@x.test", password: "Str0ng!pass" }, auth: false });
+    expect(request).toHaveBeenCalledWith("POST", "/api/auth/register", expect.objectContaining({ body: { name: "Chef", email: "c@x.test", password: "Str0ng!pass" }, auth: false }));
     expect(tokenStore.save).not.toHaveBeenCalled();
   });
 
@@ -77,7 +81,7 @@ describe("session and location", () => {
 
     const ok = setup([{}]);
     await api_signOut(ok);
-    expect(ok.request).toHaveBeenCalledWith("POST", "/api/auth/logout", { body: { refreshToken: "R" }, auth: false });
+    expect(ok.request).toHaveBeenCalledWith("POST", "/api/auth/logout", expect.objectContaining({ body: { refreshToken: "R" }, auth: false }));
   });
 
   it("reads the location context and switches location", async () => {
@@ -93,3 +97,15 @@ async function api_signOut(s: ReturnType<typeof setup>) {
   await s.api.signOut();
   expect(s.tokenStore.clear).toHaveBeenCalled();
 }
+
+describe("a reply this app version cannot use", () => {
+  it("is a bad_response, not a crash, when a sign-in reply has no tokens or an MFA reply has no session token", async () => {
+    await expect(setup([{ user }]).api.signIn("c@x.test", "pw")).rejects.toMatchObject({ code: "bad_response" });
+    await expect(setup([{ requiresMfa: true }]).api.signIn("c@x.test", "pw")).rejects.toMatchObject({ code: "bad_response" });
+  });
+
+  it("ignores fields it does not know and still signs in", async () => {
+    const { api } = setup([{ user: { ...user, newThing: 1 }, tokens: { accessToken: "A", refreshToken: "R", expiresIn: 900 }, banner: "hi" }]);
+    expect(await api.signIn("c@x.test", "pw")).toEqual({ status: "signedIn", user });
+  });
+});

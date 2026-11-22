@@ -1,64 +1,39 @@
-import type { ApiClient, TokenStore, Tokens } from "./client";
+import { ApiError, type ApiClient, type TokenStore } from "./client";
+import { LocationContextSchema, LoginReplySchema, MeReplySchema, RegisterReplySchema, type AuthUser, type LocationContext, type LoginReply, type StoreLocation } from "@culinaire/shared/schemas/auth";
 
-/** What `/auth/login` and `/auth/me` return for a person (only the fields the phone reads). */
-export interface AuthUser {
-  userId: number;
-  userName: string;
-  userEmail: string;
-  mfaEnabled: boolean;
-  roles: string[];
-  permissions: string[];
-}
-
-export interface StoreLocation {
-  storeLocationId: string;
-  organisationId: number;
-  locationName: string;
-  classification: string;
-}
-
-export interface LocationContext {
-  locations: StoreLocation[];
-  selectedLocationId: string | null;
-  organisationId: number | null;
-  isOrgAdmin: boolean;
-  hasLocationAccess: boolean;
-}
+export type { AuthUser, LocationContext, StoreLocation };
 
 export type SignInResult = { status: "signedIn"; user: AuthUser } | { status: "mfa"; mfaSessionToken: string };
-
-interface LoginReply {
-  user?: AuthUser;
-  tokens?: Tokens;
-  requiresMfa?: boolean;
-  mfaSessionToken?: string;
-}
 
 /** Sign-in, session and location calls. Tokens are saved here the moment the server hands them out. */
 export function createAuthApi(client: ApiClient, tokenStore: TokenStore) {
   async function finish(reply: LoginReply): Promise<AuthUser> {
-    await tokenStore.save({ accessToken: reply.tokens!.accessToken, refreshToken: reply.tokens!.refreshToken });
-    return reply.user!;
+    if (!reply.tokens || !reply.user) throw new ApiError("bad_response");
+    await tokenStore.save(reply.tokens);
+    return reply.user;
   }
 
   async function result(reply: LoginReply): Promise<SignInResult> {
-    if (reply.requiresMfa) return { status: "mfa", mfaSessionToken: reply.mfaSessionToken! };
+    if (reply.requiresMfa) {
+      if (!reply.mfaSessionToken) throw new ApiError("bad_response");
+      return { status: "mfa", mfaSessionToken: reply.mfaSessionToken };
+    }
     return { status: "signedIn", user: await finish(reply) };
   }
 
   return {
     async signIn(email: string, password: string): Promise<SignInResult> {
-      return result(await client.request<LoginReply>("POST", "/api/auth/login", { body: { email, password }, auth: false }));
+      return result(await client.request("POST", "/api/auth/login", { body: { email, password }, auth: false, schema: LoginReplySchema }));
     },
 
     /** The ID token comes from the phone's Google account picker; the server checks it with Google and answers like a password sign-in. */
     async googleSignIn(idToken: string): Promise<SignInResult> {
-      return result(await client.request<LoginReply>("POST", "/api/auth/google/idtoken", { body: { idToken }, auth: false }));
+      return result(await client.request("POST", "/api/auth/google/idtoken", { body: { idToken }, auth: false, schema: LoginReplySchema }));
     },
 
     /** Creates the account only: nobody is signed in, and the person finishes verifying from the email the server sends. */
     async register(name: string, email: string, password: string): Promise<{ autoVerified: boolean }> {
-      const reply = await client.request<{ autoVerified?: boolean }>("POST", "/api/auth/register", { body: { name, email, password }, auth: false });
+      const reply = await client.request("POST", "/api/auth/register", { body: { name, email, password }, auth: false, schema: RegisterReplySchema });
       return { autoVerified: reply.autoVerified === true };
     },
 
@@ -72,11 +47,11 @@ export function createAuthApi(client: ApiClient, tokenStore: TokenStore) {
     },
 
     async verifyMfa(mfaSessionToken: string, code: string): Promise<AuthUser> {
-      return finish(await client.request<LoginReply>("POST", "/api/auth/mfa/verify", { body: { mfaSessionToken, code }, auth: false }));
+      return finish(await client.request("POST", "/api/auth/mfa/verify", { body: { mfaSessionToken, code }, auth: false, schema: LoginReplySchema }));
     },
 
     async me(): Promise<AuthUser> {
-      return (await client.request<{ user: AuthUser }>("GET", "/api/auth/me")).user;
+      return (await client.request("GET", "/api/auth/me", { schema: MeReplySchema })).user;
     },
 
     /** Revoke the refresh token on the server if we can; the device tokens go either way. */
@@ -92,7 +67,7 @@ export function createAuthApi(client: ApiClient, tokenStore: TokenStore) {
     },
 
     locationContext(): Promise<LocationContext> {
-      return client.request<LocationContext>("GET", "/api/users/location-context");
+      return client.request("GET", "/api/users/location-context", { schema: LocationContextSchema });
     },
 
     selectLocation(storeLocationId: string): Promise<void> {

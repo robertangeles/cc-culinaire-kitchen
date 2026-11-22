@@ -41,10 +41,6 @@ export interface SessionDeps {
 
 const GENERIC = "Something went wrong. Try again.";
 
-function canCount(user: AuthUser): boolean {
-  return user.roles.includes("Administrator") || user.permissions.includes("inventory:count");
-}
-
 /** One plain sentence for a failed sign-in. A wrong password is the only 401 on this screen. */
 function signInMessage(err: unknown): string {
   if (!(err instanceof ApiError)) return GENERIC;
@@ -74,12 +70,8 @@ export function createSession({ api, hasTokens, snapshots, googleIdToken }: Sess
     set({ state: { phase: "ready", user, location, locations } });
   }
 
-  /** After the person is known: check they may count, then find their location. */
+  /** After the person is known: find their location. What they may open is decided by their permissions, in the shell's tab list. */
   async function open(user: AuthUser) {
-    if (!canCount(user)) {
-      set({ state: { phase: "noAccess", reason: "Your account can't count stock. Ask your manager." } });
-      return;
-    }
     const ctx = await api.locationContext();
     if (ctx.locations.length === 0) {
       set({ state: { phase: "noAccess", reason: "You aren't assigned to a location yet. Ask your manager." } });

@@ -3,21 +3,10 @@
  * download), the lines the server already holds, and this phone's outbox. All plain functions.
  */
 
+import type { ServerLine, SheetItem } from "@culinaire/shared/schemas/stockTake";
 import type { AttentionReason, OutboxEntry } from "../outbox/outbox";
 
-export interface SheetItem {
-  ingredientId: string;
-  ingredientName: string;
-  countUnit: string;
-  /** Other areas in this stock take that hold the same item. */
-  alsoIn: string[];
-}
-
-export interface ServerLine {
-  ingredientId: string;
-  rawQty: number;
-  countedUnit: string;
-}
+export type { ServerLine, SheetItem };
 
 /** The three save states from the design, plus the one that needs the chef. */
 export type SaveState = "saved_on_phone" | "waiting_to_send" | "accepted" | "needs_attention";

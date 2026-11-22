@@ -140,6 +140,10 @@ describe("drain: refusals are kept and shown, never dropped", () => {
     ["a validation failure", new ApiError("bad_request", "Quantity cannot exceed 99,999", 400), "rejected"],
     ["the area is gone", new ApiError("not_found", 'Category "Bar" not found', 404), "rejected"],
     ["a conflict", new ApiError("conflict", "Something changed", 409), "rejected"],
+    // The server's code decides, whatever the wording.
+    ["another chef holds the area (code)", new ApiError("forbidden", "Not yours", 403, undefined, "STOCK_TAKE_CLAIMED_BY_OTHER"), "not_yours"],
+    ["the claim changed (code)", new ApiError("forbidden", "Recount", 403, undefined, "STOCK_TAKE_CLAIM_CHANGED"), "claim_changed"],
+    ["the area is closed (code)", new ApiError("bad_request", "Too late", 400, undefined, "STOCK_TAKE_AREA_CLOSED"), "area_closed"],
   ];
   it.each(cases)("marks the count needs-attention when %s, with the server's message", async (_n, err, reason) => {
     const { outbox, rows } = setup(async () => { throw err; });

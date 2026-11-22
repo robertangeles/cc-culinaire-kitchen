@@ -5,7 +5,7 @@ import { useSyncExternalStore } from "react";
 import { makeHarness } from "./harness";
 import { reduceMotion, routerMock, searchParams } from "../testing/mocks";
 
-vi.mock("../src/runtime/countContext", async () => {
+vi.mock("../src/count/CountProvider", async () => {
   const { harness } = await import("./harness");
   return {
     useCount: () => {
@@ -15,7 +15,7 @@ vi.mock("../src/runtime/countContext", async () => {
   };
 });
 
-import AreaCount from "../app/area/[name]";
+import AreaCount from "../app/(app)/(count)/area/[name]";
 
 const key = (label: string) => fireEvent.click(screen.getByRole("button", { name: label }));
 const type = (digits: string) => [...digits].forEach((d) => key(d));

@@ -14,7 +14,7 @@ export default function ChooseLocation() {
 
   return (
     <Screen>
-      <Text variant="title">Where are you counting?</Text>
+      <Text variant="title">Where are you working?</Text>
       <Surface>
       {state.locations.map((l, index) => (
         <Pressable

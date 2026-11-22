@@ -329,6 +329,11 @@ jobs:
       - name: Run phone flow end-to-end test
         run: pnpm --filter @culinaire/mobile run check:e2e
 
+      # The same flow again with the zod schemas of the last store release (tag mobile-v*), so a server change
+      # cannot break the app people already have. Passes while no release tag exists. See the script header.
+      - name: Check the released phone schemas against this server
+        run: bash scripts/check-released-schemas.sh
+
       - name: Show server log on failure
         if: always()
         run: tail -n 100 server.log
