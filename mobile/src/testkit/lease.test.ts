@@ -1,9 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { spawn, spawnSync } from "node:child_process";
-import { mkdtempSync } from "node:fs";
+import { existsSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { adb } from "../../device/adb";
+import { adb, screenshot } from "../../device/adb";
 
 const script = resolve(__dirname, "../../device/lease.sh");
 const hasFlock = spawnSync("sh", ["-c", "command -v flock"]).status === 0;
@@ -24,7 +24,10 @@ describe.skipIf(!hasFlock)("device lease (needs util-linux flock; skipped when i
     const file = tmpLock();
     const holder = spawn("bash", [script, "sleep", "30"], { env: { ...process.env, DEVICE_LEASE_FILE: file }, stdio: "ignore" });
     try {
-      await new Promise((r) => setTimeout(r, 500)); // let it take the lock
+      for (const deadline = Date.now() + 10_000; !existsSync(`${file}.holder`); ) {
+        if (Date.now() > deadline) throw new Error("the holder never took the lease");
+        await new Promise((r) => setTimeout(r, 20));
+      }
       const second = lease(file, "1", "true");
       expect(second.status).toBe(75);
       expect(second.stderr).toMatch(/held by: worktree=.* pid=\d+ cmd=sleep 30 since=\d{4}-/);
@@ -40,11 +43,12 @@ describe.skipIf(!hasFlock)("device lease (needs util-linux flock; skipped when i
 });
 
 describe("adb guard", () => {
-  it("refuses to drive a device without the lease", () => {
+  it("refuses to drive a device without the lease", async () => {
     const saved = process.env.CULINAIRE_DEVICE_LEASE;
     delete process.env.CULINAIRE_DEVICE_LEASE;
     try {
       expect(() => adb(["devices"])).toThrow(/run check:device/);
+      await expect(screenshot("x")).rejects.toThrow(/run check:device/);
     } finally {
       if (saved !== undefined) process.env.CULINAIRE_DEVICE_LEASE = saved;
     }
