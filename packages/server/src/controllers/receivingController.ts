@@ -137,11 +137,15 @@ export async function handleActionLine(
     }
 
     await assertSessionAccess(req, sessionId, orgId);
-    const result = await receivingService.actionLine(receivingLineId, sessionId, parsed.data, orgId);
+    const result = await receivingService.actionLine(receivingLineId, sessionId, parsed.data, orgId, req.user!.sub);
 
     logger.info({ sessionId, receivingLineId, status: parsed.data.status }, "Receiving line actioned");
     res.json(result);
   } catch (err: unknown) {
+    if (err instanceof receivingService.ReceivingValidationError) {
+      res.status(400).json({ error: err.message, code: err.code });
+      return;
+    }
     const msg = err instanceof Error ? err.message : String(err);
     if (msg.includes("not found") || msg.includes("not active") || msg.includes("no longer active")) {
       res.status(400).json({ error: msg });
@@ -160,11 +164,15 @@ export async function handleConfirmReceipt(
 
     const sessionId = req.params.sessionId as string;
     await assertSessionAccess(req, sessionId, orgId);
-    const result = await receivingService.confirmReceipt(sessionId, orgId);
+    const result = await receivingService.confirmReceipt(sessionId, orgId, req.user!.sub);
 
     logger.info({ sessionId, poStatus: result.poStatus }, "Receipt confirmed");
     res.json(result);
   } catch (err: unknown) {
+    if (err instanceof receivingService.ReceivingValidationError) {
+      res.status(400).json({ error: err.message, code: err.code });
+      return;
+    }
     const msg = err instanceof Error ? err.message : String(err);
     if (msg.includes("not found")) {
       res.status(400).json({ error: msg });
@@ -183,7 +191,7 @@ export async function handleCancelSession(
 
     const sessionId = req.params.sessionId as string;
     await assertSessionAccess(req, sessionId, orgId);
-    await receivingService.cancelSession(sessionId, orgId);
+    await receivingService.cancelSession(sessionId, orgId, req.user!.sub);
 
     logger.info({ sessionId }, "Receiving session cancelled");
     res.json({ success: true });
