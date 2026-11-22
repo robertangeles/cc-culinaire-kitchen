@@ -104,8 +104,9 @@ export const feedbackRateLimit = rateLimit({
 });
 
 /**
- * Rate limiter for the unauthenticated auth endpoints
- * (`POST /api/auth/login`, `/register`, `/forgot-password`).
+ * Rate limiter for the account-settings endpoints that take a password
+ * (`POST /api/users/change-password`, `/delete-account`). Sign-in, registration and the
+ * other public auth endpoints each have their own bucket below, so they do not spend this one.
  *
  * 20 requests per minute per IP. This is the abuse backstop for the
  * *non-browser* path: Cloudflare Turnstile is enforced only on requests
@@ -254,4 +255,50 @@ export const mfaAccountRateLimit = rateLimit({
   skip: (req: Request) => mfaAccountOf(req) == null,
   keyGenerator: (req: Request) => `mfa-account-${mfaAccountOf(req)}`,
   message: { error: "Too many failed attempts — please wait 15 minutes before trying again." },
+});
+
+const hashIp = (req: Request) => createHash("sha256").update(req.ip ?? "unknown").digest("hex").slice(0, 32);
+
+/**
+ * One bucket per public auth endpoint, per hashed address. Sharing a single bucket meant a chef
+ * signing in could be locked out by another person's password-reset attempts, and (counting
+ * successes) a shift change behind one kitchen's NAT could lock everyone out.
+ */
+function ipBucket(name: string, limit: number, opts: { skipSuccessfulRequests?: boolean } = {}) {
+  return rateLimit({
+    windowMs: 60 * 1000,
+    limit,
+    standardHeaders: "draft-8",
+    legacyHeaders: false,
+    ...opts,
+    keyGenerator: (req: Request) => `${name}-ip-${hashIp(req)}`,
+    message: { error: "Too many attempts — please wait a minute before trying again." },
+  });
+}
+
+/** Sign-in: only failed attempts count, so successful sign-ins behind one NAT never lock each other out. */
+export const loginRateLimit = ipBucket("login", 20, { skipSuccessfulRequests: true });
+export const registerRateLimit = ipBucket("register", 20);
+export const forgotPasswordRateLimit = ipBucket("forgot-password", 10);
+export const resetPasswordRateLimit = ipBucket("reset-password", 10);
+export const resendVerificationRateLimit = ipBucket("resend-verification", 5);
+export const verifyEmailRateLimit = ipBucket("verify-email", 20);
+export const googleIdTokenRateLimit = ipBucket("google-idtoken", 20);
+export const logoutRateLimit = ipBucket("logout", 60);
+
+/**
+ * Refresh: a device refreshes about once an hour, so the per-address cap is for a flood, not for a
+ * busy kitchen (dozens of tablets behind one NAT), and a second cap per token stops one token being hammered.
+ */
+export const refreshRateLimit = ipBucket("refresh", 300);
+export const refreshTokenRateLimit = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 10,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  keyGenerator: (req: Request) => {
+    const token = req.cookies?.refresh_token ?? req.body?.refreshToken;
+    return typeof token === "string" ? `refresh-token-${createHash("sha256").update(token).digest("hex").slice(0, 32)}` : `refresh-token-none-${hashIp(req)}`;
+  },
+  message: { error: "Too many attempts — please wait a minute before trying again." },
 });

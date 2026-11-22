@@ -62,7 +62,7 @@ function isBrowserRequest(req: Request): boolean {
  *
  * Web-only by design: the mobile app shares these endpoints but cannot render
  * the browser widget, so native requests (no `Origin` header) skip the captcha
- * and are covered by `authRateLimit` instead. For browser requests the token
+ * and are covered by the per-endpoint rate limits (middleware/rateLimiter.ts) instead. For browser requests the token
  * is required and verified (hard enforcement for web).
  *
  * Note: `reset-password` and `resend-verification` are intentionally NOT gated
