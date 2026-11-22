@@ -147,7 +147,7 @@ async function seed() {
     { permissionKey: "sales:read", permissionDescription: "View FOH sales history and revenue reports" },
     // Kitchen Operations module permissions (gate the Menu & Costing, Waste, and Prep modules)
     { permissionKey: "menu:read", permissionDescription: "View Menu & Costing — menu engineering, food cost %, and P&L per item" },
-    { permissionKey: "waste:read", permissionDescription: "View Waste analytics and log wastage" },
+    { permissionKey: "waste:read", permissionDescription: "View Waste analytics, cost reports and the team view" },
     { permissionKey: "waste:log", permissionDescription: "Log, edit and delete your own waste entries" },
     { permissionKey: "prep:manage", permissionDescription: "Create and manage Prep (mise en place) sessions and tasks" },
     { permissionKey: "prep:read", permissionDescription: "View Prep sessions and tick prep tasks at your location" },
