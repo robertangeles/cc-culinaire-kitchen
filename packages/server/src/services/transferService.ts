@@ -24,6 +24,7 @@ import {
 } from "../db/schema.js";
 import { resolveToBase } from "./unitConversionService.js";
 import * as wacService from "./wacService.js";
+import type { DbOrTx } from "./auditService.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -52,12 +53,13 @@ interface ListOpts {
 // ---------------------------------------------------------------------------
 
 async function deductStockLevel(
+  tx: DbOrTx,
   storeLocationId: string,
   ingredientId: string,
   deductQty: number,
   retryCount = 0,
 ): Promise<void> {
-  const existing = await db
+  const existing = await tx
     .select()
     .from(stockLevel)
     .where(
@@ -69,7 +71,7 @@ async function deductStockLevel(
     );
 
   if (existing.length === 0) {
-    await db.insert(stockLevel).values({
+    await tx.insert(stockLevel).values({
       storeLocationId,
       ingredientId,
       zone: "BOH",
@@ -81,7 +83,7 @@ async function deductStockLevel(
 
   const current = existing[0];
   const newQty = Number(current.currentQty) - deductQty;
-  const result = await db
+  const result = await tx
     .update(stockLevel)
     .set({
       currentQty: String(newQty),
@@ -97,17 +99,20 @@ async function deductStockLevel(
     .returning();
 
   if (result.length === 0 && retryCount < 2) {
-    await deductStockLevel(storeLocationId, ingredientId, deductQty, retryCount + 1);
+    await deductStockLevel(tx, storeLocationId, ingredientId, deductQty, retryCount + 1);
+  } else if (result.length === 0) {
+    throw new Error(`Stock level update conflict for ingredient ${ingredientId} at location ${storeLocationId}`);
   }
 }
 
 async function addStockLevel(
+  tx: DbOrTx,
   storeLocationId: string,
   ingredientId: string,
   addQty: number,
   retryCount = 0,
 ): Promise<void> {
-  const existing = await db
+  const existing = await tx
     .select()
     .from(stockLevel)
     .where(
@@ -119,7 +124,7 @@ async function addStockLevel(
     );
 
   if (existing.length === 0) {
-    await db.insert(stockLevel).values({
+    await tx.insert(stockLevel).values({
       storeLocationId,
       ingredientId,
       zone: "BOH",
@@ -131,7 +136,7 @@ async function addStockLevel(
 
   const current = existing[0];
   const newQty = Number(current.currentQty) + addQty;
-  const result = await db
+  const result = await tx
     .update(stockLevel)
     .set({
       currentQty: String(newQty),
@@ -147,7 +152,9 @@ async function addStockLevel(
     .returning();
 
   if (result.length === 0 && retryCount < 2) {
-    await addStockLevel(storeLocationId, ingredientId, addQty, retryCount + 1);
+    await addStockLevel(tx, storeLocationId, ingredientId, addQty, retryCount + 1);
+  } else if (result.length === 0) {
+    throw new Error(`Stock level update conflict for ingredient ${ingredientId} at location ${storeLocationId}`);
   }
 }
 
@@ -170,37 +177,56 @@ export async function initiateTransfer(
     throw new Error("At least one line item is required");
   }
 
-  // Validate all ingredients belong to org
   const ingredientIds = lines.map((l) => l.ingredientId);
-  const ingredients = await db
-    .select({ id: ingredient.ingredientId })
-    .from(ingredient)
-    .where(
-      and(
-        inArray(ingredient.ingredientId, ingredientIds),
-        eq(ingredient.organisationId, orgId),
-      ),
-    );
 
-  if (ingredients.length !== new Set(ingredientIds).size) {
-    throw new Error("One or more ingredients not found in this organisation");
-  }
+  // Checks and inserts share one transaction: the locations and ingredients that were
+  // validated are the ones the transfer is written against.
+  return db.transaction(async (tx) => {
+    // Both ends must belong to the caller's organisation; a location id from another
+    // organisation is indistinguishable from one that does not exist.
+    const locations = await tx
+      .select({ id: storeLocation.storeLocationId })
+      .from(storeLocation)
+      .where(
+        and(
+          inArray(storeLocation.storeLocationId, [fromLocId, toLocId]),
+          eq(storeLocation.organisationId, orgId),
+        ),
+      );
+    if (locations.length !== 2) {
+      throw new Error("Location not found in this organisation");
+    }
 
-  const [transfer] = await db
-    .insert(inventoryTransfer)
-    .values({
-      organisationId: orgId,
-      fromLocationId: fromLocId,
-      toLocationId: toLocId,
-      status: "INITIATED",
-      initiatedByUserId: userId,
-      notes: notes ?? null,
-    })
-    .returning();
+    // Validate all ingredients belong to org
+    const ingredients = await tx
+      .select({ id: ingredient.ingredientId })
+      .from(ingredient)
+      .where(
+        and(
+          inArray(ingredient.ingredientId, ingredientIds),
+          eq(ingredient.organisationId, orgId),
+        ),
+      );
 
-  const lineRows = await Promise.all(
-    lines.map((line) =>
-      db
+    if (ingredients.length !== new Set(ingredientIds).size) {
+      throw new Error("One or more ingredients not found in this organisation");
+    }
+
+    const [transfer] = await tx
+      .insert(inventoryTransfer)
+      .values({
+        organisationId: orgId,
+        fromLocationId: fromLocId,
+        toLocationId: toLocId,
+        status: "INITIATED",
+        initiatedByUserId: userId,
+        notes: notes ?? null,
+      })
+      .returning();
+
+    const lineRows = [];
+    for (const line of lines) {
+      const [row] = await tx
         .insert(inventoryTransferLine)
         .values({
           transferId: transfer.transferId,
@@ -210,12 +236,12 @@ export async function initiateTransfer(
           fifoBatchId: line.fifoBatchId ?? null,
           lineStatus: "PENDING",
         })
-        .returning()
-        .then((r) => r[0]),
-    ),
-  );
+        .returning();
+      lineRows.push(row);
+    }
 
-  return { ...transfer, lines: lineRows };
+    return { ...transfer, lines: lineRows };
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -227,47 +253,50 @@ export async function confirmSent(
   orgId: number,
   userId: number,
 ) {
-  const [transfer] = await db
-    .select()
-    .from(inventoryTransfer)
-    .where(
-      and(
-        eq(inventoryTransfer.transferId, transferId),
-        eq(inventoryTransfer.organisationId, orgId),
-      ),
-    );
+  return db.transaction(async (tx) => {
+    // FOR UPDATE: a second send waits here, then reads SENT and is refused, so the
+    // source stock is deducted once. A failure below rolls the whole send back.
+    const [transfer] = await tx
+      .select()
+      .from(inventoryTransfer)
+      .where(
+        and(
+          eq(inventoryTransfer.transferId, transferId),
+          eq(inventoryTransfer.organisationId, orgId),
+        ),
+      )
+      .for("update");
 
-  if (!transfer) throw new Error("Transfer not found");
-  if (transfer.status !== "INITIATED") {
-    throw new Error(`Cannot send a transfer with status ${transfer.status}`);
-  }
+    if (!transfer) throw new Error("Transfer not found");
+    if (transfer.status !== "INITIATED") {
+      throw new Error(`Cannot send a transfer with status ${transfer.status}`);
+    }
 
-  // Get lines
-  const lines = await db
-    .select()
-    .from(inventoryTransferLine)
-    .where(eq(inventoryTransferLine.transferId, transferId));
+    const lines = await tx
+      .select()
+      .from(inventoryTransferLine)
+      .where(eq(inventoryTransferLine.transferId, transferId));
 
-  // Deduct stock from source location — convert the sent qty from its entered
-  // unit to the ingredient's base unit (identity when they're the same).
-  for (const line of lines) {
-    const { baseQty } = await resolveToBase(line.ingredientId, Number(line.sentQty), line.sentUnit);
-    await deductStockLevel(transfer.fromLocationId, line.ingredientId, baseQty);
-  }
+    // Deduct stock from source location — convert the sent qty from its entered
+    // unit to the ingredient's base unit (identity when they're the same).
+    for (const line of lines) {
+      const { baseQty } = await resolveToBase(line.ingredientId, Number(line.sentQty), line.sentUnit);
+      await deductStockLevel(tx, transfer.fromLocationId, line.ingredientId, baseQty);
+    }
 
-  // Update transfer status
-  const [updated] = await db
-    .update(inventoryTransfer)
-    .set({
-      status: "SENT",
-      sentByUserId: userId,
-      sentDttm: new Date(),
-      updatedDttm: new Date(),
-    })
-    .where(eq(inventoryTransfer.transferId, transferId))
-    .returning();
+    const [updated] = await tx
+      .update(inventoryTransfer)
+      .set({
+        status: "SENT",
+        sentByUserId: userId,
+        sentDttm: new Date(),
+        updatedDttm: new Date(),
+      })
+      .where(eq(inventoryTransfer.transferId, transferId))
+      .returning();
 
-  return updated;
+    return updated;
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -280,125 +309,130 @@ export async function confirmReceived(
   userId: number,
   receivedLines: ReceivedLineInput[],
 ) {
-  const [transfer] = await db
-    .select()
-    .from(inventoryTransfer)
-    .where(
-      and(
-        eq(inventoryTransfer.transferId, transferId),
-        eq(inventoryTransfer.organisationId, orgId),
-      ),
-    );
+  // FOR UPDATE on the transfer row: a second receive waits, then reads RECEIVED and is
+  // refused, so the destination stock is added once. Any failure rolls the whole receive back.
+  return db.transaction(async (tx) => {
+    const [transfer] = await tx
+      .select()
+      .from(inventoryTransfer)
+      .where(
+        and(
+          eq(inventoryTransfer.transferId, transferId),
+          eq(inventoryTransfer.organisationId, orgId),
+        ),
+      )
+      .for("update");
 
-  if (!transfer) throw new Error("Transfer not found");
-  if (transfer.status !== "SENT") {
-    throw new Error(`Cannot receive a transfer with status ${transfer.status}`);
-  }
-
-  const lines = await db
-    .select()
-    .from(inventoryTransferLine)
-    .where(eq(inventoryTransferLine.transferId, transferId));
-
-  const receivedMap = new Map(receivedLines.map((r) => [r.lineId, r.receivedQty]));
-  let hasDiscrepancy = false;
-
-  for (const line of lines) {
-    const receivedQty = receivedMap.get(line.lineId) ?? Number(line.sentQty);
-    const sentQty = Number(line.sentQty);
-
-    if (Math.abs(receivedQty - sentQty) > 0.001) {
-      hasDiscrepancy = true;
+    if (!transfer) throw new Error("Transfer not found");
+    if (transfer.status !== "SENT") {
+      throw new Error(`Cannot receive a transfer with status ${transfer.status}`);
     }
 
-    // Convert received qty (entered in the line's sent unit) to base for the
-    // destination stock + FIFO batch.
-    const { baseQty: baseReceivedQty } = await resolveToBase(line.ingredientId, receivedQty, line.sentUnit);
+    const lines = await tx
+      .select()
+      .from(inventoryTransferLine)
+      .where(eq(inventoryTransferLine.transferId, transferId));
 
-    // Add stock at destination
-    await addStockLevel(transfer.toLocationId, line.ingredientId, baseReceivedQty);
+    const receivedMap = new Map(receivedLines.map((r) => [r.lineId, r.receivedQty]));
+    let hasDiscrepancy = false;
 
-    // Create FIFO batch at destination.
-    //
-    // Carry BOTH the arrival date and the unit cost across. The date was
-    // already copied so FIFO age survives the move; the cost was not, so a
-    // transfer silently created stock worth nothing at the destination and the
-    // receiving site's WAC could never be computed. Stock does not become
-    // cheaper by being driven to another kitchen.
-    //
-    // Cost source, in order: the specific source batch the line drew from, then
-    // the source location's weighted average — which is what the stock leaving
-    // that site is actually worth.
-    let arrivalDate = new Date();
-    let unitCost: string | null = null;
-    if (line.fifoBatchId) {
-      const [srcBatch] = await db
-        .select()
-        .from(fifoBatch)
-        .where(eq(fifoBatch.batchId, line.fifoBatchId));
-      if (srcBatch) {
-        arrivalDate = srcBatch.arrivalDate;
-        unitCost = srcBatch.unitCost;
+    for (const line of lines) {
+      const receivedQty = receivedMap.get(line.lineId) ?? Number(line.sentQty);
+      const sentQty = Number(line.sentQty);
+
+      if (Math.abs(receivedQty - sentQty) > 0.001) {
+        hasDiscrepancy = true;
       }
+
+      // Convert received qty (entered in the line's sent unit) to base for the
+      // destination stock + FIFO batch.
+      const { baseQty: baseReceivedQty } = await resolveToBase(line.ingredientId, receivedQty, line.sentUnit);
+
+      // Add stock at destination
+      await addStockLevel(tx, transfer.toLocationId, line.ingredientId, baseReceivedQty);
+
+      // Create FIFO batch at destination.
+      //
+      // Carry BOTH the arrival date and the unit cost across. The date was
+      // already copied so FIFO age survives the move; the cost was not, so a
+      // transfer silently created stock worth nothing at the destination and the
+      // receiving site's WAC could never be computed. Stock does not become
+      // cheaper by being driven to another kitchen.
+      //
+      // Cost source, in order: the specific source batch the line drew from, then
+      // the source location's weighted average — which is what the stock leaving
+      // that site is actually worth.
+      let arrivalDate = new Date();
+      let unitCost: string | null = null;
+      if (line.fifoBatchId) {
+        const [srcBatch] = await tx
+          .select()
+          .from(fifoBatch)
+          .where(eq(fifoBatch.batchId, line.fifoBatchId));
+        if (srcBatch) {
+          arrivalDate = srcBatch.arrivalDate;
+          unitCost = srcBatch.unitCost;
+        }
+      }
+      if (unitCost === null) {
+        const [srcLi] = await tx
+          .select({ wac: locationIngredient.weightedAverageCost })
+          .from(locationIngredient)
+          .where(
+            and(
+              eq(locationIngredient.storeLocationId, transfer.fromLocationId),
+              eq(locationIngredient.ingredientId, line.ingredientId),
+            ),
+          );
+        unitCost = srcLi?.wac ?? null;
+      }
+
+      await tx.insert(fifoBatch).values({
+        storeLocationId: transfer.toLocationId,
+        ingredientId: line.ingredientId,
+        arrivalDate,
+        quantityRemaining: String(baseReceivedQty),
+        originalQuantity: String(baseReceivedQty),
+        unitCost,
+        sourceTransferId: transferId,
+      });
+
+      // The destination now holds a new cost layer, so its weighted average is
+      // stale until recomputed. Nothing else in this flow does it.
+      await wacService.recompute({
+        pairs: [{ storeLocationId: transfer.toLocationId, ingredientId: line.ingredientId }],
+        actorUserId: userId,
+        organisationId: orgId,
+        trigger: "manual",
+        triggerEntityId: transferId,
+      }, tx);
+
+      // Update the line
+      const lineStatus = Math.abs(receivedQty - sentQty) > 0.001 ? "DISCREPANCY" : "RECEIVED";
+      await tx
+        .update(inventoryTransferLine)
+        .set({
+          receivedQty: String(receivedQty),
+          lineStatus,
+          updatedDttm: new Date(),
+        })
+        .where(eq(inventoryTransferLine.lineId, line.lineId));
     }
-    if (unitCost === null) {
-      const [srcLi] = await db
-        .select({ wac: locationIngredient.weightedAverageCost })
-        .from(locationIngredient)
-        .where(
-          and(
-            eq(locationIngredient.storeLocationId, transfer.fromLocationId),
-            eq(locationIngredient.ingredientId, line.ingredientId),
-          ),
-        );
-      unitCost = srcLi?.wac ?? null;
-    }
 
-    await db.insert(fifoBatch).values({
-      storeLocationId: transfer.toLocationId,
-      ingredientId: line.ingredientId,
-      arrivalDate,
-      quantityRemaining: String(baseReceivedQty),
-      originalQuantity: String(baseReceivedQty),
-      unitCost,
-      sourceTransferId: transferId,
-    });
-
-    // The destination now holds a new cost layer, so its weighted average is
-    // stale until recomputed. Nothing else in this flow does it.
-    await wacService.recompute({
-      pairs: [{ storeLocationId: transfer.toLocationId, ingredientId: line.ingredientId }],
-      actorUserId: userId,
-      organisationId: orgId,
-      trigger: "manual",
-      triggerEntityId: transferId,
-    });
-
-    // Update the line
-    const lineStatus = Math.abs(receivedQty - sentQty) > 0.001 ? "DISCREPANCY" : "RECEIVED";
-    await db
-      .update(inventoryTransferLine)
+    const finalStatus = hasDiscrepancy ? "DISCREPANCY" : "RECEIVED";
+    const [updated] = await tx
+      .update(inventoryTransfer)
       .set({
-        receivedQty: String(receivedQty),
-        lineStatus,
+        status: finalStatus,
+        receivedByUserId: userId,
+        receivedDttm: new Date(),
         updatedDttm: new Date(),
       })
-      .where(eq(inventoryTransferLine.lineId, line.lineId));
-  }
+      .where(eq(inventoryTransfer.transferId, transferId))
+      .returning();
 
-  const finalStatus = hasDiscrepancy ? "DISCREPANCY" : "RECEIVED";
-  const [updated] = await db
-    .update(inventoryTransfer)
-    .set({
-      status: finalStatus,
-      receivedByUserId: userId,
-      receivedDttm: new Date(),
-      updatedDttm: new Date(),
-    })
-    .where(eq(inventoryTransfer.transferId, transferId))
-    .returning();
-
-  return updated;
+    return updated;
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -410,37 +444,41 @@ export async function cancelTransfer(
   orgId: number,
   _userId: number,
 ) {
-  const [transfer] = await db
-    .select()
-    .from(inventoryTransfer)
-    .where(
-      and(
-        eq(inventoryTransfer.transferId, transferId),
-        eq(inventoryTransfer.organisationId, orgId),
-      ),
-    );
+  return db.transaction(async (tx) => {
+    // FOR UPDATE so a cancel cannot slip in between a send's status check and its write.
+    const [transfer] = await tx
+      .select()
+      .from(inventoryTransfer)
+      .where(
+        and(
+          eq(inventoryTransfer.transferId, transferId),
+          eq(inventoryTransfer.organisationId, orgId),
+        ),
+      )
+      .for("update");
 
-  if (!transfer) throw new Error("Transfer not found");
-  if (transfer.status !== "INITIATED") {
-    throw new Error("Only INITIATED transfers can be cancelled");
-  }
+    if (!transfer) throw new Error("Transfer not found");
+    if (transfer.status !== "INITIATED") {
+      throw new Error("Only INITIATED transfers can be cancelled");
+    }
 
-  const [updated] = await db
-    .update(inventoryTransfer)
-    .set({
-      status: "CANCELLED",
-      updatedDttm: new Date(),
-    })
-    .where(eq(inventoryTransfer.transferId, transferId))
-    .returning();
+    const [updated] = await tx
+      .update(inventoryTransfer)
+      .set({
+        status: "CANCELLED",
+        updatedDttm: new Date(),
+      })
+      .where(eq(inventoryTransfer.transferId, transferId))
+      .returning();
 
-  // Mark lines cancelled
-  await db
-    .update(inventoryTransferLine)
-    .set({ lineStatus: "CANCELLED", updatedDttm: new Date() })
-    .where(eq(inventoryTransferLine.transferId, transferId));
+    // Mark lines cancelled
+    await tx
+      .update(inventoryTransferLine)
+      .set({ lineStatus: "CANCELLED", updatedDttm: new Date() })
+      .where(eq(inventoryTransferLine.transferId, transferId));
 
-  return updated;
+    return updated;
+  });
 }
 
 // ---------------------------------------------------------------------------
