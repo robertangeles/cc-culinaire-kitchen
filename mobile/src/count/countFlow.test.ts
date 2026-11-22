@@ -13,6 +13,9 @@ function entry(over: Partial<OutboxEntry> & { ingredientId: string; rawQty?: num
   return {
     id: `e-${ingredientId}`,
     userId: 1,
+    type: "count.saveLine",
+    version: 1,
+    serverFailures: 0,
     status: "SAVED_LOCAL",
     attempts: 0,
     nextAttemptAt: 0,

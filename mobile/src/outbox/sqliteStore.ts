@@ -12,9 +12,9 @@ export const sqliteOutboxStore: OutboxStore = {
     const db = await getDb();
     const r = toRow(e);
     await db.runAsync(
-      `INSERT OR REPLACE INTO outbox (id, user_id, status, command, attempts, next_attempt_at, created_at, updated_at, attention_reason, attention_message)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      r.id, r.user_id, r.status, r.command, r.attempts, r.next_attempt_at, r.created_at, r.updated_at, r.attention_reason, r.attention_message,
+      `INSERT OR REPLACE INTO outbox (id, user_id, type, version, status, command, attempts, server_failures, next_attempt_at, created_at, updated_at, attention_reason, attention_message)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      r.id, r.user_id, r.type, r.version, r.status, r.command, r.attempts, r.server_failures, r.next_attempt_at, r.created_at, r.updated_at, r.attention_reason, r.attention_message,
     );
   },
   async remove(ids: string[]) {

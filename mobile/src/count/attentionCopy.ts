@@ -18,6 +18,10 @@ export function attentionCopy(reason: AttentionReason, serverMessage: string): {
       return { sentence: "Your account can't add counts here any more. Ask your manager.", actions: ["discard"] };
     case "rejected":
       return { sentence: serverMessage || "The server didn't accept this count.", actions: ["enter_again", "discard"] };
+    case "server_error":
+      return { sentence: "The server couldn't save this count after several tries. Try again later.", actions: ["enter_again", "discard"] };
+    case "unsupported":
+      return { sentence: "This count was saved by a newer version of the app. Update the app and it will be sent.", actions: ["discard"] };
   }
 }
 

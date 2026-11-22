@@ -169,7 +169,7 @@ describe("stuck counts and other accounts (found in review)", () => {
 
   it("counts unsent counts that belong to another account", async () => {
     const { counts, rows } = setup();
-    rows.set("other", { id: "other", userId: 99, status: "SAVED_LOCAL", attempts: 0, nextAttemptAt: 0, createdAt: 1, updatedAt: 1, command: { sessionId: "S1", categoryName: "Bar", ingredientId: "i1", ingredientName: "Shiraz", rawQty: 1, countedUnit: "kg", claimRevision: 1 } });
+    rows.set("other", { id: "other", userId: 99, type: "count.saveLine", version: 1, serverFailures: 0, status: "SAVED_LOCAL", attempts: 0, nextAttemptAt: 0, createdAt: 1, updatedAt: 1, command: { sessionId: "S1", categoryName: "Bar", ingredientId: "i1", ingredientName: "Shiraz", rawQty: 1, countedUnit: "kg", claimRevision: 1 } });
     await counts.refresh();
     expect(state(counts).otherAccountPending).toBe(1);
   });
