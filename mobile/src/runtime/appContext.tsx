@@ -38,7 +38,7 @@ session = createSession({
   appleCredential: appleEnabled ? appleCredential : undefined,
 });
 
-export { session, googleEnabled, appleEnabled };
+export { session, googleEnabled, appleEnabled, appleCredential };
 
 /** The current screen state and busy flag, re-rendering when either changes. */
 export function useSession() {

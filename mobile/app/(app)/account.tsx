@@ -1,4 +1,4 @@
-import { session, useSession } from "../../src/runtime/appContext";
+import { appleEnabled, session, useSession } from "../../src/runtime/appContext";
 import { QueueStatus } from "../../src/outbox/QueueStatus";
 import { WASTE_TYPES } from "../../src/waste/wasteCommands";
 import { visibleTabs } from "../../src/shell/tabs";
@@ -31,6 +31,7 @@ export default function Account() {
       <QueueStatus types={WASTE_TYPES} />
       {visibleTabs(user).length === 0 ? <Text variant="muted">Nothing on your account is available on the phone yet. Ask your manager.</Text> : null}
       {locations.length > 1 ? <Button kind="ghost" label="Change location" onPress={() => session.changeLocation()} /> : null}
+      {appleEnabled ? <Button kind="ghost" label="Add Sign in with Apple" onPress={() => router.push("/link-apple")} /> : null}
       <Button kind="quiet" label="Sign out" onPress={() => void session.signOut()} />
       <LegalLinks />
       <Button kind="danger" label="Delete my account" onPress={() => router.push("/delete-account")} />

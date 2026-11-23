@@ -18,7 +18,7 @@ vi.mock("../src/waste/WasteProvider", async () => {
 });
 vi.mock("../src/runtime/appContext", async () => {
   const { sessionMock, sessionState, authApiMock } = await import("../testing/mocks");
-  return { session: sessionMock, authApi: authApiMock, googleEnabled: false, useSession: () => sessionState.current };
+  return { session: sessionMock, authApi: authApiMock, googleEnabled: false, appleEnabled: false, useSession: () => sessionState.current };
 });
 vi.mock("../src/runtime/appOutbox", async () => {
   const { wasteHarness } = await import("./wasteHarness");
