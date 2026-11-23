@@ -122,8 +122,7 @@ describe("chat and recipes on a device", () => {
   it("C3 Stop keeps what arrived", async () => {
     await typeInto("Your question", "Another one please");
     await tap("Send");
-    await waitFor("Stop", 20_000);
-    await sleep(2500);
+    await waitFor(/Fake kitchen answer to: Another/, 30_000);
     await tap("Stop");
     await waitFor("Stopped.", 20_000);
     await screenshot("c06-stopped");
@@ -139,7 +138,7 @@ describe("chat and recipes on a device", () => {
 
   it("C5 the conversation is listed, as on the web", async () => {
     await tap("Back to conversations");
-    await waitFor("Your conversations", 20_000);
+    await waitFor(/^your conversations$/i, 20_000);
     await waitFor(/My hollandaise split/, 20_000);
     await screenshot("c08-conversations");
   });
@@ -187,7 +186,7 @@ describe("chat and recipes on a device", () => {
     await tap("Refine");
     await waitFor("Antoine is refining your recipe…", 20_000);
     await screenshot("r07-refining");
-    await waitFor("What changed", 60_000);
+    await waitFor(/^what changed$/i, 60_000);
     await screenshot("r08-refine-proposal");
     await scrollTo("Accept changes");
     await tap("Accept changes");
@@ -203,7 +202,7 @@ describe("chat and recipes on a device", () => {
     await sleep(3000);
     await screenshot("t01-my-recipes-ipad");
     await tap(/^Cider-braised chicken thighs/);
-    await waitFor("Who can see it", 20_000);
+    await waitFor(/^who can see it$/i, 20_000);
     await screenshot("t02-recipe-ipad");
     await back();
     await tap("Create a recipe");
@@ -211,7 +210,7 @@ describe("chat and recipes on a device", () => {
     await screenshot("t03-lab-ipad");
     await back();
     await tab("Ask");
-    await waitFor("Your conversations", 20_000);
+    await waitFor(/^your conversations$/i, 20_000);
     await screenshot("t04-conversations-ipad");
     await tap(/^My hollandaise split/);
     await waitFor(/Fake kitchen answer/, 20_000);

@@ -5,7 +5,7 @@
  *
  *   NODE_OPTIONS="--import $PWD/mobile/device/fakeModel.mjs" OPENROUTER_API_KEY=fake pnpm --filter @culinaire/server exec tsx src/index.ts
  *
- * FAKE_MODEL_DELAY_MS   gap between streamed words (default 250)
+ * FAKE_MODEL_DELAY_MS   gap between streamed lines (default 250)
  * FAKE_RECIPE_MS        how long a recipe or a refinement takes (default 8000), so the wait can be seen
  * A user message containing "[fake:fail]" gets a provider error (the server turns it into AI_UNAVAILABLE).
  * Recipe generation and refinement (`generateObject`, which asks for a "json" tool call) get a fixed recipe.
@@ -33,7 +33,7 @@ function answerFor(question) {
     "- Salt just before cooking\n",
     "- Rest for one minute\n\n",
     "This text came from the fake model, one piece at a time.",
-  ].flatMap((line) => line.split(/(?<= )/));
+  ];
 }
 
 const RECIPE = {

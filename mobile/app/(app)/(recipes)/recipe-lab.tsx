@@ -50,15 +50,16 @@ function Pill({ label, selected, onPress, role }: { label: string; selected: boo
 function Waiting({ startedAt, onStop }: { startedAt: number; onStop: () => void }) {
   const c = useColors();
   const [now, setNow] = useState(Date.now());
+  // Every 5 s: a clock that changes every second keeps a screen reader (and uiautomator) busy for nothing.
   useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 1000);
+    const t = setInterval(() => setNow(Date.now()), 5000);
     return () => clearInterval(t);
   }, []);
   const elapsed = now - startedAt;
   return (
     <Surface>
-      <View style={{ padding: space.lg, gap: space.md }} accessibilityLiveRegion="polite">
-        <Text style={{ fontFamily: fontFamily.title, fontSize: 22 }}>Writing your recipe…</Text>
+      <View style={{ padding: space.lg, gap: space.md }}>
+        <Text accessibilityLiveRegion="polite" style={{ fontFamily: fontFamily.title, fontSize: 22 }}>Writing your recipe…</Text>
         <Text variant="meta" accessibilityLabel={`${Math.floor(elapsed / 1000)} seconds so far`}>{clock(elapsed)}</Text>
         <View style={{ height: 6, borderRadius: 3, backgroundColor: c.border, overflow: "hidden" }}>
           <View style={{ width: `${Math.min(95, (elapsed / 90_000) * 100)}%`, height: 6, backgroundColor: c.accentText }} />
