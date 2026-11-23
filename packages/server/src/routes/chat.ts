@@ -24,7 +24,7 @@ export const chatRouter = Router();
 
 // POST /api/chat — Authenticate (JWT or guest), rate-limit,
 // enforce usage limits, then stream the AI response. A session is charged
-// only when the answer arrived whole.
+// only for an answer that reached the client.
 chatRouter.post("/", authenticateOrGuest, chatRateLimit, checkSessionQuota, async (req, res, next) => {
   if (await handleChatStream(req, res, next)) await chargeSession(req);
 });

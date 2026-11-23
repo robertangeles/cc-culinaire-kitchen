@@ -13,6 +13,7 @@ import { pino } from "pino";
 import { streamChat } from "../services/aiService.js";
 import { generateImage } from "../services/imageService.js";
 import { resolveActiveOrg } from "../services/activeOrgService.js";
+import { ChatRequestSchema } from "@culinaire/shared";
 import { requestDeadline, afterDeadline } from "../utils/requestDeadline.js";
 
 /** A chat answer may use up to 15 tool steps; past this the model call is cut off. */
@@ -21,16 +22,6 @@ const CHAT_TIMEOUT_MS = 180_000;
 const IMAGE_TIMEOUT_MS = 60_000;
 
 const log = pino({ transport: { target: "pino-pretty" } });
-
-const MessagesSchema = z.object({
-  messages: z.array(
-    z.object({
-      role: z.enum(["user", "assistant"]),
-      content: z.string(),
-    })
-  ),
-  webSearch: z.boolean().optional(),
-});
 
 /**
  * Handles an incoming chat request by validating the message array and
@@ -44,15 +35,15 @@ const MessagesSchema = z.object({
  * @param next - Express next function, called with the error when the
  *               stream encounters an unexpected failure.
  * @returns A promise that resolves, once the response has been sent or the error
- *          forwarded to the error-handling middleware, to whether the answer
- *          arrived whole (the caller charges a session only then).
+ *          forwarded to the error-handling middleware, to whether an answer
+ *          reached the client (the caller charges a session only then).
  */
 export async function handleChatStream(
   req: Request,
   res: Response,
   next: NextFunction
 ): Promise<boolean> {
-  const parsed = MessagesSchema.safeParse(req.body);
+  const parsed = ChatRequestSchema.safeParse(req.body);
 
   if (!parsed.success) {
     log.warn({ error: parsed.error.flatten() }, "Chat validation failed");

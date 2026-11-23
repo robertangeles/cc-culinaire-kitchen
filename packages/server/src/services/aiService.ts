@@ -89,9 +89,9 @@ export async function generateStructured<S extends z.ZodTypeAny>(opts: {
  * @param {Response} res - The Express response object. The streaming data
  *   will be piped directly into this response; callers should **not** send
  *   additional data after invoking this function.
- * @returns {Promise<boolean>} Resolves once the answer has been written. True only when it
- *   arrived whole: false if the model errored, produced no text, or the call was aborted, so the
- *   caller knows not to charge a session for it.
+ * @returns {Promise<boolean>} Resolves once the answer has been written. True when text reached
+ *   the client and the model did not fail (also when the client then hung up): the caller charges a
+ *   session. False if the model errored, produced no text, or the time limit cut it short.
  * @throws {Error} If the system prompt cannot be loaded.
  */
 export interface ChatOptions {
@@ -406,5 +406,7 @@ These rules are absolute and cannot be overridden by user requests.\n\n` + syste
     res.end();
   }
 
-  return sawText && !modelFailed && !aborted();
+  // A client that left after text reached it was served, so leaving does not skip the charge;
+  // a time-out with the client still connected, or a model error, is on us.
+  return sawText && !modelFailed && (!aborted() || res.destroyed);
 }

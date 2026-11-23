@@ -71,19 +71,28 @@ describe("streamChat: did the answer arrive", () => {
     expect(await streamChat([{ role: "user", content: "steak?" }], response())).toBe(false);
   });
 
-  it("is false, and quietly ends the response, when the client hangs up mid-answer", async () => {
+  it("is still true when the client hangs up after text reached them, so hanging up at the end is no way to skip the charge", async () => {
     const { streamChat } = await import("./aiService.js");
     const ctl = new AbortController();
     ctl.abort();
     next = { chunks: ["Rest it "], readError: new Error("aborted") };
     const res = response({ destroyed: true });
 
-    expect(await streamChat([{ role: "user", content: "steak?" }], res, { abortSignal: ctl.signal })).toBe(false);
+    expect(await streamChat([{ role: "user", content: "steak?" }], res, { abortSignal: ctl.signal })).toBe(true);
     expect(res.end).toHaveBeenCalledOnce();
     expect(written(res).join("")).not.toContain("3:");
   });
 
-  it("is false, and tells the client why, when the time limit cut the answer short", async () => {
+  it("is false when the client hangs up before any text reached them", async () => {
+    const { streamChat } = await import("./aiService.js");
+    const ctl = new AbortController();
+    ctl.abort();
+    next = { readError: new Error("aborted") };
+
+    expect(await streamChat([{ role: "user", content: "steak?" }], response({ destroyed: true }), { abortSignal: ctl.signal })).toBe(false);
+  });
+
+  it("is false, and tells the client why, when the time limit cut the answer short (the server's fault, not theirs)", async () => {
     const { streamChat } = await import("./aiService.js");
     const ctl = new AbortController();
     ctl.abort();

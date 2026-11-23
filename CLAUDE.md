@@ -180,11 +180,12 @@ Templates live in `prompts/chatbot/` — never hardcoded in application logic. T
 
 ## API
 
-`POST /api/chat` — Request: `{ message }` → Response: `{ response, sources[] }`
+`POST /api/chat` — Request: `{ messages: [{ role: "user" | "assistant", content }], webSearch? }` (the server keeps no state: the client re-sends the whole history each turn). Auth: cookie or `Authorization: Bearer`, or a guest `X-Guest-Token`.
+Response: a chunked `text/plain` stream in the Vercel AI SDK v4 data-stream format, one `<code>:<json>\n` line per part (`0` text, `3` error, `8` annotations such as `brain_grounded`). It is not JSON and not SSE. Errors before the stream starts are JSON `{ error, code? }`: 400 `VALIDATION`, 401, 403 `FREE_SESSIONS_EXHAUSTED` / `GUEST_QUOTA_EXHAUSTED`, 429 `RATE_LIMITED`. A session is charged only for an answer that reached the client; the model call stops after 3 minutes or when the client hangs up. Schemas: `ChatRequestSchema`, `ChatResponseSchema` in `packages/shared`.
 
-Conversation schema:
-- `conversations`: id, user_id, created_at
-- `messages`: id, conversation_id, role (user|assistant), content, timestamp
+Conversations are saved by the client through `/api/conversations` (it makes the ids, so a retried create or save is safe):
+- `conversation`: conversation_id, conversation_title, user_id (or guest_session_token), created_dttm, updated_dttm
+- `message`: message_id, conversation_id, message_role (user|assistant), message_body, message_sequence, created_dttm
 
 ---
 
