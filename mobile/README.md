@@ -292,7 +292,7 @@ Differences from the web (`StockMovementForm.tsx`):
 
 ## Transfers (`src/transfers`, `app/(app)/(transfers)`)
 
-The Transfers tab is the web's "Location Transfer" view (Inventory, Transfers tab). It is shown to `inventory:count` holders, the key the server asks for to list and receive;
+The Transfers tab is the web's "Location Transfer" view (Inventory, Transfers tab). Transfers and Stock come last in the tab order (weekly store-room work), so for most people they sit under More. It is shown to `inventory:count` holders, the key the server asks for to list and receive;
 making, sending and cancelling are `inventory:manage` and are offered only to holders. The list is the transfers to and from the current location (the server's newest 50, plus every
 one still on its way here, however old), kept on the phone for no-signal starts, with the queue laid over it: **To receive** (sent here, not received), **Sent from here**, **Received here**.
 A transfer's page shows its lines; from the location it leaves, Send now and Cancel transfer (asks first); at the location it is going to, once sent, what arrived, line by line.
