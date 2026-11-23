@@ -117,6 +117,8 @@ export interface CommandHandler<C = unknown> {
    * timeout, a 5xx, a lost reply, a crash): the server may already hold it, so only "append" is safe then.
    */
   fold?(open: { type: string; command: unknown }, incoming: C, mayBeOnServer: boolean): { type: string; command: unknown } | "cancel" | "append";
+  /** This command creates what the key names: every later command with the key depends on it, so discarding it discards them too. */
+  creates?: boolean;
   /** A short line for the sync list; a handler without it is not listed there (counts have their own screen). */
   describe?(command: C): string;
 }
@@ -393,7 +395,13 @@ export function createOutbox({ store, send, handlers = [], now, newId, getUserId
     discard(id: string) {
       return locked(async () => {
         const entry = await find(id);
-        if (entry && entry.status !== "ACCEPTED") await put({ ...entry, status: "DISCARDED" });
+        if (!entry || entry.status === "ACCEPTED") return;
+        await put({ ...entry, status: "DISCARDED" });
+        if (!registry.get(entry.type)?.creates) return;
+        const key = keyOf(entry);
+        for (const e of (await store.list()) as OutboxEntry<unknown>[]) {
+          if (e.id !== id && e.userId === entry.userId && OPEN.includes(e.status) && keyOf(e) === key) await put({ ...e, status: "DISCARDED" });
+        }
       });
     },
 

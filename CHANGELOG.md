@@ -19,7 +19,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **A general offline queue.** The phone's outbox now holds typed, versioned commands with a handler per type: client-made ids so a resend is safe, ordered replay per entry, backoff on network and 5xx (with a cap a handler can set), refusals kept visible with the server's code and message (Try again or Discard), "already applied" counted as sent, a session that ended pauses the queue until sign-in. Counts are the first handler and behave as before. Existing phones gain the new `outbox` columns by `ALTER TABLE` on first launch. Documented in `mobile/README.md`.
 - **Waste on the phone.** A Waste tab for `waste:log` holders: log with ingredient autocomplete, quantity, unit, reason and shift, quick buttons for the latest items, edit and delete your own entries, per-unit daily totals, all offline-first. The shared ingredient picker (`src/ui/IngredientPicker.tsx`) is built to be reused by consumption, transfers and orders.
-- **Tablet width.** Screens built on `Screen` and the waste screens sit in a centred column of at most 640 dp.
+- **Tablet width.** Screens built on `Screen` and the waste screens sit in a centred column of at most 560 dp.
 - No server route changed: older installed apps keep working. Differences from the web waste page are listed in `mobile/README.md`.
 
 ### Changed (mobile Wave 2, server: the line loop)

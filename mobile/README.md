@@ -34,6 +34,7 @@ export interface CommandHandler<C> {
   classify?(err): Outcome;       // override how a refusal is read; the server's `code` decides, never its English text
   maxServerFailures?: number;    // stop retrying 5xx after this many and ask the person (network failures never count)
   fold?(open, incoming, mayBeOnServer) // what a newer command does to an open one: merge, "cancel", or "append"; only "append" once it may be on the server
+  creates?: boolean;             // this command makes what its key names (a waste log): discarding it discards the later commands with the key
   latestOnly?: boolean;          // only the newest command per key matters (counts)
   describe?(command: C): string; // the line shown in the sync list (Account tab); no `describe` = not listed there
 }
@@ -81,8 +82,8 @@ The catalogue download is `GET /api/inventory/ingredients`, which the server all
 
 ## Tablet width
 
-`src/ui/Column.tsx`: content sits in a centred column of at most 640 dp (`Screen` does it for every screen built on it; the waste screens use `Column` directly).
-Phones fill the width. The count screens are not wrapped yet. jsdom does no layout, so `tests/waste.test.tsx` checks only the column's constraints (full width, 640 dp cap, centred); the look at 390 and 820 wide is for the device walk.
+Content sits in a centred column of at most 560 dp, `COLUMN_WIDTH` in `src/ui/Screen.tsx` (`Screen` does it for every screen built on it; the waste screens lay themselves out and use `src/ui/Column.tsx`, which reuses the same number).
+Phones fill the width. The count screens are not wrapped yet. jsdom does no layout, so `tests/waste.test.tsx` checks only the column's constraints (full width, 560 dp cap, centred); the look at 390 and 820 wide is for the device walk.
 
 ## Waste (`src/waste`, `app/(app)/(waste)`)
 

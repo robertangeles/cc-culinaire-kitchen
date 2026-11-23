@@ -149,6 +149,18 @@ describe("editing and deleting what has not been sent", () => {
       expect(request.mock.calls.slice(1).map((c) => c[0])).toEqual(["POST", "DELETE"]);
     });
 
+    it("discarding the log discards the edit and delete queued behind it, so nothing is sent for an entry the server never took", async () => {
+      const { outbox, request, rows } = await lostReply();
+      await outbox.enqueueCommand("waste.edit", { wasteLogId: log().wasteLogId, label: "x", changes: { quantity: 3 } });
+      await outbox.enqueueCommand("waste.delete", { wasteLogId: log().wasteLogId, label: "x" });
+      await outbox.enqueueCommand("waste.log", log({ wasteLogId: "other" }));
+      await outbox.discard(rows()[0].id);
+      expect(rows().map((r) => [r.type, r.status])).toEqual([["waste.log", "DISCARDED"], ["waste.delete", "DISCARDED"], ["waste.log", "SAVED_LOCAL"]]);
+      request.mockClear();
+      await outbox.drain();
+      expect(request.mock.calls.map((c) => [c[0], c[1]])).toEqual([["POST", "/api/waste"]]);
+    });
+
     it("after a crash mid-send, the log counts as tried too", async () => {
       const { outbox, request, rows } = setup();
       await outbox.enqueueCommand("waste.log", log());

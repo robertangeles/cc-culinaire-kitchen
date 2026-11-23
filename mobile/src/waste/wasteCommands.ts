@@ -74,6 +74,7 @@ export function wasteHandlers(client: ApiClient): CommandHandler<unknown>[] {
     type: WASTE_LOG,
     version: 1,
     key,
+    creates: true,
     maxServerFailures: MAX_SERVER_FAILURES,
     fold,
     classify: classifyLog,

@@ -235,11 +235,11 @@ describe("account tab", () => {
 });
 
 describe("tablet width", () => {
-  it("puts the waste screens in a column that fills the width up to 640 dp and sits in the middle (so a phone is full width, an iPad is capped; jsdom does no layout, so the constraints are checked)", async () => {
+  it("puts the waste screens in a column that fills the width up to the app's 560 dp column and sits in the middle (so a phone is full width, an iPad is capped; jsdom does no layout, so the constraints are checked)", async () => {
     await makeWasteHarness({ onServer: [serverEntry()] });
     const { container } = render(<Waste />);
-    const column = [...container.querySelectorAll("div")].find((d) => getComputedStyle(d).maxWidth === "640px");
-    expect(column, "a 640 dp column").toBeTruthy();
+    const column = [...container.querySelectorAll("div")].find((d) => getComputedStyle(d).maxWidth === "560px");
+    expect(column, "a 560 dp column").toBeTruthy();
     const style = getComputedStyle(column!);
     expect(style.width).toBe("100%");
     expect(style.alignSelf).toBe("center");
