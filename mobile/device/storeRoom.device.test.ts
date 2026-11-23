@@ -67,8 +67,9 @@ async function type(label: string, text: string) {
     await dismissSavePassword();
     const field = await find(label, (n) => n.find((x) => x.cls.includes("EditText")));
     if (!field) {
+      // Below the keyboard on a long form, or scrolled past: look further down first, then back up.
       await hideKeyboard();
-      await scroll(false);
+      await scroll(i < 3);
       continue;
     }
     await tapAt(Math.round((field.x1 + field.x2) / 2), Math.round((field.y1 + field.y2) / 2));
