@@ -10,6 +10,7 @@ import pino from "pino";
 import { CreatePurchaseOrderSchema, PurchaseOrderInputSchema, type PurchaseOrderInput } from "@culinaire/shared/schemas/purchaseOrder";
 import { getUserLocationContext, assertLocationAccess } from "../services/locationContextService.js";
 import { hasPermission } from "../middleware/auth.js";
+import { withoutCostFields } from "../utils/costFields.js";
 import {
   createPO,
   updatePO,
@@ -55,6 +56,11 @@ const ListPOsQuerySchema = z.object({
 /** A receiving-only user (no `inventory:count`) is confined to the receiving queue of the locations they can use. */
 function isReceivingOnly(req: Request): boolean {
   return !hasPermission(req.user!, "inventory:count");
+}
+
+/** Prices on an order are for whoever buys, receives or may see cost: a counter with none of those keys gets the order without them. */
+function seesPrices(req: Request): boolean {
+  return hasPermission(req.user!, "inventory:cost") || req.user!.permissions.some((p) => p.startsWith("purchasing:"));
 }
 
 async function resolveOrgId(req: Request, res: Response): Promise<number | null> {
@@ -190,7 +196,8 @@ export async function handleListPOs(
     }
 
     const result = await listPOs(orgId, { ...rest, statuses, storeLocationIds });
-    res.json(canApproveOrders(req) ? await withApprovalRights(result, orgId, req.user!.sub) : result);
+    const visible = seesPrices(req) ? result : result.map(withoutCostFields);
+    res.json(canApproveOrders(req) ? await withApprovalRights(visible, orgId, req.user!.sub) : visible);
   } catch (err) {
     next(err);
   }
@@ -213,7 +220,8 @@ export async function handleGetPODetail(
     }
     if (isReceivingOnly(req)) await assertLocationAccess(req.user!, result.storeLocationId);
 
-    res.json(canApproveOrders(req) ? (await withApprovalRights([result], orgId, req.user!.sub))[0] : result);
+    const visible = seesPrices(req) ? result : { ...withoutCostFields(result), lines: result.lines.map(withoutCostFields) };
+    res.json(canApproveOrders(req) ? (await withApprovalRights([visible], orgId, req.user!.sub))[0] : visible);
   } catch (err) {
     next(err);
   }

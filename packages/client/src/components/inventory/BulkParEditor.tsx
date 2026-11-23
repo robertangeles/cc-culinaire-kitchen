@@ -181,7 +181,7 @@ export default function BulkParEditor() {
                   </div>
                   <div className="w-12 text-center text-xs text-dark-500">{item.baseUnit}</div>
                   <div className="w-16 text-right text-xs text-dark-600">
-                    {Number(item.currentQty ?? 0).toFixed(1)}
+                    {item.currentQty === undefined ? "—" : Number(item.currentQty ?? 0).toFixed(1)}
                   </div>
                   <div className="w-24">
                     <input

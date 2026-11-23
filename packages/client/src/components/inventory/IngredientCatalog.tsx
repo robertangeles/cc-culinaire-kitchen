@@ -219,7 +219,7 @@ export function IngredientCatalog() {
 
 // ─── Edit Modal ──────────────────────────────────────────────────
 
-function EditIngredientModal({
+export function EditIngredientModal({
   ingredient, onSave, onDelete, onCheckUsage, onClose,
 }: {
   ingredient: Ingredient;
@@ -776,7 +776,8 @@ function EditIngredientModal({
                   purchaseUnit: purchaseUnit || null,
                   packQty: purchaseUnit ? editPackQty || null : null,
                   description: desc || null,
-                  unitCost: derivedUnitCost || null,
+                  // A cost the server left out (no inventory:cost) is unknown here, not empty: only a typed price is saved.
+                  ...(ingredient.unitCost === undefined && !cost ? {} : { unitCost: derivedUnitCost || null }),
                   parLevel: toKitchen(par, parEntryUnit),
                   itemType: editItemType,
                   fifoApplicable: editFifo,

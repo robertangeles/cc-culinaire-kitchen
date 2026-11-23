@@ -405,9 +405,11 @@ export default function ConsumptionLogger({
                         {catLabel}
                       </div>
                       {items.map((item) => {
+                        // An absent quantity is hidden (no inventory:cost), not zero.
+                        const hidden = item.currentQty === undefined;
                         const stock = Number(item.currentQty || 0);
                         const isReturn = reason === "return_to_stock";
-                        const outOfStock = stock <= 0 && !isReturn;
+                        const outOfStock = !hidden && stock <= 0 && !isReturn;
                         return (
                           <button
                             key={item.ingredientId}
@@ -421,7 +423,7 @@ export default function ConsumptionLogger({
                           >
                             <span className={outOfStock ? "line-through" : ""}>{item.ingredientName}</span>
                             <span className={`text-[10px] tabular-nums ${outOfStock ? "text-red-400/60" : "text-[#888]"}`}>
-                              {outOfStock ? "Out of stock" : `${stock.toFixed(1)} ${item.baseUnit}`}
+                              {outOfStock ? "Out of stock" : `${hidden ? "—" : stock.toFixed(1)} ${item.baseUnit}`}
                             </span>
                           </button>
                         );
