@@ -34,6 +34,23 @@ describe("my recipes (shelf) store", () => {
     expect(store.getSnapshot().total).toBe(4);
   });
 
+  it("a refresh drops a recipe removed elsewhere, with one page loaded and with more", async () => {
+    const one = setup();
+    await one.store.refresh();
+    one.mine.mockResolvedValueOnce({ recipes: [row("a")], total: 1, page: 1 });
+    await one.store.refresh();
+    expect(one.store.getSnapshot()).toMatchObject({ recipes: [{ recipeId: "a" }], total: 1 });
+    expect(one.store.getSnapshot().recipes).toHaveLength(1);
+
+    const more = setup();
+    await more.store.refresh();
+    await more.store.loadMore();
+    more.mine.mockResolvedValueOnce({ recipes: [row("new"), row("b")], total: 3, page: 1 });
+    await more.store.refresh();
+    expect(more.store.getSnapshot().recipes.map((r) => r.recipeId)).toEqual(["new", "b", "c"]);
+    expect(more.store.getSnapshot().total).toBe(3);
+  });
+
   it("a refresh that overtakes Load more leaves Load more usable", async () => {
     const { store, mine } = setup();
     await store.refresh();

@@ -137,7 +137,7 @@ My Recipes first, and offers Check again beside Try again (a Try again from ther
 connection is different from a stop or the phone's own time-out: the server does not see a phone change networks and may still be
 writing, so until its limit has passed (160 s after the request was sent) the screen says the recipe may still be on its way, looks in
 My Recipes every 15 s, and offers Check now but not Try again. The lab opens a finished recipe only while its screen is in view. A recipe that finishes while the person is back on My Recipes appears in the
-list. Returning to My Recipes refreshes the first page and keeps the pages already loaded. Refine (`recipeStore.ts`) is a
+list. Returning to My Recipes refreshes the first page and keeps the later pages already loaded; a recipe removed elsewhere leaves the list. Refine (`recipeStore.ts`) is a
 proposal: nothing is saved until Accept (`accept-refinement`); Discard drops it; once Accept is saved the proposal is gone even if the
 recipe cannot be loaded again. The owner's switch is `PATCH /api/recipes/:id`
 `{ isPublicInd }`, shown at once and put back if the server refuses. Ownership comes from the server: `userId` is sent only to the owner.

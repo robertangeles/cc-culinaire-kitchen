@@ -34,9 +34,11 @@ export function createShelfStore({ api }: { api: RecipeApi }) {
     try {
       const first = await api.mine(1, domain ?? undefined);
       if (mine !== generation) return;
-      // A refresh keeps the pages already loaded: the fresh first page goes on top, replacing its own older rows.
+      // A refresh keeps the later pages already loaded. The fresh first page is the truth for the newest rows: it replaces the
+      // loaded rows down to the last one it still holds, so a recipe removed elsewhere goes; with one page loaded that is all of them.
       const fresh = new Set(first.recipes.map((r) => r.recipeId));
-      set({ phase: "ready", recipes: [...first.recipes, ...snapshot.recipes.filter((r) => !fresh.has(r.recipeId))], total: first.total });
+      const kept = page === 1 ? [] : snapshot.recipes.slice(snapshot.recipes.map((r) => fresh.has(r.recipeId)).lastIndexOf(true) + 1);
+      set({ phase: "ready", recipes: [...first.recipes, ...kept], total: first.total });
     } catch (err) {
       if (mine !== generation) return;
       // Keep what is on screen when only a refresh failed.
