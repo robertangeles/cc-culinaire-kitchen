@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useSyncExternalStore, type ReactNode } from "react";
-import { client } from "../runtime/appContext";
+import { client, session } from "../runtime/appContext";
+import { catalogueRoute, createCatalogue } from "../ingredients/catalogue";
 import { currentUserId, outbox, runner } from "../runtime/appOutbox";
 import { newUuid } from "../outbox/uuid";
 import { sqliteKv } from "../storage/kv";
@@ -10,10 +11,13 @@ const StockContext = createContext<StockStore | null>(null);
 
 /** One stock store per location and account, loading the dashboard as soon as it exists. */
 export function StockProvider({ locationId, canSeeQty, children }: { locationId: string; canSeeQty: boolean; children: ReactNode }) {
-  const store = useMemo(
-    () => createStockStore({ api: createStockApi(client), kv: sqliteKv, outbox, userId: currentUserId() ?? -1, locationId, canSeeQty, kick: runner.kick, now: Date.now, newId: newUuid }),
-    [locationId, canSeeQty],
-  );
+  const store = useMemo(() => {
+    const userId = currentUserId() ?? -1;
+    const state = session.getSnapshot().state;
+    // The same list, kept under the same key, as the shared picker's.
+    const catalogue = createCatalogue({ client, kv: sqliteKv, key: `catalogue.${userId}`, path: state.phase === "ready" ? catalogueRoute(state.user) : "/api/inventory/ingredients" });
+    return createStockStore({ api: createStockApi(client), catalogue, kv: sqliteKv, outbox, userId, locationId, canSeeQty, kick: runner.kick, now: Date.now, newId: newUuid });
+  }, [locationId, canSeeQty]);
   useEffect(() => {
     void store.refresh();
     return () => store.dispose();

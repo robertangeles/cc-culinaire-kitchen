@@ -99,10 +99,11 @@ describe("the stock dashboard", () => {
 });
 
 describe("item lookup", () => {
-  const items = [item(), item({ ingredientId: "i3", ingredientName: "Gin syrup", activeInd: false, currentQty: null }), item({ ingredientId: "i4", ingredientName: "Basil", ingredientCategory: "produce", baseUnit: "bunch", currentQty: 2 })];
+  const items = [item(), item({ ingredientId: "i4", ingredientName: "Basil", ingredientCategory: "produce", baseUnit: "bunch", currentQty: 2 })];
+  const catalogue = [{ ingredientId: "i1", ingredientName: "Gin", baseUnit: "L", ingredientCategory: "spirits" }, { ingredientId: "i3", ingredientName: "Gin syrup", baseUnit: "L", ingredientCategory: "spirits" }];
 
   it("lists the items used here, searches the whole catalogue, and asks for what is missing", async () => {
-    await makeStoreRoom({ items });
+    await makeStoreRoom({ items, catalogue });
     render(<Items />);
     expect(screen.getAllByRole("button", { name: /, on hand / }).map((b) => b.getAttribute("aria-label")?.split(",")[0])).toEqual(["Basil", "Gin"]);
     type("Search the catalogue", "gin");

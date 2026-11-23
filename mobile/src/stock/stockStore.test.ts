@@ -23,7 +23,8 @@ function setup(over: { fail?: ApiError; canSeeQty?: boolean; send?: ReturnType<t
   const api = { dashboard: vi.fn(fail(dashboard)), items: vi.fn(fail(items)), areas: vi.fn(fail([{ storageAreaId: "a1", areaName: "Dry Store" }])), assignments: vi.fn(fail({ i1: ["a1"] })), elsewhere: vi.fn(async () => [{ storeLocationId: "L2", locationName: "Bar", currentQty: 4, parLevel: 6 }]) } as unknown as StockApi;
   let id = 0;
   const kick = vi.fn();
-  const make = () => createStockStore({ api, kv, outbox, userId: 1, locationId: "L1", canSeeQty: over.canSeeQty ?? true, kick, now: () => NOW, newId: () => `00000000-0000-4000-8000-${String(++id).padStart(12, "0")}` });
+  const catalogue = { items: async () => [{ ingredientId: "i1", ingredientName: "Salt", baseUnit: "kg", ingredientCategory: "dry_goods" }, { ingredientId: "i7", ingredientName: "Yuzu", baseUnit: "L", ingredientCategory: "beverages", itemType: "KITCHEN_INGREDIENT" }], refresh: vi.fn(async () => true) };
+  const make = () => createStockStore({ api, catalogue, kv, outbox, userId: 1, locationId: "L1", canSeeQty: over.canSeeQty ?? true, kick, now: () => NOW, newId: () => `00000000-0000-4000-8000-${String(++id).padStart(12, "0")}` });
   return { make, api, over, kvMap, outbox, send, kick, rows: () => [...rows.values()] };
 }
 
@@ -32,8 +33,14 @@ describe("stock store", () => {
     const t = setup();
     const s = t.make();
     await s.refresh();
-    expect(s.getSnapshot()).toMatchObject({ phase: "ready", offline: false, dashboard, items, areas: [{ areaName: "Dry Store" }], assignments: { i1: ["a1"] }, savedAt: NOW });
+    expect(s.getSnapshot()).toMatchObject({ phase: "ready", offline: false, dashboard, areas: [{ areaName: "Dry Store" }], assignments: { i1: ["a1"] }, savedAt: NOW });
     expect(t.kvMap.has("stock.1.L1")).toBe(true);
+  });
+
+  it("adds the catalogue's items that are not active here (the location's list holds only active ones), with no quantity", async () => {
+    const s = setup().make();
+    await s.refresh();
+    expect(s.getSnapshot().items).toEqual([...items, { ingredientId: "i7", ingredientName: "Yuzu", ingredientCategory: "beverages", itemType: "KITCHEN_INGREDIENT", baseUnit: "L", parLevel: null, activeInd: false, lastCountedDttm: null, supplierName: null }]);
   });
 
   it("shows the last download, with its time, when there is no signal", async () => {
@@ -45,10 +52,11 @@ describe("stock store", () => {
     expect(s.getSnapshot()).toMatchObject({ phase: "ready", offline: true, dashboard, savedAt: NOW });
   });
 
-  it("says so when nothing was downloaded yet and there is no signal", async () => {
+  it("has no figures when nothing was downloaded yet and there is no signal, but still offers the catalogue kept for the picker", async () => {
     const s = setup({ fail: new ApiError("network") }).make();
     await s.refresh();
-    expect(s.getSnapshot()).toMatchObject({ phase: "ready", offline: true, dashboard: null, items: [] });
+    expect(s.getSnapshot()).toMatchObject({ phase: "ready", offline: true, dashboard: null, savedAt: null });
+    expect(s.getSnapshot().items.map((i) => [i.ingredientName, i.activeInd, i.currentQty])).toEqual([["Salt", false, undefined], ["Yuzu", false, undefined]]);
   });
 
   it("shows the server's refusal in its words", async () => {

@@ -81,6 +81,29 @@ async function type(label: string, text: string) {
   throw new Error(`could not type into ${label}`);
 }
 
+/** After `pm clear` the dev client shows its floating Tools button again: switch it off so it is not in the pictures (as device/screens does on the visual-pass branch). */
+async function hideDevTools() {
+  for (let i = 0; i < 10 && !(await has("Tools")); i++) await sleep(1000);
+  if (!(await has("Tools"))) return;
+  const [w, h] = size();
+  const dpi = Number(/(\d+)\s*$/.exec(adb(["shell", "wm", "density"]).trim())![1]);
+  await tap("Tools");
+  try {
+    for (let i = 0; i < 3; i++) {
+      const row = await waitFor("Tools button", 10_000).catch(() => null);
+      if (!row) break;
+      if (row.y2 < h * 0.8) {
+        await tapAt(w - Math.round((67 * dpi) / 160), Math.round((row.y1 + row.y2) / 2)); // the switch's centre is 67 dp in from the right edge
+        break;
+      }
+      await swipe(Math.round(w / 2), Math.round(h * 0.7), Math.round(w / 2), Math.round(h * 0.2), 400);
+    }
+  } finally {
+    for (let i = 0; i < 3 && (await has("Toggle performance monitor")); i++) await back();
+    await sleep(800);
+  }
+}
+
 const tab = (title: string) => tap(new RegExp(`^${title}(,|$)`), 30_000);
 
 async function signIn() {
@@ -89,6 +112,7 @@ async function signIn() {
   await openApp(METRO);
   await sleep(6000);
   if (await has("Go home")) await back();
+  await hideDevTools();
   await waitFor("Welcome back to the line.", 240_000);
   await type("Email", credentials.email);
   await type("Password", credentials.password);
@@ -166,17 +190,17 @@ describe.skipIf(!process.env.STOREROOM_OUT)(`store room screens on ${FORM}`, () 
 
   it("transfers: the list, a receive with a short line, a new transfer", async () => {
     await tab("Transfers");
-    await waitFor("To receive", 30_000);
+    await waitFor(/^to receive$/i, 30_000);
     await shot("transfers-list");
     await press(/^From Harbour St kitchen, 2 items, On its way/);
-    await waitFor("What arrived", 30_000);
+    await waitFor(/^what arrived$/i, 30_000);
     await type("Lemons received, in each", "8");
     await hideKeyboard();
     await waitFor("Short by 2 each");
     await shot("transfer-receive");
     await press("Back to transfers");
     await press("New transfer");
-    await waitFor("Going to");
+    await waitFor(/^going to$/i);
     await press("Harbour St kitchen");
     await type("Add an item", "sea");
     await tap("Use Sea salt flakes", 30_000);
@@ -193,7 +217,7 @@ describe.skipIf(!process.env.STOREROOM_OUT)(`store room screens on ${FORM}`, () 
     await press(/^Critical, reorder now/);
     await shot("stock-critical-open");
     await press(/^London dry gin, on hand/);
-    await waitFor("Kept in");
+    await waitFor(/^kept in$/i);
     await shot("stock-item");
     await press("Back");
     await press("Look up an item");

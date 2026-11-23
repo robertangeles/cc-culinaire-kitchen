@@ -64,12 +64,11 @@ export default function Transfers() {
                   onPress={() => router.push({ pathname: "/transfer/[transferId]", params: { transferId: row.transferId } })}
                   style={{ minHeight: size.tap, justifyContent: "center", gap: space.xs }}
                 >
-                  <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: space.md }}>
-                    <Text style={{ fontFamily: fontFamily.title, fontSize: 20, flexShrink: 1 }}>{incoming ? `From ${other}` : `To ${other}`}</Text>
+                  <Text style={{ fontFamily: fontFamily.title, fontSize: 20 }}>{incoming ? `From ${other}` : `To ${other}`}</Text>
+                  <Text variant="meta">{`${items} · ${dayAndTime(row.createdDttm)}${row.initiatorName ? ` · ${row.initiatorName}` : ""}`}</Text>
+                  {/* The status on its own line: a long one beside the name squeezed the name onto three lines. */}
+                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.sm }}>
                     <Chip label={statusWords(row.status)} />
-                  </View>
-                  <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: space.md }}>
-                    <Text variant="meta" style={{ flexShrink: 1 }}>{`${items} · ${dayAndTime(row.createdDttm)}${row.initiatorName ? ` · ${row.initiatorName}` : ""}`}</Text>
                     {row.sync === "waiting" ? <Chip label="Waiting to send" /> : null}
                   </View>
                 </Pressable>

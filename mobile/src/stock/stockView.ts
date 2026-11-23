@@ -52,7 +52,7 @@ export function valueRows(dashboard: LocationDashboard): { total: string; rows: 
   return { total: money(stockValue), rows };
 }
 
-/** Typed: the whole catalogue (active here or not), best match first. Empty: the items active here, A to Z. */
+/** Typed: every item the store holds (active here, then the rest of the catalogue), best match first. Empty: the items active here, A to Z. */
 export function findItems(items: LocationItem[], query: string): LocationItem[] {
   if (!query.trim()) return items.filter((i) => i.activeInd).sort((a, b) => a.ingredientName.localeCompare(b.ingredientName));
   return rankIngredients(query, items.map((i) => ({ ...i, name: i.ingredientName })), 50);
