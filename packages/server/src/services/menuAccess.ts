@@ -51,9 +51,14 @@ export function menuReadable(scope: MenuScope): SQL {
   return scope.organisationId === null ? own : or(eq(menuItem.organisationId, scope.organisationId), own)!;
 }
 
-/** 403 FORBIDDEN unless the caller made the item or administers its organisation. The item must already be readable by the caller. */
+/** The caller made the item or administers its organisation. The item must already be readable by the caller. */
+export function canManageMenuItem(scope: MenuScope, item: { userId: number; organisationId: number | null }): boolean {
+  if (item.userId === scope.userId && (item.organisationId === null || item.organisationId === scope.organisationId)) return true;
+  return scope.isOrgAdmin && item.organisationId === scope.organisationId;
+}
+
+/** 403 FORBIDDEN unless {@link canManageMenuItem}. */
 export function assertCanManageMenuItem(scope: MenuScope, item: { userId: number; organisationId: number | null }): void {
-  if (item.userId === scope.userId && (item.organisationId === null || item.organisationId === scope.organisationId)) return;
-  if (scope.isOrgAdmin && item.organisationId === scope.organisationId) return;
+  if (canManageMenuItem(scope, item)) return;
   throw new AppError(403, "FORBIDDEN", "Only the person who created this menu item or an organisation admin can change it");
 }

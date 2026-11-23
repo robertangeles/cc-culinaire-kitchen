@@ -11,6 +11,8 @@ const API = import.meta.env.VITE_API_URL ?? "";
 export interface MenuItem {
   menuItemId: string;
   userId: number;
+  /** The signed-in person may edit and delete this item (its creator or an organisation admin). Absent from an older server: treated as allowed. */
+  canManage?: boolean;
   name: string;
   category: string;
   sellingPrice: number;
@@ -63,6 +65,15 @@ export interface MenuIngredient {
   lineCost: string;
   costStaleInd?: boolean;
   costStaleAt?: string | null;
+}
+
+/** The server's own sentence for a refused request (403 not yours to change, 409 has history), else the fallback. */
+async function failure(res: Response, fallback: string): Promise<Error> {
+  try {
+    const body = await res.json();
+    if (body?.error) return new Error(body.error);
+  } catch { /* not JSON */ }
+  return new Error(fallback);
 }
 
 export function useMenuItems(category?: string) {
@@ -123,12 +134,13 @@ export function useMenuItems(category?: string) {
       credentials: "include",
       body: JSON.stringify(data),
     });
-    if (!res.ok) throw new Error("Failed to update item");
+    if (!res.ok) throw await failure(res, "Failed to update item");
     await fetchItems();
   }, [fetchItems]);
 
   const deleteItem = useCallback(async (id: string) => {
-    await fetch(`${API}/api/menu/items/${id}`, { method: "DELETE", credentials: "include" });
+    const res = await fetch(`${API}/api/menu/items/${id}`, { method: "DELETE", credentials: "include" });
+    if (!res.ok) throw await failure(res, "Failed to delete item");
     await fetchItems();
   }, [fetchItems]);
 
@@ -158,9 +170,10 @@ export function useMenuItems(category?: string) {
   }, []);
 
   const removeIngredient = useCallback(async (itemId: string, ingredientId: number) => {
-    await fetch(`${API}/api/menu/items/${itemId}/ingredients/${ingredientId}`, {
+    const res = await fetch(`${API}/api/menu/items/${itemId}/ingredients/${ingredientId}`, {
       method: "DELETE", credentials: "include",
     });
+    if (!res.ok) throw await failure(res, "Failed to remove ingredient");
   }, []);
 
   /**
