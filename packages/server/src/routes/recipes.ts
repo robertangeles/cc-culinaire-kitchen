@@ -97,7 +97,7 @@ recipesRouter.post("/:id/regenerate-image", authenticate, recipeImageRateLimit, 
 // Single recipe (public recipes visible to all, private to owner only)
 recipesRouter.get("/:id", authenticateOrGuest, handleGetRecipe);
 
-// Update (auth or guest), Archive + Delete (auth required)
+// Update (a guest is let through only to be answered 403 FORBIDDEN), Archive + Delete (auth required)
 recipesRouter.patch("/:id", authenticateOrGuest, handleUpdateRecipe);
 recipesRouter.post("/:id/archive", authenticate, handleArchiveRecipe);
 recipesRouter.post("/:id/email", authenticateOrGuest, recipeEmailRateLimit, recipeEmailGuestAddressRateLimit, recipeEmailRecipientRateLimit, handleEmailRecipe);

@@ -61,7 +61,7 @@ async function call(method: string, path: string, headers: Record<string, string
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const text = await res.text();
-  let json: Record<string, any> = {}; // eslint-disable-line @typescript-eslint/no-explicit-any
+  let json: Record<string, any> = {};
   try { json = JSON.parse(text); } catch { /* a stream */ }
   return { status: res.status, text, body: json };
 }

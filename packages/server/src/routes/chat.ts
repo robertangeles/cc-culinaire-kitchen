@@ -10,8 +10,8 @@
  *   1. {@link authenticateOrGuest} - Validates the user's auth token or guest
  *      token and attaches the authenticated user/guest to the request.
  *   2. {@link chatRateLimit} - Per-user/guest rate limiting (20/min).
- *   3. {@link checkUsageLimit} or {@link checkGuestUsageLimit} - Enforces
- *      per-user or per-guest usage limits.
+ *   3. {@link checkSessionQuota} - Enforces per-user or per-guest usage
+ *      limits.
  */
 
 import { Router } from "express";

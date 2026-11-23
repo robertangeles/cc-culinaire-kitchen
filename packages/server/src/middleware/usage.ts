@@ -1,8 +1,9 @@
 /**
  * @module middleware/usage
  *
- * Middleware to check if a free-tier user has remaining sessions.
- * Returns 403 with `upgradeRequired: true` if exhausted.
+ * Middleware to check if a free-tier user or a guest has remaining sessions
+ * (403 with `upgradeRequired: true` or `registrationRequired: true` if
+ * exhausted), and the charge a route makes once an answer was delivered.
  */
 
 import type { Request, Response, NextFunction } from "express";

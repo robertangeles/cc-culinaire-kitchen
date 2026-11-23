@@ -174,7 +174,7 @@ export function recipeHandler(domain: RecipeDomain) {
 // My Recipes
 // ---------------------------------------------------------------------------
 
-/** GET /api/recipes/my — List authenticated user's saved recipes. */
+/** GET /api/recipes/my — List authenticated user's saved recipes, optionally only one `domain`. */
 export async function handleMyRecipes(
   req: Request,
   res: Response,
@@ -259,7 +259,7 @@ export async function handleGetRecipe(
 // Update recipe
 // ---------------------------------------------------------------------------
 
-/** PATCH /api/recipes/:id — Update recipe (toggle public, edit title). */
+/** PATCH /api/recipes/:id — Update recipe (toggle public, edit title). Signed-in owner only; a guest is answered 403. */
 export async function handleUpdateRecipe(
   req: Request,
   res: Response,
