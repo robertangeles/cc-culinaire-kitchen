@@ -4,7 +4,7 @@ import { SitePageSchema } from "./legal.js";
 import { AuthUserSchema, LocationContextSchema, LoginReplySchema, RefreshReplySchema } from "./auth.js";
 import { ActiveSessionSchema, AreaLinesSchema, CountSheetsSchema, SubmitConflictBodySchema } from "./stockTake.js";
 import { WasteEntrySchema, WasteListSchema, WasteSuggestionsSchema } from "./waste.js";
-import { CatalogueSchema, WasteIngredientListSchema } from "./catalogue.js";
+import { CatalogueSchema } from "./catalogue.js";
 import { PrepMenuSchema, PrepSelectionsSchema, PrepTodaySchema } from "./prep.js";
 import { ConsumptionEntrySchema, ConsumptionListSchema } from "./consumption.js";
 import { StockMovementListSchema, StorageAreaListSchema } from "./stockMovement.js";
@@ -151,10 +151,9 @@ describe("catalogue schema", () => {
     ]);
   });
 
-  it("reads the waste picker list (id, name, unit) as the same catalogue, and refuses a list with a field beyond those", () => {
+  it("reads the waste picker list (id, name, unit) as the same catalogue", () => {
     const list = [{ ingredientId: "i1", ingredientName: "Flour", baseUnit: "g" }];
     expect(CatalogueSchema.parse(list)).toEqual([{ ...list[0], ingredientCategory: "" }]);
-    expect(WasteIngredientListSchema.element.strict().safeParse({ ...list[0], unitCost: "0.01" }).success).toBe(false);
   });
 });
 

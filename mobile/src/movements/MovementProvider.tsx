@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useSyncExternalStore, type ReactNode } from "react";
-import { client } from "../runtime/appContext";
+import { client, session } from "../runtime/appContext";
 import { currentUserId, outbox, runner } from "../runtime/appOutbox";
-import { createCatalogue } from "../ingredients/catalogue";
+import { catalogueRoute, createCatalogue } from "../ingredients/catalogue";
 import { createRecents } from "../ingredients/recents";
 import { createIngredientSource, type IngredientSource } from "../ingredients/source";
 import { newUuid } from "../outbox/uuid";
@@ -20,7 +20,8 @@ export function MovementProvider({ locationId, userName, children }: { locationI
   const ctx = useMemo<Ctx>(() => {
     const userId = currentUserId() ?? -1;
     const recents = createRecents<MovementRecent>({ kv: sqliteKv, key: `movements.recents.${userId}`, max: 12 });
-    const catalogue = createCatalogue({ client, kv: sqliteKv, key: `catalogue.${userId}` });
+    const state = session.getSnapshot().state;
+    const catalogue = createCatalogue({ client, kv: sqliteKv, key: `catalogue.${userId}`, path: state.phase === "ready" ? catalogueRoute(state.user) : "/api/inventory/ingredients" });
     void catalogue.refresh(); // in the background: the picker reads what is on the phone and never waits for this
     return {
       store: createMovementStore({ api: createMovementApi(client), kv: sqliteKv, outbox, recents, userId, userName, locationId, kick: runner.kick, now: Date.now, newId: newUuid }),
