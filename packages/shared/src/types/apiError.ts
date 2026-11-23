@@ -73,6 +73,13 @@ export const SERVER_ERROR_CODES = [
   "SWAP_CANCELLED",
   // A sale's idempotency key was already used for a different sale (Wave 7): a client bug, never retry the same request.
   "IDEMPOTENCY_KEY_REUSED",
+  // Orders, approvals and credit notes (Wave 5).
+  "SELF_APPROVAL_NOT_ALLOWED",
+  "ALREADY_EMAILED",
+  "PDF_TIMEOUT",
+  "ALREADY_CREDITED",
+  "CREDIT_EXCEEDS_DISCREPANCY",
+  "DISCREPANCY_VALUE_UNKNOWN",
 ] as const;
 export type ServerErrorCode = (typeof SERVER_ERROR_CODES)[number];
 

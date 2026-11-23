@@ -138,13 +138,18 @@ export default function ApprovalQueue() {
                         ${Number(po.totalValue).toFixed(2)}
                       </div>
                     )}
-                    <button
-                      onClick={() => handleApprove(po.poId)}
-                      className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium
-                        bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 transition-all"
-                    >
-                      <Check className="size-3.5" /> Approve
-                    </button>
+                    {/* The server refuses an approver's own order while someone else can approve it. */}
+                    {po.canApprove === false ? (
+                      <span className="max-w-[9rem] text-right text-xs leading-snug text-amber-400/80">Another approver must approve your order</span>
+                    ) : (
+                      <button
+                        onClick={() => handleApprove(po.poId)}
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium
+                          bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 transition-all"
+                      >
+                        <Check className="size-3.5" /> Approve
+                      </button>
+                    )}
                     <button
                       onClick={() => { setRejectingId(po.poId); setRejectReason(""); }}
                       className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium

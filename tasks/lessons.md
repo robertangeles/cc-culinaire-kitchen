@@ -1418,6 +1418,12 @@ builds all tables with CHECKs enforcing. Stop it again when done.
 - **Fix**: None possible in a worktree (a new development build is a native build: EAS, which is paid and credentialed, or a local Gradle build, and this machine has no Android SDK). The prep walk (`device/prep.device.test.ts`) is written and type-checked but has not passed on the phone.
 - **Rule**: When a PR adds a native module, the same PR says in its owner checklist that the development build must be rebuilt before the next device walk.
 
+## 2026-11-23 — A second `drizzle-kit push` on the local test database fails; apply the new migration instead
+
+- **Problem**: After changing an index in `schema.ts`, `db:push` on a throwaway database that had already been pushed once failed with `column "id" is in a primary key` on a table nobody touched: push tries to reconcile drift it created itself.
+- **Fix**: Wrote the change as migration 0008 and applied it with `src/scripts/migrate.ts` on that database; the tests then ran against exactly what production will get.
+- **Rule**: On a local test database, push once to create it; every later schema change goes on through the numbered migration, as it will in production.
+
 ## 2026-11-23 — A quota charge keyed to "the client stayed to the end" is a free-answer lever; and a per-recipient mail cap needs one key per inbox
 
 - **Problem**: Chat charged a session only if the stream finished with the socket open, so a client could read nearly the whole answer and hang up to skip the charge. The per-recipient email cap keyed on the raw address, so `a+1@x.com`, `a+2@x.com` and Gmail dot variants each got a fresh bucket for one inbox. Both were flagged by the commit security review, not by tests.

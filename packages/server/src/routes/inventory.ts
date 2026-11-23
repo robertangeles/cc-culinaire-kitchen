@@ -15,6 +15,7 @@ import { Router } from "express";
 import { authenticate, requirePermission } from "../middleware/auth.js";
 import { requireSupportedMobileVersion } from "../middleware/mobileVersionPolicy.js";
 import { locationParamGuard } from "../middleware/locationAccess.js";
+import { poPdfRateLimit } from "../middleware/rateLimiter.js";
 import {
   handleListAreas,
   handleCreateArea,
@@ -88,7 +89,6 @@ import {
   handleListPOs,
   handleGetPODetail,
   handleSubmitPO,
-  handleReceiveLine,
   handleCancelPO,
   handleApprovePO,
   handleRejectPO,
@@ -286,12 +286,11 @@ router.get("/purchase-orders", requirePermission("inventory:count", "purchasing:
 router.get("/purchase-orders/:id", requirePermission("inventory:count", "purchasing:receive"), handleGetPODetail);
 router.post("/purchase-orders/:id/submit", requirePermission("purchasing:submit"), handleSubmitPO);
 router.post("/purchase-orders/:id/approve", requirePermission("purchasing:approve"), handleApprovePO);
-router.post("/purchase-orders/:id/send-email", requirePermission("purchasing:submit"), handleEmailPOToSupplier);
+router.post("/purchase-orders/:id/send-email", requirePermission("purchasing:submit"), poPdfRateLimit, handleEmailPOToSupplier);
 router.post("/purchase-orders/:id/reject", requirePermission("purchasing:approve"), handleRejectPO);
 router.post("/purchase-orders/:id/clone", requirePermission("purchasing:draft"), handleClonePO);
-router.get("/purchase-orders/:id/pdf", requirePermission("purchasing:submit"), handleDownloadPOPdf);
+router.get("/purchase-orders/:id/pdf", requirePermission("purchasing:submit"), poPdfRateLimit, handleDownloadPOPdf);
 router.post("/purchase-orders/:id/cancel", requirePermission("inventory:manage"), handleCancelPO);
-router.post("/purchase-orders/:id/lines/:lineId/receive", requirePermission("inventory:count"), handleReceiveLine);
 
 // ─── Spend Thresholds ────────────────────────────────────────────
 
@@ -312,6 +311,7 @@ router.post("/receiving/sessions/:sessionId/cancel", requirePermission("purchasi
 
 router.post("/credit-notes", requirePermission("purchasing:credit"), receivingController.handleCreateCreditNote);
 router.get("/credit-notes", requirePermission("purchasing:credit"), receivingController.handleGetCreditNotes);
+router.get("/credit-notes/unresolved-discrepancies", requirePermission("purchasing:credit"), receivingController.handleGetUnresolvedDiscrepancies);
 
 // ─── Phase 4c: Auto-PO Suggestions ────────────────────────────────
 
