@@ -139,6 +139,26 @@ describe("recording with no signal, then reconnecting", () => {
     expect(routerMock.back).not.toHaveBeenCalled();
   });
 
+  it("does not carry the previous item's unit to an item whose unit is not known", async () => {
+    const { outbox } = await makeStockHarness();
+    render(<MoveEntry />);
+    type("What moved", "gin");
+    await waitFor(() => expect(screen.getByRole("button", { name: "Use Gin" })).toBeTruthy());
+    press("Use Gin");
+    expect(screen.getByText("In L, the unit this item is kept in.")).toBeTruthy();
+    type("What moved", "myst");
+    await waitFor(() => expect(screen.getByRole("button", { name: "Use Mystery oil" })).toBeTruthy());
+    press("Use Mystery oil");
+    expect(screen.queryByText(/^In L/)).toBeNull();
+    type("How much", "2");
+    choose("From", "Stock Room");
+    choose("To", "Bar");
+    press("Record move");
+    expect(await screen.findByText("Pick the item from the list again: its unit is not known.")).toBeTruthy();
+    expect(await outbox.open(["movement.log"])).toEqual([]);
+    expect(routerMock.back).not.toHaveBeenCalled();
+  });
+
   it("opens filled in from the usage screen's 'Record as movement' or a 'Move again' button", async () => {
     await makeStockHarness();
     searchParams.current = { name: "Gin", ingredientId: "i1", unit: "L", quantity: "1", from: "a1", to: "a2" };

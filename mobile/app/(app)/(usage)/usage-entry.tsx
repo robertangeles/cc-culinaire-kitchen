@@ -113,12 +113,13 @@ export default function UsageEntry() {
                   setName(t);
                   setIngredientId("");
                   setItemType("");
+                  setUnit("");
                 }}
                 onPick={(p) => {
                   setName(p.name);
                   setIngredientId(p.ingredientId ?? "");
                   setItemType(p.itemType ?? "");
-                  if (p.unit) setUnit(p.unit);
+                  setUnit(p.unit ?? "");
                 }}
               />
             )}

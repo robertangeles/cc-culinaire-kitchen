@@ -32,6 +32,7 @@ export const CATALOGUE = [
   { ingredientId: "i1", ingredientName: "Gin", baseUnit: "L", ingredientCategory: "Spirits", itemType: "KITCHEN_INGREDIENT" },
   { ingredientId: "i2", ingredientName: "Napkins", baseUnit: "each", ingredientCategory: "Supplies", itemType: "OPERATIONAL_SUPPLY" },
   { ingredientId: "i3", ingredientName: "Salt", baseUnit: "kg", ingredientCategory: "Dry", itemType: "KITCHEN_INGREDIENT" },
+  { ingredientId: "i4", ingredientName: "Mystery oil", baseUnit: "", ingredientCategory: "Dry", itemType: "KITCHEN_INGREDIENT" },
 ];
 
 interface Over {

@@ -66,11 +66,12 @@ export default function MoveEntry() {
               onChangeText={(t) => {
                 setName(t);
                 setIngredientId("");
+                setUnit("");
               }}
               onPick={(p) => {
                 setName(p.name);
                 setIngredientId(p.ingredientId ?? "");
-                if (p.unit) setUnit(p.unit);
+                setUnit(p.unit ?? "");
               }}
             />
             <TextField label="How much" value={quantity} onChangeText={setQuantity} keyboardType="decimal-pad" placeholder="0" returnKeyType="done" />

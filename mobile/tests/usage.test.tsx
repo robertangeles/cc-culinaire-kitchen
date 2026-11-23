@@ -132,6 +132,25 @@ describe("logging with no signal, then reconnecting", () => {
     expect(routerMock.back).not.toHaveBeenCalled();
   });
 
+  it("does not carry the previous item's unit to an item whose unit is not known", async () => {
+    const { outbox } = await makeStockHarness();
+    render(<UsageEntry />);
+    type("What was used", "gin");
+    await waitFor(() => expect(screen.getByRole("button", { name: "Use Gin" })).toBeTruthy());
+    press("Use Gin");
+    expect(screen.getByText("In L, the unit this item is kept in.")).toBeTruthy();
+    type("What was used", "myst");
+    await waitFor(() => expect(screen.getByRole("button", { name: "Use Mystery oil" })).toBeTruthy());
+    press("Use Mystery oil");
+    expect(screen.queryByText(/^In L/)).toBeNull();
+    type("How much", "1");
+    choose("FOH");
+    press("Log usage");
+    expect(await screen.findByText("Pick the item from the list again: its unit is not known.")).toBeTruthy();
+    expect(await outbox.open(["consumption.log"])).toEqual([]);
+    expect(routerMock.back).not.toHaveBeenCalled();
+  });
+
   it("opens filled in from a quick button", async () => {
     await makeStockHarness();
     searchParams.current = { name: "Salt", ingredientId: "i3", unit: "kg", quantity: "2", reason: "kitchen_operations" };
