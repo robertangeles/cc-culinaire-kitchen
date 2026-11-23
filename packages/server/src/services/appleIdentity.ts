@@ -105,10 +105,17 @@ const flag = (value: unknown) => value === true || value === "true";
  * Checks an identity token from the phone: signature against Apple's published keys (RS256 only), issuer,
  * audience (our app id), expiry, and the nonce. The phone sends Apple the SHA-256 of a random nonce and sends
  * us the random value itself, so a token captured from one sign-in cannot be presented for another request.
+ * `maxAgeSeconds` also bounds how long ago Apple issued it (account deletion and linking use it). The nonce is
+ * chosen by the phone, so a token plus its nonce captured together could be replayed inside that window; a
+ * server-issued single-use nonce would close it and is not built.
  *
  * @throws {AuthError} APPLE_NOT_CONFIGURED (503), APPLE_UNAVAILABLE (503), APPLE_TOKEN_INVALID (401).
  */
-export async function verifyAppleIdentityToken(identityToken: string, rawNonce: string): Promise<AppleClaims> {
+export async function verifyAppleIdentityToken(
+  identityToken: string,
+  rawNonce: string,
+  opts: { maxAgeSeconds?: number } = {},
+): Promise<AppleClaims> {
   const audience = clientId();
   if (!audience) throw new AuthError("Sign in with Apple is not set up on this server.", "APPLE_NOT_CONFIGURED", 503);
 
@@ -121,7 +128,13 @@ export async function verifyAppleIdentityToken(identityToken: string, rawNonce: 
 
   let payload: JwtPayload;
   try {
-    payload = jwt.verify(identityToken, key, { algorithms: ["RS256"], issuer: APPLE_ISSUER, audience }) as JwtPayload;
+    payload = jwt.verify(identityToken, key, {
+      algorithms: ["RS256"],
+      issuer: APPLE_ISSUER,
+      audience,
+      // Sensitive actions pass a short age: the token must have been issued moments ago, not merely not yet expired.
+      ...(opts.maxAgeSeconds ? { maxAge: opts.maxAgeSeconds } : {}),
+    }) as JwtPayload;
   } catch (err) {
     log.warn({ reason: err instanceof Error ? err.message : "unknown" }, "Apple identity token rejected");
     throw invalidToken();

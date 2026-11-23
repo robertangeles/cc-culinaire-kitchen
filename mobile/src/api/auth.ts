@@ -3,6 +3,17 @@ import { LocationContextSchema, LoginReplySchema, MeReplySchema, RegisterReplySc
 
 export type { AuthUser, LocationContext, StoreLocation };
 
+/** What the server needs to check an Apple sign-in (POST /api/auth/apple/idtoken). */
+export interface AppleCredential {
+  identityToken: string;
+  /** The random value whose SHA-256 went to Apple; the server hashes it and compares with the token's nonce. */
+  nonce: string;
+  authorizationCode?: string;
+  /** Apple gives the name once, on the very first authorization, and never again: send it now or lose it. */
+  givenName?: string;
+  familyName?: string;
+}
+
 export type SignInResult = { status: "signedIn"; user: AuthUser } | { status: "mfa"; mfaSessionToken: string };
 
 /** Sign-in, session and location calls. Tokens are saved here the moment the server hands them out. */
@@ -29,6 +40,11 @@ export function createAuthApi(client: ApiClient, tokenStore: TokenStore) {
     /** The ID token comes from the phone's Google account picker; the server checks it with Google and answers like a password sign-in. */
     async googleSignIn(idToken: string): Promise<SignInResult> {
       return result(await client.request("POST", "/api/auth/google/idtoken", { body: { idToken }, auth: false, schema: LoginReplySchema }));
+    },
+
+    /** The credential comes from Apple's sign-in sheet; the server checks the token with Apple's keys and answers like a password sign-in. */
+    async appleSignIn(credential: AppleCredential): Promise<SignInResult> {
+      return result(await client.request("POST", "/api/auth/apple/idtoken", { body: credential, auth: false, schema: LoginReplySchema }));
     },
 
     /** Creates the account only: nobody is signed in, and the person finishes verifying from the email the server sends. */

@@ -89,3 +89,32 @@ describe("store submission", () => {
     expect(eas.submit?.production?.android?.track).toBe("production");
   });
 });
+
+describe("app config for iPhone and iPad", () => {
+  const appJson = JSON.parse(readFileSync(resolve(root, "app.json"), "utf8")).expo as { ios: { supportsTablet: boolean }; plugins: unknown[] };
+  const build = async (scheme?: string) => {
+    const previous = process.env.GOOGLE_IOS_URL_SCHEME;
+    if (scheme === undefined) delete process.env.GOOGLE_IOS_URL_SCHEME;
+    else process.env.GOOGLE_IOS_URL_SCHEME = scheme;
+    try {
+      const { default: appConfig } = await import("../app.config");
+      return appConfig({ config: appJson as never, projectRoot: root, staticConfigPath: null, packageJsonPath: null });
+    } finally {
+      if (previous === undefined) delete process.env.GOOGLE_IOS_URL_SCHEME;
+      else process.env.GOOGLE_IOS_URL_SCHEME = previous;
+    }
+  };
+
+  it("keeps the iPad supported and enables Sign in with Apple (the capability that App Store rule 4.8 asks for beside Google)", async () => {
+    const config = await build();
+    expect(config.ios?.supportsTablet).toBe(true);
+    expect(config.plugins).toContain("expo-apple-authentication");
+  });
+
+  it("registers the Google iOS URL scheme from the build environment, and leaves the Google plugin alone when it is not set", async () => {
+    expect((await build()).plugins).toContain("@react-native-google-signin/google-signin");
+    const withScheme = await build("com.googleusercontent.apps.123-abc");
+    expect(withScheme.plugins).toContainEqual(["@react-native-google-signin/google-signin", { iosUrlScheme: "com.googleusercontent.apps.123-abc" }]);
+    expect(withScheme.plugins).not.toContain("@react-native-google-signin/google-signin");
+  });
+});

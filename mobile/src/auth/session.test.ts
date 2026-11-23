@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { createSession, type Snapshot } from "./session";
 import { ApiError } from "../api/client";
-import type { AuthApi, AuthUser, LocationContext, StoreLocation } from "../api/auth";
+import type { AppleCredential, AuthApi, AuthUser, LocationContext, StoreLocation } from "../api/auth";
 
 const counter: AuthUser = { userId: 1, userName: "Chef", userEmail: "c@x.test", mfaEnabled: false, roles: [], permissions: ["inventory:count"] };
 const admin: AuthUser = { ...counter, roles: ["Administrator"], permissions: [] };
@@ -9,10 +9,11 @@ const bystander: AuthUser = { ...counter, permissions: ["chat:access"] };
 const loc = (id: string): StoreLocation => ({ storeLocationId: id, organisationId: 1, locationName: `Loc ${id}`, classification: "branch" });
 const ctx = (locations: StoreLocation[], selectedLocationId: string | null = null): LocationContext => ({ locations, selectedLocationId, organisationId: 1, isOrgAdmin: false, hasLocationAccess: locations.length > 0 });
 
-function setup(overrides: Partial<Record<keyof AuthApi, unknown>> = {}, googleIdToken?: () => Promise<string | null>) {
+function setup(overrides: Partial<Record<keyof AuthApi, unknown>> = {}, googleIdToken?: () => Promise<string | null>, appleCredential?: () => Promise<AppleCredential | null>) {
   const api = {
     signIn: vi.fn(async () => ({ status: "signedIn" as const, user: counter })),
     googleSignIn: vi.fn(async () => ({ status: "signedIn" as const, user: counter })),
+    appleSignIn: vi.fn(async () => ({ status: "signedIn" as const, user: counter })),
     verifyMfa: vi.fn(async () => counter),
     me: vi.fn(async () => counter),
     signOut: vi.fn(async () => {}),
@@ -25,7 +26,7 @@ function setup(overrides: Partial<Record<keyof AuthApi, unknown>> = {}, googleId
   const hasTokens = vi.fn(async () => true);
   let saved: Snapshot | null = null;
   const snapshots = { load: vi.fn(async () => saved), save: vi.fn(async (s: Snapshot | null) => void (saved = s)) };
-  const session = createSession({ api: api as unknown as AuthApi, hasTokens, snapshots, googleIdToken });
+  const session = createSession({ api: api as unknown as AuthApi, hasTokens, snapshots, googleIdToken, appleCredential });
   return { session, api: api as Record<keyof AuthApi, ReturnType<typeof vi.fn>>, hasTokens, snapshots, setSaved: (s: Snapshot | null) => void (saved = s) };
 }
 
@@ -432,5 +433,56 @@ describe("account deleted", () => {
     await session.accountDeleted();
     session.leaveDeletedAccount();
     expect(state(session)).toEqual({ phase: "signedOut" });
+  });
+});
+
+describe("signing in with Apple", () => {
+  const credential: AppleCredential = { identityToken: "APPLE-TOKEN", nonce: "n".repeat(32), authorizationCode: "CODE", givenName: "Ada" };
+
+  it("sends what Apple's sheet returned and opens the areas like a password sign-in", async () => {
+    const { session, api } = setup({}, undefined, async () => credential);
+    await session.signInWithApple();
+    expect(api.appleSignIn).toHaveBeenCalledWith(credential);
+    expect(state(session)).toMatchObject({ phase: "ready", user: counter });
+  });
+
+  it("does nothing, and says nothing, when the person closes Apple's sheet", async () => {
+    const { session, api } = setup({}, undefined, async () => null);
+    await session.signInWithApple();
+    expect(api.appleSignIn).not.toHaveBeenCalled();
+    expect(state(session)).toEqual({ phase: "restoring" });
+    expect(session.getSnapshot().busy).toBe(false);
+  });
+
+  it("does nothing on a build without Apple sign-in (Android)", async () => {
+    const { session, api } = setup();
+    await session.signInWithApple();
+    expect(api.appleSignIn).not.toHaveBeenCalled();
+  });
+
+  it("says plainly when Apple's sheet itself fails", async () => {
+    const { session, api } = setup({}, undefined, async () => { throw new Error("ERR_REQUEST_FAILED"); });
+    await session.signInWithApple();
+    expect(api.appleSignIn).not.toHaveBeenCalled();
+    expect(state(session)).toEqual({ phase: "signedOut", error: "Apple sign-in didn't work. Try again." });
+  });
+
+  it("shows the server's reason when it refuses the Apple account", async () => {
+    const refusal = new ApiError("conflict", "An account with this email exists but its email was never verified.", 409, undefined, "ACCOUNT_EMAIL_UNVERIFIED");
+    const { session } = setup({ appleSignIn: vi.fn(async () => { throw refusal; }) }, undefined, async () => credential);
+    await session.signInWithApple();
+    expect(state(session)).toEqual({ phase: "signedOut", error: refusal.message });
+  });
+
+  it("says it could not reach the server, not something Apple-specific, when the network is down", async () => {
+    const { session } = setup({ appleSignIn: vi.fn(async () => { throw new ApiError("network"); }) }, undefined, async () => credential);
+    await session.signInWithApple();
+    expect(state(session)).toMatchObject({ phase: "signedOut", error: "Can't reach the server. Try again." });
+  });
+
+  it("goes to the code step when the account uses MFA", async () => {
+    const { session } = setup({ appleSignIn: vi.fn(async () => ({ status: "mfa" as const, mfaSessionToken: "M" })) }, undefined, async () => credential);
+    await session.signInWithApple();
+    expect(state(session)).toMatchObject({ phase: "mfa", mfaSessionToken: "M" });
   });
 });

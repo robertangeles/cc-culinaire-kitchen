@@ -109,3 +109,20 @@ describe("a reply this app version cannot use", () => {
     expect(await api.signIn("c@x.test", "pw")).toEqual({ status: "signedIn", user });
   });
 });
+
+describe("apple sign-in", () => {
+  const credential = { identityToken: "APPLE-TOKEN", nonce: "n".repeat(32), authorizationCode: "CODE", givenName: "Ada", familyName: "Lovelace" };
+
+  it("sends the credential as given and saves the tokens like a password sign-in", async () => {
+    const { api, request, tokenStore } = setup([{ user, tokens: { accessToken: "P1", refreshToken: "PR1" } }]);
+    expect(await api.appleSignIn(credential)).toEqual({ status: "signedIn", user });
+    expect(request).toHaveBeenCalledWith("POST", "/api/auth/apple/idtoken", expect.objectContaining({ body: credential, auth: false }));
+    expect(tokenStore.save).toHaveBeenCalledWith({ accessToken: "P1", refreshToken: "PR1" });
+  });
+
+  it("asks for the six-digit code and saves nothing when the account uses MFA", async () => {
+    const { api, tokenStore } = setup([{ requiresMfa: true, mfaSessionToken: "M" }]);
+    expect(await api.appleSignIn(credential)).toEqual({ status: "mfa", mfaSessionToken: "M" });
+    expect(tokenStore.save).not.toHaveBeenCalled();
+  });
+});

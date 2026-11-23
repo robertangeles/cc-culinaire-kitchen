@@ -41,6 +41,9 @@ import { encryptUserPii, hashForLookup } from "./piiService.js";
 
 const log = pino({ name: "appleSignInService" });
 
+/** How recently Apple must have issued the token for a sensitive action (linking, deleting the account). */
+const FRESH_APPLE_TOKEN_SECONDS = 5 * 60;
+
 export interface AppleSignInInput {
   identityToken: string;
   /** The random value whose SHA-256 the phone gave Apple; the token must carry that hash. */
@@ -198,7 +201,7 @@ export async function linkAppleToUser(
   if (!row) throw new AuthError("USER_NOT_FOUND", "USER_NOT_FOUND", 404);
   await requireProofToChangeMfa(row, proof, signedInAt);
 
-  const claims = await verifyAppleIdentityToken(input.identityToken, input.nonce);
+  const claims = await verifyAppleIdentityToken(input.identityToken, input.nonce, { maxAgeSeconds: FRESH_APPLE_TOKEN_SECONDS });
   const owner = await userIdForSubject(claims.sub);
   if (owner === userId) return;
   if (owner !== undefined) {
@@ -294,6 +297,6 @@ export async function retryAppleRevocations(): Promise<{ revoked: number; remain
  * @throws {AuthError} APPLE_TOKEN_INVALID and the other verification codes of {@link verifyAppleIdentityToken}.
  */
 export async function isFreshAppleSignInFor(userId: number, identityToken: string, nonce: string): Promise<boolean> {
-  const claims = await verifyAppleIdentityToken(identityToken, nonce);
+  const claims = await verifyAppleIdentityToken(identityToken, nonce, { maxAgeSeconds: FRESH_APPLE_TOKEN_SECONDS });
   return (await userIdForSubject(claims.sub)) === userId;
 }

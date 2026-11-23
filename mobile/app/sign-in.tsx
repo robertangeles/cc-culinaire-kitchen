@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Pressable, View } from "react-native";
 import { useRouter } from "expo-router";
-import { authApi, googleEnabled, session, useSession } from "../src/runtime/appContext";
+import { appleEnabled, authApi, googleEnabled, session, useSession } from "../src/runtime/appContext";
+import { AppleButton } from "../src/ui/AppleButton";
 import { Brand } from "../src/ui/Brand";
 import { GoogleMark } from "../src/ui/GoogleMark";
 import { Screen } from "../src/ui/Screen";
@@ -91,16 +92,15 @@ export default function SignIn() {
         </Text>
       ) : null}
       <Button label={register ? (busy ? "Creating…" : "Create account") : busy ? "Signing in…" : "Sign in"} disabled={!canSubmit} onPress={submit} />
-      {googleEnabled ? (
-        <>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-            <View style={{ flex: 1, height: 1, backgroundColor: c.border }} />
-            <Text style={{ fontFamily: "Inter_600SemiBold", fontSize: 12, letterSpacing: 1.8, color: c.textMuted }}>OR</Text>
-            <View style={{ flex: 1, height: 1, backgroundColor: c.border }} />
-          </View>
-          <Button kind="ghost" label="Continue with Google" leading={<GoogleMark />} disabled={signingIn} onPress={() => void session.signInWithGoogle()} />
-        </>
+      {googleEnabled || appleEnabled ? (
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+          <View style={{ flex: 1, height: 1, backgroundColor: c.border }} />
+          <Text style={{ fontFamily: "Inter_600SemiBold", fontSize: 12, letterSpacing: 1.8, color: c.textMuted }}>OR</Text>
+          <View style={{ flex: 1, height: 1, backgroundColor: c.border }} />
+        </View>
       ) : null}
+      {appleEnabled ? <AppleButton busy={signingIn} onPress={() => void session.signInWithApple()} /> : null}
+      {googleEnabled ? <Button kind="ghost" label="Continue with Google" leading={<GoogleMark />} disabled={signingIn} onPress={() => void session.signInWithGoogle()} /> : null}
       <LegalLinks />
     </Screen>
   );

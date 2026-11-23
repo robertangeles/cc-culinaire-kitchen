@@ -110,6 +110,14 @@ describe("verifyAppleIdentityToken", () => {
     await expect(verifyAppleIdentityToken(sign(), hashed(RAW_NONCE))).rejects.toMatchObject(invalid);
   });
 
+  it("with a maximum age, rejects a token issued longer ago than that even though it has not expired", async () => {
+    const issuedTenMinutesAgo = Math.floor(Date.now() / 1000) - 600;
+    const old = sign({ iat: issuedTenMinutesAgo }, keyA, { expiresIn: "1h" });
+    await expect(verifyAppleIdentityToken(old, RAW_NONCE, { maxAgeSeconds: 300 })).rejects.toMatchObject(invalid);
+    await expect(verifyAppleIdentityToken(old, RAW_NONCE)).resolves.toMatchObject({ sub: "001234.abcd" });
+    await expect(verifyAppleIdentityToken(sign(), RAW_NONCE, { maxAgeSeconds: 300 })).resolves.toMatchObject({ sub: "001234.abcd" });
+  });
+
   it("rejects a token with no subject", async () => {
     await expect(verifyAppleIdentityToken(sign({ sub: "" }), RAW_NONCE)).rejects.toMatchObject(invalid);
   });

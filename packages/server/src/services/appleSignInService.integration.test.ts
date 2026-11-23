@@ -372,6 +372,14 @@ describe.skipIf(!RUN)("Sign in with Apple (real DB)", { timeout: 120_000 }, () =
       expect((await db.select({ s: user.userStatus }).from(user).where(eq(user.userId, a.userId)))[0].s).toBe("deleted");
     });
 
+    it("is refused for an Apple token issued more than five minutes ago, and deletes nothing", async () => {
+      const a = await signedIn("delstale");
+      const stale = appleInput({ sub: a.sub, iat: Math.floor(Date.now() / 1000) - 600 });
+      const err = await refusal(deleteOwnAccount(a.userId, { appleIdentityToken: stale.identityToken, appleNonce: stale.nonce }, null));
+      expect(err).toMatchObject({ code: "INVALID_CREDENTIALS", statusCode: 403 });
+      expect((await db.select({ s: user.userStatus }).from(user).where(eq(user.userId, a.userId)))[0].s).not.toBe("deleted");
+    });
+
     it("is refused for an Apple token of someone else's Apple ID, or a token that does not verify, and deletes nothing", async () => {
       const a = await signedIn("delmine");
       const b = await signedIn("delother");

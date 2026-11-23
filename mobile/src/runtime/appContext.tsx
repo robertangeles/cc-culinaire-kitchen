@@ -10,6 +10,7 @@ import { createSnapshotStore } from "../auth/snapshotStore";
 import { sqliteKv } from "../storage/kv";
 import { wipeLocalData } from "../storage/wipe";
 import { googleIdToken } from "../auth/googleSignIn";
+import { appleCredential, appleEnabled } from "../auth/appleSignIn";
 import { apiBaseUrl, appVersion, googleEnabled } from "../config";
 
 // One of each for the whole app. The client's "session ended" callback reaches the session through this binding.
@@ -33,9 +34,10 @@ session = createSession({
   snapshots: createSnapshotStore(sqliteKv),
   googleIdToken: googleEnabled ? googleIdToken : undefined,
   wipeLocalData,
+  appleCredential: appleEnabled ? appleCredential : undefined,
 });
 
-export { session, googleEnabled };
+export { session, googleEnabled, appleEnabled };
 
 /** The current screen state and busy flag, re-rendering when either changes. */
 export function useSession() {

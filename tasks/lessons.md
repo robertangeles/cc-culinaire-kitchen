@@ -1393,3 +1393,15 @@ builds all tables with CHECKs enforcing. Stop it again when done.
 - **Problem**: `mobile/assets/icon.png`, `splash-icon.png` and the adaptive-icon background colour (`#E6F4FE`) were the blue Expo template from project creation. Nothing checked them, so a store build would have shipped another product's artwork.
 - **Fix**: Icon, adaptive icon, splash and favicon are generated from `assets/brand/ck-logo.png` on the paper colour, and `src/easConfig.test.ts` asserts the app id on both stores, the paper colours, that the files exist, the update channels, the runtime-version policy and that no permission string is declared before a feature uses it.
 - **Rule**: Whatever a store listing shows or asks about is asserted in `easConfig.test.ts`. `runtimeVersion` follows `version`: change `version` when native code changes, and never raise `mobile_min_app_version` above a version live in both stores. After a new shared schema file, rebuild `packages/shared` before `check:bundle` (Metro reads `dist/`).
+
+## 2026-11-23 — Match a sign-in provider's account by its stable id, and link by email only when both sides are verified
+
+- **Problem**: The Google path links an incoming identity to any account with the same email and marks that account's email verified, so someone who registered a victim's address (never verified, with a password they chose) is handed a verified account when the victim signs in with Google. Apple adds a hidden private-relay address that matches nobody, so the same person ends up with two accounts.
+- **Fix**: Sign in with Apple matches on Apple's `sub` first. A first sign-in links by email only when Apple says the email is verified AND the existing account's own email is verified (otherwise `ACCOUNT_EMAIL_UNVERIFIED`); a relay address never matches by email; joining a relay-email account to a registered one is an explicit signed-in action that asks for the same proof as changing MFA. Uniqueness lives in partial unique indexes, and the loser of a race re-reads the winner by the index name.
+- **Rule**: Never trust an email match alone. A login lever (linking a provider, changing MFA) needs the account's own proof, and a unique index, not a prior SELECT, decides who wins a race. The Google web and phone paths still link unverified accounts; fix them separately.
+
+## 2026-11-23 — A mocked rejection the code under test swallows still fails the test
+
+- **Problem**: A phone test made `vi.fn()` reject with the "user cancelled" error and expected the code to return null. The code did, yet the test failed with the rejection's message: the spy library reports a recorded rejection as an unhandled error.
+- **Fix**: The fake for that module is a plain function driven by a small state object, not `vi.fn()`.
+- **Rule**: When a test must make a dependency reject and the code under test handles it, use a plain function for the fake, and check the result, not the spy.
