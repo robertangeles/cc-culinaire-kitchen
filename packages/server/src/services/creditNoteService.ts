@@ -42,7 +42,7 @@ export interface DiscrepancyValueInput {
   shortageQty: string | null;
   orderedQty: string;
   receivedQty: string;
-  /** The ordered price per ordered unit, else the price recorded at the door. */
+  /** The price per ordered unit to value by (see `valueOf`: for a short delivery the higher of the order and door prices). */
   unitPrice: string | null;
   varianceAmount: string | null;
 }
