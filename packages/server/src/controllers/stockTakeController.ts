@@ -464,10 +464,10 @@ export async function handleGetLocationDashboard(
     const ctx = await resolveContext(req, res);
     if (!ctx) return;
 
-    const dashboard = await getLocationDashboard(req.params.locId as string, ctx.orgId, {
-      withValue: hasPermission(req.user!, "inventory:cost"),
-    });
-    res.json(dashboard);
+    const withValue = hasPermission(req.user!, "inventory:cost");
+    const dashboard = await getLocationDashboard(req.params.locId as string, ctx.orgId, { withValue });
+    // The book quantity is what a blind count is measured against: hidden with the value.
+    res.json(withValue ? dashboard : { ...dashboard, stockLevels: dashboard.stockLevels.map(({ currentQty: _, ...rest }) => rest) });
   } catch (err) {
     handleServiceError(err, res, next);
   }

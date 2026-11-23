@@ -98,6 +98,8 @@ describe.skipIf(!RUN)("stock take and dashboard, Wave 3 (real DB)", () => {
     expect(out.body.stockSummary).toMatchObject({ lowCount: 1, criticalCount: 1 });
     expect(out.body.stockSummary).not.toHaveProperty("stockValue");
     expect(out.body.stockSummary).not.toHaveProperty("valueByCategory");
+    expect(out.body.stockLevels.length).toBeGreaterThan(0);
+    for (const row of out.body.stockLevels) expect(row).not.toHaveProperty("currentQty");
   });
 
   it("another organisation's location dashboard is 404 NOT_FOUND", async () => {
