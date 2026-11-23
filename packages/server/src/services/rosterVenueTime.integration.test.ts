@@ -214,6 +214,15 @@ describe.skipIf(!RUN)("roster venue time and Wave 4 fixes (real DB)", () => {
     it("rejects a date that is not a date with a coded 400", async () => {
       await expect(listShifts(orgId, { from: "nope" })).rejects.toMatchObject({ statusCode: 400, code: "VALIDATION" });
     });
+
+    it("rejects a calendar day that does not exist with a coded 400 on every list, not a database error", async () => {
+      const bad = { statusCode: 400, code: "VALIDATION" };
+      await expect(listShifts(orgId, { from: "2026-02-30" })).rejects.toMatchObject(bad);
+      await expect(listShifts(orgId, { to: "2026-04-31" })).rejects.toMatchObject(bad);
+      await expect(listMyShifts(orgId, staffB, { from: "2026-02-30" })).rejects.toMatchObject(bad);
+      await expect(listMyShifts(orgId, staffB, { to: "2026-04-31" })).rejects.toMatchObject(bad);
+      await expect(getWeekCalendar(orgId, venue.syd, "2026-02-30", "2026-03-01")).rejects.toMatchObject(bad);
+    });
   });
 
   describe("GET /shifts/mine", () => {
