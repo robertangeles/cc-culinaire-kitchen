@@ -2675,8 +2675,8 @@ export const creditNote = pgTable(
     index("idx_credit_supplier").on(table.supplierId),
     // FK index: "get credits for an org"
     index("idx_credit_org").on(table.organisationId),
-    // FK index: "get credit for a discrepancy"
-    index("idx_credit_discrepancy").on(table.discrepancyId),
+    // FK index: "get the credit for a discrepancy"; unique, so one discrepancy is never credited twice (migration 0008).
+    uniqueIndex("uq_credit_note_discrepancy").on(table.discrepancyId),
   // FK index: "credit note rows for one user", and the constraint check when that user row is deleted.
   index("idx_credit_note_created_by_user_id").on(table.createdByUserId),
   ],

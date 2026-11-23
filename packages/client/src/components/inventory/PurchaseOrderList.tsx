@@ -8,6 +8,8 @@
 
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { useLocation } from "../../context/LocationContext.js";
+import { useHasPermission } from "../../hooks/useHasPermission.js";
+import { SUPPLIER_EMAIL_WINDOW_MS } from "@culinaire/shared";
 import {
   usePurchaseOrders,
   useLocationIngredients,
@@ -102,8 +104,12 @@ type View = "list" | "create" | "receive-new";
  * Supplied by PurchasingPage from `?po=` — see the readDeepLink docblock there
  * for why those links were previously dead.
  */
+/** Emailed inside the server's resend window: another send now would be refused. */
+const emailedJustNow = (at: string | null) => at !== null && Date.now() - new Date(at).getTime() < SUPPLIER_EMAIL_WINDOW_MS;
+
 export default function PurchaseOrderList({ focusPoId }: { focusPoId?: string | null } = {}) {
   const { selectedLocationId } = useLocation();
+  const canApprovePOs = useHasPermission()("purchasing:approve");
   const {
     pos, isLoading, refresh, submitPO, cancelPO,
     approvePO, rejectPO, clonePO, downloadPdf, emailPOToSupplier, getDetail,
@@ -543,15 +549,22 @@ export default function PurchaseOrderList({ focusPoId }: { focusPoId?: string | 
                             </button>
                           </>
                         )}
-                        {po.status === "PENDING_APPROVAL" && (
+                        {po.status === "PENDING_APPROVAL" && canApprovePOs && (
                           <>
-                            <button
-                              onClick={() => handleApprove(po.poId)}
-                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium
-                                bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 transition-all"
-                            >
-                              <Check className="size-3" /> Approve
-                            </button>
+                            {/* The server refuses an approver's own order while someone else can approve it. */}
+                            {po.canApprove === false ? (
+                              <span className="flex items-center gap-1 text-[11px] text-amber-400/80">
+                                <Clock className="size-3" /> Another approver must approve your order
+                              </span>
+                            ) : (
+                              <button
+                                onClick={() => handleApprove(po.poId)}
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium
+                                  bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 transition-all"
+                              >
+                                <Check className="size-3" /> Approve
+                              </button>
+                            )}
                             <button
                               onClick={() => { setRejectModalPO(po.poId); setRejectReason(""); }}
                               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium
@@ -572,13 +585,14 @@ export default function PurchaseOrderList({ focusPoId }: { focusPoId?: string | 
                             </button>
                             {po.supplierOrderingMethod === "email" && (
                               <>
-                                <button
+                                {/* A resend inside the server's window is refused as a double tap. */}
+                                {!emailedJustNow(po.supplierEmailedAt) && <button
                                   onClick={() => handleSendEmail(po.poId)}
                                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium
                                     bg-gold/10 text-gold hover:bg-gold/20 transition-all"
                                 >
                                   <Mail className="size-3" /> {po.supplierEmailedAt ? "Resend to supplier" : "Send to supplier"}
-                                </button>
+                                </button>}
                                 {po.supplierEmailedAt && (
                                   <span className="flex items-center gap-1 text-[11px] text-emerald-400/80">
                                     <Check className="size-3" /> Emailed {new Date(po.supplierEmailedAt).toLocaleDateString()}
