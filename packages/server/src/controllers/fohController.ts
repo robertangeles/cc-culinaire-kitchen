@@ -21,7 +21,6 @@ import * as consumptionLogService from "../services/consumptionLogService.js";
 const logger = pino({ name: "fohController" });
 
 /** A quantity a person could type for one shelf item: above 0, below 100,000. */
-const QTY_MAX = 99999;
 const uuidOrAbsent = (v: unknown) => v === undefined || z.string().uuid().safeParse(v).success;
 
 /** 400 VALIDATION: a refused input, with a sentence the web shows. */
@@ -95,7 +94,7 @@ export async function handleRestockFoh(req: Request, res: Response, next: NextFu
       refuse(res, "ingredientId is required");
       return;
     }
-    if (quantity === undefined || !(Number(quantity) > 0) || Number(quantity) > QTY_MAX) {
+    if (quantity === undefined || !(Number(quantity) > 0) || !Number.isFinite(Number(quantity))) {
       refuse(res, "quantity must be greater than 0");
       return;
     }
@@ -139,7 +138,7 @@ export async function handleCountFoh(req: Request, res: Response, next: NextFunc
       refuse(res, "ingredientId is required");
       return;
     }
-    if (countedQty === undefined || !(Number(countedQty) >= 0) || Number(countedQty) > QTY_MAX) {
+    if (countedQty === undefined || !(Number(countedQty) >= 0) || !Number.isFinite(Number(countedQty))) {
       refuse(res, "countedQty must be 0 or greater");
       return;
     }
@@ -175,7 +174,7 @@ export async function handleLogFohWaste(req: Request, res: Response, next: NextF
       refuse(res, "ingredientId is required");
       return;
     }
-    if (quantity === undefined || !(Number(quantity) > 0) || Number(quantity) > QTY_MAX) {
+    if (quantity === undefined || !(Number(quantity) > 0) || !Number.isFinite(Number(quantity))) {
       refuse(res, "quantity must be greater than 0");
       return;
     }
