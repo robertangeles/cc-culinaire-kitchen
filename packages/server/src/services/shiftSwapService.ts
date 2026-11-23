@@ -21,9 +21,9 @@
  * inherited from the person who offered the swap.
  */
 
-import { eq, and, asc } from "drizzle-orm";
+import { eq, and, asc, gte, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
-import { shift, shiftAssignment, shiftSwapRequest, rosterRole, user } from "../db/schema.js";
+import { shift, shiftAssignment, shiftSwapRequest, rosterRole, user, auditLog } from "../db/schema.js";
 import {
   RosterError,
   AssignmentBlockedError,
@@ -74,6 +74,7 @@ async function getSwapWithShift(orgId: number, swapRequestId: string) {
       fromAssignmentId: shiftSwapRequest.fromAssignmentId,
       fromUserId: shiftSwapRequest.fromUserId,
       status: shiftSwapRequest.status,
+      toUserId: shiftSwapRequest.toUserId,
       rosterRoleId: shift.rosterRoleId,
       storeLocationId: shift.storeLocationId,
       isPublicHoliday: shift.isPublicHoliday,
@@ -81,8 +82,39 @@ async function getSwapWithShift(orgId: number, swapRequestId: string) {
     .from(shiftSwapRequest)
     .innerJoin(shift, eq(shift.shiftId, shiftSwapRequest.shiftId))
     .where(and(eq(shiftSwapRequest.swapRequestId, swapRequestId), eq(shift.organisationId, orgId)));
-  if (!row) throw new RosterError("Swap request not found", 404);
+  if (!row) throw new RosterError("Swap request not found", 404, "NOT_FOUND");
   return row;
+}
+
+const CLAIM_REPLAY_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * A claim deletes the offerer's assignment, and the swap row goes with it (ON DELETE CASCADE), so a
+ * claimed swap cannot be read back. The claim's audit rows name the swap and the claimer: that is how a
+ * replay, or the loser of a race, learns what happened.
+ * shortcut: a metadata scan over one organisation's last 7 days of audit rows (idx_audit_log_org_created), only on this rare path; give the swap a durable Claimed row if replays older than a week matter.
+ */
+async function swapGone(orgId: number, swapRequestId: string, callerUserId: number): Promise<RosterError> {
+  const [row] = await db
+    .select({ claimer: auditLog.actorUserId })
+    .from(auditLog)
+    .where(
+      and(
+        eq(auditLog.organisationId, orgId),
+        gte(auditLog.createdDttm, new Date(Date.now() - CLAIM_REPLAY_WINDOW_MS)),
+        sql`${auditLog.metadata} @> ${JSON.stringify({ action: "swap_claimed", swapRequestId })}::jsonb`,
+      ),
+    )
+    .limit(1);
+  return row ? swapUnavailable("Claimed", row.claimer, callerUserId) : new RosterError("Swap request not found", 404, "NOT_FOUND");
+}
+
+/** Why a swap that is not Open cannot be claimed. A replayed claim (the caller won it already) is told apart from losing it. */
+function swapUnavailable(status: string, toUserId: number | null, callerUserId: number): RosterError {
+  if (status !== "Claimed") return new RosterError("The person who offered this swap cancelled it.", 409, "SWAP_CANCELLED");
+  return toUserId === callerUserId
+    ? new RosterError("You already claimed this swap.", 409, "SWAP_CLAIMED_BY_YOU")
+    : new RosterError("This swap was claimed by someone else.", 409, "SWAP_CLAIMED_BY_OTHER");
 }
 
 /** Own assignment only, must be Confirmed — mirrors assignStaff's own guards. */
@@ -141,8 +173,13 @@ export async function listOpenSwaps(orgId: number) {
  * concurrent claim rolls back cleanly with nothing transferred.
  */
 export async function claimSwap(orgId: number, swapRequestId: string, callerUserId: number) {
-  const swapRow = await getSwapWithShift(orgId, swapRequestId);
-  if (swapRow.status !== "Open") throw new RosterError("This swap is no longer available.", 409);
+  let swapRow;
+  try {
+    swapRow = await getSwapWithShift(orgId, swapRequestId);
+  } catch (err) {
+    throw err instanceof RosterError && err.statusCode === 404 ? await swapGone(orgId, swapRequestId, callerUserId) : err;
+  }
+  if (swapRow.status !== "Open") throw swapUnavailable(swapRow.status, swapRow.toUserId, callerUserId);
   if (swapRow.fromUserId === callerUserId) throw new RosterError("You can't claim your own swap offer.", 400);
 
   const jurisdiction = await resolveJurisdiction(swapRow.storeLocationId);
@@ -166,7 +203,13 @@ export async function claimSwap(orgId: number, swapRequestId: string, callerUser
       .set({ status: "Claimed", toUserId: callerUserId, updatedDttm: new Date() })
       .where(and(eq(shiftSwapRequest.swapRequestId, swapRequestId), eq(shiftSwapRequest.status, "Open")))
       .returning();
-    if (!claimed) throw new RosterError("This swap was just claimed by someone else.", 409);
+    if (!claimed) {
+      const [now] = await tx
+        .select({ status: shiftSwapRequest.status, toUserId: shiftSwapRequest.toUserId })
+        .from(shiftSwapRequest)
+        .where(eq(shiftSwapRequest.swapRequestId, swapRequestId));
+      throw now ? swapUnavailable(now.status, now.toUserId, callerUserId) : await swapGone(orgId, swapRequestId, callerUserId);
+    }
 
     await tx.delete(shiftAssignment).where(eq(shiftAssignment.assignmentId, swapRow.fromAssignmentId));
     // Reactivates the claimer's own Declined row on this shift, if they have
@@ -175,7 +218,7 @@ export async function claimSwap(orgId: number, swapRequestId: string, callerUser
     // helper assignStaff() uses, so both give the same answer.
     const inserted = await insertOrReactivateAssignment(swapRow.shiftId, callerUserId, "Confirmed", tx);
     if (!inserted) {
-      throw new RosterError("You're already assigned to this shift.", 409);
+      throw new RosterError("You're already assigned to this shift.", 409, "SHIFT_ALREADY_ASSIGNED");
     }
     // Same createdDttm/updatedDttm comparison assignStaff() uses to tell a
     // genuine insert from a Declined-row reactivation, for an accurate audit

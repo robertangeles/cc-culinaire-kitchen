@@ -8,10 +8,14 @@
  * rosterService split.
  */
 
+import type { ServerErrorCode } from "@culinaire/shared";
+
 export class RosterError extends Error {
   constructor(
     message: string,
     public statusCode: number,
+    /** Machine-readable reason a client branches on; the 409s that mean different things carry one. */
+    public code?: ServerErrorCode,
   ) {
     super(message);
     this.name = "RosterError";
@@ -29,7 +33,7 @@ export class AssignmentBlockedError extends RosterError {
     message: string,
     public info: AssignmentBlockedInfo,
   ) {
-    super(message, 409);
+    super(message, 409, "ASSIGNMENT_BLOCKED_COMPLIANCE");
     this.name = "AssignmentBlockedError";
   }
 }
