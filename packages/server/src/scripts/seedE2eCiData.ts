@@ -7,13 +7,15 @@
  * wizard would otherwise cover every page), one organisation and one HQ location
  * the user is assigned to, and the roster and workforce feature flags switched
  * on (db:seed ships them off, so their routes would 404). Specs create every other row (suppliers, ingredients,
- * pars, orders) through the API themselves.
+ * pars, orders) through the API themselves. The phone E2E signs in as its own twin of that user (same roles,
+ * organisation and location): CI runs it straight after Playwright, and the global rate limit buckets per user.
  *
  * Refuses to run against anything but a localhost database, so it can never
  * touch the shared dev or the prod database. Run after `db:push` and `db:seed`:
  *
  *   E2E_USER_EMAIL=... E2E_USER_PASSWORD=... E2E_USER_TOTP_SECRET=... \
  *   E2E_DELETE_USER_EMAIL=... E2E_DELETE_USER_PASSWORD=... \
+ *   E2E_PHONE_USER_EMAIL=... E2E_PHONE_USER_PASSWORD=... E2E_PHONE_USER_TOTP_SECRET=... \
  *     pnpm --filter @culinaire/server exec tsx src/scripts/seedE2eCiData.ts
  */
 
@@ -27,7 +29,7 @@ applyEnvPrefix();
 
 import { eq } from "drizzle-orm";
 import { db } from "../db/index.js";
-import { kitchenProfile, role, siteSetting, storeLocation, user, userRole } from "../db/schema.js";
+import { kitchenProfile, role, siteSetting, storeLocation, user, userOrganisation, userRole } from "../db/schema.js";
 import { registerUser } from "../services/authService.js";
 import { createOrganisation } from "../services/organisationService.js";
 import { assignStaffToLocation, createStoreLocation } from "../services/storeLocationService.js";
@@ -49,8 +51,8 @@ function requireEnv(name: string): string {
   return value;
 }
 
-export async function seedE2eCiData(email: string, password: string, totpSecret: string) {
-  const userId = await registerUser("E2E User", email, password);
+async function seedMfaAdministrator(name: string, email: string, password: string, totpSecret: string) {
+  const userId = await registerUser(name, email, password);
 
   await db.update(user).set({ mfaEnabledInd: true, mfaSecret: totpSecret, updatedDttm: new Date() }).where(eq(user.userId, userId));
 
@@ -59,6 +61,11 @@ export async function seedE2eCiData(email: string, password: string, totpSecret:
   await db.insert(userRole).values({ userId, roleId: admin.roleId });
 
   await db.insert(kitchenProfile).values({ userId, onboardingDoneInd: true });
+  return userId;
+}
+
+export async function seedE2eCiData(email: string, password: string, totpSecret: string) {
+  const userId = await seedMfaAdministrator("E2E User", email, password, totpSecret);
 
   for (const settingKey of ["roster_enabled", "workforce_enabled"]) {
     await db
@@ -77,6 +84,23 @@ export async function seedE2eCiData(email: string, password: string, totpSecret:
   await db.update(storeLocation).set({ inventoryActive: true }).where(eq(storeLocation.storeLocationId, location.storeLocationId));
 
   return { userId, organisationId: org.organisationId, storeLocationId: location.storeLocationId };
+}
+
+/**
+ * The phone E2E's user: the main E2E user's twin (MFA, Administrator + Operations Admin, admin of the same organisation,
+ * assigned to the same location). Idempotent: an existing account with this email is left as it is.
+ */
+export async function seedE2ePhoneUser(email: string, password: string, totpSecret: string, organisationId: number, storeLocationId: string) {
+  const [existing] = await db.select({ userId: user.userId }).from(user).where(eq(user.userEmail, email.toLowerCase()));
+  if (existing) return existing.userId;
+
+  const userId = await seedMfaAdministrator("E2E Phone User", email, password, totpSecret);
+  const [opsAdmin] = await db.select({ roleId: role.roleId }).from(role).where(eq(role.roleName, "Operations Admin"));
+  if (!opsAdmin) throw new Error("Operations Admin role not found. Run db:seed first.");
+  await db.insert(userRole).values({ userId, roleId: opsAdmin.roleId });
+  await db.insert(userOrganisation).values({ userId, organisationId, role: "admin" });
+  await assignStaffToLocation(storeLocationId, userId, userId);
+  return userId;
 }
 
 /**
@@ -99,6 +123,13 @@ if (process.argv[1]?.endsWith("seedE2eCiData.ts")) {
       requireEnv("E2E_USER_TOTP_SECRET"),
     );
     await seedE2eDeleteUser(requireEnv("E2E_DELETE_USER_EMAIL"), requireEnv("E2E_DELETE_USER_PASSWORD"));
+    await seedE2ePhoneUser(
+      requireEnv("E2E_PHONE_USER_EMAIL"),
+      requireEnv("E2E_PHONE_USER_PASSWORD"),
+      requireEnv("E2E_PHONE_USER_TOTP_SECRET"),
+      seeded.organisationId,
+      seeded.storeLocationId,
+    );
     console.log(`Seeded E2E data: user ${seeded.userId}, organisation ${seeded.organisationId}, location ${seeded.storeLocationId}`);
     process.exit(0);
   })().catch((err) => {
