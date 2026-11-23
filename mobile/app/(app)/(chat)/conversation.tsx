@@ -1,5 +1,5 @@
 import { useRef, useState, type ComponentRef } from "react";
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, TextInput, View } from "react-native";
+import { KeyboardAvoidingView, Pressable, ScrollView, TextInput, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useSession } from "../../../src/runtime/appContext";
@@ -79,7 +79,7 @@ export default function Conversation() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: c.bg }} edges={["top", "left", "right"]}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         <Column style={{ paddingHorizontal: space.xl, paddingTop: space.sm, flexDirection: "row", alignItems: "center", gap: space.md }}>
           <Pressable accessibilityRole="button" accessibilityLabel="Back to conversations" hitSlop={8} onPress={() => router.back()} style={{ minHeight: size.tap, justifyContent: "center" }}>
             <Text style={{ fontFamily: fontFamily.uiStrong, color: c.accentText }}>‹ Conversations</Text>
@@ -133,7 +133,7 @@ export default function Conversation() {
         </ScrollView>
 
         {snap.phase !== "loading" && snap.phase !== "error" ? (
-          <SafeAreaView edges={["bottom"]} style={{ borderTopWidth: 1, borderTopColor: c.border, backgroundColor: c.surface }}>
+          <View style={{ borderTopWidth: 1, borderTopColor: c.border, backgroundColor: c.surface }}>
             <Column style={{ flexDirection: "row", alignItems: "flex-end", gap: space.sm, padding: space.md }}>
               <TextInput
                 accessibilityLabel="Your question"
@@ -157,7 +157,7 @@ export default function Conversation() {
                 <Text style={{ fontFamily: fontFamily.uiStrong, color: c.buttonText }}>{streaming ? "Stop" : "Send"}</Text>
               </Pressable>
             </Column>
-          </SafeAreaView>
+          </View>
         ) : null}
       </KeyboardAvoidingView>
     </SafeAreaView>

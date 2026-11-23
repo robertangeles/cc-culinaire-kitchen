@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Image, Pressable, ScrollView, View } from "react-native";
+import { Image, KeyboardAvoidingView, Pressable, ScrollView, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { parseRecipeData, type RecipeData } from "@culinaire/shared/schemas/recipe";
@@ -112,85 +112,87 @@ export default function RecipeView() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: c.bg }}>
-      <ScrollView contentContainerStyle={{ padding: space.xl }} keyboardShouldPersistTaps="handled">
-        <Column style={{ gap: space.lg }}>
-          <Pressable accessibilityRole="button" accessibilityLabel="Back to My Recipes" hitSlop={8} onPress={() => router.back()} style={{ minHeight: size.tap, justifyContent: "center", alignSelf: "flex-start" }}>
-            <Text style={{ fontFamily: fontFamily.uiStrong, color: c.accentText }}>‹ My Recipes</Text>
-          </Pressable>
-          {snap.phase === "loading" ? <Text variant="muted">Loading the recipe…</Text> : null}
-          {snap.phase === "error" ? (
-            <>
-              <Text variant="error">{snap.error}</Text>
-              <Button kind="ghost" label="Try again" onPress={() => void store.load()} />
-            </>
-          ) : null}
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
+        <ScrollView contentContainerStyle={{ padding: space.xl }} keyboardShouldPersistTaps="handled">
+          <Column style={{ gap: space.lg }}>
+            <Pressable accessibilityRole="button" accessibilityLabel="Back to My Recipes" hitSlop={8} onPress={() => router.back()} style={{ minHeight: size.tap, justifyContent: "center", alignSelf: "flex-start" }}>
+              <Text style={{ fontFamily: fontFamily.uiStrong, color: c.accentText }}>‹ My Recipes</Text>
+            </Pressable>
+            {snap.phase === "loading" ? <Text variant="muted">Loading the recipe…</Text> : null}
+            {snap.phase === "error" ? (
+              <>
+                <Text variant="error">{snap.error}</Text>
+                <Button kind="ghost" label="Try again" onPress={() => void store.load()} />
+              </>
+            ) : null}
 
-          {recipe && data ? (
-            <>
-              {recipe.imageUrl ? <Image source={{ uri: recipe.imageUrl }} accessibilityLabel={`Photo of ${recipe.title}`} style={{ width: "100%", aspectRatio: 1, borderRadius: radius.key, backgroundColor: c.surface }} /> : null}
-              <Text style={caps}>{recipe.domain === "patisserie" ? "Patisserie" : recipe.domain === "spirits" ? "Spirits" : "Culinary"}</Text>
-              <Text variant="title">{recipe.title}</Text>
-              {recipe.description || data.description ? <Text variant="muted">{recipe.description || data.description}</Text> : null}
+            {recipe && data ? (
+              <>
+                {recipe.imageUrl ? <Image source={{ uri: recipe.imageUrl }} accessibilityLabel={`Photo of ${recipe.title}`} style={{ width: "100%", aspectRatio: 1, borderRadius: radius.key, backgroundColor: c.surface }} /> : null}
+                <Text style={caps}>{recipe.domain === "patisserie" ? "Patisserie" : recipe.domain === "spirits" ? "Spirits" : "Culinary"}</Text>
+                <Text variant="title">{recipe.title}</Text>
+                {recipe.description || data.description ? <Text variant="muted">{recipe.description || data.description}</Text> : null}
 
-              {snap.isOwner ? (
-                <View style={{ gap: space.xs }}>
-                  <Text style={caps}>Who can see it</Text>
-                  <View style={{ alignSelf: "flex-start" }}>
-                    <Segmented options={[{ value: "private", label: "Only me" }, { value: "public", label: "Public" }]} value={recipe.isPublicInd ? "public" : "private"} onChange={(v) => void store.setPublic(v === "public")} />
+                {snap.isOwner ? (
+                  <View style={{ gap: space.xs }}>
+                    <Text style={caps}>Who can see it</Text>
+                    <View style={{ alignSelf: "flex-start" }}>
+                      <Segmented options={[{ value: "private", label: "Only me" }, { value: "public", label: "Public" }]} value={recipe.isPublicInd ? "public" : "private"} onChange={(v) => void store.setPublic(v === "public")} />
+                    </View>
+                    <Text variant="meta">{recipe.isPublicInd ? "Anyone can open it, and it is listed in the community gallery." : "Only you can open it."}</Text>
+                    {snap.visibilityError ? <Text variant="error">{snap.visibilityError}</Text> : null}
                   </View>
-                  <Text variant="meta">{recipe.isPublicInd ? "Anyone can open it, and it is listed in the community gallery." : "Only you can open it."}</Text>
-                  {snap.visibilityError ? <Text variant="error">{snap.visibilityError}</Text> : null}
-                </View>
-              ) : null}
+                ) : null}
 
-              <RecipeBody data={data} />
+                <RecipeBody data={data} />
 
-              {snap.isOwner ? (
-                <View style={{ gap: space.md, borderTopWidth: 1, borderTopColor: c.border, paddingTop: space.lg }}>
-                  <Text style={caps}>Refine with Antoine</Text>
-                  {refine.phase === "idle" ? (
-                    <>
-                      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.sm }}>
-                        {QUICK.map((q) => (
-                          <Pressable key={q} accessibilityRole="button" onPress={() => setInstruction(q)} style={{ minHeight: 44, borderRadius: 999, borderWidth: 1, borderColor: c.border, backgroundColor: c.field, paddingHorizontal: space.lg, justifyContent: "center" }}>
-                            <Text style={{ fontFamily: fontFamily.uiStrong }}>{q}</Text>
-                          </Pressable>
-                        ))}
-                      </View>
-                      <TextField label="What should change?" value={instruction} onChangeText={setInstruction} placeholder="e.g. swap the cream for something lighter" multiline maxLength={INSTRUCTION_MAX} />
-                      {refine.failure ? <Text variant="error">{refine.failure.message}</Text> : null}
-                      <Button label="Refine" disabled={instruction.trim().length < INSTRUCTION_MIN} onPress={() => void store.refine(instruction)} />
-                      <Text variant="meta">You see the changes before anything is saved.</Text>
-                    </>
-                  ) : null}
-                  {refine.phase === "refining" ? (
-                    <View style={{ gap: space.md }} accessibilityLiveRegion="polite">
-                      <Text style={{ fontFamily: fontFamily.title, fontSize: 20 }}>Antoine is refining your recipe…</Text>
-                      <Text variant="muted">Usually under a minute. Nothing changes until you accept.</Text>
-                      <Button kind="danger" label="Stop" onPress={store.stopRefine} />
-                    </View>
-                  ) : null}
-                  {refine.phase === "proposal" || refine.phase === "accepting" ? (
-                    <View style={{ gap: space.lg }}>
-                      <Surface>
-                        <View style={{ padding: space.lg, gap: space.xs }}>
-                          <Text style={caps}>What changed</Text>
-                          <Text>{refine.changeSummary || "Antoine did not describe the change."}</Text>
+                {snap.isOwner ? (
+                  <View style={{ gap: space.md, borderTopWidth: 1, borderTopColor: c.border, paddingTop: space.lg }}>
+                    <Text style={caps}>Refine with Antoine</Text>
+                    {refine.phase === "idle" ? (
+                      <>
+                        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.sm }}>
+                          {QUICK.map((q) => (
+                            <Pressable key={q} accessibilityRole="button" onPress={() => setInstruction(q)} style={{ minHeight: 44, borderRadius: 999, borderWidth: 1, borderColor: c.border, backgroundColor: c.field, paddingHorizontal: space.lg, justifyContent: "center" }}>
+                              <Text style={{ fontFamily: fontFamily.uiStrong }}>{q}</Text>
+                            </Pressable>
+                          ))}
                         </View>
-                      </Surface>
-                      <Text style={{ fontFamily: fontFamily.title, fontSize: 22 }}>{parseRecipeData(refine.refinedData).name || recipe.title}</Text>
-                      <RecipeBody data={parseRecipeData(refine.refinedData)} />
-                      {refine.phase === "proposal" && refine.failure ? <Text variant="error">{refine.failure.message}</Text> : null}
-                      <Button label={refine.phase === "accepting" ? "Saving…" : "Accept changes"} disabled={refine.phase === "accepting"} onPress={() => void store.accept()} />
-                      <Button kind="quiet" label="Discard" disabled={refine.phase === "accepting"} onPress={store.discard} />
-                    </View>
-                  ) : null}
-                </View>
-              ) : null}
-            </>
-          ) : null}
-        </Column>
-      </ScrollView>
+                        <TextField label="What should change?" value={instruction} onChangeText={setInstruction} placeholder="e.g. swap the cream for something lighter" multiline maxLength={INSTRUCTION_MAX} />
+                        {refine.failure ? <Text variant="error">{refine.failure.message}</Text> : null}
+                        <Button label="Refine" disabled={instruction.trim().length < INSTRUCTION_MIN} onPress={() => void store.refine(instruction)} />
+                        <Text variant="meta">You see the changes before anything is saved.</Text>
+                      </>
+                    ) : null}
+                    {refine.phase === "refining" ? (
+                      <View style={{ gap: space.md }} accessibilityLiveRegion="polite">
+                        <Text style={{ fontFamily: fontFamily.title, fontSize: 20 }}>Antoine is refining your recipe…</Text>
+                        <Text variant="muted">Usually under a minute. Nothing changes until you accept.</Text>
+                        <Button kind="danger" label="Stop" onPress={store.stopRefine} />
+                      </View>
+                    ) : null}
+                    {refine.phase === "proposal" || refine.phase === "accepting" ? (
+                      <View style={{ gap: space.lg }}>
+                        <Surface>
+                          <View style={{ padding: space.lg, gap: space.xs }}>
+                            <Text style={caps}>What changed</Text>
+                            <Text>{refine.changeSummary || "Antoine did not describe the change."}</Text>
+                          </View>
+                        </Surface>
+                        <Text style={{ fontFamily: fontFamily.title, fontSize: 22 }}>{parseRecipeData(refine.refinedData).name || recipe.title}</Text>
+                        <RecipeBody data={parseRecipeData(refine.refinedData)} />
+                        {refine.phase === "proposal" && refine.failure ? <Text variant="error">{refine.failure.message}</Text> : null}
+                        <Button label={refine.phase === "accepting" ? "Saving…" : "Accept changes"} disabled={refine.phase === "accepting"} onPress={() => void store.accept()} />
+                        <Button kind="quiet" label="Discard" disabled={refine.phase === "accepting"} onPress={store.discard} />
+                      </View>
+                    ) : null}
+                  </View>
+                ) : null}
+              </>
+            ) : null}
+          </Column>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }

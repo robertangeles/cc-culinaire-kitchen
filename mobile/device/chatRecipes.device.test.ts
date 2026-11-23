@@ -46,12 +46,15 @@ async function launch() {
 }
 
 const tab = (title: string) => tap(new RegExp(`^${title}(,|$)`), 30_000);
-/** The longest text on screen that contains `part` (the streamed answer is one text view). */
-const answerLength = async (part: string) => Math.max(0, ...(await texts()).filter((t) => t.includes(part)).map((t) => t.length));
 const scrollDown = () => {
   const [w, h] = screenSize();
   return swipe(Math.round(w / 2), Math.round(h * 0.75), Math.round(w / 2), Math.round(h * 0.3));
 };
+/** Scrolls down until `label` is on screen (a long form). */
+async function scrollTo(label: string) {
+  for (let i = 0; i < 8 && !(await has(label)); i++) await scrollDown();
+  expect(await has(label), label).toBe(true);
+}
 
 describe("chat and recipes on a device", () => {
   beforeEach((ctx) => {
@@ -98,14 +101,21 @@ describe("chat and recipes on a device", () => {
     await screenshot("c03-new-conversation");
     await tap("My hollandaise split. How do I fix it?");
     await waitFor("Stop", 20_000);
-    await waitFor(/Fake kitchen answer/, 30_000);
-    const first = await answerLength("Fake kitchen answer");
-    await sleep(1500);
-    const later = await answerLength("Fake kitchen answer");
-    await screenshot("c04-streaming");
-    expect(later, "the answer grew while streaming").toBeGreaterThan(first);
-    expect(await has("Stop")).toBe(true);
-    await waitFor("Send", 60_000);
+    // The proof that the answer streams on this phone: its length on screen, read again and again until Send is back.
+    const samples: number[] = [];
+    let shot = false;
+    for (const until = Date.now() + 90_000; Date.now() < until; ) {
+      const onScreen = await texts();
+      samples.push(Math.max(0, ...onScreen.filter((t) => t.includes("Fake kitchen answer")).map((t) => t.length)));
+      if (!shot && samples[samples.length - 1] > 0) {
+        await screenshot("c04-streaming");
+        shot = true;
+      }
+      if (onScreen.includes("Send")) break;
+    }
+    console.log(`answer length on screen while streaming: ${samples.join(", ")}`);
+    const steps = new Set(samples.filter((n) => n > 0));
+    expect(steps.size, `the answer grew on screen in several steps: ${samples.join(", ")}`).toBeGreaterThanOrEqual(3);
     await screenshot("c05-answered");
   });
 
@@ -146,6 +156,7 @@ describe("chat and recipes on a device", () => {
   it("R2 the wait is shown with Stop, and Stop saves nothing", async () => {
     await typeInto("What would you like to create?", "Chicken braise with cider");
     await hideKeyboard();
+    await scrollTo("Generate recipe");
     await tap("Generate recipe");
     await waitFor("Writing your recipe…", 20_000);
     await sleep(2000);
@@ -157,6 +168,7 @@ describe("chat and recipes on a device", () => {
   });
 
   it("R3 a made recipe opens, with the owner's public switch", async () => {
+    await scrollTo("Generate recipe");
     await tap("Generate recipe");
     await waitFor("Cider-braised chicken thighs", 60_000);
     expect((await myRecipeIds()).filter((id) => !recipesBefore.includes(id))).toHaveLength(1);
@@ -168,15 +180,16 @@ describe("chat and recipes on a device", () => {
   });
 
   it("R4 a refinement is shown before anything is saved", async () => {
-    for (let i = 0; i < 4 && !(await has("Make dairy-free")); i++) await scrollDown();
+    await scrollTo("Make dairy-free");
     await tap("Make dairy-free");
     await hideKeyboard();
+    await scrollTo("Refine");
     await tap("Refine");
     await waitFor("Antoine is refining your recipe…", 20_000);
     await screenshot("r07-refining");
     await waitFor("What changed", 60_000);
     await screenshot("r08-refine-proposal");
-    for (let i = 0; i < 6 && !(await has("Accept changes")); i++) await scrollDown();
+    await scrollTo("Accept changes");
     await tap("Accept changes");
     await sleep(3000);
     await back();

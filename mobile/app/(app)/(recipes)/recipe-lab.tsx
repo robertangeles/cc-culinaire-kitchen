@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Pressable, ScrollView, View } from "react-native";
+import { KeyboardAvoidingView, Pressable, ScrollView, View } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLab } from "../../../src/recipes/RecipesProvider";
@@ -116,91 +116,93 @@ export default function RecipeLab() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: c.bg }}>
-      <ScrollView contentContainerStyle={{ padding: space.xl }} keyboardShouldPersistTaps="handled">
-        <Column style={{ gap: space.lg }}>
-          <Pressable accessibilityRole="button" accessibilityLabel="Back to My Recipes" hitSlop={8} onPress={() => router.back()} style={{ minHeight: size.tap, justifyContent: "center", alignSelf: "flex-start" }}>
-            <Text style={{ fontFamily: fontFamily.uiStrong, color: c.accentText }}>‹ My Recipes</Text>
-          </Pressable>
-          <Text style={caps}>Recipe Lab</Text>
-          <Text variant="title">Create a recipe</Text>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
+        <ScrollView contentContainerStyle={{ padding: space.xl }} keyboardShouldPersistTaps="handled">
+          <Column style={{ gap: space.lg }}>
+            <Pressable accessibilityRole="button" accessibilityLabel="Back to My Recipes" hitSlop={8} onPress={() => router.back()} style={{ minHeight: size.tap, justifyContent: "center", alignSelf: "flex-start" }}>
+              <Text style={{ fontFamily: fontFamily.uiStrong, color: c.accentText }}>‹ My Recipes</Text>
+            </Pressable>
+            <Text style={caps}>Recipe Lab</Text>
+            <Text variant="title">Create a recipe</Text>
 
-          {snap.phase === "generating" && snap.startedAt ? <Waiting startedAt={snap.startedAt} onStop={store.stop} /> : null}
+            {snap.phase === "generating" && snap.startedAt ? <Waiting startedAt={snap.startedAt} onStop={store.stop} /> : null}
 
-          {snap.phase === "made" && snap.made?.recovered ? (
-            <Surface>
-              <View style={{ padding: space.lg, gap: space.md }}>
-                <Text style={{ fontFamily: fontFamily.title, fontSize: 20 }}>Your recipe was saved</Text>
-                <Text variant="muted">The connection dropped before the answer reached the phone, but the recipe was made and saved, so it was not made twice.</Text>
-                <Button label="Open it" onPress={() => { const id = snap.made!.recipeId; store.reset(); router.replace({ pathname: "/recipe", params: { id } }); }} />
-              </View>
-            </Surface>
-          ) : null}
-
-          {snap.phase === "prose" && snap.prose ? (
-            <Surface>
-              <View style={{ padding: space.lg, gap: space.md }}>
-                <Text style={{ fontFamily: fontFamily.title, fontSize: 20 }}>Antoine answered in words</Text>
-                <Markdown text={snap.prose} />
-                <Text variant="meta">Nothing was saved, and no session was used.</Text>
-                <Button kind="ghost" label="Change the request" onPress={store.reset} />
-              </View>
-            </Surface>
-          ) : null}
-
-          {snap.phase === "failed" && snap.failure ? (
-            <View style={{ gap: space.sm }} accessibilityLiveRegion="polite">
-              <Text variant="error">{snap.failure.message}</Text>
-              {snap.failure.canRetry ? <Button label="Try again" onPress={() => void store.retry()} /> : null}
-              <Button kind="quiet" label="Change the request" onPress={store.reset} />
-            </View>
-          ) : null}
-
-          {snap.phase === "form" ? (
-            <>
-              {snap.note ? <Text variant="meta">{snap.note}</Text> : null}
-              <TextField label="What would you like to create?" value={request} onChangeText={setRequest} placeholder="e.g. French chicken thigh braise with cider and shallot confit" multiline maxLength={REQUEST_MAX} />
-              <TextField label="Cuisine style" value={cuisine} onChangeText={setCuisine} placeholder="e.g. French, Japanese" maxLength={100} />
-              <TextField label="Key ingredients" value={ingredients} onChangeText={setIngredients} placeholder="e.g. chicken, cider, shallots" autoCapitalize="none" />
-
-              <View style={{ gap: space.xs }}>
-                <Text style={caps}>Servings</Text>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: space.md }}>
-                  <Pressable accessibilityRole="button" accessibilityLabel="Fewer servings" disabled={servings <= 1} onPress={() => setServings(servings - 1)} style={{ width: size.tap, height: size.tap, borderRadius: radius.button, borderWidth: 1, borderColor: c.border, backgroundColor: c.field, alignItems: "center", justifyContent: "center", opacity: servings <= 1 ? 0.5 : 1 }}>
-                    <Text style={{ fontFamily: fontFamily.uiStrong, fontSize: 22 }}>−</Text>
-                  </Pressable>
-                  <Text accessibilityLabel={`${servings} servings`} style={{ fontFamily: fontFamily.title, fontSize: 26, minWidth: 48, textAlign: "center" }}>{servings}</Text>
-                  <Pressable accessibilityRole="button" accessibilityLabel="More servings" disabled={servings >= 100} onPress={() => setServings(servings + 1)} style={{ width: size.tap, height: size.tap, borderRadius: radius.button, borderWidth: 1, borderColor: c.border, backgroundColor: c.field, alignItems: "center", justifyContent: "center", opacity: servings >= 100 ? 0.5 : 1 }}>
-                    <Text style={{ fontFamily: fontFamily.uiStrong, fontSize: 22 }}>+</Text>
-                  </Pressable>
+            {snap.phase === "made" && snap.made?.recovered ? (
+              <Surface>
+                <View style={{ padding: space.lg, gap: space.md }}>
+                  <Text style={{ fontFamily: fontFamily.title, fontSize: 20 }}>Your recipe was saved</Text>
+                  <Text variant="muted">The connection dropped before the answer reached the phone, but the recipe was made and saved, so it was not made twice.</Text>
+                  <Button label="Open it" onPress={() => { const id = snap.made!.recipeId; store.reset(); router.replace({ pathname: "/recipe", params: { id } }); }} />
                 </View>
-              </View>
+              </Surface>
+            ) : null}
 
-              <View style={{ gap: space.xs }}>
-                <Text style={caps}>Difficulty</Text>
-                <View accessibilityRole="radiogroup" accessibilityLabel="Difficulty" style={{ flexDirection: "row", flexWrap: "wrap", gap: space.sm }}>
-                  <Pill role="radio" label="Any" selected={!difficulty} onPress={() => setDifficulty(undefined)} />
-                  {DIFFICULTY.map((d) => <Pill key={d.value} role="radio" label={d.label} selected={difficulty === d.value} onPress={() => setDifficulty(d.value)} />)}
+            {snap.phase === "prose" && snap.prose ? (
+              <Surface>
+                <View style={{ padding: space.lg, gap: space.md }}>
+                  <Text style={{ fontFamily: fontFamily.title, fontSize: 20 }}>Antoine answered in words</Text>
+                  <Markdown text={snap.prose} />
+                  <Text variant="meta">Nothing was saved, and no session was used.</Text>
+                  <Button kind="ghost" label="Change the request" onPress={store.reset} />
                 </View>
+              </Surface>
+            ) : null}
+
+            {snap.phase === "failed" && snap.failure ? (
+              <View style={{ gap: space.sm }} accessibilityLiveRegion="polite">
+                <Text variant="error">{snap.failure.message}</Text>
+                {snap.failure.canRetry ? <Button label="Try again" onPress={() => void store.retry()} /> : null}
+                <Button kind="quiet" label="Change the request" onPress={store.reset} />
               </View>
+            ) : null}
 
-              <TextField label="Occasion (optional)" value={occasion} onChangeText={setOccasion} placeholder="e.g. dinner party, weeknight, holiday" maxLength={100} />
+            {snap.phase === "form" ? (
+              <>
+                {snap.note ? <Text variant="meta">{snap.note}</Text> : null}
+                <TextField label="What would you like to create?" value={request} onChangeText={setRequest} placeholder="e.g. French chicken thigh braise with cider and shallot confit" multiline maxLength={REQUEST_MAX} />
+                <TextField label="Cuisine style" value={cuisine} onChangeText={setCuisine} placeholder="e.g. French, Japanese" maxLength={100} />
+                <TextField label="Key ingredients" value={ingredients} onChangeText={setIngredients} placeholder="e.g. chicken, cider, shallots" autoCapitalize="none" />
 
-              <View style={{ gap: space.xs }}>
-                <Text style={caps}>Dietary restrictions</Text>
-                <View accessibilityLabel="Dietary restrictions" style={{ flexDirection: "row", flexWrap: "wrap", gap: space.sm }}>
-                  {DIETARY.map((d) => {
-                    const on = dietary.includes(d);
-                    return <Pill key={d} role="checkbox" label={d} selected={on} onPress={() => setDietary(on ? dietary.filter((x) => x !== d) : [...dietary, d])} />;
-                  })}
+                <View style={{ gap: space.xs }}>
+                  <Text style={caps}>Servings</Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: space.md }}>
+                    <Pressable accessibilityRole="button" accessibilityLabel="Fewer servings" disabled={servings <= 1} onPress={() => setServings(servings - 1)} style={{ width: size.tap, height: size.tap, borderRadius: radius.button, borderWidth: 1, borderColor: c.border, backgroundColor: c.field, alignItems: "center", justifyContent: "center", opacity: servings <= 1 ? 0.5 : 1 }}>
+                      <Text style={{ fontFamily: fontFamily.uiStrong, fontSize: 22 }}>−</Text>
+                    </Pressable>
+                    <Text accessibilityLabel={`${servings} servings`} style={{ fontFamily: fontFamily.title, fontSize: 26, minWidth: 48, textAlign: "center" }}>{servings}</Text>
+                    <Pressable accessibilityRole="button" accessibilityLabel="More servings" disabled={servings >= 100} onPress={() => setServings(servings + 1)} style={{ width: size.tap, height: size.tap, borderRadius: radius.button, borderWidth: 1, borderColor: c.border, backgroundColor: c.field, alignItems: "center", justifyContent: "center", opacity: servings >= 100 ? 0.5 : 1 }}>
+                      <Text style={{ fontFamily: fontFamily.uiStrong, fontSize: 22 }}>+</Text>
+                    </Pressable>
+                  </View>
                 </View>
-              </View>
 
-              <Button label="Generate recipe" disabled={!valid} onPress={generate} />
-              <Text variant="meta">The recipe is saved to My Recipes, private until you make it public. It uses one of your sessions only when a recipe is made.</Text>
-            </>
-          ) : null}
-        </Column>
-      </ScrollView>
+                <View style={{ gap: space.xs }}>
+                  <Text style={caps}>Difficulty</Text>
+                  <View accessibilityRole="radiogroup" accessibilityLabel="Difficulty" style={{ flexDirection: "row", flexWrap: "wrap", gap: space.sm }}>
+                    <Pill role="radio" label="Any" selected={!difficulty} onPress={() => setDifficulty(undefined)} />
+                    {DIFFICULTY.map((d) => <Pill key={d.value} role="radio" label={d.label} selected={difficulty === d.value} onPress={() => setDifficulty(d.value)} />)}
+                  </View>
+                </View>
+
+                <TextField label="Occasion (optional)" value={occasion} onChangeText={setOccasion} placeholder="e.g. dinner party, weeknight, holiday" maxLength={100} />
+
+                <View style={{ gap: space.xs }}>
+                  <Text style={caps}>Dietary restrictions</Text>
+                  <View accessibilityLabel="Dietary restrictions" style={{ flexDirection: "row", flexWrap: "wrap", gap: space.sm }}>
+                    {DIETARY.map((d) => {
+                      const on = dietary.includes(d);
+                      return <Pill key={d} role="checkbox" label={d} selected={on} onPress={() => setDietary(on ? dietary.filter((x) => x !== d) : [...dietary, d])} />;
+                    })}
+                  </View>
+                </View>
+
+                <Button label="Generate recipe" disabled={!valid} onPress={generate} />
+                <Text variant="meta">The recipe is saved to My Recipes, private until you make it public. It uses one of your sessions only when a recipe is made.</Text>
+              </>
+            ) : null}
+          </Column>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
