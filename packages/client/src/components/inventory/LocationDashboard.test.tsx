@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { useEffect, useState } from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { LocationDashboard } from "./LocationDashboard.js";
 import type { DashboardData, LocationIngredient } from "../../hooks/useInventory.js";
@@ -7,8 +8,17 @@ import type { DashboardData, LocationIngredient } from "../../hooks/useInventory
 let dashboard: DashboardData;
 let items: Partial<LocationIngredient>[];
 let orgLocations: object[];
+/** Locations whose dashboard request never answers. */
+let unanswered: string[];
 vi.mock("../../hooks/useInventory.js", () => ({
-  useDashboard: (id: string | null) => ({ data: id ? dashboard : null, isLoading: false }),
+  // Like the real hook: the data arrives after the first render, and what was loaded stays until the next answer.
+  useDashboard: (id: string | null) => {
+    const [data, setData] = useState<DashboardData | null>(null);
+    useEffect(() => {
+      if (id && !unanswered.includes(id)) setData(dashboard);
+    }, [id]);
+    return { data, isLoading: false };
+  },
   useOrgDashboard: () => ({ locations: orgLocations, isLoading: false }),
   useLocationIngredients: (id: string | null) => ({ items: id ? items : [] }),
 }));
@@ -23,6 +33,7 @@ const item = (ingredientId: string, ingredientCategory: string, currentQty: stri
 describe("LocationDashboard", () => {
   beforeEach(() => {
     orgLocations = [];
+    unanswered = [];
     // The item rows alone would say flour is healthy and worth $1,000: the page must show the server's figures instead.
     items = [item("flour", "dry_goods", "10", "10"), item("cola", "beverages", "24", "40")];
     dashboard = {
@@ -88,6 +99,20 @@ describe("LocationDashboard", () => {
       openDrillDown();
       expect(screen.getByText("Critical").parentElement?.textContent).toContain("flour— / par 10");
       expect(screen.getByText("Low Stock").parentElement?.textContent).toContain("cola— / par 40");
+    });
+
+    it("shows none of the previous location's figures while another location's dashboard has not answered", () => {
+      unanswered = ["loc-2"];
+      openDrillDown();
+      expect(screen.getByText("Close").parentElement?.textContent).toContain("$75");
+
+      fireEvent.click(screen.getByRole("button", { name: /Annex/ }));
+
+      const header = screen.getByText("Close").parentElement?.textContent;
+      expect(header).toContain("Annex");
+      expect(header).not.toContain("$");
+      expect(screen.queryByText("Critical")).toBeNull();
+      expect(screen.queryByText("Low Stock")).toBeNull();
     });
   });
 });

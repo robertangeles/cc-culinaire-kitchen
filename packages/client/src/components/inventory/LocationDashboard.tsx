@@ -6,7 +6,7 @@
  * and inventory value breakdown.
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   useDashboard,
   useOrgDashboard,
@@ -40,7 +40,11 @@ export function LocationDashboard({
   const { items: locItems } = useLocationIngredients(locationId);
   const [drillLocationId, setDrillLocationId] = useState<string | null>(null);
   const { items: drillItems } = useLocationIngredients(drillLocationId);
-  const { data: drillData } = useDashboard(drillLocationId);
+  const [drillData, setDrillData] = useState<DashboardData | null>(null);
+  const selectDrillLocation = (id: string | null) => {
+    setDrillData(null);
+    setDrillLocationId(id);
+  };
   const [showCritical, setShowCritical] = useState(false);
   const [showLow, setShowLow] = useState(false);
 
@@ -117,7 +121,7 @@ export function LocationDashboard({
           locations={orgLocations}
           isLoading={orgLoading}
           selectedLocationId={drillLocationId}
-          onSelectLocation={(id) => setDrillLocationId(drillLocationId === id ? null : id)}
+          onSelectLocation={(id) => selectDrillLocation(drillLocationId === id ? null : id)}
         />
       )}
 
@@ -127,9 +131,10 @@ export function LocationDashboard({
           locationName={allLocations.find((l) => l.storeLocationId === drillLocationId)?.locationName || "Location"}
           items={drillItems}
           stockSummary={drillData?.stockSummary}
-          onClose={() => setDrillLocationId(null)}
+          onClose={() => selectDrillLocation(null)}
         />
       )}
+      {drillLocationId && <DrillDashboardLoader key={drillLocationId} locationId={drillLocationId} onLoaded={setDrillData} />}
 
       {/* Stock Health + Value side-by-side */}
       {(criticalItems.length > 0 || lowItems.length > 0 || totalValue > 0) && (
@@ -342,6 +347,13 @@ function OrgSummaryTable({
 }
 
 // ─── Drill-Down View ─────────────────────────────────────────────
+
+/** Loads one location's dashboard for the drill-down. Keyed by location, so it never hands over another location's figures. */
+function DrillDashboardLoader({ locationId, onLoaded }: { locationId: string; onLoaded: (data: DashboardData | null) => void }) {
+  const { data } = useDashboard(locationId);
+  useEffect(() => onLoaded(data), [data, onLoaded]);
+  return null;
+}
 
 function DrillDownView({
   locationName, items, stockSummary, onClose,

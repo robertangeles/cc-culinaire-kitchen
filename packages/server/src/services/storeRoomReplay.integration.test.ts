@@ -339,6 +339,16 @@ describe.skipIf(!RUN)("store room and bar retries (real DB)", () => {
 
   // ─── Catalogue requests ──────────────────────────────────────
 
+  it("catalogue request: a large counted quantity (100 kg of an item counted in grams) is accepted", async () => {
+    const requestId = randomUUID();
+    const out = await callHandler(handleRequestNewItem, asUser(fx.chef, ["inventory:count"]), {
+      body: { requestId, itemName: "Rock salt", storeLocationId: fx.locA, baseUnit: "g", countedQty: 100000 },
+    });
+    expect(out.status).toBe(201);
+    const [stored] = await db.select().from(pendingCatalogRequest).where(eq(pendingCatalogRequest.requestId, requestId));
+    expect(Number(stored.countedQty)).toBe(100000);
+  });
+
   it("catalogue request: a repeat of the same requestId stores one request", async () => {
     const requestId = randomUUID();
     const body = { requestId, itemName: "Yuzu kosho", storeLocationId: fx.locA };
