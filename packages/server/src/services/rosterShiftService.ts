@@ -28,6 +28,7 @@ import {
   type AwardCoverage,
 } from "./awardRuleService.js";
 import { canAssign } from "./rosterAssignmentRules.js";
+import { notifyAndPush } from "./pushDispatcher.js";
 import {
   RosterError,
   RoleVenueConflictError,
@@ -90,6 +91,32 @@ function parseFilterDateEnd(value: string): Date {
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
+}
+
+/** Tells everyone assigned to a shift (still answering or confirmed), except the person who made the change. The shift has already changed: a failed notice never undoes it. `push` is false for a Draft shift: the in-app notice only. */
+async function notifyAssignees(
+  orgId: number,
+  shiftRow: { shiftId: string; startDatetime: Date; endDatetime: Date },
+  type: "SHIFT_CHANGED" | "SHIFT_CANCELLED",
+  body: string,
+  push: boolean,
+  exceptUserId?: number,
+): Promise<void> {
+  const assignees = await db
+    .select({ userId: shiftAssignment.userId })
+    .from(shiftAssignment)
+    .where(and(eq(shiftAssignment.shiftId, shiftRow.shiftId), inArray(shiftAssignment.status, ["Pending", "Confirmed"])));
+  for (const { userId } of assignees) {
+    if (userId === exceptUserId) continue;
+    await notifyAndPush({
+      organisationId: orgId,
+      recipientUserId: userId,
+      type,
+      payload: { shiftId: shiftRow.shiftId, startDatetime: shiftRow.startDatetime.toISOString(), endDatetime: shiftRow.endDatetime.toISOString(), body },
+      relatedEntityType: "shift",
+      relatedEntityId: shiftRow.shiftId,
+    }, { push });
+  }
 }
 
 // ── Roles ──────────────────────────────────────────────────────────────
@@ -418,17 +445,21 @@ export async function updateShift(orgId: number, shiftId: string, input: UpdateS
     beforeValue: { startDatetime: row.startDatetime, endDatetime: row.endDatetime },
     afterValue: { startDatetime: start, endDatetime: end },
   });
+  if (start.getTime() !== row.startDatetime.getTime() || end.getTime() !== row.endDatetime.getTime()) {
+    await notifyAssignees(orgId, updated, "SHIFT_CHANGED", "The time of one of your shifts changed.", false, actorUserId);
+  }
   return updated;
 }
 
-/** Cancels a shift, notifying any assigned staff. */
-export async function cancelShift(orgId: number, shiftId: string) {
-  await getShiftRow(orgId, shiftId);
+/** Cancels a shift, notifying any assigned staff except the person who cancelled it. Only a Published shift's cancellation is pushed. */
+export async function cancelShift(orgId: number, shiftId: string, actorUserId?: number) {
+  const row = await getShiftRow(orgId, shiftId);
   const [updated] = await db
     .update(shift)
     .set({ status: "Cancelled", updatedDttm: new Date() })
     .where(eq(shift.shiftId, shiftId))
     .returning();
+  if (row.status !== "Cancelled") await notifyAssignees(orgId, updated, "SHIFT_CANCELLED", "One of your shifts was cancelled.", row.status === "Published", actorUserId);
   return updated;
 }
 
@@ -798,6 +829,21 @@ export async function assignStaff(orgId: number, shiftId: string, userId: number
     beforeValue: wasReactivation ? { status: "Declined" } : undefined,
     afterValue: wasReactivation ? { status: row.status } : { shiftId, userId, status: row.status },
   });
+  if (userId !== actorUserId) {
+    await notifyAndPush({
+      organisationId: orgId,
+      recipientUserId: userId,
+      type: "SHIFT_ASSIGNED",
+      payload: {
+        shiftId,
+        startDatetime: shiftRow.startDatetime.toISOString(),
+        endDatetime: shiftRow.endDatetime.toISOString(),
+        body: "A shift was assigned to you. Confirm or decline it in My Shifts.",
+      },
+      relatedEntityType: "shift",
+      relatedEntityId: shiftId,
+    }, { push: false });
+  }
   return row;
 }
 
@@ -950,6 +996,7 @@ export async function publishRoster(
   const activeAwardRules = await getActiveAwardRules(jurisdiction, today);
 
   const publishedShiftIds: string[] = [];
+  const publishedByUser = new Map<number, string[]>();
   const heldShifts: Array<{ shiftId: string; reason: string }> = [];
   const awardWarnings: Array<AwardWarning & { shiftId: string }> = [];
 
@@ -1012,6 +1059,7 @@ export async function publishRoster(
       .set({ status: "Published", isPublicHoliday: isPublicHolidayShift, updatedDttm: new Date() })
       .where(eq(shift.shiftId, s.shiftId));
     publishedShiftIds.push(s.shiftId);
+    for (const a of assignments) publishedByUser.set(a.userId, [...(publishedByUser.get(a.userId) ?? []), s.shiftId]);
   }
 
   const awardCoverage = buildAwardCoverage(activeAwardRules, jurisdiction);
@@ -1024,6 +1072,19 @@ export async function publishRoster(
     organisationId: orgId,
     metadata: { from, to, publishedShiftIds, heldShifts, awardWarnings, awardCoverage },
   });
+
+  // One notice per person, however many of their shifts this publish covered.
+  for (const [userId, shiftIds] of publishedByUser) {
+    if (userId === actorUserId) continue;
+    await notifyAndPush({
+      organisationId: orgId,
+      recipientUserId: userId,
+      type: "ROSTER_PUBLISHED",
+      payload: { storeLocationId, from, to, shiftIds, body: "The roster was published. Your shifts are in My Shifts." },
+      relatedEntityType: "store_location",
+      relatedEntityId: storeLocationId,
+    });
+  }
 
   return { publishedShiftIds, heldShifts, awardWarnings, awardCoverage };
 }

@@ -32,6 +32,17 @@ Native iOS/Android chef app (stock count first, then delivery receiving). Plan a
 - The phone offers "Save password to Google Password Manager?" after a real sign-in. Dismiss it with Back. Never tap Save.
 - Phone checks: `check:types`, `check:lint`, `check:test` (260 tests), `check:bundle`, `check:e2e`.
 
+## Push (Wave 4 server) follow-ups (2026-11-23)
+
+Hooked to push: roster published, a Published shift cancelled, document verified, document rejected. A Draft shift never pushes: shift assigned, a Draft shift's time changed or cancelled save the in-app notice only (`notifyAndPush(..., { push: false })`); a Published shift cannot be edited, so nothing pushes "shift changed" yet. Every push carries `sound: "default"`, not yet checked on a device. Still only in the in-app inbox, no push yet (each is one `notifyAndPush` call after its change commits; a producer inside a transaction must push after the commit):
+- [ ] Shift swap claimed, public-holiday consent requested and declined (`shiftSwapService`, `consentService`).
+- [ ] PO approval required, approved, rejected, receiving discrepancy, delivery overdue (`purchaseOrderService`, `receivingService`, `routes/internal.ts`): these go through `notifyHQAdmins`, which also emails; give it the push call.
+- [ ] Compliance expiry alert and verifier nudge (`complianceExpiryJob`, `complianceDocumentService.nudgeVerifier`).
+- [ ] Kitchen Brain digest, nudge, capture error.
+- [ ] Not yet notifications at all: transfer, stock take flagged, Bench mention, a person removed from a shift (`removeAssignment`), a venue's bulk undo (`undoGeneration`).
+- [ ] Quiet hours drop a push (the inbox keeps it). If the owner wants it held until quiet hours end, that needs a queue table.
+- [ ] Phone: register an Expo push token (not a raw FCM/APNs token; the dispatcher skips those), send `refreshToken` in the `register-device` body (ties the push token to that sign-in, so the server removes it when the sign-in ends; without it the token is only removed once the person has no sign-in left; logout removes the tokens registered under the signing-out sign-in, the phone sends nothing extra), call `unregister-device` when notifications are turned off, send the phone's IANA time zone with quiet hours, route `data.link` (`pushLink` in `@culinaire/shared/schemas/push`; `/notifications` until a screen exists).
+
 ## MFA follow-ups (2026-10-26)
 
 Shipped on `fix/ck-web/mfa-change-needs-proof`: setup/disable need proof (brain page `architecture/overview`, "Changing two-factor settings"). Still open:
@@ -432,7 +443,7 @@ Three items the review deferred rather than built:
   - **`GET /api/roster/shifts/mine` returns Draft shifts** (`listMyShifts` filters only `Cancelled`), so staff see unpublished assignments. Filter to Published, or confirm that is intended.
   - **`POST /api/compliance/documents/upload` has no handler for an oversize file or a wrong field name**: the multer error falls to the generic handler as `500`, not `413`/`400` (`routes/users.ts` shows the `MulterError` pattern to copy). It also has no per-route rate limit although each call hits Cloudinary and runs OCR.
   - **No machine-readable `code`** on compliance or roster errors; mobile can only branch on status.
-  - **Push is not built**: `register-device` stores a token and nothing sends. No notification when a document is verified/rejected or a roster is published. No mobile-friendly roster payload (venue name, timezone, `isPublicHoliday`, date range) and no way for the client to discover which flags are on.
+  - ~~**Push is not built**~~: the server side shipped 2026-11-23 (see "Push (Wave 4 server) follow-ups" above). Still open: no mobile-friendly roster payload (venue name, timezone, `isPublicHoliday`, date range) and no way for the client to discover which flags are on.
   - `api-contracts.md` lacks `/api/inventory/notifications` and `register-device`, and its 401 body text is stale.
 
 ---

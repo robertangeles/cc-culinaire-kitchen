@@ -29,6 +29,7 @@ import {
 import { sendVerificationEmail, sendPasswordResetEmail } from "./emailService.js";
 import { encryptUserPii, decryptUserPii, hashForLookup } from "./piiService.js";
 import { getAllSettings } from "./settingsService.js";
+import { removeSignedOutDeviceTokens } from "./pushDeviceService.js";
 
 export class AuthError extends Error {
   constructor(
@@ -367,9 +368,10 @@ function signInTimeOf(row: { signedInAtDttm: Date | null; expiresAtDttm: Date })
 /**
  * Generates a JWT access token and a refresh token: a new sign-in, so a new token family.
  * The refresh token hash is stored in the database for revocation support.
- * `signedInAt` is for re-minting inside an existing session without resetting "recently signed in".
+ * `signedInAt` and `familyId` are for re-minting inside an existing session: without resetting "recently signed in",
+ * and as the same sign-in, so what is tied to it (a push device token) stays tied.
  */
-export async function generateTokens(authUser: AuthUser, opts: { signedInAt?: Date } = {}) {
+export async function generateTokens(authUser: AuthUser, opts: { signedInAt?: Date; familyId?: string } = {}) {
   const payload: TokenPayload = {
     sub: authUser.userId,
     roles: authUser.roles,
@@ -390,9 +392,11 @@ export async function generateTokens(authUser: AuthUser, opts: { signedInAt?: Da
       tokenHash: sha256(rawRefreshToken),
       expiresAtDttm: new Date(now.getTime() + REFRESH_EXPIRY_MS),
       signedInAtDttm: opts.signedInAt ?? now,
+      familyId: opts.familyId,
     });
     await tx.delete(refreshToken).where(and(eq(refreshToken.userId, authUser.userId), lt(refreshToken.expiresAtDttm, now)));
   });
+  await removeSignedOutDeviceTokens(authUser.userId);
 
   return { accessToken, refreshToken: rawRefreshToken };
 }
@@ -462,6 +466,7 @@ export async function refreshAccessToken(rawToken: string) {
     await tx.delete(refreshToken).where(eq(refreshToken.familyId, stored.familyId));
     return { kind: "reused" };
   });
+  await removeSignedOutDeviceTokens(peek.userId);
 
   switch (verdict.kind) {
     case "invalid":
@@ -515,25 +520,29 @@ export function isRecentSignIn(signedInAt: Date | null, now: Date = new Date()):
 
 /**
  * Ends the sign-in a refresh token belongs to (logout): every token of its family, not just this one,
- * so an earlier copy of the token (another tab, a stolen one) dies with it.
+ * so an earlier copy of the token (another tab, a stolen one) dies with it. The token only has to match a
+ * stored row, expired or spent included. Returns whose sign-in it was, or undefined when no row matches.
  */
-export async function revokeRefreshToken(rawToken: string) {
+export async function revokeRefreshToken(rawToken: string): Promise<number | undefined> {
   const tokenHash = sha256(rawToken);
   const [stored] = await db
     .select({ userId: refreshToken.userId, familyId: refreshToken.familyId })
     .from(refreshToken)
     .where(eq(refreshToken.tokenHash, tokenHash));
-  if (!stored) return;
+  if (!stored) return undefined;
   await db.transaction(async (tx) => {
     await lockUserTokens(tx, stored.userId);
     await tx.delete(refreshToken).where(eq(refreshToken.familyId, stored.familyId));
   });
+  return stored.userId;
 }
 
 /**
  * Ends every sign-in of a user (suspend, cancel, password reset, password change).
  * `keepFamilyId` spares the caller's own sign-in, but only its live token: spent copies of it, which
  * another holder may have, go too. Pass `tx` to make it part of the caller's transaction.
+ * The push device tokens of the sign-ins that ended go once the revoke has committed; a caller that passes `tx`
+ * calls `removeSignedOutDeviceTokens` itself after its transaction commits.
  */
 export async function revokeAllRefreshTokens(userId: number, keepFamilyId?: string, tx?: DbOrTx) {
   const run = async (t: DbOrTx) => {
@@ -546,8 +555,9 @@ export async function revokeAllRefreshTokens(userId: number, keepFamilyId?: stri
           : eq(refreshToken.userId, userId),
       );
   };
-  if (tx) await run(tx);
-  else await db.transaction(run);
+  if (tx) return run(tx);
+  await db.transaction(run);
+  await removeSignedOutDeviceTokens(userId);
 }
 
 /** The family of a refresh token that belongs to this user, if any. */

@@ -10,6 +10,7 @@ import {
   generateTokens,
   getUserWithRolesAndPermissions,
   getSignInTime,
+  refreshTokenFamily,
   revokeRefreshToken,
 } from "../services/authService.js";
 import { setAuthCookies } from "./authController.js";
@@ -81,8 +82,9 @@ export async function handleCreateOrganisation(req: Request, res: Response, next
     const oldRefresh = presentedRefreshToken(req);
     // Never "now" when the original sign-in cannot be found: re-minting must not count as signing in again.
     const signedInAt = (await getSignInTime(oldRefresh, req.user!.sub)) ?? new Date(0);
+    const familyId = await refreshTokenFamily(oldRefresh, req.user!.sub);
     if (oldRefresh) await revokeRefreshToken(oldRefresh);
-    const tokens = await generateTokens(authUser, { signedInAt });
+    const tokens = await generateTokens(authUser, { signedInAt, familyId });
     setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
     // `tokens` is for bearer clients, whose old refresh token was just revoked; web ignores it.
     res.status(201).json({ organisation: org, tokens });
