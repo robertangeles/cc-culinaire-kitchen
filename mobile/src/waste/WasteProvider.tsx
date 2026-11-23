@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useSyncExternalStore, type ReactNode } from "react";
-import { client } from "../runtime/appContext";
+import { client, session } from "../runtime/appContext";
 import { currentUserId, outbox, runner } from "../runtime/appOutbox";
-import { createCatalogue } from "../ingredients/catalogue";
+import { catalogueRoute, createCatalogue } from "../ingredients/catalogue";
 import { createRecents } from "../ingredients/recents";
 import { createIngredientSource, type IngredientSource } from "../ingredients/source";
 import { newUuid } from "../outbox/uuid";
@@ -21,7 +21,8 @@ export function WasteProvider({ locationId, children }: { locationId: string; ch
     const userId = currentUserId() ?? -1;
     const api = createWasteApi(client);
     const recents = createRecents<WasteRecent>({ kv: sqliteKv, key: `waste.recents.${userId}`, max: 12 });
-    const catalogue = createCatalogue({ client, kv: sqliteKv, key: `catalogue.${userId}` });
+    const state = session.getSnapshot().state;
+    const catalogue = createCatalogue({ client, kv: sqliteKv, key: `catalogue.${userId}`, path: state.phase === "ready" ? catalogueRoute(state.user) : "/api/inventory/ingredients" });
     void catalogue.refresh(); // in the background: the picker reads what is on the phone and never waits for this
     return {
       store: createWasteStore({ api, kv: sqliteKv, outbox, recents, getUserId: () => currentUserId() ?? -1, locationId, kick: runner.kick, now: Date.now, newId: newUuid }),

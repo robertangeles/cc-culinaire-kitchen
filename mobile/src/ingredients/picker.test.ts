@@ -1,7 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
 import type { KvStore } from "../storage/kv";
 import { ApiError, type ApiClient } from "../api/client";
-import { createCatalogue } from "./catalogue";
+import type { AuthUser } from "../api/auth";
+import { catalogueRoute, createCatalogue } from "./catalogue";
 import { createRecents } from "./recents";
 import { createIngredientSource, rankIngredients } from "./source";
 
@@ -54,19 +55,39 @@ describe("the catalogue the picker searches", () => {
   it("downloads once, keeps only what the picker needs, and reads it back with no signal", async () => {
     const kv = memoryKv();
     const request = vi.fn(async () => rows);
-    const cat = createCatalogue({ client: { request } as unknown as ApiClient, kv, key: "cat" });
+    const cat = createCatalogue({ client: { request } as unknown as ApiClient, kv, key: "cat", path: "/api/inventory/ingredients" });
     expect(await cat.refresh()).toBe(true);
     expect(request).toHaveBeenCalledWith("GET", "/api/inventory/ingredients", expect.any(Object));
-    const offline = createCatalogue({ client: { request: async () => { throw new ApiError("network"); } } as unknown as ApiClient, kv, key: "cat" });
+    const offline = createCatalogue({ client: { request: async () => { throw new ApiError("network"); } } as unknown as ApiClient, kv, key: "cat", path: "/api/inventory/ingredients" });
     expect(await offline.items()).toEqual([{ ingredientId: "i1", ingredientName: "Flour", baseUnit: "g", ingredientCategory: "Dry", itemType: "KITCHEN_INGREDIENT" }]);
     expect(await offline.refresh()).toBe(false);
     expect((await offline.items())).toHaveLength(1); // a failed refresh keeps the last download
   });
 
   it("is empty, not an error, for someone the server will not give the catalogue to (a cook who may log waste but not count stock)", async () => {
-    const cat = createCatalogue({ client: { request: async () => { throw new ApiError("forbidden", "no", 403); } } as unknown as ApiClient, kv: memoryKv(), key: "cat" });
+    const cat = createCatalogue({ client: { request: async () => { throw new ApiError("forbidden", "no", 403); } } as unknown as ApiClient, kv: memoryKv(), key: "cat", path: "/api/inventory/ingredients" });
     expect(await cat.refresh()).toBe(false);
     expect(await cat.items()).toEqual([]);
+  });
+});
+
+describe("which list the catalogue downloads", () => {
+  const person = (permissions: string[], roles: string[] = []) => ({ userId: 1, userName: "A", userEmail: "a@x.test", mfaEnabled: false, roles, permissions }) as AuthUser;
+
+  it("is the inventory list for someone who may count stock, and the small waste list for a cook who may only log waste", () => {
+    expect(catalogueRoute(person(["inventory:count", "waste:log"]))).toBe("/api/inventory/ingredients");
+    expect(catalogueRoute(person(["waste:log"]))).toBe("/api/waste/ingredients");
+    expect(catalogueRoute(person([], ["Administrator"]))).toBe("/api/inventory/ingredients");
+  });
+
+  it("downloads from the route it was given, keeps id, name and unit, and reads them back with no signal", async () => {
+    const kv = memoryKv();
+    const request = vi.fn(async () => [{ ingredientId: "i1", ingredientName: "Flour", baseUnit: "g" }, { ingredientName: "no id" }]);
+    const cat = createCatalogue({ client: { request } as unknown as ApiClient, kv, key: "cat", path: "/api/waste/ingredients" });
+    expect(await cat.refresh()).toBe(true);
+    expect(request).toHaveBeenCalledWith("GET", "/api/waste/ingredients", expect.any(Object));
+    const offline = createCatalogue({ client: { request: async () => { throw new ApiError("network"); } } as unknown as ApiClient, kv, key: "cat", path: "/api/waste/ingredients" });
+    expect(await offline.items()).toEqual([{ ingredientId: "i1", ingredientName: "Flour", baseUnit: "g", ingredientCategory: "" }]);
   });
 });
 

@@ -4,7 +4,8 @@ import { render, screen, fireEvent, waitFor, cleanup } from "@testing-library/re
 import { Alert } from "react-native";
 import { useSyncExternalStore } from "react";
 import { NOW, makeWasteHarness, serverEntry, wasteHarness } from "./wasteHarness";
-import { ApiError } from "../src/api/client";
+import { ApiError, type ApiClient } from "../src/api/client";
+import { catalogueRoute, createCatalogue } from "../src/ingredients/catalogue";
 import { routerMock, searchParams, sessionState } from "../testing/mocks";
 
 vi.mock("../src/waste/WasteProvider", async () => {
@@ -162,6 +163,42 @@ describe("ingredient picker on the log screen", () => {
     await waste.log({ ingredientName: "Basil", quantity: 1, unit: "bunch", reason: null, shift: null, estimatedCost: null, notes: null });
     render(<WasteEntry />);
     await waitFor(() => expect(screen.getByRole("button", { name: "Use Basil" })).toBeTruthy());
+  });
+});
+
+describe("ingredient picker for a cook who may log waste but not count stock", () => {
+  // The server answers the full inventory list to inventory:count only; this cook gets the small waste list (id, name, unit).
+  const listFor = async (user: typeof cook) => {
+    const request = vi.fn(async (_method: string, path: string) => {
+      if (path !== "/api/waste/ingredients") throw new ApiError("forbidden", "Insufficient permissions.", 403);
+      return [{ ingredientId: "i1", ingredientName: "Chickpeas", baseUnit: "g" }, { ingredientId: "i2", ingredientName: "Basil", baseUnit: "bunch" }];
+    });
+    const kv = { get: async () => null, set: async () => {}, delete: async () => {} };
+    const catalogue = createCatalogue({ client: { request } as unknown as ApiClient, kv, key: "c", path: catalogueRoute(user) });
+    await catalogue.refresh();
+    return { request, items: await catalogue.items() };
+  };
+
+  it.each([
+    ["an iPhone", 390, 844],
+    ["an iPad (portrait)", 820, 1180],
+    ["an iPad (landscape)", 1180, 820],
+  ])("searches the full list and fills the unit on %s, with only the waste list ever asked for", async (_name, width, height) => {
+    window.innerWidth = width;
+    window.innerHeight = height;
+    const { request, items } = await listFor(cook);
+    expect(request.mock.calls.map((c) => c[1])).toEqual(["/api/waste/ingredients"]);
+    await makeWasteHarness({ catalogue: items });
+    render(<WasteEntry />);
+    const field = screen.getByLabelText("What was thrown away");
+    type("What was thrown away", "chick");
+    await waitFor(() => expect(screen.getByRole("button", { name: "Use Chickpeas" })).toBeTruthy());
+    // The suggestions sit in the same centred column as the field, so on a tablet they are not stretched across the paper.
+    let column = field.parentElement as HTMLElement;
+    while (Number.isNaN(parseFloat(getComputedStyle(column).maxWidth))) column = column.parentElement as HTMLElement;
+    expect(column.contains(screen.getByRole("button", { name: "Use Chickpeas" }))).toBe(true);
+    press("Use Chickpeas");
+    expect(screen.getByRole("radio", { name: "g" }).getAttribute("aria-checked")).toBe("true");
   });
 });
 
