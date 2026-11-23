@@ -17,7 +17,7 @@ API 3009, local DB 55432. There is no iOS device on this Linux machine.
 
 `device/prep.device.test.ts` is the prep walk (sign in, the Prep tab, a tick with no signal, reconnect, sync, reopen offline). It makes its list through the API as a manager first.
 It has not passed on the phone yet: the development build installed on 2026-11-20 predates `expo-crypto` (Sign in with Apple), so the app dies at start with "Cannot find native module 'ExpoCrypto'".
-It needs a development build that includes it before it can run: `check:device -- device/prep`, with Metro on 8088 and the API reachable from the phone (`adb reverse`).
+Rebuild and install the development build first (see "Rebuild and install" below; `buildStamp.sh check` says whether it is needed), then `check:device -- device/prep`, with Metro on 8088 and the API reachable from the phone (`adb reverse`).
 
 `device/stockWalk.device.test.ts` is the Usage and Move walk (log usage with signal and in airplane mode, the "that's a move, not usage" question, a move between areas, both screens in landscape). It makes its items and areas through the API as a manager first and saves screenshots to `device/_shots`: `check:device -- device/stockWalk`, with the same Metro, API and `adb reverse` set-up as above.
 
