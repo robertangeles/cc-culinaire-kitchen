@@ -79,6 +79,7 @@ describe("recording a move", () => {
     const t = setup();
     await t.moves.refresh();
     await expect(t.moves.record({ ...form, ingredientId: "" })).rejects.toThrow(/pick the item/i);
+    await expect(t.moves.record({ ...form, unit: "" })).rejects.toThrow(/unit is not known/i);
     await expect(t.moves.record({ ...form, quantity: 0 })).rejects.toThrow(/how much/i);
     await expect(t.moves.record({ ...form, quantity: 100000 })).rejects.toThrow(/more than/i);
     await expect(t.moves.record({ ...form, fromStorageAreaId: "" })).rejects.toThrow(/from and to/i);

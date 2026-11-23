@@ -82,6 +82,7 @@ describe("logging", () => {
   it("refuses nonsense before it is saved: no item picked, no quantity, a negative one, no reason", async () => {
     const t = setup();
     await expect(t.usage.log({ ...form, ingredientId: "" })).rejects.toThrow(/pick the item/i);
+    await expect(t.usage.log({ ...form, unit: "" })).rejects.toThrow(/unit is not known/i);
     await expect(t.usage.log({ ...form, quantity: 0 })).rejects.toThrow(/quantity/i);
     await expect(t.usage.log({ ...form, quantity: -1 })).rejects.toThrow(/quantity/i);
     await expect(t.usage.log({ ...form, quantity: Number.NaN })).rejects.toThrow(/quantity/i);

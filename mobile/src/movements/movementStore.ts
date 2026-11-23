@@ -113,6 +113,7 @@ export function createMovementStore({ api, kv, outbox, recents, userId, userName
     /** Record a move: saved on the phone at once with a new id, sent when it can be. */
     async record(form: MovementForm): Promise<void> {
       if (!form.ingredientId) throw new Error("Pick the item from the list.");
+      if (!form.unit) throw new Error("Pick the item from the list again: its unit is not known.");
       if (!Number.isFinite(form.quantity) || form.quantity <= 0) throw new Error("Enter how much moved.");
       if (form.quantity > MAX_QUANTITY) throw new Error("That's more than the app can record in one move.");
       const from = snapshot.areas.find((a) => a.storageAreaId === form.fromStorageAreaId);

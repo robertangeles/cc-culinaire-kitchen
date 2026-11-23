@@ -125,6 +125,7 @@ export function createConsumptionStore({ api, kv, outbox, recents, viewer, locat
     /** Log usage: saved on the phone at once with a new id, sent when it can be. */
     async log(form: ConsumptionForm): Promise<void> {
       if (!form.ingredientId) throw new Error("Pick the item from the list.");
+      if (!form.unit) throw new Error("Pick the item from the list again: its unit is not known.");
       if (!Number.isFinite(form.quantity) || form.quantity <= 0) throw new Error("Enter a quantity above zero.");
       if (!form.reason) throw new Error("Say what it was used for.");
       const command: ConsumptionLogCommand = { consumptionLogId: newId(), storeLocationId: locationId, ingredientId: form.ingredientId, ingredientName: form.ingredientName, quantity: form.quantity, unit: form.unit, reason: form.reason, shift: form.shift, notes: form.notes?.trim() || null, loggedAt: new Date(now()).toISOString() };
