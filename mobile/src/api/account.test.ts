@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { createAccountApi, deleteAccountMessage } from "./account";
+import { authenticatorLink, createAccountApi, deleteAccountMessage, mfaMessage } from "./account";
 import { ApiError, type ApiClient, type TokenStore } from "./client";
 
 function setup(replies: unknown[], tokens: { accessToken: string; refreshToken: string } | null = { accessToken: "A", refreshToken: "R" }) {
@@ -82,5 +82,65 @@ describe("what a refusal says (by the server's code, never its English)", () => 
   it("falls back to the plain sentence for a network or server failure", () => {
     expect(deleteAccountMessage(new ApiError("network"), "password")).toEqual({ text: "Can't reach the server. Try again." });
     expect(deleteAccountMessage(new Error("boom"), "password")).toEqual({ text: "Couldn't delete the account. Try again." });
+  });
+});
+
+describe("profile details", () => {
+  it("reads every field, an empty one as blank", async () => {
+    const { api } = setup([{ profile: { userName: "Chef", userEmail: "c@x.test", userBio: null, userSuburb: "Fitzroy", userPhotoPath: null, hasPassword: true } }]);
+    const d = await api.details();
+    expect(d).toMatchObject({ userName: "Chef", userBio: "", userSuburb: "Fitzroy", userLinkedin: "", userEmail: "c@x.test", userPhotoPath: null });
+  });
+
+  it("uploads a picture as multipart `file` and answers where it is", async () => {
+    const { api, request } = setup([{ photoPath: "https://img/a.jpg" }]);
+    expect(await api.uploadAvatar({ uri: "file:///a.jpg", mimeType: "image/jpeg" })).toBe("https://img/a.jpg");
+    const [method, path, options] = request.mock.calls[0] as unknown as [string, string, { body: FormData }];
+    expect([method, path]).toEqual(["POST", "/api/users/profile/avatar"]);
+    expect(options.body).toBeInstanceOf(FormData);
+    expect(options.body.has("file")).toBe(true);
+  });
+});
+
+describe("password and two-step verification", () => {
+  it("sends this sign-in's refresh token with a password change, so it stays signed in while the others end", async () => {
+    const { api, request } = setup([{ success: true }]);
+    await api.changePassword("old-one", "new-password");
+    expect(request).toHaveBeenCalledWith("POST", "/api/users/change-password", { body: { currentPassword: "old-one", newPassword: "new-password", refreshToken: "R" } });
+  });
+
+  it("sends the proof and the refresh token to start or remove two-step verification", async () => {
+    const { api, request } = setup([{ secret: "ABC", qrCodeDataUrl: "data:image/png;base64,x" }, { message: "ok" }, { message: "ok" }]);
+    expect(await api.mfaSetup({ password: "pw" })).toEqual({ secret: "ABC", qrCodeDataUrl: "data:image/png;base64,x" });
+    expect(request.mock.calls[0][2]).toMatchObject({ body: { password: "pw", refreshToken: "R" } });
+    await api.mfaEnable("123456");
+    expect(request.mock.calls[1].slice(0, 3)).toEqual(["POST", "/api/auth/mfa/enable", { body: { token: "123456" } }]);
+    await api.mfaDisable({ password: "pw", mfaCode: "654321" });
+    expect(request.mock.calls[2][2]).toMatchObject({ body: { password: "pw", mfaCode: "654321", refreshToken: "R" } });
+  });
+
+  it("explains each refusal by the server's code", () => {
+    const coded = (code: string, status = 403) => new ApiError("forbidden", "English", status, { code }, code);
+    expect(mfaMessage(coded("INVALID_CREDENTIALS")).text).toBe("That password isn't right.");
+    expect(mfaMessage(coded("MFA_REQUIRED")).needsMfa).toBe(true);
+    expect(mfaMessage(coded("RECENT_SIGN_IN_REQUIRED")).needsFreshSignIn).toBe(true);
+    expect(mfaMessage(new ApiError("bad_request", "Invalid code. Please try again.", 400)).text).toMatch(/newest code/);
+    expect(mfaMessage(new Error("boom")).text).toBe("Something went wrong. Try again.");
+  });
+
+  it("builds the authenticator link with the server's issuer and the account's email", () => {
+    expect(authenticatorLink("JBSWY3DP", "c@x.test")).toBe("otpauth://totp/CulinAIre%20Kitchen%3Ac%40x.test?secret=JBSWY3DP&issuer=CulinAIre%20Kitchen");
+  });
+});
+
+describe("kitchen profile", () => {
+  it("reads a profile never saved as the defaults", async () => {
+    const { api } = setup([{}]);
+    expect(await api.kitchenProfile()).toMatchObject({ skillLevel: "home_cook", servingsDefault: 4, cuisinePreferences: [], restaurantName: "" });
+  });
+
+  it("drops an option row it cannot read instead of failing the list", async () => {
+    const { api } = setup([{ skill_level: [{ optionValue: "line_cook", optionLabel: "Line cook", optionDescription: null }, { broken: true }], cuisine: [], dietary: [], equipment: [] }]);
+    expect((await api.personalisationOptions()).skill_level).toEqual([{ optionValue: "line_cook", optionLabel: "Line cook", optionDescription: null }]);
   });
 });

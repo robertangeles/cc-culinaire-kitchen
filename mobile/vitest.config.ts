@@ -6,7 +6,14 @@ import { fileURLToPath } from "node:url";
 export default defineConfig({
   esbuild: { jsx: "automatic" },
   // Shared schemas come from source, so a fresh checkout needs no `packages/shared` build to run the tests (Metro still reads dist/).
-  resolve: { alias: { "react-native": "react-native-web", "@culinaire/shared/schemas": fileURLToPath(new URL("../packages/shared/src/schemas", import.meta.url)) } },
+  resolve: {
+    alias: [
+      { find: "react-native", replacement: "react-native-web" },
+      { find: "@culinaire/shared/schemas", replacement: fileURLToPath(new URL("../packages/shared/src/schemas", import.meta.url)) },
+      // The package root (option lists, costing) from source too; exact match, so the schemas line above still wins for its paths.
+      { find: /^@culinaire\/shared$/, replacement: fileURLToPath(new URL("../packages/shared/src/index.ts", import.meta.url)) },
+    ],
+  },
   test: {
     environment: "node",
     // src/config.ts throws without it; any screen that reaches it through appContext needs this default.
