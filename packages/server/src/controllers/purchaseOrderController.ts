@@ -87,7 +87,7 @@ const ListPOsQuerySchema = z.object({
 
 // ─── Helpers ──────────────────────────────────────────────────────
 
-/** A receiving-only user (no `inventory:count`) is confined to the receiving queue. */
+/** A receiving-only user (no `inventory:count`) is confined to the receiving queue of the locations they can use. */
 function isReceivingOnly(req: Request): boolean {
   return !hasPermission(req.user!, "inventory:count");
 }
@@ -161,15 +161,19 @@ export async function handleListPOs(
     if (rest.storeLocationId) await assertLocationAccess(req.user!, rest.storeLocationId);
 
     let statuses: string[] | undefined = status;
+    let storeLocationIds: string[] | undefined;
     if (isReceivingOnly(req)) {
       statuses = (statuses ?? RECEIVING_QUEUE).filter((s) => RECEIVING_QUEUE.includes(s));
-      if (statuses.length === 0) {
+      if (!rest.storeLocationId) {
+        storeLocationIds = (await getUserLocationContext(req.user!.sub)).locations.map((l) => l.storeLocationId);
+      }
+      if (statuses.length === 0 || storeLocationIds?.length === 0) {
         res.json([]);
         return;
       }
     }
 
-    const result = await listPOs(orgId, { ...rest, statuses });
+    const result = await listPOs(orgId, { ...rest, statuses, storeLocationIds });
     res.json(result);
   } catch (err) {
     next(err);
@@ -191,6 +195,7 @@ export async function handleGetPODetail(
       res.status(404).json({ error: "Purchase order not found" });
       return;
     }
+    if (isReceivingOnly(req)) await assertLocationAccess(req.user!, result.storeLocationId);
 
     res.json(result);
   } catch (err) {

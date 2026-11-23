@@ -31,9 +31,11 @@ const queueItem = (over: object = {}) => ({
   expectedDeliveryDate: null, sentAt: null, storeLocationId: "L1", beingReceivedBy: null, ...over,
 });
 const line = (id: string, name: string, over: object = {}) => ({
-  receivingLineId: id, ingredientId: `i-${id}`, ingredientName: name, orderedQty: "5.0000", orderedUnit: "kg",
+  receivingLineId: id, poLineId: `pl-${id}`, ingredientId: `i-${id}`, ingredientName: name, orderedQty: "5.0000", orderedUnit: "kg",
   receivedQty: "5.0000", actualUnitCost: "2.0000", status: "RECEIVED", ...over,
 });
+/** The order's own line: `unitCost` is the price the kitchen ordered at. */
+const poLine = (id: string, name: string) => ({ lineId: `pl-${id}`, ingredientName: name, orderedQty: "5.0000", orderedUnit: "kg", unitCost: "2.0000" });
 const started = (over: object = {}) => ({
   session: { sessionId: "S1", poId: "P1", storeLocationId: "L1", receivedByUserId: 1, status: "ACTIVE" },
   lines: [line("r1", "Flour"), line("r2", "Tomatoes")],
@@ -51,7 +53,7 @@ beforeEach(() => {
   sessionState.current = { state: { phase: "ready", user: chef, location: main, locations: [main] }, busy: false };
   searchParams.current = { poId: "P1" };
   api.queue.mockResolvedValue([queueItem()]);
-  api.purchaseOrder.mockResolvedValue({ poId: "P1", poNumber: "PO-100", status: "SENT", storeLocationId: "L1", supplierName: "Fresh Farms", supplierPhone: "0400 111 222", lines: [] });
+  api.purchaseOrder.mockResolvedValue({ poId: "P1", poNumber: "PO-100", status: "SENT", storeLocationId: "L1", supplierName: "Fresh Farms", supplierPhone: "0400 111 222", lines: [poLine("r1", "Flour"), poLine("r2", "Tomatoes")] });
   api.startSession.mockResolvedValue(started());
   api.actionLine.mockImplementation(async (_s: string, id: string, input: { status: string; receivedQty?: string; actualUnitCost?: string }) => ({
     receivingLineId: id, status: input.status, receivedQty: input.receivedQty ?? "5.0000", actualUnitCost: input.actualUnitCost ?? "2.0000",
@@ -192,12 +194,53 @@ describe("receiving a delivery", () => {
     await waitFor(() => expect(api.actionLine).toHaveBeenCalledWith("S1", "r1", { status: "REJECTED", rejectionReason: "damaged" }));
   });
 
-  it("All good on a short line sends the ordered quantity back", async () => {
+  it("All good on a short line sends the status alone and shows the quantity the server put back", async () => {
     api.startSession.mockResolvedValue(started({ lines: [line("r1", "Flour", { status: "SHORT", receivedQty: "2.0000" })] }));
     render(<ReceiveDelivery />);
     await open("Flour");
     key("All good");
-    await waitFor(() => expect(api.actionLine).toHaveBeenCalledWith("S1", "r1", { status: "RECEIVED", receivedQty: "5.0000" }));
+    await waitFor(() => expect(api.actionLine).toHaveBeenCalledWith("S1", "r1", { status: "RECEIVED" }));
+    expect(await screen.findByRole("button", { name: /^Flour, 5 kg, Received/ })).toBeTruthy();
+  });
+
+  // The server keeps the quantity when only the price is sent, and the price when only the quantity is:
+  // the answers below are what it returns for each second flag.
+  it("a line flagged short and then wrong price shows both, and the order's own price in the prompt", async () => {
+    api.actionLine
+      .mockResolvedValueOnce({ receivingLineId: "r1", status: "SHORT", receivedQty: "3", actualUnitCost: "2.0000" })
+      .mockResolvedValueOnce({ receivingLineId: "r1", status: "PRICE_VARIANCE", receivedQty: "3", actualUnitCost: "4" });
+    render(<ReceiveDelivery />);
+    await open("Flour");
+    key("Short");
+    type("3");
+    fireEvent.click(screen.getByRole("button", { name: "Mark short" }));
+    await screen.findByRole("button", { name: "Confirm delivery · 1 issue" });
+    await open("Flour");
+    key("Wrong price");
+    type("4");
+    fireEvent.click(screen.getByRole("button", { name: "Save price" }));
+    expect(await screen.findByText("Short: 3 of 5 kg, price now $4.00/kg")).toBeTruthy();
+    await screen.findByRole("button", { name: "Confirm delivery · 1 issue" });
+    await open("Flour");
+    key("Wrong price");
+    expect(screen.getByText("Price charged per kg (the order says $2.00).")).toBeTruthy();
+  });
+
+  it("a line flagged wrong price and then short shows both", async () => {
+    api.actionLine
+      .mockResolvedValueOnce({ receivingLineId: "r1", status: "PRICE_VARIANCE", receivedQty: "5.0000", actualUnitCost: "4" })
+      .mockResolvedValueOnce({ receivingLineId: "r1", status: "SHORT", receivedQty: "3", actualUnitCost: "4" });
+    render(<ReceiveDelivery />);
+    await open("Flour");
+    key("Wrong price");
+    type("4");
+    fireEvent.click(screen.getByRole("button", { name: "Save price" }));
+    await screen.findByRole("button", { name: "Confirm delivery · 1 issue" });
+    await open("Flour");
+    key("Short");
+    type("3");
+    fireEvent.click(screen.getByRole("button", { name: "Mark short" }));
+    expect(await screen.findByText("Short: 3 of 5 kg, price now $4.00/kg")).toBeTruthy();
   });
 
   it("when the server refuses a change it says why and leaves the line as it was", async () => {
@@ -261,15 +304,37 @@ describe("receiving a delivery", () => {
   });
 
   it("says so when the delivery was already confirmed (another phone, or a retry that landed)", async () => {
-    api.confirm.mockRejectedValue(new ApiError("conflict", "Receiving session already confirmed", 409, { code: "ALREADY_CONFIRMED" }));
+    api.confirm.mockRejectedValue(new ApiError("conflict", "This delivery has already been confirmed", 409, undefined, "ALREADY_CONFIRMED"));
     render(<ReceiveDelivery />);
     await screen.findByText("Flour");
     fireEvent.click(screen.getByRole("button", { name: "Confirm delivery" }));
     expect(await screen.findByText("Already done")).toBeTruthy();
   });
 
+  it("does not call a delivery confirmed when another phone cancelled it", async () => {
+    api.confirm.mockRejectedValue(new ApiError("conflict", "Cannot transition receiving session from CANCELLED to COMPLETED", 409, undefined, "INVALID_STATE"));
+    render(<ReceiveDelivery />);
+    await screen.findByText("Flour");
+    fireEvent.click(screen.getByRole("button", { name: "Confirm delivery" }));
+    expect(await screen.findByText(/cancelled on another phone/)).toBeTruthy();
+    expect(screen.queryByText("Already done")).toBeNull();
+    expect(screen.queryByText(/already confirmed/)).toBeNull();
+  });
+
+  it("cancelling a delivery another phone already confirmed says so instead of leaving a dead checklist", async () => {
+    const alert = vi.spyOn(Alert, "alert").mockImplementation((_t, _m, buttons) => void buttons?.find((b) => b.style === "destructive")?.onPress?.());
+    api.cancel.mockRejectedValue(new ApiError("conflict", "This delivery has already been confirmed", 409, undefined, "ALREADY_CONFIRMED"));
+    render(<ReceiveDelivery />);
+    await screen.findByText("Flour");
+    fireEvent.click(screen.getByRole("button", { name: "Cancel receiving" }));
+    expect(await screen.findByText("This delivery was already confirmed.")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Confirm delivery" })).toBeNull();
+    expect(routerMock.replace).not.toHaveBeenCalled();
+    alert.mockRestore();
+  });
+
   it("names the item when a unit cannot be converted, and keeps the delivery open", async () => {
-    api.confirm.mockRejectedValue(new ApiError("bad_request", "Cannot receive Tomatoes (case to kg): no conversion.", 400, { code: "UNIT_NOT_CONVERTIBLE" }));
+    api.confirm.mockRejectedValue(new ApiError("bad_request", "Cannot receive Tomatoes (case to kg): no conversion.", 400, undefined, "UNIT_NOT_CONVERTIBLE"));
     render(<ReceiveDelivery />);
     await screen.findByText("Flour");
     fireEvent.click(screen.getByRole("button", { name: "Confirm delivery" }));

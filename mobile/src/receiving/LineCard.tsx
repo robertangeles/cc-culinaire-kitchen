@@ -14,6 +14,7 @@ import {
   allGood,
   formatMoney,
   formatQty,
+  isShort,
   lineSummary,
   priceInput,
   rejectInput,
@@ -27,6 +28,8 @@ type Panel = "short" | "price" | "reject" | null;
 
 interface Props {
   line: ReceivingLine;
+  /** The order's own price for this line; null when the order has none. */
+  orderUnitCost: string | null;
   open: boolean;
   saving: boolean;
   /** The server's reason the last change was refused, shown under the line. */
@@ -42,7 +45,7 @@ interface Props {
  * One delivery line: collapsed it is a name and one fact (a perfect delivery needs no taps on it);
  * opened it offers the four things a chef can say about it. Every number goes through the count keypad.
  */
-export function LineCard({ line, open, saving, error, onToggle, onPanel, onSubmit }: Props) {
+export function LineCard({ line, orderUnitCost, open, saving, error, onToggle, onPanel, onSubmit }: Props) {
   const c = useColors();
   const [panel, setPanel] = useState<Panel>(null);
   const [entry, setEntry] = useState("");
@@ -82,7 +85,7 @@ export function LineCard({ line, open, saving, error, onToggle, onPanel, onSubmi
       <Pressable
         accessibilityRole="button"
         accessibilityState={{ expanded: open }}
-        accessibilityLabel={`${name}, ${lineSummary(line)}, ${STATUS_LABEL[line.status]}`}
+        accessibilityLabel={`${name}, ${lineSummary(line, orderUnitCost)}, ${STATUS_LABEL[line.status]}`}
         onPress={() => {
           close();
           onToggle();
@@ -93,14 +96,14 @@ export function LineCard({ line, open, saving, error, onToggle, onPanel, onSubmi
           <Text style={{ fontFamily: fontFamily.title, fontSize: 20, flexShrink: 1 }}>{name}</Text>
           <Chip label={saving ? "Saving…" : STATUS_LABEL[line.status]} />
         </View>
-        <Text variant={line.status === "SHORT" || line.status === "REJECTED" ? "error" : "meta"}>{lineSummary(line)}</Text>
+        <Text variant={line.status === "REJECTED" || isShort(line) ? "error" : "meta"}>{lineSummary(line, orderUnitCost)}</Text>
         {error ? <Text variant="error" accessibilityLiveRegion="polite">{error}</Text> : null}
       </Pressable>
 
       {open && panel === null ? (
         <View style={{ padding: space.lg, paddingTop: 0, gap: space.sm }}>
           <View style={{ flexDirection: "row", gap: space.sm }}>
-            <View style={{ flex: 1 }}><Button label="All good" kind={flagged ? "primary" : "ghost"} disabled={saving} onPress={() => void send(allGood(line))} /></View>
+            <View style={{ flex: 1 }}><Button label="All good" kind={flagged ? "primary" : "ghost"} disabled={saving} onPress={() => void send(allGood)} /></View>
             <View style={{ flex: 1 }}><Button label="Short" kind="ghost" disabled={saving} onPress={() => setPanel("short")} /></View>
           </View>
           <View style={{ flexDirection: "row", gap: space.sm }}>
@@ -113,7 +116,7 @@ export function LineCard({ line, open, saving, error, onToggle, onPanel, onSubmi
       {open && (panel === "short" || panel === "price") ? (
         <View style={{ padding: space.lg, paddingTop: 0, gap: space.md }}>
           <Text variant="meta">
-            {panel === "short" ? `How much arrived? You ordered ${formatQty(line.orderedQty)} ${line.orderedUnit}.` : `Price charged per ${line.orderedUnit} (the order says ${formatMoney(line.actualUnitCost ?? 0)}).`}
+            {panel === "short" ? `How much arrived? You ordered ${formatQty(line.orderedQty)} ${line.orderedUnit}.` : `Price charged per ${line.orderedUnit}${orderUnitCost == null ? "" : ` (the order says ${formatMoney(orderUnitCost)})`}.`}
           </Text>
           <Text
             accessibilityLiveRegion="polite"

@@ -32,6 +32,8 @@ export interface QueueItem {
 
 export interface ReceivingLine {
   receivingLineId: string;
+  /** The purchase order line this delivery line came from (its `lineId` in the order's detail). */
+  poLineId: string;
   ingredientId: string;
   ingredientName: string | null;
   orderedQty: string;
@@ -63,21 +65,30 @@ export function formatMoney(value: string | number): string {
 /** Lines the chef has flagged: anything other than the default "all good". */
 export const issueCount = (lines: ReceivingLine[]) => lines.filter((l) => l.status !== "RECEIVED").length;
 
-/** One line of plain words for the row's second line. */
-export function lineSummary(line: ReceivingLine): string {
+/** Less arrived than was ordered, whatever the line's status says. */
+export const isShort = (line: ReceivingLine) => Number(line.receivedQty) < Number(line.orderedQty);
+
+/**
+ * One line of plain words for the row's second line: the quantity and price the server holds, whatever
+ * the status (a line flagged short and then repriced is both). `orderUnitCost` is the order's own price.
+ */
+export function lineSummary(line: ReceivingLine, orderUnitCost: string | null): string {
   const ordered = `${formatQty(line.orderedQty)} ${line.orderedUnit}`;
-  switch (line.status) {
-    case "SHORT":
-      return `Short: ${formatQty(line.receivedQty)} of ${ordered}`;
-    case "REJECTED":
-      return `Rejected: ${ordered}`;
-    case "PRICE_VARIANCE":
-      return `${ordered}, price now ${formatMoney(line.actualUnitCost ?? 0)}/${line.orderedUnit}`;
-    case "SUBSTITUTED":
-      return `${ordered}, substituted`;
-    default:
-      return ordered;
-  }
+  const arrived =
+    line.status === "REJECTED"
+      ? `Rejected: ${ordered}`
+      : Number(line.receivedQty) === Number(line.orderedQty)
+        ? ordered
+        : `${isShort(line) ? "Short: " : ""}${formatQty(line.receivedQty)} of ${ordered}`;
+  const price = line.actualUnitCost;
+  const repriced = price != null && (orderUnitCost == null || Number(price) !== Number(orderUnitCost));
+  return [
+    arrived,
+    repriced ? `price now ${formatMoney(price)}/${line.orderedUnit}` : null,
+    line.status === "SUBSTITUTED" ? "substituted" : null,
+  ]
+    .filter(Boolean)
+    .join(", ");
 }
 
 export const STATUS_LABEL: Record<LineStatus, string> = {
@@ -88,11 +99,8 @@ export const STATUS_LABEL: Record<LineStatus, string> = {
   SUBSTITUTED: "Substituted",
 };
 
-/**
- * "All good" sends the ordered quantity along with the status. The server also resets it, but a delivery
- * the chef marked short and then good again must never stock the short quantity if that fix is absent.
- */
-export const allGood = (line: ReceivingLine): LineInput => ({ status: "RECEIVED", receivedQty: line.orderedQty });
+/** "All good" sends the status alone: the server puts back the ordered quantity and the order's price. */
+export const allGood: LineInput = { status: "RECEIVED" };
 
 export type Checked<T> = { ok: true; value: T } | { ok: false; message: string };
 
@@ -117,23 +125,21 @@ export const rejectInput = (reason: RejectionReason, note: string): LineInput =>
   ...(note.trim() ? { rejectionNote: note.trim().slice(0, 500) } : {}),
 });
 
-/** The server's `code` on a 400, when it sent one. */
-export function serverCode(err: unknown): string | undefined {
-  if (!(err instanceof ApiError)) return undefined;
-  const code = (err.body as { code?: unknown } | undefined)?.code;
-  return typeof code === "string" ? code : undefined;
-}
-
-/** What to tell the chef. The server's own sentence is kept for the rules it words well; the rest fall back to the client's. */
+/** What to tell the chef: the server's own sentence, except where the client's is plainer. */
 export function failureMessage(err: unknown): string {
   if (!(err instanceof ApiError)) return "Something went wrong. Try again.";
-  if (serverCode(err) === "UNIT_NOT_CONVERTIBLE") return err.message;
   if (err.code === "forbidden") return "You don't have permission to receive deliveries.";
   return err.message;
 }
 
-/** A confirm the server refused because the session already finished (another phone, or a retry that did land). */
-export const isAlreadyDone = (err: unknown) => err instanceof ApiError && (serverCode(err) === "ALREADY_CONFIRMED" || err.code === "conflict");
+/** A confirm or cancel the server refused because the delivery already finished (another phone, or a retry that did land). Null for any other failure. */
+export function finishedElsewhere(err: unknown): { title: string; message: string } | null {
+  if (!(err instanceof ApiError)) return null;
+  if (err.hasCode("ALREADY_CONFIRMED")) return { title: "Already done", message: "This delivery was already confirmed." };
+  // The only other state a session leaves ACTIVE for is CANCELLED.
+  if (err.hasCode("INVALID_STATE")) return { title: "Delivery cancelled", message: "This delivery was cancelled on another phone. Nothing was added to stock." };
+  return null;
+}
 
 export interface ConfirmResult {
   poStatus: "RECEIVED" | "PARTIAL_RECEIVED";

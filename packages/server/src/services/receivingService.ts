@@ -35,6 +35,7 @@ import * as auditService from "./auditService.js";
 import type { DbOrTx } from "./auditService.js";
 import * as wacService from "./wacService.js";
 import { resolveToBase } from "./unitConversionService.js";
+import { IncompatibleUnitsError } from "@culinaire/shared";
 import { validateTransition, RECEIVING_SESSION_TRANSITIONS } from "../utils/stateTransition.js";
 import { AppError } from "../utils/appError.js";
 import pino from "pino";
@@ -158,6 +159,11 @@ export async function startSession(
       .where(and(eq(purchaseOrder.poId, poId), eq(purchaseOrder.organisationId, orgId)));
 
     if (!po) throw new Error("Purchase order not found");
+
+    // A delivery is received where it was ordered for: the session's location decides whose stock grows.
+    if (po.storeLocationId !== locationId) {
+      throw new AppError(403, "LOCATION_NOT_ALLOWED", "This purchase order belongs to another location");
+    }
 
     // Resume an existing ACTIVE session whatever the PO's status claims, because
     // the two genuinely disagree in both directions and every disagreement used
@@ -579,7 +585,7 @@ export async function confirmReceipt(sessionId: string, orgId: number, actorUser
         const { baseQty } = await resolveToBase(batchIngredientId, receivedQty, line.orderedUnit);
         conversions.set(line.receivingLineId, { baseQty, batchIngredientId });
       } catch (err) {
-        if (!(err instanceof Error && err.message.startsWith("Cannot convert"))) throw err;
+        if (!(err instanceof IncompatibleUnitsError)) throw err;
         unconvertible.push({ ingredientId: batchIngredientId, unit: line.orderedUnit });
       }
     }
@@ -838,6 +844,10 @@ export async function cancelSession(sessionId: string, orgId: number, actorUserI
       .where(and(eq(purchaseOrder.poId, session.poId), eq(purchaseOrder.organisationId, orgId)));
 
     if (!po) throw new Error("Receiving session not found");
+
+    if (session.status === "COMPLETED") {
+      throw new AppError(409, "ALREADY_CONFIRMED", "This delivery has already been confirmed");
+    }
 
     validateTransition(session.status, "CANCELLED", RECEIVING_SESSION_TRANSITIONS, "receiving session");
 

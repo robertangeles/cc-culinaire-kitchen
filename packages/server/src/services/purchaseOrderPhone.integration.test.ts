@@ -14,6 +14,7 @@ import {
   organisation,
   user,
   userOrganisation,
+  userStoreLocation,
   storeLocation,
   supplier,
   ingredient,
@@ -35,7 +36,8 @@ import { handleCreatePO, handleClonePO } from "../controllers/purchaseOrderContr
  *   - an expected-delivery sort, soonest first
  *   - the supplier's phone, and who is receiving a PO right now
  *   - detail carrying the same totalValue / rejectedReason / sentAt as the list
- *   - a user holding only `purchasing:receive` (no `inventory:count`) sees only the receiving queue
+ *   - a user holding only `purchasing:receive` (no `inventory:count`) sees only the receiving queue,
+ *     and only at the locations they are assigned to
  *
  * Gated on TENANT_IT=1 (the repo's real-DB gate). Self-cleaning.
  */
@@ -47,9 +49,11 @@ const fx = {
   receiverId: 0,
   orgId: 0,
   locId: "",
+  // A second location of the same organisation, which the receiver is not assigned to.
+  locB: "",
   supplierId: "",
   ingId: "",
-  po: {} as Record<"draft" | "sentLate" | "sentSoon" | "sentNoDate" | "receiving", string>,
+  po: {} as Record<"draft" | "sentLate" | "sentSoon" | "sentNoDate" | "receiving" | "sentElsewhere", string>,
   sessionId: "",
   // A second organisation: its ids must never be usable from the first.
   other: { orgId: 0, locId: "", supplierId: "", ingId: "" },
@@ -60,6 +64,7 @@ function call(
   handler: (req: Request, res: Response, next: (e?: unknown) => void) => Promise<void>,
   req: object,
   permissions: string[] = ["inventory:count"],
+  sub: number = fx.userId,
 ) {
   return new Promise<{ status: number; body: unknown }>((resolveCall, reject) => {
     let status = 200;
@@ -75,7 +80,7 @@ function call(
       headersSent: false,
     } as unknown as Response;
     // Errors the controller passes on reach the real error handler, as in the app.
-    handler({ user: { sub: fx.userId, roles: [], permissions }, ...req } as unknown as Request, res, (e) => errorHandler(e as Error, {} as Request, res, () => {})).catch(reject);
+    handler({ user: { sub, roles: [], permissions }, ...req } as unknown as Request, res, (e) => errorHandler(e as Error, {} as Request, res, () => {})).catch(reject);
   });
 }
 
@@ -109,6 +114,20 @@ describe.skipIf(!RUN)("purchase order list and detail for the phone (real DB)", 
         inventoryActive: true,
       })
       .returning({ id: storeLocation.storeLocationId });
+    [{ id: fx.locB }] = await db
+      .insert(storeLocation)
+      .values({
+        organisationId: fx.orgId,
+        locationName: `${fx.tag}-locb`,
+        classification: "branch",
+        storeKey: `${fx.tag}-b`.slice(0, 25),
+        createdBy: fx.userId,
+        inventoryActive: true,
+      })
+      .returning({ id: storeLocation.storeLocationId });
+    // The receiver is plain staff, assigned to the first location only.
+    await db.insert(userOrganisation).values({ userId: fx.receiverId, organisationId: fx.orgId, role: "member" });
+    await db.insert(userStoreLocation).values({ userId: fx.receiverId, storeLocationId: fx.locId });
 
     [{ id: fx.ingId }] = await db
       .insert(ingredient)
@@ -189,6 +208,7 @@ describe.skipIf(!RUN)("purchase order list and detail for the phone (real DB)", 
     await mk("sentSoon", "SENT", { expectedDeliveryDate: new Date(Date.now() + 1 * day), totalValue: "10", sentAt: new Date() });
     await mk("sentNoDate", "SENT", { totalValue: "10", sentAt: new Date() });
     await mk("receiving", "RECEIVING", { expectedDeliveryDate: new Date(Date.now() + 3 * day) });
+    await mk("sentElsewhere", "SENT", { storeLocationId: fx.locB, totalValue: "10", sentAt: new Date() });
 
     const [session] = await db
       .insert(receivingSession)
@@ -212,7 +232,8 @@ describe.skipIf(!RUN)("purchase order list and detail for the phone (real DB)", 
     }
     if (fx.supplierId) await db.delete(supplier).where(eq(supplier.supplierId, fx.supplierId));
     if (fx.ingId) await db.delete(ingredient).where(eq(ingredient.ingredientId, fx.ingId));
-    if (fx.locId) await db.delete(storeLocation).where(eq(storeLocation.storeLocationId, fx.locId));
+    if (fx.receiverId) await db.delete(userStoreLocation).where(eq(userStoreLocation.userId, fx.receiverId));
+    for (const id of [fx.locId, fx.locB]) if (id) await db.delete(storeLocation).where(eq(storeLocation.storeLocationId, id));
     if (fx.other.supplierId) await db.delete(supplier).where(eq(supplier.supplierId, fx.other.supplierId));
     if (fx.other.ingId) await db.delete(ingredient).where(eq(ingredient.ingredientId, fx.other.ingId));
     if (fx.other.locId) await db.delete(storeLocation).where(eq(storeLocation.storeLocationId, fx.other.locId));
@@ -275,8 +296,19 @@ describe.skipIf(!RUN)("purchase order list and detail for the phone (real DB)", 
   });
 
   it("caps the page at 100 rows", async () => {
-    const out = await call(handleListPOs, { query: { limit: "5000", storeLocationId: fx.locId } });
+    await db.insert(purchaseOrder).values(
+      Array.from({ length: 101 }, (_, i) => ({
+        organisationId: fx.orgId,
+        storeLocationId: fx.locB,
+        supplierId: fx.supplierId,
+        poNumber: `${fx.tag}-cap-${i}`,
+        status: "DRAFT",
+        createdByUserId: fx.userId,
+      })),
+    );
+    const out = await call(handleListPOs, { query: { limit: "5000", storeLocationId: fx.locB } });
     expect(out.status).toBe(200); // capped, not rejected: a client asking for "everything" still gets a page
+    expect(out.body).toHaveLength(100);
   });
 
   it("the web's plain call (location only) still returns every status, newest first", async () => {
@@ -310,6 +342,44 @@ describe.skipIf(!RUN)("purchase order list and detail for the phone (real DB)", 
       const draft = await call(handleGetPODetail, { params: { id: fx.po.draft } }, receiveOnly);
       expect(draft.status).toBe(404);
     });
+
+    // The receiver is assigned to the first location; `sentElsewhere` waits at the second.
+    it("lists only the deliveries of the locations they are assigned to", async () => {
+      const out = await call(handleListPOs, { query: {} }, receiveOnly, fx.receiverId);
+      expect(out.status).toBe(200);
+      const poIds = (out.body as Array<{ poId: string }>).map((r) => r.poId);
+      expect(poIds).toContain(fx.po.sentSoon);
+      expect(poIds).not.toContain(fx.po.sentElsewhere);
+    });
+
+    it("cannot list another location's deliveries by naming it", async () => {
+      const out = await call(handleListPOs, { query: { storeLocationId: fx.locB } }, receiveOnly, fx.receiverId);
+      expect(out).toMatchObject({ status: 403, body: { code: "LOCATION_NOT_ALLOWED" } });
+    });
+
+    it("opens a delivery at their own location but not one at another", async () => {
+      const own = await call(handleGetPODetail, { params: { id: fx.po.sentSoon } }, receiveOnly, fx.receiverId);
+      expect(own.status).toBe(200);
+      const elsewhere = await call(handleGetPODetail, { params: { id: fx.po.sentElsewhere } }, receiveOnly, fx.receiverId);
+      expect(elsewhere).toMatchObject({ status: 403, body: { code: "LOCATION_NOT_ALLOWED" } });
+    });
+
+    it("gets an empty queue, not the organisation's, when assigned to no location", async () => {
+      await db.delete(userStoreLocation).where(eq(userStoreLocation.userId, fx.receiverId));
+      try {
+        const out = await call(handleListPOs, { query: {} }, receiveOnly, fx.receiverId);
+        expect(out).toMatchObject({ status: 200, body: [] });
+      } finally {
+        await db.insert(userStoreLocation).values({ userId: fx.receiverId, storeLocationId: fx.locId });
+      }
+    });
+  });
+
+  it("an inventory:count holder still sees every location's orders, as before", async () => {
+    const list = await call(handleListPOs, { query: { status: "SENT" } }, ["inventory:count"], fx.receiverId);
+    expect((list.body as Array<{ poId: string }>).map((r) => r.poId)).toContain(fx.po.sentElsewhere);
+    const detail = await call(handleGetPODetail, { params: { id: fx.po.sentElsewhere } }, ["inventory:count"], fx.receiverId);
+    expect(detail.status).toBe(200);
   });
 
 describe("create and clone PO stay inside the caller's organisation (real DB)", () => {

@@ -5,8 +5,8 @@ import {
   confirmedMessage,
   expectedLabel,
   failureMessage,
+  finishedElsewhere,
   formatQty,
-  isAlreadyDone,
   issueCount,
   lineSummary,
   priceInput,
@@ -17,6 +17,7 @@ import {
 
 const line = (over: Partial<ReceivingLine> = {}): ReceivingLine => ({
   receivingLineId: "r1",
+  poLineId: "pl1",
   ingredientId: "i1",
   ingredientName: "Flour",
   orderedQty: "5.0000",
@@ -57,17 +58,28 @@ describe("reject", () => {
 });
 
 describe("all good", () => {
-  it("sends the ordered quantity so a line flipped back from short never stocks the short quantity", () => {
-    expect(allGood(line({ status: "SHORT", receivedQty: "2" }))).toEqual({ status: "RECEIVED", receivedQty: "5.0000" });
+  it("sends the status alone, as the web does: the server puts the quantity and price back", () => {
+    expect(allGood).toEqual({ status: "RECEIVED" });
   });
 });
 
 describe("line words", () => {
   it("says what happened in plain words", () => {
-    expect(lineSummary(line())).toBe("5 kg");
-    expect(lineSummary(line({ status: "SHORT", receivedQty: "3" }))).toBe("Short: 3 of 5 kg");
-    expect(lineSummary(line({ status: "REJECTED", receivedQty: "0" }))).toBe("Rejected: 5 kg");
-    expect(lineSummary(line({ status: "PRICE_VARIANCE", actualUnitCost: "3" }))).toBe("5 kg, price now $3.00/kg");
+    expect(lineSummary(line(), "2")).toBe("5 kg");
+    expect(lineSummary(line({ status: "SHORT", receivedQty: "3" }), "2")).toBe("Short: 3 of 5 kg");
+    expect(lineSummary(line({ status: "REJECTED", receivedQty: "0" }), "2")).toBe("Rejected: 5 kg");
+    expect(lineSummary(line({ status: "PRICE_VARIANCE", actualUnitCost: "3" }), "2")).toBe("5 kg, price now $3.00/kg");
+  });
+  // The server keeps one status per line but both fields: the row must not hide either.
+  it("a line flagged short and then repriced reads as both", () => {
+    expect(lineSummary(line({ status: "PRICE_VARIANCE", receivedQty: "3", actualUnitCost: "4" }), "2")).toBe("Short: 3 of 5 kg, price now $4.00/kg");
+  });
+  it("a line repriced and then flagged short reads as both", () => {
+    expect(lineSummary(line({ status: "SHORT", receivedQty: "3", actualUnitCost: "4" }), "2")).toBe("Short: 3 of 5 kg, price now $4.00/kg");
+  });
+  it("a price on a line the order had no price for is a changed price", () => {
+    expect(lineSummary(line({ status: "PRICE_VARIANCE", actualUnitCost: "4" }), null)).toBe("5 kg, price now $4.00/kg");
+    expect(lineSummary(line({ actualUnitCost: null }), null)).toBe("5 kg");
   });
   it("counts the flagged lines", () => {
     expect(issueCount([line(), line({ status: "SHORT" }), line({ status: "REJECTED" })])).toBe(2);
@@ -75,13 +87,21 @@ describe("line words", () => {
 });
 
 describe("errors", () => {
-  const unit = new ApiError("bad_request", "Cannot receive Tomatoes (case to kg): no conversion.", 400, { code: "UNIT_NOT_CONVERTIBLE" });
+  const unit = new ApiError("bad_request", "Cannot receive Tomatoes (case to kg): no conversion.", 400, undefined, "UNIT_NOT_CONVERTIBLE");
   it("keeps the server's sentence for an unconvertible unit", () => expect(failureMessage(unit)).toContain("Tomatoes"));
   it("uses the client's wording for an offline phone", () => expect(failureMessage(new ApiError("network"))).toBe("Can't reach the server. Try again."));
   it("tells a refused permission apart", () => expect(failureMessage(new ApiError("forbidden"))).toContain("permission"));
-  it("recognises a confirm that already happened", () => {
-    expect(isAlreadyDone(new ApiError("conflict", "x", 409, { code: "ALREADY_CONFIRMED" }))).toBe(true);
-    expect(isAlreadyDone(new ApiError("network"))).toBe(false);
+  it("recognises a delivery that was already confirmed", () => {
+    expect(finishedElsewhere(new ApiError("conflict", "x", 409, undefined, "ALREADY_CONFIRMED"))?.message).toContain("already confirmed");
+  });
+  it("tells a delivery cancelled on another phone apart from a confirmed one", () => {
+    const cancelled = finishedElsewhere(new ApiError("conflict", "Cannot transition receiving session from CANCELLED to COMPLETED", 409, undefined, "INVALID_STATE"));
+    expect(cancelled?.message).toContain("cancelled");
+    expect(cancelled?.message).not.toContain("confirmed");
+  });
+  it("does not call any other refusal finished", () => {
+    expect(finishedElsewhere(new ApiError("conflict", "x", 409))).toBeNull();
+    expect(finishedElsewhere(new ApiError("network"))).toBeNull();
   });
 });
 

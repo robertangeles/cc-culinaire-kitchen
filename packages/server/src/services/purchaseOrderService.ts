@@ -58,6 +58,8 @@ export interface ListPOOpts {
   /** Any of these statuses. Omitted = every status (the web's plain call). */
   statuses?: string[];
   storeLocationId?: string;
+  /** Only these locations (a receiving-only caller's own). Omitted = every location of the organisation. */
+  storeLocationIds?: string[];
   limit?: number;
   offset?: number;
   /** "expected" = soonest expected delivery first, undated last. Default: newest created first. */
@@ -158,6 +160,9 @@ export async function listPOs(orgId: number, opts: ListPOOpts = {}) {
   if (opts.storeLocationId) {
     conditions.push(eq(purchaseOrder.storeLocationId, opts.storeLocationId));
   }
+  if (opts.storeLocationIds) {
+    conditions.push(inArray(purchaseOrder.storeLocationId, opts.storeLocationIds));
+  }
 
   const limit = opts.limit ?? 50;
   const offset = opts.offset ?? 0;
@@ -217,7 +222,6 @@ export async function getPODetail(poId: string, orgId: number) {
       rejectedReason: purchaseOrder.rejectedReason,
       totalValue: purchaseOrder.totalValue,
       expectedDeliveryDate: purchaseOrder.expectedDeliveryDate,
-      submittedAt: purchaseOrder.submittedAt,
       sentAt: purchaseOrder.sentAt,
       supplierEmailedAt: purchaseOrder.supplierEmailedAt,
       createdDttm: purchaseOrder.createdDttm,

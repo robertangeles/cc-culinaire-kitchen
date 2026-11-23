@@ -191,7 +191,7 @@ function withTxRows(rowsByCall: unknown[][]) {
 describe("receivingService — transaction + audit invariants", () => {
   describe("startSession", () => {
     it("wraps writes in db.transaction and writes a 'create' audit row", async () => {
-      const po = { poId: "po-1", status: "SENT", organisationId: 7 };
+      const po = { poId: "po-1", status: "SENT", organisationId: 7, storeLocationId: "loc-1" };
       const session = { sessionId: "session-1", poId: "po-1", storeLocationId: "loc-1", receivedByUserId: 42, status: "ACTIVE" };
 
       withTxRows([
@@ -220,7 +220,7 @@ describe("receivingService — transaction + audit invariants", () => {
     // (cancelSession resets the PO unconditionally). That combination used to
     // throw "already in progress" with no path to the session at all.
     it("resumes an ACTIVE session on a PO still marked SENT instead of throwing", async () => {
-      const po = { poId: "po-1", status: "SENT", organisationId: 7 };
+      const po = { poId: "po-1", status: "SENT", organisationId: 7, storeLocationId: "loc-1" };
       const orphan = { sessionId: "session-orphan", poId: "po-1", status: "ACTIVE" };
       const lines = [{ receivingLineId: "rl-1", ingredientName: "Belicard" }];
 
@@ -236,7 +236,7 @@ describe("receivingService — transaction + audit invariants", () => {
     });
 
     it("rejects a PO in a terminal status when no ACTIVE session exists", async () => {
-      const po = { poId: "po-1", status: "RECEIVED", organisationId: 7 };
+      const po = { poId: "po-1", status: "RECEIVED", organisationId: 7, storeLocationId: "loc-1" };
 
       withTxRows([[po], []]);
 

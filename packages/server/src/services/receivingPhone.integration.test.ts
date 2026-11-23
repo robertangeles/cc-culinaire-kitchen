@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { config } from "dotenv";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { randomUUID } from "node:crypto";
 import { applyEnvPrefix } from "../utils/envShim.js";
 
 // Same .env bootstrap as the other real-DB suites (see mobileReplay.integration.test.ts).
@@ -292,7 +293,50 @@ describe.skipIf(!RUN)("receiving rules for the phone (real DB)", () => {
     });
   });
 
+  describe("a delivery belongs to the order's own location", () => {
+    it("refuses to start it at another location, and leaves the order waiting", async () => {
+      const [po] = await db
+        .insert(purchaseOrder)
+        .values({
+          organisationId: fx.orgId,
+          storeLocationId: fx.locId,
+          supplierId: fx.supplierId,
+          poNumber: `${fx.tag}-${fx.poIds.length}`.slice(0, 50),
+          status: "SENT",
+          createdByUserId: fx.userA,
+        })
+        .returning({ id: purchaseOrder.poId });
+      fx.poIds.push(po.id);
+
+      await expect(receivingService.startSession(po.id, randomUUID(), fx.userA, fx.orgId)).rejects.toMatchObject({
+        statusCode: 403,
+        code: "LOCATION_NOT_ALLOWED",
+      });
+      const [after] = await db.select({ status: purchaseOrder.status }).from(purchaseOrder).where(eq(purchaseOrder.poId, po.id));
+      expect(after.status).toBe("SENT");
+      expect(await db.select().from(receivingSession).where(eq(receivingSession.poId, po.id))).toHaveLength(0);
+    });
+  });
+
   describe("two phones on one session", () => {
+    it("tells a phone that cancels a delivery another phone confirmed that it is already confirmed", async () => {
+      const s = await sentPO([{ ingredientId: fx.flourId, qty: "5", unit: "kg" }]);
+      await receivingService.confirmReceipt(s.sessionId, fx.orgId, fx.userA);
+      await expect(receivingService.cancelSession(s.sessionId, fx.orgId, fx.userB)).rejects.toMatchObject({
+        statusCode: 409,
+        code: "ALREADY_CONFIRMED",
+      });
+    });
+
+    it("tells a phone that confirms a delivery another phone cancelled that it is not active, never that it is confirmed", async () => {
+      const s = await sentPO([{ ingredientId: fx.flourId, qty: "5", unit: "kg" }]);
+      await receivingService.cancelSession(s.sessionId, fx.orgId, fx.userA);
+      await expect(receivingService.confirmReceipt(s.sessionId, fx.orgId, fx.userB)).rejects.toMatchObject({
+        statusCode: 409,
+        code: "INVALID_STATE",
+      });
+    });
+
     it("tells the second phone the session was started by someone else", async () => {
       const s = await sentPO([{ ingredientId: fx.flourId, qty: "5", unit: "kg" }]);
       const again = await receivingService.startSession(s.poId, fx.locId, fx.userB, fx.orgId);

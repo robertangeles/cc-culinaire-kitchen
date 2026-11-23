@@ -45,7 +45,7 @@ export default function ReceiveDelivery() {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: c.bg }}>
         <Column style={{ padding: space.xl, gap: space.lg }}>
-          <Text variant="title">{gone ? "Already done" : "Couldn't open this delivery"}</Text>
+          <Text variant="title">{r.phase.kind === "gone" ? r.phase.title : "Couldn't open this delivery"}</Text>
           <Text>{r.phase.message}</Text>
           {gone ? null : <Button label="Try again" onPress={() => void r.reload()} />}
           <Button kind={gone ? "primary" : "quiet"} label="Back to deliveries" onPress={toQueue} />
@@ -96,6 +96,7 @@ export default function ReceiveDelivery() {
             <View key={line.receivingLineId} style={[rowDivider(i, c.border), panelOpen && openId !== line.receivingLineId ? { display: "none" } : null]}>
               <LineCard
                 line={line}
+                orderUnitCost={r.po?.lines.find((l) => l.lineId === line.poLineId)?.unitCost ?? null}
                 open={openId === line.receivingLineId}
                 saving={r.saving.has(line.receivingLineId)}
                 error={r.lineErrors[line.receivingLineId]}

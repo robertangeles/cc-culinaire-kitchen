@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { PurchaseOrderDetail, ReceivingApi, ReceivingSession } from "./receivingApi";
-import { failureMessage, isAlreadyDone, type ConfirmResult, type LineInput, type ReceivingLine } from "./receivingFlow";
+import { failureMessage, finishedElsewhere, type ConfirmResult, type LineInput, type ReceivingLine } from "./receivingFlow";
 
 export type Phase =
   | { kind: "loading" }
   | { kind: "error"; message: string }
   | { kind: "ready" }
   | { kind: "done"; result: ConfirmResult }
-  | { kind: "gone"; message: string };
+  | { kind: "gone"; title: string; message: string };
 
 /**
  * One delivery being received. The server holds the truth: every line change waits for the server's
@@ -84,7 +84,8 @@ export function useReceivingSession(api: ReceivingApi, poId: string, currentUser
       if (alive.current) setPhase({ kind: "done", result });
     } catch (err) {
       if (!alive.current) return;
-      if (isAlreadyDone(err)) setPhase({ kind: "gone", message: "This delivery was already confirmed." });
+      const finished = finishedElsewhere(err);
+      if (finished) setPhase({ kind: "gone", ...finished });
       else setConfirmError(failureMessage(err));
     } finally {
       if (alive.current) setConfirming(false);
@@ -98,7 +99,10 @@ export function useReceivingSession(api: ReceivingApi, poId: string, currentUser
       await api.cancel(session.sessionId);
       return true;
     } catch (err) {
-      if (alive.current) setConfirmError(failureMessage(err));
+      if (!alive.current) return false;
+      const finished = finishedElsewhere(err);
+      if (finished) setPhase({ kind: "gone", ...finished });
+      else setConfirmError(failureMessage(err));
       return false;
     }
   }, [api, session]);
