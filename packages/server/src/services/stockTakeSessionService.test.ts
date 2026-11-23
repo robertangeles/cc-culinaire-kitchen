@@ -143,12 +143,12 @@ describe("openOpeningCount", () => {
 describe("submitSessionForReview", () => {
   it("throws NotFoundError when session does not exist", async () => {
     mockSelectOnce([]);
-    await expect(submitSessionForReview("s1", 1)).rejects.toThrow(NotFoundError);
+    await expect(submitSessionForReview("s1", 1, { canFinishOpening: true })).rejects.toThrow(NotFoundError);
   });
 
   it("throws InvalidStateError when session is already PENDING_REVIEW", async () => {
     mockSelectOnce([{ sessionId: "s1", sessionStatus: "PENDING_REVIEW", organisationId: 1 }]);
-    await expect(submitSessionForReview("s1", 1)).rejects.toThrow(InvalidStateError);
+    await expect(submitSessionForReview("s1", 1, { canFinishOpening: true })).rejects.toThrow(InvalidStateError);
   });
 
   it("throws ValidationError when no categories are submitted", async () => {
@@ -156,7 +156,7 @@ describe("submitSessionForReview", () => {
     mockSelectOnce([{ sessionId: "s1", sessionStatus: "OPEN", sessionType: "REGULAR", organisationId: 1 }]);
     // Second select: categories — all NOT_STARTED, none SUBMITTED
     mockSelectOnce([{ categoryId: "c1", categoryStatus: "NOT_STARTED" }]);
-    await expect(submitSessionForReview("s1", 1)).rejects.toThrow(ValidationError);
+    await expect(submitSessionForReview("s1", 1, { canFinishOpening: true })).rejects.toThrow(ValidationError);
   });
 
   it("throws ValidationError when categories are still IN_PROGRESS", async () => {
@@ -167,7 +167,7 @@ describe("submitSessionForReview", () => {
       { categoryId: "c1", categoryStatus: "SUBMITTED" },
       { categoryId: "c2", categoryStatus: "IN_PROGRESS" },
     ]);
-    await expect(submitSessionForReview("s1", 1)).rejects.toThrow(ValidationError);
+    await expect(submitSessionForReview("s1", 1, { canFinishOpening: true })).rejects.toThrow(ValidationError);
   });
 });
 

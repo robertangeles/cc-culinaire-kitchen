@@ -268,7 +268,7 @@ Differences from the web (`packages/client/src/components/inventory/ConsumptionL
 | Counts only "N today" | Per-unit totals; "Return to Stockroom" entries are shown apart, never added to usage | Mixed units cannot be added. |
 | A quantity of zero or less is refused on the form only | Refused on the form and again before an edit is queued | The edit route stores any number. |
 | Quick buttons: none | "Log again" for the latest six items, with unit, quantity and reason | The 15-second entry. |
-| Location Transfer view (create, send, receive) | Not on the phone | Create, send and receive are not safe to replay (no client id or guard; the plan puts it in Wave 3 with the server work). Nothing is queued that could double-apply. |
+| Location Transfer view (create, send, receive) | Not on the phone | Not built yet (Wave 3). The server is ready for it: create takes a phone-made `transferId` and answers a repeat with 200, and a second send or receive is refused with 409 `ALREADY_CONFIRMED` (CHANGELOG, mobile Wave 3 server). |
 | No adjustment screen | None | The web has none either: stock is changed by counts, and the only way to put stock back is the Return to Stockroom reason. |
 
 ## Move between areas (`src/movements`, `app/(app)/(moves)`)

@@ -196,4 +196,13 @@ describe("StockMovementForm", () => {
     expect(screen.getByText("Shiraz")).toBeInTheDocument();
     expect(screen.getByText(/Stock Room → Bar/)).toBeInTheDocument();
   });
+
+  it("shows a dash, not zero, for a quantity the server left out (no inventory:cost)", async () => {
+    const { currentQty: _hidden, ...blind } = wine;
+    mockItems = [blind];
+    render(<StockMovementForm />);
+    fireEvent.change(screen.getByPlaceholderText(/search items/i), { target: { value: "Shiraz" } });
+
+    expect((await screen.findByRole("button", { name: /Shiraz/ })).textContent).toContain("— bottle on site");
+  });
 });

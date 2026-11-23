@@ -8,7 +8,8 @@
  *   row and deduct FOH stock. The sale already happened at the counter, so an
  *   oversell (FOH going negative) is FLAGGED, never rejected. Invalid lines
  *   (unknown item / not a FOH consumable / bad qty) are skipped and returned
- *   in `rejected` — valid lines still post (no silent drops).
+ *   in `rejected` — valid lines still post (no silent drops). A line may carry the
+ *   id the client made (`fohSaleId`): a resend finds that sale and deducts nothing.
  * getFohSalesReport:  revenue / COGS / margin per item, COGS via location WAC.
  */
 
@@ -17,6 +18,8 @@ import { db } from "../db/index.js";
 import { fohSale, stockLevel, ingredient } from "../db/schema.js";
 
 export interface SaleLineInput {
+  /** Made by the phone so a resent line finds its own sale instead of recording a second one. */
+  fohSaleId?: string;
   ingredientId: string;
   quantity: number;
   unitPrice?: number | null;
@@ -29,12 +32,16 @@ export interface RecordedSale {
   quantity: number;
   fohQty: number;
   oversold: boolean;
+  /** True when this line's `fohSaleId` was already recorded: nothing was written, `fohQty` is the shelf now. */
+  replay: boolean;
 }
 
 export interface RejectedSale {
   ingredientId: string;
   quantity: number;
   reason: string;
+  /** VALIDATION for a line the shop cannot sell, CONFLICT for an id another person's sale holds. */
+  code: "VALIDATION" | "CONFLICT";
 }
 
 /** Return the set of FOH-consumable ingredient IDs for an org (active only). */
@@ -75,6 +82,7 @@ export async function recordFohSales(
         ingredientId: line.ingredientId,
         quantity: line.quantity,
         reason: "Not a FOH consumable in this organisation",
+        code: "VALIDATION",
       });
       continue;
     }
@@ -83,6 +91,7 @@ export async function recordFohSales(
         ingredientId: line.ingredientId,
         quantity: line.quantity,
         reason: "Quantity must be greater than 0",
+        code: "VALIDATION",
       });
       continue;
     }
@@ -99,6 +108,39 @@ export async function recordFohSales(
           ),
         )
         .for("update");
+
+      const current = row ? Number(row.currentQty) : 0;
+      const oversold = current - line.quantity < 0;
+      const unitPrice = line.unitPrice ?? null;
+      const lineTotal = unitPrice !== null ? unitPrice * line.quantity : null;
+
+      // The sale row first: when its id is already taken, this line was recorded before and the shelf is not touched again.
+      const [sale] = await tx
+        .insert(fohSale)
+        .values({
+          fohSaleId: line.fohSaleId,
+          organisationId: orgId,
+          storeLocationId,
+          ingredientId: line.ingredientId,
+          quantity: String(line.quantity),
+          unitPrice: unitPrice !== null ? String(unitPrice) : null,
+          lineTotal: lineTotal !== null ? String(lineTotal) : null,
+          source,
+          oversoldInd: oversold,
+          soldAt: line.soldAt ?? new Date(),
+          createdBy: userId,
+        })
+        .onConflictDoNothing({ target: fohSale.fohSaleId })
+        .returning();
+      if (!sale) {
+        const [stored] = await tx.select().from(fohSale).where(eq(fohSale.fohSaleId, line.fohSaleId!));
+        if (stored.createdBy !== userId || stored.organisationId !== orgId) return { conflict: true as const };
+        const [shelf] = await tx
+          .select({ q: stockLevel.currentQty })
+          .from(stockLevel)
+          .where(and(eq(stockLevel.storeLocationId, stored.storeLocationId), eq(stockLevel.ingredientId, stored.ingredientId), eq(stockLevel.zone, "FOH")));
+        return { sale: stored, newQty: Number(shelf?.q ?? 0), oversold: stored.oversoldInd, replay: true };
+      }
 
       let newQty: number;
       if (!row) {
@@ -124,36 +166,21 @@ export async function recordFohSales(
           .where(eq(stockLevel.stockLevelId, row.stockLevelId));
       }
 
-      const oversold = newQty < 0;
-      const unitPrice = line.unitPrice ?? null;
-      const lineTotal = unitPrice !== null ? unitPrice * line.quantity : null;
-
-      const [sale] = await tx
-        .insert(fohSale)
-        .values({
-          organisationId: orgId,
-          storeLocationId,
-          ingredientId: line.ingredientId,
-          quantity: String(line.quantity),
-          unitPrice: unitPrice !== null ? String(unitPrice) : null,
-          lineTotal: lineTotal !== null ? String(lineTotal) : null,
-          source,
-          oversoldInd: oversold,
-          soldAt: line.soldAt ?? new Date(),
-          createdBy: userId,
-        })
-        .returning();
-
-      return { sale, newQty, oversold };
+      return { sale, newQty, oversold, replay: false };
     });
 
+    if ("conflict" in result) {
+      rejected.push({ ingredientId: line.ingredientId, quantity: line.quantity, reason: "That id is already used by another sale", code: "CONFLICT" });
+      continue;
+    }
     if (result.oversold) oversoldCount++;
     recorded.push({
       fohSaleId: result.sale.fohSaleId,
-      ingredientId: line.ingredientId,
-      quantity: line.quantity,
+      ingredientId: result.sale.ingredientId,
+      quantity: Number(result.sale.quantity),
       fohQty: result.newQty,
       oversold: result.oversold,
+      replay: result.replay,
     });
   }
 

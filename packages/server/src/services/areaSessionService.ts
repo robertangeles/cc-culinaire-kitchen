@@ -237,8 +237,9 @@ export interface AreaCountSheet {
  * sheet in shelf order, plus the reserved "Unassigned" bucket. Areas come in sheet order with
  * "Unassigned" last. The list is the same one D8 and D4 reason over (active areas of the
  * location), so a gap D8 reports is always an item the chef can see and count.
+ * A CATEGORY count (a regular one, or the opening inventory) gets one sheet per category row instead, holding
+ * the location's active items in that category (the location's category override first, as the web counter does).
  * @throws NotFoundError when the session is not in this organisation.
- * @throws ValidationError for a category count.
  */
 export async function getAreaCountSheets(sessionId: string, organisationId: number): Promise<AreaCountSheet[]> {
   const [session] = await db
@@ -246,17 +247,36 @@ export async function getAreaCountSheets(sessionId: string, organisationId: numb
     .from(stockTakeSession)
     .where(and(eq(stockTakeSession.sessionId, sessionId), eq(stockTakeSession.organisationId, organisationId)));
   if (!session) throw new NotFoundError("Session not found");
-  if (session.countMode !== "AREA") {
-    throw new ValidationError("This stock take counts by category, so it has no area sheets.");
-  }
 
   const rows = await db
     .select({ categoryId: stockTakeCategory.categoryId, categoryName: stockTakeCategory.categoryName })
     .from(stockTakeCategory)
-    .where(eq(stockTakeCategory.sessionId, sessionId));
+    .where(eq(stockTakeCategory.sessionId, sessionId))
+    .orderBy(asc(stockTakeCategory.categoryName));
   const inSession = new Map(rows.map((r) => [r.categoryName, r.categoryId]));
 
   const countUnit = sql<string>`coalesce(${locationIngredient.unitOverride}, ${ingredient.baseUnit})`;
+
+  if (session.countMode !== "AREA") {
+    const items = await db
+      .select({
+        category: sql<string>`coalesce(${locationIngredient.categoryOverride}, ${ingredient.ingredientCategory})`,
+        ingredientId: locationIngredient.ingredientId,
+        ingredientName: ingredient.ingredientName,
+        countUnit,
+      })
+      .from(locationIngredient)
+      .innerJoin(ingredient, eq(ingredient.ingredientId, locationIngredient.ingredientId))
+      .where(and(eq(locationIngredient.storeLocationId, session.storeLocationId), eq(locationIngredient.activeInd, true)))
+      .orderBy(asc(ingredient.ingredientName));
+    return rows.map((r) => ({
+      categoryId: r.categoryId,
+      categoryName: r.categoryName,
+      items: items
+        .filter((i) => i.category === r.categoryName)
+        .map((i) => ({ ingredientId: i.ingredientId, ingredientName: i.ingredientName, countUnit: i.countUnit, alsoIn: [] })),
+    }));
+  }
   const assigned = await db
     .select({
       areaName: storageArea.areaName,

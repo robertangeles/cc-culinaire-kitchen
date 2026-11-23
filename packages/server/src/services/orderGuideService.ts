@@ -251,6 +251,7 @@ export async function getGuideItems(
       and(
         eq(stockLevel.ingredientId, orderGuideItem.ingredientId),
         eq(stockLevel.storeLocationId, locationId),
+        eq(stockLevel.zone, "BOH"),
       ),
     )
     .leftJoin(

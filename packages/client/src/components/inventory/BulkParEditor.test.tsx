@@ -90,4 +90,13 @@ describe("BulkParEditor", () => {
     const saveBtn = screen.getByText("Save pars").closest("button")!;
     expect(saveBtn.hasAttribute("disabled")).toBe(true);
   });
+
+  it("shows a dash, not zero, for a quantity the server left out (no inventory:cost)", () => {
+    const { currentQty: _hidden, ...blind } = WINE;
+    mockItems = [blind];
+    render(<BulkParEditor />);
+
+    expect(screen.getByText("—")).toBeTruthy();
+    expect(screen.queryByText("0.0")).toBeNull();
+  });
 });

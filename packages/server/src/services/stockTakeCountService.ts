@@ -348,14 +348,25 @@ async function getExpectedOnHand(
       and(
         eq(stockLevel.storeLocationId, stockTakeSession.storeLocationId),
         eq(stockLevel.ingredientId, ingredientId),
+        // A count is of the store room; the front-of-house shelf has its own row and its own count.
+        eq(stockLevel.zone, "BOH"),
       ),
     )
     .where(eq(stockTakeCategory.categoryId, currentCategoryId));
   return row ? Number(row.currentQty) : null;
 }
 
-/** Auto-check: if all claimed categories are SUBMITTED, advance session to PENDING_REVIEW. */
+/**
+ * Auto-check: if all claimed categories are SUBMITTED, advance session to PENDING_REVIEW. A flagged recount
+ * round advances the same way. An opening count never does: a manager finishes it with submit-for-review.
+ */
 async function checkAndAdvanceSession(sessionId: string) {
+  const [session] = await db
+    .select({ sessionType: stockTakeSession.sessionType })
+    .from(stockTakeSession)
+    .where(eq(stockTakeSession.sessionId, sessionId));
+  if (session?.sessionType === "OPENING") return;
+
   const [counts] = await db
     .select({
       claimed: sql<number>`count(*) filter (where ${stockTakeCategory.categoryStatus} != 'NOT_STARTED')`,
@@ -385,6 +396,6 @@ async function checkAndAdvanceSession(sessionId: string) {
         submittedDttm: new Date(),
         updatedDttm: new Date(),
       })
-      .where(and(eq(stockTakeSession.sessionId, sessionId), eq(stockTakeSession.sessionStatus, "OPEN")));
+      .where(and(eq(stockTakeSession.sessionId, sessionId), inArray(stockTakeSession.sessionStatus, ["OPEN", "FLAGGED"])));
   }
 }
