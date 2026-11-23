@@ -73,14 +73,15 @@ async function getShiftRow(orgId: number, shiftId: string) {
   return row;
 }
 
-function parseFilterDate(value: string): Date {
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) throw new RosterError("from/to must be valid dates", 400, "VALIDATION");
-  return parsed;
-}
-
 const DAY_MS = 24 * 60 * 60 * 1000;
 const BARE_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+function parseFilterDate(value: string): Date {
+  const parsed = new Date(value);
+  const isRealDate = !Number.isNaN(parsed.getTime()) && (!BARE_DATE.test(value) || parsed.toISOString().slice(0, 10) === value);
+  if (!isRealDate) throw new RosterError("from/to must be valid dates", 400, "VALIDATION");
+  return parsed;
+}
 
 /**
  * The UTC instants [from, toExclusive) covering the calendar days `from`..`to` inclusive.

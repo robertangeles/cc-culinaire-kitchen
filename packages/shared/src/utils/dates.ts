@@ -55,11 +55,9 @@ export function durationHours(startIso: string, endIso: string): number {
 
 /** The calendar day `d` falls on in `timeZone` (the device's zone when omitted), as a day count. */
 function localDayNumber(d: Date, timeZone?: string): number {
-  const [year, month, day] = new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" })
-    .format(d)
-    .split("-")
-    .map(Number);
-  return Date.UTC(year, month - 1, day) / 86400000;
+  const parts = new Intl.DateTimeFormat("en-US", { timeZone, year: "numeric", month: "numeric", day: "numeric" }).formatToParts(d);
+  const part = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find((p) => p.type === type)?.value);
+  return Date.UTC(part("year"), part("month") - 1, part("day")) / 86400000;
 }
 
 /** Local-calendar-day boundaries crossed between two ISO instants (0 = same day), in `timeZone` (the device's zone when omitted). */
