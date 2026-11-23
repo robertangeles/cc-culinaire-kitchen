@@ -4,9 +4,12 @@ import type { AttentionReason, OutboxEntry, OutboxStatus, SaveLineCommand } from
 export interface OutboxRow {
   id: string;
   user_id: number;
+  type: string;
+  version: number;
   status: OutboxStatus;
   command: string;
   attempts: number;
+  server_failures: number;
   next_attempt_at: number;
   created_at: number;
   updated_at: number;
@@ -18,9 +21,12 @@ export function toRow(e: OutboxEntry): OutboxRow {
   return {
     id: e.id,
     user_id: e.userId,
+    type: e.type,
+    version: e.version,
     status: e.status,
     command: JSON.stringify(e.command),
     attempts: e.attempts,
+    server_failures: e.serverFailures,
     next_attempt_at: e.nextAttemptAt,
     created_at: e.createdAt,
     updated_at: e.updatedAt,
@@ -33,9 +39,12 @@ export function fromRow(r: OutboxRow): OutboxEntry {
   return {
     id: r.id,
     userId: r.user_id,
+    type: r.type,
+    version: r.version,
     status: r.status,
     command: JSON.parse(r.command) as SaveLineCommand,
     attempts: r.attempts,
+    serverFailures: r.server_failures,
     nextAttemptAt: r.next_attempt_at,
     createdAt: r.created_at,
     updatedAt: r.updated_at,

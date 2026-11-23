@@ -5,6 +5,9 @@ import type { OutboxEntry } from "./outbox";
 const base: OutboxEntry = {
   id: "a",
   userId: 7,
+  type: "count.saveLine",
+  version: 1,
+  serverFailures: 0,
   status: "SAVED_LOCAL",
   command: { sessionId: "S", categoryName: "Bar", ingredientId: "i", ingredientName: "Shiraz", rawQty: 2.5, countedUnit: "kg", claimRevision: 3 },
   attempts: 2,

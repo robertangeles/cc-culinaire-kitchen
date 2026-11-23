@@ -122,7 +122,7 @@ describe("areas list", () => {
   it("tells the chef when another account's counts are waiting on this phone", async () => {
     const { rows, counts } = await makeHarness();
     // Left by someone who signed out with a count unsent.
-    rows.set("theirs", { id: "theirs", userId: 99, status: "SAVED_LOCAL", attempts: 0, nextAttemptAt: 0, createdAt: 1, updatedAt: 1, command: { sessionId: "S1", categoryName: "Bar", ingredientId: "i1", ingredientName: "Shiraz", rawQty: 1, countedUnit: "kg", claimRevision: 1 } });
+    rows.set("theirs", { id: "theirs", userId: 99, type: "count.saveLine", version: 1, serverFailures: 0, status: "SAVED_LOCAL", attempts: 0, nextAttemptAt: 0, createdAt: 1, updatedAt: 1, command: { sessionId: "S1", categoryName: "Bar", ingredientId: "i1", ingredientName: "Shiraz", rawQty: 1, countedUnit: "kg", claimRevision: 1 } });
     await counts.refresh();
     render(<Areas />);
     expect(screen.getByText(/1 count from another account is waiting on this phone/)).toBeTruthy();

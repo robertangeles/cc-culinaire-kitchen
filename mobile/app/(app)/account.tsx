@@ -1,4 +1,6 @@
 import { session, useSession } from "../../src/runtime/appContext";
+import { QueueStatus } from "../../src/outbox/QueueStatus";
+import { WASTE_TYPES } from "../../src/waste/wasteCommands";
 import { visibleTabs } from "../../src/shell/tabs";
 import { Screen } from "../../src/ui/Screen";
 import { Text } from "../../src/ui/Text";
@@ -25,6 +27,8 @@ export default function Account() {
           <Text>{location.locationName}</Text>
         </View>
       </Surface>
+      {/* What is waiting on this phone and what the server refused. Each module's command types are listed here (counts have their own screen). */}
+      <QueueStatus types={WASTE_TYPES} />
       {visibleTabs(user).length === 0 ? <Text variant="muted">Nothing on your account is available on the phone yet. Ask your manager.</Text> : null}
       {locations.length > 1 ? <Button kind="ghost" label="Change location" onPress={() => session.changeLocation()} /> : null}
       <Button kind="quiet" label="Sign out" onPress={() => void session.signOut()} />

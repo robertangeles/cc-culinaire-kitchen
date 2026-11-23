@@ -9,6 +9,12 @@ describe("which tabs a person sees", () => {
     expect(visibleTabs(person({ permissions: ["inventory:count"] })).map((t) => t.route)).toEqual(["(count)"]);
   });
 
+  it("shows the Waste tab to someone who holds waste:log, and only that: waste:read alone is the web's reports, not on the phone", () => {
+    expect(visibleTabs(person({ permissions: ["waste:log"] })).map((t) => t.route)).toEqual(["(waste)"]);
+    expect(visibleTabs(person({ permissions: ["waste:read"] }))).toEqual([]);
+    expect(visibleTabs(person({ permissions: ["inventory:count", "waste:log"] })).map((t) => t.route)).toEqual(["(count)", "(waste)"]);
+  });
+
   it("shows no module to someone with only unrelated permissions, or none", () => {
     expect(visibleTabs(person({ permissions: ["chat:access"] }))).toEqual([]);
     expect(visibleTabs(person())).toEqual([]);

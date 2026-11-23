@@ -15,7 +15,11 @@ export interface ModuleTab {
   anyPermission: string[];
 }
 
-export const moduleTabs: ModuleTab[] = [{ route: "(count)", title: "Count", icon: "count", anyPermission: ["inventory:count"] }];
+export const moduleTabs: ModuleTab[] = [
+  { route: "(count)", title: "Count", icon: "count", anyPermission: ["inventory:count"] },
+  // `waste:log` is the key to log, edit and delete your own entries (reports and the team view are `waste:read`, not on the phone yet).
+  { route: "(waste)", title: "Waste", icon: "waste", anyPermission: ["waste:log"] },
+];
 
 /** Administrators hold every permission implicitly, as on the web and the server. */
 export function hasAnyPermission(user: AuthUser, keys: string[]): boolean {
