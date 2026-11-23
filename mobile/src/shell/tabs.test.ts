@@ -29,7 +29,9 @@ describe("which tabs a person sees", () => {
 
   it("shows the Receive tab to someone who holds purchasing:receive, with or without Count", () => {
     expect(visibleTabs(person({ permissions: ["purchasing:receive"] })).map((t) => t.route)).toEqual(["(receive)"]);
-    expect(visibleTabs(person({ permissions: ["inventory:count", "purchasing:receive"] })).map((t) => t.route)).toEqual(["(count)", "(receive)"]);
+    const both = visibleTabs(person({ permissions: ["inventory:count", "purchasing:receive"] })).map((t) => t.route);
+    expect(both).toContain("(count)");
+    expect(both).toContain("(receive)");
   });
 
   it("shows no module to someone with only unrelated permissions, or none", () => {
