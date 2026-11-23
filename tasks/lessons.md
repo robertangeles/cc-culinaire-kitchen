@@ -1435,3 +1435,9 @@ builds all tables with CHECKs enforcing. Stop it again when done.
 - **Problem**: `scripts/localIntegrationDb.sh start` always uses `~/.cache/ck-it-pg` and `ls ... | sort -V | tail -1`, so with Postgres 16, 18 and 19 installed it picked 19 against a folder another worker had made with 18 ("control file appears to be corrupt"), and a second worker running `db:push` there would race the first. The default `pnpm` (9.15.9) also refuses `--frozen-lockfile` because it reads `overrides` from `package.json`, not `pnpm-workspace.yaml`.
 - **Fix**: Made a private cluster under the session scratch folder (own port, own `initdb` from the version that made nothing else), pushed the schema and seeded it there, and ran every pnpm command as `npx pnpm@10.31.0`.
 - **Rule**: When several workers share a machine, give each its own database folder and port, and do not run `db:push` against a folder you did not create. Use the pnpm in `packageManager`.
+
+## 2026-11-23 — A claimed shift swap cannot be read back, and a bare date is a day on the venue's clock
+
+- **Problem**: A replayed swap claim answered 404, not the 409 the plan assumed: claiming deletes the offerer's assignment, and `shift_swap_request.from_assignment_id` cascades, so the "Claimed" row never exists. Separately, roster ranges parsed `"2026-06-08"` as UTC midnight, dropping a 6 am Monday Melbourne shift (Sunday 20:00 UTC) from a Monday publish, and two old tests had been written to that UTC reading.
+- **Fix**: The claim's audit rows (metadata `swapRequestId`, actor = claimer) tell a replay from a lost race; a bare `YYYY-MM-DD` is resolved on the venue's wall clock (`venueDayRange`, `venueBoundSql`); the two tests now build their shift on the venue's day.
+- **Rule**: Before coding to a state a plan names, check the row can exist (look for cascades). Any date-only filter on shifts takes the venue's IANA zone, never UTC, and is tested on both daylight-saving days (23 and 25 hours).

@@ -16,9 +16,9 @@ import { RosterError, AssignmentBlockedError } from "../services/rosterService.j
 
 function handleServiceError(err: unknown, res: Response, next: NextFunction): void {
   if (err instanceof AssignmentBlockedError) {
-    res.status(err.statusCode).json({ error: err.message, blocked: err.info });
+    res.status(err.statusCode).json({ error: err.message, code: err.code, blocked: err.info });
   } else if (err instanceof RosterError) {
-    res.status(err.statusCode).json({ error: err.message });
+    res.status(err.statusCode).json({ error: err.message, ...(err.code ? { code: err.code } : {}) });
   } else {
     next(err);
   }

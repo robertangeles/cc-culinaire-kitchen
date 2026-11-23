@@ -43,6 +43,7 @@ import {
   getWeekCalendar,
   listMyShifts,
   cancelShift,
+  resolveVenueLocalToUtc,
 } from "./rosterService.js";
 import { requestConsent, respondToConsent } from "./consentService.js";
 
@@ -735,7 +736,8 @@ describe.skipIf(!RUN)("roster service (real DB)", () => {
       uploadedBy: userA,
     });
     const toDate = addDays(TODAY, 1);
-    const start = new Date(`${toDate}T23:00:00.000Z`);
+    // 23:00 on the venue's own `to` day (locA is Melbourne): a bare `to` date is a venue-local day, not UTC's.
+    const start = resolveVenueLocalToUtc(toDate, "23:00", "Australia/Melbourne");
     const end = new Date(start.getTime() + 2 * 60 * 60 * 1000);
     const s = await createShift(
       orgA,
@@ -751,10 +753,10 @@ describe.skipIf(!RUN)("roster service (real DB)", () => {
   });
 
   // Same regression as the publishRoster test above, for listShifts's own
-  // `to` filter — see the parseFilterDateEnd comment in rosterService.ts.
+  // `to` filter — see venueDayRange / venueBoundSql in rosterShiftService.ts.
   it("listShifts includes a shift starting late in the day on the 'to' boundary date, not just at its first instant", async () => {
     const toDate = addDays(TODAY, 2);
-    const start = new Date(`${toDate}T23:00:00.000Z`);
+    const start = resolveVenueLocalToUtc(toDate, "23:00", "Australia/Melbourne"); // as above: the venue's own `to` day
     const end = new Date(start.getTime() + 2 * 60 * 60 * 1000);
     const s = await createShift(
       orgA,
@@ -1129,6 +1131,8 @@ describe.skipIf(!RUN)("roster service (real DB)", () => {
       userA,
     );
     await assignStaff(orgA, s.shiftId, userA, userA);
+    // A Draft is not on the staff member's roster yet: only a published shift is listed.
+    await db.update(shift).set({ status: "Published" }).where(eq(shift.shiftId, s.shiftId));
 
     const myShifts = await listMyShifts(orgA, userA);
     const mine = myShifts.find((m) => m.shiftId === s.shiftId);
@@ -1151,6 +1155,8 @@ describe.skipIf(!RUN)("roster service (real DB)", () => {
       userA,
     );
     await assignStaff(orgA, s.shiftId, userA, userA);
+    await db.update(shift).set({ status: "Published" }).where(eq(shift.shiftId, s.shiftId));
+    expect((await listMyShifts(orgA, userA)).find((m) => m.shiftId === s.shiftId)).toBeDefined();
     await cancelShift(orgA, s.shiftId);
 
     const myShifts = await listMyShifts(orgA, userA);

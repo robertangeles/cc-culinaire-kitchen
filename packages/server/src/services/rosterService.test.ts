@@ -4,6 +4,8 @@ import {
   toVenueLocalTime,
   shiftEndTimeOnStartDate,
   resolveVenueLocalToUtc,
+  venueDayRange,
+  RosterError,
 } from "./rosterService.js";
 
 describe("toVenueLocalTime", () => {
@@ -86,3 +88,71 @@ describe("resolveVenueLocalToUtc", () => {
     );
   });
 });
+
+describe("venueDayRange", () => {
+  const iso = (r: { from: Date; toExclusive: Date }) => [r.from.toISOString(), r.toExclusive.toISOString()];
+
+  it("reads a bare date as the venue's own day: Monday in Melbourne starts on Sunday 14:00 UTC", () => {
+    expect(iso(venueDayRange("2026-06-08", "2026-06-08", "Australia/Melbourne"))).toEqual([
+      "2026-06-07T14:00:00.000Z",
+      "2026-06-08T14:00:00.000Z",
+    ]);
+  });
+
+  it("includes a 6 am Monday Melbourne shift that UTC midnight would have dropped", () => {
+    const sixAmMonday = resolveVenueLocalToUtc("2026-06-08", "06:00", "Australia/Melbourne");
+    const { from, toExclusive } = venueDayRange("2026-06-08", "2026-06-08", "Australia/Melbourne");
+    expect(sixAmMonday >= from && sixAmMonday < toExclusive).toBe(true);
+    expect(sixAmMonday < new Date("2026-06-08")).toBe(true); // the old UTC-midnight lower bound
+  });
+
+  it("spans several days to the start of the day after `to`", () => {
+    expect(iso(venueDayRange("2026-06-08", "2026-06-14", "Australia/Perth"))).toEqual([
+      "2026-06-07T16:00:00.000Z",
+      "2026-06-14T16:00:00.000Z",
+    ]);
+  });
+
+  it("west of UTC the venue day starts after UTC midnight (New York, EDT = UTC-4)", () => {
+    expect(iso(venueDayRange("2026-06-08", "2026-06-08", "America/New_York"))).toEqual([
+      "2026-06-08T04:00:00.000Z",
+      "2026-06-09T04:00:00.000Z",
+    ]);
+  });
+
+  it("the day daylight saving starts is 23 hours long (Sydney, Sun 4 Oct 2026)", () => {
+    const { from, toExclusive } = venueDayRange("2026-10-04", "2026-10-04", "Australia/Sydney");
+    expect(iso({ from, toExclusive })).toEqual(["2026-10-03T14:00:00.000Z", "2026-10-04T13:00:00.000Z"]);
+    expect((toExclusive.getTime() - from.getTime()) / 3_600_000).toBe(23);
+  });
+
+  it("the day daylight saving ends is 25 hours long (Sydney, Sun 5 Apr 2026)", () => {
+    const { from, toExclusive } = venueDayRange("2026-04-05", "2026-04-05", "Australia/Sydney");
+    expect(iso({ from, toExclusive })).toEqual(["2026-04-04T13:00:00.000Z", "2026-04-05T14:00:00.000Z"]);
+    expect((toExclusive.getTime() - from.getTime()) / 3_600_000).toBe(25);
+  });
+
+  it("a range ending on the last day of a month or year rolls over", () => {
+    expect(venueDayRange("2026-12-31", "2026-12-31", "UTC").toExclusive.toISOString()).toBe("2027-01-01T00:00:00.000Z");
+  });
+
+  it("keeps the old reading for a full instant: that exact moment, and a day after the `to` instant", () => {
+    expect(iso(venueDayRange("2026-06-08T00:00:00Z", "2026-06-08T00:00:00Z", "Australia/Melbourne"))).toEqual([
+      "2026-06-08T00:00:00.000Z",
+      "2026-06-09T00:00:00.000Z",
+    ]);
+  });
+
+  it.each([["not-a-date", "2026-06-08"], ["2026-06-08", "2026-13-40"], ["", "2026-06-08"]])(
+    "rejects an invalid date (%s, %s) with a 400",
+    (from, to) => {
+      expect(() => venueDayRange(from, to, "Australia/Melbourne")).toThrowError(RosterError);
+      try {
+        venueDayRange(from, to, "Australia/Melbourne");
+      } catch (err) {
+        expect((err as RosterError).statusCode).toBe(400);
+      }
+    },
+  );
+});
+
