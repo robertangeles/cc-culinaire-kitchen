@@ -68,7 +68,7 @@ What the queue does, which the tests in `src/outbox/*.test.ts` pin down:
 
 ```ts
 const source = createIngredientSource({
-  catalogue,            // createCatalogue({ client, kv, key }): the organisation's ingredients, downloaded in the background, read from the phone
+  catalogue,            // createCatalogue({ client, kv, key, path }): the organisation's ingredients, downloaded in the background, read from the phone
   recents,              // createRecents({ kv, key, max }): what this person picked last, newest first
   moreNames: (q) => ..., // optional: names the server suggests for what was typed (waste: its own history and recipes)
 });
@@ -78,7 +78,9 @@ const source = createIngredientSource({
 Empty, it offers recent items; typing shows matches from the phone at once (prefix, then word-prefix, then contains; accents and case ignored) and, 300 ms later, the
 server's extra names. It works with no signal. A name that is in no list is accepted as typed (waste stores text). `onPick` gives `{ name, ingredientId?, unit? }`
 (`unit` is the item's kitchen unit from the catalogue, or the unit last used; `itemType` is the catalogue's KITCHEN_INGREDIENT, FOH_CONSUMABLE or OPERATIONAL_SUPPLY). Usage and Move build their own `IngredientSource` (the catalogue and their own recents, no server name list) and reuse the component; transfers and orders will do the same. Those two need the item's id (the server takes an ingredient, not free text), so a name that is not in the list is refused on the form, and so is an item whose unit is not known ("Pick the item from the list again"): the unit is cleared whenever the name is retyped or an item without a kitchen unit is picked, so an earlier item's unit is never carried over.
-The catalogue download is `GET /api/inventory/ingredients`, which the server allows for `inventory:count` only: for someone without it the catalogue is simply empty.
+The catalogue download is `catalogueRoute(user)`: `GET /api/inventory/ingredients` for someone with `inventory:count`, and for a cook who may only log waste `GET /api/waste/ingredients`,
+a read-only list of id, name and kitchen unit (no cost, stock or supplier; the server opens it to `waste:log` and `inventory:count`). Both are kept on the phone the same way and read offline.
+If a download fails (no signal, or a server that does not have the route yet) the last list stays and the picker still offers recent items and the server's name suggestions.
 
 ## Tablet width
 
