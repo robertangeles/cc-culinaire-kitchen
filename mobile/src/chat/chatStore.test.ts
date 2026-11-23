@@ -278,6 +278,31 @@ describe("chat store", () => {
     expect(store.getSnapshot()).toMatchObject({ unsaved: false, conversationId: created[0].id });
   });
 
+  it("Save again after a broken answer leaves the half answer out, so Try again's full answer is the only one stored at that place", async () => {
+    const { store, api, answers, saved } = setup();
+    api.save.mockRejectedValueOnce(new ApiError("network"));
+    let done = store.send("One");
+    await flush();
+    answers[0].push({ type: "text", text: "A" });
+    answers[0].push("end");
+    await done;
+    done = store.send("Two");
+    await flush();
+    answers[1].push({ type: "text", text: "Half" });
+    answers[1].push({ type: "error", message: "x" });
+    answers[1].push("end");
+    await done;
+    await store.saveNow();
+    expect(saved[0].messages.map((m) => m.messageBody)).toEqual(["One", "A", "Two"]);
+    const again = store.retry();
+    await flush();
+    answers[2].push({ type: "text", text: "Whole" });
+    answers[2].push("end");
+    await again;
+    const stored = saved.flatMap((s) => s.messages);
+    expect(stored.map((m) => [m.messageSequence, m.messageBody])).toEqual([[0, "One"], [1, "A"], [2, "Two"], [3, "Whole"]]);
+  });
+
   it("dispose stops an answer in flight", async () => {
     const { store, signals } = setup();
     void store.send("One");

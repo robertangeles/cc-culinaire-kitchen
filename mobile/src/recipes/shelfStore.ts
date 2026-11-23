@@ -32,13 +32,13 @@ export function createShelfStore({ api }: { api: RecipeApi }) {
     if (restart) page = 1;
     set({ domain, error: null, more: false, ...(restart ? { phase: "loading", recipes: [] } : {}) });
     try {
-      const first = await api.mine(1, domain ?? undefined);
+      // A refresh reads every page already loaded again, so the list stays as long as it was and a recipe added or removed
+      // elsewhere moves the rows the way the server has them.
+      const pages = await Promise.all(Array.from({ length: page }, (_, i) => api.mine(i + 1, domain ?? undefined)));
       if (mine !== generation) return;
-      // A refresh keeps the later pages already loaded. The fresh first page is the truth for the newest rows: it replaces the
-      // loaded rows down to the last one it still holds, so a recipe removed elsewhere goes; with one page loaded that is all of them.
-      const fresh = new Set(first.recipes.map((r) => r.recipeId));
-      const kept = page === 1 ? [] : snapshot.recipes.slice(snapshot.recipes.map((r) => fresh.has(r.recipeId)).lastIndexOf(true) + 1);
-      set({ phase: "ready", recipes: [...first.recipes, ...kept], total: first.total });
+      const seen = new Set<string>();
+      const recipes = pages.flatMap((p) => p.recipes).filter((r) => !seen.has(r.recipeId) && seen.add(r.recipeId));
+      set({ phase: "ready", recipes, total: pages[0].total });
     } catch (err) {
       if (mine !== generation) return;
       // Keep what is on screen when only a refresh failed.

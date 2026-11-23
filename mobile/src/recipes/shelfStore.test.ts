@@ -51,6 +51,24 @@ describe("my recipes (shelf) store", () => {
     expect(more.store.getSnapshot().total).toBe(3);
   });
 
+  it("a refresh after a removal elsewhere, with two pages loaded, skips no recipe and Load more still reaches the end", async () => {
+    let all = ["r1", "r2", "r3", "r4", "r5", "r6"];
+    const mine = vi.fn(async (page: number) => ({ recipes: all.slice((page - 1) * 2, page * 2).map((id) => row(id)), total: all.length, page }));
+    const store = createShelfStore({ api: { mine } as unknown as RecipeApi });
+    await store.refresh();
+    await store.loadMore();
+    expect(store.getSnapshot().recipes.map((r) => r.recipeId)).toEqual(["r1", "r2", "r3", "r4"]);
+    all = all.filter((id) => id !== "r2");
+    await store.refresh();
+    expect(store.getSnapshot().recipes.map((r) => r.recipeId)).toEqual(["r1", "r3", "r4", "r5"]);
+    expect(store.getSnapshot().total).toBe(5);
+    await store.loadMore();
+    expect(store.getSnapshot().recipes.map((r) => r.recipeId)).toEqual(["r1", "r3", "r4", "r5", "r6"]);
+    const calls = mine.mock.calls.length;
+    await store.loadMore();
+    expect(mine.mock.calls.length).toBe(calls);
+  });
+
   it("a refresh that overtakes Load more leaves Load more usable", async () => {
     const { store, mine } = setup();
     await store.refresh();
