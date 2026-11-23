@@ -29,6 +29,16 @@ export const SERVER_ERROR_CODES = [
   // Prep (Wave 2): the session was ended, or another device changed the task first. Both answer 409.
   "PREP_SESSION_ENDED",
   "PREP_TASK_CHANGED",
+  // Sign in with Apple (POST /api/auth/apple/idtoken and /apple/link).
+  "APPLE_NOT_CONFIGURED",
+  "APPLE_UNAVAILABLE",
+  "APPLE_TOKEN_INVALID",
+  "APPLE_EMAIL_MISSING",
+  "APPLE_EMAIL_NOT_VERIFIED",
+  "APPLE_ALREADY_LINKED",
+  "ACCOUNT_EMAIL_UNVERIFIED",
+  "UNAUTHENTICATED",
+  "RATE_LIMITED",
 ] as const;
 export type ServerErrorCode = (typeof SERVER_ERROR_CODES)[number];
 

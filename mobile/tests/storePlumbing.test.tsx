@@ -14,7 +14,9 @@ const mocks = vi.hoisted(() => ({
   authApi: { register: vi.fn() },
   appleProof: { current: undefined as undefined | (() => Promise<unknown>) },
 }));
-vi.mock("../src/runtime/appContext", () => ({ session: mocks.session, accountApi: mocks.accountApi, legalApi: mocks.legalApi, authApi: mocks.authApi, googleEnabled: false, get appleProof() { return mocks.appleProof.current; }, useSession: () => mocks.state.current }));
+vi.mock("../src/runtime/appContext", () => ({ session: mocks.session, accountApi: mocks.accountApi, legalApi: mocks.legalApi, authApi: mocks.authApi, googleEnabled: false, appleEnabled: false, get appleProof() { return mocks.appleProof.current; }, useSession: () => mocks.state.current }));
+// The sign-in screen imports the native Apple button, which needs the native runtime.
+vi.mock("expo-apple-authentication", () => ({ AppleAuthenticationButton: () => null, AppleAuthenticationButtonType: {}, AppleAuthenticationButtonStyle: {} }));
 
 import SignIn from "../app/sign-in";
 import Account from "../app/(app)/account";

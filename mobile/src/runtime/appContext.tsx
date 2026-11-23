@@ -10,6 +10,7 @@ import { createSnapshotStore } from "../auth/snapshotStore";
 import { sqliteKv } from "../storage/kv";
 import { wipeLocalData } from "../storage/wipe";
 import { googleIdToken } from "../auth/googleSignIn";
+import { appleCredential, appleEnabled } from "../auth/appleSignIn";
 import { apiBaseUrl, appVersion, googleEnabled } from "../config";
 
 // One of each for the whole app. The client's "session ended" callback reaches the session through this binding.
@@ -21,21 +22,23 @@ export const client = createApiClient({ baseUrl: apiBaseUrl, tokenStore, appVers
 export const authApi = createAuthApi(client, tokenStore);
 export const accountApi = createAccountApi(client, tokenStore);
 export const legalApi = createLegalApi(client);
-/**
- * Opens Apple's sign-in sheet for a fresh credential, to confirm deleting an Apple-linked account (null when the sheet is closed).
- * Undefined until the Sign in with Apple change provides the sheet (`appleCredential` in auth/appleSignIn.ts: pass it here as
- * `appleEnabled ? async () => { const c = await appleCredential(); return c && { identityToken: c.identityToken, nonce: c.nonce }; } : undefined`).
- */
-export const appleProof: (() => Promise<AppleProof | null>) | undefined = undefined;
+/** Opens Apple's sign-in sheet for a fresh credential, to confirm deleting an Apple-linked account (null when the sheet is closed). */
+export const appleProof: (() => Promise<AppleProof | null>) | undefined = appleEnabled
+  ? async () => {
+      const credential = await appleCredential();
+      return credential && { identityToken: credential.identityToken, nonce: credential.nonce };
+    }
+  : undefined;
 session = createSession({
   api: authApi,
   hasTokens: async () => (await tokenStore.load()) !== null,
   snapshots: createSnapshotStore(sqliteKv),
   googleIdToken: googleEnabled ? googleIdToken : undefined,
   wipeLocalData,
+  appleCredential: appleEnabled ? appleCredential : undefined,
 });
 
-export { session, googleEnabled };
+export { session, googleEnabled, appleEnabled };
 
 /** The current screen state and busy flag, re-rendering when either changes. */
 export function useSession() {

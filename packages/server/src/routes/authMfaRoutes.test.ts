@@ -13,7 +13,12 @@ vi.mock("../services/guestService.js", () => ({}));
 
 import authRouter from "./auth.js";
 import { authenticate } from "../middleware/auth.js";
-import { mfaVerifyRateLimit, mfaAccountRateLimit } from "../middleware/rateLimiter.js";
+import {
+  mfaVerifyRateLimit,
+  mfaAccountRateLimit,
+  appleIdTokenRateLimit,
+  appleLinkRateLimit,
+} from "../middleware/rateLimiter.js";
 
 /**
  * Changing MFA needs proof, and the proof can be guessed, so these three routes must keep their
@@ -36,6 +41,22 @@ describe("POST /mfa/verify", () => {
     expect(handlers).toHaveLength(4);
     expect(handlers[0]).toBe(mfaVerifyRateLimit);
     expect(handlers[1]).toBe(mfaAccountRateLimit);
+  });
+});
+
+// Sign in with Apple has two public-facing doors: the sign-in itself (rate limited per address, like Google's)
+// and the link action (needs a session, and its wrong passwords count against the per-account limit).
+describe("Sign in with Apple routes", () => {
+  it("POST /apple/idtoken is rate limited per address before the phone version check and the handler", () => {
+    const handlers = handlersFor("/apple/idtoken");
+    expect(handlers).toHaveLength(3);
+    expect(handlers[0]).toBe(appleIdTokenRateLimit);
+  });
+
+  it("POST /apple/link needs a session first, then the per-address and per-account limits, then the handler", () => {
+    const handlers = handlersFor("/apple/link");
+    expect(handlers).toHaveLength(4);
+    expect(handlers.slice(0, 3)).toEqual([authenticate, appleLinkRateLimit, mfaAccountRateLimit]);
   });
 });
 

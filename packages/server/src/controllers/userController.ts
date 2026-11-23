@@ -30,7 +30,7 @@ import { anonymiseUser, UserAnonymisationError } from "../services/userAnonymisa
 import { sendDirectEmail } from "../services/emailService.js";
 import { AccountDeletionError, deleteOwnAccount } from "../services/accountDeletionService.js";
 import { clearAuthCookies } from "./authController.js";
-import { getSignInTime } from "../services/authService.js";
+import { AuthError, getSignInTime } from "../services/authService.js";
 import { presentedRefreshToken } from "../utils/presentedRefreshToken.js";
 
 /** GET /api/users/profile — get current user's profile. */
@@ -114,6 +114,8 @@ const DeleteOwnAccountSchema = z.object({
   password: z.string().max(200).optional(),
   confirmEmail: z.string().max(320).optional(),
   mfaCode: z.string().max(12).optional(),
+  appleIdentityToken: z.string().max(4096).optional(),
+  appleNonce: z.string().min(16).max(256).optional(),
 });
 
 /**
@@ -135,6 +137,10 @@ export async function handleDeleteOwnAccount(req: Request, res: Response, next: 
     res.json({ success: true });
   } catch (err) {
     if (err instanceof AccountDeletionError) {
+      res.status(err.statusCode).json({ error: err.message, code: err.code });
+      return;
+    }
+    if (err instanceof AuthError) {
       res.status(err.statusCode).json({ error: err.message, code: err.code });
       return;
     }

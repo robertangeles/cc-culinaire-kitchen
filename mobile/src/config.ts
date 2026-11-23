@@ -14,3 +14,6 @@ export const appVersion = Constants.expoConfig?.version ?? "0.0.0";
 /** The Google "Web application" OAuth client ID the server checks sign-in tokens against. Without it the Google button is not offered. */
 export const googleWebClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ?? "";
 export const googleEnabled = googleWebClientId !== "";
+
+/** The Google "iOS" OAuth client ID, for sign-in on iPhone and iPad. Its reversed form is the iOS URL scheme (see app.config.ts). Empty on Android builds. */
+export const googleIosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID ?? "";

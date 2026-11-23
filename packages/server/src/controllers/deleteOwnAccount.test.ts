@@ -11,7 +11,7 @@ vi.mock("../services/accountDeletionService.js", async () => {
 });
 
 import { AccountDeletionError, deleteOwnAccount } from "../services/accountDeletionService.js";
-import { getSignInTime } from "../services/authService.js";
+import { AuthError, getSignInTime } from "../services/authService.js";
 import { UserAnonymisationError } from "../services/userAnonymisationService.js";
 import { handleDeleteOwnAccount } from "./userController.js";
 import usersRouter from "../routes/users.js";
@@ -60,6 +60,15 @@ describe("POST /api/users/delete-account handler", () => {
     expect(res.status).toHaveBeenCalledWith(403);
     expect(res.json).toHaveBeenCalledWith({ error: "Incorrect password.", code: "INVALID_CREDENTIALS" });
     expect(res.clearCookie).not.toHaveBeenCalled();
+  });
+
+  it("returns Apple's 503 with its own code when Apple could not check the token, without signing out", async () => {
+    vi.mocked(deleteOwnAccount).mockRejectedValue(new AuthError("Apple sign-in is unavailable right now.", "APPLE_UNAVAILABLE", 503));
+    const { res, next } = await call({ appleIdentityToken: "t", appleNonce: "n".repeat(16) });
+    expect(res.status).toHaveBeenCalledWith(503);
+    expect(res.json).toHaveBeenCalledWith({ error: "Apple sign-in is unavailable right now.", code: "APPLE_UNAVAILABLE" });
+    expect(res.clearCookie).not.toHaveBeenCalled();
+    expect(next).not.toHaveBeenCalled();
   });
 
   it("returns 409 when blocked by organisation ownership", async () => {

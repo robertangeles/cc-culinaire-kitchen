@@ -6,7 +6,7 @@
 
 import { UpgradeRequiredBodySchema, type UpgradeRequired } from "@culinaire/shared/schemas/errors";
 import { ApiError } from "../api/client";
-import type { AuthApi, AuthUser, StoreLocation } from "../api/auth";
+import type { AppleCredential, AuthApi, AuthUser, StoreLocation } from "../api/auth";
 
 export type SessionState =
   | { phase: "restoring" }
@@ -45,6 +45,8 @@ export interface SessionDeps {
   googleIdToken?: () => Promise<string | null>;
   /** Clears what the phone stores besides the tokens and saved user: the count queue and downloaded sheets. */
   wipeLocalData?: () => Promise<void>;
+  /** Opens Apple's sign-in sheet and returns what the server verifies, or null when the person closes it. Absent off iOS. */
+  appleCredential?: () => Promise<AppleCredential | null>;
 }
 
 const GENERIC = "Something went wrong. Try again.";
@@ -64,7 +66,7 @@ function joinMessage(err: unknown): string {
   return err.message;
 }
 
-export function createSession({ api, hasTokens, snapshots, googleIdToken, wipeLocalData }: SessionDeps) {
+export function createSession({ api, hasTokens, snapshots, googleIdToken, appleCredential, wipeLocalData }: SessionDeps) {
   let snapshot: SessionSnapshot = { state: { phase: "restoring" }, busy: false };
   const listeners = new Set<() => void>();
 
@@ -173,6 +175,26 @@ export function createSession({ api, hasTokens, snapshots, googleIdToken, wipeLo
         if (idToken === null) return; // closed the picker: nothing to say
         try {
           const result = await api.googleSignIn(idToken);
+          if (result.status === "mfa") return set({ state: { phase: "mfa", mfaSessionToken: result.mfaSessionToken } });
+          await open(result.user);
+        } catch (err) {
+          set({ state: { phase: "signedOut", error: err instanceof ApiError ? err.message : GENERIC } });
+        }
+      });
+    },
+
+    signInWithApple() {
+      if (!appleCredential) return Promise.resolve();
+      return run(async () => {
+        let credential: AppleCredential | null;
+        try {
+          credential = await appleCredential();
+        } catch {
+          return set({ state: { phase: "signedOut", error: "Apple sign-in didn't work. Try again." } });
+        }
+        if (credential === null) return; // closed the sheet: nothing to say
+        try {
+          const result = await api.appleSignIn(credential);
           if (result.status === "mfa") return set({ state: { phase: "mfa", mfaSessionToken: result.mfaSessionToken } });
           await open(result.user);
         } catch (err) {

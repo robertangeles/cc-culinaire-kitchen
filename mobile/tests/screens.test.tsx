@@ -4,7 +4,7 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { Alert } from "react-native";
 import { useSyncExternalStore } from "react";
 import { harness, makeHarness } from "./harness";
-import { authApiMock, googleConfig, routerMock, sessionMock, sessionState } from "../testing/mocks";
+import { appleConfig, authApiMock, googleConfig, routerMock, sessionMock, sessionState } from "../testing/mocks";
 
 vi.mock("../src/count/CountProvider", async () => {
   const { harness } = await import("./harness");
@@ -17,7 +17,16 @@ vi.mock("../src/count/CountProvider", async () => {
 });
 vi.mock("../src/runtime/appContext", async () => {
   const { sessionMock, sessionState } = await import("../testing/mocks");
-  return { session: sessionMock, authApi: authApiMock, get googleEnabled() { return googleConfig.enabled; }, useSession: () => sessionState.current };
+  return { session: sessionMock, authApi: authApiMock, get googleEnabled() { return googleConfig.enabled; }, get appleEnabled() { return appleConfig.enabled; }, useSession: () => sessionState.current };
+});
+// The native Apple button is a native view: here it is a plain button that keeps the label Apple's own button speaks.
+vi.mock("expo-apple-authentication", async () => {
+  const { createElement } = await import("react");
+  return {
+    AppleAuthenticationButtonType: { CONTINUE: 1 },
+    AppleAuthenticationButtonStyle: { BLACK: 2, WHITE: 0 },
+    AppleAuthenticationButton: ({ onPress }: { onPress: () => void }) => createElement("button", { onClick: onPress }, "Continue with Apple"),
+  };
 });
 vi.mock("../src/runtime/appOutbox", async () => {
   const { harness } = await import("./harness");
@@ -336,6 +345,56 @@ describe("continue with Google", () => {
     fireEvent.click(screen.getByRole("button", { name: "Continue with Google" }));
     expect(sessionMock.signInWithGoogle).toHaveBeenCalled();
     googleConfig.enabled = false;
+  });
+});
+
+describe("continue with Apple", () => {
+  beforeEach(() => {
+    sessionState.current = { state: { phase: "signedOut" }, busy: false };
+    sessionMock.signInWithApple.mockReset();
+    appleConfig.enabled = false;
+    googleConfig.enabled = false;
+  });
+
+  it("is offered on iPhone and iPad only: Android builds never show it", () => {
+    const { unmount } = render(<SignIn />);
+    expect(screen.queryByRole("button", { name: "Continue with Apple" })).toBeNull();
+    unmount();
+    appleConfig.enabled = true;
+    render(<SignIn />);
+    expect(screen.getByRole("button", { name: "Continue with Apple" })).toBeTruthy();
+  });
+
+  it("starts Apple sign-in on tap", () => {
+    appleConfig.enabled = true;
+    render(<SignIn />);
+    fireEvent.click(screen.getByRole("button", { name: "Continue with Apple" }));
+    expect(sessionMock.signInWithApple).toHaveBeenCalledTimes(1);
+  });
+
+  it("ignores taps while a sign-in is already running", () => {
+    appleConfig.enabled = true;
+    sessionState.current = { state: { phase: "signedOut" }, busy: true };
+    render(<SignIn />);
+    fireEvent.click(screen.getByRole("button", { name: "Continue with Apple" }));
+    expect(sessionMock.signInWithApple).not.toHaveBeenCalled();
+  });
+
+  it("sits above the Google button, both under one OR divider, so Apple is at least as prominent (App Store rule 4.8)", () => {
+    appleConfig.enabled = true;
+    googleConfig.enabled = true;
+    render(<SignIn />);
+    expect(screen.getAllByText("OR")).toHaveLength(1);
+    const apple = screen.getByRole("button", { name: "Continue with Apple" });
+    const google = screen.getByRole("button", { name: "Continue with Google" });
+    expect(apple.compareDocumentPosition(google) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("shows the reason when Apple sign-in fails", () => {
+    appleConfig.enabled = true;
+    sessionState.current = { state: { phase: "signedOut", error: "Apple sign-in didn't work. Try again." }, busy: false };
+    render(<SignIn />);
+    expect(screen.getByText("Apple sign-in didn't work. Try again.")).toBeTruthy();
   });
 });
 

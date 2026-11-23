@@ -240,16 +240,16 @@ export async function loginUser(
 
   // If MFA is enabled, return a temporary session token instead of full auth
   if (row.mfaEnabledInd) {
-    const mfaSessionToken = jwt.sign(
-      { sub: row.userId, purpose: "mfa" },
-      mfaSessionSecret(),
-      { expiresIn: "5m" },
-    );
-    return { requiresMfa: true, mfaSessionToken };
+    return { requiresMfa: true, mfaSessionToken: createMfaSessionToken(row.userId) };
   }
 
   const authUser = await getUserWithRolesAndPermissions(row.userId);
   return { requiresMfa: false, user: authUser };
+}
+
+/** The 5-minute "first factor passed, code still to come" token that `/mfa/verify` exchanges for a session. */
+export function createMfaSessionToken(userId: number): string {
+  return jwt.sign({ sub: userId, purpose: "mfa" }, mfaSessionSecret(), { expiresIn: "5m" });
 }
 
 /**
@@ -966,8 +966,9 @@ export interface MfaChangeProof {
  * switching MFA off removes the second factor. A session alone is therefore not enough.
  * Password accounts give their password; Google-only accounts, which have none, must have
  * signed in within the last 10 minutes; an account with MFA on also gives a current code.
+ * Linking another sign-in method (Sign in with Apple) is the same kind of lever and asks for the same proof.
  */
-async function requireProofToChangeMfa(
+export async function requireProofToChangeMfa(
   row: typeof user.$inferSelect,
   proof: MfaChangeProof,
   signedInAt: Date | null,

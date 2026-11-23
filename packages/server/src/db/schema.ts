@@ -364,12 +364,39 @@ export const userOrganisation = pgTable("user_organisation", {
  * The `oauth_account` table links external OAuth providers (Google,
  * Microsoft) to user accounts. A user may have multiple linked providers.
  */
-export const oauthAccount = pgTable("oauth_account", {
-  oauthAccountId: serial("oauth_account_id").primaryKey(),
-  userId: integer("user_id").notNull(),
-  oauthProvider: varchar("oauth_provider", { length: 20 }).notNull(),
-  oauthProviderId: varchar("oauth_provider_id", { length: 255 }).notNull(),
-  createdDttm: timestamp("created_dttm").notNull().defaultNow(),
+export const oauthAccount = pgTable(
+  "oauth_account",
+  {
+    oauthAccountId: serial("oauth_account_id").primaryKey(),
+    userId: integer("user_id").notNull(),
+    oauthProvider: varchar("oauth_provider", { length: 20 }).notNull(),
+    oauthProviderId: varchar("oauth_provider_id", { length: 255 }).notNull(),
+    /** Apple's refresh token, AES-256-GCM encrypted as `iv:tag:ciphertext` (hex). Kept only so deleting the account can revoke it at Apple. */
+    providerRefreshTokenEnc: text("provider_refresh_token_enc"),
+    createdDttm: timestamp("created_dttm").notNull().defaultNow(),
+  },
+  (table) => [
+    // Sign in with Apple: "find the account for this Apple subject", and the guard that two sign-ins racing
+    // for a new person cannot both create an account. Partial: other providers' rows are not constrained here.
+    uniqueIndex("uq_oauth_account_apple_subject").on(table.oauthProviderId).where(sql`${table.oauthProvider} = 'apple'`),
+    // "Which Apple link does this user have" (link action, account deletion), and at most one per user.
+    uniqueIndex("uq_oauth_account_apple_user").on(table.userId).where(sql`${table.oauthProvider} = 'apple'`),
+  ],
+);
+
+/**
+ * Apple refresh tokens that could not be revoked when an account was deleted, kept (encrypted) so
+ * `scripts/retryAppleRevocations.ts` can try again. A row is deleted once Apple accepts the revoke.
+ * No link to a user: the account is gone and the token is the only thing left to act on.
+ */
+export const appleRevocationRetries = pgTable("apple_revocation_retries", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  /** AES-256-GCM as `iv:tag:ciphertext` (hex), the same form as `oauth_account.provider_refresh_token_enc`. */
+  refreshTokenEnc: text("refresh_token_enc").notNull(),
+  attempts: integer("attempts").notNull().default(1),
+  lastError: varchar("last_error", { length: 500 }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
 /**

@@ -18,7 +18,8 @@
  * reverse (data gone, subscription still billing) is the failure to avoid.
  *
  * The Stripe customer is deleted (name and email; Stripe keeps its payment records), and so
- * is the uploaded avatar file.
+ * is the uploaded avatar file. A Sign in with Apple link is revoked at Apple once the deletion has
+ * committed (App Store rule 5.1.1(v)); a failure there is logged for follow-up and never undoes it.
  *
  * Limits: an access token already issued stays valid until it expires (short-lived;
  * `authenticate` does not re-read the user). A local `/uploads/` avatar (the no-Cloudinary dev
@@ -56,6 +57,7 @@ import {
 import { cancelSubscriptionNow, deleteCustomer } from "./stripeService.js";
 import { deleteProfilePhoto, profilePhotoPublicId } from "../middleware/upload.js";
 import * as auditService from "./auditService.js";
+import { appleLinkOf, revokeAppleAfterDeletion } from "./appleSignInService.js";
 
 const logger = pino({ name: "userAnonymisationService" });
 
@@ -262,6 +264,9 @@ export async function anonymiseUser(userId: number, actorUserId: number | null =
 
   await removeProfilePhoto(userId, row.userPhotoPath);
 
+  // Read before the transaction deletes the oauth_account row that holds Apple's token.
+  const appleLink = await appleLinkOf(userId);
+
   await db.transaction(async (tx) => {
     // Conversations and their messages.
     const conversations = await tx
@@ -321,4 +326,6 @@ export async function anonymiseUser(userId: number, actorUserId: number | null =
       tx,
     );
   });
+
+  if (appleLink) await revokeAppleAfterDeletion(userId, appleLink);
 }

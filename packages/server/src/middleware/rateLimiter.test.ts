@@ -40,13 +40,13 @@ describe("rateLimiter — chatRateLimit config", () => {
   it("constructs with 20 requests per 60 seconds", async () => {
     await import("./rateLimiter.js");
 
-    // Twenty limiters are constructed: chat + mobile prompt + mobile RAG +
+    // Twenty-two limiters are constructed: chat + mobile prompt + mobile RAG +
     // mobile feedback + account settings (auth) + compliance document view + compliance
     // document edit + compliance report + MFA verify + MFA account, then the nine per-endpoint auth
-    // buckets (login, register, forgot, reset, resend, verify-email, google id token, logout, refresh)
-    // and the per-token refresh cap. Assert call count first so we catch any future limiter being
+    // buckets (login, register, forgot, reset, resend, verify-email, google id token, apple id token, apple link,
+    // logout, refresh) and the per-token refresh cap. Assert call count first so we catch any future limiter being
     // added or removed silently.
-    expect(mockRateLimit).toHaveBeenCalledTimes(20);
+    expect(mockRateLimit).toHaveBeenCalledTimes(22);
 
     const chatConfig = mockRateLimit.mock.calls[0][0] as Record<string, unknown>;
     expect(chatConfig.limit).toBe(20);

@@ -12,6 +12,10 @@
  * lift that: until MFA changes needed proof, a session alone could enrol an authenticator,
  * and any such enrolment would still be in place.
  *
+ * An account with no password may instead give a fresh Sign in with Apple identity token for the Apple ID
+ * linked to it. That is a real credential (not just a confirmation), so it replaces both the typed email and
+ * the recent-sign-in rule, and it works for a hidden private-relay address, which a person cannot type.
+ *
  * Blocked, with a message that says what to do: the only platform Administrator, and the
  * only admin of an organisation that still has other members (it would be left with nobody
  * able to manage it). An Administrator can still delete such a user from Settings.
@@ -21,7 +25,8 @@ import bcrypt from "bcrypt";
 import { and, count, eq, ne, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { organisation, role, user, userOrganisation, userRole } from "../db/schema.js";
-import { isRecentSignIn, verifyMfaToken } from "./authService.js";
+import { AuthError, isRecentSignIn, verifyMfaToken } from "./authService.js";
+import { isFreshAppleSignInFor } from "./appleSignInService.js";
 import { decryptUserPii } from "./piiService.js";
 import { anonymiseUser } from "./userAnonymisationService.js";
 
@@ -40,6 +45,9 @@ export interface DeleteAccountInput {
   password?: string;
   confirmEmail?: string;
   mfaCode?: string;
+  /** A fresh Apple identity token and its nonce: proof for an account that has no password and an Apple link. */
+  appleIdentityToken?: string;
+  appleNonce?: string;
 }
 
 /** An organisation is left unmanaged when its only admin leaves while other members remain. */
@@ -81,10 +89,21 @@ async function isLastAdministrator(userId: number): Promise<boolean> {
   return isOnlyAdministrator(admins.map((a) => a.userId), userId);
 }
 
+/** True only for a fresh Apple sign-in of the Apple ID linked to this account; anything else is a refusal. */
+async function proveWithApple(userId: number, identityToken: string, nonce: string): Promise<boolean> {
+  try {
+    if (await isFreshAppleSignInFor(userId, identityToken, nonce)) return true;
+  } catch (err) {
+    if (!(err instanceof AuthError) || err.code !== "APPLE_TOKEN_INVALID") throw err;
+  }
+  throw new AccountDeletionError("That Apple sign-in does not match this account.", "INVALID_CREDENTIALS", 403);
+}
+
 /**
  * Delete the caller's own account.
  *
  * @throws {AccountDeletionError} 403 for wrong password / email / MFA code, 409 when blocked.
+ * @throws {AuthError} APPLE_UNAVAILABLE / APPLE_NOT_CONFIGURED (503) when Apple cannot be asked to check the token.
  * @throws {UserAnonymisationError} when the Stripe subscription could not be cancelled.
  */
 export async function deleteOwnAccount(
@@ -95,9 +114,12 @@ export async function deleteOwnAccount(
   const [row] = await db.select().from(user).where(eq(user.userId, userId));
   if (!row || row.userStatus === "deleted") throw new AccountDeletionError("Account not found.", "INVALID_CREDENTIALS", 403);
 
+  let appleProven = false;
   if (row.userPasswordHash) {
     const ok = input.password ? await bcrypt.compare(input.password, row.userPasswordHash) : false;
     if (!ok) throw new AccountDeletionError("Incorrect password.", "INVALID_CREDENTIALS", 403);
+  } else if (input.appleIdentityToken && input.appleNonce) {
+    appleProven = await proveWithApple(userId, input.appleIdentityToken, input.appleNonce);
   } else {
     const email = decryptUserPii(row).userEmail.toLowerCase();
     if (input.confirmEmail?.trim().toLowerCase() !== email) {
@@ -108,7 +130,7 @@ export async function deleteOwnAccount(
   // Required for every account without a password, MFA or not: before MFA changes needed proof,
   // a session thief could enrol their own authenticator, and that enrolment would otherwise
   // slip past this rule.
-  if (!row.userPasswordHash && !isRecentSignIn(signedInAt)) {
+  if (!row.userPasswordHash && !appleProven && !isRecentSignIn(signedInAt)) {
     throw new AccountDeletionError(
       "For your security, sign out, sign back in, and then delete your account.",
       "RECENT_SIGN_IN_REQUIRED",
