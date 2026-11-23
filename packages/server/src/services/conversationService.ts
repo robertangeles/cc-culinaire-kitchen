@@ -118,6 +118,8 @@ export async function updateConversationTitle(
  *
  * @param conversationId - Parent conversation UUID.
  * @param msgs           - Array of messages to insert.
+ * @returns `false` on a cross-owner write; otherwise the messages this call actually inserted (a replay
+ *          inserts none).
  */
 export async function saveMessages(
   conversationId: string,
@@ -128,7 +130,7 @@ export async function saveMessages(
     messageBody: string;
     messageSequence: number;
   }>
-): Promise<boolean> {
+): Promise<false | Array<{ messageId: string }>> {
   // Ownership guard: if the conversation already exists it MUST belong to the
   // caller — a userId match for authenticated users, or a guestSessionToken
   // match for guests (guest rows have userId NULL, so NULL alone is not enough
@@ -147,9 +149,9 @@ export async function saveMessages(
     if (!owns) return false;
   }
 
-  if (msgs.length === 0) return true;
+  if (msgs.length === 0) return [];
 
-  await db.insert(message).values(
+  const inserted = await db.insert(message).values(
     msgs.map((m) => ({
       messageId: m.messageId,
       conversationId,
@@ -157,7 +159,7 @@ export async function saveMessages(
       messageBody: m.messageBody,
       messageSequence: m.messageSequence,
     }))
-  ).onConflictDoNothing({ target: message.messageId });
+  ).onConflictDoNothing({ target: message.messageId }).returning({ messageId: message.messageId });
 
   // Touch updated_dttm on the parent conversation
   await db
@@ -165,7 +167,7 @@ export async function saveMessages(
     .set({ updatedDttm: new Date() })
     .where(eq(conversation.conversationId, conversationId));
 
-  return true;
+  return inserted;
 }
 
 /**
