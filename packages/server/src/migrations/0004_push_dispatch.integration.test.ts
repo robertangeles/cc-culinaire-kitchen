@@ -33,18 +33,23 @@ describe.skipIf(!RUN)("migration 0004 (real DB)", () => {
     await db.delete(user).where(eq(user.userId, userId));
   });
 
-  it("can run twice, leaves the three tables with their indexes, and changes no column of any other table", async () => {
+  it("can run twice, leaves the three tables with their indexes, and changes no existing column of any other table", async () => {
     const m = migrations.find((x) => x.id === "0004_push_dispatch")!;
     const otherColumns = () =>
       db.execute(sql`
         SELECT table_name, column_name, data_type, is_nullable, column_default
         FROM information_schema.columns
         WHERE table_schema = current_schema() AND table_name NOT IN ('push_opt_outs','push_quiet_hours','push_receipts')
+          AND NOT (table_name = 'device_token' AND column_name = 'refresh_family_id')
         ORDER BY table_name, column_name`) as unknown as Promise<unknown[]>;
     const before = [...(await otherColumns())];
     for (let i = 0; i < 2; i++) for (const s of m.statements) await db.execute(sql.raw(s));
     expect(before.length).toBeGreaterThan(0);
     expect([...(await otherColumns())]).toEqual(before);
+    const added = (await db.execute(sql`
+      SELECT data_type, is_nullable, column_default FROM information_schema.columns
+      WHERE table_schema = current_schema() AND table_name = 'device_token' AND column_name = 'refresh_family_id'`)) as unknown as unknown[];
+    expect([...added]).toEqual([{ data_type: "uuid", is_nullable: "YES", column_default: null }]);
     const idx = (await db.execute(sql`
       SELECT indexname FROM pg_indexes WHERE tablename IN ('push_opt_outs','push_quiet_hours','push_receipts') ORDER BY indexname`)) as unknown as Array<{ indexname: string }>;
     expect(idx.map((i) => i.indexname)).toEqual(

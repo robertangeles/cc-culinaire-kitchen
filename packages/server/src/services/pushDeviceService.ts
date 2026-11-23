@@ -1,12 +1,12 @@
 /**
  * @module services/pushDeviceService
  *
- * Removing device tokens: a person's own token (unregister, logout), every token of a person whose sign-ins have
- * all ended, and tokens the push provider says are dead.
+ * Removing device tokens: a person's own token (unregister, logout), the tokens of a sign-in that has ended,
+ * and tokens the push provider says are dead.
  * Registering stays in `notificationsController` (an upsert on the token value).
  */
 
-import { and, eq, gt, inArray, notExists } from "drizzle-orm";
+import { and, eq, gt, inArray, isNull, notExists, or } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { deviceToken, refreshToken } from "../db/schema.js";
 import type { DbOrTx } from "./auditService.js";
@@ -26,11 +26,12 @@ export async function removeDeviceToken(userId: number, tokenValue: string): Pro
 }
 
 /**
- * Removes every device token of a person who has no live sign-in left (no unexpired refresh token): a phone that
- * was signed out by the server must stop receiving that person's pushes. Does nothing while any sign-in is alive,
- * because a device token is not tied to the sign-in that registered it. Run it in the transaction that ended the sign-in.
+ * Removes a person's device tokens whose sign-in has ended: a phone the server signed out must stop receiving that
+ * person's pushes. A token registered under a sign-in (`refreshFamilyId`) goes when that sign-in has no unexpired
+ * refresh token left; a token with no recorded sign-in goes only when the person has none left at all.
+ * Pass the transaction that ended the sign-in when there is one.
  */
-export async function removeDeviceTokensIfSignedOut(userId: number, tx: DbOrTx): Promise<void> {
+export async function removeSignedOutDeviceTokens(userId: number, tx: DbOrTx = db): Promise<void> {
   await tx.delete(deviceToken).where(
     and(
       eq(deviceToken.userId, userId),
@@ -38,7 +39,13 @@ export async function removeDeviceTokensIfSignedOut(userId: number, tx: DbOrTx):
         tx
           .select({ id: refreshToken.refreshTokenId })
           .from(refreshToken)
-          .where(and(eq(refreshToken.userId, userId), gt(refreshToken.expiresAtDttm, new Date()))),
+          .where(
+            and(
+              eq(refreshToken.userId, userId),
+              gt(refreshToken.expiresAtDttm, new Date()),
+              or(isNull(deviceToken.refreshFamilyId), eq(refreshToken.familyId, deviceToken.refreshFamilyId)),
+            ),
+          ),
       ),
     ),
   );

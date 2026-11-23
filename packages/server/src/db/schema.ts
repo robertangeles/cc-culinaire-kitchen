@@ -2803,6 +2803,8 @@ export const deviceToken = pgTable(
     userId: integer("user_id").notNull().references(() => user.userId),
     tokenValue: varchar("token_value", { length: 500 }).notNull().unique(),
     platform: varchar("platform", { length: 10 }).notNull(),
+    /** The sign-in (`refresh_token.family_id`) this token was registered under: when that sign-in ends, the token goes. Null = the client did not say. Migration 0004. */
+    refreshFamilyId: uuid("refresh_family_id"),
     lastUsedDttm: timestamp("last_used_dttm", { withTimezone: true }),
     createdDttm: timestamp("created_dttm", { withTimezone: true }).defaultNow().notNull(),
     updatedDttm: timestamp("updated_dttm", { withTimezone: true }).defaultNow().notNull(),

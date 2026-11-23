@@ -41,7 +41,7 @@ Hooked to push: roster published, a Published shift cancelled, document verified
 - [ ] Kitchen Brain digest, nudge, capture error.
 - [ ] Not yet notifications at all: transfer, stock take flagged, Bench mention, a person removed from a shift (`removeAssignment`), a venue's bulk undo (`undoGeneration`).
 - [ ] Quiet hours drop a push (the inbox keeps it). If the owner wants it held until quiet hours end, that needs a queue table.
-- [ ] Phone: register an Expo push token (not a raw FCM/APNs token; the dispatcher skips those), send `deviceToken` on logout, call `unregister-device` when notifications are turned off, send the phone's IANA time zone with quiet hours, route `data.link` (`pushLink` in `@culinaire/shared/schemas/push`; `/notifications` until a screen exists).
+- [ ] Phone: register an Expo push token (not a raw FCM/APNs token; the dispatcher skips those), send `refreshToken` in the `register-device` body (ties the push token to that sign-in, so the server removes it when the sign-in ends; without it the token is only removed once the person has no sign-in left), send `deviceToken` on logout, call `unregister-device` when notifications are turned off, send the phone's IANA time zone with quiet hours, route `data.link` (`pushLink` in `@culinaire/shared/schemas/push`; `/notifications` until a screen exists).
 
 ## MFA follow-ups (2026-10-26)
 

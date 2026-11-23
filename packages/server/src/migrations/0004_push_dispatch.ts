@@ -1,15 +1,17 @@
 import type { Migration } from "./runner.js";
 
 /**
- * Push notifications (server side of Wave 4): per-type opt-outs, quiet hours and the pending delivery receipts.
+ * Push notifications (server side of Wave 4): per-type opt-outs, quiet hours, the pending delivery receipts, and
+ * the sign-in a device token was registered under.
  * Run BEFORE the server version that reads these deploys. The previous server version keeps working afterwards:
- * all three tables are new and nothing there reads or writes them, and no existing table or column changes.
+ * the three tables are new and nothing there reads or writes them, and the only change to an existing table is
+ * one new nullable column on `device_token`, which the previous version neither reads nor writes.
  * The one exception is deleting a user: the previous version does not clear `push_opt_outs` / `push_quiet_hours`
  * rows, but it also never creates them, so there is nothing to clear until the new version is live.
  */
 export const migration: Migration = {
   id: "0004_push_dispatch",
-  description: "push_opt_outs, push_quiet_hours and push_receipts, with their indexes",
+  description: "push_opt_outs, push_quiet_hours and push_receipts, with their indexes, and device_token.refresh_family_id",
   statements: [
     // One row per notification type a user switched off; absence = on.
     `CREATE TABLE IF NOT EXISTS "push_opt_outs" (
@@ -46,5 +48,8 @@ export const migration: Migration = {
     `CREATE INDEX IF NOT EXISTS "idx_push_receipts_device_token" ON "push_receipts" ("device_token_id")`,
     // The receipt job: "tickets old enough to have a receipt, oldest first" (and "older than a day: give up").
     `CREATE INDEX IF NOT EXISTS "idx_push_receipts_created" ON "push_receipts" ("created_at")`,
+    // The sign-in (refresh_token.family_id) a device token was registered under; null for a client that did not say.
+    // No index: it is only compared within one user's tokens, which idx_device_token_user already narrows to.
+    `ALTER TABLE "device_token" ADD COLUMN IF NOT EXISTS "refresh_family_id" uuid`,
   ],
 };
