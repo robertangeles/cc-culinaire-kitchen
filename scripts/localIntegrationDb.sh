@@ -13,7 +13,12 @@ set -euo pipefail
 DIR="$HOME/.cache/ck-it-pg"
 SOCK=/tmp/ck-it-pg-sock   # short path: a unix socket path is limited to 107 bytes
 PORT=55432
-BIN=$(ls -d /usr/lib/postgresql/*/bin 2>/dev/null | sort -V | tail -1)
+# An existing data directory only starts under the server version that made it; a new one needs a version that has pgvector installed.
+if [ -f "$DIR/PG_VERSION" ]; then
+  BIN=/usr/lib/postgresql/$(cat "$DIR/PG_VERSION")/bin
+else
+  BIN=$(for v in $(ls /usr/lib/postgresql 2>/dev/null | sort -rV); do [ -f "/usr/share/postgresql/$v/extension/vector.control" ] && echo "/usr/lib/postgresql/$v/bin" && break; done)
+fi
 URL="postgresql://ci@127.0.0.1:$PORT/culinaire_it"
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 
