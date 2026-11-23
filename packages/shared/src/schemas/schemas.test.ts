@@ -150,6 +150,11 @@ describe("catalogue schema", () => {
       { ingredientId: "i2", ingredientName: "Gin", baseUnit: "L", ingredientCategory: "" },
     ]);
   });
+
+  it("reads the waste picker list (id, name, unit) as the same catalogue", () => {
+    const list = [{ ingredientId: "i1", ingredientName: "Flour", baseUnit: "g" }];
+    expect(CatalogueSchema.parse(list)).toEqual([{ ...list[0], ingredientCategory: "" }]);
+  });
 });
 
 describe("prep schemas", () => {

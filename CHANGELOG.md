@@ -5,6 +5,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added (waste: the ingredient list for a cook who logs waste but cannot count stock)
+
+- **`GET /api/waste/ingredients`.** A read-only list of the caller's organisation's active ingredients, each `{ ingredientId, ingredientName, baseUnit }` (the kitchen unit) and nothing else: no cost, stock, supplier, category or allergen. Same organisation as `GET /api/inventory/ingredients` (ingredients belong to the organisation, not to a location); removed ingredients are left out; sorted by name. Open to `waste:log` and to `inventory:count` (and Administrators), so a cook who may log waste but not count stock can now search the whole list in the phone's picker. No new permission, no migration, nothing to seed or backfill. Someone in no organisation gets `403` with `code: "FORBIDDEN"`.
+- **Phone.** The picker's catalogue downloads this list when the person lacks `inventory:count`, and keeps it on the phone like the full one; people who have `inventory:count` still download `GET /api/inventory/ingredients`, unchanged. Older installed apps keep working: the inventory route is untouched and an old phone never asks for the new one.
+- Not in this change: a web waste page for `waste:log`-only users (the web gives them no waste screen to type in yet; separate decision).
+
 ### Added (mobile: add Sign in with Apple to an account)
 
 - **Account > Add Sign in with Apple** (iPhone and iPad only; Android never shows it). A signed-in person gives a fresh Apple credential and the same proof as changing two-factor settings: the password for an account that has one, and an authenticator code when MFA is on. It calls the existing `POST /api/auth/apple/link`; no server change. A person who registered by email and then hides their email with Apple can now join the two, so Apple sign-in opens the one account instead of creating a second. The screen also shows the already-linked state and plain sentences for the server's codes (`INVALID_CREDENTIALS`, `MFA_REQUIRED`, `INVALID_MFA_CODE`, `RECENT_SIGN_IN_REQUIRED`, `APPLE_ALREADY_LINKED`, `APPLE_TOKEN_INVALID`, `APPLE_NOT_CONFIGURED`/`APPLE_UNAVAILABLE`, `RATE_LIMITED`).

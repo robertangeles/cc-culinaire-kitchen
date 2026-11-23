@@ -14,6 +14,7 @@ import {
   editWasteLog,
   getWasteSummary,
   getIngredientSuggestions,
+  listIngredientsForWaste,
   generateReuseSuggestions,
 } from "../services/wasteService.js";
 import { getUserOrgContext } from "../services/orgContextService.js";
@@ -195,6 +196,11 @@ export async function handleGetIngredientSuggestions(req: Request, res: Response
 
   const result = await getIngredientSuggestions(userId, parsed.data.q);
   res.json({ ingredients: result });
+}
+
+/** GET /api/waste/ingredients */
+export async function handleListIngredientsForWaste(req: Request, res: Response) {
+  res.json(await listIngredientsForWaste(req.user!.sub));
 }
 
 /** POST /api/waste/reuse */

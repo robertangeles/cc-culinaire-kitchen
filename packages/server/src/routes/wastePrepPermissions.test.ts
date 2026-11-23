@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import type { Request, Response } from "express";
 import { wasteRouter } from "./waste.js";
 import { prepRouter } from "./prep.js";
+import inventoryRouter from "./inventory.js";
 
 /**
  * Wave 2 permission splits, per route. waste:read (reports, team view, AI reuse) is not waste:log (log,
@@ -52,6 +53,8 @@ const waste: Array<[string, string, string[]]> = [
   ["post", "/reuse", ["waste:read"]],
   ["get", "/", ["waste:read", "waste:log"]],
   ["get", "/suggestions", ["waste:read", "waste:log"]],
+  // The phone's ingredient picker for a cook who may log waste but not count stock; inventory:count holders may read the same list.
+  ["get", "/ingredients", ["waste:log"]],
 ];
 
 const prep: Array<[string, string, string[]]> = [
@@ -91,5 +94,31 @@ describe("GET /waste/org-context (the team/personal toggle for waste and prep)",
   it("still refuses a signed-in user with no waste or prep access, and an anonymous request", () => {
     expect(allows(gates, { permissions: ["chat:access"] })).toBe(false);
     expect(allows(gates, undefined)).toBe(false);
+  });
+});
+
+describe("GET /waste/ingredients (the picker list for a cook who logs waste but cannot count stock)", () => {
+  const gates = gatesFor(wasteRouter, "get", "/ingredients");
+
+  it("is open to a holder of inventory:count too, who may already read the full list", () => {
+    expect(allows(gates, { permissions: ["inventory:count"] })).toBe(true);
+  });
+
+  it("is closed to waste:read alone (reports are not logging) and to inventory:manage alone", () => {
+    expect(allows(gates, { permissions: ["waste:read"] })).toBe(false);
+    expect(allows(gates, { permissions: ["inventory:manage"] })).toBe(false);
+  });
+});
+
+describe("a user holding only waste:log on the inventory routes", () => {
+  type Layer = { route?: { path: string; methods: Record<string, boolean> } };
+  const routes = (inventoryRouter as unknown as { stack: Layer[] }).stack.flatMap((l) =>
+    l.route ? Object.keys(l.route.methods).map((m) => [m, l.route!.path] as const) : [],
+  );
+
+  it("reaches no inventory route but the signed-in user's own notifications, so the new list is the only door to ingredients", () => {
+    expect(routes.length).toBeGreaterThan(50);
+    const open = routes.filter(([method, path]) => allows(gatesFor(inventoryRouter, method, path), { permissions: ["waste:log"] }));
+    expect(open.every(([, path]) => path.startsWith("/notifications"))).toBe(true);
   });
 });

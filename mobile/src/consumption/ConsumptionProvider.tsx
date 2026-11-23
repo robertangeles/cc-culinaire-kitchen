@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useSyncExternalStore, type ReactNode } from "react";
-import { client } from "../runtime/appContext";
+import { client, session } from "../runtime/appContext";
 import { currentUserId, outbox, runner } from "../runtime/appOutbox";
-import { createCatalogue } from "../ingredients/catalogue";
+import { catalogueRoute, createCatalogue } from "../ingredients/catalogue";
 import { createRecents } from "../ingredients/recents";
 import { createIngredientSource, type IngredientSource } from "../ingredients/source";
 import { newUuid } from "../outbox/uuid";
@@ -22,7 +22,8 @@ export function ConsumptionProvider({ locationId, viewer, children }: { location
     const userId = currentUserId() ?? -1;
     const recents = createRecents<ConsumptionRecent>({ kv: sqliteKv, key: `consumption.recents.${userId}`, max: 12 });
     // Usage names an item of the organisation's catalogue (the server takes an ingredient id), so there is no free-text list from the server.
-    const catalogue = createCatalogue({ client, kv: sqliteKv, key: `catalogue.${userId}` });
+    const state = session.getSnapshot().state;
+    const catalogue = createCatalogue({ client, kv: sqliteKv, key: `catalogue.${userId}`, path: state.phase === "ready" ? catalogueRoute(state.user) : "/api/inventory/ingredients" });
     void catalogue.refresh(); // in the background: the picker reads what is on the phone and never waits for this
     return {
       store: createConsumptionStore({ api: createConsumptionApi(client), kv: sqliteKv, outbox, recents, viewer, locationId, kick: runner.kick, now: Date.now, newId: newUuid }),
