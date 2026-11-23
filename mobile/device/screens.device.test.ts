@@ -314,6 +314,27 @@ describe.skipIf(!process.env.SCREENS_OUT)(`screens on ${FORM}`, { timeout: 600_0
     await waitFor(/^More(,|$)|^Account(,|$)/, 60_000);
   });
 
+  it("home, ask, recipes, receive", async () => {
+    await signedIn();
+    await sleep(2500);
+    await shot("07-home");
+    await tab("Ask");
+    await waitFor("New conversation", 30_000);
+    await shot("80-ask");
+    await tap("New conversation");
+    await waitFor("My hollandaise split. How do I fix it?", 20_000);
+    await shot("81-ask-conversation");
+    await tab("Recipes");
+    await waitFor("No recipes yet", 30_000);
+    await shot("85-recipes-empty");
+    await tap("Create a recipe");
+    await waitFor("What would you like to create?", 20_000);
+    await shot("86-recipe-lab");
+    await tab("Receive");
+    await waitFor("No deliveries waiting", 30_000);
+    await shot("90-receive-empty");
+  });
+
   it("count with no stock take open", async () => {
     await signedIn();
     await tab("Count");
