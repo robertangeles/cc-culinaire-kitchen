@@ -8,6 +8,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useLocation } from "../../context/LocationContext.js";
+import { useHasPermission } from "../../hooks/useHasPermission.js";
 import { CategoryCounter } from "./CategoryCounter.js";
 import { CompletionRing } from "./CompletionRing.js";
 import { CATEGORY_LABELS } from "@culinaire/shared";
@@ -32,6 +33,8 @@ interface OpeningSession {
 
 export function OpeningInventory() {
   const { selectedLocationId, refreshLocations } = useLocation();
+  // The server lets only a manager finish the opening inventory (it writes the first stock levels).
+  const canFinish = useHasPermission()("inventory:manage");
 
   const [session, setSession] = useState<OpeningSession | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -353,8 +356,14 @@ export function OpeningInventory() {
         })}
       </div>
 
+      {allCategoriesSubmitted && !canFinish && (
+        <p className="text-center text-sm text-dark-600">
+          Every category is counted. A manager finishes the opening inventory.
+        </p>
+      )}
+
       {/* Submit button — visible when all categories are submitted */}
-      {allCategoriesSubmitted && (
+      {allCategoriesSubmitted && canFinish && (
         <div className="text-center animate-[fadeInUp_300ms_ease-out]">
           <button
             onClick={submitAll}

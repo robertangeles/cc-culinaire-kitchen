@@ -7,6 +7,12 @@ vi.mock("../../context/LocationContext.js", () => ({
   useLocation: () => ({ selectedLocationId: "loc-1", refreshLocations: vi.fn() }),
 }));
 
+// Finishing the opening count is a manager's call (inventory:manage on the server).
+let isManager = true;
+vi.mock("../../hooks/useHasPermission.js", () => ({
+  useHasPermission: () => (key: string) => key === "inventory:manage" && isManager,
+}));
+
 const openingSession = {
   sessionId: "sess-1",
   sessionStatus: "OPEN",
@@ -54,5 +60,32 @@ describe("OpeningInventory — claim before count", () => {
 
     // (B) the claim failed, so the counter must NOT have opened.
     expect(screen.queryByText(/copy last count/i)).toBeNull();
+  });
+});
+
+describe("OpeningInventory — finishing is a manager's call", () => {
+  const counted = {
+    ...openingSession,
+    categories: [{ categoryId: "cat-uuid-1", categoryName: "spirits", categoryStatus: "SUBMITTED", lines: [] }],
+  };
+
+  beforeEach(() => {
+    global.fetch = vi.fn(() => Promise.resolve({ ok: true, json: async () => counted })) as unknown as typeof fetch;
+  });
+  afterEach(() => {
+    isManager = true;
+    vi.restoreAllMocks();
+  });
+
+  it("shows a manager the Complete button", async () => {
+    render(<OpeningInventory />);
+    expect(await screen.findByRole("button", { name: /complete opening inventory/i })).toBeTruthy();
+  });
+
+  it("shows a counter that a manager finishes it, and no Complete button", async () => {
+    isManager = false;
+    render(<OpeningInventory />);
+    expect(await screen.findByText(/a manager finishes the opening inventory/i)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /complete opening inventory/i })).toBeNull();
   });
 });

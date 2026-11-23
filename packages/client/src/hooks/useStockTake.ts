@@ -117,8 +117,19 @@ export interface SetupProgress {
   inventoryActive: boolean;
 }
 
+/** The dashboard's figures, worked out on the server. Value is absent without `inventory:cost`. */
+export interface StockSummary {
+  lowCount: number;
+  criticalCount: number;
+  lowIngredientIds: string[];
+  criticalIngredientIds: string[];
+  stockValue?: number;
+  valueByCategory?: Array<{ category: string; value: number }>;
+}
+
 export interface DashboardData {
   stockLevels: LocationIngredient[];
+  stockSummary: StockSummary;
   activeSession: StockTakeSession | null;
   lastCompletedSession: StockTakeSession | null;
   setupProgress?: SetupProgress;
@@ -145,7 +156,8 @@ export interface OrgLocationSummary {
   totalItems: number;
   lowStock: number;
   critical: number;
-  inventoryValue: number;
+  /** Absent without `inventory:cost`. */
+  inventoryValue?: number;
   lastCountDttm: string | null;
 }
 

@@ -47,6 +47,7 @@ export function LocationDashboard({
   const { items: locItems } = useLocationIngredients(locationId);
   const [drillLocationId, setDrillLocationId] = useState<string | null>(null);
   const { items: drillItems } = useLocationIngredients(drillLocationId);
+  const { data: drillData } = useDashboard(drillLocationId);
   const [showCritical, setShowCritical] = useState(false);
   const [showLow, setShowLow] = useState(false);
 
@@ -70,31 +71,27 @@ export function LocationDashboard({
   if (!data) return null;
 
   // Use drilled-down location's items when selected, otherwise current location
-  const activeItems = drillLocationId && drillItems.length > 0 ? drillItems : locItems;
+  const drilling = drillLocationId && drillItems.length > 0 && drillData;
+  const activeItems = drilling ? drillItems : locItems;
+  // Low, critical and value come from the server, so the web and the phone show the same figures.
+  const summary = drilling ? drillData.stockSummary : data.stockSummary;
+  const lowIds = new Set(summary.lowIngredientIds);
+  const criticalIds = new Set(summary.criticalIngredientIds);
+  const statusOf = (i: LocationIngredient) => (criticalIds.has(i.ingredientId) ? "critical" : lowIds.has(i.ingredientId) ? "low" : "healthy");
 
   // Separate low and critical items
-  const lowItems = activeItems.filter((i) => getStockStatus(i) === "low");
-  const criticalItems = activeItems.filter((i) => getStockStatus(i) === "critical");
+  const lowItems = activeItems.filter((i) => statusOf(i) === "low");
+  const criticalItems = activeItems.filter((i) => statusOf(i) === "critical");
 
-  // Calculate inventory value
-  let totalValue = 0;
-  const valueByCat = new Map<string, number>();
-  for (const item of activeItems) {
-    const qty = Number(item.currentQty || 0);
-    const cost = Number(item.locationUnitCost || item.orgUnitCost || 0);
-    const val = qty * cost;
-    if (val > 0) {
-      totalValue += val;
-      const cat = item.ingredientCategory;
-      valueByCat.set(cat, (valueByCat.get(cat) || 0) + val);
-    }
-  }
+  // Inventory value: absent for someone without inventory:cost, and then not shown
+  const totalValue = summary.stockValue ?? 0;
+  const valueByCat = new Map((summary.valueByCategory ?? []).map((v) => [v.category, v.value]));
 
   // Category health chips
   const catHealth = new Map<string, "healthy" | "low" | "critical">();
   for (const item of activeItems) {
     const cat = item.ingredientCategory;
-    const status = getStockStatus(item);
+    const status = statusOf(item);
     const current = catHealth.get(cat) || "healthy";
     if (status === "critical" || (status === "low" && current !== "critical")) {
       catHealth.set(cat, status === "critical" ? "critical" : status);
@@ -136,6 +133,7 @@ export function LocationDashboard({
         <DrillDownView
           locationName={allLocations.find((l) => l.storeLocationId === drillLocationId)?.locationName || "Location"}
           items={drillItems}
+          stockValue={drillData?.stockSummary.stockValue}
           onClose={() => setDrillLocationId(null)}
         />
       )}
@@ -276,7 +274,7 @@ function OrgSummaryTable({
       items: acc.items + l.totalItems,
       low: acc.low + l.lowStock,
       critical: acc.critical + l.critical,
-      value: acc.value + l.inventoryValue,
+      value: acc.value + (l.inventoryValue ?? 0),
     }),
     { items: 0, low: 0, critical: 0, value: 0 },
   );
@@ -325,7 +323,7 @@ function OrgSummaryTable({
               {loc.critical}
             </div>
             <div className="text-right text-sm text-emerald-400 tabular-nums hidden sm:block">
-              ${loc.inventoryValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+              {loc.inventoryValue === undefined ? "—" : `$${loc.inventoryValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
             </div>
           </button>
         ))}
@@ -340,7 +338,9 @@ function OrgSummaryTable({
             {totals.critical}
           </div>
           <div className="text-right text-xs text-emerald-400 font-medium tabular-nums hidden sm:block">
-            ${totals.value.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+            {locations.every((l) => l.inventoryValue === undefined)
+              ? "—"
+              : `$${totals.value.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
           </div>
         </div>
       </div>
@@ -351,21 +351,16 @@ function OrgSummaryTable({
 // ─── Drill-Down View ─────────────────────────────────────────────
 
 function DrillDownView({
-  locationName, items, onClose,
+  locationName, items, stockValue, onClose,
 }: {
   locationName: string;
   items: LocationIngredient[];
+  /** From the server; absent without inventory:cost. */
+  stockValue?: number;
   onClose: () => void;
 }) {
   const lowItems = items.filter((i) => getStockStatus(i) === "low");
   const critItems = items.filter((i) => getStockStatus(i) === "critical");
-
-  let totalValue = 0;
-  for (const item of items) {
-    const qty = Number(item.currentQty || 0);
-    const cost = Number(item.locationUnitCost || item.orgUnitCost || 0);
-    totalValue += qty * cost;
-  }
 
   return (
     <div className="rounded-xl border border-gold/20 bg-dark-50 overflow-hidden animate-[fadeIn_150ms_ease-out]">
@@ -374,7 +369,8 @@ function DrillDownView({
           <MapPin className="size-4 text-gold" />
           <span className="text-sm font-semibold text-white">{locationName}</span>
           <span className="text-xs text-dark-600">
-            {items.length} items · ${totalValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+            {items.length} items
+            {stockValue !== undefined && ` · $${stockValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
           </span>
         </div>
         <button onClick={onClose} className="text-xs text-dark-600 hover:text-white transition-colors">
