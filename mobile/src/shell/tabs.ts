@@ -39,5 +39,5 @@ export function hasAnyPermission(user: AuthUser, keys: string[]): boolean {
 
 export const canOpen = (user: AuthUser, tab: ModuleTab) => !tab.anyPermission || hasAnyPermission(user, tab.anyPermission);
 
-/** Everyone also gets the Account tab (sign out, location), so a person with no module still has somewhere to go. */
+/** Everyone also gets the Account tab (sign out, location). */
 export const visibleTabs = (user: AuthUser) => moduleTabs.filter((t) => canOpen(user, t));

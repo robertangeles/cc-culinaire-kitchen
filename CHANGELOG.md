@@ -5,6 +5,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added (mobile Wave 6, phone: Ask Antoine and recipes)
+
+No server change, no schema change and no migration. The phone gets two tabs shown to everyone signed in (the server asks for no permission on chat, conversations or recipes): **Ask** (the kitchen chat with a streamed answer, Stop, Try again, saved conversations and the "grounded in your Brain" label) and **Recipes** (My Recipes, the culinary Recipe Lab, a recipe's page with refine and the public switch). No pricing, purchase or upgrade links. How it works and every difference from the web: `mobile/README.md` ("Ask Antoine", "Recipes").
+
+- **Shared schemas.** `packages/shared/src/schemas/conversation.ts` and `recipe.ts`: what the conversation and recipe routes send, parsed leniently on the phone.
+- **Not on the phone yet:** guest chat, image mode, web search, the Patisserie and Cocktail labs, versions, share, email, ratings, archive and image regeneration.
+
 ### Changed (server hardening for chat, recipes and the model-backed screens, before the phone shows them)
 
 No migration, nothing to seed or backfill. Every answer below keeps `error` as the sentence the web shows and adds `code` (shared `ApiErrorBody`), so older installed apps keep working.
