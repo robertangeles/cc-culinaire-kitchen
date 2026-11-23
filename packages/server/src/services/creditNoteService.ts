@@ -51,7 +51,7 @@ export interface DiscrepancyValueInput {
 const toCents = (n: number) => Math.round(n * 100) / 100;
 
 /**
- * What a discrepancy is worth, the most it can be credited: the missing quantity at the order price for a short
+ * What a discrepancy is worth, the most it can be credited: the missing quantity at `unitPrice` for a short
  * delivery, the whole line for a rejection or a substitution, and the extra paid per unit times what arrived for a
  * price rise (nothing for a price drop). Null when there is no price to value it by.
  */
