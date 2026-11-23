@@ -14,6 +14,7 @@ import {
   handleEditWasteLog,
   handleGetWasteSummary,
   handleGetIngredientSuggestions,
+  handleListIngredientsForWaste,
   handleGenerateReuseSuggestions,
   handleGetOrgContext,
 } from "../controllers/wasteController.js";
@@ -30,6 +31,10 @@ wasteRouter.get(
   requirePermission("waste:read", "waste:log", "prep:read", "prep:manage"),
   handleGetOrgContext,
 );
+
+// The phone's waste picker lists the organisation's ingredients (id, name, unit only). A cook who may log waste but not count
+// stock cannot read GET /api/inventory/ingredients, so this is the one door; inventory:count holders may read the same list.
+wasteRouter.get("/ingredients", requirePermission("waste:log", "inventory:count"), handleListIngredientsForWaste);
 
 // The module needs waste:read (reports and cost) or waste:log (log your own entries); each route below says which.
 wasteRouter.use(requirePermission("waste:read", "waste:log"));

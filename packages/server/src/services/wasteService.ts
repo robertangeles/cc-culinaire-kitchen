@@ -11,13 +11,14 @@ import { generateObject } from "ai";
 import { z } from "zod";
 import pino from "pino";
 import { db } from "../db/index.js";
-import { wasteLog, user, storeLocation } from "../db/schema.js";
+import { wasteLog, user, storeLocation, ingredient } from "../db/schema.js";
 import { recipe } from "../db/schema.js";
-import { eq, desc, sql, and, gte, lte, ilike, inArray } from "drizzle-orm";
+import { eq, desc, sql, and, gte, lte, ilike, inArray, isNull } from "drizzle-orm";
 import { AppError } from "../utils/appError.js";
 import { insertOnce, settleDelete } from "../utils/retrySafe.js";
 import { dayBounds } from "../utils/dateRange.js";
 import { getUserOrgContext, type OrgContext } from "./orgContextService.js";
+import { getUserLocationContext } from "./locationContextService.js";
 import { getModel } from "./providerService.js";
 import { recordOpsEvent } from "./brainCaptureService.js";
 
@@ -378,6 +379,26 @@ export async function getWasteSummary(
       cost: Number(r.totalCost),
     })),
   };
+}
+
+// ---------------------------------------------------------------------------
+// listIngredientsForWaste
+// ---------------------------------------------------------------------------
+
+/**
+ * The organisation's active ingredients as the phone's waste picker needs them: id, name and kitchen unit, nothing else
+ * (no cost, stock or supplier). Same organisation as `GET /api/inventory/ingredients` (a location's organisation, else the
+ * membership's); ingredients belong to the organisation, not to a location.
+ */
+export async function listIngredientsForWaste(userId: number) {
+  const ctx = await getUserLocationContext(userId);
+  const organisationId = ctx.locations[0]?.organisationId ?? ctx.organisationId;
+  if (organisationId === null) throw new AppError(403, "FORBIDDEN", "You are not a member of any organisation");
+  return db
+    .select({ ingredientId: ingredient.ingredientId, ingredientName: ingredient.ingredientName, baseUnit: ingredient.baseUnit })
+    .from(ingredient)
+    .where(and(eq(ingredient.organisationId, organisationId), isNull(ingredient.deletedAt)))
+    .orderBy(ingredient.ingredientName);
 }
 
 // ---------------------------------------------------------------------------

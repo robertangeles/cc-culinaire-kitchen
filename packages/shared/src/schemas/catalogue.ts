@@ -14,3 +14,7 @@ export type CatalogueIngredient = z.infer<typeof CatalogueIngredientSchema>;
 
 /** A row that cannot be picked (no id or name) is skipped, never the whole catalogue. */
 export const CatalogueSchema = z.array(z.unknown()).transform((rows) => rows.flatMap((r) => { const p = CatalogueIngredientSchema.safeParse(r); return p.success ? [p.data] : []; }));
+
+/** `GET /api/waste/ingredients`, for a cook who may log waste but not count stock: id, name and kitchen unit and nothing else (no cost, stock or supplier). */
+export const WasteIngredientListSchema = z.array(z.object({ ingredientId: z.string(), ingredientName: z.string().min(1), baseUnit: z.string() }));
+export type WasteIngredient = z.infer<typeof WasteIngredientListSchema>[number];
