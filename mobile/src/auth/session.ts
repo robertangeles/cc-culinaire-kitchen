@@ -4,6 +4,7 @@
  * It never discards saved tokens on a network failure: only the server refusing them ends a session.
  */
 
+import { UpgradeRequiredBodySchema, type UpgradeRequired } from "@culinaire/shared/schemas/errors";
 import { ApiError } from "../api/client";
 import type { AuthApi, AuthUser, StoreLocation } from "../api/auth";
 
@@ -11,7 +12,12 @@ export type SessionState =
   | { phase: "restoring" }
   | { phase: "signedOut"; error?: string }
   | { phase: "mfa"; mfaSessionToken: string; error?: string }
-  | { phase: "noAccess"; reason: string }
+  /** Signed in but not at a location yet: join the organisation (`organisationId` null) or the location by key. */
+  | { phase: "firstRun"; user: AuthUser; organisationId: number | null; error?: string }
+  /** The server says this build is too old. Stays until the app is replaced. */
+  | ({ phase: "updateRequired" } & UpgradeRequired)
+  /** The person deleted their account from here; the phone is already cleared. */
+  | { phase: "accountDeleted" }
   /** `current` is set when a chef already counting at a location came back to the picker, so they can cancel. */
   | { phase: "chooseLocation"; user: AuthUser; locations: StoreLocation[]; current?: StoreLocation; error?: string }
   /** `offline` is true when opened from the last known user and location because the server could not be reached. */
@@ -37,6 +43,8 @@ export interface SessionDeps {
   snapshots: { load: () => Promise<Snapshot | null>; save: (snapshot: Snapshot | null) => Promise<void> };
   /** Opens the Google account picker and returns its ID token, or null when the person closes it. Absent when the build has no Google client ID. */
   googleIdToken?: () => Promise<string | null>;
+  /** Clears what the phone stores besides the tokens and saved user: the count queue and downloaded sheets. */
+  wipeLocalData?: () => Promise<void>;
 }
 
 const GENERIC = "Something went wrong. Try again.";
@@ -47,11 +55,22 @@ function signInMessage(err: unknown): string {
   return err.code === "unauthorized" ? "Email or password is wrong." : err.message;
 }
 
-export function createSession({ api, hasTokens, snapshots, googleIdToken }: SessionDeps) {
+/** A failed join in one plain sentence. The code is the server's machine-readable one; the English is only the fallback. */
+function joinMessage(err: unknown): string {
+  if (!(err instanceof ApiError)) return GENERIC;
+  if (err.hasCode("INVALID_JOIN_KEY") || err.hasCode("STORE_KEY_NOT_FOUND")) return "That key wasn't found. Check it with your manager.";
+  if (err.hasCode("NOT_ORG_MEMBER")) return "That location belongs to a different organisation than yours.";
+  if (err.hasCode("LOCATION_INACTIVE")) return "That location isn't open any more. Ask your manager.";
+  return err.message;
+}
+
+export function createSession({ api, hasTokens, snapshots, googleIdToken, wipeLocalData }: SessionDeps) {
   let snapshot: SessionSnapshot = { state: { phase: "restoring" }, busy: false };
   const listeners = new Set<() => void>();
 
   function set(next: Partial<SessionSnapshot>) {
+    // Once the server has said this build is too old, no later answer (the failure that came with the 426) may replace the update screen.
+    if (next.state && snapshot.state.phase === "updateRequired") return;
     snapshot = { ...snapshot, ...next };
     listeners.forEach((l) => l());
   }
@@ -74,7 +93,7 @@ export function createSession({ api, hasTokens, snapshots, googleIdToken }: Sess
   async function open(user: AuthUser) {
     const ctx = await api.locationContext();
     if (ctx.locations.length === 0) {
-      set({ state: { phase: "noAccess", reason: "You aren't assigned to a location yet. Ask your manager." } });
+      set({ state: { phase: "firstRun", user, organisationId: ctx.organisationId } });
       return;
     }
     const selected = ctx.locations.find((l) => l.storeLocationId === ctx.selectedLocationId);
@@ -86,6 +105,25 @@ export function createSession({ api, hasTokens, snapshots, googleIdToken }: Sess
     } else {
       set({ state: { phase: "chooseLocation", user, locations: ctx.locations } });
     }
+  }
+
+  /** One join step. A server that says the person is already in is a retry after a lost reply, so it counts as done. */
+  function join(key: string, send: (key: string) => Promise<void>, alreadyCode: string) {
+    const current = snapshot.state;
+    const trimmed = key.trim();
+    if (current.phase !== "firstRun" || !trimmed) return Promise.resolve();
+    return run(async () => {
+      try {
+        try {
+          await send(trimmed);
+        } catch (err) {
+          if (!(err instanceof ApiError && err.hasCode(alreadyCode))) throw err;
+        }
+        await open(await api.me());
+      } catch (err) {
+        set({ state: { ...current, error: joinMessage(err) } });
+      }
+    });
   }
 
   return {
@@ -186,6 +224,34 @@ export function createSession({ api, hasTokens, snapshots, googleIdToken }: Sess
       const current = snapshot.state;
       if (current.phase !== "chooseLocation" || !current.current) return;
       set({ state: { phase: "ready", user: current.user, location: current.current, locations: current.locations } });
+    },
+
+    /** First run, step one: join the organisation by its key. Reloads the person, so new permissions show. */
+    joinOrganisation(joinKey: string) {
+      return join(joinKey, (key) => api.joinOrganisation(key), "ALREADY_MEMBER");
+    },
+
+    /** First run, step two: join a location of that organisation by its store key. */
+    joinLocation(storeKey: string) {
+      return join(storeKey, (key) => api.joinLocation(key), "ALREADY_ASSIGNED");
+    },
+
+    /** The API client calls this on any 426. */
+    updateRequired(body: unknown) {
+      set({ state: { phase: "updateRequired", ...UpgradeRequiredBodySchema.parse(body) } });
+    },
+
+    /** The server deleted the account: end the session and clear everything on the phone, then show the result. */
+    async accountDeleted() {
+      // Each step is tried on its own: the account is gone either way, so the result must show whatever fails here.
+      await api.signOut().catch(() => undefined); // clears the device tokens
+      await snapshots.save(null).catch(() => undefined);
+      await wipeLocalData?.().catch(() => undefined);
+      set({ state: { phase: "accountDeleted" } });
+    },
+
+    leaveDeletedAccount() {
+      set({ state: { phase: "signedOut" } });
     },
 
     signOut() {

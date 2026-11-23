@@ -9,8 +9,8 @@ interface Props {
   label: string;
   onPress: () => void;
   disabled?: boolean;
-  /** "primary" is the copper gradient; "ghost" is outlined paper; "quiet" is a text-only action. */
-  kind?: "primary" | "ghost" | "quiet";
+  /** "primary" is the copper gradient; "ghost" is outlined paper; "quiet" is a text-only action; "danger" is outlined ember, for what cannot be undone. */
+  kind?: "primary" | "ghost" | "quiet" | "danger";
   /** A mark before the label (the Google "G"). */
   leading?: ReactNode;
 }
@@ -22,6 +22,13 @@ export function Button({ label, onPress, disabled, kind = "primary", leading }: 
       <Pressable accessibilityRole="button" accessibilityState={{ disabled: !!disabled }} disabled={disabled} onPress={onPress} style={({ pressed }) => [styles.ghost, { backgroundColor: c.surface, borderColor: c.border, opacity: disabled ? 0.5 : 1, transform: [{ scale: pressed ? 0.97 : 1 }] }]}>
         {leading ? <View accessibilityElementsHidden>{leading}</View> : null}
         <Text style={{ color: c.text, fontFamily: fontFamily.uiStrong, fontSize: fontSize.body + 2 }}>{label}</Text>
+      </Pressable>
+    );
+  }
+  if (kind === "danger") {
+    return (
+      <Pressable accessibilityRole="button" accessibilityState={{ disabled: !!disabled }} disabled={disabled} onPress={onPress} style={({ pressed }) => [styles.ghost, { backgroundColor: c.surface, borderColor: c.danger, opacity: disabled ? 0.5 : 1, transform: [{ scale: pressed ? 0.97 : 1 }] }]}>
+        <Text style={{ color: c.danger, fontFamily: fontFamily.uiStrong, fontSize: fontSize.body + 2 }}>{label}</Text>
       </Pressable>
     );
   }

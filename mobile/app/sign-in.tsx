@@ -9,6 +9,7 @@ import { Segmented } from "../src/ui/Segmented";
 import { Text } from "../src/ui/Text";
 import { TextField } from "../src/ui/TextField";
 import { Button } from "../src/ui/Button";
+import { LegalLinks } from "../src/ui/LegalLinks";
 import { useColors } from "../src/ui/theme";
 
 type Mode = "signin" | "register";
@@ -100,6 +101,7 @@ export default function SignIn() {
           <Button kind="ghost" label="Continue with Google" leading={<GoogleMark />} disabled={signingIn} onPress={() => void session.signInWithGoogle()} />
         </>
       ) : null}
+      <LegalLinks />
     </Screen>
   );
 }
