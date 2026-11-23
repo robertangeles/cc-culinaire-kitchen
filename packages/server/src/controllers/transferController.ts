@@ -6,12 +6,35 @@
  */
 
 import type { Request, Response, NextFunction } from "express";
+import { z } from "zod";
 import pino from "pino";
 import { getUserLocationContext, assertLocationAccess, canAccessLocation } from "../services/locationContextService.js";
 import { AppError } from "../utils/appError.js";
 import * as transferService from "../services/transferService.js";
 
 const logger = pino({ name: "transferController" });
+
+const QTY_MAX = 99999;
+
+/** One line as sent on create, replace and add: a real item, a quantity above 0, a unit. */
+const LineSchema = z.object({
+  ingredientId: z.string().uuid(),
+  sentQty: z.coerce.number().positive().max(QTY_MAX),
+  sentUnit: z.string().min(1).max(20),
+  fifoBatchId: z.string().uuid().optional(),
+});
+const LinesSchema = z.array(LineSchema).min(1).max(500);
+
+/** What arrived, per line of the transfer: 0 or more (a line that never came is 0). */
+const ReceivedLinesSchema = z.array(z.object({
+  lineId: z.string().uuid(),
+  receivedQty: z.number().finite().min(0).max(QTY_MAX),
+})).max(500);
+
+/** 400 VALIDATION: a refused input, with a sentence the web shows. */
+function refuse(res: Response, error: string): void {
+  res.status(400).json({ error, code: "VALIDATION" });
+}
 
 /** Resolve the user's org ID from their location context. */
 async function resolveOrgId(req: Request, res: Response): Promise<number | null> {
@@ -20,7 +43,7 @@ async function resolveOrgId(req: Request, res: Response): Promise<number | null>
   // location-less org admin can still manage org-wide records (e.g. suppliers).
   const orgId = ctx.locations[0]?.organisationId ?? ctx.organisationId;
   if (orgId === null) {
-    res.status(400).json({ error: "You are not a member of any organisation" });
+    res.status(400).json({ error: "You are not a member of any organisation", code: "FORBIDDEN" });
     return null;
   }
   return orgId;
@@ -53,46 +76,35 @@ export async function handleInitiateTransfer(
     if (orgId === null) return;
 
     const userId = req.user!.sub;
-    const { fromLocationId, toLocationId, lines, notes } = req.body;
+    const { transferId, fromLocationId, toLocationId, notes } = req.body;
 
+    if (transferId !== undefined && !z.string().uuid().safeParse(transferId).success) {
+      refuse(res, "transferId must be a UUID when provided");
+      return;
+    }
     if (!fromLocationId) {
-      res.status(400).json({ error: "fromLocationId is required" });
+      refuse(res, "fromLocationId is required");
       return;
     }
     if (!toLocationId) {
-      res.status(400).json({ error: "toLocationId is required" });
+      refuse(res, "toLocationId is required");
       return;
     }
-    if (!lines || !Array.isArray(lines) || lines.length === 0) {
-      res.status(400).json({ error: "lines array is required with at least one item" });
+    const lines = LinesSchema.safeParse(req.body.lines);
+    if (!lines.success) {
+      refuse(res, "Each line needs an item, a quantity above 0 and a unit (1 to 500 lines)");
       return;
-    }
-
-    for (const line of lines) {
-      if (!line.ingredientId || !line.sentQty || !line.sentUnit) {
-        res.status(400).json({ error: "Each line requires ingredientId, sentQty, sentUnit" });
-        return;
-      }
-      if (Number(line.sentQty) <= 0) {
-        res.status(400).json({ error: "sentQty must be greater than 0" });
-        return;
-      }
     }
 
     // Stock leaves the source, so it must be the caller's; the destination only has to be in the organisation.
     await assertLocationAccess(req.user!, fromLocationId);
 
-    const transfer = await transferService.initiateTransfer(
-      orgId, fromLocationId, toLocationId, userId, lines, notes,
+    const { replay, ...transfer } = await transferService.initiateTransfer(
+      orgId, fromLocationId, toLocationId, userId, lines.data, notes, transferId,
     );
 
-    res.status(201).json(transfer);
+    res.status(replay ? 200 : 201).json(transfer);
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (msg.includes("not found") || msg.includes("must be different")) {
-      res.status(400).json({ error: msg });
-      return;
-    }
     logger.error(err, "handleInitiateTransfer failed");
     next(err);
   }
@@ -115,11 +127,6 @@ export async function handleConfirmSent(
 
     res.json(transfer);
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (msg.includes("not found")) {
-      res.status(404).json({ error: msg });
-      return;
-    }
     logger.error(err, "handleConfirmSent failed");
     next(err);
   }
@@ -135,25 +142,19 @@ export async function handleConfirmReceived(
     const orgId = await resolveOrgId(req, res);
     if (orgId === null) return;
 
-    const { receivedLines } = req.body;
-
-    if (!receivedLines || !Array.isArray(receivedLines)) {
-      res.status(400).json({ error: "receivedLines array is required" });
+    const receivedLines = ReceivedLinesSchema.safeParse(req.body.receivedLines);
+    if (!receivedLines.success) {
+      refuse(res, "receivedLines must list each line with a quantity of 0 or more");
       return;
     }
 
     await assertTransferAccess(req, req.params.id as string, orgId, ["to"]);
     const transfer = await transferService.confirmReceived(
-      req.params.id as string, orgId, req.user!.sub, receivedLines,
+      req.params.id as string, orgId, req.user!.sub, receivedLines.data,
     );
 
     res.json(transfer);
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (msg.includes("not found")) {
-      res.status(404).json({ error: msg });
-      return;
-    }
     logger.error(err, "handleConfirmReceived failed");
     next(err);
   }
@@ -176,11 +177,6 @@ export async function handleCancelTransfer(
 
     res.json(transfer);
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (msg.includes("not found")) {
-      res.status(404).json({ error: msg });
-      return;
-    }
     logger.error(err, "handleCancelTransfer failed");
     next(err);
   }
@@ -226,7 +222,7 @@ export async function handleGetTransferDetail(
     await assertTransferAccess(req, req.params.id as string, orgId, ["from", "to"]);
     const transfer = await transferService.getTransferDetail(req.params.id as string, orgId);
     if (!transfer) {
-      res.status(404).json({ error: "Transfer not found" });
+      res.status(404).json({ error: "Transfer not found", code: "NOT_FOUND" });
       return;
     }
 
@@ -250,7 +246,7 @@ export async function handleListPending(
     const { storeLocationId } = req.query;
 
     if (!storeLocationId) {
-      res.status(400).json({ error: "storeLocationId query param is required" });
+      refuse(res, "storeLocationId query param is required");
       return;
     }
 
@@ -277,28 +273,18 @@ export async function handleUpdateTransfer(
     if (orgId === null) return;
 
     const id = req.params.id as string;
-    const { lines, notes } = req.body;
-
-    if (!Array.isArray(lines) || lines.length === 0) {
-      res.status(400).json({ error: "lines array is required" });
+    const lines = LinesSchema.safeParse(req.body.lines);
+    if (!lines.success) {
+      refuse(res, "Each line needs an item, a quantity above 0 and a unit (1 to 500 lines)");
       return;
     }
 
     await assertTransferAccess(req, id, orgId, ["from"]);
-    const result = await transferService.updateTransfer(id, orgId, { lines, notes });
+    const result = await transferService.updateTransfer(id, orgId, { lines: lines.data, notes: req.body.notes });
     res.json(result);
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (msg === "not found") {
-      res.status(404).json({ error: "Transfer not found" });
-    } else if (msg.includes("no longer editable")) {
-      res.status(409).json({ error: msg });
-    } else if (msg.includes("ingredients not found")) {
-      res.status(400).json({ error: msg });
-    } else {
-      logger.error(err, "handleUpdateTransfer failed");
-      next(err);
-    }
+    logger.error(err, "handleUpdateTransfer failed");
+    next(err);
   }
 }
 
@@ -311,27 +297,17 @@ export async function handleAddLines(
     if (orgId === null) return;
 
     const id = req.params.id as string;
-    const { lines } = req.body;
-
-    if (!Array.isArray(lines) || lines.length === 0) {
-      res.status(400).json({ error: "lines array is required" });
+    const lines = LinesSchema.safeParse(req.body.lines);
+    if (!lines.success) {
+      refuse(res, "Each line needs an item, a quantity above 0 and a unit (1 to 500 lines)");
       return;
     }
 
     await assertTransferAccess(req, id, orgId, ["from"]);
-    const result = await transferService.addLinesToTransfer(id, orgId, lines);
+    const result = await transferService.addLinesToTransfer(id, orgId, lines.data);
     res.json(result);
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (msg === "not found") {
-      res.status(404).json({ error: "Transfer not found" });
-    } else if (msg.includes("no longer editable")) {
-      res.status(409).json({ error: msg });
-    } else if (msg.includes("ingredients not found")) {
-      res.status(400).json({ error: msg });
-    } else {
-      logger.error(err, "handleAddLines failed");
-      next(err);
-    }
+    logger.error(err, "handleAddLines failed");
+    next(err);
   }
 }

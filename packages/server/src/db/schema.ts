@@ -2217,6 +2217,37 @@ export const fohSale = pgTable(
 );
 
 /**
+ * The `foh_restocks` table records each "stock the fridge" move (back-of-house to front-of-house at one
+ * location). `id` is made by the client when it sends one, so a resent restock finds its row and moves the
+ * stock once. Migration 0007.
+ *
+ * OLTP table, 2NF — every non-key column depends on id.
+ */
+export const fohRestock = pgTable(
+  "foh_restocks",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organisationId: integer("organisation_id").notNull().references(() => organisation.organisationId),
+    storeLocationId: uuid("store_location_id").notNull().references(() => storeLocation.storeLocationId),
+    ingredientId: uuid("ingredient_id").notNull().references(() => ingredient.ingredientId),
+    userId: integer("user_id").notNull().references(() => user.userId),
+    quantity: numeric("quantity", { precision: 12, scale: 3 }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // FK index: "restocks at this location, newest first" (FOH history), and the location FK check.
+    index("idx_foh_restocks_store_location_id").on(table.storeLocationId, table.createdAt),
+    // FK index: the constraint check when an organisation row is deleted.
+    index("idx_foh_restocks_organisation_id").on(table.organisationId),
+    // FK index: "restocks of one item", and the constraint check when that ingredient row is deleted.
+    index("idx_foh_restocks_ingredient_id").on(table.ingredientId),
+    // FK index: "restocks by one user", and the constraint check when that user row is deleted.
+    index("idx_foh_restocks_user_id").on(table.userId),
+  ],
+);
+
+/**
  * The `consumption_log` table records stock consumed outside of
  * recipes, prep sessions, or stock takes. Entries deduct stock
  * immediately — no approval workflow. HQ reviews via daily digest.

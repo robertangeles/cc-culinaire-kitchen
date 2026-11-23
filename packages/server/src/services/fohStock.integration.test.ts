@@ -9,6 +9,7 @@ import {
   locationIngredient,
   stockLevel,
   fohSale,
+  fohRestock,
   consumptionLog,
 } from "../db/schema.js";
 import {
@@ -106,6 +107,7 @@ describe.skipIf(!RUN)("FOH stock + sales — real DB", () => {
 
   afterAll(async () => {
     await db.delete(fohSale).where(eq(fohSale.organisationId, orgId));
+    await db.delete(fohRestock).where(eq(fohRestock.organisationId, orgId));
     await db.delete(consumptionLog).where(eq(consumptionLog.organisationId, orgId));
     await db.delete(stockLevel).where(eq(stockLevel.storeLocationId, locId));
     await db.delete(locationIngredient).where(eq(locationIngredient.storeLocationId, locId));
@@ -130,7 +132,7 @@ describe.skipIf(!RUN)("FOH stock + sales — real DB", () => {
   }
 
   it("moveToFoh conserves BOH+FOH within the location", async () => {
-    const res = await moveToFoh(orgId, locId, fohId, 10);
+    const res = await moveToFoh(orgId, locId, fohId, 10, userId);
     expect(res.bohQty).toBe(14);
     expect(res.fohQty).toBe(10);
     expect(await zoneQty("BOH")).toBe(14);
@@ -138,13 +140,13 @@ describe.skipIf(!RUN)("FOH stock + sales — real DB", () => {
   });
 
   it("moveToFoh rejects moving more than BOH holds", async () => {
-    await expect(moveToFoh(orgId, locId, fohId, 999)).rejects.toBeInstanceOf(FohError);
+    await expect(moveToFoh(orgId, locId, fohId, 999, userId)).rejects.toBeInstanceOf(FohError);
     // BOH untouched by the failed move
     expect(await zoneQty("BOH")).toBe(14);
   });
 
   it("moveToFoh rejects a non-FOH item", async () => {
-    await expect(moveToFoh(orgId, locId, kitchenId, 1)).rejects.toBeInstanceOf(FohError);
+    await expect(moveToFoh(orgId, locId, kitchenId, 1, userId)).rejects.toBeInstanceOf(FohError);
   });
 
   it("recordFohSales deducts FOH and does not flag a within-stock sale", async () => {
