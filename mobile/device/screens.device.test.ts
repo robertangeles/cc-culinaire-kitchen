@@ -508,6 +508,7 @@ describe.skipIf(!process.env.SCREENS_OUT)(`screens on ${FORM}`, { timeout: 600_0
     const second = await m.client.request<{ storeLocation: { storeLocationId: string } }>("POST", "/api/store-locations", { body: { organisationId: ctx.organisationId, locationName: NAMES.location2 } });
     await m.client.request("POST", `/api/store-locations/${second.storeLocation.storeLocationId}/staff`, { body: { userId } });
     await launch();
+    await waitFor(/^More(,|$)|^Account(,|$)/, 60_000);
     if (await has(/^More(,|$)/)) {
       await tap(/^More(,|$)/);
       await waitFor("More");

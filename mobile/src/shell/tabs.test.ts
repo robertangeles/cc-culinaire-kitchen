@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { AuthUser } from "../api/auth";
-import { canOpen, hasAnyPermission, MAX_TABS, moduleTabs, tabBar, visibleTabs } from "./tabs";
+import { canOpen, hasAnyPermission, MAX_TABS, moduleTabs, tabBar, tabLabels, visibleTabs } from "./tabs";
 
 /** The tabs a permission opens, leaving out those every signed-in person gets. */
 const gatedTabs = (user: AuthUser) => visibleTabs(user).filter((t) => t.anyPermission);
@@ -89,5 +89,17 @@ describe("the tab bar and More", () => {
     const cook = person({ permissions: ["inventory:count", "waste:log", "prep:read"] });
     const { bar, more } = tabBar(cook);
     expect([...bar, ...more]).toEqual(visibleTabs(cook));
+  });
+
+  it("numbers each button for VoiceOver by its place among the buttons that show, not among every screen", () => {
+    expect(tabLabels(person({ roles: ["Administrator"] }))).toEqual({
+      Prep: "Prep, tab, 1 of 5",
+      Waste: "Waste, tab, 2 of 5",
+      Usage: "Usage, tab, 3 of 5",
+      Count: "Count, tab, 4 of 5",
+      More: "More, tab, 5 of 5",
+    });
+    // No module permission: Ask and Recipes, which everyone gets, then Account; More has no button.
+    expect(tabLabels(person())).toEqual({ Ask: "Ask, tab, 1 of 3", Recipes: "Recipes, tab, 2 of 3", Account: "Account, tab, 3 of 3" });
   });
 });

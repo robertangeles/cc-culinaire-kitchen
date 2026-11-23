@@ -2,6 +2,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { Children, createContext, useContext, type ReactNode } from "react";
+import { Platform } from "react-native";
 import type { AuthUser } from "../src/api/auth";
 
 // The real tab navigator needs the native runtime, so this renders the real tab layout against a Tabs that records each screen's options
@@ -11,7 +12,7 @@ const mocks = vi.hoisted(() => ({
   insets: { top: 24, bottom: 48, left: 0, right: 0 },
   screenOptions: {} as Record<string, unknown>,
   backBehavior: undefined as string | undefined,
-  screens: [] as { name: string; guard: boolean; options: { title?: string; href?: null; tabBarButton?: () => null; tabBarItemStyle?: { display?: string } } }[],
+  screens: [] as { name: string; guard: boolean; options: { title?: string; href?: null; tabBarAccessibilityLabel?: string; tabBarButton?: () => null; tabBarItemStyle?: { display?: string } } }[],
   navigate: vi.fn(),
   tabBar: null as unknown as (props: BarProps) => ReactNode,
   barState: null as unknown as BarProps["state"],
@@ -31,7 +32,7 @@ vi.mock("expo-router", () => {
     mocks.tabBar = tabBar;
     return <>{children}</>;
   };
-  Tabs.Screen = ({ name, options, listeners }: { name: string; options: { title?: string; href?: null; tabBarButton?: () => null; tabBarItemStyle?: { display?: string } }; listeners?: (typeof mocks.listeners)[string] }) => {
+  Tabs.Screen = ({ name, options, listeners }: { name: string; options: { title?: string; href?: null; tabBarAccessibilityLabel?: string; tabBarButton?: () => null; tabBarItemStyle?: { display?: string } }; listeners?: (typeof mocks.listeners)[string] }) => {
     if (listeners) mocks.listeners[name] = listeners;
     mocks.screens.push({ name, guard: useContext(Guard), options });
     return null;
@@ -96,6 +97,25 @@ describe("the tab bar", () => {
     render(<AppTabs />);
     expect(buttons()).toEqual(["Ask", "Recipes", "Account"]);
     expect(mocks.screens.filter((s) => s.guard).map((s) => s.name)).toEqual(["(chat)", "(recipes)", "account", "more"]);
+  });
+
+  it("on an iPhone or iPad each button is read with its place among the buttons that show; elsewhere the label is left to the library", () => {
+    mocks.user = person({ roles: ["Administrator"] });
+    render(<AppTabs />);
+    expect(mocks.screens.every((s) => s.options.tabBarAccessibilityLabel === undefined)).toBe(true);
+    cleanup();
+    mocks.screens.length = 0;
+
+    const os = Platform.OS;
+    Platform.OS = "ios";
+    try {
+      render(<AppTabs />);
+    } finally {
+      Platform.OS = os;
+    }
+    // Ten screens are in the navigator, five have a button: VoiceOver must hear "of 5".
+    const spoken = mocks.screens.filter((s) => s.guard && s.options.tabBarButton === undefined).map((s) => s.options.tabBarAccessibilityLabel);
+    expect(spoken).toEqual(["Prep, tab, 1 of 5", "Waste, tab, 2 of 5", "Usage, tab, 3 of 5", "Count, tab, 4 of 5", "More, tab, 5 of 5"]);
   });
 
   it("never shows more than five buttons: four modules and More, with the rest and Account under More", () => {

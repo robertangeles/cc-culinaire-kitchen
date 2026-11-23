@@ -55,3 +55,13 @@ export function tabBar(user: AuthUser): { bar: ModuleTab[]; more: ModuleTab[] } 
   if (tabs.length + 1 <= MAX_TABS) return { bar: tabs, more: [] };
   return { bar: tabs.slice(0, MAX_TABS - 1), more: tabs.slice(MAX_TABS - 1) };
 }
+
+/**
+ * What VoiceOver reads for each button on the bar, by title: its place among the buttons that show. The library counts every route in the
+ * navigator, the ones under More too, so an Administrator's More would be read as "10 of 10".
+ */
+export function tabLabels(user: AuthUser): Record<string, string> {
+  const { bar, more } = tabBar(user);
+  const titles = [...bar.map((t) => t.title), more.length > 0 ? "More" : "Account"];
+  return Object.fromEntries(titles.map((title, i) => [title, `${title}, tab, ${i + 1} of ${titles.length}`]));
+}
