@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from "vitest";
 import { config } from "dotenv";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -12,6 +12,16 @@ import { db } from "../db/index.js";
 import { deviceToken, notification, organisation, pushOptOuts, pushQuietHours, pushReceipts, user, userOrganisation } from "../db/schema.js";
 import { dispatchPush, notifyAndPush, drainPushDispatch, processPushReceipts, setPushProviderForTests } from "./pushDispatcher.js";
 import { FakePushProvider } from "./pushTestKit.js";
+
+/** The Integrations settings the dispatcher reads, set per test so the suite does not depend on the credentials table. */
+const settings = vi.hoisted(() => new Map<string, string>());
+vi.mock("./credentialService.js", async (original) => {
+  const real = await original<typeof import("./credentialService.js")>();
+  return {
+    ...real,
+    getCredentialValueWithFallback: async (key: string) => (key.startsWith("EXPO_") ? settings.get(key) ?? "" : real.getCredentialValueWithFallback(key)),
+  };
+});
 
 /**
  * Real-database behaviour of the push dispatcher, with a fake push provider (Expo is never called).
@@ -124,11 +134,41 @@ describe.skipIf(!RUN)("pushDispatcher (real DB)", () => {
     for (const secret of ["Zelda", "Fitzgerald", "Food Safety", "Supervisor", "2031", "expires"]) expect(wire).not.toContain(secret);
   });
 
-  it("sends nothing while the provider switch is off (no provider resolved)", async () => {
-    setPushProviderForTests(null);
-    delete process.env.EXPO_PUSH_ENABLED;
-    await dispatchPush(note(staff));
-    expect(fake.sent).toEqual([]);
+  describe("the provider switch (EXPO_PUSH_ENABLED), seen at the call to Expo", () => {
+    const staffReceipts = async () =>
+      db.select({ id: pushReceipts.id }).from(pushReceipts).innerJoin(deviceToken, eq(deviceToken.deviceTokenId, pushReceipts.deviceTokenId)).where(eq(deviceToken.userId, staff));
+    let expo: ReturnType<typeof vi.fn>;
+
+    beforeEach(() => {
+      setPushProviderForTests(null);
+      settings.clear();
+      expo = vi.fn(async (_url: string, init: { body: string }) =>
+        new Response(JSON.stringify({ data: (JSON.parse(init.body) as unknown[]).map((_, i) => ({ status: "ok", id: `${tag}-ticket-${i}` })) }), { status: 200 }),
+      );
+      vi.stubGlobal("fetch", expo);
+    });
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+      settings.clear();
+    });
+
+    it.each([["unset", undefined], ["false", "false"], ["empty", ""], ["anything but true", "yes"]])("calls nobody and records no ticket while the switch is %s", async (_name, value) => {
+      if (value !== undefined) settings.set("EXPO_PUSH_ENABLED", value);
+      await dispatchPush(note(staff));
+      expect(expo).not.toHaveBeenCalled();
+      expect(await staffReceipts()).toEqual([]);
+    });
+
+    it("makes one call to Expo's send endpoint for both devices, and records their tickets, once the switch reads true", async () => {
+      settings.set("EXPO_PUSH_ENABLED", "true");
+      await dispatchPush(note(staff));
+      expect(expo).toHaveBeenCalledTimes(1);
+      const [url, init] = expo.mock.calls[0] as [string, { body: string }];
+      expect(url).toBe("https://exp.host/--/api/v2/push/send");
+      expect((JSON.parse(init.body) as Array<{ to: string }>).map((m) => m.to).sort()).toEqual([tok("staff-1"), tok("staff-2")]);
+      expect((await staffReceipts()).length).toBe(2);
+    });
   });
 
   it("skips a token that is not an Expo push token (a raw APNs or FCM token from an older build)", async () => {
