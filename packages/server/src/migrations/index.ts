@@ -8,5 +8,6 @@ import type { Migration } from "./runner.js";
 import { migration as m0001 } from "./0001_refresh_token_rotation.js";
 import { migration as m0002 } from "./0002_prep_completed_by.js";
 import { migration as m0003 } from "./0003_apple_sign_in.js";
+import { migration as m0006 } from "./0006_menu_item_organisation.js";
 
-export const migrations: Migration[] = [m0001, m0002, m0003];
+export const migrations: Migration[] = [m0001, m0002, m0003, m0006];
