@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { ApiError } from "../api/client";
 import {
   allGood,
@@ -117,12 +117,24 @@ describe("confirmed message", () => {
   });
 });
 
-describe("expectedLabel", () => {
-  const now = new Date(2026, 10, 22, 9, 0);
-  it("is null with no date", () => expect(expectedLabel(null, now)).toBeNull());
-  it("names today, tomorrow and overdue", () => {
-    expect(expectedLabel(new Date(2026, 10, 22, 23).toISOString(), now)).toBe("Expected today");
-    expect(expectedLabel(new Date(2026, 10, 23, 6).toISOString(), now)).toBe("Expected tomorrow");
-    expect(expectedLabel(new Date(2026, 10, 20, 6).toISOString(), now)).toBe("Overdue");
+// The server stores the day typed on the order as UTC midnight ("2026-11-22" -> 2026-11-22T00:00:00.000Z).
+// The label is about that calendar day against the phone's own today, wherever the phone is.
+describe.each(["America/New_York", "UTC", "Australia/Sydney"])("expectedLabel on a phone in %s", (zone) => {
+  const before = process.env.TZ;
+  beforeAll(() => void (process.env.TZ = zone));
+  afterAll(() => void (before === undefined ? delete process.env.TZ : (process.env.TZ = before)));
+  const morning = () => new Date(2026, 10, 22, 9, 0);
+
+  it("is null with no date", () => expect(expectedLabel(null, morning())).toBeNull());
+  it("names today, tomorrow and overdue by the order's calendar day", () => {
+    expect(expectedLabel("2026-11-22T00:00:00.000Z", morning())).toBe("Expected today");
+    expect(expectedLabel("2026-11-23T00:00:00.000Z", morning())).toBe("Expected tomorrow");
+    expect(expectedLabel("2026-11-21T00:00:00.000Z", morning())).toBe("Overdue");
+  });
+  it("still says today late in the evening", () => {
+    expect(expectedLabel("2026-11-22T00:00:00.000Z", new Date(2026, 10, 22, 23, 30))).toBe("Expected today");
+  });
+  it("names a later day by the order's own date", () => {
+    expect(expectedLabel("2026-11-26T00:00:00.000Z", morning())).toContain("26");
   });
 });

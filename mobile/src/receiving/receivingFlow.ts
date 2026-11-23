@@ -155,15 +155,20 @@ export function confirmedMessage(result: ConfirmResult): { title: string; detail
     : { title: "Delivery received", detail: `${issues} Stock is updated.` };
 }
 
-/** Expected-delivery wording for a queue row: "Today", "Tomorrow", "Overdue", else the date. */
+/**
+ * Expected-delivery wording for a queue row: "Today", "Tomorrow", "Overdue", else the date.
+ * The server stores the day typed on the order as UTC midnight, so its calendar day is read from the
+ * UTC parts and compared with the phone's own today; read in local time it is a day early west of UTC.
+ */
 export function expectedLabel(iso: string | null, now: Date = new Date()): string | null {
   if (!iso) return null;
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return null;
-  const startOf = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-  const days = Math.round((startOf(date) - startOf(now)) / 86_400_000);
+  const expected = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+  const today = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+  const days = Math.round((expected - today) / 86_400_000);
   if (days === 0) return "Expected today";
   if (days === 1) return "Expected tomorrow";
   if (days < 0) return "Overdue";
-  return `Expected ${date.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" })}`;
+  return `Expected ${date.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" })}`;
 }
