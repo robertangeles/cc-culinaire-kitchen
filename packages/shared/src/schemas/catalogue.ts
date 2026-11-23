@@ -7,6 +7,8 @@ export const CatalogueIngredientSchema = z.object({
   /** The kitchen unit: the unit the item is counted and stocked in. */
   baseUnit: z.string().catch(""),
   ingredientCategory: z.string().catch(""),
+  /** KITCHEN_INGREDIENT, FOH_CONSUMABLE, OPERATIONAL_SUPPLY...; absent from a server, or a list saved on the phone, that does not send it. */
+  itemType: z.string().optional().catch(undefined),
 });
 export type CatalogueIngredient = z.infer<typeof CatalogueIngredientSchema>;
 

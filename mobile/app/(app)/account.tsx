@@ -1,6 +1,8 @@
 import { appleEnabled, session, useSession } from "../../src/runtime/appContext";
 import { QueueStatus } from "../../src/outbox/QueueStatus";
 import { PREP_TYPES } from "../../src/prep/prepCommands";
+import { CONSUMPTION_TYPES } from "../../src/consumption/consumptionCommands";
+import { MOVEMENT_TYPES } from "../../src/movements/movementCommands";
 import { WASTE_TYPES } from "../../src/waste/wasteCommands";
 import { visibleTabs } from "../../src/shell/tabs";
 import { Screen } from "../../src/ui/Screen";
@@ -29,7 +31,7 @@ export default function Account() {
         </View>
       </Surface>
       {/* What is waiting on this phone and what the server refused. Each module's command types are listed here (counts have their own screen). */}
-      <QueueStatus types={[...WASTE_TYPES, ...PREP_TYPES]} />
+      <QueueStatus types={[...WASTE_TYPES, ...PREP_TYPES, ...CONSUMPTION_TYPES, ...MOVEMENT_TYPES]} />
       {visibleTabs(user).length === 0 ? <Text variant="muted">Nothing on your account is available on the phone yet. Ask your manager.</Text> : null}
       {locations.length > 1 ? <Button kind="ghost" label="Change location" onPress={() => session.changeLocation()} /> : null}
       {appleEnabled ? <Button kind="ghost" label="Add Sign in with Apple" onPress={() => router.push("/link-apple")} /> : null}

@@ -13,7 +13,7 @@ checks every call anyway.
 | `src/api` | The one network client: auth, refresh, coded errors (`ApiError.code`, `serverCode`). |
 | `src/outbox` | The offline queue (below). |
 | `src/ingredients` | The shared ingredient picker's data (below); its component is `src/ui/IngredientPicker.tsx`. |
-| `src/count`, `src/waste`, `src/prep` | One folder per module: API calls, store (screen state), pure view functions, commands. |
+| `src/count`, `src/waste`, `src/prep`, `src/consumption`, `src/movements` | One folder per module: API calls, store (screen state), pure view functions, commands. |
 | `src/ui` | Components shared by every module, `Column` (the tablet column) among them. |
 | `packages/shared/src/schemas` | The zod schemas of what the server sends, parsed leniently at the boundary (`lenient.ts`). |
 
@@ -77,13 +77,13 @@ const source = createIngredientSource({
 
 Empty, it offers recent items; typing shows matches from the phone at once (prefix, then word-prefix, then contains; accents and case ignored) and, 300 ms later, the
 server's extra names. It works with no signal. A name that is in no list is accepted as typed (waste stores text). `onPick` gives `{ name, ingredientId?, unit? }`
-(`unit` is the item's kitchen unit from the catalogue, or the unit last used). Consumption, transfers and orders build their own `IngredientSource` and reuse the component.
+(`unit` is the item's kitchen unit from the catalogue, or the unit last used; `itemType` is the catalogue's KITCHEN_INGREDIENT, FOH_CONSUMABLE or OPERATIONAL_SUPPLY). Usage and Move build their own `IngredientSource` (the catalogue and their own recents, no server name list) and reuse the component; transfers and orders will do the same. Those two need the item's id (the server takes an ingredient, not free text), so a name that is not in the list is refused on the form, and so is an item whose unit is not known ("Pick the item from the list again"): the unit is cleared whenever the name is retyped or an item without a kitchen unit is picked, so an earlier item's unit is never carried over.
 The catalogue download is `GET /api/inventory/ingredients`, which the server allows for `inventory:count` only: for someone without it the catalogue is simply empty.
 
 ## Tablet width
 
-Content sits in a centred column of at most 560 dp, `COLUMN_WIDTH` in `src/ui/Screen.tsx` (`Screen` does it for every screen built on it; the waste and prep screens lay themselves out and use `src/ui/Column.tsx`, which reuses the same number).
-Phones fill the width. The count screens are not wrapped yet. jsdom does no layout, so `tests/waste.test.tsx` and `tests/prep.test.tsx` check only the column's constraints (full width, 560 dp cap, centred; prep at 390, 820 and 1180 wide); the look at 390 and 820 wide is for the device walk.
+Content sits in a centred column of at most 560 dp, `COLUMN_WIDTH` in `src/ui/Screen.tsx` (`Screen` does it for every screen built on it; the waste, prep, usage and move screens lay themselves out and use `src/ui/Column.tsx`, which reuses the same number).
+Phones fill the width. The count screens are not wrapped yet. jsdom does no layout, so the screen tests check only the column's constraints (full width, 560 dp cap, centred): `tests/waste.test.tsx`; `tests/prep.test.tsx` at 390, 820 and 1180 wide; `tests/usage.test.tsx` and `tests/moves.test.tsx` at window sizes of an iPad in portrait (820 x 1180) and landscape (1180 x 820) and a phone (390 x 844). The look is for the device walk. Usage and Move use `Column` and have no second column definition. They have no two-column layout: a tablet gets the same column in the middle of the paper.
 
 ## Add Sign in with Apple (`app/link-apple.tsx`)
 
@@ -148,7 +148,55 @@ Differences from the web prep page (`KitchenCopilotPage.tsx`, `components/copilo
 | Cross-usage, High impact, History, team/personal toggle, print sheet, waste-alert banner | Not on the phone | Later waves. |
 | Task add, edit, delete | Not on the web or the server | See above. |
 
+## Usage (`src/consumption`, `app/(app)/(usage)`)
+
+The Usage tab is the web's "Internal Usage" (inventory, Transfers tab). It is shown to `inventory:count` holders, the key the server asks for on every consumption route
+(and on the catalogue download the picker uses, so nobody who sees this tab is left without ingredients). The screen shows today's entries at the current location (the server's
+list, kept on the phone, with the queue laid over it), per-unit totals with returns kept apart, "Log again" buttons for the six latest items, and every entry with whether it is sent.
+Log, change and delete only write to the queue (`consumption.log`, `consumption.edit`, `consumption.delete`, ids made on the phone as `consumptionLogId`); the server answers a repeat with 200 and takes no second deduction.
+Refusals stay on the entry with the server's words and Try again or Discard: another person's id (409 `CONFLICT`), a location the person does not work at (403 `LOCATION_NOT_ALLOWED`),
+units that cannot be converted (422 `INCOMPATIBLE_UNITS`), an item the server does not know (404 `NOT_FOUND`), an edit or delete after 24 hours (409 `EDIT_WINDOW_EXPIRED`, a refusal, never "already applied"),
+someone else's entry (403 `FORBIDDEN`). A delete of an entry that is already gone is success (200 now, a 404 from an older server).
+Differences from the web (`packages/client/src/components/inventory/ConsumptionLogger.tsx`), found while comparing:
+
+| Web | Phone | Why |
+|---|---|---|
+| The Inventory page opens for `inventory:count`, `inventory:manage`, `inventory:transfer` or `inventory:hq`; the form's own routes need `inventory:count` | The tab needs `inventory:count` | A person with only manage, transfer or HQ sees the web page but gets 403 on logging. Web gate is wider than the server's. |
+| Items come from the location (`GET /locations/:locId/ingredients`): only items active there, with the stock on hand, greyed out at zero (except for Return to Stockroom) | The shared picker searches the organisation's whole catalogue, works offline, shows no stock and never blocks an item at zero | The server checks neither activation nor stock; offline the phone cannot know them. An item not active at the location can be logged and makes a stock row there. A location-activated list is a small read-route follow-up. |
+| Unit is the location's unit override, else the kitchen unit | Always the item's kitchen unit (shown under the quantity) | The server converts any unit to the kitchen unit; the phone does not download overrides yet. Where an override exists, the number the person types is in the kitchen unit. |
+| Optional "Dish" for the Kitchen reason (`menuItemId`, for yield variance) | Not on the phone | The dish list needs `menu:read`; comes with the menu wave. |
+| Entries are final: "no edits", although the server lets the logger or an Administrator change and delete within 24 hours | Edit quantity, reason, shift and notes, and delete, your own entries (an Administrator any); the item cannot be swapped | Asked for in the wave. A change after 24 hours is refused by the server and shown. |
+| Asks "That's a move, not usage" (modal) for FOH usage of kitchen ingredients and FOH consumables, with "Record as movement" carrying item and amount to the movement form | The same question as an alert with the same three answers; "Record as movement" opens Move filled in. An item whose type the phone does not know yet (a catalogue saved before it was sent) counts as a kitchen ingredient. Not asked when editing | Same rule, `FOH_MOVE_ITEM_TYPES` in `packages/shared/src/schemas/consumption.ts`. |
+| The form's header and submit button say "Transfer" | "Log usage" | Web wording slip next to the Location Transfer view; not fixed here. |
+| Reasons and shifts are lists in `ConsumptionLogger.tsx` | The same keys and labels, copied to `packages/shared/src/schemas/consumption.ts` | Keep the two in step until the web imports the shared list. |
+| Lists everyone's entries at the location whose `loggedAt` falls on the browser's calendar day | Local midnight to midnight sent as timestamps; other people's entries are shown read-only with their name | A venue's day is not the UTC day. |
+| `loggedAt` is the server's clock | The same: the route takes no time. The phone shows its own clock until the entry is sent, then the server's | An entry made offline and sent after midnight moves to the next day's list. Waste sends its own time; the consumption route could too (needs a server change, not made here). |
+| Counts only "N today" | Per-unit totals; "Return to Stockroom" entries are shown apart, never added to usage | Mixed units cannot be added. |
+| A quantity of zero or less is refused on the form only | Refused on the form and again before an edit is queued | The edit route stores any number. |
+| Quick buttons: none | "Log again" for the latest six items, with unit, quantity and reason | The 15-second entry. |
+| Location Transfer view (create, send, receive) | Not on the phone | Create, send and receive are not safe to replay (no client id or guard; the plan puts it in Wave 3 with the server work). Nothing is queued that could double-apply. |
+| No adjustment screen | None | The web has none either: stock is changed by counts, and the only way to put stock back is the Return to Stockroom reason. |
+
+## Move between areas (`src/movements`, `app/(app)/(moves)`)
+
+The Move tab is the web's "Move Between Areas", shown to `inventory:count` holders. A move ("4 bottles, Stock Room to Bar") changes no stock: the item stays on site until it is sold or wasted. One command, `movement.log`, with its id made on the phone (`stockMovementId`);
+it is sent to the location the move was made at. The areas and the latest moves are kept on the phone, so the form works with no signal once it has opened once with one.
+Refusals stay visible: an area that is not at the location (404 `NOT_FOUND`), an area no longer in use or the same area twice (400 `VALIDATION`), units that cannot be converted (`INCOMPATIBLE_UNITS`).
+Differences from the web (`StockMovementForm.tsx`):
+
+| Web | Phone | Why |
+|---|---|---|
+| Item search over the location's items (six results), stock shown | The shared picker over the organisation's catalogue, no stock | As for Usage. |
+| Unit is the location's override, else the kitchen unit | The kitchen unit | As for Usage. |
+| From and To are drop-downs; To leaves out the chosen From | Rows of chips; the same rule | |
+| Fewer than two areas: "No areas yet" / "You need a second area" | The same words; with no signal and nothing downloaded yet it says the areas have not been downloaded | |
+| "Recent moves": the latest ten, from the server | The latest twenty, with moves still waiting to send laid over them, each with its state | Offline-first. |
+| `movedAt` is the server's clock | The same; the phone shows its own clock until the move is sent | As for Usage. |
+| Moves cannot be changed or deleted | The same | The server has no route for it. |
+| No quick buttons | "Move again" for the latest six moves, with item, amount and areas | |
+| Notes up to 500 characters | The same, checked before it is queued (as is an amount over 99,999) | The server refuses both. |
+
 ## Tests
 
 `check:test` runs the logic tests (`src/**`) and the screen tests (`tests/*.test.tsx`); `check:e2e` runs the real client and queue against a server
-(`e2e/phoneFlow`, `e2e/wasteQueue`, `e2e/prepQueue`). See `device/README.md`.
+(`e2e/phoneFlow`, `e2e/wasteQueue`, `e2e/prepQueue`, `e2e/stockQueue`). See `device/README.md`.

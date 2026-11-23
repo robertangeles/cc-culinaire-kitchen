@@ -19,6 +19,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **Owner setup.** Credentials `APPLE_CLIENT_ID` (the iOS bundle id), `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY` (the `.p8`) in Settings → Integrations; the key is needed only to revoke. For Google on iPhone: `GOOGLE_IOS_CLIENT_ID` on the server, and in the phone build `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` plus the EAS variable `GOOGLE_IOS_URL_SCHEME` (see `mobile/.env.example`).
 - **New error codes** (shared `ApiErrorBody`): `APPLE_NOT_CONFIGURED`, `APPLE_UNAVAILABLE` (both 503), `APPLE_TOKEN_INVALID` (401), `APPLE_EMAIL_MISSING`, `APPLE_EMAIL_NOT_VERIFIED` (403), `APPLE_ALREADY_LINKED` (409), `ACCOUNT_EMAIL_UNVERIFIED`, `UNAUTHENTICATED`, `RATE_LIMITED` (the per-IP limiters now carry it).
 
+### Added (mobile Wave 2, phone: usage and moves)
+
+- **Usage on the phone.** A Usage tab for `inventory:count` holders (the web's "Internal Usage"): log with the shared ingredient picker, quantity in the item's kitchen unit, reason and shift; edit and delete your own entries; per-unit daily totals with "Return to Stockroom" kept apart; quick "Log again" buttons; the web's "that's a move, not usage" question for FOH usage of kitchen ingredients. Every write is a queued command with a client-made `consumptionLogId`, so a repeat after a lost reply takes no second deduction.
+- **Move between areas on the phone.** A Move tab for `inventory:count` holders: pick an item, an amount and the two areas; the areas and latest moves are kept on the phone. One queued command with a client-made `stockMovementId`. A move changes no stock.
+- **Shared schemas.** `packages/shared/src/schemas/consumption.ts` and `stockMovement.ts` (what the server sends, parsed leniently, and the reason and shift lists); the catalogue schema gains an optional `itemType`.
+- No server route changed: older installed apps keep working. Location Transfer is not on the phone yet (its routes are not safe to replay). Differences from the web are listed in `mobile/README.md`.
+
 ### Added (mobile Wave 2, phone: the offline queue and waste)
 
 - **A general offline queue.** The phone's outbox now holds typed, versioned commands with a handler per type: client-made ids so a resend is safe, ordered replay per entry, backoff on network and 5xx (with a cap a handler can set), refusals kept visible with the server's code and message (Try again or Discard), "already applied" counted as sent, a session that ended pauses the queue until sign-in. Counts are the first handler and behave as before. Existing phones gain the new `outbox` columns by `ALTER TABLE` on first launch. Documented in `mobile/README.md`.

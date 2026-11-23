@@ -49,7 +49,7 @@ describe("recent items", () => {
 });
 
 describe("the catalogue the picker searches", () => {
-  const rows = [{ ingredientId: "i1", ingredientName: "Flour", baseUnit: "g", ingredientCategory: "Dry", unitCost: "0.01" }];
+  const rows = [{ ingredientId: "i1", ingredientName: "Flour", baseUnit: "g", ingredientCategory: "Dry", itemType: "KITCHEN_INGREDIENT", unitCost: "0.01" }];
 
   it("downloads once, keeps only what the picker needs, and reads it back with no signal", async () => {
     const kv = memoryKv();
@@ -58,7 +58,7 @@ describe("the catalogue the picker searches", () => {
     expect(await cat.refresh()).toBe(true);
     expect(request).toHaveBeenCalledWith("GET", "/api/inventory/ingredients", expect.any(Object));
     const offline = createCatalogue({ client: { request: async () => { throw new ApiError("network"); } } as unknown as ApiClient, kv, key: "cat" });
-    expect(await offline.items()).toEqual([{ ingredientId: "i1", ingredientName: "Flour", baseUnit: "g", ingredientCategory: "Dry" }]);
+    expect(await offline.items()).toEqual([{ ingredientId: "i1", ingredientName: "Flour", baseUnit: "g", ingredientCategory: "Dry", itemType: "KITCHEN_INGREDIENT" }]);
     expect(await offline.refresh()).toBe(false);
     expect((await offline.items())).toHaveLength(1); // a failed refresh keeps the last download
   });

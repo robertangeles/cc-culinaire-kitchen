@@ -33,8 +33,8 @@ export function localDayBounds(at: Date): { start: string; end: string } {
   return { start: start.toISOString(), end: new Date(end.getTime() - 1).toISOString() };
 }
 
-const OPEN = ["SAVED_LOCAL", "SENDING", "NEEDS_ATTENTION"];
-const syncOf = (e: OutboxEntry<unknown>): RowSync => (e.status === "NEEDS_ATTENTION" ? "attention" : OPEN.includes(e.status) ? "waiting" : "synced");
+export const OPEN = ["SAVED_LOCAL", "SENDING", "NEEDS_ATTENTION"];
+export const syncOf = (e: OutboxEntry<unknown>): RowSync => (e.status === "NEEDS_ATTENTION" ? "attention" : OPEN.includes(e.status) ? "waiting" : "synced");
 
 function fromLog(c: WasteLogCommand, e: OutboxEntry<unknown>): WasteRow {
   return { wasteLogId: c.wasteLogId, ingredientName: c.ingredientName, quantity: c.quantity, unit: c.unit, reason: c.reason, shift: c.shift, notes: c.notes, estimatedCost: c.estimatedCost, loggedAt: c.loggedAt, sync: syncOf(e), ...(e.status === "NEEDS_ATTENTION" ? { entryId: e.id, attentionMessage: e.attention?.message } : OPEN.includes(e.status) ? { entryId: e.id } : {}) };

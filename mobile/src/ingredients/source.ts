@@ -13,6 +13,8 @@ export interface PickedIngredient {
   ingredientId?: string;
   /** The unit the item is kept in (catalogue) or was last used with (recent). */
   unit?: string;
+  /** From the catalogue (KITCHEN_INGREDIENT, FOH_CONSUMABLE...); absent for recent, typed and suggested names. */
+  itemType?: string;
 }
 
 export interface IngredientSource {
@@ -52,7 +54,7 @@ const LIMIT = 8;
 export function createIngredientSource({ catalogue, recents, moreNames }: SourceDeps): IngredientSource {
   async function local(query: string): Promise<PickedIngredient[]> {
     const [recent, items] = await Promise.all([recents.list(), catalogue.items()]);
-    const fromCatalogue: PickedIngredient[] = items.map((i) => ({ name: i.ingredientName, ingredientId: i.ingredientId, unit: i.baseUnit || undefined }));
+    const fromCatalogue: PickedIngredient[] = items.map((i) => ({ name: i.ingredientName, ingredientId: i.ingredientId, unit: i.baseUnit || undefined, itemType: i.itemType || undefined }));
     // Recent items come first (the person's own habit), then the catalogue; a name is offered once.
     const seen = new Set<string>();
     const out: PickedIngredient[] = [];
