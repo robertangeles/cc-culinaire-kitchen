@@ -5,6 +5,16 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added (mobile: Sign in with Apple)
+
+**Apply migration `0003_apple_sign_in` by hand on production BEFORE this version deploys** (`pnpm --filter @culinaire/server exec tsx src/scripts/migrate.ts`; run it with `--dry-run` first). The new column and table are read by nothing in the previous server, and the two unique indexes only cover provider `apple`, so the previous server keeps working after the migration. The web behaves as before.
+
+- **Sign in with Apple on iPhone and iPad** (App Store rule 4.8, because the app also offers Google). `POST /api/auth/apple/idtoken` takes `{ identityToken, nonce, authorizationCode?, givenName?, familyName? }` and answers like `/login`, or `{ requiresMfa, mfaSessionToken }` for an account with MFA on. `POST /api/auth/apple/link` (signed in; password or MFA code as for changing MFA) adds Apple to an existing account, which is how a hidden private-relay address joins a registered account.
+- **Linking is by Apple's stable id.** A first sign-in links to an existing account by email only when Apple says the email is verified AND that account's own email is verified (otherwise `ACCOUNT_EMAIL_UNVERIFIED`). A relay address never matches by email. The Google paths still link unverified accounts (see `tasks/lessons.md`).
+- **Deleting the account revokes the Apple token** (App Store rule 5.1.1(v)). `POST /api/users/delete-account` also accepts `appleIdentityToken` and `appleNonce`: a fresh Apple sign-in of the linked Apple ID is the proof for an account with no password (it replaces the typed email and the recent-sign-in rule). A failed revoke queues the encrypted token in `apple_revocation_retries` and logs `apple_token_not_revoked`; nothing runs the queue by itself, so run `pnpm --filter @culinaire/server exec tsx src/scripts/retryAppleRevocations.ts` (prefix `APP_ENV=prod` for production) when that alert appears.
+- **Owner setup.** Credentials `APPLE_CLIENT_ID` (the iOS bundle id), `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY` (the `.p8`) in Settings → Integrations; the key is needed only to revoke. For Google on iPhone: `GOOGLE_IOS_CLIENT_ID` on the server, and in the phone build `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` plus the EAS variable `GOOGLE_IOS_URL_SCHEME` (see `mobile/.env.example`).
+- **New error codes** (shared `ApiErrorBody`): `APPLE_NOT_CONFIGURED`, `APPLE_UNAVAILABLE` (both 503), `APPLE_TOKEN_INVALID` (401), `APPLE_EMAIL_MISSING`, `APPLE_EMAIL_NOT_VERIFIED` (403), `APPLE_ALREADY_LINKED` (409), `ACCOUNT_EMAIL_UNVERIFIED`, `UNAUTHENTICATED`, `RATE_LIMITED` (the per-IP limiters now carry it).
+
 ### Changed (mobile Wave 2, server: the line loop)
 
 **Apply migration `0002_prep_completed_by` by hand on production BEFORE this version deploys** (`pnpm --filter @culinaire/server exec tsx src/scripts/migrate.ts`, then `backfillWastePrepPermissions.ts`). Both new columns are nullable, so the previous server keeps working after the migration. The web behaves as before.

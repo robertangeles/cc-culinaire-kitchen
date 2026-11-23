@@ -8,7 +8,10 @@ config({ path: resolve(dirname(fileURLToPath(import.meta.url)), "../../../../.en
 applyEnvPrefix();
 
 vi.mock("./stripeService.js", () => ({ cancelSubscriptionNow: vi.fn(), deleteCustomer: vi.fn() }));
-vi.mock("./appleSignInService.js", () => ({ isFreshAppleSignInFor: vi.fn() }));
+vi.mock("./appleSignInService.js", async () => {
+  const actual = await vi.importActual<typeof import("./appleSignInService.js")>("./appleSignInService.js");
+  return { ...actual, isFreshAppleSignInFor: vi.fn() };
+});
 
 import { and, eq } from "drizzle-orm";
 import { generate as otpGenerate, generateSecret as otpGenerateSecret } from "otplib";

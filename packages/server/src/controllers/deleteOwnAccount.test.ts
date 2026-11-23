@@ -64,7 +64,7 @@ describe("POST /api/users/delete-account handler", () => {
 
   it("returns Apple's 503 with its own code when Apple could not check the token, without signing out", async () => {
     vi.mocked(deleteOwnAccount).mockRejectedValue(new AuthError("Apple sign-in is unavailable right now.", "APPLE_UNAVAILABLE", 503));
-    const { res, next } = await call({ appleIdentityToken: "t", appleNonce: "n" });
+    const { res, next } = await call({ appleIdentityToken: "t", appleNonce: "n".repeat(16) });
     expect(res.status).toHaveBeenCalledWith(503);
     expect(res.json).toHaveBeenCalledWith({ error: "Apple sign-in is unavailable right now.", code: "APPLE_UNAVAILABLE" });
     expect(res.clearCookie).not.toHaveBeenCalled();
