@@ -93,12 +93,13 @@ function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-/** Tells everyone assigned to a shift (still answering or confirmed), except the person who made the change. The shift has already changed: a failed notice never undoes it. */
+/** Tells everyone assigned to a shift (still answering or confirmed), except the person who made the change. The shift has already changed: a failed notice never undoes it. `push` is false for a Draft shift: the in-app notice only. */
 async function notifyAssignees(
   orgId: number,
   shiftRow: { shiftId: string; startDatetime: Date; endDatetime: Date },
   type: "SHIFT_CHANGED" | "SHIFT_CANCELLED",
   body: string,
+  push: boolean,
   exceptUserId?: number,
 ): Promise<void> {
   const assignees = await db
@@ -114,7 +115,7 @@ async function notifyAssignees(
       payload: { shiftId: shiftRow.shiftId, startDatetime: shiftRow.startDatetime.toISOString(), endDatetime: shiftRow.endDatetime.toISOString(), body },
       relatedEntityType: "shift",
       relatedEntityId: shiftRow.shiftId,
-    });
+    }, { push });
   }
 }
 
@@ -445,20 +446,20 @@ export async function updateShift(orgId: number, shiftId: string, input: UpdateS
     afterValue: { startDatetime: start, endDatetime: end },
   });
   if (start.getTime() !== row.startDatetime.getTime() || end.getTime() !== row.endDatetime.getTime()) {
-    await notifyAssignees(orgId, updated, "SHIFT_CHANGED", "The time of one of your shifts changed.", actorUserId);
+    await notifyAssignees(orgId, updated, "SHIFT_CHANGED", "The time of one of your shifts changed.", false, actorUserId);
   }
   return updated;
 }
 
-/** Cancels a shift, notifying any assigned staff. */
-export async function cancelShift(orgId: number, shiftId: string) {
+/** Cancels a shift, notifying any assigned staff except the person who cancelled it. Only a Published shift's cancellation is pushed. */
+export async function cancelShift(orgId: number, shiftId: string, actorUserId?: number) {
   const row = await getShiftRow(orgId, shiftId);
   const [updated] = await db
     .update(shift)
     .set({ status: "Cancelled", updatedDttm: new Date() })
     .where(eq(shift.shiftId, shiftId))
     .returning();
-  if (row.status !== "Cancelled") await notifyAssignees(orgId, updated, "SHIFT_CANCELLED", "One of your shifts was cancelled.");
+  if (row.status !== "Cancelled") await notifyAssignees(orgId, updated, "SHIFT_CANCELLED", "One of your shifts was cancelled.", row.status === "Published", actorUserId);
   return updated;
 }
 
@@ -841,7 +842,7 @@ export async function assignStaff(orgId: number, shiftId: string, userId: number
       },
       relatedEntityType: "shift",
       relatedEntityId: shiftId,
-    });
+    }, { push: false });
   }
   return row;
 }

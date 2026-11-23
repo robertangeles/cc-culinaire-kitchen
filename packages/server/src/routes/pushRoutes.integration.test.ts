@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { config } from "dotenv";
+import { createHash } from "node:crypto";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { applyEnvPrefix } from "../utils/envShim.js";
@@ -18,7 +19,7 @@ import {
   handleUpdatePushPreferences,
 } from "../controllers/notificationsController.js";
 import { handleLogout } from "../controllers/authController.js";
-import { generateTokens, getUserWithRolesAndPermissions } from "../services/authService.js";
+import { AuthError, generateTokens, getUserWithRolesAndPermissions, refreshAccessToken, refreshTokenFamily, revokeAllRefreshTokens } from "../services/authService.js";
 import notificationsRouter from "./notifications.js";
 
 /**
@@ -138,6 +139,80 @@ describe.skipIf(!RUN)("push routes (real DB)", () => {
       expect((await call(handleLogout, undefined, { refreshToken: tokens.refreshToken })).status).toBe(200);
       expect((await call(handleLogout, undefined, { deviceToken: tok("b1") })).status).toBe(200);
       expect(await tokensOf(bob)).toEqual([tok("b1")]); // no refresh token proves nothing: nobody's token is touched
+    });
+
+    it("removes the device token when the presented refresh token has expired", async () => {
+      await call(handleRegisterDevice, alice, { deviceToken: tok("a3"), platform: "ios" });
+      const tokens = await generateTokens(await getUserWithRolesAndPermissions(alice));
+      await db.update(refreshToken).set({ expiresAtDttm: new Date(Date.now() - 1000) }).where(eq(refreshToken.userId, alice));
+      expect((await call(handleLogout, undefined, { refreshToken: tokens.refreshToken, deviceToken: tok("a3") })).status).toBe(200);
+      expect(await tokensOf(alice)).toEqual([]);
+    });
+
+    it("removes the device token when the presented refresh token was already rotated", async () => {
+      await call(handleRegisterDevice, alice, { deviceToken: tok("a4"), platform: "ios" });
+      const tokens = await generateTokens(await getUserWithRolesAndPermissions(alice));
+      await refreshAccessToken(tokens.refreshToken);
+      expect((await call(handleLogout, undefined, { refreshToken: tokens.refreshToken, deviceToken: tok("a4") })).status).toBe(200);
+      expect(await tokensOf(alice)).toEqual([]);
+    });
+
+    it("answers 200 and removes nothing for a refresh token that matches no row", async () => {
+      await call(handleRegisterDevice, alice, { deviceToken: tok("a5"), platform: "ios" });
+      const res = await call(handleLogout, undefined, { refreshToken: "f".repeat(128), deviceToken: tok("a5") });
+      expect(res.status).toBe(200);
+      expect(await tokensOf(alice, bob)).toEqual([tok("a5"), tok("b1")]);
+      await db.delete(deviceToken).where(eq(deviceToken.userId, alice));
+    });
+  });
+
+  describe("sign-ins ended by the server", () => {
+    const signIn = async (userId: number) => generateTokens(await getUserWithRolesAndPermissions(userId));
+    const reset = async () => {
+      await db.delete(refreshToken).where(inArray(refreshToken.userId, [alice, bob]));
+      await db.delete(deviceToken).where(eq(deviceToken.userId, alice));
+      await call(handleRegisterDevice, alice, { deviceToken: tok("s1"), platform: "ios" });
+      await call(handleRegisterDevice, alice, { deviceToken: tok("s2"), platform: "android" });
+    };
+
+    it("removes every device token of the person when all their sign-ins are revoked, and nobody else's", async () => {
+      await reset();
+      await signIn(alice);
+      await signIn(alice);
+      await revokeAllRefreshTokens(alice);
+      expect(await tokensOf(alice, bob)).toEqual([tok("b1")]);
+    });
+
+    it("keeps the device tokens when the caller's own sign-in is spared (password change)", async () => {
+      await reset();
+      const mine = await signIn(alice);
+      await signIn(alice);
+      await revokeAllRefreshTokens(alice, await refreshTokenFamily(mine.refreshToken, alice));
+      expect(await db.select().from(refreshToken).where(eq(refreshToken.userId, alice))).toHaveLength(1);
+      expect(await tokensOf(alice)).toEqual([tok("s1"), tok("s2")]);
+    });
+
+    it("removes the device tokens when a suspended account's refresh ends every sign-in", async () => {
+      await reset();
+      const tokens = await signIn(alice);
+      await db.update(user).set({ userStatus: "suspended" }).where(eq(user.userId, alice));
+      await expect(refreshAccessToken(tokens.refreshToken)).rejects.toBeInstanceOf(AuthError);
+      await db.update(user).set({ userStatus: "active" }).where(eq(user.userId, alice));
+      expect(await tokensOf(alice)).toEqual([]);
+    });
+
+    it("keeps the device tokens when one sign-in is refused as expired while another is alive, and removes them when the last one is", async () => {
+      await reset();
+      const expire = (raw: string) =>
+        db.update(refreshToken).set({ expiresAtDttm: new Date(Date.now() - 1000) }).where(eq(refreshToken.tokenHash, createHash("sha256").update(raw).digest("hex")));
+      const other = await signIn(alice);
+      const old = await signIn(alice);
+      await expire(old.refreshToken);
+      await expect(refreshAccessToken(old.refreshToken)).rejects.toBeInstanceOf(AuthError);
+      expect(await tokensOf(alice)).toEqual([tok("s1"), tok("s2")]);
+      await expire(other.refreshToken);
+      await expect(refreshAccessToken(other.refreshToken)).rejects.toBeInstanceOf(AuthError);
+      expect(await tokensOf(alice)).toEqual([]);
     });
   });
 

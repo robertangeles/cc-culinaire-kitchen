@@ -289,7 +289,10 @@ export async function handleLogin(
  *
  * Revokes the refresh token and clears auth cookies. A phone also sends `deviceToken` (its push token): that
  * person's own token is removed, so the next person to sign in on the device is not sent this one's notifications.
- * The refresh token is what proves whose it is; a token that is not theirs is left alone.
+ * The refresh token is what proves whose it is; a token that is not theirs is left alone. An expired or spent
+ * refresh token still proves it while its row exists. Once the row is gone (the sign-in was already revoked) nobody
+ * is identified and nothing is removed here: the revoke paths in `authService` remove the device tokens themselves
+ * when a person's last sign-in ends.
  */
 export async function handleLogout(
   req: Request,
