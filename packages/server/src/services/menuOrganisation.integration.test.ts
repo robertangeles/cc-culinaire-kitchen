@@ -39,6 +39,7 @@ import {
   handleVoidSale,
   handleListSales,
   handleGetWasteImpact,
+  handleListYieldVariance,
 } from "../controllers/menuIntelligenceController.js";
 import { previewSalesCsv, commitSalesCsv } from "./saleService.js";
 import { importCsvSalesData } from "./menuIntelligenceService.js";
@@ -701,6 +702,16 @@ describe.skipIf(!RUN)("Wave 7 menu server work (real DB)", () => {
   });
 
   describe("reading and deleting", () => {
+    it("the yield variance list covers the organisation's dishes, not the hidden FOH sale links", async () => {
+      const links = await db.select({ id: menuItem.menuItemId }).from(menuItem).where(and(eq(menuItem.organisationId, fx.orgA), eq(menuItem.linkedIngredientId, fx.cokeId)));
+      expect(links.length).toBeGreaterThan(0);
+      const { status, body } = await call(handleListYieldVariance, fx.cook);
+      expect(status).toBe(200);
+      const ids = body.map((r: { menuItemId: string }) => r.menuItemId);
+      expect(ids).toContain(fx.itemId);
+      for (const link of links) expect(ids).not.toContain(link.id);
+    });
+
     it("a colleague reads the recipe lines of the chef's item; the other organisation gets 404", async () => {
       const mine = await call(handleListIngredients, fx.cook, { params: { id: fx.itemId } });
       expect(mine.status).toBe(200);
