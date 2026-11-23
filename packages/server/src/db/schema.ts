@@ -865,7 +865,13 @@ export const benchDmThread = pgTable(
  */
 export const menuItem = pgTable("menu_item", {
   menuItemId: uuid("menu_item_id").defaultRandom().primaryKey(),
+  /** The creator. Edit rights: the creator or an admin of `organisation_id`. */
   userId: integer("user_id").notNull().references(() => user.userId),
+  /**
+   * The organisation the item belongs to: every member reads it. Null only for a user with no organisation and for
+   * rows an older server wrote before backfillMenuItemOrganisation.ts ran; those stay visible to their creator.
+   */
+  organisationId: integer("organisation_id").references(() => organisation.organisationId),
   storeLocationId: uuid("store_location_id").references(() => storeLocation.storeLocationId),
   name: varchar("name", { length: 200 }).notNull(),
   category: varchar("category", { length: 100 }).notNull(),
@@ -916,6 +922,8 @@ export const menuItem = pgTable("menu_item", {
   updatedDttm: timestamp("updated_dttm").notNull().defaultNow(),
 }, (table) => [
   index("idx_menu_item_user").on(table.userId),
+  // "All menu items of one organisation, by category": the list, analysis and sale lookups, and the FK check when an organisation row is deleted.
+  index("idx_menu_item_organisation").on(table.organisationId),
   index("idx_menu_item_store").on(table.storeLocationId),
   // FOH direct sale: one auto-generated 1:1 link per (user, consumable) — the
   // partial unique makes "create once, reuse forever" race-safe.

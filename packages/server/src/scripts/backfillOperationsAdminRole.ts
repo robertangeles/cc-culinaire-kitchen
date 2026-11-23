@@ -39,7 +39,7 @@ export const OPERATIONS_ADMIN_PERMISSION_KEYS = [
   "inventory:count", "inventory:manage", "inventory:transfer", "inventory:hq",
   "purchasing:draft", "purchasing:submit", "purchasing:approve", "purchasing:receive", "purchasing:credit",
   "sales:record", "sales:read",
-  "menu:read", "waste:read", "waste:log", "prep:manage", "prep:read",
+  "menu:read", "menu:manage", "waste:read", "waste:log", "prep:manage", "prep:read",
   "brain:read", "brain:manage",
   "compliance:read-own", "compliance:read-all", "compliance:verify", "compliance:manage-rules",
   "roster:read-own", "roster:read-all", "roster:manage", "roster:publish",
