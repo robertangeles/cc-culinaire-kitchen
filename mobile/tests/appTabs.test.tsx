@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
   user: null as unknown as AuthUser,
   insets: { top: 24, bottom: 48, left: 0, right: 0 },
   screenOptions: {} as Record<string, unknown>,
-  screens: [] as { name: string; guard: boolean; options: { title?: string; href?: null } }[],
+  screens: [] as { name: string; guard: boolean; options: { title?: string; href?: null; tabBarButton?: () => null; tabBarItemStyle?: { display?: string } } }[],
   navigate: vi.fn(),
 }));
 vi.mock("../src/runtime/appContext", () => ({ useSession: () => ({ state: { phase: "ready", user: mocks.user } }) }));
@@ -24,7 +24,7 @@ vi.mock("expo-router", () => {
     mocks.screenOptions = screenOptions;
     return <>{children}</>;
   };
-  Tabs.Screen = ({ name, options }: { name: string; options: { title?: string; href?: null } }) => {
+  Tabs.Screen = ({ name, options }: { name: string; options: { title?: string; href?: null; tabBarButton?: () => null; tabBarItemStyle?: { display?: string } } }) => {
     mocks.screens.push({ name, guard: useContext(Guard), options });
     return null;
   };
@@ -42,8 +42,16 @@ afterEach(() => {
 });
 
 const person = (over: Partial<AuthUser>): AuthUser => ({ userId: 1, userName: "A", userEmail: "a@x.test", mfaEnabled: false, roles: [], permissions: [], ...over });
-/** The titles of the buttons on the bar: screens the person may open that are not hidden behind More. */
-const buttons = () => mocks.screens.filter((s) => s.guard && s.options.href !== null).map((s) => s.options.title);
+/** The titles of the buttons on the bar: screens the person may open whose button is not taken away (those are under More). */
+const buttons = () =>
+  mocks.screens
+    .filter((s) => {
+      const hidden = s.options.tabBarButton?.() === null;
+      // A taken-away button must also take its slot away, or the bar keeps an empty gap where it was.
+      expect(hidden).toBe(s.options.tabBarItemStyle?.display === "none");
+      return s.guard && !hidden;
+    })
+    .map((s) => s.options.title);
 
 describe("the tab bar", () => {
   it.each([["three-button navigation", 48], ["gesture navigation", 24], ["no system bar (an iPad without a home indicator)", 0]])(
@@ -74,6 +82,8 @@ describe("the tab bar", () => {
     expect(buttons()).toEqual(["Prep", "Waste", "Usage", "Count", "More"]);
     // Move and Account stay in the navigator, so More can open them.
     expect(mocks.screens.filter((s) => s.guard).map((s) => s.name)).toEqual(expect.arrayContaining(["(moves)", "account"]));
+    // ...and none is `href: null`: expo-router hides such a tab and sends anyone who opens it to the first tab (More > Move landed on Prep).
+    expect(mocks.screens.every((s) => s.options.href === undefined)).toBe(true);
   });
 
   it("More lists the modules that did not fit, then Account, and opens each", () => {

@@ -7,6 +7,12 @@ import { useColors } from "../../src/ui/theme";
 import { fontFamily, size, space } from "../../src/theme";
 
 /**
+ * A tab with no button on the bar, still open to navigation. Not `href: null`: expo-router hides such a tab and, when it is opened, sends
+ * the person to the first tab instead (More > Move landed on Prep on the moto g86). The item style takes away the empty slot the button leaves.
+ */
+const noButton = (hide: boolean) => (hide ? { tabBarButton: () => null, tabBarItemStyle: { display: "none" as const } } : {});
+
+/**
  * The signed-in app: one tab per module the person's permissions open, then Account; at most five buttons, so a person with more
  * modules gets four and More (the rest and Account). Each module is a route group next to this file.
  */
@@ -33,11 +39,11 @@ export default function AppTabs() {
       {moduleTabs.map((tab) => (
         // A tab the person cannot open is not in the navigator at all, so a link or a back press cannot reach it. One under More has no button.
         <Tabs.Protected key={tab.route} guard={canOpen(user, tab)}>
-          <Tabs.Screen name={tab.route} options={{ title: tab.title, href: more.includes(tab) ? null : undefined, tabBarIcon: ({ color }) => <TabIcon name={tab.icon} color={color} /> }} />
+          <Tabs.Screen name={tab.route} options={{ title: tab.title, ...noButton(more.includes(tab)), tabBarIcon: ({ color }) => <TabIcon name={tab.icon} color={color} /> }} />
         </Tabs.Protected>
       ))}
-      <Tabs.Screen name="more" options={{ title: "More", href: overflow ? undefined : null, tabBarIcon: ({ color }) => <TabIcon name="more" color={color} /> }} />
-      <Tabs.Screen name="account" options={{ title: "Account", href: overflow ? null : undefined, tabBarIcon: ({ color }) => <TabIcon name="account" color={color} /> }} />
+      <Tabs.Screen name="more" options={{ title: "More", ...noButton(!overflow), tabBarIcon: ({ color }) => <TabIcon name="more" color={color} /> }} />
+      <Tabs.Screen name="account" options={{ title: "Account", ...noButton(overflow), tabBarIcon: ({ color }) => <TabIcon name="account" color={color} /> }} />
     </Tabs>
   );
 }
