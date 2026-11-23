@@ -85,8 +85,8 @@ If a download fails (no signal, or a server that does not have the route yet) th
 
 ## Tablet width
 
-Content sits in a centred column of at most 560 dp, `COLUMN_WIDTH` in `src/ui/Screen.tsx` (`Screen` does it for every screen built on it; the waste, prep, usage and move screens lay themselves out and use `src/ui/Column.tsx`, which reuses the same number).
-Phones fill the width. The count screens are not wrapped yet. jsdom does no layout, so the screen tests check only the column's constraints (full width, 560 dp cap, centred): `tests/waste.test.tsx`; `tests/prep.test.tsx` at 390, 820 and 1180 wide; `tests/usage.test.tsx` and `tests/moves.test.tsx` at window sizes of an iPad in portrait (820 x 1180) and landscape (1180 x 820) and a phone (390 x 844). The look is for the device walk. Usage and Move use `Column` and have no second column definition. They have no two-column layout: a tablet gets the same column in the middle of the paper.
+Content sits in a centred column of at most 560 dp, `COLUMN_WIDTH` in `src/ui/Screen.tsx` (`Screen` does it for every screen built on it; the waste, prep, usage, move and receiving screens lay themselves out and use `src/ui/Column.tsx`, which reuses the same number).
+Phones fill the width. The count screens are not wrapped yet. jsdom does no layout, so the screen tests check only the column's constraints (full width, 560 dp cap, centred): `tests/waste.test.tsx`; `tests/prep.test.tsx` at 390, 820 and 1180 wide; `tests/usage.test.tsx` and `tests/moves.test.tsx` at window sizes of an iPad in portrait (820 x 1180) and landscape (1180 x 820) and a phone (390 x 844). `tests/receiving.test.tsx` at an iPad's width. The look is for the device walk. Usage and Move use `Column` and have no second column definition. They have no two-column layout: a tablet gets the same column in the middle of the paper.
 
 ## Add Sign in with Apple (`app/link-apple.tsx`)
 
@@ -199,7 +199,19 @@ Differences from the web (`StockMovementForm.tsx`):
 | No quick buttons | "Move again" for the latest six moves, with item, amount and areas | |
 | Notes up to 500 characters | The same, checked before it is queued (as is an amount over 99,999) | The server refuses both. |
 
+## Receive (`src/receiving`, `app/(app)/(receive)`)
+
+The Receive tab is shown to `purchasing:receive` holders. It is the web's receiving (`components/purchasing/ReceiveQueue.tsx`, `ReceivingChecklist.tsx`) and uses the same routes.
+**Online-only**: nothing is written to the outbox. Every tap waits for the server and the screen shows what the server saved; a refused change stays on its line with the server's words (the web swallowed a failed line save and confirmed anyway).
+The queue is the SENT and RECEIVING purchase orders at the current location, soonest expected first (the server filters and sorts), read again whenever the screen comes back into view and on pull-to-refresh.
+A row says "In progress" for a delivery you have open and names a colleague who has it open. The expected day is the order's UTC calendar day (the server stores the day typed on the web as UTC midnight) compared with the phone's own today.
+Opening a delivery starts its session, or resumes the open one (a banner names whoever started it on another phone; both phones change the same delivery). Every line starts as received in full, so a perfect delivery is: open, Confirm.
+A line offers All good, Short (less than ordered, typed on the count keypad), Wrong price and Reject (a reason and an optional note). The server keeps one status per line, so the row shows the quantity and the price it holds whatever the status. Substituted lines are shown, not made on the phone.
+While a keypad or reject panel is open only that line shows and Confirm is hidden. Confirm also waits until no line is saving. A short delivery closes the order as partial; the balance goes on a new purchase order.
+"Back to deliveries" leaves the delivery open; "Cancel receiving" asks first, discards it (nothing reaches stock) and puts the order back in the queue.
+A delivery another phone already confirmed (`ALREADY_CONFIRMED`) or cancelled (`INVALID_STATE`) says so and offers the queue. A unit with no path to the kitchen unit (`UNIT_NOT_CONVERTIBLE`) names the item and leaves the delivery open: reject that line to go on.
+
 ## Tests
 
 `check:test` runs the logic tests (`src/**`) and the screen tests (`tests/*.test.tsx`); `check:e2e` runs the real client and queue against a server
-(`e2e/phoneFlow`, `e2e/wasteQueue`, `e2e/prepQueue`, `e2e/stockQueue`). See `device/README.md`.
+(`e2e/phoneFlow`, `e2e/wasteQueue`, `e2e/prepQueue`, `e2e/stockQueue`; `e2e/receiving` uses the client alone, receiving has no queue). See `device/README.md`.

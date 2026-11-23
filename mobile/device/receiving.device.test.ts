@@ -4,7 +4,7 @@ import { credentials, freshCode, manager } from "./fixtures";
 
 /**
  * Receiving a delivery on a real Android runtime, through the app's own screens against the real server: sign in,
- * open Receive deliveries, receive one delivery perfectly, then another with a short line, a wrong price and a
+ * open the Receive tab, receive one delivery perfectly, then another with a short line, a wrong price and a
  * rejection, and check the server's side. It changes no system setting (no airplane mode, font size or rotation),
  * signs out at the end and removes the adb tunnels it added. Needs the dev build installed, Metro on METRO_URL,
  * and the server on E2E_API_URL; the phone reaches both through `adb reverse`.
