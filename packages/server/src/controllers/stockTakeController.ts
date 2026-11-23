@@ -36,7 +36,7 @@ import {
 } from "../services/stockTakeService.js";
 import { hasPermission } from "../middleware/auth.js";
 import { getAreaCountSheets } from "../services/areaSessionService.js";
-import type { TokenPayload } from "../services/authService.js";
+import { forViewer } from "../utils/costFields.js";
 
 const logger = pino({ name: "stockTakeController" });
 
@@ -58,17 +58,6 @@ const FlagSessionSchema = z.object({
 });
 
 // ─── Helpers ──────────────────────────────────────────────────────
-
-/** Line fields that give away the book quantity or what stock is worth: a counter without `inventory:cost` counts blind. */
-const COST_FIELDS = ["expectedQty", "varianceQty", "variancePct", "unitCost"] as const;
-
-/** `line` as this caller may see it: without {@link COST_FIELDS} unless they hold `inventory:cost`. */
-function forViewer<T extends object>(user: TokenPayload, line: T): T {
-  if (hasPermission(user, "inventory:cost")) return line;
-  const copy = { ...line } as Record<string, unknown>;
-  for (const k of COST_FIELDS) delete copy[k];
-  return copy as T;
-}
 
 function handleServiceError(err: unknown, res: Response, next: NextFunction): void {
   // `code` lets the phone's offline queue branch on the kind of refusal; `error` stays the sentence the web shows.
@@ -467,7 +456,7 @@ export async function handleGetLocationDashboard(
     const withValue = hasPermission(req.user!, "inventory:cost");
     const dashboard = await getLocationDashboard(req.params.locId as string, ctx.orgId, { withValue });
     // The book quantity is what a blind count is measured against: hidden with the value.
-    res.json(withValue ? dashboard : { ...dashboard, stockLevels: dashboard.stockLevels.map(({ currentQty: _, ...rest }) => rest) });
+    res.json({ ...dashboard, stockLevels: dashboard.stockLevels.map((l) => forViewer(req.user!, l)) });
   } catch (err) {
     handleServiceError(err, res, next);
   }

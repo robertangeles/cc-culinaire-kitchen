@@ -284,6 +284,24 @@ describe.skipIf(!RUN)("store room and bar retries (real DB)", () => {
     expect(await zoneQty(fx.locA, colaId, "FOH")).toBe(7);
   });
 
+  it("FOH count: a repeat from a phone whose clock runs ahead, after a later sale, changes nothing and answers success", async () => {
+    const countedAt = new Date(Date.now() + 120_000).toISOString();
+    const count = () => callHandler(handleCountFoh, asUser(fx.chef, SALES), { params: { locId: fx.locA }, body: { ingredientId: colaId, countedQty: 12, countedAt } });
+    expect((await count()).body.replay).toBe(false);
+    await callHandler(handleRecordSales, asUser(fx.chef, SALES), { params: { locId: fx.locA }, body: { lines: [{ ingredientId: colaId, quantity: 3 }] } });
+    const again = await count();
+
+    expect(again.status).toBe(200);
+    expect(again.body.replay).toBe(true);
+    expect(await zoneQty(fx.locA, colaId, "FOH")).toBe(9);
+  });
+
+  it("FOH count with countedAt null sets the shelf like one without it", async () => {
+    const out = await callHandler(handleCountFoh, asUser(fx.chef, SALES), { params: { locId: fx.locA }, body: { ingredientId: colaId, countedQty: 13, countedAt: null } });
+    expect(out.status).toBe(200);
+    expect(await zoneQty(fx.locA, colaId, "FOH")).toBe(13);
+  });
+
   it("FOH count without countedAt sets the shelf as before (the web)", async () => {
     const out = await callHandler(handleCountFoh, asUser(fx.chef, SALES), { params: { locId: fx.locA }, body: { ingredientId: colaId, countedQty: 11 } });
     expect(out.status).toBe(200);

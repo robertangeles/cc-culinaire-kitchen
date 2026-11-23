@@ -9,14 +9,16 @@ applyEnvPrefix();
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "../db/index.js";
 import {
-  ingredient, locationIngredient, stockLevel, storeLocation, stockTakeSession, stockTakeCategory, stockTakeLine, user,
+  ingredient, ingredientSupplier, locationIngredient, stockLevel, storeLocation, stockTakeSession, stockTakeCategory, stockTakeLine, supplier, user,
 } from "../db/schema.js";
 import { openSession, openOpeningCount, claimCategory, flagSession, approveSession } from "./stockTakeService.js";
 import {
   handleSaveLineItem, handleGetCategoryLines, handleGetSessionDetail, handleGetPreviousLines, handleGetCountSheets,
   handleSubmitCategory, handleSubmitForReview, handleGetLocationDashboard, handleGetOrgDashboard, handleClaimCategory,
 } from "../controllers/stockTakeController.js";
-import { handleListLocationIngredients, handleUpdateLocationIngredient } from "../controllers/ingredientController.js";
+import {
+  handleListIngredients, handleListIngredientSuppliers, handleListLocationIngredients, handleUpdateLocationIngredient,
+} from "../controllers/ingredientController.js";
 import { asUser, callHandler, createLineLoopFx, removeLineLoopFx, type LineLoopFx } from "./lineLoopFixture.js";
 
 /**
@@ -31,6 +33,7 @@ const RUN = process.env.TENANT_IT === "1";
 let fx: LineLoopFx;
 let other: LineLoopFx;
 let colaId = "";
+let supplierId = "";
 
 const COUNT = ["inventory:count"];
 const COST = ["inventory:count", "inventory:cost"];
@@ -52,8 +55,10 @@ describe.skipIf(!RUN)("stock take and dashboard, Wave 3 (real DB)", () => {
     other = await createLineLoopFx(`${tag}x`);
     [{ id: colaId }] = await db
       .insert(ingredient)
-      .values({ organisationId: fx.orgId, ingredientName: `${tag}-cola`, ingredientCategory: "beverages", itemType: "FOH_CONSUMABLE", baseUnit: "each" })
+      .values({ organisationId: fx.orgId, ingredientName: `${tag}-cola`, ingredientCategory: "beverages", itemType: "FOH_CONSUMABLE", baseUnit: "each", unitCost: "2" })
       .returning({ id: ingredient.ingredientId });
+    [{ id: supplierId }] = await db.insert(supplier).values({ organisationId: fx.orgId, supplierName: `${tag}-drinks` }).returning({ id: supplier.supplierId });
+    await db.insert(ingredientSupplier).values({ ingredientId: colaId, supplierId, packCost: "28.8", costPerUnit: "1.2" });
     // Flour: 10 kg on hand, par 50 (critical), $3/kg here. Cola: 24 in the store room and 6 on the bar shelf, par 40 (low), $1.50 each.
     await db.update(locationIngredient).set({ parLevel: "50", unitCost: "3" }).where(and(eq(locationIngredient.ingredientId, fx.ingId), eq(locationIngredient.storeLocationId, fx.locA)));
     await db.insert(locationIngredient).values({ ingredientId: colaId, storeLocationId: fx.locA, activeInd: true, parLevel: "40", unitCost: "1.5" });
@@ -67,6 +72,8 @@ describe.skipIf(!RUN)("stock take and dashboard, Wave 3 (real DB)", () => {
     await removeSessions(fx.orgId);
     await removeSessions(other.orgId);
     await db.delete(stockLevel).where(eq(stockLevel.ingredientId, colaId));
+    await db.delete(ingredientSupplier).where(eq(ingredientSupplier.ingredientId, colaId));
+    await db.delete(supplier).where(eq(supplier.supplierId, supplierId));
     await db.delete(locationIngredient).where(eq(locationIngredient.ingredientId, colaId));
     await db.delete(ingredient).where(eq(ingredient.ingredientId, colaId));
     await removeLineLoopFx(fx);
@@ -75,11 +82,40 @@ describe.skipIf(!RUN)("stock take and dashboard, Wave 3 (real DB)", () => {
 
   // ─── Zone: back-of-house rows only ───────────────────────────
 
-  it("the location item list has one row per item, with the store-room quantity", async () => {
-    const out = await callHandler(handleListLocationIngredients, asUser(fx.chef, COUNT), { params: { locId: fx.locA } });
+  it("the location item list has one row per item, with the store-room quantity and costs for a holder of inventory:cost", async () => {
+    const out = await callHandler(handleListLocationIngredients, asUser(fx.chef, COST), { params: { locId: fx.locA } });
     const cola = out.body.filter((r: { ingredientId: string }) => r.ingredientId === colaId);
     expect(cola).toHaveLength(1);
     expect(Number(cola[0].currentQty)).toBe(24);
+    expect(Number(cola[0].locationUnitCost)).toBe(1.5);
+    expect(Number(cola[0].orgUnitCost)).toBe(2);
+  });
+
+  it("the location item list leaves out the book quantity and unit costs for someone without inventory:cost", async () => {
+    const out = await callHandler(handleListLocationIngredients, asUser(fx.chef, COUNT), { params: { locId: fx.locA } });
+    const cola = out.body.filter((r: { ingredientId: string }) => r.ingredientId === colaId);
+    expect(cola).toHaveLength(1);
+    expect(Number(cola[0].parLevel)).toBe(40);
+    for (const k of ["currentQty", "locationUnitCost", "orgUnitCost"]) expect(cola[0]).not.toHaveProperty(k);
+  });
+
+  it("the catalogue list carries unit costs only for a holder of inventory:cost", async () => {
+    const find = async (perms: string[]) =>
+      (await callHandler(handleListIngredients, asUser(fx.chef, perms), { query: {} })).body.find((r: { ingredientId: string }) => r.ingredientId === colaId);
+
+    expect(Number((await find(COST)).unitCost)).toBe(2);
+    const blind = await find(COUNT);
+    expect(blind.baseUnit).toBe("each");
+    for (const k of ["unitCost", "preferredUnitCost"]) expect(blind).not.toHaveProperty(k);
+  });
+
+  it("an item's supplier list carries prices only for a holder of inventory:cost", async () => {
+    const list = async (perms: string[]) => (await callHandler(handleListIngredientSuppliers, asUser(fx.chef, perms), { params: { id: colaId } })).body;
+
+    expect(await list(COST)).toMatchObject([{ supplierId, packCost: expect.anything(), costPerUnit: expect.anything() }]);
+    const blind = await list(COUNT);
+    expect(blind).toMatchObject([{ supplierId }]);
+    for (const k of ["packCost", "costPerUnit"]) expect(blind[0]).not.toHaveProperty(k);
   });
 
   it("the dashboard counts each item once and returns value and low/critical figures to a holder of inventory:cost", async () => {
