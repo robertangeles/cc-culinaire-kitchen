@@ -32,6 +32,17 @@ Native iOS/Android chef app (stock count first, then delivery receiving). Plan a
 - The phone offers "Save password to Google Password Manager?" after a real sign-in. Dismiss it with Back. Never tap Save.
 - Phone checks: `check:types`, `check:lint`, `check:test` (260 tests), `check:bundle`, `check:e2e`.
 
+## Push (Wave 4 server) follow-ups (2026-11-23)
+
+Hooked to push: shift assigned, changed, cancelled, roster published, document verified, document rejected. Still only in the in-app inbox, no push yet (each is one `notifyAndPush` call after its change commits; a producer inside a transaction must push after the commit):
+- [ ] Shift swap claimed, public-holiday consent requested and declined (`shiftSwapService`, `consentService`).
+- [ ] PO approval required, approved, rejected, receiving discrepancy, delivery overdue (`purchaseOrderService`, `receivingService`, `routes/internal.ts`): these go through `notifyHQAdmins`, which also emails; give it the push call.
+- [ ] Compliance expiry alert and verifier nudge (`complianceExpiryJob`, `complianceDocumentService.nudgeVerifier`).
+- [ ] Kitchen Brain digest, nudge, capture error.
+- [ ] Not yet notifications at all: transfer, stock take flagged, Bench mention, a person removed from a shift (`removeAssignment`), a venue's bulk undo (`undoGeneration`).
+- [ ] Quiet hours drop a push (the inbox keeps it). If the owner wants it held until quiet hours end, that needs a queue table.
+- [ ] Phone: register an Expo push token (not a raw FCM/APNs token; the dispatcher skips those), send `deviceToken` on logout, call `unregister-device` when notifications are turned off, send the phone's IANA time zone with quiet hours, route `data.link` (`pushLink` in `@culinaire/shared/schemas/push`; `/notifications` until a screen exists).
+
 ## MFA follow-ups (2026-10-26)
 
 Shipped on `fix/ck-web/mfa-change-needs-proof`: setup/disable need proof (brain page `architecture/overview`, "Changing two-factor settings"). Still open:
