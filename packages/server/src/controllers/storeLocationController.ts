@@ -28,6 +28,7 @@ import {
   updateModulePreference,
 } from "../services/locationContextService.js";
 import { getMembership } from "../services/organisationService.js";
+import { JoinError } from "../services/joinErrors.js";
 
 // ---------------------------------------------------------------------------
 // Validation Schemas
@@ -300,17 +301,8 @@ export async function handleJoinStoreLocation(
     );
     res.json({ storeLocation: location });
   } catch (err: unknown) {
-    if (err instanceof Error) {
-      const msg = err.message;
-      if (msg.includes("not found")) {
-        res.status(404).json({ error: msg });
-      } else if (msg.includes("must be a member")) {
-        res.status(403).json({ error: msg });
-      } else if (msg.includes("already assigned")) {
-        res.status(409).json({ error: msg });
-      } else {
-        res.status(400).json({ error: msg });
-      }
+    if (err instanceof JoinError) {
+      res.status(err.statusCode).json({ error: err.message, code: err.code });
       return;
     }
     next(err);

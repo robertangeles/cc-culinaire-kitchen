@@ -14,6 +14,7 @@ import {
 } from "../services/authService.js";
 import { setAuthCookies } from "./authController.js";
 import { presentedRefreshToken } from "../utils/presentedRefreshToken.js";
+import { JoinError } from "../services/joinErrors.js";
 import {
   createOrganisation,
   updateOrganisation,
@@ -178,8 +179,8 @@ export async function handleJoinOrganisation(req: Request, res: Response, next: 
     const org = await joinOrganisation(req.user!.sub, parsed.data.joinKey);
     res.json({ organisation: org });
   } catch (err: unknown) {
-    if (err instanceof Error) {
-      res.status(400).json({ error: err.message });
+    if (err instanceof JoinError) {
+      res.status(err.statusCode).json({ error: err.message, code: err.code });
       return;
     }
     next(err);

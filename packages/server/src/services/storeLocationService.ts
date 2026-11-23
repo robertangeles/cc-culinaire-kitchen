@@ -20,6 +20,7 @@ import {
 import { encryptPii, decryptPii } from "../utils/crypto.js";
 import { decryptUserPii } from "./piiService.js";
 import { seedDefaultAreas } from "./storageAreaService.js";
+import { JoinError } from "./joinErrors.js";
 
 // ---------------------------------------------------------------------------
 // Store Key Generation
@@ -319,13 +320,13 @@ export async function joinStoreLocation(userId: number, storeKey: string) {
     .where(eq(storeLocation.storeKey, storeKey));
 
   if (locations.length === 0) {
-    throw new Error("Store key not found.");
+    throw new JoinError("Store key not found.", "STORE_KEY_NOT_FOUND", 404);
   }
 
   const location = locations[0];
 
   if (!location.isActiveInd) {
-    throw new Error("This location is no longer active.");
+    throw new JoinError("This location is no longer active.", "LOCATION_INACTIVE", 400);
   }
 
   // Cross-org guard: verify user is a member of the org that owns this location
@@ -340,9 +341,7 @@ export async function joinStoreLocation(userId: number, storeKey: string) {
     );
 
   if (membership.length === 0) {
-    throw new Error(
-      "You must be a member of this organisation first."
-    );
+    throw new JoinError("You must be a member of this organisation first.", "NOT_ORG_MEMBER", 403);
   }
 
   // Check if already assigned
@@ -357,7 +356,7 @@ export async function joinStoreLocation(userId: number, storeKey: string) {
     );
 
   if (existing.length > 0) {
-    throw new Error("You are already assigned to this location.");
+    throw new JoinError("You are already assigned to this location.", "ALREADY_ASSIGNED", 409);
   }
 
   // Create assignment (self-serve: assignedBy = null)
