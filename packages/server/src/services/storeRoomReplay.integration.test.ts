@@ -87,6 +87,14 @@ describe.skipIf(!RUN)("store room and bar retries (real DB)", () => {
     ...extra,
   });
 
+  it("transfer create: a large quantity (100 kg of an item kept in grams) is accepted", async () => {
+    const out = await callHandler(transferController.handleInitiateTransfer, asUser(fx.chef, MANAGE), {
+      body: createBody({ lines: [{ ingredientId: fx.ingId, sentQty: 100000, sentUnit: "g" }] }),
+    });
+    expect(out.status).toBe(201);
+    expect(Number(out.body.lines[0].sentQty)).toBe(100000);
+  });
+
   it("transfer create: a repeat of the same transferId makes one transfer with one set of lines", async () => {
     const transferId = randomUUID();
     const first = await callHandler(transferController.handleInitiateTransfer, asUser(fx.chef, MANAGE), { body: createBody({ transferId }) });
@@ -209,7 +217,7 @@ describe.skipIf(!RUN)("store room and bar retries (real DB)", () => {
 
     expect(await send(fx.cook, { fohRestockId, ingredientId: colaId, quantity: 1 })).toMatchObject({ status: 409, body: { code: "CONFLICT" } });
     expect(await send(fx.cook, { ingredientId: colaId, quantity: 0 })).toMatchObject({ status: 400, body: { code: "VALIDATION" } });
-    expect(await send(fx.cook, { ingredientId: colaId, quantity: 100000 })).toMatchObject({ status: 400, body: { code: "VALIDATION" } });
+    expect(await send(fx.cook, { ingredientId: colaId, quantity: "1e999" })).toMatchObject({ status: 400, body: { code: "VALIDATION" } });
     expect(await send(fx.cook, { ingredientId: fx.ingId, quantity: 1 })).toMatchObject({ status: 400, body: { code: "VALIDATION" } });
     expect(await send(fx.cook, { ingredientId: randomUUID(), quantity: 1 })).toMatchObject({ status: 404, body: { code: "NOT_FOUND" } });
   });

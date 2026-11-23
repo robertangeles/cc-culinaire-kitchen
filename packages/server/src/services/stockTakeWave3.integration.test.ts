@@ -149,6 +149,35 @@ describe.skipIf(!RUN)("stock take and dashboard, Wave 3 (real DB)", () => {
     expect(row).toMatchObject({ totalItems: 2, lowStock: 1, critical: 1, inventoryValue: 75 });
   });
 
+  it("the location dashboard and the organisation summary agree: value counts every stock row, low/critical only active items with a par", async () => {
+    // At the second location: flour deactivated with 10 kg left at $3 and par 50; cola in stock (4 at the catalogue's $2)
+    // with no location row; salt active, par 10, at -2 kg and $5.
+    await db.insert(locationIngredient).values([
+      { ingredientId: fx.ingId, storeLocationId: fx.locB, activeInd: false, parLevel: "50", unitCost: "3" },
+      { ingredientId: fx.ingNoStockId, storeLocationId: fx.locB, activeInd: true, parLevel: "10", unitCost: "5" },
+    ]);
+    await db.insert(stockLevel).values([
+      { storeLocationId: fx.locB, ingredientId: fx.ingId, zone: "BOH", currentQty: "10" },
+      { storeLocationId: fx.locB, ingredientId: colaId, zone: "BOH", currentQty: "4" },
+      { storeLocationId: fx.locB, ingredientId: fx.ingNoStockId, zone: "BOH", currentQty: "-2" },
+    ]);
+
+    const { stockSummary } = (await callHandler(handleGetLocationDashboard, asUser(fx.boss, COST), { params: { locId: fx.locB } })).body;
+    const hq = (await callHandler(handleGetOrgDashboard, asUser(fx.boss, ["inventory:hq", "inventory:cost"]))).body.find(
+      (l: { storeLocationId: string }) => l.storeLocationId === fx.locB,
+    );
+    await db.delete(stockLevel).where(eq(stockLevel.storeLocationId, fx.locB));
+    await db.delete(locationIngredient).where(eq(locationIngredient.storeLocationId, fx.locB));
+
+    // Flour 10 x 3 + cola 4 x 2; the negative salt adds nothing.
+    expect(stockSummary.stockValue).toBe(38);
+    expect(hq.inventoryValue).toBe(38);
+    // Only salt: flour is not active here, cola has no par.
+    expect(stockSummary.criticalIngredientIds).toEqual([fx.ingNoStockId]);
+    expect(stockSummary.lowIngredientIds).toEqual([]);
+    expect(hq).toMatchObject({ critical: 1, lowStock: 0, totalItems: 3 });
+  });
+
   it("the organisation summary leaves out value for someone without inventory:cost", async () => {
     const out = await callHandler(handleGetOrgDashboard, asUser(fx.boss, ["inventory:hq"]));
     const row = out.body.find((l: { storeLocationId: string }) => l.storeLocationId === fx.locA);
