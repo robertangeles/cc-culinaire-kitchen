@@ -4,6 +4,7 @@ import { createOutbox } from "../outbox/outbox";
 import { createRunner } from "../outbox/runner";
 import { createSendSaveLine } from "../outbox/sendSaveLine";
 import { sqliteOutboxStore } from "../outbox/sqliteStore";
+import { prepHandlers } from "../prep/prepCommands";
 import { wasteHandlers } from "../waste/wasteCommands";
 
 /** The signed-in chef's id, or null (counts stay on the phone and wait for a sign-in). */
@@ -16,7 +17,7 @@ export const outbox = createOutbox({
   store: sqliteOutboxStore,
   send: createSendSaveLine(client),
   // Every other module's commands: add its handlers here (see the "Offline queue" section of mobile/README.md).
-  handlers: [...wasteHandlers(client)],
+  handlers: [...wasteHandlers(client), ...prepHandlers(client)],
   now: Date.now,
   newId: () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
   getUserId: currentUserId,

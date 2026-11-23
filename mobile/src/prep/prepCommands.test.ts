@@ -117,7 +117,7 @@ describe("changing what has not been sent", () => {
     await outbox.enqueueCommand("prep.tick", tick({ status: "completed" }));
     await outbox.drain();
     await outbox.enqueueCommand("prep.tick", tick({ status: "pending", completedAt: null }));
-    expect(rows().map((r) => (r.command as PrepTickCommand).status)).toEqual(["pending"]);
+    expect(rows().map((r) => (r.command as unknown as PrepTickCommand).status)).toEqual(["pending"]);
   });
 
   it("a newer plan of dishes replaces an unsent one, and the order create, selections, generate is kept", async () => {

@@ -15,6 +15,13 @@ describe("which tabs a person sees", () => {
     expect(visibleTabs(person({ permissions: ["inventory:count", "waste:log"] })).map((t) => t.route)).toEqual(["(count)", "(waste)"]);
   });
 
+  it("shows the Prep tab to someone who holds prep:read or prep:manage, as the server lets either tick tasks (any role can be given them)", () => {
+    expect(visibleTabs(person({ permissions: ["prep:read"] })).map((t) => t.route)).toEqual(["(prep)"]);
+    expect(visibleTabs(person({ permissions: ["prep:manage"] })).map((t) => t.route)).toEqual(["(prep)"]);
+    expect(visibleTabs(person({ permissions: ["inventory:count", "waste:log", "prep:read"] })).map((t) => t.route)).toEqual(["(count)", "(waste)", "(prep)"]);
+    expect(visibleTabs(person({ permissions: ["waste:read", "menu:read"] }))).toEqual([]);
+  });
+
   it("shows no module to someone with only unrelated permissions, or none", () => {
     expect(visibleTabs(person({ permissions: ["chat:access"] }))).toEqual([]);
     expect(visibleTabs(person())).toEqual([]);
