@@ -282,6 +282,13 @@ export async function canAccessLocation(user: TokenPayload, storeLocationId: str
   return false;
 }
 
+/** Every location {@link canAccessLocation} accepts for this caller. */
+export async function accessibleLocationIds(user: TokenPayload): Promise<string[]> {
+  const ctx = await getUserLocationContext(user.sub);
+  const locations = ctx.organisationId !== null && hasPermission(user, "inventory:hq") ? await getOrgStoreLocations(ctx.organisationId) : ctx.locations;
+  return locations.map((l) => l.storeLocationId);
+}
+
 /** 403 LOCATION_NOT_ALLOWED unless {@link canAccessLocation}. Wrong organisation and not assigned answer the same. */
 export async function assertLocationAccess(user: TokenPayload, storeLocationId: string): Promise<void> {
   if (!(await canAccessLocation(user, storeLocationId))) {

@@ -12,9 +12,11 @@
 import pino from "pino";
 import { db } from "../db/index.js";
 import { menuItem, menuItemIngredient, menuCategorySetting, wasteLog, ingredient, locationIngredient, user } from "../db/schema.js";
-import { eq, and, sql, gte, inArray } from "drizzle-orm";
+import { eq, and, or, sql, gte, inArray, isNull } from "drizzle-orm";
 import { AppError } from "../utils/appError.js";
-import { menuReadable, assertCanManageMenuItem, type MenuScope } from "./menuAccess.js";
+import { menuReadable, assertCanManageMenuItem, resolveMenuScope, type MenuScope } from "./menuAccess.js";
+import { accessibleLocationIds } from "./locationContextService.js";
+import type { TokenPayload } from "./authService.js";
 import {
   IncompatibleUnitsError, classifyAgainstWholeMenu, menuMixPct, plateFoodCost, storedItemCosts, storedLineCost,
   summariseMenuAnalysis,
@@ -179,9 +181,9 @@ export async function deleteMenuItem(menuItemId: string, scope: MenuScope) {
   try {
     await db.delete(menuItem).where(eq(menuItem.menuItemId, menuItemId));
   } catch (err) {
-    // A sale row points at the item and is history: the item stays.
+    // A sale or prep row points at the item and is history: the item stays.
     const code = (err as { code?: string; cause?: { code?: string } }).code ?? (err as { cause?: { code?: string } }).cause?.code;
-    if (code === "23503") throw new AppError(409, "CONFLICT", "This menu item has recorded sales and cannot be deleted");
+    if (code === "23503") throw new AppError(409, "CONFLICT", "This menu item has recorded sales or prep history and cannot be deleted");
     throw err;
   }
   await persistClassification(scope);
@@ -540,11 +542,17 @@ export async function persistClassification(scope: MenuScope): Promise<void> {
   }
 }
 
-/** persistClassification for the organisation of one item, when the caller's scope is not at hand (a cost change deep in a service). */
+/**
+ * persistClassification for the menu one item is part of, when the caller's scope is not at hand (a cost change deep
+ * in a service). An item with no organisation is part of its creator's menu, which is their organisation's if they have one.
+ */
 async function persistClassificationOf(menuItemId: string): Promise<void> {
   const [item] = await db.select({ userId: menuItem.userId, organisationId: menuItem.organisationId })
     .from(menuItem).where(eq(menuItem.menuItemId, menuItemId));
-  if (item) await persistClassification({ userId: item.userId, organisationId: item.organisationId, isOrgAdmin: false });
+  if (!item) return;
+  await persistClassification(item.organisationId === null
+    ? await resolveMenuScope(item.userId)
+    : { userId: item.userId, organisationId: item.organisationId, isOrgAdmin: false });
 }
 
 /** POST /analysis/recalculate: refresh stored costs (of one category, or all), then stored mix and classification. */
@@ -633,6 +641,7 @@ export async function importCsvSalesData(scope: MenuScope, csvContent: string) {
   }
 
   let updated = 0;
+  // Names with no item to update: no match, or (marked as such) more than one.
   const notFound: string[] = [];
 
   for (let i = 1; i < lines.length; i++) {
@@ -641,13 +650,15 @@ export async function importCsvSalesData(scope: MenuScope, csvContent: string) {
     const sold = parseInt(cols[soldIdx], 10);
     if (!name || isNaN(sold)) continue;
 
-    // Find matching menu item by name (case-insensitive), among the items this caller may change: this overwrites units sold.
-    const [match] = await db.select({ menuItemId: menuItem.menuItemId })
+    // Find matching menu item by name (case-insensitive), among the dishes this caller may change: this overwrites units sold.
+    const [match, another] = await db.select({ menuItemId: menuItem.menuItemId })
       .from(menuItem)
-      .where(and(menuReadable(scope), scope.isOrgAdmin ? undefined : eq(menuItem.userId, scope.userId), sql`LOWER(${menuItem.name}) = LOWER(${name})`))
-      .limit(1);
+      .where(and(menuReadable(scope), scope.isOrgAdmin ? undefined : eq(menuItem.userId, scope.userId), isNull(menuItem.linkedIngredientId), sql`LOWER(${menuItem.name}) = LOWER(${name})`))
+      .limit(2);
 
-    if (match) {
+    if (another) {
+      notFound.push(`${name} (ambiguous name: multiple menu items)`);
+    } else if (match) {
       await db.update(menuItem).set({ unitsSold: sold, updatedDttm: new Date() })
         .where(eq(menuItem.menuItemId, match.menuItemId));
       updated++;
@@ -732,10 +743,10 @@ export interface WasteImpactResult {
 
 /**
  * For each menu item, check if any of its ingredients appear in waste logs
- * from the last 30 days. Returns aggregated waste cost per menu item.
+ * from the last 30 days. Returns aggregated waste cost per menu item. The waste
+ * is the viewer's own plus the organisation's at the locations the viewer may use.
  */
-export async function getWasteImpactForMenuItems(scope: MenuScope): Promise<WasteImpactResult[]> {
-  const userId = scope.userId;
+export async function getWasteImpactForMenuItems(scope: MenuScope, actor: TokenPayload): Promise<WasteImpactResult[]> {
   const items = await getMenuItems(scope);
   if (items.length === 0) return [];
 
@@ -749,6 +760,12 @@ export async function getWasteImpactForMenuItems(scope: MenuScope): Promise<Wast
 
   if (allIngredients.length === 0) return [];
 
+  let wasteInScope = eq(wasteLog.userId, scope.userId);
+  if (scope.organisationId !== null) {
+    const locationIds = await accessibleLocationIds(actor);
+    if (locationIds.length) wasteInScope = or(wasteInScope, and(eq(wasteLog.organisationId, scope.organisationId), inArray(wasteLog.storeLocationId, locationIds)))!;
+  }
+
   // Query waste logs for matching ingredients in the last 30 days
   const thirtyDaysAgo = new Date();
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
@@ -761,7 +778,7 @@ export async function getWasteImpactForMenuItems(scope: MenuScope): Promise<Wast
     .from(wasteLog)
     .where(
       and(
-        eq(wasteLog.userId, userId),
+        wasteInScope,
         gte(wasteLog.loggedAt, thirtyDaysAgo),
       ),
     )
