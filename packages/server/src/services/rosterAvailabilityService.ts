@@ -74,7 +74,7 @@ export async function listAvailabilityForOrg(orgId: number) {
     .orderBy(asc(staffAvailability.userId), asc(staffAvailability.dayOfWeek));
 }
 
-/** Creates an availability window for a user. */
+/** Creates an availability window for a user. A replay of a window they already have returns that row. */
 export async function createAvailability(orgId: number, userId: number, input: AvailabilityInput) {
   if (input.storeLocationId) await assertLocationInOrg(input.storeLocationId, orgId);
   validateAvailabilityInput(input);
@@ -91,8 +91,26 @@ export async function createAvailability(orgId: number, userId: number, input: A
       effectiveFrom: input.effectiveFrom,
       effectiveUntil: input.effectiveUntil ?? null,
     })
+    .onConflictDoNothing()
     .returning();
-  return created;
+  if (created) return created;
+
+  const [existing] = await db
+    .select()
+    .from(staffAvailability)
+    .where(
+      and(
+        eq(staffAvailability.userId, userId),
+        eq(staffAvailability.organisationId, orgId),
+        input.storeLocationId ? eq(staffAvailability.storeLocationId, input.storeLocationId) : isNull(staffAvailability.storeLocationId),
+        eq(staffAvailability.dayOfWeek, input.dayOfWeek),
+        eq(staffAvailability.availableFrom, input.availableFrom),
+        eq(staffAvailability.availableUntil, input.availableUntil),
+        eq(staffAvailability.effectiveFrom, input.effectiveFrom),
+        input.effectiveUntil ? eq(staffAvailability.effectiveUntil, input.effectiveUntil) : isNull(staffAvailability.effectiveUntil),
+      ),
+    );
+  return existing;
 }
 
 async function getAvailabilityRow(orgId: number, availabilityId: string) {
@@ -126,20 +144,27 @@ export async function updateAvailability(
   if (input.storeLocationId) await assertLocationInOrg(input.storeLocationId, orgId);
   validateAvailabilityInput(input);
 
-  const [updated] = await db
-    .update(staffAvailability)
-    .set({
-      storeLocationId: input.storeLocationId ?? null,
-      dayOfWeek: input.dayOfWeek,
-      availableFrom: input.availableFrom,
-      availableUntil: input.availableUntil,
-      effectiveFrom: input.effectiveFrom,
-      effectiveUntil: input.effectiveUntil ?? null,
-      updatedDttm: new Date(),
-    })
-    .where(eq(staffAvailability.staffAvailabilityId, availabilityId))
-    .returning();
-  return updated;
+  try {
+    const [updated] = await db
+      .update(staffAvailability)
+      .set({
+        storeLocationId: input.storeLocationId ?? null,
+        dayOfWeek: input.dayOfWeek,
+        availableFrom: input.availableFrom,
+        availableUntil: input.availableUntil,
+        effectiveFrom: input.effectiveFrom,
+        effectiveUntil: input.effectiveUntil ?? null,
+        updatedDttm: new Date(),
+      })
+      .where(eq(staffAvailability.staffAvailabilityId, availabilityId))
+      .returning();
+    return updated;
+  } catch (err) {
+    if ((err as { code?: string }).code === "23505") {
+      throw new RosterError("You already have this availability window.", 409, "CONFLICT");
+    }
+    throw err;
+  }
 }
 
 /** Deletes a user's availability window. */
