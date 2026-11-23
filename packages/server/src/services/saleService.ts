@@ -13,10 +13,16 @@
  * location resolution, D6 yield clamp, D7 reversible via the `sale` header +
  * voidSale, D11 layered scoping (own the menu item AND org-match the stock),
  * D13 idempotency key. Costing stays WAC (D4) — deductStock only, no FIFO.
+ *
+ * Wave 7: menu items belong to the organisation, so any member who may sell can sell any item of it (D11a
+ * becomes "the item is in the caller's organisation"); the key is claimed by the insert itself (ON CONFLICT),
+ * a replay with a different payload is a 409, stock leaves the zone its item type lives in (a FOH consumable
+ * from the shelf, everything else from BOH), and a sale is only recorded or voided at a location the caller
+ * may use.
  */
 
 import { createHash } from "node:crypto";
-import { and, eq, sql, desc } from "drizzle-orm";
+import { and, eq, inArray, isNull, or, sql, desc } from "drizzle-orm";
 import { db } from "../db/index.js";
 import type { DbOrTx } from "./auditService.js";
 import {
@@ -31,14 +37,30 @@ import {
 } from "../db/schema.js";
 import { resolveToBase } from "./unitConversionService.js";
 import { assertLocationAccess } from "./locationContextService.js";
+import { menuReadable, type MenuScope } from "./menuAccess.js";
+import { persistClassification } from "./menuIntelligenceService.js";
 import type { TokenPayload } from "./authService.js";
+import { AppError } from "../utils/appError.js";
+import type { ServerErrorCode } from "@culinaire/shared";
+import pino from "pino";
 
-export class SaleError extends Error {
-  constructor(message: string, public statusCode: number) {
-    super(message);
+const logger = pino({ name: "saleService" });
+
+const CODE_FOR_STATUS: Record<number, ServerErrorCode> = { 400: "VALIDATION", 403: "FORBIDDEN", 404: "NOT_FOUND", 409: "INVALID_STATE" };
+
+/** A refused sale request. `{ error, code }` on the wire (errorHandler); the code defaults from the status. */
+export class SaleError extends AppError {
+  constructor(message: string, statusCode: number, code: ServerErrorCode = CODE_FOR_STATUS[statusCode] ?? "VALIDATION") {
+    super(statusCode, code, message);
     this.name = "SaleError";
   }
 }
+
+/** The caller's side of a sale: who they are and the organisation it is recorded in. Reads need no admin flag. */
+const readScope = (orgId: number, userId: number): MenuScope => ({ userId, organisationId: orgId, isOrgAdmin: false });
+
+/** Which stock zone an item type lives in: the FOH shelf for a consumable, the back of house for everything else. */
+const zoneFor = (itemType: string): "BOH" | "FOH" => (itemType === "FOH_CONSUMABLE" ? "FOH" : "BOH");
 
 export interface RecordSaleInput {
   menuItemId: string;
@@ -54,6 +76,7 @@ export interface RecordSaleInput {
 interface DepletionLine {
   ingredientId: string;
   ingredientName: string;
+  zone: "BOH" | "FOH";
   baseQty: number;
   baseUnit: string;
 }
@@ -119,13 +142,15 @@ async function planDepletions(
   const skipped: Array<{ ingredientName: string; reason: string }> = [];
   const perServing = servings > 0 ? servings : 1;
 
-  const assertOrg = async (ingredientId: string, name: string) => {
+  /** Throws unless the ingredient is this organisation's; returns the zone its stock lives in. */
+  const assertOrg = async (ingredientId: string, name: string): Promise<"BOH" | "FOH"> => {
     const [ing] = await db
-      .select({ orgId: ingredient.organisationId })
+      .select({ orgId: ingredient.organisationId, itemType: ingredient.itemType })
       .from(ingredient)
       .where(eq(ingredient.ingredientId, ingredientId));
     if (!ing) throw new SaleError(`Ingredient not found: ${name}`, 404);
     if (ing.orgId !== orgId) throw new SaleError(`Ingredient "${name}" is not in this organisation`, 403);
+    return zoneFor(ing.itemType);
   };
 
   for (const line of lines) {
@@ -144,11 +169,11 @@ async function planDepletions(
           skipped.push({ ingredientName: pl.ingredientName, reason: "prep line has no linked ingredient" });
           continue;
         }
-        await assertOrg(pl.ingredientId, pl.ingredientName);
+        const zone = await assertOrg(pl.ingredientId, pl.ingredientName);
         // raw used = (dish's prep usage) × (prep raw qty), yield-adjusted, per serving.
         const rawEntered = (dishUses * Number(pl.quantity)) / yieldFactor(pl.yieldPct) / perServing * qtySold;
         const { baseQty, baseUnit } = await resolveToBase(pl.ingredientId, rawEntered, pl.unit);
-        depletions.push({ ingredientId: pl.ingredientId, ingredientName: pl.ingredientName, baseQty, baseUnit });
+        depletions.push({ ingredientId: pl.ingredientId, ingredientName: pl.ingredientName, zone, baseQty, baseUnit });
       }
       continue;
     }
@@ -159,34 +184,55 @@ async function planDepletions(
       continue;
     }
 
-    await assertOrg(line.ingredientId, line.ingredientName);
+    const zone = await assertOrg(line.ingredientId, line.ingredientName);
     // per-serving, yield-adjusted, × qty sold. resolveToBase throws → aborts.
     const entered = Number(line.quantity) / yieldFactor(line.yieldPct) / perServing * qtySold;
     const { baseQty, baseUnit } = await resolveToBase(line.ingredientId, entered, line.unit);
-    depletions.push({ ingredientId: line.ingredientId, ingredientName: line.ingredientName, baseQty, baseUnit });
+    depletions.push({ ingredientId: line.ingredientId, ingredientName: line.ingredientName, zone, baseQty, baseUnit });
   }
 
   return { depletions, skipped };
 }
 
-/** Deduct base qty from stock, locking the row; inserts a negative row if none exists (oversell allowed). Returns the new on-hand. */
-async function deductForSale(tx: DbOrTx, locationId: string, ingredientId: string, baseQty: number): Promise<number> {
-  const [row] = await tx
-    .select()
-    .from(stockLevel)
-    .where(and(eq(stockLevel.storeLocationId, locationId), eq(stockLevel.ingredientId, ingredientId)))
-    .for("update");
+/**
+ * Add `delta` (negative to deduct) to the stock row of this location, ingredient and zone, locking the row; a missing
+ * row is created (oversell allowed: the sale already happened). Returns the new on-hand.
+ */
+async function adjustSaleStock(tx: DbOrTx, locationId: string, ingredientId: string, zone: "BOH" | "FOH", delta: number): Promise<number> {
+  const lock = () =>
+    tx
+      .select()
+      .from(stockLevel)
+      .where(and(eq(stockLevel.storeLocationId, locationId), eq(stockLevel.ingredientId, ingredientId), eq(stockLevel.zone, zone)))
+      .for("update");
+  let [row] = await lock();
   if (!row) {
-    const newQty = -baseQty;
-    await tx.insert(stockLevel).values({ storeLocationId: locationId, ingredientId, currentQty: String(newQty), version: 0 });
-    return newQty;
+    // Two sales creating the same row at once: the loser's insert is a no-op and it locks the winner's row.
+    await tx.insert(stockLevel).values({ storeLocationId: locationId, ingredientId, zone, currentQty: "0", version: 0 }).onConflictDoNothing();
+    [row] = await lock();
   }
-  const newQty = Number(row.currentQty) - baseQty;
+  const newQty = Number(row.currentQty) + delta;
   await tx
     .update(stockLevel)
     .set({ currentQty: String(newQty), version: row.version + 1, updatedDttm: new Date() })
     .where(eq(stockLevel.stockLevelId, row.stockLevelId));
   return newQty;
+}
+
+type SaleRow = typeof sale.$inferSelect;
+
+/**
+ * A request that carries a key already recorded: the same sale again (replay), or a different one under the same
+ * key (409 IDEMPOTENCY_KEY_REUSED). "Same" is the menu item and quantity, plus the time and location when the request names them.
+ */
+function replayOf(prior: SaleRow, input: RecordSaleInput): RecordSaleResult {
+  const same =
+    prior.menuItemId === input.menuItemId &&
+    Number(prior.qtySold) === input.qtySold &&
+    (input.soldAt === undefined || prior.soldAt.getTime() === input.soldAt.getTime()) &&
+    (input.locationId === undefined || prior.storeLocationId === input.locationId);
+  if (!same) throw new SaleError("This idempotency key was already used for a different sale", 409, "IDEMPOTENCY_KEY_REUSED");
+  return { saleId: prior.saleId, alreadyExists: true, voided: prior.voidedAt != null, depleted: [], skipped: [], oversold: [] };
 }
 
 /**
@@ -198,25 +244,28 @@ export async function recordSale(orgId: number, userId: number, input: RecordSal
   const soldAt = input.soldAt ?? new Date();
   if (soldAt.getTime() > Date.now() + 60_000) throw new SaleError("soldAt cannot be in the future", 400);
   const source = input.source ?? "MANUAL";
+  const key = input.idempotencyKey || null;
+  if (key && key.length > 120) throw new SaleError("The idempotency key is longer than 120 characters", 400);
 
-  // Idempotency (D13): a replayed key returns the existing sale, no re-record.
-  if (input.idempotencyKey) {
-    const [existing] = await db
-      .select({ saleId: sale.saleId, voidedAt: sale.voidedAt })
-      .from(sale)
-      .where(and(eq(sale.organisationId, orgId), eq(sale.idempotencyKey, input.idempotencyKey)));
-    if (existing) {
-      return { saleId: existing.saleId, alreadyExists: true, voided: existing.voidedAt != null, depleted: [], skipped: [], oversold: [] };
-    }
+  // Idempotency (D13): a replayed key returns the existing sale, no re-record. The insert below is what claims the key.
+  const findByKey = async (db_: DbOrTx) => {
+    const [row] = await db_.select().from(sale).where(and(eq(sale.organisationId, orgId), eq(sale.idempotencyKey, key!)));
+    return row;
+  };
+  if (key) {
+    const prior = await findByKey(db);
+    if (prior) return replayOf(prior, input);
   }
 
-  // Load the menu item, enforcing user ownership (D11a).
+  // The item must be in the caller's organisation (D11a): any member who may sell can sell any item of it.
   const [mi] = await db
     .select()
     .from(menuItem)
-    .where(and(eq(menuItem.menuItemId, input.menuItemId), eq(menuItem.userId, userId)));
+    .where(and(eq(menuItem.menuItemId, input.menuItemId), menuReadable(readScope(orgId, userId))));
   if (!mi) throw new SaleError("Menu item not found", 404);
 
+  // A location the request names is checked first, so another organisation's location and one the caller is not assigned to answer alike.
+  if (input.actor && input.locationId) await assertLocationAccess(input.actor, input.locationId);
   const locationId = await resolveSaleLocation(orgId, input.locationId, mi.storeLocationId);
   // Checked on the RESOLVED location: it can come from the menu item or the org's only location, not just the request.
   if (input.actor) await assertLocationAccess(input.actor, locationId);
@@ -225,7 +274,7 @@ export async function recordSale(orgId: number, userId: number, input: RecordSal
   const { depletions, skipped } = await planDepletions(orgId, input.menuItemId, mi.servings, input.qtySold);
 
   // Commit: sale header + units_sold + depletions + logs, one transaction.
-  return db.transaction(async (tx) => {
+  const result = await db.transaction(async (tx) => {
     const [saleRow] = await tx
       .insert(sale)
       .values({
@@ -234,11 +283,14 @@ export async function recordSale(orgId: number, userId: number, input: RecordSal
         storeLocationId: locationId,
         qtySold: String(input.qtySold),
         source,
-        idempotencyKey: input.idempotencyKey ?? null,
+        idempotencyKey: key,
         soldAt,
         createdBy: userId,
       })
+      // A concurrent request with the same key committed first: nothing here is written, and this one replays it.
+      .onConflictDoNothing({ target: [sale.organisationId, sale.idempotencyKey], where: sql`idempotency_key IS NOT NULL` })
       .returning();
+    if (!saleRow) return replayOf((await findByKey(tx))!, input);
 
     await tx
       .update(menuItem)
@@ -248,7 +300,7 @@ export async function recordSale(orgId: number, userId: number, input: RecordSal
     const depleted: RecordSaleResult["depleted"] = [];
     const oversold: string[] = [];
     for (const d of depletions) {
-      const newQty = await deductForSale(tx, locationId, d.ingredientId, d.baseQty);
+      const newQty = await adjustSaleStock(tx, locationId, d.ingredientId, d.zone, -d.baseQty);
       const isOversold = newQty < 0;
       if (isOversold) oversold.push(d.ingredientName);
       await tx.insert(consumptionLog).values({
@@ -269,53 +321,58 @@ export async function recordSale(orgId: number, userId: number, input: RecordSal
 
     return { saleId: saleRow.saleId, depleted, skipped, oversold };
   });
+  // units_sold moved: bring the stored matrix along, without ever failing a sale that is already recorded.
+  if (!result.alreadyExists) await persistClassification(readScope(orgId, userId)).catch((err) => logger.warn({ err }, "Menu classification refresh failed after a sale"));
+  return result;
 }
 
 /**
- * Reverse a sale (D7): restore every ingredient this sale depleted and
- * decrement units_sold. Guarded against double-void (409).
+ * Reverse a sale (D7): restore every ingredient this sale depleted, into the zone it left, and decrement
+ * units_sold. Guarded against double-void (409). Only the person who recorded the sale or an admin of its
+ * organisation may void it, and only at a location they can use.
  */
-export async function voidSale(orgId: number, userId: number, saleId: string): Promise<{ saleId: string; restored: number }> {
+export async function voidSale(scope: MenuScope & { organisationId: number }, saleId: string, actor: TokenPayload): Promise<{ saleId: string; restored: number }> {
   const [saleRow] = await db
     .select()
     .from(sale)
-    .where(and(eq(sale.saleId, saleId), eq(sale.organisationId, orgId)));
+    .where(and(eq(sale.saleId, saleId), eq(sale.organisationId, scope.organisationId)));
   if (!saleRow) throw new SaleError("Sale not found", 404);
-  if (saleRow.voidedAt) throw new SaleError("Sale is already voided", 409);
+  if (saleRow.createdBy !== scope.userId && !scope.isOrgAdmin) {
+    throw new SaleError("Only the person who recorded this sale or an organisation admin can void it", 403);
+  }
+  await assertLocationAccess(actor, saleRow.storeLocationId);
 
   const rows = await db
     .select()
     .from(consumptionLog)
     .where(eq(consumptionLog.saleId, saleId));
+  // The zone is the one the ingredient's item type lives in, as when the sale took it out.
+  const types = rows.length
+    ? await db.select({ id: ingredient.ingredientId, itemType: ingredient.itemType }).from(ingredient).where(inArray(ingredient.ingredientId, rows.map((r) => r.ingredientId)))
+    : [];
+  const zoneOf = new Map(types.map((t) => [t.id, zoneFor(t.itemType)]));
 
-  return db.transaction(async (tx) => {
+  const result = await db.transaction(async (tx) => {
+    // Claim the void first: a concurrent void waits here, then sees it taken.
+    const [claimed] = await tx
+      .update(sale)
+      .set({ voidedAt: new Date(), voidedBy: scope.userId })
+      .where(and(eq(sale.saleId, saleId), sql`${sale.voidedAt} IS NULL`))
+      .returning({ id: sale.saleId });
+    if (!claimed) throw new SaleError("Sale is already voided", 409);
+
     for (const r of rows) {
       // Add the depleted qty back (rows store base qty already).
-      const [sl] = await tx
-        .select()
-        .from(stockLevel)
-        .where(and(eq(stockLevel.storeLocationId, r.storeLocationId), eq(stockLevel.ingredientId, r.ingredientId)))
-        .for("update");
-      const back = Number(r.quantity);
-      if (!sl) {
-        await tx.insert(stockLevel).values({ storeLocationId: r.storeLocationId, ingredientId: r.ingredientId, currentQty: String(back), version: 0 });
-      } else {
-        await tx
-          .update(stockLevel)
-          .set({ currentQty: String(Number(sl.currentQty) + back), version: sl.version + 1, updatedDttm: new Date() })
-          .where(eq(stockLevel.stockLevelId, sl.stockLevelId));
-      }
+      await adjustSaleStock(tx, r.storeLocationId, r.ingredientId, zoneOf.get(r.ingredientId) ?? "BOH", Number(r.quantity));
     }
     await tx
       .update(menuItem)
       .set({ unitsSold: sql`GREATEST(0, ${menuItem.unitsSold} - ${Number(saleRow.qtySold)})`, updatedDttm: new Date() })
       .where(eq(menuItem.menuItemId, saleRow.menuItemId));
-    await tx
-      .update(sale)
-      .set({ voidedAt: new Date(), voidedBy: userId })
-      .where(eq(sale.saleId, saleId));
     return { saleId, restored: rows.length };
   });
+  await persistClassification(scope).catch((err) => logger.warn({ err }, "Menu classification refresh failed after a void"));
+  return result;
 }
 
 // ─── FOH direct sale (auto 1:1 link) ───────────────────────────────────────
@@ -370,6 +427,7 @@ async function getOrCreateConsumableLink(orgId: number, userId: number, ingredie
         .insert(menuItem)
         .values({
           userId,
+          organisationId: orgId,
           name: ing.ingredientName,
           category: "foh",
           sellingPrice: "0",
@@ -431,6 +489,10 @@ export interface CsvPreview {
   unmatched: Array<{ rowIndex: number; name: string; reason: string }>;
 }
 
+/** The items a CSV row may name: the organisation's menu, plus the caller's own system-made FOH sale links (other members' links are not dishes). */
+const sellableByName = (orgId: number, userId: number) =>
+  and(menuReadable(readScope(orgId, userId)), or(isNull(menuItem.linkedIngredientId), eq(menuItem.userId, userId)));
+
 /** Canonicalise a row into a stable idempotency key (D12/D13): content, not file position. */
 function rowKey(menuItemId: string, qtySold: number, soldAt: string | undefined, occurrence: number): string {
   const canonical = [menuItemId.toLowerCase(), String(qtySold), soldAt ? new Date(soldAt).toISOString() : "", occurrence].join("|");
@@ -439,14 +501,14 @@ function rowKey(menuItemId: string, qtySold: number, soldAt: string | undefined,
 
 /**
  * Phase 1 (D3): parse a sales CSV and match each row's name → menu_item_id for
- * this user. Deplete NOTHING. Rows are `name,qty[,soldAt]`; a header row and
+ * this organisation. Deplete NOTHING. Rows are `name,qty[,soldAt]`; a header row and
  * blank rows are skipped. Unmatched/ambiguous names are reported, never dropped.
  */
-export async function previewSalesCsv(userId: number, csvContent: string): Promise<CsvPreview> {
+export async function previewSalesCsv(orgId: number, userId: number, csvContent: string): Promise<CsvPreview> {
   const items = await db
     .select({ id: menuItem.menuItemId, name: menuItem.name })
     .from(menuItem)
-    .where(eq(menuItem.userId, userId));
+    .where(sellableByName(orgId, userId));
   const byName = new Map<string, string[]>();
   for (const it of items) {
     const k = it.name.trim().toLowerCase();
@@ -499,7 +561,7 @@ export async function commitSalesCsv(orgId: number, userId: number, lines: CsvSa
       const [mi] = await db
         .select({ id: menuItem.menuItemId })
         .from(menuItem)
-        .where(and(eq(menuItem.userId, userId), sql`lower(${menuItem.name}) = ${line.name.toLowerCase()}`));
+        .where(and(sellableByName(orgId, userId), sql`lower(${menuItem.name}) = ${line.name.toLowerCase()}`));
       if (!mi) {
         failed.push({ rowIndex: line.rowIndex, reason: "no matching menu item" });
         continue;

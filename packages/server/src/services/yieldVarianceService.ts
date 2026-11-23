@@ -26,6 +26,7 @@
 
 import { sql, eq } from "drizzle-orm";
 import { db } from "../db/index.js";
+import { menuReadable, type MenuScope } from "./menuAccess.js";
 import {
   menuItem,
   menuItemIngredient,
@@ -177,17 +178,17 @@ export async function getYieldVariance(menuItemId: string): Promise<YieldVarianc
 }
 
 /**
- * Bulk version — computes variance for every menu item belonging to the
- * caller (used by the Menu Intelligence list view to render the variance
+ * Bulk version — computes variance for every menu item of the caller's
+ * organisation (used by the Menu Intelligence list view to render the variance
  * column without N+1 round-trips). Reuses the single-item computation by
  * iterating; for now the result set is small (tens of dishes), so a single
  * SQL aggregate would be premature optimization.
  */
-export async function listYieldVariance(userId: number): Promise<YieldVarianceResult[]> {
+export async function listYieldVariance(scope: MenuScope): Promise<YieldVarianceResult[]> {
   const items = await db
     .select({ menuItemId: menuItem.menuItemId })
     .from(menuItem)
-    .where(eq(menuItem.userId, userId));
+    .where(menuReadable(scope));
 
   const results: YieldVarianceResult[] = [];
   for (const it of items) {

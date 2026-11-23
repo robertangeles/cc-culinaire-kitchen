@@ -1435,3 +1435,9 @@ builds all tables with CHECKs enforcing. Stop it again when done.
 - **Problem**: `scripts/localIntegrationDb.sh start` always uses `~/.cache/ck-it-pg` and `ls ... | sort -V | tail -1`, so with Postgres 16, 18 and 19 installed it picked 19 against a folder another worker had made with 18 ("control file appears to be corrupt"), and a second worker running `db:push` there would race the first. The default `pnpm` (9.15.9) also refuses `--frozen-lockfile` because it reads `overrides` from `package.json`, not `pnpm-workspace.yaml`.
 - **Fix**: Made a private cluster under the session scratch folder (own port, own `initdb` from the version that made nothing else), pushed the schema and seeded it there, and ran every pnpm command as `npx pnpm@10.31.0`.
 - **Rule**: When several workers share a machine, give each its own database folder and port, and do not run `db:push` against a folder you did not create. Use the pnpm in `packageManager`.
+
+## 2026-11-23 — A new owner column needs a read fallback for rows the previous server keeps writing
+
+- **Problem**: Migration 0006 backfills `menu_item.organisation_id`, but the previous server version stays live until the new one deploys and keeps inserting rows with the column NULL. A read of "the organisation's items" would hide every item created in that window from everyone, its creator included.
+- **Fix**: Reads match `organisation_id = mine OR (organisation_id IS NULL AND user_id = me)` (`menuAccess.menuReadable`), the new server stamps the column on every insert, and `backfillMenuItemOrganisation.ts` is run once after the deploy to claim the stragglers.
+- **Rule**: When a migration adds a scoping column that the previous server does not write, ship the NULL fallback with the reader and a re-runnable backfill, and say in the PR when to run it.
