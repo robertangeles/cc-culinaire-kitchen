@@ -78,7 +78,8 @@ export function createChatStore({ api, newId }: { api: ChatApi; newId: () => str
     try {
       let id = snapshot.conversationId;
       if (!id) {
-        id = newId();
+        // Made once: a create whose reply was lost is sent again with the same id, which the server answers without a second conversation.
+        id = newConversationId ??= newId();
         const title = titleOf(messages[0].text);
         await api.create(id, title);
         set({ conversationId: id, title });
@@ -95,6 +96,9 @@ export function createChatStore({ api, newId }: { api: ChatApi; newId: () => str
   // One save at a time: a second one waits, then sends only what the first did not (and never makes a second conversation).
   let saving = Promise.resolve();
   const saveNow = () => (saving = saving.then(save));
+  let newConversationId: string | null = null;
+  // The answer in flight, through to its save.
+  let working = Promise.resolve();
 
   /** Streams the answer to the history on screen (which ends with the person's question). */
   async function answer(): Promise<void> {
@@ -149,7 +153,7 @@ export function createChatStore({ api, newId }: { api: ChatApi; newId: () => str
       const question = text.trim();
       if (!question || snapshot.phase === "streaming" || snapshot.phase === "loading") return;
       set({ messages: [...snapshot.messages, { id: newId(), role: "user", text: question }] });
-      await answer();
+      await (working = answer());
     },
 
     /** After a failure: drop the half answer, if any, and ask again with the same history. */
@@ -158,11 +162,13 @@ export function createChatStore({ api, newId }: { api: ChatApi; newId: () => str
       const last = snapshot.messages[snapshot.messages.length - 1];
       if (last?.role === "assistant") set({ messages: snapshot.messages.slice(0, -1) });
       if (snapshot.messages[snapshot.messages.length - 1]?.role !== "user") return;
-      await answer();
+      await (working = answer());
     },
 
     stop: () => controller?.abort(),
     saveNow,
+    /** Resolves once nothing is being answered or saved (the conversation list waits for it before it reads). */
+    settled: () => working.then(() => saving),
     /** Leaving the screen stops an answer in flight (what arrived is still saved). */
     dispose: () => controller?.abort(),
   };

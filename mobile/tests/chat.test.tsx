@@ -70,6 +70,17 @@ afterEach(() => {
 });
 
 describe("conversation list", () => {
+  it("leaving a new conversation mid-answer saves what arrived before the list is read, so the list has it", async () => {
+    const { rerender } = render(wrap(<Conversation key="conversation" />));
+    fireEvent.change(screen.getByLabelText("Your question"), { target: { value: "Crisp skin?" } });
+    press("Send");
+    await feed({ type: "text", text: "Pat it" });
+    rerender(wrap(<Conversations key="list" />));
+    await waitFor(() => expect(chat.api.list).toHaveBeenCalled());
+    expect(chat.api.save).toHaveBeenCalledTimes(1);
+    expect(chat.api.save.mock.invocationCallOrder[0]).toBeLessThan(chat.api.list.mock.invocationCallOrder[0]);
+  });
+
   it("lists saved conversations and opens one or a new one", async () => {
     render(wrap(<Conversations />));
     await waitFor(() => expect(screen.getByText("Hollandaise rescue")).toBeTruthy());

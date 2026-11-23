@@ -258,6 +258,26 @@ describe("chat store", () => {
     expect(store.getSnapshot()).toMatchObject({ unsaved: false, conversationId: created[0].id });
   });
 
+  it("a create whose reply was lost is sent again with the same id, so the server keeps one conversation", async () => {
+    const { store, api, answers, created, saved } = setup();
+    api.create.mockImplementationOnce(async (id: string, title: string) => {
+      created.push({ id, title });
+      throw new ApiError("network");
+    });
+    const done = store.send("One");
+    await flush();
+    answers[0].push({ type: "text", text: "A" });
+    answers[0].push("end");
+    await done;
+    expect(store.getSnapshot().unsaved).toBe(true);
+    await store.saveNow();
+    expect(created).toHaveLength(2);
+    expect(created[1].id).toBe(created[0].id);
+    expect(saved).toHaveLength(1);
+    expect(saved[0].id).toBe(created[0].id);
+    expect(store.getSnapshot()).toMatchObject({ unsaved: false, conversationId: created[0].id });
+  });
+
   it("dispose stops an answer in flight", async () => {
     const { store, signals } = setup();
     void store.send("One");
