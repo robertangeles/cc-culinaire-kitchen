@@ -31,6 +31,8 @@ export const SERVER_ERROR_CODES = [
   "SHORT_QTY_NOT_LESS",
   "PRICE_REQUIRED",
   "UNIT_NOT_CONVERTIBLE",
+  // Front-of-house shelf (Wave 3): a count taken before the shelf's last sale, restock or waste. 409; count again.
+  "FOH_COUNT_STALE",
   // Prep (Wave 2): the session was ended, or another device changed the task first. Both answer 409.
   "PREP_SESSION_ENDED",
   "PREP_TASK_CHANGED",

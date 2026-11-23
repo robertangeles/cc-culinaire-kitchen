@@ -6,6 +6,7 @@
  */
 
 import type { Request, Response, NextFunction } from "express";
+import { z } from "zod";
 import pino from "pino";
 import { getUserLocationContext, assertLocationAccess } from "../services/locationContextService.js";
 import {
@@ -17,6 +18,17 @@ import {
 
 const logger = pino({ name: "catalogRequestController" });
 
+/** A staff request for an item the catalogue lacks. Lengths match the table's columns. */
+const RequestItemSchema = z.object({
+  requestId: z.string().uuid().optional(),
+  storeLocationId: z.string().uuid(),
+  itemName: z.string().trim().min(1).max(200),
+  itemType: z.string().max(20).optional(),
+  category: z.string().max(50).optional(),
+  baseUnit: z.string().max(20).optional(),
+  countedQty: z.number().finite().min(0).max(99999).optional(),
+});
+
 /** Resolve the user's org ID from their location context. */
 async function resolveOrgId(req: Request, res: Response): Promise<number | null> {
   const ctx = await getUserLocationContext(req.user!.sub);
@@ -24,7 +36,7 @@ async function resolveOrgId(req: Request, res: Response): Promise<number | null>
   // location-less org admin can still manage org-wide records (e.g. suppliers).
   const orgId = ctx.locations[0]?.organisationId ?? ctx.organisationId;
   if (orgId === null) {
-    res.status(400).json({ error: "You are not a member of any organisation" });
+    res.status(400).json({ error: "You are not a member of any organisation", code: "FORBIDDEN" });
     return null;
   }
   return orgId;
@@ -32,7 +44,7 @@ async function resolveOrgId(req: Request, res: Response): Promise<number | null>
 
 // ─── Request a new catalog item ─────────────────────────────────
 
-/** POST /catalog-requests */
+/** POST /catalog-requests: 201, or 200 for a resend of the same client-made `requestId`. */
 export async function handleRequestNewItem(
   req: Request, res: Response, next: NextFunction,
 ): Promise<void> {
@@ -40,26 +52,26 @@ export async function handleRequestNewItem(
     const orgId = await resolveOrgId(req, res);
     if (orgId === null) return;
 
-    const { itemName, itemType, category, baseUnit, countedQty } = req.body;
-    if (!itemName) {
-      res.status(400).json({ error: "itemName is required" });
+    const parsed = RequestItemSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({
+        error: "Give the item a name (up to 200 characters) and the location it was found at",
+        code: "VALIDATION",
+        details: parsed.error.flatten(),
+      });
       return;
     }
+    const { requestId, storeLocationId, ...item } = parsed.data;
 
-    if (req.body.storeLocationId) await assertLocationAccess(req.user!, req.body.storeLocationId);
+    await assertLocationAccess(req.user!, storeLocationId);
 
-    const result = await requestNewItem(
-      orgId,
-      req.body.storeLocationId,
-      req.user!.sub,
-      { itemName, itemType, category, baseUnit, countedQty },
-    );
+    const { request, replay } = await requestNewItem(orgId, storeLocationId, req.user!.sub, item, requestId);
 
     logger.info(
-      { requestId: result.requestId, itemName, userId: req.user!.sub },
+      { requestId: request.requestId, itemName: item.itemName, userId: req.user!.sub, replay },
       "Catalog item request submitted",
     );
-    res.status(201).json(result);
+    res.status(replay ? 200 : 201).json(request);
   } catch (err) {
     next(err);
   }
@@ -109,11 +121,11 @@ export async function handleApproveRequest(
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     if (msg === "Request not found") {
-      res.status(404).json({ error: msg });
+      res.status(404).json({ error: msg, code: "NOT_FOUND" });
       return;
     }
     if (msg === "Request already reviewed") {
-      res.status(409).json({ error: msg });
+      res.status(409).json({ error: msg, code: "ALREADY_CONFIRMED" });
       return;
     }
     next(err);
@@ -133,7 +145,7 @@ export async function handleRejectRequest(
     const id = req.params.id as string;
     const { reason } = req.body;
     if (!reason) {
-      res.status(400).json({ error: "reason is required" });
+      res.status(400).json({ error: "reason is required", code: "VALIDATION" });
       return;
     }
 
@@ -152,11 +164,11 @@ export async function handleRejectRequest(
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     if (msg === "Request not found") {
-      res.status(404).json({ error: msg });
+      res.status(404).json({ error: msg, code: "NOT_FOUND" });
       return;
     }
     if (msg === "Request already reviewed") {
-      res.status(409).json({ error: msg });
+      res.status(409).json({ error: msg, code: "ALREADY_CONFIRMED" });
       return;
     }
     next(err);

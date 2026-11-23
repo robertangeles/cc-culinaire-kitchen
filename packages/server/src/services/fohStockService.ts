@@ -19,18 +19,24 @@ import { and, eq, sql } from "drizzle-orm";
 import type { StockZoneKey } from "@culinaire/shared";
 import { db } from "../db/index.js";
 import type { DbOrTx } from "./auditService.js";
-import { stockLevel, ingredient } from "../db/schema.js";
+import { stockLevel, ingredient, fohRestock } from "../db/schema.js";
 import { addStock, deductStock } from "./stockService.js";
+import { insertOnce } from "../utils/retrySafe.js";
 
-/** Domain error carrying an HTTP status for the controller to map. */
+/** Domain error carrying an HTTP status and a code for the controller to map. */
 export class FohError extends Error {
-  constructor(message: string, public statusCode: number) {
+  constructor(message: string, public statusCode: number, private readonly explicitCode?: string) {
     super(message);
     this.name = "FohError";
   }
+
+  /** What the phone branches on: 404 is NOT_FOUND, anything else without its own code is a refused input. */
+  get code(): string {
+    return this.explicitCode ?? (this.statusCode === 404 ? "NOT_FOUND" : "VALIDATION");
+  }
 }
 
-/** Read the current qty for one zone. Returns 0 when no row exists yet. */
+/** Read the current qty for one zone, locking the row inside a transaction. Returns 0 when no row exists yet. */
 async function getZoneQty(
   storeLocationId: string,
   ingredientId: string,
@@ -46,7 +52,8 @@ async function getZoneQty(
         eq(stockLevel.ingredientId, ingredientId),
         eq(stockLevel.zone, zone),
       ),
-    );
+    )
+    .for("update");
   return row ? Number(row.currentQty) : 0;
 }
 
@@ -70,18 +77,43 @@ async function assertFohConsumable(orgId: number, ingredientId: string): Promise
 /**
  * Move `qty` from BOH to FOH at one location ("stock the fridge").
  * Rejects if BOH doesn't hold enough — unlike a sale (which already happened),
- * you cannot move stock you don't have.
+ * you cannot move stock you don't have. Each move is a `foh_restocks` row; when the client made its id
+ * (`fohRestockId`), a resend finds that row, moves nothing and answers `replay: true` with today's quantities.
  */
 export async function moveToFoh(
   orgId: number,
   storeLocationId: string,
   ingredientId: string,
   qty: number,
-): Promise<{ ingredientId: string; moved: number; bohQty: number; fohQty: number }> {
+  userId: number,
+  fohRestockId?: string,
+): Promise<{ fohRestockId: string; ingredientId: string; moved: number; bohQty: number; fohQty: number; replay: boolean }> {
   if (!(qty > 0)) throw new FohError("Quantity must be greater than 0", 400);
   await assertFohConsumable(orgId, ingredientId);
 
   return db.transaction(async (tx) => {
+    const { row, replay } = await insertOnce(
+      userId,
+      () =>
+        tx
+          .insert(fohRestock)
+          .values({ id: fohRestockId, organisationId: orgId, storeLocationId, ingredientId, userId, quantity: String(qty) })
+          .onConflictDoNothing({ target: fohRestock.id })
+          .returning(),
+      async () => (await tx.select().from(fohRestock).where(eq(fohRestock.id, fohRestockId!)))[0],
+    );
+    if (replay) {
+      return {
+        fohRestockId: row.id,
+        ingredientId: row.ingredientId,
+        moved: Number(row.quantity),
+        bohQty: await getZoneQty(row.storeLocationId, row.ingredientId, "BOH", tx),
+        fohQty: await getZoneQty(row.storeLocationId, row.ingredientId, "FOH", tx),
+        replay,
+      };
+    }
+
+    // Locked: two restocks at once cannot both pass this check and take the store room below what it holds.
     const bohQty = await getZoneQty(storeLocationId, ingredientId, "BOH", tx);
     if (bohQty < qty) {
       throw new FohError(
@@ -92,7 +124,7 @@ export async function moveToFoh(
     await deductStock(storeLocationId, ingredientId, qty, tx, "BOH");
     await addStock(storeLocationId, ingredientId, qty, tx, "FOH");
     const fohQty = await getZoneQty(storeLocationId, ingredientId, "FOH", tx);
-    return { ingredientId, moved: qty, bohQty: bohQty - qty, fohQty };
+    return { fohRestockId: row.id, ingredientId, moved: qty, bohQty: bohQty - qty, fohQty, replay };
   });
 }
 
@@ -102,6 +134,11 @@ export async function moveToFoh(
  * variance for the audit trail.
  * ponytail: simple reset; upgrade to a review/approval session if FOH counts
  * ever need sign-off.
+ *
+ * A count is absolute, so a late one would wipe out every sale since. `countedAt` (when the phone took the
+ * count) guards that: a shelf that changed after it answers 409 FOH_COUNT_STALE and is left alone, and a resend
+ * of the count already applied (same person, same `countedAt`) answers `replay: true` and changes nothing.
+ * Without `countedAt` (the web, counting live) the count is applied as now.
  */
 export async function recountFoh(
   orgId: number,
@@ -109,7 +146,8 @@ export async function recountFoh(
   ingredientId: string,
   countedQty: number,
   userId: number,
-): Promise<{ ingredientId: string; previousQty: number; countedQty: number; varianceQty: number }> {
+  countedAt?: Date,
+): Promise<{ ingredientId: string; previousQty: number; countedQty: number; varianceQty: number; replay: boolean }> {
   if (!(countedQty >= 0)) throw new FohError("Counted quantity cannot be negative", 400);
   await assertFohConsumable(orgId, ingredientId);
 
@@ -119,6 +157,9 @@ export async function recountFoh(
         stockLevelId: stockLevel.stockLevelId,
         currentQty: stockLevel.currentQty,
         version: stockLevel.version,
+        lastCountedDttm: stockLevel.lastCountedDttm,
+        lastCountedByUserId: stockLevel.lastCountedByUserId,
+        updatedDttm: stockLevel.updatedDttm,
       })
       .from(stockLevel)
       .where(
@@ -127,9 +168,20 @@ export async function recountFoh(
           eq(stockLevel.ingredientId, ingredientId),
           eq(stockLevel.zone, "FOH"),
         ),
-      );
+      )
+      .for("update");
 
     const previousQty = existing ? Number(existing.currentQty) : 0;
+
+    if (countedAt && existing) {
+      if (existing.lastCountedByUserId === userId && existing.lastCountedDttm?.getTime() === countedAt.getTime()) {
+        return { ingredientId, previousQty, countedQty, varianceQty: 0, replay: true };
+      }
+      if (existing.updatedDttm > countedAt) {
+        throw new FohError("The shelf changed after this count (a sale, restock or waste). Count it again.", 409, "FOH_COUNT_STALE");
+      }
+    }
+    const stamp = countedAt ?? new Date();
 
     if (!existing) {
       await tx.insert(stockLevel).values({
@@ -137,7 +189,7 @@ export async function recountFoh(
         ingredientId,
         zone: "FOH",
         currentQty: String(countedQty),
-        lastCountedDttm: new Date(),
+        lastCountedDttm: stamp,
         lastCountedByUserId: userId,
         version: 0,
       });
@@ -146,7 +198,7 @@ export async function recountFoh(
         .update(stockLevel)
         .set({
           currentQty: String(countedQty),
-          lastCountedDttm: new Date(),
+          lastCountedDttm: stamp,
           lastCountedByUserId: userId,
           version: existing.version + 1,
           updatedDttm: new Date(),
@@ -154,7 +206,7 @@ export async function recountFoh(
         .where(eq(stockLevel.stockLevelId, existing.stockLevelId));
     }
 
-    return { ingredientId, previousQty, countedQty, varianceQty: countedQty - previousQty };
+    return { ingredientId, previousQty, countedQty, varianceQty: countedQty - previousQty, replay: false };
   });
 }
 

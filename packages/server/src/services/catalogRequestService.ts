@@ -8,13 +8,18 @@
 
 import { eq, and, desc } from "drizzle-orm";
 import { db } from "../db/index.js";
+import { AppError } from "../utils/appError.js";
 import {
   pendingCatalogRequest,
   ingredient,
   locationIngredient,
 } from "../db/schema.js";
 
-/** Create a new catalog item request from a location */
+/**
+ * Create a new catalog item request from a location. `requestId`, when the client made one, makes a resend safe:
+ * the request already stored under it comes back with `replay: true`. An id held by another person's request is
+ * 409 CONFLICT.
+ */
 export async function requestNewItem(
   organisationId: number,
   storeLocationId: string,
@@ -26,10 +31,12 @@ export async function requestNewItem(
     baseUnit?: string;
     countedQty?: number;
   },
+  requestId?: string,
 ) {
   const [request] = await db
     .insert(pendingCatalogRequest)
     .values({
+      requestId,
       organisationId,
       storeLocationId,
       requestedByUserId: userId,
@@ -40,9 +47,15 @@ export async function requestNewItem(
       countedQty: data.countedQty?.toString(),
       status: "PENDING",
     })
+    .onConflictDoNothing({ target: pendingCatalogRequest.requestId })
     .returning();
+  if (request) return { request, replay: false };
 
-  return request;
+  const [stored] = await db.select().from(pendingCatalogRequest).where(eq(pendingCatalogRequest.requestId, requestId!));
+  if (!stored || stored.organisationId !== organisationId || stored.requestedByUserId !== userId) {
+    throw new AppError(409, "CONFLICT", "That id is already used by another request");
+  }
+  return { request: stored, replay: true };
 }
 
 /** List pending requests for HQ review */

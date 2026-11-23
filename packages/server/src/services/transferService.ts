@@ -102,7 +102,7 @@ async function deductStockLevel(
   if (result.length === 0 && retryCount < 2) {
     await deductStockLevel(tx, storeLocationId, ingredientId, deductQty, retryCount + 1);
   } else if (result.length === 0) {
-    throw new Error(`Stock level update conflict for ingredient ${ingredientId} at location ${storeLocationId}`);
+    throw new AppError(409, "CONFLICT", "Stock changed while saving. Try again.");
   }
 }
 
@@ -155,7 +155,7 @@ async function addStockLevel(
   if (result.length === 0 && retryCount < 2) {
     await addStockLevel(tx, storeLocationId, ingredientId, addQty, retryCount + 1);
   } else if (result.length === 0) {
-    throw new Error(`Stock level update conflict for ingredient ${ingredientId} at location ${storeLocationId}`);
+    throw new AppError(409, "CONFLICT", "Stock changed while saving. Try again.");
   }
 }
 
@@ -166,7 +166,7 @@ async function assertIngredientsInOrg(tx: DbOrTx, orgId: number, ingredientIds: 
     .from(ingredient)
     .where(and(inArray(ingredient.ingredientId, ingredientIds), eq(ingredient.organisationId, orgId)));
   if (found.length !== new Set(ingredientIds).size) {
-    throw new Error("One or more ingredients not found in this organisation");
+    throw new AppError(404, "NOT_FOUND", "One or more ingredients not found in this organisation");
   }
 }
 
@@ -174,6 +174,11 @@ async function assertIngredientsInOrg(tx: DbOrTx, orgId: number, ingredientIds: 
 // 1. initiateTransfer
 // ---------------------------------------------------------------------------
 
+/**
+ * Create a transfer with its lines. `transferId`, when the client made one, makes a resend safe: the transfer
+ * already stored under it comes back with `replay: true` and nothing is written. An id held by another user's
+ * transfer (or another organisation's) is 409 CONFLICT.
+ */
 export async function initiateTransfer(
   orgId: number,
   fromLocId: string,
@@ -181,12 +186,13 @@ export async function initiateTransfer(
   userId: number,
   lines: TransferLineInput[],
   notes?: string,
+  transferId?: string,
 ) {
   if (fromLocId === toLocId) {
-    throw new Error("Source and destination locations must be different");
+    throw new AppError(400, "VALIDATION", "Source and destination locations must be different");
   }
   if (!lines.length) {
-    throw new Error("At least one line item is required");
+    throw new AppError(400, "VALIDATION", "At least one line item is required");
   }
 
   const ingredientIds = lines.map((l) => l.ingredientId);
@@ -206,7 +212,7 @@ export async function initiateTransfer(
         ),
       );
     if (locations.length !== 2) {
-      throw new Error("Location not found in this organisation");
+      throw new AppError(404, "NOT_FOUND", "Location not found in this organisation");
     }
 
     await assertIngredientsInOrg(tx, orgId, ingredientIds);
@@ -224,12 +230,13 @@ export async function initiateTransfer(
             eq(fifoBatch.ingredientId, line.ingredientId),
           ),
         );
-      if (!batch) throw new Error("Stock batch not found at the source location");
+      if (!batch) throw new AppError(404, "NOT_FOUND", "Stock batch not found at the source location");
     }
 
     const [transfer] = await tx
       .insert(inventoryTransfer)
       .values({
+        transferId,
         organisationId: orgId,
         fromLocationId: fromLocId,
         toLocationId: toLocId,
@@ -237,7 +244,17 @@ export async function initiateTransfer(
         initiatedByUserId: userId,
         notes: notes ?? null,
       })
+      .onConflictDoNothing({ target: inventoryTransfer.transferId })
       .returning();
+
+    if (!transfer) {
+      const [stored] = await tx.select().from(inventoryTransfer).where(eq(inventoryTransfer.transferId, transferId!));
+      if (!stored || stored.organisationId !== orgId || stored.initiatedByUserId !== userId) {
+        throw new AppError(409, "CONFLICT", "That id is already used by another transfer");
+      }
+      const storedLines = await tx.select().from(inventoryTransferLine).where(eq(inventoryTransferLine.transferId, stored.transferId));
+      return { ...stored, lines: storedLines, replay: true };
+    }
 
     const lineRows = [];
     for (const line of lines) {
@@ -255,7 +272,7 @@ export async function initiateTransfer(
       lineRows.push(row);
     }
 
-    return { ...transfer, lines: lineRows };
+    return { ...transfer, lines: lineRows, replay: false };
   });
 }
 
@@ -282,7 +299,7 @@ export async function confirmSent(
       )
       .for("update");
 
-    if (!transfer) throw new Error("Transfer not found");
+    if (!transfer) throw new AppError(404, "NOT_FOUND", "Transfer not found");
     if (transfer.status !== "INITIATED") {
       const sentAlready = transfer.status !== "INITIATED" && transfer.status !== "CANCELLED";
       throw new AppError(409, sentAlready ? "ALREADY_CONFIRMED" : "INVALID_STATE", `Cannot send a transfer with status ${transfer.status}`);
@@ -339,7 +356,7 @@ export async function confirmReceived(
       )
       .for("update");
 
-    if (!transfer) throw new Error("Transfer not found");
+    if (!transfer) throw new AppError(404, "NOT_FOUND", "Transfer not found");
     if (transfer.status !== "SENT") {
       throw new AppError(409, transfer.status === "RECEIVED" || transfer.status === "DISCREPANCY" ? "ALREADY_CONFIRMED" : "INVALID_STATE", `Cannot receive a transfer with status ${transfer.status}`);
     }
@@ -349,6 +366,10 @@ export async function confirmReceived(
       .from(inventoryTransferLine)
       .where(eq(inventoryTransferLine.transferId, transferId));
 
+    const lineIds = new Set(lines.map((l) => l.lineId));
+    if (receivedLines.some((r) => !lineIds.has(r.lineId))) {
+      throw new AppError(400, "VALIDATION", "A received line is not on this transfer");
+    }
     const receivedMap = new Map(receivedLines.map((r) => [r.lineId, r.receivedQty]));
     let hasDiscrepancy = false;
 
@@ -479,7 +500,7 @@ export async function cancelTransfer(
       )
       .for("update");
 
-    if (!transfer) throw new Error("Transfer not found");
+    if (!transfer) throw new AppError(404, "NOT_FOUND", "Transfer not found");
     if (transfer.status !== "INITIATED") {
       throw new AppError(409, transfer.status === "CANCELLED" ? "ALREADY_CONFIRMED" : "INVALID_STATE", "Only INITIATED transfers can be cancelled");
     }
@@ -680,8 +701,8 @@ export async function updateTransfer(
       )
       .for("update");
 
-    if (!transfer) throw new Error("not found");
-    if (transfer.status !== "INITIATED") throw new Error("Transfer is no longer editable");
+    if (!transfer) throw new AppError(404, "NOT_FOUND", "Transfer not found");
+    if (transfer.status !== "INITIATED") throw new AppError(409, "INVALID_STATE", "Transfer is no longer editable");
 
     await assertIngredientsInOrg(tx, orgId, data.lines.map((l) => l.ingredientId));
 
@@ -736,8 +757,8 @@ export async function addLinesToTransfer(
       )
       .for("update");
 
-    if (!transfer) throw new Error("not found");
-    if (transfer.status !== "INITIATED") throw new Error("Transfer is no longer editable");
+    if (!transfer) throw new AppError(404, "NOT_FOUND", "Transfer not found");
+    if (transfer.status !== "INITIATED") throw new AppError(409, "INVALID_STATE", "Transfer is no longer editable");
 
     await assertIngredientsInOrg(tx, orgId, lines.map((l) => l.ingredientId));
 
@@ -749,7 +770,7 @@ export async function addLinesToTransfer(
     const existingIds = new Set(existingLines.map((l) => l.ingredientId));
     const duplicates = lines.filter((l) => existingIds.has(l.ingredientId));
     if (duplicates.length > 0) {
-      throw new Error("Item already exists in this transfer");
+      throw new AppError(409, "CONFLICT", "Item already exists in this transfer");
     }
 
     for (const line of lines) {
