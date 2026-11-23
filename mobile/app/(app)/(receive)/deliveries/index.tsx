@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { Pressable, RefreshControl, ScrollView, View } from "react-native";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useSession } from "../../../../src/runtime/appContext";
 import { receivingApi } from "../../../../src/runtime/receiving";
@@ -34,9 +34,12 @@ export default function ReceiveQueue() {
     }
   }, [locationId]);
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  // On focus, not only on mount: backing out of a delivery returns to this still-mounted screen.
+  useFocusEffect(
+    useCallback(() => {
+      void load();
+    }, [load]),
+  );
 
   if (state.phase !== "ready") return null;
 

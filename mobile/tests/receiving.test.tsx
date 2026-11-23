@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import { Alert } from "react-native";
-import { routerMock, searchParams, sessionState } from "../testing/mocks";
+import { returnToScreen, routerMock, searchParams, sessionState } from "../testing/mocks";
 import { ApiError } from "../src/api/client";
 import { COLUMN_WIDTH } from "../src/ui/Screen";
 
@@ -113,6 +113,16 @@ describe("deliveries queue", () => {
     render(<ReceiveQueue />);
     fireEvent.click(await screen.findByRole("button", { name: /Fresh Farms/ }));
     expect(routerMock.push).toHaveBeenCalledWith({ pathname: "/deliveries/[poId]", params: { poId: "P1" } });
+  });
+
+  it("shows a delivery as in progress on coming back from it, without a pull to refresh", async () => {
+    render(<ReceiveQueue />);
+    await screen.findByText("Fresh Farms");
+    expect(screen.queryByText("In progress")).toBeNull();
+    // Opening the delivery started its session on the server; backing out returns to this mounted screen.
+    api.queue.mockResolvedValue([queueItem({ status: "RECEIVING", beingReceivedBy: { userId: 1, userName: "Chef", sessionId: "S1", startedAt: "" } })]);
+    act(() => returnToScreen());
+    expect(await screen.findByText("In progress")).toBeTruthy();
   });
 
   it("marks one that you already started, and one another chef has open", async () => {

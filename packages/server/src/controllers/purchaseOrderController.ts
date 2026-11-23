@@ -21,6 +21,7 @@ import {
   clonePO,
   emailPOToSupplier,
 } from "../services/purchaseOrderService.js";
+import { PO_TRANSITIONS } from "../utils/stateTransition.js";
 import * as thresholdService from "../services/thresholdService.js";
 import * as pdfService from "../services/pdfService.js";
 import { recordOpsEvent } from "../services/brainCaptureService.js";
@@ -58,16 +59,6 @@ const ReceiveLineSchema = z.object({
   ).nullable().optional(),
 });
 
-const PO_STATUSES = [
-  "DRAFT",
-  "PENDING_APPROVAL",
-  "SENT",
-  "RECEIVING",
-  "RECEIVED",
-  "PARTIAL_RECEIVED",
-  "CANCELLED",
-] as const;
-
 /** The only POs a user holding `purchasing:receive` but not `inventory:count` may see. */
 const RECEIVING_QUEUE = ["SENT", "RECEIVING"];
 
@@ -77,7 +68,7 @@ const ListPOsQuerySchema = z.object({
   status: z
     .string()
     .transform((v) => v.split(",").map((x) => x.trim()))
-    .pipe(z.array(z.enum(PO_STATUSES)).min(1))
+    .pipe(z.array(z.enum(Object.keys(PO_TRANSITIONS) as [string, ...string[]])).min(1))
     .optional(),
   storeLocationId: z.string().uuid().optional(),
   limit: z.coerce.number().int().min(1).transform((n) => Math.min(n, 100)).optional(),
