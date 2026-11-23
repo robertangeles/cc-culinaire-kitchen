@@ -5,6 +5,7 @@ import { AuthUserSchema, LocationContextSchema, LoginReplySchema, RefreshReplySc
 import { ActiveSessionSchema, AreaLinesSchema, CountSheetsSchema, SubmitConflictBodySchema } from "./stockTake.js";
 import { WasteEntrySchema, WasteListSchema, WasteSuggestionsSchema } from "./waste.js";
 import { CatalogueSchema } from "./catalogue.js";
+import { PrepMenuSchema, PrepSelectionsSchema, PrepTodaySchema } from "./prep.js";
 
 // Payloads are shaped like the real server replies. Each lenient rule is one case: the point is that a server
 // that moved on (new field, new enum value, new null) does not break a phone that was installed last month.
@@ -146,5 +147,35 @@ describe("catalogue schema", () => {
       { ingredientId: "i1", ingredientName: "Flour", baseUnit: "g", ingredientCategory: "Dry" },
       { ingredientId: "i2", ingredientName: "Gin", baseUnit: "L", ingredientCategory: "" },
     ]);
+  });
+});
+
+describe("prep schemas", () => {
+  const session = { prepSessionId: "s1", userId: 7, prepDate: "2026-11-23", expectedCovers: 80, actualCovers: null, tasksTotal: 2, tasksCompleted: 1, tasksSkipped: 0, isEnded: false, createdDttm: "x", updatedDttm: "y", brandNew: 1 };
+  const task = { prepTaskId: "t1", prepSessionId: "s1", taskDescription: "Prep Onion for Soup", ingredientName: "Onion", quantityNeeded: "4.500", unit: "kg", prepTimeMinutes: 20, priorityScore: 3, priorityTier: "start_first", station: "Veg", onHandQty: "1.000", prepNeeded: 3.5, status: "pending", assignedTo: null, completedAt: null, completedBy: null };
+
+  it("reads today's session with numeric strings turned into numbers and unknown fields dropped", () => {
+    const today = PrepTodaySchema.parse({ session, tasks: [task] });
+    expect(today.session).toMatchObject({ prepSessionId: "s1", expectedCovers: 80, isEnded: false });
+    expect(today.tasks[0]).toMatchObject({ quantityNeeded: 4.5, onHandQty: 1, prepNeeded: 3.5, station: "Veg", completedBy: null });
+  });
+
+  it("keeps a status or tier it does not know, and skips a task it cannot read", () => {
+    const today = PrepTodaySchema.parse({ session, tasks: [{ ...task, status: "in_progress", priorityTier: "later" }, { nonsense: true }, { ...task, prepTaskId: "t3", status: 5 }] });
+    expect(today.tasks.map((t) => [t.prepTaskId, t.status, t.priorityTier])).toEqual([["t1", "in_progress", "later"], ["t3", "pending", "start_first"]]);
+  });
+
+  it("needs a session", () => {
+    expect(PrepTodaySchema.safeParse({ tasks: [] }).success).toBe(false);
+  });
+
+  it("reads the menu a cook can pick from, dropping rows without an id", () => {
+    const menu = PrepMenuSchema.parse({ menuItems: [{ menuItemId: "m1", name: "Soup", category: "Starter", foodCostPct: 30 }, { name: "no id" }], recipes: [{ recipeId: "r1", title: "Stock", domain: "culinary" }], hasMenuItems: true });
+    expect(menu).toEqual({ menuItems: [{ menuItemId: "m1", name: "Soup", category: "Starter" }], recipes: [{ recipeId: "r1", title: "Stock" }] });
+  });
+
+  it("reads the previous selections, which the server sends as a bare array", () => {
+    expect(PrepSelectionsSchema.parse([{ selectionId: "x", menuItemId: "m1", recipeId: null, dishName: "Soup", expectedPortions: 12, category: "Starter" }, { nonsense: 1 }])).toEqual([{ menuItemId: "m1", recipeId: null, dishName: "Soup", expectedPortions: 12, category: "Starter" }]);
+    expect(PrepSelectionsSchema.parse({ selections: [] })).toEqual([]);
   });
 });
