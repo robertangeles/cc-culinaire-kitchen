@@ -4,18 +4,9 @@
  * Menu engineering calculation engine + CRUD for menu items.
  * Implements the Star/Plowhorse/Puzzle/Dog classification matrix.
  *
- * Formulas:
- *   line_cost = (quantity × unit_cost) / (yield_pct / 100)
- *   food_cost = Σ line_cost for all ingredients
- *   food_cost_pct = (food_cost / selling_price) × 100
- *   contribution_margin = selling_price - food_cost
- *   menu_mix_pct = (units_sold / total_units_sold) × 100
- *
- * Classification:
- *   Star      = CM ≥ avg AND mix ≥ avg
- *   Plowhorse = CM < avg AND mix ≥ avg
- *   Puzzle    = CM ≥ avg AND mix < avg
- *   Dog       = CM < avg AND mix < avg
+ * The costing and classification maths (line cost, food cost per sale, food cost %, contribution margin,
+ * menu mix, Star/Plowhorse/Puzzle/Dog) live in packages/shared/src/utils/menuCosting.ts; this service
+ * resolves units, reads and writes the rows.
  */
 
 import pino from "pino";
@@ -219,11 +210,10 @@ export async function resolveUnitCost(
 /**
  * Compute the line cost for a row.
  *
- * line_cost = (qtyInBaseUnit × unitCost) / (yieldPct / 100)
- *
- * Quantity is converted to the ingredient's base unit before multiplication.
- * If `ingredientId` is null (legacy free-text row) or no unit conversion is
- * possible, qty is used as-is and we trust the caller's unit/cost.
+ * The formula is `storedLineCost` in @culinaire/shared. Quantity is converted
+ * to the ingredient's kitchen unit before multiplication. If `ingredientId` is
+ * null (legacy free-text row), qty is used as-is and we trust the caller's
+ * unit/cost; units with no path between them throw.
  */
 async function computeLineCost(
   quantity: string,
