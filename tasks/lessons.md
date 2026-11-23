@@ -1387,3 +1387,9 @@ builds all tables with CHECKs enforcing. Stop it again when done.
 - **Fix**: `utils/retrySafe.ts` (`insertOnce`) tells the caller whether it was a replay; the caller runs the insert and every side effect in one transaction and skips the effects on replay. The stock row is locked while it changes instead of retrying on a version clash and giving up silently.
 - **Rule**: A retry-safe create is: client id, insert-or-read in the same transaction as its side effects, side effects only when `replay` is false. Write the concurrent case as a test (eight parallel creates: stock equals start minus entries that exist).
 
+
+## 2026-11-23 — The phone app's icon and splash were still Expo's template art
+
+- **Problem**: `mobile/assets/icon.png`, `splash-icon.png` and the adaptive-icon background colour (`#E6F4FE`) were the blue Expo template from project creation. Nothing checked them, so a store build would have shipped another product's artwork.
+- **Fix**: Icon, adaptive icon, splash and favicon are generated from `assets/brand/ck-logo.png` on the paper colour, and `src/easConfig.test.ts` asserts the app id on both stores, the paper colours, that the files exist, the update channels, the runtime-version policy and that no permission string is declared before a feature uses it.
+- **Rule**: Whatever a store listing shows or asks about is asserted in `easConfig.test.ts`. `runtimeVersion` follows `version`: change `version` when native code changes, and never raise `mobile_min_app_version` above a version live in both stores. After a new shared schema file, rebuild `packages/shared` before `check:bundle` (Metro reads `dist/`).

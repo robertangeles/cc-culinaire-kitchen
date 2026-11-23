@@ -99,6 +99,8 @@ export interface ApiClientOptions {
   /** A fetch whose response body can be read piece by piece (`expo/fetch` on the phone); the built-in one buffers. Defaults to `fetchFn`. */
   streamFetchFn?: typeof fetch;
   onSessionExpired?: () => void;
+  /** Any 426 `upgrade_required` answer, with its body: the app shows its update screen. */
+  onUpgradeRequired?: (body: unknown) => void;
   /** Default for JSON calls. */
   timeoutMs?: number;
   /** Default for uploads and downloads, which move more bytes. */
@@ -121,7 +123,7 @@ export interface RequestOptions<T = unknown> {
 type Mode = "json" | "blob" | "stream";
 
 export function createApiClient(opts: ApiClientOptions) {
-  const { baseUrl, tokenStore, appVersion, onSessionExpired, timeoutMs = 15000, transferTimeoutMs = 60000 } = opts;
+  const { baseUrl, tokenStore, appVersion, onSessionExpired, onUpgradeRequired, timeoutMs = 15000, transferTimeoutMs = 60000 } = opts;
   const fetchFn = opts.fetchFn ?? fetch;
   const streamFetchFn = opts.streamFetchFn ?? fetchFn;
   let refreshing: Promise<Tokens> | null = null;
@@ -155,7 +157,11 @@ export function createApiClient(opts: ApiClientOptions) {
         body: body === undefined ? undefined : isForm ? (body as FormData) : JSON.stringify(body),
         signal: controller.signal,
       });
-      if (!res.ok) throw failure(res.status, await res.text());
+      if (!res.ok) {
+        const err = failure(res.status, await res.text());
+        if (res.status === 426) onUpgradeRequired?.(err.body);
+        throw err;
+      }
       if (mode === "stream") {
         clearTimeout(timer); // the wait for the first byte is over; the caller's signal ends the stream
         return { value: res as T, release };

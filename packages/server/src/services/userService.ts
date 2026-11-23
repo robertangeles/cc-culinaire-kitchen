@@ -16,6 +16,7 @@ import {
   userRole,
   userOrganisation,
   organisation,
+  oauthAccount,
 } from "../db/schema.js";
 
 const BCRYPT_ROUNDS = parseInt(process.env.BCRYPT_ROUNDS ?? "12", 10);
@@ -34,8 +35,13 @@ export async function getUserProfile(userId: number) {
   // the password hash and the MFA secret.
   const { userPasswordHash: _userPasswordHash, mfaSecret: _mfaSecret, ...rest } = rows[0];
   const pii = decryptUserPii(rest as Record<string, unknown>);
-  // hasPassword lets the client ask Google-only accounts for their email instead of a password.
-  return { ...rest, ...pii, hasPassword: _userPasswordHash !== null };
+  const [apple] = await db
+    .select({ id: oauthAccount.oauthAccountId })
+    .from(oauthAccount)
+    .where(and(eq(oauthAccount.userId, userId), eq(oauthAccount.oauthProvider, "apple")));
+  // hasPassword lets the client ask Google-only accounts for their email instead of a password;
+  // hasApple lets it ask an Apple-linked account for a fresh Apple sign-in instead (a private-relay email cannot be typed).
+  return { ...rest, ...pii, hasPassword: _userPasswordHash !== null, hasApple: apple !== undefined };
 }
 
 /** Update profile fields (name, photo, bio, address). */

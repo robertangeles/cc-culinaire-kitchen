@@ -18,13 +18,15 @@ function setup(overrides: Partial<Record<keyof AuthApi, unknown>> = {}, googleId
     signOut: vi.fn(async () => {}),
     locationContext: vi.fn(async () => ctx([loc("L1")], "L1")),
     selectLocation: vi.fn(async () => {}),
+    joinOrganisation: vi.fn(async () => {}),
+    joinLocation: vi.fn(async () => {}),
     ...overrides,
   };
   const hasTokens = vi.fn(async () => true);
   let saved: Snapshot | null = null;
   const snapshots = { load: vi.fn(async () => saved), save: vi.fn(async (s: Snapshot | null) => void (saved = s)) };
   const session = createSession({ api: api as unknown as AuthApi, hasTokens, snapshots, googleIdToken });
-  return { session, api, hasTokens, snapshots, setSaved: (s: Snapshot | null) => void (saved = s) };
+  return { session, api: api as Record<keyof AuthApi, ReturnType<typeof vi.fn>>, hasTokens, snapshots, setSaved: (s: Snapshot | null) => void (saved = s) };
 }
 
 const state = (s: ReturnType<typeof setup>["session"]) => s.getSnapshot().state;
@@ -146,10 +148,16 @@ describe("access rules", () => {
     }
   });
 
-  it("tells an account with no location to ask its manager", async () => {
+  it("sends an account with no location to the first-run screen, still needing an organisation when it has none", async () => {
+    const { session } = setup({ locationContext: vi.fn(async () => ({ ...ctx([]), organisationId: null })) });
+    await session.restore();
+    expect(state(session)).toMatchObject({ phase: "firstRun", user: counter, organisationId: null });
+  });
+
+  it("asks only for the location key when the account is already in an organisation", async () => {
     const { session } = setup({ locationContext: vi.fn(async () => ctx([])) });
     await session.restore();
-    expect(state(session)).toMatchObject({ phase: "noAccess", reason: "You aren't assigned to a location yet. Ask your manager." });
+    expect(state(session)).toMatchObject({ phase: "firstRun", organisationId: 1 });
   });
 });
 
@@ -287,5 +295,142 @@ describe("signing in with Google", () => {
     const { session } = setup({ googleSignIn: vi.fn(async () => ({ status: "mfa" as const, mfaSessionToken: "M" })) }, async () => "ID-TOKEN");
     await session.signInWithGoogle();
     expect(state(session)).toMatchObject({ phase: "mfa", mfaSessionToken: "M" });
+  });
+});
+
+describe("first run: joining by key", () => {
+  const noOrg = () => ({ ...ctx([]), organisationId: null });
+  const keyError = (serverCode: string, message = "server words") => new ApiError("bad_request", message, 400, undefined, serverCode);
+
+  async function firstRun(overrides: Partial<Record<keyof AuthApi, unknown>> = {}) {
+    const s = setup({ locationContext: vi.fn(async () => noOrg()), ...overrides });
+    await s.session.restore();
+    expect(state(s.session)).toMatchObject({ phase: "firstRun" });
+    return s;
+  }
+
+  it("joins the organisation, reloads the person and the location list, and asks for the location key next", async () => {
+    const { session, api } = await firstRun();
+    api.locationContext.mockResolvedValueOnce(ctx([]));
+    await session.joinOrganisation("  CULINAIRE-ABC  ");
+    expect(api.joinOrganisation).toHaveBeenCalledWith("CULINAIRE-ABC");
+    expect(api.me).toHaveBeenCalledTimes(2); // restore, then again so new permissions show
+    expect(state(session)).toMatchObject({ phase: "firstRun", organisationId: 1 });
+  });
+
+  it("goes to the app once the location key opens a location", async () => {
+    const { session, api } = await firstRun();
+    api.locationContext.mockResolvedValueOnce(ctx([]));
+    await session.joinOrganisation("K1");
+    api.locationContext.mockResolvedValueOnce(ctx([loc("L1")]));
+    await session.joinLocation("S1");
+    expect(api.joinLocation).toHaveBeenCalledWith("S1");
+    expect(api.selectLocation).toHaveBeenCalledWith("L1");
+    expect(state(session)).toMatchObject({ phase: "ready", location: { storeLocationId: "L1" } });
+  });
+
+  it.each([
+    ["INVALID_JOIN_KEY", "That key wasn't found. Check it with your manager."],
+    ["STORE_KEY_NOT_FOUND", "That key wasn't found. Check it with your manager."],
+    ["NOT_ORG_MEMBER", "That location belongs to a different organisation than yours."],
+    ["LOCATION_INACTIVE", "That location isn't open any more. Ask your manager."],
+  ])("says what went wrong, from the server's code %s, never its English", async (code, sentence) => {
+    const { session, api } = await firstRun();
+    api.joinOrganisation.mockRejectedValueOnce(keyError(code));
+    await session.joinOrganisation("K");
+    expect(state(session)).toMatchObject({ phase: "firstRun", error: sentence });
+  });
+
+  it("shows the server's sentence for a failure it has no code for, and a plain one when the network is down", async () => {
+    const { session, api } = await firstRun();
+    api.joinOrganisation.mockRejectedValueOnce(new ApiError("bad_request", "Invalid join key."));
+    await session.joinOrganisation("K");
+    expect(state(session)).toMatchObject({ error: "Invalid join key." });
+    api.joinOrganisation.mockRejectedValueOnce(new ApiError("network"));
+    await session.joinOrganisation("K");
+    expect(state(session)).toMatchObject({ error: "Can't reach the server. Try again." });
+  });
+
+  it("carries on when the server says the person is already in (a retry after a lost reply)", async () => {
+    const { session, api } = await firstRun();
+    api.joinOrganisation.mockRejectedValueOnce(keyError("ALREADY_MEMBER"));
+    api.locationContext.mockResolvedValueOnce(ctx([]));
+    await session.joinOrganisation("K");
+    expect(state(session)).toMatchObject({ phase: "firstRun", organisationId: 1 });
+    expect(state(session)).not.toHaveProperty("error");
+    api.joinLocation.mockRejectedValueOnce(keyError("ALREADY_ASSIGNED"));
+    api.locationContext.mockResolvedValueOnce(ctx([loc("L1")], "L1"));
+    await session.joinLocation("S");
+    expect(state(session)).toMatchObject({ phase: "ready" });
+  });
+
+  it("does nothing outside the first-run screen, and nothing for an empty key", async () => {
+    const { session, api } = setup();
+    await session.restore();
+    await session.joinOrganisation("K");
+    expect(api.joinOrganisation).not.toHaveBeenCalled();
+    const first = await firstRun();
+    await first.session.joinOrganisation("   ");
+    expect(first.api.joinOrganisation).not.toHaveBeenCalled();
+  });
+});
+
+describe("the update screen", () => {
+  const body = { minVersion: "1.2.0", storeUrls: { ios: "https://apps.apple.com/app/id1" } };
+
+  it("shows from any 426, with the version and the links the server sent", async () => {
+    const { session } = setup();
+    await session.restore();
+    session.updateRequired(body);
+    expect(state(session)).toEqual({ phase: "updateRequired", minVersion: "1.2.0", storeUrls: { ios: "https://apps.apple.com/app/id1" } });
+  });
+
+  it("has no links when the server sent none, even from a body it cannot read", () => {
+    const { session } = setup();
+    session.updateRequired(undefined);
+    expect(state(session)).toEqual({ phase: "updateRequired", minVersion: "", storeUrls: undefined });
+  });
+
+  it("stays until the app is replaced: the failure that came with the 426 must not put the sign-in screen back", async () => {
+    const { session } = setup({ me: vi.fn(async () => { throw new ApiError("upgrade_required", undefined, 426); }) });
+    const restoring = session.restore();
+    session.updateRequired(body); // the client reports the 426 before the call rejects
+    await restoring;
+    expect(state(session)).toMatchObject({ phase: "updateRequired" });
+    await session.signIn("c@x.test", "pw");
+    expect(state(session)).toMatchObject({ phase: "updateRequired" });
+  });
+});
+
+describe("account deleted", () => {
+  const ready = async (extra: Record<string, unknown> = {}) => {
+    const wipeLocalData = vi.fn(async () => {});
+    const s = setup(extra);
+    const session = createSession({ api: s.api as unknown as AuthApi, hasTokens: s.hasTokens, snapshots: s.snapshots, wipeLocalData });
+    await session.restore();
+    return { ...s, session, wipeLocalData };
+  };
+
+  it("clears the tokens, the saved user and everything stored on the phone, then shows the result", async () => {
+    const { session, api, snapshots, wipeLocalData } = await ready();
+    await session.accountDeleted();
+    expect(api.signOut).toHaveBeenCalled(); // clears the device tokens
+    expect(snapshots.save).toHaveBeenLastCalledWith(null);
+    expect(wipeLocalData).toHaveBeenCalled();
+    expect(state(session)).toEqual({ phase: "accountDeleted" });
+  });
+
+  it("still shows the result when clearing the phone fails: the account is gone either way", async () => {
+    const { session, wipeLocalData } = await ready();
+    wipeLocalData.mockRejectedValueOnce(new Error("disk"));
+    await session.accountDeleted();
+    expect(state(session)).toEqual({ phase: "accountDeleted" });
+  });
+
+  it("goes back to sign-in once acknowledged", async () => {
+    const { session } = await ready();
+    await session.accountDeleted();
+    session.leaveDeletedAccount();
+    expect(state(session)).toEqual({ phase: "signedOut" });
   });
 });

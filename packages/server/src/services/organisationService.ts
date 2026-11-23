@@ -10,6 +10,7 @@ import { eq, and } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { organisation, userOrganisation, user, role, userRole } from "../db/schema.js";
 import { encryptOrgPii, decryptOrgPii, decryptUserPii } from "./piiService.js";
+import { JoinError } from "./joinErrors.js";
 
 /** Generate a short random join key. */
 function generateJoinKey(): string {
@@ -153,7 +154,7 @@ export async function joinOrganisation(userId: number, joinKey: string) {
     .where(eq(organisation.joinKey, joinKey));
 
   if (orgs.length === 0) {
-    throw new Error("Invalid join key.");
+    throw new JoinError("Invalid join key.", "INVALID_JOIN_KEY", 400);
   }
 
   const org = orgs[0];
@@ -170,7 +171,7 @@ export async function joinOrganisation(userId: number, joinKey: string) {
     );
 
   if (existing.length > 0) {
-    throw new Error("You are already a member of this organisation.");
+    throw new JoinError("You are already a member of this organisation.", "ALREADY_MEMBER", 400);
   }
 
   await db.insert(userOrganisation).values({

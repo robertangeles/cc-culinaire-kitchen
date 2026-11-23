@@ -73,6 +73,16 @@ export function createAuthApi(client: ApiClient, tokenStore: TokenStore) {
     selectLocation(storeLocationId: string): Promise<void> {
       return client.request("PATCH", "/api/users/selected-location", { body: { storeLocationId } });
     },
+
+    /** First run: join the organisation whose manager gave this key. */
+    async joinOrganisation(joinKey: string): Promise<void> {
+      await client.request("POST", "/api/organisations/join", { body: { joinKey } });
+    },
+
+    /** First run: join a location of an organisation the person is already in. */
+    async joinLocation(storeKey: string): Promise<void> {
+      await client.request("POST", "/api/store-locations/join", { body: { storeKey } });
+    },
   };
 }
 

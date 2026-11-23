@@ -42,11 +42,18 @@ export default function RootLayout() {
         <Stack.Protected guard={state.phase === "chooseLocation"}>
           <Stack.Screen name="location" />
         </Stack.Protected>
-        <Stack.Protected guard={state.phase === "noAccess"}>
-          <Stack.Screen name="no-access" />
+        <Stack.Protected guard={state.phase === "firstRun"}>
+          <Stack.Screen name="first-run" />
+        </Stack.Protected>
+        <Stack.Protected guard={state.phase === "updateRequired"}>
+          <Stack.Screen name="update-required" />
+        </Stack.Protected>
+        <Stack.Protected guard={state.phase === "accountDeleted"}>
+          <Stack.Screen name="account-deleted" />
         </Stack.Protected>
         <Stack.Protected guard={state.phase === "ready"}>
           <Stack.Screen name="(app)" />
+          <Stack.Screen name="delete-account" />
         </Stack.Protected>
       </Stack>
     </SafeAreaProvider>

@@ -12,7 +12,7 @@ vi.mock("./stripeService.js", () => ({ cancelSubscriptionNow: vi.fn(), deleteCus
 import { and, eq } from "drizzle-orm";
 import { generate as otpGenerate, generateSecret as otpGenerateSecret } from "otplib";
 import { db } from "../db/index.js";
-import { auditLog, organisation, user, userOrganisation, userRole } from "../db/schema.js";
+import { auditLog, oauthAccount, organisation, user, userOrganisation, userRole } from "../db/schema.js";
 import { registerUser } from "./authService.js";
 import { createOrganisation } from "./organisationService.js";
 import { getUserProfile } from "./userService.js";
@@ -60,6 +60,7 @@ describe.skipIf(!RUN)("deleteOwnAccount (real DB)", { timeout: 120_000 }, () => 
     for (const id of userIds) {
       await db.delete(auditLog).where(eq(auditLog.actorUserId, id));
       await db.delete(auditLog).where(and(eq(auditLog.entityType, "user"), eq(auditLog.entityId, String(id))));
+      await db.delete(oauthAccount).where(eq(oauthAccount.userId, id));
       await db.delete(userOrganisation).where(eq(userOrganisation.userId, id));
       await db.delete(userRole).where(eq(userRole.userId, id));
     }
@@ -85,6 +86,15 @@ describe.skipIf(!RUN)("deleteOwnAccount (real DB)", { timeout: 120_000 }, () => 
     expect(withPassword).not.toHaveProperty("userPasswordHash");
     await db.update(user).set({ userPasswordHash: null }).where(eq(user.userId, userId));
     expect((await getUserProfile(userId))?.hasPassword).toBe(false);
+  });
+
+  it("the profile tells the client whether the account is linked to Apple (it then confirms deletion with a fresh Apple sign-in)", async () => {
+    const { userId } = await makeUser("hasApple");
+    expect((await getUserProfile(userId))?.hasApple).toBe(false);
+    await db.insert(oauthAccount).values({ userId, oauthProvider: "google", oauthProviderId: `g-${tag}-hasApple` });
+    expect((await getUserProfile(userId))?.hasApple).toBe(false);
+    await db.insert(oauthAccount).values({ userId, oauthProvider: "apple", oauthProviderId: `a-${tag}-hasApple` });
+    expect((await getUserProfile(userId))?.hasApple).toBe(true);
   });
 
   it("deletes the account with the right password", async () => {

@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { ApiErrorBodySchema, normaliseCode } from "./errors.js";
+import { ApiErrorBodySchema, UpgradeRequiredBodySchema, normaliseCode } from "./errors.js";
+import { SitePageSchema } from "./legal.js";
 import { AuthUserSchema, LocationContextSchema, LoginReplySchema, RefreshReplySchema } from "./auth.js";
 import { ActiveSessionSchema, AreaLinesSchema, CountSheetsSchema, SubmitConflictBodySchema } from "./stockTake.js";
 
@@ -79,5 +80,35 @@ describe("error body", () => {
 
   it("compares codes in one spelling", () => {
     expect(normaliseCode(" upgrade_required ")).toBe("UPGRADE_REQUIRED");
+  });
+});
+
+describe("update-required body (the 426)", () => {
+  it("reads the minimum and the store links", () => {
+    expect(UpgradeRequiredBodySchema.parse({ error: "Update", code: "upgrade_required", minVersion: "1.2.0", storeUrls: { ios: "https://apps.apple.com/app/id1", android: "https://play.google.com/store/apps/details?id=x" } })).toEqual({
+      minVersion: "1.2.0",
+      storeUrls: { ios: "https://apps.apple.com/app/id1", android: "https://play.google.com/store/apps/details?id=x" },
+    });
+  });
+
+  it("has no links when the server sent none, and drops a link that is not https (the phone opens what this holds)", () => {
+    expect(UpgradeRequiredBodySchema.parse({ minVersion: "1.2.0" }).storeUrls).toBeUndefined();
+    expect(UpgradeRequiredBodySchema.parse({ minVersion: "1.2.0", storeUrls: { ios: "javascript:alert(1)", android: "http://play.google.com/x" } }).storeUrls).toEqual({ ios: undefined, android: undefined });
+  });
+
+  it("still reads a body with no usable fields: the phone shows the update screen without a version or link", () => {
+    expect(UpgradeRequiredBodySchema.parse({ minVersion: 3, storeUrls: "x" })).toEqual({ minVersion: "", storeUrls: undefined });
+    expect(UpgradeRequiredBodySchema.parse(undefined)).toEqual({ minVersion: "", storeUrls: undefined });
+  });
+});
+
+describe("site page (terms, privacy)", () => {
+  it("reads the title and the text, and ignores the rest", () => {
+    expect(SitePageSchema.parse({ pageId: "p", slug: "terms", surface: "mobile", title: "Terms of Service", bodyMd: "# Hi", publishedInd: true })).toEqual({ title: "Terms of Service", bodyMd: "# Hi" });
+  });
+
+  it("needs a title; a missing body is empty text", () => {
+    expect(SitePageSchema.parse({ title: "Privacy" })).toEqual({ title: "Privacy", bodyMd: "" });
+    expect(SitePageSchema.safeParse({ bodyMd: "x" }).success).toBe(false);
   });
 });

@@ -4,12 +4,15 @@ import { Screen } from "../../src/ui/Screen";
 import { Text } from "../../src/ui/Text";
 import { Button } from "../../src/ui/Button";
 import { Surface } from "../../src/ui/Surface";
+import { LegalLinks } from "../../src/ui/LegalLinks";
+import { useRouter } from "expo-router";
 import { View } from "react-native";
 import { space } from "../../src/theme";
 
 /** Who is signed in and where, plus the two things every person needs whatever they can open: change location and sign out. */
 export default function Account() {
   const { state } = useSession();
+  const router = useRouter();
   if (state.phase !== "ready") return null;
   const { user, location, locations } = state;
 
@@ -25,6 +28,8 @@ export default function Account() {
       {visibleTabs(user).length === 0 ? <Text variant="muted">Nothing on your account is available on the phone yet. Ask your manager.</Text> : null}
       {locations.length > 1 ? <Button kind="ghost" label="Change location" onPress={() => session.changeLocation()} /> : null}
       <Button kind="quiet" label="Sign out" onPress={() => void session.signOut()} />
+      <LegalLinks />
+      <Button kind="danger" label="Delete my account" onPress={() => router.push("/delete-account")} />
     </Screen>
   );
 }

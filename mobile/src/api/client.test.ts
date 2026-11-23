@@ -328,3 +328,23 @@ describe("streamed response", () => {
     expect(fetchFn).not.toHaveBeenCalled();
   });
 });
+
+describe("update required (426)", () => {
+  const body = { error: "Update the app to continue.", code: "upgrade_required", minVersion: "1.2.0", storeUrls: { ios: "https://apps.apple.com/app/id1" } };
+
+  it("tells the app once, with the body, from any call; the call still fails with upgrade_required", async () => {
+    const onUpgradeRequired = vi.fn();
+    const store = memoryTokens({ accessToken: "A1", refreshToken: "R1" });
+    const client = createApiClient({ baseUrl: "https://api.test", tokenStore: store, appVersion: "0.1.0", fetchFn: async () => json(426, body), onUpgradeRequired });
+    await expect(client.request("GET", "/api/x")).rejects.toMatchObject({ code: "upgrade_required", status: 426 });
+    expect(onUpgradeRequired).toHaveBeenCalledTimes(1);
+    expect(onUpgradeRequired).toHaveBeenCalledWith(body);
+  });
+
+  it("is quiet for every other failure", async () => {
+    const onUpgradeRequired = vi.fn();
+    const client = createApiClient({ baseUrl: "https://api.test", tokenStore: memoryTokens(null), appVersion: "0.1.0", fetchFn: async () => json(500, {}), onUpgradeRequired });
+    await expect(client.request("POST", "/api/auth/login", { auth: false, body: {} })).rejects.toMatchObject({ code: "server" });
+    expect(onUpgradeRequired).not.toHaveBeenCalled();
+  });
+});
