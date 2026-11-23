@@ -38,7 +38,6 @@ import {
 import { resolveToBase, getValidUnits, invalidateConversionCache } from "./unitConversionService.js";
 import { logConsumption } from "./consumptionLogService.js";
 import { changeKitchenUnit } from "./ingredientService.js";
-import { receiveLine } from "./purchaseOrderService.js";
 import {
   recordSale,
   voidSale,
@@ -266,43 +265,6 @@ describe.skipIf(!RUN)("kitchen-unit model + recipe selling — real DB", () => {
         reason: "waste",
       });
       expect(await stockQtyOf(fx.wineId)).toBeCloseTo(7.1, 6); // 7.5 − 0.4
-    });
-
-    it("legacy PO receiving converts cases → bottles AND cost → per-bottle (the pre-existing bug, fixed)", async () => {
-      const [po] = await db
-        .insert(purchaseOrder)
-        .values({
-          organisationId: fx.orgId,
-          storeLocationId: fx.locId,
-          supplierId: fx.supplierId,
-          poNumber: `${fx.tag}-PO1`,
-          status: "SUBMITTED",
-          createdByUserId: fx.userId,
-        })
-        .returning();
-      const [line] = await db
-        .insert(purchaseOrderLine)
-        .values({
-          poId: po.poId,
-          ingredientId: fx.wineId,
-          ingredientName: `${fx.tag}-wine`,
-          orderedQty: "2",
-          orderedUnit: "case",
-          unitCost: "60", // $60 per case of 12
-          lineStatus: "PENDING",
-        })
-        .returning();
-
-      const before = await stockQtyOf(fx.wineId);
-      await receiveLine(po.poId, line.lineId, "2", "case", "60", fx.userId, fx.orgId);
-      expect(await stockQtyOf(fx.wineId)).toBeCloseTo(before + 24, 6); // 2 cases = 24 bottles
-
-      const [batch] = await db
-        .select()
-        .from(fifoBatch)
-        .where(eq(fifoBatch.sourcePoLineId, line.lineId));
-      expect(Number(batch.originalQuantity)).toBeCloseTo(24, 6);
-      expect(Number(batch.unitCost)).toBeCloseTo(5, 4); // $60/case ÷ 12 = $5/bottle
     });
   });
 

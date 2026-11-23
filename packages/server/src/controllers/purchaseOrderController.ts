@@ -14,12 +14,12 @@ import {
   listPOs,
   getPODetail,
   submitPO,
-  receiveLine,
   cancelPO,
   approvePO,
   rejectPO,
   clonePO,
   emailPOToSupplier,
+  withApprovalRights,
 } from "../services/purchaseOrderService.js";
 import { PO_TRANSITIONS } from "../utils/stateTransition.js";
 import * as thresholdService from "../services/thresholdService.js";
@@ -47,16 +47,6 @@ const CreatePOSchema = z.object({
   lines: z.array(CreatePOLineSchema).min(1, "At least one line item is required"),
   notes: z.string().max(2000).optional(),
   expectedDeliveryDate: z.string().optional(),
-});
-
-const ReceiveLineSchema = z.object({
-  receivedQty: z.string().refine(
-    (v) => !isNaN(Number(v)) && Number(v) > 0, "Must be a positive number",
-  ),
-  receivedUnit: z.string().min(1).max(20),
-  unitCost: z.string().refine(
-    (v) => !isNaN(Number(v)) && Number(v) >= 0, "Must be a non-negative number",
-  ).nullable().optional(),
 });
 
 /** The only POs a user holding `purchasing:receive` but not `inventory:count` may see. */
@@ -89,11 +79,29 @@ async function resolveOrgId(req: Request, res: Response): Promise<number | null>
   // location-less org admin can still manage org-wide records (e.g. suppliers).
   const orgId = ctx.locations[0]?.organisationId ?? ctx.organisationId;
   if (orgId === null) {
-    res.status(400).json({ error: "You are not a member of any organisation" });
+    res.status(400).json({ error: "You are not a member of any organisation", code: "FORBIDDEN" });
     return null;
   }
   return orgId;
 }
+
+/** Spend thresholds decide which orders need approval, so only an organisation admin may change them. */
+async function resolveOrgAdminOrgId(req: Request, res: Response): Promise<number | null> {
+  const ctx = await getUserLocationContext(req.user!.sub);
+  if (ctx.organisationId === null || !ctx.isOrgAdmin) {
+    res.status(403).json({ error: "Only an organisation admin can change spend thresholds", code: "FORBIDDEN" });
+    return null;
+  }
+  return ctx.organisationId;
+}
+
+/** A refused body: the first problem as the sentence, every field problem under `details`. */
+function sendValidation(res: Response, error: z.ZodError): void {
+  res.status(400).json({ error: error.issues[0]?.message ?? "Validation failed", code: "VALIDATION", details: error.flatten() });
+}
+
+/** An approver sees, on each order waiting for approval, whether they may approve it (not their own while someone else can). */
+const canApproveOrders = (req: Request) => hasPermission(req.user!, "purchasing:approve");
 
 // ─── Handlers ─────────────────────────────────────────────────────
 
@@ -165,7 +173,7 @@ export async function handleListPOs(
     }
 
     const result = await listPOs(orgId, { ...rest, statuses, storeLocationIds });
-    res.json(result);
+    res.json(canApproveOrders(req) ? await withApprovalRights(result, orgId, req.user!.sub) : result);
   } catch (err) {
     next(err);
   }
@@ -188,7 +196,7 @@ export async function handleGetPODetail(
     }
     if (isReceivingOnly(req)) await assertLocationAccess(req.user!, result.storeLocationId);
 
-    res.json(result);
+    res.json(canApproveOrders(req) ? (await withApprovalRights([result], orgId, req.user!.sub))[0] : result);
   } catch (err) {
     next(err);
   }
@@ -222,58 +230,6 @@ export async function handleSubmitPO(
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     if (msg.includes("Cannot submit") || msg.includes("not found")) {
-      res.status(400).json({ error: msg });
-      return;
-    }
-    next(err);
-  }
-}
-
-export async function handleReceiveLine(
-  req: Request, res: Response, next: NextFunction,
-): Promise<void> {
-  try {
-    const orgId = await resolveOrgId(req, res);
-    if (orgId === null) return;
-
-    const poId = req.params.id as string;
-    const lineId = req.params.lineId as string;
-    const userId = req.user!.sub;
-
-    const parsed = ReceiveLineSchema.safeParse(req.body);
-    if (!parsed.success) {
-      res.status(400).json({ error: "Validation failed", details: parsed.error.flatten() });
-      return;
-    }
-
-    const result = await receiveLine(
-      poId,
-      lineId,
-      parsed.data.receivedQty,
-      parsed.data.receivedUnit,
-      parsed.data.unitCost ?? null,
-      userId,
-      orgId,
-    );
-
-    logger.info({ poId, lineId, userId }, "PO line received");
-    // Brain org memory (spec T12): "goods arrived on this PO". Each line receipt
-    // upserts the one `${poId}:received` memory (last-receipt-wins) — this is a
-    // PO-level "received" memory, not per-line item detail.
-    void recordOpsEvent({
-      userId,
-      sourceType: "purchase_order",
-      scope: "org",
-      organisationId: orgId,
-      stage: "received",
-      sourceRef: `${poId}:received`,
-      poNumber: (result as { poNumber?: string })?.poNumber ?? poId,
-      title: "Stock received on a purchase order",
-    });
-    res.json(result);
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (msg.includes("Cannot receive") || msg.includes("not found") || msg.includes("already received")) {
       res.status(400).json({ error: msg });
       return;
     }
@@ -331,12 +287,7 @@ export async function handleApprovePO(
       title: `PO ${result.poNumber} approved`,
     });
     res.json(result);
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (msg.includes("Cannot approve") || msg.includes("not found")) {
-      res.status(400).json({ error: msg });
-      return;
-    }
+  } catch (err) {
     next(err);
   }
 }
@@ -365,16 +316,7 @@ export async function handleEmailPOToSupplier(
 
     logger.info({ poId, to: result.to }, "Purchase order emailed to supplier");
     res.json({ emailed: true, emailedAt: result.emailedAt, to: result.to });
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (msg.includes("not found")) {
-      res.status(404).json({ error: msg });
-      return;
-    }
-    if (msg.includes("Only a sent")) {
-      res.status(400).json({ error: msg });
-      return;
-    }
+  } catch (err) {
     next(err);
   }
 }
@@ -382,7 +324,7 @@ export async function handleEmailPOToSupplier(
 // ─── Reject PO (HQ) ─────────────────────────────────────────────
 
 const RejectPOSchema = z.object({
-  reason: z.string().min(1, "Rejection reason is required").max(2000),
+  reason: z.string({ required_error: "Rejection reason is required" }).trim().min(1, "Rejection reason is required").max(2000),
 });
 
 export async function handleRejectPO(
@@ -397,19 +339,14 @@ export async function handleRejectPO(
 
     const parsed = RejectPOSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: "Validation failed", details: parsed.error.flatten() });
+      sendValidation(res, parsed.error);
       return;
     }
 
     const result = await rejectPO(poId, orgId, userId, parsed.data.reason);
     logger.info({ poId, userId }, "Purchase order rejected");
     res.json(result);
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (msg.includes("Cannot") || msg.includes("not found") || msg.includes("required")) {
-      res.status(400).json({ error: msg });
-      return;
-    }
+  } catch (err) {
     next(err);
   }
 }
@@ -467,24 +404,27 @@ export async function handleGetThresholds(
   }
 }
 
-const SetOrgThresholdSchema = z.object({
-  amount: z.number().positive("Threshold must be a positive number"),
-});
+const ThresholdAmount = z
+  .number({ required_error: "Enter a threshold amount", invalid_type_error: "Threshold must be a number" })
+  .positive("Threshold must be a positive number")
+  .max(thresholdService.MAX_SPEND_THRESHOLD, "Threshold cannot be more than 1,000,000");
+
+const SetOrgThresholdSchema = z.object({ amount: ThresholdAmount });
 
 export async function handleSetOrgThreshold(
   req: Request, res: Response, next: NextFunction,
 ): Promise<void> {
   try {
-    const orgId = await resolveOrgId(req, res);
+    const orgId = await resolveOrgAdminOrgId(req, res);
     if (orgId === null) return;
 
     const parsed = SetOrgThresholdSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: "Validation failed", details: parsed.error.flatten() });
+      sendValidation(res, parsed.error);
       return;
     }
 
-    await thresholdService.setOrgDefault(orgId, parsed.data.amount);
+    await thresholdService.setOrgDefault(orgId, parsed.data.amount, req.user!.sub);
     res.json({ success: true });
   } catch (err) {
     next(err);
@@ -492,26 +432,24 @@ export async function handleSetOrgThreshold(
 }
 
 const SetLocationThresholdSchema = z.object({
-  storeLocationId: z.string().uuid(),
-  amount: z.number().positive("Threshold must be a positive number"),
+  storeLocationId: z.string().uuid("Choose a location"),
+  amount: ThresholdAmount,
 });
 
 export async function handleSetLocationThreshold(
   req: Request, res: Response, next: NextFunction,
 ): Promise<void> {
   try {
-    const orgId = await resolveOrgId(req, res);
+    const orgId = await resolveOrgAdminOrgId(req, res);
     if (orgId === null) return;
-
-    const userId = req.user!.sub;
 
     const parsed = SetLocationThresholdSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: "Validation failed", details: parsed.error.flatten() });
+      sendValidation(res, parsed.error);
       return;
     }
 
-    await thresholdService.setLocationOverride(orgId, parsed.data.storeLocationId, parsed.data.amount, userId);
+    await thresholdService.setLocationOverride(orgId, parsed.data.storeLocationId, parsed.data.amount, req.user!.sub);
     res.json({ success: true });
   } catch (err) {
     next(err);
@@ -522,11 +460,15 @@ export async function handleRemoveLocationThreshold(
   req: Request, res: Response, next: NextFunction,
 ): Promise<void> {
   try {
-    const orgId = await resolveOrgId(req, res);
+    const orgId = await resolveOrgAdminOrgId(req, res);
     if (orgId === null) return;
 
-    const locationId = req.params.locationId as string;
-    await thresholdService.removeLocationOverride(orgId, locationId);
+    const parsed = z.string().uuid("Choose a location").safeParse(req.params.locationId);
+    if (!parsed.success) {
+      sendValidation(res, parsed.error);
+      return;
+    }
+    await thresholdService.removeLocationOverride(orgId, parsed.data, req.user!.sub);
     res.json({ success: true });
   } catch (err) {
     next(err);
@@ -548,16 +490,7 @@ export async function handleDownloadPOPdf(
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `attachment; filename="${poNumber}.pdf"`);
     res.send(buffer);
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (msg.includes("not found")) {
-      res.status(404).json({ error: msg });
-      return;
-    }
-    if (msg.includes("timed out")) {
-      res.status(500).json({ error: "PDF generation timed out — please try again" });
-      return;
-    }
+  } catch (err) {
     next(err);
   }
 }

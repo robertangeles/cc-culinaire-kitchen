@@ -19,12 +19,12 @@ vi.mock("../services/purchaseOrderService.js", () => ({
   listPOs: vi.fn(),
   getPODetail: vi.fn(),
   submitPO: vi.fn(),
-  receiveLine: vi.fn(),
   cancelPO: vi.fn(),
   approvePO: vi.fn(),
   rejectPO: vi.fn(),
   clonePO: vi.fn(),
   emailPOToSupplier: vi.fn(),
+  withApprovalRights: vi.fn(),
 }));
 
 vi.mock("../services/pdfService.js", () => ({
@@ -46,6 +46,7 @@ import * as purchaseOrderService from "../services/purchaseOrderService.js";
 import * as pdfService from "../services/pdfService.js";
 import { validateTransition, PO_TRANSITIONS } from "../utils/stateTransition.js";
 import { errorHandler } from "../middleware/errorHandler.js";
+import { AppError } from "../utils/appError.js";
 
 function mockReq(overrides: Partial<Request> = {}): Request {
   return {
@@ -97,49 +98,22 @@ describe("handleSubmitPO catch handlers", () => {
   });
 });
 
-describe("handleEmailPOToSupplier catch handlers", () => {
+describe("email, PDF and approve answer the service's coded errors through the error handler", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("returns 404 when service throws 'not found'", async () => {
-    vi.mocked(purchaseOrderService.emailPOToSupplier).mockRejectedValue(
-      new Error("Purchase order not found"),
-    );
+  it.each([
+    ["email", "ALREADY_EMAILED", () => vi.mocked(purchaseOrderService.emailPOToSupplier), handleEmailPOToSupplier, new AppError(409, "ALREADY_EMAILED", "This order was just emailed")],
+    ["email", "NOT_FOUND", () => vi.mocked(purchaseOrderService.emailPOToSupplier), handleEmailPOToSupplier, new AppError(404, "NOT_FOUND", "Purchase order not found")],
+    ["pdf", "PDF_TIMEOUT", () => vi.mocked(pdfService.generatePOPdf), handleDownloadPOPdf, new AppError(503, "PDF_TIMEOUT", "The PDF took too long")],
+    ["approve", "SELF_APPROVAL_NOT_ALLOWED", () => vi.mocked(purchaseOrderService.approvePO), handleApprovePO, new AppError(403, "SELF_APPROVAL_NOT_ALLOWED", "Another approver must approve it")],
+  ] as const)("%s answers %s", async (_name, _code, mock, handler, err) => {
+    (mock() as unknown as { mockRejectedValue: (e: Error) => void }).mockRejectedValue(err);
     const res = mockRes();
-    const next = vi.fn() as unknown as NextFunction;
-    await handleEmailPOToSupplier(mockReq({ params: { id: "po-1" } }), res, next);
-    expect(res.status).toHaveBeenCalledWith(404);
-    expect(res.json).toHaveBeenCalledWith({ error: "Purchase order not found" });
-    expect(next).not.toHaveBeenCalled();
-  });
-
-  it("returns 400 when service throws 'Only a sent'", async () => {
-    vi.mocked(purchaseOrderService.emailPOToSupplier).mockRejectedValue(
-      new Error("Only a sent PO can be emailed again"),
-    );
-    const res = mockRes();
-    const next = vi.fn() as unknown as NextFunction;
-    await handleEmailPOToSupplier(mockReq({ params: { id: "po-1" } }), res, next);
-    expect(res.status).toHaveBeenCalledWith(400);
-    expect(res.json).toHaveBeenCalledWith({ error: "Only a sent PO can be emailed again" });
-    expect(next).not.toHaveBeenCalled();
-  });
-});
-
-describe("handleDownloadPOPdf catch handlers", () => {
-  beforeEach(() => vi.clearAllMocks());
-
-  it("returns 500 when pdf service throws 'timed out'", async () => {
-    vi.mocked(pdfService.generatePOPdf).mockRejectedValue(
-      new Error("PDF generation timed out"),
-    );
-    const res = mockRes();
-    const next = vi.fn() as unknown as NextFunction;
-    await handleDownloadPOPdf(mockReq({ params: { id: "po-1" } }), res, next);
-    expect(res.status).toHaveBeenCalledWith(500);
-    expect(res.json).toHaveBeenCalledWith({
-      error: "PDF generation timed out — please try again",
-    });
-    expect(next).not.toHaveBeenCalled();
+    (res as unknown as { headersSent: boolean }).headersSent = false;
+    const next = ((e: Error) => errorHandler(e, mockReq(), res, vi.fn())) as unknown as NextFunction;
+    await handler(mockReq({ params: { id: "po-1" } }), res, next);
+    expect(res.status).toHaveBeenCalledWith(err.statusCode);
+    expect(res.json).toHaveBeenCalledWith({ error: err.message, code: err.code });
   });
 });
 
@@ -166,19 +140,5 @@ describe("PO submit / cancel on an order in the wrong state", () => {
       error: "Cannot transition purchase order from RECEIVED to CANCELLED",
       code: "INVALID_STATE",
     });
-  });
-});
-
-describe("handleApprovePO plain-error mapping", () => {
-  beforeEach(() => vi.clearAllMocks());
-
-  it("still answers 400 for an order that is not awaiting approval", async () => {
-    vi.mocked(purchaseOrderService.approvePO).mockRejectedValue(new Error("Cannot approve PO with status DRAFT"));
-    const res = mockRes();
-    const next = vi.fn() as unknown as NextFunction;
-    await handleApprovePO(mockReq({ params: { id: "po-1" } }), res, next);
-    expect(res.status).toHaveBeenCalledWith(400);
-    expect(res.json).toHaveBeenCalledWith({ error: "Cannot approve PO with status DRAFT" });
-    expect(next).not.toHaveBeenCalled();
   });
 });

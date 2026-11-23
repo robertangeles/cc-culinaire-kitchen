@@ -7,15 +7,14 @@
  *   PENDING_APPROVAL → SENT (approved) or DRAFT (rejected)
  *   SENT → RECEIVING → RECEIVED / PARTIAL_RECEIVED
  *
- * On receive, creates FIFO batches and updates stock levels.
+ * Receiving (stock, FIFO batches, WAC) is receivingService's.
  */
 
-import { eq, and, desc, sql, inArray } from "drizzle-orm";
+import { eq, and, desc, sql, inArray, ne, or, isNull, lt } from "drizzle-orm";
 import { db } from "../db/index.js";
 import {
   purchaseOrder,
   purchaseOrderLine,
-  fifoBatch,
   stockLevel,
   ingredient,
   supplier,
@@ -24,13 +23,22 @@ import {
   locationIngredient,
   organisation,
   receivingSession,
+  userOrganisation,
+  userRole,
+  role,
+  rolePermission,
+  permission,
 } from "../db/schema.js";
 import { validateTransition, PO_TRANSITIONS } from "../utils/stateTransition.js";
 import * as thresholdService from "./thresholdService.js";
 import * as notificationService from "./notificationService.js";
 import * as pdfService from "./pdfService.js";
 import * as emailService from "./emailService.js";
-import { resolveToBase } from "./unitConversionService.js";
+import * as auditService from "./auditService.js";
+import type { DbOrTx } from "./auditService.js";
+import { AppError } from "../utils/appError.js";
+import { escapeHtml } from "../utils/escapeHtml.js";
+import { SUPPLIER_EMAIL_WINDOW_MS } from "@culinaire/shared";
 import pino from "pino";
 
 const logger = pino({ name: "purchaseOrderService" });
@@ -358,32 +366,101 @@ export async function submitPO(poId: string, orgId: number, userId: number) {
 
 // ─── approvePO ───────────────────────────────────────────────────
 
-export async function approvePO(poId: string, orgId: number, userId: number) {
-  const [po] = await db
+/**
+ * Whether anyone in the organisation besides `userId` can approve purchase orders: an active member who holds
+ * `purchasing:approve` through a role, or an Administrator (who bypasses permission checks).
+ */
+async function hasOtherApprover(orgId: number, userId: number, tx: DbOrTx = db): Promise<boolean> {
+  const rows = await tx
+    .select({ userId: user.userId })
+    .from(user)
+    .innerJoin(userOrganisation, eq(userOrganisation.userId, user.userId))
+    .innerJoin(userRole, eq(userRole.userId, user.userId))
+    .innerJoin(role, eq(role.roleId, userRole.roleId))
+    .leftJoin(rolePermission, eq(rolePermission.roleId, role.roleId))
+    .leftJoin(permission, eq(permission.permissionId, rolePermission.permissionId))
+    .where(
+      and(
+        eq(userOrganisation.organisationId, orgId),
+        ne(user.userId, userId),
+        eq(user.userStatus, "active"),
+        or(eq(role.roleName, "Administrator"), eq(permission.permissionKey, "purchasing:approve")),
+      ),
+    )
+    .limit(1);
+  return rows.length > 0;
+}
+
+/**
+ * `canApprove` on every order waiting for approval, for an approver's list or detail: false on their own order
+ * while someone else in the organisation can approve it. Other rows are returned unchanged.
+ */
+export async function withApprovalRights<T extends { status: string; createdByUserId: number }>(
+  rows: T[],
+  orgId: number,
+  userId: number,
+): Promise<Array<T & { canApprove?: boolean }>> {
+  const ownWaiting = rows.some((r) => r.status === "PENDING_APPROVAL" && r.createdByUserId === userId);
+  const soleApprover = ownWaiting ? !(await hasOtherApprover(orgId, userId)) : true;
+  return rows.map((r) =>
+    r.status === "PENDING_APPROVAL" ? { ...r, canApprove: r.createdByUserId !== userId || soleApprover } : r,
+  );
+}
+
+/** Lock a waiting order of this organisation for an approver's decision, or refuse. */
+async function lockPendingPO(tx: DbOrTx, poId: string, orgId: number, verb: "approve" | "reject") {
+  const [po] = await tx
     .select()
     .from(purchaseOrder)
-    .where(and(eq(purchaseOrder.poId, poId), eq(purchaseOrder.organisationId, orgId)));
-
-  if (!po) throw new Error("Purchase order not found");
-  validateTransition(po.status, "SENT", PO_TRANSITIONS, "purchase order");
-
+    .where(and(eq(purchaseOrder.poId, poId), eq(purchaseOrder.organisationId, orgId)))
+    .for("update");
+  if (!po) throw new AppError(404, "NOT_FOUND", "Purchase order not found");
   if (po.status !== "PENDING_APPROVAL") {
-    throw new Error(`Cannot approve PO with status ${po.status}`);
+    throw new AppError(409, "INVALID_STATE", `Cannot ${verb} PO with status ${po.status}`);
   }
+  return po;
+}
 
-  const now = new Date();
+/**
+ * Approve a waiting order. The row is locked, so two approvers racing cannot both approve it. The creator may not
+ * approve their own order unless nobody else in the organisation can; that case is allowed and audited as a self-approval.
+ */
+export async function approvePO(poId: string, orgId: number, userId: number) {
+  const { po, updated, selfApproval } = await db.transaction(async (tx) => {
+    const po = await lockPendingPO(tx, poId, orgId, "approve");
+    const selfApproval = po.createdByUserId === userId;
+    if (selfApproval && (await hasOtherApprover(orgId, userId, tx))) {
+      throw new AppError(403, "SELF_APPROVAL_NOT_ALLOWED", "You created this purchase order, so another approver must approve it.");
+    }
 
-  const [updated] = await db
-    .update(purchaseOrder)
-    .set({
-      status: "SENT",
-      approvedByUserId: userId,
-      approvedAt: now,
-      sentAt: now,
-      updatedDttm: now,
-    })
-    .where(eq(purchaseOrder.poId, poId))
-    .returning();
+    const now = new Date();
+    const [updated] = await tx
+      .update(purchaseOrder)
+      .set({
+        status: "SENT",
+        approvedByUserId: userId,
+        approvedAt: now,
+        sentAt: now,
+        updatedDttm: now,
+      })
+      .where(eq(purchaseOrder.poId, poId))
+      .returning();
+
+    await auditService.log(
+      {
+        entityType: "purchase_order",
+        entityId: poId,
+        action: "approve",
+        actorUserId: userId,
+        organisationId: orgId,
+        beforeValue: { status: po.status },
+        afterValue: { status: updated.status, approvedAt: now.toISOString() },
+        metadata: { selfApproval, totalValue: po.totalValue },
+      },
+      tx,
+    );
+    return { po, updated, selfApproval };
+  });
 
   // Notify the location that PO was approved
   await notificationService.createInApp({
@@ -395,8 +472,8 @@ export async function approvePO(poId: string, orgId: number, userId: number) {
     relatedEntityId: poId,
   });
 
-  logger.info({ poId, approvedBy: userId }, "PO approved by HQ");
-  return updated;
+  logger.info({ poId, approvedBy: userId, selfApproval }, "PO approved by HQ");
+  return { ...updated, selfApproval };
 }
 
 // ─── emailPOToSupplier ───────────────────────────────────────────
@@ -406,6 +483,10 @@ export async function approvePO(poId: string, orgId: number, userId: number) {
  * Explicit operator action — separate from the internal SENT status flip.
  * Never throws for expected states: a supplier with no email on file, or an
  * unconfigured email transport, is reported back so the UI can flag it.
+ *
+ * The send is claimed first by stamping `supplier_emailed_at` in one conditional update, so two taps (or a retry
+ * after a lost reply) inside {@link SUPPLIER_EMAIL_WINDOW_MS} send one email; the second answers 409 ALREADY_EMAILED.
+ * A send that does not happen gives the claim back, so it can be tried again at once.
  */
 export async function emailPOToSupplier(poId: string, orgId: number) {
   const [po] = await db
@@ -413,6 +494,7 @@ export async function emailPOToSupplier(poId: string, orgId: number) {
       poNumber: purchaseOrder.poNumber,
       status: purchaseOrder.status,
       expectedDeliveryDate: purchaseOrder.expectedDeliveryDate,
+      supplierEmailedAt: purchaseOrder.supplierEmailedAt,
       supplierName: supplier.supplierName,
       contactEmail: supplier.contactEmail,
       orderingMethod: supplier.orderingMethod,
@@ -425,11 +507,11 @@ export async function emailPOToSupplier(poId: string, orgId: number) {
     .leftJoin(organisation, eq(purchaseOrder.organisationId, organisation.organisationId))
     .where(and(eq(purchaseOrder.poId, poId), eq(purchaseOrder.organisationId, orgId)));
 
-  if (!po) throw new Error("Purchase order not found");
+  if (!po) throw new AppError(404, "NOT_FOUND", "Purchase order not found");
 
   // Only a finalised (SENT) PO can be emailed to a supplier.
   if (po.status !== "SENT") {
-    throw new Error("Only a sent purchase order can be emailed to the supplier");
+    throw new AppError(409, "INVALID_STATE", "Only a sent purchase order can be emailed to the supplier");
   }
 
   // This action is for suppliers ordered via email. Phone/portal suppliers are
@@ -443,38 +525,64 @@ export async function emailPOToSupplier(poId: string, orgId: number) {
     return { emailed: false as const, reason: "no_supplier_email" as const };
   }
 
-  // The full order (line items, totals, notes) lives in the attached PDF; the
-  // email body is a brief cover note, so no line-items query is needed here.
-  const { buffer: pdfBuffer } = await pdfService.generatePOPdf(poId, orgId);
+  const now = new Date();
+  const [claimed] = await db
+    .update(purchaseOrder)
+    .set({ supplierEmailedAt: now, updatedDttm: now })
+    .where(
+      and(
+        eq(purchaseOrder.poId, poId),
+        or(
+          isNull(purchaseOrder.supplierEmailedAt),
+          lt(purchaseOrder.supplierEmailedAt, new Date(now.getTime() - SUPPLIER_EMAIL_WINDOW_MS)),
+        ),
+      ),
+    )
+    .returning({ poId: purchaseOrder.poId });
+  if (!claimed) {
+    throw new AppError(409, "ALREADY_EMAILED", "This order was just emailed to the supplier. You can send it again in a few minutes.");
+  }
+  // Only our own stamp is given back: a later claim by someone else is theirs.
+  const release = () =>
+    db
+      .update(purchaseOrder)
+      .set({ supplierEmailedAt: po.supplierEmailedAt })
+      .where(and(eq(purchaseOrder.poId, poId), eq(purchaseOrder.supplierEmailedAt, now)));
 
-  const result = await emailService.sendPurchaseOrderEmail(
-    po.contactEmail,
-    {
-      poNumber: po.poNumber,
-      supplierName: po.supplierName ?? "there",
-      orgName: po.orgName ?? "CulinAIre Kitchen",
-      locationName: po.locationName ?? "",
-      expectedDeliveryDate: po.expectedDeliveryDate
-        ? po.expectedDeliveryDate.toISOString().slice(0, 10)
-        : null,
-    },
-    pdfBuffer,
-  );
+  let result: Awaited<ReturnType<typeof emailService.sendPurchaseOrderEmail>>;
+  try {
+    // The full order (line items, totals, notes) lives in the attached PDF; the
+    // email body is a brief cover note, so no line-items query is needed here.
+    const { buffer: pdfBuffer } = await pdfService.generatePOPdf(poId, orgId);
+    result = await emailService.sendPurchaseOrderEmail(
+      po.contactEmail,
+      {
+        poNumber: po.poNumber,
+        supplierName: po.supplierName ?? "there",
+        orgName: po.orgName ?? "CulinAIre Kitchen",
+        locationName: po.locationName ?? "",
+        expectedDeliveryDate: po.expectedDeliveryDate
+          ? po.expectedDeliveryDate.toISOString().slice(0, 10)
+          : null,
+      },
+      pdfBuffer,
+    );
+  } catch (err) {
+    await release();
+    throw err;
+  }
 
   // Transport not set up (e.g. local dev without RESEND_API_KEY) → flag, don't crash.
   if (result.notConfigured) {
+    await release();
     return { emailed: false as const, reason: "email_not_configured" as const };
   }
-  // Genuine send failure (Resend returned an error) → surface it.
+  // Genuine send failure (Resend returned an error) → surface it, without the provider's words.
   if (!result.sent) {
-    throw new Error(result.error ?? "Failed to send supplier email");
+    await release();
+    logger.error({ poId, error: result.error }, "Supplier email failed");
+    throw new AppError(502, "EMAIL_FAILED", "The email to the supplier could not be sent. Try again, or download the PDF and send it yourself.");
   }
-
-  const now = new Date();
-  await db
-    .update(purchaseOrder)
-    .set({ supplierEmailedAt: now, updatedDttm: now })
-    .where(eq(purchaseOrder.poId, poId));
 
   logger.info({ poId, to: po.contactEmail }, "PO emailed to supplier");
   return { emailed: true as const, emailedAt: now, to: po.contactEmail };
@@ -489,29 +597,36 @@ export async function rejectPO(
   reason: string,
 ) {
   if (!reason || reason.trim().length === 0) {
-    throw new Error("Rejection reason is required");
+    throw new AppError(400, "VALIDATION", "Rejection reason is required");
   }
 
-  const [po] = await db
-    .select()
-    .from(purchaseOrder)
-    .where(and(eq(purchaseOrder.poId, poId), eq(purchaseOrder.organisationId, orgId)));
+  const { po, updated } = await db.transaction(async (tx) => {
+    const po = await lockPendingPO(tx, poId, orgId, "reject");
+    const [updated] = await tx
+      .update(purchaseOrder)
+      .set({
+        status: "DRAFT",
+        rejectedReason: reason.trim(),
+        updatedDttm: new Date(),
+      })
+      .where(eq(purchaseOrder.poId, poId))
+      .returning();
 
-  if (!po) throw new Error("Purchase order not found");
-
-  if (po.status !== "PENDING_APPROVAL") {
-    throw new Error(`Cannot reject PO with status ${po.status}`);
-  }
-
-  const [updated] = await db
-    .update(purchaseOrder)
-    .set({
-      status: "DRAFT",
-      rejectedReason: reason.trim(),
-      updatedDttm: new Date(),
-    })
-    .where(eq(purchaseOrder.poId, poId))
-    .returning();
+    await auditService.log(
+      {
+        entityType: "purchase_order",
+        entityId: poId,
+        action: "reject",
+        actorUserId: userId,
+        organisationId: orgId,
+        beforeValue: { status: po.status },
+        afterValue: { status: updated.status },
+        metadata: { reason: reason.trim(), totalValue: po.totalValue },
+      },
+      tx,
+    );
+    return { po, updated };
+  });
 
   // Notify the location that PO was rejected with reason
   await notificationService.createInApp({
@@ -542,7 +657,7 @@ export async function rejectPO(
       htmlBody: `
         <h2 style="color: #1a1a1a; margin-bottom: 16px;">Purchase Order Rejected</h2>
         <p><strong>PO Number:</strong> ${po.poNumber}</p>
-        <p><strong>Reason:</strong> ${reason.trim()}</p>
+        <p><strong>Reason:</strong> ${escapeHtml(reason.trim())}</p>
         <p style="margin-top: 16px;">The PO has been returned to Draft status. Please review and resubmit.</p>
         <p style="margin-top: 16px;">
           <a href="${process.env.CLIENT_URL || "https://www.culinaire.kitchen"}/purchasing?tab=orders&po=${poId}"
@@ -662,123 +777,6 @@ export async function clonePO(
   );
 
   return { ...newPO, skippedItems };
-}
-
-// ─── receiveLine ──────────────────────────────────────────────────
-
-export async function receiveLine(
-  poId: string,
-  lineId: string,
-  receivedQty: string,
-  receivedUnit: string,
-  unitCost: string | null,
-  userId: number,
-  orgId: number,
-) {
-  // Validate PO status — AND org so a caller cannot receive on another org's PO
-  const [po] = await db
-    .select()
-    .from(purchaseOrder)
-    .where(and(eq(purchaseOrder.poId, poId), eq(purchaseOrder.organisationId, orgId)));
-
-  if (!po) throw new Error("Purchase order not found");
-  if (po.status !== "SUBMITTED" && po.status !== "PARTIALLY_RECEIVED") {
-    throw new Error(`Cannot receive on PO with status ${po.status}`);
-  }
-
-  // Validate line belongs to PO
-  const [line] = await db
-    .select()
-    .from(purchaseOrderLine)
-    .where(and(eq(purchaseOrderLine.lineId, lineId), eq(purchaseOrderLine.poId, poId)));
-
-  if (!line) throw new Error("PO line not found");
-  if (line.lineStatus === "RECEIVED") throw new Error("Line already received");
-
-  // Update the line
-  const [updatedLine] = await db
-    .update(purchaseOrderLine)
-    .set({
-      receivedQty,
-      receivedUnit,
-      unitCost: unitCost ?? line.unitCost,
-      lineStatus: "RECEIVED",
-      receivedByUserId: userId,
-      receivedDttm: new Date(),
-      updatedDttm: new Date(),
-    })
-    .where(eq(purchaseOrderLine.lineId, lineId))
-    .returning();
-
-  // Convert the received qty from its entered/packaging unit to the
-  // ingredient's KITCHEN unit at the receiving boundary — packaging (case,
-  // bag) must never touch the stock count directly. The unit cost converts
-  // with it (per-case → per-kitchen-unit) so FIFO/WAC stay consistent.
-  const { baseQty: receivedBaseQty } = await resolveToBase(
-    line.ingredientId,
-    Number(receivedQty),
-    receivedUnit || line.orderedUnit,
-  );
-  const conversionFactor = receivedBaseQty / Number(receivedQty);
-  const enteredCost = unitCost ?? line.unitCost;
-  const baseUnitCost = enteredCost != null ? String(Number(enteredCost) / conversionFactor) : enteredCost;
-
-  // Create FIFO batch (kitchen units + per-kitchen-unit cost)
-  await db.insert(fifoBatch).values({
-    storeLocationId: po.storeLocationId,
-    ingredientId: line.ingredientId,
-    arrivalDate: new Date(),
-    quantityRemaining: String(receivedBaseQty),
-    originalQuantity: String(receivedBaseQty),
-    unitCost: baseUnitCost,
-    sourcePoLineId: lineId,
-    isDepleted: false,
-  });
-
-  // Upsert stock level — add received qty (kitchen units)
-  const existingStock = await db
-    .select()
-    .from(stockLevel)
-    .where(
-      and(
-        eq(stockLevel.storeLocationId, po.storeLocationId),
-        eq(stockLevel.ingredientId, line.ingredientId),
-      ),
-    );
-
-  if (existingStock.length > 0) {
-    await db
-      .update(stockLevel)
-      .set({
-        currentQty: sql`${stockLevel.currentQty}::numeric + ${receivedBaseQty}::numeric`,
-        updatedDttm: new Date(),
-      })
-      .where(eq(stockLevel.stockLevelId, existingStock[0].stockLevelId));
-  } else {
-    await db.insert(stockLevel).values({
-      storeLocationId: po.storeLocationId,
-      ingredientId: line.ingredientId,
-      currentQty: String(receivedBaseQty),
-    });
-  }
-
-  // Check if all lines are received → update PO status
-  const allLines = await db
-    .select({ lineStatus: purchaseOrderLine.lineStatus })
-    .from(purchaseOrderLine)
-    .where(eq(purchaseOrderLine.poId, poId));
-
-  const allReceived = allLines.every((l) => l.lineStatus === "RECEIVED");
-
-  await db
-    .update(purchaseOrder)
-    .set({
-      status: allReceived ? "RECEIVED" : "PARTIALLY_RECEIVED",
-      updatedDttm: new Date(),
-    })
-    .where(eq(purchaseOrder.poId, poId));
-
-  return updatedLine;
 }
 
 // ─── cancelPO ─────────────────────────────────────────────────────
