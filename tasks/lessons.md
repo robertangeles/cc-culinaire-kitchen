@@ -1471,3 +1471,9 @@ builds all tables with CHECKs enforcing. Stop it again when done.
 - **Problem**: Adding "edit a draft order" looked like one route. It broke two existing guards that relied on orders never changing: submit read the total and then flipped the status without a lock (an edit in between slipped a large order under the spend threshold), and "the creator may not approve" said nothing about an editor (an approver could rewrite someone's draft and approve their own content). The commit security review found the second.
 - **Fix**: Submit locks the row for the whole decision; an editor (known from the edit's audit rows) counts as an author when approving, unless only authors can approve.
 - **Rule**: Before adding an edit to something that was create-only, list every later step that reads it (submit, approve, price, email) and ask what each assumed could not change. And compare a replayed create with the request that made the row, never with the row: it may have been edited since.
+
+## 2026-11-23 — A new owner column needs a read fallback for rows the previous server keeps writing
+
+- **Problem**: Migration 0006 backfills `menu_item.organisation_id`, but the previous server version stays live until the new one deploys and keeps inserting rows with the column NULL. A read of "the organisation's items" would hide every item created in that window from everyone, its creator included.
+- **Fix**: Reads match `organisation_id = mine OR (organisation_id IS NULL AND user_id = me)` (`menuAccess.menuReadable`), the new server stamps the column on every insert, and `backfillMenuItemOrganisation.ts` is run once after the deploy to claim the stragglers.
+- **Rule**: When a migration adds a scoping column that the previous server does not write, ship the NULL fallback with the reader and a re-runnable backfill, and say in the PR when to run it.
