@@ -44,7 +44,7 @@ Run commands from the repository root. `eas` is the Expo build service; use it t
 1. First release only: in the Play Console create an internal testing release and upload the first `.aab` by hand (Play does not let the API create a first release). Build it: `pnpm --dir mobile exec eas build --profile production --platform android`; download the `.aab` from the build page.
 2. After that: `pnpm --dir mobile exec eas submit --platform android --profile internal` (uses the latest production build and the `internal` track).
 3. Add testers (Testing, Internal testing, Testers): an email list. They install from the opt-in link.
-4. Before any production release the Play Console also needs: Data safety form (the app holds name, email, and later identity documents from compliance uploads: declare them), content rating, target audience, the privacy policy URL (`https://<your site>/privacy`), and the **account deletion** answer: in-app path "Account tab, Delete my account", web page `https://<your site>/delete-account`.
+4. Before any production release the Play Console also needs: Data safety form (the app holds name, email, and later identity documents from compliance uploads: declare them), content rating, target audience, the privacy policy URL (use the existing web Privacy URL, `https://<your site>/privacy`), and the **account deletion** answer: in-app path "Account tab, Delete my account", web page `https://<your site>/delete-account`.
 5. Production: `eas submit --platform android --profile production` (the draft goes to the Play Console for you to review and roll out).
 
 ## TestFlight and the App Store
@@ -52,15 +52,14 @@ Run commands from the repository root. `eas` is the Expo build service; use it t
 1. In App Store Connect create the app with bundle id `com.culinairekitchen.chef`.
 2. `pnpm --dir mobile exec eas build --profile production --platform ios`, then `pnpm --dir mobile exec eas submit --platform ios` (asks for your Apple login). It appears in TestFlight after Apple's processing.
 3. Add internal testers (your iPhone and iPad) in TestFlight. iPad is supported, so the store listing needs iPad screenshots.
-4. Before submitting for review: privacy nutrition labels, age rating, the privacy policy URL, support URL, and the reviewer notes below, with the demo account.
+4. Before submitting for review: privacy nutrition labels, age rating, the privacy policy URL (the existing web Privacy URL), the terms URL (the existing web Terms URL), support URL, and the reviewer notes below, with the demo account.
 5. Apple rule 3.1.3(b): the day the website starts selling paid plans, an app that unlocks those features must either also sell them in the app or qualify for an exemption. Billing in the app is deferred, so nothing in the app mentions plans. Revisit before the web billing launch.
 
 ## Owner chores that are not code (with the long lead times first)
 
 | Chore | Where | Needed before |
 |---|---|---|
-| Write and publish **Terms of Service** and **Privacy Policy**, and the **delete-account** page | Settings, Site Pages, the **mobile** surface (the web's `/terms`, `/privacy` and `/delete-account` pages read the same rows). They are seeded as empty drafts, so until then the phone shows "This page isn't available in the app yet." | any store submission. Target date: ______ |
-| Fill the store links | Settings, Site Settings: "App Store link" and "Google Play link" (empty until each listing is live; the update screen then shows no link) | the first release that raises the minimum version |
+| Confirm the **delete-account** page is published, and set the store links | Settings, Site Pages (delete-account, mobile surface); Settings, Site Settings ("App Store link", "Google Play link", empty until each listing is live; the update screen then shows no link) | any store submission |
 | Reviewer demo account | below | submission |
 | Google Play account age and type | Play Console | planning the first production date |
 

@@ -12,8 +12,9 @@ const mocks = vi.hoisted(() => ({
   accountApi: { facts: vi.fn(), deleteAccount: vi.fn() },
   legalApi: { load: vi.fn() },
   authApi: { register: vi.fn() },
+  appleProof: { current: undefined as undefined | (() => Promise<unknown>) },
 }));
-vi.mock("../src/runtime/appContext", () => ({ session: mocks.session, accountApi: mocks.accountApi, legalApi: mocks.legalApi, authApi: mocks.authApi, googleEnabled: false, useSession: () => mocks.state.current }));
+vi.mock("../src/runtime/appContext", () => ({ session: mocks.session, accountApi: mocks.accountApi, legalApi: mocks.legalApi, authApi: mocks.authApi, googleEnabled: false, get appleProof() { return mocks.appleProof.current; }, useSession: () => mocks.state.current }));
 
 import SignIn from "../app/sign-in";
 import Account from "../app/(app)/account";
@@ -170,14 +171,16 @@ describe("first run", () => {
 });
 
 describe("delete account", () => {
-  const withPassword = { hasPassword: true, mfaEnabled: false, email: "c@x.test" };
-  const googleOnly = { hasPassword: false, mfaEnabled: false, email: "g@x.test" };
+  const withPassword = { hasPassword: true, hasApple: false, mfaEnabled: false, email: "c@x.test" };
+  const googleOnly = { hasPassword: false, hasApple: false, mfaEnabled: false, email: "g@x.test" };
+  const appleOnly = { hasPassword: false, hasApple: true, mfaEnabled: false, email: "x1y2@privaterelay.appleid.com" };
   const fill = (label: string, value: string) => fireEvent.change(screen.getByLabelText(label), { target: { value } });
 
   beforeEach(() => {
     mocks.accountApi.facts.mockReset();
     mocks.accountApi.deleteAccount.mockReset();
     mocks.session.accountDeleted.mockReset();
+    mocks.appleProof.current = undefined;
     setState({ phase: "ready", user: chef, location: main, locations: [main] });
   });
 
@@ -255,6 +258,68 @@ describe("delete account", () => {
     fill("Your password", "pw");
     fireEvent.click(screen.getByRole("button", { name: "Delete my account" }));
     await screen.findByText(sentence);
+  });
+
+  describe("an account that signed up with Apple (no password)", () => {
+    const credential = { identityToken: "apple-id-token", nonce: "a".repeat(64) };
+
+    it("confirms with a fresh Apple sign-in instead of a typed email (a private-relay address cannot be typed)", async () => {
+      mocks.appleProof.current = vi.fn(async () => credential);
+      mocks.accountApi.facts.mockResolvedValue(appleOnly);
+      mocks.accountApi.deleteAccount.mockResolvedValue(undefined);
+      render(<DeleteAccount />);
+      await screen.findByText(/Apple confirms it's you/);
+      expect(screen.queryByLabelText("Your email")).toBeNull();
+      expect(screen.queryByLabelText("Your password")).toBeNull();
+      fireEvent.click(screen.getByRole("button", { name: "Delete my account" }));
+      await waitFor(() => expect(mocks.session.accountDeleted).toHaveBeenCalled());
+      expect(mocks.accountApi.deleteAccount).toHaveBeenCalledWith({ apple: credential });
+    });
+
+    it("deletes nothing when the person closes Apple's sheet", async () => {
+      mocks.appleProof.current = vi.fn(async () => null);
+      mocks.accountApi.facts.mockResolvedValue(appleOnly);
+      render(<DeleteAccount />);
+      await screen.findByText(/Apple confirms it's you/);
+      fireEvent.click(screen.getByRole("button", { name: "Delete my account" }));
+      await waitFor(() => expect((mocks.appleProof.current as ReturnType<typeof vi.fn>)).toHaveBeenCalled());
+      await screen.findByRole("button", { name: "Delete my account" }); // back to idle, not "Deleting…"
+      expect(mocks.accountApi.deleteAccount).not.toHaveBeenCalled();
+      expect(mocks.session.accountDeleted).not.toHaveBeenCalled();
+    });
+
+    it("says so when Apple's sheet fails, and deletes nothing", async () => {
+      mocks.appleProof.current = vi.fn(async () => { throw new Error("no sheet"); });
+      mocks.accountApi.facts.mockResolvedValue(appleOnly);
+      render(<DeleteAccount />);
+      await screen.findByText(/Apple confirms it's you/);
+      fireEvent.click(screen.getByRole("button", { name: "Delete my account" }));
+      await screen.findByText("Apple sign-in didn't work. Try again.");
+      expect(mocks.accountApi.deleteAccount).not.toHaveBeenCalled();
+    });
+
+    it("names an Apple sign-in the server refused", async () => {
+      mocks.appleProof.current = vi.fn(async () => credential);
+      mocks.accountApi.facts.mockResolvedValue(appleOnly);
+      mocks.accountApi.deleteAccount.mockRejectedValue(new ApiError("forbidden", "x", 403, undefined, "INVALID_CREDENTIALS"));
+      render(<DeleteAccount />);
+      await screen.findByText(/Apple confirms it's you/);
+      fireEvent.click(screen.getByRole("button", { name: "Delete my account" }));
+      await screen.findByText("That Apple sign-in doesn't match this account.");
+    });
+
+    it("falls back to the typed email where this phone has no Apple sheet (the server then also wants a recent sign-in)", async () => {
+      mocks.accountApi.facts.mockResolvedValue(appleOnly);
+      render(<DeleteAccount />);
+      await screen.findByLabelText("Your email");
+    });
+
+    it("still asks a password account for its password, even if it is also linked to Apple", async () => {
+      mocks.appleProof.current = vi.fn(async () => credential);
+      mocks.accountApi.facts.mockResolvedValue({ ...withPassword, hasApple: true });
+      render(<DeleteAccount />);
+      await screen.findByLabelText("Your password");
+    });
   });
 
   it("can be cancelled", async () => {

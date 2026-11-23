@@ -2,7 +2,7 @@ import { useSyncExternalStore } from "react";
 import { fetch as streamingFetch } from "expo/fetch";
 import { createApiClient } from "../api/client";
 import { createAuthApi } from "../api/auth";
-import { createAccountApi } from "../api/account";
+import { createAccountApi, type AppleProof } from "../api/account";
 import { createLegalApi } from "../legal/legalApi";
 import { createSession, type Session } from "../auth/session";
 import { createSecureTokenStore } from "../auth/secureTokenStore";
@@ -21,6 +21,12 @@ export const client = createApiClient({ baseUrl: apiBaseUrl, tokenStore, appVers
 export const authApi = createAuthApi(client, tokenStore);
 export const accountApi = createAccountApi(client, tokenStore);
 export const legalApi = createLegalApi(client);
+/**
+ * Opens Apple's sign-in sheet for a fresh credential, to confirm deleting an Apple-linked account (null when the sheet is closed).
+ * Undefined until the Sign in with Apple change provides the sheet (`appleCredential` in auth/appleSignIn.ts: pass it here as
+ * `appleEnabled ? async () => { const c = await appleCredential(); return c && { identityToken: c.identityToken, nonce: c.nonce }; } : undefined`).
+ */
+export const appleProof: (() => Promise<AppleProof | null>) | undefined = undefined;
 session = createSession({
   api: authApi,
   hasTokens: async () => (await tokenStore.load()) !== null,
