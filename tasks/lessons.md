@@ -1435,3 +1435,9 @@ builds all tables with CHECKs enforcing. Stop it again when done.
 - **Problem**: `scripts/localIntegrationDb.sh start` always uses `~/.cache/ck-it-pg` and `ls ... | sort -V | tail -1`, so with Postgres 16, 18 and 19 installed it picked 19 against a folder another worker had made with 18 ("control file appears to be corrupt"), and a second worker running `db:push` there would race the first. The default `pnpm` (9.15.9) also refuses `--frozen-lockfile` because it reads `overrides` from `package.json`, not `pnpm-workspace.yaml`.
 - **Fix**: Made a private cluster under the session scratch folder (own port, own `initdb` from the version that made nothing else), pushed the schema and seeded it there, and ran every pnpm command as `npx pnpm@10.31.0`.
 - **Rule**: When several workers share a machine, give each its own database folder and port, and do not run `db:push` against a folder you did not create. Use the pnpm in `packageManager`.
+
+## 2026-11-23 — A state machine's auto-advance must name every state and session kind it applies to
+
+- **Problem**: `checkAndAdvanceSession` advanced a stock take to review with `WHERE session_status = 'OPEN'` and no regard for the session type. A flagged recount round therefore never went back to review (the web only offers "Submit for review" on OPEN, so it was stuck everywhere), and an opening inventory jumped to review after its first category, which then refused the next claim and the "Complete opening inventory" call. Both were only an inference in the roadmap until a real-DB test ran the round.
+- **Fix**: The advance covers OPEN and FLAGGED and skips OPENING sessions; submit-for-review also finishes an opening count already stranded in review.
+- **Rule**: When a write moves a parent's status from a child's status, test every parent status and kind that can reach it (here: OPEN, FLAGGED, OPENING), not only the happy one.
