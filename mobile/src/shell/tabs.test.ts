@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { AuthUser } from "../api/auth";
-import { canOpen, hasAnyPermission, moduleTabs, visibleTabs } from "./tabs";
+import { canOpen, hasAnyPermission, MAX_TABS, moduleTabs, tabBar, visibleTabs } from "./tabs";
 
 /** The tabs a permission opens, leaving out those every signed-in person gets. */
 const gatedTabs = (user: AuthUser) => visibleTabs(user).filter((t) => t.anyPermission);
@@ -13,20 +13,20 @@ describe("which tabs a person sees", () => {
   });
 
   it("shows the Usage and Move tabs to someone who holds inventory:count, the key the server asks for on both, and to no one without it", () => {
-    expect(gatedTabs(person({ permissions: ["inventory:count"] })).map((t) => t.route)).toEqual(["(count)", "(usage)", "(moves)"]);
+    expect(gatedTabs(person({ permissions: ["inventory:count"] })).map((t) => t.route)).toEqual(["(usage)", "(count)", "(moves)"]);
     expect(gatedTabs(person({ permissions: ["waste:log", "inventory:manage", "inventory:hq", "inventory:transfer"] })).map((t) => t.route)).toEqual(["(waste)"]);
   });
 
   it("shows the Waste tab to someone who holds waste:log, and only that: waste:read alone is the web's reports, not on the phone", () => {
     expect(gatedTabs(person({ permissions: ["waste:log"] })).map((t) => t.route)).toEqual(["(waste)"]);
     expect(gatedTabs(person({ permissions: ["waste:read"] }))).toEqual([]);
-    expect(gatedTabs(person({ permissions: ["inventory:count", "waste:log"] })).map((t) => t.route)).toEqual(["(count)", "(waste)", "(usage)", "(moves)"]);
+    expect(gatedTabs(person({ permissions: ["inventory:count", "waste:log"] })).map((t) => t.route)).toEqual(["(waste)", "(usage)", "(count)", "(moves)"]);
   });
 
   it("shows the Prep tab to someone who holds prep:read or prep:manage, as the server lets either tick tasks (any role can be given them)", () => {
     expect(gatedTabs(person({ permissions: ["prep:read"] })).map((t) => t.route)).toEqual(["(prep)"]);
     expect(gatedTabs(person({ permissions: ["prep:manage"] })).map((t) => t.route)).toEqual(["(prep)"]);
-    expect(gatedTabs(person({ permissions: ["inventory:count", "waste:log", "prep:read"] })).map((t) => t.route)).toEqual(["(count)", "(waste)", "(prep)", "(usage)", "(moves)"]);
+    expect(gatedTabs(person({ permissions: ["inventory:count", "waste:log", "prep:read"] })).map((t) => t.route)).toEqual(["(prep)", "(waste)", "(usage)", "(count)", "(moves)"]);
     expect(gatedTabs(person({ permissions: ["waste:read", "menu:read"] }))).toEqual([]);
   });
 
@@ -63,5 +63,30 @@ describe("which tabs a person sees", () => {
 
   it("has one entry per route group", () => {
     expect(new Set(moduleTabs.map((t) => t.route)).size).toBe(moduleTabs.length);
+  });
+
+  it("puts the tabs in the order a line cook uses them: prep, waste, usage, count, move", () => {
+    expect(moduleTabs.map((t) => t.title)).toEqual(["Prep", "Waste", "Usage", "Count", "Move"]);
+  });
+});
+
+describe("the tab bar and More", () => {
+  it("keeps every module and Account on the bar when they fit in five buttons", () => {
+    const cook = person({ permissions: ["inventory:count", "waste:log"] });
+    expect(tabBar(cook)).toEqual({ bar: visibleTabs(cook), more: [] });
+    expect(tabBar(person())).toEqual({ bar: [], more: [] });
+  });
+
+  it("shows four modules and More when a person's modules and Account would make more than five buttons", () => {
+    const { bar, more } = tabBar(person({ roles: ["Administrator"] }));
+    expect(bar.map((t) => t.title)).toEqual(["Prep", "Waste", "Usage", "Count"]);
+    expect(more.map((t) => t.title)).toEqual(["Move"]);
+    expect(bar.length + 1).toBe(MAX_TABS); // the fifth button is More, which also holds Account
+  });
+
+  it("never puts a module the person cannot open under More", () => {
+    const cook = person({ permissions: ["inventory:count", "waste:log", "prep:read"] });
+    const { bar, more } = tabBar(cook);
+    expect([...bar, ...more]).toEqual(visibleTabs(cook));
   });
 });
