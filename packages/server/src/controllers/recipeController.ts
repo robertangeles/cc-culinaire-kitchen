@@ -15,10 +15,11 @@
 import type { Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import pino from "pino";
-import { generateRecipe, type RecipeDomain } from "../services/recipeService.js";
+import { generateRecipe, RECIPE_DOMAINS, type RecipeDomain } from "../services/recipeService.js";
 import { buildContextString } from "../services/userContextService.js";
 import {
   getRecipe,
+  forViewer,
   listUserRecipes,
   listGalleryRecipes,
   updateRecipe,
@@ -38,6 +39,14 @@ import { db } from "../db/index.js";
 import { recipe as recipeTable, user as userTable } from "../db/schema.js";
 import { eq, and, isNull, isNotNull, sql, inArray } from "drizzle-orm";
 import { getUserOrgContext } from "../services/orgContextService.js";
+import { requestDeadline, afterDeadline } from "../utils/requestDeadline.js";
+
+/** Generation chains up to three model calls and a hero image. */
+const GENERATE_TIMEOUT_MS = 150_000;
+/** One model call. */
+const REFINE_TIMEOUT_MS = 90_000;
+/** One paid image call. */
+const IMAGE_TIMEOUT_MS = 60_000;
 
 const logger = pino({ name: "recipeController" });
 
@@ -74,17 +83,23 @@ type RecipeRequest = z.infer<typeof RecipeRequestSchema>;
 // Generate recipe handler
 // ---------------------------------------------------------------------------
 
+/**
+ * The handler resolves to whether it produced a recipe: only then does the route charge a session.
+ * A prose fallback, a failure, a time-out and a client that left all cost nothing.
+ */
 export function recipeHandler(domain: RecipeDomain) {
-  return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  return async (req: Request, res: Response, next: NextFunction): Promise<boolean> => {
     const parsed = RecipeRequestSchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({
         error: "Invalid recipe request.",
         details: parsed.error.flatten().fieldErrors,
+        code: "VALIDATION",
       });
-      return;
+      return false;
     }
 
+    const deadline = requestDeadline(res, GENERATE_TIMEOUT_MS);
     const body: RecipeRequest = parsed.data;
     const userId = req.user?.sub ?? 0;
 
@@ -128,16 +143,18 @@ export function recipeHandler(domain: RecipeDomain) {
         kitchenContext,
         userId: userId > 0 ? userId : undefined,
         activeOrgId,
+        signal: deadline.signal,
       });
     } catch (err) {
       logger.error({ domain, err }, "recipeHandler: unexpected error during generation");
-      next(err);
-      return;
+      const toSend = afterDeadline(err, deadline);
+      if (toSend) next(toSend);
+      return false;
     }
 
     if (result.proseResponse) {
       res.status(200).json({ prose: result.proseResponse });
-      return;
+      return false;
     }
 
     res.status(200).json({
@@ -149,6 +166,7 @@ export function recipeHandler(domain: RecipeDomain) {
       // recall didn't inform this generation. Ids + labels only, never bodies.
       brainGrounded: result.memories ?? undefined,
     });
+    return true;
   };
 }
 
@@ -156,7 +174,7 @@ export function recipeHandler(domain: RecipeDomain) {
 // My Recipes
 // ---------------------------------------------------------------------------
 
-/** GET /api/recipes/my — List authenticated user's saved recipes. */
+/** GET /api/recipes/my — List authenticated user's saved recipes, optionally only one `domain`. */
 export async function handleMyRecipes(
   req: Request,
   res: Response,
@@ -165,13 +183,19 @@ export async function handleMyRecipes(
   try {
     const userId = req.user?.sub;
     if (!userId) {
-      res.status(401).json({ error: "Authentication required." });
+      res.status(401).json({ error: "Authentication required.", code: "UNAUTHENTICATED" });
+      return;
+    }
+
+    const domain = z.enum(RECIPE_DOMAINS).optional().safeParse(req.query.domain);
+    if (!domain.success) {
+      res.status(400).json({ error: "Unknown recipe domain.", code: "VALIDATION" });
       return;
     }
 
     const page = Math.max(1, parseInt(req.query.page as string, 10) || 1);
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string, 10) || 20));
-    const result = await listUserRecipes(userId, page, limit);
+    const result = await listUserRecipes(userId, page, limit, domain.data);
     res.json(result);
   } catch (err) {
     next(err);
@@ -215,17 +239,17 @@ export async function handleGetRecipe(
     const id = req.params.id as string;
     const rec = await getRecipe(id, true); // increment view count
     if (!rec) {
-      res.status(404).json({ error: "Recipe not found." });
+      res.status(404).json({ error: "Recipe not found.", code: "NOT_FOUND" });
       return;
     }
 
     // Non-public recipes are only visible to their owner
     if (!rec.isPublicInd && rec.userId !== req.user?.sub) {
-      res.status(404).json({ error: "Recipe not found." });
+      res.status(404).json({ error: "Recipe not found.", code: "NOT_FOUND" });
       return;
     }
 
-    res.json(rec);
+    res.json(forViewer(rec, req.user?.sub));
   } catch (err) {
     next(err);
   }
@@ -235,14 +259,18 @@ export async function handleGetRecipe(
 // Update recipe
 // ---------------------------------------------------------------------------
 
-/** PATCH /api/recipes/:id — Update recipe (toggle public, edit title). */
+/** PATCH /api/recipes/:id — Update recipe (toggle public, edit title). Signed-in owner only; a guest is answered 403. */
 export async function handleUpdateRecipe(
   req: Request,
   res: Response,
   next: NextFunction,
 ): Promise<void> {
   try {
-    const userId = req.user?.sub ?? 0;
+    const userId = req.user?.sub;
+    if (!userId) {
+      res.status(403).json({ error: "Recipes made as a guest cannot be changed. Create an account to manage your recipes.", code: "FORBIDDEN" });
+      return;
+    }
 
     const id = req.params.id as string;
     const { title, isPublicInd } = req.body;
@@ -252,13 +280,13 @@ export async function handleUpdateRecipe(
     if (typeof isPublicInd === "boolean") updates.isPublicInd = isPublicInd;
 
     if (Object.keys(updates).length === 0) {
-      res.status(400).json({ error: "No valid fields to update." });
+      res.status(400).json({ error: "No valid fields to update.", code: "VALIDATION" });
       return;
     }
 
     const updated = await updateRecipe(id, userId, updates);
     if (!updated) {
-      res.status(404).json({ error: "Recipe not found or not owned by you." });
+      res.status(404).json({ error: "Recipe not found or not owned by you.", code: "NOT_FOUND" });
       return;
     }
 
@@ -486,10 +514,11 @@ export async function handleRefineRecipe(
   res: Response,
   next: NextFunction,
 ): Promise<void> {
+  const deadline = requestDeadline(res, REFINE_TIMEOUT_MS);
   try {
     const userId = req.user?.sub;
     if (!userId) {
-      res.status(401).json({ error: "Authentication required." });
+      res.status(401).json({ error: "Authentication required.", code: "UNAUTHENTICATED" });
       return;
     }
 
@@ -498,6 +527,7 @@ export async function handleRefineRecipe(
       res.status(400).json({
         error: "Invalid refinement request.",
         details: parsed.error.flatten().fieldErrors,
+        code: "VALIDATION",
       });
       return;
     }
@@ -505,7 +535,7 @@ export async function handleRefineRecipe(
     const id = req.params.id as string;
     const rec = await getRecipe(id);
     if (!rec || rec.userId !== userId) {
-      res.status(404).json({ error: "Recipe not found or not owned by you." });
+      res.status(404).json({ error: "Recipe not found or not owned by you.", code: "NOT_FOUND" });
       return;
     }
 
@@ -520,6 +550,7 @@ export async function handleRefineRecipe(
       kitchenContext,
       userId,
       activeOrgId,
+      deadline.signal,
     );
 
     res.json({
@@ -527,7 +558,9 @@ export async function handleRefineRecipe(
       changeSummary: result.changeSummary,
     });
   } catch (err) {
-    next(err);
+    logger.error({ err }, "handleRefineRecipe: refinement failed");
+    const toSend = afterDeadline(err, deadline);
+    if (toSend) next(toSend);
   }
 }
 
@@ -608,13 +641,13 @@ export async function handleEmailRecipe(
 
     const parsed = EmailSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: "Valid email address is required." });
+      res.status(400).json({ error: "Valid email address is required.", code: "VALIDATION" });
       return;
     }
 
     const rec = await getRecipe(id);
     if (!rec) {
-      res.status(404).json({ error: "Recipe not found." });
+      res.status(404).json({ error: "Recipe not found.", code: "NOT_FOUND" });
       return;
     }
 
@@ -622,7 +655,7 @@ export async function handleEmailRecipe(
     // as handleGetRecipe. Otherwise anyone with the UUID could exfiltrate the
     // full costed recipe to an arbitrary address.
     if (!rec.isPublicInd && rec.userId !== req.user?.sub) {
-      res.status(404).json({ error: "Recipe not found." });
+      res.status(404).json({ error: "Recipe not found.", code: "NOT_FOUND" });
       return;
     }
 
@@ -671,7 +704,8 @@ export async function handleEmailRecipe(
     );
 
     if (!result.sent) {
-      res.status(500).json({ error: result.error ?? "Failed to send email." });
+      logger.error({ recipeId: id, reason: result.error }, "handleEmailRecipe: email not sent");
+      res.status(502).json({ error: "The email could not be sent. Please try again later.", code: "EMAIL_FAILED" });
       return;
     }
 
@@ -742,6 +776,7 @@ export async function handleRegenerateImage(
   res: Response,
   next: NextFunction,
 ): Promise<void> {
+  const deadline = requestDeadline(res, IMAGE_TIMEOUT_MS);
   try {
     const userId = req.user?.sub;
     const recipeId = req.params.id as string;
@@ -759,11 +794,11 @@ export async function handleRegenerateImage(
       .limit(1);
 
     if (!recipe) {
-      res.status(404).json({ error: "Recipe not found" });
+      res.status(404).json({ error: "Recipe not found", code: "NOT_FOUND" });
       return;
     }
     if (recipe.userId !== userId) {
-      res.status(403).json({ error: "Only the recipe owner can regenerate the image" });
+      res.status(403).json({ error: "Only the recipe owner can regenerate the image", code: "FORBIDDEN" });
       return;
     }
 
@@ -772,7 +807,7 @@ export async function handleRegenerateImage(
     const prompt = (recipeDataObj?.imagePrompt as string) || recipe.imagePrompt;
 
     if (!prompt) {
-      res.status(400).json({ error: "No image prompt available for this recipe" });
+      res.status(400).json({ error: "No image prompt available for this recipe", code: "INVALID_STATE" });
       return;
     }
 
@@ -781,12 +816,14 @@ export async function handleRegenerateImage(
       await db.update(recipeTable).set({ imagePrompt: prompt }).where(eq(recipeTable.recipeId, recipeId));
     }
 
-    const generated = await generateImage(prompt);
+    const generated = await generateImage(prompt, deadline.signal);
     if (!generated?.url) {
-      res.status(500).json({ error: "Image generation failed — try again" });
+      res.status(500).json({ error: "Image generation failed — try again", code: "AI_UNAVAILABLE" });
       return;
     }
 
+    // The client left or time ran out while the image was made: keep the current image.
+    deadline.signal.throwIfAborted();
     await db
       .update(recipeTable)
       .set({ imageUrl: generated.url })
@@ -795,7 +832,9 @@ export async function handleRegenerateImage(
     logger.info({ recipeId, title: recipe.title }, "Single recipe image regenerated");
     res.json({ imageUrl: generated.url });
   } catch (err) {
-    next(err);
+    logger.error({ err }, "handleRegenerateImage: image regeneration failed");
+    const toSend = afterDeadline(err, deadline);
+    if (toSend) next(toSend);
   }
 }
 

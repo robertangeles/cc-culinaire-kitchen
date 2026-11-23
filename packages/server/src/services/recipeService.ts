@@ -36,7 +36,8 @@ const logger = pino({ name: "recipeService" });
 // Domain type
 // ---------------------------------------------------------------------------
 
-export type RecipeDomain = "recipe" | "patisserie" | "spirits";
+export const RECIPE_DOMAINS = ["recipe", "patisserie", "spirits"] as const;
+export type RecipeDomain = (typeof RECIPE_DOMAINS)[number];
 
 // ---------------------------------------------------------------------------
 // Zod output schema (V2 — enhanced)
@@ -195,6 +196,11 @@ export interface RecipeInput {
    * activeOrgService.resolveActiveOrg). Null → user-scope recall only.
    */
   activeOrgId?: number | null;
+  /**
+   * Fires when the client hung up or the time limit passed. Generation then stops and rejects
+   * with the signal's reason, before anything is saved, so nothing is left behind to duplicate.
+   */
+  signal?: AbortSignal;
 }
 
 // ---------------------------------------------------------------------------
@@ -391,10 +397,12 @@ export async function generateRecipe(input: RecipeInput): Promise<{
       schema: RecipeOutputSchema,
       system: systemPrompt,
       prompt: userMessage,
+      abortSignal: input.signal,
     });
     recipe = object;
     logger.info({ domain: input.domain, recipeName: recipe.name }, "generateRecipe: structured generation succeeded");
   } catch (err) {
+    input.signal?.throwIfAborted();
     const msg = err instanceof Error ? err.message : String(err);
 
     // Extract the raw AI text and validation cause from NoObjectGeneratedError
@@ -460,10 +468,12 @@ export async function generateRecipe(input: RecipeInput): Promise<{
           schema: RecipeOutputSchema,
           system: systemPrompt,
           prompt: stricterMessage,
+          abortSignal: input.signal,
         });
         recipe = object;
         logger.info({ domain: input.domain, recipeName: recipe.name }, "generateRecipe: strict retry succeeded");
       } catch (retryErr) {
+        input.signal?.throwIfAborted();
         let retryCause: string | undefined;
         if (retryErr instanceof NoObjectGeneratedError) {
           retryCause = retryErr.cause instanceof Error ? retryErr.cause.message : String(retryErr.cause ?? "");
@@ -483,13 +493,16 @@ export async function generateRecipe(input: RecipeInput): Promise<{
   const settings = await getAllSettings();
   if (settings.image_generation_enabled === "true" && recipe.imagePrompt) {
     try {
-      const generated = await generateImage(recipe.imagePrompt);
+      const generated = await generateImage(recipe.imagePrompt, input.signal);
       imageUrl = generated?.url ?? null;
       logger.info({ imageUrl }, "generateRecipe: hero image generated");
     } catch (imgErr) {
       logger.warn({ err: imgErr }, "generateRecipe: image generation failed — no hero image");
     }
   }
+
+  // Nobody is waiting for this any more: save nothing, so a retry cannot duplicate it.
+  input.signal?.throwIfAborted();
 
   // Persist recipe to database
   let recipeId: string | null = null;

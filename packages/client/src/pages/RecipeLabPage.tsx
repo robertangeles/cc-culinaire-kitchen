@@ -262,14 +262,11 @@ export function RecipeLabPage({ domain }: RecipeLabPageProps) {
               userLinkedin: null,
               restaurantName: null,
             } : null}
-            onTogglePublic={generated.recipeId ? async (pub) => {
+            onTogglePublic={generated.recipeId && user ? async (pub) => {
               try {
-                const gt = localStorage.getItem("culinaire_guest_token");
-                const hdrs: Record<string, string> = { "Content-Type": "application/json" };
-                if (gt) hdrs["X-Guest-Token"] = gt;
                 const patchRes = await fetch(`/api/recipes/${generated.recipeId}`, {
                   method: "PATCH",
-                  headers: hdrs,
+                  headers: { "Content-Type": "application/json" },
                   credentials: "include",
                   body: JSON.stringify({ isPublicInd: pub }),
                 });

@@ -68,10 +68,11 @@ export interface GeneratedImage {
  * admins can switch models without a code change or server restart.
  *
  * @param prompt - The text description of the image to generate.
+ * @param signal - Aborts the provider call (the client left, or the time limit passed).
  * @returns The URL and MIME type of the generated image, or null if unavailable.
  * @throws {Error} If the API call fails.
  */
-export async function generateImage(prompt: string): Promise<GeneratedImage | null> {
+export async function generateImage(prompt: string, signal?: AbortSignal): Promise<GeneratedImage | null> {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
     throw new Error("Image generation is not configured. OPENROUTER_API_KEY is missing.");
@@ -96,6 +97,7 @@ export async function generateImage(prompt: string): Promise<GeneratedImage | nu
         messages: [{ role: "user", content: prompt }],
         modalities: ["text", "image"],
       }),
+      signal,
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

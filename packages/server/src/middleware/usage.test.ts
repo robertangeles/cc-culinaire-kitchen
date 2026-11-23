@@ -64,6 +64,7 @@ describe("checkUsageLimit", () => {
     await checkUsageLimit(req, res, next);
 
     expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ code: "UNAUTHENTICATED" }));
     expect(next).not.toHaveBeenCalled();
   });
 
@@ -119,5 +120,6 @@ describe("checkUsageLimit", () => {
     await checkUsageLimit(req, res, next);
 
     expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ code: "UNAUTHENTICATED" }));
   });
 });

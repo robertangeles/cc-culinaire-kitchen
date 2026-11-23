@@ -8,7 +8,7 @@
 import pino from "pino";
 import { db } from "../db/index.js";
 import { recipe, recipeVersion, user, kitchenProfile } from "../db/schema.js";
-import { eq, and, or, sql, desc, max, isNull } from "drizzle-orm";
+import { eq, and, or, sql, desc, max } from "drizzle-orm";
 
 const logger = pino({ name: "recipePersistence" });
 
@@ -204,10 +204,21 @@ export async function getRecipe(idOrSlug: string, incrementView = false) {
 }
 
 /**
+ * A recipe as the person asking may see it: the owner gets every column, anyone else (a public
+ * recipe's reader) gets it without the owner's id and the kitchen profile it was generated from.
+ */
+export function forViewer<T extends { userId: number | null; kitchenContext: string | null }>(rec: T, viewerId?: number) {
+  if (viewerId !== undefined && rec.userId === viewerId) return rec;
+  const { userId: _userId, kitchenContext: _kitchenContext, ...shared } = rec;
+  return shared;
+}
+
+/**
  * List recipes for a specific user (My Recipes).
  */
-export async function listUserRecipes(userId: number, page = 1, limit = 20) {
+export async function listUserRecipes(userId: number, page = 1, limit = 20, domain?: string) {
   const offset = (page - 1) * limit;
+  const mine = and(eq(recipe.userId, userId), eq(recipe.archivedInd, false), domain ? eq(recipe.domain, domain) : undefined);
 
   const recipes = await db
     .select({
@@ -224,7 +235,7 @@ export async function listUserRecipes(userId: number, page = 1, limit = 20) {
       ratingCount: sql<number>`COALESCE((SELECT COUNT(*)::int FROM recipe_rating WHERE recipe_id = ${recipe.recipeId}), 0)`.as("rating_count"),
     })
     .from(recipe)
-    .where(and(eq(recipe.userId, userId), eq(recipe.archivedInd, false)))
+    .where(mine)
     .orderBy(desc(recipe.createdDttm))
     .limit(limit)
     .offset(offset);
@@ -232,7 +243,7 @@ export async function listUserRecipes(userId: number, page = 1, limit = 20) {
   const [{ count }] = await db
     .select({ count: sql<number>`count(*)::int` })
     .from(recipe)
-    .where(and(eq(recipe.userId, userId), eq(recipe.archivedInd, false)));
+    .where(mine);
 
   return { recipes, total: count, page, limit };
 }
@@ -310,26 +321,12 @@ export async function updateRecipe(
     editorialContent?: string;
   },
 ) {
-  // First try matching by userId (owner). If recipe was created by this user,
-  // allow the update. If userId doesn't match (e.g. recipe created as guest
-  // before login), fall back to matching by recipeId only for isPublicInd toggle.
-  let result = await db
+  // A guest-created recipe has no owner (user_id NULL) and nothing ties it to the guest, so no one can change it.
+  const result = await db
     .update(recipe)
     .set({ ...updates, updatedDttm: new Date() })
     .where(and(eq(recipe.recipeId, recipeId), eq(recipe.userId, userId)))
     .returning({ recipeId: recipe.recipeId });
-
-  // Fallback: if only toggling isPublicInd and owner check failed,
-  // allow update for guest-created recipes (userId IS NULL) by recipeId alone.
-  // Scoping to NULL userId prevents cross-user exploitation of recipes owned by
-  // authenticated users (those always match the first update via userId).
-  if (result.length === 0 && updates.isPublicInd !== undefined && Object.keys(updates).length === 1) {
-    result = await db
-      .update(recipe)
-      .set({ isPublicInd: updates.isPublicInd, updatedDttm: new Date() })
-      .where(and(eq(recipe.recipeId, recipeId), isNull(recipe.userId)))
-      .returning({ recipeId: recipe.recipeId });
-  }
 
   return result.length > 0;
 }

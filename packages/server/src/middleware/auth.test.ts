@@ -260,6 +260,7 @@ describe("authenticate (regression — required-auth path unchanged)", () => {
     const next = vi.fn();
     authenticate(req, res, next);
     expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ code: "UNAUTHENTICATED" }));
     expect(next).not.toHaveBeenCalled();
   });
 

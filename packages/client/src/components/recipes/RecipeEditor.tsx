@@ -58,6 +58,7 @@ export function RecipeEditor({
   const [showAdditional, setShowAdditional] = useState(false);
   const [saving, setSaving] = useState(false);
   const [regeneratingImage, setRegeneratingImage] = useState(false);
+  const [imageError, setImageError] = useState<string | null>(null);
   const [imageRegenerated, setImageRegenerated] = useState(false);
 
   /* ---------- field helpers ---------- */
@@ -436,7 +437,8 @@ export function RecipeEditor({
       </section>
 
       {/* ── Sticky Actions Bar ── */}
-      <div className="sticky bottom-0 bg-dark-50 border-t border-dark-200 -mx-6 px-6 py-4 flex items-center justify-between gap-3 rounded-b-2xl">
+      <div className="sticky bottom-0 bg-dark-50 border-t border-dark-200 -mx-6 px-6 py-4 flex flex-wrap items-center justify-between gap-3 rounded-b-2xl">
+        {imageError && <p role="alert" className="basis-full text-sm text-red-400">{imageError}</p>}
         <button
           onClick={onCancel}
           className="px-5 py-3 text-sm text-dark-600 hover:text-white transition-colors rounded-xl"
@@ -447,18 +449,23 @@ export function RecipeEditor({
           <button
             onClick={async () => {
               setRegeneratingImage(true);
+              setImageError(null);
               try {
                 const res = await fetch(`/api/recipes/${_recipeId}/regenerate-image`, {
                   method: "POST",
                   credentials: "include",
                 });
+                const data = await res.json().catch(() => ({}));
                 if (res.ok) {
-                  const data = await res.json();
                   if (data.imageUrl) onImageUpdate?.(data.imageUrl);
                   setImageRegenerated(true);
                   setTimeout(() => setImageRegenerated(false), 3000);
+                } else {
+                  setImageError(typeof data.error === "string" ? data.error : "The image could not be made. Please try again.");
                 }
-              } catch { /* silent */ } finally {
+              } catch {
+                setImageError("The image could not be made. Please try again.");
+              } finally {
                 setRegeneratingImage(false);
               }
             }}

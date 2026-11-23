@@ -45,7 +45,7 @@ export function MenuItemDetail({ item, onClose, onAddIngredient, onRemoveIngredi
   const navigate = useNavigate();
   const [ingredients, setIngredients] = useState<MenuIngredient[]>([]);
   const [loadingIng, setLoadingIng] = useState(true);
-  const { recommendations, loading: recLoading, fetchRecommendations, generateReplacement } = useMenuRecommendations();
+  const { recommendations, loading: recLoading, error: recError, fetchRecommendations, generateReplacement } = useMenuRecommendations();
 
   // Ingredient form
   const [ingName, setIngName] = useState("");
@@ -206,6 +206,12 @@ export function MenuItemDetail({ item, onClose, onAddIngredient, onRemoveIngredi
             {recLoading && (
               <div className="flex items-center gap-2 py-4 text-dark-500 text-sm">
                 <Loader2 className="size-4 animate-spin" /> Analysing this item...
+              </div>
+            )}
+
+            {recError && !recLoading && (
+              <div role="alert" className="px-4 py-3 bg-red-500/10 border border-red-500/20 rounded-xl text-sm text-red-400">
+                {recError}
               </div>
             )}
 

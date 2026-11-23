@@ -13,18 +13,15 @@ import { pino } from "pino";
 import { streamChat } from "../services/aiService.js";
 import { generateImage } from "../services/imageService.js";
 import { resolveActiveOrg } from "../services/activeOrgService.js";
+import { ChatRequestSchema } from "@culinaire/shared";
+import { requestDeadline, afterDeadline } from "../utils/requestDeadline.js";
+
+/** A chat answer may use up to 15 tool steps; past this the model call is cut off. */
+const CHAT_TIMEOUT_MS = 180_000;
+/** One paid image call. */
+const IMAGE_TIMEOUT_MS = 60_000;
 
 const log = pino({ transport: { target: "pino-pretty" } });
-
-const MessagesSchema = z.object({
-  messages: z.array(
-    z.object({
-      role: z.enum(["user", "assistant"]),
-      content: z.string(),
-    })
-  ),
-  webSearch: z.boolean().optional(),
-});
 
 /**
  * Handles an incoming chat request by validating the message array and
@@ -37,22 +34,24 @@ const MessagesSchema = z.object({
  *              fails, a 400 JSON response is sent instead.
  * @param next - Express next function, called with the error when the
  *               stream encounters an unexpected failure.
- * @returns A promise that resolves once the response has been sent or the
- *          error has been forwarded to the error-handling middleware.
+ * @returns A promise that resolves, once the response has been sent or the error
+ *          forwarded to the error-handling middleware, to whether an answer
+ *          reached the client (the caller charges a session only then).
  */
 export async function handleChatStream(
   req: Request,
   res: Response,
   next: NextFunction
-): Promise<void> {
-  const parsed = MessagesSchema.safeParse(req.body);
+): Promise<boolean> {
+  const parsed = ChatRequestSchema.safeParse(req.body);
 
   if (!parsed.success) {
     log.warn({ error: parsed.error.flatten() }, "Chat validation failed");
-    res.status(400).json({ error: parsed.error.flatten() });
-    return;
+    res.status(400).json({ error: "Invalid chat request.", code: "VALIDATION", details: parsed.error.flatten() });
+    return false;
   }
 
+  const deadline = requestDeadline(res, CHAT_TIMEOUT_MS);
   try {
     log.info({ messageCount: parsed.data.messages.length, webSearch: parsed.data.webSearch }, "Chat request");
     // Resolve the active org for org-shared Brain recall (spec T11) here —
@@ -61,14 +60,17 @@ export async function handleChatStream(
     // membership recheck; any failure degrades to user-scope recall only.
     const userId = req.user?.sub ?? 0;
     const activeOrgId = userId ? await resolveActiveOrg(userId).catch(() => null) : null;
-    await streamChat(parsed.data.messages, res, {
+    return await streamChat(parsed.data.messages, res, {
       webSearch: parsed.data.webSearch,
       userId,
       activeOrgId,
+      abortSignal: deadline.signal,
     });
   } catch (err) {
     log.error(err, "Chat stream error");
-    next(err);
+    const toSend = afterDeadline(err, deadline);
+    if (toSend) next(toSend);
+    return false;
   }
 }
 
@@ -78,35 +80,36 @@ const ImagePromptSchema = z.object({
 
 /**
  * Handles an image generation request. Validates the prompt and returns
- * a JSON response with the generated image URL.
+ * a JSON response with the generated image URL. Resolves to whether an
+ * image was sent (the caller charges a session only then).
  */
 export async function handleImageGeneration(
   req: Request,
   res: Response,
   next: NextFunction
-): Promise<void> {
+): Promise<boolean> {
   const parsed = ImagePromptSchema.safeParse(req.body);
 
   if (!parsed.success) {
     log.warn({ error: parsed.error.flatten() }, "Image prompt validation failed");
-    res.status(400).json({ error: parsed.error.flatten() });
-    return;
+    res.status(400).json({ error: "Invalid image request.", code: "VALIDATION", details: parsed.error.flatten() });
+    return false;
   }
 
+  const deadline = requestDeadline(res, IMAGE_TIMEOUT_MS);
   try {
     log.info({ promptLength: parsed.data.prompt.length }, "Image generation request");
-    const result = await generateImage(parsed.data.prompt);
+    const result = await generateImage(parsed.data.prompt, deadline.signal);
     if (!result) {
-      res.status(503).json({ error: "Image generation is not available." });
-      return;
+      res.status(503).json({ error: "Image generation is not available.", code: "AI_UNAVAILABLE" });
+      return false;
     }
     res.json({ imageUrl: result.url, mimeType: result.mimeType });
+    return true;
   } catch (err) {
-    if (err instanceof Error && err.message.includes("not configured")) {
-      res.status(503).json({ error: err.message });
-      return;
-    }
     log.error(err, "Image generation error");
-    next(err);
+    const toSend = afterDeadline(err, deadline);
+    if (toSend) next(toSend);
+    return false;
   }
 }

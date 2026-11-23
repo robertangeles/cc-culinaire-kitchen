@@ -25,7 +25,7 @@ export const chatRateLimit = rateLimit({
     if (req.guestToken) return `guest-${req.guestToken}`;
     return req.ip ?? "unknown";
   },
-  message: { error: "Too many chat requests — please wait a moment before trying again." },
+  message: { error: "Too many chat requests — please wait a moment before trying again.", code: "RATE_LIMITED" },
 });
 
 /**
@@ -304,3 +304,58 @@ export const refreshTokenRateLimit = rateLimit({
   },
   message: { error: "Too many attempts — please wait a minute before trying again." },
 });
+
+/** Whoever is asking: the signed-in user, else the guest token, else the address. A guest's token is theirs alone, so a shared NAT does not share a bucket. */
+const senderKey = (req: Request) => (req.user?.sub ? `user-${req.user.sub}` : req.guestToken ? `guest-${req.guestToken}` : `ip-${hashIp(req)}`);
+
+/** A bucket per route for work that spends money or sends mail, counted per person over a window of minutes. */
+function senderBucket(
+  name: string,
+  windowMinutes: number,
+  limit: number,
+  what: string,
+  keyOf: (req: Request) => string | null = senderKey,
+) {
+  return rateLimit({
+    windowMs: windowMinutes * 60 * 1000,
+    limit,
+    standardHeaders: "draft-8",
+    legacyHeaders: false,
+    skip: (req: Request) => keyOf(req) === null,
+    keyGenerator: (req: Request) => `${name}-${keyOf(req)}`,
+    message: { error: `Too many ${what} — please wait a few minutes before trying again.`, code: "RATE_LIMITED" },
+  });
+}
+
+/** Recipe generation chains up to three model calls and an image; refine is one call; an image is one paid call. */
+export const recipeGenerateRateLimit = senderBucket("recipe-generate", 10, 10, "recipes generated");
+export const recipeRefineRateLimit = senderBucket("recipe-refine", 10, 20, "recipe refinements");
+export const recipeImageRateLimit = senderBucket("recipe-image", 10, 10, "image requests");
+
+/**
+ * Emailing a recipe: anyone, guests included, may send to any address, so three caps. Each sender gets a few an hour,
+ * and each recipient address a few an hour from everyone together, which is what stops this being used to flood one inbox.
+ * Guest tokens are free to mint, so all the guests behind one address also share a cap; signed-in users are not counted in it.
+ */
+export const recipeEmailRateLimit = senderBucket("recipe-email", 60, 10, "recipe emails");
+export const recipeEmailGuestAddressRateLimit = senderBucket("recipe-email-guest-ip", 60, 10, "recipe emails", (req) => (req.user ? null : hashIp(req)));
+export const recipeEmailRecipientRateLimit = senderBucket("recipe-email-to", 60, 3, "emails to that address", (req) => recipientKey(req.body?.to));
+
+/**
+ * One key for one inbox: lower case, no `+tag`, and for Gmail no dots and one domain name. Null when it is not an address,
+ * which skips the limiter and lets the handler answer 400. Other providers that ignore dots or add their own aliases are
+ * not covered; the per-sender cap above still bounds those.
+ */
+export function recipientKey(to: unknown): string | null {
+  if (typeof to !== "string") return null;
+  const address = to.trim().toLowerCase();
+  const at = address.lastIndexOf("@");
+  let local = address.slice(0, at).split("+")[0];
+  let domain = address.slice(at + 1);
+  if (at < 1 || !local || !domain) return null;
+  if (domain === "gmail.com" || domain === "googlemail.com") {
+    local = local.replaceAll(".", "");
+    domain = "gmail.com";
+  }
+  return createHash("sha256").update(`${local}@${domain}`).digest("hex").slice(0, 32);
+}

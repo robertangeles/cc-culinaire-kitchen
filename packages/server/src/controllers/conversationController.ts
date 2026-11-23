@@ -61,7 +61,8 @@ const SaveMessagesSchema = z.object({
  *
  * Request body: `{ id: string, title: string }`
  *
- * @returns 201 `{ success: true, conversationId }` on success.
+ * @returns 201 `{ success: true, conversationId }` on success, 200 with the same body when the
+ *          caller had already created it (a retry), 409 CONFLICT when someone else holds the id.
  */
 export async function handleCreateConversation(
   req: Request,
@@ -71,21 +72,22 @@ export async function handleCreateConversation(
   try {
     const parsed = CreateSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.flatten() });
+      res.status(400).json({ error: "Invalid conversation.", code: "VALIDATION", details: parsed.error.flatten() });
       return;
     }
 
+    let created: boolean;
     if (req.user) {
-      await createConversation(parsed.data.id, parsed.data.title, req.user.sub);
+      created = await createConversation(parsed.data.id, parsed.data.title, req.user.sub);
     } else if (req.guestToken) {
-      await createGuestConversation(parsed.data.id, parsed.data.title, req.guestToken);
+      created = await createGuestConversation(parsed.data.id, parsed.data.title, req.guestToken);
     } else {
-      res.status(401).json({ error: "Authentication required." });
+      res.status(401).json({ error: "Authentication required.", code: "UNAUTHENTICATED" });
       return;
     }
 
-    log.info({ id: parsed.data.id }, "Conversation created");
-    res.status(201).json({ success: true, conversationId: parsed.data.id });
+    log.info({ id: parsed.data.id, created }, "Conversation created");
+    res.status(created ? 201 : 200).json({ success: true, conversationId: parsed.data.id });
   } catch (err) {
     log.error(err, "Failed to create conversation");
     next(err);
@@ -210,7 +212,7 @@ export async function handleSaveMessages(
     const id = req.params.id as string;
     const parsed = SaveMessagesSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.flatten() });
+      res.status(400).json({ error: "Invalid messages.", code: "VALIDATION", details: parsed.error.flatten() });
       return;
     }
 
@@ -220,13 +222,13 @@ export async function handleSaveMessages(
     } else if (req.guestToken) {
       owner = { guestToken: req.guestToken };
     } else {
-      res.status(401).json({ error: "Authentication required." });
+      res.status(401).json({ error: "Authentication required.", code: "UNAUTHENTICATED" });
       return;
     }
 
     const saved = await saveMessages(id, owner, parsed.data.messages);
     if (!saved) {
-      res.status(403).json({ error: "You do not have access to this conversation." });
+      res.status(403).json({ error: "You do not have access to this conversation.", code: "FORBIDDEN" });
       return;
     }
 

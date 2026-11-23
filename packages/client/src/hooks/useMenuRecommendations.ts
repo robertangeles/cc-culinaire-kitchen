@@ -18,19 +18,28 @@ export interface MenuRecommendation {
   menuDescription?: string;
 }
 
+const TIMEOUT_MESSAGE = "That took too long. Please try again.";
+const UNAVAILABLE_MESSAGE = "Recommendations are unavailable right now. Please try again shortly.";
+
 export function useMenuRecommendations() {
   const [recommendations, setRecommendations] = useState<MenuRecommendation | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchRecommendations = useCallback(async (menuItemId: string) => {
     setLoading(true);
     setRecommendations(null);
+    setError(null);
     try {
       const res = await fetch(`${API}/api/menu/items/${menuItemId}/recommendations`, { credentials: "include" });
-      if (!res.ok) return;
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { code?: string };
+        setError(res.status === 504 || body.code === "AI_TIMEOUT" ? TIMEOUT_MESSAGE : UNAVAILABLE_MESSAGE);
+        return;
+      }
       setRecommendations(await res.json());
     } catch {
-      // silent
+      setError(UNAVAILABLE_MESSAGE);
     } finally {
       setLoading(false);
     }
@@ -45,5 +54,5 @@ export function useMenuRecommendations() {
     return res.json();
   }, []);
 
-  return { recommendations, loading, fetchRecommendations, generateReplacement };
+  return { recommendations, loading, error, fetchRecommendations, generateReplacement };
 }

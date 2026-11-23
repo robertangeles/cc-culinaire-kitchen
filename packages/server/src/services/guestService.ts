@@ -71,13 +71,10 @@ export async function hasGuestQuota(token: string): Promise<boolean> {
 
 /** Increment the sessions_used counter for a guest. */
 export async function incrementGuestSessions(token: string) {
-  const session = await getGuestSession(token);
-  if (!session) return;
-
   await db
     .update(guestSession)
     .set({
-      sessionsUsed: session.sessionsUsed + 1,
+      sessionsUsed: sql`${guestSession.sessionsUsed} + 1`,
       lastActiveDttm: new Date(),
     })
     .where(eq(guestSession.sessionToken, token));

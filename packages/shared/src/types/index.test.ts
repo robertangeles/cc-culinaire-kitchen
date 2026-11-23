@@ -55,41 +55,35 @@ describe("MessageSchema", () => {
 });
 
 describe("ChatRequestSchema", () => {
-  it("validates with message only", () => {
-    const result = ChatRequestSchema.parse({ message: "Hello" });
-    expect(result.message).toBe("Hello");
-    expect(result.conversationId).toBeUndefined();
+  it("validates the history the client re-sends each turn", () => {
+    const body = { messages: [{ role: "user", content: "Hello" }, { role: "assistant", content: "Hi" }, { role: "user", content: "Sear?" }] };
+    expect(ChatRequestSchema.parse(body)).toEqual(body);
   });
 
-  it("validates with message and conversationId", () => {
-    const result = ChatRequestSchema.parse({
-      message: "Hello",
-      conversationId: "conv-1",
-    });
-    expect(result.conversationId).toBe("conv-1");
+  it("takes the optional web search switch", () => {
+    expect(ChatRequestSchema.parse({ messages: [], webSearch: true }).webSearch).toBe(true);
   });
 
-  it("rejects empty message", () => {
-    expect(() => ChatRequestSchema.parse({ message: "" })).toThrow();
+  it("rejects the old single-message shape", () => {
+    expect(() => ChatRequestSchema.parse({ message: "Hello" })).toThrow();
+  });
+
+  it("rejects a role the server does not accept", () => {
+    expect(() => ChatRequestSchema.parse({ messages: [{ role: "system", content: "x" }] })).toThrow();
   });
 });
 
 describe("ChatResponseSchema", () => {
-  it("validates a correct response", () => {
-    const data = {
-      response: "Sear them hot",
-      conversationId: "conv-1",
-      sources: ["techniques/searing.md"],
-    };
+  it("validates the answer a client holds once it has read the whole stream", () => {
+    const data = { text: "Sear them hot", brainGrounded: [{ memoryId: "m1", title: "Miso Cod", sourceType: "recipe" }] };
     expect(ChatResponseSchema.parse(data)).toEqual(data);
   });
 
-  it("rejects missing sources array", () => {
-    expect(() =>
-      ChatResponseSchema.parse({
-        response: "test",
-        conversationId: "conv-1",
-      }),
-    ).toThrow();
+  it("needs only the text", () => {
+    expect(ChatResponseSchema.parse({ text: "Sear them hot" })).toEqual({ text: "Sear them hot" });
+  });
+
+  it("rejects a response without text", () => {
+    expect(() => ChatResponseSchema.parse({ response: "old shape", sources: [] })).toThrow();
   });
 });

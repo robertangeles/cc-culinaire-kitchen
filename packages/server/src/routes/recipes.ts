@@ -4,15 +4,21 @@
  * API routes for recipe generation, management, and gallery.
  *
  * Generation routes mirror the chat route's usage tracking:
- *   authenticateOrGuest → usageCheck → generate → sessionDecrement
+ *   authenticateOrGuest → rate limit → usageCheck → generate → charge a session if a recipe was made
  */
 
 import { Router, type Request, type Response, type NextFunction } from "express";
 import { authenticateOrGuest } from "../middleware/guestAuth.js";
 import { authenticate, requireRole } from "../middleware/auth.js";
-import { checkUsageLimit, decrementFreeSessions } from "../middleware/usage.js";
-import { checkGuestUsageLimit } from "../middleware/guestUsage.js";
-import { incrementGuestSessions } from "../services/guestService.js";
+import { checkSessionQuota, chargeSession } from "../middleware/usage.js";
+import {
+  recipeGenerateRateLimit,
+  recipeRefineRateLimit,
+  recipeImageRateLimit,
+  recipeEmailRateLimit,
+  recipeEmailGuestAddressRateLimit,
+  recipeEmailRecipientRateLimit,
+} from "../middleware/rateLimiter.js";
 import {
   recipeHandler,
   handleGallery,
@@ -43,49 +49,27 @@ import {
 export const recipesRouter = Router();
 
 /**
- * Wraps a recipe generation handler with usage check + session decrement.
- * Same pattern as the chat route:
+ * Wraps a recipe generation handler with the usage check and the charge:
  * 1. authenticateOrGuest (already applied)
  * 2. Check usage limits (guest or authenticated)
  * 3. Run the handler
- * 4. Decrement session on success
+ * 4. Charge a session only if the handler says it produced a recipe
  */
 function withUsageTracking(domain: "recipe" | "patisserie" | "spirits") {
   const handler = recipeHandler(domain);
 
   return [
-    // Usage check middleware (guest vs authenticated)
-    (req: Request, res: Response, next: NextFunction) => {
-      if (req.user) {
-        checkUsageLimit(req, res, next);
-      } else {
-        checkGuestUsageLimit(req, res, next);
-      }
-    },
-    // Handler + decrement
+    checkSessionQuota,
     async (req: Request, res: Response, next: NextFunction) => {
-      let succeeded = false;
-      try {
-        await handler(req, res, next);
-        // If response was sent successfully (not an error), mark as succeeded
-        succeeded = res.statusCode >= 200 && res.statusCode < 300;
-      } finally {
-        if (succeeded) {
-          if (req.user) {
-            await decrementFreeSessions(req.user.sub).catch(() => {});
-          } else if (req.guestToken) {
-            await incrementGuestSessions(req.guestToken).catch(() => {});
-          }
-        }
-      }
+      if (await handler(req, res, next)) await chargeSession(req);
     },
   ];
 }
 
 // Generation endpoints with usage tracking
-recipesRouter.post("/generate", authenticateOrGuest, ...withUsageTracking("recipe"));
-recipesRouter.post("/patisserie", authenticateOrGuest, ...withUsageTracking("patisserie"));
-recipesRouter.post("/spirits", authenticateOrGuest, ...withUsageTracking("spirits"));
+recipesRouter.post("/generate", authenticateOrGuest, recipeGenerateRateLimit, ...withUsageTracking("recipe"));
+recipesRouter.post("/patisserie", authenticateOrGuest, recipeGenerateRateLimit, ...withUsageTracking("patisserie"));
+recipesRouter.post("/spirits", authenticateOrGuest, recipeGenerateRateLimit, ...withUsageTracking("spirits"));
 
 // Bulk regenerate images (admin only)
 // Admin-only maintenance jobs — these mutate images/settings across ALL tenants.
@@ -106,17 +90,17 @@ recipesRouter.get("/:id/versions", authenticate, handleGetVersions);
 recipesRouter.get("/:id/versions/:versionId", authenticate, handleGetVersion);
 recipesRouter.post("/:id/versions/:versionId/revert", authenticate, handleRevertVersion);
 recipesRouter.patch("/:id/content", authenticate, handleUpdateRecipeContent);
-recipesRouter.post("/:id/refine", authenticate, handleRefineRecipe);
+recipesRouter.post("/:id/refine", authenticate, recipeRefineRateLimit, handleRefineRecipe);
 recipesRouter.post("/:id/accept-refinement", authenticate, handleAcceptRefinement);
-recipesRouter.post("/:id/regenerate-image", authenticate, handleRegenerateImage);
+recipesRouter.post("/:id/regenerate-image", authenticate, recipeImageRateLimit, handleRegenerateImage);
 
 // Single recipe (public recipes visible to all, private to owner only)
 recipesRouter.get("/:id", authenticateOrGuest, handleGetRecipe);
 
-// Update (auth or guest), Archive + Delete (auth required)
+// Update (a guest is let through only to be answered 403 FORBIDDEN), Archive + Delete (auth required)
 recipesRouter.patch("/:id", authenticateOrGuest, handleUpdateRecipe);
 recipesRouter.post("/:id/archive", authenticate, handleArchiveRecipe);
-recipesRouter.post("/:id/email", authenticateOrGuest, handleEmailRecipe);
+recipesRouter.post("/:id/email", authenticateOrGuest, recipeEmailRateLimit, recipeEmailGuestAddressRateLimit, recipeEmailRecipientRateLimit, handleEmailRecipe);
 recipesRouter.delete("/:id", authenticate, handleDeleteRecipe);
 
 // Ratings & Reviews

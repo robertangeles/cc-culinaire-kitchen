@@ -5,6 +5,22 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Changed (server hardening for chat, recipes and the model-backed screens, before the phone shows them)
+
+No migration, nothing to seed or backfill. Every answer below keeps `error` as the sentence the web shows and adds `code` (shared `ApiErrorBody`), so older installed apps keep working.
+
+- **New error codes:** `FREE_SESSIONS_EXHAUSTED`, `GUEST_QUOTA_EXHAUSTED` (403), `AI_UNAVAILABLE` (503), `AI_TIMEOUT` (504), `EMAIL_FAILED` (502). The 401s from `authenticate` and `authenticateOrGuest` now carry `UNAUTHENTICATED`, and the error answers of the chat, conversation and recipe routes carry `VALIDATION`, `NOT_FOUND`, `FORBIDDEN`, `INVALID_STATE` or `RATE_LIMITED`. Validation 400s on chat and conversations now send `error` as a sentence and the field errors under `details` (before, `error` was the field-error object).
+- **Time limits.** Chat stops after 3 minutes, recipe generation after 150 s, refine after 90 s, an image after 60 s, a menu recommendation or waste reuse answer after 45 s: `504 AI_TIMEOUT` (chat already streaming gets a stream error part instead). A model failure on these routes is `503 AI_UNAVAILABLE` and never repeats the provider's message. A client that hangs up stops the model call, and a recipe or image still in the making is not saved.
+- **Rate limits per person** (user, else guest token, else address), `429 RATE_LIMITED`: 10 recipe generations, 20 refinements and 10 image regenerations per 10 minutes. Recipe emails: 10 an hour per sender, 10 an hour for all guests behind one address together, and 3 an hour to any one inbox (`+tag` and Gmail dot variants count as the same inbox).
+- **Sessions are charged only for what was delivered.** Chat charges once answer text reached the client (also if the client then hangs up); recipe generation charges only when a recipe was made. A refusal, failure, time-out or prose fallback costs nothing. Both counters are now single atomic updates.
+- **`GET /api/recipes/:id`** leaves `userId` and `kitchenContext` out unless the caller owns the recipe.
+- **`PATCH /api/recipes/:id`** answers `403 FORBIDDEN` to guests; a guest-created recipe can no longer be changed by anyone. The web Recipe Lab no longer shows guests the public/private toggle.
+- **`GET /api/recipes/my`** honours `?domain=recipe|patisserie|spirits` (`400 VALIDATION` for anything else).
+- **`POST /api/recipes/:id/email`** escapes all recipe text in the HTML body, and a send failure is `502 EMAIL_FAILED` with a fixed sentence (was 500 with the mail provider's message).
+- **Conversations.** A repeated `POST /api/conversations` with the same id by the same owner answers 200 (201 the first time); an id held by someone else is `409 CONFLICT`. A repeated save of messages skips the ids already stored. Neither answers 500 any more.
+- **`GET /api/menu/items/:id/recommendations`** answers `503`/`504` when the model fails instead of 200 with stand-in text (`404 NOT_FOUND` for an unknown item); **`POST /api/waste/reuse`** answers the same codes. Both now call the model through `aiService`. The web menu panel, the recipe card and the recipe editor show the error.
+- **Shared schemas.** `ChatRequestSchema` is `{ messages, webSearch? }` and `ChatResponseSchema` is `{ text, brainGrounded? }`, matching what `POST /api/chat` really takes and streams (contract in `CLAUDE.md`, API section).
+
 ### Added (waste: the ingredient list for a cook who logs waste but cannot count stock)
 
 - **`GET /api/waste/ingredients`.** A read-only list of the caller's organisation's active ingredients, each `{ ingredientId, ingredientName, baseUnit }` (the kitchen unit) and nothing else: no cost, stock, supplier, category or allergen. Same organisation as `GET /api/inventory/ingredients` (ingredients belong to the organisation, not to a location); removed ingredients are left out; sorted by name. Open to `waste:log` and to `inventory:count` (and Administrators), so a cook who may log waste but not count stock can now search the whole list in the phone's picker. No new permission, no migration, nothing to seed or backfill. Someone in no organisation gets `403` with `code: "FORBIDDEN"`.

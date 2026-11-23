@@ -134,6 +134,7 @@ export function RecipeCard({ recipe, domain, recipeId, slug, imageUrl, onToggleP
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
   const [editMode, setEditMode] = useState(false);
   const [regeneratingImage, setRegeneratingImage] = useState(false);
+  const [imageError, setImageError] = useState<string | null>(null);
   const [showRefine, setShowRefine] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
 
@@ -349,13 +350,18 @@ export function RecipeCard({ recipe, domain, recipeId, slug, imageUrl, onToggleP
             <button
               onClick={async () => {
                 setRegeneratingImage(true);
+                setImageError(null);
                 try {
                   const res = await fetch(`/api/recipes/${recipeId}/regenerate-image`, { method: "POST", credentials: "include" });
+                  const data = await res.json().catch(() => ({}));
                   if (res.ok) {
-                    const data = await res.json();
                     if (data.imageUrl) onImageUpdate?.(data.imageUrl);
+                  } else {
+                    setImageError(typeof data.error === "string" ? data.error : "The image could not be made. Please try again.");
                   }
-                } catch { /* silent */ } finally {
+                } catch {
+                  setImageError("The image could not be made. Please try again.");
+                } finally {
                   setRegeneratingImage(false);
                 }
               }}
@@ -367,6 +373,7 @@ export function RecipeCard({ recipe, domain, recipeId, slug, imageUrl, onToggleP
             </button>
           </div>
         )}
+        {imageError && <p role="alert" className="mt-3 text-sm text-red-400">{imageError}</p>}
       </div>
 
       {/* Two-column layout */}

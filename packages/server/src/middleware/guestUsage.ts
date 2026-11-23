@@ -14,7 +14,7 @@ import { hasGuestQuota } from "../services/guestService.js";
  */
 export async function checkGuestUsageLimit(req: Request, res: Response, next: NextFunction) {
   if (!req.guestToken) {
-    res.status(401).json({ error: "Guest authentication required." });
+    res.status(401).json({ error: "Guest authentication required.", code: "UNAUTHENTICATED" });
     return;
   }
 
@@ -23,6 +23,7 @@ export async function checkGuestUsageLimit(req: Request, res: Response, next: Ne
     if (!hasQuota) {
       res.status(403).json({
         error: "You have used all 10 free guest sessions. Please register to continue.",
+        code: "GUEST_QUOTA_EXHAUSTED",
         registrationRequired: true,
       });
       return;
