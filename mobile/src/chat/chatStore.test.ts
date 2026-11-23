@@ -303,6 +303,34 @@ describe("chat store", () => {
     expect(stored.map((m) => [m.messageSequence, m.messageBody])).toEqual([[0, "One"], [1, "A"], [2, "Two"], [3, "Whole"]]);
   });
 
+  it("a queued save that runs while the next answer streams leaves that answer out, and the finished answer is what is stored", async () => {
+    const { store, api, answers, saved } = setup();
+    api.save.mockRejectedValueOnce(new ApiError("network"));
+    let done = store.send("One");
+    await flush();
+    answers[0].push({ type: "text", text: "A" });
+    answers[0].push("end");
+    await done;
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((r) => (release = r));
+    api.save.mockImplementationOnce(async (id, messages) => {
+      await gate;
+      saved.push({ id, messages });
+    });
+    void store.saveNow();
+    void store.saveNow();
+    done = store.send("Two");
+    await flush();
+    answers[1].push({ type: "text", text: "Pat it" });
+    await flush();
+    release();
+    await flush();
+    answers[1].push({ type: "text", text: " dry." });
+    answers[1].push("end");
+    await done;
+    expect(saved.flatMap((s) => s.messages).map((m) => [m.messageSequence, m.messageBody])).toEqual([[0, "One"], [1, "A"], [2, "Two"], [3, "Pat it dry."]]);
+  });
+
   it("dispose stops an answer in flight", async () => {
     const { store, signals } = setup();
     void store.send("One");

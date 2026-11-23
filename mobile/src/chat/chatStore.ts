@@ -74,8 +74,8 @@ export function createChatStore({ api, newId }: { api: ChatApi; newId: () => str
 
   async function save(): Promise<void> {
     const messages = snapshot.messages.filter((m) => m.text.trim() !== "");
-    // The half answer of a failed turn is the one Try again drops: it is not stored.
-    if (snapshot.failure && messages[messages.length - 1]?.role === "assistant") messages.pop();
+    // The half answer of a failed turn is the one Try again drops, and an answer still streaming is saved when it ends: neither is stored now.
+    if ((snapshot.failure || snapshot.phase === "streaming") && messages[messages.length - 1]?.role === "assistant") messages.pop();
     if (!messages.some((m) => m.role === "assistant")) return;
     try {
       let id = snapshot.conversationId;
