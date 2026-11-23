@@ -8,7 +8,7 @@
 import type { NextFunction, Request, Response } from "express";
 import { z } from "zod";
 import pino from "pino";
-import { AuthError, generateTokens, getSignInTime, type MfaChangeProof } from "../services/authService.js";
+import { AuthError, createMfaSessionToken, generateTokens, getSignInTime, type MfaChangeProof } from "../services/authService.js";
 import { linkAppleToUser, signInWithApple } from "../services/appleSignInService.js";
 import { setAuthCookies } from "./authController.js";
 import { presentedRefreshToken } from "../utils/presentedRefreshToken.js";
@@ -50,7 +50,8 @@ function handleFailure(err: unknown, res: Response, next: NextFunction, what: st
  * POST /api/auth/apple/idtoken
  *
  * Request: { identityToken, nonce, authorizationCode?, givenName?, familyName? }
- * Response: { user, tokens: { accessToken, refreshToken } } — the same shape as `/login` and `/google/idtoken`.
+ * Response: { user, tokens: { accessToken, refreshToken } } — the same shape as `/login` and `/google/idtoken`,
+ * or `{ requiresMfa, mfaSessionToken }` for an account with MFA on (finished at `/mfa/verify`, as after a password).
  */
 export async function handleAppleIdToken(req: Request, res: Response, next: NextFunction) {
   try {
@@ -61,6 +62,12 @@ export async function handleAppleIdToken(req: Request, res: Response, next: Next
     }
 
     const authUser = await signInWithApple(parsed.data);
+    // Apple proves who the person is, not that they hold the authenticator: an account with MFA on still needs its code,
+    // exactly as after a password (the phone and `/mfa/verify` already handle this answer).
+    if (authUser.mfaEnabled) {
+      res.json({ requiresMfa: true, mfaSessionToken: createMfaSessionToken(authUser.userId) });
+      return;
+    }
     const tokens = await generateTokens(authUser);
     setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
 

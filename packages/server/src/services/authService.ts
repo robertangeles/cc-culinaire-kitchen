@@ -240,16 +240,16 @@ export async function loginUser(
 
   // If MFA is enabled, return a temporary session token instead of full auth
   if (row.mfaEnabledInd) {
-    const mfaSessionToken = jwt.sign(
-      { sub: row.userId, purpose: "mfa" },
-      mfaSessionSecret(),
-      { expiresIn: "5m" },
-    );
-    return { requiresMfa: true, mfaSessionToken };
+    return { requiresMfa: true, mfaSessionToken: createMfaSessionToken(row.userId) };
   }
 
   const authUser = await getUserWithRolesAndPermissions(row.userId);
   return { requiresMfa: false, user: authUser };
+}
+
+/** The 5-minute "first factor passed, code still to come" token that `/mfa/verify` exchanges for a session. */
+export function createMfaSessionToken(userId: number): string {
+  return jwt.sign({ sub: userId, purpose: "mfa" }, mfaSessionSecret(), { expiresIn: "5m" });
 }
 
 /**

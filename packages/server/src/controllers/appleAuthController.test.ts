@@ -8,7 +8,7 @@ vi.mock("../services/authService.js", () => {
       this.name = "AuthError";
     }
   }
-  return { AuthError, generateTokens: vi.fn(), getSignInTime: vi.fn() };
+  return { AuthError, generateTokens: vi.fn(), getSignInTime: vi.fn(), createMfaSessionToken: vi.fn(() => "MFA-SESSION") };
 });
 vi.mock("../services/appleSignInService.js", () => ({ signInWithApple: vi.fn(), linkAppleToUser: vi.fn() }));
 vi.mock("./authController.js", () => ({ setAuthCookies: vi.fn() }));
@@ -32,6 +32,15 @@ describe("handleAppleIdToken", () => {
     await handleAppleIdToken(req({ ...body, givenName: "Ada" }), r, vi.fn());
     expect(signInWithApple).toHaveBeenCalledWith({ ...body, givenName: "Ada" });
     expect(r.json).toHaveBeenCalledWith({ user: authUser, tokens: { accessToken: "A", refreshToken: "R" } });
+  });
+
+  it("for an account with MFA on, answers the MFA step and issues no tokens or cookies", async () => {
+    vi.mocked(signInWithApple).mockResolvedValue({ userId: 7, mfaEnabled: true } as never);
+    const r = res();
+    await handleAppleIdToken(req(body), r, vi.fn());
+    expect(r.json).toHaveBeenCalledWith({ requiresMfa: true, mfaSessionToken: "MFA-SESSION" });
+    expect(generateTokens).not.toHaveBeenCalled();
+    expect(r.cookie).not.toHaveBeenCalled();
   });
 
   it.each([
