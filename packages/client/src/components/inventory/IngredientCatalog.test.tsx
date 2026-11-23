@@ -14,11 +14,12 @@ vi.mock("../../context/LocationContext.js", () => ({
 }));
 let mockIngredients: Ingredient[] = [];
 let mockLocItems: object[] = [];
+let mockLevels: object[] = [];
 vi.mock("../../hooks/useInventory.js", () => ({
   useIngredients: () => ({ ingredients: mockIngredients, isLoading: false }),
   useSuppliers: () => ({ suppliers: [] }),
   useLocationIngredients: () => ({ items: mockLocItems }),
-  useIngredientStock: () => ({ levels: [] }),
+  useIngredientStock: () => ({ levels: mockLevels }),
   useIngredientSuppliers: () => ({ suppliers: [], assign: vi.fn(), updateLink: vi.fn(), removeLink: vi.fn() }),
 }));
 vi.mock("./TransactionHistory.js", () => ({ TransactionHistory: () => null }));
@@ -63,6 +64,23 @@ describe("EditIngredientModal, unit cost on save", () => {
     const sent = await save(flour({ unitCost: "2.5000" }), () => fireEvent.change(screen.getByPlaceholderText("0.00"), { target: { value: "" } }));
 
     expect(sent.unitCost).toBeNull();
+  });
+});
+
+describe("EditIngredientModal, stock across locations", () => {
+  const open = (levels: object[]) => {
+    mockLevels = levels;
+    render(<EditIngredientModal ingredient={flour()} onSave={vi.fn()} onDelete={vi.fn()} onCheckUsage={vi.fn(async () => [])} onClose={vi.fn()} />);
+  };
+
+  it("shows a dash, not \"Not counted yet\", where the server left the quantity out (no inventory:cost)", () => {
+    open([{ storeLocationId: "loc-1", locationName: "Main", parLevel: "10", reorderQty: null, lastCountedDttm: "2026-11-20T00:00:00.000Z" }]);
+    expect(screen.getByText("Main").nextElementSibling?.textContent).toBe("—");
+  });
+
+  it("still says \"Not counted yet\" for a location with no stock row", () => {
+    open([{ storeLocationId: "loc-1", locationName: "Main", currentQty: null, parLevel: "10", reorderQty: null, lastCountedDttm: null, unitCost: null }]);
+    expect(screen.getByText("Not counted yet")).toBeTruthy();
   });
 });
 

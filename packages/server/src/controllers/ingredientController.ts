@@ -415,7 +415,7 @@ export async function handleGetIngredientStockLevels(
     if (!ing) { res.status(404).json({ error: "Ingredient not found" }); return; }
 
     const rows = await getIngredientStockAcrossLocations(req.params.id as string, orgId);
-    res.json(rows);
+    res.json(rows.map((r) => forViewer(req.user!, r)));
   } catch (err) {
     next(err);
   }

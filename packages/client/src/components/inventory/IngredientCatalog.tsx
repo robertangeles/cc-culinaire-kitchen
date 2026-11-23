@@ -695,9 +695,11 @@ export function EditIngredientModal({
                     <div key={l.storeLocationId} className="flex items-center justify-between px-3 py-1.5 text-xs">
                       <span className="text-white">{l.locationName}</span>
                       <span className={`tabular-nums ${isLow ? "text-red-400" : hasStock ? "text-[#E5E5E5]" : "text-dark-500"}`}>
-                        {hasStock
-                          ? `${qty % 1 === 0 ? qty.toString() : qty.toFixed(1)} ${unit}`
-                          : "Not counted yet"}
+                        {l.currentQty === undefined
+                          ? "—"
+                          : hasStock
+                            ? `${qty % 1 === 0 ? qty.toString() : qty.toFixed(1)} ${unit}`
+                            : "Not counted yet"}
                         {hasStock && parQty != null && (
                           <span className="text-dark-500 ml-1.5">(par: {parQty % 1 === 0 ? parQty.toString() : parQty.toFixed(1)})</span>
                         )}
