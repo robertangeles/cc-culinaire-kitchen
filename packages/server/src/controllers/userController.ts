@@ -69,7 +69,7 @@ export async function handleUpdateProfile(req: Request, res: Response, next: Nex
   try {
     const parsed = UpdateProfileSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.flatten() });
+      res.status(400).json({ error: parsed.error.flatten(), code: "VALIDATION" });
       return;
     }
     await updateUserProfile(req.user!.sub, parsed.data);
@@ -91,7 +91,8 @@ export async function handleChangePassword(req: Request, res: Response, next: Ne
   try {
     const parsed = ChangePasswordSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.flatten() });
+      const weak = parsed.error.issues.some((i) => i.path[0] === "newPassword" && i.code === "too_small");
+      res.status(400).json({ error: parsed.error.flatten(), code: weak ? "WEAK_PASSWORD" : "VALIDATION" });
       return;
     }
     await changePassword(
@@ -103,7 +104,7 @@ export async function handleChangePassword(req: Request, res: Response, next: Ne
     res.json({ success: true });
   } catch (err: unknown) {
     if (err instanceof PasswordChangeError) {
-      res.status(400).json({ error: err.message });
+      res.status(400).json({ error: err.message, code: err.code });
       return;
     }
     next(err);
@@ -156,7 +157,7 @@ export async function handleDeleteOwnAccount(req: Request, res: Response, next: 
 export async function handleAvatarUpload(req: Request, res: Response, next: NextFunction) {
   try {
     if (!req.file) {
-      res.status(400).json({ error: "No file provided" });
+      res.status(400).json({ error: "No file provided", code: "VALIDATION" });
       return;
     }
 
@@ -171,6 +172,11 @@ export async function handleAvatarUpload(req: Request, res: Response, next: Next
 
     res.json({ photoPath: filePath });
   } catch (err) {
+    // Cloudinary refuses a file it cannot read as an image with a plain object carrying http_code 400.
+    if ((err as { http_code?: unknown } | null)?.http_code === 400) {
+      res.status(400).json({ error: "That file could not be read as an image.", code: "UNSUPPORTED_FILE_TYPE" });
+      return;
+    }
     next(err);
   }
 }

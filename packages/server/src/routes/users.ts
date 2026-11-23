@@ -8,7 +8,7 @@ import { Router } from "express";
 import multer from "multer";
 import { authenticate, requireRole } from "../middleware/auth.js";
 import { authRateLimit } from "../middleware/rateLimiter.js";
-import { upload } from "../middleware/upload.js";
+import { upload, UnsupportedFileTypeError } from "../middleware/upload.js";
 import {
   handleGetProfile,
   handleUpdateProfile,
@@ -61,14 +61,18 @@ router.post("/profile/avatar", (req, res, next) => {
   upload.single("file")(req, res, (err: unknown) => {
     if (err instanceof multer.MulterError) {
       if (err.code === "LIMIT_FILE_SIZE") {
-        res.status(400).json({ error: "File too large. Maximum size is 2 MB." });
+        res.status(400).json({ error: "File too large. Maximum size is 2 MB.", code: "FILE_TOO_LARGE" });
         return;
       }
-      res.status(400).json({ error: err.message });
+      res.status(400).json({ error: err.message, code: "VALIDATION" });
+      return;
+    }
+    if (err instanceof UnsupportedFileTypeError) {
+      res.status(400).json({ error: err.message, code: "UNSUPPORTED_FILE_TYPE" });
       return;
     }
     if (err instanceof Error) {
-      res.status(400).json({ error: err.message });
+      res.status(400).json({ error: err.message, code: "VALIDATION" });
       return;
     }
     next();

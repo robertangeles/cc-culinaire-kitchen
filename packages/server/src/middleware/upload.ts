@@ -35,6 +35,9 @@ const ALLOWED_MIMES = [
   "image/webp",
 ];
 
+/** The image filter's refusal, so a route can tell a wrong file type from a malformed upload. */
+export class UnsupportedFileTypeError extends Error {}
+
 /**
  * Pre-configured multer instance for image uploads.
  * Uses memoryStorage so buffer can be sent to Cloudinary.
@@ -46,7 +49,7 @@ export const upload = multer({
     if (ALLOWED_MIMES.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error("Only image files (png, jpg, svg, ico, webp) are allowed"));
+      cb(new UnsupportedFileTypeError("Only image files (png, jpg, svg, ico, webp) are allowed"));
     }
   },
 });
