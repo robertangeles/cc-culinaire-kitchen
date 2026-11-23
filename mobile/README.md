@@ -97,7 +97,12 @@ time-out), `FREE_SESSIONS_EXHAUSTED`, signed out, no signal. A `3:` part partway
 conversation is saved after each finished or stopped answer (`POST /api/conversations` with an id made on the phone, then the messages
 with their ids; both are safe to repeat).
 
-**Streaming on a real phone (the spike).** Not run on the moto g86 yet.
+**Streaming on a real phone (the spike), 2026-11-24.** Chat chunks arrive one at a time through `expo/fetch` on the moto g86
+(development build, Android, against a local server whose model is `device/fakeModel.mjs`, no paid calls). In the device walk
+(`device/chatRecipes.device.test.ts`, all 10 steps passed) the screen was read while an answer streamed one line every 2.5 s: its
+lines on screen went 1, 2, 3, 4, 5, 6, 7, 8 with Stop showing until the end; a second answer stopped after 3 lines kept those 3. Not yet run on an iPhone or an iPad (no Mac). How to read the phone's
+screen from a test: uiautomator only dumps an idle screen, so text that changes faster than about once a second cannot be sampled
+(the walk slows the fake model down; the Recipe Lab's clock steps every 5 s for the same reason and for screen readers).
 
 Differences from the web chat (`ChatContainer.tsx`, `ConversationList.tsx`), found while comparing:
 
