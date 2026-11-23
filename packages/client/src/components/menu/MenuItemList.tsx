@@ -88,7 +88,7 @@ interface MenuItemListProps {
   classificationFilter?: string;
   onAdd: () => void;
   onEdit: (item: MenuItem) => void;
-  onDelete: (id: string) => void;
+  onDelete: (id: string) => void | Promise<void>;
   onSelect: (item: MenuItem) => void;
 }
 
@@ -109,6 +109,7 @@ export function MenuItemList({
   const [categoryFilter, setCategoryFilter] = useState("");
   const [classFilter, setClassFilter] = useState(initialClassFilter ?? "");
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [error, setError] = useState("");
 
   // Build a waste impact lookup map
   const wasteMap = useMemo(() => {
@@ -170,8 +171,11 @@ export function MenuItemList({
 
   async function handleDelete(id: string) {
     setDeletingId(id);
+    setError("");
     try {
       await onDelete(id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete item");
     } finally {
       setDeletingId(null);
     }
@@ -290,6 +294,12 @@ export function MenuItemList({
           );
         })}
       </div>
+
+      {error && (
+        <div role="alert" className="px-4 py-3 bg-red-500/10 border border-red-500/20 rounded-xl text-sm text-red-400">
+          {error}
+        </div>
+      )}
 
       {/* Table */}
       <div className="bg-dark-50 rounded-2xl border border-dark-200 overflow-hidden">
@@ -417,6 +427,7 @@ export function MenuItemList({
                             <Sparkles className="size-4" />
                           </button>
                         )}
+                        {item.canManage !== false && (<>
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -442,6 +453,7 @@ export function MenuItemList({
                             <Trash2 className="size-4" />
                           )}
                         </button>
+                        </>)}
                       </div>
                     </td>
                   </tr>

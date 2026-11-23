@@ -1447,3 +1447,15 @@ builds all tables with CHECKs enforcing. Stop it again when done.
 - **Problem**: A replayed swap claim answered 404, not the 409 the plan assumed: claiming deletes the offerer's assignment, and `shift_swap_request.from_assignment_id` cascades, so the "Claimed" row never exists. Separately, roster ranges parsed `"2026-06-08"` as UTC midnight, dropping a 6 am Monday Melbourne shift (Sunday 20:00 UTC) from a Monday publish, and two old tests had been written to that UTC reading.
 - **Fix**: The claim's audit rows (metadata `swapRequestId`, actor = claimer) tell a replay from a lost race; a bare `YYYY-MM-DD` is resolved on the venue's wall clock (`venueDayRange`, `venueBoundSql`); the two tests now build their shift on the venue's day.
 - **Rule**: Before coding to a state a plan names, check the row can exist (look for cascades). Any date-only filter on shifts takes the venue's IANA zone, never UTC, and is tested on both daylight-saving days (23 and 25 hours).
+
+## 2026-11-23 — A new owner column needs a read fallback for rows the previous server keeps writing
+
+- **Problem**: Migration 0006 backfills `menu_item.organisation_id`, but the previous server version stays live until the new one deploys and keeps inserting rows with the column NULL. A read of "the organisation's items" would hide every item created in that window from everyone, its creator included.
+- **Fix**: Reads match `organisation_id = mine OR (organisation_id IS NULL AND user_id = me)` (`menuAccess.menuReadable`), the new server stamps the column on every insert, and `backfillMenuItemOrganisation.ts` is run once after the deploy to claim the stragglers.
+- **Rule**: When a migration adds a scoping column that the previous server does not write, ship the NULL fallback with the reader and a re-runnable backfill, and say in the PR when to run it.
+
+## 2026-11-23 — Sharing a record across the organisation changes every default that came from its creator
+
+- **Problem**: Menu items became organisation-wide, but a sale with no location still used the item's location (the creator's at creation time), so a colleague at another site deducted stock from the wrong kitchen; a name lookup that was unique per creator became ambiguous and silently took the first match; waste for a shared dish was still summed from the viewer's own rows; and a creator who left the organisation kept reading and editing its items.
+- **Fix**: A sale's location is the request's, else the seller's selected one, else the item's only if the seller may use it, else a 400. Ambiguous names are reported and not imported. Waste is the organisation's at the locations the viewer may use. Reads and edits follow current membership (`menuAccess`), and items with no organisation are claimed when their creator creates or joins one.
+- **Rule**: When a table moves from per-user to per-organisation, list every place that read "the creator's" location, name uniqueness, rows or rights through it, and decide each one for a caller who is not the creator.

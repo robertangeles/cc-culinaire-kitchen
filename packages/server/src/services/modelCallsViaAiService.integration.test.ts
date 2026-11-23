@@ -33,11 +33,13 @@ const RUN = process.env.TENANT_IT === "1";
 const tag = `mc_${Date.now().toString(36)}`;
 let uid: number;
 let itemId: string;
+/** These users belong to no organisation, so each reads only their own menu items. */
+const scope = (userId: number) => ({ userId, organisationId: null, isOrgAdmin: false });
 
 describe.skipIf(!RUN)("model calls go through aiService (real DB)", () => {
   beforeAll(async () => {
     [{ id: uid }] = await db.insert(user).values({ userName: tag, userEmail: `${tag}@it.test` }).returning({ id: user.userId });
-    const item = await createMenuItem(uid, { name: `${tag} risotto`, category: "mains", sellingPrice: "24" } as Parameters<typeof createMenuItem>[1]);
+    const item = await createMenuItem(scope(uid), { name: `${tag} risotto`, category: "mains", sellingPrice: "24" } as Parameters<typeof createMenuItem>[1]);
     itemId = item.menuItemId;
     await db.insert(wasteLog).values({ userId: uid, ingredientName: `${tag} rice`, quantity: "2", unit: "kg", reason: "spoilage" });
   });
@@ -52,17 +54,17 @@ describe.skipIf(!RUN)("model calls go through aiService (real DB)", () => {
       const wanted = { summary: "Protect it.", actions: [{ type: "protect", description: "Keep it." }] };
       generateStructured.mockResolvedValueOnce(wanted);
 
-      expect(await getItemRecommendations(itemId, uid)).toEqual(wanted);
+      expect(await getItemRecommendations(itemId, scope(uid))).toEqual(wanted);
       expect(generateStructured.mock.calls[0][0].prompt).toContain(`${tag} risotto`);
     });
 
     it("when the model fails the caller gets the 503, not a canned recommendation", async () => {
       generateStructured.mockRejectedValueOnce(new AppError(503, "AI_UNAVAILABLE", "down"));
-      await expect(getItemRecommendations(itemId, uid)).rejects.toMatchObject({ statusCode: 503, code: "AI_UNAVAILABLE" });
+      await expect(getItemRecommendations(itemId, scope(uid))).rejects.toMatchObject({ statusCode: 503, code: "AI_UNAVAILABLE" });
     });
 
     it("an item that is not yours is a 404 NOT_FOUND", async () => {
-      await expect(getItemRecommendations(itemId, uid + 1_000_000)).rejects.toMatchObject({ statusCode: 404, code: "NOT_FOUND" });
+      await expect(getItemRecommendations(itemId, scope(uid + 1_000_000))).rejects.toMatchObject({ statusCode: 404, code: "NOT_FOUND" });
     });
   });
 

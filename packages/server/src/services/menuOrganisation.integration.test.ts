@@ -1,0 +1,840 @@
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { config } from "dotenv";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { applyEnvPrefix } from "../utils/envShim.js";
+
+config({ path: resolve(dirname(fileURLToPath(import.meta.url)), "../../../../.env") });
+applyEnvPrefix();
+import { createHash } from "node:crypto";
+import { and, eq, inArray, isNull, or } from "drizzle-orm";
+import type { Request, Response } from "express";
+import { db } from "../db/index.js";
+import {
+  organisation,
+  user,
+  userOrganisation,
+  userRole,
+  userStoreLocation,
+  storeLocation,
+  ingredient,
+  locationIngredient,
+  stockLevel,
+  consumptionLog,
+  menuItem,
+  sale,
+  wasteLog,
+} from "../db/schema.js";
+import {
+  handleCreateMenuItem,
+  handleListMenuItems,
+  handleUpdateMenuItem,
+  handleDeleteMenuItem,
+  handleAddIngredient,
+  handleListIngredients,
+  handleGetAnalysis,
+  handleRecalculate,
+  handleRecordSale,
+  handleRecordConsumableSale,
+  handleVoidSale,
+  handleListSales,
+  handleGetWasteImpact,
+  handleListYieldVariance,
+  handleSalesCsvCommit,
+} from "../controllers/menuIntelligenceController.js";
+import { previewSalesCsv, commitSalesCsv } from "./saleService.js";
+import { importCsvSalesData } from "./menuIntelligenceService.js";
+import { resolveMenuScope } from "./menuAccess.js";
+import { createOrganisation, joinOrganisation } from "./organisationService.js";
+import { errorHandler } from "../middleware/errorHandler.js";
+import type { TokenPayload } from "./authService.js";
+
+/**
+ * Wave 7 menu server work, real DB: menu items belong to the organisation (every member reads, the creator or an
+ * organisation admin edits), reading the analysis writes nothing, and a sale is atomic, idempotent by key (body or
+ * header), conflicts on a different payload, respects the stock zone and stays inside the caller's locations.
+ * Stock comes off where the seller is working, a void restores the zone the sale recorded, an ambiguous name is not
+ * imported, waste is the organisation's, and items made before a person had an organisation join it with them.
+ *
+ * Gated on TENANT_IT=1. Self-cleaning.
+ */
+const RUN = process.env.TENANT_IT === "1";
+
+const fx = {
+  tag: `w7m_${Date.now().toString(36)}`,
+  chef: 0, // creator, member of org A, assigned to a1 and working there
+  cook: 0, // colleague, member of org A, assigned to a1
+  cookB: 0, // colleague, member of org A, assigned to a2
+  leaver: 0, // joins org A, creates an item, is removed
+  solo: 0, // no organisation until they create one
+  joiner: 0, // no organisation until they join A
+  admin: 0, // org admin of A (sees every location of A)
+  loner: 0, // org A member assigned to no location
+  outsider: 0, // org B admin
+  orgA: 0,
+  orgB: 0,
+  a1: "",
+  a2: "",
+  b1: "",
+  flourId: "",
+  cokeId: "",
+  flourB: "",
+  itemId: "", // chef's dish in A: 100 g flour per serving
+  itemBId: "", // org B's dish
+  madeOrgs: [] as number[], // organisations a test created
+};
+
+const principal = (sub: number): TokenPayload => ({ sub, roles: [], permissions: ["menu:read", "menu:manage"] });
+
+type Handler = (req: Request, res: Response, next: (e?: unknown) => void) => Promise<void>;
+
+/** Runs a controller the way Express does, errors through the real errorHandler. */
+function call(handler: Handler, sub: number, req: { body?: unknown; params?: Record<string, string>; query?: Record<string, string>; headers?: Record<string, string> } = {}) {
+  return new Promise<{ status: number; body: any }>((resolveCall, reject) => {
+    let status = 200;
+    const res = {
+      headersSent: false,
+      status(code: number) {
+        status = code;
+        return this;
+      },
+      json(body: unknown) {
+        resolveCall({ status, body });
+        return this;
+      },
+    } as unknown as Response;
+    const next = (e?: unknown) => errorHandler(e as Error, {} as Request, res, () => {});
+    const headers = req.headers ?? {};
+    const full = {
+      user: principal(sub),
+      body: {},
+      query: {},
+      params: {},
+      ...req,
+      header: (name: string) => headers[name],
+    };
+    handler(full as unknown as Request, res, next).catch(reject);
+  });
+}
+
+const stockOf = async (loc: string, ingredientId: string, zone: "BOH" | "FOH") => {
+  const [row] = await db
+    .select({ q: stockLevel.currentQty })
+    .from(stockLevel)
+    .where(and(eq(stockLevel.storeLocationId, loc), eq(stockLevel.ingredientId, ingredientId), eq(stockLevel.zone, zone)));
+  return row ? Number(row.q) : null;
+};
+
+describe.skipIf(!RUN)("Wave 7 menu server work (real DB)", () => {
+  beforeAll(async () => {
+    const mkUser = async (n: string) => {
+      const [{ id }] = await db.insert(user).values({ userName: `W7 ${n}`, userEmail: `${fx.tag}-${n}@it.test` }).returning({ id: user.userId });
+      return id;
+    };
+    fx.chef = await mkUser("chef");
+    fx.cook = await mkUser("cook");
+    fx.cookB = await mkUser("cookB");
+    fx.leaver = await mkUser("leaver");
+    fx.solo = await mkUser("solo");
+    fx.joiner = await mkUser("joiner");
+    fx.admin = await mkUser("admin");
+    fx.loner = await mkUser("loner");
+    fx.outsider = await mkUser("outsider");
+    for (const key of ["orgA", "orgB"] as const) {
+      [{ id: fx[key] }] = await db
+        .insert(organisation)
+        .values({ organisationName: `${fx.tag}-${key}`, joinKey: `${fx.tag}-${key}`.slice(0, 25), createdBy: fx.admin })
+        .returning({ id: organisation.organisationId });
+    }
+    await db.insert(userOrganisation).values([
+      { userId: fx.chef, organisationId: fx.orgA, role: "member" },
+      { userId: fx.cook, organisationId: fx.orgA, role: "member" },
+      { userId: fx.cookB, organisationId: fx.orgA, role: "member" },
+      { userId: fx.leaver, organisationId: fx.orgA, role: "member" },
+      { userId: fx.admin, organisationId: fx.orgA, role: "admin" },
+      { userId: fx.loner, organisationId: fx.orgA, role: "member" },
+      { userId: fx.outsider, organisationId: fx.orgB, role: "admin" },
+    ]);
+    for (const [key, orgId] of [["a1", fx.orgA], ["a2", fx.orgA], ["b1", fx.orgB]] as const) {
+      [{ id: fx[key] }] = await db
+        .insert(storeLocation)
+        .values({ organisationId: orgId, locationName: `${fx.tag}-${key}`, classification: "branch", storeKey: `${fx.tag}-${key}`.slice(0, 25), createdBy: fx.admin })
+        .returning({ id: storeLocation.storeLocationId });
+    }
+    await db.insert(userStoreLocation).values([
+      { userId: fx.chef, storeLocationId: fx.a1 },
+      { userId: fx.cook, storeLocationId: fx.a1 },
+      { userId: fx.cookB, storeLocationId: fx.a2 },
+    ]);
+    // The chef works at a1, so the dish below is created there.
+    await db.update(user).set({ selectedLocationId: fx.a1 }).where(eq(user.userId, fx.chef));
+
+    const mkIng = async (orgId: number, loc: string, name: string, itemType: string, base: string) => {
+      const [row] = await db
+        .insert(ingredient)
+        .values({ organisationId: orgId, ingredientName: `${fx.tag}-${name}`, ingredientCategory: "other", itemType, baseUnit: base, preferredUnitCost: "0.0100" })
+        .returning({ id: ingredient.ingredientId });
+      await db.insert(locationIngredient).values({ ingredientId: row.id, storeLocationId: loc, weightedAverageCost: "0.0100", activeInd: true });
+      return row.id;
+    };
+    fx.flourId = await mkIng(fx.orgA, fx.a1, "flour", "KITCHEN_INGREDIENT", "g");
+    fx.cokeId = await mkIng(fx.orgA, fx.a1, "coke", "FOH_CONSUMABLE", "each");
+    fx.flourB = await mkIng(fx.orgB, fx.b1, "flourB", "KITCHEN_INGREDIENT", "g");
+    // Kitchen stock lives in BOH, the shelf in FOH. The coke also has 99 in BOH: a sale must not touch it.
+    await db.insert(stockLevel).values([
+      { storeLocationId: fx.a1, ingredientId: fx.flourId, zone: "BOH", currentQty: "5000" },
+      { storeLocationId: fx.a1, ingredientId: fx.flourId, zone: "FOH", currentQty: "7" },
+      { storeLocationId: fx.a1, ingredientId: fx.cokeId, zone: "BOH", currentQty: "99" },
+      { storeLocationId: fx.a1, ingredientId: fx.cokeId, zone: "FOH", currentQty: "10" },
+      { storeLocationId: fx.b1, ingredientId: fx.flourB, zone: "BOH", currentQty: "100" },
+    ]);
+
+    const created = await call(handleCreateMenuItem, fx.chef, { body: { name: `${fx.tag} dish`, category: "mains", sellingPrice: "12.00", servings: 1 } });
+    fx.itemId = created.body.menuItemId;
+    await call(handleAddIngredient, fx.chef, {
+      params: { id: fx.itemId },
+      body: { ingredientId: fx.flourId, ingredientName: "flour", quantity: "100", unit: "g" },
+    });
+    const createdB = await call(handleCreateMenuItem, fx.outsider, { body: { name: `${fx.tag} dish B`, category: "mains", sellingPrice: "9.00" } });
+    fx.itemBId = createdB.body.menuItemId;
+  });
+
+  afterAll(async () => {
+    const orgs = [fx.orgA, fx.orgB, ...fx.madeOrgs];
+    const users = [fx.chef, fx.cook, fx.cookB, fx.leaver, fx.solo, fx.joiner, fx.admin, fx.loner, fx.outsider];
+    const ingIds = [fx.flourId, fx.cokeId, fx.flourB];
+    await db.delete(wasteLog).where(inArray(wasteLog.userId, users));
+    await db.delete(userRole).where(inArray(userRole.userId, users)); // creating an organisation grants a role
+    await db.delete(consumptionLog).where(inArray(consumptionLog.organisationId, orgs));
+    await db.delete(sale).where(inArray(sale.organisationId, orgs));
+    await db.delete(menuItem).where(inArray(menuItem.userId, users)); // cascades recipe lines
+    await db.delete(stockLevel).where(inArray(stockLevel.ingredientId, ingIds));
+    await db.delete(locationIngredient).where(inArray(locationIngredient.ingredientId, ingIds));
+    await db.delete(ingredient).where(inArray(ingredient.ingredientId, ingIds));
+    await db.delete(userStoreLocation).where(inArray(userStoreLocation.userId, users));
+    await db.delete(storeLocation).where(inArray(storeLocation.organisationId, orgs));
+    await db.delete(userOrganisation).where(inArray(userOrganisation.organisationId, orgs));
+    await db.delete(organisation).where(inArray(organisation.organisationId, orgs));
+    await db.delete(user).where(inArray(user.userId, users));
+  });
+
+  describe("menu items belong to the organisation", () => {
+    it("stamps the creator's organisation on a new item", async () => {
+      const [row] = await db.select({ org: menuItem.organisationId }).from(menuItem).where(eq(menuItem.menuItemId, fx.itemId));
+      expect(row.org).toBe(fx.orgA);
+    });
+
+    it("every member of the organisation lists it, the other organisation does not", async () => {
+      for (const who of [fx.chef, fx.cook, fx.admin, fx.loner]) {
+        const { status, body } = await call(handleListMenuItems, who);
+        expect(status).toBe(200);
+        expect(body.map((i: { menuItemId: string }) => i.menuItemId)).toContain(fx.itemId);
+        expect(body.map((i: { menuItemId: string }) => i.menuItemId)).not.toContain(fx.itemBId);
+      }
+      const other = await call(handleListMenuItems, fx.outsider);
+      expect(other.body.map((i: { menuItemId: string }) => i.menuItemId)).toEqual([fx.itemBId]);
+    });
+
+    it("a colleague cannot edit or delete: 403 FORBIDDEN, and nothing changes", async () => {
+      const patch = await call(handleUpdateMenuItem, fx.cook, { params: { id: fx.itemId }, body: { name: "hijacked" } });
+      expect(patch.status).toBe(403);
+      expect(patch.body.code).toBe("FORBIDDEN");
+      const del = await call(handleDeleteMenuItem, fx.cook, { params: { id: fx.itemId } });
+      expect(del.status).toBe(403);
+      expect(del.body.code).toBe("FORBIDDEN");
+      const add = await call(handleAddIngredient, fx.cook, { params: { id: fx.itemId }, body: { ingredientName: "x", quantity: "1", unit: "g" } });
+      expect(add.status).toBe(403);
+      const [row] = await db.select({ name: menuItem.name }).from(menuItem).where(eq(menuItem.menuItemId, fx.itemId));
+      expect(row.name).toBe(`${fx.tag} dish`);
+    });
+
+    it("another organisation's item is not found (404 NOT_FOUND), even for its admin", async () => {
+      const patch = await call(handleUpdateMenuItem, fx.outsider, { params: { id: fx.itemId }, body: { name: "x" } });
+      expect(patch.status).toBe(404);
+      expect(patch.body.code).toBe("NOT_FOUND");
+      const del = await call(handleDeleteMenuItem, fx.outsider, { params: { id: fx.itemId } });
+      expect(del.status).toBe(404);
+    });
+
+    it("the creator and an organisation admin may edit; the admin of another organisation may not", async () => {
+      const byCreator = await call(handleUpdateMenuItem, fx.chef, { params: { id: fx.itemId }, body: { sellingPrice: "13.00" } });
+      expect(byCreator.status).toBe(200);
+      expect(byCreator.body.sellingPrice).toBe("13.00");
+      const byAdmin = await call(handleUpdateMenuItem, fx.admin, { params: { id: fx.itemId }, body: { sellingPrice: "12.00" } });
+      expect(byAdmin.status).toBe(200);
+      expect(byAdmin.body.sellingPrice).toBe("12.00");
+    });
+
+    it("a row an older server wrote without an organisation stays visible to its creator only", async () => {
+      const [legacy] = await db
+        .insert(menuItem)
+        .values({ userId: fx.chef, name: `${fx.tag} legacy`, category: "mains", sellingPrice: "5.00" })
+        .returning({ id: menuItem.menuItemId });
+      const mine = await call(handleListMenuItems, fx.chef);
+      expect(mine.body.map((i: { menuItemId: string }) => i.menuItemId)).toContain(legacy.id);
+      const theirs = await call(handleListMenuItems, fx.cook);
+      expect(theirs.body.map((i: { menuItemId: string }) => i.menuItemId)).not.toContain(legacy.id);
+    });
+
+    it("a creator removed from the organisation no longer lists, edits or deletes the items they made in it", async () => {
+      const made = await call(handleCreateMenuItem, fx.leaver, { body: { name: `${fx.tag} left behind`, category: "mains", sellingPrice: "6.00" } });
+      const id = made.body.menuItemId;
+      await db.delete(userOrganisation).where(eq(userOrganisation.userId, fx.leaver));
+
+      const list = await call(handleListMenuItems, fx.leaver);
+      expect(list.body.map((i: { menuItemId: string }) => i.menuItemId)).not.toContain(id);
+      const patch = await call(handleUpdateMenuItem, fx.leaver, { params: { id }, body: { name: "still mine" } });
+      expect(patch.status).toBe(404);
+      const del = await call(handleDeleteMenuItem, fx.leaver, { params: { id } });
+      expect(del.status).toBe(404);
+
+      const [row] = await db.select({ name: menuItem.name, org: menuItem.organisationId }).from(menuItem).where(eq(menuItem.menuItemId, id));
+      expect(row).toEqual({ name: `${fx.tag} left behind`, org: fx.orgA });
+      const colleagues = await call(handleListMenuItems, fx.cook);
+      expect(colleagues.body.map((i: { menuItemId: string }) => i.menuItemId)).toContain(id);
+    });
+  });
+
+  describe("what the web is told it may change (canManage)", () => {
+    const flagOf = (rows: Array<{ menuItemId: string; canManage: boolean }>) => rows.find((r) => r.menuItemId === fx.itemId)?.canManage;
+
+    it("the item list and the analysis mark the chef's dish manageable for the chef and an organisation admin, not for a colleague", async () => {
+      for (const [who, expected] of [[fx.chef, true], [fx.admin, true], [fx.cook, false]] as const) {
+        expect(flagOf((await call(handleListMenuItems, who)).body)).toBe(expected);
+        expect(flagOf((await call(handleGetAnalysis, who)).body.items)).toBe(expected);
+      }
+    });
+
+    it("a location's sales are marked voidable for the recorder and an organisation admin only", async () => {
+      const made = await call(handleRecordSale, fx.cook, { params: { id: fx.itemId }, body: { qtySold: 1, locationId: fx.a1 } });
+      const flag = async (who: number) =>
+        (await call(handleListSales, who, { params: { locId: fx.a1 }, query: {} })).body.find((s: { saleId: string }) => s.saleId === made.body.saleId).canManage;
+      expect(await flag(fx.cook)).toBe(true);
+      expect(await flag(fx.admin)).toBe(true);
+      expect(await flag(fx.chef)).toBe(false);
+      await call(handleVoidSale, fx.cook, { params: { saleId: made.body.saleId } });
+    });
+  });
+
+  describe("POST /sales/import/commit checks its rows", () => {
+    it("answers a coded 400 for a row that is not what the preview returns, and records nothing", async () => {
+      const good = { rowIndex: 1, name: `${fx.tag} dish`, qtySold: 1 };
+      const bad: unknown[] = [
+        "not an array",
+        [],
+        [{ ...good, name: 42 }],
+        [{ ...good, qtySold: "many" }],
+        [{ ...good, qtySold: 1.2345 }],
+        [{ ...good, soldAt: "not a date" }],
+        [{ ...good, rowIndex: "x" }],
+      ];
+      const before = await db.select({ id: sale.saleId }).from(sale).where(eq(sale.organisationId, fx.orgA));
+      for (const lines of bad) {
+        const res = await call(handleSalesCsvCommit, fx.cook, { body: { lines } });
+        expect(res.status).toBe(400);
+        expect(res.body.code).toBe("VALIDATION");
+      }
+      expect(await db.select({ id: sale.saleId }).from(sale).where(eq(sale.organisationId, fx.orgA))).toHaveLength(before.length);
+    });
+  });
+
+  describe("items made before a person had an organisation", () => {
+    const orgOf = async (id: string) => (await db.select({ org: menuItem.organisationId }).from(menuItem).where(eq(menuItem.menuItemId, id)))[0].org;
+
+    it("join the organisation they create", async () => {
+      const made = await call(handleCreateMenuItem, fx.solo, { body: { name: `${fx.tag} solo dish`, category: "mains", sellingPrice: "7.00" } });
+      expect(await orgOf(made.body.menuItemId)).toBeNull();
+      const org = await createOrganisation(fx.solo, { name: `${fx.tag}-solo` });
+      fx.madeOrgs.push(org.organisationId);
+      expect(await orgOf(made.body.menuItemId)).toBe(org.organisationId);
+    });
+
+    it("join the organisation they join, where a colleague then reads them; a later second organisation does not take them", async () => {
+      const made = await call(handleCreateMenuItem, fx.joiner, { body: { name: `${fx.tag} joiner dish`, category: "mains", sellingPrice: "7.00" } });
+      const id = made.body.menuItemId;
+      const before = await call(handleListMenuItems, fx.cook);
+      expect(before.body.map((i: { menuItemId: string }) => i.menuItemId)).not.toContain(id);
+
+      await joinOrganisation(fx.joiner, `${fx.tag}-orgA`.slice(0, 25));
+      expect(await orgOf(id)).toBe(fx.orgA);
+      const after = await call(handleListMenuItems, fx.cook);
+      expect(after.body.map((i: { menuItemId: string }) => i.menuItemId)).toContain(id);
+
+      await joinOrganisation(fx.joiner, `${fx.tag}-orgB`.slice(0, 25));
+      expect(await orgOf(id)).toBe(fx.orgA);
+    });
+  });
+
+  describe("stored classification of the organisation's menu", () => {
+    it("stays relative to the whole organisation when a creator changes an item that has no organisation", async () => {
+      await db.update(menuItem).set({ unitsSold: 10 }).where(eq(menuItem.menuItemId, fx.itemId));
+      await db.insert(menuItem).values({ userId: fx.cook, organisationId: fx.orgA, name: `${fx.tag} cook dish`, category: "mains", sellingPrice: "8.00", unitsSold: 30 });
+      const [legacy] = await db
+        .insert(menuItem)
+        .values({ userId: fx.chef, name: `${fx.tag} legacy two`, category: "mains", sellingPrice: "5.00" })
+        .returning({ id: menuItem.menuItemId });
+
+      const add = await call(handleAddIngredient, fx.chef, { params: { id: legacy.id }, body: { ingredientName: "salt", quantity: "1", unit: "g" } });
+      expect(add.status).toBe(201);
+
+      // menu_mix_pct = units_sold / total units sold on the menu: the organisation's dishes plus the chef's own unclaimed ones.
+      const menu = await db
+        .select({ units: menuItem.unitsSold })
+        .from(menuItem)
+        .where(and(isNull(menuItem.linkedIngredientId), or(eq(menuItem.organisationId, fx.orgA), and(eq(menuItem.userId, fx.chef), isNull(menuItem.organisationId)))));
+      const total = menu.reduce((sum, m) => sum + m.units, 0);
+      expect(total).toBeGreaterThanOrEqual(40);
+      const [row] = await db.select({ mix: menuItem.menuMixPct }).from(menuItem).where(eq(menuItem.menuItemId, fx.itemId));
+      expect(Number(row.mix)).toBeCloseTo((10 / total) * 100, 1);
+    });
+  });
+
+  describe("stored classification after a creator has left", () => {
+    it("an admin's change to the item they left behind does not mix in, or rewrite, their private dishes", async () => {
+      const [left] = await db.select({ id: menuItem.menuItemId }).from(menuItem).where(and(eq(menuItem.userId, fx.leaver), eq(menuItem.organisationId, fx.orgA)));
+      const [mine] = await db
+        .insert(menuItem)
+        .values({ userId: fx.leaver, name: `${fx.tag} private`, category: "mains", sellingPrice: "9.00", unitsSold: 1000 })
+        .returning();
+
+      const patch = await call(handleUpdateMenuItem, fx.admin, { params: { id: left.id }, body: { sellingPrice: "6.50" } });
+      expect(patch.status).toBe(200);
+
+      const [after] = await db.select().from(menuItem).where(eq(menuItem.menuItemId, mine.menuItemId));
+      expect(after).toEqual(mine);
+      // Mix is a share of the organisation's units only: the 1000 private units are not in the total.
+      const menu = await db.select({ units: menuItem.unitsSold, mix: menuItem.menuMixPct }).from(menuItem).where(and(eq(menuItem.organisationId, fx.orgA), isNull(menuItem.linkedIngredientId)));
+      const total = menu.reduce((sum, m) => sum + m.units, 0);
+      expect(total).toBeGreaterThan(0);
+      for (const m of menu) expect(Number(m.mix)).toBeCloseTo((m.units / total) * 100, 1);
+    });
+  });
+
+  describe("GET /analysis writes nothing", () => {
+    it("leaves stored classification and mix untouched, with or without ?category=", async () => {
+      await db.update(menuItem).set({ unitsSold: 5, classification: "unclassified", menuMixPct: null }).where(eq(menuItem.menuItemId, fx.itemId));
+      const before = await db.select().from(menuItem).where(inArray(menuItem.userId, [fx.chef, fx.outsider]));
+
+      const all = await call(handleGetAnalysis, fx.cook);
+      const byCategory = await call(handleGetAnalysis, fx.cook, { query: { category: "mains" } });
+      expect(all.status).toBe(200);
+      expect(byCategory.status).toBe(200);
+
+      const after = await db.select().from(menuItem).where(inArray(menuItem.userId, [fx.chef, fx.outsider]));
+      expect(after).toEqual(before);
+    });
+
+    it("still answers the computed classification and mix, org-wide, and never another organisation's items", async () => {
+      const { body } = await call(handleGetAnalysis, fx.cook);
+      const mine = body.items.find((i: { menuItemId: string }) => i.menuItemId === fx.itemId);
+      expect(mine).toBeDefined();
+      expect(mine.menuMixPct).toBeGreaterThan(0);
+      expect(mine.classification).not.toBe("unclassified");
+      expect(body.items.map((i: { menuItemId: string }) => i.menuItemId)).not.toContain(fx.itemBId);
+    });
+
+    it("POST /analysis/recalculate is what persists them", async () => {
+      const done = await call(handleRecalculate, fx.chef, { body: {} });
+      expect(done.status).toBe(200);
+      const [row] = await db.select({ c: menuItem.classification, m: menuItem.menuMixPct }).from(menuItem).where(eq(menuItem.menuItemId, fx.itemId));
+      expect(row.c).not.toBe("unclassified");
+      expect(Number(row.m)).toBeGreaterThan(0);
+    });
+  });
+
+  describe("recording a sale", () => {
+    const sell = (who: number, qty: number, extra: { key?: string; headerKey?: string; locationId?: string; itemId?: string } = {}) =>
+      call(handleRecordSale, who, {
+        params: { id: extra.itemId ?? fx.itemId },
+        body: { qtySold: qty, locationId: extra.locationId ?? fx.a1, ...(extra.key ? { idempotencyKey: extra.key } : {}) },
+        headers: extra.headerKey ? { "Idempotency-Key": extra.headerKey } : {},
+      });
+    const salesWithKey = (key: string) => db.select().from(sale).where(and(eq(sale.organisationId, fx.orgA), eq(sale.idempotencyKey, key)));
+
+    it("a colleague sells the chef's item; the other organisation cannot", async () => {
+      const ok = await sell(fx.cook, 1);
+      expect(ok.status).toBe(201);
+      const [row] = await db.select({ by: sale.createdBy, org: sale.organisationId }).from(sale).where(eq(sale.saleId, ok.body.saleId));
+      expect(row).toEqual({ by: fx.cook, org: fx.orgA });
+      const other = await sell(fx.outsider, 1, { locationId: fx.b1 });
+      expect(other.status).toBe(404);
+      expect(other.body.code).toBe("NOT_FOUND");
+    });
+
+    it("only at a location the caller belongs to: 403 LOCATION_NOT_ALLOWED for an unassigned member and for another organisation's location", async () => {
+      const notAssigned = await sell(fx.cook, 1, { locationId: fx.a2 });
+      expect(notAssigned.status).toBe(403);
+      expect(notAssigned.body.code).toBe("LOCATION_NOT_ALLOWED");
+      const lonerAtA1 = await sell(fx.loner, 1, { locationId: fx.a1 });
+      expect(lonerAtA1.status).toBe(403);
+      const foreign = await sell(fx.cook, 1, { locationId: fx.b1 });
+      expect(foreign.status).toBe(403);
+      expect(foreign.body.code).toBe("LOCATION_NOT_ALLOWED");
+    });
+
+    it("an org admin may sell at any location of the organisation", async () => {
+      const res = await sell(fx.admin, 1, { locationId: fx.a2 });
+      expect(res.status).toBe(201);
+    });
+
+    it("the key may come in the body or in the header, and a replay records and deducts once", async () => {
+      const before = (await stockOf(fx.a1, fx.flourId, "BOH"))!;
+      const first = await sell(fx.cook, 2, { key: `${fx.tag}-body` });
+      const replay = await sell(fx.cook, 2, { key: `${fx.tag}-body` });
+      expect(first.status).toBe(201);
+      expect(replay.status).toBe(201);
+      expect(replay.body.saleId).toBe(first.body.saleId);
+      expect(replay.body.alreadyExists).toBe(true);
+      expect(await salesWithKey(`${fx.tag}-body`)).toHaveLength(1);
+      expect(await stockOf(fx.a1, fx.flourId, "BOH")).toBe(before - 200);
+
+      const h1 = await sell(fx.cook, 1, { headerKey: `${fx.tag}-hdr` });
+      const h2 = await sell(fx.cook, 1, { headerKey: `${fx.tag}-hdr` });
+      expect(h2.body.saleId).toBe(h1.body.saleId);
+      expect(await salesWithKey(`${fx.tag}-hdr`)).toHaveLength(1);
+
+      // The same key in header and body are one key.
+      const mixed = await sell(fx.cook, 1, { key: `${fx.tag}-hdr` });
+      expect(mixed.body.saleId).toBe(h1.body.saleId);
+    });
+
+    it("the same key with a different payload is a coded 409 and records nothing", async () => {
+      const first = await sell(fx.cook, 2, { key: `${fx.tag}-conflict` });
+      expect(first.status).toBe(201);
+      const before = (await stockOf(fx.a1, fx.flourId, "BOH"))!;
+      const otherQty = await sell(fx.cook, 3, { key: `${fx.tag}-conflict` });
+      expect(otherQty.status).toBe(409);
+      expect(otherQty.body.code).toBe("IDEMPOTENCY_KEY_REUSED");
+      const [otherItem] = await db
+        .insert(menuItem)
+        .values({ userId: fx.chef, organisationId: fx.orgA, name: `${fx.tag} other`, category: "mains", sellingPrice: "4.00" })
+        .returning({ id: menuItem.menuItemId });
+      const otherDish = await sell(fx.cook, 2, { key: `${fx.tag}-conflict`, itemId: otherItem.id });
+      expect(otherDish.status).toBe(409);
+      expect(otherDish.body.code).toBe("IDEMPOTENCY_KEY_REUSED");
+      expect(await salesWithKey(`${fx.tag}-conflict`)).toHaveLength(1);
+      expect(await stockOf(fx.a1, fx.flourId, "BOH")).toBe(before);
+    });
+
+    it("a concurrent pair with one key records one sale and neither request fails", async () => {
+      const before = (await stockOf(fx.a1, fx.flourId, "BOH"))!;
+      const pair = await Promise.all([sell(fx.cook, 1, { key: `${fx.tag}-race` }), sell(fx.chef, 1, { key: `${fx.tag}-race` })]);
+      expect(pair.map((p) => p.status)).toEqual([201, 201]);
+      expect(pair[0].body.saleId).toBe(pair[1].body.saleId);
+      expect(pair.filter((p) => p.body.alreadyExists).length).toBe(1);
+      expect(await salesWithKey(`${fx.tag}-race`)).toHaveLength(1);
+      expect(await stockOf(fx.a1, fx.flourId, "BOH")).toBe(before - 100);
+    });
+
+    it("the same key in another organisation is a different sale", async () => {
+      await sell(fx.cook, 1, { key: `${fx.tag}-shared` });
+      const other = await sell(fx.outsider, 1, { key: `${fx.tag}-shared`, locationId: fx.b1, itemId: fx.itemBId });
+      expect(other.status).toBe(201);
+      expect(other.body.alreadyExists).toBeUndefined();
+    });
+
+    it("a sale that names no location comes off the seller's location, not the one the item was created at", async () => {
+      const [item] = await db.select({ loc: menuItem.storeLocationId }).from(menuItem).where(eq(menuItem.menuItemId, fx.itemId));
+      expect(item.loc).toBe(fx.a1);
+      const a1Before = await stockOf(fx.a1, fx.flourId, "BOH");
+      const a2Before = (await stockOf(fx.a2, fx.flourId, "BOH")) ?? 0;
+
+      const res = await call(handleRecordSale, fx.cookB, { params: { id: fx.itemId }, body: { qtySold: 1 } });
+      expect(res.status).toBe(201);
+      const [row] = await db.select({ loc: sale.storeLocationId }).from(sale).where(eq(sale.saleId, res.body.saleId));
+      expect(row.loc).toBe(fx.a2);
+      expect(await stockOf(fx.a2, fx.flourId, "BOH")).toBe(a2Before - 100);
+      expect(await stockOf(fx.a1, fx.flourId, "BOH")).toBe(a1Before);
+
+      const csv = await commitSalesCsv(fx.orgA, fx.cookB, [{ rowIndex: 1, name: `${fx.tag} dish`, qtySold: 2 }], principal(fx.cookB));
+      expect(csv.failed).toEqual([]);
+      expect(await stockOf(fx.a2, fx.flourId, "BOH")).toBe(a2Before - 300);
+      expect(await stockOf(fx.a1, fx.flourId, "BOH")).toBe(a1Before);
+    });
+
+    it("the same CSV line imported at two locations is two sales, and a re-import at either records nothing more", async () => {
+      const line = { rowIndex: 1, name: `${fx.tag} dish`, qtySold: 4, soldAt: "2026-11-20T12:00:00.000Z" };
+      const a1Before = (await stockOf(fx.a1, fx.flourId, "BOH"))!;
+      const a2Before = (await stockOf(fx.a2, fx.flourId, "BOH"))!;
+
+      const atA1 = await commitSalesCsv(fx.orgA, fx.cook, [line], principal(fx.cook));
+      const atA2 = await commitSalesCsv(fx.orgA, fx.cookB, [line], principal(fx.cookB));
+      expect(atA1.succeeded).toHaveLength(1);
+      expect(atA2.succeeded).toHaveLength(1);
+      expect(atA2.succeeded[0].saleId).not.toBe(atA1.succeeded[0].saleId);
+      expect(await stockOf(fx.a1, fx.flourId, "BOH")).toBe(a1Before - 400);
+      expect(await stockOf(fx.a2, fx.flourId, "BOH")).toBe(a2Before - 400);
+
+      const again = await commitSalesCsv(fx.orgA, fx.cookB, [line], principal(fx.cookB));
+      expect(again.succeeded).toEqual([]);
+      expect(again.alreadyExists.map((r) => r.saleId)).toEqual([atA2.succeeded[0].saleId]);
+      expect(await stockOf(fx.a2, fx.flourId, "BOH")).toBe(a2Before - 400);
+    });
+
+    it("a CSV line imported before the location was in the key is recognised at its own location only", async () => {
+      const line = { rowIndex: 1, name: `${fx.tag} dish`, qtySold: 6, soldAt: "2026-11-19T12:00:00.000Z" };
+      // The key the previous server stored for this line (persisted in sale.idempotency_key): item | qty | sold at | occurrence.
+      const oldKey = "csv:" + createHash("sha256").update([fx.itemId, "6", line.soldAt, 1].join("|")).digest("hex").slice(0, 40);
+      const [old] = await db
+        .insert(sale)
+        .values({ organisationId: fx.orgA, menuItemId: fx.itemId, storeLocationId: fx.a1, qtySold: "6", source: "CSV", idempotencyKey: oldKey, soldAt: new Date(line.soldAt), createdBy: fx.chef })
+        .returning({ id: sale.saleId });
+      const a1Before = (await stockOf(fx.a1, fx.flourId, "BOH"))!;
+      const a2Before = (await stockOf(fx.a2, fx.flourId, "BOH"))!;
+
+      const atA1 = await commitSalesCsv(fx.orgA, fx.cook, [line], principal(fx.cook));
+      expect(atA1.succeeded).toEqual([]);
+      expect(atA1.alreadyExists.map((r) => r.saleId)).toEqual([old.id]);
+      expect(await stockOf(fx.a1, fx.flourId, "BOH")).toBe(a1Before);
+
+      const atA2 = await commitSalesCsv(fx.orgA, fx.cookB, [line], principal(fx.cookB));
+      expect(atA2.succeeded).toHaveLength(1);
+      expect(await stockOf(fx.a2, fx.flourId, "BOH")).toBe(a2Before - 600);
+    });
+
+    it("asks for a location (400 VALIDATION) when the seller has none and cannot use the item's, and records nothing", async () => {
+      const res = await call(handleRecordSale, fx.loner, { params: { id: fx.itemId }, body: { qtySold: 1 } });
+      expect(res.status).toBe(400);
+      expect(res.body.code).toBe("VALIDATION");
+      expect(await db.select().from(sale).where(eq(sale.createdBy, fx.loner))).toHaveLength(0);
+    });
+
+    it("sells a fraction of up to 3 decimals (0.5, 1.25): stock leaves in proportion, a replay is the same sale, a void puts it back", async () => {
+      const before = (await stockOf(fx.a1, fx.flourId, "BOH"))!;
+      const half = await sell(fx.cook, 0.5, { key: `${fx.tag}-half` });
+      expect(half.status).toBe(201);
+      expect(await stockOf(fx.a1, fx.flourId, "BOH")).toBe(before - 50);
+      const replay = await sell(fx.cook, 0.5, { key: `${fx.tag}-half` });
+      expect(replay.status).toBe(201);
+      expect(replay.body.saleId).toBe(half.body.saleId);
+      expect(await stockOf(fx.a1, fx.flourId, "BOH")).toBe(before - 50);
+
+      const more = await sell(fx.cook, 1.25);
+      expect(more.status).toBe(201);
+      expect(await stockOf(fx.a1, fx.flourId, "BOH")).toBe(before - 175);
+
+      for (const made of [half, more]) {
+        const voided = await call(handleVoidSale, fx.cook, { params: { saleId: made.body.saleId } });
+        expect(voided.status).toBe(200);
+      }
+      expect(await stockOf(fx.a1, fx.flourId, "BOH")).toBe(before);
+    });
+
+    it("rejects a quantity of more than 3 decimals (1.2345) with a coded 400 and records nothing", async () => {
+      const before = (await stockOf(fx.a1, fx.flourId, "BOH"))!;
+      const res = await sell(fx.cook, 1.2345, { key: `${fx.tag}-fraction` });
+      expect(res.status).toBe(400);
+      expect(res.body.code).toBe("VALIDATION");
+      expect(await salesWithKey(`${fx.tag}-fraction`)).toHaveLength(0);
+      expect(await stockOf(fx.a1, fx.flourId, "BOH")).toBe(before);
+
+      const csv = await commitSalesCsv(fx.orgA, fx.cook, [{ rowIndex: 1, name: `${fx.tag} dish`, qtySold: 1.2345 }], principal(fx.cook));
+      expect(csv.succeeded).toEqual([]);
+      expect(csv.failed).toHaveLength(1);
+      expect(await stockOf(fx.a1, fx.flourId, "BOH")).toBe(before);
+    });
+
+    it("rejects a non-positive quantity with a coded 400", async () => {
+      const res = await sell(fx.cook, 0);
+      expect(res.status).toBe(400);
+      expect(res.body.code).toBe("VALIDATION");
+    });
+  });
+
+  describe("stock deduction respects the zone", () => {
+    it("a kitchen ingredient comes out of BOH and a FOH consumable out of FOH; void restores the same rows", async () => {
+      const flourBoh = (await stockOf(fx.a1, fx.flourId, "BOH"))!;
+      const flourFoh = await stockOf(fx.a1, fx.flourId, "FOH");
+      const dish = await call(handleRecordSale, fx.cook, { params: { id: fx.itemId }, body: { qtySold: 1, locationId: fx.a1 } });
+      expect(await stockOf(fx.a1, fx.flourId, "BOH")).toBe(flourBoh - 100);
+      expect(await stockOf(fx.a1, fx.flourId, "FOH")).toBe(flourFoh);
+
+      const cokeBoh = await stockOf(fx.a1, fx.cokeId, "BOH");
+      const can = await call(handleRecordConsumableSale, fx.cook, { params: { ingredientId: fx.cokeId }, body: { qtySold: 3, locationId: fx.a1 } });
+      expect(can.status).toBe(201);
+      expect(await stockOf(fx.a1, fx.cokeId, "FOH")).toBe(7);
+      expect(await stockOf(fx.a1, fx.cokeId, "BOH")).toBe(cokeBoh);
+      expect(can.body.depleted[0].fohOnHand).toBe(7);
+
+      const voidCan = await call(handleVoidSale, fx.chef, { params: { saleId: can.body.saleId } });
+      // The recorder is the cook, not the chef: only the recorder or an org admin may void.
+      expect(voidCan.status).toBe(403);
+      const voided = await call(handleVoidSale, fx.cook, { params: { saleId: can.body.saleId } });
+      expect(voided.status).toBe(200);
+      expect(await stockOf(fx.a1, fx.cokeId, "FOH")).toBe(10);
+      expect(await stockOf(fx.a1, fx.cokeId, "BOH")).toBe(cokeBoh);
+
+      const voidDish = await call(handleVoidSale, fx.admin, { params: { saleId: dish.body.saleId } });
+      expect(voidDish.status).toBe(200);
+      expect(await stockOf(fx.a1, fx.flourId, "BOH")).toBe(flourBoh);
+      expect(await stockOf(fx.a1, fx.flourId, "FOH")).toBe(flourFoh);
+    });
+  });
+
+  describe("voiding a sale", () => {
+    it("is for the person who recorded it or an organisation admin, at a location they can use", async () => {
+      const made = await call(handleRecordSale, fx.cook, { params: { id: fx.itemId }, body: { qtySold: 1, locationId: fx.a1 } });
+      const byOther = await call(handleVoidSale, fx.chef, { params: { saleId: made.body.saleId } });
+      expect(byOther.status).toBe(403);
+      expect(byOther.body.code).toBe("FORBIDDEN");
+      const foreign = await call(handleVoidSale, fx.outsider, { params: { saleId: made.body.saleId } });
+      expect(foreign.status).toBe(404);
+      expect(foreign.body.code).toBe("NOT_FOUND");
+      const own = await call(handleVoidSale, fx.cook, { params: { saleId: made.body.saleId } });
+      expect(own.status).toBe(200);
+      const again = await call(handleVoidSale, fx.cook, { params: { saleId: made.body.saleId } });
+      expect(again.status).toBe(409);
+      expect(again.body.code).toBe("INVALID_STATE");
+    });
+
+    it("puts stock back in the zone the sale recorded, even after the ingredient's item type changed", async () => {
+      const foh = (await stockOf(fx.a1, fx.cokeId, "FOH"))!;
+      const boh = (await stockOf(fx.a1, fx.cokeId, "BOH"))!;
+      const can = await call(handleRecordConsumableSale, fx.cook, { params: { ingredientId: fx.cokeId }, body: { qtySold: 2, locationId: fx.a1 } });
+      expect(can.status).toBe(201);
+      const logged = await db.select({ zone: consumptionLog.zone }).from(consumptionLog).where(eq(consumptionLog.saleId, can.body.saleId));
+      expect(logged).toEqual([{ zone: "FOH" }]);
+
+      await db.update(ingredient).set({ itemType: "KITCHEN_INGREDIENT" }).where(eq(ingredient.ingredientId, fx.cokeId));
+      const voided = await call(handleVoidSale, fx.cook, { params: { saleId: can.body.saleId } });
+      await db.update(ingredient).set({ itemType: "FOH_CONSUMABLE" }).where(eq(ingredient.ingredientId, fx.cokeId));
+      expect(voided.status).toBe(200);
+      expect(await stockOf(fx.a1, fx.cokeId, "FOH")).toBe(foh);
+      expect(await stockOf(fx.a1, fx.cokeId, "BOH")).toBe(boh);
+    });
+
+    it("a sale with no recorded zone (an older server's) goes back to the zone of the ingredient's item type", async () => {
+      const boh = (await stockOf(fx.a1, fx.flourId, "BOH"))!;
+      const foh = await stockOf(fx.a1, fx.flourId, "FOH");
+      const made = await call(handleRecordSale, fx.cook, { params: { id: fx.itemId }, body: { qtySold: 1, locationId: fx.a1 } });
+      await db.update(consumptionLog).set({ zone: null }).where(eq(consumptionLog.saleId, made.body.saleId));
+      const voided = await call(handleVoidSale, fx.cook, { params: { saleId: made.body.saleId } });
+      expect(voided.status).toBe(200);
+      expect(await stockOf(fx.a1, fx.flourId, "BOH")).toBe(boh);
+      expect(await stockOf(fx.a1, fx.flourId, "FOH")).toBe(foh);
+    });
+
+    it("is refused for a recorder who has since lost the location", async () => {
+      const made = await call(handleRecordSale, fx.chef, { params: { id: fx.itemId }, body: { qtySold: 1, locationId: fx.a1 } });
+      await db.delete(userStoreLocation).where(and(eq(userStoreLocation.userId, fx.chef), eq(userStoreLocation.storeLocationId, fx.a1)));
+      const res = await call(handleVoidSale, fx.chef, { params: { saleId: made.body.saleId } });
+      await db.insert(userStoreLocation).values({ userId: fx.chef, storeLocationId: fx.a1 });
+      expect(res.status).toBe(403);
+      expect(res.body.code).toBe("LOCATION_NOT_ALLOWED");
+    });
+  });
+
+  describe("a name that matches more than one item", () => {
+    it("is reported as ambiguous and not imported, by the legacy units-sold import and by the sales CSV commit", async () => {
+      const twins: string[] = [];
+      for (const who of [fx.chef, fx.cook]) {
+        const made = await call(handleCreateMenuItem, who, { body: { name: `${fx.tag} twin`, category: "mains", sellingPrice: "4.00" } });
+        twins.push(made.body.menuItemId);
+      }
+
+      const legacy = await importCsvSalesData(await resolveMenuScope(fx.admin), `name,units sold\n${fx.tag} twin,9`);
+      expect(legacy.updated).toBe(0);
+      expect(legacy.notFound).toHaveLength(1);
+      expect(legacy.notFound[0]).toContain(`${fx.tag} twin`);
+      expect(legacy.notFound[0]).toMatch(/ambiguous name/);
+
+      const commit = await commitSalesCsv(fx.orgA, fx.cook, [{ rowIndex: 1, name: `${fx.tag} twin`, qtySold: 1 }], principal(fx.cook));
+      expect(commit.succeeded).toEqual([]);
+      expect(commit.failed).toHaveLength(1);
+      expect(commit.failed[0].reason).toMatch(/ambiguous name/);
+
+      const rows = await db.select({ units: menuItem.unitsSold }).from(menuItem).where(inArray(menuItem.menuItemId, twins));
+      expect(rows.map((r) => r.units)).toEqual([0, 0]);
+      expect(await db.select().from(sale).where(inArray(sale.menuItemId, twins))).toHaveLength(0);
+    });
+  });
+
+  describe("waste impact", () => {
+    it("sums the organisation's waste at the locations the viewer may use, whoever logged it", async () => {
+      const row = (userId: number, organisationId: number, storeLocationId: string, estimatedCost: string) =>
+        ({ userId, organisationId, storeLocationId, ingredientName: "Flour", quantity: "1", unit: "kg", estimatedCost });
+      await db.insert(wasteLog).values([
+        row(fx.chef, fx.orgA, fx.a1, "5.00"),
+        row(fx.admin, fx.orgA, fx.a2, "7.00"),
+        row(fx.outsider, fx.orgB, fx.b1, "100.00"),
+      ]);
+      const wasteFor = async (who: number) => {
+        const { status, body } = await call(handleGetWasteImpact, who);
+        expect(status).toBe(200);
+        return body.find((w: { menuItemId: string }) => w.menuItemId === fx.itemId)?.wasteEstimate;
+      };
+      expect(await wasteFor(fx.cook)).toBe(5); // a1 only: the chef's row, not the cook's own
+      expect(await wasteFor(fx.cookB)).toBe(7); // a2 only
+      expect(await wasteFor(fx.admin)).toBe(12); // every location of the organisation, never organisation B's
+    });
+  });
+
+  describe("reading and deleting", () => {
+    it("the yield variance list covers the organisation's dishes, not the hidden FOH sale links", async () => {
+      const links = await db.select({ id: menuItem.menuItemId }).from(menuItem).where(and(eq(menuItem.organisationId, fx.orgA), eq(menuItem.linkedIngredientId, fx.cokeId)));
+      expect(links.length).toBeGreaterThan(0);
+      const { status, body } = await call(handleListYieldVariance, fx.cook);
+      expect(status).toBe(200);
+      const ids = body.map((r: { menuItemId: string }) => r.menuItemId);
+      expect(ids).toContain(fx.itemId);
+      for (const link of links) expect(ids).not.toContain(link.id);
+    });
+
+    it("a colleague reads the recipe lines of the chef's item; the other organisation gets 404", async () => {
+      const mine = await call(handleListIngredients, fx.cook, { params: { id: fx.itemId } });
+      expect(mine.status).toBe(200);
+      expect(mine.body.length).toBeGreaterThan(0);
+      const theirs = await call(handleListIngredients, fx.outsider, { params: { id: fx.itemId } });
+      expect(theirs.status).toBe(404);
+      expect(theirs.body.code).toBe("NOT_FOUND");
+    });
+
+    it("the CSV preview matches names across the organisation, and never another organisation's", async () => {
+      const preview = await previewSalesCsv(fx.orgA, fx.cook, `item,qty\n${fx.tag} dish,2\n${fx.tag} dish B,1`);
+      expect(preview.matched.map((m) => m.menuItemId)).toEqual([fx.itemId]);
+      expect(preview.unmatched.map((u) => u.name)).toEqual([`${fx.tag} dish B`]);
+    });
+
+    it("the CSV preview matches a fraction of up to 3 decimals and reports more as an invalid quantity", async () => {
+      const preview = await previewSalesCsv(fx.orgA, fx.cook, `item,qty\n${fx.tag} dish,0.5\n${fx.tag} dish,1.25\n${fx.tag} dish,1.2345`);
+      expect(preview.matched.map((m) => m.qtySold)).toEqual([0.5, 1.25]);
+      expect(preview.unmatched).toEqual([{ rowIndex: 3, name: `${fx.tag} dish`, reason: "invalid quantity" }]);
+    });
+
+    it("the CSV preview reports a row whose date cannot be read as an invalid date, so every matched row is one the commit accepts", async () => {
+      const preview = await previewSalesCsv(fx.orgA, fx.cook, `item,qty,date\n${fx.tag} dish,2,2026-11-13\n${fx.tag} dish,2,13/11/2026\n${fx.tag} dish,2`);
+      expect(preview.matched.map((m) => m.rowIndex)).toEqual([1, 3]);
+      expect(preview.unmatched).toEqual([{ rowIndex: 2, name: `${fx.tag} dish`, reason: "invalid date" }]);
+
+      const before = (await stockOf(fx.a1, fx.flourId, "BOH"))!;
+      const commit = await call(handleSalesCsvCommit, fx.cook, { body: { lines: preview.matched } });
+      expect(commit.status).toBe(200);
+      expect(commit.body.failed).toEqual([]);
+      expect(commit.body.succeeded).toHaveLength(2);
+      expect(await stockOf(fx.a1, fx.flourId, "BOH")).toBe(before - 400);
+    });
+
+    it("lists a location's sales for a member of that location", async () => {
+      const ok = await call(handleListSales, fx.cook, { params: { locId: fx.a1 }, query: {} });
+      expect(ok.status).toBe(200);
+      expect(ok.body.length).toBeGreaterThan(0);
+    });
+
+    it("an item with recorded sales cannot be deleted: 409 CONFLICT, not a 500", async () => {
+      const res = await call(handleDeleteMenuItem, fx.chef, { params: { id: fx.itemId } });
+      expect(res.status).toBe(409);
+      expect(res.body.code).toBe("CONFLICT");
+      expect(res.body.error).toMatch(/sales or prep history/);
+      const [row] = await db.select({ id: menuItem.menuItemId }).from(menuItem).where(eq(menuItem.menuItemId, fx.itemId));
+      expect(row).toBeDefined();
+    });
+
+    it("an item without sales is deleted by its creator or an organisation admin", async () => {
+      const made = await call(handleCreateMenuItem, fx.chef, { body: { name: `${fx.tag} gone`, category: "mains", sellingPrice: "3.00" } });
+      const byAdmin = await call(handleDeleteMenuItem, fx.admin, { params: { id: made.body.menuItemId } });
+      expect(byAdmin.status).toBe(200);
+      const again = await call(handleDeleteMenuItem, fx.chef, { params: { id: made.body.menuItemId } });
+      expect(again.status).toBe(404);
+    });
+  });
+});

@@ -152,9 +152,9 @@ describe.skipIf(!RUN)("tenant isolation — real DB", () => {
     expect(await getLocationInOrg(locA, orgA)).toBe(true);
   });
 
-  it("getMenuItem is owner-scoped (user-first isolation)", async () => {
-    expect(await getMenuItem(menuA, userB)).toBeNull();
-    expect(await getMenuItem(menuA, userA)).not.toBeNull();
+  it("getMenuItem is organisation-scoped (another organisation's admin cannot see it)", async () => {
+    expect(await getMenuItem(menuA, { userId: userB, organisationId: orgB, isOrgAdmin: true })).toBeNull();
+    expect(await getMenuItem(menuA, { userId: userA, organisationId: orgA, isOrgAdmin: true })).not.toBeNull();
   });
 
   it("saveMessages refuses a cross-owner write and inserts nothing", async () => {
