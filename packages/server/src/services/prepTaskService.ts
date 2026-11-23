@@ -27,7 +27,7 @@ import { canManageSession, canWorkSession } from "./prepAccess.js";
 import { AppError } from "../utils/appError.js";
 import { insertOnce } from "../utils/retrySafe.js";
 import { aggregatePrepLines, attachOnHand, type PrepSourceLine } from "./prepMath.js";
-import { convertUnit as sharedConvertUnit, normalizeUnit } from "@culinaire/shared";
+import { classificationPrepWeight, convertUnit as sharedConvertUnit, normalizeUnit } from "@culinaire/shared";
 import { addStock, deductStock } from "./stockService.js";
 import { recordOpsEvent } from "./brainCaptureService.js";
 import type { DbOrTx } from "./auditService.js";
@@ -192,14 +192,6 @@ export async function generateTasksFromSelections(
     .from(prepMenuSelection)
     .where(eq(prepMenuSelection.prepSessionId, sessionId));
 
-  const classificationWeights: Record<string, number> = {
-    star: 4,
-    plowhorse: 3,
-    puzzle: 2,
-    dog: 1,
-    unclassified: 2,
-  };
-
   const menuItemIds = selections.map((s) => s.menuItemId).filter((id): id is string => id !== null);
   const recipeIds = selections.map((s) => s.recipeId).filter((id): id is string => id !== null);
 
@@ -282,7 +274,7 @@ export async function generateTasksFromSelections(
 
     if (sel.menuItemId && menuItemsMap.has(sel.menuItemId)) {
       const mi = menuItemsMap.get(sel.menuItemId)!;
-      const weight = classificationWeights[mi.classification ?? "unclassified"] ?? 2;
+      const weight = classificationPrepWeight(mi.classification);
       const servings = mi.servings ?? 1;
 
       for (const ing of miIngredientsByItem.get(sel.menuItemId) ?? []) {
@@ -319,7 +311,7 @@ export async function generateTasksFromSelections(
       const matchedMi = [...menuItemsMap.values()].find(
         (mi) => mi.name.toLowerCase() === r.title.toLowerCase(),
       );
-      const weight = classificationWeights[matchedMi?.classification ?? "unclassified"] ?? 2;
+      const weight = classificationPrepWeight(matchedMi?.classification);
 
       for (const ing of ingredients) {
         if (!ing.name) continue;

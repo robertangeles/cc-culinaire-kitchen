@@ -13,6 +13,7 @@ import {
   menuItemIngredient,
 } from "../db/schema.js";
 import { eq, desc, sql, and, inArray } from "drizzle-orm";
+import { classificationPrepWeight } from "@culinaire/shared";
 import { getUserOrgContext } from "./orgContextService.js";
 import { computeSuggestedSelections } from "./prepMath.js";
 import { parseTimeToMinutes } from "./prepErrors.js";
@@ -359,17 +360,9 @@ export async function getHighImpactDishes(
       ingredientCountMap.set(row.menuItemId, Number(row.count));
     }
 
-    const classificationWeights: Record<string, number> = {
-      star: 4,
-      plowhorse: 3,
-      puzzle: 2,
-      dog: 1,
-      unclassified: 2,
-    };
-
     const dishes: HighImpactDish[] = menuItems.map((mi) => {
       const ingCount = ingredientCountMap.get(mi.menuItemId) ?? 0;
-      const classWeight = classificationWeights[mi.classification] ?? 2;
+      const classWeight = classificationPrepWeight(mi.classification);
       const complexityScore = ingCount * classWeight;
       const classLabel = mi.classification.charAt(0).toUpperCase() + mi.classification.slice(1);
 
