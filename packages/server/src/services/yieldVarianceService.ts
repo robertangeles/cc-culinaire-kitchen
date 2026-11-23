@@ -24,7 +24,7 @@
  *     bad direction. Negative (underuse) is fine.
  */
 
-import { sql, eq } from "drizzle-orm";
+import { sql, eq, and, isNull } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { menuReadable, type MenuScope } from "./menuAccess.js";
 import {
@@ -178,8 +178,8 @@ export async function getYieldVariance(menuItemId: string): Promise<YieldVarianc
 }
 
 /**
- * Bulk version — computes variance for every menu item of the caller's
- * organisation (used by the Menu Intelligence list view to render the variance
+ * Bulk version — computes variance for every dish of the caller's
+ * organisation, without the system-made FOH sale links (used by the Menu Intelligence list view to render the variance
  * column without N+1 round-trips). Reuses the single-item computation by
  * iterating; for now the result set is small (tens of dishes), so a single
  * SQL aggregate would be premature optimization.
@@ -188,7 +188,7 @@ export async function listYieldVariance(scope: MenuScope): Promise<YieldVariance
   const items = await db
     .select({ menuItemId: menuItem.menuItemId })
     .from(menuItem)
-    .where(menuReadable(scope));
+    .where(and(menuReadable(scope), isNull(menuItem.linkedIngredientId)));
 
   const results: YieldVarianceResult[] = [];
   for (const it of items) {
