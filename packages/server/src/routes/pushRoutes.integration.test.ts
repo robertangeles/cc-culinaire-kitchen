@@ -1,0 +1,351 @@
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
+import bcrypt from "bcrypt";
+import { config } from "dotenv";
+import { createHash } from "node:crypto";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { applyEnvPrefix } from "../utils/envShim.js";
+
+config({ path: resolve(dirname(fileURLToPath(import.meta.url)), "../../../../.env") });
+applyEnvPrefix();
+
+import { eq, inArray } from "drizzle-orm";
+import express, { type Request, type Response } from "express";
+import cookieParser from "cookie-parser";
+import type { AddressInfo } from "node:net";
+import { db } from "../db/index.js";
+import { deviceToken, pushOptOuts, pushQuietHours, refreshToken, user } from "../db/schema.js";
+import {
+  handleRegisterDevice,
+  handleUnregisterDevice,
+  handleGetPushPreferences,
+  handleUpdatePushPreferences,
+} from "../controllers/notificationsController.js";
+import { handleLogout } from "../controllers/authController.js";
+import { AuthError, generateTokens, getUserWithRolesAndPermissions, refreshAccessToken, refreshTokenFamily, revokeAllRefreshTokens, revokeRefreshToken } from "../services/authService.js";
+import { changePassword } from "../services/userService.js";
+import notificationsRouter from "./notifications.js";
+
+/**
+ * The phone's push endpoints, called through the real controllers against a real database.
+ * Gated on TENANT_IT=1, like the other real-DB suites.
+ */
+const RUN = process.env.TENANT_IT === "1";
+const tag = `pr_${Date.now().toString(36)}`;
+
+type Handler = (req: Request, res: Response, next: (err?: unknown) => void) => Promise<void> | void;
+
+/** Runs a handler the way Express would and returns what it answered. `userId` undefined = no valid token (authenticate would have refused first on the real route). */
+async function call(handler: Handler, userId: number | undefined, body?: unknown, extra: Record<string, unknown> = {}) {
+  return new Promise<{ status: number; body: any; error?: unknown }>((done) => {
+    const out = { status: 200, body: undefined as unknown };
+    const res = {
+      status(n: number) { out.status = n; return res; },
+      json(b: unknown) { out.body = b; done({ ...out, body: b }); return res; },
+      clearCookie() { return res; },
+      cookie() { return res; },
+    } as unknown as Response;
+    const req = { user: userId === undefined ? undefined : { sub: userId, roles: [], permissions: [] }, body, cookies: {}, ...extra } as unknown as Request;
+    Promise.resolve(handler(req, res, (error) => done({ status: 500, body: undefined, error }))).catch((error) => done({ status: 500, body: undefined, error }));
+  });
+}
+
+describe("push routes: wiring", () => {
+  it.each([
+    ["POST", "/register-device"],
+    ["POST", "/unregister-device"],
+    ["GET", "/push-preferences"],
+    ["PUT", "/push-preferences"],
+  ])("%s %s answers 401 to a request with no token, or a token that is not ours", async (method, path) => {
+    const app = express();
+    app.use(express.json());
+    app.use(cookieParser());
+    app.use("/api/notifications", notificationsRouter);
+    const server = app.listen(0, "127.0.0.1");
+    await new Promise((ready) => server.once("listening", ready));
+    try {
+      const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/api/notifications${path}`;
+      const body = method === "GET" ? undefined : JSON.stringify({ deviceToken: "ExponentPushToken[wiring]", platform: "ios" });
+      for (const headers of [{}, { Authorization: "Bearer not-a-real-token" }]) {
+        const res = await fetch(url, { method, headers: { "Content-Type": "application/json", ...headers }, body });
+        expect(res.status).toBe(401);
+      }
+    } finally {
+      await new Promise((closed) => server.close(closed));
+    }
+  });
+});
+
+describe.skipIf(!RUN)("push routes (real DB)", () => {
+  let alice: number;
+  let bob: number;
+  const tok = (n: string) => `ExponentPushToken[${tag}-${n}]`;
+  const tokensOf = async (...ids: number[]) => (await db.select({ tokenValue: deviceToken.tokenValue }).from(deviceToken).where(inArray(deviceToken.userId, ids))).map((r) => r.tokenValue).sort();
+
+  beforeAll(async () => {
+    [{ id: alice }] = await db.insert(user).values({ userName: `${tag} Alice`, userEmail: `${tag}-a@it.test` }).returning({ id: user.userId });
+    [{ id: bob }] = await db.insert(user).values({ userName: `${tag} Bob`, userEmail: `${tag}-b@it.test` }).returning({ id: user.userId });
+  });
+
+  afterAll(async () => {
+    const ids = [alice, bob];
+    await db.delete(deviceToken).where(inArray(deviceToken.userId, ids));
+    await db.delete(pushOptOuts).where(inArray(pushOptOuts.userId, ids));
+    await db.delete(pushQuietHours).where(inArray(pushQuietHours.userId, ids));
+    await db.delete(refreshToken).where(inArray(refreshToken.userId, ids));
+    await db.delete(user).where(inArray(user.userId, ids));
+  });
+
+  describe("register-device", () => {
+    it("401s without a signed-in user and 400s a bad body, both with a code", async () => {
+      expect(await call(handleRegisterDevice, undefined, { deviceToken: tok("x"), platform: "ios" })).toMatchObject({ status: 401, body: { code: "UNAUTHENTICATED" } });
+      expect(await call(handleRegisterDevice, alice, { platform: "ios" })).toMatchObject({ status: 400, body: { code: "VALIDATION" } });
+    });
+
+    it("registers a token (200), and the same token moves to the next person who signs in on that device", async () => {
+      expect((await call(handleRegisterDevice, alice, { deviceToken: tok("shared"), platform: "ios" })).status).toBe(200);
+      expect(await tokensOf(alice)).toEqual([tok("shared")]);
+      await call(handleRegisterDevice, bob, { deviceToken: tok("shared"), platform: "ios" });
+      expect(await tokensOf(alice)).toEqual([]);
+      expect(await tokensOf(bob)).toEqual([tok("shared")]);
+      await db.delete(deviceToken).where(eq(deviceToken.userId, bob));
+    });
+  });
+
+  describe("unregister-device", () => {
+    it("removes the caller's own token (200)", async () => {
+      await call(handleRegisterDevice, alice, { deviceToken: tok("a1"), platform: "android" });
+      await call(handleRegisterDevice, alice, { deviceToken: tok("a2"), platform: "android" });
+      expect((await call(handleUnregisterDevice, alice, { deviceToken: tok("a1") })).status).toBe(200);
+      expect(await tokensOf(alice)).toEqual([tok("a2")]);
+    });
+
+    it("answers 200 again for a token that is already gone, so a repeat is safe", async () => {
+      expect((await call(handleUnregisterDevice, alice, { deviceToken: tok("a1") })).status).toBe(200);
+    });
+
+    it("does not remove another person's token", async () => {
+      await call(handleRegisterDevice, bob, { deviceToken: tok("b1"), platform: "ios" });
+      expect((await call(handleUnregisterDevice, alice, { deviceToken: tok("b1") })).status).toBe(200);
+      expect(await tokensOf(bob)).toEqual([tok("b1")]);
+    });
+
+    it("401s without a signed-in user and 400s a missing token, both with a code", async () => {
+      expect(await call(handleUnregisterDevice, undefined, { deviceToken: tok("a2") })).toMatchObject({ status: 401, body: { code: "UNAUTHENTICATED" } });
+      expect(await call(handleUnregisterDevice, alice, {})).toMatchObject({ status: 400, body: { code: "VALIDATION" } });
+      expect(await tokensOf(alice)).toEqual([tok("a2")]);
+    });
+  });
+
+  describe("sign-ins ended by the server", () => {
+    const signIn = async (userId: number) => generateTokens(await getUserWithRolesAndPermissions(userId));
+    const hashOf = (raw: string) => createHash("sha256").update(raw).digest("hex");
+    const expire = (raw: string) => db.update(refreshToken).set({ expiresAtDttm: new Date(Date.now() - 1000) }).where(eq(refreshToken.tokenHash, hashOf(raw)));
+    const register = (name: string, raw?: string) => call(handleRegisterDevice, alice, { deviceToken: tok(name), platform: "ios", refreshToken: raw });
+    let phone: { refreshToken: string };
+    let web: { refreshToken: string };
+
+    /** Alice signed in on a phone and on the web: "phone" is registered under the phone's sign-in, "web" under the web's, "old" by a client that named none. */
+    beforeEach(async () => {
+      await db.delete(refreshToken).where(inArray(refreshToken.userId, [alice, bob]));
+      await db.delete(deviceToken).where(eq(deviceToken.userId, alice));
+      phone = await signIn(alice);
+      web = await signIn(alice);
+      await register("phone", phone.refreshToken);
+      await register("web", web.refreshToken);
+      await register("old");
+    });
+
+    it("register-device records the caller's sign-in, and none for a client that presents no refresh token or someone else's", async () => {
+      const bobs = await signIn(bob);
+      await register("stolen", bobs.refreshToken);
+      const rows = await db.select().from(deviceToken).where(eq(deviceToken.userId, alice));
+      const familyOf = (name: string) => rows.find((r) => r.tokenValue === tok(name))!.refreshFamilyId;
+      expect(familyOf("phone")).toBe(await refreshTokenFamily(phone.refreshToken, alice));
+      expect(familyOf("web")).toBe(await refreshTokenFamily(web.refreshToken, alice));
+      expect(familyOf("phone")).not.toBe(familyOf("web"));
+      expect(familyOf("old")).toBeNull();
+      expect(familyOf("stolen")).toBeNull();
+    });
+
+    it("removes every device token of the person when all their sign-ins are revoked, and nobody else's", async () => {
+      await revokeAllRefreshTokens(alice);
+      expect(await tokensOf(alice, bob)).toEqual([tok("b1")]);
+    });
+
+    it("a password change on the web removes the signed-out phone's token and keeps the web's own", async () => {
+      await revokeAllRefreshTokens(alice, await refreshTokenFamily(web.refreshToken, alice));
+      expect(await tokensOf(alice)).toEqual([tok("old"), tok("web")]);
+    });
+
+    it("removes the phone's token when its sign-in is revoked for reuse of a spent refresh token", async () => {
+      const second = await refreshAccessToken(phone.refreshToken);
+      await refreshAccessToken(second.refreshToken);
+      await db.update(refreshToken).set({ rotatedAtDttm: new Date(Date.now() - 60 * 60 * 1000) }).where(eq(refreshToken.tokenHash, hashOf(phone.refreshToken)));
+      await expect(refreshAccessToken(phone.refreshToken)).rejects.toMatchObject({ code: "REFRESH_TOKEN_REUSED" });
+      expect(await tokensOf(alice)).toEqual([tok("old"), tok("web")]);
+    });
+
+    it("removes the phone's token when its refresh token is refused as expired, and the rest when the last sign-in expires", async () => {
+      await expire(phone.refreshToken);
+      await expect(refreshAccessToken(phone.refreshToken)).rejects.toMatchObject({ code: "REFRESH_TOKEN_EXPIRED" });
+      expect(await tokensOf(alice)).toEqual([tok("old"), tok("web")]);
+      await expire(web.refreshToken);
+      await expect(refreshAccessToken(web.refreshToken)).rejects.toMatchObject({ code: "REFRESH_TOKEN_EXPIRED" });
+      expect(await tokensOf(alice)).toEqual([]);
+    });
+
+    it("removes the token of a sign-in that expired unnoticed the next time the person signs in", async () => {
+      await expire(phone.refreshToken);
+      await signIn(alice);
+      expect(await tokensOf(alice)).toEqual([tok("old"), tok("web")]);
+    });
+
+    it("keeps the phone's token through a refresh, which rotates the token inside the same sign-in", async () => {
+      const next = await refreshAccessToken(phone.refreshToken);
+      await refreshAccessToken(next.refreshToken);
+      expect(await tokensOf(alice)).toEqual([tok("old"), tok("phone"), tok("web")]);
+    });
+
+    it("logout removes the tokens registered under that sign-in, revokes it, and leaves the rest", async () => {
+      expect((await call(handleLogout, undefined, { refreshToken: phone.refreshToken })).status).toBe(200);
+      expect(await tokensOf(alice, bob)).toEqual([tok("b1"), tok("old"), tok("web")]);
+      await expect(refreshAccessToken(phone.refreshToken)).rejects.toMatchObject({ code: "INVALID_REFRESH_TOKEN" });
+    });
+
+    it("logout removes the sign-in's tokens when the presented refresh token has expired or was already rotated", async () => {
+      await expire(phone.refreshToken);
+      expect((await call(handleLogout, undefined, { refreshToken: phone.refreshToken })).status).toBe(200);
+      expect(await tokensOf(alice)).toEqual([tok("old"), tok("web")]);
+      await refreshAccessToken(web.refreshToken);
+      expect((await call(handleLogout, undefined, { refreshToken: web.refreshToken })).status).toBe(200);
+      expect(await tokensOf(alice)).toEqual([]);
+    });
+
+    it("logout answers 200 and removes nothing with no session at all, or a refresh token that matches no row", async () => {
+      expect((await call(handleLogout, undefined, {})).status).toBe(200);
+      expect((await call(handleLogout, undefined, { refreshToken: "f".repeat(128) })).status).toBe(200);
+      expect(await tokensOf(alice, bob)).toEqual([tok("b1"), tok("old"), tok("phone"), tok("web")]);
+    });
+
+    describe("when the device-token cleanup fails (migration 0004 not applied: the column is missing)", () => {
+      const column = deviceToken.refreshFamilyId as unknown as { name: string };
+      const realName = column.name;
+      const all = [tok("old"), tok("phone"), tok("web")];
+      beforeEach(() => { column.name = `${realName}_missing`; });
+      afterEach(() => { column.name = realName; });
+
+      it("still signs in", async () => {
+        await expire(phone.refreshToken);
+        expect((await signIn(alice)).refreshToken).toHaveLength(128);
+        expect(await tokensOf(alice)).toEqual(all);
+      });
+
+      it("still refreshes, and still refuses and removes an expired refresh token", async () => {
+        const next = await refreshAccessToken(phone.refreshToken);
+        expect(next.user.userId).toBe(alice);
+        await expire(web.refreshToken);
+        await expect(refreshAccessToken(web.refreshToken)).rejects.toMatchObject({ code: "REFRESH_TOKEN_EXPIRED" });
+        await expect(refreshAccessToken(web.refreshToken)).rejects.toMatchObject({ code: "INVALID_REFRESH_TOKEN" });
+        expect(await tokensOf(alice)).toEqual(all);
+      });
+
+      it("still revokes every sign-in", async () => {
+        await revokeAllRefreshTokens(alice);
+        expect(await db.select().from(refreshToken).where(eq(refreshToken.userId, alice))).toEqual([]);
+        expect(await tokensOf(alice)).toEqual(all);
+      });
+
+      it("still changes the password and ends the other sign-ins", async () => {
+        await db.update(user).set({ userPasswordHash: await bcrypt.hash("Old-pass-1!", 4) }).where(eq(user.userId, alice));
+        await changePassword(alice, "Old-pass-1!", "New-pass-2!", web.refreshToken);
+        await expect(refreshAccessToken(phone.refreshToken)).rejects.toMatchObject({ code: "INVALID_REFRESH_TOKEN" });
+        expect((await refreshAccessToken(web.refreshToken)).user.userId).toBe(alice);
+        expect(await tokensOf(alice)).toEqual(all);
+      });
+
+      it("still logs out", async () => {
+        expect((await call(handleLogout, undefined, { refreshToken: phone.refreshToken })).status).toBe(200);
+        await expect(refreshAccessToken(phone.refreshToken)).rejects.toMatchObject({ code: "INVALID_REFRESH_TOKEN" });
+        expect(await tokensOf(alice)).toEqual(all);
+      });
+    });
+
+    it("a password change removes the signed-out phone's token once it has committed", async () => {
+      await db.update(user).set({ userPasswordHash: await bcrypt.hash("Old-pass-1!", 4) }).where(eq(user.userId, alice));
+      await changePassword(alice, "Old-pass-1!", "New-pass-2!", web.refreshToken);
+      expect(await tokensOf(alice)).toEqual([tok("old"), tok("web")]);
+    });
+
+    it("keeps the phone's token when its session is re-minted as the same sign-in", async () => {
+      const familyId = await refreshTokenFamily(phone.refreshToken, alice);
+      await revokeRefreshToken(phone.refreshToken);
+      const reminted = await generateTokens(await getUserWithRolesAndPermissions(alice), { familyId });
+      await refreshAccessToken(reminted.refreshToken);
+      expect(await tokensOf(alice)).toEqual([tok("old"), tok("phone"), tok("web")]);
+    });
+
+    it("removes the device tokens when a suspended account's refresh ends every sign-in", async () => {
+      await db.update(user).set({ userStatus: "suspended" }).where(eq(user.userId, alice));
+      await expect(refreshAccessToken(phone.refreshToken)).rejects.toBeInstanceOf(AuthError);
+      await db.update(user).set({ userStatus: "active" }).where(eq(user.userId, alice));
+      expect(await tokensOf(alice)).toEqual([]);
+    });
+  });
+
+  describe("push-preferences", () => {
+    it("401s without a signed-in user", async () => {
+      expect(await call(handleGetPushPreferences, undefined)).toMatchObject({ status: 401, body: { code: "UNAUTHENTICATED" } });
+      expect(await call(handleUpdatePushPreferences, undefined, {})).toMatchObject({ status: 401, body: { code: "UNAUTHENTICATED" } });
+    });
+
+    it("starts with every type on and no quiet hours", async () => {
+      const { status, body } = await call(handleGetPushPreferences, alice);
+      expect(status).toBe(200);
+      expect(body.quietHours).toBeNull();
+      expect(body.types.length).toBeGreaterThan(10);
+      expect(body.types.every((t: { enabled: boolean; label: string }) => t.enabled && t.label.length > 0)).toBe(true);
+    });
+
+    it("switches types off, replaces the list on the next update, and leaves it alone when the key is left out", async () => {
+      let r = await call(handleUpdatePushPreferences, alice, { disabledTypes: ["SHIFT_CHANGED", "SHIFT_CANCELLED"] });
+      expect(r.status).toBe(200);
+      const off = (b: any) => b.types.filter((t: any) => !t.enabled).map((t: any) => t.type).sort();
+      expect(off(r.body)).toEqual(["SHIFT_CANCELLED", "SHIFT_CHANGED"]);
+      r = await call(handleUpdatePushPreferences, alice, { disabledTypes: ["SHIFT_CHANGED", "DOCUMENT_REJECTED"] });
+      expect(off(r.body)).toEqual(["DOCUMENT_REJECTED", "SHIFT_CHANGED"]);
+      r = await call(handleUpdatePushPreferences, alice, { quietHours: { start: "22:00", end: "07:00", timeZone: "Australia/Sydney" } });
+      expect(off(r.body)).toEqual(["DOCUMENT_REJECTED", "SHIFT_CHANGED"]);
+      r = await call(handleUpdatePushPreferences, alice, { disabledTypes: [] });
+      expect(off(r.body)).toEqual([]);
+      expect(r.body.quietHours).toEqual({ start: "22:00", end: "07:00", timeZone: "Australia/Sydney" });
+    });
+
+    it("sets, changes and clears quiet hours", async () => {
+      let r = await call(handleUpdatePushPreferences, alice, { quietHours: { start: "21:30", end: "06:15", timeZone: "Europe/London" } });
+      expect(r.body.quietHours).toEqual({ start: "21:30", end: "06:15", timeZone: "Europe/London" });
+      r = await call(handleUpdatePushPreferences, alice, { quietHours: null });
+      expect(r.body.quietHours).toBeNull();
+    });
+
+    it("refuses bad input with 400 VALIDATION and changes nothing", async () => {
+      for (const body of [
+        { quietHours: { start: "25:00", end: "07:00", timeZone: "UTC" } },
+        { quietHours: { start: "22:00", end: "22:00", timeZone: "UTC" } },
+        { quietHours: { start: "22:00", end: "07:00", timeZone: "Mars/Olympus" } },
+        { disabledTypes: ["NOT_A_TYPE"] },
+        { disabledTypes: "SHIFT_CHANGED" },
+      ]) {
+        expect(await call(handleUpdatePushPreferences, alice, body), JSON.stringify(body)).toMatchObject({ status: 400, body: { code: "VALIDATION" } });
+      }
+      expect((await call(handleGetPushPreferences, alice)).body.quietHours).toBeNull();
+    });
+
+    it("keeps each person's settings to themselves", async () => {
+      await call(handleUpdatePushPreferences, alice, { disabledTypes: ["BRAIN_NUDGE"], quietHours: { start: "23:00", end: "05:00", timeZone: "UTC" } });
+      const mine = (await call(handleGetPushPreferences, bob)).body;
+      expect(mine.quietHours).toBeNull();
+      expect(mine.types.every((t: any) => t.enabled)).toBe(true);
+    });
+  });
+});

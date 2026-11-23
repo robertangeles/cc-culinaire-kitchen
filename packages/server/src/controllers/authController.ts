@@ -34,6 +34,7 @@ import {
 import { linkGuestConversations } from "../services/guestService.js";
 import { verifyTurnstileToken } from "../services/turnstileService.js";
 import { getCredentialValueWithFallback } from "../services/credentialService.js";
+import { removeSignedOutDeviceTokens } from "../services/pushDeviceService.js";
 
 const logger = pino({ name: "authController" });
 
@@ -286,7 +287,11 @@ export async function handleLogin(
 /**
  * POST /api/auth/logout
  *
- * Revokes the refresh token and clears auth cookies.
+ * Revokes the refresh token and clears auth cookies. Every push device token registered under that sign-in is
+ * removed, so the next person to sign in on the device is not sent this one's notifications. The refresh token is
+ * what proves whose sign-in it is; an expired or spent one still proves it while its row exists.
+ * Once the row is gone (the sign-in was already revoked) nobody is identified and nothing is removed here: the
+ * revoke paths in `authService` already removed that sign-in's device tokens.
  */
 export async function handleLogout(
   req: Request,
@@ -297,7 +302,8 @@ export async function handleLogout(
     // Web sends the refresh token via cookie; native mobile sends it in the body.
     const rawRefreshToken = req.cookies?.refresh_token ?? req.body?.refreshToken;
     if (rawRefreshToken) {
-      await revokeRefreshToken(rawRefreshToken);
+      const userId = await revokeRefreshToken(rawRefreshToken);
+      if (userId !== undefined) await removeSignedOutDeviceTokens(userId);
     }
     clearAuthCookies(res);
     res.json({ message: "Logged out successfully." });

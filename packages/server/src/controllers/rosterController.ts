@@ -335,7 +335,7 @@ export async function handleCancelShift(req: Request, res: Response, next: NextF
   try {
     const ctx = await resolveContext(req, res);
     if (!ctx) return;
-    res.json(await cancelShift(ctx.orgId, req.params.id as string));
+    res.json(await cancelShift(ctx.orgId, req.params.id as string, req.user!.sub));
   } catch (err) {
     handleServiceError(err, res, next);
   }
