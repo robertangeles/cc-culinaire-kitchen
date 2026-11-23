@@ -344,6 +344,27 @@ describe.skipIf(!RUN)("Wave 7 menu server work (real DB)", () => {
     });
   });
 
+  describe("stored classification after a creator has left", () => {
+    it("an admin's change to the item they left behind does not mix in, or rewrite, their private dishes", async () => {
+      const [left] = await db.select({ id: menuItem.menuItemId }).from(menuItem).where(and(eq(menuItem.userId, fx.leaver), eq(menuItem.organisationId, fx.orgA)));
+      const [mine] = await db
+        .insert(menuItem)
+        .values({ userId: fx.leaver, name: `${fx.tag} private`, category: "mains", sellingPrice: "9.00", unitsSold: 1000 })
+        .returning();
+
+      const patch = await call(handleUpdateMenuItem, fx.admin, { params: { id: left.id }, body: { sellingPrice: "6.50" } });
+      expect(patch.status).toBe(200);
+
+      const [after] = await db.select().from(menuItem).where(eq(menuItem.menuItemId, mine.menuItemId));
+      expect(after).toEqual(mine);
+      // Mix is a share of the organisation's units only: the 1000 private units are not in the total.
+      const menu = await db.select({ units: menuItem.unitsSold, mix: menuItem.menuMixPct }).from(menuItem).where(and(eq(menuItem.organisationId, fx.orgA), isNull(menuItem.linkedIngredientId)));
+      const total = menu.reduce((sum, m) => sum + m.units, 0);
+      expect(total).toBeGreaterThan(0);
+      for (const m of menu) expect(Number(m.mix)).toBeCloseTo((m.units / total) * 100, 1);
+    });
+  });
+
   describe("GET /analysis writes nothing", () => {
     it("leaves stored classification and mix untouched, with or without ?category=", async () => {
       await db.update(menuItem).set({ unitsSold: 5, classification: "unclassified", menuMixPct: null }).where(eq(menuItem.menuItemId, fx.itemId));
@@ -531,6 +552,17 @@ describe.skipIf(!RUN)("Wave 7 menu server work (real DB)", () => {
       expect(res.status).toBe(400);
       expect(res.body.code).toBe("VALIDATION");
       expect(await db.select().from(sale).where(eq(sale.createdBy, fx.loner))).toHaveLength(0);
+    });
+
+    it("rejects a fractional quantity (units sold are whole) with a coded 400 and records nothing", async () => {
+      const before = (await stockOf(fx.a1, fx.flourId, "BOH"))!;
+      for (const qty of [1.2345, 1.5]) {
+        const res = await sell(fx.cook, qty, { key: `${fx.tag}-fraction` });
+        expect(res.status).toBe(400);
+        expect(res.body.code).toBe("VALIDATION");
+      }
+      expect(await salesWithKey(`${fx.tag}-fraction`)).toHaveLength(0);
+      expect(await stockOf(fx.a1, fx.flourId, "BOH")).toBe(before);
     });
 
     it("rejects a non-positive quantity with a coded 400", async () => {

@@ -14,7 +14,7 @@ import { db } from "../db/index.js";
 import { menuItem, menuItemIngredient, menuCategorySetting, wasteLog, ingredient, locationIngredient, user } from "../db/schema.js";
 import { eq, and, or, sql, gte, inArray, isNull } from "drizzle-orm";
 import { AppError } from "../utils/appError.js";
-import { menuReadable, assertCanManageMenuItem, resolveMenuScope, type MenuScope } from "./menuAccess.js";
+import { menuReadable, assertCanManageMenuItem, type MenuScope } from "./menuAccess.js";
 import { accessibleLocationIds } from "./locationContextService.js";
 import type { TokenPayload } from "./authService.js";
 import {
@@ -144,7 +144,7 @@ export async function updateMenuItem(menuItemId: string, scope: MenuScope, data:
     data.servingsPerSale !== undefined || data.qFactorPct !== undefined;
   if (costRelevantChange || data.unitsSold !== undefined) {
     if (costRelevantChange) await recalculateItemCosts(menuItemId);
-    await persistClassificationOf(menuItemId);
+    await persistClassification(scope);
   }
 
   // Brain memory (spec T12): only capture SEMANTIC menu changes (name/category/
@@ -267,7 +267,7 @@ async function computeLineCost(
   });
 }
 
-export async function addIngredient(menuItemId: string, data: {
+export async function addIngredient(menuItemId: string, scope: MenuScope, data: {
   ingredientId?: string | null;
   ingredientName: string;
   note?: string | null;
@@ -300,7 +300,7 @@ export async function addIngredient(menuItemId: string, data: {
 
   // Recalculate item costs
   await recalculateItemCosts(menuItemId);
-  await persistClassificationOf(menuItemId);
+  await persistClassification(scope);
   return ing;
 }
 
@@ -337,11 +337,11 @@ export async function getIngredients(menuItemId: string) {
     .orderBy(menuItemIngredient.ingredientName);
 }
 
-export async function deleteIngredient(ingredientId: number, menuItemId: string) {
+export async function deleteIngredient(ingredientId: number, menuItemId: string, scope: MenuScope) {
   await db.delete(menuItemIngredient)
     .where(and(eq(menuItemIngredient.id, ingredientId), eq(menuItemIngredient.menuItemId, menuItemId)));
   await recalculateItemCosts(menuItemId);
-  await persistClassificationOf(menuItemId);
+  await persistClassification(scope);
 }
 
 /**
@@ -352,7 +352,7 @@ export async function deleteIngredient(ingredientId: number, menuItemId: string)
  * Throws if the row is unlinked (legacy free-text) — there's no Catalog
  * cost to refresh from.
  */
-export async function refreshIngredientCost(rowId: number, menuItemId: string) {
+export async function refreshIngredientCost(rowId: number, menuItemId: string, scope: MenuScope) {
   const [row] = await db.select().from(menuItemIngredient)
     .where(and(eq(menuItemIngredient.id, rowId), eq(menuItemIngredient.menuItemId, menuItemId)));
   if (!row) throw new Error("Menu item ingredient not found");
@@ -388,7 +388,7 @@ export async function refreshIngredientCost(rowId: number, menuItemId: string) {
     .returning();
 
   await recalculateItemCosts(menuItemId);
-  await persistClassificationOf(menuItemId);
+  await persistClassification(scope);
   return updated;
 }
 
@@ -540,19 +540,6 @@ export async function persistClassification(scope: MenuScope): Promise<void> {
     await db.update(menuItem).set({ menuMixPct: next.menuMixPct, classification: next.classification, updatedDttm: new Date() })
       .where(eq(menuItem.menuItemId, item.menuItemId));
   }
-}
-
-/**
- * persistClassification for the menu one item is part of, when the caller's scope is not at hand (a cost change deep
- * in a service). An item with no organisation is part of its creator's menu, which is their organisation's if they have one.
- */
-async function persistClassificationOf(menuItemId: string): Promise<void> {
-  const [item] = await db.select({ userId: menuItem.userId, organisationId: menuItem.organisationId })
-    .from(menuItem).where(eq(menuItem.menuItemId, menuItemId));
-  if (!item) return;
-  await persistClassification(item.organisationId === null
-    ? await resolveMenuScope(item.userId)
-    : { userId: item.userId, organisationId: item.organisationId, isOrgAdmin: false });
 }
 
 /** POST /analysis/recalculate: refresh stored costs (of one category, or all), then stored mix and classification. */
