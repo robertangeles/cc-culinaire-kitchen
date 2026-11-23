@@ -12,7 +12,11 @@ const mocks = vi.hoisted(() => ({
   screenOptions: {} as Record<string, unknown>,
   screens: [] as { name: string; guard: boolean; options: { title?: string; href?: null; tabBarButton?: () => null; tabBarItemStyle?: { display?: string } } }[],
   navigate: vi.fn(),
+  tabBar: null as unknown as (props: BarProps) => ReactNode,
+  barState: null as unknown as BarProps["state"],
+  listeners: {} as Record<string, (arg: { navigation: { navigate: (route: string) => void } }) => { tabPress: (e: { preventDefault: () => void }) => void }>,
 }));
+type BarProps = { state: { index: number; routes: { key: string; name: string }[] } };
 vi.mock("../src/runtime/appContext", () => ({ useSession: () => ({ state: { phase: "ready", user: mocks.user } }) }));
 vi.mock("react-native-safe-area-context", () => ({
   useSafeAreaInsets: () => mocks.insets,
@@ -20,17 +24,26 @@ vi.mock("react-native-safe-area-context", () => ({
 }));
 vi.mock("expo-router", () => {
   const Guard = createContext(true);
-  const Tabs = ({ children, screenOptions }: { children?: ReactNode; screenOptions: Record<string, unknown> }) => {
+  const Tabs = ({ children, screenOptions, tabBar }: { children?: ReactNode; screenOptions: Record<string, unknown>; tabBar: typeof mocks.tabBar }) => {
     mocks.screenOptions = screenOptions;
+    mocks.tabBar = tabBar;
     return <>{children}</>;
   };
-  Tabs.Screen = ({ name, options }: { name: string; options: { title?: string; href?: null; tabBarButton?: () => null; tabBarItemStyle?: { display?: string } } }) => {
+  Tabs.Screen = ({ name, options, listeners }: { name: string; options: { title?: string; href?: null; tabBarButton?: () => null; tabBarItemStyle?: { display?: string } }; listeners?: (typeof mocks.listeners)[string] }) => {
+    if (listeners) mocks.listeners[name] = listeners;
     mocks.screens.push({ name, guard: useContext(Guard), options });
     return null;
   };
   Tabs.Protected = ({ guard, children }: { guard: boolean; children?: ReactNode }) => <Guard value={guard}>{Children.toArray(children)}</Guard>;
   return { Tabs, useNavigation: () => ({ navigate: mocks.navigate }) };
 });
+// The library's own bar, which draws the tab at `state.index` as the open one: this records the state the layout hands it.
+vi.mock("expo-router/tabs", () => ({
+  BottomTabBar: ({ state }: BarProps) => {
+    mocks.barState = state;
+    return null;
+  },
+}));
 
 import AppTabs from "../app/(app)/_layout";
 import More from "../app/(app)/more";
@@ -91,6 +104,42 @@ describe("the tab bar", () => {
     expect(mocks.screens.filter((s) => s.guard).map((s) => s.name)).toEqual(expect.arrayContaining(["(moves)", "(receive)", "account"]));
     // ...and none is `href: null`: expo-router hides such a tab and sends anyone who opens it to the first tab (More > Move landed on Prep).
     expect(mocks.screens.every((s) => s.options.href === undefined)).toBe(true);
+  });
+
+  /** The tab the bar draws as open when the navigator's open screen is `focused`. */
+  const highlighted = (focused: string) => {
+    const routes = mocks.screens.filter((s) => s.guard).map((s) => ({ key: `${s.name}-key`, name: s.name }));
+    cleanup();
+    render(<>{mocks.tabBar({ state: { index: routes.findIndex((r) => r.name === focused), routes } })}</>);
+    return mocks.barState.routes[mocks.barState.index].name;
+  };
+
+  it.each([["(moves)"], ["(receive)"], ["account"]])("highlights More while %s, a screen under More, is open", (route) => {
+    mocks.user = person({ roles: ["Administrator"] });
+    render(<AppTabs />);
+    expect(highlighted(route)).toBe("more");
+  });
+
+  it("highlights a screen's own button when it has one", () => {
+    mocks.user = person({ roles: ["Administrator"] });
+    render(<AppTabs />);
+    expect(highlighted("(prep)")).toBe("(prep)");
+    cleanup();
+    mocks.screens.length = 0;
+    // With no overflow Account has its own button, so it is not handed to More.
+    mocks.user = person({ permissions: ["waste:log"] });
+    render(<AppTabs />);
+    expect(highlighted("account")).toBe("account");
+  });
+
+  it("a press on More opens the More list even when the bar already shows More as open (from Move)", () => {
+    mocks.user = person({ roles: ["Administrator"] });
+    render(<AppTabs />);
+    const preventDefault = vi.fn();
+    mocks.listeners.more({ navigation: { navigate: mocks.navigate } }).tabPress({ preventDefault });
+    // Prevented, so the bar's own handling (which does nothing for the tab it thinks is open) does not also run.
+    expect(preventDefault).toHaveBeenCalled();
+    expect(mocks.navigate).toHaveBeenCalledWith("more");
   });
 
   it("More lists the modules that did not fit, then Account, and opens each", () => {

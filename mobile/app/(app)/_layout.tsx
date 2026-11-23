@@ -1,4 +1,5 @@
 import { Tabs } from "expo-router";
+import { BottomTabBar } from "expo-router/tabs";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useSession } from "../../src/runtime/appContext";
 import { canOpen, moduleTabs, tabBar } from "../../src/shell/tabs";
@@ -25,9 +26,16 @@ export default function AppTabs() {
   const { user } = state;
   const { more } = tabBar(user);
   const overflow = more.length > 0;
+  const underMore = overflow ? [...more.map((t) => t.route), "account"] : [];
 
   return (
     <Tabs
+      // A screen under More has no button of its own to light up: the bar is told More is the open tab, so More is highlighted.
+      tabBar={(props) => {
+        const { routes, index } = props.state;
+        const shown = underMore.includes(routes[index].name) ? routes.findIndex((r) => r.name === "more") : index;
+        return <BottomTabBar {...props} state={{ ...props.state, index: shown }} />;
+      }}
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: c.accentText,
@@ -43,7 +51,17 @@ export default function AppTabs() {
         </Tabs.Protected>
       ))}
       <Tabs.Screen name="account" options={{ title: "Account", ...noButton(overflow), tabBarIcon: ({ color }) => <TabIcon name="account" color={color} /> }} />
-      <Tabs.Screen name="more" options={{ title: "More", ...noButton(!overflow), tabBarIcon: ({ color }) => <TabIcon name="more" color={color} /> }} />
+      <Tabs.Screen
+        name="more"
+        options={{ title: "More", ...noButton(!overflow), tabBarIcon: ({ color }) => <TabIcon name="more" color={color} /> }}
+        // The bar ignores a press on the tab it thinks is open, which More is while a screen under it shows: open the list here instead.
+        listeners={({ navigation }) => ({
+          tabPress: (e) => {
+            e.preventDefault();
+            navigation.navigate("more");
+          },
+        })}
+      />
     </Tabs>
   );
 }

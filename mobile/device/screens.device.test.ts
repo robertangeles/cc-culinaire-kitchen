@@ -76,7 +76,9 @@ async function hideDevTools() {
   try {
     // The menu opens half-height, with the switch under the navigation bar: drag it up until the row is well on screen.
     for (let i = 0; i < 3; i++) {
-      const row = await waitFor("Tools button", 10_000);
+      // The menu does not always show the row in time: leave the gear in the picture rather than fail the walk.
+      const row = await waitFor("Tools button", 10_000).catch(() => null);
+      if (!row) break;
       if (row.y2 < h * 0.8) {
         await tapAt(w - Math.round((67 * dpi) / 160), Math.round((row.y1 + row.y2) / 2)); // the switch's centre is 67 dp in from the right edge
         break;
@@ -503,8 +505,8 @@ describe.skipIf(!process.env.SCREENS_OUT)(`screens on ${FORM}`, () => {
     const me = await m.client.request<{ userId?: number; user?: { userId: number } }>("GET", "/api/auth/me");
     const userId = me.userId ?? me.user!.userId;
     const ctx = await m.client.request<{ organisationId: number }>("GET", "/api/users/location-context");
-    const second = await m.client.request<{ storeLocationId: string }>("POST", "/api/store-locations", { body: { organisationId: ctx.organisationId, locationName: NAMES.location2 } });
-    await m.client.request("POST", `/api/store-locations/${second.storeLocationId}/staff`, { body: { userId } });
+    const second = await m.client.request<{ storeLocation: { storeLocationId: string } }>("POST", "/api/store-locations", { body: { organisationId: ctx.organisationId, locationName: NAMES.location2 } });
+    await m.client.request("POST", `/api/store-locations/${second.storeLocation.storeLocationId}/staff`, { body: { userId } });
     await launch();
     if (await has(/^More(,|$)/)) {
       await tap(/^More(,|$)/);
