@@ -1,6 +1,7 @@
 /**
  * Which tabs a signed-in person sees. One entry per module: its route group under `app/(app)/`, its title, and
- * the permissions that open it (any one is enough, as in the web's `navConfig.ts`). A new wave adds a folder
+ * the permissions that open it (any one is enough, as in the web's `navConfig.ts`; none for a module the server opens to anyone
+ * signed in). A new wave adds a folder
  * `app/(app)/(module)/` and one line here. Hiding a tab is never access control: the server checks every call.
  */
 
@@ -12,7 +13,8 @@ export interface ModuleTab {
   route: string;
   title: string;
   icon: TabIconName;
-  anyPermission: string[];
+  /** Left out when the server asks only for a signed-in person (no permission key on its routes). */
+  anyPermission?: string[];
 }
 
 export const moduleTabs: ModuleTab[] = [
@@ -25,6 +27,9 @@ export const moduleTabs: ModuleTab[] = [
   // The server gates the consumption log and stock movements with `inventory:count` (the web's "Internal Usage" and "Move Between Areas").
   { route: "(usage)", title: "Usage", icon: "usage", anyPermission: ["inventory:count"] },
   { route: "(moves)", title: "Move", icon: "move", anyPermission: ["inventory:count"] },
+  // Chat, saved conversations and recipes check only that someone is signed in (`authenticate`/`authenticateOrGuest`, no permission key).
+  { route: "(chat)", title: "Ask", icon: "chat" },
+  { route: "(recipes)", title: "Recipes", icon: "recipes" },
 ];
 
 /** Administrators hold every permission implicitly, as on the web and the server. */
@@ -32,7 +37,7 @@ export function hasAnyPermission(user: AuthUser, keys: string[]): boolean {
   return user.roles.includes("Administrator") || keys.some((k) => user.permissions.includes(k));
 }
 
-export const canOpen = (user: AuthUser, tab: ModuleTab) => hasAnyPermission(user, tab.anyPermission);
+export const canOpen = (user: AuthUser, tab: ModuleTab) => !tab.anyPermission || hasAnyPermission(user, tab.anyPermission);
 
 /** Everyone also gets the Account tab (sign out, location), so a person with no module still has somewhere to go. */
 export const visibleTabs = (user: AuthUser) => moduleTabs.filter((t) => canOpen(user, t));
