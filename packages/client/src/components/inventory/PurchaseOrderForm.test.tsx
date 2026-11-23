@@ -270,4 +270,25 @@ describe("PurchaseOrderForm — order-guide-first", () => {
     expect(arg.lines[0].orderedQty).toBe("3");
     expect(arg.lines[0].orderedUnit).toBe("case");
   });
+
+  it("adds a line without a price or stock figure when the server left them out (no inventory:cost)", async () => {
+    const { currentQty: _qty, locationUnitCost: _loc, orgUnitCost: _org, ...blind } = BARE_CATALOG_ITEM;
+    mockIngredients = [{ ...blind, parLevel: "5" }];
+    mockGuides = [];
+    renderForm();
+    fireEvent.change(screen.getByLabelText(/Supplier/), { target: { value: "sup-1" } });
+    fireEvent.change(screen.getByPlaceholderText(/Filter items by name/), { target: { value: "spice" } });
+    const row = (await screen.findByText("Mixed Spice")).closest("button")!;
+    expect(row.textContent).not.toContain("0.0");
+
+    fireEvent.click(row);
+
+    expect(await screen.findByText(/In stock: —/)).toBeTruthy();
+    expect(screen.queryByText("below par")).toBeNull();
+    fireEvent.click(screen.getByText("Save as Draft"));
+    await waitFor(() => expect(createPO).toHaveBeenCalled());
+    const [line] = (createPO.mock.calls[0][0] as any).lines;
+    expect(line).toMatchObject({ ingredientId: "ing-spice", orderedQty: "1", orderedUnit: "kg" });
+    expect(line.unitCost).toBeUndefined();
+  });
 });

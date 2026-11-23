@@ -352,6 +352,7 @@ export async function generateTasksFromSelections(
         and(
           eq(stockLevel.storeLocationId, session.storeLocationId),
           inArray(stockLevel.ingredientId, catalogIds),
+          eq(stockLevel.zone, "BOH"),
         ),
       );
     for (const sr of stockRows) {

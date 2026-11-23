@@ -9,6 +9,7 @@ import { z } from "zod";
 import pino from "pino";
 import { getUserLocationContext, assertLocationAccess } from "../services/locationContextService.js";
 import { hasPermission } from "../middleware/auth.js";
+import { withoutCostFields } from "../utils/costFields.js";
 import {
   createPO,
   listPOs,
@@ -81,6 +82,11 @@ const ListPOsQuerySchema = z.object({
 /** A receiving-only user (no `inventory:count`) is confined to the receiving queue of the locations they can use. */
 function isReceivingOnly(req: Request): boolean {
   return !hasPermission(req.user!, "inventory:count");
+}
+
+/** Prices on an order are for whoever buys, receives or may see cost: a counter with none of those keys gets the order without them. */
+function seesPrices(req: Request): boolean {
+  return hasPermission(req.user!, "inventory:cost") || req.user!.permissions.some((p) => p.startsWith("purchasing:"));
 }
 
 async function resolveOrgId(req: Request, res: Response): Promise<number | null> {
@@ -165,7 +171,7 @@ export async function handleListPOs(
     }
 
     const result = await listPOs(orgId, { ...rest, statuses, storeLocationIds });
-    res.json(result);
+    res.json(seesPrices(req) ? result : result.map(withoutCostFields));
   } catch (err) {
     next(err);
   }
@@ -188,7 +194,7 @@ export async function handleGetPODetail(
     }
     if (isReceivingOnly(req)) await assertLocationAccess(req.user!, result.storeLocationId);
 
-    res.json(result);
+    res.json(seesPrices(req) ? result : { ...withoutCostFields(result), lines: result.lines.map(withoutCostFields) });
   } catch (err) {
     next(err);
   }
