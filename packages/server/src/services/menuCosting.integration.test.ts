@@ -13,6 +13,7 @@ import { ingredient, locationIngredient, menuItem, menuItemIngredient, user } fr
 import {
   addIngredient, createMenuItem, getMenuAnalysis, getPandLFoodCost, recalculateMenu, updateMenuItem,
 } from "./menuIntelligenceService.js";
+import { resolveMenuScope, type MenuScope } from "./menuAccess.js";
 import { createLineLoopFx, removeLineLoopFx, type LineLoopFx } from "./lineLoopFixture.js";
 
 /**
@@ -25,11 +26,12 @@ import { createLineLoopFx, removeLineLoopFx, type LineLoopFx } from "./lineLoopF
 const RUN = process.env.TENANT_IT === "1";
 
 let fx: LineLoopFx;
+let chef: MenuScope;
 let brandyId: string;
 const ids: Record<string, string> = {};
 
 async function item(name: string, category: string, price: string, extra: Partial<Parameters<typeof createMenuItem>[1]> = {}) {
-  const row = await createMenuItem(fx.chef, { name, category, sellingPrice: price, ...extra });
+  const row = await createMenuItem(chef, { name, category, sellingPrice: price, ...extra });
   ids[name] = row.menuItemId;
   return row.menuItemId;
 }
@@ -57,6 +59,7 @@ describe.skipIf(!RUN)("menu costing (real DB) — characterisation before the mo
   beforeAll(async () => {
     fx = await createLineLoopFx(`mc_${Date.now().toString(36)}`);
     await db.update(user).set({ selectedLocationId: fx.locA }).where(eq(user.userId, fx.chef));
+    chef = await resolveMenuScope(fx.chef);
     // Catalogue: flour is kg (fixture, location cost 2); brandy is counted in L with a preferred supplier cost.
     [{ id: brandyId }] = await db
       .insert(ingredient)
@@ -77,12 +80,12 @@ describe.skipIf(!RUN)("menu costing (real DB) — characterisation before the mo
 
   it("costs a dish: yield, unit conversion, servings, Q factor and a pack of servings per sale", async () => {
     await item("Margherita", "Mains", "18.50", { servings: 4, servingsPerSale: 2, qFactorPct: "3.5" });
-    await addIngredient(ids.Margherita, { ingredientName: "Dough", quantity: "1.2", unit: "kg", unitCost: "3.35", yieldPct: "87.5" });
-    await addIngredient(ids.Margherita, { ingredientName: "Cheese", quantity: "0.35", unit: "kg", unitCost: "14.20" });
+    await addIngredient(ids.Margherita, chef, { ingredientName: "Dough", quantity: "1.2", unit: "kg", unitCost: "3.35", yieldPct: "87.5" });
+    await addIngredient(ids.Margherita, chef, { ingredientName: "Cheese", quantity: "0.35", unit: "kg", unitCost: "14.20" });
     // Linked to a kg-counted catalogue item: 500 g converts to 0.5 kg. The manual 2.10 wins over the catalogue.
-    await addIngredient(ids.Margherita, { ingredientId: fx.ingId, ingredientName: "Flour", quantity: "500", unit: "g", unitCost: "2.10", yieldPct: "92" });
+    await addIngredient(ids.Margherita, chef, { ingredientId: fx.ingId, ingredientName: "Flour", quantity: "500", unit: "g", unitCost: "2.10", yieldPct: "92" });
     // Linked to an L-counted spirit with no manual cost: 150 mL is 0.15 L at the catalogue's preferred 41.25.
-    await addIngredient(ids.Margherita, { ingredientId: brandyId, ingredientName: "Brandy", quantity: "150", unit: "mL" });
+    await addIngredient(ids.Margherita, chef, { ingredientId: brandyId, ingredientName: "Brandy", quantity: "150", unit: "mL" });
 
     expect(await lineCosts("Margherita")).toMatchInlineSnapshot(`
       [
@@ -98,7 +101,7 @@ describe.skipIf(!RUN)("menu costing (real DB) — characterisation before the mo
         "contributionMargin": "9.76",
         "foodCost": "8.74",
         "foodCostPct": "47.25",
-        "menuMixPct": null,
+        "menuMixPct": "0.00",
       }
     `);
   });
@@ -106,9 +109,9 @@ describe.skipIf(!RUN)("menu costing (real DB) — characterisation before the mo
   it("rounds a half-cent line with toFixed and a zero yield to 0.00", async () => {
     await item("House Salad", "Starters", "12.00");
     // 0.125 kg x 14.20 = 1.775 in floating point (1.7749999...): the stored cost is 1.77.
-    await addIngredient(ids["House Salad"], { ingredientName: "Lettuce", quantity: "0.125", unit: "kg", unitCost: "14.20" });
-    await addIngredient(ids["House Salad"], { ingredientName: "Dressing", quantity: "0.5", unit: "kg", unitCost: "8.35" });
-    await addIngredient(ids["House Salad"], { ingredientName: "Croutons", quantity: "0.2", unit: "kg", unitCost: "5", yieldPct: "0" });
+    await addIngredient(ids["House Salad"], chef, { ingredientName: "Lettuce", quantity: "0.125", unit: "kg", unitCost: "14.20" });
+    await addIngredient(ids["House Salad"], chef, { ingredientName: "Dressing", quantity: "0.5", unit: "kg", unitCost: "8.35" });
+    await addIngredient(ids["House Salad"], chef, { ingredientName: "Croutons", quantity: "0.2", unit: "kg", unitCost: "5", yieldPct: "0" });
 
     expect(await lineCosts("House Salad")).toMatchInlineSnapshot(`
       [
@@ -123,25 +126,25 @@ describe.skipIf(!RUN)("menu costing (real DB) — characterisation before the mo
         "contributionMargin": "6.06",
         "foodCost": "5.94",
         "foodCostPct": "49.50",
-        "menuMixPct": null,
+        "menuMixPct": "0.00",
       }
     `);
   });
 
   it("a free item has a 0 food cost % and a negative margin; a price change recalculates the stored costs", async () => {
     await item("Free Bread", "Starters", "0.00");
-    await addIngredient(ids["Free Bread"], { ingredientId: fx.ingId, ingredientName: "Flour", quantity: "300", unit: "g", unitCost: "2.40" });
+    await addIngredient(ids["Free Bread"], chef, { ingredientId: fx.ingId, ingredientName: "Flour", quantity: "300", unit: "g", unitCost: "2.40" });
     const free = await stored("Free Bread");
 
     await item("Truffle Pasta", "Mains", "29.00", { servings: 2 });
-    await addIngredient(ids["Truffle Pasta"], { ingredientName: "Truffle", quantity: "0.04", unit: "kg", unitCost: "950" });
-    await addIngredient(ids["Truffle Pasta"], { ingredientName: "Pasta", quantity: "0.25", unit: "kg", unitCost: "4.60", yieldPct: "95" });
+    await addIngredient(ids["Truffle Pasta"], chef, { ingredientName: "Truffle", quantity: "0.04", unit: "kg", unitCost: "950" });
+    await addIngredient(ids["Truffle Pasta"], chef, { ingredientName: "Pasta", quantity: "0.25", unit: "kg", unitCost: "4.60", yieldPct: "95" });
     const before = await stored("Truffle Pasta");
-    await updateMenuItem(ids["Truffle Pasta"], fx.chef, { sellingPrice: "38.00" });
+    await updateMenuItem(ids["Truffle Pasta"], chef, { sellingPrice: "38.00" });
     const after = await stored("Truffle Pasta");
 
     await item("Soup", "Mains", "9.50");
-    await addIngredient(ids.Soup, { ingredientName: "Stock", quantity: "0.4", unit: "kg", unitCost: "3.10", yieldPct: "100" });
+    await addIngredient(ids.Soup, chef, { ingredientName: "Stock", quantity: "0.4", unit: "kg", unitCost: "3.10", yieldPct: "100" });
 
     expect({ free, before, after, soup: await stored("Soup") }).toMatchInlineSnapshot(`
       {
@@ -150,79 +153,59 @@ describe.skipIf(!RUN)("menu costing (real DB) — characterisation before the mo
           "contributionMargin": "18.39",
           "foodCost": "19.61",
           "foodCostPct": "51.59",
-          "menuMixPct": null,
+          "menuMixPct": "0.00",
         },
         "before": {
           "classification": "unclassified",
           "contributionMargin": "9.39",
           "foodCost": "19.61",
           "foodCostPct": "67.60",
-          "menuMixPct": null,
+          "menuMixPct": "0.00",
         },
         "free": {
           "classification": "unclassified",
           "contributionMargin": "-0.72",
           "foodCost": "0.72",
           "foodCostPct": "0.00",
-          "menuMixPct": null,
+          "menuMixPct": "0.00",
         },
         "soup": {
           "classification": "unclassified",
           "contributionMargin": "8.26",
           "foodCost": "1.24",
           "foodCostPct": "13.05",
-          "menuMixPct": null,
+          "menuMixPct": "0.00",
         },
       }
     `);
   });
 
-  it("recalculates mix % and classification over the whole menu, then over one category", async () => {
+  it("stores mix % and classification over the whole menu; one category is classified on its own only in the analysis", async () => {
     const sold: Record<string, number> = { Margherita: 120, "House Salad": 40, "Free Bread": 10, "Truffle Pasta": 25, Soup: 0 };
-    for (const [name, unitsSold] of Object.entries(sold)) await updateMenuItem(ids[name], fx.chef, { unitsSold });
+    for (const [name, unitsSold] of Object.entries(sold)) await updateMenuItem(ids[name], chef, { unitsSold });
 
-    await recalculateMenu(fx.chef);
+    await recalculateMenu(chef);
     const whole = Object.fromEntries(await Promise.all(Object.keys(sold).map(async (n) => [n, await stored(n)])));
-    await recalculateMenu(fx.chef, "Mains");
-    const mainsOnly = Object.fromEntries(await Promise.all(Object.keys(sold).map(async (n) => [n, await stored(n)])));
+    // A category recalculation refreshes that category's costs; the stored mix and class stay menu-wide.
+    await recalculateMenu(chef, "Mains");
+    const afterMains = Object.fromEntries(await Promise.all(Object.keys(sold).map(async (n) => [n, await stored(n)])));
+    expect(afterMains).toEqual(whole);
+    const mainsOnly = Object.fromEntries((await getMenuAnalysis(chef, "Mains")).items.map((i) => [i.name, { classification: i.classification, menuMixPct: i.menuMixPct }]));
 
     expect({ whole, mainsOnly }).toMatchInlineSnapshot(`
       {
         "mainsOnly": {
-          "Free Bread": {
-            "classification": "dog",
-            "contributionMargin": "-0.72",
-            "foodCost": "0.72",
-            "foodCostPct": "0.00",
-            "menuMixPct": "5.13",
-          },
-          "House Salad": {
-            "classification": "plowhorse",
-            "contributionMargin": "6.06",
-            "foodCost": "5.94",
-            "foodCostPct": "49.50",
-            "menuMixPct": "20.51",
-          },
           "Margherita": {
             "classification": "plowhorse",
-            "contributionMargin": "9.76",
-            "foodCost": "8.74",
-            "foodCostPct": "47.25",
-            "menuMixPct": "82.76",
+            "menuMixPct": 82.76,
           },
           "Soup": {
             "classification": "unclassified",
-            "contributionMargin": "8.26",
-            "foodCost": "1.24",
-            "foodCostPct": "13.05",
-            "menuMixPct": "0.00",
+            "menuMixPct": 0,
           },
           "Truffle Pasta": {
             "classification": "puzzle",
-            "contributionMargin": "18.39",
-            "foodCost": "19.61",
-            "foodCostPct": "51.59",
-            "menuMixPct": "17.24",
+            "menuMixPct": 17.24,
           },
         },
         "whole": {
@@ -267,7 +250,7 @@ describe.skipIf(!RUN)("menu costing (real DB) — characterisation before the mo
   });
 
   it("summarises the analysis: counts, averages, revenue, food cost and overall food cost %", async () => {
-    const a = await getMenuAnalysis(fx.chef);
+    const a = await getMenuAnalysis(chef);
     const { items, ...summary } = a;
     expect({
       summary,
@@ -336,7 +319,8 @@ describe.skipIf(!RUN)("menu costing (real DB) — characterisation before the mo
         },
       }
     `);
-    const empty = await getMenuAnalysis(fx.boss);
+    // A person in no organisation reads only their own items: none here.
+    const empty = await getMenuAnalysis({ userId: fx.boss, organisationId: null, isOrgAdmin: false });
     expect(empty).toMatchInlineSnapshot(`
       {
         "avgContributionMargin": "0.00",

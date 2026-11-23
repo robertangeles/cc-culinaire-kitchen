@@ -860,12 +860,18 @@ export const benchDmThread = pgTable(
 // ---------------------------------------------------------------------------
 
 /**
- * The `menu_item` table stores a user's menu items with calculated
+ * The `menu_item` table stores an organisation's menu items with calculated
  * cost metrics and menu engineering classification.
  */
 export const menuItem = pgTable("menu_item", {
   menuItemId: uuid("menu_item_id").defaultRandom().primaryKey(),
+  /** The creator. Edit rights: the creator or an admin of `organisation_id`. */
   userId: integer("user_id").notNull().references(() => user.userId),
+  /**
+   * The organisation the item belongs to: every member reads it. Null only for a user with no organisation and for
+   * rows an older server wrote before backfillMenuItemOrganisation.ts ran; those stay visible to their creator.
+   */
+  organisationId: integer("organisation_id").references(() => organisation.organisationId),
   storeLocationId: uuid("store_location_id").references(() => storeLocation.storeLocationId),
   name: varchar("name", { length: 200 }).notNull(),
   category: varchar("category", { length: 100 }).notNull(),
@@ -916,6 +922,8 @@ export const menuItem = pgTable("menu_item", {
   updatedDttm: timestamp("updated_dttm").notNull().defaultNow(),
 }, (table) => [
   index("idx_menu_item_user").on(table.userId),
+  // "All menu items of one organisation, by category": the list, analysis and sale lookups, and the FK check when an organisation row is deleted.
+  index("idx_menu_item_organisation").on(table.organisationId),
   index("idx_menu_item_store").on(table.storeLocationId),
   // FOH direct sale: one auto-generated 1:1 link per (user, consumable) — the
   // partial unique makes "create once, reuse forever" race-safe.
@@ -2236,6 +2244,8 @@ export const consumptionLog = pgTable(
      * exactly the rows a sale produced.
      */
     saleId: uuid("sale_id").references(() => sale.saleId),
+    /** The stock zone (BOH or FOH) a sale took this quantity from, so a void puts it back there. NULL for non-sale rows and sales recorded before Wave 7. */
+    zone: varchar("zone", { length: 3 }),
     userId: integer("user_id").notNull().references(() => user.userId),
     quantity: numeric("quantity", { precision: 10, scale: 3 }).notNull(),
     unit: varchar("unit", { length: 20 }).notNull(),

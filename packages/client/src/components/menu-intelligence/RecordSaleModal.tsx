@@ -209,8 +209,9 @@ function CsvTab({ onDone }: { onDone: () => void }) {
 }
 
 function HistoryTab({ locationId, onDone }: { locationId: string | null; onDone: () => void }) {
-  const [sales, setSales] = useState<Array<{ saleId: string; menuItemName: string; qtySold: string; source: string; soldAt: string; voidedAt: string | null }>>([]);
+  const [sales, setSales] = useState<Awaited<ReturnType<typeof listSales>>>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const load = useCallback(() => {
     if (!locationId) { setLoading(false); return; }
     setLoading(true);
@@ -219,7 +220,8 @@ function HistoryTab({ locationId, onDone }: { locationId: string | null; onDone:
   useEffect(() => { load(); }, [load]);
 
   async function doVoid(saleId: string) {
-    try { await voidSale(saleId); onDone(); load(); } catch { /* surfaced by reload */ }
+    setError(null);
+    try { await voidSale(saleId); onDone(); load(); } catch (err) { setError(err instanceof Error ? err.message : "Could not void the sale"); }
   }
 
   if (!locationId) return <p className="text-xs text-dark-600">Select a location to see its sales.</p>;
@@ -228,14 +230,17 @@ function HistoryTab({ locationId, onDone }: { locationId: string | null; onDone:
 
   return (
     <div className="space-y-1 max-h-72 overflow-y-auto">
+      {error && <p role="alert" className="text-xs text-red-400">{error}</p>}
       {sales.map((s) => (
         <div key={s.saleId} className="flex items-center justify-between text-xs px-2 py-1.5 rounded border border-white/5">
           <span className={s.voidedAt ? "text-dark-500 line-through" : "text-white"}>{s.menuItemName} ×{Number(s.qtySold)}</span>
           <span className="text-dark-500">{new Date(s.soldAt).toLocaleDateString()}</span>
           {s.voidedAt ? (
             <span className="text-dark-500">voided</span>
-          ) : (
+          ) : s.canManage !== false ? (
             <button onClick={() => doVoid(s.saleId)} className="flex items-center gap-1 text-red-400 hover:text-red-300"><RotateCcw className="size-3" /> void</button>
+          ) : (
+            <span />
           )}
         </div>
       ))}
