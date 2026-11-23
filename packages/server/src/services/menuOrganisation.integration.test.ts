@@ -40,6 +40,7 @@ import {
   handleListSales,
   handleGetWasteImpact,
   handleListYieldVariance,
+  handleSalesCsvCommit,
 } from "../controllers/menuIntelligenceController.js";
 import { previewSalesCsv, commitSalesCsv } from "./saleService.js";
 import { importCsvSalesData } from "./menuIntelligenceService.js";
@@ -291,6 +292,49 @@ describe.skipIf(!RUN)("Wave 7 menu server work (real DB)", () => {
       expect(row).toEqual({ name: `${fx.tag} left behind`, org: fx.orgA });
       const colleagues = await call(handleListMenuItems, fx.cook);
       expect(colleagues.body.map((i: { menuItemId: string }) => i.menuItemId)).toContain(id);
+    });
+  });
+
+  describe("what the web is told it may change (canManage)", () => {
+    const flagOf = (rows: Array<{ menuItemId: string; canManage: boolean }>) => rows.find((r) => r.menuItemId === fx.itemId)?.canManage;
+
+    it("the item list and the analysis mark the chef's dish manageable for the chef and an organisation admin, not for a colleague", async () => {
+      for (const [who, expected] of [[fx.chef, true], [fx.admin, true], [fx.cook, false]] as const) {
+        expect(flagOf((await call(handleListMenuItems, who)).body)).toBe(expected);
+        expect(flagOf((await call(handleGetAnalysis, who)).body.items)).toBe(expected);
+      }
+    });
+
+    it("a location's sales are marked voidable for the recorder and an organisation admin only", async () => {
+      const made = await call(handleRecordSale, fx.cook, { params: { id: fx.itemId }, body: { qtySold: 1, locationId: fx.a1 } });
+      const flag = async (who: number) =>
+        (await call(handleListSales, who, { params: { locId: fx.a1 }, query: {} })).body.find((s: { saleId: string }) => s.saleId === made.body.saleId).canManage;
+      expect(await flag(fx.cook)).toBe(true);
+      expect(await flag(fx.admin)).toBe(true);
+      expect(await flag(fx.chef)).toBe(false);
+      await call(handleVoidSale, fx.cook, { params: { saleId: made.body.saleId } });
+    });
+  });
+
+  describe("POST /sales/import/commit checks its rows", () => {
+    it("answers a coded 400 for a row that is not what the preview returns, and records nothing", async () => {
+      const good = { rowIndex: 1, name: `${fx.tag} dish`, qtySold: 1 };
+      const bad: unknown[] = [
+        "not an array",
+        [],
+        [{ ...good, name: 42 }],
+        [{ ...good, qtySold: "many" }],
+        [{ ...good, qtySold: 1.2345 }],
+        [{ ...good, soldAt: "not a date" }],
+        [{ ...good, rowIndex: "x" }],
+      ];
+      const before = await db.select({ id: sale.saleId }).from(sale).where(eq(sale.organisationId, fx.orgA));
+      for (const lines of bad) {
+        const res = await call(handleSalesCsvCommit, fx.cook, { body: { lines } });
+        expect(res.status).toBe(400);
+        expect(res.body.code).toBe("VALIDATION");
+      }
+      expect(await db.select({ id: sale.saleId }).from(sale).where(eq(sale.organisationId, fx.orgA))).toHaveLength(before.length);
     });
   });
 

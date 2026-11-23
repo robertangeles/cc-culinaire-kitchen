@@ -86,6 +86,8 @@ export async function listSales(locationId: string, limit = 50) {
   if (!res.ok) throw new Error("Failed to load sales");
   return res.json() as Promise<Array<{
     saleId: string; menuItemName: string; qtySold: string; source: string; soldAt: string; voidedAt: string | null;
+    /** The signed-in person may void this sale (its recorder or an organisation admin). Absent from an older server: treated as allowed. */
+    canManage?: boolean;
   }>>;
 }
 
