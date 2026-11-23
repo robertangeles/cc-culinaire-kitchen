@@ -129,6 +129,9 @@ per walk than the phone, but it never waits for the phone's lease. The emulator 
 (count walk W5 and W6, cause not yet found), so use the phone for offline steps. At tablet width the walks
 written for the phone also meet screens the phone never shows at once (the Sign in tab and button are both on screen).
 
+`device/storeRoom.sh` photographs the Transfers and Stock screens on the phone and at iPad width (`wm size`/`wm density`, reset afterwards), then runs `e2e/storeRoom` against the same API.
+It makes its own throwaway database (`culinaire_storeroom` on the local test cluster), API and Metro on free ports, and stops them by process group: `bash device/lease.sh bash device/storeRoom.sh [out-dir]`.
+
 ## Rebuild and install the development build (Android, no EAS, no accounts)
 
 The installed development build holds the native code (Expo modules, icons, app id `com.culinairekitchen.chef`); the screens
