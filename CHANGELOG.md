@@ -5,6 +5,19 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Changed (error codes on the profile and account routes, before the phone shows them)
+
+No migration, no new route, nothing to seed or backfill. Every refusal below keeps the status and the `error` the web shows today and adds `code` (shared `ApiErrorBody`), so older installed apps and the web keep working. The one behaviour change: a profile photo the photo store cannot read as an image now answers `400 UNSUPPORTED_FILE_TYPE` ("That file could not be read as an image.") instead of a 500.
+
+- **New error codes:** `INVALID_CREDENTIALS`, `WEAK_PASSWORD`, `PASSWORD_NOT_SET`, `RECENT_SIGN_IN_REQUIRED`, `MFA_REQUIRED`, `INVALID_MFA_CODE`, `INVALID_MFA_SESSION`, `MFA_ALREADY_ENABLED`, `FILE_TOO_LARGE`, `UNSUPPORTED_FILE_TYPE`. The MFA ones were already sent by `/mfa/setup`, `/mfa/disable` and `/apple/link`; they are now in the shared list too.
+- **`PATCH /api/users/profile`:** a bad field is `400 VALIDATION` (`error` is still the field-error object the web reads).
+- **`POST /api/users/change-password`:** a new password under 8 characters is `400 WEAK_PASSWORD`, any other bad body `400 VALIDATION`; a wrong current password is `400 INVALID_CREDENTIALS`, an account with no password (Google sign-in only) `400 PASSWORD_NOT_SET`, a deleted account `400 NOT_FOUND`. The per-address limit answers `429 RATE_LIMITED`.
+- **`POST /api/users/profile/avatar`:** a file over the limit is `400 FILE_TOO_LARGE`, a file that is not an image `400 UNSUPPORTED_FILE_TYPE`, a missing file or a malformed upload `400 VALIDATION`.
+- **`POST /api/auth/mfa/setup`, `/enable`, `/disable`, `/verify`:** no session is `401 UNAUTHENTICATED`, a missing code `400 VALIDATION`, a wrong code `400 INVALID_MFA_CODE`, an expired sign-in step `401 INVALID_MFA_SESSION`. The per-account and per-address MFA limits answer `429 RATE_LIMITED`.
+- **`GET`/`PUT /api/users/kitchen-profile`:** `401 UNAUTHENTICATED`, `400 VALIDATION` (the field errors stay under `details`).
+- **`PATCH /api/inventory/notifications/:id/read`** and **`/dismiss`:** a notification that is missing or not the caller's is `404 NOT_FOUND`.
+- **Not in this change:** there is no "same as the current password" refusal on change-password today (web or server), so no code for it; adding one would be a behaviour change.
+
 ### Added (mobile Wave 6, phone: Ask Antoine and recipes)
 
 No server change, no schema change and no migration. The phone gets two tabs shown to everyone signed in (the server asks for no permission on chat, conversations or recipes): **Ask** (the kitchen chat with a streamed answer, Stop, Try again, saved conversations and the "grounded in your Brain" label) and **Recipes** (My Recipes, the culinary Recipe Lab, a recipe's page with refine and the public switch). No pricing, purchase or upgrade links. How it works and every difference from the web: `mobile/README.md` ("Ask Antoine", "Recipes").
