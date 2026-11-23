@@ -99,7 +99,7 @@ describe.skipIf(!RUN)("location scoping (real DB)", () => {
     // A dish the chef owns, but which belongs to a location they are not assigned to.
     [{ id: fx.menuItemAtA2 }] = await db
       .insert(menuItem)
-      .values({ userId: fx.chef, storeLocationId: fx.a2, name: `${fx.tag}-dish`, category: "mains", sellingPrice: "10", servings: 1 })
+      .values({ userId: fx.chef, organisationId: fx.orgA, storeLocationId: fx.a2, name: `${fx.tag}-dish`, category: "mains", sellingPrice: "10", servings: 1 })
       .returning({ id: menuItem.menuItemId });
     for (const locId of [fx.a1, fx.a2]) {
       await db.insert(locationIngredient).values({ ingredientId: fx.ingId, storeLocationId: locId, activeInd: true, weightedAverageCost: "2" });
@@ -196,10 +196,20 @@ describe.skipIf(!RUN)("location scoping (real DB)", () => {
   });
 
   describe("sales", () => {
-    it("refuses a sale whose location is the menu item's own, when the chef is not assigned there", async () => {
+    const locationOf = async (saleId: string) => (await db.select({ loc: sale.storeLocationId }).from(sale).where(eq(sale.saleId, saleId)))[0].loc;
+
+    it("records a sale that names no location at the chef's own location, not the menu item's", async () => {
+      const res = await recordSale(fx.orgA, fx.chef, { menuItemId: fx.menuItemAtA2, qtySold: 1, actor: principal(fx.chef) });
+      expect(await locationOf(res.saleId)).toBe(fx.a1);
+    });
+
+    it("falls back to the menu item's location only for a caller who may use it, and asks for a location otherwise", async () => {
+      // fx.hq is assigned nowhere, so has no selected location.
       await expect(
-        recordSale(fx.orgA, fx.chef, { menuItemId: fx.menuItemAtA2, qtySold: 1, actor: principal(fx.chef) }),
-      ).rejects.toMatchObject({ statusCode: 403, code: "LOCATION_NOT_ALLOWED" });
+        recordSale(fx.orgA, fx.hq, { menuItemId: fx.menuItemAtA2, qtySold: 1, actor: principal(fx.hq) }),
+      ).rejects.toMatchObject({ statusCode: 400, code: "VALIDATION" });
+      const res = await recordSale(fx.orgA, fx.hq, { menuItemId: fx.menuItemAtA2, qtySold: 1, actor: principal(fx.hq, ["inventory:hq"]) });
+      expect(await locationOf(res.saleId)).toBe(fx.a2);
     });
 
     it("refuses an explicit location the chef is not assigned to", async () => {
@@ -208,10 +218,13 @@ describe.skipIf(!RUN)("location scoping (real DB)", () => {
       ).rejects.toMatchObject({ code: "LOCATION_NOT_ALLOWED" });
     });
 
-    it("fails a CSV row for the same reason and records nothing", async () => {
+    it("a CSV row follows the same rule: recorded at the chef's location, failed for a caller with none", async () => {
+      const none = await commitSalesCsv(fx.orgA, fx.hq, [{ rowIndex: 1, name: `${fx.tag}-dish`, qtySold: 1 }], principal(fx.hq));
+      expect(none.succeeded).toEqual([]);
+      expect(none.failed).toEqual([{ rowIndex: 1, reason: "Choose a location for this sale" }]);
       const res = await commitSalesCsv(fx.orgA, fx.chef, [{ rowIndex: 1, name: `${fx.tag}-dish`, qtySold: 1 }], principal(fx.chef));
-      expect(res.succeeded).toEqual([]);
-      expect(res.failed).toEqual([{ rowIndex: 1, reason: "You do not have access to this location" }]);
+      expect(res.failed).toEqual([]);
+      expect(await locationOf(res.succeeded[0].saleId)).toBe(fx.a1);
     });
   });
 });
