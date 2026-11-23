@@ -23,13 +23,13 @@ const LineSchema = z.object({
   sentUnit: z.string().min(1).max(20),
   fifoBatchId: z.string().uuid().optional(),
 });
-const LinesSchema = z.array(LineSchema).min(1).max(500);
+const LinesSchema = z.array(LineSchema).min(1);
 
 /** What arrived, per line of the transfer: 0 or more (a line that never came is 0). */
 const ReceivedLinesSchema = z.array(z.object({
   lineId: z.string().uuid(),
   receivedQty: z.number().finite().min(0).max(QTY_MAX),
-})).max(500);
+}));
 
 /** 400 VALIDATION: a refused input, with a sentence the web shows. */
 function refuse(res: Response, error: string): void {
@@ -92,7 +92,7 @@ export async function handleInitiateTransfer(
     }
     const lines = LinesSchema.safeParse(req.body.lines);
     if (!lines.success) {
-      refuse(res, "Each line needs an item, a quantity above 0 and a unit (1 to 500 lines)");
+      refuse(res, "Each line needs an item, a quantity above 0 and a unit");
       return;
     }
 
@@ -275,7 +275,7 @@ export async function handleUpdateTransfer(
     const id = req.params.id as string;
     const lines = LinesSchema.safeParse(req.body.lines);
     if (!lines.success) {
-      refuse(res, "Each line needs an item, a quantity above 0 and a unit (1 to 500 lines)");
+      refuse(res, "Each line needs an item, a quantity above 0 and a unit");
       return;
     }
 
@@ -299,7 +299,7 @@ export async function handleAddLines(
     const id = req.params.id as string;
     const lines = LinesSchema.safeParse(req.body.lines);
     if (!lines.success) {
-      refuse(res, "Each line needs an item, a quantity above 0 and a unit (1 to 500 lines)");
+      refuse(res, "Each line needs an item, a quantity above 0 and a unit");
       return;
     }
 

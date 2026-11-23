@@ -78,6 +78,8 @@ export function IngredientCatalog() {
       if (search && !i.ingredientName.toLowerCase().includes(search.toLowerCase())) return false;
       if (statusFilter) {
         const loc = locMap.get(i.ingredientId);
+        // A quantity the server left out (no inventory:cost) is unknown, not zero: no status.
+        if (loc && loc.currentQty === undefined) return false;
         const qty = Number(loc?.currentQty || 0);
         const par = Number(loc?.parLevel || i.parLevel || 0);
         const ratio = par > 0 ? qty / par : 1;
@@ -98,7 +100,7 @@ export function IngredientCatalog() {
       const loc = locMap.get(item.ingredientId);
       const qty = Number(loc?.currentQty || 0);
       const par = Number(loc?.parLevel || item.parLevel || 0);
-      if (par > 0) {
+      if (par > 0 && !(loc && loc.currentQty === undefined)) {
         const ratio = qty / par;
         if (ratio <= 0.25) counts[cat].critical++;
         else if (ratio <= 0.75) counts[cat].low++;
