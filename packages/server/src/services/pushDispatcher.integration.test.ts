@@ -101,6 +101,7 @@ describe.skipIf(!RUN)("pushDispatcher (real DB)", () => {
     for (const m of fake.sent) {
       expect(m.title).toBe("Your shifts");
       expect(m.body).toBe("One of your shifts changed.");
+      expect(m.sound).toBe("default");
       expect(m.data).toEqual({ notificationId: n.notificationId, type: "SHIFT_CHANGED", link: "/shifts/3f2b8c1e-5d7a-4e6f-9a1b-2c3d4e5f6a7b" });
     }
   });
@@ -191,11 +192,11 @@ describe.skipIf(!RUN)("pushDispatcher (real DB)", () => {
       expect(rows.length).toBe(2);
 
       // Too young: the provider is not asked.
-      await processPushReceipts(new Date(Date.now() + 5 * MIN), fake);
+      await processPushReceipts(new Date(Date.now() + 5 * MIN));
       expect(fake.receiptRequests.flat().filter((id) => rows.some((r) => r.ticketId === id))).toEqual([]);
 
       for (const r of rows) fake.receiptScript.set(r.ticketId, { status: "ok" });
-      await processPushReceipts(new Date(Date.now() + 20 * MIN), fake);
+      await processPushReceipts(new Date(Date.now() + 20 * MIN));
       const after = (await ticketRows()).filter((r) => rows.some((x) => x.id === r.id));
       expect(after).toEqual([]);
       expect((await tokenRows([staff])).length).toBe(2);
@@ -205,7 +206,7 @@ describe.skipIf(!RUN)("pushDispatcher (real DB)", () => {
       await dispatchPush(note(staff));
       fake.receiptScript.set(fake.ticketByToken.get(tok("staff-1"))!, { status: "error", error: "DeviceNotRegistered", message: "gone" });
       fake.receiptScript.set(fake.ticketByToken.get(tok("staff-2"))!, { status: "ok" });
-      await processPushReceipts(new Date(Date.now() + 20 * MIN), fake);
+      await processPushReceipts(new Date(Date.now() + 20 * MIN));
       expect((await tokenRows([staff])).map((r) => r.tokenValue)).toEqual([tok("staff-2")]);
     });
 
@@ -213,7 +214,7 @@ describe.skipIf(!RUN)("pushDispatcher (real DB)", () => {
       await dispatchPush(note(staff));
       const id = fake.ticketByToken.get(tok("staff-1"))!;
       fake.receiptScript.set(id, { status: "error", error: "MessageRateExceeded", message: "slow down" });
-      await processPushReceipts(new Date(Date.now() + 20 * MIN), fake);
+      await processPushReceipts(new Date(Date.now() + 20 * MIN));
       expect((await tokenRows([staff])).length).toBe(2);
       expect((await ticketRows()).some((r) => r.ticketId === id)).toBe(false);
     });
@@ -221,17 +222,17 @@ describe.skipIf(!RUN)("pushDispatcher (real DB)", () => {
     it("keeps a ticket the provider has no receipt for yet, and gives up on it after a day", async () => {
       await dispatchPush(note(staff));
       const id = fake.ticketByToken.get(tok("staff-1"))!;
-      await processPushReceipts(new Date(Date.now() + 20 * MIN), fake);
+      await processPushReceipts(new Date(Date.now() + 20 * MIN));
       expect((await ticketRows()).some((r) => r.ticketId === id)).toBe(true);
-      await processPushReceipts(new Date(Date.now() + 25 * 60 * MIN), fake);
+      await processPushReceipts(new Date(Date.now() + 25 * 60 * MIN));
       expect((await ticketRows()).some((r) => r.ticketId === id)).toBe(false);
       expect((await tokenRows([staff])).length).toBe(2); // giving up is not proof the token is dead
     });
 
     it("leaves the tickets alone, and does not throw, when the provider cannot be reached", async () => {
       await dispatchPush(note(staff));
-      const failing = { ...fake, receipts: async () => { throw new Error("down"); } };
-      await expect(processPushReceipts(new Date(Date.now() + 20 * MIN), failing)).resolves.toBeDefined();
+      fake.receipts = async () => { throw new Error("down"); };
+      await expect(processPushReceipts(new Date(Date.now() + 20 * MIN))).resolves.toBeDefined();
       expect((await ticketRows()).some((r) => r.ticketId === fake.ticketByToken.get(tok("staff-1")))).toBe(true);
     });
   });
@@ -256,6 +257,15 @@ describe.skipIf(!RUN)("pushDispatcher (real DB)", () => {
       await expect(
         notifyAndPush({ organisationId: -1, recipientUserId: staff, type: "SHIFT_ASSIGNED", payload: {} }),
       ).resolves.toBeUndefined();
+      expect(fake.sent).toEqual([]);
+    });
+
+    it("saves the in-app notification and sends no push when the caller asks for none", async () => {
+      const relatedEntityId = crypto.randomUUID();
+      await notifyAndPush({ organisationId: orgA, recipientUserId: staff, type: "SHIFT_CHANGED", payload: {}, relatedEntityType: "shift", relatedEntityId }, { push: false });
+      await drainPushDispatch();
+      const rows = await db.select().from(notification).where(eq(notification.relatedEntityId, relatedEntityId));
+      expect(rows.map((r) => r.recipientUserId)).toEqual([staff]);
       expect(fake.sent).toEqual([]);
     });
 

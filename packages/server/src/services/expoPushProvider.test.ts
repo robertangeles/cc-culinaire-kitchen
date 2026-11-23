@@ -30,7 +30,7 @@ beforeEach(() => {
   reply = () => ({ status: 200, json: { data: [] } });
 });
 
-const msg = (to: string): PushMessage => ({ to, title: "T", body: "B", data: { link: "/shifts" } });
+const msg = (to: string): PushMessage => ({ to, title: "T", body: "B", data: { link: "/shifts" }, sound: "default" });
 
 describe("createExpoPushProvider.send", () => {
   it("posts the messages with the access token and returns one ticket per message, in order", async () => {
@@ -43,6 +43,7 @@ describe("createExpoPushProvider.send", () => {
     expect(seen).toHaveLength(1);
     expect(seen[0].path).toBe("/--/api/v2/push/send");
     expect(seen[0].auth).toBe("Bearer secret");
+    expect((seen[0].body as PushMessage[]).map((m) => m.sound)).toEqual(["default", "default"]);
     expect(tickets).toEqual([
       { status: "ok", id: "t0" },
       { status: "error", error: "DeviceNotRegistered", message: "gone" },

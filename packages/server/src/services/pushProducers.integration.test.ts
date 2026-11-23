@@ -29,8 +29,9 @@ import { drainPushDispatch, setPushProviderForTests } from "./pushDispatcher.js"
 import { FakePushProvider } from "./pushTestKit.js";
 
 /**
- * The producers hooked to push in this change: shift assigned, changed, cancelled and roster published,
- * document verified and rejected. Real database, fake push provider. Gated on TENANT_IT=1.
+ * The producers hooked in this change. Pushed: roster published, a Published shift cancelled, document verified
+ * and rejected. In-app notice only (a Draft shift never pushes): shift assigned, a Draft shift's time changed or
+ * cancelled. Real database, fake push provider. Gated on TENANT_IT=1.
  */
 const RUN = process.env.TENANT_IT === "1";
 const tag = `pp_${Date.now().toString(36)}`;
@@ -66,6 +67,7 @@ describe.skipIf(!RUN)("push producers (real DB)", () => {
     shiftIds.push(row.id);
     return row.id;
   }
+  const publish = (shiftId: string) => db.update(shift).set({ status: "Published" }).where(eq(shift.shiftId, shiftId));
   async function mkDoc(userId: number | null, status = "Pending") {
     const [row] = await db
       .insert(complianceDocument)
@@ -129,16 +131,14 @@ describe.skipIf(!RUN)("push producers (real DB)", () => {
   });
 
   describe("shifts", () => {
-    it("tells a person a shift was assigned to them: an in-app notice with the details, and a generic push", async () => {
+    it("tells a person a shift was assigned to them with an in-app notice, and no push while the shift is a Draft", async () => {
       const s = await mkShift(3);
       await assignStaff(orgA, s, staff1, manager);
       const [row] = await inApp(staff1, "SHIFT_ASSIGNED");
       expect(row.relatedEntityType).toBe("shift");
       expect(row.relatedEntityId).toBe(s);
       expect(row.payload).toMatchObject({ shiftId: s });
-      const pushes = await pushedTo("staff1");
-      expect(pushes).toHaveLength(1);
-      expect(pushes[0]).toMatchObject({ title: "Your shifts", body: "You have a new shift.", data: { type: "SHIFT_ASSIGNED", link: `/shifts/${s}` } });
+      expect(await pushedTo("staff1")).toEqual([]);
     });
 
     it("does not tell a manager about a shift they assigned to themselves", async () => {
@@ -148,18 +148,15 @@ describe.skipIf(!RUN)("push producers (real DB)", () => {
       expect(await pushedTo("manager")).toEqual([]);
     });
 
-    it("tells the assigned staff when the time changes, not the person who changed it, and not when nothing changed", async () => {
+    it("tells the assigned staff in-app when a Draft shift's time changes, without a push, not the person who changed it, and not when nothing changed", async () => {
       const s = await mkShift(4);
       await assignStaff(orgA, s, staff1, manager);
       await assignStaff(orgA, s, manager, manager);
-      await drainPushDispatch();
-      fake.sent.length = 0;
       const day = dayStr(4);
       await updateShift(orgA, s, { startDatetime: `${day}T10:00:00Z` }, manager);
       expect(await inApp(staff1, "SHIFT_CHANGED")).toHaveLength(1);
       expect(await inApp(manager, "SHIFT_CHANGED")).toEqual([]);
-      expect((await pushedTo("staff1")).map((m) => m.body)).toEqual(["One of your shifts changed."]);
-      expect(await pushedTo("manager")).toEqual([]);
+      expect(await pushedTo("staff1", "manager")).toEqual([]);
       await updateShift(orgA, s, { startDatetime: `${day}T10:00:00Z` }, manager);
       expect(await inApp(staff1, "SHIFT_CHANGED")).toHaveLength(1);
     });
@@ -172,16 +169,36 @@ describe.skipIf(!RUN)("push producers (real DB)", () => {
       expect(await inApp(staff2, "SHIFT_CHANGED")).toEqual([]);
     });
 
-    it("tells the assigned staff a shift was cancelled, once", async () => {
+    it("tells the assigned staff a Published shift was cancelled, once, with a push", async () => {
       const s = await mkShift(6);
       await assignStaff(orgA, s, staff2, manager);
-      await drainPushDispatch();
-      fake.sent.length = 0;
+      await publish(s);
       await cancelShift(orgA, s);
       await cancelShift(orgA, s);
       const rows = (await inApp(staff2, "SHIFT_CANCELLED")).filter((r) => r.relatedEntityId === s);
       expect(rows).toHaveLength(1);
-      expect((await pushedTo("staff2")).map((m) => m.data.link)).toEqual(["/shifts"]);
+      const pushes = await pushedTo("staff2");
+      expect(pushes).toHaveLength(1);
+      expect(pushes[0]).toMatchObject({ title: "Your shifts", body: "One of your shifts was cancelled.", data: { type: "SHIFT_CANCELLED", link: "/shifts" } });
+    });
+
+    it("tells the assigned staff in-app that a Draft shift was cancelled, without a push", async () => {
+      const s = await mkShift(7);
+      await assignStaff(orgA, s, staff2, manager);
+      await cancelShift(orgA, s);
+      expect((await inApp(staff2, "SHIFT_CANCELLED")).filter((r) => r.relatedEntityId === s)).toHaveLength(1);
+      expect(await pushedTo("staff2")).toEqual([]);
+    });
+
+    it("does not tell the person who cancelled a shift they are assigned to, and still tells the others", async () => {
+      const s = await mkShift(13);
+      await assignStaff(orgA, s, manager, manager);
+      await assignStaff(orgA, s, staff1, manager);
+      await publish(s);
+      await cancelShift(orgA, s, manager);
+      expect((await inApp(manager, "SHIFT_CANCELLED")).filter((r) => r.relatedEntityId === s)).toEqual([]);
+      expect((await inApp(staff1, "SHIFT_CANCELLED")).filter((r) => r.relatedEntityId === s)).toHaveLength(1);
+      expect((await pushedTo("staff1", "manager")).map((m) => m.to)).toEqual([tok("staff1")]);
     });
 
     it("tells each person once when a roster is published, however many of their shifts it covers, and not the publisher", async () => {
@@ -190,8 +207,6 @@ describe.skipIf(!RUN)("push producers (real DB)", () => {
       await assignStaff(orgA, a, staff1, manager);
       await assignStaff(orgA, b, staff1, manager);
       await assignStaff(orgA, b, staff2, manager);
-      await drainPushDispatch();
-      fake.sent.length = 0;
       const result = await publishRoster(orgA, loc, dayStr(8), dayStr(9), manager);
       expect(result.publishedShiftIds.sort()).toEqual([a, b].sort());
       const mine = (await inApp(staff1, "ROSTER_PUBLISHED")).filter((r) => (r.payload as { shiftIds: string[] }).shiftIds.includes(a));
@@ -202,19 +217,24 @@ describe.skipIf(!RUN)("push producers (real DB)", () => {
     });
 
     it("still saves the in-app notice for a person who switched that type's push off, and sends them no push", async () => {
-      await db.insert(pushOptOuts).values({ userId: staff2, notificationType: "SHIFT_ASSIGNED" });
+      await db.insert(pushOptOuts).values({ userId: staff2, notificationType: "SHIFT_CANCELLED" });
       const s = await mkShift(11);
+      await assignStaff(orgA, s, staff1, manager);
       await assignStaff(orgA, s, staff2, manager);
-      expect((await inApp(staff2, "SHIFT_ASSIGNED")).some((r) => r.relatedEntityId === s)).toBe(true);
-      expect(await pushedTo("staff2")).toEqual([]);
+      await publish(s);
+      await cancelShift(orgA, s);
+      expect((await inApp(staff2, "SHIFT_CANCELLED")).some((r) => r.relatedEntityId === s)).toBe(true);
+      expect((await pushedTo("staff1", "staff2")).map((m) => m.to)).toEqual([tok("staff1")]);
+      await db.delete(pushOptOuts).where(eq(pushOptOuts.userId, staff2));
     });
 
     it("never pushes to a device that belongs to another organisation's people", async () => {
       const s = await mkShift(12);
       await assignStaff(orgA, s, staff1, manager);
       await updateShift(orgA, s, { endDatetime: `${dayStr(12)}T15:00:00Z` }, manager);
+      await publish(s);
       await cancelShift(orgA, s);
-      expect(await pushedTo("outsider")).toEqual([]);
+      expect((await pushedTo("staff1", "outsider")).map((m) => m.to)).toEqual([tok("staff1")]);
       expect(await db.select().from(notification).where(eq(notification.recipientUserId, outsider))).toEqual([]);
     });
   });
@@ -251,7 +271,7 @@ describe.skipIf(!RUN)("push producers (real DB)", () => {
       expect(await pushedTo("manager")).toEqual([]);
     });
 
-    it("still verifies the document when the notice cannot be saved", async () => {
+    it("still verifies the document when the push fails", async () => {
       const id = await mkDoc(staff1);
       fake.failSend = true;
       const updated = await verifyDocument(orgA, id, manager);

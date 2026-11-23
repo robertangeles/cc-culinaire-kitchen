@@ -6,6 +6,7 @@
  *
  * `notifyAndPush` is what a producer calls once the change it reports has committed. It never throws into the
  * request that called it: a failed notification must not fail a roster publish or a document verification.
+ * `{ push: false }` saves the in-app notice only: a Draft shift is still being built, so it never reaches a lock screen.
  *
  * Skipped, in this order: the provider switch is off; the recipient is not an active member of the notification's
  * organisation; the person switched that type off; it is inside their quiet hours (dropped, not held back: the inbox has it).
@@ -27,7 +28,6 @@ import { createInApp, type CreateNotificationParams } from "./notificationServic
 import { removeDeadTokens } from "./pushDeviceService.js";
 import { pushCopy } from "./pushCopy.js";
 import { isQuietNow } from "./pushQuietHours.js";
-import type { DbOrTx } from "./auditService.js";
 
 const logger = pino({ name: "pushDispatcher" });
 
@@ -111,7 +111,7 @@ export async function dispatchPush(notification: PushableNotification, now: Date
       type: notification.type,
       link: pushLink(notification.type, notification.relatedEntityType, notification.relatedEntityId),
     };
-    const messages: PushMessage[] = tokens.map((t) => ({ to: t.value, title, body, data }));
+    const messages: PushMessage[] = tokens.map((t) => ({ to: t.value, title, body, data, sound: "default" }));
 
     const tickets = await provider.send(messages);
 
@@ -133,11 +133,12 @@ const inFlight = new Set<Promise<void>>();
 
 /**
  * Saves the in-app notification and, once it is saved, pushes it without making the caller wait for the provider.
- * Call after the change it reports has committed. Never throws.
+ * Call after the change it reports has committed. Never throws. `push: false` saves the in-app notification only.
  */
-export async function notifyAndPush(params: Omit<CreateNotificationParams, "channel">, tx?: DbOrTx): Promise<void> {
+export async function notifyAndPush(params: Omit<CreateNotificationParams, "channel">, opts: { push?: boolean } = {}): Promise<void> {
   try {
-    const row = await createInApp(params, tx);
+    const row = await createInApp(params);
+    if (opts.push === false) return;
     const push = dispatchPush(row);
     inFlight.add(push);
     void push.finally(() => inFlight.delete(push));
@@ -162,7 +163,7 @@ export interface ReceiptRun {
  * any other error is logged and kept (the token may be fine). A ticket with no receipt yet stays for the next run;
  * one older than a day is dropped without a verdict. A provider that cannot be reached leaves everything for the next run.
  */
-export async function processPushReceipts(now: Date = new Date(), provider?: PushProvider): Promise<ReceiptRun> {
+export async function processPushReceipts(now: Date = new Date()): Promise<ReceiptRun> {
   const run: ReceiptRun = { checked: 0, deadTokens: 0, gaveUp: 0 };
   try {
     const stale = await db
@@ -171,8 +172,8 @@ export async function processPushReceipts(now: Date = new Date(), provider?: Pus
       .returning({ id: pushReceipts.id });
     run.gaveUp = stale.length;
 
-    const resolved = provider ?? (await resolveProvider());
-    if (!resolved) return run;
+    const provider = await resolveProvider();
+    if (!provider) return run;
 
     const due = await db
       .select({ id: pushReceipts.id, deviceTokenId: pushReceipts.deviceTokenId, ticketId: pushReceipts.ticketId })
@@ -182,7 +183,7 @@ export async function processPushReceipts(now: Date = new Date(), provider?: Pus
       .limit(RECEIPT_BATCH);
     if (due.length === 0) return run;
 
-    const receipts = await resolved.receipts(due.map((r) => r.ticketId));
+    const receipts = await provider.receipts(due.map((r) => r.ticketId));
     const answered: string[] = [];
     const dead = new Set<string>();
     for (const row of due) {
