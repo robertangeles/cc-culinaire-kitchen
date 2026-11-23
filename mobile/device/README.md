@@ -20,3 +20,47 @@ It has not passed on the phone yet: the development build installed on 2026-11-2
 It needs a development build that includes it before it can run: `check:device -- device/prep`, with Metro on 8088 and the API reachable from the phone (`adb reverse`).
 
 `device/stockWalk.device.test.ts` is the Usage and Move walk (log usage with signal and in airplane mode, the "that's a move, not usage" question, a move between areas, both screens in landscape). It makes its items and areas through the API as a manager first and saves screenshots to `device/_shots`: `check:device -- device/stockWalk`, with the same Metro, API and `adb reverse` set-up as above.
+
+## Rebuild and install the development build (Android, no EAS, no accounts)
+
+The installed development build holds the native code (Expo modules, icons, app id `com.culinairekitchen.chef`); the screens
+come from Metro. So the build only needs redoing when native dependencies or `app.json`/`app.config.ts`/assets change. Ask the check:
+
+```bash
+bash mobile/device/buildStamp.sh check    # exit 1 + "STALE" = rebuild; exit 0 = current
+```
+
+It compares a fingerprint (`@expo/fingerprint`: installed native packages, app config, icons, plugins) with the one recorded after
+the last install on this machine (`~/.cache/culinaire-dev-build/android.fingerprint`). Run `pnpm install` first if `package.json` changed:
+it hashes `node_modules`, not `package.json`. It cannot see what is on the phone, only what this machine last installed.
+
+Rebuild (about 2 minutes; needs JDK 17 and the SDK at `~/android-sdk`, `ANDROID_HOME` pointing at it):
+
+```bash
+cd mobile
+CI=1 npx expo prebuild --platform android --no-install   # writes mobile/android (git-ignored)
+git checkout package.json                                 # prebuild rewrites the "android"/"ios" scripts: undo it
+(cd android && CI=1 ./gradlew assembleDebug -PreactNativeArchitectures=arm64-v8a)   # arm64 only: the moto g86 and iPad-class phones
+# the APK: android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+Install under the lease (the install is adb use). The id is unchanged since the store plumbing (`com.culinairekitchen.chef`) and
+the debug keystore is the template's, so `-r` updates in place and keeps the app's data; nothing else on the phone is touched:
+
+```bash
+bash device/lease.sh bash -c '$HOME/android-sdk/platform-tools/adb install -r android/app/build/outputs/apk/debug/app-debug.apk'
+bash device/buildStamp.sh stamp
+```
+
+If `install -r` fails with `INSTALL_FAILED_UPDATE_INCOMPATIBLE` (a different signing key), uninstall only this app
+(`adb uninstall com.culinairekitchen.chef`) and install again; never touch other packages (`com.culinairekitchen.mobile.lite` is a different app).
+
+Start it: Metro needs the server address when it bundles, and the phone reaches Metro through `adb reverse`:
+
+```bash
+EXPO_PUBLIC_API_URL=http://localhost:3009 npx expo start --dev-client --port 8088   # without the variable the app shows "EXPO_PUBLIC_API_URL is not set"
+adb reverse tcp:8088 tcp:8088; adb reverse tcp:3009 tcp:3009   # the walk does the first itself; the second lets the phone's localhost reach your server
+```
+
+Stop Metro by the pid you started (`npx` hides it: the listener is `ss -ltnp 'sport = :8088'`). After `pm clear` the first launch
+shows the dev tools sheet; Back closes it.
