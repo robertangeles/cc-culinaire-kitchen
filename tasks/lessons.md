@@ -1441,3 +1441,9 @@ builds all tables with CHECKs enforcing. Stop it again when done.
 - **Problem**: Against a fresh local database every recipe generation answered the prose fallback in milliseconds: the recipe-lab prompts are not seeded (they live only in the `prompt` table, authored in the admin UI) and the file fallback `prompts/chatbot/recipePrompt.md` does not exist. Separately, a script that evaluated code on the phone through Metro's `/json/list` debugger URL was refused: the inspector proxy only accepts a WebSocket whose `Origin` is Metro itself, and Node's built-in `WebSocket` cannot send one.
 - **Fix**: Inserted `recipePrompt` and `recipeRefinementPrompt` rows with `default_ind = false` (the live row; `true` is the factory default) into the throwaway database, and connected with the `ws` package and `origin: "http://localhost:8088"`.
 - **Rule**: Before calling a run of a model-backed route "broken", check the server log for the prompt load. Talk to the phone's JS through Metro with an explicit Origin.
+
+## 2026-11-23 — A new owner column needs a read fallback for rows the previous server keeps writing
+
+- **Problem**: Migration 0006 backfills `menu_item.organisation_id`, but the previous server version stays live until the new one deploys and keeps inserting rows with the column NULL. A read of "the organisation's items" would hide every item created in that window from everyone, its creator included.
+- **Fix**: Reads match `organisation_id = mine OR (organisation_id IS NULL AND user_id = me)` (`menuAccess.menuReadable`), the new server stamps the column on every insert, and `backfillMenuItemOrganisation.ts` is run once after the deploy to claim the stragglers.
+- **Rule**: When a migration adds a scoping column that the previous server does not write, ship the NULL fallback with the reader and a re-runnable backfill, and say in the PR when to run it.
