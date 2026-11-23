@@ -24,6 +24,7 @@ import { getUserOrgContext } from "./orgContextService.js";
 import { assertLocationAccess } from "./locationContextService.js";
 import type { TokenPayload } from "./authService.js";
 import { canManageSession, canWorkSession } from "./prepAccess.js";
+import { menuReadable, resolveMenuScope } from "./menuAccess.js";
 import { AppError } from "../utils/appError.js";
 import { insertOnce } from "../utils/retrySafe.js";
 import { aggregatePrepLines, attachOnHand, type PrepSourceLine } from "./prepMath.js";
@@ -203,7 +204,11 @@ export async function generateTasksFromSelections(
   const menuItemsMap = new Map<string, typeof menuItem.$inferSelect>();
   if (menuItemIds.length > 0) {
     const mis = await db.select().from(menuItem).where(
-      and(inArray(menuItem.menuItemId, menuItemIds), inArray(menuItem.userId, authorisedUserIds)),
+      and(
+        inArray(menuItem.menuItemId, menuItemIds),
+        inArray(menuItem.userId, authorisedUserIds),
+        menuReadable(await resolveMenuScope(userId)),
+      ),
     );
     for (const mi of mis) menuItemsMap.set(mi.menuItemId, mi);
   }
