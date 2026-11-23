@@ -2816,6 +2816,70 @@ export const deviceToken = pgTable(
 );
 
 /**
+ * A notification type this user does not want pushed to their devices (the in-app inbox still gets it).
+ * One row per opted-out type, so a new type is on by default. Migration 0004.
+ */
+export const pushOptOuts = pgTable(
+  "push_opt_outs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: integer("user_id").notNull().references(() => user.userId),
+    notificationType: varchar("notification_type", { length: 30 }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // "Has this user switched this type off?" at dispatch, and "which types has this user switched off" for the settings screen; the leading user_id column also serves the FK.
+    uniqueIndex("uq_push_opt_outs_user_type").on(table.userId, table.notificationType),
+  ],
+);
+
+/**
+ * The window in which a user's phone is not pushed to: minutes after local midnight, read in the
+ * user's own IANA time zone (the phone reports it). A window that ends before it starts crosses midnight.
+ * No row = no quiet hours. Migration 0004.
+ */
+export const pushQuietHours = pgTable(
+  "push_quiet_hours",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: integer("user_id").notNull().references(() => user.userId),
+    startMinute: smallint("start_minute").notNull(),
+    endMinute: smallint("end_minute").notNull(),
+    timeZone: varchar("time_zone", { length: 64 }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // "What are this user's quiet hours?" at dispatch; one window per user. Also serves the FK.
+    uniqueIndex("uq_push_quiet_hours_user").on(table.userId),
+    check("ck_push_quiet_hours_minutes", sql`${table.startMinute} BETWEEN 0 AND 1439 AND ${table.endMinute} BETWEEN 0 AND 1439 AND ${table.startMinute} <> ${table.endMinute}`),
+  ],
+);
+
+/**
+ * A push the provider accepted and gave a ticket id for. The delivery receipt (did the device's
+ * platform take it, or is the token dead) is only available some minutes later; the receipt job
+ * reads these rows, acts on the answer and deletes them. Migration 0004.
+ */
+export const pushReceipts = pgTable(
+  "push_receipts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    deviceTokenId: uuid("device_token_id").notNull().references(() => deviceToken.deviceTokenId, { onDelete: "cascade" }),
+    ticketId: varchar("ticket_id", { length: 100 }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // FK index: dropping a device token cascades to its pending receipts.
+    index("idx_push_receipts_device_token").on(table.deviceTokenId),
+    // The receipt job: "tickets old enough to have a receipt, oldest first" (and "older than a day: give up").
+    index("idx_push_receipts_created").on(table.createdAt),
+  ],
+);
+
+/**
  * The `audit_log` table is the project-wide audit trail. Every state-changing
  * operation that needs reconstructable history (receiving events, soft-deletes,
  * catalog merges, WAC recomputes, manual cost overrides) writes a row here.
