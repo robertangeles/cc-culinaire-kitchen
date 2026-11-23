@@ -10,6 +10,8 @@ import { ConsumptionEntrySchema, ConsumptionListSchema } from "./consumption.js"
 import { StockMovementListSchema, StorageAreaListSchema } from "./stockMovement.js";
 import { ConversationDetailSchema, ConversationListSchema } from "./conversation.js";
 import { GenerateReplySchema, RecipePageSchema, RecipeSchema, RefineReplySchema, parseRecipeData } from "./recipe.js";
+import { AppNotificationListSchema, UnreadCountSchema } from "./notifications.js";
+import { KitchenProfileSchema, MfaSetupReplySchema, PersonalisationOptionsSchema, ProfileDetailsReplySchema } from "./account.js";
 
 // Payloads are shaped like the real server replies. Each lenient rule is one case: the point is that a server
 // that moved on (new field, new enum value, new null) does not break a phone that was installed last month.
@@ -269,5 +271,24 @@ describe("recipe schemas", () => {
   it("needs an object to accept from a refinement", () => {
     expect(RefineReplySchema.safeParse({ refinedData: data, changeSummary: "Dairy-free" }).success).toBe(true);
     expect(RefineReplySchema.safeParse({ refinedData: null, changeSummary: "" }).success).toBe(false);
+  });
+});
+
+describe("notification and profile schemas", () => {
+  it("keeps the readable notifications and leaves out a row this app cannot read", () => {
+    const good = { notificationId: "n1", organisationId: 1, recipientUserId: 7, type: "SHIFT_ASSIGNED", channel: "IN_APP", status: "SENT", payload: { body: "x" }, relatedEntityType: "shift", relatedEntityId: "s1", sentAt: null, readAt: null, createdAt: "2026-11-24T10:00:00Z" };
+    const rows = AppNotificationListSchema.parse([good, { type: "NO_ID" }, { ...good, notificationId: "n2", payload: null, relatedEntityType: undefined }]);
+    expect(rows.map((r) => r.notificationId)).toEqual(["n1", "n2"]);
+    expect(rows[1]).toMatchObject({ payload: {}, relatedEntityType: null });
+    expect(UnreadCountSchema.parse({ count: "lots" }).count).toBe(0);
+  });
+
+  it("reads profile details with every empty field as blank, and a kitchen profile never saved as the defaults", () => {
+    const { profile } = ProfileDetailsReplySchema.parse({ profile: { userName: "Chef", userBio: null, userEmail: "c@x.test", userPhotoPath: null, userPasswordHash: "never-read" } });
+    expect(profile).toMatchObject({ userName: "Chef", userBio: "", userLinkedin: "", userPhotoPath: null });
+    expect(profile).not.toHaveProperty("userPasswordHash");
+    expect(KitchenProfileSchema.parse({ pricePoint: null })).toMatchObject({ skillLevel: "home_cook", servingsDefault: 4, pricePoint: "" });
+    expect(MfaSetupReplySchema.parse({ secret: "S" })).toEqual({ secret: "S", qrCodeDataUrl: "" });
+    expect(PersonalisationOptionsSchema.parse({ skill_level: "broken" }).skill_level).toEqual([]);
   });
 });
