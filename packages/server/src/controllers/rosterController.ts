@@ -93,6 +93,10 @@ const AvailabilitySchema = z.object({
 });
 
 const MyShiftsQuerySchema = z.object({
+  excludeDrafts: z
+    .enum(["true", "false"], { message: "excludeDrafts must be true or false" })
+    .transform((value) => value === "true")
+    .optional(),
   from: z.string().min(1).optional(),
   to: z.string().min(1).optional(),
   limit: z.coerce.number().int().min(1).max(MY_SHIFTS_MAX_LIMIT).optional(),
