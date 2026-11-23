@@ -58,7 +58,12 @@ export function mergeWaste(serverRows: WasteEntry[], entries: OutboxEntry<unknow
     } else if (e.type === WASTE_DELETE) {
       const c = e.command as WasteDeleteCommand;
       const row = rows.get(c.wasteLogId);
-      if (!row || !OPEN.includes(e.status)) continue;
+      if (!row) continue;
+      if (e.status === "ACCEPTED") {
+        rows.delete(c.wasteLogId);
+        continue;
+      }
+      if (!OPEN.includes(e.status)) continue;
       // A delete waiting to be sent hides the entry (the person has deleted it); a refused one brings it back with the reason.
       if (e.status === "NEEDS_ATTENTION") rows.set(c.wasteLogId, { ...row, sync: "attention", entryId: e.id, attentionMessage: e.attention?.message });
       else rows.delete(c.wasteLogId);

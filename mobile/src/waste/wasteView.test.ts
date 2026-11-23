@@ -32,6 +32,13 @@ describe("what the waste list shows", () => {
     expect(mergeWaste([], [entry("waste.log", cmd(), "ACCEPTED")], day)).toHaveLength(1); // not on the server's list yet
   });
 
+  it("does not bring back an entry whose delete was accepted, whether or not the server's list has caught up", () => {
+    const log = entry("waste.log", cmd(), "ACCEPTED");
+    const del = entry("waste.delete", { wasteLogId: "w2", label: "Chicken trim" }, "ACCEPTED");
+    expect(mergeWaste([], [log, del], day)).toEqual([]);
+    expect(mergeWaste([server({ wasteLogId: "w2" })], [log, del], day)).toEqual([]);
+  });
+
   it("applies waiting edits to the entry and marks it waiting; hides an entry with a waiting delete", () => {
     const rows = mergeWaste([server(), server({ wasteLogId: "w9", ingredientName: "Gin" })], [entry("waste.edit", { wasteLogId: "w1", label: "Basil", changes: { quantity: 3, reason: "Expired" } }), entry("waste.delete", { wasteLogId: "w9", label: "Gin" })], day);
     expect(rows).toHaveLength(1);
