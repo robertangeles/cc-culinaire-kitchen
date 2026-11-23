@@ -82,7 +82,7 @@ The catalogue download is `GET /api/inventory/ingredients`, which the server all
 ## Tablet width
 
 `src/ui/Column.tsx`: content sits in a centred column of at most 640 dp (`Screen` does it for every screen built on it; the waste screens use `Column` directly).
-Phones fill the width. The count screens are not wrapped yet. Screen tests check the column at 820 wide (an iPad) and 390 wide (`tests/waste.test.tsx`).
+Phones fill the width. The count screens are not wrapped yet. jsdom does no layout, so `tests/waste.test.tsx` checks only the column's constraints (full width, 640 dp cap, centred); the look at 390 and 820 wide is for the device walk.
 
 ## Waste (`src/waste`, `app/(app)/(waste)`)
 
