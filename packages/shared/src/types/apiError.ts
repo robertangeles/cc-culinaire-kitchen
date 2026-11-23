@@ -50,6 +50,17 @@ export const SERVER_ERROR_CODES = [
   "AI_UNAVAILABLE",
   "AI_TIMEOUT",
   "EMAIL_FAILED",
+  // Profile and account: change password, two-step verification, profile photo.
+  "INVALID_CREDENTIALS",
+  "WEAK_PASSWORD",
+  "PASSWORD_NOT_SET",
+  "RECENT_SIGN_IN_REQUIRED",
+  "MFA_REQUIRED",
+  "INVALID_MFA_CODE",
+  "INVALID_MFA_SESSION",
+  "MFA_ALREADY_ENABLED",
+  "FILE_TOO_LARGE",
+  "UNSUPPORTED_FILE_TYPE",
 ] as const;
 export type ServerErrorCode = (typeof SERVER_ERROR_CODES)[number];
 
