@@ -1453,3 +1453,9 @@ builds all tables with CHECKs enforcing. Stop it again when done.
 - **Problem**: Hooking `verifyDocument` and `rejectDocument` to push made them save an in-app notification. `compliance.integration.test.ts` deleted its organisation in `afterAll` without deleting notifications, and the `notification.organisation_id` foreign key refused: two suites failed with a teardown error, not an assertion.
 - **Fix**: The two teardown blocks delete the organisation's notifications first. The full real-database suite (`TENANT_IT=1`) found it; the unit run did not.
 - **Rule**: When a service gains a side-effect row (notification, audit, receipt), grep the tests that call it and fix their teardown in the same change, and run the whole real-database suite once before closing.
+
+## 2026-11-23 — A claimed shift swap cannot be read back, and a bare date is a day on the venue's clock
+
+- **Problem**: A replayed swap claim answered 404, not the 409 the plan assumed: claiming deletes the offerer's assignment, and `shift_swap_request.from_assignment_id` cascades, so the "Claimed" row never exists. Separately, roster ranges parsed `"2026-06-08"` as UTC midnight, dropping a 6 am Monday Melbourne shift (Sunday 20:00 UTC) from a Monday publish, and two old tests had been written to that UTC reading.
+- **Fix**: The claim's audit rows (metadata `swapRequestId`, actor = claimer) tell a replay from a lost race; a bare `YYYY-MM-DD` is resolved on the venue's wall clock (`venueDayRange`, `venueBoundSql`); the two tests now build their shift on the venue's day.
+- **Rule**: Before coding to a state a plan names, check the row can exist (look for cascades). Any date-only filter on shifts takes the venue's IANA zone, never UTC, and is tested on both daylight-saving days (23 and 25 hours).

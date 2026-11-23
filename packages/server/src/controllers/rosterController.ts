@@ -41,6 +41,7 @@ import {
   RosterError,
   AssignmentBlockedError,
   RoleVenueConflictError,
+  MY_SHIFTS_MAX_LIMIT,
 } from "../services/rosterService.js";
 import {
   listPublicHolidays,
@@ -89,6 +90,12 @@ const AvailabilitySchema = z.object({
     .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "availableUntil must be HH:MM"),
   effectiveFrom: z.string().min(1),
   effectiveUntil: z.string().min(1).nullable().optional(),
+});
+
+const MyShiftsQuerySchema = z.object({
+  from: z.string().min(1).optional(),
+  to: z.string().min(1).optional(),
+  limit: z.coerce.number().int().min(1).max(MY_SHIFTS_MAX_LIMIT).optional(),
 });
 
 const AssignSchema = z.object({ userId: z.number().int().positive() });
@@ -160,7 +167,7 @@ const ERROR_EXTRA_FIELD: [
 function handleServiceError(err: unknown, res: Response, next: NextFunction): void {
   if (err instanceof RosterError) {
     const match = ERROR_EXTRA_FIELD.find(([matches]) => matches(err));
-    res.status(err.statusCode).json({ error: err.message, ...(match ? match[1](err) : {}) });
+    res.status(err.statusCode).json({ error: err.message, ...(err.code ? { code: err.code } : {}), ...(match ? match[1](err) : {}) });
   } else if (err instanceof PublicHolidayError) {
     res.status(err.statusCode).json({ error: err.message });
   } else if (err instanceof AwardRuleError) {
@@ -295,7 +302,12 @@ export async function handleListMyShifts(req: Request, res: Response, next: Next
   try {
     const ctx = await resolveContext(req, res);
     if (!ctx) return;
-    res.json(await listMyShifts(ctx.orgId, req.user!.sub));
+    const parsed = MyShiftsQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.errors[0]?.message ?? "Invalid input", code: "VALIDATION" });
+      return;
+    }
+    res.json(await listMyShifts(ctx.orgId, req.user!.sub, parsed.data));
   } catch (err) {
     handleServiceError(err, res, next);
   }
