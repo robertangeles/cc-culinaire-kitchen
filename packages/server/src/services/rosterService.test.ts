@@ -143,6 +143,24 @@ describe("venueDayRange", () => {
     ]);
   });
 
+  it.each([["2026-02-30", "2026-03-01"], ["2026-04-01", "2026-04-31"], ["2027-02-29", "2027-03-01"]])(
+    "rejects a calendar day that does not exist (%s, %s) with a coded 400 instead of rolling it over",
+    (from, to) => {
+      let thrown: unknown;
+      try {
+        venueDayRange(from, to, "Australia/Melbourne");
+      } catch (err) {
+        thrown = err;
+      }
+      expect(thrown).toBeInstanceOf(RosterError);
+      expect(thrown).toMatchObject({ statusCode: 400, code: "VALIDATION" });
+    },
+  );
+
+  it("still accepts a real leap day", () => {
+    expect(venueDayRange("2028-02-29", "2028-02-29", "UTC").toExclusive.toISOString()).toBe("2028-03-01T00:00:00.000Z");
+  });
+
   it.each([["not-a-date", "2026-06-08"], ["2026-06-08", "2026-13-40"], ["", "2026-06-08"]])(
     "rejects an invalid date (%s, %s) with a 400",
     (from, to) => {
