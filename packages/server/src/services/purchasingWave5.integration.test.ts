@@ -64,7 +64,7 @@ import * as emailService from "./emailService.js";
  *   - spend thresholds: organisation admins only, an upper bound, the location must be the organisation's own, audited
  *   - send-email does not email the supplier twice within a few minutes
  *   - credit notes: one per discrepancy, capped at what the discrepancy is worth, safe to repeat with a client-made id,
- *     and a list of what is still open, for `purchasing:credit` holders at their own locations
+ *     and a paged list of what is still open, for `purchasing:credit` holders across their organisation
  *
  * Gated on TENANT_IT=1 (the repo's real-DB gate). Self-cleaning.
  */
@@ -531,7 +531,7 @@ describe.skipIf(!RUN)("Wave 5: orders, approvals and credit notes (real DB)", ()
 
   describe("credit notes", () => {
     const body = (discrepancyId: string, creditAmount: number, extra: object = {}) => ({
-      body: { discrepancyId, supplierId: fx.supplierId, creditAmount, ...extra },
+      body: { discrepancyId, creditAmount, ...extra },
     });
 
     it("creates one, resolves the discrepancy, and a repeat with the same id answers the first note", async () => {
@@ -542,6 +542,7 @@ describe.skipIf(!RUN)("Wave 5: orders, approvals and credit notes (real DB)", ()
       const again = await call(handleCreateCreditNote, fx.adminA, CREDIT, body(d, 12, { creditNoteId }));
       expect(first.status).toBe(201);
       expect(first.body.creditNoteId).toBe(creditNoteId);
+      expect(first.body.supplierId).toBe(fx.supplierId);
       expect(again.status).toBe(200);
       expect(again.body.creditNoteId).toBe(creditNoteId);
       expect(await db.select().from(creditNote).where(eq(creditNote.discrepancyId, d))).toHaveLength(1);
@@ -587,13 +588,6 @@ describe.skipIf(!RUN)("Wave 5: orders, approvals and credit notes (real DB)", ()
       expect(out.body.code).toBe("INVALID_STATE");
     });
 
-    it("refuses a supplier that is not the discrepancy's own", async () => {
-      const d = await mkDiscrepancy({ type: "SHORT", receivedQty: "7", extra: { shortageQty: "3" } });
-      const out = await call(handleCreateCreditNote, fx.adminA, CREDIT, body(d, 5, { supplierId: fx.solo.supplierId }));
-      expect(out.status).toBe(400);
-      expect(out.body.code).toBe("VALIDATION");
-    });
-
     it("answers CONFLICT when the id is someone else's note", async () => {
       const d1 = await mkDiscrepancy({ type: "SHORT", receivedQty: "7", extra: { shortageQty: "3" } });
       const d2 = await mkDiscrepancy({ type: "SHORT", receivedQty: "7", extra: { shortageQty: "3" } });
@@ -604,27 +598,40 @@ describe.skipIf(!RUN)("Wave 5: orders, approvals and credit notes (real DB)", ()
       expect(out.body.code).toBe("CONFLICT");
     });
 
-    it("keeps another organisation out, and staff to their own locations", async () => {
+    it("keeps another organisation out, and lets staff credit at any location of their own organisation", async () => {
       const atB = await mkDiscrepancy({ type: "SHORT", locId: fx.locB, receivedQty: "7", extra: { shortageQty: "3" } });
       const foreign = await call(handleCreateCreditNote, fx.solo.userId, CREDIT, body(atB, 5));
       expect([foreign.status, foreign.body.code]).toEqual([404, "NOT_FOUND"]);
+      const [untouched] = await db.select().from(receivingDiscrepancy).where(eq(receivingDiscrepancy.discrepancyId, atB));
+      expect(untouched.isResolved).toBe(false);
+      // The clerk works at location A only; credit notes reach the whole organisation.
       const staff = await call(handleCreateCreditNote, fx.clerk, CREDIT, body(atB, 5));
-      expect([staff.status, staff.body.code]).toEqual([403, "LOCATION_NOT_ALLOWED"]);
+      expect(staff.status).toBe(201);
       const [disc] = await db.select().from(receivingDiscrepancy).where(eq(receivingDiscrepancy.discrepancyId, atB));
-      expect(disc.isResolved).toBe(false);
+      expect(disc.isResolved).toBe(true);
     });
 
-    it("lists what is still open, with what each is worth, only at the caller's locations", async () => {
+    it("stores the amount rounded to cents, and refuses one that rounds to nothing", async () => {
+      const d = await mkDiscrepancy({ type: "SHORT", receivedQty: "7", extra: { shortageQty: "3" } });
+      const nothing = await call(handleCreateCreditNote, fx.adminA, CREDIT, body(d, 0.004));
+      expect([nothing.status, nothing.body.code]).toEqual([400, "VALIDATION"]);
+      // Worth 12.00: 12.004 is 12.00 to the cent, so it passes the cap and 12 is what is kept.
+      const out = await call(handleCreateCreditNote, fx.adminA, CREDIT, body(d, 12.004));
+      expect(out.status).toBe(201);
+      expect(Number(out.body.creditAmount)).toBe(12);
+    });
+
+    it("lists what is still open across the organisation, with what each is worth", async () => {
       const atA = await mkDiscrepancy({ type: "SHORT", receivedQty: "7", extra: { shortageQty: "3" } });
       const atB = await mkDiscrepancy({ type: "SHORT", locId: fx.locB, receivedQty: "7", extra: { shortageQty: "3" } });
       const stillOpen = await mkDiscrepancy({ type: "SHORT", sessionStatus: "ACTIVE", receivedQty: "7", extra: { shortageQty: "3" } });
       const credited = await mkDiscrepancy({ type: "SHORT", receivedQty: "7", extra: { shortageQty: "3" } });
       await call(handleCreateCreditNote, fx.adminA, CREDIT, body(credited, 1));
 
-      const clerk = await call(handleGetUnresolvedDiscrepancies, fx.clerk, CREDIT);
+      // The clerk works at location A only and still sees location B's.
+      const clerk = await call(handleGetUnresolvedDiscrepancies, fx.clerk, CREDIT, { query: { limit: "100" } });
       const clerkIds = (clerk.body as Array<{ discrepancyId: string }>).map((r) => r.discrepancyId);
-      expect(clerkIds).toContain(atA);
-      expect(clerkIds).not.toContain(atB);
+      expect(clerkIds).toEqual(expect.arrayContaining([atA, atB]));
       expect(clerkIds).not.toContain(stillOpen);
       expect(clerkIds).not.toContain(credited);
       const row = (clerk.body as Array<Record<string, unknown>>).find((r) => r.discrepancyId === atA)!;
@@ -632,20 +639,43 @@ describe.skipIf(!RUN)("Wave 5: orders, approvals and credit notes (real DB)", ()
       expect(row.poNumber).toBeTruthy();
       expect(row.ingredientName).toBe(`${fx.tag}-flour`);
 
-      const admin = await call(handleGetUnresolvedDiscrepancies, fx.adminA, CREDIT);
-      expect((admin.body as Array<{ discrepancyId: string }>).map((r) => r.discrepancyId)).toEqual(expect.arrayContaining([atA, atB]));
-
-      const foreign = await call(handleGetUnresolvedDiscrepancies, fx.solo.userId, CREDIT);
-      expect((foreign.body as Array<{ discrepancyId: string }>).map((r) => r.discrepancyId)).not.toContain(atA);
+      const foreign = await call(handleGetUnresolvedDiscrepancies, fx.solo.userId, CREDIT, { query: { limit: "100" } });
+      const foreignIds = (foreign.body as Array<{ discrepancyId: string }>).map((r) => r.discrepancyId);
+      expect(foreignIds).not.toContain(atA);
+      expect(foreignIds).not.toContain(atB);
     });
 
-    it("lists credit notes only at the caller's locations", async () => {
+    it("pages the open list newest first, leaves out a price drop and keeps a line with no price", async () => {
+      const older = await mkDiscrepancy({ type: "SHORT", receivedQty: "7", extra: { shortageQty: "3" } });
+      const priceDrop = await mkDiscrepancy({ type: "PRICE_VARIANCE", extra: { poUnitCost: "4", actualUnitCost: "3", varianceAmount: "-1" } });
+      const noPrice = await mkDiscrepancy({ type: "SHORT", receivedQty: "7", unitCost: null, extra: { shortageQty: "3" } });
+
+      const ids = (out: { body: any }) => (out.body as Array<{ discrepancyId: string }>).map((r) => r.discrepancyId);
+      const first = await call(handleGetUnresolvedDiscrepancies, fx.adminA, CREDIT, { query: { limit: "2" } });
+      expect(first.status).toBe(200);
+      expect(ids(first)).toEqual([noPrice, older]);
+      expect(first.body[0].maxCreditAmount).toBeNull();
+      const second = await call(handleGetUnresolvedDiscrepancies, fx.adminA, CREDIT, { query: { limit: "1", offset: "1" } });
+      expect(ids(second)).toEqual([older]);
+      const all = await call(handleGetUnresolvedDiscrepancies, fx.adminA, CREDIT, { query: { limit: "100" } });
+      expect(ids(all)).not.toContain(priceDrop);
+    });
+
+    it.each([{ limit: "0" }, { limit: "101" }, { limit: "abc" }, { limit: "1.5" }, { offset: "-1" }])(
+      "refuses the open list page %o",
+      async (query) => {
+        const out = await call(handleGetUnresolvedDiscrepancies, fx.adminA, CREDIT, { query });
+        expect([out.status, out.body.code]).toEqual([400, "VALIDATION"]);
+      },
+    );
+
+    it("lists credit notes across the organisation, and keeps another organisation out", async () => {
       const atB = await mkDiscrepancy({ type: "SHORT", locId: fx.locB, receivedQty: "7", extra: { shortageQty: "3" } });
       const note = await call(handleCreateCreditNote, fx.adminA, CREDIT, body(atB, 2));
       const clerk = await call(handleGetCreditNotes, fx.clerk, CREDIT);
-      expect((clerk.body as Array<{ creditNoteId: string }>).map((n) => n.creditNoteId)).not.toContain(note.body.creditNoteId);
-      const admin = await call(handleGetCreditNotes, fx.adminA, CREDIT);
-      expect((admin.body as Array<{ creditNoteId: string }>).map((n) => n.creditNoteId)).toContain(note.body.creditNoteId);
+      expect((clerk.body as Array<{ creditNoteId: string }>).map((n) => n.creditNoteId)).toContain(note.body.creditNoteId);
+      const foreign = await call(handleGetCreditNotes, fx.solo.userId, CREDIT);
+      expect((foreign.body as Array<{ creditNoteId: string }>).map((n) => n.creditNoteId)).not.toContain(note.body.creditNoteId);
     });
   });
 });

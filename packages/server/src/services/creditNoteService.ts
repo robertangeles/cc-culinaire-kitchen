@@ -8,7 +8,7 @@
  * once the delivery is confirmed: before that, a re-action on the line replaces the discrepancy row.
  */
 
-import { eq, and, desc, inArray } from "drizzle-orm";
+import { eq, and, or, ne, gt, isNull, desc } from "drizzle-orm";
 import { db } from "../db/index.js";
 import {
   creditNote,
@@ -30,8 +30,6 @@ export interface CreateCreditNoteInput {
   /** Client-made id: a repeat with the same id answers the note it made the first time. */
   creditNoteId?: string;
   discrepancyId: string;
-  /** Optional: when sent it must be the discrepancy's own supplier. */
-  supplierId?: string;
   organisationId: number;
   creditAmount: number;
   creditReference?: string;
@@ -104,17 +102,6 @@ type DiscrepancyRow = {
 const valueOf = (d: DiscrepancyRow) =>
   discrepancyValue({ ...d, unitPrice: d.poLineUnitCost ?? d.lineActualUnitCost });
 
-/** The location a discrepancy of this organisation was received at, or null if there is no such discrepancy. */
-export async function getDiscrepancyLocationId(discrepancyId: string, orgId: number): Promise<string | null> {
-  const [row] = await db
-    .select({ storeLocationId: receivingSession.storeLocationId })
-    .from(receivingDiscrepancy)
-    .innerJoin(receivingSession, eq(receivingDiscrepancy.sessionId, receivingSession.sessionId))
-    .innerJoin(purchaseOrder, eq(receivingSession.poId, purchaseOrder.poId))
-    .where(and(eq(receivingDiscrepancy.discrepancyId, discrepancyId), eq(purchaseOrder.organisationId, orgId)));
-  return row?.storeLocationId ?? null;
-}
-
 /**
  * Create a credit note against a discrepancy and mark it resolved, in one transaction. The discrepancy row is locked,
  * so two notes for it cannot both be made. `replay: true` means the client-made id had already made this note.
@@ -155,15 +142,13 @@ export async function createCreditNote(input: CreateCreditNoteInput) {
       throw new AppError(409, "INVALID_STATE", "This delivery is still being received. Credit it once it is confirmed.");
     }
     if (disc.isResolved) throw new AppError(409, "ALREADY_CREDITED", "This discrepancy already has a credit note");
-    if (input.supplierId && input.supplierId !== disc.supplierId) {
-      throw new AppError(400, "VALIDATION", "The supplier is not the one this discrepancy is with");
-    }
 
     const worth = valueOf(disc);
     if (worth === null) {
       throw new AppError(400, "DISCREPANCY_VALUE_UNKNOWN", "This line has no price, so a credit cannot be checked against it");
     }
-    if (toCents(input.creditAmount) > worth) {
+    const amount = toCents(input.creditAmount);
+    if (amount > worth) {
       throw new AppError(
         400,
         "CREDIT_EXCEEDS_DISCREPANCY",
@@ -178,7 +163,7 @@ export async function createCreditNote(input: CreateCreditNoteInput) {
         discrepancyId: input.discrepancyId,
         supplierId: disc.supplierId,
         organisationId: input.organisationId,
-        creditAmount: String(input.creditAmount),
+        creditAmount: String(amount),
         creditReference: input.creditReference,
         notes: input.notes,
         createdByUserId: input.userId,
@@ -199,10 +184,9 @@ export async function createCreditNote(input: CreateCreditNoteInput) {
 }
 
 /**
- * Credit notes of the organisation for discrepancies received at these locations, newest first; optionally one supplier's.
+ * Credit notes of the organisation, newest first; optionally one supplier's.
  */
-export async function getCreditNotes(organisationId: number, locationIds: string[], supplierId?: string) {
-  if (locationIds.length === 0) return [];
+export async function getCreditNotes(organisationId: number, supplierId?: string) {
   return db
     .select({
       creditNoteId: creditNote.creditNoteId,
@@ -216,31 +200,25 @@ export async function getCreditNotes(organisationId: number, locationIds: string
       createdAt: creditNote.createdAt,
     })
     .from(creditNote)
-    .innerJoin(receivingDiscrepancy, eq(creditNote.discrepancyId, receivingDiscrepancy.discrepancyId))
-    .innerJoin(receivingSession, eq(receivingDiscrepancy.sessionId, receivingSession.sessionId))
     .where(
       and(
         eq(creditNote.organisationId, organisationId),
-        inArray(receivingSession.storeLocationId, locationIds),
         supplierId ? eq(creditNote.supplierId, supplierId) : undefined,
       ),
     )
     .orderBy(desc(creditNote.createdAt));
 }
 
-/** The newest this many open discrepancies are listed: more than a kitchen chases at once. */
-const UNRESOLVED_LIMIT = 200;
-
 /**
- * Discrepancies of confirmed deliveries at these locations that have no credit note yet, newest first, each with
- * `maxCreditAmount` (what it is worth; null when the line has no price).
+ * One page of the organisation's discrepancies of confirmed deliveries that have no credit note yet, newest first,
+ * each with `maxCreditAmount` (what it is worth; null when the line has no price). A price drop is worth nothing and
+ * can never be credited, so it is left out.
  */
 export async function listUnresolvedDiscrepancies(
   organisationId: number,
-  locationIds: string[],
+  page: { limit: number; offset: number },
   supplierId?: string,
 ) {
-  if (locationIds.length === 0) return [];
   const rows = await db
     .select({
       ...discrepancyColumns,
@@ -261,12 +239,17 @@ export async function listUnresolvedDiscrepancies(
         eq(purchaseOrder.organisationId, organisationId),
         eq(receivingDiscrepancy.isResolved, false),
         eq(receivingSession.status, "COMPLETED"),
-        inArray(receivingSession.storeLocationId, locationIds),
+        or(
+          ne(receivingDiscrepancy.type, "PRICE_VARIANCE"),
+          isNull(receivingDiscrepancy.varianceAmount),
+          gt(receivingDiscrepancy.varianceAmount, "0"),
+        ),
         supplierId ? eq(receivingDiscrepancy.supplierId, supplierId) : undefined,
       ),
     )
-    .orderBy(desc(receivingDiscrepancy.createdAt))
-    .limit(UNRESOLVED_LIMIT);
+    .orderBy(desc(receivingDiscrepancy.createdAt), desc(receivingDiscrepancy.discrepancyId))
+    .limit(page.limit)
+    .offset(page.offset);
 
   return rows.map(({ isResolved: _r, sessionStatus: _s, poLineUnitCost, lineActualUnitCost, ...row }) => ({
     ...row,
