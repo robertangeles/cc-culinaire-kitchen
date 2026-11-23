@@ -63,13 +63,15 @@ async function press(label: string | RegExp) {
 
 /** Type into a field and check it took (the save-password sheet can swallow keystrokes). */
 async function type(label: string, text: string) {
+  let lastY: number | undefined;
   for (let i = 0; i < 6; i++) {
     await dismissSavePassword();
     // Find the field with the keyboard down: uiautomator also lists a field the keyboard covers, and a tap there lands on the keyboard.
     await hideKeyboard();
     const field = await find(label, (n) => n.find((x) => x.cls.includes("EditText")));
-    if (!field || field.y2 > size()[1] * 0.55) {
-      // Low on the screen (the keyboard will cover it) or not found: scroll down first, then back up.
+    // Low on the screen (the keyboard will cover it): scroll it up, unless scrolling no longer moves it (a screen that does not scroll).
+    if (!field || (field.y2 > size()[1] * 0.55 && field.y2 !== lastY)) {
+      lastY = field?.y2;
       await scroll(!field || i < 3);
       continue;
     }
