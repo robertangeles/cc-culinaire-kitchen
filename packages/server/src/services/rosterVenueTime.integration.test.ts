@@ -231,7 +231,7 @@ describe.skipIf(!RUN)("roster venue time and Wave 4 fixes (real DB)", () => {
     const setStatus = (shiftId: string, status: string) => db.update(shift).set({ status }).where(eq(shift.shiftId, shiftId));
     const daysFromNow = (n: number) => new Date(Date.now() + n * 86_400_000).toISOString();
 
-    it("leaves out Drafts and cancelled shifts, keeps a Draft awaiting holiday consent, and carries holiday and venue fields", async () => {
+    it("with no filters lists Drafts too (the web shape); excludeDrafts leaves them out but keeps a Draft awaiting holiday consent; cancelled never shows", async () => {
       const published = await mkShift(venue.mel, daysFromNow(3));
       const draft = await mkShift(venue.mel, daysFromNow(4));
       const draftConsent = await mkShift(venue.perth, daysFromNow(5));
@@ -242,7 +242,11 @@ describe.skipIf(!RUN)("roster venue time and Wave 4 fixes (real DB)", () => {
       for (const id of [published, draft, cancelled]) await assign(id, staffB);
       await assign(draftConsent, staffB, "Pending", "Requested");
 
-      const mine = await listMyShifts(orgId, staffB);
+      const everything = (await listMyShifts(orgId, staffB)).map((s) => s.shiftId);
+      expect(everything).toEqual(expect.arrayContaining([published, draft, draftConsent]));
+      expect(everything).not.toContain(cancelled);
+
+      const mine = await listMyShifts(orgId, staffB, { excludeDrafts: true });
       const ids = mine.map((s) => s.shiftId);
 
       expect(ids).toContain(published);
@@ -259,7 +263,7 @@ describe.skipIf(!RUN)("roster venue time and Wave 4 fixes (real DB)", () => {
       expect(mine.find((s) => s.shiftId === draftConsent)).toMatchObject({ ianaTimezone: "Australia/Perth", publicHolidayConsent: "Requested" });
     });
 
-    it("is bounded: a shift older than the default look-back is not returned unless asked for, `to` and `limit` apply, soonest first", async () => {
+    it("has no date window unless asked: an old shift is listed with no filters, and `from`, `to` and `limit` bound the list, soonest first", async () => {
       const old = await mkShift(venue.mel, daysFromNow(-40));
       const soon = await mkShift(venue.mel, daysFromNow(20));
       const later = await mkShift(venue.mel, daysFromNow(40));
@@ -268,18 +272,43 @@ describe.skipIf(!RUN)("roster venue time and Wave 4 fixes (real DB)", () => {
         await assign(id, staffC);
       }
 
-      expect((await listMyShifts(orgId, staffC)).map((s) => s.shiftId)).toEqual([soon, later]);
-      const from = daysFromNow(-41).slice(0, 10);
-      expect((await listMyShifts(orgId, staffC, { from })).map((s) => s.shiftId)).toEqual([old, soon, later]);
-      expect((await listMyShifts(orgId, staffC, { to: daysFromNow(30).slice(0, 10) })).map((s) => s.shiftId)).toEqual([soon]);
-      expect((await listMyShifts(orgId, staffC, { from, limit: 2 })).map((s) => s.shiftId)).toEqual([old, soon]);
+      expect((await listMyShifts(orgId, staffC)).map((s) => s.shiftId)).toEqual([old, soon, later]);
+      expect((await listMyShifts(orgId, staffC, { from: daysFromNow(-14).slice(0, 10) })).map((s) => s.shiftId)).toEqual([soon, later]);
+      expect((await listMyShifts(orgId, staffC, { to: daysFromNow(30).slice(0, 10) })).map((s) => s.shiftId)).toEqual([old, soon]);
+      expect((await listMyShifts(orgId, staffC, { limit: 2 })).map((s) => s.shiftId)).toEqual([old, soon]);
     });
 
-    it("the controller answers a bad limit with 400 VALIDATION and caps nothing silently", async () => {
-      const sent = fakeRes();
-      await handleListMyShifts({ user: { sub: staffB }, query: { limit: "0" } } as unknown as Request, sent.res, () => undefined);
-      expect(sent.status).toBe(400);
-      expect(sent.body).toMatchObject({ code: "VALIDATION" });
+    it("with no filters returns more than 100 shifts: there is no default page size", async () => {
+      const ids = await Promise.all(Array.from({ length: 101 }, (_, i) => mkShift(venue.mel, daysFromNow(60 + i))));
+      await db.insert(shiftAssignment).values(ids.map((shiftId) => ({ shiftId, userId: staffC, status: "Confirmed" })));
+
+      const mine = (await listMyShifts(orgId, staffC)).map((s) => s.shiftId);
+      expect(mine).toEqual(expect.arrayContaining(ids));
+      expect(await listMyShifts(orgId, staffC, { limit: 5 })).toHaveLength(5);
+    });
+
+    it.each([{ limit: "0" }, { limit: "501" }, { excludeDrafts: "yes" }, { excludeDrafts: "1" }])(
+      "the controller answers a bad query (%o) with 400 VALIDATION",
+      async (query) => {
+        const sent = fakeRes();
+        await handleListMyShifts({ user: { sub: staffB }, query } as unknown as Request, sent.res, () => undefined);
+        expect(sent.status).toBe(400);
+        expect(sent.body).toMatchObject({ code: "VALIDATION" });
+      },
+    );
+
+    it("the controller lists Drafts with no query and leaves them out with excludeDrafts=true", async () => {
+      const draft = await mkShift(venue.mel, daysFromNow(7));
+      await assign(draft, staffB);
+      const list = async (query: Record<string, string>) => {
+        const sent = fakeRes();
+        await handleListMyShifts({ user: { sub: staffB }, query } as unknown as Request, sent.res, () => undefined);
+        return (sent.body as { shiftId: string }[]).map((s) => s.shiftId);
+      };
+
+      expect(await list({})).toContain(draft);
+      expect(await list({ excludeDrafts: "false" })).toContain(draft);
+      expect(await list({ excludeDrafts: "true" })).not.toContain(draft);
     });
   });
 
