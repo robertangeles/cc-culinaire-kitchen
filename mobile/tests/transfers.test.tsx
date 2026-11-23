@@ -210,6 +210,16 @@ describe("one transfer", () => {
     await waitFor(() => expect([...rows.values()].map((r) => r.type)).toEqual(["transfer.create", "transfer.send"]));
   });
 
+  it("shows the lines of a transfer made on this phone with its send queued behind it, with no signal", async () => {
+    searchParams.current = { transferId: "00000000-0000-4000-8000-000000000001" };
+    const { transfers } = await makeStoreRoom({ readsFail: new ApiError("network") });
+    await transfers.create({ toLocationId: "L2", toLocationName: "Bar", lines: [{ ingredientId: "i1", ingredientName: "Gin", unit: "L", quantity: "3" }], notes: "", sendNow: true });
+    render(<TransferScreen />);
+    expect(await screen.findByText("Sent 3 L")).toBeTruthy();
+    expect(screen.queryByText(/has not been opened on this phone before/)).toBeNull();
+    expect(screen.queryByText("Transfer not found")).toBeNull();
+  });
+
   it("says when a transfer was never opened on this phone and there is no signal", async () => {
     searchParams.current = { transferId: "due" };
     await makeStoreRoom({ readsFail: new ApiError("network") });
