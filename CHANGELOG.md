@@ -12,6 +12,11 @@ No server change, no schema change and no migration. The phone gets two tabs sho
 - **Shared schemas.** `packages/shared/src/schemas/conversation.ts` and `recipe.ts`: what the conversation and recipe routes send, parsed leniently on the phone.
 - **Not on the phone yet:** guest chat, image mode, web search, the Patisserie and Cocktail labs, versions, share, email, ratings, archive and image regeneration.
 
+### Changed (mobile: the tab bar)
+
+- **Tab order and More.** The phone's tabs now follow a cook's shift: Prep, Waste, Usage, Count, Move, Receive, Ask, Recipes, then Account. The bar holds at most five buttons; a person with more modules gets the first four and **More**, which lists the rest and Account and stays highlighted while one of them is open. The bar now sits above the system navigation bar with its labels unclipped. The Count tab is titled "Count", shows its empty state in a card and keeps the centred tablet column. No server change.
+- **Screenshot walk.** `mobile/device/screens.sh` photographs every phone screen on the moto g86 at phone and iPad widths and writes a gallery to look through; the look checklist is in `mobile/README.md` (see `mobile/device/README.md`, "The screenshot walk").
+
 ### Changed (server hardening for chat, recipes and the model-backed screens, before the phone shows them)
 
 No migration, nothing to seed or backfill. Every answer below keeps `error` as the sentence the web shows and adds `code` (shared `ApiErrorBody`), so older installed apps keep working.
