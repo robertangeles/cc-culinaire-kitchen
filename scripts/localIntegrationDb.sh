@@ -17,7 +17,7 @@ PORT=55432
 if [ -f "$DIR/PG_VERSION" ]; then
   BIN=/usr/lib/postgresql/$(cat "$DIR/PG_VERSION")/bin
 else
-  BIN=$(for v in $(ls /usr/lib/postgresql 2>/dev/null | sort -rV); do [ -f "/usr/share/postgresql/$v/extension/vector.control" ] && echo "/usr/lib/postgresql/$v/bin" && break; done)
+  BIN=$(for v in $(ls /usr/lib/postgresql 2>/dev/null | sort -rV); do [ -f "/usr/share/postgresql/$v/extension/vector.control" ] && echo "/usr/lib/postgresql/$v/bin" && break; done || true)
 fi
 URL="postgresql://ci@127.0.0.1:$PORT/culinaire_it"
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
@@ -31,7 +31,7 @@ env_lines() {
 
 case "${1:-}" in
   start)
-    [ -n "$BIN" ] || { echo "no PostgreSQL server binaries under /usr/lib/postgresql" >&2; exit 1; }
+    [ -n "$BIN" ] || { echo "no PostgreSQL version with pgvector (vector.control) found under /usr/lib/postgresql" >&2; exit 1; }
     mkdir -p "$SOCK"
     [ -d "$DIR" ] || "$BIN/initdb" -D "$DIR" -U ci --auth=trust > /dev/null
     "$BIN/pg_ctl" -D "$DIR" -o "-p $PORT -k $SOCK -c listen_addresses=127.0.0.1" -l "$DIR/server.log" -w start > /dev/null
