@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, onTestFailed } from "vitest";
 import {
   adb, back, clearApp, tapLabel, tapAt, clearField, darkIconsOnStatusBar, dump, fieldText, findAll, find, forceStop, has, hideKeyboard, isEnabled, openApp, screenshot,
-  setAirplane, setAnimations, setDarkMode, setFontScale, setRotation, tap, typeInto, waitFor,
+  openTab, setAirplane, setAnimations, setDarkMode, setFontScale, setRotation, tap, typeInto, waitFor,
 } from "./adb";
 import { credentials, freshCode, seedAreaCount, type AreaFixture } from "./fixtures";
 
@@ -372,7 +372,7 @@ describe("count walk on a device", () => {
 
   it("W11 below the minimum app version the app is asked to update at sign-in, and works again once it is lifted", async () => {
     await fx.api.request("PUT", "/api/settings", { body: { mobile_min_app_version: "9.9.9" } });
-    await tap(/^Account/); // Sign out lives on the Account tab
+    await openTab("Account"); // Sign out lives on the Account tab (under More for this Administrator)
     await waitFor("Sign out", 20_000);
     await tap("Sign out");
     await waitFor("Sign in", 30_000);

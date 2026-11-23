@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
-  adb, back, clearApp, dismissSavePassword, dump, fieldText, find, isSavePasswordSheet, findAll, forceStop, has, hideKeyboard, openApp, setAirplane, setAnimations, setDarkMode, setFontScale,
+  adb, back, clearApp, dismissSavePassword, openTab, dump, fieldText, find, isSavePasswordSheet, findAll, forceStop, has, hideKeyboard, openApp, setAirplane, setAnimations, setDarkMode, setFontScale,
   setRotation, swipe, tap, tapAt, tapLabel, typeInto, waitFor, waitGone,
 } from "./adb";
 import { credentials, freshCode, manager } from "./fixtures";
@@ -173,14 +173,7 @@ async function enterCode(code: string | typeof freshCode) {
   await sleep(1500);
 }
 
-/** Open a tab by its title; one that did not fit on the bar is opened from More. */
-async function tab(title: string) {
-  const button = new RegExp(`^${title}(,|$)`);
-  await waitFor(/^More(,|$)|^Account(,|$)/, 30_000);
-  if (await has(button)) return tap(button);
-  await tap(/^More(,|$)/);
-  await tap(title);
-}
+const tab = (title: string) => openTab(title);
 
 
 /**

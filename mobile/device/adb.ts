@@ -266,3 +266,12 @@ export async function tapLabel(label: string, timeoutMs = 20_000): Promise<void>
     await sleep(500);
   }
 }
+
+/** Open a tab by its title. A person with more modules than the bar holds finds the rest, and Account, under More. */
+export async function openTab(title: string, timeoutMs = 30_000): Promise<void> {
+  const button = new RegExp(`^${title}(,|$)`);
+  await waitFor(/^More(,|$)|^Account(,|$)/, timeoutMs);
+  if (await has(button)) return tap(button);
+  await tap(/^More(,|$)/);
+  await tap(title);
+}

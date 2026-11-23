@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, onTestFailed } from "vitest";
 import {
-  adb, back, clearApp, tap, tapAt, tapLabel, clearField, find, findAll, has, hideKeyboard, openApp, forceStop, screenshot, setAirplane, setAnimations, setDarkMode, setFontScale,
+  adb, back, clearApp, tap, tapAt, tapLabel, clearField, find, findAll, has, hideKeyboard, openApp, openTab, forceStop, screenshot, setAirplane, setAnimations, setDarkMode, setFontScale,
   setRotation, typeInto, waitFor, waitGone, screenSize,
 } from "./adb";
 import { credentials, freshCode, manager } from "./fixtures";
@@ -49,8 +49,8 @@ async function signIn() {
   await tap("Verify");
 }
 
-/** The tab bar button with this title (a tab is "Usage, tab, 3 of 5" or similar, so match by the start). */
-const tab = (title: string) => tap(new RegExp(`^${title}(,|$)`), 30_000);
+/** The tab with this title (a tab is "Usage, tab, 3 of 5" or similar); the E2E user is an Administrator, so Move and Account are under More. */
+const tab = (title: string) => openTab(title);
 
 describe("usage and moves on a device", () => {
   beforeEach((ctx) => {
@@ -91,10 +91,10 @@ describe("usage and moves on a device", () => {
     await m.client.request("DELETE", `${API}/ingredients/${itemId}`).catch(() => {});
   });
 
-  it("S1 signs in and shows the Usage and Move tabs next to Count, Waste and Account", async () => {
+  it("S1 signs in and shows Prep, Waste, Usage and Count with Move and Account under More", async () => {
     await signIn();
     await waitFor(/^Usage(,|$)/, 60_000);
-    for (const t of ["Count", "Waste", "Usage", "Move", "Account"]) expect(await has(new RegExp(`^${t}(,|$)`)), `${t} tab`).toBe(true);
+    for (const t of ["Prep", "Waste", "Usage", "Count", "More"]) expect(await has(new RegExp(`^${t}(,|$)`)), `${t} tab`).toBe(true);
     await screenshot("s01-tabs");
   });
 
