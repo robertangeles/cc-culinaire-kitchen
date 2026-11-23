@@ -33,6 +33,10 @@ export const moduleTabs: ModuleTab[] = [
   { route: "(recipes)", title: "Recipes", icon: "recipes" },
   // Everyone's notifications (the web bell's routes ask only for a sign-in), with the unread count on its button or on More.
   { route: "(inbox)", title: "Inbox", icon: "inbox" },
+  // Listing and receiving transfers is `inventory:count` on the server; making, sending and cancelling one is `inventory:manage` (the screens offer those only to holders).
+  { route: "(transfers)", title: "Transfers", icon: "transfer", anyPermission: ["inventory:count"] },
+  // The dashboard, the location's items and catalogue requests are `inventory:count`; stock value and quantities also need `inventory:cost`.
+  { route: "(stock)", title: "Stock", icon: "stock", anyPermission: ["inventory:count"] },
 ];
 
 /** Administrators hold every permission implicitly, as on the web and the server. */

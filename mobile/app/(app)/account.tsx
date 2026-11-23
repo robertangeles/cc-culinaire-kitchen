@@ -5,6 +5,8 @@ import { CONSUMPTION_TYPES } from "../../src/consumption/consumptionCommands";
 import { MOVEMENT_TYPES } from "../../src/movements/movementCommands";
 import { WASTE_TYPES } from "../../src/waste/wasteCommands";
 import { NOTIFICATION_TYPES } from "../../src/notifications/notificationCommands";
+import { TRANSFER_TYPES } from "../../src/transfers/transferCommands";
+import { CATALOG_REQUEST_TYPES } from "../../src/stock/catalogRequestCommands";
 import { Screen } from "../../src/ui/Screen";
 import { Text } from "../../src/ui/Text";
 import { Button } from "../../src/ui/Button";
@@ -57,7 +59,7 @@ export default function Account() {
         ))}
       </Surface>
       {/* What is waiting on this phone and what the server refused. Each module's command types are listed here (counts have their own screen). */}
-      <QueueStatus types={[...WASTE_TYPES, ...PREP_TYPES, ...CONSUMPTION_TYPES, ...MOVEMENT_TYPES, ...NOTIFICATION_TYPES]} />
+      <QueueStatus types={[...WASTE_TYPES, ...PREP_TYPES, ...CONSUMPTION_TYPES, ...MOVEMENT_TYPES, ...NOTIFICATION_TYPES, ...TRANSFER_TYPES, ...CATALOG_REQUEST_TYPES]} />
       {locations.length > 1 ? <Button kind="ghost" label="Change location" onPress={() => session.changeLocation()} /> : null}
       {appleEnabled ? <Button kind="ghost" label="Add Sign in with Apple" onPress={() => router.push("/link-apple")} /> : null}
       <Button kind="quiet" label="Sign out" onPress={() => void session.signOut()} />
