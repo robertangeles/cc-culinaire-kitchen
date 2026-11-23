@@ -41,7 +41,11 @@ Hooked to push: roster published, a Published shift cancelled, document verified
 - [ ] Kitchen Brain digest, nudge, capture error.
 - [ ] Not yet notifications at all: transfer, stock take flagged, Bench mention, a person removed from a shift (`removeAssignment`), a venue's bulk undo (`undoGeneration`).
 - [ ] Quiet hours drop a push (the inbox keeps it). If the owner wants it held until quiet hours end, that needs a queue table.
-- [ ] Phone: register an Expo push token (not a raw FCM/APNs token; the dispatcher skips those), send `refreshToken` in the `register-device` body (ties the push token to that sign-in, so the server removes it when the sign-in ends; without it the token is only removed once the person has no sign-in left; logout removes the tokens registered under the signing-out sign-in, the phone sends nothing extra), call `unregister-device` when notifications are turned off, send the phone's IANA time zone with quiet hours, route `data.link` (`pushLink` in `@culinaire/shared/schemas/push`; `/notifications` until a screen exists).
+- [x] Phone (2026-11-24, Wave 4 phone PR): register an Expo push token (not a raw FCM/APNs token; the dispatcher skips those), send `refreshToken` in the `register-device` body (ties the push token to that sign-in, so the server removes it when the sign-in ends; without it the token is only removed once the person has no sign-in left; logout removes the tokens registered under the signing-out sign-in, the phone sends nothing extra), call `unregister-device` when notifications are turned off, send the phone's IANA time zone with quiet hours, route `data.link` (`pushLink` in `@culinaire/shared/schemas/push`; `/notifications` until a screen exists).
+- [ ] Phone, after the visual pass (More tab) merges: show the inbox's unread count on the More button and its More row when the Inbox sits under More (today the badge is on the Inbox tab button only).
+- [ ] Owner, before push reaches a phone: `eas init` (Expo project id), FCM credentials and `google-services.json`, APNs key, then `EXPO_PUSH_ENABLED=true` (checklist in `mobile/README.md`, "Inbox and push").
+- [ ] Server: machine-readable `code` on the 400s of profile PATCH, change-password, avatar upload, MFA enable and kitchen-profile PUT, and the notification read/dismiss 404 (the phone reads the status today; list in `mobile/README.md`); the avatar size message says 2 MB while the limit is 10 MB.
+- [ ] Server: notification read history and "mark all read" (the list holds unread rows only).
 
 ## MFA follow-ups (2026-10-26)
 
