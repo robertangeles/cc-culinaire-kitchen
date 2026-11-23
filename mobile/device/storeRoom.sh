@@ -21,6 +21,8 @@ LOGS=$(mktemp -d)
 DB=culinaire_storeroom
 PSQL=(psql -h 127.0.0.1 -p 55432 -U ci -qAt)
 ADB=${ADB:-${ANDROID_HOME:-$HOME/android-sdk}/platform-tools/adb}
+# The moto g86 (device/README.md): an emulator another lane left running must not make every adb call ambiguous.
+export ANDROID_SERIAL=${ANDROID_SERIAL:-ZY32MB62DD}
 
 export E2E_USER_EMAIL=${E2E_USER_EMAIL:-e2e-ci@culinaire.test}
 export E2E_USER_PASSWORD=${E2E_USER_PASSWORD:-E2e-Ci-Throwaway-Pass-1!}
