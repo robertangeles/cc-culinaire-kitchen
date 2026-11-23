@@ -17,6 +17,7 @@ import {
   AlertTriangle,
   Loader2,
 } from "lucide-react";
+import { FOOD_COST_ALERT_PCT } from "@culinaire/shared";
 import type { MenuAnalysis } from "../../hooks/useMenuAnalysis.js";
 import type { MenuItem } from "../../hooks/useMenuItems.js";
 
@@ -143,7 +144,7 @@ export function MenuDashboard({ analysis, loading, onFilterDogs }: MenuDashboard
           icon={DollarSign}
           label="Avg Food Cost"
           value={`${Number(analysis.avgFoodCostPct).toFixed(1)}%`}
-          alert={Number(analysis.avgFoodCostPct) > 35}
+          alert={Number(analysis.avgFoodCostPct) > FOOD_COST_ALERT_PCT}
         />
         <MetricCard
           icon={TrendingUp}
@@ -154,7 +155,7 @@ export function MenuDashboard({ analysis, loading, onFilterDogs }: MenuDashboard
           icon={DollarSign}
           label="Overall Food Cost"
           value={`${Number(analysis.overallFoodCostPct).toFixed(1)}%`}
-          alert={Number(analysis.overallFoodCostPct) > 35}
+          alert={Number(analysis.overallFoodCostPct) > FOOD_COST_ALERT_PCT}
         />
       </div>
 

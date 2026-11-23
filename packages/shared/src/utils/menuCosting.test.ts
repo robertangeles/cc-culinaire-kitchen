@@ -57,7 +57,7 @@ function legacyEditor(totalBatchCost: number, servings: number, qFactorPct: stri
   const foodCostPerSale = foodCostWithQ * salePack;
   const foodCostPct = price > 0 ? (foodCostPerSale / price) * 100 : 0;
   const contributionMargin = price - foodCostPerSale;
-  return { perServingCost, foodCostWithQ, salePack, foodCostPerSale, foodCostPct, contributionMargin };
+  return { foodCostWithQ, salePack, foodCostPerSale, foodCostPct, contributionMargin };
 }
 
 /** menuIntelligenceService.ts recalculateItemCosts, up to the update. */

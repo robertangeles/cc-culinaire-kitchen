@@ -1,4 +1,5 @@
 import { DollarSign } from "lucide-react";
+import { FOOD_COST_ALERT_PCT } from "@culinaire/shared";
 
 interface CostSummaryProps {
   totalBatchCost: number;
@@ -50,7 +51,7 @@ export function CostSummary({
         </div>
         <div>
           <p className="text-[10px] uppercase text-dark-500 mb-0.5">Food Cost %</p>
-          <p className={`text-lg font-bold ${foodCostPct > 35 ? "text-red-400" : "text-[#FAFAFA]"}`}>
+          <p className={`text-lg font-bold ${foodCostPct > FOOD_COST_ALERT_PCT ? "text-red-400" : "text-[#FAFAFA]"}`}>
             {foodCostPct.toFixed(1)}%
           </p>
           {salePack > 1 && (

@@ -15,6 +15,7 @@ import {
   AlertTriangle,
   Settings2,
 } from "lucide-react";
+import { DEFAULT_CATEGORY_TARGET_PCT, categoryActualFoodCostPct } from "@culinaire/shared";
 import type { MenuItem } from "../../hooks/useMenuItems.js";
 
 const API = import.meta.env.VITE_API_URL ?? "";
@@ -65,14 +66,7 @@ export function CategorySettings({
   const categoryActuals = useMemo(() => {
     const result: Record<string, number> = {};
     for (const cat of categories) {
-      const catItems = items.filter((i) => i.category === cat);
-      if (catItems.length === 0) {
-        result[cat] = 0;
-        continue;
-      }
-      const avg =
-        catItems.reduce((sum, i) => sum + i.foodCostPct, 0) / catItems.length;
-      result[cat] = avg;
+      result[cat] = categoryActualFoodCostPct(items.filter((i) => i.category === cat));
     }
     return result;
   }, [categories, items]);
@@ -81,7 +75,7 @@ export function CategorySettings({
   const exceedingItems = useMemo(() => {
     const result: Record<string, MenuItem[]> = {};
     for (const cat of categories) {
-      const target = parseFloat(settings[cat] ?? "30");
+      const target = parseFloat(settings[cat] ?? String(DEFAULT_CATEGORY_TARGET_PCT));
       result[cat] = items.filter(
         (i) => i.category === cat && i.foodCostPct > target
       );
@@ -90,7 +84,7 @@ export function CategorySettings({
   }, [categories, items, settings]);
 
   async function handleSave(categoryName: string) {
-    const val = settings[categoryName] ?? "30";
+    const val = settings[categoryName] ?? String(DEFAULT_CATEGORY_TARGET_PCT);
     setSaving(categoryName);
     setError("");
     try {
@@ -158,7 +152,7 @@ export function CategorySettings({
         <div className="divide-y divide-dark-200/50">
           {categories.map((cat) => {
             const actual = categoryActuals[cat] ?? 0;
-            const target = parseFloat(settings[cat] ?? "30");
+            const target = parseFloat(settings[cat] ?? String(DEFAULT_CATEGORY_TARGET_PCT));
             const exceeding = exceedingItems[cat] ?? [];
             const isExpanded = expanded === cat;
             const isOverTarget = actual > target;
@@ -184,7 +178,7 @@ export function CategorySettings({
                       step="0.5"
                       min="0"
                       max="100"
-                      value={settings[cat] ?? "30"}
+                      value={settings[cat] ?? String(DEFAULT_CATEGORY_TARGET_PCT)}
                       onChange={(e) =>
                         setSettings((prev) => ({
                           ...prev,

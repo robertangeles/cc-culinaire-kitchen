@@ -99,8 +99,6 @@ function perServingWithQ(totalLineCost: number, servings: number, qFactorPct: nu
 }
 
 export interface EditorItemCosts {
-  /** Per serving, before the Q factor. */
-  perServingCost: number;
   /** Per serving, with the Q factor. */
   foodCostWithQ: number;
   /** How many servings one sale covers (at least 1). */
@@ -122,7 +120,6 @@ export function editorItemCosts(input: {
   servingsPerSale: number;
   sellingPrice: string;
 }): EditorItemCosts {
-  const perServingCost = input.servings > 1 ? input.totalBatchCost / input.servings : input.totalBatchCost;
   const qPct = parseFloat(input.qFactorPct) || 0;
   const foodCostWithQ = perServingWithQ(input.totalBatchCost, input.servings, qPct);
 
@@ -132,7 +129,7 @@ export function editorItemCosts(input: {
   const foodCostPct = price > 0 ? (foodCostPerSale / price) * 100 : 0;
   const contributionMargin = price - foodCostPerSale;
 
-  return { perServingCost, foodCostWithQ, salePack, foodCostPerSale, foodCostPct, contributionMargin };
+  return { foodCostWithQ, salePack, foodCostPerSale, foodCostPct, contributionMargin };
 }
 
 /**

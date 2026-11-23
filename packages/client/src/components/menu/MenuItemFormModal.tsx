@@ -9,7 +9,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { X, Loader2 } from "lucide-react";
 import type { MenuItem, MenuIngredient } from "../../hooks/useMenuItems.js";
-import type { CustomConversion } from "@culinaire/shared";
+import { editorItemCosts, type CustomConversion } from "@culinaire/shared";
 import { CostSummary } from "./CostSummary.js";
 import { RecipeImportPanel, type ImportRecipe } from "./RecipeImportPanel.js";
 import { IngredientsSection, type IngredientRow, calcLineCost } from "./IngredientsSection.js";
@@ -338,15 +338,10 @@ export function MenuItemFormModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- conversionsVersion invalidates when a conversions fetch lands
     [ingredients, conversionsVersion]
   );
-  const perServingCost = servings > 1 ? totalBatchCost / servings : totalBatchCost;
   const qPct = parseFloat(qFactorPct) || 0;
-  const foodCostWithQ = qPct > 0 ? perServingCost * (1 + qPct / 100) : perServingCost;
-
-  const price = parseFloat(sellingPrice) || 0;
-  const salePack = Math.max(1, servingsPerSale || 1);
-  const foodCostPerSale = foodCostWithQ * salePack;
-  const foodCostPct = price > 0 ? (foodCostPerSale / price) * 100 : 0;
-  const contributionMargin = price - foodCostPerSale;
+  const { foodCostWithQ, salePack, foodCostPerSale, foodCostPct, contributionMargin } = editorItemCosts({
+    totalBatchCost, servings, qFactorPct, servingsPerSale, sellingPrice,
+  });
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
