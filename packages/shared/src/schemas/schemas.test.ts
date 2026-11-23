@@ -6,6 +6,8 @@ import { ActiveSessionSchema, AreaLinesSchema, CountSheetsSchema, SubmitConflict
 import { WasteEntrySchema, WasteListSchema, WasteSuggestionsSchema } from "./waste.js";
 import { CatalogueSchema } from "./catalogue.js";
 import { PrepMenuSchema, PrepSelectionsSchema, PrepTodaySchema } from "./prep.js";
+import { ConsumptionEntrySchema, ConsumptionListSchema } from "./consumption.js";
+import { StockMovementListSchema, StorageAreaListSchema } from "./stockMovement.js";
 
 // Payloads are shaped like the real server replies. Each lenient rule is one case: the point is that a server
 // that moved on (new field, new enum value, new null) does not break a phone that was installed last month.
@@ -139,13 +141,13 @@ describe("waste schemas", () => {
 describe("catalogue schema", () => {
   it("keeps only what the picker needs and drops rows that cannot be picked", () => {
     const rows = CatalogueSchema.parse([
-      { ingredientId: "i1", ingredientName: "Flour", baseUnit: "g", ingredientCategory: "Dry", unitCost: "0.0012", organisationId: 1 },
+      { ingredientId: "i1", ingredientName: "Flour", baseUnit: "g", ingredientCategory: "Dry", itemType: "KITCHEN_INGREDIENT", unitCost: "0.0012", organisationId: 1 },
       { ingredientName: "no id" },
       { ingredientId: "i2", ingredientName: "Gin", baseUnit: "L" },
     ]);
     expect(rows).toEqual([
-      { ingredientId: "i1", ingredientName: "Flour", baseUnit: "g", ingredientCategory: "Dry" },
-      { ingredientId: "i2", ingredientName: "Gin", baseUnit: "L", ingredientCategory: "" },
+      { ingredientId: "i1", ingredientName: "Flour", baseUnit: "g", ingredientCategory: "Dry", itemType: "KITCHEN_INGREDIENT" },
+      { ingredientId: "i2", ingredientName: "Gin", baseUnit: "L", ingredientCategory: "", itemType: "" },
     ]);
   });
 });
@@ -177,5 +179,31 @@ describe("prep schemas", () => {
   it("reads the previous selections, which the server sends as a bare array", () => {
     expect(PrepSelectionsSchema.parse([{ selectionId: "x", menuItemId: "m1", recipeId: null, dishName: "Soup", expectedPortions: 12, category: "Starter" }, { nonsense: 1 }])).toEqual([{ menuItemId: "m1", recipeId: null, dishName: "Soup", expectedPortions: 12, category: "Starter" }]);
     expect(PrepSelectionsSchema.parse({ selections: [] })).toEqual([]);
+  });
+});
+
+describe("consumption schemas", () => {
+  const row = { consumptionLogId: "c1", ingredientId: "i1", ingredientName: "Gin", ingredientCategory: "Spirits", baseUnit: "L", quantity: "0.700", unit: "L", reason: "foh_operations", notes: null, shift: "evening", loggedAt: "2026-11-23T01:00:00.000Z", userId: 7, userName: "Rob", brandNew: 1 };
+
+  it("reads an entry with its numeric string quantity and ignores what it does not know", () => {
+    expect(ConsumptionEntrySchema.parse(row)).toMatchObject({ consumptionLogId: "c1", quantity: 0.7, unit: "L", reason: "foh_operations", userId: 7, userName: "Rob" });
+    expect(ConsumptionEntrySchema.parse({ consumptionLogId: "c2", ingredientId: "i2", ingredientName: "Salt", quantity: 1, loggedAt: "2026-11-23T01:00:00.000Z" })).toMatchObject({ notes: null, shift: null, reason: "", userId: 0 });
+  });
+
+  it("skips a row it cannot read, never the whole list", () => {
+    expect(ConsumptionListSchema.parse([row, { nonsense: true }, { ...row, consumptionLogId: "c3" }]).map((r) => r.consumptionLogId)).toEqual(["c1", "c3"]);
+  });
+});
+
+describe("stock movement schemas", () => {
+  it("reads the active areas and drops one with no name", () => {
+    expect(StorageAreaListSchema.parse([{ storageAreaId: "a1", areaName: "Stock Room", sortOrder: 0, activeInd: true, itemCount: 4 }, { storageAreaId: "a2", areaName: "" }])).toEqual([{ storageAreaId: "a1", areaName: "Stock Room" }]);
+  });
+
+  it("reads a move by area names and skips a row that cannot be read", () => {
+    const move = { stockMovementId: "m1", ingredientId: "i1", ingredientName: "Gin", quantity: "4.000", unit: "bottle", fromAreaName: "Stock Room", toAreaName: "Bar", userName: "Rob", notes: null, movedAt: "2026-11-23T01:00:00.000Z" };
+    const list = StockMovementListSchema.parse([move, { nonsense: 1 }]);
+    expect(list).toHaveLength(1);
+    expect(list[0]).toMatchObject({ quantity: 4, fromAreaName: "Stock Room", toAreaName: "Bar" });
   });
 });
