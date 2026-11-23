@@ -40,7 +40,7 @@ export function authenticate(req: Request, res: Response, next: NextFunction) {
   const token = extractAccessToken(req);
 
   if (!token) {
-    res.status(401).json({ error: "Authentication required." });
+    res.status(401).json({ error: "Authentication required.", code: "UNAUTHENTICATED" });
     return;
   }
 
@@ -48,7 +48,7 @@ export function authenticate(req: Request, res: Response, next: NextFunction) {
     req.user = verifyAccessToken(token);
     next();
   } catch {
-    res.status(401).json({ error: "Invalid or expired token." });
+    res.status(401).json({ error: "Invalid or expired token.", code: "UNAUTHENTICATED" });
   }
 }
 

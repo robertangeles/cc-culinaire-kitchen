@@ -22,7 +22,7 @@ const logger = pino({ name: "usage" });
  */
 export async function checkUsageLimit(req: Request, res: Response, next: NextFunction) {
   if (!req.user) {
-    res.status(401).json({ error: "Authentication required." });
+    res.status(401).json({ error: "Authentication required.", code: "UNAUTHENTICATED" });
     return;
   }
 
@@ -36,7 +36,7 @@ export async function checkUsageLimit(req: Request, res: Response, next: NextFun
       .where(eq(user.userId, req.user.sub));
 
     if (rows.length === 0) {
-      res.status(401).json({ error: "User not found." });
+      res.status(401).json({ error: "User not found.", code: "UNAUTHENTICATED" });
       return;
     }
 

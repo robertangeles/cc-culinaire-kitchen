@@ -333,10 +333,12 @@ export const recipeRefineRateLimit = senderBucket("recipe-refine", 10, 20, "reci
 export const recipeImageRateLimit = senderBucket("recipe-image", 10, 10, "image requests");
 
 /**
- * Emailing a recipe: anyone, guests included, may send to any address, so two caps. Each sender gets a few an hour,
+ * Emailing a recipe: anyone, guests included, may send to any address, so three caps. Each sender gets a few an hour,
  * and each recipient address a few an hour from everyone together, which is what stops this being used to flood one inbox.
+ * Guest tokens are free to mint, so all the guests behind one address also share a cap; signed-in users are not counted in it.
  */
 export const recipeEmailRateLimit = senderBucket("recipe-email", 60, 10, "recipe emails");
+export const recipeEmailGuestAddressRateLimit = senderBucket("recipe-email-guest-ip", 60, 10, "recipe emails", (req) => (req.user ? null : hashIp(req)));
 export const recipeEmailRecipientRateLimit = senderBucket("recipe-email-to", 60, 3, "emails to that address", (req) => recipientKey(req.body?.to));
 
 /**

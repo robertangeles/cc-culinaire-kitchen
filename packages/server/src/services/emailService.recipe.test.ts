@@ -36,6 +36,22 @@ describe("sendRecipeEmail", () => {
     expect(html).toContain("&lt;img src=x onerror=&quot;alert(1)&quot;&gt;");
   });
 
+  it("escapes a flavour name the owner made up, which is an object key and not a value", async () => {
+    const flavorBalance = { "<a href=//evil.example>Click</a>": { score: 1, description: "x" } };
+    await sendRecipeEmail("cook@example.com", recipe({ flavorBalance }), null, "a-slug", "id-1");
+
+    const { html } = send.mock.calls[0][0] as { html: string };
+    expect(html).not.toContain("<a href=//evil.example>");
+    expect(html).toContain("&lt;a href=//evil.example&gt;Click&lt;/a&gt;");
+  });
+
+  it("sends a recipe whose edited name is not a string, instead of throwing", async () => {
+    const result = await sendRecipeEmail("cook@example.com", recipe({ name: 42 }), null, "a-slug", "id-1");
+
+    expect(result.sent).toBe(true);
+    expect((send.mock.calls[0][0] as { subject: string }).subject).toBe("42 — CulinAIre Kitchen");
+  });
+
   it("keeps the subject as plain text, on one line", async () => {
     await sendRecipeEmail("cook@example.com", recipe({ name: "Tom & Jerry\r\nBcc: x@y.z" }), null, "a-slug", "id-1");
 

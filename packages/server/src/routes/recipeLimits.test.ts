@@ -11,6 +11,7 @@ import {
   recipeRefineRateLimit,
   recipeImageRateLimit,
   recipeEmailRateLimit,
+  recipeEmailGuestAddressRateLimit,
   recipeEmailRecipientRateLimit,
   recipientKey,
 } from "../middleware/rateLimiter.js";
@@ -30,6 +31,7 @@ describe("model-backed routes are rate limited per user", () => {
     ["post", "/:id/refine", recipeRefineRateLimit],
     ["post", "/:id/regenerate-image", recipeImageRateLimit],
     ["post", "/:id/email", recipeEmailRateLimit],
+    ["post", "/:id/email", recipeEmailGuestAddressRateLimit],
     ["post", "/:id/email", recipeEmailRecipientRateLimit],
   ] as const)("recipes %s %s", (method, path, limiter) => {
     expect(handlersOf(recipesRouter, method, path)).toContain(limiter);
@@ -73,6 +75,41 @@ describe("the limiters count per person, not per address", () => {
     expect(blocked.status).toBe(429);
     expect(blocked.body.code).toBe("RATE_LIMITED");
     expect((await post(recipeGenerateRateLimit, "u2")).status).toBe(200);
+  });
+});
+
+describe("recipe emails from guests are also counted per address", () => {
+  let server: Server;
+  afterAll(() => server?.close());
+
+  it("fifty guest tokens behind one address send ten between them; signed-in users there are not counted", async () => {
+    const app = express();
+    app.use(express.json());
+    app.use((req, _res, next) => {
+      const who = String(req.headers["x-test-who"]);
+      if (who.startsWith("u")) req.user = { sub: Number(who.slice(1)), roles: [], permissions: [] };
+      else req.guestToken = who;
+      next();
+    });
+    app.post("/x", recipeEmailRateLimit, recipeEmailGuestAddressRateLimit, recipeEmailRecipientRateLimit, (_req, res) => res.sendStatus(200));
+    server = app.listen(0);
+    const send = async (who: string, to: string) => {
+      const res = await fetch(`http://127.0.0.1:${(server.address() as AddressInfo).port}/x`, {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-test-who": who },
+        body: JSON.stringify({ to }),
+      });
+      return { status: res.status, body: await res.json().catch(() => ({})) as Record<string, unknown> };
+    };
+
+    const answers = [];
+    for (let i = 0; i < 50; i++) answers.push(await send(`guest-${i}`, `inbox-${i}@example.com`));
+
+    expect(answers.filter((a) => a.status === 200)).toHaveLength(10);
+    expect(answers[10].status).toBe(429);
+    expect(answers[10].body.code).toBe("RATE_LIMITED");
+    expect((await send("u71", "user-one@example.com")).status).toBe(200);
+    expect((await send("u72", "user-two@example.com")).status).toBe(200);
   });
 });
 

@@ -14,7 +14,7 @@ import { hasGuestQuota } from "../services/guestService.js";
  */
 export async function checkGuestUsageLimit(req: Request, res: Response, next: NextFunction) {
   if (!req.guestToken) {
-    res.status(401).json({ error: "Guest authentication required." });
+    res.status(401).json({ error: "Guest authentication required.", code: "UNAUTHENTICATED" });
     return;
   }
 

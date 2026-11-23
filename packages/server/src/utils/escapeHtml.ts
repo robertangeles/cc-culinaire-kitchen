@@ -38,12 +38,12 @@ export function safeHttpUrl(url: string | null | undefined): string | null {
   return /^https?:\/\//i.test(url) ? url : null;
 }
 
-/** Returns a copy of `value` with every string in it (at any depth) HTML-escaped; numbers, booleans and null pass through. */
+/** Returns a copy of `value` with every string in it (at any depth, object keys included) HTML-escaped; numbers, booleans and null pass through. */
 export function escapeStrings<T>(value: T): T {
   if (typeof value === "string") return escapeHtml(value) as T;
   if (Array.isArray(value)) return value.map(escapeStrings) as T;
   if (value && typeof value === "object") {
-    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, escapeStrings(v)])) as T;
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [escapeHtml(k), escapeStrings(v)])) as T;
   }
   return value;
 }

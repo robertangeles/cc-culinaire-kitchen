@@ -72,7 +72,7 @@ export async function handleCreateConversation(
   try {
     const parsed = CreateSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.flatten() });
+      res.status(400).json({ error: "Invalid conversation.", code: "VALIDATION", details: parsed.error.flatten() });
       return;
     }
 
@@ -212,7 +212,7 @@ export async function handleSaveMessages(
     const id = req.params.id as string;
     const parsed = SaveMessagesSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.flatten() });
+      res.status(400).json({ error: "Invalid messages.", code: "VALIDATION", details: parsed.error.flatten() });
       return;
     }
 
@@ -222,13 +222,13 @@ export async function handleSaveMessages(
     } else if (req.guestToken) {
       owner = { guestToken: req.guestToken };
     } else {
-      res.status(401).json({ error: "Authentication required." });
+      res.status(401).json({ error: "Authentication required.", code: "UNAUTHENTICATED" });
       return;
     }
 
     const saved = await saveMessages(id, owner, parsed.data.messages);
     if (!saved) {
-      res.status(403).json({ error: "You do not have access to this conversation." });
+      res.status(403).json({ error: "You do not have access to this conversation.", code: "FORBIDDEN" });
       return;
     }
 

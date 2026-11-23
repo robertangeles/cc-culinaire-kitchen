@@ -183,7 +183,7 @@ export async function handleMyRecipes(
   try {
     const userId = req.user?.sub;
     if (!userId) {
-      res.status(401).json({ error: "Authentication required." });
+      res.status(401).json({ error: "Authentication required.", code: "UNAUTHENTICATED" });
       return;
     }
 
@@ -239,13 +239,13 @@ export async function handleGetRecipe(
     const id = req.params.id as string;
     const rec = await getRecipe(id, true); // increment view count
     if (!rec) {
-      res.status(404).json({ error: "Recipe not found." });
+      res.status(404).json({ error: "Recipe not found.", code: "NOT_FOUND" });
       return;
     }
 
     // Non-public recipes are only visible to their owner
     if (!rec.isPublicInd && rec.userId !== req.user?.sub) {
-      res.status(404).json({ error: "Recipe not found." });
+      res.status(404).json({ error: "Recipe not found.", code: "NOT_FOUND" });
       return;
     }
 
@@ -280,7 +280,7 @@ export async function handleUpdateRecipe(
     if (typeof isPublicInd === "boolean") updates.isPublicInd = isPublicInd;
 
     if (Object.keys(updates).length === 0) {
-      res.status(400).json({ error: "No valid fields to update." });
+      res.status(400).json({ error: "No valid fields to update.", code: "VALIDATION" });
       return;
     }
 
@@ -518,7 +518,7 @@ export async function handleRefineRecipe(
   try {
     const userId = req.user?.sub;
     if (!userId) {
-      res.status(401).json({ error: "Authentication required." });
+      res.status(401).json({ error: "Authentication required.", code: "UNAUTHENTICATED" });
       return;
     }
 
@@ -527,6 +527,7 @@ export async function handleRefineRecipe(
       res.status(400).json({
         error: "Invalid refinement request.",
         details: parsed.error.flatten().fieldErrors,
+        code: "VALIDATION",
       });
       return;
     }
@@ -534,7 +535,7 @@ export async function handleRefineRecipe(
     const id = req.params.id as string;
     const rec = await getRecipe(id);
     if (!rec || rec.userId !== userId) {
-      res.status(404).json({ error: "Recipe not found or not owned by you." });
+      res.status(404).json({ error: "Recipe not found or not owned by you.", code: "NOT_FOUND" });
       return;
     }
 
@@ -639,13 +640,13 @@ export async function handleEmailRecipe(
 
     const parsed = EmailSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: "Valid email address is required." });
+      res.status(400).json({ error: "Valid email address is required.", code: "VALIDATION" });
       return;
     }
 
     const rec = await getRecipe(id);
     if (!rec) {
-      res.status(404).json({ error: "Recipe not found." });
+      res.status(404).json({ error: "Recipe not found.", code: "NOT_FOUND" });
       return;
     }
 
@@ -653,7 +654,7 @@ export async function handleEmailRecipe(
     // as handleGetRecipe. Otherwise anyone with the UUID could exfiltrate the
     // full costed recipe to an arbitrary address.
     if (!rec.isPublicInd && rec.userId !== req.user?.sub) {
-      res.status(404).json({ error: "Recipe not found." });
+      res.status(404).json({ error: "Recipe not found.", code: "NOT_FOUND" });
       return;
     }
 
@@ -792,11 +793,11 @@ export async function handleRegenerateImage(
       .limit(1);
 
     if (!recipe) {
-      res.status(404).json({ error: "Recipe not found" });
+      res.status(404).json({ error: "Recipe not found", code: "NOT_FOUND" });
       return;
     }
     if (recipe.userId !== userId) {
-      res.status(403).json({ error: "Only the recipe owner can regenerate the image" });
+      res.status(403).json({ error: "Only the recipe owner can regenerate the image", code: "FORBIDDEN" });
       return;
     }
 
@@ -805,7 +806,7 @@ export async function handleRegenerateImage(
     const prompt = (recipeDataObj?.imagePrompt as string) || recipe.imagePrompt;
 
     if (!prompt) {
-      res.status(400).json({ error: "No image prompt available for this recipe" });
+      res.status(400).json({ error: "No image prompt available for this recipe", code: "INVALID_STATE" });
       return;
     }
 

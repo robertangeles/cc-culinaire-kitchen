@@ -27,7 +27,15 @@ vi.mock("../db/index.js", () => {
   return { db: { select: () => select, update: () => ({ set: (v: unknown) => ({ where: async () => updates.push(v) }) }) } };
 });
 
-const { recipeHandler, handleRefineRecipe, handleRegenerateImage } = await import("./recipeController.js");
+const {
+  recipeHandler,
+  handleRefineRecipe,
+  handleRegenerateImage,
+  handleMyRecipes,
+  handleGetRecipe,
+  handleUpdateRecipe,
+  handleEmailRecipe,
+} = await import("./recipeController.js");
 
 function reqRes(over: Partial<Request> = {}) {
   const res = Object.assign(new EventEmitter(), {
@@ -110,6 +118,54 @@ describe("recipeHandler", () => {
     expect(await recipeHandler("recipe")(req, res, next)).toBe(false);
     expect(res.status).toHaveBeenCalledWith(400);
     expect(generateRecipe).not.toHaveBeenCalled();
+  });
+});
+
+describe("every refusal carries a code a phone can branch on", () => {
+  const mine = { userId: 5, isPublicInd: false, recipeData: {} };
+  const theirs = { userId: 6, isPublicInd: false, recipeData: {} };
+  const noUser = { user: undefined } as Partial<Request>;
+  const generate: typeof handleGetRecipe = async (req, res, next) => void (await recipeHandler("recipe")(req, res, next));
+
+  beforeEach(() => vi.clearAllMocks());
+  afterEach(() => void rows.splice(0, rows.length, { recipeId: "r1", userId: 5, title: "Dish", imagePrompt: "a dish", recipeData: {} }));
+
+  it.each([
+    ["generate, request too short", generate, { body: { request: "x" } }, mine, 400, "VALIDATION"],
+    ["my recipes, not signed in", handleMyRecipes, { ...noUser, query: {} }, mine, 401, "UNAUTHENTICATED"],
+    ["get, no such recipe", handleGetRecipe, {}, null, 404, "NOT_FOUND"],
+    ["get, someone else's private recipe", handleGetRecipe, {}, theirs, 404, "NOT_FOUND"],
+    ["update, nothing to change", handleUpdateRecipe, { body: {} }, mine, 400, "VALIDATION"],
+    ["refine, not signed in", handleRefineRecipe, noUser, mine, 401, "UNAUTHENTICATED"],
+    ["refine, instruction too short", handleRefineRecipe, { body: { instruction: "x" } }, mine, 400, "VALIDATION"],
+    ["refine, someone else's recipe", handleRefineRecipe, {}, theirs, 404, "NOT_FOUND"],
+    ["email, not an address", handleEmailRecipe, { body: { to: "nope" } }, mine, 400, "VALIDATION"],
+    ["email, no such recipe", handleEmailRecipe, { body: { to: "a@example.com" } }, null, 404, "NOT_FOUND"],
+    ["email, someone else's private recipe", handleEmailRecipe, { body: { to: "a@example.com" } }, theirs, 404, "NOT_FOUND"],
+  ] as const)("%s", async (_name, handler, over, stored, status, code) => {
+    getRecipe.mockResolvedValue(stored);
+    const { req, res, next } = reqRes(over as Partial<Request>);
+
+    await handler(req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(status);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: expect.any(String), code }));
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["regenerate image, no such recipe", [], 404, "NOT_FOUND"],
+    ["regenerate image, someone else's recipe", [{ recipeId: "r1", userId: 6, title: "Dish", imagePrompt: "a dish", recipeData: {} }], 403, "FORBIDDEN"],
+    ["regenerate image, recipe with no image prompt", [{ recipeId: "r1", userId: 5, title: "Dish", imagePrompt: "", recipeData: {} }], 400, "INVALID_STATE"],
+  ] as const)("%s", async (_name, stored, status, code) => {
+    rows.splice(0, rows.length, ...stored);
+    const { req, res, next } = reqRes();
+
+    await handleRegenerateImage(req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(status);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: expect.any(String), code }));
+    expect(generateImage).not.toHaveBeenCalled();
   });
 });
 

@@ -48,5 +48,5 @@ export async function authenticateOrGuest(req: Request, res: Response, next: Nex
     }
   }
 
-  res.status(401).json({ error: "Authentication required." });
+  res.status(401).json({ error: "Authentication required.", code: "UNAUTHENTICATED" });
 }

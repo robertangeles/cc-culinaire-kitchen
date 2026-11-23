@@ -48,6 +48,7 @@ describe("authenticateOrGuest", () => {
   it("answers 401 when there is no token of either kind", async () => {
     const { res, next } = await run({});
     expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ code: "UNAUTHENTICATED" }));
     expect(next).not.toHaveBeenCalled();
   });
 });

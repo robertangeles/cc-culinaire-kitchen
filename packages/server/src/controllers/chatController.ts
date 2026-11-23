@@ -47,7 +47,7 @@ export async function handleChatStream(
 
   if (!parsed.success) {
     log.warn({ error: parsed.error.flatten() }, "Chat validation failed");
-    res.status(400).json({ error: parsed.error.flatten(), code: "VALIDATION" });
+    res.status(400).json({ error: "Invalid chat request.", code: "VALIDATION", details: parsed.error.flatten() });
     return false;
   }
 
@@ -92,7 +92,7 @@ export async function handleImageGeneration(
 
   if (!parsed.success) {
     log.warn({ error: parsed.error.flatten() }, "Image prompt validation failed");
-    res.status(400).json({ error: parsed.error.flatten(), code: "VALIDATION" });
+    res.status(400).json({ error: "Invalid image request.", code: "VALIDATION", details: parsed.error.flatten() });
     return false;
   }
 

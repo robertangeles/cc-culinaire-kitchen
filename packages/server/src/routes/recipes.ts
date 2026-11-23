@@ -16,6 +16,7 @@ import {
   recipeRefineRateLimit,
   recipeImageRateLimit,
   recipeEmailRateLimit,
+  recipeEmailGuestAddressRateLimit,
   recipeEmailRecipientRateLimit,
 } from "../middleware/rateLimiter.js";
 import {
@@ -99,7 +100,7 @@ recipesRouter.get("/:id", authenticateOrGuest, handleGetRecipe);
 // Update (auth or guest), Archive + Delete (auth required)
 recipesRouter.patch("/:id", authenticateOrGuest, handleUpdateRecipe);
 recipesRouter.post("/:id/archive", authenticate, handleArchiveRecipe);
-recipesRouter.post("/:id/email", authenticateOrGuest, recipeEmailRateLimit, recipeEmailRecipientRateLimit, handleEmailRecipe);
+recipesRouter.post("/:id/email", authenticateOrGuest, recipeEmailRateLimit, recipeEmailGuestAddressRateLimit, recipeEmailRecipientRateLimit, handleEmailRecipe);
 recipesRouter.delete("/:id", authenticate, handleDeleteRecipe);
 
 // Ratings & Reviews

@@ -119,14 +119,17 @@ describe.skipIf(!RUN)("wave 6 server hardening, over HTTP (real DB)", () => {
   describe("POST /api/chat", () => {
     const history = { messages: [{ role: "user", content: "How long do I rest a steak?" }] };
 
-    it("401 with no credentials", async () => {
-      expect((await call("POST", "/api/chat", {}, history)).status).toBe(401);
+    it("401 UNAUTHENTICATED with no credentials", async () => {
+      const out = await call("POST", "/api/chat", {}, history);
+      expect(out.status).toBe(401);
+      expect(out.body.code).toBe("UNAUTHENTICATED");
     });
 
     it("400 VALIDATION for the old single-message shape, and it costs nothing", async () => {
       const out = await call("POST", "/api/chat", asUser(owner), { message: "hi" });
       expect(out.status).toBe(400);
       expect(out.body.code).toBe("VALIDATION");
+      expect(typeof out.body.error).toBe("string");
       await settle();
       expect(await freeOf(owner)).toBe(5);
     });
@@ -272,7 +275,9 @@ describe.skipIf(!RUN)("wave 6 server hardening, over HTTP (real DB)", () => {
   describe("GET /api/recipes/my", () => {
     it("401, then 200 filtered by domain, then 400 for a domain that does not exist", async () => {
       await makeRecipe({ userId: owner, domain: "spirits" });
-      expect((await call("GET", "/api/recipes/my")).status).toBe(401);
+      const anonymous = await call("GET", "/api/recipes/my");
+      expect(anonymous.status).toBe(401);
+      expect(anonymous.body.code).toBe("UNAUTHENTICATED");
       const spirits = await call("GET", "/api/recipes/my?domain=spirits", asUser(owner));
       expect(spirits.status).toBe(200);
       expect(spirits.body.recipes.every((r: { domain: string }) => r.domain === "spirits")).toBe(true);
@@ -315,6 +320,19 @@ describe.skipIf(!RUN)("wave 6 server hardening, over HTTP (real DB)", () => {
       expect((await call("POST", "/api/conversations", asUser(owner), body)).status).toBe(200);
       expect((await call("POST", "/api/conversations", asUser(stranger), body)).body.code).toBe("CONFLICT");
       expect((await call("POST", "/api/conversations", {}, body)).status).toBe(401);
+    });
+
+    it("400 VALIDATION with a text error for a create or a save that is malformed, 403 FORBIDDEN for saving into someone else's", async () => {
+      const id = randomUUID();
+      conversationIds.push(id);
+      const create = await call("POST", "/api/conversations", asUser(owner), { id: "not-a-uuid" });
+      expect([create.status, create.body.code, typeof create.body.error]).toEqual([400, "VALIDATION", "string"]);
+      await call("POST", "/api/conversations", asUser(owner), { id, title: "Mine" });
+      const save = await call("POST", `/api/conversations/${id}/messages`, asUser(owner), { messages: [] });
+      expect([save.status, save.body.code, typeof save.body.error]).toEqual([400, "VALIDATION", "string"]);
+      const messages = [{ messageId: randomUUID(), messageRole: "user", messageBody: "hi", messageSequence: 0 }];
+      const intruder = await call("POST", `/api/conversations/${id}/messages`, asUser(stranger), { messages });
+      expect([intruder.status, intruder.body.code]).toEqual([403, "FORBIDDEN"]);
     });
 
     it("200 when the same messages are saved twice", async () => {

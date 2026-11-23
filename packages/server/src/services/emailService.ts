@@ -417,7 +417,7 @@ export async function sendRecipeEmail(
   const { error } = await client.emails.send({
     from: FROM_EMAIL,
     to,
-    subject: `${rawRecipeData.name.replace(/\s+/g, " ")} — CulinAIre Kitchen`,
+    subject: `${String(rawRecipeData.name).replace(/\s+/g, " ")} — CulinAIre Kitchen`,
     html,
     ...(attachments.length > 0 ? { attachments: attachments as { filename?: string; content?: Buffer | string; path?: string }[] } : {}),
   });
