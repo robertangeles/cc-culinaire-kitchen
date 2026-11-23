@@ -140,7 +140,7 @@ export default function ApprovalQueue() {
                     )}
                     {/* The server refuses an approver's own order while someone else can approve it. */}
                     {po.canApprove === false ? (
-                      <span className="text-xs text-amber-400/80">Another approver must approve your order</span>
+                      <span className="max-w-[9rem] text-right text-xs leading-snug text-amber-400/80">Another approver must approve your order</span>
                     ) : (
                       <button
                         onClick={() => handleApprove(po.poId)}
