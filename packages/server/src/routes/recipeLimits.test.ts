@@ -12,6 +12,7 @@ import {
   recipeImageRateLimit,
   recipeEmailRateLimit,
   recipeEmailRecipientRateLimit,
+  recipientKey,
 } from "../middleware/rateLimiter.js";
 
 /** The handlers wired onto a route, in order, read off the real router (as authMfaRoutes.test.ts does). */
@@ -72,5 +73,30 @@ describe("the limiters count per person, not per address", () => {
     expect(blocked.status).toBe(429);
     expect(blocked.body.code).toBe("RATE_LIMITED");
     expect((await post(recipeGenerateRateLimit, "u2")).status).toBe(200);
+  });
+});
+
+describe("recipientKey: addresses that reach one inbox count as one", () => {
+  it.each([
+    ["Cook@Example.com", "cook@example.com"],
+    ["  cook@example.com ", "cook@example.com"],
+    ["cook+spam1@example.com", "cook@example.com"],
+    ["cook+a+b@example.com", "cook@example.com"],
+    ["c.o.o.k@gmail.com", "cook@gmail.com"],
+    ["cook+x@googlemail.com", "cook@gmail.com"],
+  ])("%s -> %s", (given, same) => {
+    expect(recipientKey(given)).toBe(recipientKey(same));
+  });
+
+  it("keeps dots for other providers, where they are a different mailbox", () => {
+    expect(recipientKey("c.ook@example.com")).not.toBe(recipientKey("cook@example.com"));
+  });
+
+  it("keeps different people apart", () => {
+    expect(recipientKey("a@example.com")).not.toBe(recipientKey("b@example.com"));
+  });
+
+  it("is null for anything that is not an address, so the handler can answer 400 instead of sharing a bucket", () => {
+    for (const bad of [undefined, 42, "", "no-at-sign", "@example.com", "cook@", "+tag@example.com"]) expect(recipientKey(bad)).toBeNull();
   });
 });

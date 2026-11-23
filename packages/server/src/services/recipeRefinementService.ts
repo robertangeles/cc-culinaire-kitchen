@@ -139,6 +139,7 @@ const RefinementOutputSchema = z.object({
  * @param currentRecipeData - The full recipe data object (from recipe_data JSONB)
  * @param instruction - The chef's modification instruction (e.g. "make it dairy-free")
  * @param kitchenContext - Optional kitchen profile context string
+ * @param signal - Stops the model call when it fires (the client left, or the time limit passed)
  * @returns The refined recipe data and a summary of changes
  */
 export async function refineRecipe(
@@ -147,6 +148,7 @@ export async function refineRecipe(
   kitchenContext?: string,
   userId?: number,
   activeOrgId?: number | null,
+  signal?: AbortSignal,
 ): Promise<{ refinedData: Record<string, unknown>; changeSummary: string }> {
   const model = getModel();
 
@@ -210,6 +212,7 @@ export async function refineRecipe(
     system: systemPrompt,
     prompt: userMessage,
     maxTokens: 16384,
+    abortSignal: signal,
   });
 
   logger.info({ changeSummary: object.changeSummary }, "Recipe refinement complete");

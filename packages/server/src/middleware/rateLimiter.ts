@@ -309,12 +309,19 @@ export const refreshTokenRateLimit = rateLimit({
 const senderKey = (req: Request) => (req.user?.sub ? `user-${req.user.sub}` : req.guestToken ? `guest-${req.guestToken}` : `ip-${hashIp(req)}`);
 
 /** A bucket per route for work that spends money or sends mail, counted per person over a window of minutes. */
-function senderBucket(name: string, windowMinutes: number, limit: number, what: string, keyOf: (req: Request) => string = senderKey) {
+function senderBucket(
+  name: string,
+  windowMinutes: number,
+  limit: number,
+  what: string,
+  keyOf: (req: Request) => string | null = senderKey,
+) {
   return rateLimit({
     windowMs: windowMinutes * 60 * 1000,
     limit,
     standardHeaders: "draft-8",
     legacyHeaders: false,
+    skip: (req: Request) => keyOf(req) === null,
     keyGenerator: (req: Request) => `${name}-${keyOf(req)}`,
     message: { error: `Too many ${what} — please wait a few minutes before trying again.`, code: "RATE_LIMITED" },
   });
@@ -330,7 +337,23 @@ export const recipeImageRateLimit = senderBucket("recipe-image", 10, 10, "image 
  * and each recipient address a few an hour from everyone together, which is what stops this being used to flood one inbox.
  */
 export const recipeEmailRateLimit = senderBucket("recipe-email", 60, 10, "recipe emails");
-export const recipeEmailRecipientRateLimit = senderBucket("recipe-email-to", 60, 3, "emails to that address", (req) => {
-  const to = typeof req.body?.to === "string" ? req.body.to.trim().toLowerCase() : "";
-  return createHash("sha256").update(to).digest("hex").slice(0, 32);
-});
+export const recipeEmailRecipientRateLimit = senderBucket("recipe-email-to", 60, 3, "emails to that address", (req) => recipientKey(req.body?.to));
+
+/**
+ * One key for one inbox: lower case, no `+tag`, and for Gmail no dots and one domain name. Null when it is not an address,
+ * which skips the limiter and lets the handler answer 400. Other providers that ignore dots or add their own aliases are
+ * not covered; the per-sender cap above still bounds those.
+ */
+export function recipientKey(to: unknown): string | null {
+  if (typeof to !== "string") return null;
+  const address = to.trim().toLowerCase();
+  const at = address.lastIndexOf("@");
+  let local = address.slice(0, at).split("+")[0];
+  let domain = address.slice(at + 1);
+  if (at < 1 || !local || !domain) return null;
+  if (domain === "gmail.com" || domain === "googlemail.com") {
+    local = local.replaceAll(".", "");
+    domain = "gmail.com";
+  }
+  return createHash("sha256").update(`${local}@${domain}`).digest("hex").slice(0, 32);
+}

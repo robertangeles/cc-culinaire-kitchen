@@ -23,6 +23,7 @@ export async function checkGuestUsageLimit(req: Request, res: Response, next: Ne
     if (!hasQuota) {
       res.status(403).json({
         error: "You have used all 10 free guest sessions. Please register to continue.",
+        code: "GUEST_QUOTA_EXHAUSTED",
         registrationRequired: true,
       });
       return;

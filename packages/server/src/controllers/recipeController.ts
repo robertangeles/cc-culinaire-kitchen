@@ -39,6 +39,14 @@ import { db } from "../db/index.js";
 import { recipe as recipeTable, user as userTable } from "../db/schema.js";
 import { eq, and, isNull, isNotNull, sql, inArray } from "drizzle-orm";
 import { getUserOrgContext } from "../services/orgContextService.js";
+import { requestDeadline, afterDeadline } from "../utils/requestDeadline.js";
+
+/** Generation chains up to three model calls and a hero image. */
+const GENERATE_TIMEOUT_MS = 150_000;
+/** One model call. */
+const REFINE_TIMEOUT_MS = 90_000;
+/** One paid image call. */
+const IMAGE_TIMEOUT_MS = 60_000;
 
 const logger = pino({ name: "recipeController" });
 
@@ -75,17 +83,23 @@ type RecipeRequest = z.infer<typeof RecipeRequestSchema>;
 // Generate recipe handler
 // ---------------------------------------------------------------------------
 
+/**
+ * The handler resolves to whether it produced a recipe: only then does the route charge a session.
+ * A prose fallback, a failure, a time-out and a client that left all cost nothing.
+ */
 export function recipeHandler(domain: RecipeDomain) {
-  return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  return async (req: Request, res: Response, next: NextFunction): Promise<boolean> => {
     const parsed = RecipeRequestSchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({
         error: "Invalid recipe request.",
         details: parsed.error.flatten().fieldErrors,
+        code: "VALIDATION",
       });
-      return;
+      return false;
     }
 
+    const deadline = requestDeadline(res, GENERATE_TIMEOUT_MS);
     const body: RecipeRequest = parsed.data;
     const userId = req.user?.sub ?? 0;
 
@@ -129,16 +143,18 @@ export function recipeHandler(domain: RecipeDomain) {
         kitchenContext,
         userId: userId > 0 ? userId : undefined,
         activeOrgId,
+        signal: deadline.signal,
       });
     } catch (err) {
       logger.error({ domain, err }, "recipeHandler: unexpected error during generation");
-      next(err);
-      return;
+      const toSend = afterDeadline(err, deadline);
+      if (toSend) next(toSend);
+      return false;
     }
 
     if (result.proseResponse) {
       res.status(200).json({ prose: result.proseResponse });
-      return;
+      return false;
     }
 
     res.status(200).json({
@@ -150,6 +166,7 @@ export function recipeHandler(domain: RecipeDomain) {
       // recall didn't inform this generation. Ids + labels only, never bodies.
       brainGrounded: result.memories ?? undefined,
     });
+    return true;
   };
 }
 
@@ -497,6 +514,7 @@ export async function handleRefineRecipe(
   res: Response,
   next: NextFunction,
 ): Promise<void> {
+  const deadline = requestDeadline(res, REFINE_TIMEOUT_MS);
   try {
     const userId = req.user?.sub;
     if (!userId) {
@@ -531,6 +549,7 @@ export async function handleRefineRecipe(
       kitchenContext,
       userId,
       activeOrgId,
+      deadline.signal,
     );
 
     res.json({
@@ -538,7 +557,8 @@ export async function handleRefineRecipe(
       changeSummary: result.changeSummary,
     });
   } catch (err) {
-    next(err);
+    const toSend = afterDeadline(err, deadline);
+    if (toSend) next(toSend);
   }
 }
 
@@ -754,6 +774,7 @@ export async function handleRegenerateImage(
   res: Response,
   next: NextFunction,
 ): Promise<void> {
+  const deadline = requestDeadline(res, IMAGE_TIMEOUT_MS);
   try {
     const userId = req.user?.sub;
     const recipeId = req.params.id as string;
@@ -793,12 +814,14 @@ export async function handleRegenerateImage(
       await db.update(recipeTable).set({ imagePrompt: prompt }).where(eq(recipeTable.recipeId, recipeId));
     }
 
-    const generated = await generateImage(prompt);
+    const generated = await generateImage(prompt, deadline.signal);
     if (!generated?.url) {
-      res.status(500).json({ error: "Image generation failed — try again" });
+      res.status(500).json({ error: "Image generation failed — try again", code: "AI_UNAVAILABLE" });
       return;
     }
 
+    // The client left or time ran out while the image was made: keep the current image.
+    deadline.signal.throwIfAborted();
     await db
       .update(recipeTable)
       .set({ imageUrl: generated.url })
@@ -807,7 +830,8 @@ export async function handleRegenerateImage(
     logger.info({ recipeId, title: recipe.title }, "Single recipe image regenerated");
     res.json({ imageUrl: generated.url });
   } catch (err) {
-    next(err);
+    const toSend = afterDeadline(err, deadline);
+    if (toSend) next(toSend);
   }
 }
 

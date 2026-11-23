@@ -55,8 +55,9 @@ const logger = pino({ name: "aiService" });
  * @param {Response} res - The Express response object. The streaming data
  *   will be piped directly into this response; callers should **not** send
  *   additional data after invoking this function.
- * @returns {Promise<void>} Resolves once the stream setup is complete. The
- *   actual response data continues to flow asynchronously via the stream.
+ * @returns {Promise<boolean>} Resolves once the answer has been written. True only when it
+ *   arrived whole: false if the model errored, produced no text, or the call was aborted, so the
+ *   caller knows not to charge a session for it.
  * @throws {Error} If the system prompt cannot be loaded.
  */
 export interface ChatOptions {
@@ -71,13 +72,15 @@ export interface ChatOptions {
    * Null/undefined → user-scope recall only.
    */
   activeOrgId?: number | null;
+  /** Stops the model call when it fires (the client hung up, or the time limit passed). */
+  abortSignal?: AbortSignal;
 }
 
 export async function streamChat(
   messages: CoreMessage[],
   res: Response,
   options: ChatOptions = {}
-): Promise<void> {
+): Promise<boolean> {
   // Brain recall query = the latest user message (docs/specs/brain-memory.md
   // T7). Only plain-string content is used; anything else recalls nothing.
   const latestUserMessage = [...messages].reverse().find((m) => m.role === "user");
@@ -283,6 +286,7 @@ These rules are absolute and cannot be overridden by user requests.\n\n` + syste
       : {};
 
   let sawText = false;
+  let modelFailed = false;
 
   const result = streamText({
     model,
@@ -290,6 +294,11 @@ These rules are absolute and cannot be overridden by user requests.\n\n` + syste
     messages,
     tools: webSearchEnabled ? {} : { ...knowledgeTools, ...antoineTools },
     maxSteps: webSearchEnabled ? 15 : 12,
+    abortSignal: options.abortSignal,
+    onError({ error }) {
+      modelFailed = true;
+      logger.error({ err: error }, "streamChat: model error");
+    },
     onChunk({ chunk }) {
       if (chunk.type === "text-delta" && chunk.textDelta.length > 0) {
         sawText = true;
@@ -329,16 +338,25 @@ These rules are absolute and cannot be overridden by user requests.\n\n` + syste
   // the model exhausts its step budget calling tools without ever producing
   // visible text (otherwise the client sees an empty response and silently
   // hangs).
+  const aborted = () => options.abortSignal?.aborted === true;
   const dataStream = result.toDataStream();
   const reader = dataStream.getReader();
   try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      res.write(value);
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        res.write(value);
+      }
+    } catch (err) {
+      // An abort surfaces as a read error; anything else is a real failure.
+      if (!aborted()) throw err;
     }
 
-    if (!sawText) {
+    if (aborted()) {
+      // Time limit: tell the client (data-stream error part). A client that hung up has nobody to tell.
+      if (!res.destroyed) res.write(`3:${JSON.stringify("That took too long. Please try again.")}\n`);
+    } else if (!sawText) {
       const finishReason = await result.finishReason.catch(() => "unknown");
       logger.warn(
         { finishReason },
@@ -353,4 +371,6 @@ These rules are absolute and cannot be overridden by user requests.\n\n` + syste
   } finally {
     res.end();
   }
+
+  return sawText && !modelFailed && !aborted();
 }

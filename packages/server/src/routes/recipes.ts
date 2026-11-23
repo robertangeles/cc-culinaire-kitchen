@@ -4,14 +4,13 @@
  * API routes for recipe generation, management, and gallery.
  *
  * Generation routes mirror the chat route's usage tracking:
- *   authenticateOrGuest → usageCheck → generate → sessionDecrement
+ *   authenticateOrGuest → rate limit → usageCheck → generate → charge a session if a recipe was made
  */
 
 import { Router, type Request, type Response, type NextFunction } from "express";
 import { authenticateOrGuest } from "../middleware/guestAuth.js";
 import { authenticate, requireRole } from "../middleware/auth.js";
-import { checkUsageLimit, decrementFreeSessions } from "../middleware/usage.js";
-import { checkGuestUsageLimit } from "../middleware/guestUsage.js";
+import { checkSessionQuota, chargeSession } from "../middleware/usage.js";
 import {
   recipeGenerateRateLimit,
   recipeRefineRateLimit,
@@ -19,7 +18,6 @@ import {
   recipeEmailRateLimit,
   recipeEmailRecipientRateLimit,
 } from "../middleware/rateLimiter.js";
-import { incrementGuestSessions } from "../services/guestService.js";
 import {
   recipeHandler,
   handleGallery,
@@ -50,41 +48,19 @@ import {
 export const recipesRouter = Router();
 
 /**
- * Wraps a recipe generation handler with usage check + session decrement.
- * Same pattern as the chat route:
+ * Wraps a recipe generation handler with the usage check and the charge:
  * 1. authenticateOrGuest (already applied)
  * 2. Check usage limits (guest or authenticated)
  * 3. Run the handler
- * 4. Decrement session on success
+ * 4. Charge a session only if the handler says it produced a recipe
  */
 function withUsageTracking(domain: "recipe" | "patisserie" | "spirits") {
   const handler = recipeHandler(domain);
 
   return [
-    // Usage check middleware (guest vs authenticated)
-    (req: Request, res: Response, next: NextFunction) => {
-      if (req.user) {
-        checkUsageLimit(req, res, next);
-      } else {
-        checkGuestUsageLimit(req, res, next);
-      }
-    },
-    // Handler + decrement
+    checkSessionQuota,
     async (req: Request, res: Response, next: NextFunction) => {
-      let succeeded = false;
-      try {
-        await handler(req, res, next);
-        // If response was sent successfully (not an error), mark as succeeded
-        succeeded = res.statusCode >= 200 && res.statusCode < 300;
-      } finally {
-        if (succeeded) {
-          if (req.user) {
-            await decrementFreeSessions(req.user.sub).catch(() => {});
-          } else if (req.guestToken) {
-            await incrementGuestSessions(req.guestToken).catch(() => {});
-          }
-        }
-      }
+      if (await handler(req, res, next)) await chargeSession(req);
     },
   ];
 }
