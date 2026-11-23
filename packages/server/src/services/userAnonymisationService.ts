@@ -151,6 +151,7 @@ export const KEPT_USER_REFERENCES: readonly string[] = [
   "credit_note.created_by_user_id",
   "discrepancy_photo.uploaded_by_user_id",
   "document_access_log.actor_user_id",
+  "foh_restocks.user_id",
   "foh_sale.created_by",
   "guide.updated_by",
   "ingredient.deleted_by",

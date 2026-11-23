@@ -10,6 +10,7 @@
  */
 
 import type { Request, Response, NextFunction } from "express";
+import { z } from "zod";
 import pino from "pino";
 import { getUserLocationContext, getLocationInOrg } from "../services/locationContextService.js";
 import * as fohStockService from "../services/fohStockService.js";
@@ -19,12 +20,21 @@ import * as consumptionLogService from "../services/consumptionLogService.js";
 
 const logger = pino({ name: "fohController" });
 
+/** A quantity a person could type for one shelf item: above 0, below 100,000. */
+const QTY_MAX = 99999;
+const uuidOrAbsent = (v: unknown) => v === undefined || z.string().uuid().safeParse(v).success;
+
+/** 400 VALIDATION: a refused input, with a sentence the web shows. */
+function refuse(res: Response, error: string): void {
+  res.status(400).json({ error, code: "VALIDATION" });
+}
+
 /** Resolve the caller's org ID from their location context. */
 async function resolveOrgId(req: Request, res: Response): Promise<number | null> {
   const ctx = await getUserLocationContext(req.user!.sub);
   const orgId = ctx.locations[0]?.organisationId ?? ctx.organisationId;
   if (orgId === null) {
-    res.status(400).json({ error: "You are not a member of any organisation" });
+    res.status(400).json({ error: "You are not a member of any organisation", code: "FORBIDDEN" });
     return null;
   }
   return orgId;
@@ -34,16 +44,16 @@ async function resolveOrgId(req: Request, res: Response): Promise<number | null>
 async function requireLocation(req: Request, res: Response, orgId: number): Promise<string | null> {
   const locId = req.params.locId as string;
   if (!(await getLocationInOrg(locId, orgId))) {
-    res.status(404).json({ error: "Location not found" });
+    res.status(404).json({ error: "Location not found", code: "NOT_FOUND" });
     return null;
   }
   return locId;
 }
 
-/** Map a thrown FohError to its HTTP status; otherwise bubble to the handler. */
+/** Map a thrown FohError to its HTTP status and code; otherwise bubble to the handler. */
 function handleFohError(err: unknown, res: Response, next: NextFunction, where: string): void {
   if (err instanceof FohError) {
-    res.status(err.statusCode).json({ error: err.message });
+    res.status(err.statusCode).json({ error: err.message, code: err.code });
     return;
   }
   logger.error(err, `${where} failed`);
@@ -68,7 +78,7 @@ export async function handleGetFohStock(req: Request, res: Response, next: NextF
 
 // ─── Restock (BOH -> FOH) ───────────────────────────────────────
 
-/** POST /locations/:locId/foh/restock  { ingredientId, quantity } */
+/** POST /locations/:locId/foh/restock  { fohRestockId?, ingredientId, quantity }: 201, or 200 for a resend of the same fohRestockId. */
 export async function handleRestockFoh(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const orgId = await resolveOrgId(req, res);
@@ -76,17 +86,22 @@ export async function handleRestockFoh(req: Request, res: Response, next: NextFu
     const locId = await requireLocation(req, res, orgId);
     if (locId === null) return;
 
-    const { ingredientId, quantity } = req.body;
-    if (!ingredientId) {
-      res.status(400).json({ error: "ingredientId is required" });
+    const { fohRestockId, ingredientId, quantity } = req.body;
+    if (!uuidOrAbsent(fohRestockId)) {
+      refuse(res, "fohRestockId must be a UUID when provided");
       return;
     }
-    if (quantity === undefined || Number(quantity) <= 0) {
-      res.status(400).json({ error: "quantity must be greater than 0" });
+    if (!ingredientId) {
+      refuse(res, "ingredientId is required");
+      return;
+    }
+    if (quantity === undefined || !(Number(quantity) > 0) || Number(quantity) > QTY_MAX) {
+      refuse(res, "quantity must be greater than 0");
       return;
     }
 
-    res.json(await fohStockService.moveToFoh(orgId, locId, ingredientId, Number(quantity)));
+    const { replay, ...moved } = await fohStockService.moveToFoh(orgId, locId, ingredientId, Number(quantity), req.user!.sub, fohRestockId);
+    res.status(replay ? 200 : 201).json(moved);
   } catch (err) {
     handleFohError(err, res, next, "handleRestockFoh");
   }
@@ -108,7 +123,10 @@ export async function handleGetRestockSuggestions(req: Request, res: Response, n
 
 // ─── FOH count ──────────────────────────────────────────────────
 
-/** POST /locations/:locId/foh/count  { ingredientId, countedQty } */
+/**
+ * POST /locations/:locId/foh/count  { ingredientId, countedQty, countedAt? }. `countedAt` (ISO time the count was
+ * taken, sent by a phone that may deliver it late) makes a count older than the shelf's last change a 409.
+ */
 export async function handleCountFoh(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const orgId = await resolveOrgId(req, res);
@@ -116,17 +134,26 @@ export async function handleCountFoh(req: Request, res: Response, next: NextFunc
     const locId = await requireLocation(req, res, orgId);
     if (locId === null) return;
 
-    const { ingredientId, countedQty } = req.body;
+    const { ingredientId, countedQty, countedAt } = req.body;
     if (!ingredientId) {
-      res.status(400).json({ error: "ingredientId is required" });
+      refuse(res, "ingredientId is required");
       return;
     }
-    if (countedQty === undefined || Number(countedQty) < 0) {
-      res.status(400).json({ error: "countedQty must be 0 or greater" });
+    if (countedQty === undefined || !(Number(countedQty) >= 0) || Number(countedQty) > QTY_MAX) {
+      refuse(res, "countedQty must be 0 or greater");
       return;
     }
+    const at = countedAt === undefined ? undefined : new Date(countedAt);
+    if (at && Number.isNaN(at.getTime())) {
+      refuse(res, "countedAt must be an ISO date-time when provided");
+      return;
+    }
+    // A phone clock ahead of the server must not make a count look newer than what happens next.
+    const now = new Date();
 
-    res.json(await fohStockService.recountFoh(orgId, locId, ingredientId, Number(countedQty), req.user!.sub));
+    res.json(
+      await fohStockService.recountFoh(orgId, locId, ingredientId, Number(countedQty), req.user!.sub, at && (at > now ? now : at)),
+    );
   } catch (err) {
     handleFohError(err, res, next, "handleCountFoh");
   }
@@ -134,7 +161,7 @@ export async function handleCountFoh(req: Request, res: Response, next: NextFunc
 
 // ─── FOH waste ──────────────────────────────────────────────────
 
-/** POST /locations/:locId/foh/waste  { ingredientId, quantity, unit, reason?, notes? } */
+/** POST /locations/:locId/foh/waste  { consumptionLogId?, ingredientId, quantity, unit, reason?, notes? }: 201, or 200 for a resend of the same consumptionLogId. */
 export async function handleLogFohWaste(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const orgId = await resolveOrgId(req, res);
@@ -142,22 +169,27 @@ export async function handleLogFohWaste(req: Request, res: Response, next: NextF
     const locId = await requireLocation(req, res, orgId);
     if (locId === null) return;
 
-    const { ingredientId, quantity, unit, reason, notes } = req.body;
-    if (!ingredientId) {
-      res.status(400).json({ error: "ingredientId is required" });
+    const { consumptionLogId, ingredientId, quantity, unit, reason, notes } = req.body;
+    if (!uuidOrAbsent(consumptionLogId)) {
+      refuse(res, "consumptionLogId must be a UUID when provided");
       return;
     }
-    if (quantity === undefined || Number(quantity) <= 0) {
-      res.status(400).json({ error: "quantity must be greater than 0" });
+    if (!ingredientId) {
+      refuse(res, "ingredientId is required");
+      return;
+    }
+    if (quantity === undefined || !(Number(quantity) > 0) || Number(quantity) > QTY_MAX) {
+      refuse(res, "quantity must be greater than 0");
       return;
     }
     if (!unit) {
-      res.status(400).json({ error: "unit is required" });
+      refuse(res, "unit is required");
       return;
     }
 
     // FOH waste is a consumption event against the FOH zone.
-    const entry = await consumptionLogService.logConsumption(orgId, locId, req.user!.sub, {
+    const { entry, replay } = await consumptionLogService.logConsumptionOnce(orgId, locId, req.user!.sub, {
+      consumptionLogId,
       ingredientId,
       quantity: Number(quantity),
       unit,
@@ -165,7 +197,7 @@ export async function handleLogFohWaste(req: Request, res: Response, next: NextF
       notes: notes || null,
       zone: "FOH",
     });
-    res.status(201).json(entry);
+    res.status(replay ? 200 : 201).json(entry);
   } catch (err) {
     handleFohError(err, res, next, "handleLogFohWaste");
   }
@@ -173,7 +205,10 @@ export async function handleLogFohWaste(req: Request, res: Response, next: NextF
 
 // ─── Record sales (deduct FOH) ──────────────────────────────────
 
-/** POST /locations/:locId/sales  { lines: [{ ingredientId, quantity, unitPrice?, soldAt? }], source? } */
+/**
+ * POST /locations/:locId/sales  { lines: [{ fohSaleId?, ingredientId, quantity, unitPrice?, soldAt? }], source? }.
+ * 201 when a line was recorded now; 200 when every recorded line was a resend of a `fohSaleId` already stored.
+ */
 export async function handleRecordSales(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const orgId = await resolveOrgId(req, res);
@@ -182,13 +217,23 @@ export async function handleRecordSales(req: Request, res: Response, next: NextF
     if (locId === null) return;
 
     const { lines, source } = req.body;
-    if (!Array.isArray(lines) || lines.length === 0) {
-      res.status(400).json({ error: "lines must be a non-empty array" });
+    // ponytail: 500 lines covers a day's CSV for one shelf; raise it if an import ever needs more.
+    if (!Array.isArray(lines) || lines.length === 0 || lines.length > 500) {
+      refuse(res, "lines must be a list of 1 to 500 sales");
+      return;
+    }
+    if (lines.some((l: Record<string, unknown>) => !uuidOrAbsent(l?.fohSaleId))) {
+      refuse(res, "fohSaleId must be a UUID when provided");
+      return;
+    }
+    if (lines.some((l: Record<string, unknown>) => l?.soldAt && Number.isNaN(new Date(String(l.soldAt)).getTime()))) {
+      refuse(res, "soldAt must be an ISO date-time when provided");
       return;
     }
     const src = source === "CSV" ? "CSV" : "MANUAL";
 
     const parsed: fohSalesService.SaleLineInput[] = lines.map((l: Record<string, unknown>) => ({
+      fohSaleId: l.fohSaleId as string | undefined,
       ingredientId: String(l.ingredientId ?? ""),
       quantity: Number(l.quantity),
       unitPrice: l.unitPrice === undefined || l.unitPrice === null || l.unitPrice === "" ? null : Number(l.unitPrice),
@@ -196,7 +241,8 @@ export async function handleRecordSales(req: Request, res: Response, next: NextF
     }));
 
     const result = await fohSalesService.recordFohSales(orgId, locId, parsed, src, req.user!.sub);
-    res.status(201).json(result);
+    const allReplays = result.recorded.length > 0 && result.recorded.every((r) => r.replay);
+    res.status(allReplays ? 200 : 201).json(result);
   } catch (err) {
     handleFohError(err, res, next, "handleRecordSales");
   }
