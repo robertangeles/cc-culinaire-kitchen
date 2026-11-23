@@ -69,6 +69,20 @@ describe("my recipes (shelf) store", () => {
     expect(mine.mock.calls.length).toBe(calls);
   });
 
+  it("a Load more that overtakes a refresh keeps its page when the slower refresh answers", async () => {
+    const { store, mine } = setup();
+    await store.refresh();
+    let release: () => void = () => undefined;
+    mine.mockImplementationOnce(() => new Promise((r) => (release = () => r({ recipes: [row("a"), row("b")], total: 3, page: 1 }))));
+    const slow = store.refresh();
+    await store.loadMore();
+    expect(store.getSnapshot().recipes.map((r) => r.recipeId)).toEqual(["a", "b", "c"]);
+    release();
+    await slow;
+    expect(store.getSnapshot().recipes.map((r) => r.recipeId)).toEqual(["a", "b", "c"]);
+    expect(store.getSnapshot()).toMatchObject({ phase: "ready", more: false });
+  });
+
   it("a refresh that overtakes Load more leaves Load more usable", async () => {
     const { store, mine } = setup();
     await store.refresh();

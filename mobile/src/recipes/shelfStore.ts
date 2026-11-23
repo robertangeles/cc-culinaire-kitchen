@@ -56,7 +56,7 @@ export function createShelfStore({ api }: { api: RecipeApi }) {
     setDomain: (domain: RecipeDomain | null) => (domain === snapshot.domain && snapshot.phase !== "error" ? Promise.resolve() : load(domain)),
     async loadMore(): Promise<void> {
       if (snapshot.more || snapshot.phase !== "ready" || snapshot.recipes.length >= snapshot.total) return;
-      const mine = generation;
+      const mine = ++generation;
       set({ more: true, error: null });
       try {
         const next = await api.mine(page + 1, snapshot.domain ?? undefined);
