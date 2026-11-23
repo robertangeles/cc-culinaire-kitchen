@@ -22,6 +22,7 @@ import {
   ingredient,
 } from "../db/schema.js";
 import { AppError } from "../utils/appError.js";
+import { isUnpriced } from "./poMath.js";
 import pino from "pino";
 
 const logger = pino({ name: "creditNoteService" });
@@ -101,14 +102,13 @@ type DiscrepancyRow = {
 
 /**
  * A short delivery is valued at the higher of the order price and the price recorded at the door, so a line that is
- * both short and re-priced can still be credited for the missing quantity at what the supplier charged.
+ * both short and re-priced can still be credited for the missing quantity at what the supplier charged. A zero or
+ * negative price is no price: it is skipped, and a line with no real price has no value.
  */
 export const valueOf = (d: DiscrepancyRow) => {
-  const prices = [d.poLineUnitCost, d.lineActualUnitCost].filter((p): p is string => p !== null);
+  const priced = [d.poLineUnitCost, d.lineActualUnitCost].filter((p): p is string => !isUnpriced(p));
   const unitPrice =
-    d.type === "SHORT" && prices.length > 0
-      ? String(Math.max(...prices.map(Number)))
-      : (d.poLineUnitCost ?? d.lineActualUnitCost);
+    priced.length === 0 ? null : d.type === "SHORT" ? String(Math.max(...priced.map(Number))) : priced[0];
   return discrepancyValue({ ...d, unitPrice });
 };
 

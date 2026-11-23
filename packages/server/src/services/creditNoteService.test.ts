@@ -49,6 +49,14 @@ describe("valueOf", () => {
     expect(valueOf({ ...line, type: "SHORT", poLineUnitCost: null, lineActualUnitCost: null })).toBeNull();
   });
 
+  it("treats a zero order price as no price: the door price is used, else the value is unknown", () => {
+    for (const type of ["SHORT", "REJECTED"]) {
+      expect(valueOf({ ...line, type, poLineUnitCost: "0", lineActualUnitCost: "4" })).toBe(type === "SHORT" ? 8 : 20);
+      expect(valueOf({ ...line, type, poLineUnitCost: "0", lineActualUnitCost: null })).toBeNull();
+      expect(valueOf({ ...line, type, poLineUnitCost: "0", lineActualUnitCost: "0" })).toBeNull();
+    }
+  });
+
   it("values a price rise at the extra per unit times what arrived, whatever the line's prices", () => {
     expect(
       valueOf({ ...line, type: "PRICE_VARIANCE", varianceAmount: "2", poLineUnitCost: "2", lineActualUnitCost: "4" }),
