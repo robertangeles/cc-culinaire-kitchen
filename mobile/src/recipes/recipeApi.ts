@@ -19,13 +19,16 @@ const REFINE_MS = 110_000;
 
 export function createRecipeApi(client: ApiClient) {
   const one = (id: string) => `/api/recipes/${encodeURIComponent(id)}`;
+  // An image the server keeps itself has a site-relative path (`/uploads/generated/...`); the phone needs the whole address.
+  const withImage = <T extends { imageUrl: string | null }>(r: T): T => (r.imageUrl?.startsWith("/") ? { ...r, imageUrl: `${client.baseUrl}${r.imageUrl}` } : r);
   return {
     /** My recipes, newest first; archived ones are left out by the server. */
-    mine(page: number, domain?: RecipeDomain, limit = PAGE_SIZE): Promise<RecipePage> {
-      return client.request("GET", `/api/recipes/my?page=${page}&limit=${limit}${domain ? `&domain=${domain}` : ""}`, { schema: RecipePageSchema });
+    async mine(page: number, domain?: RecipeDomain, limit = PAGE_SIZE): Promise<RecipePage> {
+      const found = await client.request("GET", `/api/recipes/my?page=${page}&limit=${limit}${domain ? `&domain=${domain}` : ""}`, { schema: RecipePageSchema });
+      return { ...found, recipes: found.recipes.map(withImage) };
     },
-    get(id: string): Promise<Recipe> {
-      return client.request("GET", one(id), { schema: RecipeSchema });
+    async get(id: string): Promise<Recipe> {
+      return withImage(await client.request("GET", one(id), { schema: RecipeSchema }));
     },
     /** Saves the recipe when it is made. Stopping it (`signal`) makes the server stop and save nothing. */
     generate(body: RecipeRequest, signal: AbortSignal): Promise<GenerateReply> {

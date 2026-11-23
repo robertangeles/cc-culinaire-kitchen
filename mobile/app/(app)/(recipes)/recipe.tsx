@@ -4,10 +4,11 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { parseRecipeData, type RecipeData } from "@culinaire/shared/schemas/recipe";
 import { useSession } from "../../../src/runtime/appContext";
-import { useRecipe } from "../../../src/recipes/RecipesProvider";
+import { useLab, useRecipe } from "../../../src/recipes/RecipesProvider";
 import { INSTRUCTION_MAX, INSTRUCTION_MIN } from "../../../src/recipes/recipeStore";
 import { Button } from "../../../src/ui/Button";
 import { Column } from "../../../src/ui/Column";
+import { Grounded } from "../../../src/ui/Grounded";
 import { Segmented } from "../../../src/ui/Segmented";
 import { Text } from "../../../src/ui/Text";
 import { TextField } from "../../../src/ui/TextField";
@@ -105,6 +106,9 @@ export default function RecipeView() {
   const { state } = useSession();
   const { id } = useLocalSearchParams<{ id?: string }>();
   const { store, snap } = useRecipe(id ?? "", state.phase === "ready" ? state.user.userId : -1);
+  const { snap: lab } = useLab();
+  // Only the generate reply says which kitchen notes a recipe drew on, so the marker is on the recipe just made.
+  const grounded = lab.made && lab.made.recipeId === id ? lab.made.grounded : [];
   const [instruction, setInstruction] = useState("");
   const recipe = snap.recipe;
   const data = recipe ? parseRecipeData(recipe.recipeData) : null;
@@ -131,6 +135,7 @@ export default function RecipeView() {
                 {recipe.imageUrl ? <Image source={{ uri: recipe.imageUrl }} accessibilityLabel={`Photo of ${recipe.title}`} style={{ width: "100%", aspectRatio: 1, borderRadius: radius.key, backgroundColor: c.surface }} /> : null}
                 <Text style={caps}>{recipe.domain === "patisserie" ? "Patisserie" : recipe.domain === "spirits" ? "Spirits" : "Culinary"}</Text>
                 <Text variant="title">{recipe.title}</Text>
+                {grounded.length ? <Grounded titles={grounded} /> : null}
                 {recipe.description || data.description ? <Text variant="muted">{recipe.description || data.description}</Text> : null}
 
                 {snap.isOwner ? (
@@ -149,6 +154,7 @@ export default function RecipeView() {
                 {snap.isOwner ? (
                   <View style={{ gap: space.md, borderTopWidth: 1, borderTopColor: c.border, paddingTop: space.lg }}>
                     <Text style={caps}>Refine with Antoine</Text>
+                    {snap.error ? <Text variant="error" accessibilityLiveRegion="polite">{snap.error}</Text> : null}
                     {refine.phase === "idle" ? (
                       <>
                         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.sm }}>

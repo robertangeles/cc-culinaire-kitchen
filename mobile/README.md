@@ -95,7 +95,8 @@ history (`chatStore.ts`). The body arrives through `client.stream`, which uses `
 A refusal is read from the server's `code`, never its English: `RATE_LIMITED`, `AI_UNAVAILABLE`, `AI_TIMEOUT` (and the client's own
 time-out), `FREE_SESSIONS_EXHAUSTED`, signed out, no signal. A `3:` part partway keeps what arrived next to the message. The
 conversation is saved after each finished or stopped answer (`POST /api/conversations` with an id made on the phone, then the messages
-with their ids; both are safe to repeat).
+with their ids; both are safe to repeat). As on the web, a save sends only the messages not saved yet: the server builds a Brain
+memory from what each save sends, so sending the whole conversation again would repeat it.
 
 **Streaming on a real phone (the spike), 2026-11-24.** Chat chunks arrive one at a time through `expo/fetch` on the moto g86
 (development build, Android, against a local server whose model is `device/fakeModel.mjs`, no paid calls). In the device walk
@@ -128,10 +129,16 @@ The Recipes tab is shown to everyone signed in. It opens on My Recipes; "Create 
 Generation (`labStore.ts`) can take up to two and a half minutes (the server stops at 150 s with `AI_TIMEOUT`; the phone waits 170 s).
 The screen shows the time so far, how long it usually takes, and Stop. The server saves a recipe only when it is made, and a stop, a
 time-out or a model failure saves nothing and costs no session (PR 215). Only a reply lost after the server finished can leave a recipe
-the phone never heard about, so before generating the phone notes the first page of My Recipes, and after a lost reply or a stop it looks
-again: a recipe that was not there is opened ("your recipe was saved") instead of being made twice. Refine (`recipeStore.ts`) is a
-proposal: nothing is saved until Accept (`accept-refinement`); Discard drops it. The owner's switch is `PATCH /api/recipes/:id`
+the phone never heard about, so before generating the phone notes the newest of My Recipes (without that look the request is not sent),
+and after a lost reply or a stop it looks again. A recipe that was not there when the request began is offered as a question ("A new
+recipe appeared. Is it this one?", it may have been made on the web meanwhile) instead of being made twice. "Nothing was saved" is said
+only when that second look worked and shows no new recipe; when it could not be made the screen says so, asks the person to look in
+My Recipes first, and offers Check again beside Try again. A recipe that finishes while the person is back on My Recipes appears in the
+list. Returning to My Recipes refreshes the first page and keeps the pages already loaded. Refine (`recipeStore.ts`) is a
+proposal: nothing is saved until Accept (`accept-refinement`); Discard drops it; once Accept is saved the proposal is gone even if the
+recipe cannot be loaded again. The owner's switch is `PATCH /api/recipes/:id`
 `{ isPublicInd }`, shown at once and put back if the server refuses. Ownership comes from the server: `userId` is sent only to the owner.
+An image the server keeps itself has a site-relative path, which the phone completes with the server's address (`recipeApi.ts`).
 
 Differences from the web (`RecipeLabPage.tsx`, `RecipeForm.tsx`, `MyShelfPage.tsx`, `RecipeRefinePanel.tsx`), found while comparing:
 
@@ -140,7 +147,8 @@ Differences from the web (`RecipeLabPage.tsx`, `RecipeForm.tsx`, `MyShelfPage.ts
 | Recipe, Patisserie and Cocktail labs | The culinary Recipe Lab only | The other labs are out of scope for this wave. My Recipes still lists and opens their recipes. |
 | The same culinary fields; servings is a number box | The same fields and lists; servings is a − / + stepper (1 to 100) | |
 | "Generating..." on the button; no way to stop | Time so far, the usual duration and Stop | An honest wait. |
-| A retry after a lost reply can make the recipe twice | A recipe that appeared is opened instead | Uses the server's rule that nothing is saved unless made. |
+| A retry after a lost reply can make the recipe twice | A recipe that appeared is offered first ("is it this one?"); if the shelf cannot be read, Check again | Uses the server's rule that nothing is saved unless made. |
+| "Grounded in your Brain" chip on the lab result | The same chip on the page of the recipe just made, expands to the note titles | Matched. Only the generate reply carries it, so it is not shown when the recipe is opened later. |
 | The result is shown on the lab page (kept in the browser session) | The saved recipe's own page opens | |
 | My Recipe Book: All / Culinary / Patisserie / Spirits, search over what is loaded, Load more, "Showing X of Y" | The same | |
 | Archive, ratings and view counts on the cards | Not on the phone | Follow-up. |

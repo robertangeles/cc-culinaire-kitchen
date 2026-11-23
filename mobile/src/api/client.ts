@@ -281,7 +281,7 @@ export function createApiClient(opts: ApiClientOptions) {
     }
   }
 
-  return { request, download, stream };
+  return { baseUrl, request, download, stream };
 }
 
 export type ApiClient = ReturnType<typeof createApiClient>;

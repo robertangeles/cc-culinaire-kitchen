@@ -7,6 +7,7 @@ import { useConversation } from "../../../src/chat/ChatProvider";
 import type { ChatMessage } from "../../../src/chat/chatStore";
 import { Button } from "../../../src/ui/Button";
 import { Column } from "../../../src/ui/Column";
+import { Grounded } from "../../../src/ui/Grounded";
 import { Markdown } from "../../../src/ui/Markdown";
 import { Text } from "../../../src/ui/Text";
 import { fontFamily, fontSize, radius, size, space } from "../../../src/theme";
@@ -19,26 +20,6 @@ const SUGGESTIONS = [
   "Explain the five mother sauces and their derivatives",
   "How do I temper chocolate without a marble slab?",
 ];
-
-/** The web's "Grounded in your Brain" chip: the answer drew on the kitchen's own notes. Tap to see which. */
-function Grounded({ titles }: { titles: (string | null)[] }) {
-  const c = useColors();
-  const [open, setOpen] = useState(false);
-  return (
-    <View style={{ gap: space.xs }}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityState={{ expanded: open }}
-        accessibilityLabel="Grounded in your Brain"
-        onPress={() => setOpen(!open)}
-        style={{ alignSelf: "flex-start", minHeight: 40, flexDirection: "row", alignItems: "center", gap: space.xs, borderRadius: 999, borderWidth: 1, borderColor: c.accentText, paddingHorizontal: space.md }}
-      >
-        <Text style={{ fontFamily: fontFamily.uiStrong, color: c.accentText }}>{`Grounded in your Brain ${open ? "▴" : "▾"}`}</Text>
-      </Pressable>
-      {open ? titles.map((t, i) => <Text key={i} variant="meta">{`• ${t ?? "A note from your kitchen"}`}</Text>) : null}
-    </View>
-  );
-}
 
 function Bubble({ message, streaming }: { message: ChatMessage; streaming: boolean }) {
   const c = useColors();

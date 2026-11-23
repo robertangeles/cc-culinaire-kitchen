@@ -6,7 +6,7 @@ import type { Recipe, RecipeSummary } from "@culinaire/shared/schemas/recipe";
 import { ApiError } from "../src/api/client";
 import type { RecipeApi, RecipeRequest } from "../src/recipes/recipeApi";
 import { RecipesProvider } from "../src/recipes/RecipesProvider";
-import { routerMock, searchParams, sessionState } from "../testing/mocks";
+import { returnToScreen, routerMock, searchParams, sessionState } from "../testing/mocks";
 
 vi.mock("../src/runtime/appContext", async () => {
   const { sessionState } = await import("../testing/mocks");
@@ -64,6 +64,12 @@ describe("My Recipes", () => {
     expect(screen.getByText("Showing 2 of 3")).toBeTruthy();
     press("Load more");
     await waitFor(() => expect(screen.getByText("Recipe c")).toBeTruthy());
+    // Coming back from a recipe refreshes the first page and keeps the pages already loaded.
+    fake.api.mine.mockResolvedValueOnce({ recipes: [row("new"), row("a"), row("b")], total: 4, page: 1 });
+    await act(async () => returnToScreen());
+    await waitFor(() => expect(screen.getByText("Recipe new")).toBeTruthy());
+    expect(screen.getByText("Recipe c")).toBeTruthy();
+    expect(screen.getByText("Showing 4 of 4")).toBeTruthy();
     fireEvent.click(screen.getByRole("tab", { name: "Spirits" }));
     await waitFor(() => expect(screen.getByText("No recipes yet")).toBeTruthy());
     expect(fake.api.mine).toHaveBeenLastCalledWith(1, "spirits");
@@ -78,6 +84,23 @@ describe("My Recipes", () => {
     expect(routerMock.push).toHaveBeenCalledWith({ pathname: "/recipe", params: { id: "b" } });
     press("Create a recipe");
     expect(routerMock.push).toHaveBeenCalledWith("/recipe-lab");
+  });
+
+  it("a recipe that finishes while the person is on My Recipes appears in the list, and Create a recipe opens the form again", async () => {
+    const { rerender } = render(wrap(<><MyRecipes key="shelf" /><RecipeLab key="lab" /></>));
+    fireEvent.change(screen.getByLabelText("What would you like to create?"), { target: { value: "Tart" } });
+    press("Generate recipe");
+    await waitFor(() => expect(fake.api.generate).toHaveBeenCalled());
+    rerender(wrap(<><MyRecipes key="shelf" /></>));
+    expect(screen.getByRole("button", { name: "Recipe Lab: making your recipe…" })).toBeTruthy();
+    fake.api.mine.mockResolvedValueOnce({ recipes: [row("new"), row("a"), row("b")], total: 4, page: 1 });
+    await act(async () => fake.finish({ recipe: data, recipeId: "new" }));
+    await waitFor(() => expect(screen.getByText("Recipe new")).toBeTruthy());
+    press("Create a recipe");
+    expect(routerMock.push).toHaveBeenCalledWith("/recipe-lab");
+    rerender(wrap(<><MyRecipes key="shelf" /><RecipeLab key="lab" /></>));
+    expect(screen.getByRole("button", { name: "Generate recipe" })).toBeTruthy();
+    expect(routerMock.replace).not.toHaveBeenCalled();
   });
 });
 
@@ -107,16 +130,32 @@ describe("Recipe Lab", () => {
     await waitFor(() => expect(screen.getByText("Stopped. Nothing was saved.")).toBeTruthy());
   });
 
-  it("a lost reply after the server saved opens that recipe instead of making it twice", async () => {
+  it("a lost reply with a new recipe on the shelf asks whether it is this one, instead of making it twice", async () => {
     render(wrap(<RecipeLab />));
     fireEvent.change(screen.getByLabelText("What would you like to create?"), { target: { value: "Tart" } });
     press("Generate recipe");
     await waitFor(() => expect(fake.api.generate).toHaveBeenCalled());
     fake.api.mine.mockResolvedValueOnce({ recipes: [row("new"), row("a"), row("b")], total: 4, page: 1 });
     await act(async () => fake.fail(new ApiError("network")));
-    await waitFor(() => expect(screen.getByText("Your recipe was saved")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("A new recipe appeared. Is it this one?")).toBeTruthy());
+    expect(screen.getByText(/"Recipe new" was saved to My Recipes/)).toBeTruthy();
     press("Open it");
     expect(routerMock.replace).toHaveBeenCalledWith({ pathname: "/recipe", params: { id: "new" } });
+    expect(fake.api.generate).toHaveBeenCalledTimes(1);
+  });
+
+  it("a lost reply that cannot be checked says so, with Check again beside Try again", async () => {
+    render(wrap(<RecipeLab />));
+    fireEvent.change(screen.getByLabelText("What would you like to create?"), { target: { value: "Tart" } });
+    press("Generate recipe");
+    await waitFor(() => expect(fake.api.generate).toHaveBeenCalled());
+    fake.api.mine.mockRejectedValueOnce(new ApiError("network"));
+    await act(async () => fake.fail(new ApiError("network")));
+    await waitFor(() => expect(screen.getByText("The reply was lost. The phone could not check whether a recipe was saved. Look in My Recipes before trying again.")).toBeTruthy());
+    expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
+    fake.api.mine.mockResolvedValueOnce({ recipes: [row("new"), row("a"), row("b")], total: 4, page: 1 });
+    press("Check again");
+    await waitFor(() => expect(screen.getByText("A new recipe appeared. Is it this one?")).toBeTruthy());
     expect(fake.api.generate).toHaveBeenCalledTimes(1);
   });
 
@@ -143,6 +182,35 @@ describe("a recipe", () => {
     await settle();
     expect(fake.api.setPublic).toHaveBeenCalledWith("r1", true);
     expect(screen.getByText("Anyone can open it, and it is listed in the community gallery.")).toBeTruthy();
+  });
+
+  it("marks the recipe just made as grounded in the kitchen's notes, expandable to their titles", async () => {
+    searchParams.current = { id: "r9" };
+    render(wrap(<><RecipeLab /><RecipeView /></>));
+    await waitFor(() => expect(screen.getByText("Refine with Antoine")).toBeTruthy());
+    expect(screen.queryByRole("button", { name: "Grounded in your Brain" })).toBeNull();
+    fireEvent.change(screen.getByLabelText("What would you like to create?"), { target: { value: "Chicken braise" } });
+    press("Generate recipe");
+    await waitFor(() => expect(fake.api.generate).toHaveBeenCalled());
+    await act(async () => fake.finish({ recipe: data, recipeId: "r9", brainGrounded: [{ title: "Fish supplier" }, { title: null }] }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Grounded in your Brain" })).toBeTruthy());
+    press("Grounded in your Brain");
+    expect(screen.getByText("• Fish supplier")).toBeTruthy();
+    expect(screen.getByText("• A note from your kitchen")).toBeTruthy();
+  });
+
+  it("an accept that was saved but could not be loaded again says so and leaves no Accept to press twice", async () => {
+    searchParams.current = { id: "r1" };
+    render(wrap(<RecipeView />));
+    await waitFor(() => expect(screen.getByText("Refine with Antoine")).toBeTruthy());
+    press("Make dairy-free");
+    press("Refine");
+    await waitFor(() => expect(screen.getByRole("button", { name: "Accept changes" })).toBeTruthy());
+    fake.api.get.mockRejectedValueOnce(new ApiError("network"));
+    press("Accept changes");
+    await waitFor(() => expect(screen.getByText("Your changes were saved, but the recipe could not be loaded again. Open it again to see them.")).toBeTruthy());
+    expect(screen.queryByRole("button", { name: "Accept changes" })).toBeNull();
+    expect(fake.api.accept).toHaveBeenCalledTimes(1);
   });
 
   it("gives someone who does not own it no switch and no refine", async () => {

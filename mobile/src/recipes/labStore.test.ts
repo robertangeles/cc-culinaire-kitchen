@@ -45,7 +45,16 @@ describe("recipe lab store", () => {
     expect(t.api.generate).toHaveBeenCalledWith(form, expect.anything());
     t.finish({ recipe: {}, recipeId: "r1", imageUrl: null });
     await done;
-    expect(t.store.getSnapshot()).toMatchObject({ phase: "made", made: { recipeId: "r1", recovered: false } });
+    expect(t.store.getSnapshot()).toMatchObject({ phase: "made", made: { recipeId: "r1", grounded: [] } });
+  });
+
+  it("keeps the titles of the kitchen notes the recipe drew on", async () => {
+    const t = setup();
+    const done = t.store.generate(form);
+    await flush();
+    t.finish({ recipe: {}, recipeId: "r1", brainGrounded: [{ title: "Fish supplier" }, { title: null }] });
+    await done;
+    expect(t.store.getSnapshot().made).toEqual({ recipeId: "r1", grounded: ["Fish supplier", null] });
   });
 
   it("shows a prose answer (nothing saved, nothing charged)", async () => {
@@ -75,14 +84,66 @@ describe("recipe lab store", () => {
     expect(t.store.getSnapshot()).toMatchObject({ phase: "form", note: "Stopped. Nothing was saved." });
   });
 
-  it("a lost reply after the server saved the recipe opens that recipe instead of making a second one", async () => {
+  it("a lost reply with a recipe that was not there when the request began offers that recipe, as a question", async () => {
     const t = setup();
     const done = t.store.generate(form);
     await flush();
     t.shelve("r-new");
     t.fail(new ApiError("network"));
     await done;
-    expect(t.store.getSnapshot()).toMatchObject({ phase: "made", made: { recipeId: "r-new", recovered: true } });
+    expect(t.store.getSnapshot()).toMatchObject({ phase: "found", found: { recipeId: "r-new", title: "r-new" }, made: null });
+    expect(t.api.generate).toHaveBeenCalledTimes(1);
+  });
+
+  it("a lost reply says nothing was saved only after the shelf was read and shows no new recipe", async () => {
+    const t = setup();
+    const done = t.store.generate(form);
+    await flush();
+    t.fail(new ApiError("network"));
+    await done;
+    expect(t.store.getSnapshot()).toMatchObject({ phase: "failed", unchecked: false, failure: { message: "The connection dropped and nothing was saved. Try again.", canRetry: true } });
+  });
+
+  it.each([
+    [new ApiError("network"), "The reply was lost."],
+    [new ApiError("timeout"), "The reply was lost."],
+  ])("a lost reply (%s) whose check cannot be made does not claim nothing was saved; Check again finds the recipe the server saved", async (err, start) => {
+    const t = setup();
+    const done = t.store.generate(form);
+    await flush();
+    t.shelve("r-new");
+    t.api.mine.mockRejectedValueOnce(new ApiError("network"));
+    t.fail(err);
+    await done;
+    const snap = t.store.getSnapshot();
+    expect(snap).toMatchObject({ phase: "failed", unchecked: true, failure: { message: `${start} The phone could not check whether a recipe was saved. Look in My Recipes before trying again.`, canRetry: true } });
+    expect(snap.failure?.message).not.toMatch(/nothing was saved/i);
+    await t.store.checkAgain();
+    expect(t.store.getSnapshot()).toMatchObject({ phase: "found", found: { recipeId: "r-new" } });
+    expect(t.api.generate).toHaveBeenCalledTimes(1);
+  });
+
+  it("Check again that reads the shelf and finds no new recipe says nothing was saved", async () => {
+    const t = setup();
+    const done = t.store.generate(form);
+    await flush();
+    t.api.mine.mockRejectedValueOnce(new ApiError("network"));
+    t.fail(new ApiError("network"));
+    await done;
+    await t.store.checkAgain();
+    expect(t.store.getSnapshot()).toMatchObject({ phase: "failed", unchecked: false, failure: { message: "The connection dropped and nothing was saved. Try again." } });
+    await t.store.checkAgain();
+    expect(t.api.mine).toHaveBeenCalledTimes(3);
+  });
+
+  it("a stop whose check cannot be made does not claim nothing was saved", async () => {
+    const t = setup();
+    const done = t.store.generate(form);
+    await flush();
+    t.api.mine.mockRejectedValueOnce(new ApiError("network"));
+    t.store.stop();
+    await done;
+    expect(t.store.getSnapshot()).toMatchObject({ phase: "failed", unchecked: true, failure: { message: "Stopped. The phone could not check whether a recipe was saved. Look in My Recipes before trying again." } });
   });
 
   it("a lost reply with nothing saved offers to try again, which starts over", async () => {
@@ -97,7 +158,7 @@ describe("recipe lab store", () => {
     expect(t.api.generate).toHaveBeenCalledTimes(2);
     t.finish({ recipe: {}, recipeId: "r2", imageUrl: null });
     await again;
-    expect(t.store.getSnapshot().made).toEqual({ recipeId: "r2", recovered: false });
+    expect(t.store.getSnapshot().made).toEqual({ recipeId: "r2", grounded: [] });
   });
 
   it.each([
@@ -118,14 +179,12 @@ describe("recipe lab store", () => {
     expect(t.api.mine).not.toHaveBeenCalled();
   });
 
-  it("without a first look at the shelf (no signal) a lost reply is a plain failure", async () => {
+  it("without a first look at the shelf (no signal) the request is not sent, so nothing can be lost", async () => {
     const t = setup();
     t.api.mine.mockRejectedValueOnce(new ApiError("network"));
-    const done = t.store.generate(form);
-    await flush();
-    t.fail(new ApiError("network"));
-    await done;
-    expect(t.store.getSnapshot()).toMatchObject({ phase: "failed", failure: { canRetry: true } });
+    await t.store.generate(form);
+    expect(t.api.generate).not.toHaveBeenCalled();
+    expect(t.store.getSnapshot()).toMatchObject({ phase: "failed", unchecked: false, failure: { message: "Can't reach the server. Check your signal and try again.", canRetry: true } });
   });
 
   it("reset clears a result for the next recipe", async () => {

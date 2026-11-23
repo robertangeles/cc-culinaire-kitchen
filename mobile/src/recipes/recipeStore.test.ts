@@ -49,6 +49,27 @@ describe("recipe store", () => {
     expect(store.getSnapshot()).toMatchObject({ refine: { phase: "idle" }, recipe: { title: "Braise, dairy-free" } });
   });
 
+  it("an accept whose reload fails is still accepted: the proposal goes, and it cannot be sent a second time", async () => {
+    const { store, api } = setup();
+    await store.load();
+    await store.refine("Make it dairy-free");
+    api.get.mockRejectedValueOnce(new ApiError("network"));
+    await store.accept();
+    expect(store.getSnapshot()).toMatchObject({ phase: "ready", refine: { phase: "idle", failure: null }, recipe: { title: "Braise" }, error: "Your changes were saved, but the recipe could not be loaded again. Open it again to see them." });
+    await store.accept();
+    expect(api.accept).toHaveBeenCalledTimes(1);
+  });
+
+  it("an accept the server refuses keeps the proposal, to try again", async () => {
+    const { store, api } = setup();
+    await store.load();
+    await store.refine("Make it dairy-free");
+    api.accept.mockRejectedValueOnce(new ApiError("network"));
+    await store.accept();
+    expect(store.getSnapshot().refine).toMatchObject({ phase: "proposal", failure: { canRetry: true } });
+    expect(api.get).toHaveBeenCalledTimes(1);
+  });
+
   it("discard drops the proposal and saves nothing", async () => {
     const { store, api } = setup();
     await store.load();

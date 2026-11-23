@@ -70,12 +70,14 @@ export type Recipe = z.infer<typeof RecipeSchema>;
 
 const MemorySchema = z.object({ title: z.string().nullable().catch(null) });
 
-/** `POST /api/recipes/generate`: a saved recipe, or `prose` when the model answered in words instead (nothing saved, nothing charged). */
+/**
+ * `POST /api/recipes/generate`: a saved recipe with the kitchen notes it drew on (`brainGrounded`, the phone's "Grounded in your
+ * Brain" marker), or `prose` when the model answered in words instead (nothing saved, nothing charged).
+ */
 export const GenerateReplySchema = z.union([
   z.object({
     recipe: z.unknown(),
     recipeId: z.string().nullable().catch(null),
-    imageUrl: z.string().nullable().catch(null),
     brainGrounded: keep(MemorySchema).optional(),
   }).refine((r) => r.recipe !== undefined),
   z.object({ prose: z.string() }),

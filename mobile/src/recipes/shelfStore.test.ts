@@ -24,6 +24,31 @@ describe("my recipes (shelf) store", () => {
     expect(mine).toHaveBeenCalledTimes(2);
   });
 
+  it("a refresh keeps the pages already loaded, with new and changed recipes from the fresh first page on top", async () => {
+    const { store, mine } = setup();
+    await store.refresh();
+    await store.loadMore();
+    mine.mockResolvedValueOnce({ recipes: [row("new"), { ...row("a"), title: "a, renamed" }], total: 4, page: 1 });
+    await store.refresh();
+    expect(store.getSnapshot().recipes.map((r) => r.title)).toEqual(["new", "a, renamed", "b", "c"]);
+    expect(store.getSnapshot().total).toBe(4);
+  });
+
+  it("a refresh that overtakes Load more leaves Load more usable", async () => {
+    const { store, mine } = setup();
+    await store.refresh();
+    let release: () => void = () => undefined;
+    mine.mockImplementationOnce(() => new Promise((r) => (release = () => r({ recipes: [row("c")], total: 3, page: 2 }))));
+    const slow = store.loadMore();
+    expect(store.getSnapshot().more).toBe(true);
+    await store.refresh();
+    release();
+    await slow;
+    expect(store.getSnapshot().more).toBe(false);
+    await store.loadMore();
+    expect(store.getSnapshot().recipes.map((r) => r.recipeId)).toEqual(["a", "b", "c"]);
+  });
+
   it("asks the server for one lab only", async () => {
     const { store, mine } = setup();
     await store.refresh();

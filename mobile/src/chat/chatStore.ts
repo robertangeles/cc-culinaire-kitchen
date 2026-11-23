@@ -1,6 +1,7 @@
 /**
  * One conversation on screen: the messages, the answer streaming in, stop, retry and saving. The server keeps no chat state, so
- * every turn sends the whole history; the conversation is saved after each finished (or stopped) answer, the way the web does it.
+ * every turn sends the whole history; the conversation is saved after each finished (or stopped) answer, the way the web does it:
+ * only the messages the server does not have yet (it builds Brain memories from what a save sends).
  * A refusal is shown in plain words from the server's `code`, never its English text.
  */
 
@@ -30,7 +31,7 @@ export interface ChatSnapshot {
   failure: ChatFailure | null;
   /** The last answer was stopped by the person. */
   stopped: boolean;
-  /** The last save did not reach the server (the next one sends everything again). */
+  /** The last save did not reach the server (the next one sends the same messages again). */
   unsaved: boolean;
 }
 
@@ -58,6 +59,8 @@ export function createChatStore({ api, newId }: { api: ChatApi; newId: () => str
   let snapshot: ChatSnapshot = { conversationId: null, title: "", messages: [], phase: "idle", failure: null, stopped: false, unsaved: false };
   const listeners = new Set<() => void>();
   let controller: AbortController | null = null;
+  /** Ids of the messages the server already has. */
+  const saved = new Set<string>();
 
   const set = (next: Partial<ChatSnapshot>) => {
     snapshot = { ...snapshot, ...next };
@@ -80,7 +83,9 @@ export function createChatStore({ api, newId }: { api: ChatApi; newId: () => str
         await api.create(id, title);
         set({ conversationId: id, title });
       }
-      await api.save(id, messages.map((m, i) => ({ messageId: m.id, messageRole: m.role, messageBody: m.text, messageSequence: i })));
+      const rest = messages.map((m, i) => ({ messageId: m.id, messageRole: m.role, messageBody: m.text, messageSequence: i })).filter((m) => !saved.has(m.messageId));
+      if (rest.length) await api.save(id, rest);
+      rest.forEach((m) => saved.add(m.messageId));
       set({ unsaved: false });
     } catch {
       set({ unsaved: true });
@@ -124,6 +129,7 @@ export function createChatStore({ api, newId }: { api: ChatApi; newId: () => str
       set({ phase: "loading", failure: null });
       try {
         const detail = await api.get(conversationId);
+        detail.messages.forEach((m) => saved.add(m.messageId));
         set({
           phase: "idle",
           conversationId,

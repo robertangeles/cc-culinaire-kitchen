@@ -28,12 +28,15 @@ export function createShelfStore({ api }: { api: RecipeApi }) {
 
   async function load(domain: RecipeDomain | null): Promise<void> {
     const mine = ++generation;
-    set({ domain, error: null, ...(domain !== snapshot.domain || snapshot.phase === "error" ? { phase: "loading", recipes: [] } : {}) });
+    const restart = domain !== snapshot.domain || snapshot.phase === "error";
+    if (restart) page = 1;
+    set({ domain, error: null, more: false, ...(restart ? { phase: "loading", recipes: [] } : {}) });
     try {
       const first = await api.mine(1, domain ?? undefined);
       if (mine !== generation) return;
-      page = 1;
-      set({ phase: "ready", recipes: first.recipes, total: first.total });
+      // A refresh keeps the pages already loaded: the fresh first page goes on top, replacing its own older rows.
+      const fresh = new Set(first.recipes.map((r) => r.recipeId));
+      set({ phase: "ready", recipes: [...first.recipes, ...snapshot.recipes.filter((r) => !fresh.has(r.recipeId))], total: first.total });
     } catch (err) {
       if (mine !== generation) return;
       // Keep what is on screen when only a refresh failed.

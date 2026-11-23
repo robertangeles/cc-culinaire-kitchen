@@ -80,7 +80,7 @@ describe("chat store", () => {
     ]);
   });
 
-  it("re-sends the whole history each turn and saves under the same conversation", async () => {
+  it("re-sends the whole history to the model each turn, and saves only the new messages under the same conversation", async () => {
     const { store, answers, sent, created, saved } = setup();
     let done = store.send("First");
     await flush();
@@ -95,7 +95,7 @@ describe("chat store", () => {
     expect(sent[1]).toEqual([{ role: "user", content: "First" }, { role: "assistant", content: "One." }, { role: "user", content: "Second" }]);
     expect(created).toHaveLength(1);
     expect(saved[1].id).toBe(created[0].id);
-    expect(saved[1].messages.map((m) => m.messageSequence)).toEqual([0, 1, 2, 3]);
+    expect(saved[1].messages.map((m) => [m.messageSequence, m.messageBody])).toEqual([[2, "Second"], [3, "Two."]]);
   });
 
   it("cuts a long first question to 100 characters for the title", async () => {
@@ -215,7 +215,7 @@ describe("chat store", () => {
     await done;
     expect(created).toHaveLength(0);
     expect(saved[0]).toMatchObject({ id: "c9" });
-    expect(saved[0].messages.map((m) => m.messageSequence)).toEqual([0, 1, 2, 3]);
+    expect(saved[0].messages.map((m) => [m.messageSequence, m.messageBody])).toEqual([[2, "And salt?"], [3, "Just before."]]);
   });
 
   it("says when a saved conversation cannot be opened", async () => {
@@ -236,6 +236,9 @@ describe("chat store", () => {
     expect(store.getSnapshot().unsaved).toBe(true);
     await store.saveNow();
     expect(store.getSnapshot().unsaved).toBe(false);
+    expect(saved).toHaveLength(1);
+    expect(saved[0].messages.map((m) => m.messageBody)).toEqual(["One", "A"]);
+    await store.saveNow();
     expect(saved).toHaveLength(1);
   });
 

@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Image, Pressable, RefreshControl, ScrollView, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -25,10 +25,19 @@ export default function MyRecipes() {
   const router = useRouter();
   const c = useColors();
   const { store, snap } = useShelf();
-  const { snap: lab } = useLab();
+  const { store: labStore, snap: lab } = useLab();
   const [search, setSearch] = useState("");
   const [refreshing, setRefreshing] = useState(false);
   useFocusEffect(useCallback(() => void store.refresh(), [store]));
+  // A recipe that finishes while the person is here shows up in the list.
+  useEffect(() => {
+    if (lab.phase === "made") void store.refresh();
+  }, [lab.phase, store]);
+  function openLab() {
+    // A finished recipe has been seen (in the list, or on its page): the lab opens on its form again.
+    if (lab.phase === "made") labStore.reset();
+    router.push("/recipe-lab");
+  }
   const caps = { fontFamily: fontFamily.uiStrong, fontSize: 12, letterSpacing: 1.8, textTransform: "uppercase", color: c.accentText } as const;
   // As on the web, the search looks through the recipes already loaded.
   const q = search.trim().toLowerCase();
@@ -44,7 +53,7 @@ export default function MyRecipes() {
         <Column style={{ gap: space.lg }}>
           <Text style={caps}>Recipe book</Text>
           <Text variant="title">My Recipes</Text>
-          <Button label={lab.phase === "generating" ? "Recipe Lab: making your recipe…" : "Create a recipe"} onPress={() => router.push("/recipe-lab")} />
+          <Button label={lab.phase === "generating" ? "Recipe Lab: making your recipe…" : "Create a recipe"} onPress={openLab} />
 
           <View accessibilityRole="tablist" style={{ flexDirection: "row", flexWrap: "wrap", gap: space.sm }}>
             {TABS.map((t) => {

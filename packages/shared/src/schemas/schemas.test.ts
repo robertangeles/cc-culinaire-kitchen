@@ -260,6 +260,8 @@ describe("recipe schemas", () => {
 
   it("tells a saved recipe from a prose answer", () => {
     expect("recipe" in GenerateReplySchema.parse({ recipe: data, recipeId: "r1", imageUrl: null, slug: "braise" })).toBe(true);
+    // The server sends `{ memoryId, title, sourceType }` per note; a title can be null.
+    expect(GenerateReplySchema.parse({ recipe: data, recipeId: "r1", brainGrounded: [{ memoryId: "m1", title: "Fish supplier", sourceType: "note" }, { memoryId: "m2", title: null }, "junk"] })).toMatchObject({ brainGrounded: [{ title: "Fish supplier" }, { title: null }] });
     expect(GenerateReplySchema.parse({ prose: "Try a stew." })).toEqual({ prose: "Try a stew." });
     expect(GenerateReplySchema.safeParse({}).success).toBe(false);
   });

@@ -90,14 +90,10 @@ export default function RecipeLab() {
   const [occasion, setOccasion] = useState("");
   const caps = { fontFamily: fontFamily.uiStrong, fontSize: 12, letterSpacing: 1.8, textTransform: "uppercase", color: c.accentText } as const;
 
-  // A recipe that was just made opens straight away; one found after a lost reply is announced first.
+  // A recipe that was just made opens straight away (the lab keeps it, for the marker on its page, until My Recipes opens the lab again).
   useEffect(() => {
-    if (snap.made && !snap.made.recovered) {
-      const id = snap.made.recipeId;
-      store.reset();
-      router.replace({ pathname: "/recipe", params: { id } });
-    }
-  }, [snap.made, store, router]);
+    if (snap.made) router.replace({ pathname: "/recipe", params: { id: snap.made.recipeId } });
+  }, [snap.made, router]);
 
   const text = request.trim();
   const valid = text.length >= REQUEST_MIN;
@@ -128,12 +124,15 @@ export default function RecipeLab() {
 
             {snap.phase === "generating" && snap.startedAt ? <Waiting startedAt={snap.startedAt} onStop={store.stop} /> : null}
 
-            {snap.phase === "made" && snap.made?.recovered ? (
+            {snap.phase === "checking" ? <Text variant="muted" accessibilityLiveRegion="polite">Checking My Recipes…</Text> : null}
+
+            {snap.phase === "found" && snap.found ? (
               <Surface>
-                <View style={{ padding: space.lg, gap: space.md }}>
-                  <Text style={{ fontFamily: fontFamily.title, fontSize: 20 }}>Your recipe was saved</Text>
-                  <Text variant="muted">The connection dropped before the answer reached the phone, but the recipe was made and saved, so it was not made twice.</Text>
-                  <Button label="Open it" onPress={() => { const id = snap.made!.recipeId; store.reset(); router.replace({ pathname: "/recipe", params: { id } }); }} />
+                <View style={{ padding: space.lg, gap: space.md }} accessibilityLiveRegion="polite">
+                  <Text style={{ fontFamily: fontFamily.title, fontSize: 20 }}>A new recipe appeared. Is it this one?</Text>
+                  <Text variant="muted">{`The answer did not reach the phone, but "${snap.found.title}" was saved to My Recipes while you waited. Open it before making the recipe again.`}</Text>
+                  <Button label="Open it" onPress={() => { const id = snap.found!.recipeId; store.reset(); router.replace({ pathname: "/recipe", params: { id } }); }} />
+                  <Button kind="quiet" label="It's another recipe: make mine again" onPress={() => void store.retry()} />
                 </View>
               </Surface>
             ) : null}
@@ -152,7 +151,8 @@ export default function RecipeLab() {
             {snap.phase === "failed" && snap.failure ? (
               <View style={{ gap: space.sm }} accessibilityLiveRegion="polite">
                 <Text variant="error">{snap.failure.message}</Text>
-                {snap.failure.canRetry ? <Button label="Try again" onPress={() => void store.retry()} /> : null}
+                {snap.unchecked ? <Button label="Check again" onPress={() => void store.checkAgain()} /> : null}
+                {snap.failure.canRetry ? <Button kind={snap.unchecked ? "ghost" : undefined} label="Try again" onPress={() => void store.retry()} /> : null}
                 <Button kind="quiet" label="Change the request" onPress={store.reset} />
               </View>
             ) : null}

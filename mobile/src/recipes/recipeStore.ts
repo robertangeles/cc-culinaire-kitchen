@@ -39,6 +39,16 @@ export function createRecipeStore({ api, recipeId, userId }: { api: RecipeApi; r
   };
   const show = (recipe: Recipe) => set({ phase: "ready", recipe, error: null, isOwner: recipe.userId === userId });
 
+  async function load(): Promise<void> {
+    if (!snapshot.recipe) set({ phase: "loading" });
+    try {
+      show(await api.get(recipeId));
+    } catch (err) {
+      const gone = err instanceof ApiError && (err.code === "not_found" || err.code === "forbidden");
+      set({ phase: snapshot.recipe ? "ready" : "error", error: gone ? "This recipe isn't available. It may be private or deleted." : recipeFailure(err).message });
+    }
+  }
+
   return {
     subscribe(listener: () => void) {
       listeners.add(listener);
@@ -46,15 +56,7 @@ export function createRecipeStore({ api, recipeId, userId }: { api: RecipeApi; r
     },
     getSnapshot: () => snapshot,
 
-    async load(): Promise<void> {
-      if (!snapshot.recipe) set({ phase: "loading" });
-      try {
-        show(await api.get(recipeId));
-      } catch (err) {
-        const gone = err instanceof ApiError && (err.code === "not_found" || err.code === "forbidden");
-        set({ phase: snapshot.recipe ? "ready" : "error", error: gone ? "This recipe isn't available. It may be private or deleted." : recipeFailure(err).message });
-      }
-    },
+    load,
 
     async refine(instruction: string): Promise<void> {
       const text = instruction.trim();
@@ -80,11 +82,14 @@ export function createRecipeStore({ api, recipeId, userId }: { api: RecipeApi; r
       set({ refine: { phase: "accepting", refinedData: r.refinedData, changeSummary: r.changeSummary } });
       try {
         await api.accept(recipeId, r.refinedData, r.changeSummary.slice(0, INSTRUCTION_MAX));
-        show(await api.get(recipeId));
-        set({ refine: { phase: "idle", failure: null } });
       } catch (err) {
         set({ refine: { ...r, failure: recipeFailure(err, "refine recipes") } });
+        return;
       }
+      // Saved: the proposal is gone whatever the reload does, so Accept cannot be sent twice.
+      set({ refine: { phase: "idle", failure: null } });
+      await load();
+      if (snapshot.error) set({ error: "Your changes were saved, but the recipe could not be loaded again. Open it again to see them." });
     },
 
     async setPublic(isPublic: boolean): Promise<void> {
