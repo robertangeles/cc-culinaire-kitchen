@@ -966,8 +966,9 @@ export interface MfaChangeProof {
  * switching MFA off removes the second factor. A session alone is therefore not enough.
  * Password accounts give their password; Google-only accounts, which have none, must have
  * signed in within the last 10 minutes; an account with MFA on also gives a current code.
+ * Linking another sign-in method (Sign in with Apple) is the same kind of lever and asks for the same proof.
  */
-async function requireProofToChangeMfa(
+export async function requireProofToChangeMfa(
   row: typeof user.$inferSelect,
   proof: MfaChangeProof,
   signedInAt: Date | null,

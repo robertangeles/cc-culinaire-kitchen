@@ -114,6 +114,8 @@ const DeleteOwnAccountSchema = z.object({
   password: z.string().max(200).optional(),
   confirmEmail: z.string().max(320).optional(),
   mfaCode: z.string().max(12).optional(),
+  appleIdentityToken: z.string().max(4096).optional(),
+  appleNonce: z.string().min(16).max(256).optional(),
 });
 
 /**

@@ -26,6 +26,7 @@ import {
   handleResetPassword,
   handleTurnstileConfig,
 } from "../controllers/authController.js";
+import { handleAppleIdToken, handleAppleLink } from "../controllers/appleAuthController.js";
 import { authenticate } from "../middleware/auth.js";
 import {
   mfaVerifyRateLimit,
@@ -37,6 +38,8 @@ import {
   resendVerificationRateLimit,
   verifyEmailRateLimit,
   googleIdTokenRateLimit,
+  appleIdTokenRateLimit,
+  appleLinkRateLimit,
   logoutRateLimit,
   refreshRateLimit,
   refreshTokenRateLimit,
@@ -66,6 +69,10 @@ router.get("/google/callback", handleGoogleCallback);
 // Mobile native Google Sign-In: accepts an ID token from
 // @react-native-google-signin/google-signin and issues our JWTs.
 router.post("/google/idtoken", googleIdTokenRateLimit, handleGoogleIdToken);
+// Mobile native Sign in with Apple: accepts the identity token iOS returns and issues our JWTs.
+router.post("/apple/idtoken", appleIdTokenRateLimit, requireSupportedMobileVersion(), handleAppleIdToken);
+// A signed-in person adds Apple to their account. Wrong passwords or codes count against the per-account MFA limit.
+router.post("/apple/link", authenticate, appleLinkRateLimit, mfaAccountRateLimit, handleAppleLink);
 
 // MFA
 router.post("/mfa/setup", authenticate, mfaAccountRateLimit, handleMfaSetup);

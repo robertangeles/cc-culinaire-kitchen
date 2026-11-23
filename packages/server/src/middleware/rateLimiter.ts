@@ -272,7 +272,7 @@ function ipBucket(name: string, limit: number, opts: { skipSuccessfulRequests?: 
     legacyHeaders: false,
     ...opts,
     keyGenerator: (req: Request) => `${name}-ip-${hashIp(req)}`,
-    message: { error: "Too many attempts — please wait a minute before trying again." },
+    message: { error: "Too many attempts — please wait a minute before trying again.", code: "RATE_LIMITED" },
   });
 }
 
@@ -284,6 +284,8 @@ export const resetPasswordRateLimit = ipBucket("reset-password", 10);
 export const resendVerificationRateLimit = ipBucket("resend-verification", 5);
 export const verifyEmailRateLimit = ipBucket("verify-email", 20);
 export const googleIdTokenRateLimit = ipBucket("google-idtoken", 20);
+export const appleIdTokenRateLimit = ipBucket("apple-idtoken", 20);
+export const appleLinkRateLimit = ipBucket("apple-link", 10);
 export const logoutRateLimit = ipBucket("logout", 60);
 
 /**

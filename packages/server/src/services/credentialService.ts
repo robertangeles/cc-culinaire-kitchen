@@ -35,6 +35,11 @@ export const CREDENTIAL_REGISTRY: Record<string, CredentialMeta> = {
   // Client IDs are public — they ship inside the mobile app binary.
   GOOGLE_ANDROID_CLIENT_ID: { category: "oauth",    label: "Google Client ID (Android — native sign-in)", sensitive: false },
   GOOGLE_IOS_CLIENT_ID:     { category: "oauth",    label: "Google Client ID (iOS — native sign-in)",     sensitive: false },
+  // Sign in with Apple (the iOS app; used by /api/auth/apple/idtoken). The app id is public; the key is needed only to revoke on account deletion.
+  APPLE_CLIENT_ID:         { category: "oauth",    label: "Apple App ID (iOS bundle id — Sign in with Apple)", sensitive: false },
+  APPLE_TEAM_ID:           { category: "oauth",    label: "Apple Team ID",                           sensitive: false },
+  APPLE_KEY_ID:            { category: "oauth",    label: "Apple Sign in with Apple Key ID",         sensitive: false },
+  APPLE_PRIVATE_KEY:       { category: "oauth",    label: "Apple Sign in with Apple private key (.p8)", sensitive: true },
   OPENROUTER_API_KEY:      { category: "ai",       label: "OpenRouter API Key",      sensitive: true },
   AI_MODEL:                { category: "ai",       label: "Chat Model (OpenRouter format)", sensitive: false },
   RESEND_API_KEY:          { category: "email",    label: "Resend API Key",          sensitive: true },
