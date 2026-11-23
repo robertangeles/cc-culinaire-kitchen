@@ -144,7 +144,7 @@ describe("logging with no signal, then reconnecting", () => {
     press("Use Mystery oil");
     expect(screen.queryByText(/^In L/)).toBeNull();
     type("How much", "1");
-    choose("FOH");
+    choose("Kitchen");
     press("Log usage");
     expect(await screen.findByText("Pick the item from the list again: its unit is not known.")).toBeTruthy();
     expect(await outbox.open(["consumption.log"])).toEqual([]);
