@@ -68,3 +68,37 @@ describe("calcLineCost", () => {
     expect(calcLineCost(row, [])).toBe(0);
   });
 });
+
+// Characterisation before calcLineCost's maths moved to packages/shared: the same dish the server test
+// (menuCosting.integration.test.ts) stores, costed here the way the web editor shows it.
+describe("calcLineCost — the Margherita lines, as the editor previews them", () => {
+  const row = (over: Partial<IngredientRow>): IngredientRow => ({ ...baseRow, ingredientId: null, baseUnit: undefined, ...over });
+
+  it("matches the cents the server stores for yield, grams to kg and mL to L", () => {
+    expect(calcLineCost(row({ ingredientName: "Dough", quantity: "1.2", unit: "kg", unitCost: "3.35", yieldPct: "87.5" }), [])).toBe(4.59);
+    expect(calcLineCost(row({ ingredientName: "Cheese", quantity: "0.35", unit: "kg", unitCost: "14.20" }), [])).toBe(4.97);
+    expect(calcLineCost(row({ ingredientId: "i", quantity: "500", unit: "g", baseUnit: "kg", unitCost: "2.10", yieldPct: "92" }), [])).toBe(1.14);
+    expect(calcLineCost(row({ ingredientId: "i", quantity: "150", unit: "mL", baseUnit: "L", unitCost: "41.2500" }), [])).toBe(6.19);
+  });
+
+  it("rounds a half-cent line up (Math.round), where the server's toFixed gives the cent below", () => {
+    // 0.125 kg x 14.20 = 1.7749999999999999 in floating point: web 1.78, server stores 1.77.
+    expect(calcLineCost(row({ quantity: "0.125", unit: "kg", unitCost: "14.20" }), [])).toBe(1.78);
+    expect(calcLineCost(row({ quantity: "0.5", unit: "kg", unitCost: "8.35" }), [])).toBe(4.18);
+  });
+
+  it("treats a blank, zero or unreadable yield as 100% (the server stores 0.00 for a zero yield)", () => {
+    for (const yieldPct of ["", "0", "abc"]) {
+      expect(calcLineCost(row({ quantity: "0.2", unit: "kg", unitCost: "5", yieldPct }), [])).toBe(1);
+    }
+  });
+
+  it("reads a blank or unreadable quantity or cost as 0", () => {
+    expect(calcLineCost(row({ quantity: "", unitCost: "5" }), [])).toBe(0);
+    expect(calcLineCost(row({ quantity: "2", unitCost: "n/a" }), [])).toBe(0);
+  });
+
+  it("lets a negative yield through (a negative cost)", () => {
+    expect(calcLineCost(row({ quantity: "1", unit: "kg", unitCost: "10", yieldPct: "-50" }), [])).toBe(-20);
+  });
+});
