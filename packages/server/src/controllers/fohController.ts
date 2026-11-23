@@ -20,7 +20,7 @@ import * as consumptionLogService from "../services/consumptionLogService.js";
 
 const logger = pino({ name: "fohController" });
 
-/** A quantity a person could type for one shelf item: above 0, below 100,000. */
+/** A client-made id is optional; when sent it must be a UUID. */
 const uuidOrAbsent = (v: unknown) => v === undefined || z.string().uuid().safeParse(v).success;
 
 /** 400 VALIDATION: a refused input, with a sentence the web shows. */

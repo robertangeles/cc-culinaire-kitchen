@@ -26,7 +26,7 @@ const RequestItemSchema = z.object({
   itemType: z.string().max(20).optional(),
   category: z.string().max(50).optional(),
   baseUnit: z.string().max(20).optional(),
-  countedQty: z.number().finite().min(0).max(99999).optional(),
+  countedQty: z.number().finite().min(0).optional(),
 });
 
 /** Resolve the user's org ID from their location context. */
