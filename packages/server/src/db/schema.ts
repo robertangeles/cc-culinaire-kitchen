@@ -3725,6 +3725,18 @@ export const staffAvailability = pgTable(
       "chk_staff_availability_date_order",
       sql`${table.effectiveUntil} IS NULL OR ${table.effectiveUntil} >= ${table.effectiveFrom}`,
     ),
+    // One row per distinct window: "find the window this create replays" (createAvailability returns the existing row instead of a twin).
+    // NULL location (any venue) and NULL end date (open-ended) count as values, hence the coalesce.
+    uniqueIndex("uq_staff_availability_window").on(
+      table.userId,
+      table.organisationId,
+      table.dayOfWeek,
+      table.availableFrom,
+      table.availableUntil,
+      table.effectiveFrom,
+      sql`coalesce(${table.storeLocationId}, '00000000-0000-0000-0000-000000000000'::uuid)`,
+      sql`coalesce(${table.effectiveUntil}, 'infinity'::date)`,
+    ),
   ],
 );
 
