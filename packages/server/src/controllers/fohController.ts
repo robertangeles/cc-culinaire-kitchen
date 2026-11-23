@@ -214,9 +214,8 @@ export async function handleRecordSales(req: Request, res: Response, next: NextF
     if (locId === null) return;
 
     const { lines, source } = req.body;
-    // ponytail: 500 lines covers a day's CSV for one shelf; raise it if an import ever needs more.
-    if (!Array.isArray(lines) || lines.length === 0 || lines.length > 500) {
-      refuse(res, "lines must be a list of 1 to 500 sales");
+    if (!Array.isArray(lines) || lines.length === 0) {
+      refuse(res, "lines must be a non-empty array");
       return;
     }
     if (lines.some((l: Record<string, unknown>) => !uuidOrAbsent(l?.fohSaleId))) {

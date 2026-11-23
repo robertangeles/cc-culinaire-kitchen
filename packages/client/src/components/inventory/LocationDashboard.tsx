@@ -11,6 +11,7 @@ import {
   useDashboard,
   useOrgDashboard,
   useLocationIngredients,
+  type DashboardData,
   type LocationIngredient,
   type OrgLocationSummary,
 } from "../../hooks/useInventory.js";
@@ -23,16 +24,8 @@ import {
 } from "lucide-react";
 import { CATEGORY_LABELS } from "@culinaire/shared";
 
-function getStockStatus(item: LocationIngredient): "healthy" | "low" | "critical" | "unknown" {
-  if (!item.currentQty || !item.parLevel) return "unknown";
-  const qty = Number(item.currentQty);
-  const par = Number(item.parLevel);
-  if (par === 0) return "healthy";
-  const ratio = qty / par;
-  if (ratio <= 0.25) return "critical";
-  if (ratio <= 0.75) return "low";
-  return "healthy";
-}
+/** The book quantity for display; one the server left out (no inventory:cost) is a dash, not zero. */
+const qtyText = (item: LocationIngredient) => (item.currentQty === undefined ? "—" : Number(item.currentQty || 0).toFixed(1));
 
 export function LocationDashboard({
   locationId,
@@ -133,7 +126,7 @@ export function LocationDashboard({
         <DrillDownView
           locationName={allLocations.find((l) => l.storeLocationId === drillLocationId)?.locationName || "Location"}
           items={drillItems}
-          stockValue={drillData?.stockSummary.stockValue}
+          stockSummary={drillData?.stockSummary}
           onClose={() => setDrillLocationId(null)}
         />
       )}
@@ -351,16 +344,19 @@ function OrgSummaryTable({
 // ─── Drill-Down View ─────────────────────────────────────────────
 
 function DrillDownView({
-  locationName, items, stockValue, onClose,
+  locationName, items, stockSummary, onClose,
 }: {
   locationName: string;
   items: LocationIngredient[];
-  /** From the server; absent without inventory:cost. */
-  stockValue?: number;
+  /** The server's figures for this location (its value is absent without inventory:cost); undefined while they load. */
+  stockSummary?: DashboardData["stockSummary"];
   onClose: () => void;
 }) {
-  const lowItems = items.filter((i) => getStockStatus(i) === "low");
-  const critItems = items.filter((i) => getStockStatus(i) === "critical");
+  const stockValue = stockSummary?.stockValue;
+  const lowIds = new Set(stockSummary?.lowIngredientIds);
+  const criticalIds = new Set(stockSummary?.criticalIngredientIds);
+  const lowItems = items.filter((i) => lowIds.has(i.ingredientId) && !criticalIds.has(i.ingredientId));
+  const critItems = items.filter((i) => criticalIds.has(i.ingredientId));
 
   return (
     <div className="rounded-xl border border-gold/20 bg-dark-50 overflow-hidden animate-[fadeIn_150ms_ease-out]">
@@ -384,7 +380,7 @@ function DrillDownView({
           {critItems.map((item) => (
             <div key={item.ingredientId} className="flex justify-between text-xs py-0.5">
               <span className="text-white">{item.ingredientName}</span>
-              <span className="text-red-400 tabular-nums">{Number(item.currentQty || 0).toFixed(1)} / par {Number(item.parLevel || 0).toFixed(0)}</span>
+              <span className="text-red-400 tabular-nums">{qtyText(item)} / par {Number(item.parLevel || 0).toFixed(0)}</span>
             </div>
           ))}
         </div>
@@ -396,7 +392,7 @@ function DrillDownView({
           {lowItems.map((item) => (
             <div key={item.ingredientId} className="flex justify-between text-xs py-0.5">
               <span className="text-white">{item.ingredientName}</span>
-              <span className="text-amber-400 tabular-nums">{Number(item.currentQty || 0).toFixed(1)} / par {Number(item.parLevel || 0).toFixed(0)}</span>
+              <span className="text-amber-400 tabular-nums">{qtyText(item)} / par {Number(item.parLevel || 0).toFixed(0)}</span>
             </div>
           ))}
         </div>
@@ -411,8 +407,7 @@ function DrillDownView({
           <div className="text-right">Cost</div>
         </div>
         {items.map((item) => {
-          const status = getStockStatus(item);
-          const statusColor = status === "critical" ? "text-red-400" : status === "low" ? "text-amber-400" : "text-dark-600";
+          const statusColor = criticalIds.has(item.ingredientId) ? "text-red-400" : lowIds.has(item.ingredientId) ? "text-amber-400" : "text-dark-600";
           return (
             <div key={item.ingredientId} className="grid grid-cols-5 gap-1 px-4 py-1.5 text-xs hover:bg-dark-100/30 transition-colors">
               <div className="col-span-2 text-white truncate">{item.ingredientName}</div>
@@ -444,13 +439,13 @@ function StockAlertList({ items }: { items: LocationIngredient[] }) {
         const qty = Number(item.currentQty || 0);
         const par = Number(item.parLevel || 0);
         const cost = Number(item.locationUnitCost || item.orgUnitCost || 0);
-        const atRisk = par > 0 ? (par - qty) * cost : 0;
+        const atRisk = par > 0 && item.currentQty !== undefined ? (par - qty) * cost : 0;
         return (
           <div key={item.ingredientId} className="flex items-center justify-between px-4 py-1.5 text-xs">
             <div className="flex items-center gap-2 min-w-0">
               <span className="text-white truncate">{item.ingredientName}</span>
               <span className="text-[10px] text-dark-500 shrink-0">
-                {item.currentQty == null ? "—" : qty.toFixed(1)} {item.baseUnit} / par {par}
+                {qtyText(item)} {item.baseUnit} / par {par}
               </span>
             </div>
             {atRisk > 0 && (

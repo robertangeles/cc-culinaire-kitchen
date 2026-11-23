@@ -6,13 +6,14 @@ import type { DashboardData, LocationIngredient } from "../../hooks/useInventory
 // The stock figures come from the server's dashboard (stockSummary), so the web and the phone agree.
 let dashboard: DashboardData;
 let items: Partial<LocationIngredient>[];
+let orgLocations: object[];
 vi.mock("../../hooks/useInventory.js", () => ({
   useDashboard: (id: string | null) => ({ data: id ? dashboard : null, isLoading: false }),
-  useOrgDashboard: () => ({ locations: [], isLoading: false }),
+  useOrgDashboard: () => ({ locations: orgLocations, isLoading: false }),
   useLocationIngredients: (id: string | null) => ({ items: id ? items : [] }),
 }));
 vi.mock("../../context/LocationContext.js", () => ({
-  useLocation: () => ({ isOrgAdmin: false, locations: [] }),
+  useLocation: () => ({ isOrgAdmin: orgLocations.length > 0, locations: orgLocations }),
 }));
 vi.mock("./ForecastCard.js", () => ({ default: () => null }));
 
@@ -21,6 +22,7 @@ const item = (ingredientId: string, ingredientCategory: string, currentQty: stri
 
 describe("LocationDashboard", () => {
   beforeEach(() => {
+    orgLocations = [];
     // The item rows alone would say flour is healthy and worth $1,000: the page must show the server's figures instead.
     items = [item("flour", "dry_goods", "10", "10"), item("cola", "beverages", "24", "40")];
     dashboard = {
@@ -58,5 +60,34 @@ describe("LocationDashboard", () => {
     render(<LocationDashboard locationId="loc-1" />);
     fireEvent.click(screen.getByText("Critical — Reorder Now"));
     expect(screen.getByText("— kg / par 10")).toBeTruthy();
+  });
+
+  describe("drill-down into a location (HQ)", () => {
+    const openDrillDown = () => {
+      orgLocations = [
+        { storeLocationId: "loc-1", locationName: "Main", totalItems: 2, lowStock: 1, critical: 1, lastCountDttm: null },
+        { storeLocationId: "loc-2", locationName: "Annex", totalItems: 0, lowStock: 0, critical: 0, lastCountDttm: null },
+      ];
+      render(<LocationDashboard locationId="loc-1" />);
+      fireEvent.click(screen.getByRole("button", { name: /Main/ }));
+    };
+
+    it("lists low and critical from the server's figures, not from the item rows", () => {
+      // By the rows alone flour (10 of par 10) is healthy; the server says it is critical.
+      openDrillDown();
+      expect(screen.getByText("Critical").parentElement?.textContent).toContain("flour10.0 / par 10");
+      expect(screen.getByText("Low Stock").parentElement?.textContent).toContain("cola24.0 / par 40");
+    });
+
+    it("still lists them, with a dash for the quantity, when the server leaves quantities out (no inventory:cost)", () => {
+      items = [
+        { ingredientId: "flour", ingredientName: "flour", ingredientCategory: "dry_goods", baseUnit: "kg", parLevel: "10" },
+        { ingredientId: "cola", ingredientName: "cola", ingredientCategory: "beverages", baseUnit: "each", parLevel: "40" },
+      ];
+      delete dashboard.stockSummary.stockValue;
+      openDrillDown();
+      expect(screen.getByText("Critical").parentElement?.textContent).toContain("flour— / par 10");
+      expect(screen.getByText("Low Stock").parentElement?.textContent).toContain("cola— / par 40");
+    });
   });
 });
