@@ -15,6 +15,7 @@ Run the screenshot walk (`device/README.md`, "The screenshot walk") after changi
 - Nothing clipped or overlapping: tab labels fully above the system navigation bar, long item names wrap, buttons fit their words.
 - At most five tab buttons; more modules go under More (`src/shell/tabs.ts`, `tabBar`), and Account is always reachable.
 - On a tablet the content sits in the centred 560 dp column (`Screen` or `Column`), with equal paper on both sides.
+- A signed-in screen, the location choice and Terms and Privacy start at the top (`Screen` with `align="top"`); only sign-in, forgot password, check email, the two-step code, first run, update required and account deleted sit centred down the page.
 - The primary action is the copper gradient button; quiet actions are copper text; destructive ones outlined in ember. Offline is the saffron banner, waiting rows say "Waiting to send".
 - With the keyboard up, the field being typed in stays visible; a form's button may need a scroll but is never unreachable.
 - No pricing, purchase or upgrade link anywhere (subscriptions are sold on the web).
