@@ -1417,3 +1417,15 @@ builds all tables with CHECKs enforcing. Stop it again when done.
 - **Problem**: The device walk on the moto g86 never got past sign-in: the installed development build (installed 2026-11-20) has no `ExpoCrypto`, which PR 203 (Sign in with Apple) imports at start, so every screen died with "Cannot find native module 'ExpoCrypto'".
 - **Fix**: None possible in a worktree (a new development build is a native build: EAS, which is paid and credentialed, or a local Gradle build, and this machine has no Android SDK). The prep walk (`device/prep.device.test.ts`) is written and type-checked but has not passed on the phone.
 - **Rule**: When a PR adds a native module, the same PR says in its owner checklist that the development build must be rebuilt before the next device walk.
+
+## 2026-11-23 — A quota charge keyed to "the client stayed to the end" is a free-answer lever; and a per-recipient mail cap needs one key per inbox
+
+- **Problem**: Chat charged a session only if the stream finished with the socket open, so a client could read nearly the whole answer and hang up to skip the charge. The per-recipient email cap keyed on the raw address, so `a+1@x.com`, `a+2@x.com` and Gmail dot variants each got a fresh bucket for one inbox. Both were flagged by the commit security review, not by tests.
+- **Fix**: `streamChat` counts an answer as delivered once text reached the client, even if they then leave; only a model error or a server time-out stays free. `recipientKey` lowercases, drops `+tag`, strips Gmail dots and folds googlemail.com, and skips the limiter for a non-address so the handler can 400.
+- **Rule**: Charge for what was delivered, never for how the client behaved afterwards. Key a limiter on the thing being protected (the inbox), normalised, not on the string the caller typed.
+
+## 2026-11-23 — After a charge made post-response, a test must wait for it
+
+- **Problem**: HTTP-level tests read the session counter right after the response and saw no charge; the charge runs after the answer is sent.
+- **Fix**: `vi.waitFor` for "charged", a short settle before asserting "not charged".
+- **Rule**: Assert work done after `res.end()` with a wait, and assert its absence only after a pause.
