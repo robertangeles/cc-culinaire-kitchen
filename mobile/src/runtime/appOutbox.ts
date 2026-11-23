@@ -8,6 +8,8 @@ import { prepHandlers } from "../prep/prepCommands";
 import { consumptionHandlers } from "../consumption/consumptionCommands";
 import { movementHandlers } from "../movements/movementCommands";
 import { wasteHandlers } from "../waste/wasteCommands";
+import { transferHandlers } from "../transfers/transferCommands";
+import { catalogRequestHandlers } from "../stock/catalogRequestCommands";
 
 /** The signed-in chef's id, or null (counts stay on the phone and wait for a sign-in). */
 export function currentUserId(): number | null {
@@ -19,7 +21,7 @@ export const outbox = createOutbox({
   store: sqliteOutboxStore,
   send: createSendSaveLine(client),
   // Every other module's commands: add its handlers here (see the "Offline queue" section of mobile/README.md).
-  handlers: [...wasteHandlers(client), ...prepHandlers(client), ...consumptionHandlers(client), ...movementHandlers(client)],
+  handlers: [...wasteHandlers(client), ...prepHandlers(client), ...consumptionHandlers(client), ...movementHandlers(client), ...transferHandlers(client), ...catalogRequestHandlers(client)],
   now: Date.now,
   newId: () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
   getUserId: currentUserId,

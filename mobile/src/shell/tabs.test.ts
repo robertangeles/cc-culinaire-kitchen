@@ -13,20 +13,20 @@ describe("which tabs a person sees", () => {
   });
 
   it("shows the Usage and Move tabs to someone who holds inventory:count, the key the server asks for on both, and to no one without it", () => {
-    expect(gatedTabs(person({ permissions: ["inventory:count"] })).map((t) => t.route)).toEqual(["(usage)", "(count)", "(moves)"]);
+    expect(gatedTabs(person({ permissions: ["inventory:count"] })).map((t) => t.route)).toEqual(["(usage)", "(count)", "(moves)", "(transfers)", "(stock)"]);
     expect(gatedTabs(person({ permissions: ["waste:log", "inventory:manage", "inventory:hq", "inventory:transfer"] })).map((t) => t.route)).toEqual(["(waste)"]);
   });
 
   it("shows the Waste tab to someone who holds waste:log, and only that: waste:read alone is the web's reports, not on the phone", () => {
     expect(gatedTabs(person({ permissions: ["waste:log"] })).map((t) => t.route)).toEqual(["(waste)"]);
     expect(gatedTabs(person({ permissions: ["waste:read"] }))).toEqual([]);
-    expect(gatedTabs(person({ permissions: ["inventory:count", "waste:log"] })).map((t) => t.route)).toEqual(["(waste)", "(usage)", "(count)", "(moves)"]);
+    expect(gatedTabs(person({ permissions: ["inventory:count", "waste:log"] })).map((t) => t.route)).toEqual(["(waste)", "(usage)", "(count)", "(moves)", "(transfers)", "(stock)"]);
   });
 
   it("shows the Prep tab to someone who holds prep:read or prep:manage, as the server lets either tick tasks (any role can be given them)", () => {
     expect(gatedTabs(person({ permissions: ["prep:read"] })).map((t) => t.route)).toEqual(["(prep)"]);
     expect(gatedTabs(person({ permissions: ["prep:manage"] })).map((t) => t.route)).toEqual(["(prep)"]);
-    expect(gatedTabs(person({ permissions: ["inventory:count", "waste:log", "prep:read"] })).map((t) => t.route)).toEqual(["(prep)", "(waste)", "(usage)", "(count)", "(moves)"]);
+    expect(gatedTabs(person({ permissions: ["inventory:count", "waste:log", "prep:read"] })).map((t) => t.route)).toEqual(["(prep)", "(waste)", "(usage)", "(count)", "(moves)", "(transfers)", "(stock)"]);
     expect(gatedTabs(person({ permissions: ["waste:read", "menu:read"] }))).toEqual([]);
   });
 
@@ -55,6 +55,11 @@ describe("which tabs a person sees", () => {
     const tab = { ...moduleTabs[0], anyPermission: ["a:read", "a:write"] };
     expect(canOpen(person({ permissions: ["a:write"] }), tab)).toBe(true);
     expect(canOpen(person({ permissions: ["b:read"] }), tab)).toBe(false);
+  });
+
+  it("shows Transfers and Stock to someone who holds inventory:count, the key the server asks for to list and receive transfers and to read the dashboard, and to no one who holds only manage", () => {
+    expect(gatedTabs(person({ permissions: ["inventory:count"] })).map((t) => t.route)).toEqual(expect.arrayContaining(["(transfers)", "(stock)"]));
+    expect(gatedTabs(person({ permissions: ["inventory:manage", "inventory:cost"] }))).toEqual([]);
   });
 
   it("does not treat a role name other than Administrator as a superuser", () => {
