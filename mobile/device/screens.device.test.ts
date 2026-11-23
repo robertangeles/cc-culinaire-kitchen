@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
-  adb, back, clearApp, clearField, dismissSavePassword, dump, fieldText, find, isSavePasswordSheet, findAll, forceStop, has, hideKeyboard, openApp, setAirplane, setAnimations, setDarkMode, setFontScale,
+  adb, back, clearApp, dismissSavePassword, dump, fieldText, find, isSavePasswordSheet, findAll, forceStop, has, hideKeyboard, openApp, setAirplane, setAnimations, setDarkMode, setFontScale,
   setRotation, swipe, tap, tapAt, tapLabel, typeInto, waitFor, waitGone,
 } from "./adb";
 import { credentials, freshCode, manager } from "./fixtures";
@@ -154,12 +154,23 @@ async function press(label: string) {
   throw new Error(`no button labelled ${label}`);
 }
 
-async function enterCode(code: string) {
+/**
+ * Type a two-step code and send it with the keyboard's Go key. A real code is made only once the field is focused and empty: it is good
+ * for the rest of its 30 seconds, and the checks that make typing reliable take several. Wrong codes count against the server's limit of
+ * five failures in 15 minutes, so a refused real code is not retried here.
+ */
+async function enterCode(code: string | typeof freshCode) {
   await waitFor("Enter your 6-digit code", 30_000);
-  await clearField("Code");
-  await type("Code", code);
-  await hideKeyboard();
-  await tap("Verify");
+  await dismissSavePassword();
+  const field = await find("Code", (n) => n.find((x) => x.cls.includes("EditText")));
+  if (!field) throw new Error("no code field");
+  await tapAt(Math.round((field.x1 + field.x2) / 2), Math.round((field.y1 + field.y2) / 2));
+  await sleep(800);
+  adb(["shell", "input", "keyevent", "KEYCODE_MOVE_END", ...Array(8).fill("KEYCODE_DEL")]);
+  const value = typeof code === "string" ? code : await code();
+  adb(["shell", "input", "text", value]);
+  adb(["shell", "input", "keyevent", "KEYCODE_ENTER"]);
+  await sleep(1500);
 }
 
 /** Open a tab by its title; one that did not fit on the bar is opened from More. */
@@ -189,7 +200,7 @@ async function signedIn() {
   await toSignIn();
   await typePassword(credentials.email, credentials.password);
   await submitSignIn();
-  await enterCode(await freshCode());
+  await enterCode(freshCode);
   await waitFor(/^More(,|$)|^Account(,|$)/, 60_000);
 }
 
@@ -200,7 +211,9 @@ async function pick(field: string, typed: string, name: string) {
 
 describe(`screens on ${FORM}`, () => {
   beforeEach((ctx) => {
-    onTestFailed(async () => {
+    onTestFailed(async ({ task }) => {
+      // Said at once, so a walk that is stopped early still shows why its tests failed.
+      process.stderr.write(`FAILED ${task.name}: ${task.result?.errors?.[0]?.message ?? "?"}\n`);
       await shot(`FAILED-${ctx.task.name.slice(0, 40).replace(/[^a-z0-9]+/gi, "-")}`).catch(() => {});
     });
   });
@@ -302,7 +315,7 @@ describe(`screens on ${FORM}`, () => {
     await enterCode("000000");
     await sleep(2500);
     await shot("06b-mfa-error");
-    await enterCode(await freshCode());
+    await enterCode(freshCode);
     await waitFor(/^More(,|$)|^Account(,|$)/, 60_000);
   });
 

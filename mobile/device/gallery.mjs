@@ -1,6 +1,6 @@
 // Writes <dir>/index.html: one row per screen from the screenshot walk (device/screens.sh), with the phone, iPad portrait and iPad
 // landscape images side by side and the web page the screen mirrors. With a second folder (an earlier run), a screen whose image changed
-// also shows the earlier one, marked "before". Opens straight from disk.
+// also shows the earlier one, marked "before". A notes.html in <dir> is shown above the table. Opens straight from disk.
 //   node device/gallery.mjs <dir> [<before-dir>]
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { relative, resolve } from "node:path";
@@ -44,6 +44,9 @@ function cell(form, name) {
   return `<td>${changed ? img(old, "before") + img(now, "after") : img(now, "")}</td>`;
 }
 
+// Optional notes for the reader (what was not photographed and why), kept next to the images as notes.html.
+const notes = existsSync(resolve(dir, "notes.html")) ? readFileSync(resolve(dir, "notes.html"), "utf8") : "";
+
 const rows = names.map((n) => {
   const title = n.replace(/\.png$/, "");
   const web = WEB.find(([re]) => re.test(title))?.[1] ?? "";
@@ -60,6 +63,7 @@ th{width:220px}.web{font-weight:400;color:#696D74;margin-top:4px}td.none{color:#
 figure{display:inline-block;margin:0 8px 0 0}img{max-height:520px;max-width:420px;border:1px solid #C9C2B3}figcaption{color:#956134;font-weight:600}
 </style>
 <h1>Phone screens</h1><p>${names.length} screens. Generated ${new Date().toISOString()} by mobile/device/gallery.mjs. Tablet forms are the moto g86 with its display set to iPad sizes (wm size and density). A round gear at the top right, where it shows, is the development build's menu button, not the app: release builds do not have it.</p>
+${notes}
 <table><tr><th>Screen / web page</th>${FORMS.map((f) => `<th>${f}</th>`).join("")}</tr>${rows.join("\n")}</table>\n`,
 );
 stdout.write(`gallery: ${resolve(dir, "index.html")} (${names.length} screens)\n`);
