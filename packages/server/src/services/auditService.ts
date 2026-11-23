@@ -51,7 +51,10 @@ export type AuditAction =
   | "access_denied"
   // Account deletion: the user row was scrubbed and kept (userAnonymisationService).
   // Distinct from "soft_delete" because the personal data is gone, not hidden.
-  | "anonymised";
+  | "anonymised"
+  // A purchase order approved or rejected by an approver (who and when; a self-approval says so in metadata).
+  | "approve"
+  | "reject";
 
 export interface LogParams {
   entityType: string;

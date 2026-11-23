@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import type { Request, Response } from "express";
 import router from "./inventory.js";
+import { poPdfRateLimit } from "../middleware/rateLimiter.js";
 
 /**
  * Supplier read-gating regression tests.
@@ -207,6 +208,29 @@ describe("PO send-to-supplier gating", () => {
 
   it("passes a user with purchasing:submit", () => {
     expect(runGate(findGate("post", path), [...MANAGER, "purchasing:submit"]).passed).toBe(true);
+  });
+});
+
+describe("Wave 5 purchasing routes", () => {
+  const hasLayer = (method: Method, path: string) =>
+    (router as any).stack.some((l: any) => l.route?.path === path && l.route?.methods?.[method]);
+
+  it("no longer has the legacy line-receive route (it could never succeed; receiving sessions replaced it)", () => {
+    expect(hasLayer("post", "/purchase-orders/:id/lines/:lineId/receive")).toBe(false);
+  });
+
+  it.each([
+    ["get", "/purchase-orders/:id/pdf"],
+    ["post", "/purchase-orders/:id/send-email"],
+  ] as Array<[Method, string]>)("rate-limits the PDF render per user on %s %s", (method, path) => {
+    const layer = (router as any).stack.find((l: any) => l.route?.path === path && l.route?.methods?.[method]);
+    expect(layer.route.stack.map((s: any) => s.handle)).toContain(poPdfRateLimit);
+  });
+
+  it("gates the unresolved-discrepancy list on purchasing:credit", () => {
+    const gate = findGate("get", "/credit-notes/unresolved-discrepancies");
+    expect(runGate(gate, MANAGER).passed).toBe(false);
+    expect(runGate(gate, ["purchasing:credit"]).passed).toBe(true);
   });
 });
 
