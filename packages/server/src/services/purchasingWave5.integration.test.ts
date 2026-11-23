@@ -195,10 +195,12 @@ async function mkDiscrepancy(opts: {
   sessionStatus?: string;
   receivedQty?: string;
   unitCost?: string | null;
+  doorPrice?: string;
+  orderedQty?: string;
   extra?: Partial<typeof receivingDiscrepancy.$inferInsert>;
 }) {
   const locId = opts.locId ?? fx.locA;
-  const { poId, poLineId } = await mkPO({ ...org1(fx.adminA, "RECEIVED"), locId }, { unitCost: opts.unitCost });
+  const { poId, poLineId } = await mkPO({ ...org1(fx.adminA, "RECEIVED"), locId }, { unitCost: opts.unitCost, orderedQty: opts.orderedQty });
   const [session] = await db
     .insert(receivingSession)
     .values({ poId, storeLocationId: locId, receivedByUserId: fx.adminA, status: opts.sessionStatus ?? "COMPLETED" })
@@ -209,9 +211,10 @@ async function mkDiscrepancy(opts: {
       sessionId: session.sessionId,
       poLineId,
       ingredientId: fx.ingId,
-      orderedQty: "10",
+      orderedQty: opts.orderedQty ?? "10",
       orderedUnit: "kg",
       receivedQty: opts.receivedQty ?? "10",
+      actualUnitCost: opts.doorPrice,
       status: opts.type === "SUBSTITUTION" ? "SUBSTITUTED" : opts.type,
     })
     .returning();
@@ -345,6 +348,24 @@ describe.skipIf(!RUN)("Wave 5: orders, approvals and credit notes (real DB)", ()
       const [row] = await auditFor(poId);
       expect(row).toMatchObject({ action: "approve", actorUserId: fx.solo.userId });
       expect(row.metadata).toMatchObject({ selfApproval: true });
+    });
+
+    it("does not count an approver whose earliest organisation is another one", async () => {
+      const elsewhere = await mkUser("elsewhere");
+      const [{ id: homeOrgId }] = await db
+        .insert(organisation)
+        .values({ organisationName: `${fx.tag}-home`, joinKey: `${fx.tag}-h`.slice(0, 25), createdBy: elsewhere })
+        .returning({ id: organisation.organisationId });
+      fx.orgs.push(homeOrgId);
+      await db.insert(userOrganisation).values([
+        { userId: elsewhere, organisationId: homeOrgId, role: "member" },
+        { userId: elsewhere, organisationId: fx.solo.orgId, role: "member" },
+      ]);
+      await grantOpsAdmin(elsewhere);
+      const { poId } = await mkPO({ ...org1(fx.solo.userId, "PENDING_APPROVAL"), orgId: fx.solo.orgId, locId: fx.solo.locId, supplierId: fx.solo.supplierId, ingId: fx.solo.ingId });
+      const out = await call(handleApprovePO, fx.solo.userId, APPROVER, { params: { id: poId } });
+      expect(out.status).toBe(200);
+      expect(out.body.selfApproval).toBe(true);
     });
 
     it("lets two racing approvals succeed only once", async () => {
@@ -572,6 +593,23 @@ describe.skipIf(!RUN)("Wave 5: orders, approvals and credit notes (real DB)", ()
       expect(out.body.code).toBe("CREDIT_EXCEEDS_DISCREPANCY");
       const exact = await mkDiscrepancy(opts);
       expect((await call(handleCreateCreditNote, fx.adminA, CREDIT, body(exact, worth))).status).toBe(201);
+    });
+
+    it("caps a short on a re-priced line at the missing quantity times the higher charged price", async () => {
+      // 5 kg ordered at $2, door price $4, 3 arrived: the 2 missing are worth $8.
+      const opts = { type: "SHORT" as const, orderedQty: "5", unitCost: "2", doorPrice: "4", receivedQty: "3", extra: { shortageQty: "2" } };
+      const over = await call(handleCreateCreditNote, fx.adminA, CREDIT, body(await mkDiscrepancy(opts), 8.01));
+      expect([over.status, over.body.code]).toEqual([400, "CREDIT_EXCEEDS_DISCREPANCY"]);
+      const exact = await call(handleCreateCreditNote, fx.adminA, CREDIT, body(await mkDiscrepancy(opts), 8));
+      expect(exact.status).toBe(201);
+    });
+
+    it("caps a price rise flagged after a short at the extra per unit times what arrived", async () => {
+      // Same line, flagged the other way round: the receiving model keeps one discrepancy per line, so the cap is $2 extra x 3 arrived = $6.
+      const opts = { type: "PRICE_VARIANCE" as const, orderedQty: "5", unitCost: "2", doorPrice: "4", receivedQty: "3", extra: { poUnitCost: "2", actualUnitCost: "4", varianceAmount: "2" } };
+      const over = await call(handleCreateCreditNote, fx.adminA, CREDIT, body(await mkDiscrepancy(opts), 6.01));
+      expect([over.status, over.body.code]).toEqual([400, "CREDIT_EXCEEDS_DISCREPANCY"]);
+      expect((await call(handleCreateCreditNote, fx.adminA, CREDIT, body(await mkDiscrepancy(opts), 6))).status).toBe(201);
     });
 
     it("refuses a discrepancy that has no price to cap it", async () => {
