@@ -65,11 +65,12 @@ async function press(label: string | RegExp) {
 async function type(label: string, text: string) {
   for (let i = 0; i < 6; i++) {
     await dismissSavePassword();
+    // Find the field with the keyboard down: uiautomator also lists a field the keyboard covers, and a tap there lands on the keyboard.
+    await hideKeyboard();
     const field = await find(label, (n) => n.find((x) => x.cls.includes("EditText")));
-    if (!field) {
-      // Below the keyboard on a long form, or scrolled past: look further down first, then back up.
-      await hideKeyboard();
-      await scroll(i < 3);
+    if (!field || field.y2 > size()[1] * 0.55) {
+      // Low on the screen (the keyboard will cover it) or not found: scroll down first, then back up.
+      await scroll(!field || i < 3);
       continue;
     }
     await tapAt(Math.round((field.x1 + field.x2) / 2), Math.round((field.y1 + field.y2) / 2));
@@ -216,7 +217,7 @@ describe.skipIf(!process.env.STOREROOM_OUT)(`store room screens on ${FORM}`, () 
     await press("Cancel");
   });
 
-  it("stock: the dashboard, the critical list, an item, the lookup, a request and my requests", async () => {
+  it("stock: the dashboard, the critical list, an item, the lookup", async () => {
     await tab("Stock");
     await waitFor(/^Critical, reorder now/, 30_000);
     await shot("stock-dashboard");
@@ -230,6 +231,11 @@ describe.skipIf(!process.env.STOREROOM_OUT)(`store room screens on ${FORM}`, () 
     await type("Search the catalogue", "le");
     await hideKeyboard();
     await shot("stock-lookup");
+  });
+
+  it("stock: a new-item request and my requests", async () => {
+    await tab("Stock");
+    await press("Look up an item");
     await type("Search the catalogue", "yuzu");
     await press("Not in the catalogue? Ask for it");
     await waitFor("Ask for a new item");
