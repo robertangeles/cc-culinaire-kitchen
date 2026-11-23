@@ -138,9 +138,9 @@ export function createTransferStore({ api, kv, outbox, userId, userName, locatio
       }
     },
 
-    /** The lines of a transfer made on this phone that the server does not hold yet. */
+    /** The lines of a transfer made on this phone whose create the server has not accepted yet. */
     async localLines(transferId: string) {
-      const created = (await outbox.entriesOfTypes([TRANSFER_CREATE])).find((e) => (e.command as TransferCreateCommand).transferId === transferId);
+      const created = (await outbox.open([TRANSFER_CREATE])).find((e) => (e.command as TransferCreateCommand).transferId === transferId);
       return created ? (created.command as TransferCreateCommand).lines : null;
     },
 
