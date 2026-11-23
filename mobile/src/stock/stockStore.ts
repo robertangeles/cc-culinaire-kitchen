@@ -5,6 +5,7 @@
  */
 
 import type { LocationDashboard, LocationItem, StockAtLocation } from "@culinaire/shared/schemas/storeRoom";
+import type { CatalogueIngredient } from "@culinaire/shared/schemas/catalogue";
 import type { StorageArea } from "@culinaire/shared/schemas/stockMovement";
 import { ApiError } from "../api/client";
 import type { KvStore } from "../storage/kv";
@@ -30,6 +31,7 @@ export interface StockSnapshot {
   offline: boolean;
   error?: string;
   dashboard: LocationDashboard | null;
+  /** The items active here (with stock), then every other catalogue item, marked not active here and with no quantity. */
   items: LocationItem[];
   areas: StorageArea[];
   assignments: Record<string, string[]>;
@@ -40,6 +42,8 @@ export interface StockSnapshot {
 
 export interface StockStoreDeps {
   api: StockApi;
+  /** The organisation's catalogue as the picker keeps it (`src/ingredients/catalogue.ts`): the location's list holds only items active there. */
+  catalogue: { items(): Promise<CatalogueIngredient[]>; refresh(): Promise<boolean> };
   kv: KvStore;
   outbox: Outbox;
   userId: number;
@@ -59,7 +63,14 @@ const MAX_UNIT = 20;
 const MAX_QTY = 99999;
 const isOffline = (err: unknown) => err instanceof ApiError && (err.code === "network" || err.code === "timeout");
 
-export function createStockStore({ api, kv, outbox, userId, locationId, canSeeQty, kick, now, newId }: StockStoreDeps) {
+/** Catalogue items the location's list does not hold: not active here, quantity unknown here (absent, a dash). */
+function withCatalogue(items: LocationItem[], catalogue: CatalogueIngredient[]): LocationItem[] {
+  const here = new Set(items.map((i) => i.ingredientId));
+  const others = catalogue.filter((c) => !here.has(c.ingredientId)).map((c): LocationItem => ({ ingredientId: c.ingredientId, ingredientName: c.ingredientName, ingredientCategory: c.ingredientCategory, itemType: c.itemType ?? "", baseUnit: c.baseUnit, parLevel: null, activeInd: false, lastCountedDttm: null, supplierName: null }));
+  return [...items, ...others];
+}
+
+export function createStockStore({ api, catalogue, kv, outbox, userId, locationId, canSeeQty, kick, now, newId }: StockStoreDeps) {
   // Per account: what one person may see (quantities, value) is not another's.
   const savedKey = `stock.${userId}.${locationId}`;
   const requestsKey = `stock.requests.${userId}`;
@@ -100,14 +111,14 @@ export function createStockStore({ api, kv, outbox, userId, locationId, canSeeQt
     /** Download everything the stock screens show, or fall back to the last download when there is no signal. */
     async refresh(): Promise<void> {
       try {
-        const [dashboard, items, areas, assignments] = await Promise.all([api.dashboard(locationId), api.items(locationId), api.areas(locationId), api.assignments(locationId)]);
+        const [dashboard, items, areas, assignments] = await Promise.all([api.dashboard(locationId), api.items(locationId), api.areas(locationId), api.assignments(locationId), catalogue.refresh()]);
         const saved: Saved = { dashboard, items, areas, assignments, savedAt: now() };
         await kv.set(savedKey, JSON.stringify(saved));
-        set({ phase: "ready", offline: false, error: undefined, ...saved });
+        set({ phase: "ready", offline: false, error: undefined, ...saved, items: withCatalogue(items, await catalogue.items()) });
       } catch (err) {
         if (isOffline(err)) {
           const saved = JSON.parse((await kv.get(savedKey)) ?? "null") as Saved | null;
-          set({ phase: "ready", offline: true, error: undefined, ...(saved ?? {}) });
+          set({ phase: "ready", offline: true, error: undefined, ...(saved ?? {}), items: withCatalogue(saved?.items ?? [], await catalogue.items()) });
         } else {
           set({ phase: "error", error: err instanceof ApiError ? err.message : "Something went wrong. Try again." });
         }

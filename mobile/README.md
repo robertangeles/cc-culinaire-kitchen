@@ -331,7 +331,8 @@ The Stock tab is shown to `inventory:count` holders (the key on the dashboard, t
 
 - **Dashboard** (`GET /locations/:locId/dashboard`): the server's critical (at or under a quarter of par) and low (at or under three quarters) lists, each opening to its items and each item to its page;
   the stock value by category for `inventory:cost` holders only; the stock take in progress and the last count.
-- **Look up an item**: with nothing typed, the items used here, A to Z; typed, the whole catalogue (`GET /locations/:locId/ingredients` lists every item, active here or not). An item's page shows its
+- **Look up an item**: with nothing typed, the items used here, A to Z (`GET /locations/:locId/ingredients`, which lists only items active at the location); typed, the whole catalogue (the same
+  download the picker keeps, `catalogue.<user>`; an item not used here has no quantity here, a dash). An item's page shows its
   store-room stock here against par, the server's low or critical flag, the areas it is kept in (`/storage-areas/assignments`), its supplier and, for `inventory:manage` holders, its stock at every location
   (`GET /ingredients/:id/stock-levels`, online only).
 - **Ask for a new item** (`catalog.request`, phone-made `requestId`, `POST /catalog-requests`): name (required, up to 200), type and category (the web's lists, `CATEGORIES` and `ITEM_TYPES` from
