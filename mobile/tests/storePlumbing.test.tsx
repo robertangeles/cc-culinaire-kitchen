@@ -18,6 +18,9 @@ vi.mock("../src/runtime/appContext", () => ({ session: mocks.session, accountApi
 // The sign-in screen imports the native Apple button, which needs the native runtime.
 vi.mock("expo-apple-authentication", () => ({ AppleAuthenticationButton: () => null, AppleAuthenticationButtonType: {}, AppleAuthenticationButtonStyle: {} }));
 
+// The account screen lists what is waiting on the phone; these tests have nothing queued (and the real queue needs the native SQLite module).
+vi.mock("../src/runtime/appOutbox", () => ({ outbox: { open: async () => [], subscribe: () => () => {} }, runner: { kick: vi.fn() } }));
+
 import SignIn from "../app/sign-in";
 import Account from "../app/(app)/account";
 import Legal from "../app/legal";
