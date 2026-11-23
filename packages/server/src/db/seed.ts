@@ -136,6 +136,7 @@ async function seed() {
     { permissionKey: "inventory:manage", permissionDescription: "Open stock take sessions, set par levels, manage ingredient catalog" },
     { permissionKey: "inventory:transfer", permissionDescription: "Initiate and confirm inventory transfers between locations" },
     { permissionKey: "inventory:hq", permissionDescription: "HQ dashboard, approve/flag stock takes, cross-location oversight" },
+    { permissionKey: "inventory:cost", permissionDescription: "See stock value, unit costs and expected quantities (without it a counter counts blind)" },
     // Purchasing & Receiving permissions
     { permissionKey: "purchasing:draft", permissionDescription: "Create and edit draft purchase orders" },
     { permissionKey: "purchasing:submit", permissionDescription: "Submit POs for approval or send directly to supplier" },
@@ -191,7 +192,7 @@ async function seed() {
     Administrator: [
       "admin:dashboard", "admin:manage-users", "admin:manage-roles", "admin:manage-settings",
       "chat:access", "chat:unlimited", "org:create-organisation", "org:manage-organisation",
-      "inventory:count", "inventory:manage", "inventory:transfer", "inventory:hq",
+      "inventory:count", "inventory:manage", "inventory:transfer", "inventory:hq", "inventory:cost",
       "purchasing:draft", "purchasing:submit", "purchasing:approve", "purchasing:receive", "purchasing:credit",
       "sales:record", "sales:read",
       "menu:read", "menu:manage", "waste:read", "waste:log", "prep:manage", "prep:read",
@@ -204,7 +205,7 @@ async function seed() {
     // brain:read/brain:manage are a consent baseline: any user whose chat turns are
     // captured must be able to view and delete their own memories.
     Subscriber: [
-      "chat:access", "org:create-organisation", "inventory:count", "purchasing:draft", "purchasing:receive",
+      "chat:access", "org:create-organisation", "inventory:count", "inventory:cost", "purchasing:draft", "purchasing:receive",
       "sales:record", "sales:read",
       "menu:read", "menu:manage", "waste:read", "waste:log", "prep:manage", "prep:read",
       "brain:read", "brain:manage",
@@ -219,7 +220,7 @@ async function seed() {
     // of any org they merely belong to, not just ones they administer.
     "Paid Subscriber": [
       "chat:access", "chat:unlimited", "org:create-organisation",
-      "inventory:count", "inventory:manage", "inventory:transfer",
+      "inventory:count", "inventory:manage", "inventory:transfer", "inventory:cost",
       "purchasing:draft", "purchasing:submit", "purchasing:receive", "purchasing:credit",
       "sales:record", "sales:read",
       "menu:read", "menu:manage", "waste:read", "waste:log", "prep:manage", "prep:read",

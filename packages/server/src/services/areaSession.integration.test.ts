@@ -340,11 +340,12 @@ describe.skipIf(!RUN)("stock take by storage area (real DB)", () => {
       await expect(getAreaCountSheets(s.id, fx.orgId + 1_000_000)).rejects.toThrow(NotFoundError);
     });
 
-    it("a category count has no area sheets", async () => {
+    it("a category count gets one sheet per category (Wave 3; it was a 400 before)", async () => {
       await closeSession(fx.sessionIds.pop()!);
       const cat = await openSession(fx.locId, fx.orgId, fx.userA, ["dairy"]);
       fx.sessionIds.push(cat.sessionId);
-      await expect(getAreaCountSheets(cat.sessionId, fx.orgId)).rejects.toThrow(ValidationError);
+      const sheets = await getAreaCountSheets(cat.sessionId, fx.orgId);
+      expect(sheets.map((s) => s.categoryName)).toEqual(["dairy"]);
     });
   });
 });
