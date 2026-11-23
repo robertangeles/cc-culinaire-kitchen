@@ -5,11 +5,25 @@ Rules that hold for every screen: light paper, copper capitals labels, Fraunces 
 screens never call `fetch` (lint rule; only `src/api` does); a tab exists only for a permission the person holds, and the server
 checks every call anyway.
 
+## The look: check every screen against this
+
+Run the screenshot walk (`device/README.md`, "The screenshot walk") after changing a screen, open its gallery and go down this list for the phone and both iPad widths:
+
+- Light paper background (`bg`), never white; cards and grouped rows on the sunk paper `Surface` with hairline dividers.
+- Section and field labels in copper capitals (Inter semibold 12, letter-spaced, `accentText`); titles and sentences in Fraunces; buttons, chips, numbers and short facts in Inter. Nothing below 16 pt except those labels.
+- A tab's title says what it is ("Waste", "Count"), with the location under it in Inter; an empty tab shows its state in a card (copper label, one sentence), never a bare line.
+- Nothing clipped or overlapping: tab labels fully above the system navigation bar, long item names wrap, buttons fit their words.
+- At most five tab buttons; more modules go under More (`src/shell/tabs.ts`, `tabBar`), and Account is always reachable.
+- On a tablet the content sits in the centred 560 dp column (`Screen` or `Column`), with equal paper on both sides.
+- The primary action is the copper gradient button; quiet actions are copper text; destructive ones outlined in ember. Offline is the saffron banner, waiting rows say "Waiting to send".
+- With the keyboard up, the field being typed in stays visible; a form's button may need a scroll but is never unreachable.
+- No pricing, purchase or upgrade link anywhere (subscriptions are sold on the web).
+
 ## Layout
 
 | Folder | What lives there |
 |---|---|
-| `app/` | Screens (expo-router). A module is a route group `app/(app)/(module)/`, plus one entry in `src/shell/tabs.ts` naming the permission that opens it (none when the server asks only for a signed-in person). |
+| `app/` | Screens (expo-router). A module is a route group `app/(app)/(module)/`, plus one entry in `src/shell/tabs.ts` naming the permission that opens it (none when the server asks only for a signed-in person), in the order a line cook uses them (Prep, Waste, Usage, Count, Move). Past five tab buttons, the fifth is More (`app/(app)/more.tsx`), listing the rest and Account. A tab under More keeps its route and loses only its button: never `href: null`, which expo-router turns into a hidden tab that redirects to the first tab when opened. |
 | `src/api` | The one network client: auth, refresh, coded errors (`ApiError.code`, `serverCode`). |
 | `src/outbox` | The offline queue (below). |
 | `src/ingredients` | The shared ingredient picker's data (below); its component is `src/ui/IngredientPicker.tsx`. |
@@ -162,7 +176,7 @@ Differences from the web (`RecipeLabPage.tsx`, `RecipeForm.tsx`, `MyShelfPage.ts
 ## Tablet width
 
 Content sits in a centred column of at most 560 dp, `COLUMN_WIDTH` in `src/ui/Screen.tsx` (`Screen` does it for every screen built on it; the waste, prep, usage, move, receiving, chat and recipe screens lay themselves out and use `src/ui/Column.tsx`, which reuses the same number).
-Phones fill the width. The count screens are not wrapped yet. jsdom does no layout, so the screen tests check only the column's constraints (full width, 560 dp cap, centred): `tests/waste.test.tsx`; `tests/prep.test.tsx` at 390, 820 and 1180 wide; `tests/usage.test.tsx`, `tests/moves.test.tsx`, `tests/chat.test.tsx` and `tests/recipes.test.tsx` at window sizes of an iPad in portrait (820 x 1180) and landscape (1180 x 820) and a phone (390 x 844). `tests/receiving.test.tsx` at an iPad's width. The look is for the device walk. Usage and Move use `Column` and have no second column definition. They have no two-column layout: a tablet gets the same column in the middle of the paper.
+Phones fill the width. The Count areas list uses `Column`; the area count and needs-attention screens are not wrapped yet. jsdom does no layout, so the screen tests check only the column's constraints (full width, 560 dp cap, centred): `tests/waste.test.tsx`; `tests/prep.test.tsx` at 390, 820 and 1180 wide; `tests/usage.test.tsx`, `tests/moves.test.tsx`, `tests/chat.test.tsx` and `tests/recipes.test.tsx` at window sizes of an iPad in portrait (820 x 1180) and landscape (1180 x 820) and a phone (390 x 844). `tests/receiving.test.tsx` at an iPad's width. The look is for the device walk. Usage and Move use `Column` and have no second column definition. They have no two-column layout: a tablet gets the same column in the middle of the paper.
 
 ## Add Sign in with Apple (`app/link-apple.tsx`)
 
