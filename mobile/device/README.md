@@ -23,6 +23,17 @@ Rebuild and install the development build first (see "Rebuild and install" below
 
 `device/receiving.device.test.ts` is the receiving walk (sign in, the Receive tab, a perfect delivery, then one with a short line, a wrong price and a rejection, checked on the server). It makes its supplier, items and sent orders through the API as a manager first and changes no system setting: `check:device -- device/receiving`.
 
+`device/chatRecipes.device.test.ts` is the Ask and Recipes walk (a streamed answer seen growing on screen, Stop, a failed answer, My Recipes, the Recipe Lab's wait and Stop,
+a made recipe, a refinement, the public switch, then the same screens at iPad width by setting the phone's density so it is 820 dp wide, put back after). It needs no model key:
+start the API with the fake model preloaded, which answers chat slowly and recipe and refine calls with a fixed recipe, and makes no outside call:
+
+```bash
+NODE_OPTIONS="--import $PWD/mobile/device/fakeModel.mjs" OPENROUTER_API_KEY=fake pnpm --filter @culinaire/server exec tsx src/index.ts
+```
+
+The database also needs the `recipePrompt` and `recipeRefinementPrompt` rows (`prompt` table, `default_ind = false`): they are authored in the admin UI and not seeded.
+Then `check:device -- device/chatRecipes`, with Metro on 8088 and `adb reverse` for 8088 and 3009. It deletes only the recipes and conversations it made.
+
 ## Rebuild and install the development build (Android, no EAS, no accounts)
 
 The installed development build holds the native code (Expo modules, icons, app id `com.culinairekitchen.chef`); the screens
