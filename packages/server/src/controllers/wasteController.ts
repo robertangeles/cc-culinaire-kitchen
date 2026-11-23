@@ -6,7 +6,7 @@
  */
 
 import { z } from "zod";
-import type { Request, Response } from "express";
+import type { Request, Response, NextFunction } from "express";
 import {
   logWaste,
   getWasteLogs,
@@ -204,10 +204,10 @@ export async function handleListIngredientsForWaste(req: Request, res: Response)
 }
 
 /** POST /api/waste/reuse */
-export async function handleGenerateReuseSuggestions(req: Request, res: Response) {
+export async function handleGenerateReuseSuggestions(req: Request, res: Response, next: NextFunction) {
   const userId = req.user!.sub;
   if (!userId) {
-    res.status(401).json({ error: "Sign in to get reuse suggestions" });
+    res.status(401).json({ error: "Sign in to get reuse suggestions", code: "UNAUTHENTICATED" });
     return;
   }
 
@@ -215,8 +215,7 @@ export async function handleGenerateReuseSuggestions(req: Request, res: Response
     const suggestions = await generateReuseSuggestions(userId);
     res.json({ suggestions });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "Failed to generate suggestions";
-    res.status(500).json({ error: msg });
+    next(err);
   }
 }
 

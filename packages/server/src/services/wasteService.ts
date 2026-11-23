@@ -7,7 +7,6 @@
  */
 
 import crypto from "node:crypto";
-import { generateObject } from "ai";
 import { z } from "zod";
 import pino from "pino";
 import { db } from "../db/index.js";
@@ -19,7 +18,7 @@ import { insertOnce, settleDelete } from "../utils/retrySafe.js";
 import { dayBounds } from "../utils/dateRange.js";
 import { getUserOrgContext, type OrgContext } from "./orgContextService.js";
 import { getUserLocationContext } from "./locationContextService.js";
-import { getModel } from "./providerService.js";
+import { generateStructured } from "./aiService.js";
 import { recordOpsEvent } from "./brainCaptureService.js";
 
 const logger = pino({ name: "wasteService" });
@@ -510,39 +509,27 @@ export async function generateReuseSuggestions(
     )
     .join("\n");
 
-  const model = getModel();
+  const object = await generateStructured({
+    schema: ReuseSuggestionSchema,
+    system:
+      "You are a professional kitchen waste reduction consultant. " +
+      "Given a list of recently wasted ingredients, suggest practical ways to reuse or repurpose " +
+      "these ingredients before they become waste. Focus on real culinary techniques: stocks, " +
+      "sauces, staff meals, ferments, garnishes, etc. Be specific and actionable.",
+    prompt:
+      `Here are the top wasted ingredients from the last 7 days:\n\n${wasteDescription}\n\n` +
+      "For each ingredient, provide a practical reuse suggestion, a potential dish, and estimated savings.",
+  });
 
-  try {
-    const { object } = await generateObject({
-      model,
-      schema: ReuseSuggestionSchema,
-      system:
-        "You are a professional kitchen waste reduction consultant. " +
-        "Given a list of recently wasted ingredients, suggest practical ways to reuse or repurpose " +
-        "these ingredients before they become waste. Focus on real culinary techniques: stocks, " +
-        "sauces, staff meals, ferments, garnishes, etc. Be specific and actionable.",
-      prompt:
-        `Here are the top wasted ingredients from the last 7 days:\n\n${wasteDescription}\n\n` +
-        "For each ingredient, provide a practical reuse suggestion, a potential dish, and estimated savings.",
-    });
+  logger.info({ userId, suggestionCount: object.suggestions.length }, "AI reuse suggestions generated");
 
-    logger.info(
-      { userId, suggestionCount: object.suggestions.length },
-      "AI reuse suggestions generated",
-    );
-
-    return object.suggestions.map((s) => ({
-      id: crypto.randomUUID(),
-      ingredientName: s.ingredientName,
-      quantityWasted: Number(s.quantityWasted),
-      suggestion: s.suggestion,
-      type: s.type,
-    }));
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    logger.error({ userId, error: msg }, "Failed to generate reuse suggestions");
-    throw new Error("Failed to generate reuse suggestions. Please try again.");
-  }
+  return object.suggestions.map((s) => ({
+    id: crypto.randomUUID(),
+    ingredientName: s.ingredientName,
+    quantityWasted: Number(s.quantityWasted),
+    suggestion: s.suggestion,
+    type: s.type,
+  }));
 }
 
 // ---------------------------------------------------------------------------

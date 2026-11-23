@@ -26,6 +26,7 @@ import { IncompatibleUnitsError } from "@culinaire/shared";
 import { resolveToBase } from "./unitConversionService.js";
 import { recordOpsEvent } from "./brainCaptureService.js";
 import { getUserOrgContext } from "./orgContextService.js";
+import { AppError } from "../utils/appError.js";
 
 const logger = pino({ name: "menuIntelligence" });
 
@@ -687,9 +688,8 @@ export async function importCsvSalesData(userId: number, csvContent: string) {
 // AI Recommendations
 // ---------------------------------------------------------------------------
 
-import { generateObject } from "ai";
 import { z } from "zod";
-import { getModel } from "./providerService.js";
+import { generateStructured } from "./aiService.js";
 import { buildContextString } from "./userContextService.js";
 
 const RecommendationSchema = z.object({
@@ -706,7 +706,7 @@ export type MenuRecommendation = z.infer<typeof RecommendationSchema>;
 
 export async function getItemRecommendations(menuItemId: string, userId: number): Promise<MenuRecommendation> {
   const item = await getMenuItem(menuItemId, userId);
-  if (!item) throw new Error("Item not found");
+  if (!item) throw new AppError(404, "NOT_FOUND", "Menu item not found.");
 
   const ingredients = await getIngredients(menuItemId);
   const kitchenContext = await buildContextString(userId);
@@ -741,27 +741,7 @@ ${ingredientList || "No ingredients entered yet"}
 
 Provide recommendations appropriate for this item's classification. Be specific about dollar amounts, ingredient swaps, and projected impact. Write for a chef, not an accountant.`;
 
-  try {
-    const model = getModel();
-    const { object } = await generateObject({
-      model,
-      schema: RecommendationSchema,
-      prompt,
-    });
-    return object;
-  } catch (err) {
-    logger.error({ err, menuItemId }, "Failed to generate menu recommendations");
-    // Return a basic recommendation on failure
-    return {
-      summary: `This item is classified as a ${item.classification}. Add ingredients to get detailed AI recommendations.`,
-      actions: [{
-        type: item.classification === "dog" ? "remove" : "protect",
-        description: item.classification === "dog"
-          ? "Consider removing this item or generating a replacement recipe"
-          : "Review this item's performance and ingredients for optimisation opportunities",
-      }],
-    };
-  }
+  return generateStructured({ schema: RecommendationSchema, prompt });
 }
 
 // ---------------------------------------------------------------------------

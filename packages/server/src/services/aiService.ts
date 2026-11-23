@@ -15,7 +15,7 @@
  * directly, in line with the project's separation-of-concerns rules.
  */
 
-import { streamText, tool, type CoreMessage } from "ai";
+import { generateObject, streamText, tool, type CoreMessage } from "ai";
 import type { Response } from "express";
 import { z } from "zod";
 import { getModel, getWebSearchModel } from "./providerService.js";
@@ -26,8 +26,42 @@ import { buildContextString } from "./userContextService.js";
 import { recallMemoriesWithBudget } from "./brainRecallService.js";
 import { antoineComplianceTool } from "./antoineComplianceTools.js";
 import pino from "pino";
+import { AppError } from "../utils/appError.js";
 
 const logger = pino({ name: "aiService" });
+
+/** One structured answer (a menu recommendation, waste reuse ideas) is a single model call. */
+const STRUCTURED_TIMEOUT_MS = 45_000;
+
+/**
+ * One-shot structured model call, for the screens that ask the model a question and show the answer
+ * (menu recommendations, waste reuse suggestions). Other services must not call the model themselves.
+ *
+ * Fails loudly: a 504 AI_TIMEOUT when the time limit passes, otherwise a 503 AI_UNAVAILABLE that does not
+ * repeat the provider's message (it can carry configuration detail). Never returns a stand-in answer.
+ */
+export async function generateStructured<S extends z.ZodTypeAny>(opts: {
+  schema: S;
+  prompt: string;
+  system?: string;
+  timeoutMs?: number;
+}): Promise<z.infer<S>> {
+  const timeout = AbortSignal.timeout(opts.timeoutMs ?? STRUCTURED_TIMEOUT_MS);
+  try {
+    const { object } = await generateObject({
+      model: getModel(),
+      schema: opts.schema,
+      system: opts.system,
+      prompt: opts.prompt,
+      abortSignal: timeout,
+    });
+    return object;
+  } catch (err) {
+    logger.error({ err }, "generateStructured: model call failed");
+    if (timeout.aborted) throw new AppError(504, "AI_TIMEOUT", "That took too long. Please try again.");
+    throw new AppError(503, "AI_UNAVAILABLE", "The AI service could not complete that. Please try again.");
+  }
+}
 
 /**
  * Stream an AI-generated chat response to the client.
