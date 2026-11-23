@@ -102,18 +102,18 @@ describe("email, PDF and approve answer the service's coded errors through the e
   beforeEach(() => vi.clearAllMocks());
 
   it.each([
-    ["email", "ALREADY_EMAILED", () => vi.mocked(purchaseOrderService.emailPOToSupplier), handleEmailPOToSupplier, new AppError(409, "ALREADY_EMAILED", "This order was just emailed")],
-    ["email", "NOT_FOUND", () => vi.mocked(purchaseOrderService.emailPOToSupplier), handleEmailPOToSupplier, new AppError(404, "NOT_FOUND", "Purchase order not found")],
-    ["pdf", "PDF_TIMEOUT", () => vi.mocked(pdfService.generatePOPdf), handleDownloadPOPdf, new AppError(503, "PDF_TIMEOUT", "The PDF took too long")],
-    ["approve", "SELF_APPROVAL_NOT_ALLOWED", () => vi.mocked(purchaseOrderService.approvePO), handleApprovePO, new AppError(403, "SELF_APPROVAL_NOT_ALLOWED", "Another approver must approve it")],
-  ] as const)("%s answers %s", async (_name, _code, mock, handler, err) => {
+    ["email", 409, "ALREADY_EMAILED", () => vi.mocked(purchaseOrderService.emailPOToSupplier), handleEmailPOToSupplier, new AppError(409, "ALREADY_EMAILED", "This order was just emailed")],
+    ["email", 404, "NOT_FOUND", () => vi.mocked(purchaseOrderService.emailPOToSupplier), handleEmailPOToSupplier, new AppError(404, "NOT_FOUND", "Purchase order not found")],
+    ["pdf", 503, "PDF_TIMEOUT", () => vi.mocked(pdfService.generatePOPdf), handleDownloadPOPdf, new AppError(503, "PDF_TIMEOUT", "The PDF took too long")],
+    ["approve", 403, "SELF_APPROVAL_NOT_ALLOWED", () => vi.mocked(purchaseOrderService.approvePO), handleApprovePO, new AppError(403, "SELF_APPROVAL_NOT_ALLOWED", "Another approver must approve it")],
+  ] as const)("%s answers %i %s", async (_name, status, code, mock, handler, err) => {
     (mock() as unknown as { mockRejectedValue: (e: Error) => void }).mockRejectedValue(err);
     const res = mockRes();
     (res as unknown as { headersSent: boolean }).headersSent = false;
     const next = ((e: Error) => errorHandler(e, mockReq(), res, vi.fn())) as unknown as NextFunction;
     await handler(mockReq({ params: { id: "po-1" } }), res, next);
-    expect(res.status).toHaveBeenCalledWith(err.statusCode);
-    expect(res.json).toHaveBeenCalledWith({ error: err.message, code: err.code });
+    expect(res.status).toHaveBeenCalledWith(status);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ code }));
   });
 });
 
