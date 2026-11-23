@@ -97,9 +97,15 @@ const lowest = async (label: string) => {
 
 async function typePassword(email: string, password: string) {
   await waitFor("Welcome back to the line.", 60_000);
-  await type("Email", email);
-  await type("Password", password);
-  await hideKeyboard();
+  // Google's autofill sheet can come up over the password field and clear the email when it goes: check both are in before going on.
+  for (let i = 0; i < 3; i++) {
+    await type("Email", email);
+    await type("Password", password);
+    await hideKeyboard();
+    await dismissSavePassword();
+    if ((await fieldText("Email")) === email) return;
+  }
+  throw new Error("the email would not stay typed in");
 }
 
 async function submitSignIn() {
