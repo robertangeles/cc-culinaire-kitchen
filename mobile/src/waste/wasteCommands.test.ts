@@ -21,8 +21,9 @@ function setup(request: ReturnType<typeof vi.fn> = vi.fn(async () => ({}))) {
   const rows = new Map<string, OutboxEntry>();
   const store: OutboxStore = { list: async () => [...rows.values()].sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id)), put: async (e) => void rows.set(e.id, { ...e }), remove: async (ids) => ids.forEach((i) => rows.delete(i)) };
   let n = 0;
-  const outbox = createOutbox({ store, send: async () => {}, handlers: wasteHandlers({ request } as unknown as ApiClient), now: () => 1_000_000, newId: () => `e${++n}`, getUserId: () => 1 });
-  return { outbox, request, rows: () => [...rows.values()] };
+  const clock = { t: 1_000_000 };
+  const outbox = createOutbox({ store, send: async () => {}, handlers: wasteHandlers({ request } as unknown as ApiClient), now: () => clock.t, newId: () => `e${++n}`, getUserId: () => 1 });
+  return { outbox, request, clock, rows: () => [...rows.values()] };
 }
 
 describe("waste requests", () => {
@@ -118,6 +119,56 @@ describe("editing and deleting what has not been sent", () => {
     await outbox.enqueueCommand("waste.edit", { wasteLogId: log().wasteLogId, label: "x", changes: { quantity: 9 } });
     await outbox.drain();
     expect(request.mock.calls.map((c) => c[0])).toEqual(["POST", "PATCH"]);
+  });
+
+  describe("a log the server may already hold (its reply was lost)", () => {
+    const lostReply = async () => {
+      let fail = true;
+      const t = setup(vi.fn(async () => { if (fail) throw new ApiError("server", "boom", 500); return {}; }));
+      await t.outbox.enqueueCommand("waste.log", log());
+      await t.outbox.drain();
+      expect(t.rows()[0]).toMatchObject({ status: "SAVED_LOCAL", attempts: 1 });
+      fail = false;
+      t.clock.t += 60_000;
+      return t;
+    };
+
+    it("an edit goes after the log instead of changing it, so the server's old row is still corrected", async () => {
+      const { outbox, request, rows } = await lostReply();
+      await outbox.enqueueCommand("waste.edit", { wasteLogId: log().wasteLogId, label: "Chicken trim", changes: { quantity: 3 } });
+      expect(rows().map((r) => r.type)).toEqual(["waste.log", "waste.edit"]);
+      await outbox.drain();
+      expect(request.mock.calls.slice(1).map((c) => [c[0], (c[2] as { body: { quantity: number } }).body.quantity])).toEqual([["POST", 2.5], ["PATCH", 3]]);
+    });
+
+    it("a delete goes after the log instead of cancelling it, so the server's row is removed", async () => {
+      const { outbox, request, rows } = await lostReply();
+      expect(await outbox.enqueueCommand("waste.delete", { wasteLogId: log().wasteLogId, label: "Chicken trim" })).not.toBeNull();
+      expect(rows().map((r) => r.type)).toEqual(["waste.log", "waste.delete"]);
+      await outbox.drain();
+      expect(request.mock.calls.slice(1).map((c) => c[0])).toEqual(["POST", "DELETE"]);
+    });
+
+    it("after a crash mid-send, the log counts as tried too", async () => {
+      const { outbox, request, rows } = setup();
+      await outbox.enqueueCommand("waste.log", log());
+      rows()[0].status = "SENDING"; // as if the app was killed mid-send
+      await outbox.recover();
+      expect(rows()[0]).toMatchObject({ status: "SAVED_LOCAL", attempts: 1 });
+      await outbox.enqueueCommand("waste.edit", { wasteLogId: log().wasteLogId, label: "x", changes: { quantity: 3 } });
+      expect(rows().map((r) => r.type)).toEqual(["waste.log", "waste.edit"]);
+      await outbox.drain();
+      expect(request.mock.calls.map((c) => c[0])).toEqual(["POST", "PATCH"]);
+    });
+
+    it("a log the server refused for good can still be corrected in place", async () => {
+      const t = setup(vi.fn(async () => { throw new ApiError("conflict", "Wrong place", 409, undefined, "CONFLICT"); }));
+      await t.outbox.enqueueCommand("waste.log", log());
+      await t.outbox.drain();
+      expect(t.rows()[0].status).toBe("NEEDS_ATTENTION");
+      await t.outbox.enqueueCommand("waste.edit", { wasteLogId: log().wasteLogId, label: "x", changes: { quantity: 3 } });
+      expect(t.rows().map((r) => [r.type, r.status])).toEqual([["waste.log", "SAVED_LOCAL"]]);
+    });
   });
 
   it("describes each command for the sync list", () => {

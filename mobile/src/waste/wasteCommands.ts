@@ -53,8 +53,8 @@ const key = (c: { wasteLogId: string }) => `waste:${c.wasteLogId}`;
 type Open = { type: string; command: unknown };
 
 /** What saving `incoming` means when an unsent command about the same entry is waiting. */
-function fold(open: Open, incoming: WasteLogCommand | WasteEditCommand | WasteDeleteCommand, sending: boolean): Open | "cancel" | "append" {
-  if (sending) return "append"; // on the wire: the new command goes after it
+function fold(open: Open, incoming: WasteLogCommand | WasteEditCommand | WasteDeleteCommand, mayBeOnServer: boolean): Open | "cancel" | "append" {
+  if (mayBeOnServer) return "append"; // the server may already hold it (a replay answers with the old row): the change goes after it
   const isEdit = "changes" in incoming;
   const isDelete = !isEdit && !("quantity" in incoming);
   if (isDelete) return open.type === WASTE_LOG ? "cancel" : { type: WASTE_DELETE, command: incoming };

@@ -218,7 +218,7 @@ describe("recovery, accounts and submit gating", () => {
     await outbox.enqueue(line());
     await store.put({ ...rows()[0], status: "SENDING" });
     await outbox.recover();
-    expect(rows()[0].status).toBe("SAVED_LOCAL");
+    expect(rows()[0]).toMatchObject({ status: "SAVED_LOCAL", attempts: 1 });
   });
 
   it("only sends the signed-in account's counts and reports the rest", async () => {
@@ -234,6 +234,17 @@ describe("recovery, accounts and submit gating", () => {
     await outbox2.drain();
     expect(a.send).toHaveBeenCalledTimes(1);
     expect(await outbox2.otherAccountPending()).toBe(0);
+  });
+
+  it("the notice for another account's counts does not count its other commands", async () => {
+    const a = setup(async () => {}, 1);
+    const handlers = [{ type: "note.save", version: 1, key: () => "n", send: async () => {} }];
+    let n = 0;
+    const first = createOutbox({ store: a.store, send: a.send, handlers, now: () => a.clock.t, newId: () => `n${++n}`, getUserId: () => 1 });
+    await first.enqueueCommand("note.save", {});
+    await first.enqueue(line());
+    const second = createOutbox({ store: a.store, send: a.send, handlers, now: () => a.clock.t, newId: () => "x", getUserId: () => 2 });
+    expect(await second.otherAccountPending()).toBe(1);
   });
 
   it("lists one area's entries for the signed-in account only", async () => {

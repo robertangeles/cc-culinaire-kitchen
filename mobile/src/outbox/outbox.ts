@@ -113,9 +113,10 @@ export interface CommandHandler<C = unknown> {
   /**
    * What saving `incoming` means when an older unsent command for the same key is waiting (`open`). Return the command
    * the waiting entry becomes (its type may change), "cancel" to drop it (the server never heard of it), or "append"
-   * to queue after it. `sending` is true while the older one is on the wire: only "append" is safe then.
+   * to queue after it. `mayBeOnServer` is true once the older one has been tried and not definitely refused (on the wire, or a
+   * timeout, a 5xx, a lost reply, a crash): the server may already hold it, so only "append" is safe then.
    */
-  fold?(open: { type: string; command: unknown }, incoming: C, sending: boolean): { type: string; command: unknown } | "cancel" | "append";
+  fold?(open: { type: string; command: unknown }, incoming: C, mayBeOnServer: boolean): { type: string; command: unknown } | "cancel" | "append";
   /** A short line for the sync list; a handler without it is not listed there (counts have their own screen). */
   describe?(command: C): string;
 }
@@ -335,7 +336,8 @@ export function createOutbox({ store, send, handlers = [], now, newId, getUserId
       if (!existing) return append();
 
       const sending = existing.status === "SENDING";
-      const folded = handler.fold ? handler.fold({ type: existing.type, command: existing.command }, command, sending) : handler.latestOnly ? { type, command } : "append";
+      const mayBeOnServer = sending || (existing.status === "SAVED_LOCAL" && existing.attempts > 0) || existing.attention?.reason === "server_error";
+      const folded = handler.fold ? handler.fold({ type: existing.type, command: existing.command }, command, mayBeOnServer) : handler.latestOnly ? { type, command } : "append";
       if (folded === "append") return append();
       if (folded === "cancel") {
         await store.remove([existing.id]);
@@ -399,7 +401,7 @@ export function createOutbox({ store, send, handlers = [], now, newId, getUserId
     recover() {
       return locked(async () => {
         for (const e of (await store.list()).filter((x) => x.status === "SENDING" || (x.status === "NEEDS_ATTENTION" && x.attention?.reason === "unsupported"))) {
-          await put({ ...e, status: "SAVED_LOCAL", attention: undefined });
+          await put({ ...e, status: "SAVED_LOCAL", attention: undefined, attempts: e.status === "SENDING" ? e.attempts + 1 : e.attempts });
         }
       });
     },
@@ -452,10 +454,10 @@ export function createOutbox({ store, send, handlers = [], now, newId, getUserId
       return ((await store.list()) as OutboxEntry[]).filter((e) => e.userId === userId && e.type === COUNT_TYPE && e.status === "NEEDS_ATTENTION");
     },
 
-    /** Unsent counts that belong to a different account than the one signed in (shown as a notice). */
+    /** Unsent counts (not other commands) that belong to a different account than the one signed in (shown as a notice). */
     async otherAccountPending(): Promise<number> {
       const userId = getUserId();
-      return (await store.list()).filter((e) => e.userId !== userId && OPEN.includes(e.status)).length;
+      return (await store.list()).filter((e) => e.userId !== userId && e.type === COUNT_TYPE && OPEN.includes(e.status)).length;
     },
 
     subscribe(listener: () => void) {
