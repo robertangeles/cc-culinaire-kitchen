@@ -1447,3 +1447,9 @@ builds all tables with CHECKs enforcing. Stop it again when done.
 - **Problem**: Against a fresh local database every recipe generation answered the prose fallback in milliseconds: the recipe-lab prompts are not seeded (they live only in the `prompt` table, authored in the admin UI) and the file fallback `prompts/chatbot/recipePrompt.md` does not exist. Separately, a script that evaluated code on the phone through Metro's `/json/list` debugger URL was refused: the inspector proxy only accepts a WebSocket whose `Origin` is Metro itself, and Node's built-in `WebSocket` cannot send one.
 - **Fix**: Inserted `recipePrompt` and `recipeRefinementPrompt` rows with `default_ind = false` (the live row; `true` is the factory default) into the throwaway database, and connected with the `ws` package and `origin: "http://localhost:8088"`.
 - **Rule**: Before calling a run of a model-backed route "broken", check the server log for the prompt load. Talk to the phone's JS through Metro with an explicit Origin.
+
+## 2026-11-23 — A service that starts writing notifications breaks every test that deletes its organisation
+
+- **Problem**: Hooking `verifyDocument` and `rejectDocument` to push made them save an in-app notification. `compliance.integration.test.ts` deleted its organisation in `afterAll` without deleting notifications, and the `notification.organisation_id` foreign key refused: two suites failed with a teardown error, not an assertion.
+- **Fix**: The two teardown blocks delete the organisation's notifications first. The full real-database suite (`TENANT_IT=1`) found it; the unit run did not.
+- **Rule**: When a service gains a side-effect row (notification, audit, receipt), grep the tests that call it and fix their teardown in the same change, and run the whole real-database suite once before closing.
