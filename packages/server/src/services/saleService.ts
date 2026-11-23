@@ -500,9 +500,12 @@ export interface CsvPreview {
 const sellableByName = (orgId: number, userId: number) =>
   and(menuReadable(readScope(orgId, userId)), or(isNull(menuItem.linkedIngredientId), eq(menuItem.userId, userId)));
 
-/** Canonicalise a row into a stable idempotency key (D12/D13): content, not file position. */
-function rowKey(menuItemId: string, qtySold: number, soldAt: string | undefined, occurrence: number): string {
-  const canonical = [menuItemId.toLowerCase(), String(qtySold), soldAt ? new Date(soldAt).toISOString() : "", occurrence].join("|");
+/**
+ * Canonicalise a row into a stable idempotency key (D12/D13): content and the location it is sold at, not file
+ * position. Without a location it is the key imports made before Wave 7, when an item was sold at one location only.
+ */
+function rowKey(menuItemId: string, qtySold: number, soldAt: string | undefined, occurrence: number, locationId?: string): string {
+  const canonical = [menuItemId.toLowerCase(), String(qtySold), soldAt ? new Date(soldAt).toISOString() : "", occurrence, ...(locationId ? [locationId] : [])].join("|");
   return "csv:" + createHash("sha256").update(canonical).digest("hex").slice(0, 40);
 }
 
@@ -550,8 +553,11 @@ export async function previewSalesCsv(orgId: number, userId: number, csvContent:
 
 /**
  * Phase 2 (D12): commit matched rows. Each row is its OWN sale (per-row
- * atomic — a bad row never rolls back the others). A per-row content-derived
- * idempotency key makes re-importing the same file a no-op. A name that matches
+ * atomic — a bad row never rolls back the others). A per-row idempotency key
+ * derived from the content and the sale location makes re-importing the same file
+ * at the same location a no-op, and the same line at another location its own
+ * sale. A row imported before the location was part of the key is recognised at
+ * the location it was recorded at. A name that matches
  * more than one item fails its row, as in the preview. The stored classification
  * is refreshed once, after the last row.
  */
@@ -568,7 +574,7 @@ export async function commitSalesCsv(orgId: number, userId: number, lines: CsvSa
     try {
       // Resolve name → menu item id again at commit (defends against a stale preview).
       const [mi, another] = await db
-        .select({ id: menuItem.menuItemId })
+        .select({ id: menuItem.menuItemId, storeLocationId: menuItem.storeLocationId })
         .from(menuItem)
         .where(and(sellableByName(orgId, userId), sql`lower(${menuItem.name}) = ${line.name.toLowerCase()}`))
         .limit(2);
@@ -576,13 +582,22 @@ export async function commitSalesCsv(orgId: number, userId: number, lines: CsvSa
         failed.push({ rowIndex: line.rowIndex, reason: mi ? "ambiguous name (multiple menu items)" : "no matching menu item" });
         continue;
       }
-      const key = rowKey(mi.id, line.qtySold, line.soldAt, n);
+      const locationId = await resolveSaleLocation(orgId, userId, undefined, mi.storeLocationId, actor);
+      const [legacy] = await db
+        .select({ saleId: sale.saleId, voidedAt: sale.voidedAt })
+        .from(sale)
+        .where(and(eq(sale.organisationId, orgId), eq(sale.idempotencyKey, rowKey(mi.id, line.qtySold, line.soldAt, n)), eq(sale.storeLocationId, locationId)));
+      if (legacy) {
+        alreadyExists.push({ rowIndex: line.rowIndex, saleId: legacy.saleId, voided: legacy.voidedAt != null });
+        continue;
+      }
       const res = await writeSale(orgId, userId, {
         menuItemId: mi.id,
         qtySold: line.qtySold,
         source: "CSV",
         soldAt: line.soldAt ? new Date(line.soldAt) : undefined,
-        idempotencyKey: key,
+        locationId,
+        idempotencyKey: rowKey(mi.id, line.qtySold, line.soldAt, n, locationId),
         actor,
       });
       if (res.alreadyExists) alreadyExists.push({ rowIndex: line.rowIndex, saleId: res.saleId, voided: !!res.voided });
