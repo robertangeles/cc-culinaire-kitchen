@@ -137,7 +137,8 @@ export function linkAppleMessage(err: unknown): LinkFailure {
     if (err.hasCode("APPLE_ALREADY_LINKED")) return { text: "That Apple ID is already used by another account, or this account already has a different one." };
     if (err.hasCode("APPLE_TOKEN_INVALID")) return { text: "Apple sign-in didn't work. Try again." };
     if (err.hasCode("APPLE_NOT_CONFIGURED") || err.hasCode("APPLE_UNAVAILABLE")) return { text: "Sign in with Apple isn't available right now. Try again later." };
-    if (err.hasCode("RATE_LIMITED")) return { text: "Too many tries. Wait a few minutes and try again." };
+    // The per-account limiter (5 wrong proofs, then 15 minutes) answers 429 with no code, so match the status too.
+    if (err.hasCode("RATE_LIMITED") || err.code === "rate_limited") return { text: "Too many tries. Wait a few minutes and try again." };
   }
   return { text: "Couldn't add Sign in with Apple. Try again." };
 }

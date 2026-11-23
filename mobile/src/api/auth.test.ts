@@ -167,6 +167,11 @@ describe("linkAppleMessage", () => {
     expect(linkAppleMessage(refused("RECENT_SIGN_IN_REQUIRED"))).toMatchObject({ needsFreshSignIn: true });
   });
 
+  it("explains the per-account 429, which the server sends with no code", () => {
+    const locked = new ApiError("rate_limited", "Too many failed attempts — please wait 15 minutes before trying again.", 429);
+    expect(linkAppleMessage(locked).text).toBe("Too many tries. Wait a few minutes and try again.");
+  });
+
   it("does not show a stranger's words for an error it cannot name", () => {
     expect(linkAppleMessage(new ApiError("network")).text).toBe("Couldn't add Sign in with Apple. Try again.");
     expect(linkAppleMessage(new Error("boom")).text).toBe("Couldn't add Sign in with Apple. Try again.");
