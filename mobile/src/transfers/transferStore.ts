@@ -47,8 +47,7 @@ export interface TransferStoreDeps {
   newId: () => string;
 }
 
-/** The server's limit per line (`LineSchema`): a quantity it refuses is caught before it is queued. Stock on hand is never a reason to refuse. */
-const MAX_QTY = 99999;
+/** Stock on hand is never a reason to refuse: the server checks none (`LineSchema`: a finite amount above 0). */
 const isOffline = (err: unknown) => err instanceof ApiError && (err.code === "network" || err.code === "timeout");
 
 export function createTransferStore({ api, kv, outbox, userId, userName, locationId, locationName, kick, now, newId }: TransferStoreDeps) {
@@ -157,7 +156,6 @@ export function createTransferStore({ api, kv, outbox, userId, userName, locatio
         seen.add(l.ingredientId);
         const qty = Number(l.quantity.trim().replace(",", "."));
         if (l.quantity.trim() === "" || !Number.isFinite(qty) || qty <= 0) throw new Error(`Enter how much ${l.ingredientName} is going.`);
-        if (qty > MAX_QTY) throw new Error(`That's more ${l.ingredientName} than the app can record in one transfer.`);
         return { ingredientId: l.ingredientId, ingredientName: l.ingredientName, sentQty: qty, sentUnit: l.unit };
       });
       const command: TransferCreateCommand = { transferId: newId(), fromLocationId: locationId, fromLocationName: locationName, toLocationId: form.toLocationId, toLocationName: form.toLocationName, lines, notes: form.notes.trim() || null, createdAt: new Date(now()).toISOString() };

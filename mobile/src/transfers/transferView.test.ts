@@ -68,9 +68,9 @@ describe("checking a receipt", () => {
     expect(checkReceipt(lines, { l1: "2.0005" })).toMatchObject({ ok: true, differences: [] });
   });
 
-  it("refuses a quantity the server would refuse: below 0, not a number, too large", () => {
+  it("refuses a quantity the server would refuse: below 0 or not a number", () => {
     expect(checkReceipt(lines, { l1: "-1" })).toEqual({ ok: false, lineId: "l1", message: "Enter what arrived: 0 or more." });
     expect(checkReceipt(lines, { l2: "abc" })).toEqual({ ok: false, lineId: "l2", message: "Enter what arrived: 0 or more." });
-    expect(checkReceipt(lines, { l1: "100000" })).toEqual({ ok: false, lineId: "l1", message: "That's more than the app can record for one item." });
+    expect(checkReceipt(lines, { l1: "100000" })).toMatchObject({ ok: true }); // no upper limit on the server
   });
 });

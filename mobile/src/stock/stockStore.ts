@@ -1,11 +1,12 @@
 /**
  * The stock screens' data: the location's dashboard, its item list and where items are kept, kept on the phone with the time of the
- * download so a no-signal start shows the last known figures and their age. Catalogue requests are queued commands; the person's own
- * requests are remembered on the phone (the server has no "my requests" route), with whether each was sent.
+ * download so a no-signal start shows the last known figures and their age. Catalogue requests are queued commands; My requests is the
+ * server's list (`/catalog-requests/mine`, with HQ's outcome) with the requests still on the phone laid over it.
  */
 
 import type { LocationDashboard, LocationItem, StockAtLocation } from "@culinaire/shared/schemas/storeRoom";
 import type { CatalogueIngredient } from "@culinaire/shared/schemas/catalogue";
+import type { CatalogRequest } from "@culinaire/shared/schemas/catalogRequest";
 import type { StorageArea } from "@culinaire/shared/schemas/stockMovement";
 import { ApiError } from "../api/client";
 import type { KvStore } from "../storage/kv";
@@ -13,8 +14,9 @@ import type { Outbox } from "../outbox/outbox";
 import type { StockApi } from "./stockApi";
 import { CATALOG_REQUEST, CATALOG_REQUEST_TYPES, type CatalogRequestCommand } from "./catalogRequestCommands";
 
-export type RequestState = "waiting" | "attention" | "sent" | "discarded";
-export type RequestRow = CatalogRequestCommand & { state: RequestState; entryId?: string; attentionMessage?: string };
+/** On the phone: waiting, attention, discarded. On the server: sent (HQ has not decided, or a status this version does not know), approved, rejected. */
+export type RequestState = "waiting" | "attention" | "sent" | "discarded" | "approved" | "rejected";
+export type RequestRow = CatalogRequestCommand & { state: RequestState; entryId?: string; attentionMessage?: string; reviewNotes?: string | null };
 
 export interface RequestForm {
   itemName: string;
@@ -48,7 +50,7 @@ export interface StockStoreDeps {
   outbox: Outbox;
   userId: number;
   locationId: string;
-  /** Holds `inventory:cost`: may see quantities. A route that does not hide them is hidden here. */
+  /** Holds `inventory:cost`: may see quantities. Hidden here too for a server from before `stock-levels` hid them. */
   canSeeQty: boolean;
   kick: () => void;
   now: () => number;
@@ -60,7 +62,6 @@ type Saved = Pick<StockSnapshot, "dashboard" | "items" | "areas" | "assignments"
 /** The server's limits (`RequestItemSchema`), checked so a request it would refuse is not queued. */
 const MAX_NAME = 200;
 const MAX_UNIT = 20;
-const MAX_QTY = 99999;
 const isOffline = (err: unknown) => err instanceof ApiError && (err.code === "network" || err.code === "timeout");
 
 /** Catalogue items the location's list does not hold: not active here, quantity unknown here (absent, a dash). */
@@ -84,23 +85,28 @@ export function createStockStore({ api, catalogue, kv, outbox, userId, locationI
   /** The person's requests, newest first; `discarded` marks one they threw away (the queue no longer lists it). */
   type RequestRecord = CatalogRequestCommand & { discarded?: true };
   const records = async () => JSON.parse((await kv.get(requestsKey)) ?? "[]") as RequestRecord[];
+  const serverRequestsKey = `stock.requests.server.${userId}`;
+  let serverRequests: CatalogRequest[] = [];
 
   async function rebuildRequests() {
     const entries = await outbox.entriesOfTypes(CATALOG_REQUEST_TYPES);
     const byId = new Map(entries.map((e) => [(e.command as CatalogRequestCommand).requestId, e]));
-    const requests = (await records()).map(({ discarded, ...r }): RequestRow => {
+    const onServer = new Set(serverRequests.map((r) => r.requestId));
+    // What only this phone knows: not sent yet, refused, discarded, or sent since the server's list was read.
+    const local = (await records()).filter((r) => !onServer.has(r.requestId)).map(({ discarded, ...r }): RequestRow => {
       const e = byId.get(r.requestId);
       if (discarded) return { ...r, state: "discarded" };
       if (!e || e.status === "ACCEPTED") return { ...r, state: "sent" };
       if (e.status === "NEEDS_ATTENTION") return { ...r, state: "attention", entryId: e.id, attentionMessage: e.attention?.message };
       return { ...r, state: "waiting", entryId: e.id };
     });
-    set({ requests });
+    const server = serverRequests.map((r): RequestRow => ({ requestId: r.requestId, storeLocationId: r.storeLocationId, itemName: r.itemName, itemType: r.itemType || null, category: r.category, baseUnit: r.baseUnit, countedQty: r.countedQty, requestedAt: r.createdDttm, state: r.status === "APPROVED" ? "approved" : r.status === "REJECTED" ? "rejected" : "sent", reviewNotes: r.reviewNotes }));
+    set({ requests: [...local, ...server].sort((a, b) => (a.requestedAt < b.requestedAt ? 1 : a.requestedAt > b.requestedAt ? -1 : 0)) });
   }
 
   const unsubscribe = outbox.subscribe(() => void rebuildRequests());
 
-  return {
+  const store = {
     getSnapshot: () => snapshot,
     subscribe(l: () => void) {
       listeners.add(l);
@@ -123,6 +129,17 @@ export function createStockStore({ api, catalogue, kv, outbox, userId, locationI
           set({ phase: "error", error: err instanceof ApiError ? err.message : "Something went wrong. Try again." });
         }
       }
+      await store.refreshRequests();
+    },
+
+    /** The server's list of this person's requests, or the last one read when it cannot be reached. */
+    async refreshRequests(): Promise<void> {
+      try {
+        serverRequests = await api.myRequests();
+        await kv.set(serverRequestsKey, JSON.stringify(serverRequests));
+      } catch {
+        serverRequests = JSON.parse((await kv.get(serverRequestsKey)) ?? "[]") as CatalogRequest[];
+      }
       await rebuildRequests();
     },
 
@@ -141,7 +158,7 @@ export function createStockStore({ api, catalogue, kv, outbox, userId, locationI
       if (baseUnit && baseUnit.length > MAX_UNIT) throw new Error("The unit is too long.");
       const typed = form.countedQty.trim();
       const countedQty = typed === "" ? null : Number(typed.replace(",", "."));
-      if (countedQty !== null && (!Number.isFinite(countedQty) || countedQty < 0 || countedQty > MAX_QTY)) throw new Error("Enter how many you have: 0 or more.");
+      if (countedQty !== null && (!Number.isFinite(countedQty) || countedQty < 0)) throw new Error("Enter how many you have: 0 or more.");
       const command: CatalogRequestCommand = { requestId: newId(), storeLocationId: locationId, itemName, itemType: form.itemType, category: form.category, baseUnit, countedQty, requestedAt: new Date(now()).toISOString() };
       await kv.set(requestsKey, JSON.stringify([command, ...(await records())]));
       await outbox.enqueueCommand(CATALOG_REQUEST, command);
@@ -161,6 +178,7 @@ export function createStockStore({ api, catalogue, kv, outbox, userId, locationI
       await rebuildRequests();
     },
   };
+  return store;
 }
 
 export type StockStore = ReturnType<typeof createStockStore>;

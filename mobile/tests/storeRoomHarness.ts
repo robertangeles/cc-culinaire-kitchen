@@ -1,6 +1,7 @@
 import { vi } from "vitest";
 import type { TransferDetail, TransferSummary } from "@culinaire/shared/schemas/transfer";
 import type { LocationDashboard, LocationItem, StockAtLocation } from "@culinaire/shared/schemas/storeRoom";
+import type { CatalogRequest } from "@culinaire/shared/schemas/catalogRequest";
 import { ApiError, type ApiClient } from "../src/api/client";
 import { createOutbox, type Outbox, type OutboxEntry, type OutboxStore } from "../src/outbox/outbox";
 import { createRecents } from "../src/ingredients/recents";
@@ -46,6 +47,8 @@ interface Over {
   canSeeQty?: boolean;
   send?: ReturnType<typeof vi.fn>;
   readsFail?: ApiError;
+  /** What `GET /catalog-requests/mine` answers. */
+  mine?: CatalogRequest[];
   /** The organisation's catalogue (the location's list holds only items active there). */
   catalogue?: { ingredientId: string; ingredientName: string; baseUnit: string; ingredientCategory: string; itemType?: string }[];
 }
@@ -68,7 +71,7 @@ export async function makeStoreRoom(over: Over = {}) {
 
   const transferApi = { list: read(() => over.transfers ?? []), pending: read(() => []), detail: vi.fn(async (id: string) => { if (over.readsFail) throw over.readsFail; const d = over.details?.[id]; if (!d) throw new ApiError("not_found", "Transfer not found", 404, undefined, "NOT_FOUND"); return d; }), items: read(() => visible(items)) } as unknown as TransferApi;
   const transfers = createTransferStore({ api: transferApi, kv, outbox, userId: 1, userName: "Cook", locationId: "L1", locationName: "Main Kitchen", kick, now: () => NOW, newId });
-  const stockApi = { dashboard: read(() => over.dashboard ?? dashboard()), items: read(() => visible(items)), areas: read(() => [{ storageAreaId: "a1", areaName: "Back Bar" }, { storageAreaId: "a2", areaName: "Cool Room" }]), assignments: read(() => ({ i1: ["a1"] })), elsewhere: vi.fn(async () => over.elsewhere ?? []) } as unknown as StockApi;
+  const stockApi = { dashboard: read(() => over.dashboard ?? dashboard()), items: read(() => visible(items)), areas: read(() => [{ storageAreaId: "a1", areaName: "Back Bar" }, { storageAreaId: "a2", areaName: "Cool Room" }]), assignments: read(() => ({ i1: ["a1"] })), elsewhere: vi.fn(async () => over.elsewhere ?? []), myRequests: vi.fn(async () => over.mine ?? []) } as unknown as StockApi;
   const stock = createStockStore({ api: stockApi, catalogue: { items: async () => over.catalogue ?? [], refresh: async () => true }, kv, outbox, userId: 1, locationId: "L1", canSeeQty: over.canSeeQty ?? true, kick, now: () => NOW, newId });
   await Promise.all([transfers.refresh(), stock.refresh()]);
   // "You have" loads in the background: let it land before a screen reads it.

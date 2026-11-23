@@ -83,7 +83,6 @@ describe("making a transfer", () => {
     await expect(s.create(form({ lines: [{ ingredientId: "", ingredientName: "Gin", unit: "L", quantity: "1" }] }))).rejects.toThrow("Pick Gin from the list.");
     await expect(s.create(form({ lines: [{ ingredientId: "i1", ingredientName: "Gin", unit: "", quantity: "1" }] }))).rejects.toThrow("Pick Gin from the list again: its unit is not known.");
     await expect(s.create(form({ lines: [{ ingredientId: "i1", ingredientName: "Gin", unit: "L", quantity: "0" }] }))).rejects.toThrow("Enter how much Gin is going.");
-    await expect(s.create(form({ lines: [{ ingredientId: "i1", ingredientName: "Gin", unit: "L", quantity: "100000" }] }))).rejects.toThrow("That's more Gin than the app can record in one transfer.");
     const twice = { ingredientId: "i1", ingredientName: "Gin", unit: "L", quantity: "1" };
     await expect(s.create(form({ lines: [twice, twice] }))).rejects.toThrow("Gin is on the transfer twice.");
     // Ten litres of gin with five on the books: allowed, as on the server (stock goes negative until the next count).

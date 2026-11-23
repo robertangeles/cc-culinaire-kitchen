@@ -65,8 +65,7 @@ export const dayAndTime = (iso: string) => new Date(iso).toLocaleString([], { da
 const WORDS: Record<string, string> = { INITIATED: "Not sent yet", SENT: "On its way", RECEIVED: "Received", DISCREPANCY: "Received with differences", CANCELLED: "Cancelled" };
 export const statusWords = (status: string) => WORDS[status] ?? status;
 
-/** The server's own limits: a quantity it refuses is caught here, and so is its tolerance for "the same as sent". */
-const MAX_QTY = 99999;
+/** The server's tolerance for "the same as sent" (`transferService.confirmReceived`). */
 const TOLERANCE = 0.001;
 
 export type ReceiptCheck =
@@ -81,7 +80,6 @@ export function checkReceipt(lines: { lineId: string; sentQty: number }[], typed
     const text = (typed[line.lineId] ?? "").trim();
     const qty = text === "" ? line.sentQty : Number(text.replace(",", "."));
     if (!Number.isFinite(qty) || qty < 0) return { ok: false, lineId: line.lineId, message: "Enter what arrived: 0 or more." };
-    if (qty > MAX_QTY) return { ok: false, lineId: line.lineId, message: "That's more than the app can record for one item." };
     receivedLines.push({ lineId: line.lineId, receivedQty: qty });
     if (Math.abs(qty - line.sentQty) > TOLERANCE) differences.push({ lineId: line.lineId, difference: Math.round((qty - line.sentQty) * 1000) / 1000 });
   }

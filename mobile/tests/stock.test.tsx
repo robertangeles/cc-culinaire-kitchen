@@ -166,6 +166,13 @@ describe("catalogue requests", () => {
     expect(await screen.findByText("Give the item a name.")).toBeTruthy();
   });
 
+  it("shows HQ's decision and its reason for a request it did not add", async () => {
+    await makeStoreRoom({ mine: [{ requestId: "r2", storeLocationId: "L1", itemName: "Yuzu", itemType: "", category: null, baseUnit: null, countedQty: null, status: "REJECTED", reviewNotes: "Use the citrus juice we stock", createdIngredientId: null, createdDttm: new Date(NOW).toISOString(), updatedDttm: "" }] });
+    render(<Requests />);
+    await waitFor(() => expect(screen.getByLabelText("Yuzu, Not added")).toBeTruthy());
+    expect(screen.getByText("HQ: Use the citrus juice we stock")).toBeTruthy();
+  });
+
   it("says when there are no requests yet", async () => {
     await makeStoreRoom();
     render(<Requests />);
