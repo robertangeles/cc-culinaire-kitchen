@@ -46,6 +46,8 @@ async function launch() {
 }
 
 const tab = (title: string) => tap(new RegExp(`^${title}(,|$)`), 30_000);
+/** One phrase from each line `fakeModel.mjs` streams, in order. */
+const ANSWER_LINES = ["Fake kitchen answer", "Sear the fish skin", "press it flat", "leave it alone", "Pat the skin dry", "Salt just before", "Rest for one minute", "one piece at a time"];
 const scrollDown = () => {
   const [w, h] = screenSize();
   return swipe(Math.round(w / 2), Math.round(h * 0.75), Math.round(w / 2), Math.round(h * 0.3));
@@ -106,14 +108,15 @@ describe("chat and recipes on a device", () => {
     let shot = false;
     for (const until = Date.now() + 90_000; Date.now() < until; ) {
       const onScreen = await texts();
-      samples.push(Math.max(0, ...onScreen.filter((t) => t.includes("Fake kitchen answer")).map((t) => t.length)));
+      // The answer is several text views (one per paragraph or list item): count the fake model's lines that are on screen.
+      samples.push(ANSWER_LINES.filter((line) => onScreen.some((t) => t.includes(line))).length);
       if (!shot && samples[samples.length - 1] > 0) {
         await screenshot("c04-streaming");
         shot = true;
       }
       if (onScreen.includes("Send")) break;
     }
-    console.log(`answer length on screen while streaming: ${samples.join(", ")}`);
+    console.log(`answer lines on screen while streaming: ${samples.join(", ")}`);
     const steps = new Set(samples.filter((n) => n > 0));
     expect(steps.size, `the answer grew on screen in several steps: ${samples.join(", ")}`).toBeGreaterThanOrEqual(3);
     await screenshot("c05-answered");
@@ -200,6 +203,8 @@ describe("chat and recipes on a device", () => {
     const [w] = screenSize();
     adb(["shell", "wm", "density", String(Math.round((w / 820) * 160))]);
     await sleep(3000);
+    await tab("Recipes");
+    await waitFor("Create a recipe", 20_000);
     await screenshot("t01-my-recipes-ipad");
     await tap(/^Cider-braised chicken thighs/);
     await waitFor(/^who can see it$/i, 20_000);

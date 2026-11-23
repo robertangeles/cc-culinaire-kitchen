@@ -85,7 +85,7 @@ export default function Conversation() {
             <Text style={{ fontFamily: fontFamily.uiStrong, color: c.accentText }}>‹ Conversations</Text>
           </Pressable>
         </Column>
-        <ScrollView ref={scroll} contentContainerStyle={{ padding: space.xl, paddingTop: space.sm }} onContentSizeChange={() => streaming && scroll.current?.scrollToEnd({ animated: true })} keyboardShouldPersistTaps="handled">
+        <ScrollView ref={scroll} contentContainerStyle={{ padding: space.xl, paddingTop: space.sm }} onContentSizeChange={() => scroll.current?.scrollToEnd({ animated: true })} keyboardShouldPersistTaps="handled">
           <Column style={{ gap: space.lg }}>
             {snap.title ? <Text variant="title" style={{ fontSize: 26 }}>{snap.title}</Text> : null}
             {snap.phase === "loading" ? <Text variant="muted">Loading the conversation…</Text> : null}
