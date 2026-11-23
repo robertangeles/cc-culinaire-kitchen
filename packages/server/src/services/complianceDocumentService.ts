@@ -28,6 +28,7 @@ import type {
 } from "./compliancePdfService.js";
 import { NUDGE_ELIGIBLE_AFTER_HOURS } from "@culinaire/shared";
 import { ComplianceError } from "./complianceErrors.js";
+import { notifyAndPush } from "./pushDispatcher.js";
 
 /** Name the daily expiry-scan job writes to via `runIfClaimed` — read here as the admin heartbeat. */
 const EXPIRY_SCAN_JOB = "compliance_expiry_scan";
@@ -452,6 +453,27 @@ export async function deleteDocument(
   });
 }
 
+/**
+ * Tells the person a document belongs to that it was reviewed. A document with no person (a venue's own) has no one to tell,
+ * and a verifier reviewing their own document does not need telling. The details go in the in-app notice; the push is generic.
+ */
+async function notifyDocumentOwner(
+  doc: { complianceDocumentId: string; organisationId: number; userId: number | null; documentType: string },
+  verifierUserId: number,
+  type: "DOCUMENT_VERIFIED" | "DOCUMENT_REJECTED",
+  body: string,
+): Promise<void> {
+  if (doc.userId === null || doc.userId === verifierUserId) return;
+  await notifyAndPush({
+    organisationId: doc.organisationId,
+    recipientUserId: doc.userId,
+    type,
+    payload: { documentId: doc.complianceDocumentId, documentType: doc.documentType, body },
+    relatedEntityType: "compliance_document",
+    relatedEntityId: doc.complianceDocumentId,
+  });
+}
+
 /** Marks a compliance document as verified by the given verifier. */
 export async function verifyDocument(orgId: number, documentId: string, verifierUserId: number) {
   const doc = await getDocumentRow(orgId, documentId);
@@ -490,6 +512,7 @@ export async function verifyDocument(orgId: number, documentId: string, verifier
     metadata: { action: "verify" },
   });
 
+  await notifyDocumentOwner(updated, verifierUserId, "DOCUMENT_VERIFIED", `Your ${updated.documentType} was verified.`);
   return updated;
 }
 
@@ -539,6 +562,7 @@ export async function rejectDocument(
     metadata: { action: "reject" },
   });
 
+  await notifyDocumentOwner(updated, verifierUserId, "DOCUMENT_REJECTED", `Your ${updated.documentType} was rejected: ${trimmedReason}`);
   return updated;
 }
 
