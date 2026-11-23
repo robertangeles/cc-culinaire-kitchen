@@ -35,6 +35,20 @@
       "expo-apple-authentication",
       "@react-native-google-signin/google-signin",
       [
+        "expo-notifications",
+        {
+          "color": "#A26A38"
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "CulinAIre Kitchen uses your photos when you choose a profile picture.",
+          "cameraPermission": "CulinAIre Kitchen uses the camera when you take a profile picture.",
+          "microphonePermission": false
+        }
+      ],
+      [
         "expo-splash-screen",
         {
           "image": "./assets/splash-icon.png",

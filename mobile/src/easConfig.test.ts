@@ -55,6 +55,14 @@ describe("app identity (both stores)", () => {
     expect(app.android.permissions ?? []).toEqual([]);
   });
 
+  it("asks for photos and the camera in its own words for the profile picture, and never for the microphone", () => {
+    const picker = app.plugins.find((p: unknown) => Array.isArray(p) && p[0] === "expo-image-picker");
+    expect(picker[1].photosPermission).toMatch(/profile picture/);
+    expect(picker[1].cameraPermission).toMatch(/profile picture/);
+    expect(picker[1].microphonePermission).toBe(false);
+    expect(app.plugins.some((p: unknown) => Array.isArray(p) && p[0] === "expo-notifications")).toBe(true);
+  });
+
   it("has real icons and splash from the brand art, in the paper colour (not Expo's blue template)", () => {
     for (const f of [app.icon, app.android.adaptiveIcon.foregroundImage, app.android.adaptiveIcon.backgroundImage, app.android.adaptiveIcon.monochromeImage]) {
       expect(existsSync(resolve(root, f)), f).toBe(true);
