@@ -21,7 +21,7 @@ async function resolveOrgId(req: Request, res: Response): Promise<number | null>
   // location-less org admin can still manage org-wide records (e.g. suppliers).
   const orgId = ctx.locations[0]?.organisationId ?? ctx.organisationId;
   if (orgId === null) {
-    res.status(400).json({ error: "You are not a member of any organisation" });
+    res.status(400).json({ error: "You are not a member of any organisation", code: "FORBIDDEN" });
     return null;
   }
   return orgId;
@@ -54,12 +54,24 @@ const ActionLineSchema = z.object({
 });
 
 const CreateCreditNoteSchema = z.object({
-  discrepancyId: z.string().uuid(),
-  supplierId: z.string().uuid(),
-  creditAmount: z.number().positive("Credit amount must be positive"),
+  // Client-made id, so a repeat after a lost reply answers the first note instead of making a second.
+  creditNoteId: z.string().uuid("creditNoteId must be a UUID").optional(),
+  discrepancyId: z.string().uuid("Choose a discrepancy"),
+  // Optional: the discrepancy names its supplier. Older callers send it; it must then match.
+  supplierId: z.string().uuid().optional(),
+  creditAmount: z.number({ required_error: "Enter the credit amount" }).positive("Credit amount must be positive").finite(),
   creditReference: z.string().max(100).optional(),
   notes: z.string().max(2000).optional(),
 });
+
+const CreditListQuerySchema = z.object({
+  supplierId: z.string().uuid("supplierId must be a UUID").optional(),
+});
+
+/** The locations whose discrepancies and credit notes the caller may see: all of an org admin's, else their own. */
+async function visibleLocationIds(req: Request): Promise<string[]> {
+  return (await getUserLocationContext(req.user!.sub)).locations.map((l) => l.storeLocationId);
+}
 
 // ─── Handlers ────────────────────────────────────────────────────
 
@@ -210,24 +222,23 @@ export async function handleCreateCreditNote(
 
     const parsed = CreateCreditNoteSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: "Validation failed", details: parsed.error.flatten() });
+      res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Validation failed", code: "VALIDATION", details: parsed.error.flatten() });
       return;
     }
 
-    const result = await creditNoteService.createCreditNote({
+    // A discrepancy is credited by someone who works where it was received. Unknown ones are left to the service.
+    const locationId = await creditNoteService.getDiscrepancyLocationId(parsed.data.discrepancyId, orgId);
+    if (locationId) await assertLocationAccess(req.user!, locationId);
+
+    const { note, replay } = await creditNoteService.createCreditNote({
       ...parsed.data,
       organisationId: orgId,
       userId,
     });
 
-    logger.info({ creditNoteId: result.creditNoteId, userId }, "Credit note created");
-    res.status(201).json(result);
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (msg.includes("not found") || msg.includes("already resolved")) {
-      res.status(400).json({ error: msg });
-      return;
-    }
+    logger.info({ creditNoteId: note.creditNoteId, userId, replay }, "Credit note created");
+    res.status(replay ? 200 : 201).json(note);
+  } catch (err) {
     next(err);
   }
 }
@@ -236,15 +247,36 @@ export async function handleGetCreditNotes(
   req: Request, res: Response, next: NextFunction,
 ): Promise<void> {
   try {
-    const supplierId = req.query.supplierId as string | undefined;
     const orgId = await resolveOrgId(req, res);
     if (orgId === null) return;
 
-    const result = supplierId
-      ? await creditNoteService.getCreditNotesForSupplier(supplierId, orgId)
-      : await creditNoteService.getCreditNotesForOrg(orgId);
+    const parsed = CreditListQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Validation failed", code: "VALIDATION", details: parsed.error.flatten() });
+      return;
+    }
 
-    res.json(result);
+    res.json(await creditNoteService.getCreditNotes(orgId, await visibleLocationIds(req), parsed.data.supplierId));
+  } catch (err) {
+    next(err);
+  }
+}
+
+/** Discrepancies of confirmed deliveries that still have no credit note, at the caller's locations. */
+export async function handleGetUnresolvedDiscrepancies(
+  req: Request, res: Response, next: NextFunction,
+): Promise<void> {
+  try {
+    const orgId = await resolveOrgId(req, res);
+    if (orgId === null) return;
+
+    const parsed = CreditListQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Validation failed", code: "VALIDATION", details: parsed.error.flatten() });
+      return;
+    }
+
+    res.json(await creditNoteService.listUnresolvedDiscrepancies(orgId, await visibleLocationIds(req), parsed.data.supplierId));
   } catch (err) {
     next(err);
   }
