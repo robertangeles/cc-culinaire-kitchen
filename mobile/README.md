@@ -29,7 +29,7 @@ Run the screenshot walk (`device/README.md`, "The screenshot walk") after changi
 | `src/api` | The one network client: auth, refresh, coded errors (`ApiError.code`, `serverCode`). |
 | `src/outbox` | The offline queue (below). |
 | `src/ingredients` | The shared ingredient picker's data (below); its component is `src/ui/IngredientPicker.tsx`. |
-| `src/count`, `src/waste`, `src/prep`, `src/consumption`, `src/movements`, `src/chat`, `src/recipes`, `src/notifications` | One folder per module: API calls, store (screen state), pure view functions, commands. |
+| `src/count`, `src/waste`, `src/prep`, `src/consumption`, `src/movements`, `src/chat`, `src/recipes`, `src/notifications`, `src/transfers`, `src/stock` | One folder per module: API calls, store (screen state), pure view functions, commands. |
 | `src/profile` | The photo picker and the kitchen profile form's rules. |
 | `src/ui` | Components shared by every module, `Column` (the tablet column) among them. |
 | `packages/shared/src/schemas` | The zod schemas of what the server sends, parsed leniently at the boundary (`lenient.ts`). |
@@ -62,7 +62,7 @@ Add a module's commands in four steps: (1) a `<module>Commands.ts` exporting `xx
 (2) add them to `handlers` in `src/runtime/appOutbox.ts`; (3) enqueue with `outbox.enqueueCommand(type, command)` and call `runner.kick()`;
 (4) list the command types in `QueueStatus` where it is used (Account tab: `types={[...]}`). Mint the row's **id on the phone**
 (`newUuid()` in `src/outbox/uuid.ts`) and send it as the server's client-made id (`wasteLogId`, `consumptionLogId`, `stockMovementId`,
-`prepSessionId`): a repeat after a lost reply then finds the same row (server answers 200 with the stored row, 201 the first time).
+`prepSessionId`, `transferId`, `requestId`): a repeat after a lost reply then finds the same row (server answers 200 with the stored row, 201 the first time).
 
 What the queue does, which the tests in `src/outbox/*.test.ts` pin down:
 
@@ -179,7 +179,7 @@ Differences from the web (`RecipeLabPage.tsx`, `RecipeForm.tsx`, `MyShelfPage.ts
 ## Tablet width
 
 Content sits in a centred column of at most 560 dp, `COLUMN_WIDTH` in `src/ui/Screen.tsx` (`Screen` does it for every screen built on it; the waste, prep, usage, move, receiving, chat and recipe screens lay themselves out and use `src/ui/Column.tsx`, which reuses the same number).
-Phones fill the width. The Count areas list uses `Column`; the area count and needs-attention screens are not wrapped yet. jsdom does no layout, so the screen tests check only the column's constraints (full width, 560 dp cap, centred): `tests/waste.test.tsx`; `tests/prep.test.tsx` at 390, 820 and 1180 wide; `tests/usage.test.tsx`, `tests/moves.test.tsx`, `tests/chat.test.tsx` and `tests/recipes.test.tsx` at window sizes of an iPad in portrait (820 x 1180) and landscape (1180 x 820) and a phone (390 x 844). `tests/receiving.test.tsx` at an iPad's width. The look is for the device walk. Usage and Move use `Column` and have no second column definition. They have no two-column layout: a tablet gets the same column in the middle of the paper.
+Phones fill the width. The Count areas list uses `Column`; the area count and needs-attention screens are not wrapped yet. jsdom does no layout, so the screen tests check only the column's constraints (full width, 560 dp cap, centred): `tests/waste.test.tsx`; `tests/prep.test.tsx` at 390, 820 and 1180 wide; `tests/usage.test.tsx`, `tests/moves.test.tsx`, `tests/chat.test.tsx` and `tests/recipes.test.tsx` at window sizes of an iPad in portrait (820 x 1180) and landscape (1180 x 820) and a phone (390 x 844). `tests/receiving.test.tsx` at an iPad's width. The look is for the device walk. Usage and Move use `Column` and have no second column definition. They have no two-column layout: a tablet gets the same column in the middle of the paper. `tests/transfers.test.tsx` and `tests/stock.test.tsx` at both iPad sizes and a phone.
 
 ## Add Sign in with Apple (`app/link-apple.tsx`)
 
@@ -270,7 +270,7 @@ Differences from the web (`packages/client/src/components/inventory/ConsumptionL
 | Counts only "N today" | Per-unit totals; "Return to Stockroom" entries are shown apart, never added to usage | Mixed units cannot be added. |
 | A quantity of zero or less is refused on the form only | Refused on the form and again before an edit is queued | The edit route stores any number. |
 | Quick buttons: none | "Log again" for the latest six items, with unit, quantity and reason | The 15-second entry. |
-| Location Transfer view (create, send, receive) | Not on the phone | Not built yet (Wave 3). The server is ready for it: create takes a phone-made `transferId` and answers a repeat with 200, and a second send or receive is refused with 409 `ALREADY_CONFIRMED` (CHANGELOG, mobile Wave 3 server). |
+| Location Transfer view (create, send, receive) | The Transfers tab (below) | |
 | No adjustment screen | None | The web has none either: stock is changed by counts, and the only way to put stock back is the Return to Stockroom reason. |
 
 ## Move between areas (`src/movements`, `app/(app)/(moves)`)
@@ -291,6 +291,77 @@ Differences from the web (`StockMovementForm.tsx`):
 | Moves cannot be changed or deleted | The same | The server has no route for it. |
 | No quick buttons | "Move again" for the latest six moves, with item, amount and areas | |
 | Notes up to 500 characters | The same, checked before it is queued (as is an amount over 99,999) | The server refuses both. |
+
+## Transfers (`src/transfers`, `app/(app)/(transfers)`)
+
+The Transfers tab is the web's "Location Transfer" view (Inventory, Transfers tab). It is shown to `inventory:count` holders, the key the server asks for to list and receive;
+making, sending and cancelling are `inventory:manage` and are offered only to holders. The list is the transfers to and from the current location (the server's newest 50, plus every
+one still on its way here, however old), kept on the phone for no-signal starts, with the queue laid over it: **To receive** (sent here, not received), **Sent from here**, **Received here**.
+A transfer's page shows its lines; from the location it leaves, Send now and Cancel transfer (asks first); at the location it is going to, once sent, what arrived, line by line.
+Every write goes through the queue (`transfer.create` with a phone-made `transferId`, `transfer.send`, `transfer.cancel`, `transfer.receive`; one key per transfer, sent in order):
+
+- A repeat is safe: create answers 200 with the stored transfer; a second send, cancel or receive is 409 `ALREADY_CONFIRMED`, read as done for send and cancel (the stock moved once).
+- For a receive, `ALREADY_CONFIRMED` is done only when the server says this person received it (a lost reply). When someone else received it first, these quantities were never saved: the row keeps
+  "Someone else received this transfer first..." with Try again and Discard.
+- A refusal stays on its transfer with the server's words: a send after a cancel or a cancel after a send (409 `INVALID_STATE`), an id that is someone else's (409 `CONFLICT`), a location or item
+  outside the organisation (404 `NOT_FOUND`), a location the person does not work at (403 `LOCATION_NOT_ALLOWED`), a bad line or quantity (400 `VALIDATION`).
+- A transfer made with no signal can be sent or cancelled before it leaves the phone; a cancel then drops it (the server never hears of it).
+- Receiving needs the transfer's lines: it works with no signal once the transfer was opened with one (`transfers.detail.<user>.<id>` on the phone).
+- The form checks what the server would refuse (a destination, at least one item, each picked from the list with a known unit, an amount above 0 and up to 99,999, no item twice, on receive 0 or more),
+  never stock: ten litres can go with five on the books, as on the server (stock goes negative until the next count).
+
+Differences from the web (`TransferList.tsx`, `TransferForm.tsx`, `TransferReceiving.tsx`), found while comparing:
+
+| Web | Phone | Why |
+|---|---|---|
+| The page opens for `inventory:count`, `inventory:manage`, `inventory:transfer` or `inventory:hq`; New Transfer is shown to all of them | The tab needs `inventory:count`; New transfer, Send now and Cancel only for `inventory:manage` | The server's gates; `inventory:transfer` gates no route. |
+| An "Incoming Transfers Awaiting Receipt" banner, then Outgoing and Incoming (a transfer on its way is listed twice) | To receive, Sent from here, Received here: each transfer once | |
+| Statuses as codes (INITIATED, SENT, DISCREPANCY) | Words: Not sent yet, On its way, Received, Received with differences, Cancelled; an unknown status as sent | |
+| Create, then a separate Confirm Send on the expanded row | "Send now" (create and send) or "Save, send later"; send and cancel on the transfer's page | Fewer taps for the usual case. |
+| Edit a transfer not yet sent: change quantities, add items (`PUT`, `POST /lines`), change the note | Not on the phone | Not in this slice: cancel it and make a new one. |
+| Items from the location's own list (active items; an item at a known zero is greyed out, "Out of stock", and cannot be added) | The shared picker over the organisation's catalogue, offline; "You have" per line (a dash when hidden or unknown); never blocks on stock | The server checks no stock; the phone cannot know it offline. |
+| "You have" and "They have" (the destination's stock) per line | "You have" only | "They have" needs the destination's whole item list downloaded; later. |
+| Unit is the location's override, else the kitchen unit | The kitchen unit | As for Usage. |
+| Receive: every line starts at what was sent; a "Quantity Discrepancy Detected" note | The same, plus "Short by" or "Over by" on each line that differs, and a quantity below 0 is refused on its line | |
+| A failed send, cancel or receive is swallowed ("error handled by hook") | Saved on the phone; a refusal stays on the transfer with the server's words | Offline-first, nothing silent. |
+| Deep link `?transfer=` from an ingredient's history | Not on the phone | |
+
+## Stock (`src/stock`, `app/(app)/(stock)`)
+
+The Stock tab is shown to `inventory:count` holders (the key on the dashboard, the location's item list and catalogue requests). Its screens read what was last downloaded
+(`stock.<user>.<location>`: the dashboard, the item list, the areas and where items are kept, and the time), so a no-signal start shows the last known figures and says from when.
+
+- **Dashboard** (`GET /locations/:locId/dashboard`): the server's critical (at or under a quarter of par) and low (at or under three quarters) lists, each opening to its items and each item to its page;
+  the stock value by category for `inventory:cost` holders only; the stock take in progress and the last count.
+- **Look up an item**: with nothing typed, the items used here, A to Z; typed, the whole catalogue (`GET /locations/:locId/ingredients` lists every item, active here or not). An item's page shows its
+  store-room stock here against par, the server's low or critical flag, the areas it is kept in (`/storage-areas/assignments`), its supplier and, for `inventory:manage` holders, its stock at every location
+  (`GET /ingredients/:id/stock-levels`, online only).
+- **Ask for a new item** (`catalog.request`, phone-made `requestId`, `POST /catalog-requests`): name (required, up to 200), type and category (the web's lists, `CATEGORIES` and `ITEM_TYPES` from
+  `@culinaire/shared`), unit, how many are on hand. **My requests** lists what this person asked for from this phone with whether it was sent; what HQ decided is not shown (no route, below).
+
+**Blind count rule.** Where the server leaves a quantity or value out (no `inventory:cost`: `currentQty`, `stockValue`, `valueByCategory`), the phone shows a dash, never 0, and decides nothing on it
+(`qtyText`, `valueRows` in `src/stock/stockView.ts`; the schemas in `packages/shared/src/schemas/storeRoom.ts` keep the field absent). Low and critical lists still show, because staff need to know what
+is running out. `GET /ingredients/:id/stock-levels` does not hide `currentQty` or `unitCost` from a manager without `inventory:cost`; the phone drops the quantity itself and never reads the cost.
+
+**Needs a server decision (not changed here).** (1) No route lists a person's own catalogue requests or their outcome: My requests can only show what was asked from this phone and whether it was sent.
+A `GET /catalog-requests/mine` (requester's rows, any status, with review notes) would close it. (2) `GET /ingredients/:id/stock-levels` sends `currentQty` and `unitCost` to an `inventory:manage`
+holder without `inventory:cost`, against the blind count rule elsewhere. (3) Stock is kept per location and zone, not per storage area: "stock by area" can only be where an item is kept, not how much is in each.
+
+Differences from the web (`LocationDashboard.tsx`, `IngredientCatalog.tsx`, `CatalogRequestQueue.tsx`), found while comparing:
+
+| Web | Phone | Why |
+|---|---|---|
+| Organisation summary table and a drill-down into another location (org admins) | Not on the phone | HQ review is the next slice. |
+| Set-up checklist while inventory is not active | Not on the phone | Set-up stays on the web (Wave 7). |
+| Critical and low lists (collapsed), each row "qty unit / par N" and "$N at risk" | The same lists and figures, a dash where hidden; no "at risk" figure; each row opens the item | |
+| Value by category: the top six, with a share in % | The top six as bars with their value | |
+| Forecast recommendations card | Not on the phone | Reorder forecasts are a later slice. |
+| Category health chips | Not on the phone | The lists say the same per item. |
+| "No inventory data yet" | "No stock figures yet" | |
+| No offline view | The last download, with its time | |
+| The catalogue: a table with costs, filters (type, allergen, status), add, edit, archive | Read-only lookup and item page | Catalogue editing stays on the web (Wave 7). |
+| An item's stock at every location (managers) | The same route, for `inventory:manage`; quantities hidden without `inventory:cost` | See the server gap above. |
+| Staff cannot ask for a new item anywhere (only HQ's review queue exists, `CatalogRequestQueue.tsx`) | Ask for a new item, and My requests | Nothing to mirror; HQ still approves on the web. |
 
 ## Receive (`src/receiving`, `app/(app)/(receive)`)
 
@@ -365,5 +436,5 @@ The web's "create your first location" link for an admin is a sentence here: mak
 ## Tests
 
 `check:test` runs the logic tests (`src/**`) and the screen tests (`tests/*.test.tsx`); `check:e2e` runs the real client and queue against a server
-(`e2e/phoneFlow`, `e2e/wasteQueue`, `e2e/prepQueue`, `e2e/stockQueue`, `e2e/chatRecipes`; `e2e/receiving` uses the client alone, receiving has no queue; `e2e/accountNotifications`
+(`e2e/phoneFlow`, `e2e/wasteQueue`, `e2e/prepQueue`, `e2e/stockQueue`, `e2e/chatRecipes`, `e2e/storeRoom`; `e2e/receiving` uses the client alone, receiving has no queue; `e2e/accountNotifications`
 covers details, kitchen profile, password, two-step, the inbox read queue and push settings with a just-registered person; set `E2E_NOTIFICATION_ID` to a notification made for that person to check a real row, as the suite cannot make one through the API). See `device/README.md`.

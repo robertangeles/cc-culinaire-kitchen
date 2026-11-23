@@ -82,6 +82,16 @@ No migration, nothing to seed or backfill. The web is unchanged and older phone 
 - **Sales CSV.** The preview reports a bad quantity, an unparseable date and a name that matches more than one item as unmatched rows; the commit answers `400 VALIDATION` for malformed `lines`.
 - Refusals on these routes carry a `code` (`VALIDATION`, `NOT_FOUND`, `FORBIDDEN`, `CONFLICT`, `INVALID_STATE` for a sale already voided). The phone has no menu or sale screen yet.
 
+### Added (mobile Wave 3, phone: store room, first slice)
+
+No server change, migration or seed. Built on the Wave 3 server routes above; details and every difference from the web in `mobile/README.md` (Transfers, Stock).
+
+- **Transfers tab** (`inventory:count`): the transfers to and from the location (to receive, sent from here, received here), a transfer's lines, receive line by line with "Short by" or "Over by", and for `inventory:manage` a new transfer (send now, or save and send later), send and cancel. Every write goes through the offline queue with a phone-made `transferId`; a refused or conflicting transfer stays on screen with the server's words, and a receive someone else made first is kept visible, not counted as done.
+- **Stock tab** (`inventory:count`): the server's critical and low lists for the location with a drill-down to each item, the stock value for `inventory:cost` holders only, the stock take in progress and the last count, kept on the phone with the time of the download; item lookup over the catalogue with an item's stock here, where it is kept and (managers) its stock at every location; ask for a new catalogue item (queued, phone-made `requestId`) and the requests made from this phone.
+- **Blind counts**: a quantity or value the server leaves out is a dash, never 0, and never blocks an action.
+- New shared schemas `@culinaire/shared/schemas/transfer` and `@culinaire/shared/schemas/storeRoom` (the latter re-exports the catalogue's `CATEGORIES` and `ITEM_TYPES`).
+- Server gaps written down, not changed: no route lists a person's own catalogue requests; `GET /ingredients/:id/stock-levels` sends quantities and costs without checking `inventory:cost`.
+
 ### Changed (mobile Wave 3, server: store room, bar and HQ review)
 
 **Before this version deploys, on production, in this order:** apply migration `0007_foh_restocks` (`APP_ENV=prod pnpm --filter @culinaire/server exec tsx src/scripts/migrate.ts --dry-run`, then the same without `--dry-run`), then run `APP_ENV=prod pnpm --filter @culinaire/server exec tsx src/scripts/backfillInventoryCostPermission.ts`. The migration only adds a table the previous server never touches; the backfill must run at least one hour before the deploy, or every counter loses stock value and expected quantities at the deploy. The hour matters because a signed-in user's permissions travel in their access token, which lasts up to an hour: someone signed in before the backfill keeps a token without `inventory:cost` until it refreshes, and sees dashes for value, costs, book quantity and expected quantities in the meantime (nothing is written wrongly). If the deploy cannot wait an hour, those users must sign in again.
