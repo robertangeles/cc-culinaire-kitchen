@@ -10,7 +10,9 @@ config({ path: resolve(dirname(fileURLToPath(import.meta.url)), "../../../../.en
 applyEnvPrefix();
 
 import { eq, inArray } from "drizzle-orm";
-import type { Request, Response } from "express";
+import express, { type Request, type Response } from "express";
+import cookieParser from "cookie-parser";
+import type { AddressInfo } from "node:net";
 import { db } from "../db/index.js";
 import { deviceToken, pushOptOuts, pushQuietHours, refreshToken, user } from "../db/schema.js";
 import {
@@ -49,12 +51,27 @@ async function call(handler: Handler, userId: number | undefined, body?: unknown
 }
 
 describe("push routes: wiring", () => {
-  it("puts `authenticate` in front of register, unregister and both push-preferences routes", () => {
-    const stack = (notificationsRouter as unknown as { stack: Array<{ route?: { path: string; methods: Record<string, boolean>; stack: Array<{ name: string }> } }> }).stack;
-    for (const [method, path] of [["post", "/register-device"], ["post", "/unregister-device"], ["get", "/push-preferences"], ["put", "/push-preferences"]]) {
-      const layer = stack.find((l) => l.route?.path === path && l.route.methods[method]);
-      expect(layer, `${method} ${path}`).toBeDefined();
-      expect(layer!.route!.stack[0].name, `${method} ${path}`).toBe("authenticate");
+  it.each([
+    ["POST", "/register-device"],
+    ["POST", "/unregister-device"],
+    ["GET", "/push-preferences"],
+    ["PUT", "/push-preferences"],
+  ])("%s %s answers 401 to a request with no token, or a token that is not ours", async (method, path) => {
+    const app = express();
+    app.use(express.json());
+    app.use(cookieParser());
+    app.use("/api/notifications", notificationsRouter);
+    const server = app.listen(0, "127.0.0.1");
+    await new Promise((ready) => server.once("listening", ready));
+    try {
+      const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/api/notifications${path}`;
+      const body = method === "GET" ? undefined : JSON.stringify({ deviceToken: "ExponentPushToken[wiring]", platform: "ios" });
+      for (const headers of [{}, { Authorization: "Bearer not-a-real-token" }]) {
+        const res = await fetch(url, { method, headers: { "Content-Type": "application/json", ...headers }, body });
+        expect(res.status).toBe(401);
+      }
+    } finally {
+      await new Promise((closed) => server.close(closed));
     }
   });
 });
