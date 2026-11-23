@@ -34,6 +34,7 @@ import {
 import { linkGuestConversations } from "../services/guestService.js";
 import { verifyTurnstileToken } from "../services/turnstileService.js";
 import { getCredentialValueWithFallback } from "../services/credentialService.js";
+import { removeDeviceToken } from "../services/pushDeviceService.js";
 
 const logger = pino({ name: "authController" });
 
@@ -286,7 +287,9 @@ export async function handleLogin(
 /**
  * POST /api/auth/logout
  *
- * Revokes the refresh token and clears auth cookies.
+ * Revokes the refresh token and clears auth cookies. A phone also sends `deviceToken` (its push token): that
+ * person's own token is removed, so the next person to sign in on the device is not sent this one's notifications.
+ * The refresh token is what proves whose it is; a token that is not theirs is left alone.
  */
 export async function handleLogout(
   req: Request,
@@ -297,7 +300,12 @@ export async function handleLogout(
     // Web sends the refresh token via cookie; native mobile sends it in the body.
     const rawRefreshToken = req.cookies?.refresh_token ?? req.body?.refreshToken;
     if (rawRefreshToken) {
-      await revokeRefreshToken(rawRefreshToken);
+      const userId = await revokeRefreshToken(rawRefreshToken);
+      const pushToken = req.body?.deviceToken;
+      if (userId !== undefined && typeof pushToken === "string" && pushToken.length > 0 && pushToken.length <= 500) {
+        // Logging out must succeed even if this housekeeping does not.
+        await removeDeviceToken(userId, pushToken).catch((err) => logger.error({ err, userId }, "Could not remove the device token at logout"));
+      }
     }
     clearAuthCookies(res);
     res.json({ message: "Logged out successfully." });
