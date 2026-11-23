@@ -55,6 +55,8 @@ describe("areas list", () => {
   it("shows each area with its progress and which areas share items", async () => {
     await makeHarness();
     render(<Areas />);
+    // Titled by what it is, like every other tab, with the location under it (it was titled with the location name alone).
+    expect(screen.getByRole("heading").textContent).toBe("Count");
     expect(screen.getByText("Main Kitchen")).toBeTruthy();
     expect(screen.getByText("Bar")).toBeTruthy();
     expect(screen.getAllByText("0 of 2").length).toBe(1);
@@ -132,6 +134,14 @@ describe("areas list", () => {
     await makeHarness({ api: { activeSession: vi.fn(async () => null) } });
     render(<Areas />);
     expect(screen.getByText("No stock take is open. Ask your manager to open one on the web.")).toBeTruthy();
+  });
+
+  it("keeps the list in the centred 560 dp column on an iPad, as every other tab does", async () => {
+    await makeHarness();
+    render(<Areas />);
+    const column = screen.getByRole("heading").parentElement as HTMLElement;
+    expect(parseFloat(getComputedStyle(column).maxWidth)).toBe(560);
+    expect(getComputedStyle(column).alignSelf).toBe("center");
   });
 });
 

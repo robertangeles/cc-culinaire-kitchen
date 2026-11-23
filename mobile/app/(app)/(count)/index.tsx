@@ -11,6 +11,7 @@ import { Button } from "../../../src/ui/Button";
 import { Chip, Surface, rowDivider } from "../../../src/ui/Surface";
 import { fontFamily, size, space } from "../../../src/theme";
 import { useColors } from "../../../src/ui/theme";
+import { Column } from "../../../src/ui/Column";
 
 const sheetIndex = (sheets: Array<{ categoryName: string }>, name: string) => {
   const i = sheets.findIndex((s) => s.categoryName === name);
@@ -47,63 +48,78 @@ export default function Areas() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: c.bg }}>
       <ScrollView
-        contentContainerStyle={{ padding: space.xl, gap: space.lg }}
+        contentContainerStyle={{ padding: space.xl }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await store.refresh(); setRefreshing(false); }} />}
       >
-        <Text variant="title">{state.location.locationName}</Text>
-        {snap.offline ? <OfflineBanner text="You're offline. Counts are saved on this phone and sent when you're back." /> : null}
-        {attention > 0 ? (
-          <Pressable accessibilityRole="button" accessibilityLabel={attentionText} onPress={() => router.push("/attention")} style={{ minHeight: size.tap, justifyContent: "center" }}>
-            <Text variant="error">⚠ {attentionText}</Text>
-          </Pressable>
-        ) : null}
-        {waiting > 0 ? <Text variant="muted">{waiting} waiting to send</Text> : null}
-        {snap.otherAccountPending > 0 ? (
-          <Text variant="muted">
-            {snap.otherAccountPending} {snap.otherAccountPending === 1 ? "count" : "counts"} from another account {snap.otherAccountPending === 1 ? "is" : "are"} waiting on this phone. They are sent when that account signs in.
-          </Text>
-        ) : null}
-        {notice ? <Text variant="error" accessibilityLiveRegion="polite">{notice}</Text> : null}
+        <Column style={{ gap: space.lg }}>
+          <Text variant="title">Count</Text>
+          <Text variant="meta">{state.location.locationName}</Text>
+          {snap.offline ? <OfflineBanner text="You're offline. Counts are saved on this phone and sent when you're back." /> : null}
+          {attention > 0 ? (
+            <Pressable accessibilityRole="button" accessibilityLabel={attentionText} onPress={() => router.push("/attention")} style={{ minHeight: size.tap, justifyContent: "center" }}>
+              <Text variant="error">⚠ {attentionText}</Text>
+            </Pressable>
+          ) : null}
+          {waiting > 0 ? <Text variant="muted">{waiting} waiting to send</Text> : null}
+          {snap.otherAccountPending > 0 ? (
+            <Text variant="muted">
+              {snap.otherAccountPending} {snap.otherAccountPending === 1 ? "count" : "counts"} from another account {snap.otherAccountPending === 1 ? "is" : "are"} waiting on this phone. They are sent when that account signs in.
+            </Text>
+          ) : null}
+          {notice ? <Text variant="error" accessibilityLiveRegion="polite">{notice}</Text> : null}
 
-        {snap.phase === "loading" ? <Text variant="muted">Loading the stock take…</Text> : null}
-        {snap.phase === "none" ? <Text>No stock take is open. Ask your manager to open one on the web.</Text> : null}
-        {snap.phase === "categoryMode" ? <Text>This stock take counts by category. Count it on the web.</Text> : null}
-        {snap.phase === "error" ? (
-          <>
-            <Text variant="error">{snap.error}</Text>
-            <Button label="Try again" onPress={() => void store.refresh()} />
-          </>
-        ) : null}
+          {snap.phase === "loading" || snap.phase === "none" || snap.phase === "categoryMode" ? (
+            // The same card as Waste's "Today": a copper label over one sentence, so an empty tab is not a bare line of text.
+            <Surface>
+              <View style={{ padding: space.lg, gap: space.xs }}>
+                <Text style={{ fontFamily: fontFamily.uiStrong, fontSize: 12, letterSpacing: 1.8, textTransform: "uppercase", color: c.accentText }}>Stock take</Text>
+                <Text variant="muted">
+                  {snap.phase === "loading"
+                    ? "Loading the stock take…"
+                    : snap.phase === "none"
+                      ? "No stock take is open. Ask your manager to open one on the web."
+                      : "This stock take counts by category. Count it on the web."}
+                </Text>
+              </View>
+            </Surface>
+          ) : null}
+          {snap.phase === "error" ? (
+            <>
+              <Text variant="error">{snap.error}</Text>
+              <Button label="Try again" onPress={() => void store.refresh()} />
+            </>
+          ) : null}
 
-        {snap.phase === "ready" && snap.session ? (
-          <Surface>
-            {[...snap.session.categories]
-              // Shelf order (the order of the count sheets), not the server's row order, which changes as rows are updated.
-              .sort((a, b) => sheetIndex(snap.sheets, a.categoryName) - sheetIndex(snap.sheets, b.categoryName))
-              .map((category, index) => {
-              const sheet = snap.sheets.find((s) => s.categoryName === category.categoryName);
-              const area = summarizeArea({ items: sheet?.items ?? [], category, answers: store.answers(category.categoryName), currentUserId: state.user.userId });
-              const done = area.status === "SUBMITTED" || area.status === "APPROVED";
-              return (
-                <Pressable
-                  key={category.categoryId}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${area.name}, ${area.counted} of ${area.total} counted${area.heldBy ? `, held by ${area.heldBy}` : ""}${done ? ", sent for review" : ""}`}
-                  onPress={() => void open(area.name)}
-                  style={[{ minHeight: size.tap + 14, justifyContent: "center", paddingVertical: space.md, paddingHorizontal: space.lg, gap: space.xs }, rowDivider(index, c.border)]}
-                >
-                  <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: space.md }}>
-                    <Text style={{ fontFamily: fontFamily.title, fontSize: 20, flexShrink: 1 }}>{area.name}</Text>
-                    <Chip label={done ? "Sent for review" : `${area.counted} of ${area.total}`} />
-                  </View>
-                  {area.sharesWith.length > 0 ? <Text variant="meta">Shares items with {area.sharesWith.join(", ")}</Text> : null}
-                  {area.heldBy ? <Text variant="meta">{area.heldBy} is counting this</Text> : null}
-                  {area.needsAttention > 0 ? <Text variant="error">⚠ {area.needsAttention} need attention</Text> : null}
-                </Pressable>
-              );
-            })}
-          </Surface>
-        ) : null}
+          {snap.phase === "ready" && snap.session ? (
+            <Surface>
+              {[...snap.session.categories]
+                // Shelf order (the order of the count sheets), not the server's row order, which changes as rows are updated.
+                .sort((a, b) => sheetIndex(snap.sheets, a.categoryName) - sheetIndex(snap.sheets, b.categoryName))
+                .map((category, index) => {
+                const sheet = snap.sheets.find((s) => s.categoryName === category.categoryName);
+                const area = summarizeArea({ items: sheet?.items ?? [], category, answers: store.answers(category.categoryName), currentUserId: state.user.userId });
+                const done = area.status === "SUBMITTED" || area.status === "APPROVED";
+                return (
+                  <Pressable
+                    key={category.categoryId}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${area.name}, ${area.counted} of ${area.total} counted${area.heldBy ? `, held by ${area.heldBy}` : ""}${done ? ", sent for review" : ""}`}
+                    onPress={() => void open(area.name)}
+                    style={[{ minHeight: size.tap + 14, justifyContent: "center", paddingVertical: space.md, paddingHorizontal: space.lg, gap: space.xs }, rowDivider(index, c.border)]}
+                  >
+                    <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: space.md }}>
+                      <Text style={{ fontFamily: fontFamily.title, fontSize: 20, flexShrink: 1 }}>{area.name}</Text>
+                      <Chip label={done ? "Sent for review" : `${area.counted} of ${area.total}`} />
+                    </View>
+                    {area.sharesWith.length > 0 ? <Text variant="meta">Shares items with {area.sharesWith.join(", ")}</Text> : null}
+                    {area.heldBy ? <Text variant="meta">{area.heldBy} is counting this</Text> : null}
+                    {area.needsAttention > 0 ? <Text variant="error">⚠ {area.needsAttention} need attention</Text> : null}
+                  </Pressable>
+                );
+              })}
+            </Surface>
+          ) : null}
+        </Column>
       </ScrollView>
     </SafeAreaView>
   );
