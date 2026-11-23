@@ -358,7 +358,7 @@ Differences from the web profile (`pages/ProfilePage.tsx`, `components/profile`)
 It also says what to do without a key (an admin can add them from the organisation's settings on the web), who is signed in, and keeps sign out, the legal pages and Delete my account reachable (App Store 5.1.1(v)).
 The web's "create your first location" link for an admin is a sentence here: making locations is organisation admin, Wave 8.
 
-**Server answers without a machine-readable code** (no server change in this wave; the phone reads the HTTP status and shows the server's sentence for a 400):
+**Server answers without a machine-readable code** (a separate server PR adds codes; until it is on main the phone reads the HTTP status and shows the server's sentence for a 400, and switches to the codes once they exist):
 `PATCH /api/users/profile` (400 with `error` as a field object), `POST /api/users/change-password` (400), `POST /api/users/profile/avatar` (400; its size message says 2 MB while the limit is 10 MB), `POST /api/auth/mfa/enable` (400), `PUT /api/users/kitchen-profile` (400), and the notification read route (404).
 
 ## Tests
