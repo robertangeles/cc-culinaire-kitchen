@@ -801,6 +801,19 @@ describe.skipIf(!RUN)("Wave 7 menu server work (real DB)", () => {
       expect(preview.unmatched).toEqual([{ rowIndex: 3, name: `${fx.tag} dish`, reason: "invalid quantity" }]);
     });
 
+    it("the CSV preview reports a row whose date cannot be read as an invalid date, so every matched row is one the commit accepts", async () => {
+      const preview = await previewSalesCsv(fx.orgA, fx.cook, `item,qty,date\n${fx.tag} dish,2,2026-11-13\n${fx.tag} dish,2,13/11/2026\n${fx.tag} dish,2`);
+      expect(preview.matched.map((m) => m.rowIndex)).toEqual([1, 3]);
+      expect(preview.unmatched).toEqual([{ rowIndex: 2, name: `${fx.tag} dish`, reason: "invalid date" }]);
+
+      const before = (await stockOf(fx.a1, fx.flourId, "BOH"))!;
+      const commit = await call(handleSalesCsvCommit, fx.cook, { body: { lines: preview.matched } });
+      expect(commit.status).toBe(200);
+      expect(commit.body.failed).toEqual([]);
+      expect(commit.body.succeeded).toHaveLength(2);
+      expect(await stockOf(fx.a1, fx.flourId, "BOH")).toBe(before - 400);
+    });
+
     it("lists a location's sales for a member of that location", async () => {
       const ok = await call(handleListSales, fx.cook, { params: { locId: fx.a1 }, query: {} });
       expect(ok.status).toBe(200);

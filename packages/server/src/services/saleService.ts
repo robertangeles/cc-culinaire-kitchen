@@ -543,6 +543,10 @@ export async function previewSalesCsv(orgId: number, userId: number, csvContent:
       unmatched.push({ rowIndex: i, name: c0, reason: "invalid quantity" });
       return;
     }
+    if (c2 && Number.isNaN(new Date(c2).getTime())) {
+      unmatched.push({ rowIndex: i, name: c0, reason: "invalid date" });
+      return;
+    }
     const ids = byName.get(c0.toLowerCase());
     if (!ids || ids.length === 0) {
       unmatched.push({ rowIndex: i, name: c0, reason: "no matching menu item" });
