@@ -20,6 +20,8 @@ export interface PushMessage {
   title: string;
   body: string;
   data: Record<string, string>;
+  /** Expo's docs say iOS delivers silently without it. Not yet checked on a device. */
+  sound: "default";
 }
 
 export type PushTicket = { status: "ok"; id: string } | { status: "error"; error?: string; message?: string };

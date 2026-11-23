@@ -34,7 +34,7 @@ Native iOS/Android chef app (stock count first, then delivery receiving). Plan a
 
 ## Push (Wave 4 server) follow-ups (2026-11-23)
 
-Hooked to push: shift assigned, changed, cancelled, roster published, document verified, document rejected. Still only in the in-app inbox, no push yet (each is one `notifyAndPush` call after its change commits; a producer inside a transaction must push after the commit):
+Hooked to push: roster published, a Published shift cancelled, document verified, document rejected. A Draft shift never pushes: shift assigned, a Draft shift's time changed or cancelled save the in-app notice only (`notifyAndPush(..., { push: false })`); a Published shift cannot be edited, so nothing pushes "shift changed" yet. Every push carries `sound: "default"`, not yet checked on a device. Still only in the in-app inbox, no push yet (each is one `notifyAndPush` call after its change commits; a producer inside a transaction must push after the commit):
 - [ ] Shift swap claimed, public-holiday consent requested and declined (`shiftSwapService`, `consentService`).
 - [ ] PO approval required, approved, rejected, receiving discrepancy, delivery overdue (`purchaseOrderService`, `receivingService`, `routes/internal.ts`): these go through `notifyHQAdmins`, which also emails; give it the push call.
 - [ ] Compliance expiry alert and verifier nudge (`complianceExpiryJob`, `complianceDocumentService.nudgeVerifier`).
