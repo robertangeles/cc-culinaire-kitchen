@@ -27,6 +27,7 @@ import { runIfClaimed, dayKey, dayHourKey } from "./utils/dailyRunClaim.js";
 import { runExpiryScan } from "./services/complianceExpiryJob.js";
 import { purgeExpiredRetention, pruneAccessLog } from "./services/complianceRetentionService.js";
 import { runPublicHolidayGapCheck } from "./services/publicHolidayService.js";
+import { processPushReceipts } from "./services/pushDispatcher.js";
 
 /** Starts all background jobs and returns a cleanup function. */
 export function startScheduler(log: Logger): () => void {
@@ -257,6 +258,14 @@ export function startScheduler(log: Logger): () => void {
     log,
   }), 60_000);
 
+  // Push delivery receipts — every 15 min. Expo has a ticket's receipt about 15 minutes after the send; this is how a
+  // dead device token is found and removed. Safe to run on two instances at once: each step is a delete of what it just read.
+  const pushReceiptInterval = everyMs(() => {
+    processPushReceipts()
+      .then((r) => { if (r.checked || r.deadTokens || r.gaveUp) log.info(r, "Push receipts processed"); })
+      .catch((err) => log.error({ err }, "Push receipt job failed"));
+  }, 15 * 60 * 1000);
+
   return function clearAll() {
     clearInterval(cleanupInterval);
     clearInterval(purgeInterval);
@@ -271,5 +280,6 @@ export function startScheduler(log: Logger): () => void {
     clearInterval(complianceExpiryInterval);
     clearInterval(complianceRetentionInterval);
     clearInterval(publicHolidayGapCheckInterval);
+    clearInterval(pushReceiptInterval);
   };
 }

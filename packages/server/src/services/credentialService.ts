@@ -59,6 +59,10 @@ export const CREDENTIAL_REGISTRY: Record<string, CredentialMeta> = {
   CLOUDINARY_CLOUD_NAME:   { category: "cloudinary", label: "Cloud Name",           sensitive: false },
   CLOUDINARY_API_KEY:      { category: "cloudinary", label: "API Key",              sensitive: true },
   CLOUDINARY_API_SECRET:   { category: "cloudinary", label: "API Secret",           sensitive: true },
+  // Push notifications through Expo's push service (services/pushDispatcher.ts). Nothing is sent unless the switch reads "true".
+  // The Apple (APNs) and Google (FCM) keys live in the Expo project, not here.
+  EXPO_PUSH_ENABLED:       { category: "push",     label: "Send push notifications (true to turn on)", sensitive: false },
+  EXPO_ACCESS_TOKEN:       { category: "push",     label: "Expo Access Token (only if enhanced push security is on)", sensitive: true },
 };
 
 /** Category display order and labels for the frontend. */
@@ -71,6 +75,7 @@ export const CREDENTIAL_CATEGORIES = [
   { id: "cloudflare", label: "Cloudflare" },
   { id: "database", label: "Database" },
   { id: "cloudinary", label: "Cloudinary (Images)" },
+  { id: "push",     label: "Push Notifications" },
 ];
 
 // ---------------------------------------------------------------------------

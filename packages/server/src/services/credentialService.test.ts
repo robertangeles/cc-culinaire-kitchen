@@ -95,6 +95,13 @@ describe("credentialService", () => {
     expect(CREDENTIAL_CATEGORIES.some((c) => c.id === "cloudflare")).toBe(true);
   });
 
+  it("CREDENTIAL_REGISTRY has the push switch (visible) and the Expo access token (masked) under their own tab", async () => {
+    const { CREDENTIAL_REGISTRY, CREDENTIAL_CATEGORIES } = await import("./credentialService.js");
+    expect(CREDENTIAL_REGISTRY.EXPO_PUSH_ENABLED).toMatchObject({ category: "push", sensitive: false });
+    expect(CREDENTIAL_REGISTRY.EXPO_ACCESS_TOKEN).toMatchObject({ category: "push", sensitive: true });
+    expect(CREDENTIAL_CATEGORIES.some((c) => c.id === "push")).toBe(true);
+  });
+
   it("maskSecret works correctly via crypto util", async () => {
     const { maskSecret } = await import("../utils/crypto.js");
     expect(maskSecret("sk-ant-secret-1234")).toBe("••••1234");
