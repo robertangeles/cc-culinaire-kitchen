@@ -6,7 +6,7 @@
  * for backward compatibility.
  */
 
-import { eq, and, ne, gte, lt, inArray, isNotNull, asc } from "drizzle-orm";
+import { eq, and, or, ne, gte, lt, inArray, isNotNull, asc, getTableColumns, sql, type SQL } from "drizzle-orm";
 import { db } from "../db/index.js";
 import {
   rosterRole,
@@ -74,19 +74,41 @@ async function getShiftRow(orgId: number, shiftId: string) {
   return row;
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+const BARE_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
 function parseFilterDate(value: string): Date {
   const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) throw new RosterError("from/to must be valid dates", 400);
+  const isRealDate = !Number.isNaN(parsed.getTime()) && (!BARE_DATE.test(value) || parsed.toISOString().slice(0, 10) === value);
+  if (!isRealDate) throw new RosterError("from/to must be valid dates", 400, "VALIDATION");
   return parsed;
 }
 
 /**
- * Exclusive upper bound for a bare "to" calendar date. Uses lt() against
- * the next day's midnight so the "to" day is fully included regardless of
- * how far a shift's UTC instant sits from local midnight.
+ * The UTC instants [from, toExclusive) covering the calendar days `from`..`to` inclusive.
+ * A bare "YYYY-MM-DD" is a day on the VENUE's wall clock, so a 6 am Monday shift in Melbourne
+ * (Sunday 20:00 UTC) is on Monday; read as UTC midnight it fell on Sunday. Any other string is an
+ * instant and keeps the old reading (`to` reaches a day past that instant).
  */
-function parseFilterDateEnd(value: string): Date {
-  return new Date(parseFilterDate(value).getTime() + 24 * 60 * 60 * 1000);
+export function venueDayRange(from: string, to: string, ianaTimezone: string): { from: Date; toExclusive: Date } {
+  const fromAt = parseFilterDate(from);
+  const toAt = parseFilterDate(to);
+  return {
+    from: BARE_DATE.test(from) ? resolveVenueLocalToUtc(from, "00:00", ianaTimezone) : fromAt,
+    toExclusive: BARE_DATE.test(to)
+      ? resolveVenueLocalToUtc(addDaysIso(to, 1), "00:00", ianaTimezone)
+      : new Date(toAt.getTime() + DAY_MS),
+  };
+}
+
+/**
+ * The same bound as venueDayRange, as SQL, for queries that span venues: the day's start on the
+ * wall clock of the joined `store_location` row. `endOfDay` gives the exclusive end of a `to` date.
+ */
+function venueBoundSql(value: string, endOfDay: boolean): SQL {
+  const at = parseFilterDate(value);
+  if (!BARE_DATE.test(value)) return sql`${new Date(at.getTime() + (endOfDay ? DAY_MS : 0)).toISOString()}::timestamptz`;
+  return sql`((${value}::date + ${endOfDay ? 1 : 0}::int)::timestamp AT TIME ZONE ${storeLocation.ianaTimezone})`;
 }
 
 function todayIso(): string {
@@ -252,15 +274,16 @@ export interface ShiftFilters {
   to?: string;
 }
 
-/** Returns shifts for the org, optionally filtered by date range, location, and role. */
+/** Returns shifts for the org, optionally filtered by date range (venue-local days) and location. */
 export async function listShifts(orgId: number, filters: ShiftFilters = {}) {
   const conditions = [eq(shift.organisationId, orgId)];
   if (filters.storeLocationId) conditions.push(eq(shift.storeLocationId, filters.storeLocationId));
-  if (filters.from) conditions.push(gte(shift.startDatetime, parseFilterDate(filters.from)));
-  if (filters.to) conditions.push(lt(shift.startDatetime, parseFilterDateEnd(filters.to)));
+  if (filters.from) conditions.push(sql`${shift.startDatetime} >= ${venueBoundSql(filters.from, false)}`);
+  if (filters.to) conditions.push(sql`${shift.startDatetime} < ${venueBoundSql(filters.to, true)}`);
   return db
-    .select()
+    .select(getTableColumns(shift))
     .from(shift)
+    .innerJoin(storeLocation, eq(storeLocation.storeLocationId, shift.storeLocationId))
     .where(and(...conditions))
     .orderBy(asc(shift.startDatetime));
 }
@@ -288,8 +311,7 @@ export async function getWeekCalendar(
   to: string,
 ): Promise<CalendarShift[]> {
   await assertLocationInOrg(storeLocationId, orgId);
-  const fromDate = parseFilterDate(from);
-  const toDateExclusive = parseFilterDateEnd(to);
+  const { from: fromDate, toExclusive: toDateExclusive } = venueDayRange(from, to, await getVenueTimezone(storeLocationId));
 
   const rows = await db
     .select({
@@ -351,17 +373,49 @@ export async function getWeekCalendar(
   return [...byShift.values()];
 }
 
-/** Shifts the caller is personally assigned to, across every venue in the org. */
-export async function listMyShifts(orgId: number, userId: number) {
+export interface MyShiftsFilters {
+  excludeDrafts?: boolean;
+  from?: string;
+  to?: string;
+  limit?: number;
+}
+
+export const MY_SHIFTS_MAX_LIMIT = 500;
+/** Safety cap on every answer, far above any real person's roster list. */
+const MY_SHIFTS_ROW_CAP = 5000;
+
+/**
+ * Shifts the caller is personally assigned to, across every venue in the org, soonest first.
+ * With no filters: every non-Cancelled shift, Drafts included (what the web My Shifts page shows).
+ * Each filter applies only when sent: `from`/`to` are venue-local days, `limit` caps the rows, and
+ * `excludeDrafts` leaves out Draft shifts, except where the manager has asked the caller to consent
+ * to a public holiday on one (consent happens before publish, which holds the shift until they
+ * answer, so hiding it would deadlock that flow).
+ */
+export async function listMyShifts(orgId: number, userId: number, filters: MyShiftsFilters = {}) {
+  const conditions = [
+    eq(shift.organisationId, orgId),
+    eq(shiftAssignment.userId, userId),
+    ne(shift.status, "Cancelled"),
+  ];
+  if (filters.excludeDrafts) {
+    conditions.push(or(ne(shift.status, "Draft"), eq(shiftAssignment.publicHolidayConsent, "Requested"))!);
+  }
+  if (filters.from) conditions.push(sql`${shift.startDatetime} >= ${venueBoundSql(filters.from, false)}`);
+  if (filters.to) conditions.push(sql`${shift.startDatetime} < ${venueBoundSql(filters.to, true)}`);
   return db
     .select({
       shiftId: shift.shiftId,
       storeLocationId: shift.storeLocationId,
+      locationName: storeLocation.locationName,
+      ianaTimezone: storeLocation.ianaTimezone,
+      state: storeLocation.state,
       rosterRoleId: shift.rosterRoleId,
       roleName: rosterRole.roleName,
       startDatetime: shift.startDatetime,
       endDatetime: shift.endDatetime,
       status: shift.status,
+      isPublicHoliday: shift.isPublicHoliday,
       assignmentId: shiftAssignment.assignmentId,
       assignmentStatus: shiftAssignment.status,
       publicHolidayConsent: shiftAssignment.publicHolidayConsent,
@@ -369,14 +423,10 @@ export async function listMyShifts(orgId: number, userId: number) {
     .from(shiftAssignment)
     .innerJoin(shift, eq(shiftAssignment.shiftId, shift.shiftId))
     .innerJoin(rosterRole, eq(rosterRole.rosterRoleId, shift.rosterRoleId))
-    .where(
-      and(
-        eq(shift.organisationId, orgId),
-        eq(shiftAssignment.userId, userId),
-        ne(shift.status, "Cancelled"),
-      ),
-    )
-    .orderBy(asc(shift.startDatetime));
+    .innerJoin(storeLocation, eq(storeLocation.storeLocationId, shift.storeLocationId))
+    .where(and(...conditions))
+    .orderBy(asc(shift.startDatetime))
+    .limit(Math.min(filters.limit ?? MY_SHIFTS_ROW_CAP, MY_SHIFTS_ROW_CAP));
 }
 
 export interface CreateShiftInput {
@@ -422,7 +472,7 @@ export interface UpdateShiftInput {
 /** Updates an existing shift. */
 export async function updateShift(orgId: number, shiftId: string, input: UpdateShiftInput, actorUserId: number) {
   const row = await getShiftRow(orgId, shiftId);
-  if (row.status !== "Draft") throw new RosterError("Only a Draft shift can be edited", 409);
+  if (row.status !== "Draft") throw new RosterError("Only a Draft shift can be edited", 409, "SHIFT_NOT_DRAFT");
 
   const start = input.startDatetime ? new Date(input.startDatetime) : row.startDatetime;
   const end = input.endDatetime ? new Date(input.endDatetime) : row.endDatetime;
@@ -790,10 +840,14 @@ function consentHoldReason(consent: string | null, staffDisplayName: string): st
   return `${staffDisplayName} hasn't been asked to consent to this public holiday shift yet.`;
 }
 
-/** Assigns a staff member to a shift, enforcing compliance and availability rules. */
+/**
+ * Assigns a staff member to a shift, enforcing the role's compliance documents. Availability and
+ * double-booking are NOT checked (nor does the web check them): `staff_availability` is advisory.
+ * The 409s are told apart by `code`: SHIFT_NOT_DRAFT, ASSIGNMENT_BLOCKED_COMPLIANCE, SHIFT_ALREADY_ASSIGNED.
+ */
 export async function assignStaff(orgId: number, shiftId: string, userId: number, actorUserId: number) {
   const shiftRow = await getShiftRow(orgId, shiftId);
-  if (shiftRow.status !== "Draft") throw new RosterError("Can only assign staff to a Draft shift", 409);
+  if (shiftRow.status !== "Draft") throw new RosterError("Can only assign staff to a Draft shift", 409, "SHIFT_NOT_DRAFT");
   await assertUserInOrg(userId, orgId);
   const roleRow = await getRoleRow(orgId, shiftRow.rosterRoleId);
 
@@ -816,7 +870,7 @@ export async function assignStaff(orgId: number, shiftId: string, userId: number
   const row = await insertOrReactivateAssignment(shiftId, userId, "Pending");
   if (!row) {
     const name = await staffName(userId);
-    throw new RosterError(`${name} is already assigned to this shift.`, 409);
+    throw new RosterError(`${name} is already assigned to this shift.`, 409, "SHIFT_ALREADY_ASSIGNED");
   }
 
   const wasReactivation = row.updatedDttm.getTime() > row.createdDttm.getTime();
@@ -944,11 +998,11 @@ export interface PublishResult {
  */
 async function assertHolidayCalendarLoaded(
   jurisdiction: string | null,
-  fromDate: Date,
-  toDate: Date,
+  fromYear: number,
+  toYear: number,
 ): Promise<void> {
   if (!jurisdiction) return;
-  for (let year = fromDate.getUTCFullYear(); year <= toDate.getUTCFullYear(); year++) {
+  for (let year = fromYear; year <= toYear; year++) {
     if (!(await isYearLoaded(jurisdiction, year))) {
       throw new RosterError(`Public holidays for ${jurisdiction} ${year} are not loaded.`, 409);
     }
@@ -976,9 +1030,13 @@ export async function publishRoster(
   const venueTimezone = await getVenueTimezone(storeLocationId);
   const today = todayIso();
   const now = new Date().toISOString();
-  const fromDate = parseFilterDate(from);
-  const toDate = parseFilterDate(to);
-  await assertHolidayCalendarLoaded(jurisdiction, fromDate, toDate);
+  const range = venueDayRange(from, to, venueTimezone);
+  // The holiday years the range touches are read on the venue's calendar, not UTC's: 1 Jan 6 am in Melbourne is still 31 Dec in UTC.
+  await assertHolidayCalendarLoaded(
+    jurisdiction,
+    Number(toVenueLocalDate(range.from, venueTimezone).slice(0, 4)),
+    Number(toVenueLocalDate(new Date(range.toExclusive.getTime() - 1), venueTimezone).slice(0, 4)),
+  );
 
   const draftShifts = await db
     .select()
@@ -988,8 +1046,8 @@ export async function publishRoster(
         eq(shift.organisationId, orgId),
         eq(shift.storeLocationId, storeLocationId),
         eq(shift.status, "Draft"),
-        gte(shift.startDatetime, fromDate),
-        lt(shift.startDatetime, parseFilterDateEnd(to)),
+        gte(shift.startDatetime, range.from),
+        lt(shift.startDatetime, range.toExclusive),
       ),
     );
 

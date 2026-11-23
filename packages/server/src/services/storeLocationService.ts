@@ -612,6 +612,7 @@ export async function getUserStoreLocations(userId: number) {
       storeKey: storeLocation.storeKey,
       colorAccent: storeLocation.colorAccent,
       photoPath: storeLocation.photoPath,
+      ianaTimezone: storeLocation.ianaTimezone,
       isActiveInd: storeLocation.isActiveInd,
       createdBy: storeLocation.createdBy,
       createdDttm: storeLocation.createdDttm,

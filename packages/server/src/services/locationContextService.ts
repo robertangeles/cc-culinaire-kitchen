@@ -32,6 +32,10 @@ export interface LocationContext {
     classification: string;
     colorAccent: string | null;
     photoPath: string | null;
+    /** IANA zone of the venue, e.g. "Australia/Melbourne": shift times are shown on its wall clock. */
+    ianaTimezone: string;
+    /** Venue state as entered (e.g. "VIC"), or null. */
+    state: string | null;
   }>;
   /** Currently selected location (resolved from DB preference) */
   selectedLocationId: string | null;
@@ -88,6 +92,8 @@ export async function getUserLocationContext(
       classification: loc.classification,
       colorAccent: loc.colorAccent,
       photoPath: loc.photoPath,
+      ianaTimezone: loc.ianaTimezone,
+      state: loc.state,
     }));
   } else {
     // Staff sees only assigned locations
@@ -101,6 +107,8 @@ export async function getUserLocationContext(
       classification: loc.classification,
       colorAccent: loc.colorAccent,
       photoPath: loc.photoPath,
+      ianaTimezone: loc.ianaTimezone,
+      state: loc.state,
     }));
   }
 
