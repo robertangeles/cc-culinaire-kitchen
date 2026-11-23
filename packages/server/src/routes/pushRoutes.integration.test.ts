@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
 import { config } from "dotenv";
 import { createHash } from "node:crypto";
 import { dirname, resolve } from "node:path";
@@ -19,7 +19,7 @@ import {
   handleUpdatePushPreferences,
 } from "../controllers/notificationsController.js";
 import { handleLogout } from "../controllers/authController.js";
-import { AuthError, generateTokens, getUserWithRolesAndPermissions, refreshAccessToken, refreshTokenFamily, revokeAllRefreshTokens } from "../services/authService.js";
+import { AuthError, generateTokens, getUserWithRolesAndPermissions, refreshAccessToken, refreshTokenFamily, revokeAllRefreshTokens, revokeRefreshToken } from "../services/authService.js";
 import notificationsRouter from "./notifications.js";
 
 /**
@@ -168,50 +168,91 @@ describe.skipIf(!RUN)("push routes (real DB)", () => {
 
   describe("sign-ins ended by the server", () => {
     const signIn = async (userId: number) => generateTokens(await getUserWithRolesAndPermissions(userId));
-    const reset = async () => {
+    const hashOf = (raw: string) => createHash("sha256").update(raw).digest("hex");
+    const expire = (raw: string) => db.update(refreshToken).set({ expiresAtDttm: new Date(Date.now() - 1000) }).where(eq(refreshToken.tokenHash, hashOf(raw)));
+    const register = (name: string, raw?: string) => call(handleRegisterDevice, alice, { deviceToken: tok(name), platform: "ios", refreshToken: raw });
+    let phone: { refreshToken: string };
+    let web: { refreshToken: string };
+
+    /** Alice signed in on a phone and on the web: "phone" is registered under the phone's sign-in, "web" under the web's, "old" by a client that named none. */
+    beforeEach(async () => {
       await db.delete(refreshToken).where(inArray(refreshToken.userId, [alice, bob]));
       await db.delete(deviceToken).where(eq(deviceToken.userId, alice));
-      await call(handleRegisterDevice, alice, { deviceToken: tok("s1"), platform: "ios" });
-      await call(handleRegisterDevice, alice, { deviceToken: tok("s2"), platform: "android" });
-    };
+      phone = await signIn(alice);
+      web = await signIn(alice);
+      await register("phone", phone.refreshToken);
+      await register("web", web.refreshToken);
+      await register("old");
+    });
+
+    it("register-device records the caller's sign-in, and none for a client that presents no refresh token or someone else's", async () => {
+      const bobs = await signIn(bob);
+      await register("stolen", bobs.refreshToken);
+      const rows = await db.select().from(deviceToken).where(eq(deviceToken.userId, alice));
+      const familyOf = (name: string) => rows.find((r) => r.tokenValue === tok(name))!.refreshFamilyId;
+      expect(familyOf("phone")).toBe(await refreshTokenFamily(phone.refreshToken, alice));
+      expect(familyOf("web")).toBe(await refreshTokenFamily(web.refreshToken, alice));
+      expect(familyOf("phone")).not.toBe(familyOf("web"));
+      expect(familyOf("old")).toBeNull();
+      expect(familyOf("stolen")).toBeNull();
+    });
 
     it("removes every device token of the person when all their sign-ins are revoked, and nobody else's", async () => {
-      await reset();
-      await signIn(alice);
-      await signIn(alice);
       await revokeAllRefreshTokens(alice);
       expect(await tokensOf(alice, bob)).toEqual([tok("b1")]);
     });
 
-    it("keeps the device tokens when the caller's own sign-in is spared (password change)", async () => {
-      await reset();
-      const mine = await signIn(alice);
-      await signIn(alice);
-      await revokeAllRefreshTokens(alice, await refreshTokenFamily(mine.refreshToken, alice));
-      expect(await db.select().from(refreshToken).where(eq(refreshToken.userId, alice))).toHaveLength(1);
-      expect(await tokensOf(alice)).toEqual([tok("s1"), tok("s2")]);
+    it("a password change on the web removes the signed-out phone's token and keeps the web's own", async () => {
+      await revokeAllRefreshTokens(alice, await refreshTokenFamily(web.refreshToken, alice));
+      expect(await tokensOf(alice)).toEqual([tok("old"), tok("web")]);
     });
 
-    it("removes the device tokens when a suspended account's refresh ends every sign-in", async () => {
-      await reset();
-      const tokens = await signIn(alice);
-      await db.update(user).set({ userStatus: "suspended" }).where(eq(user.userId, alice));
-      await expect(refreshAccessToken(tokens.refreshToken)).rejects.toBeInstanceOf(AuthError);
-      await db.update(user).set({ userStatus: "active" }).where(eq(user.userId, alice));
+    it("removes the phone's token when its sign-in is revoked for reuse of a spent refresh token", async () => {
+      const second = await refreshAccessToken(phone.refreshToken);
+      await refreshAccessToken(second.refreshToken);
+      await db.update(refreshToken).set({ rotatedAtDttm: new Date(Date.now() - 60 * 60 * 1000) }).where(eq(refreshToken.tokenHash, hashOf(phone.refreshToken)));
+      await expect(refreshAccessToken(phone.refreshToken)).rejects.toMatchObject({ code: "REFRESH_TOKEN_REUSED" });
+      expect(await tokensOf(alice)).toEqual([tok("old"), tok("web")]);
+    });
+
+    it("removes the phone's token when its refresh token is refused as expired, and the rest when the last sign-in expires", async () => {
+      await expire(phone.refreshToken);
+      await expect(refreshAccessToken(phone.refreshToken)).rejects.toMatchObject({ code: "REFRESH_TOKEN_EXPIRED" });
+      expect(await tokensOf(alice)).toEqual([tok("old"), tok("web")]);
+      await expire(web.refreshToken);
+      await expect(refreshAccessToken(web.refreshToken)).rejects.toMatchObject({ code: "REFRESH_TOKEN_EXPIRED" });
       expect(await tokensOf(alice)).toEqual([]);
     });
 
-    it("keeps the device tokens when one sign-in is refused as expired while another is alive, and removes them when the last one is", async () => {
-      await reset();
-      const expire = (raw: string) =>
-        db.update(refreshToken).set({ expiresAtDttm: new Date(Date.now() - 1000) }).where(eq(refreshToken.tokenHash, createHash("sha256").update(raw).digest("hex")));
-      const other = await signIn(alice);
-      const old = await signIn(alice);
-      await expire(old.refreshToken);
-      await expect(refreshAccessToken(old.refreshToken)).rejects.toBeInstanceOf(AuthError);
-      expect(await tokensOf(alice)).toEqual([tok("s1"), tok("s2")]);
-      await expire(other.refreshToken);
-      await expect(refreshAccessToken(other.refreshToken)).rejects.toBeInstanceOf(AuthError);
+    it("removes the token of a sign-in that expired unnoticed the next time the person signs in", async () => {
+      await expire(phone.refreshToken);
+      await signIn(alice);
+      expect(await tokensOf(alice)).toEqual([tok("old"), tok("web")]);
+    });
+
+    it("keeps the phone's token through a refresh, which rotates the token inside the same sign-in", async () => {
+      const next = await refreshAccessToken(phone.refreshToken);
+      await refreshAccessToken(next.refreshToken);
+      expect(await tokensOf(alice)).toEqual([tok("old"), tok("phone"), tok("web")]);
+    });
+
+    it("logout removes the tokens registered under that sign-in even when the app sends no device token", async () => {
+      expect((await call(handleLogout, undefined, { refreshToken: phone.refreshToken })).status).toBe(200);
+      expect(await tokensOf(alice)).toEqual([tok("old"), tok("web")]);
+    });
+
+    it("keeps the phone's token when its session is re-minted as the same sign-in", async () => {
+      const familyId = await refreshTokenFamily(phone.refreshToken, alice);
+      await revokeRefreshToken(phone.refreshToken);
+      const reminted = await generateTokens(await getUserWithRolesAndPermissions(alice), { familyId });
+      await refreshAccessToken(reminted.refreshToken);
+      expect(await tokensOf(alice)).toEqual([tok("old"), tok("phone"), tok("web")]);
+    });
+
+    it("removes the device tokens when a suspended account's refresh ends every sign-in", async () => {
+      await db.update(user).set({ userStatus: "suspended" }).where(eq(user.userId, alice));
+      await expect(refreshAccessToken(phone.refreshToken)).rejects.toBeInstanceOf(AuthError);
+      await db.update(user).set({ userStatus: "active" }).where(eq(user.userId, alice));
       expect(await tokensOf(alice)).toEqual([]);
     });
   });
