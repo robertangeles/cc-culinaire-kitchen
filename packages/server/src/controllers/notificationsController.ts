@@ -12,7 +12,9 @@ import pino from "pino";
 import { db } from "../db/index.js";
 import { deviceToken } from "../db/schema.js";
 import { PushPreferencesUpdateSchema } from "@culinaire/shared/schemas/push";
+import { refreshTokenFamily } from "../services/authService.js";
 import { removeDeviceToken } from "../services/pushDeviceService.js";
+import { presentedRefreshToken } from "../utils/presentedRefreshToken.js";
 import { getPushPreferences, updatePushPreferences, PushPreferenceError } from "../services/pushPreferenceService.js";
 
 const logger = pino({ name: "notificationsController" });
@@ -28,6 +30,8 @@ const RegisterDeviceSchema = z.object({
  * Registers (or refreshes) a push notification token for the authenticated
  * user's device. Upserts on `token_value` — the same token reported twice
  * updates the `last_used_dttm` instead of erroring.
+ * The token is tied to the sign-in whose refresh token the request presents (cookie, or `refreshToken` in the
+ * body), so it is removed when that sign-in ends. A client that presents none registers with no sign-in.
  */
 export async function handleRegisterDevice(
   req: Request,
@@ -50,6 +54,7 @@ export async function handleRegisterDevice(
 
     const { deviceToken: tokenValue, platform } = parsed.data;
     const now = new Date();
+    const refreshFamilyId = (await refreshTokenFamily(presentedRefreshToken(req), userId)) ?? null;
 
     await db
       .insert(deviceToken)
@@ -57,6 +62,7 @@ export async function handleRegisterDevice(
         userId,
         tokenValue,
         platform,
+        refreshFamilyId,
         lastUsedDttm: now,
       })
       .onConflictDoUpdate({
@@ -64,6 +70,7 @@ export async function handleRegisterDevice(
         set: {
           userId,
           platform,
+          refreshFamilyId,
           lastUsedDttm: now,
           updatedDttm: now,
         },

@@ -34,7 +34,7 @@ import {
 import { linkGuestConversations } from "../services/guestService.js";
 import { verifyTurnstileToken } from "../services/turnstileService.js";
 import { getCredentialValueWithFallback } from "../services/credentialService.js";
-import { removeDeviceToken } from "../services/pushDeviceService.js";
+import { removeDeviceToken, removeSignedOutDeviceTokens } from "../services/pushDeviceService.js";
 
 const logger = pino({ name: "authController" });
 
@@ -290,9 +290,9 @@ export async function handleLogin(
  * Revokes the refresh token and clears auth cookies. A phone also sends `deviceToken` (its push token): that
  * person's own token is removed, so the next person to sign in on the device is not sent this one's notifications.
  * The refresh token is what proves whose it is; a token that is not theirs is left alone. An expired or spent
- * refresh token still proves it while its row exists. Once the row is gone (the sign-in was already revoked) nobody
- * is identified and nothing is removed here: the revoke paths in `authService` remove the device tokens themselves
- * when a person's last sign-in ends.
+ * refresh token still proves it while its row exists. Every device token registered under the sign-in goes too.
+ * Once the row is gone (the sign-in was already revoked) nobody is identified and nothing is removed here: the
+ * revoke paths in `authService` already removed that sign-in's device tokens.
  */
 export async function handleLogout(
   req: Request,
@@ -305,9 +305,12 @@ export async function handleLogout(
     if (rawRefreshToken) {
       const userId = await revokeRefreshToken(rawRefreshToken);
       const pushToken = req.body?.deviceToken;
-      if (userId !== undefined && typeof pushToken === "string" && pushToken.length > 0 && pushToken.length <= 500) {
+      if (userId !== undefined) {
         // Logging out must succeed even if this housekeeping does not.
-        await removeDeviceToken(userId, pushToken).catch((err) => logger.error({ err, userId }, "Could not remove the device token at logout"));
+        await removeSignedOutDeviceTokens(userId).catch((err) => logger.error({ err, userId }, "Could not remove the sign-in's device tokens at logout"));
+        if (typeof pushToken === "string" && pushToken.length > 0 && pushToken.length <= 500) {
+          await removeDeviceToken(userId, pushToken).catch((err) => logger.error({ err, userId }, "Could not remove the device token at logout"));
+        }
       }
     }
     clearAuthCookies(res);
