@@ -43,10 +43,10 @@ const StartSessionSchema = z.object({
 const ActionLineSchema = z.object({
   status: z.enum(["RECEIVED", "SHORT", "REJECTED", "PRICE_VARIANCE", "SUBSTITUTED"]),
   receivedQty: z.string().refine(
-    (v) => !isNaN(Number(v)) && Number(v) >= 0, "Must be a non-negative number",
+    (v) => v.trim() !== "" && !isNaN(Number(v)) && Number(v) >= 0, "Must be a non-negative number",
   ).optional(),
   actualUnitCost: z.string().refine(
-    (v) => !isNaN(Number(v)) && Number(v) >= 0, "Must be a non-negative number",
+    (v) => v.trim() !== "" && !isNaN(Number(v)) && Number(v) >= 0, "Must be a non-negative number",
   ).optional(),
   rejectionReason: z.enum(["quality", "damaged", "temperature", "expired", "other"]).optional(),
   rejectionNote: z.string().max(500).optional(),

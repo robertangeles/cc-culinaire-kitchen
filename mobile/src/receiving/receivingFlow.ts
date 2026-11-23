@@ -128,7 +128,7 @@ export const rejectInput = (reason: RejectionReason, note: string): LineInput =>
 /** What to tell the chef: the server's own sentence, except where the client's is plainer. */
 export function failureMessage(err: unknown): string {
   if (!(err instanceof ApiError)) return "Something went wrong. Try again.";
-  if (err.code === "forbidden") return "You don't have permission to receive deliveries.";
+  if (err.code === "forbidden" && !err.hasCode("LOCATION_NOT_ALLOWED")) return "You don't have permission to receive deliveries.";
   return err.message;
 }
 

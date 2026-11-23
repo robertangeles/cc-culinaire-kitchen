@@ -91,6 +91,10 @@ describe("errors", () => {
   it("keeps the server's sentence for an unconvertible unit", () => expect(failureMessage(unit)).toContain("Tomatoes"));
   it("uses the client's wording for an offline phone", () => expect(failureMessage(new ApiError("network"))).toBe("Can't reach the server. Try again."));
   it("tells a refused permission apart", () => expect(failureMessage(new ApiError("forbidden"))).toContain("permission"));
+  it("keeps the server's sentence for a location the chef can no longer use", () => {
+    const err = new ApiError("forbidden", "You do not have access to this location", 403, undefined, "LOCATION_NOT_ALLOWED");
+    expect(failureMessage(err)).toBe("You do not have access to this location");
+  });
   it("recognises a delivery that was already confirmed", () => {
     expect(finishedElsewhere(new ApiError("conflict", "x", 409, undefined, "ALREADY_CONFIRMED"))?.message).toContain("already confirmed");
   });

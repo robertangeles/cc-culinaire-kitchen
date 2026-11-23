@@ -212,6 +212,17 @@ describe.skipIf(!RUN)("receiving rules for the phone (real DB)", () => {
       expect(out.body.code).toBe("SHORT_QTY_REQUIRED");
     });
 
+    it.each([
+      { status: "SHORT", receivedQty: "" },
+      { status: "SHORT", receivedQty: " " },
+      { status: "PRICE_VARIANCE", actualUnitCost: "" },
+    ])("is refused with 400 when the number is blank: %o", async (body) => {
+      const s = await sentPO([{ ingredientId: fx.flourId, qty: "5", unit: "kg" }]);
+      const lineId = s.line(fx.flourId).receivingLineId;
+      const out = await call(handleActionLine, { params: { sessionId: s.sessionId, lineId }, body });
+      expect(out.status).toBe(400);
+    });
+
     it.each(["5", "7"])("is refused with 400 when the quantity (%s) is not less than ordered (5)", async (qty) => {
       const s = await sentPO([{ ingredientId: fx.flourId, qty: "5", unit: "kg" }]);
       const out = await call(handleActionLine, {
