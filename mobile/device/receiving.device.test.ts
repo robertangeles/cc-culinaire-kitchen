@@ -104,7 +104,9 @@ describe("receiving walk on a device", () => {
   });
 
   it("R1 signs in and the tab bar offers Receive", async () => {
-    await signIn();
+    // A phone that is already signed in (a rerun after a failure) goes straight on.
+    await sleep(3000);
+    if (!(await has(/^Receive/))) await signIn();
     await waitFor(/^Receive/, 60_000);
     await screenshot("r01-home");
   });

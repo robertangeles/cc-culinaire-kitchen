@@ -158,7 +158,9 @@ describe("receiving a delivery", () => {
     fireEvent.click(screen.getByRole("button", { name: "Mark short" }));
     await waitFor(() => expect(api.actionLine).toHaveBeenCalledWith("S1", "r1", { status: "SHORT", receivedQty: "3" }));
     expect(await screen.findByText("Short: 3 of 5 kg")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Confirm delivery · 1 issue" })).toBeTruthy();
+    // The other line comes back with the rest of the screen once the panel closes.
+    expect(await screen.findByText("Tomatoes")).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Confirm delivery · 1 issue" })).toBeTruthy();
   });
 
   it("does not send a short quantity that is not less than the order", async () => {
@@ -208,6 +210,35 @@ describe("receiving a delivery", () => {
     expect(screen.getByRole("button", { name: /^Flour, 5 kg, Received/ })).toBeTruthy();
   });
 
+  it("hides Confirm while a keypad or reject panel is open, so a stray tap cannot confirm a half-entered line", async () => {
+    render(<ReceiveDelivery />);
+    await open("Flour");
+    expect(screen.getByRole("button", { name: "Confirm delivery" })).toBeTruthy(); // the four actions do not hide it
+    key("Short");
+    expect(screen.queryByRole("button", { name: "Confirm delivery" })).toBeNull();
+    key("Back");
+    expect(screen.getByRole("button", { name: "Confirm delivery" })).toBeTruthy();
+  });
+
+  it("shows only the open line while its keypad is up, so the keypad is not pushed below the fold", async () => {
+    render(<ReceiveDelivery />);
+    await open("Flour");
+    key("Short");
+    expect(screen.getByText("Tomatoes").closest("[style*='display: none']")).not.toBeNull();
+    expect(screen.queryByRole("button", { name: "Cancel receiving" })).toBeNull();
+    key("Back");
+    expect(screen.getByRole("button", { name: "Cancel receiving" })).toBeTruthy();
+  });
+
+  it("puts the action above the keypad, so it is on screen however tall the keypad is", async () => {
+    render(<ReceiveDelivery />);
+    await open("Flour");
+    key("Short");
+    const action = screen.getByRole("button", { name: "Mark short" });
+    const pad = screen.getByLabelText("Number keypad");
+    expect(action.compareDocumentPosition(pad) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it("will not confirm while a line is still saving", async () => {
     let finish!: (v: unknown) => void;
     api.actionLine.mockReturnValueOnce(new Promise((r) => (finish = r)));
@@ -215,7 +246,7 @@ describe("receiving a delivery", () => {
     await open("Flour");
     key("Reject");
     fireEvent.click(screen.getByRole("button", { name: "Reject item" }));
-    await waitFor(() => expect(screen.getByRole("button", { name: "Confirm delivery" }).getAttribute("aria-disabled")).toBe("true"));
+    expect(screen.queryByRole("button", { name: "Confirm delivery" })).toBeNull();
     finish({ receivingLineId: "r1", status: "REJECTED", receivedQty: "0", actualUnitCost: "2" });
     await waitFor(() => expect(screen.getByRole("button", { name: "Confirm delivery · 1 issue" }).getAttribute("aria-disabled")).not.toBe("true"));
   });

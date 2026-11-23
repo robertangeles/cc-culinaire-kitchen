@@ -25,6 +25,7 @@ export default function ReceiveDelivery() {
   const router = useRouter();
   const c = useColors();
   const [openId, setOpenId] = useState<string | null>(null);
+  const [panelOpen, setPanelOpen] = useState(false);
   const userId = state.phase === "ready" ? state.user.userId : -1;
   const r = useReceivingSession(receivingApi, poId, userId);
 
@@ -78,33 +79,45 @@ export default function ReceiveDelivery() {
     <SafeAreaView style={{ flex: 1, backgroundColor: c.bg }}>
       <ScrollView contentContainerStyle={{ padding: space.xl }} keyboardShouldPersistTaps="handled">
         <Column style={{ gap: space.lg }}>
+        {panelOpen ? null : (
+          <>
         <View style={{ gap: space.xs }}>
           <Text variant="title">{r.po?.supplierName ?? "Delivery"}</Text>
           <Text variant="meta">Order {r.po?.poNumber} · {r.lines.length} {r.lines.length === 1 ? "item" : "items"}</Text>
         </View>
         {r.otherStarter ? <OfflineBanner text={`${r.otherStarter} started this delivery on another phone. Anything you change is saved to the same delivery.`} /> : null}
         {phone ? <Button kind="quiet" label={`Call ${r.po?.supplierName ?? "supplier"}`} onPress={() => void Linking.openURL(`tel:${phone}`)} /> : null}
+          </>
+        )}
 
         <Surface>
           {r.lines.map((line, i) => (
-            <View key={line.receivingLineId} style={rowDivider(i, c.border)}>
+            // While a keypad or reject panel is open only that line shows, so the panel is not pushed below the fold.
+            <View key={line.receivingLineId} style={[rowDivider(i, c.border), panelOpen && openId !== line.receivingLineId ? { display: "none" } : null]}>
               <LineCard
                 line={line}
                 open={openId === line.receivingLineId}
                 saving={r.saving.has(line.receivingLineId)}
                 error={r.lineErrors[line.receivingLineId]}
                 onToggle={() => setOpenId(openId === line.receivingLineId ? null : line.receivingLineId)}
+                onPanel={setPanelOpen}
                 onSubmit={(input) => r.act(line.receivingLineId, input)}
               />
             </View>
           ))}
         </Surface>
 
-        <Button kind="quiet" label="Back to deliveries" onPress={() => router.back()} />
-        <Button kind="quiet" label="Cancel receiving" onPress={cancel} />
+        {panelOpen ? null : (
+          <>
+            <Button kind="quiet" label="Back to deliveries" onPress={() => router.back()} />
+            <Button kind="quiet" label="Cancel receiving" onPress={cancel} />
+          </>
+        )}
         </Column>
       </ScrollView>
-      {/* Pinned, as on the web: Confirm is always under the thumb, however long the delivery. */}
+      {/* Pinned, as on the web: Confirm is always under the thumb, however long the delivery. Hidden while a
+          keypad or reject panel is open, so a stray tap cannot confirm a delivery that is half way through a line. */}
+      {panelOpen ? null : (
       <View style={{ padding: space.lg, borderTopWidth: 1, borderTopColor: c.border, backgroundColor: c.bg }}>
         <Column style={{ gap: space.sm }}>
         {r.confirmError ? <Text variant="error" accessibilityLiveRegion="polite">{r.confirmError}</Text> : null}
@@ -115,6 +128,7 @@ export default function ReceiveDelivery() {
         />
         </Column>
       </View>
+      )}
     </SafeAreaView>
   );
 }

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Pressable, View } from "react-native";
 import { Button } from "../ui/Button";
 import { Keypad } from "../ui/Keypad";
@@ -32,6 +32,8 @@ interface Props {
   /** The server's reason the last change was refused, shown under the line. */
   error?: string;
   onToggle: () => void;
+  /** True while a keypad or reject panel is open, so the screen can hide Confirm and nothing is confirmed by a stray tap. */
+  onPanel?: (active: boolean) => void;
   /** Resolves true when the server accepted the change. */
   onSubmit: (input: LineInput) => Promise<boolean>;
 }
@@ -40,7 +42,7 @@ interface Props {
  * One delivery line: collapsed it is a name and one fact (a perfect delivery needs no taps on it);
  * opened it offers the four things a chef can say about it. Every number goes through the count keypad.
  */
-export function LineCard({ line, open, saving, error, onToggle, onSubmit }: Props) {
+export function LineCard({ line, open, saving, error, onToggle, onPanel, onSubmit }: Props) {
   const c = useColors();
   const [panel, setPanel] = useState<Panel>(null);
   const [entry, setEntry] = useState("");
@@ -68,6 +70,10 @@ export function LineCard({ line, open, saving, error, onToggle, onSubmit }: Prop
     setHint(limitMessage(entry, key));
     setEntry(press(entry, key));
   };
+  useEffect(() => {
+    onPanel?.(open && panel !== null);
+    return () => onPanel?.(false);
+  }, [open, panel, onPanel]);
   const flagged = line.status !== "RECEIVED";
   const name = line.ingredientName ?? "Unknown item";
 
@@ -117,8 +123,9 @@ export function LineCard({ line, open, saving, error, onToggle, onSubmit }: Prop
             {entry === "" ? "–" : panel === "price" ? `$${entry}` : entry}
           </Text>
           {hint ? <Text variant="error" accessibilityLiveRegion="polite">{hint}</Text> : null}
-          <Keypad entry={entry} onKey={onKey} />
+          {/* Above the keypad, so the action is on screen however tall the keypad is. */}
           <Button label={saving ? "Saving…" : panel === "short" ? "Mark short" : "Save price"} disabled={saving || entry === ""} onPress={() => submitChecked(panel === "short" ? shortInput(entry, line) : priceInput(entry))} />
+          <Keypad entry={entry} onKey={onKey} />
           <Button kind="quiet" label="Back" onPress={close} />
         </View>
       ) : null}
