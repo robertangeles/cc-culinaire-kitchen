@@ -419,11 +419,4 @@ describe("account tab", () => {
     fireEvent.click(screen.getByRole("button", { name: "Change location" }));
     expect(sessionMock.changeLocation).toHaveBeenCalled();
   });
-
-  it("says so, and still signs out, when nothing on the account opens on the phone", () => {
-    sessionState.current = { state: { phase: "ready", user: { ...chef, permissions: ["chat:access"] }, location: main, locations: [main] }, busy: false };
-    render(<Account />);
-    expect(screen.getByText(/Nothing on your account is available on the phone yet/)).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Sign out" })).toBeTruthy();
-  });
 });

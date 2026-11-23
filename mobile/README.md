@@ -9,11 +9,11 @@ checks every call anyway.
 
 | Folder | What lives there |
 |---|---|
-| `app/` | Screens (expo-router). A module is a route group `app/(app)/(module)/`, plus one entry in `src/shell/tabs.ts` naming the permission that opens it. |
+| `app/` | Screens (expo-router). A module is a route group `app/(app)/(module)/`, plus one entry in `src/shell/tabs.ts` naming the permission that opens it (none when the server asks only for a signed-in person). |
 | `src/api` | The one network client: auth, refresh, coded errors (`ApiError.code`, `serverCode`). |
 | `src/outbox` | The offline queue (below). |
 | `src/ingredients` | The shared ingredient picker's data (below); its component is `src/ui/IngredientPicker.tsx`. |
-| `src/count`, `src/waste`, `src/prep`, `src/consumption`, `src/movements` | One folder per module: API calls, store (screen state), pure view functions, commands. |
+| `src/count`, `src/waste`, `src/prep`, `src/consumption`, `src/movements`, `src/chat`, `src/recipes` | One folder per module: API calls, store (screen state), pure view functions, commands. |
 | `src/ui` | Components shared by every module, `Column` (the tablet column) among them. |
 | `packages/shared/src/schemas` | The zod schemas of what the server sends, parsed leniently at the boundary (`lenient.ts`). |
 | `packages/shared/src/utils/menuCosting.ts` | Menu and recipe costing (line cost, food cost %, margin, plate P&L cost, classification, the 35% alert and 30% category target). The phone imports costing from `@culinaire/shared`, never its own copy; the server and the web import the same functions. Where the web editor and the server round or guard differently each keeps its own named function (`previewLineCost`, `editorItemCosts` for a live preview; `storedLineCost`, `storedItemCosts` for what the server saves): a phone editor uses the preview ones, and the differences are listed in `menuCosting.test.ts`. |
@@ -83,10 +83,86 @@ The catalogue download is `catalogueRoute(user)`: `GET /api/inventory/ingredient
 a read-only list of id, name and kitchen unit (no cost, stock or supplier; the server opens it to `waste:log` and `inventory:count`). Both are kept on the phone the same way and read offline.
 If a download fails (no signal, or a server that does not have the route yet) the last list stays and the picker still offers recent items and the server's name suggestions.
 
+## Ask Antoine (`src/chat`, `app/(app)/(chat)`)
+
+The Ask tab is shown to everyone signed in: the server asks for no permission on chat, conversations or recipes (a tab entry
+without `anyPermission` in `src/shell/tabs.ts`). Guest chat is not on the phone yet.
+
+`POST /api/chat` is a chunked HTTP POST that answers in the Vercel AI SDK v4 data-stream format, one `<code>:<json>` line per part;
+it is not SSE. `src/chat/dataStream.ts` joins lines split across network pieces and reads `0` (text), `3` (error) and `8`
+(the `brain_grounded` annotation); everything else is skipped. The server keeps no chat state, so every question sends the whole
+history (`chatStore.ts`). The body arrives through `client.stream`, which uses `expo/fetch` on the phone (the built-in fetch buffers).
+A refusal is read from the server's `code`, never its English: `RATE_LIMITED`, `AI_UNAVAILABLE`, `AI_TIMEOUT` (and the client's own
+time-out), `FREE_SESSIONS_EXHAUSTED`, signed out, no signal. A `3:` part partway keeps what arrived next to the message. The
+conversation is saved after each finished or stopped answer (`POST /api/conversations` with an id made on the phone, then the messages
+with their ids; both are safe to repeat; one save runs at a time). As on the web, a save sends only the messages not saved yet: the server builds a Brain
+memory from what each save sends, so sending the whole conversation again would repeat it.
+
+**Streaming on a real phone (the spike), 2026-11-24.** Chat chunks arrive one at a time through `expo/fetch` on the moto g86
+(development build, Android, against a local server whose model is `device/fakeModel.mjs`, no paid calls). In the device walk
+(`device/chatRecipes.device.test.ts`, all 10 steps passed) the screen was read while an answer streamed one line every 2.5 s: its
+lines on screen went 1, 2, 3, 4, 5, 6, 7, 8 with Stop showing until the end; a second answer stopped after 3 lines kept those 3. Not yet run on an iPhone or an iPad (no Mac). How to read the phone's
+screen from a test: uiautomator only dumps an idle screen, so text that changes faster than about once a second cannot be sampled
+(the walk slows the fake model down; the Recipe Lab's clock steps every 5 s for the same reason and for screen readers).
+
+Differences from the web chat (`ChatContainer.tsx`, `ConversationList.tsx`), found while comparing:
+
+| Web | Phone | Why |
+|---|---|---|
+| Guests can chat (`gate: "guest-ok"`) | Signed-in people only | Guest chat is a follow-up. |
+| Errors are matched on the English text: one "Something went wrong" for 429, 503, 504 and a stream error | One plain sentence per `code` (too fast, not available, too long, signed out, no signal, free sessions used up) | The phone branches on the code. |
+| Free sessions used up: "Upgrade to continue" links to the profile | The sentence only, no link and no Try again | No billing or upgrade links in the app (owner, Q7). |
+| No retry | Try again after a failure sends the same history again (a half answer is dropped first) | Asked for in this wave. |
+| Leaving mid-answer moves the stream to the background (it is re-POSTed) | Leaving the conversation stops the answer; what arrived is saved | A background answer is a follow-up. |
+| Image mode and the web-search toggle (when the site settings turn them on) | Not on the phone | Follow-up. |
+| Markdown with GFM (tables, code blocks, images) | Headings, lists, bold, italic and links (`src/ui/Markdown.tsx`, shared with the legal pages); a table or code block shows as plain text | No new dependency. |
+| "Grounded in your Brain" chip, dismissible, expands to the note titles | The same label, expands to the titles; not dismissible | |
+| Delete (hover trash) without asking | Delete asks first | |
+| A failed save is silent | "Not saved yet" with Save again | |
+| Empty state subtitle is the site's description | A fixed line | The site settings are not read by the phone. |
+| No rename | No rename | Same (the server's PATCH is never used). |
+
+## Recipes (`src/recipes`, `app/(app)/(recipes)`)
+
+The Recipes tab is shown to everyone signed in. It opens on My Recipes; "Create a recipe" is the culinary Recipe Lab; a recipe opens its own page.
+
+Generation (`labStore.ts`) can take up to two and a half minutes (the server stops at 150 s with `AI_TIMEOUT`; the phone waits 170 s).
+The screen shows the time so far, how long it usually takes, and Stop. The server saves a recipe only when it is made, and a stop, a
+time-out or a model failure saves nothing and costs no session (PR 215). Only a reply lost after the server finished can leave a recipe
+the phone never heard about, so before generating the phone notes the newest of My Recipes (without that look the request is not sent),
+and after a lost reply or a stop it looks again. A recipe that was not there when the request began is offered as a question ("A new
+recipe appeared. Is it this one?", it may have been made on the web meanwhile) instead of being made twice. "Nothing was saved" is said
+only when that second look worked and shows no new recipe; when it could not be made the screen says so, asks the person to look in
+My Recipes first, and offers Check again beside Try again (a Try again from there looks once more before it sends anything). A dropped
+connection is different from a stop or the phone's own time-out: the server does not see a phone change networks and may still be
+writing, so until its limit has passed (160 s after the request was sent) the screen says the recipe may still be on its way, looks in
+My Recipes every 15 s, and offers Check now but not Try again. The lab opens a finished recipe only while its screen is in view. A recipe that finishes while the person is back on My Recipes appears in the
+list. Returning to My Recipes reads every page already loaded again, so the list keeps its length and a recipe added or removed elsewhere shows as the server has it. Refine (`recipeStore.ts`) is a
+proposal: nothing is saved until Accept (`accept-refinement`); Discard drops it; once Accept is saved the proposal is gone even if the
+recipe cannot be loaded again. The owner's switch is `PATCH /api/recipes/:id`
+`{ isPublicInd }`, shown at once and put back if the server refuses. Ownership comes from the server: `userId` is sent only to the owner.
+An image the server keeps itself has a site-relative path, which the phone completes with the server's address (`recipeApi.ts`).
+
+Differences from the web (`RecipeLabPage.tsx`, `RecipeForm.tsx`, `MyShelfPage.tsx`, `RecipeRefinePanel.tsx`), found while comparing:
+
+| Web | Phone | Why |
+|---|---|---|
+| Recipe, Patisserie and Cocktail labs | The culinary Recipe Lab only | The other labs are out of scope for this wave. My Recipes still lists and opens their recipes. |
+| The same culinary fields; servings is a number box | The same fields and lists; servings is a − / + stepper (1 to 100) | |
+| "Generating..." on the button; no way to stop | Time so far, the usual duration and Stop | An honest wait. |
+| A retry after a lost reply can make the recipe twice | A recipe that appeared is offered first ("is it this one?"); if the shelf cannot be read, Check again | Uses the server's rule that nothing is saved unless made. |
+| "Grounded in your Brain" chip on the lab result | The same chip on the page of the recipe just made, expands to the note titles | Matched. Only the generate reply carries it, so it is not shown when the recipe is opened later. |
+| The result is shown on the lab page (kept in the browser session) | The saved recipe's own page opens | |
+| My Recipe Book: All / Culinary / Patisserie / Spirits, search over what is loaded, Load more, "Showing X of Y" | The same | |
+| Archive, ratings and view counts on the cards | Not on the phone | Follow-up. |
+| The recipe page: versions, share, email, edit, image regeneration, ratings and reviews, flavour balance, nutrition, wine pairing, baker's percentages | Image, facts, ingredients, method, pro tips, why it works, allergens, the model's note | Read and refine only in this wave; image regeneration is a follow-up. |
+| Refine: Cancel, Try Again, Accept Changes | Discard, Accept changes (refine again to try again); Stop while it works | |
+| Public/private on the lab result and the shelf | "Only me / Public" on the recipe page, for the owner only | |
+
 ## Tablet width
 
-Content sits in a centred column of at most 560 dp, `COLUMN_WIDTH` in `src/ui/Screen.tsx` (`Screen` does it for every screen built on it; the waste, prep, usage, move and receiving screens lay themselves out and use `src/ui/Column.tsx`, which reuses the same number).
-Phones fill the width. The count screens are not wrapped yet. jsdom does no layout, so the screen tests check only the column's constraints (full width, 560 dp cap, centred): `tests/waste.test.tsx`; `tests/prep.test.tsx` at 390, 820 and 1180 wide; `tests/usage.test.tsx` and `tests/moves.test.tsx` at window sizes of an iPad in portrait (820 x 1180) and landscape (1180 x 820) and a phone (390 x 844). `tests/receiving.test.tsx` at an iPad's width. The look is for the device walk. Usage and Move use `Column` and have no second column definition. They have no two-column layout: a tablet gets the same column in the middle of the paper.
+Content sits in a centred column of at most 560 dp, `COLUMN_WIDTH` in `src/ui/Screen.tsx` (`Screen` does it for every screen built on it; the waste, prep, usage, move, receiving, chat and recipe screens lay themselves out and use `src/ui/Column.tsx`, which reuses the same number).
+Phones fill the width. The count screens are not wrapped yet. jsdom does no layout, so the screen tests check only the column's constraints (full width, 560 dp cap, centred): `tests/waste.test.tsx`; `tests/prep.test.tsx` at 390, 820 and 1180 wide; `tests/usage.test.tsx`, `tests/moves.test.tsx`, `tests/chat.test.tsx` and `tests/recipes.test.tsx` at window sizes of an iPad in portrait (820 x 1180) and landscape (1180 x 820) and a phone (390 x 844). `tests/receiving.test.tsx` at an iPad's width. The look is for the device walk. Usage and Move use `Column` and have no second column definition. They have no two-column layout: a tablet gets the same column in the middle of the paper.
 
 ## Add Sign in with Apple (`app/link-apple.tsx`)
 
@@ -214,4 +290,4 @@ A delivery another phone already confirmed (`ALREADY_CONFIRMED`) or cancelled (`
 ## Tests
 
 `check:test` runs the logic tests (`src/**`) and the screen tests (`tests/*.test.tsx`); `check:e2e` runs the real client and queue against a server
-(`e2e/phoneFlow`, `e2e/wasteQueue`, `e2e/prepQueue`, `e2e/stockQueue`; `e2e/receiving` uses the client alone, receiving has no queue). See `device/README.md`.
+(`e2e/phoneFlow`, `e2e/wasteQueue`, `e2e/prepQueue`, `e2e/stockQueue`, `e2e/chatRecipes`; `e2e/receiving` uses the client alone, receiving has no queue). See `device/README.md`.

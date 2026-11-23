@@ -1,6 +1,6 @@
 import { afterEach, vi } from "vitest";
 import { createElement, type ReactNode } from "react";
-import { reduceMotion as reduceMotionState } from "./testing/mocks";
+import { reduceMotion as reduceMotionState, screenFocus as screenFocusState } from "./testing/mocks";
 
 // Screen tests render the real screens with react-native-web in jsdom. Only native-only modules are faked here.
 vi.mock("expo-haptics", () => ({ impactAsync: vi.fn(), ImpactFeedbackStyle: { Light: "light" } }));
@@ -21,12 +21,12 @@ vi.mock("react-native-svg", async () => {
   return { default: ({ children, style }: { children?: ReactNode; style?: object }) => createElement(View, { style }, children), Path: () => null };
 });
 vi.mock("expo-router", async () => {
-  const { routerMock, searchParams, focusEffects } = await import("./testing/mocks");
+  const { routerMock, searchParams, focusEffects, screenFocus } = await import("./testing/mocks");
   const { useEffect } = await import("react");
   // As the real hook: the effect runs when the screen is shown, and again each time it regains focus.
   const useFocusEffect = (effect: () => void) =>
     useEffect(() => {
-      effect();
+      if (screenFocus.current) effect();
       focusEffects.add(effect);
       return () => void focusEffects.delete(effect);
     }, [effect]);
@@ -50,6 +50,7 @@ if (typeof window !== "undefined") {
 
 afterEach(async () => {
   reduceMotionState.current = false;
+  screenFocusState.current = true;
   const { cleanup } = await import("@testing-library/react");
   cleanup();
   vi.clearAllMocks();

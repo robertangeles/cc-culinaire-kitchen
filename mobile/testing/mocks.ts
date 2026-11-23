@@ -6,6 +6,8 @@ export const searchParams: { current: Record<string, string> } = { current: {} }
 /** The mounted screens' focus effects. `returnToScreen()` runs them again, as coming back to a screen left mounted does. */
 export const focusEffects = new Set<() => void>();
 export const returnToScreen = () => focusEffects.forEach((run) => run());
+/** Whether the mounted screens are in view. A test sets it false for a screen left mounted behind another tab. */
+export const screenFocus = { current: true };
 
 /** The session as screens see it: tests set `sessionState.current` and inspect `sessionMock`. */
 export const sessionMock = { signIn: vi.fn(), signInWithGoogle: vi.fn(), signInWithApple: vi.fn(), submitCode: vi.fn(), chooseLocation: vi.fn(), changeLocation: vi.fn(), cancelChangeLocation: vi.fn(), signOut: vi.fn() };
