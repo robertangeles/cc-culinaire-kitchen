@@ -17,8 +17,9 @@
  * Wave 7: menu items belong to the organisation, so any member who may sell can sell any item of it (D11a
  * becomes "the item is in the caller's organisation"); the key is claimed by the insert itself (ON CONFLICT),
  * a replay with a different payload is a 409, stock leaves the zone its item type lives in (a FOH consumable
- * from the shelf, everything else from BOH), and a sale is only recorded or voided at a location the caller
- * may use.
+ * from the shelf, everything else from BOH) and the zone is kept on the consumption row for the void, and a sale
+ * is only recorded or voided at a location the caller may use. Stock comes off where the seller is working: a sale
+ * that names no location is recorded at the caller's selected one, not the menu item's.
  */
 
 import { createHash } from "node:crypto";
@@ -36,7 +37,7 @@ import {
   sale,
 } from "../db/schema.js";
 import { resolveToBase } from "./unitConversionService.js";
-import { assertLocationAccess } from "./locationContextService.js";
+import { assertLocationAccess, canAccessLocation, getUserLocationContext } from "./locationContextService.js";
 import { menuReadable, type MenuScope } from "./menuAccess.js";
 import { persistClassification } from "./menuIntelligenceService.js";
 import type { TokenPayload } from "./authService.js";
@@ -97,29 +98,25 @@ function yieldFactor(yieldPct: unknown): number {
 }
 
 /**
- * Resolve the location for a sale (D5): explicit arg → menu item's location →
- * the org's sole location → else reject.
+ * Resolve the location for a sale (D5): explicit arg → the caller's selected location → the menu item's
+ * location, if the caller may use it → else reject.
  */
 async function resolveSaleLocation(
   orgId: number,
+  userId: number,
   explicit: string | undefined,
   menuItemLocation: string | null,
+  actor: TokenPayload | undefined,
 ): Promise<string> {
-  const candidate = explicit ?? menuItemLocation ?? null;
-  if (candidate) {
-    const [loc] = await db
-      .select({ id: storeLocation.storeLocationId })
-      .from(storeLocation)
-      .where(and(eq(storeLocation.storeLocationId, candidate), eq(storeLocation.organisationId, orgId)));
-    if (!loc) throw new SaleError("Location not found in this organisation", 404);
-    return candidate;
-  }
-  const locs = await db
+  let candidate = explicit ?? (await getUserLocationContext(userId)).selectedLocationId;
+  if (!candidate && menuItemLocation && (!actor || (await canAccessLocation(actor, menuItemLocation)))) candidate = menuItemLocation;
+  if (!candidate) throw new SaleError("Choose a location for this sale", 400);
+  const [loc] = await db
     .select({ id: storeLocation.storeLocationId })
     .from(storeLocation)
-    .where(eq(storeLocation.organisationId, orgId));
-  if (locs.length === 1) return locs[0].id;
-  throw new SaleError("Choose a location for this sale", 400);
+    .where(and(eq(storeLocation.storeLocationId, candidate), eq(storeLocation.organisationId, orgId)));
+  if (!loc) throw new SaleError("Location not found in this organisation", 404);
+  return candidate;
 }
 
 /**
@@ -235,11 +232,22 @@ function replayOf(prior: SaleRow, input: RecordSaleInput): RecordSaleResult {
   return { saleId: prior.saleId, alreadyExists: true, voided: prior.voidedAt != null, depleted: [], skipped: [], oversold: [] };
 }
 
-/**
- * Record a menu-item sale: preflight the recipe, then (in one transaction) write
- * the sale header, bump units_sold, and deplete every ingredient + log it.
- */
+/** units_sold moved: bring the stored matrix along, without ever failing a sale or void that is already recorded. */
+const refreshClassification = (scope: MenuScope) =>
+  persistClassification(scope).catch((err) => logger.warn({ err }, "Menu classification refresh failed after a sale or void"));
+
+/** Record a menu-item sale and refresh the stored classification of the menu. */
 export async function recordSale(orgId: number, userId: number, input: RecordSaleInput): Promise<RecordSaleResult> {
+  const result = await writeSale(orgId, userId, input);
+  if (!result.alreadyExists) await refreshClassification(readScope(orgId, userId));
+  return result;
+}
+
+/**
+ * Preflight the recipe, then (in one transaction) write the sale header, bump units_sold, and deplete every
+ * ingredient + log it. The stored classification is the caller's to refresh.
+ */
+async function writeSale(orgId: number, userId: number, input: RecordSaleInput): Promise<RecordSaleResult> {
   if (!(input.qtySold > 0)) throw new SaleError("qtySold must be greater than 0", 400);
   const soldAt = input.soldAt ?? new Date();
   if (soldAt.getTime() > Date.now() + 60_000) throw new SaleError("soldAt cannot be in the future", 400);
@@ -266,15 +274,15 @@ export async function recordSale(orgId: number, userId: number, input: RecordSal
 
   // A location the request names is checked first, so another organisation's location and one the caller is not assigned to answer alike.
   if (input.actor && input.locationId) await assertLocationAccess(input.actor, input.locationId);
-  const locationId = await resolveSaleLocation(orgId, input.locationId, mi.storeLocationId);
-  // Checked on the RESOLVED location: it can come from the menu item or the org's only location, not just the request.
+  const locationId = await resolveSaleLocation(orgId, userId, input.locationId, mi.storeLocationId, input.actor);
+  // Checked on the RESOLVED location: it can come from the caller's selection or the menu item, not just the request.
   if (input.actor) await assertLocationAccess(input.actor, locationId);
 
   // Preflight — resolve all depletions (D1). Throws before any write.
   const { depletions, skipped } = await planDepletions(orgId, input.menuItemId, mi.servings, input.qtySold);
 
   // Commit: sale header + units_sold + depletions + logs, one transaction.
-  const result = await db.transaction(async (tx) => {
+  return db.transaction(async (tx) => {
     const [saleRow] = await tx
       .insert(sale)
       .values({
@@ -309,6 +317,7 @@ export async function recordSale(orgId: number, userId: number, input: RecordSal
         ingredientId: d.ingredientId,
         menuItemId: input.menuItemId,
         saleId: saleRow.saleId,
+        zone: d.zone,
         userId,
         quantity: String(d.baseQty),
         unit: d.baseUnit,
@@ -321,9 +330,6 @@ export async function recordSale(orgId: number, userId: number, input: RecordSal
 
     return { saleId: saleRow.saleId, depleted, skipped, oversold };
   });
-  // units_sold moved: bring the stored matrix along, without ever failing a sale that is already recorded.
-  if (!result.alreadyExists) await persistClassification(readScope(orgId, userId)).catch((err) => logger.warn({ err }, "Menu classification refresh failed after a sale"));
-  return result;
 }
 
 /**
@@ -346,7 +352,7 @@ export async function voidSale(scope: MenuScope & { organisationId: number }, sa
     .select()
     .from(consumptionLog)
     .where(eq(consumptionLog.saleId, saleId));
-  // The zone is the one the ingredient's item type lives in, as when the sale took it out.
+  // The zone the sale recorded; a row from before the zone was recorded falls back to the one the ingredient's item type lives in.
   const types = rows.length
     ? await db.select({ id: ingredient.ingredientId, itemType: ingredient.itemType }).from(ingredient).where(inArray(ingredient.ingredientId, rows.map((r) => r.ingredientId)))
     : [];
@@ -363,7 +369,8 @@ export async function voidSale(scope: MenuScope & { organisationId: number }, sa
 
     for (const r of rows) {
       // Add the depleted qty back (rows store base qty already).
-      await adjustSaleStock(tx, r.storeLocationId, r.ingredientId, zoneOf.get(r.ingredientId) ?? "BOH", Number(r.quantity));
+      const zone = (r.zone as "BOH" | "FOH" | null) ?? zoneOf.get(r.ingredientId) ?? "BOH";
+      await adjustSaleStock(tx, r.storeLocationId, r.ingredientId, zone, Number(r.quantity));
     }
     await tx
       .update(menuItem)
@@ -371,7 +378,7 @@ export async function voidSale(scope: MenuScope & { organisationId: number }, sa
       .where(eq(menuItem.menuItemId, saleRow.menuItemId));
     return { saleId, restored: rows.length };
   });
-  await persistClassification(scope).catch((err) => logger.warn({ err }, "Menu classification refresh failed after a void"));
+  await refreshClassification(scope);
   return result;
 }
 
@@ -453,7 +460,7 @@ async function getOrCreateConsumableLink(orgId: number, userId: number, ingredie
       .from(menuItem)
       .where(and(eq(menuItem.userId, userId), eq(menuItem.linkedIngredientId, ingredientId)));
     if (again) return again.menuItemId;
-    throw new SaleError("Could not create the sale link for this item", 500);
+    throw new Error("Could not create the sale link for this item");
   }
 }
 
@@ -542,9 +549,11 @@ export async function previewSalesCsv(orgId: number, userId: number, csvContent:
 }
 
 /**
- * Phase 2 (D12): commit matched rows. Each row is its OWN recordSale (per-row
+ * Phase 2 (D12): commit matched rows. Each row is its OWN sale (per-row
  * atomic — a bad row never rolls back the others). A per-row content-derived
- * idempotency key makes re-importing the same file a no-op.
+ * idempotency key makes re-importing the same file a no-op. A name that matches
+ * more than one item fails its row, as in the preview. The stored classification
+ * is refreshed once, after the last row.
  */
 export async function commitSalesCsv(orgId: number, userId: number, lines: CsvSaleLine[], actor?: TokenPayload) {
   const succeeded: Array<{ rowIndex: number; saleId: string }> = [];
@@ -558,16 +567,17 @@ export async function commitSalesCsv(orgId: number, userId: number, lines: CsvSa
     occ.set(contentId, n);
     try {
       // Resolve name → menu item id again at commit (defends against a stale preview).
-      const [mi] = await db
+      const [mi, another] = await db
         .select({ id: menuItem.menuItemId })
         .from(menuItem)
-        .where(and(sellableByName(orgId, userId), sql`lower(${menuItem.name}) = ${line.name.toLowerCase()}`));
-      if (!mi) {
-        failed.push({ rowIndex: line.rowIndex, reason: "no matching menu item" });
+        .where(and(sellableByName(orgId, userId), sql`lower(${menuItem.name}) = ${line.name.toLowerCase()}`))
+        .limit(2);
+      if (!mi || another) {
+        failed.push({ rowIndex: line.rowIndex, reason: mi ? "ambiguous name (multiple menu items)" : "no matching menu item" });
         continue;
       }
       const key = rowKey(mi.id, line.qtySold, line.soldAt, n);
-      const res = await recordSale(orgId, userId, {
+      const res = await writeSale(orgId, userId, {
         menuItemId: mi.id,
         qtySold: line.qtySold,
         source: "CSV",
@@ -581,6 +591,7 @@ export async function commitSalesCsv(orgId: number, userId: number, lines: CsvSa
       failed.push({ rowIndex: line.rowIndex, reason: err instanceof Error ? err.message : "failed" });
     }
   }
+  if (succeeded.length) await refreshClassification(readScope(orgId, userId));
 
   return { succeeded, alreadyExists, failed };
 }

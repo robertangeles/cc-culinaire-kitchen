@@ -11,6 +11,7 @@ import { db } from "../db/index.js";
 import { organisation, userOrganisation, user, role, userRole } from "../db/schema.js";
 import { encryptOrgPii, decryptOrgPii, decryptUserPii } from "./piiService.js";
 import { JoinError } from "./joinErrors.js";
+import { claimMenuItems } from "./menuAccess.js";
 
 /** Generate a short random join key. */
 function generateJoinKey(): string {
@@ -135,10 +136,13 @@ export async function createOrganisation(
   // updateMemberRole's last-admin-demotion guard and the client's
   // myOrgRole === "admin" checks key off — a separate axis from the
   // Operations Admin system role granted below.
-  await db.insert(userOrganisation).values({
-    userId,
-    organisationId: org.organisationId,
-    role: "admin",
+  await db.transaction(async (tx) => {
+    await tx.insert(userOrganisation).values({
+      userId,
+      organisationId: org.organisationId,
+      role: "admin",
+    });
+    await claimMenuItems(tx, userId);
   });
 
   await grantOperationsAdminRole(userId);
@@ -174,9 +178,12 @@ export async function joinOrganisation(userId: number, joinKey: string) {
     throw new JoinError("You are already a member of this organisation.", "ALREADY_MEMBER", 400);
   }
 
-  await db.insert(userOrganisation).values({
-    userId,
-    organisationId: org.organisationId,
+  await db.transaction(async (tx) => {
+    await tx.insert(userOrganisation).values({
+      userId,
+      organisationId: org.organisationId,
+    });
+    await claimMenuItems(tx, userId);
   });
 
   return org;

@@ -369,7 +369,7 @@ export async function handleGetRecommendations(req: Request, res: Response, next
 
 export async function handleGetWasteImpact(req: Request, res: Response, next: NextFunction) {
   try {
-    res.json(await getWasteImpactForMenuItems(await menuScope(req)));
+    res.json(await getWasteImpactForMenuItems(await menuScope(req), req.user!));
   } catch (err) { next(err); }
 }
 

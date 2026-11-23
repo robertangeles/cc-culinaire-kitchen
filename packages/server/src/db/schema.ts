@@ -2244,6 +2244,8 @@ export const consumptionLog = pgTable(
      * exactly the rows a sale produced.
      */
     saleId: uuid("sale_id").references(() => sale.saleId),
+    /** The stock zone (BOH or FOH) a sale took this quantity from, so a void puts it back there. NULL for non-sale rows and sales recorded before Wave 7. */
+    zone: varchar("zone", { length: 3 }),
     userId: integer("user_id").notNull().references(() => user.userId),
     quantity: numeric("quantity", { precision: 10, scale: 3 }).notNull(),
     unit: varchar("unit", { length: 20 }).notNull(),

@@ -11,7 +11,7 @@ import { db } from "../db/index.js";
 import { menuItem, organisation, user, userOrganisation } from "../db/schema.js";
 import { migrations } from "./index.js";
 
-/** Migration 0006 (menu items belong to the organisation): idempotent, applied by hand before the deploy. Gated on TENANT_IT=1. */
+/** Migration 0006 (menu items belong to the organisation; a sale keeps its stock zone): idempotent, applied by hand before the deploy. Gated on TENANT_IT=1. */
 const RUN = process.env.TENANT_IT === "1";
 
 describe("migration 0006", () => {
@@ -40,7 +40,7 @@ describe.skipIf(!RUN)("migration 0006 (real DB)", () => {
     for (const s of m.statements) await db.execute(sql.raw(s));
   };
 
-  it("runs twice, leaves a nullable indexed column, and backfills each creator's earliest membership only where NULL", async () => {
+  it("runs twice, leaves a nullable indexed column and a nullable zone on consumption_log, and backfills each creator's earliest membership only where NULL", async () => {
     await run();
     const mkUser = async (n: string) => (await db.insert(user).values({ userName: `M6 ${n}`, userEmail: `${tag}-${n}@it.test` }).returning({ id: user.userId }))[0].id;
     const multi = await mkUser("multi");
@@ -76,5 +76,7 @@ describe.skipIf(!RUN)("migration 0006 (real DB)", () => {
     expect(idx).toHaveLength(1);
     const col = (await db.execute(sql`SELECT is_nullable FROM information_schema.columns WHERE table_name = 'menu_item' AND column_name = 'organisation_id'`)) as unknown as Array<{ is_nullable: string }>;
     expect(col.map((c) => c.is_nullable)).toEqual(["YES"]);
+    const zone = (await db.execute(sql`SELECT is_nullable, data_type, character_maximum_length FROM information_schema.columns WHERE table_name = 'consumption_log' AND column_name = 'zone'`)) as unknown as Array<Record<string, unknown>>;
+    expect(zone.map((c) => ({ ...c }))).toEqual([{ is_nullable: "YES", data_type: "character varying", character_maximum_length: 3 }]);
   });
 });
