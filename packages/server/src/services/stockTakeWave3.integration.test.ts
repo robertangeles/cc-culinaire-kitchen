@@ -17,7 +17,7 @@ import {
   handleSubmitCategory, handleSubmitForReview, handleGetLocationDashboard, handleGetOrgDashboard, handleClaimCategory,
 } from "../controllers/stockTakeController.js";
 import {
-  handleListIngredients, handleListIngredientSuppliers, handleListLocationIngredients, handleUpdateLocationIngredient,
+  handleGetIngredientStockLevels, handleListIngredients, handleListIngredientSuppliers, handleListLocationIngredients, handleUpdateLocationIngredient,
 } from "../controllers/ingredientController.js";
 import { asUser, callHandler, createLineLoopFx, removeLineLoopFx, type LineLoopFx } from "./lineLoopFixture.js";
 
@@ -116,6 +116,18 @@ describe.skipIf(!RUN)("stock take and dashboard, Wave 3 (real DB)", () => {
     const blind = await list(COUNT);
     expect(blind).toMatchObject([{ supplierId }]);
     for (const k of ["packCost", "costPerUnit"]) expect(blind[0]).not.toHaveProperty(k);
+  });
+
+  it("an item's stock levels by location carry the book quantity and unit cost only for a holder of inventory:cost", async () => {
+    const atA = async (perms: string[]) =>
+      (await callHandler(handleGetIngredientStockLevels, asUser(fx.chef, [...perms, "inventory:manage"]), { params: { id: colaId } }))
+        .body.find((r: { storeLocationId: string }) => r.storeLocationId === fx.locA);
+
+    expect(await atA(COST)).toMatchObject({ currentQty: expect.anything(), unitCost: expect.anything() });
+    expect(Number((await atA(COST)).currentQty)).toBe(24);
+    const blind = await atA(COUNT);
+    expect(Number(blind.parLevel)).toBe(40);
+    for (const k of ["currentQty", "unitCost"]) expect(blind).not.toHaveProperty(k);
   });
 
   it("the dashboard counts each item once and returns value and low/critical figures to a holder of inventory:cost", async () => {

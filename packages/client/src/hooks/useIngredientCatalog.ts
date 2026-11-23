@@ -98,11 +98,13 @@ export interface IngredientSupplierLink {
 export interface IngredientStockLevel {
   storeLocationId: string;
   locationName: string;
-  currentQty: string | null;
+  /** Absent (not null) for someone without inventory:cost. */
+  currentQty?: string | null;
   parLevel: string | null;
   reorderQty: string | null;
   lastCountedDttm: string | null;
-  unitCost: string | null;
+  /** Absent (not null) for someone without inventory:cost. */
+  unitCost?: string | null;
 }
 
 /**
