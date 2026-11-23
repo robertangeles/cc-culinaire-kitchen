@@ -32,7 +32,7 @@ import {
   getYieldVariance,
   listYieldVariance,
 } from "../services/yieldVarianceService.js";
-import { recordSale, voidSale, listSales, previewSalesCsv, commitSalesCsv, listSellableConsumables, recordConsumableSale } from "../services/saleService.js";
+import { recordSale, voidSale, listSales, previewSalesCsv, commitSalesCsv, listSellableConsumables, recordConsumableSale, fitsSaleQty } from "../services/saleService.js";
 import { assertLocationAccess } from "../services/locationContextService.js";
 import { resolveMenuScope, type MenuScope } from "../services/menuAccess.js";
 import { AppError } from "../utils/appError.js";
@@ -53,7 +53,7 @@ async function saleScope(req: Request): Promise<MenuScope & { organisationId: nu
 }
 
 const saleBodySchema = z.object({
-  qtySold: z.coerce.number().positive("qtySold must be greater than 0"),
+  qtySold: z.coerce.number().positive("qtySold must be greater than 0").refine(fitsSaleQty, "qtySold can have at most 3 decimal places"),
   soldAt: z.string().optional().refine((v) => v === undefined || v === "" || !Number.isNaN(new Date(v).getTime()), "soldAt is not a date"),
   locationId: z.preprocess((v) => (v === "" ? undefined : v), z.string().uuid("locationId is not a location id").optional()),
   idempotencyKey: z.string().max(120, "The idempotency key is longer than 120 characters").optional(),

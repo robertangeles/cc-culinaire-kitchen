@@ -63,6 +63,9 @@ const readScope = (orgId: number, userId: number): MenuScope => ({ userId, organ
 /** Which stock zone an item type lives in: the FOH shelf for a consumable, the back of house for everything else. */
 const zoneFor = (itemType: string): "BOH" | "FOH" => (itemType === "FOH_CONSUMABLE" ? "FOH" : "BOH");
 
+/** sale.qty_sold is numeric(10,3): a quantity with more decimals would be stored as a different number than the one sold. */
+export const fitsSaleQty = (qty: number): boolean => qty < 1e7 && Number(qty.toFixed(3)) === qty;
+
 export interface RecordSaleInput {
   menuItemId: string;
   qtySold: number;
@@ -249,8 +252,7 @@ export async function recordSale(orgId: number, userId: number, input: RecordSal
  */
 async function writeSale(orgId: number, userId: number, input: RecordSaleInput): Promise<RecordSaleResult> {
   if (!(input.qtySold > 0)) throw new SaleError("qtySold must be greater than 0", 400);
-  // menu_item.units_sold counts whole sales.
-  if (!Number.isInteger(input.qtySold)) throw new SaleError("qtySold must be a whole number", 400);
+  if (!fitsSaleQty(input.qtySold)) throw new SaleError("qtySold can have at most 3 decimal places", 400);
   const soldAt = input.soldAt ?? new Date();
   if (soldAt.getTime() > Date.now() + 60_000) throw new SaleError("soldAt cannot be in the future", 400);
   const source = input.source ?? "MANUAL";
@@ -304,7 +306,8 @@ async function writeSale(orgId: number, userId: number, input: RecordSaleInput):
 
     await tx
       .update(menuItem)
-      .set({ unitsSold: sql`${menuItem.unitsSold} + ${input.qtySold}`, updatedDttm: new Date() })
+      // shortcut: units_sold is an integer, so a fractional sale counts as its rounded quantity (the void takes the same amount back); make the column numeric when fractional sales matter to the menu mix.
+      .set({ unitsSold: sql`${menuItem.unitsSold} + round(${input.qtySold}::numeric)::int`, updatedDttm: new Date() })
       .where(eq(menuItem.menuItemId, input.menuItemId));
 
     const depleted: RecordSaleResult["depleted"] = [];
@@ -376,7 +379,7 @@ export async function voidSale(scope: MenuScope & { organisationId: number }, sa
     }
     await tx
       .update(menuItem)
-      .set({ unitsSold: sql`GREATEST(0, ${menuItem.unitsSold} - ${Number(saleRow.qtySold)})`, updatedDttm: new Date() })
+      .set({ unitsSold: sql`GREATEST(0, ${menuItem.unitsSold} - round(${saleRow.qtySold}::numeric)::int)`, updatedDttm: new Date() })
       .where(eq(menuItem.menuItemId, saleRow.menuItemId));
     return { saleId, restored: rows.length };
   });
@@ -536,7 +539,7 @@ export async function previewSalesCsv(orgId: number, userId: number, csvContent:
     const [c0, c1, c2] = row.split(",").map((c) => c.trim());
     if (!c0 || /^(item|menu|name|menu item)$/i.test(c0)) return; // header
     const qty = Number(c1);
-    if (!(qty > 0)) {
+    if (!(qty > 0) || !fitsSaleQty(qty)) {
       unmatched.push({ rowIndex: i, name: c0, reason: "invalid quantity" });
       return;
     }
