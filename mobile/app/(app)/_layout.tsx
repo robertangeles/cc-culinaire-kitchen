@@ -26,8 +26,8 @@ export default function AppTabs() {
         headerShown: false,
         tabBarActiveTintColor: c.accentText,
         tabBarInactiveTintColor: c.textMuted,
-        tabBarStyle: { backgroundColor: c.surface, borderTopColor: c.border, height: size.tabBar + insets.bottom, paddingTop: space.sm, paddingBottom: space.sm + insets.bottom },
-        tabBarLabelStyle: { fontFamily: fontFamily.uiStrong, fontSize: 16 },
+        tabBarStyle: { backgroundColor: c.surface, borderTopColor: c.border, height: size.tabBar + insets.bottom, paddingTop: space.xs, paddingBottom: space.xs + insets.bottom },
+        tabBarLabelStyle: { fontFamily: fontFamily.uiStrong, fontSize: 16, lineHeight: 20 },
       }}
     >
       {moduleTabs.map((tab) => (

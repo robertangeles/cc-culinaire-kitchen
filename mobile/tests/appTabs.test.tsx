@@ -52,11 +52,13 @@ describe("the tab bar", () => {
       mocks.insets = { ...mocks.insets, bottom };
       mocks.user = person({ permissions: ["waste:log"] });
       render(<AppTabs />);
-      const style = mocks.screenOptions.tabBarStyle as { height: number; paddingBottom: number };
-      expect(style.height).toBe(64 + bottom);
+      const style = mocks.screenOptions.tabBarStyle as { height: number; paddingTop: number; paddingBottom: number };
+      const label = mocks.screenOptions.tabBarLabelStyle as { lineHeight: number };
+      expect(style.height).toBe(68 + bottom);
       expect(style.paddingBottom).toBeGreaterThanOrEqual(bottom);
-      // 16pt labels under 24dp icons need more than the library's default 49dp: what was clipped on the moto g86.
-      expect(style.height - bottom).toBeGreaterThanOrEqual(56);
+      // A tab is the library's 5 dp padding, a 25 dp icon, the label's line and 5 dp again: it must fit inside the bar's own padding,
+      // or the label is cut off at the bottom (the library's default 49 dp clipped the 16pt labels on the moto g86).
+      expect(style.height - bottom - style.paddingTop - (style.paddingBottom - bottom)).toBeGreaterThanOrEqual(5 + 25 + label.lineHeight + 5);
     },
   );
 

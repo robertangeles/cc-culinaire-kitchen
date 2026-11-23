@@ -116,11 +116,14 @@ async function submitSignIn() {
  * keystrokes: close it (Back), focus the field again and type only once no sheet is up.
  */
 async function type(label: string, text: string) {
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < 6; i++) {
     await dismissSavePassword();
     const field = await find(label, (n) => n.find((x) => x.cls.includes("EditText")));
     if (!field) {
-      await sleep(800);
+      // Scrolled past it (a long form after its button was pressed): scroll back up.
+      await hideKeyboard();
+      const [w, h] = /(\d+)x(\d+)/.exec(adb(["shell", "wm", "size"]).trim().split("\n").pop()!)!.slice(1).map(Number);
+      await swipe(Math.round(w / 2), Math.round(h * 0.3), Math.round(w / 2), Math.round(h * 0.8), 300);
       continue;
     }
     await tapAt(Math.round((field.x1 + field.x2) / 2), Math.round((field.y1 + field.y2) / 2));
