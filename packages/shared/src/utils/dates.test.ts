@@ -99,6 +99,7 @@ describe("daysBetweenLocal", () => {
 
   it("does not depend on how the engine lays out a formatted date string", () => {
     process.env.TZ = "UTC";
+    // @ts-expect-error the lib types declare `format` as a method; engines expose it as a getter
     const format = vi.spyOn(Intl.DateTimeFormat.prototype, "format", "get").mockReturnValue(() => "13/09/2026");
     try {
       expect(daysBetweenLocal("2026-09-06T22:00:00Z", "2026-09-13T11:00:00Z", "Australia/Sydney")).toBe(6);
