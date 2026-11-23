@@ -220,6 +220,18 @@ describe("one transfer", () => {
     expect(screen.queryByText("Transfer not found")).toBeNull();
   });
 
+  it("shows what the server holds, with what arrived, once the transfer made on this phone was accepted", async () => {
+    const id = "00000000-0000-4000-8000-000000000001";
+    searchParams.current = { transferId: id };
+    const details: Record<string, ReturnType<typeof detailOf>> = {};
+    const { transfers, outbox } = await makeStoreRoom({ details });
+    await transfers.create({ toLocationId: "L2", toLocationName: "Bar", lines: [{ ingredientId: "i1", ingredientName: "Gin", unit: "L", quantity: "3" }], notes: "", sendNow: true });
+    await outbox.drain();
+    details[id] = detailOf(transfer({ transferId: id, status: "RECEIVED" }), [line({ sentQty: 3, receivedQty: 2.5 })]);
+    render(<TransferScreen />);
+    expect(await screen.findByText("Received 2.5 L")).toBeTruthy();
+  });
+
   it("says when a transfer was never opened on this phone and there is no signal", async () => {
     searchParams.current = { transferId: "due" };
     await makeStoreRoom({ readsFail: new ApiError("network") });
