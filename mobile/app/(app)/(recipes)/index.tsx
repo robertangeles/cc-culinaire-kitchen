@@ -31,7 +31,7 @@ export default function MyRecipes() {
   useFocusEffect(useCallback(() => void store.refresh(), [store]));
   // A recipe that finishes while the person is here shows up in the list.
   useEffect(() => {
-    if (lab.phase === "made") void store.refresh();
+    if (lab.phase === "made" || lab.phase === "found") void store.refresh();
   }, [lab.phase, store]);
   function openLab() {
     // A finished recipe has been seen (in the list, or on its page): the lab opens on its form again.

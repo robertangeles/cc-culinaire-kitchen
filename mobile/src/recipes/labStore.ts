@@ -3,7 +3,8 @@
  * a time-out or a model failure saves nothing and costs nothing (PR 215). Only a reply lost after the server finished can leave
  * a saved recipe the phone never heard about, so after a lost reply or a stop the phone looks at the shelf: a recipe that was
  * not there when the request began is offered ("is it this one?") instead of making a second one. "Nothing was saved" is said
- * only when that look worked and shows no new recipe.
+ * only when that look worked and shows no new recipe, and, after a dropped connection, only once the server's own limit has
+ * passed: the server does not see a phone change networks and may still be writing, so until then the phone keeps looking.
  */
 
 import { ApiError } from "../api/client";
@@ -15,7 +16,8 @@ export interface RecipeFailure {
 }
 
 export interface LabSnapshot {
-  phase: "form" | "generating" | "checking" | "made" | "found" | "prose" | "failed";
+  /** `pending`: the connection dropped and the server may still be making the recipe; the shelf is looked at every few seconds. */
+  phase: "form" | "generating" | "checking" | "pending" | "made" | "found" | "prose" | "failed";
   /** When the current generation began (the phone's clock), for the elapsed time on screen. */
   startedAt: number | null;
   /** The recipe just made, with the titles of the kitchen notes it drew on (a title can be null). */
@@ -32,6 +34,9 @@ export interface LabSnapshot {
 
 const NOTHING_SAVED_TIMEOUT = "That took too long. Nothing was saved. Try again.";
 const UNCHECKED = "The phone could not check whether a recipe was saved. Look in My Recipes before trying again.";
+// The server stops a generation 150 s after it began; a little longer, for the request's way there and the save.
+const SERVER_DONE_MS = 160_000;
+const LOOK_EVERY_MS = 15_000;
 
 /** Refusals of generate and refine, from the server's code. `what` finishes "Sign in again to …". */
 export function recipeFailure(err: unknown, what = "make recipes"): RecipeFailure {
@@ -59,6 +64,11 @@ export function createLabStore({ api, now }: { api: RecipeApi; now: () => number
   let before: string[] = [];
   let stopped = false;
   let lost = "";
+  // After a dropped connection: until when the server may still save the recipe (the phone's clock).
+  let serverDoneAt = 0;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  // A look that answers after the person has moved on (a new generation, a reset) is dropped.
+  let attempt = 0;
 
   const set = (next: Partial<LabSnapshot>) => {
     snapshot = { ...snapshot, ...next };
@@ -70,36 +80,58 @@ export function createLabStore({ api, now }: { api: RecipeApi; now: () => number
 
   /** After a lost reply or a stop: is there a recipe that was not on the shelf when the request began? */
   async function check(): Promise<void> {
-    set({ ...empty, phase: "checking" });
+    const mine = attempt;
+    clearTimeout(timer);
+    if (snapshot.phase !== "pending") set({ ...empty, phase: "checking" });
     const after = await shelf().catch(() => null);
+    if (mine !== attempt) return;
+    clearTimeout(timer);
     const fresh = after?.find((r) => !before.includes(r.recipeId));
-    if (fresh) set({ phase: "found", found: { recipeId: fresh.recipeId, title: fresh.title } });
-    else if (!after) set({ phase: "failed", unchecked: true, failure: { message: `${stopped ? "Stopped." : "The reply was lost."} ${UNCHECKED}`, canRetry: true } });
+    if (fresh) set({ ...empty, phase: "found", found: { recipeId: fresh.recipeId, title: fresh.title } });
+    else if (now() < serverDoneAt) {
+      set({ ...empty, phase: "pending" });
+      timer = setTimeout(() => void check(), LOOK_EVERY_MS);
+    } else if (!after) set({ phase: "failed", unchecked: true, failure: { message: `${stopped ? "Stopped." : "The reply was lost."} ${UNCHECKED}`, canRetry: true } });
     else if (stopped) set({ ...empty, note: "Stopped. Nothing was saved." });
     else set({ phase: "failed", failure: { message: lost, canRetry: true } });
   }
 
   async function generate(form: RecipeRequest): Promise<void> {
-    if (snapshot.phase === "generating" || snapshot.phase === "checking") return;
+    if (snapshot.phase === "generating" || snapshot.phase === "checking" || snapshot.phase === "pending") return;
+    // Whether the attempt before this one saved a recipe is still not known: the first look below settles it.
+    const unsettled = snapshot.unchecked ? snapshot.failure : null;
     last = form;
+    attempt += 1;
     controller = new AbortController();
     const signal = controller.signal;
     set({ ...empty, phase: "generating", startedAt: now() });
     let sent = false;
     try {
       // Without the shelf as it is now, a lost reply could not be checked afterwards: the request is not sent.
-      before = (await shelf()).map((r) => r.recipeId);
+      const rows = await shelf();
       if (signal.aborted) throw new ApiError("aborted");
+      const late = unsettled ? rows.find((r) => !before.includes(r.recipeId)) : undefined;
+      if (late) {
+        set({ ...empty, phase: "found", found: { recipeId: late.recipeId, title: late.title } });
+        return;
+      }
+      before = rows.map((r) => r.recipeId);
       sent = true;
+      serverDoneAt = now() + SERVER_DONE_MS;
       const reply = await api.generate(form, signal);
       if ("prose" in reply) set({ phase: "prose", prose: reply.prose });
       else if (reply.recipeId) set({ phase: "made", made: { recipeId: reply.recipeId, grounded: (reply.brainGrounded ?? []).map((m) => m.title) } });
       else set({ phase: "failed", failure: { message: "The recipe was made but not saved. Try again.", canRetry: true } });
     } catch (err) {
-      stopped = signal.aborted;
-      if (!sent) set(stopped ? { ...empty, note: "Stopped. Nothing was saved." } : { phase: "failed", failure: recipeFailure(err) });
-      else if (mayHaveSaved(err)) {
-        lost = err instanceof ApiError && err.code === "timeout" ? NOTHING_SAVED_TIMEOUT : "The connection dropped and nothing was saved. Try again.";
+      if (!sent) {
+        if (unsettled) set({ phase: "failed", unchecked: true, failure: signal.aborted ? unsettled : recipeFailure(err) });
+        else set(signal.aborted ? { ...empty, note: "Stopped. Nothing was saved." } : { phase: "failed", failure: recipeFailure(err) });
+      } else if (mayHaveSaved(err)) {
+        stopped = signal.aborted;
+        const dropped = err instanceof ApiError && err.code === "network";
+        lost = dropped ? "The connection dropped and nothing was saved. Try again." : NOTHING_SAVED_TIMEOUT;
+        // A stop reaches the server and the phone's own time-out is past the server's limit: only a dropped connection leaves it working.
+        if (!dropped) serverDoneAt = 0;
         await check();
       } else set({ phase: "failed", failure: recipeFailure(err) });
     } finally {
@@ -116,11 +148,19 @@ export function createLabStore({ api, now }: { api: RecipeApi; now: () => number
     generate,
     /** The same form again, from the start. */
     retry: () => (last && (snapshot.phase === "failed" || snapshot.phase === "found") ? generate(last) : Promise.resolve()),
-    /** Another look at the shelf, when the last one could not be made. */
-    checkAgain: () => (snapshot.phase === "failed" && snapshot.unchecked ? check() : Promise.resolve()),
+    /** Another look at the shelf, when the last one could not be made or the recipe may still be on its way. */
+    checkAgain: () => ((snapshot.phase === "failed" && snapshot.unchecked) || snapshot.phase === "pending" ? check() : Promise.resolve()),
     stop: () => controller?.abort(),
-    reset: () => set(empty),
-    dispose: () => controller?.abort(),
+    reset() {
+      attempt += 1;
+      clearTimeout(timer);
+      set(empty);
+    },
+    dispose() {
+      attempt += 1;
+      clearTimeout(timer);
+      controller?.abort();
+    },
   };
 }
 

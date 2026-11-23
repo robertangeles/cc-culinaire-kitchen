@@ -72,7 +72,7 @@ export function createChatStore({ api, newId }: { api: ChatApi; newId: () => str
     set({ messages });
   };
 
-  async function saveNow(): Promise<void> {
+  async function save(): Promise<void> {
     const messages = snapshot.messages.filter((m) => m.text.trim() !== "");
     if (!messages.some((m) => m.role === "assistant")) return;
     try {
@@ -91,6 +91,10 @@ export function createChatStore({ api, newId }: { api: ChatApi; newId: () => str
       set({ unsaved: true });
     }
   }
+
+  // One save at a time: a second one waits, then sends only what the first did not (and never makes a second conversation).
+  let saving = Promise.resolve();
+  const saveNow = () => (saving = saving.then(save));
 
   /** Streams the answer to the history on screen (which ends with the person's question). */
   async function answer(): Promise<void> {

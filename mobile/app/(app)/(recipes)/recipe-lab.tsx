@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { KeyboardAvoidingView, Pressable, ScrollView, View } from "react-native";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLab } from "../../../src/recipes/RecipesProvider";
 import type { RecipeRequest } from "../../../src/recipes/recipeApi";
@@ -24,6 +24,7 @@ const DIFFICULTY: { value: NonNullable<RecipeRequest["difficulty"]>; label: stri
 /** The server's limits (`recipeController.ts`). */
 const REQUEST_MIN = 3;
 const REQUEST_MAX = 500;
+const INGREDIENT_MAX = 50;
 
 const clock = (ms: number) => {
   const s = Math.max(0, Math.floor(ms / 1000));
@@ -91,15 +92,16 @@ export default function RecipeLab() {
   const caps = { fontFamily: fontFamily.uiStrong, fontSize: 12, letterSpacing: 1.8, textTransform: "uppercase", color: c.accentText } as const;
 
   // A recipe that was just made opens straight away (the lab keeps it, for the marker on its page, until My Recipes opens the lab again).
-  useEffect(() => {
+  // Only while this screen is in view: made while the person is on another tab, it opens when they come back.
+  useFocusEffect(useCallback(() => {
     if (snap.made) router.replace({ pathname: "/recipe", params: { id: snap.made.recipeId } });
-  }, [snap.made, router]);
+  }, [snap.made, router]));
 
   const text = request.trim();
   const valid = text.length >= REQUEST_MIN;
   function generate() {
     if (!valid) return;
-    const list = ingredients.split(",").map((s) => s.trim()).filter(Boolean).slice(0, 20);
+    const list = ingredients.split(",").map((s) => s.trim().slice(0, INGREDIENT_MAX)).filter(Boolean).slice(0, 20);
     void store.generate({
       request: text.slice(0, REQUEST_MAX),
       servings,
@@ -125,6 +127,16 @@ export default function RecipeLab() {
             {snap.phase === "generating" && snap.startedAt ? <Waiting startedAt={snap.startedAt} onStop={store.stop} /> : null}
 
             {snap.phase === "checking" ? <Text variant="muted" accessibilityLiveRegion="polite">Checking My Recipes…</Text> : null}
+
+            {snap.phase === "pending" ? (
+              <Surface>
+                <View style={{ padding: space.lg, gap: space.md }} accessibilityLiveRegion="polite">
+                  <Text style={{ fontFamily: fontFamily.title, fontSize: 20 }}>Your recipe may still be on its way</Text>
+                  <Text variant="muted">The connection dropped while Antoine was writing, and he may still be at it. The phone looks in My Recipes every few seconds, so do not make it again yet.</Text>
+                  <Button label="Check now" onPress={() => void store.checkAgain()} />
+                </View>
+              </Surface>
+            ) : null}
 
             {snap.phase === "found" && snap.found ? (
               <Surface>

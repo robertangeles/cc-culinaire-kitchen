@@ -242,6 +242,22 @@ describe("chat store", () => {
     expect(saved).toHaveLength(1);
   });
 
+  it("two saves at once make one conversation and send the messages once", async () => {
+    const { store, api, answers, created, saved } = setup();
+    api.create.mockRejectedValueOnce(new ApiError("network"));
+    const done = store.send("One");
+    await flush();
+    answers[0].push({ type: "text", text: "A" });
+    answers[0].push("end");
+    await done;
+    expect(store.getSnapshot()).toMatchObject({ unsaved: true, conversationId: null });
+    await Promise.all([store.saveNow(), store.saveNow()]);
+    expect(created).toHaveLength(1);
+    expect(saved).toHaveLength(1);
+    expect(saved[0].id).toBe(created[0].id);
+    expect(store.getSnapshot()).toMatchObject({ unsaved: false, conversationId: created[0].id });
+  });
+
   it("dispose stops an answer in flight", async () => {
     const { store, signals } = setup();
     void store.send("One");

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "../api/client";
 import type { RecipeSummary } from "@culinaire/shared/schemas/recipe";
 import type { RecipeApi, RecipeRequest } from "./recipeApi";
@@ -7,7 +7,10 @@ import { createLabStore } from "./labStore";
 const row = (recipeId: string): RecipeSummary => ({ recipeId, slug: null, title: recipeId, description: null, domain: "recipe", imageUrl: null, isPublicInd: false, createdDttm: "" });
 const form: RecipeRequest = { request: "Chicken braise", servings: 4 };
 
-function setup() {
+// The server stops a generation at 150 s (PR 215); the phone treats 160 s after sending as past that.
+const PAST_SERVER_LIMIT = 161_000;
+
+function setup(now: () => number = () => 1000) {
   let shelf = [row("old")];
   let finish: ((v: unknown) => void) | null = null;
   let fail: ((e: unknown) => void) | null = null;
@@ -23,7 +26,7 @@ function setup() {
       });
     }),
   } as unknown as RecipeApi & { mine: ReturnType<typeof vi.fn>; generate: ReturnType<typeof vi.fn> };
-  const store = createLabStore({ api, now: () => 1000 });
+  const store = createLabStore({ api, now });
   return {
     store,
     api,
@@ -35,6 +38,8 @@ function setup() {
 }
 
 const flush = () => new Promise((r) => setTimeout(r, 0));
+
+afterEach(() => void vi.useRealTimers());
 
 describe("recipe lab store", () => {
   it("sends the form and hands over the saved recipe", async () => {
@@ -95,22 +100,88 @@ describe("recipe lab store", () => {
     expect(t.api.generate).toHaveBeenCalledTimes(1);
   });
 
-  it("a lost reply says nothing was saved only after the shelf was read and shows no new recipe", async () => {
+  it("a connection that drops while the server may still be writing (wifi to mobile data at 10 s) keeps looking instead of saying nothing was saved, and shows the recipe when it lands", async () => {
+    vi.useFakeTimers();
+    const t = setup(() => Date.now());
+    const done = t.store.generate(form);
+    await vi.advanceTimersByTimeAsync(10_000);
+    t.fail(new ApiError("network"));
+    await done;
+    expect(t.store.getSnapshot()).toMatchObject({ phase: "pending", failure: null });
+    await t.store.retry();
+    await t.store.generate(form);
+    expect(t.api.generate).toHaveBeenCalledTimes(1);
+    const looks = t.api.mine.mock.calls.length;
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(t.api.mine.mock.calls.length).toBe(looks + 1);
+    expect(t.store.getSnapshot().phase).toBe("pending");
+    t.shelve("r-late");
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(t.store.getSnapshot()).toMatchObject({ phase: "found", found: { recipeId: "r-late" } });
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(t.api.mine.mock.calls.length).toBe(looks + 2);
+  });
+
+  it("after a dropped connection, nothing was saved is said only once the server's limit has passed and the shelf shows no new recipe", async () => {
+    vi.useFakeTimers();
+    const t = setup(() => Date.now());
+    const done = t.store.generate(form);
+    await vi.advanceTimersByTimeAsync(10_000);
+    t.fail(new ApiError("network"));
+    await done;
+    await vi.advanceTimersByTimeAsync(140_000);
+    expect(t.store.getSnapshot().phase).toBe("pending");
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(t.store.getSnapshot()).toMatchObject({ phase: "failed", unchecked: false, failure: { message: "The connection dropped and nothing was saved. Try again.", canRetry: true } });
+  });
+
+  it("Check now looks at once while the recipe may still be on its way", async () => {
+    vi.useFakeTimers();
+    const t = setup(() => Date.now());
+    const done = t.store.generate(form);
+    await vi.advanceTimersByTimeAsync(10_000);
+    t.fail(new ApiError("network"));
+    await done;
+    t.shelve("r-late");
+    await t.store.checkAgain();
+    expect(t.store.getSnapshot()).toMatchObject({ phase: "found", found: { recipeId: "r-late" } });
+  });
+
+  it("the phone's own time-out is past the server's limit: nothing was saved is said after one look", async () => {
     const t = setup();
     const done = t.store.generate(form);
     await flush();
-    t.fail(new ApiError("network"));
+    t.fail(new ApiError("timeout"));
     await done;
-    expect(t.store.getSnapshot()).toMatchObject({ phase: "failed", unchecked: false, failure: { message: "The connection dropped and nothing was saved. Try again.", canRetry: true } });
+    expect(t.store.getSnapshot()).toMatchObject({ phase: "failed", unchecked: false, failure: { message: "That took too long. Nothing was saved. Try again." } });
+  });
+
+  it("a Try again while the earlier attempt is still unchecked looks first, and offers the recipe that attempt saved instead of making a second", async () => {
+    const t = setup();
+    const done = t.store.generate(form);
+    await flush();
+    t.api.mine.mockRejectedValueOnce(new ApiError("network"));
+    t.fail(new ApiError("timeout"));
+    await done;
+    expect(t.store.getSnapshot()).toMatchObject({ phase: "failed", unchecked: true });
+    t.api.mine.mockRejectedValueOnce(new ApiError("network"));
+    await t.store.retry();
+    expect(t.store.getSnapshot()).toMatchObject({ phase: "failed", unchecked: true, failure: { message: "Can't reach the server. Check your signal and try again." } });
+    t.shelve("r-late");
+    await t.store.retry();
+    expect(t.store.getSnapshot()).toMatchObject({ phase: "found", found: { recipeId: "r-late" } });
+    expect(t.api.generate).toHaveBeenCalledTimes(1);
   });
 
   it.each([
     [new ApiError("network"), "The reply was lost."],
     [new ApiError("timeout"), "The reply was lost."],
   ])("a lost reply (%s) whose check cannot be made does not claim nothing was saved; Check again finds the recipe the server saved", async (err, start) => {
-    const t = setup();
+    let clock = 1000;
+    const t = setup(() => clock);
     const done = t.store.generate(form);
     await flush();
+    clock += PAST_SERVER_LIMIT;
     t.shelve("r-new");
     t.api.mine.mockRejectedValueOnce(new ApiError("network"));
     t.fail(err);
@@ -124,9 +195,11 @@ describe("recipe lab store", () => {
   });
 
   it("Check again that reads the shelf and finds no new recipe says nothing was saved", async () => {
-    const t = setup();
+    let clock = 1000;
+    const t = setup(() => clock);
     const done = t.store.generate(form);
     await flush();
+    clock += PAST_SERVER_LIMIT;
     t.api.mine.mockRejectedValueOnce(new ApiError("network"));
     t.fail(new ApiError("network"));
     await done;

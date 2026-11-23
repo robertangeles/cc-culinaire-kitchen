@@ -95,7 +95,7 @@ history (`chatStore.ts`). The body arrives through `client.stream`, which uses `
 A refusal is read from the server's `code`, never its English: `RATE_LIMITED`, `AI_UNAVAILABLE`, `AI_TIMEOUT` (and the client's own
 time-out), `FREE_SESSIONS_EXHAUSTED`, signed out, no signal. A `3:` part partway keeps what arrived next to the message. The
 conversation is saved after each finished or stopped answer (`POST /api/conversations` with an id made on the phone, then the messages
-with their ids; both are safe to repeat). As on the web, a save sends only the messages not saved yet: the server builds a Brain
+with their ids; both are safe to repeat; one save runs at a time). As on the web, a save sends only the messages not saved yet: the server builds a Brain
 memory from what each save sends, so sending the whole conversation again would repeat it.
 
 **Streaming on a real phone (the spike), 2026-11-24.** Chat chunks arrive one at a time through `expo/fetch` on the moto g86
@@ -133,7 +133,10 @@ the phone never heard about, so before generating the phone notes the newest of 
 and after a lost reply or a stop it looks again. A recipe that was not there when the request began is offered as a question ("A new
 recipe appeared. Is it this one?", it may have been made on the web meanwhile) instead of being made twice. "Nothing was saved" is said
 only when that second look worked and shows no new recipe; when it could not be made the screen says so, asks the person to look in
-My Recipes first, and offers Check again beside Try again. A recipe that finishes while the person is back on My Recipes appears in the
+My Recipes first, and offers Check again beside Try again (a Try again from there looks once more before it sends anything). A dropped
+connection is different from a stop or the phone's own time-out: the server does not see a phone change networks and may still be
+writing, so until its limit has passed (160 s after the request was sent) the screen says the recipe may still be on its way, looks in
+My Recipes every 15 s, and offers Check now but not Try again. The lab opens a finished recipe only while its screen is in view. A recipe that finishes while the person is back on My Recipes appears in the
 list. Returning to My Recipes refreshes the first page and keeps the pages already loaded. Refine (`recipeStore.ts`) is a
 proposal: nothing is saved until Accept (`accept-refinement`); Discard drops it; once Accept is saved the proposal is gone even if the
 recipe cannot be loaded again. The owner's switch is `PATCH /api/recipes/:id`

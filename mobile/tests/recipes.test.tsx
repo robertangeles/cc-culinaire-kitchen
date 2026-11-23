@@ -6,7 +6,7 @@ import type { Recipe, RecipeSummary } from "@culinaire/shared/schemas/recipe";
 import { ApiError } from "../src/api/client";
 import type { RecipeApi, RecipeRequest } from "../src/recipes/recipeApi";
 import { RecipesProvider } from "../src/recipes/RecipesProvider";
-import { returnToScreen, routerMock, searchParams, sessionState } from "../testing/mocks";
+import { returnToScreen, routerMock, screenFocus, searchParams, sessionState } from "../testing/mocks";
 
 vi.mock("../src/runtime/appContext", async () => {
   const { sessionState } = await import("../testing/mocks");
@@ -150,13 +150,54 @@ describe("Recipe Lab", () => {
     press("Generate recipe");
     await waitFor(() => expect(fake.api.generate).toHaveBeenCalled());
     fake.api.mine.mockRejectedValueOnce(new ApiError("network"));
-    await act(async () => fake.fail(new ApiError("network")));
+    await act(async () => fake.fail(new ApiError("timeout")));
     await waitFor(() => expect(screen.getByText("The reply was lost. The phone could not check whether a recipe was saved. Look in My Recipes before trying again.")).toBeTruthy());
     expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
     fake.api.mine.mockResolvedValueOnce({ recipes: [row("new"), row("a"), row("b")], total: 4, page: 1 });
     press("Check again");
     await waitFor(() => expect(screen.getByText("A new recipe appeared. Is it this one?")).toBeTruthy());
     expect(fake.api.generate).toHaveBeenCalledTimes(1);
+  });
+
+  it("a dropped connection says the recipe may still be on its way, with Check now and no Try again", async () => {
+    render(wrap(<RecipeLab />));
+    fireEvent.change(screen.getByLabelText("What would you like to create?"), { target: { value: "Tart" } });
+    press("Generate recipe");
+    await waitFor(() => expect(fake.api.generate).toHaveBeenCalled());
+    await act(async () => fake.fail(new ApiError("network")));
+    await waitFor(() => expect(screen.getByText("Your recipe may still be on its way")).toBeTruthy());
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+    expect(screen.queryByText(/nothing was saved/i)).toBeNull();
+    fake.api.mine.mockResolvedValueOnce({ recipes: [row("new"), row("a"), row("b")], total: 4, page: 1 });
+    press("Check now");
+    await waitFor(() => expect(screen.getByText("A new recipe appeared. Is it this one?")).toBeTruthy());
+    expect(fake.api.generate).toHaveBeenCalledTimes(1);
+  });
+
+  it("a recipe made while the lab is behind another tab opens when the person comes back, not before", async () => {
+    render(wrap(<RecipeLab />));
+    fireEvent.change(screen.getByLabelText("What would you like to create?"), { target: { value: "Tart" } });
+    press("Generate recipe");
+    await waitFor(() => expect(fake.api.generate).toHaveBeenCalled());
+    screenFocus.current = false;
+    await act(async () => fake.finish({ recipe: data, recipeId: "r9" }));
+    await settle();
+    expect(routerMock.replace).not.toHaveBeenCalled();
+    screenFocus.current = true;
+    await act(async () => returnToScreen());
+    expect(routerMock.replace).toHaveBeenCalledWith({ pathname: "/recipe", params: { id: "r9" } });
+  });
+
+  it("cuts a key ingredient to the 50 characters the server takes", async () => {
+    render(wrap(<RecipeLab />));
+    fireEvent.change(screen.getByLabelText("What would you like to create?"), { target: { value: "Braise" } });
+    const long = "chicken thighs with the skin on and some dry cider from the farm";
+    fireEvent.change(screen.getByLabelText("Key ingredients"), { target: { value: `${long}, shallots` } });
+    press("Generate recipe");
+    await waitFor(() => expect(fake.api.generate).toHaveBeenCalled());
+    const sent = fake.api.generate.mock.calls[0][0].mainIngredients!;
+    expect(sent).toEqual(["chicken thighs with the skin on and some dry cider", "shallots"]);
+    expect(sent.every((i) => i.length <= 50)).toBe(true);
   });
 
   it("shows the server's time-out plainly with Try again", async () => {
