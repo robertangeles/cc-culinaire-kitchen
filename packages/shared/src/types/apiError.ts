@@ -50,6 +50,13 @@ export const SERVER_ERROR_CODES = [
   "AI_UNAVAILABLE",
   "AI_TIMEOUT",
   "EMAIL_FAILED",
+  // Orders, approvals and credit notes (Wave 5).
+  "SELF_APPROVAL_NOT_ALLOWED",
+  "ALREADY_EMAILED",
+  "PDF_TIMEOUT",
+  "ALREADY_CREDITED",
+  "CREDIT_EXCEEDS_DISCREPANCY",
+  "DISCREPANCY_VALUE_UNKNOWN",
 ] as const;
 export type ServerErrorCode = (typeof SERVER_ERROR_CODES)[number];
 
