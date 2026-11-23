@@ -555,14 +555,38 @@ describe.skipIf(!RUN)("Wave 7 menu server work (real DB)", () => {
       expect(await db.select().from(sale).where(eq(sale.createdBy, fx.loner))).toHaveLength(0);
     });
 
-    it("rejects a fractional quantity (units sold are whole) with a coded 400 and records nothing", async () => {
+    it("sells a fraction of up to 3 decimals (0.5, 1.25): stock leaves in proportion, a replay is the same sale, a void puts it back", async () => {
       const before = (await stockOf(fx.a1, fx.flourId, "BOH"))!;
-      for (const qty of [1.2345, 1.5]) {
-        const res = await sell(fx.cook, qty, { key: `${fx.tag}-fraction` });
-        expect(res.status).toBe(400);
-        expect(res.body.code).toBe("VALIDATION");
+      const half = await sell(fx.cook, 0.5, { key: `${fx.tag}-half` });
+      expect(half.status).toBe(201);
+      expect(await stockOf(fx.a1, fx.flourId, "BOH")).toBe(before - 50);
+      const replay = await sell(fx.cook, 0.5, { key: `${fx.tag}-half` });
+      expect(replay.status).toBe(201);
+      expect(replay.body.saleId).toBe(half.body.saleId);
+      expect(await stockOf(fx.a1, fx.flourId, "BOH")).toBe(before - 50);
+
+      const more = await sell(fx.cook, 1.25);
+      expect(more.status).toBe(201);
+      expect(await stockOf(fx.a1, fx.flourId, "BOH")).toBe(before - 175);
+
+      for (const made of [half, more]) {
+        const voided = await call(handleVoidSale, fx.cook, { params: { saleId: made.body.saleId } });
+        expect(voided.status).toBe(200);
       }
+      expect(await stockOf(fx.a1, fx.flourId, "BOH")).toBe(before);
+    });
+
+    it("rejects a quantity of more than 3 decimals (1.2345) with a coded 400 and records nothing", async () => {
+      const before = (await stockOf(fx.a1, fx.flourId, "BOH"))!;
+      const res = await sell(fx.cook, 1.2345, { key: `${fx.tag}-fraction` });
+      expect(res.status).toBe(400);
+      expect(res.body.code).toBe("VALIDATION");
       expect(await salesWithKey(`${fx.tag}-fraction`)).toHaveLength(0);
+      expect(await stockOf(fx.a1, fx.flourId, "BOH")).toBe(before);
+
+      const csv = await commitSalesCsv(fx.orgA, fx.cook, [{ rowIndex: 1, name: `${fx.tag} dish`, qtySold: 1.2345 }], principal(fx.cook));
+      expect(csv.succeeded).toEqual([]);
+      expect(csv.failed).toHaveLength(1);
       expect(await stockOf(fx.a1, fx.flourId, "BOH")).toBe(before);
     });
 
@@ -725,6 +749,12 @@ describe.skipIf(!RUN)("Wave 7 menu server work (real DB)", () => {
       const preview = await previewSalesCsv(fx.orgA, fx.cook, `item,qty\n${fx.tag} dish,2\n${fx.tag} dish B,1`);
       expect(preview.matched.map((m) => m.menuItemId)).toEqual([fx.itemId]);
       expect(preview.unmatched.map((u) => u.name)).toEqual([`${fx.tag} dish B`]);
+    });
+
+    it("the CSV preview matches a fraction of up to 3 decimals and reports more as an invalid quantity", async () => {
+      const preview = await previewSalesCsv(fx.orgA, fx.cook, `item,qty\n${fx.tag} dish,0.5\n${fx.tag} dish,1.25\n${fx.tag} dish,1.2345`);
+      expect(preview.matched.map((m) => m.qtySold)).toEqual([0.5, 1.25]);
+      expect(preview.unmatched).toEqual([{ rowIndex: 3, name: `${fx.tag} dish`, reason: "invalid quantity" }]);
     });
 
     it("lists a location's sales for a member of that location", async () => {
