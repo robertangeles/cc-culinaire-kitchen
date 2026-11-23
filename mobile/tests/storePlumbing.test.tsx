@@ -161,12 +161,56 @@ describe("first run", () => {
     expect(mocks.session.joinLocation).toHaveBeenCalledWith("KITCHEN-XYZ");
   });
 
-  it("shows why a key was refused, offers sign out, and sells nothing", () => {
+  it("starts the location step with an empty field once the organisation join succeeds", () => {
+    setState({ phase: "firstRun", user: chef, organisationId: null });
+    const { rerender } = render(<FirstRun />);
+    fireEvent.change(screen.getByLabelText("Join key"), { target: { value: "CULINAIRE-ABC123" } });
+    setState({ phase: "firstRun", user: chef, organisationId: 1 });
+    rerender(<FirstRun />);
+    expect(screen.getByText("Join your location")).toBeTruthy();
+    expect((screen.getByLabelText("Location key") as HTMLInputElement).value).toBe("");
+    expect(screen.getByRole("button", { name: "Join" }).getAttribute("aria-disabled")).toBe("true");
+  });
+
+  it("shows why a key was refused and offers sign out", () => {
     setState({ phase: "firstRun", user: chef, organisationId: null, error: "That key wasn't found. Check it with your manager." });
     render(<FirstRun />);
     expect(screen.getByText("That key wasn't found. Check it with your manager.")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
     expect(mocks.session.signOut).toHaveBeenCalled();
+  });
+});
+
+describe("no plan, price, purchase or upgrade is offered on any store-plumbing screen", () => {
+  const selling = /\b(pricing|price|purchase|checkout|paywall|billing|subscribe|subscription|upgrade|premium|free trial)\b/i;
+
+  it.each([
+    ["sign-in", () => <SignIn />, { phase: "signedOut" }],
+    ["account", () => <Account />, { phase: "ready", user: chef, location: main, locations: [main] }],
+    ["first run (organisation)", () => <FirstRun />, { phase: "firstRun", user: chef, organisationId: null }],
+    ["first run (location)", () => <FirstRun />, { phase: "firstRun", user: chef, organisationId: 1 }],
+    ["update required", () => <UpdateRequired />, { phase: "updateRequired", minVersion: "1.2.0", storeUrls: { ios: "https://apps.apple.com/app/id1", android: "https://play.google.com/store/apps/details?id=x" } }],
+    ["account deleted", () => <AccountDeleted />, { phase: "signedOut" }],
+  ])("%s screen", (_name, screenFor, state) => {
+    setState(state);
+    const { container } = render(screenFor());
+    expect(container.textContent).not.toMatch(selling);
+  });
+
+  it("legal screen", async () => {
+    searchParams.current = { slug: "terms" };
+    mocks.legalApi.load.mockResolvedValue({ status: "unavailable" });
+    const { container } = render(<Legal />);
+    await screen.findByText("This page isn't available in the app yet. Please check back soon.");
+    expect(container.textContent).not.toMatch(selling);
+  });
+
+  it("delete-account screen", async () => {
+    mocks.accountApi.facts.mockResolvedValue({ hasPassword: true, hasApple: false, mfaEnabled: false, email: "c@x.test" });
+    setState({ phase: "ready", user: chef, location: main, locations: [main] });
+    const { container } = render(<DeleteAccount />);
+    await screen.findByLabelText("Your password");
+    expect(container.textContent).not.toMatch(selling);
   });
 });
 
