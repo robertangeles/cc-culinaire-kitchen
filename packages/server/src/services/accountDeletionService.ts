@@ -94,7 +94,7 @@ async function proveWithApple(userId: number, identityToken: string, nonce: stri
   try {
     if (await isFreshAppleSignInFor(userId, identityToken, nonce)) return true;
   } catch (err) {
-    if (!(err instanceof AuthError)) throw err;
+    if (!(err instanceof AuthError) || err.code !== "APPLE_TOKEN_INVALID") throw err;
   }
   throw new AccountDeletionError("That Apple sign-in does not match this account.", "INVALID_CREDENTIALS", 403);
 }
@@ -103,6 +103,7 @@ async function proveWithApple(userId: number, identityToken: string, nonce: stri
  * Delete the caller's own account.
  *
  * @throws {AccountDeletionError} 403 for wrong password / email / MFA code, 409 when blocked.
+ * @throws {AuthError} APPLE_UNAVAILABLE / APPLE_NOT_CONFIGURED (503) when Apple cannot be asked to check the token.
  * @throws {UserAnonymisationError} when the Stripe subscription could not be cancelled.
  */
 export async function deleteOwnAccount(

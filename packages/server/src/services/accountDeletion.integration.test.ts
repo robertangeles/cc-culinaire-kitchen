@@ -8,12 +8,14 @@ config({ path: resolve(dirname(fileURLToPath(import.meta.url)), "../../../../.en
 applyEnvPrefix();
 
 vi.mock("./stripeService.js", () => ({ cancelSubscriptionNow: vi.fn(), deleteCustomer: vi.fn() }));
+vi.mock("./appleSignInService.js", () => ({ isFreshAppleSignInFor: vi.fn() }));
 
 import { and, eq } from "drizzle-orm";
 import { generate as otpGenerate, generateSecret as otpGenerateSecret } from "otplib";
 import { db } from "../db/index.js";
 import { auditLog, oauthAccount, organisation, user, userOrganisation, userRole } from "../db/schema.js";
-import { registerUser } from "./authService.js";
+import { AuthError, registerUser } from "./authService.js";
+import { isFreshAppleSignInFor } from "./appleSignInService.js";
 import { createOrganisation } from "./organisationService.js";
 import { getUserProfile } from "./userService.js";
 import { AccountDeletionError, deleteOwnAccount } from "./accountDeletionService.js";
@@ -156,6 +158,25 @@ describe.skipIf(!RUN)("deleteOwnAccount (real DB)", { timeout: 120_000 }, () => 
     const { userId } = await makeUser("pw-old-session");
     await deleteOwnAccount(userId, { password: PASSWORD }, new Date(Date.now() - 3 * 24 * 3600 * 1000));
     expect(await statusOf(userId)).toBe("deleted");
+  });
+
+  it("Apple-only account: a token for another Apple ID is a 403, but Apple being down or unset reaches the caller as its own 503", async () => {
+    const { userId } = await makeUser("apple");
+    await db.update(user).set({ userPasswordHash: null }).where(eq(user.userId, userId));
+    const apple = { appleIdentityToken: "t", appleNonce: "n" };
+
+    vi.mocked(isFreshAppleSignInFor).mockResolvedValueOnce(false);
+    expect(await refusal(deleteOwnAccount(userId, apple, null))).toMatchObject({ statusCode: 403, code: "INVALID_CREDENTIALS" });
+    vi.mocked(isFreshAppleSignInFor).mockRejectedValueOnce(new AuthError("bad", "APPLE_TOKEN_INVALID", 401));
+    expect(await refusal(deleteOwnAccount(userId, apple, null))).toMatchObject({ statusCode: 403, code: "INVALID_CREDENTIALS" });
+
+    for (const code of ["APPLE_UNAVAILABLE", "APPLE_NOT_CONFIGURED"]) {
+      vi.mocked(isFreshAppleSignInFor).mockRejectedValueOnce(new AuthError("down", code, 503));
+      const err = await refusal(deleteOwnAccount(userId, apple, null));
+      expect(err).toBeInstanceOf(AuthError);
+      expect(err).toMatchObject({ statusCode: 503, code });
+    }
+    expect(await statusOf(userId)).not.toBe("deleted");
   });
 
   it("getSignInTime: the sign-in time of the caller's own refresh token, nothing for someone else's or an unknown one", async () => {

@@ -64,6 +64,8 @@ export function resetAppleKeyCache(): void {
   keysFetchedAt = 0;
 }
 
+const unavailable = () => new AuthError("Apple sign-in is unavailable right now. Try again in a moment.", "APPLE_UNAVAILABLE", 503);
+
 async function refetchKeys(): Promise<void> {
   let body: { keys?: Array<crypto.JsonWebKey & { kid?: string }> };
   try {
@@ -73,7 +75,7 @@ async function refetchKeys(): Promise<void> {
   } catch (err) {
     keysFetchedAt = Date.now(); // spaced like a success: do not hammer Apple while it is down
     log.error({ err }, "Could not fetch Apple's signing keys");
-    throw new AuthError("Apple sign-in is unavailable right now. Try again in a moment.", "APPLE_UNAVAILABLE", 503);
+    throw unavailable();
   }
   const fresh = new Map<string, crypto.KeyObject>();
   for (const jwk of body.keys ?? []) {
@@ -85,7 +87,10 @@ async function refetchKeys(): Promise<void> {
 
 async function keyFor(kid: string): Promise<crypto.KeyObject | undefined> {
   const age = Date.now() - keysFetchedAt;
-  if (keys.size === 0 || age > KEYS_MAX_AGE_MS) await refetchKeys();
+  if (keys.size === 0) {
+    if (keysFetchedAt > 0 && age < KEYS_REFETCH_SPACING_MS) throw unavailable();
+    await refetchKeys();
+  } else if (age > KEYS_MAX_AGE_MS) await refetchKeys();
   else if (!keys.has(kid) && age > KEYS_REFETCH_SPACING_MS) await refetchKeys();
   return keys.get(kid);
 }

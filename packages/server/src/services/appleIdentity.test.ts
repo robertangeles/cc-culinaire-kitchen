@@ -178,6 +178,30 @@ describe("verifyAppleIdentityToken", () => {
   });
 });
 
+describe("Apple key fetch while Apple is down", () => {
+  const keyCalls = () => fetchCalls.filter((c) => c.url.endsWith("/auth/keys")).length;
+
+  it("with a cold cache, spaces the retries: sign-ins inside the spacing get 503 without another Apple call", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      fetchCalls.push({ url });
+      throw new Error("network down");
+    }));
+    for (let i = 0; i < 4; i++) {
+      await expect(verifyAppleIdentityToken(sign(), RAW_NONCE)).rejects.toMatchObject({ code: "APPLE_UNAVAILABLE", statusCode: 503 });
+    }
+    expect(keyCalls()).toBe(1);
+
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(Date.now() + 2 * 60_000);
+    try {
+      await expect(verifyAppleIdentityToken(sign(), RAW_NONCE)).rejects.toMatchObject({ code: "APPLE_UNAVAILABLE" });
+      expect(keyCalls()).toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
 describe("Apple token endpoint", () => {
   const { privateKey } = crypto.generateKeyPairSync("ec", { namedCurve: "P-256" });
   const pem = privateKey.export({ type: "pkcs8", format: "pem" }).toString();
