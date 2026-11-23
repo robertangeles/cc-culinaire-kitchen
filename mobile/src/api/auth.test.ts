@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
-import { createAuthApi } from "./auth";
-import type { ApiClient, TokenStore } from "./client";
+import { createAuthApi, linkAppleMessage } from "./auth";
+import { ApiError, type ApiClient, type TokenStore } from "./client";
 
 const user = { userId: 7, userName: "Chef", userEmail: "c@x.test", mfaEnabled: false, roles: [], permissions: ["inventory:count"] };
 
@@ -124,5 +124,51 @@ describe("apple sign-in", () => {
     const { api, tokenStore } = setup([{ requiresMfa: true, mfaSessionToken: "M" }]);
     expect(await api.appleSignIn(credential)).toEqual({ status: "mfa", mfaSessionToken: "M" });
     expect(tokenStore.save).not.toHaveBeenCalled();
+  });
+});
+
+describe("adding Apple to a signed-in account", () => {
+  const credential = { identityToken: "APPLE-TOKEN", nonce: "n".repeat(32), authorizationCode: "CODE" };
+
+  it("sends the credential, the proof and the refresh token (the server finds when this sign-in began from it)", async () => {
+    const { api, request, tokenStore } = setup([{ linked: true }]);
+    await api.linkApple(credential, { password: "pw", mfaCode: "123456" });
+    expect(request).toHaveBeenCalledWith("POST", "/api/auth/apple/link", expect.objectContaining({ body: { ...credential, password: "pw", mfaCode: "123456", refreshToken: "R" } }));
+    expect(request.mock.calls[0]?.[2]).not.toHaveProperty("auth", false);
+    expect(tokenStore.save).not.toHaveBeenCalled();
+  });
+
+  it("sends no proof fields the person did not give", async () => {
+    const { api, request } = setup([{ linked: true }]);
+    await api.linkApple(credential, {});
+    expect(request.mock.calls[0]?.[2]).toMatchObject({ body: { ...credential, refreshToken: "R" } });
+    expect(Object.keys((request.mock.calls[0]?.[2] as { body: object }).body)).not.toContain("password");
+  });
+});
+
+describe("linkAppleMessage", () => {
+  const refused = (code: string, status = 403) => new ApiError("forbidden", "server words", status, undefined, code);
+
+  it.each([
+    ["INVALID_CREDENTIALS", "That password isn't right."],
+    ["MFA_REQUIRED", "Enter your authenticator code."],
+    ["INVALID_MFA_CODE", "That authenticator code isn't valid."],
+    ["APPLE_ALREADY_LINKED", "That Apple ID is already used by another account, or this account already has a different one."],
+    ["APPLE_TOKEN_INVALID", "Apple sign-in didn't work. Try again."],
+    ["APPLE_NOT_CONFIGURED", "Sign in with Apple isn't available right now. Try again later."],
+    ["APPLE_UNAVAILABLE", "Sign in with Apple isn't available right now. Try again later."],
+    ["RATE_LIMITED", "Too many tries. Wait a few minutes and try again."],
+  ])("explains %s in one plain sentence", (code, text) => {
+    expect(linkAppleMessage(refused(code)).text).toBe(text);
+  });
+
+  it("asks for an authenticator code and a fresh sign-in where those are the way forward", () => {
+    expect(linkAppleMessage(refused("MFA_REQUIRED"))).toMatchObject({ needsMfa: true });
+    expect(linkAppleMessage(refused("RECENT_SIGN_IN_REQUIRED"))).toMatchObject({ needsFreshSignIn: true });
+  });
+
+  it("does not show a stranger's words for an error it cannot name", () => {
+    expect(linkAppleMessage(new ApiError("network")).text).toBe("Couldn't add Sign in with Apple. Try again.");
+    expect(linkAppleMessage(new Error("boom")).text).toBe("Couldn't add Sign in with Apple. Try again.");
   });
 });
