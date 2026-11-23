@@ -15,7 +15,8 @@ import {
 } from "../db/schema.js";
 import * as transferController from "../controllers/transferController.js";
 import { handleRecordSales, handleRestockFoh, handleLogFohWaste, handleCountFoh } from "../controllers/fohController.js";
-import { handleRequestNewItem } from "../controllers/catalogRequestController.js";
+import { handleListMyRequests, handleRequestNewItem } from "../controllers/catalogRequestController.js";
+import { CatalogRequestListSchema } from "@culinaire/shared/schemas/catalogRequest";
 import { asUser, callHandler, createLineLoopFx, removeLineLoopFx, type LineLoopFx } from "./lineLoopFixture.js";
 
 /**
@@ -85,6 +86,14 @@ describe.skipIf(!RUN)("store room and bar retries (real DB)", () => {
     toLocationId: fx.locB,
     lines: [{ ingredientId: fx.ingId, sentQty: 2, sentUnit: "kg" }],
     ...extra,
+  });
+
+  it("transfer create: a large quantity (100 kg of an item kept in grams) is accepted", async () => {
+    const out = await callHandler(transferController.handleInitiateTransfer, asUser(fx.chef, MANAGE), {
+      body: createBody({ lines: [{ ingredientId: fx.ingId, sentQty: 100000, sentUnit: "g" }] }),
+    });
+    expect(out.status).toBe(201);
+    expect(Number(out.body.lines[0].sentQty)).toBe(100000);
   });
 
   it("transfer create: a repeat of the same transferId makes one transfer with one set of lines", async () => {
@@ -209,7 +218,7 @@ describe.skipIf(!RUN)("store room and bar retries (real DB)", () => {
 
     expect(await send(fx.cook, { fohRestockId, ingredientId: colaId, quantity: 1 })).toMatchObject({ status: 409, body: { code: "CONFLICT" } });
     expect(await send(fx.cook, { ingredientId: colaId, quantity: 0 })).toMatchObject({ status: 400, body: { code: "VALIDATION" } });
-    expect(await send(fx.cook, { ingredientId: colaId, quantity: 100000 })).toMatchObject({ status: 400, body: { code: "VALIDATION" } });
+    expect(await send(fx.cook, { ingredientId: colaId, quantity: "1e999" })).toMatchObject({ status: 400, body: { code: "VALIDATION" } });
     expect(await send(fx.cook, { ingredientId: fx.ingId, quantity: 1 })).toMatchObject({ status: 400, body: { code: "VALIDATION" } });
     expect(await send(fx.cook, { ingredientId: randomUUID(), quantity: 1 })).toMatchObject({ status: 404, body: { code: "NOT_FOUND" } });
   });
@@ -331,6 +340,16 @@ describe.skipIf(!RUN)("store room and bar retries (real DB)", () => {
 
   // ─── Catalogue requests ──────────────────────────────────────
 
+  it("catalogue request: a large counted quantity (100 kg of an item counted in grams) is accepted", async () => {
+    const requestId = randomUUID();
+    const out = await callHandler(handleRequestNewItem, asUser(fx.chef, ["inventory:count"]), {
+      body: { requestId, itemName: "Rock salt", storeLocationId: fx.locA, baseUnit: "g", countedQty: 100000 },
+    });
+    expect(out.status).toBe(201);
+    const [stored] = await db.select().from(pendingCatalogRequest).where(eq(pendingCatalogRequest.requestId, requestId));
+    expect(Number(stored.countedQty)).toBe(100000);
+  });
+
   it("catalogue request: a repeat of the same requestId stores one request", async () => {
     const requestId = randomUUID();
     const body = { requestId, itemName: "Yuzu kosho", storeLocationId: fx.locA };
@@ -352,5 +371,39 @@ describe.skipIf(!RUN)("store room and bar retries (real DB)", () => {
     expect(await send(fx.cook, { itemName: "Sumac", storeLocationId: other.locA })).toMatchObject({ status: 403, body: { code: "LOCATION_NOT_ALLOWED" } });
     expect(await send(fx.cook, { requestId, itemName: "Sumac", storeLocationId: fx.locA })).toMatchObject({ status: 409, body: { code: "CONFLICT" } });
     expect(await send(fx.cook, { itemName: "x".repeat(201), storeLocationId: fx.locA })).toMatchObject({ status: 400, body: { code: "VALIDATION" } });
+  });
+
+  it("my catalogue requests: only the caller's own in this organisation, any status, newest first, paged", async () => {
+    await db.delete(pendingCatalogRequest).where(eq(pendingCatalogRequest.organisationId, fx.orgId));
+    const at = (day: number) => new Date(Date.UTC(2026, 10, day));
+    const row = (f: LineLoopFx, who: number, itemName: string, day: number, review: object = {}) =>
+      ({ organisationId: f.orgId, storeLocationId: f.locA, requestedByUserId: who, itemName, createdDttm: at(day), ...review });
+    await db.insert(pendingCatalogRequest).values([
+      row(fx, fx.chef, "Sumac", 1, { status: "REJECTED", reviewNotes: "We stock it as Za'atar mix", reviewedByUserId: fx.boss }),
+      row(fx, fx.chef, "Yuzu", 3),
+      row(fx, fx.chef, "Shiso", 2, { status: "APPROVED", reviewedByUserId: fx.boss }),
+      row(fx, fx.cook, "Cook's own", 4),
+      row(other, other.chef, "Other org", 5),
+    ]);
+    const mine = (query: object) => callHandler(handleListMyRequests, asUser(fx.chef, ["inventory:count"]), { query });
+
+    const all = await mine({});
+    expect(all.status).toBe(200);
+    const list = CatalogRequestListSchema.parse(JSON.parse(JSON.stringify(all.body))); // as the phone receives it
+    expect(list.total).toBe(3);
+    expect(list.data.map((r) => r.itemName)).toEqual(["Yuzu", "Shiso", "Sumac"]);
+    expect(list.data[2]).toMatchObject({ status: "REJECTED", reviewNotes: "We stock it as Za'atar mix" });
+    expect(list.data[1]).toMatchObject({ status: "APPROVED", reviewNotes: null });
+    expect(all.body.data[0]).not.toHaveProperty("reviewedByUserId");
+
+    expect((await mine({ limit: "2" })).body).toMatchObject({ total: 3, data: [{ itemName: "Yuzu" }, { itemName: "Shiso" }] });
+    expect((await mine({ limit: "2", offset: "2" })).body).toMatchObject({ total: 3, data: [{ itemName: "Sumac" }] });
+    expect((await callHandler(handleListMyRequests, asUser(fx.roamer, ["inventory:count"]), { query: {} })).body).toEqual({ data: [], total: 0 });
+  });
+
+  it("my catalogue requests: a bad page is 400 VALIDATION", async () => {
+    for (const query of [{ limit: "0" }, { limit: "101" }, { limit: "many" }, { offset: "-1" }]) {
+      expect(await callHandler(handleListMyRequests, asUser(fx.chef, ["inventory:count"]), { query })).toMatchObject({ status: 400, body: { code: "VALIDATION" } });
+    }
   });
 });

@@ -204,6 +204,6 @@ describe.skipIf(!RUN)("tenant isolation — real DB", () => {
       .from(message)
       .where(eq(message.conversationId, convA));
     expect(rows.length).toBe(0); // nothing was written on the cross-owner attempt
-    expect(await saveMessages(convA, { userId: userA }, [])).toBe(true); // owner allowed
+    expect(await saveMessages(convA, { userId: userA }, [])).toEqual([]); // owner allowed
   });
 });

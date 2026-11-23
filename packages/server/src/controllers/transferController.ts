@@ -14,12 +14,10 @@ import * as transferService from "../services/transferService.js";
 
 const logger = pino({ name: "transferController" });
 
-const QTY_MAX = 99999;
-
 /** One line as sent on create, replace and add: a real item, a quantity above 0, a unit. */
 const LineSchema = z.object({
   ingredientId: z.string().uuid(),
-  sentQty: z.coerce.number().positive().max(QTY_MAX),
+  sentQty: z.coerce.number().positive().finite(),
   sentUnit: z.string().min(1).max(20),
   fifoBatchId: z.string().uuid().optional(),
 });
@@ -28,7 +26,7 @@ const LinesSchema = z.array(LineSchema).min(1);
 /** What arrived, per line of the transfer: 0 or more (a line that never came is 0). */
 const ReceivedLinesSchema = z.array(z.object({
   lineId: z.string().uuid(),
-  receivedQty: z.number().finite().min(0).max(QTY_MAX),
+  receivedQty: z.number().finite().min(0),
 }));
 
 /** 400 VALIDATION: a refused input, with a sentence the web shows. */

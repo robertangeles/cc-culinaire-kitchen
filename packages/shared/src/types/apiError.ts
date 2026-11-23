@@ -52,6 +52,18 @@ export const SERVER_ERROR_CODES = [
   "AI_UNAVAILABLE",
   "AI_TIMEOUT",
   "EMAIL_FAILED",
+  // Profile and account: change password, two-step verification, profile photo.
+  "INVALID_CREDENTIALS",
+  "WEAK_PASSWORD",
+  "PASSWORD_NOT_SET",
+  "RECENT_SIGN_IN_REQUIRED",
+  "MFA_REQUIRED",
+  "INVALID_MFA_CODE",
+  "INVALID_MFA_SESSION",
+  "MFA_ALREADY_ENABLED",
+  "FILE_TOO_LARGE",
+  "UNSUPPORTED_FILE_TYPE",
+  "UPLOAD_FAILED",
   // Roster (Wave 4). Assigning to a shift answers 409 for three different reasons; a swap claim for three more.
   "ASSIGNMENT_BLOCKED_COMPLIANCE",
   "SHIFT_ALREADY_ASSIGNED",

@@ -1442,6 +1442,12 @@ builds all tables with CHECKs enforcing. Stop it again when done.
 - **Fix**: Made a private cluster under the session scratch folder (own port, own `initdb` from the version that made nothing else), pushed the schema and seeded it there, and ran every pnpm command as `npx pnpm@10.31.0`.
 - **Rule**: When several workers share a machine, give each its own database folder and port, and do not run `db:push` against a folder you did not create. Use the pnpm in `packageManager`.
 
+## 2026-11-23 — A local recipe run needs the prompt rows, and a debugger client needs Metro's Origin
+
+- **Problem**: Against a fresh local database every recipe generation answered the prose fallback in milliseconds: the recipe-lab prompts are not seeded (they live only in the `prompt` table, authored in the admin UI) and the file fallback `prompts/chatbot/recipePrompt.md` does not exist. Separately, a script that evaluated code on the phone through Metro's `/json/list` debugger URL was refused: the inspector proxy only accepts a WebSocket whose `Origin` is Metro itself, and Node's built-in `WebSocket` cannot send one.
+- **Fix**: Inserted `recipePrompt` and `recipeRefinementPrompt` rows with `default_ind = false` (the live row; `true` is the factory default) into the throwaway database, and connected with the `ws` package and `origin: "http://localhost:8088"`.
+- **Rule**: Before calling a run of a model-backed route "broken", check the server log for the prompt load. Talk to the phone's JS through Metro with an explicit Origin.
+
 ## 2026-11-23 — A service that starts writing notifications breaks every test that deletes its organisation
 
 - **Problem**: Hooking `verifyDocument` and `rejectDocument` to push made them save an in-app notification. `compliance.integration.test.ts` deleted its organisation in `afterAll` without deleting notifications, and the `notification.organisation_id` foreign key refused: two suites failed with a teardown error, not an assertion.

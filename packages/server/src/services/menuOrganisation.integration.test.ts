@@ -45,6 +45,7 @@ import {
 import { previewSalesCsv, commitSalesCsv } from "./saleService.js";
 import { importCsvSalesData } from "./menuIntelligenceService.js";
 import { resolveMenuScope } from "./menuAccess.js";
+import { getMenuForSelection, suggestSelections, getHighImpactDishes } from "./prepMenuService.js";
 import { createOrganisation, joinOrganisation } from "./organisationService.js";
 import { errorHandler } from "../middleware/errorHandler.js";
 import type { TokenPayload } from "./authService.js";
@@ -279,7 +280,14 @@ describe.skipIf(!RUN)("Wave 7 menu server work (real DB)", () => {
     it("a creator removed from the organisation no longer lists, edits or deletes the items they made in it", async () => {
       const made = await call(handleCreateMenuItem, fx.leaver, { body: { name: `${fx.tag} left behind`, category: "mains", sellingPrice: "6.00" } });
       const id = made.body.menuItemId;
+      const prepIds = async (userId: number) => [
+        ...(await getMenuForSelection(userId)).menuItems.map((i) => i.menuItemId),
+        ...(await suggestSelections(userId, 10)).suggestions.map((i) => i.menuItemId),
+        ...(await getHighImpactDishes(userId)).dishes.map((d) => d.menuItemId),
+      ];
+      expect(await prepIds(fx.leaver)).toContain(id);
       await db.delete(userOrganisation).where(eq(userOrganisation.userId, fx.leaver));
+      expect(await prepIds(fx.leaver)).not.toContain(id);
 
       const list = await call(handleListMenuItems, fx.leaver);
       expect(list.body.map((i: { menuItemId: string }) => i.menuItemId)).not.toContain(id);

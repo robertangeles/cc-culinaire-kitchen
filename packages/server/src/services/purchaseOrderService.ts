@@ -10,7 +10,8 @@
  * Receiving (stock, FIFO batches, WAC) is receivingService's.
  */
 
-import { eq, and, desc, sql, inArray, ne, or, isNull, lt } from "drizzle-orm";
+import { eq, and, desc, sql, inArray, ne, or, isNull, lt, notExists } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { db } from "../db/index.js";
 import {
   purchaseOrder,
@@ -370,9 +371,11 @@ export async function submitPO(poId: string, orgId: number, userId: number) {
 
 /**
  * Whether anyone in the organisation besides `userId` can approve purchase orders: an active member who holds
- * `purchasing:approve` through a role, or an Administrator (who bypasses permission checks).
+ * `purchasing:approve` through a role, or an Administrator (who bypasses permission checks). A user only acts in their
+ * earliest organisation (`getUserLocationContext`), so a member whose earliest membership is elsewhere does not count.
  */
 async function hasOtherApprover(orgId: number, userId: number, tx: DbOrTx = db): Promise<boolean> {
+  const earlier = alias(userOrganisation, "earlier_membership");
   const rows = await tx
     .select({ userId: user.userId })
     .from(user)
@@ -384,6 +387,17 @@ async function hasOtherApprover(orgId: number, userId: number, tx: DbOrTx = db):
     .where(
       and(
         eq(userOrganisation.organisationId, orgId),
+        notExists(
+          tx
+            .select({ one: sql`1` })
+            .from(earlier)
+            .where(
+              and(
+                eq(earlier.userId, userOrganisation.userId),
+                sql`${earlier.userOrganisationId} < ${userOrganisation.userOrganisationId}`,
+              ),
+            ),
+        ),
         ne(user.userId, userId),
         eq(user.userStatus, "active"),
         or(eq(role.roleName, "Administrator"), eq(permission.permissionKey, "purchasing:approve")),

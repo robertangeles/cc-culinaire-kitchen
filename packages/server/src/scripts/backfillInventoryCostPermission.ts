@@ -7,8 +7,10 @@
  * `inventory:hq`) is given `inventory:cost`, so nobody loses what they see now; an owner who wants blind
  * counting removes it from that role in Settings → Roles. A role with no inventory key does not gain it.
  *
- * MUST run BEFORE the server code that hides these fields goes live. Idempotent: re-running only inserts missing
- * rows/links.
+ * MUST run at least ONE HOUR BEFORE the server code that hides these fields goes live. A signed-in user's
+ * permissions travel in their access token, which lasts up to an hour: someone signed in before this ran keeps a
+ * token without `inventory:cost` until it refreshes. If the deploy cannot wait an hour, those users must sign in
+ * again. Idempotent: re-running only inserts missing rows/links.
  *
  * Run once:
  *   pnpm --filter @culinaire/server exec tsx src/scripts/backfillInventoryCostPermission.ts

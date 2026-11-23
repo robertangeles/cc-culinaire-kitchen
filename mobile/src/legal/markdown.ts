@@ -1,5 +1,5 @@
 /**
- * Just enough Markdown for the terms and privacy pages the owner writes in Settings: headings, paragraphs, lists, rules, bold,
+ * Just enough Markdown for the terms and privacy pages the owner writes in Settings, and for chat answers: headings, paragraphs, lists, rules, bold,
  * italic and links. Anything else shows as the plain text it is. No HTML is ever interpreted, and only web and mail links open.
  */
 

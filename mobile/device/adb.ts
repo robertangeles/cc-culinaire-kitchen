@@ -89,12 +89,33 @@ export async function find(m: Matcher, pick: (nodes: UiNode[]) => UiNode | undef
   return pick((await dump()).filter((n) => nodeMatches(n, m)));
 }
 
+/**
+ * True while one of Google Password Manager's sheets is up: "Save password to Google Password Manager?" after a sign-in, or "Use your saved
+ * password for CulinAIre Kitchen?" when an email field is focused. Both show the phone owner's accounts: never keep a screenshot of them.
+ */
+export const isSavePasswordSheet = (nodes: UiNode[]) => nodes.some((n) => /Google Password Manager|^Save password|saved password/i.test(n.text));
+
+/**
+ * A real phone's Google Password Manager offers to save the password a few seconds after a sign-in, and to fill a saved one when an email
+ * field is focused, over whatever screen is up by then. Close it with the Back key, which chooses nothing: never tap its buttons (Save,
+ * Never, Not now, Continue, No thanks change or use the owner's Google account). `waitFor` calls this while it polls, so every walk gets
+ * it. Returns true when a sheet was closed.
+ */
+export async function dismissSavePassword(nodes?: UiNode[]): Promise<boolean> {
+  if (!isSavePasswordSheet(nodes ?? (await dump()))) return false;
+  await back();
+  await sleep(800);
+  return true;
+}
+
 /** Wait until something with this text or label is on screen. Returns it. */
 export async function waitFor(m: Matcher, timeoutMs = 20_000): Promise<UiNode> {
   const deadline = Date.now() + timeoutMs;
   for (;;) {
-    const node = await find(m);
+    const nodes = await dump();
+    const node = nodes.find((n) => nodeMatches(n, m));
     if (node) return node;
+    await dismissSavePassword(nodes);
     if (Date.now() > deadline) throw new Error(`timed out waiting for ${String(m)}\nOn screen: ${(await texts()).join(" | ")}`);
     await sleep(500);
   }
@@ -244,4 +265,13 @@ export async function tapLabel(label: string, timeoutMs = 20_000): Promise<void>
     if (Date.now() > deadline) throw new Error(`no control labelled "${label}"\nOn screen: ${(await texts()).join(" | ")}`);
     await sleep(500);
   }
+}
+
+/** Open a tab by its title. A person with more modules than the bar holds finds the rest, and Account, under More. */
+export async function openTab(title: string, timeoutMs = 30_000): Promise<void> {
+  const button = new RegExp(`^${title}(,|$)`);
+  await waitFor(/^More(,|$)|^Account(,|$)/, timeoutMs);
+  if (await has(button)) return tap(button);
+  await tap(/^More(,|$)/);
+  await tap(title);
 }

@@ -614,52 +614,68 @@ export function stockStatus(qty: number | null, par: number | null): "healthy" |
 const valueOf = (qty: number, locationUnitCost: string | null, orgUnitCost: string | null) =>
   qty * Number(locationUnitCost || orgUnitCost || 0);
 
-/**
- * The dashboard's figures, worked out once on the server so the web and the phone agree. Over the location's active
- * items: low and critical are the store-room quantity against par; value counts the store room and the
- * front-of-house shelf, each once. Value is left out unless `withValue` (the caller holds `inventory:cost`).
- */
-async function getStockSummary(storeLocationId: string, organisationId: number, withValue: boolean) {
-  const foh = alias(stockLevel, "foh_level");
-  const rows = await db
-    .select({
-      ingredientId: ingredient.ingredientId,
-      category: ingredient.ingredientCategory,
-      bohQty: stockLevel.currentQty,
-      fohQty: foh.currentQty,
-      parLevel: locationIngredient.parLevel,
-      locationUnitCost: locationIngredient.unitCost,
-      orgUnitCost: ingredient.unitCost,
-    })
-    .from(locationIngredient)
-    .innerJoin(ingredient, eq(ingredient.ingredientId, locationIngredient.ingredientId))
-    .leftJoin(
-      stockLevel,
-      and(eq(stockLevel.ingredientId, locationIngredient.ingredientId), eq(stockLevel.storeLocationId, storeLocationId), eq(stockLevel.zone, "BOH")),
-    )
-    .leftJoin(foh, and(eq(foh.ingredientId, locationIngredient.ingredientId), eq(foh.storeLocationId, storeLocationId), eq(foh.zone, "FOH")))
-    .where(
-      and(
-        eq(locationIngredient.storeLocationId, storeLocationId),
-        eq(locationIngredient.activeInd, true),
-        eq(ingredient.organisationId, organisationId),
-      ),
-    );
+interface StockRow {
+  ingredientId: string;
+  category: string;
+  zone: string;
+  currentQty: string;
+  parLevel: string | null;
+  activeInd: boolean | null;
+  locationUnitCost: string | null;
+  orgUnitCost: string | null;
+}
 
+/** The columns {@link summariseStock} reads, from `stock_level` joined to its ingredient and (left) its `location_ingredient`. */
+const stockRowColumns = {
+  ingredientId: stockLevel.ingredientId,
+  category: ingredient.ingredientCategory,
+  zone: stockLevel.zone,
+  currentQty: stockLevel.currentQty,
+  parLevel: locationIngredient.parLevel,
+  activeInd: locationIngredient.activeInd,
+  locationUnitCost: locationIngredient.unitCost,
+  orgUnitCost: ingredient.unitCost,
+};
+
+/**
+ * One location's stock figures, by the one rule the location dashboard and the HQ table share. Value counts every
+ * stock row, store room and front-of-house shelf, whether or not the item is active here (stock on hand is money);
+ * a negative quantity is worth nothing. Low and critical count only items active here that have a par, by the
+ * store-room quantity.
+ */
+function summariseStock(rows: StockRow[]) {
   const lowIngredientIds: string[] = [];
   const criticalIngredientIds: string[] = [];
   const valueByCat = new Map<string, number>();
   let stockValue = 0;
   for (const r of rows) {
-    const status = stockStatus(r.bohQty === null ? null : Number(r.bohQty), r.parLevel === null ? null : Number(r.parLevel));
+    const value = valueOf(Math.max(Number(r.currentQty), 0), r.locationUnitCost, r.orgUnitCost);
+    stockValue += value;
+    if (value > 0) valueByCat.set(r.category, (valueByCat.get(r.category) ?? 0) + value);
+    if (r.zone !== "BOH" || r.activeInd !== true) continue;
+    const status = stockStatus(Number(r.currentQty), r.parLevel === null ? null : Number(r.parLevel));
     if (status === "low") lowIngredientIds.push(r.ingredientId);
     if (status === "critical") criticalIngredientIds.push(r.ingredientId);
-    const value = valueOf(Number(r.bohQty ?? 0) + Number(r.fohQty ?? 0), r.locationUnitCost, r.orgUnitCost);
-    if (value > 0) {
-      stockValue += value;
-      valueByCat.set(r.category, (valueByCat.get(r.category) ?? 0) + value);
-    }
   }
+  return { lowIngredientIds, criticalIngredientIds, stockValue, valueByCat };
+}
+
+/**
+ * The dashboard's figures, worked out once on the server so the web and the phone agree (see {@link summariseStock}).
+ * Value is left out unless `withValue` (the caller holds `inventory:cost`).
+ */
+async function getStockSummary(storeLocationId: string, organisationId: number, withValue: boolean) {
+  const rows = await db
+    .select(stockRowColumns)
+    .from(stockLevel)
+    .innerJoin(ingredient, eq(ingredient.ingredientId, stockLevel.ingredientId))
+    .leftJoin(
+      locationIngredient,
+      and(eq(locationIngredient.ingredientId, stockLevel.ingredientId), eq(locationIngredient.storeLocationId, stockLevel.storeLocationId)),
+    )
+    .where(and(eq(stockLevel.storeLocationId, storeLocationId), eq(ingredient.organisationId, organisationId)));
+
+  const { lowIngredientIds, criticalIngredientIds, stockValue, valueByCat } = summariseStock(rows);
   return {
     lowCount: lowIngredientIds.length,
     criticalCount: criticalIngredientIds.length,
@@ -783,8 +799,8 @@ export async function getLocationDashboard(
 }
 
 /**
- * Get org-wide dashboard summary — one row per location with stock counts + value. Item counts and low/critical
- * read the store-room row; value counts the store room and the front-of-house shelf, and is left out unless `withValue`.
+ * Get org-wide dashboard summary — one row per location with stock counts + value, by the same rule as the location's
+ * own dashboard (see {@link summariseStock}). The item count is the store-room rows; value is left out unless `withValue`.
  */
 export async function getOrgDashboardSummary(organisationId: number, opts: { withValue: boolean }) {
   // Get all locations in org
@@ -803,14 +819,7 @@ export async function getOrgDashboardSummary(organisationId: number, opts: { wit
 
   // Batch-fetch stock levels for all locations (replaces N per-location queries)
   const allLevels = await db
-    .select({
-      storeLocationId: stockLevel.storeLocationId,
-      zone: stockLevel.zone,
-      currentQty: stockLevel.currentQty,
-      parLevel: locationIngredient.parLevel,
-      unitCost: locationIngredient.unitCost,
-      orgUnitCost: ingredient.unitCost,
-    })
+    .select({ storeLocationId: stockLevel.storeLocationId, ...stockRowColumns })
     .from(stockLevel)
     .innerJoin(ingredient, eq(ingredient.ingredientId, stockLevel.ingredientId))
     .leftJoin(
@@ -860,27 +869,15 @@ export async function getOrgDashboardSummary(organisationId: number, opts: { wit
 
   return locations.map((loc) => {
     const levels = levelsByLocation.get(loc.storeLocationId) ?? [];
-    let totalItems = 0;
-    let lowStock = 0;
-    let critical = 0;
-    let inventoryValue = 0;
-
-    for (const l of levels) {
-      inventoryValue += valueOf(Number(l.currentQty || 0), l.unitCost, l.orgUnitCost);
-      if (l.zone !== "BOH") continue;
-      totalItems++;
-      const status = stockStatus(Number(l.currentQty || 0), l.parLevel === null ? null : Number(l.parLevel));
-      if (status === "critical") critical++;
-      else if (status === "low") lowStock++;
-    }
+    const summary = summariseStock(levels);
 
     return {
       ...loc,
       inventoryActive: loc.inventoryActive,
-      totalItems,
-      lowStock,
-      critical,
-      ...(opts.withValue && { inventoryValue }),
+      totalItems: levels.filter((l) => l.zone === "BOH").length,
+      lowStock: summary.lowIngredientIds.length,
+      critical: summary.criticalIngredientIds.length,
+      ...(opts.withValue && { inventoryValue: summary.stockValue }),
       lastCountDttm: lastSessionByLocation.get(loc.storeLocationId) ?? null,
     };
   });

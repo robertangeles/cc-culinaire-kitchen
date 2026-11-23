@@ -5,9 +5,12 @@ import { AuthUserSchema, LocationContextSchema, LoginReplySchema, RefreshReplySc
 import { ActiveSessionSchema, AreaLinesSchema, CountSheetsSchema, SubmitConflictBodySchema } from "./stockTake.js";
 import { WasteEntrySchema, WasteListSchema, WasteSuggestionsSchema } from "./waste.js";
 import { CatalogueSchema } from "./catalogue.js";
+import { CatalogRequestListSchema } from "./catalogRequest.js";
 import { PrepMenuSchema, PrepSelectionsSchema, PrepTodaySchema } from "./prep.js";
 import { ConsumptionEntrySchema, ConsumptionListSchema } from "./consumption.js";
 import { StockMovementListSchema, StorageAreaListSchema } from "./stockMovement.js";
+import { ConversationDetailSchema, ConversationListSchema } from "./conversation.js";
+import { GenerateReplySchema, RecipePageSchema, RecipeSchema, RefineReplySchema, parseRecipeData } from "./recipe.js";
 
 // Payloads are shaped like the real server replies. Each lenient rule is one case: the point is that a server
 // that moved on (new field, new enum value, new null) does not break a phone that was installed last month.
@@ -210,5 +213,78 @@ describe("stock movement schemas", () => {
     const list = StockMovementListSchema.parse([move, { nonsense: 1 }]);
     expect(list).toHaveLength(1);
     expect(list[0]).toMatchObject({ quantity: 4, fromAreaName: "Stock Room", toAreaName: "Bar" });
+  });
+});
+
+describe("conversation schemas", () => {
+  it("lists conversations and drops a row without an id", () => {
+    expect(ConversationListSchema.parse({ conversations: [{ conversationId: "c1", conversationTitle: "Hollandaise", updatedDttm: "2026-11-23T01:00:00Z", userId: 7 }, { conversationTitle: "no id" }] })).toEqual([
+      { conversationId: "c1", conversationTitle: "Hollandaise", updatedDttm: "2026-11-23T01:00:00Z" },
+    ]);
+  });
+
+  it("orders messages by sequence and drops a role the phone does not know", () => {
+    const detail = ConversationDetailSchema.parse({
+      conversation: {
+        conversationId: "c1",
+        conversationTitle: "Fish",
+        messages: [
+          { messageId: "m2", messageRole: "assistant", messageBody: "Pat it dry.", messageSequence: 1 },
+          { messageId: "m0", messageRole: "system", messageBody: "x", messageSequence: 2 },
+          { messageId: "m1", messageRole: "user", messageBody: "Crisp skin?", messageSequence: 0 },
+        ],
+      },
+    });
+    expect(detail.messages.map((m) => m.messageId)).toEqual(["m1", "m2"]);
+  });
+});
+
+describe("recipe schemas", () => {
+  const data = { name: "Braise", description: "Slow", yield: "4", prepTime: "10 min", cookTime: "2 h", difficulty: "intermediate", ingredients: [{ amount: 2, unit: "kg", name: "Chicken thigh" }, { unit: "g" }], steps: [{ step: 1, instruction: "Brown." }], allergenNote: "None", confidenceNote: "High", flavorBalance: { sweet: { score: 3 } } };
+
+  it("reads what the recipe screen shows, tolerating a numeric amount and a broken row", () => {
+    const parsed = parseRecipeData(data);
+    expect(parsed.ingredients).toEqual([{ amount: "2", unit: "kg", name: "Chicken thigh", note: undefined }]);
+    expect(parsed.proTips).toEqual([]);
+    expect(parseRecipeData(null).name).toBe("");
+  });
+
+  it("keeps recipeData exactly as sent, so a refinement can be accepted with it", () => {
+    const recipe = RecipeSchema.parse({ recipeId: "r1", title: "Braise", recipeData: data, isPublicInd: true, kitchenContext: "x" });
+    expect(recipe.recipeData).toBe(data);
+    expect(recipe.userId).toBeUndefined();
+  });
+
+  it("reads a page of my recipes", () => {
+    expect(RecipePageSchema.parse({ recipes: [{ recipeId: "r1", title: "Braise", isPublicInd: "yes" }], total: 1, page: 1, limit: 20 }).recipes[0]).toMatchObject({ recipeId: "r1", isPublicInd: false, slug: null });
+  });
+
+  it("tells a saved recipe from a prose answer", () => {
+    expect("recipe" in GenerateReplySchema.parse({ recipe: data, recipeId: "r1", imageUrl: null, slug: "braise" })).toBe(true);
+    // The server sends `{ memoryId, title, sourceType }` per note; a title can be null.
+    expect(GenerateReplySchema.parse({ recipe: data, recipeId: "r1", brainGrounded: [{ memoryId: "m1", title: "Fish supplier", sourceType: "note" }, { memoryId: "m2", title: null }, "junk"] })).toMatchObject({ brainGrounded: [{ title: "Fish supplier" }, { title: null }] });
+    expect(GenerateReplySchema.parse({ prose: "Try a stew." })).toEqual({ prose: "Try a stew." });
+    expect(GenerateReplySchema.safeParse({}).success).toBe(false);
+  });
+
+  it("needs an object to accept from a refinement", () => {
+    expect(RefineReplySchema.safeParse({ refinedData: data, changeSummary: "Dairy-free" }).success).toBe(true);
+    expect(RefineReplySchema.safeParse({ refinedData: null, changeSummary: "" }).success).toBe(false);
+  });
+});
+
+describe("catalogue request list schema", () => {
+  const row = {
+    requestId: "r1", storeLocationId: "loc-1", itemName: "Sumac", itemType: "KITCHEN_INGREDIENT", category: null, baseUnit: null, countedQty: "2.500",
+    status: "REJECTED", reviewNotes: "We stock it", createdIngredientId: null, createdDttm: "2026-11-20T00:00:00.000Z", updatedDttm: "2026-11-21T00:00:00.000Z",
+  };
+
+  it("reads a row, with the counted quantity as a number and HQ's notes", () => {
+    expect(CatalogRequestListSchema.parse({ data: [row], total: 1 }).data[0]).toMatchObject({ countedQty: 2.5, status: "REJECTED", reviewNotes: "We stock it" });
+  });
+
+  it("keeps a status it does not know, and one bad row does not hide the others", () => {
+    const list = CatalogRequestListSchema.parse({ data: [{ ...row, status: "MERGED" }, { nonsense: true }, { ...row, requestId: "r2", countedQty: null }], total: 3 });
+    expect(list.data.map((r) => [r.requestId, r.status, r.countedQty])).toEqual([["r1", "MERGED", 2.5], ["r2", "REJECTED", null]]);
   });
 });

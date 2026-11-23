@@ -18,6 +18,7 @@ import { getUserOrgContext } from "./orgContextService.js";
 import { computeSuggestedSelections } from "./prepMath.js";
 import { parseTimeToMinutes } from "./prepErrors.js";
 import { canManageSession, canWorkSession } from "./prepAccess.js";
+import { menuReadable, resolveMenuScope } from "./menuAccess.js";
 import { AppError } from "../utils/appError.js";
 import type { TokenPayload } from "./authService.js";
 
@@ -116,7 +117,7 @@ export async function getMenuForSelection(
   const menuItems = await db
     .select()
     .from(menuItem)
-    .where(inArray(menuItem.userId, userIds));
+    .where(and(inArray(menuItem.userId, userIds), menuReadable(await resolveMenuScope(userId))));
 
   const recipes = await db
     .select()
@@ -176,7 +177,7 @@ export async function suggestSelections(
       unitsSold: menuItem.unitsSold,
     })
     .from(menuItem)
-    .where(inArray(menuItem.userId, userIds));
+    .where(and(inArray(menuItem.userId, userIds), menuReadable(await resolveMenuScope(userId))));
 
   const items = rows.map((r) => ({
     menuItemId: r.menuItemId,
@@ -340,7 +341,7 @@ export async function getHighImpactDishes(
   const menuItems = await db
     .select()
     .from(menuItem)
-    .where(inArray(menuItem.userId, userIds));
+    .where(and(inArray(menuItem.userId, userIds), menuReadable(await resolveMenuScope(userId))));
 
   const hasMenuItems = menuItems.length > 0;
 

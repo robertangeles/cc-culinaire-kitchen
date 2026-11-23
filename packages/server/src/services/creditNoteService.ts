@@ -22,6 +22,7 @@ import {
   ingredient,
 } from "../db/schema.js";
 import { AppError } from "../utils/appError.js";
+import { isUnpriced } from "./poMath.js";
 import pino from "pino";
 
 const logger = pino({ name: "creditNoteService" });
@@ -42,7 +43,7 @@ export interface DiscrepancyValueInput {
   shortageQty: string | null;
   orderedQty: string;
   receivedQty: string;
-  /** The ordered price per ordered unit, else the price recorded at the door. */
+  /** The price per ordered unit to value by (see `valueOf`: for a short delivery the higher of the order and door prices). */
   unitPrice: string | null;
   varianceAmount: string | null;
 }
@@ -50,7 +51,7 @@ export interface DiscrepancyValueInput {
 const toCents = (n: number) => Math.round(n * 100) / 100;
 
 /**
- * What a discrepancy is worth, the most it can be credited: the missing quantity at the order price for a short
+ * What a discrepancy is worth, the most it can be credited: the missing quantity at `unitPrice` for a short
  * delivery, the whole line for a rejection or a substitution, and the extra paid per unit times what arrived for a
  * price rise (nothing for a price drop). Null when there is no price to value it by.
  */
@@ -99,8 +100,17 @@ type DiscrepancyRow = {
   varianceAmount: string | null;
 };
 
-const valueOf = (d: DiscrepancyRow) =>
-  discrepancyValue({ ...d, unitPrice: d.poLineUnitCost ?? d.lineActualUnitCost });
+/**
+ * A short delivery is valued at the higher of the order price and the price recorded at the door, so a line that is
+ * both short and re-priced can still be credited for the missing quantity at what the supplier charged. A zero or
+ * negative price is no price: it is skipped, and a line with no real price has no value.
+ */
+export const valueOf = (d: DiscrepancyRow) => {
+  const priced = [d.poLineUnitCost, d.lineActualUnitCost].filter((p): p is string => !isUnpriced(p));
+  const unitPrice =
+    priced.length === 0 ? null : d.type === "SHORT" ? String(Math.max(...priced.map(Number))) : priced[0];
+  return discrepancyValue({ ...d, unitPrice });
+};
 
 /**
  * Create a credit note against a discrepancy and mark it resolved, in one transaction. The discrepancy row is locked,

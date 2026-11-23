@@ -48,7 +48,7 @@ export async function handleGetKitchenProfile(
   next: NextFunction
 ): Promise<void> {
   if (!req.user) {
-    res.status(401).json({ error: "Authentication required." });
+    res.status(401).json({ error: "Authentication required.", code: "UNAUTHENTICATED" });
     return;
   }
 
@@ -72,7 +72,7 @@ export async function handleUpsertKitchenProfile(
   next: NextFunction
 ): Promise<void> {
   if (!req.user) {
-    res.status(401).json({ error: "Authentication required." });
+    res.status(401).json({ error: "Authentication required.", code: "UNAUTHENTICATED" });
     return;
   }
 
@@ -80,6 +80,7 @@ export async function handleUpsertKitchenProfile(
   if (!parsed.success) {
     res.status(400).json({
       error: "Invalid kitchen profile data.",
+      code: "VALIDATION",
       details: parsed.error.flatten().fieldErrors,
     });
     return;

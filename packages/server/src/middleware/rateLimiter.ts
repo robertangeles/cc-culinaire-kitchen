@@ -137,7 +137,7 @@ export const authRateLimit = rateLimit({
     const hash = createHash("sha256").update(ip).digest("hex").slice(0, 32);
     return `auth-ip-${hash}`;
   },
-  message: { error: "Too many attempts — please wait a minute before trying again." },
+  message: { error: "Too many attempts — please wait a minute before trying again.", code: "RATE_LIMITED" },
 });
 
 /**
@@ -229,7 +229,7 @@ export const mfaVerifyRateLimit = rateLimit({
     const ip = req.ip ?? "unknown";
     return `mfa-verify-ip-${createHash("sha256").update(ip).digest("hex").slice(0, 32)}`;
   },
-  message: { error: "Too many attempts — please wait a minute before trying again." },
+  message: { error: "Too many attempts — please wait a minute before trying again.", code: "RATE_LIMITED" },
 });
 
 const mfaAccountOf = (req: Request): number | null =>
@@ -254,7 +254,7 @@ export const mfaAccountRateLimit = rateLimit({
   requestWasSuccessful: (_req: Request, res: Response) => res.statusCode < 400 || res.statusCode === 409,
   skip: (req: Request) => mfaAccountOf(req) == null,
   keyGenerator: (req: Request) => `mfa-account-${mfaAccountOf(req)}`,
-  message: { error: "Too many failed attempts — please wait 15 minutes before trying again." },
+  message: { error: "Too many failed attempts — please wait 15 minutes before trying again.", code: "RATE_LIMITED" },
 });
 
 const hashIp = (req: Request) => createHash("sha256").update(req.ip ?? "unknown").digest("hex").slice(0, 32);
