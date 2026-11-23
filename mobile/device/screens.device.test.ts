@@ -204,7 +204,7 @@ async function pick(field: string, typed: string, name: string) {
   await tap(`Use ${name}`, 30_000);
 }
 
-describe.skipIf(!process.env.SCREENS_OUT)(`screens on ${FORM}`, () => {
+describe.skipIf(!process.env.SCREENS_OUT)(`screens on ${FORM}`, { timeout: 600_000 }, () => {
   beforeEach((ctx) => {
     onTestFailed(async ({ task }) => {
       // Said at once, so a walk that is stopped early still shows why its tests failed.
