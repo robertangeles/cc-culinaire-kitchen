@@ -78,7 +78,7 @@ describe.skipIf(!process.env.CI && (!email || !password || !totpSecret))("transf
     cleanups.push(() => client.request("POST", `/api/store-locations/${there}/deactivate`));
     gin = (await client.request<{ ingredientId: string }>("POST", `${API}/ingredients`, { body: { ingredientName: `${tag}gin`, ingredientCategory: "spirits", baseUnit: "L", unitCost: "30.00" } })).ingredientId;
     cleanups.push(() => client.request("DELETE", `${API}/ingredients/${gin}`));
-    // In use here (the location's item list holds only items active there); not at the other location.
+    // In use here: the location's item list holds only items active there (a receive makes it active at the other end).
     await client.request("POST", `${API}/locations/${here}/activate-items`, { body: { ingredientIds: [gin] } });
   });
 
@@ -167,7 +167,7 @@ describe.skipIf(!process.env.CI && (!email || !password || !totpSecret))("transf
     expect(typeof dashboard.stockSummary.stockValue).toBe("number"); // the E2E user is an Administrator, so holds inventory:cost
     const items = await stock.items(here);
     expect(items.find((i) => i.ingredientId === gin)).toMatchObject({ ingredientName: `${tag}gin`, baseUnit: "L", currentQty: -4 }); // sent 4 with none on the books
-    expect((await stock.items(there)).find((i) => i.ingredientId === gin)).toBeUndefined(); // not active there, though stock arrived
+    expect((await stock.items(there)).find((i) => i.ingredientId === gin)).toMatchObject({ activeInd: true, currentQty: 3.5 }); // receiving put it in use there
     const everywhere = await stock.elsewhere(gin);
     expect(everywhere.find((l) => l.storeLocationId === there)).toMatchObject({ currentQty: 3.5 });
     expect(await stock.assignments(here)).toEqual(expect.any(Object));
