@@ -517,17 +517,18 @@ export function isRecentSignIn(signedInAt: Date | null, now: Date = new Date()):
  * Ends the sign-in a refresh token belongs to (logout): every token of its family, not just this one,
  * so an earlier copy of the token (another tab, a stolen one) dies with it.
  */
-export async function revokeRefreshToken(rawToken: string) {
+export async function revokeRefreshToken(rawToken: string): Promise<number | undefined> {
   const tokenHash = sha256(rawToken);
   const [stored] = await db
     .select({ userId: refreshToken.userId, familyId: refreshToken.familyId })
     .from(refreshToken)
     .where(eq(refreshToken.tokenHash, tokenHash));
-  if (!stored) return;
+  if (!stored) return undefined;
   await db.transaction(async (tx) => {
     await lockUserTokens(tx, stored.userId);
     await tx.delete(refreshToken).where(eq(refreshToken.familyId, stored.familyId));
   });
+  return stored.userId;
 }
 
 /**
