@@ -15,6 +15,8 @@ export interface Option {
  */
 export function OptionChips({ label, options, selected, onChange, multiple, max }: { label: string; options: readonly Option[]; selected: readonly string[]; onChange: (next: string[]) => void; multiple?: boolean; max?: number }) {
   const c = useColors();
+  // An admin-managed list nobody has filled yet: no heading over nothing.
+  if (options.length === 0) return null;
   return (
     <View style={styles.wrap}>
       <SectionLabel>{max ? `${label} (up to ${max})` : label}</SectionLabel>

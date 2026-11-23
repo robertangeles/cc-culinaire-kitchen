@@ -351,6 +351,7 @@ Differences from the web profile (`pages/ProfilePage.tsx`, `components/profile`)
 | Two-step set-up: a QR and the key | The key with **Open in authenticator app** (an `otpauth:` link) and the QR for an authenticator on another device | Scanning a QR on the phone that shows it is not possible. The server does not send its `otpauth` URL, so the phone builds it with the server's issuer ("CulinAIre Kitchen") and the account's email. |
 | A sign-in that is too old for a change (no-password account) shows the server's sentence | Says so and offers Sign out | |
 | Kitchen profile: accordion sections; a non-admin sees only the skill level and Save sends the whole form | Flat sections; a non-admin sees the skill level and Save sends only the skill level | Never overwrites the organisation's answers from a cook's phone. |
+| Skill levels, cuisines, dietary needs and equipment come from the admin-managed list; when it is empty the form shows no choices | The same lists; an empty skill-level list falls back to the six levels the server accepts, and an empty list is hidden | Otherwise nobody can set a skill level until an admin fills the list. |
 | Organisation tab (members, keys, locations), My Documents | Not on the phone | Organisation admin is Wave 8; documents are the compliance staff side (Wave 8). |
 | Onboarding wizard | Not on the phone | Out of scope (the kitchen profile covers its answers). |
 

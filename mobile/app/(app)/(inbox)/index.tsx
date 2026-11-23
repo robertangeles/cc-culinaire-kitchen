@@ -49,11 +49,11 @@ export default function Inbox() {
               const { title, body } = notificationText(n);
               const route = routeFor(n, state.user);
               return (
-                <View key={n.notificationId} accessible accessibilityLabel={`${title}. ${body}`} style={[{ padding: space.lg, gap: space.xs }, rowDivider(index, c.border)]}>
+                <View key={n.notificationId} accessible accessibilityLabel={`${title}. ${body}`} style={[{ paddingHorizontal: space.lg, paddingTop: space.lg, paddingBottom: space.xs, gap: space.xs }, rowDivider(index, c.border)]}>
                   <SectionLabel>{title}</SectionLabel>
                   <Text>{body}</Text>
                   <Text variant="meta">{timeAgo(n.createdAt, Date.now())}</Text>
-                  <View style={{ flexDirection: "row", gap: space.lg, flexWrap: "wrap" }}>
+                  <View style={{ flexDirection: "row", gap: space.xl, flexWrap: "wrap" }}>
                     {route ? (
                       <Button
                         kind="quiet"

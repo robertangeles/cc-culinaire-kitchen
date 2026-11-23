@@ -18,6 +18,19 @@ interface Loaded {
   isOrgAdmin: boolean;
 }
 
+/**
+ * The skill levels the server accepts (`KitchenProfileUpdateSchema`), for a server whose admin-managed list is empty: the web then shows no choice at all,
+ * and nobody could set one.
+ */
+const SKILL_LEVELS: Option[] = [
+  { value: "home_cook", label: "Home cook" },
+  { value: "culinary_student", label: "Culinary student" },
+  { value: "line_cook", label: "Line cook" },
+  { value: "sous_chef", label: "Sous chef" },
+  { value: "head_chef", label: "Head chef" },
+  { value: "restaurant_owner", label: "Restaurant owner" },
+];
+
 /** Cuisine, dietary and equipment are stored by their label, as the web stores them. */
 const byLabel = (rows: PersonalisationOptions["cuisine"]): Option[] => rows.map((r) => ({ value: r.optionLabel, label: r.optionLabel }));
 
@@ -69,7 +82,7 @@ export default function KitchenProfile() {
     }
   }
 
-  const skill = options.skill_level.map((o) => ({ value: o.optionValue, label: o.optionLabel }));
+  const skill = options.skill_level.length > 0 ? options.skill_level.map((o) => ({ value: o.optionValue, label: o.optionLabel })) : SKILL_LEVELS;
   const describe = options.skill_level.find((o) => o.optionValue === form.skillLevel)?.optionDescription;
 
   return (

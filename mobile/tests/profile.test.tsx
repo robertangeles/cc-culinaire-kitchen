@@ -258,6 +258,16 @@ describe("kitchen profile", () => {
     );
   });
 
+  it("offers the server's skill levels when the admin-managed list is empty, and hides empty lists", async () => {
+    mocks.authApi.locationContext.mockResolvedValue({ isOrgAdmin: true });
+    mocks.accountApi.personalisationOptions.mockResolvedValue({ skill_level: [], cuisine: [], dietary: [], equipment: [] });
+    render(<KitchenProfile />);
+    fireEvent.click(await screen.findByRole("radio", { name: "Sous chef" }));
+    expect(screen.queryByText(/Cuisine preferences/i)).toBeNull();
+    click("Save");
+    await waitFor(() => expect(mocks.accountApi.saveKitchenProfile).toHaveBeenCalledWith(expect.objectContaining({ skillLevel: "sous_chef" })));
+  });
+
   it("says when the profile cannot be loaded", async () => {
     mocks.authApi.locationContext.mockRejectedValue(new ApiError("network"));
     render(<KitchenProfile />);

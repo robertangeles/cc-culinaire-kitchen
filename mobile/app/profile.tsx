@@ -108,10 +108,11 @@ export default function Profile() {
   return (
     <Screen>
       <Text variant="title">My details</Text>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: space.lg }}>
+      <Text variant="meta">{user.userEmail}</Text>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: space.xl }}>
         <Avatar photoPath={user.userPhotoPath} name={current.userName || user.userName} size={88} />
-        <View style={{ flex: 1, gap: space.xs }}>
-          <Text variant="meta">{user.userEmail}</Text>
+        {/* Left-aligned under each other, not centred in the space beside the picture. */}
+        <View style={{ alignItems: "flex-start" }}>
           <Button kind="quiet" label={uploading ? "Uploading…" : "Choose photo"} disabled={uploading} onPress={() => void changePicture("library")} />
           <Button kind="quiet" label="Take photo" disabled={uploading} onPress={() => void changePicture("camera")} />
         </View>
