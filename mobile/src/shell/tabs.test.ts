@@ -65,22 +65,23 @@ describe("which tabs a person sees", () => {
     expect(new Set(moduleTabs.map((t) => t.route)).size).toBe(moduleTabs.length);
   });
 
-  it("puts the tabs in the order a line cook uses them: prep, waste, usage, count, move, receive", () => {
-    expect(moduleTabs.map((t) => t.title)).toEqual(["Prep", "Waste", "Usage", "Count", "Move", "Receive"]);
+  it("puts the tabs in the order a line cook uses them (prep, waste, usage, count, move, receive), then Ask and Recipes", () => {
+    expect(moduleTabs.map((t) => t.title)).toEqual(["Prep", "Waste", "Usage", "Count", "Move", "Receive", "Ask", "Recipes"]);
   });
 });
 
 describe("the tab bar and More", () => {
   it("keeps every module and Account on the bar when they fit in five buttons", () => {
-    const cook = person({ permissions: ["inventory:count", "waste:log"] });
-    expect(tabBar(cook)).toEqual({ bar: visibleTabs(cook), more: [] });
-    expect(tabBar(person())).toEqual({ bar: [], more: [] });
+    const cook = person({ permissions: ["waste:log", "purchasing:receive"] });
+    expect(tabBar(cook).bar.map((t) => t.title)).toEqual(["Waste", "Receive", "Ask", "Recipes"]);
+    expect(tabBar(cook).more).toEqual([]);
+    expect(tabBar(person())).toEqual({ bar: visibleTabs(person()), more: [] });
   });
 
   it("shows four modules and More when a person's modules and Account would make more than five buttons", () => {
     const { bar, more } = tabBar(person({ roles: ["Administrator"] }));
     expect(bar.map((t) => t.title)).toEqual(["Prep", "Waste", "Usage", "Count"]);
-    expect(more.map((t) => t.title)).toEqual(["Move", "Receive"]);
+    expect(more.map((t) => t.title)).toEqual(["Move", "Receive", "Ask", "Recipes"]);
     expect(bar.length + 1).toBe(MAX_TABS); // the fifth button is More, which also holds Account
   });
 

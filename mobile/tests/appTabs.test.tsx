@@ -84,16 +84,16 @@ describe("the tab bar", () => {
   );
 
   it("shows a cook's modules and Account, with no More, when they fit in five buttons", () => {
-    mocks.user = person({ permissions: ["inventory:count", "waste:log"] });
+    mocks.user = person({ permissions: ["waste:log", "purchasing:receive"] });
     render(<AppTabs />);
-    expect(buttons()).toEqual(["Waste", "Usage", "Count", "Move", "Account"]);
+    expect(buttons()).toEqual(["Waste", "Receive", "Ask", "Recipes", "Account"]);
   });
 
-  it("opens on Account for a person with no module: the navigator starts on its first screen, and More has no button then", () => {
+  it("gives a person with no permission Ask, Recipes and Account, with Account ahead of More, which has no button then", () => {
     mocks.user = person({});
     render(<AppTabs />);
-    expect(buttons()).toEqual(["Account"]);
-    expect(mocks.screens.filter((s) => s.guard)[0].name).toBe("account");
+    expect(buttons()).toEqual(["Ask", "Recipes", "Account"]);
+    expect(mocks.screens.filter((s) => s.guard).map((s) => s.name)).toEqual(["(chat)", "(recipes)", "account", "more"]);
   });
 
   it("never shows more than five buttons: four modules and More, with the rest and Account under More", () => {
@@ -151,6 +151,6 @@ describe("the tab bar", () => {
     expect(mocks.navigate).toHaveBeenLastCalledWith("(receive)");
     fireEvent.click(screen.getByRole("button", { name: "Account" }));
     expect(mocks.navigate).toHaveBeenLastCalledWith("account");
-    expect(screen.getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual(["Move", "Receive", "Account"]);
+    expect(screen.getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual(["Move", "Receive", "Ask", "Recipes", "Account"]);
   });
 });
