@@ -82,6 +82,33 @@ No migration, nothing to seed or backfill. The web is unchanged and older phone 
 - **Sales CSV.** The preview reports a bad quantity, an unparseable date and a name that matches more than one item as unmatched rows; the commit answers `400 VALIDATION` for malformed `lines`.
 - Refusals on these routes carry a `code` (`VALIDATION`, `NOT_FOUND`, `FORBIDDEN`, `CONFLICT`, `INVALID_STATE` for a sale already voided). The phone has no menu or sale screen yet.
 
+### Changed (mobile Wave 3, server: store room, bar and HQ review)
+
+**Before this version deploys, on production, in this order:** apply migration `0007_foh_restocks` (`APP_ENV=prod pnpm --filter @culinaire/server exec tsx src/scripts/migrate.ts --dry-run`, then the same without `--dry-run`), then run `APP_ENV=prod pnpm --filter @culinaire/server exec tsx src/scripts/backfillInventoryCostPermission.ts`. The migration only adds a table the previous server never touches; the backfill must run first or every counter loses stock value and expected quantities at the deploy.
+
+- **Retried writes do not double up.** Transfer create (`transferId`), front-of-house restock (`fohRestockId`), front-of-house waste (`consumptionLogId`), each sale line (`fohSaleId`) and catalogue requests (`requestId`) take a client-made id: a repeat answers 200 with what was stored and moves no stock; an id held by someone else is 409 `CONFLICT`. Without the ids everything behaves as before. Restocks are now rows in `foh_restocks` (who moved what, when).
+- **Front-of-house count.** An optional `countedAt` (when the count was taken): if the shelf changed after it (a sale, restock or waste), 409 `FOH_COUNT_STALE` and nothing is overwritten; a resend of a count already applied answers success with `replay: true`. The web sends no `countedAt` and counts as before.
+- **Transfers.** Receive refuses a line that is not on the transfer and a quantity below 0 or not a number (400 `VALIDATION`, nothing received). Adding an item already on the transfer is 409 `CONFLICT` (was 500). Every refusal carries a code; a location or ingredient outside the organisation is 404 `NOT_FOUND` (was 400).
+- **Stock reads take the store-room row.** The location item list, the dashboard, the organisation summary, the per-ingredient stock levels and a count's expected quantity read `zone = 'BOH'`, so a front-of-house item is listed once and its expected quantity is the store room's.
+- **Dashboard figures from the server.** `GET /locations/:locId/dashboard` adds `stockSummary { lowCount, criticalCount, lowIngredientIds, criticalIngredientIds, stockValue?, valueByCategory? }`. Low and critical are the store-room quantity against par (25% / 75%, as before); value is store room plus shelf at the location's unit cost, else the catalogue's. The web dashboard now shows these instead of working them out itself.
+- **New permission `inventory:cost`** (see stock value, unit costs and expected quantities). Without it, count lines (save, category lines, session detail, previous lines) carry no `expectedQty`, `varianceQty`, `variancePct` or `unitCost`, and the dashboard and organisation summary carry no value. Seeded for all four default roles; the backfill gives it to every role holding any inventory key, so nothing changes until an owner removes it from a role (blind counting). The web shows "—" where a value is absent.
+- **Opening inventory.** Finishing it needs `inventory:manage` (403 `FORBIDDEN` otherwise); the web shows a counter "A manager finishes the opening inventory" instead of the button. Submitting a category no longer moves an opening count to review (it did after the first one, which blocked the rest); one already stranded in review can be finished.
+- **Recount round.** After HQ flags a category and it is counted and submitted again, the session goes back to review by itself (it stayed FLAGGED, and the web had no button for it).
+- **`GET /stock-takes/:id/count-sheets`** serves a category count too (one sheet per category; was 400). Installed phones never ask for it on a category count.
+- **`fohParLevel`** on `PATCH /locations/:locId/ingredients/:id` is stored (it was accepted and dropped).
+
+| Route | New |
+|---|---|
+| `POST /api/inventory/transfers` | body `transferId` (uuid); 200 on a repeat; 409 `CONFLICT`; 404 `NOT_FOUND` for a location or item outside the organisation |
+| `POST /api/inventory/transfers/:id/receive` | 400 `VALIDATION` for a foreign line or bad quantity |
+| `POST /api/inventory/transfers/:id/lines` | 409 `CONFLICT` for an item already on it |
+| `POST /api/inventory/locations/:locId/foh/restock` | body `fohRestockId`; 201, 200 on a repeat; answer carries `fohRestockId` |
+| `POST /api/inventory/locations/:locId/foh/count` | body `countedAt`; 409 `FOH_COUNT_STALE`; answer carries `replay` |
+| `POST /api/inventory/locations/:locId/foh/waste` | body `consumptionLogId`; 200 on a repeat |
+| `POST /api/inventory/locations/:locId/sales` | line `fohSaleId`; 200 when every line was a repeat; each `recorded` line carries `replay`, each `rejected` line a `code`; at most 500 lines |
+| `POST /api/inventory/catalog-requests` | body `requestId`; `storeLocationId` required (400, was a 500); 200 on a repeat |
+| `GET /api/inventory/locations/:locId/dashboard` | `stockSummary` |
+
 ### Changed (server hardening for chat, recipes and the model-backed screens, before the phone shows them)
 
 No migration, nothing to seed or backfill. Every answer below keeps `error` as the sentence the web shows and adds `code` (shared `ApiErrorBody`), so older installed apps keep working.
