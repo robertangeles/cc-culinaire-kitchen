@@ -16,6 +16,7 @@ checks every call anyway.
 | `src/count`, `src/waste`, `src/prep`, `src/consumption`, `src/movements` | One folder per module: API calls, store (screen state), pure view functions, commands. |
 | `src/ui` | Components shared by every module, `Column` (the tablet column) among them. |
 | `packages/shared/src/schemas` | The zod schemas of what the server sends, parsed leniently at the boundary (`lenient.ts`). |
+| `packages/shared/src/utils/menuCosting.ts` | Menu and recipe costing (line cost, food cost %, margin, plate P&L cost, classification, the 35% alert and 30% category target). The phone imports costing from `@culinaire/shared`, never its own copy; the server and the web import the same functions. Where the web editor and the server round or guard differently each keeps its own named function (`previewLineCost`, `editorItemCosts` for a live preview; `storedLineCost`, `storedItemCosts` for what the server saves): a phone editor uses the preview ones, and the differences are listed in `menuCosting.test.ts`. |
 
 ## The offline queue (`src/outbox`)
 
