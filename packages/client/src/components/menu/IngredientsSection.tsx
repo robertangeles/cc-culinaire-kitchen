@@ -2,7 +2,7 @@ import { type Dispatch, type SetStateAction } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import type { MenuItem, MenuIngredient } from "../../hooks/useMenuItems.js";
 import { IngredientPickerInline } from "../inventory/IngredientPickerInline.js";
-import { resolveQtyToKitchen, resolvableUnits, type CustomConversion } from "@culinaire/shared";
+import { previewLineCost, rawLineCost, resolveQtyToKitchen, resolvableUnits, type CustomConversion } from "@culinaire/shared";
 
 const UNITS = [
   "kg", "g", "mg",
@@ -60,15 +60,7 @@ function toKitchenQty(
 }
 
 export function calcLineCost(row: IngredientRow, conversions: CustomConversion[]): number {
-  const qty = parseFloat(row.quantity) || 0;
-  const cost = parseFloat(row.unitCost) || 0;
-  const yld = parseFloat(row.yieldPct) || 100;
-  if (yld === 0) return 0;
-
-  const qtyInBase = toKitchenQty(row, qty, conversions);
-  if (qtyInBase === null) return 0;
-  const raw = (qtyInBase * cost) / (yld / 100);
-  return Math.round(raw * 100) / 100;
+  return previewLineCost(row, (qty) => toKitchenQty(row, qty, conversions));
 }
 
 function hasUnitMismatch(row: IngredientRow, conversions: CustomConversion[]): boolean {
@@ -105,7 +97,7 @@ function buildConversionText(row: IngredientRow, conversions: CustomConversion[]
     ? `${qty}${row.unit} = ${Number(qtyInBase.toFixed(4))} ${row.baseUnit}`
     : `${Number(qtyInBase.toFixed(4))} ${row.baseUnit}`;
   const costStr = `$${cost.toFixed(4)}/${row.baseUnit}`;
-  const lineCost = yld > 0 ? (qtyInBase * cost) / (yld / 100) : 0;
+  const lineCost = rawLineCost(qtyInBase, cost, yld);
 
   // Cost provenance: age from the catalog row's last update when known.
   const age = costAge(row);

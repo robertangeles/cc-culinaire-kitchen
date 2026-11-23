@@ -22,6 +22,7 @@ import {
   Sparkles,
   AlertTriangle,
 } from "lucide-react";
+import { DEFAULT_CATEGORY_TARGET_PCT } from "@culinaire/shared";
 import type { MenuItem } from "../../hooks/useMenuItems.js";
 import { AllergenBadges } from "./AllergenBadges.js";
 
@@ -405,7 +406,7 @@ export function MenuItemList({
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              const target = categoryTargets[item.category] ?? 30;
+                              const target = categoryTargets[item.category] ?? DEFAULT_CATEGORY_TARGET_PCT;
                               navigate(
                                 `/recipes?replaceDog=true&category=${encodeURIComponent(item.category)}&targetFoodCostPct=${target}`
                               );
