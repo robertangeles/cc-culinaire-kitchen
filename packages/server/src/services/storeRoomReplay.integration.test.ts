@@ -242,10 +242,18 @@ describe.skipIf(!RUN)("store room and bar retries (real DB)", () => {
     expect(await db.select().from(fohSale).where(eq(fohSale.fohSaleId, fohSaleId))).toHaveLength(1);
   });
 
-  it("FOH sales: a fohSaleId that is not a UUID, or more than 500 lines, is 400 VALIDATION", async () => {
+  it("FOH sales: a fohSaleId that is not a UUID is 400 VALIDATION", async () => {
     const send = (lines: object[]) => callHandler(handleRecordSales, asUser(fx.chef, SALES), { params: { locId: fx.locA }, body: { lines } });
     expect(await send([{ fohSaleId: "x", ingredientId: colaId, quantity: 1 }])).toMatchObject({ status: 400, body: { code: "VALIDATION" } });
-    expect(await send(Array.from({ length: 501 }, () => ({ ingredientId: colaId, quantity: 1 })))).toMatchObject({ status: 400, body: { code: "VALIDATION" } });
+  });
+
+  it("FOH sales: a long import (the web's CSV) is taken whole", async () => {
+    const out = await callHandler(handleRecordSales, asUser(fx.chef, SALES), {
+      params: { locId: fx.locA },
+      body: { lines: Array.from({ length: 501 }, () => ({ ingredientId: colaId, quantity: 1 })) },
+    });
+    expect(out.status).toBe(201);
+    expect(out.body.recorded).toHaveLength(501);
   });
 
   it("FOH waste: a repeat of the same consumptionLogId logs once and deducts the shelf once", async () => {
