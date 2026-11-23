@@ -860,7 +860,7 @@ export const benchDmThread = pgTable(
 // ---------------------------------------------------------------------------
 
 /**
- * The `menu_item` table stores a user's menu items with calculated
+ * The `menu_item` table stores an organisation's menu items with calculated
  * cost metrics and menu engineering classification.
  */
 export const menuItem = pgTable("menu_item", {
