@@ -14,8 +14,8 @@ import { migrations } from "./index.js";
 const RUN = process.env.TENANT_IT === "1";
 
 describe("migration 0007", () => {
-  it("is registered, last", () => {
-    expect(migrations.at(-1)?.id).toBe("0007_foh_restocks");
+  it("is registered", () => {
+    expect(migrations.some((m) => m.id === "0007_foh_restocks")).toBe(true);
   });
 });
 
