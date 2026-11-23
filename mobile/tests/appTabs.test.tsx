@@ -246,9 +246,11 @@ describe("the tab bar", () => {
     expect(mocks.navigate).toHaveBeenLastCalledWith("(moves)");
     fireEvent.click(screen.getByRole("button", { name: "Receive" }));
     expect(mocks.navigate).toHaveBeenLastCalledWith("(receive)");
+    fireEvent.click(screen.getByRole("button", { name: "Transfers" }));
+    expect(mocks.navigate).toHaveBeenLastCalledWith("(transfers)");
     fireEvent.click(screen.getByRole("button", { name: "Account" }));
     expect(mocks.navigate).toHaveBeenLastCalledWith("account");
-    expect(screen.getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual(["Move", "Receive", "Ask", "Recipes", "Inbox", "Account"]);
+    expect(screen.getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual(["Move", "Receive", "Ask", "Recipes", "Inbox", "Transfers", "Stock", "Account"]);
   });
 });
 
