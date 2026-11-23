@@ -33,7 +33,7 @@ export interface CommandHandler<C> {
   isApplied?(err): boolean;      // a refusal that means "the server already has it" (409 ALREADY_CONFIRMED, a 404 on delete)
   classify?(err): Outcome;       // override how a refusal is read; the server's `code` decides, never its English text
   maxServerFailures?: number;    // stop retrying 5xx after this many and ask the person (network failures never count)
-  fold?(open, incoming, sending) // what a newer command does to an unsent one: merge, "cancel", or "append"
+  fold?(open, incoming, mayBeOnServer) // what a newer command does to an open one: merge, "cancel", or "append"; only "append" once it may be on the server
   latestOnly?: boolean;          // only the newest command per key matters (counts)
   describe?(command: C): string; // the line shown in the sync list (Account tab); no `describe` = not listed there
 }
@@ -57,7 +57,8 @@ What the queue does, which the tests in `src/outbox/*.test.ts` pin down:
 - **Newer app, older app**: an entry whose type or version this build does not know is kept as "needs attention / unsupported", never sent or dropped, and is
   looked at again after an update.
 - **Folding**: a change made before the command leaves the phone is merged into it (edit of an unsent waste log = one POST with the final values; delete of an unsent log
-  sends nothing). A command already on the wire is never changed: the new one goes after it.
+  sends nothing). A command that has been tried and not definitively refused (on the wire, or a timeout, a 5xx, a lost reply, a crash) may already be on the server, so it is never
+  changed or cancelled: the new one goes after it. One the server definitively refused can still be corrected in place.
 - **Counts** are the built-in `count.saveLine` handler (one entry per item; a newer number replaces the older one). The count flow is unchanged.
 
 ## The shared ingredient picker

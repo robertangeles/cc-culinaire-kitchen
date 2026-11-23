@@ -235,21 +235,13 @@ describe("account tab", () => {
 });
 
 describe("tablet width", () => {
-  const widen = (width: number) => {
-    Object.defineProperty(window, "innerWidth", { configurable: true, value: width });
-    window.dispatchEvent(new Event("resize"));
-  };
-  afterEach(() => widen(1024));
-
-  it("keeps the waste screens in a centred column of at most 640 dp on an iPad (820 wide) and fills a phone (390 wide)", async () => {
+  it("puts the waste screens in a column that fills the width up to 640 dp and sits in the middle (so a phone is full width, an iPad is capped; jsdom does no layout, so the constraints are checked)", async () => {
     await makeWasteHarness({ onServer: [serverEntry()] });
-    for (const [width, expected] of [[820, "640px"], [390, "640px"]] as const) {
-      widen(width);
-      const { container, unmount } = render(<Waste />);
-      const column = [...container.querySelectorAll("div")].find((d) => getComputedStyle(d).maxWidth === expected);
-      expect(column, `a ${expected} column at ${width} wide`).toBeTruthy();
-      expect(getComputedStyle(column!).alignSelf).toBe("center");
-      unmount();
-    }
+    const { container } = render(<Waste />);
+    const column = [...container.querySelectorAll("div")].find((d) => getComputedStyle(d).maxWidth === "640px");
+    expect(column, "a 640 dp column").toBeTruthy();
+    const style = getComputedStyle(column!);
+    expect(style.width).toBe("100%");
+    expect(style.alignSelf).toBe("center");
   });
 });
