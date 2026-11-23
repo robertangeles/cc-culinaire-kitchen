@@ -333,6 +333,12 @@ export const recipeRefineRateLimit = senderBucket("recipe-refine", 10, 20, "reci
 export const recipeImageRateLimit = senderBucket("recipe-image", 10, 10, "image requests");
 
 /**
+ * A purchase order PDF is rendered in this process (CPU and memory, up to 10 s). Downloading it and emailing it to the
+ * supplier (which attaches it) share this one bucket per user.
+ */
+export const poPdfRateLimit = senderBucket("po-pdf", 10, 20, "PDF requests");
+
+/**
  * Emailing a recipe: anyone, guests included, may send to any address, so three caps. Each sender gets a few an hour,
  * and each recipient address a few an hour from everyone together, which is what stops this being used to flood one inbox.
  * Guest tokens are free to mint, so all the guests behind one address also share a cap; signed-in users are not counted in it.

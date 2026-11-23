@@ -89,7 +89,11 @@ export function PurchasingPage() {
   }, [activeTab, setGuideKeyOverride]);
 
   // Authoring guides writes the catalogue — same gate as the routes.
-  const canManageGuides = useHasPermission()("inventory:manage");
+  const hasPermission = useHasPermission();
+  const canManageGuides = hasPermission("inventory:manage");
+  // Approvals and thresholds are gated by the permission the routes check, not by role. Changing thresholds
+  // also needs an organisation admin (the server refuses anyone else).
+  const canApprove = hasPermission("purchasing:approve");
 
   const tabs = useMemo(() => {
     const t: { key: PurchasingTab; label: string; icon: typeof ShoppingCart; badge?: number }[] = [
@@ -100,12 +104,10 @@ export function PurchasingPage() {
     t.push({ key: "suggestions", label: "Suggestions", icon: Sparkles });
     t.push({ key: "receive", label: "Receive", icon: Package, badge: awaitingReceiptCount });
     t.push({ key: "suppliers", label: "Suppliers", icon: Truck });
-    if (isOrgAdmin) {
-      t.push({ key: "approvals", label: "Approvals", icon: ClipboardCheck, badge: pendingApprovalCount });
-      t.push({ key: "settings", label: "Settings", icon: Settings });
-    }
+    if (canApprove) t.push({ key: "approvals", label: "Approvals", icon: ClipboardCheck, badge: pendingApprovalCount });
+    if (canApprove && isOrgAdmin) t.push({ key: "settings", label: "Settings", icon: Settings });
     return t;
-  }, [isOrgAdmin, canManageGuides, pendingApprovalCount, awaitingReceiptCount]);
+  }, [isOrgAdmin, canApprove, canManageGuides, pendingApprovalCount, awaitingReceiptCount]);
 
   if (isGuest || !user) {
     return (
@@ -172,8 +174,8 @@ export function PurchasingPage() {
               delivery that has already been received. */}
           {activeTab === "receive" && <ReceiveQueue onChanged={refreshPOs} />}
           {activeTab === "suppliers" && <SupplierManager />}
-          {activeTab === "approvals" && <ApprovalQueue />}
-          {activeTab === "settings" && <SpendThresholdSettings />}
+          {activeTab === "approvals" && canApprove && <ApprovalQueue />}
+          {activeTab === "settings" && canApprove && isOrgAdmin && <SpendThresholdSettings />}
         </div>
       </div>
     </div>

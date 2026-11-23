@@ -162,6 +162,8 @@ export interface PurchaseOrder {
   supplierOrderingMethod: string | null;
   lineCount: number;
   lines?: PurchaseOrderLine[];
+  /** Sent to approvers on an order waiting for approval: false on their own while someone else can approve it. */
+  canApprove?: boolean;
 }
 
 export interface PurchaseOrderLine {
@@ -593,22 +595,6 @@ export function usePurchaseOrders(locationId: string | null) {
     await refresh();
   }, [refresh]);
 
-  const receiveLine = useCallback(async (
-    poId: string,
-    lineId: string,
-    data: { receivedQty: string; receivedUnit: string; unitCost?: string | null },
-  ) => {
-    const res = await fetch(`${API}/purchase-orders/${poId}/lines/${lineId}/receive`, {
-      ...jsonOpts, method: "POST", body: JSON.stringify(data),
-    });
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error || "Failed to receive line");
-    }
-    await refresh();
-    return res.json();
-  }, [refresh]);
-
   const approvePO = useCallback(async (poId: string) => {
     const res = await fetch(`${API}/purchase-orders/${poId}/approve`, {
       ...jsonOpts, method: "POST",
@@ -647,7 +633,10 @@ export function usePurchaseOrders(locationId: string | null) {
 
   const downloadPdf = useCallback(async (poId: string, poNumber?: string) => {
     const res = await fetch(`${API}/purchase-orders/${poId}/pdf`, opts);
-    if (!res.ok) throw new Error("Failed to download PDF");
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || "Failed to download PDF");
+    }
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -674,7 +663,7 @@ export function usePurchaseOrders(locationId: string | null) {
 
   return {
     pos, isLoading, refresh, getDetail, createPO, submitPO, cancelPO,
-    receiveLine, approvePO, rejectPO, clonePO, downloadPdf, emailPOToSupplier,
+    approvePO, rejectPO, clonePO, downloadPdf, emailPOToSupplier,
   };
 }
 

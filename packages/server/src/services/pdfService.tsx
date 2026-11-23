@@ -18,6 +18,7 @@ import {
   user,
 } from "../db/schema.js";
 import { PurchaseOrderPdf } from "../templates/PurchaseOrderPdf.js";
+import { AppError } from "../utils/appError.js";
 import type { POPdfData } from "../templates/PurchaseOrderPdf.js";
 import pino from "pino";
 
@@ -49,7 +50,7 @@ export async function generatePOPdf(
     .from(purchaseOrder)
     .where(and(eq(purchaseOrder.poId, poId), eq(purchaseOrder.organisationId, orgId)));
 
-  if (!po) throw new Error("Purchase order not found");
+  if (!po) throw new AppError(404, "NOT_FOUND", "Purchase order not found");
 
   const [sup] = await db
     .select()
@@ -148,7 +149,7 @@ export async function generatePOPdf(
   const pdfBuffer = await Promise.race([
     renderToBuffer(<PurchaseOrderPdf data={pdfData} />),
     new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error("PDF generation timed out")), PDF_TIMEOUT_MS),
+      setTimeout(() => reject(new AppError(503, "PDF_TIMEOUT", "The PDF took too long to make. Please try again.")), PDF_TIMEOUT_MS),
     ),
   ]);
 

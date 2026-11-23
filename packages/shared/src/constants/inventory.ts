@@ -212,6 +212,9 @@ export const PO_STATUS = {
 
 export type POStatusKey = keyof typeof PO_STATUS;
 
+/** Emailing an order to its supplier again inside this window is refused (409 ALREADY_EMAILED): a double tap, not a resend. */
+export const SUPPLIER_EMAIL_WINDOW_MS = 5 * 60 * 1000;
+
 // ── Transfer Statuses ───────────────────────────────────────
 
 export const TRANSFER_STATUS = {
