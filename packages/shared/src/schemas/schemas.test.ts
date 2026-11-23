@@ -6,6 +6,7 @@ import { ActiveSessionSchema, AreaLinesSchema, CountSheetsSchema, SubmitConflict
 import { WasteEntrySchema, WasteListSchema, WasteSuggestionsSchema } from "./waste.js";
 import { CatalogueSchema } from "./catalogue.js";
 import { CreatePurchaseOrderSchema, PurchaseOrderInputSchema, PurchaseOrderSchema } from "./purchaseOrder.js";
+import { CatalogRequestListSchema } from "./catalogRequest.js";
 import { PrepMenuSchema, PrepSelectionsSchema, PrepTodaySchema } from "./prep.js";
 import { ConsumptionEntrySchema, ConsumptionListSchema } from "./consumption.js";
 import { StockMovementListSchema, StorageAreaListSchema } from "./stockMovement.js";
@@ -321,5 +322,21 @@ describe("purchase order schemas", () => {
   it("reads the order the server answers, tolerating a field it does not know or a missing one", () => {
     const po = PurchaseOrderSchema.parse({ poId: "p1", status: "NEW_STATUS", storeLocationId: "l1", supplierId: "s1", totalValue: null, lines: [{ lineId: "x", ingredientId: "i1", orderedQty: "7.50", orderedUnit: "kg", unitCost: null, lineStatus: "PENDING" }] });
     expect(po).toMatchObject({ poNumber: "", status: "NEW_STATUS", notes: null, expectedDeliveryDate: null, lines: [{ orderedQty: 7.5, unitCost: null }] });
+  });
+});
+
+describe("catalogue request list schema", () => {
+  const row = {
+    requestId: "r1", storeLocationId: "loc-1", itemName: "Sumac", itemType: "KITCHEN_INGREDIENT", category: null, baseUnit: null, countedQty: "2.500",
+    status: "REJECTED", reviewNotes: "We stock it", createdIngredientId: null, createdDttm: "2026-11-20T00:00:00.000Z", updatedDttm: "2026-11-21T00:00:00.000Z",
+  };
+
+  it("reads a row, with the counted quantity as a number and HQ's notes", () => {
+    expect(CatalogRequestListSchema.parse({ data: [row], total: 1 }).data[0]).toMatchObject({ countedQty: 2.5, status: "REJECTED", reviewNotes: "We stock it" });
+  });
+
+  it("keeps a status it does not know, and one bad row does not hide the others", () => {
+    const list = CatalogRequestListSchema.parse({ data: [{ ...row, status: "MERGED" }, { nonsense: true }, { ...row, requestId: "r2", countedQty: null }], total: 3 });
+    expect(list.data.map((r) => [r.requestId, r.status, r.countedQty])).toEqual([["r1", "MERGED", 2.5], ["r2", "REJECTED", null]]);
   });
 });
