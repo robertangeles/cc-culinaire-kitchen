@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import type { LocationDashboard, LocationItem } from "@culinaire/shared/schemas/storeRoom";
+import type { CatalogRequest } from "@culinaire/shared/schemas/catalogRequest";
 import { createOutbox, type OutboxEntry, type OutboxStore } from "../outbox/outbox";
 import { ApiError, type ApiClient } from "../api/client";
 import type { KvStore } from "../storage/kv";
@@ -11,7 +12,7 @@ const NOW = Date.UTC(2026, 10, 23, 1);
 const dashboard: LocationDashboard = { stockLevels: [], stockSummary: { lowCount: 0, criticalCount: 1, lowIngredientIds: [], criticalIngredientIds: ["i1"] }, activeSession: null, lastCompletedSession: null };
 const items: LocationItem[] = [{ ingredientId: "i1", ingredientName: "Salt", ingredientCategory: "dry_goods", itemType: "KITCHEN_INGREDIENT", baseUnit: "kg", parLevel: 10, activeInd: true, currentQty: 1, lastCountedDttm: null, supplierName: null }];
 
-function setup(over: { fail?: ApiError; canSeeQty?: boolean; send?: ReturnType<typeof vi.fn> } = {}) {
+function setup(over: { fail?: ApiError; canSeeQty?: boolean; send?: ReturnType<typeof vi.fn>; mine?: CatalogRequest[] } = {}) {
   const rows = new Map<string, OutboxEntry>();
   const store: OutboxStore = { list: async () => [...rows.values()].sort((a, b) => a.createdAt - b.createdAt), put: async (e) => void rows.set(e.id, { ...e }), remove: async (ids) => ids.forEach((i) => rows.delete(i)) };
   const send = over.send ?? vi.fn(async () => ({}));
@@ -20,7 +21,7 @@ function setup(over: { fail?: ApiError; canSeeQty?: boolean; send?: ReturnType<t
   const kvMap = new Map<string, string>();
   const kv: KvStore = { get: async (k) => kvMap.get(k) ?? null, set: async (k, v) => void kvMap.set(k, v), delete: async (k) => void kvMap.delete(k) };
   const fail = <T>(v: T) => async () => { if (over.fail) throw over.fail; return v; };
-  const api = { dashboard: vi.fn(fail(dashboard)), items: vi.fn(fail(items)), areas: vi.fn(fail([{ storageAreaId: "a1", areaName: "Dry Store" }])), assignments: vi.fn(fail({ i1: ["a1"] })), elsewhere: vi.fn(async () => [{ storeLocationId: "L2", locationName: "Bar", currentQty: 4, parLevel: 6 }]) } as unknown as StockApi;
+  const api = { dashboard: vi.fn(fail(dashboard)), items: vi.fn(fail(items)), areas: vi.fn(fail([{ storageAreaId: "a1", areaName: "Dry Store" }])), assignments: vi.fn(fail({ i1: ["a1"] })), elsewhere: vi.fn(async () => [{ storeLocationId: "L2", locationName: "Bar", currentQty: 4, parLevel: 6 }]), myRequests: vi.fn(async () => over.mine ?? []) } as unknown as StockApi;
   let id = 0;
   const kick = vi.fn();
   const catalogue = { items: async () => [{ ingredientId: "i1", ingredientName: "Salt", baseUnit: "kg", ingredientCategory: "dry_goods" }, { ingredientId: "i7", ingredientName: "Yuzu", baseUnit: "L", ingredientCategory: "beverages", itemType: "KITCHEN_INGREDIENT" }], refresh: vi.fn(async () => true) };
@@ -95,13 +96,22 @@ describe("catalogue requests from the phone", () => {
     await vi.waitFor(() => expect(s.getSnapshot().requests[0].state).toBe("discarded"));
   });
 
+  it("shows HQ's outcome from the server's list, with what is still on the phone laid over it", async () => {
+    const mine = (over: Partial<CatalogRequest>): CatalogRequest => ({ requestId: "r1", storeLocationId: "L1", itemName: "Shiso", itemType: "KITCHEN_INGREDIENT", category: "produce", baseUnit: "bunch", countedQty: null, status: "PENDING", reviewNotes: null, createdIngredientId: null, createdDttm: "2026-11-20T01:00:00.000Z", updatedDttm: "", ...over });
+    const t = setup({ mine: [mine({}), mine({ requestId: "r2", itemName: "Yuzu", status: "REJECTED", reviewNotes: "Use the citrus juice we stock", createdDttm: "2026-11-21T01:00:00.000Z" }), mine({ requestId: "r3", itemName: "Tamarind", status: "APPROVED", createdDttm: "2026-11-19T01:00:00.000Z" })] });
+    const s = t.make();
+    await s.refresh();
+    t.over.fail = new ApiError("network");
+    await s.request({ itemName: "Kombu", itemType: null, category: null, baseUnit: null, countedQty: "" });
+    expect(s.getSnapshot().requests.map((r) => [r.itemName, r.state, r.reviewNotes ?? null])).toEqual([["Kombu", "waiting", null], ["Yuzu", "rejected", "Use the citrus juice we stock"], ["Shiso", "sent", null], ["Tamarind", "approved", null]]);
+  });
+
   it("refuses on the phone what the server would refuse", async () => {
     const s = setup().make();
     const ask = (over: Record<string, unknown>) => s.request({ itemName: "Yuzu", itemType: null, category: null, baseUnit: null, countedQty: "", ...over });
     await expect(ask({ itemName: " " })).rejects.toThrow("Give the item a name.");
     await expect(ask({ itemName: "x".repeat(201) })).rejects.toThrow("The name is too long.");
     await expect(ask({ countedQty: "-1" })).rejects.toThrow("Enter how many you have: 0 or more.");
-    await expect(ask({ countedQty: "100000" })).rejects.toThrow("Enter how many you have: 0 or more.");
     await expect(ask({ baseUnit: "x".repeat(21) })).rejects.toThrow("The unit is too long.");
   });
 });

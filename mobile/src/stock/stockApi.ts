@@ -1,5 +1,6 @@
 import { AreaAssignmentsSchema, LocationDashboardSchema, LocationItemListSchema, StockAcrossLocationsSchema, type LocationDashboard, type LocationItem, type StockAtLocation } from "@culinaire/shared/schemas/storeRoom";
 import { StorageAreaListSchema, type StorageArea } from "@culinaire/shared/schemas/stockMovement";
+import { CatalogRequestListSchema, type CatalogRequest } from "@culinaire/shared/schemas/catalogRequest";
 import type { ApiClient } from "../api/client";
 
 /** The store room reads. Catalogue requests are queued commands (`catalogRequestCommands.ts`), never called from a screen. */
@@ -25,7 +26,12 @@ export function createStockApi(client: ApiClient) {
     elsewhere(ingredientId: string): Promise<StockAtLocation[]> {
       return client.request("GET", `/api/inventory/ingredients/${encodeURIComponent(ingredientId)}/stock-levels`, { schema: StockAcrossLocationsSchema });
     },
+    /** This person's catalogue requests, any status, newest first, with HQ's outcome. */
+    async myRequests(): Promise<CatalogRequest[]> {
+      return (await client.request("GET", `/api/inventory/catalog-requests/mine?limit=${REQUESTS_SHOWN}`, { schema: CatalogRequestListSchema })).data;
+    },
   };
 }
 
+export const REQUESTS_SHOWN = 50;
 export type StockApi = ReturnType<typeof createStockApi>;

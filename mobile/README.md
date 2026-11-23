@@ -307,7 +307,7 @@ Every write goes through the queue (`transfer.create` with a phone-made `transfe
   outside the organisation (404 `NOT_FOUND`), a location the person does not work at (403 `LOCATION_NOT_ALLOWED`), a bad line or quantity (400 `VALIDATION`).
 - A transfer made with no signal can be sent or cancelled before it leaves the phone; a cancel then drops it (the server never hears of it).
 - Receiving needs the transfer's lines: it works with no signal once the transfer was opened with one (`transfers.detail.<user>.<id>` on the phone).
-- The form checks what the server would refuse (a destination, at least one item, each picked from the list with a known unit, an amount above 0 and up to 99,999, no item twice, on receive 0 or more),
+- The form checks what the server would refuse (a destination, at least one item, each picked from the list with a known unit, an amount above 0, no item twice, on receive 0 or more),
   never stock: ten litres can go with five on the books, as on the server (stock goes negative until the next count).
 
 Differences from the web (`TransferList.tsx`, `TransferForm.tsx`, `TransferReceiving.tsx`), found while comparing:
@@ -338,15 +338,15 @@ The Stock tab is shown to `inventory:count` holders (the key on the dashboard, t
   store-room stock here against par, the server's low or critical flag, the areas it is kept in (`/storage-areas/assignments`), its supplier and, for `inventory:manage` holders, its stock at every location
   (`GET /ingredients/:id/stock-levels`, online only).
 - **Ask for a new item** (`catalog.request`, phone-made `requestId`, `POST /catalog-requests`): name (required, up to 200), type and category (the web's lists, `CATEGORIES` and `ITEM_TYPES` from
-  `@culinaire/shared`), unit, how many are on hand. **My requests** lists what this person asked for from this phone with whether it was sent; what HQ decided is not shown (no route, below).
+  `@culinaire/shared`), unit, how many are on hand. **My requests** is the server's list of this person's requests (`GET /catalog-requests/mine`, the newest 50, read whenever the screen comes into view)
+  with HQ's outcome (Sent for review, Added to the catalogue, Not added with HQ's reason), and laid over it the requests still on this phone (waiting, refused, discarded).
 
 **Blind count rule.** Where the server leaves a quantity or value out (no `inventory:cost`: `currentQty`, `stockValue`, `valueByCategory`), the phone shows a dash, never 0, and decides nothing on it
 (`qtyText`, `valueRows` in `src/stock/stockView.ts`; the schemas in `packages/shared/src/schemas/storeRoom.ts` keep the field absent). Low and critical lists still show, because staff need to know what
-is running out. `GET /ingredients/:id/stock-levels` does not hide `currentQty` or `unitCost` from a manager without `inventory:cost`; the phone drops the quantity itself and never reads the cost.
+is running out. `GET /ingredients/:id/stock-levels` leaves the quantity and cost out for a manager without `inventory:cost`; the phone also drops the quantity itself, for a server from before that change.
 
-**Needs a server decision (not changed here).** (1) No route lists a person's own catalogue requests or their outcome: My requests can only show what was asked from this phone and whether it was sent.
-A `GET /catalog-requests/mine` (requester's rows, any status, with review notes) would close it. (2) `GET /ingredients/:id/stock-levels` sends `currentQty` and `unitCost` to an `inventory:manage`
-holder without `inventory:cost`, against the blind count rule elsewhere. (3) Stock is kept per location and zone, not per storage area: "stock by area" can only be where an item is kept, not how much is in each.
+**Stock by area.** Stock is kept per location and zone (store room, shelf), not per storage area, on the server and the web alike: an item's page shows its store-room stock here and the areas it is kept in,
+never a quantity per area (owner decision: nothing per area is invented).
 
 Differences from the web (`LocationDashboard.tsx`, `IngredientCatalog.tsx`, `CatalogRequestQueue.tsx`), found while comparing:
 
@@ -361,8 +361,9 @@ Differences from the web (`LocationDashboard.tsx`, `IngredientCatalog.tsx`, `Cat
 | "No inventory data yet" | "No stock figures yet" | |
 | No offline view | The last download, with its time | |
 | The catalogue: a table with costs, filters (type, allergen, status), add, edit, archive | Read-only lookup and item page | Catalogue editing stays on the web (Wave 7). |
-| An item's stock at every location (managers) | The same route, for `inventory:manage`; quantities hidden without `inventory:cost` | See the server gap above. |
-| Staff cannot ask for a new item anywhere (only HQ's review queue exists, `CatalogRequestQueue.tsx`) | Ask for a new item, and My requests | Nothing to mirror; HQ still approves on the web. |
+| An item's stock at every location (managers) | The same route, for `inventory:manage`; quantities hidden without `inventory:cost` | |
+| Staff cannot ask for a new item anywhere (only HQ's review queue exists, `CatalogRequestQueue.tsx`) | Ask for a new item, and My requests with HQ's outcome | Nothing to mirror; HQ still approves on the web. |
+| An item's stock per storage area | None on either: stock is per location and zone; the phone shows where an item is kept | See "Stock by area" above. |
 
 ## Receive (`src/receiving`, `app/(app)/(receive)`)
 

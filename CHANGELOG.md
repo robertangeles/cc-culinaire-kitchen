@@ -87,10 +87,10 @@ No migration, nothing to seed or backfill. The web is unchanged and older phone 
 No server change, migration or seed. Built on the Wave 3 server routes above; details and every difference from the web in `mobile/README.md` (Transfers, Stock).
 
 - **Transfers tab** (`inventory:count`): the transfers to and from the location (to receive, sent from here, received here), a transfer's lines, receive line by line with "Short by" or "Over by", and for `inventory:manage` a new transfer (send now, or save and send later), send and cancel. Every write goes through the offline queue with a phone-made `transferId`; a refused or conflicting transfer stays on screen with the server's words, and a receive someone else made first is kept visible, not counted as done.
-- **Stock tab** (`inventory:count`): the server's critical and low lists for the location with a drill-down to each item, the stock value for `inventory:cost` holders only, the stock take in progress and the last count, kept on the phone with the time of the download; item lookup over the catalogue with an item's stock here, where it is kept and (managers) its stock at every location; ask for a new catalogue item (queued, phone-made `requestId`) and the requests made from this phone.
+- **Stock tab** (`inventory:count`): the server's critical and low lists for the location with a drill-down to each item, the stock value for `inventory:cost` holders only, the stock take in progress and the last count, kept on the phone with the time of the download; item lookup over the catalogue with an item's stock here, where it is kept and (managers) its stock at every location; ask for a new catalogue item (queued, phone-made `requestId`) and My requests with HQ's outcome (`GET /catalog-requests/mine`).
 - **Blind counts**: a quantity or value the server leaves out is a dash, never 0, and never blocks an action.
 - New shared schemas `@culinaire/shared/schemas/transfer` and `@culinaire/shared/schemas/storeRoom` (the latter re-exports the catalogue's `CATEGORIES` and `ITEM_TYPES`).
-- Server gaps written down, not changed: no route lists a person's own catalogue requests; `GET /ingredients/:id/stock-levels` sends quantities and costs without checking `inventory:cost`.
+- Stock is per location and zone, not per storage area: an item's page shows where it is kept, never a quantity per area.
 
 ### Changed (mobile Wave 3, server: store room, bar and HQ review)
 

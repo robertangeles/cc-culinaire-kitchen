@@ -158,6 +158,7 @@ describe.skipIf(!process.env.CI && (!email || !password || !totpSecret))("transf
     expect((await post(`${API}/catalog-requests`, { requestId: ask.requestId, storeLocationId: here, itemName: ask.itemName })).status).toBe(200);
     const pending = await client.request<Array<{ requestId: string; itemName: string; countedQty: string }>>("GET", `${API}/catalog-requests/pending`);
     expect(pending.filter((r) => r.itemName === ask.itemName)).toEqual([expect.objectContaining({ requestId: ask.requestId })]);
+    expect((await stock.myRequests()).find((r) => r.requestId === ask.requestId)).toMatchObject({ itemName: ask.itemName, status: "PENDING", countedQty: 2 });
     cleanups.push(() => client.request("POST", `${API}/catalog-requests/${ask.requestId}/reject`, { body: { reason: "e2e cleanup" } }));
   });
 
