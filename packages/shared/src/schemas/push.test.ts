@@ -3,7 +3,6 @@ import {
   NOTIFICATION_TYPES,
   PUSH_LINK_PATTERN,
   PushPreferencesUpdateSchema,
-  PushDataSchema,
   pushLink,
 } from "./push.js";
 
@@ -38,15 +37,6 @@ describe("pushLink", () => {
 
   it("sends a type it does not know, from a newer server, to the inbox", () => {
     expect(pushLink("SOMETHING_NEW", "shift", ID)).toBe("/notifications");
-  });
-});
-
-describe("PushDataSchema", () => {
-  it("reads what the server puts in a push and refuses a link that is not an in-app route", () => {
-    const ok = PushDataSchema.safeParse({ notificationId: ID, type: "SHIFT_ASSIGNED", link: `/shifts/${ID}` });
-    expect(ok.success).toBe(true);
-    expect(PushDataSchema.safeParse({ notificationId: ID, type: "X", link: "https://evil.example/" }).success).toBe(false);
-    expect(PushDataSchema.safeParse({ notificationId: ID, type: "X", link: "//evil.example" }).success).toBe(false);
   });
 });
 

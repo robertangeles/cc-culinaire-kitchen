@@ -78,14 +78,6 @@ export function pushLink(type: string, relatedEntityType?: string | null, relate
   }
 }
 
-/** The `data` of a push: ids and a route, never text a lock screen could show. */
-export const PushDataSchema = z.object({
-  notificationId: z.string(),
-  type: z.string(),
-  link: z.string().regex(PUSH_LINK_PATTERN),
-});
-export type PushData = z.infer<typeof PushDataSchema>;
-
 const TIME_OF_DAY = /^([01]\d|2[0-3]):[0-5]\d$/;
 const timeOfDay = z.string().regex(TIME_OF_DAY, "Use a 24-hour time such as 22:00");
 
@@ -100,10 +92,3 @@ export const PushPreferencesUpdateSchema = z.object({
   quietHours: QuietHoursSchema.nullable().optional(),
 });
 export type PushPreferencesUpdate = z.infer<typeof PushPreferencesUpdateSchema>;
-
-/** `GET` and `PUT /api/notifications/push-preferences`. A type this phone does not know is listed with the server's label and shown as is. */
-export const PushPreferencesSchema = z.object({
-  types: z.array(z.object({ type: z.string(), label: z.string(), enabled: z.boolean() })).catch([]),
-  quietHours: QuietHoursSchema.nullable().catch(null),
-});
-export type PushPreferences = z.infer<typeof PushPreferencesSchema>;

@@ -6,11 +6,17 @@
  */
 
 import { and, eq, notInArray } from "drizzle-orm";
-import { NOTIFICATION_TYPES, type PushPreferences, type PushPreferencesUpdate } from "@culinaire/shared/schemas/push";
+import { NOTIFICATION_TYPES, type QuietHours, type PushPreferencesUpdate } from "@culinaire/shared/schemas/push";
 import { db } from "../db/index.js";
 import { pushOptOuts, pushQuietHours } from "../db/schema.js";
 import { PUSH_TYPE_LABELS } from "./pushCopy.js";
 import { isKnownTimeZone, minutesOf, timeOfDayOf } from "./pushQuietHours.js";
+
+/** `GET` and `PUT /api/notifications/push-preferences`. */
+export interface PushPreferences {
+  types: { type: string; label: string; enabled: boolean }[];
+  quietHours: QuietHours | null;
+}
 
 export class PushPreferenceError extends Error {
   constructor(message: string, public readonly statusCode = 400) {
