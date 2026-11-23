@@ -409,16 +409,24 @@ describe("continue with Apple", () => {
 });
 
 describe("account tab", () => {
-  it("starts at the top of the page, as the module tabs do, while sign-in stays centred; both keep the 560 dp column", () => {
+  it("starts at the top of the page, as the module tabs do, and so does the location picker, while sign-in stays centred; all keep the 560 dp column", () => {
     const { unmount } = render(<Account />);
     const column = screen.getByText("Main Kitchen").parentElement!.parentElement!.parentElement as HTMLElement;
     expect(parseFloat(getComputedStyle(column).maxWidth)).toBe(560);
     expect(getComputedStyle(column.parentElement as HTMLElement).justifyContent).toBe("flex-start");
     unmount();
 
+    // Change location is opened from Account, so it starts where Account does.
+    sessionState.current = { state: { phase: "chooseLocation", user: chef, locations: [main], current: main }, busy: false };
+    const picker = render(<ChooseLocation />);
+    let el = screen.getByRole("button", { name: "Main Kitchen, current location" }) as HTMLElement;
+    while (parseFloat(getComputedStyle(el).maxWidth) !== 560) el = el.parentElement as HTMLElement;
+    expect(getComputedStyle(el.parentElement as HTMLElement).justifyContent).toBe("flex-start");
+    picker.unmount();
+
     sessionState.current = { state: { phase: "signedOut" }, busy: false };
     render(<SignIn />);
-    let el = screen.getByLabelText("Email") as HTMLElement;
+    el = screen.getByLabelText("Email") as HTMLElement;
     while (parseFloat(getComputedStyle(el).maxWidth) !== 560) el = el.parentElement as HTMLElement;
     expect(getComputedStyle(el.parentElement as HTMLElement).justifyContent).toBe("center");
   });
