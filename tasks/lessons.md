@@ -1405,3 +1405,15 @@ builds all tables with CHECKs enforcing. Stop it again when done.
 - **Problem**: A phone test made `vi.fn()` reject with the "user cancelled" error and expected the code to return null. The code did, yet the test failed with the rejection's message: the spy library reports a recorded rejection as an unhandled error.
 - **Fix**: The fake for that module is a plain function driven by a small state object, not `vi.fn()`.
 - **Rule**: When a test must make a dependency reject and the code under test handles it, use a plain function for the fake, and check the result, not the spy.
+
+## 2026-11-23 — A failed `pnpm install` can still empty `node_modules`; the PATH `pnpm` is not the repo's
+
+- **Problem**: `pnpm install --frozen-lockfile` with the machine's `pnpm` 9 (the repo pins 10.31.0 in `packageManager`; pnpm 9 does not read `overrides` from `pnpm-workspace.yaml`) recreated `node_modules` and then stopped with `ERR_PNPM_LOCKFILE_CONFIG_MISMATCH`, leaving it empty.
+- **Fix**: Ran the cached pinned binary (`node ~/.cache/node/corepack/v1/pnpm/10.31.0/bin/pnpm.cjs install --frozen-lockfile --prefer-offline`), which restored everything from the store in a second.
+- **Rule**: Check `pnpm -v` against `packageManager` before any install, and use the corepack copy when they differ. A worktree whose tests lack a module (`expo-apple-authentication`) needs that install, not a workaround.
+
+## 2026-11-23 — The shared Android development build can predate a native module the app now imports
+
+- **Problem**: The device walk on the moto g86 never got past sign-in: the installed development build (installed 2026-11-20) has no `ExpoCrypto`, which PR 203 (Sign in with Apple) imports at start, so every screen died with "Cannot find native module 'ExpoCrypto'".
+- **Fix**: None possible in a worktree (a new development build is a native build: EAS, which is paid and credentialed, or a local Gradle build, and this machine has no Android SDK). The prep walk (`device/prep.device.test.ts`) is written and type-checked but has not passed on the phone.
+- **Rule**: When a PR adds a native module, the same PR says in its owner checklist that the development build must be rebuilt before the next device walk.

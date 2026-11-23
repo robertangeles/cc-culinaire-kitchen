@@ -13,7 +13,7 @@ checks every call anyway.
 | `src/api` | The one network client: auth, refresh, coded errors (`ApiError.code`, `serverCode`). |
 | `src/outbox` | The offline queue (below). |
 | `src/ingredients` | The shared ingredient picker's data (below); its component is `src/ui/IngredientPicker.tsx`. |
-| `src/count`, `src/waste` | One folder per module: API calls, store (screen state), pure view functions, commands. |
+| `src/count`, `src/waste`, `src/prep` | One folder per module: API calls, store (screen state), pure view functions, commands. |
 | `src/ui` | Components shared by every module, `Column` (the tablet column) among them. |
 | `packages/shared/src/schemas` | The zod schemas of what the server sends, parsed leniently at the boundary (`lenient.ts`). |
 
@@ -82,8 +82,8 @@ The catalogue download is `GET /api/inventory/ingredients`, which the server all
 
 ## Tablet width
 
-Content sits in a centred column of at most 560 dp, `COLUMN_WIDTH` in `src/ui/Screen.tsx` (`Screen` does it for every screen built on it; the waste screens lay themselves out and use `src/ui/Column.tsx`, which reuses the same number).
-Phones fill the width. The count screens are not wrapped yet. jsdom does no layout, so `tests/waste.test.tsx` checks only the column's constraints (full width, 560 dp cap, centred); the look at 390 and 820 wide is for the device walk.
+Content sits in a centred column of at most 560 dp, `COLUMN_WIDTH` in `src/ui/Screen.tsx` (`Screen` does it for every screen built on it; the waste and prep screens lay themselves out and use `src/ui/Column.tsx`, which reuses the same number).
+Phones fill the width. The count screens are not wrapped yet. jsdom does no layout, so `tests/waste.test.tsx` and `tests/prep.test.tsx` check only the column's constraints (full width, 560 dp cap, centred; prep at 390, 820 and 1180 wide); the look at 390 and 820 wide is for the device walk.
 
 ## Add Sign in with Apple (`app/link-apple.tsx`)
 
@@ -119,7 +119,36 @@ Differences from the web waste page (`packages/client/src/components/waste`), fo
 | `loggedAt` is the server's clock | The phone's clock when the entry was made | A queued log keeps its time. |
 | Team view, Dashboard, Reuse Ideas | Not on the phone yet | `waste:read` features, later wave. |
 
+## Prep (`src/prep`, `app/(app)/(prep)`)
+
+The Prep tab is shown to `prep:read` or `prep:manage` holders (the server lets either tick, for anyone who works at the session's location, so any role can be given prep).
+The list is today's open session at the current location, found by the phone's **local date** and the location, whoever made it: every cook at the location works from one list.
+It is read now, when the app wakes, on pull-to-refresh and every 30 seconds (nothing pushes to the phone), and kept on the phone for no-signal starts (only if it is today's).
+Tick, untick, skip and undo skip write one `prep.tick` command per task (only the newest per task is sent; the cook's tap is the final word, so no `expectedStatus`) and send the phone's time as `completedAt`.
+Planning (`prep:manage`, the Plan screen) saves `prep.create` (client-made session id, location, local date, optional covers), `prep.selections` and `prep.generate` (`requestId`) in that order under one key.
+A repeat of any of them answers 200 itself, so no 409 means "already applied" here: `PREP_SESSION_ENDED`, `CONFLICT`, 403 and 404 stay on the row (or on the "list is waiting to be made" card) with the server's words, Try again and Discard.
+The plan is only offered when no list exists: generating again rebuilds the tasks and would wipe their ticks. It reads the server again first, so a list a colleague just made is not made twice (two phones planning offline at once can still make two sessions: the server has no unique key for a day and location; the newest one is shown).
+Not built, and possible later: add, edit or delete a task. **They exist neither on the web nor on the server** (tasks only come from generating a list; `PATCH /api/prep/tasks/:id` changes status and `assignedTo` only), so there is nothing to mirror.
+Differences from the web prep page (`KitchenCopilotPage.tsx`, `components/copilot`), found while comparing:
+
+| Web | Phone | Why |
+|---|---|---|
+| Page needs `prep:manage` only | Tab needs `prep:read` or `prep:manage`; planning needs `prep:manage` | PR 202's split: a `prep:read` cook can tick without the web page. |
+| "Today" is the caller's newest open session of any date and place (and a new one is made with the UTC date, so a morning in Sydney is yesterday) | The open session for the phone's local date at the current location, whoever made it | One list for the whole line; the server's `date` + `storeLocationId` query. |
+| Ticks wait for the server; a failed one shows a message and the box stays | Saved on the phone at once, sent in the background; a refused one stays on its row with the reason | Offline-first. |
+| No `completedAt`, so the server stamps the time it arrives | The phone's time of the tick | An offline tick keeps its time. |
+| Shows no one's name on a done task | "Done by you" or "Done by a colleague", and the time | `completedBy` is a user id; **a name needs a small read-route** (not added: out of scope). |
+| Assign a task to a staff name (free text) | Not on the phone | Free text on a phone is a poor fit; also the web's assign sends `status: "pending"` and can undo a colleague's tick. Later, with a user picker. |
+| End session (with actual covers) | Not on the phone | Ending is a manager's act on the web; the phone keys on the date, so tomorrow starts clean. |
+| Edit selections (regenerates the list), forecast covers to suggested portions | Plan once per day; portions typed or stepped, or "Use the last plan's portions" | A regenerate wipes ticks. Forecast suggestions: later. |
+| "Use previous selections" reads `{selections}`; the server sends a bare array, so it does nothing | Reads the bare array | Web bug, not fixed here. |
+| Portions start at 1 when a dish is ticked | Start at 0 (not picked); `+` makes 1 | A list of every dish with steppers has no tick box. |
+| `expectedCovers` is never sent when the session is made | Sent when the cook types it | The progress card shows it. |
+| Dishes of a task: text after the first `for ` of the description | Text after `Prep <ingredient> for `; nothing for a hand-typed description | An ingredient with "for" in its name broke the web's split. |
+| Cross-usage, High impact, History, team/personal toggle, print sheet, waste-alert banner | Not on the phone | Later waves. |
+| Task add, edit, delete | Not on the web or the server | See above. |
+
 ## Tests
 
 `check:test` runs the logic tests (`src/**`) and the screen tests (`tests/*.test.tsx`); `check:e2e` runs the real client and queue against a server
-(`e2e/phoneFlow`, `e2e/wasteQueue`). See `device/README.md`.
+(`e2e/phoneFlow`, `e2e/wasteQueue`, `e2e/prepQueue`). See `device/README.md`.

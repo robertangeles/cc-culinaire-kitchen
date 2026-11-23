@@ -26,6 +26,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **Tablet width.** Screens built on `Screen` and the waste screens sit in a centred column of at most 560 dp.
 - No server route changed: older installed apps keep working. Differences from the web waste page are listed in `mobile/README.md`.
 
+### Added (mobile Wave 2, phone: prep)
+
+- **Prep on the phone.** A Prep tab for `prep:read` or `prep:manage` holders (any role can be given them): today's list at the current location (found by the phone's local date, shared by every cook at the location), tick, untick, skip and undo skip with offline-first queued commands that keep the phone's tick time, a progress card, the tasks grouped start with these, next up, can wait, and a Plan screen for `prep:manage` holders (pick dishes and portions, or start from the last plan; saved as create, dishes and generate and sent in order, each safe to repeat). Refused ticks stay on their row with the server's reason. The list is read again every 30 seconds and when the app wakes. Differences from the web prep page are listed in `mobile/README.md`; adding, editing or deleting a task exists on neither web nor server.
+- No server route changed: older installed apps keep working.
+
 ### Changed (mobile Wave 2, server: the line loop)
 
 **Apply migration `0002_prep_completed_by` by hand on production BEFORE this version deploys** (`pnpm --filter @culinaire/server exec tsx src/scripts/migrate.ts`, then `backfillWastePrepPermissions.ts`). Both new columns are nullable, so the previous server keeps working after the migration. The web behaves as before.
