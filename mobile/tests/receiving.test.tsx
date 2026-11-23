@@ -120,15 +120,15 @@ describe("deliveries queue", () => {
     await screen.findByText("Fresh Farms");
     expect(screen.queryByText("In progress")).toBeNull();
     // Opening the delivery started its session on the server; backing out returns to this mounted screen.
-    api.queue.mockResolvedValue([queueItem({ status: "RECEIVING", beingReceivedBy: { userId: 1, userName: "Chef", sessionId: "S1", startedAt: "" } })]);
+    api.queue.mockResolvedValue([queueItem({ status: "RECEIVING", beingReceivedBy: { userId: 1, userName: "Chef" } })]);
     act(() => returnToScreen());
     expect(await screen.findByText("In progress")).toBeTruthy();
   });
 
   it("marks one that you already started, and one another chef has open", async () => {
     api.queue.mockResolvedValue([
-      queueItem({ status: "RECEIVING", beingReceivedBy: { userId: 1, userName: "Chef", sessionId: "S1", startedAt: "" } }),
-      queueItem({ poId: "P2", poNumber: "PO-200", supplierName: "Dairy Co", status: "RECEIVING", beingReceivedBy: { userId: 9, userName: "Sam", sessionId: "S9", startedAt: "" } }),
+      queueItem({ status: "RECEIVING", beingReceivedBy: { userId: 1, userName: "Chef" } }),
+      queueItem({ poId: "P2", poNumber: "PO-200", supplierName: "Dairy Co", status: "RECEIVING", beingReceivedBy: { userId: 9, userName: "Sam" } }),
     ]);
     render(<ReceiveQueue />);
     expect(await screen.findByText("In progress")).toBeTruthy();
@@ -295,13 +295,38 @@ describe("receiving a delivery", () => {
   it("will not confirm while a line is still saving", async () => {
     let finish!: (v: unknown) => void;
     api.actionLine.mockReturnValueOnce(new Promise((r) => (finish = r)));
+    api.startSession.mockResolvedValue(started({ lines: [line("r1", "Flour", { status: "SHORT", receivedQty: "2.0000" }), line("r2", "Tomatoes")] }));
     render(<ReceiveDelivery />);
     await open("Flour");
-    key("Reject");
-    fireEvent.click(screen.getByRole("button", { name: "Reject item" }));
-    expect(screen.queryByRole("button", { name: "Confirm delivery" })).toBeNull();
-    finish({ receivingLineId: "r1", status: "REJECTED", receivedQty: "0", actualUnitCost: "2" });
-    await waitFor(() => expect(screen.getByRole("button", { name: "Confirm delivery · 1 issue" }).getAttribute("aria-disabled")).not.toBe("true"));
+    key("All good");
+    const confirm = () => screen.getByRole("button", { name: /^Confirm delivery/ });
+    await waitFor(() => expect(confirm().getAttribute("aria-disabled")).toBe("true"));
+    fireEvent.click(confirm());
+    expect(api.confirm).not.toHaveBeenCalled();
+    await act(async () => finish({ receivingLineId: "r1", status: "RECEIVED", receivedQty: "5.0000", actualUnitCost: "2.0000" }));
+    await waitFor(() => expect(confirm().getAttribute("aria-disabled")).not.toBe("true"));
+    fireEvent.click(confirm());
+    await waitFor(() => expect(api.confirm).toHaveBeenCalledWith("S1"));
+  });
+
+  it("the price keypad's zero is a plain digit, and Short keeps its \"none here\" key", async () => {
+    render(<ReceiveDelivery />);
+    await open("Flour");
+    key("Wrong price");
+    expect(screen.queryByText("none here")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Zero, none here" })).toBeNull();
+    key("0");
+    key("Decimal point");
+    type("50");
+    expect(screen.getByText("$0.50")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Save price" }));
+    await waitFor(() => expect(api.actionLine).toHaveBeenCalledWith("S1", "r1", { status: "PRICE_VARIANCE", actualUnitCost: "0.5" }));
+    await open("Flour");
+    key("Short");
+    expect(screen.getByText("none here")).toBeTruthy();
+    key("Zero, none here");
+    fireEvent.click(screen.getByRole("button", { name: "Mark short" }));
+    await waitFor(() => expect(api.actionLine).toHaveBeenCalledWith("S1", "r1", { status: "SHORT", receivedQty: "0" }));
   });
 
   it("a short delivery ends with the order closed as partial", async () => {

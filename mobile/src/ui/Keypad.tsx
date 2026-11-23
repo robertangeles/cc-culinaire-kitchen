@@ -8,6 +8,8 @@ import { useColors } from "./theme";
 interface Props {
   entry: string;
   onKey: (key: Key) => void;
+  /** The zero key is a plain digit with no "none here" hint: for a number where zero is not an answer of its own (a price). */
+  plainZero?: boolean;
 }
 
 const ROWS: Array<Array<{ key: Key | "zero-or-0"; label: string; hint?: string; a11y: string }>> = [
@@ -22,7 +24,7 @@ const ROWS: Array<Array<{ key: Key | "zero-or-0"; label: string; hint?: string; 
 ];
 
 /** Three columns of 72dp keys with 8dp gaps. Each tap gives a light haptic. */
-export function Keypad({ entry, onKey }: Props) {
+export function Keypad({ entry, onKey, plainZero }: Props) {
   const c = useColors();
   return (
     <View accessibilityLabel="Number keypad" style={styles.pad}>
@@ -32,15 +34,15 @@ export function Keypad({ entry, onKey }: Props) {
             <Pressable
               key={k.label}
               accessibilityRole="button"
-              accessibilityLabel={k.a11y}
+              accessibilityLabel={k.hint && plainZero ? k.label : k.a11y}
               onPress={() => {
                 void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                onKey(k.key === "zero-or-0" ? zeroKey(entry) : k.key);
+                onKey(k.key === "zero-or-0" ? (plainZero ? "0" : zeroKey(entry)) : k.key);
               }}
               style={({ pressed }) => [styles.key, { backgroundColor: c.surface, borderColor: c.border, opacity: pressed ? 0.7 : 1 }]}
             >
               <Text style={{ fontFamily: fontFamily.uiStrong, fontSize: fontSize.item }}>{k.label}</Text>
-              {k.hint ? <Text variant="meta" style={{ fontSize: fontSize.body }}>{k.hint}</Text> : null}
+              {k.hint && !plainZero ? <Text variant="meta" style={{ fontSize: fontSize.body }}>{k.hint}</Text> : null}
             </Pressable>
           ))}
         </View>

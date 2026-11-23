@@ -71,12 +71,10 @@ export interface ListPOOpts {
  * subquery (newest session wins) rather than a join: before the per-PO start lock
  * two ACTIVE sessions could exist for one PO, and a join would duplicate the row.
  */
-const beingReceivedBy = sql<{ userId: number; userName: string; sessionId: string; startedAt: string } | null>`(
+const beingReceivedBy = sql<{ userId: number; userName: string } | null>`(
   SELECT json_build_object(
     'userId', ${receivingSession.receivedByUserId},
-    'userName', u.user_name,
-    'sessionId', ${receivingSession.sessionId},
-    'startedAt', ${receivingSession.startedAt}
+    'userName', u.user_name
   )
   FROM ${receivingSession}
   JOIN "user" u ON u.user_id = ${receivingSession.receivedByUserId}

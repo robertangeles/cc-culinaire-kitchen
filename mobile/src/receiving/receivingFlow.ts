@@ -27,7 +27,7 @@ export interface QueueItem {
   expectedDeliveryDate: string | null;
   sentAt: string | null;
   storeLocationId: string;
-  beingReceivedBy: { userId: number; userName: string; sessionId: string; startedAt: string } | null;
+  beingReceivedBy: { userId: number; userName: string } | null;
 }
 
 export interface ReceivingLine {

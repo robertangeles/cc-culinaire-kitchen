@@ -85,7 +85,7 @@ describe.skipIf(!process.env.CI && (!email || !password || !totpSecret))("receiv
     // The queue now shows the order as in progress, with the chef's name.
     const mine = (await receiving.queue(locationId)).find((q) => q.poId === poId)!;
     expect(mine).toMatchObject({ status: "RECEIVING" });
-    expect(mine.beingReceivedBy?.sessionId).toBe(started.session.sessionId);
+    expect(mine.beingReceivedBy?.userId).toBe(started.session.receivedByUserId);
 
     expect(Number((await receiving.actionLine(started.session.sessionId, flour.receivingLineId, { status: "SHORT", receivedQty: "7" })).receivedQty)).toBe(7);
     expect((await receiving.actionLine(started.session.sessionId, milk.receivingLineId, { status: "PRICE_VARIANCE", actualUnitCost: "1.8" })).status).toBe("PRICE_VARIANCE");

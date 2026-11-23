@@ -128,7 +128,7 @@ export function LineCard({ line, orderUnitCost, open, saving, error, onToggle, o
           {hint ? <Text variant="error" accessibilityLiveRegion="polite">{hint}</Text> : null}
           {/* Above the keypad, so the action is on screen however tall the keypad is. */}
           <Button label={saving ? "Saving…" : panel === "short" ? "Mark short" : "Save price"} disabled={saving || entry === ""} onPress={() => submitChecked(panel === "short" ? shortInput(entry, line) : priceInput(entry))} />
-          <Keypad entry={entry} onKey={onKey} />
+          <Keypad entry={entry} onKey={onKey} plainZero={panel === "price"} />
           <Button kind="quiet" label="Back" onPress={close} />
         </View>
       ) : null}

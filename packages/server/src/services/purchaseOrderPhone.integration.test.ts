@@ -267,7 +267,7 @@ describe.skipIf(!RUN)("purchase order list and detail for the phone (real DB)", 
     const receiving = rows.find((r) => r.poId === fx.po.receiving)!;
     const sent = rows.find((r) => r.poId === fx.po.sentSoon)!;
     expect(receiving.supplierPhone).toBe("0400 111 222");
-    expect(receiving.beingReceivedBy).toMatchObject({ userId: fx.receiverId, userName: "POP Receiver", sessionId: fx.sessionId });
+    expect(receiving.beingReceivedBy).toEqual({ userId: fx.receiverId, userName: "POP Receiver" });
     expect(sent.beingReceivedBy).toBeNull();
   });
 
