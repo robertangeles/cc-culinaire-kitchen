@@ -6,6 +6,7 @@ import { applyEnvPrefix } from "../utils/envShim.js";
 
 config({ path: resolve(dirname(fileURLToPath(import.meta.url)), "../../../../.env") });
 applyEnvPrefix();
+import { createHash } from "node:crypto";
 import { and, eq, inArray, isNull, or } from "drizzle-orm";
 import type { Request, Response } from "express";
 import { db } from "../db/index.js";
@@ -483,6 +484,46 @@ describe.skipIf(!RUN)("Wave 7 menu server work (real DB)", () => {
       expect(csv.failed).toEqual([]);
       expect(await stockOf(fx.a2, fx.flourId, "BOH")).toBe(a2Before - 300);
       expect(await stockOf(fx.a1, fx.flourId, "BOH")).toBe(a1Before);
+    });
+
+    it("the same CSV line imported at two locations is two sales, and a re-import at either records nothing more", async () => {
+      const line = { rowIndex: 1, name: `${fx.tag} dish`, qtySold: 4, soldAt: "2026-11-20T12:00:00.000Z" };
+      const a1Before = (await stockOf(fx.a1, fx.flourId, "BOH"))!;
+      const a2Before = (await stockOf(fx.a2, fx.flourId, "BOH"))!;
+
+      const atA1 = await commitSalesCsv(fx.orgA, fx.cook, [line], principal(fx.cook));
+      const atA2 = await commitSalesCsv(fx.orgA, fx.cookB, [line], principal(fx.cookB));
+      expect(atA1.succeeded).toHaveLength(1);
+      expect(atA2.succeeded).toHaveLength(1);
+      expect(atA2.succeeded[0].saleId).not.toBe(atA1.succeeded[0].saleId);
+      expect(await stockOf(fx.a1, fx.flourId, "BOH")).toBe(a1Before - 400);
+      expect(await stockOf(fx.a2, fx.flourId, "BOH")).toBe(a2Before - 400);
+
+      const again = await commitSalesCsv(fx.orgA, fx.cookB, [line], principal(fx.cookB));
+      expect(again.succeeded).toEqual([]);
+      expect(again.alreadyExists.map((r) => r.saleId)).toEqual([atA2.succeeded[0].saleId]);
+      expect(await stockOf(fx.a2, fx.flourId, "BOH")).toBe(a2Before - 400);
+    });
+
+    it("a CSV line imported before the location was in the key is recognised at its own location only", async () => {
+      const line = { rowIndex: 1, name: `${fx.tag} dish`, qtySold: 6, soldAt: "2026-11-19T12:00:00.000Z" };
+      // The key the previous server stored for this line (persisted in sale.idempotency_key): item | qty | sold at | occurrence.
+      const oldKey = "csv:" + createHash("sha256").update([fx.itemId, "6", line.soldAt, 1].join("|")).digest("hex").slice(0, 40);
+      const [old] = await db
+        .insert(sale)
+        .values({ organisationId: fx.orgA, menuItemId: fx.itemId, storeLocationId: fx.a1, qtySold: "6", source: "CSV", idempotencyKey: oldKey, soldAt: new Date(line.soldAt), createdBy: fx.chef })
+        .returning({ id: sale.saleId });
+      const a1Before = (await stockOf(fx.a1, fx.flourId, "BOH"))!;
+      const a2Before = (await stockOf(fx.a2, fx.flourId, "BOH"))!;
+
+      const atA1 = await commitSalesCsv(fx.orgA, fx.cook, [line], principal(fx.cook));
+      expect(atA1.succeeded).toEqual([]);
+      expect(atA1.alreadyExists.map((r) => r.saleId)).toEqual([old.id]);
+      expect(await stockOf(fx.a1, fx.flourId, "BOH")).toBe(a1Before);
+
+      const atA2 = await commitSalesCsv(fx.orgA, fx.cookB, [line], principal(fx.cookB));
+      expect(atA2.succeeded).toHaveLength(1);
+      expect(await stockOf(fx.a2, fx.flourId, "BOH")).toBe(a2Before - 600);
     });
 
     it("asks for a location (400 VALIDATION) when the seller has none and cannot use the item's, and records nothing", async () => {
