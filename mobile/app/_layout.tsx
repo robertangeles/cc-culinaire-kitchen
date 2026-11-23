@@ -10,6 +10,9 @@ import { startOutbox } from "../src/runtime/appOutbox";
 
 void SplashScreen.preventAutoHideAsync();
 
+/** Where each phase lives. A guarded screen redirects here; without it expo-router picks the first unguarded file (legal.tsx), so a fresh launch landed on "Not found". */
+const HOME = { restoring: "/", signedOut: "/sign-in", mfa: "/mfa", chooseLocation: "/location", firstRun: "/first-run", updateRequired: "/update-required", accountDeleted: "/account-deleted", ready: "/" } as const;
+
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({ Fraunces_400Regular, Fraunces_600SemiBold, Inter_400Regular, Inter_600SemiBold });
   const { state } = useSession();
@@ -31,27 +34,27 @@ export default function RootLayout() {
       {/* One status bar for every screen: dark icons on the light paper. */}
       <StatusBar style="dark" />
       <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Protected guard={state.phase === "signedOut"}>
+        <Stack.Protected redirectTo={HOME[state.phase]} guard={state.phase === "signedOut"}>
           <Stack.Screen name="sign-in" />
           <Stack.Screen name="forgot-password" />
           <Stack.Screen name="check-email" />
         </Stack.Protected>
-        <Stack.Protected guard={state.phase === "mfa"}>
+        <Stack.Protected redirectTo={HOME[state.phase]} guard={state.phase === "mfa"}>
           <Stack.Screen name="mfa" />
         </Stack.Protected>
-        <Stack.Protected guard={state.phase === "chooseLocation"}>
+        <Stack.Protected redirectTo={HOME[state.phase]} guard={state.phase === "chooseLocation"}>
           <Stack.Screen name="location" />
         </Stack.Protected>
-        <Stack.Protected guard={state.phase === "firstRun"}>
+        <Stack.Protected redirectTo={HOME[state.phase]} guard={state.phase === "firstRun"}>
           <Stack.Screen name="first-run" />
         </Stack.Protected>
-        <Stack.Protected guard={state.phase === "updateRequired"}>
+        <Stack.Protected redirectTo={HOME[state.phase]} guard={state.phase === "updateRequired"}>
           <Stack.Screen name="update-required" />
         </Stack.Protected>
-        <Stack.Protected guard={state.phase === "accountDeleted"}>
+        <Stack.Protected redirectTo={HOME[state.phase]} guard={state.phase === "accountDeleted"}>
           <Stack.Screen name="account-deleted" />
         </Stack.Protected>
-        <Stack.Protected guard={state.phase === "ready"}>
+        <Stack.Protected redirectTo={HOME[state.phase]} guard={state.phase === "ready"}>
           <Stack.Screen name="(app)" />
           <Stack.Screen name="delete-account" />
           <Stack.Screen name="link-apple" />
