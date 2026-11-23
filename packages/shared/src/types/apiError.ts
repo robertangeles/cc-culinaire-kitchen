@@ -39,6 +39,12 @@ export const SERVER_ERROR_CODES = [
   "ACCOUNT_EMAIL_UNVERIFIED",
   "UNAUTHENTICATED",
   "RATE_LIMITED",
+  // Chat, recipes and the model-backed screens (Wave 6 hardening).
+  "FREE_SESSIONS_EXHAUSTED",
+  "GUEST_QUOTA_EXHAUSTED",
+  "AI_UNAVAILABLE",
+  "AI_TIMEOUT",
+  "EMAIL_FAILED",
 ] as const;
 export type ServerErrorCode = (typeof SERVER_ERROR_CODES)[number];
 

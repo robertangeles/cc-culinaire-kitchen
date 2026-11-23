@@ -25,7 +25,7 @@ export const chatRateLimit = rateLimit({
     if (req.guestToken) return `guest-${req.guestToken}`;
     return req.ip ?? "unknown";
   },
-  message: { error: "Too many chat requests — please wait a moment before trying again." },
+  message: { error: "Too many chat requests — please wait a moment before trying again.", code: "RATE_LIMITED" },
 });
 
 /**
@@ -303,4 +303,34 @@ export const refreshTokenRateLimit = rateLimit({
     return typeof token === "string" ? `refresh-token-${createHash("sha256").update(token).digest("hex").slice(0, 32)}` : `refresh-token-none-${hashIp(req)}`;
   },
   message: { error: "Too many attempts — please wait a minute before trying again." },
+});
+
+/** Whoever is asking: the signed-in user, else the guest token, else the address. A guest's token is theirs alone, so a shared NAT does not share a bucket. */
+const senderKey = (req: Request) => (req.user?.sub ? `user-${req.user.sub}` : req.guestToken ? `guest-${req.guestToken}` : `ip-${hashIp(req)}`);
+
+/** A bucket per route for work that spends money or sends mail, counted per person over a window of minutes. */
+function senderBucket(name: string, windowMinutes: number, limit: number, what: string, keyOf: (req: Request) => string = senderKey) {
+  return rateLimit({
+    windowMs: windowMinutes * 60 * 1000,
+    limit,
+    standardHeaders: "draft-8",
+    legacyHeaders: false,
+    keyGenerator: (req: Request) => `${name}-${keyOf(req)}`,
+    message: { error: `Too many ${what} — please wait a few minutes before trying again.`, code: "RATE_LIMITED" },
+  });
+}
+
+/** Recipe generation chains up to three model calls and an image; refine is one call; an image is one paid call. */
+export const recipeGenerateRateLimit = senderBucket("recipe-generate", 10, 10, "recipes generated");
+export const recipeRefineRateLimit = senderBucket("recipe-refine", 10, 20, "recipe refinements");
+export const recipeImageRateLimit = senderBucket("recipe-image", 10, 10, "image requests");
+
+/**
+ * Emailing a recipe: anyone, guests included, may send to any address, so two caps. Each sender gets a few an hour,
+ * and each recipient address a few an hour from everyone together, which is what stops this being used to flood one inbox.
+ */
+export const recipeEmailRateLimit = senderBucket("recipe-email", 60, 10, "recipe emails");
+export const recipeEmailRecipientRateLimit = senderBucket("recipe-email-to", 60, 3, "emails to that address", (req) => {
+  const to = typeof req.body?.to === "string" ? req.body.to.trim().toLowerCase() : "";
+  return createHash("sha256").update(to).digest("hex").slice(0, 32);
 });

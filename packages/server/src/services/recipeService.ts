@@ -36,7 +36,8 @@ const logger = pino({ name: "recipeService" });
 // Domain type
 // ---------------------------------------------------------------------------
 
-export type RecipeDomain = "recipe" | "patisserie" | "spirits";
+export const RECIPE_DOMAINS = ["recipe", "patisserie", "spirits"] as const;
+export type RecipeDomain = (typeof RECIPE_DOMAINS)[number];
 
 // ---------------------------------------------------------------------------
 // Zod output schema (V2 — enhanced)

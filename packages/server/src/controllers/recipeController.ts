@@ -15,10 +15,11 @@
 import type { Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import pino from "pino";
-import { generateRecipe, type RecipeDomain } from "../services/recipeService.js";
+import { generateRecipe, RECIPE_DOMAINS, type RecipeDomain } from "../services/recipeService.js";
 import { buildContextString } from "../services/userContextService.js";
 import {
   getRecipe,
+  forViewer,
   listUserRecipes,
   listGalleryRecipes,
   updateRecipe,
@@ -169,9 +170,15 @@ export async function handleMyRecipes(
       return;
     }
 
+    const domain = z.enum(RECIPE_DOMAINS).optional().safeParse(req.query.domain);
+    if (!domain.success) {
+      res.status(400).json({ error: "Unknown recipe domain.", code: "VALIDATION" });
+      return;
+    }
+
     const page = Math.max(1, parseInt(req.query.page as string, 10) || 1);
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string, 10) || 20));
-    const result = await listUserRecipes(userId, page, limit);
+    const result = await listUserRecipes(userId, page, limit, domain.data);
     res.json(result);
   } catch (err) {
     next(err);
@@ -225,7 +232,7 @@ export async function handleGetRecipe(
       return;
     }
 
-    res.json(rec);
+    res.json(forViewer(rec, req.user?.sub));
   } catch (err) {
     next(err);
   }
@@ -242,7 +249,11 @@ export async function handleUpdateRecipe(
   next: NextFunction,
 ): Promise<void> {
   try {
-    const userId = req.user?.sub ?? 0;
+    const userId = req.user?.sub;
+    if (!userId) {
+      res.status(403).json({ error: "Recipes made as a guest cannot be changed. Create an account to manage your recipes.", code: "FORBIDDEN" });
+      return;
+    }
 
     const id = req.params.id as string;
     const { title, isPublicInd } = req.body;
@@ -258,7 +269,7 @@ export async function handleUpdateRecipe(
 
     const updated = await updateRecipe(id, userId, updates);
     if (!updated) {
-      res.status(404).json({ error: "Recipe not found or not owned by you." });
+      res.status(404).json({ error: "Recipe not found or not owned by you.", code: "NOT_FOUND" });
       return;
     }
 
@@ -671,7 +682,8 @@ export async function handleEmailRecipe(
     );
 
     if (!result.sent) {
-      res.status(500).json({ error: result.error ?? "Failed to send email." });
+      logger.error({ recipeId: id, reason: result.error }, "handleEmailRecipe: email not sent");
+      res.status(502).json({ error: "The email could not be sent. Please try again later.", code: "EMAIL_FAILED" });
       return;
     }
 

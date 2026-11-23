@@ -61,7 +61,8 @@ const SaveMessagesSchema = z.object({
  *
  * Request body: `{ id: string, title: string }`
  *
- * @returns 201 `{ success: true, conversationId }` on success.
+ * @returns 201 `{ success: true, conversationId }` on success, 200 with the same body when the
+ *          caller had already created it (a retry), 409 CONFLICT when someone else holds the id.
  */
 export async function handleCreateConversation(
   req: Request,
@@ -75,17 +76,18 @@ export async function handleCreateConversation(
       return;
     }
 
+    let created: boolean;
     if (req.user) {
-      await createConversation(parsed.data.id, parsed.data.title, req.user.sub);
+      created = await createConversation(parsed.data.id, parsed.data.title, req.user.sub);
     } else if (req.guestToken) {
-      await createGuestConversation(parsed.data.id, parsed.data.title, req.guestToken);
+      created = await createGuestConversation(parsed.data.id, parsed.data.title, req.guestToken);
     } else {
-      res.status(401).json({ error: "Authentication required." });
+      res.status(401).json({ error: "Authentication required.", code: "UNAUTHENTICATED" });
       return;
     }
 
-    log.info({ id: parsed.data.id }, "Conversation created");
-    res.status(201).json({ success: true, conversationId: parsed.data.id });
+    log.info({ id: parsed.data.id, created }, "Conversation created");
+    res.status(created ? 201 : 200).json({ success: true, conversationId: parsed.data.id });
   } catch (err) {
     log.error(err, "Failed to create conversation");
     next(err);

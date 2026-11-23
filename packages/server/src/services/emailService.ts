@@ -25,6 +25,7 @@ function getResend(): Resend | null {
 
 const FROM_EMAIL = process.env.RESEND_FROM_EMAIL ?? "noreply@culinaire.kitchen";
 import { CLIENT_URL, PORT } from "../utils/env.js";
+import { escapeStrings } from "../utils/escapeHtml.js";
 
 /**
  * Sends an email verification link to a newly registered user.
@@ -212,7 +213,7 @@ interface RecipeEmailData {
  */
 export async function sendRecipeEmail(
   to: string,
-  recipeData: RecipeEmailData,
+  rawRecipeData: RecipeEmailData,
   imageUrl: string | null,
   slug: string | null,
   recipeId: string,
@@ -220,6 +221,8 @@ export async function sendRecipeEmail(
   const client = getResend();
   if (!client) return { sent: false, error: "Email service not configured" };
 
+  // Recipe text is user- and model-authored and goes into an HTML body below, so escape it all once, here.
+  const recipeData = escapeStrings(rawRecipeData);
   const recipeUrl = `${CLIENT_URL}/kitchen-shelf/${slug ?? recipeId}`;
 
   const s = (label: string, content: string) =>
@@ -414,7 +417,7 @@ export async function sendRecipeEmail(
   const { error } = await client.emails.send({
     from: FROM_EMAIL,
     to,
-    subject: `${recipeData.name} — CulinAIre Kitchen`,
+    subject: `${rawRecipeData.name.replace(/\s+/g, " ")} — CulinAIre Kitchen`,
     html,
     ...(attachments.length > 0 ? { attachments: attachments as { filename?: string; content?: Buffer | string; path?: string }[] } : {}),
   });

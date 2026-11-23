@@ -12,6 +12,37 @@
 import { eq, desc, and } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { conversation, message } from "../db/schema.js";
+import { AppError } from "../utils/appError.js";
+
+/**
+ * Insert a conversation unless the id is taken. A replay by the same owner is not an error
+ * (the phone retries a create it never saw the answer to); an id held by someone else is a 409.
+ *
+ * @returns true when a row was created, false when the caller already owned it.
+ */
+async function insertConversation(
+  id: string,
+  title: string,
+  owner: { userId: number } | { guestToken: string },
+): Promise<boolean> {
+  const mine = "userId" in owner
+    ? { userId: owner.userId, guestSessionToken: null }
+    : { userId: null, guestSessionToken: owner.guestToken };
+  const inserted = await db
+    .insert(conversation)
+    .values({ conversationId: id, conversationTitle: title, ...mine })
+    .onConflictDoNothing()
+    .returning({ id: conversation.conversationId });
+  if (inserted.length > 0) return true;
+
+  const [existing] = await db
+    .select({ userId: conversation.userId, guestToken: conversation.guestSessionToken })
+    .from(conversation)
+    .where(eq(conversation.conversationId, id));
+  const owns = existing && ("userId" in owner ? existing.userId === owner.userId : existing.guestToken === owner.guestToken);
+  if (!owns) throw new AppError(409, "CONFLICT", "That conversation id is already in use.");
+  return false;
+}
 
 /**
  * Create a new conversation scoped to a user.
@@ -19,17 +50,10 @@ import { conversation, message } from "../db/schema.js";
  * @param id     - Client-generated UUID for the conversation.
  * @param title  - Display title (typically derived from the first user message).
  * @param userId - Owner user ID.
+ * @returns true when created, false when the same user had already created it.
  */
-export async function createConversation(
-  id: string,
-  title: string,
-  userId: number
-): Promise<void> {
-  await db.insert(conversation).values({
-    conversationId: id,
-    conversationTitle: title,
-    userId,
-  });
+export function createConversation(id: string, title: string, userId: number): Promise<boolean> {
+  return insertConversation(id, title, { userId });
 }
 
 /**
@@ -89,7 +113,8 @@ export async function updateConversationTitle(
 }
 
 /**
- * Append messages to a conversation and refresh `updated_dttm`.
+ * Append messages to a conversation and refresh `updated_dttm`. A message id that is already stored is
+ * skipped, so a replayed save adds only what is new.
  *
  * @param conversationId - Parent conversation UUID.
  * @param msgs           - Array of messages to insert.
@@ -132,7 +157,7 @@ export async function saveMessages(
       messageBody: m.messageBody,
       messageSequence: m.messageSequence,
     }))
-  );
+  ).onConflictDoNothing({ target: message.messageId });
 
   // Touch updated_dttm on the parent conversation
   await db
@@ -172,18 +197,10 @@ export async function deleteConversation(id: string, userId: number): Promise<vo
  * @param id         - Client-generated UUID for the conversation.
  * @param title      - Display title.
  * @param guestToken - Guest session token for ownership tracking.
+ * @returns true when created, false when the same guest had already created it.
  */
-export async function createGuestConversation(
-  id: string,
-  title: string,
-  guestToken: string,
-): Promise<void> {
-  await db.insert(conversation).values({
-    conversationId: id,
-    conversationTitle: title,
-    userId: null,
-    guestSessionToken: guestToken,
-  });
+export function createGuestConversation(id: string, title: string, guestToken: string): Promise<boolean> {
+  return insertConversation(id, title, { guestToken });
 }
 
 /**

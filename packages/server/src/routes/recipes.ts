@@ -12,6 +12,13 @@ import { authenticateOrGuest } from "../middleware/guestAuth.js";
 import { authenticate, requireRole } from "../middleware/auth.js";
 import { checkUsageLimit, decrementFreeSessions } from "../middleware/usage.js";
 import { checkGuestUsageLimit } from "../middleware/guestUsage.js";
+import {
+  recipeGenerateRateLimit,
+  recipeRefineRateLimit,
+  recipeImageRateLimit,
+  recipeEmailRateLimit,
+  recipeEmailRecipientRateLimit,
+} from "../middleware/rateLimiter.js";
 import { incrementGuestSessions } from "../services/guestService.js";
 import {
   recipeHandler,
@@ -83,9 +90,9 @@ function withUsageTracking(domain: "recipe" | "patisserie" | "spirits") {
 }
 
 // Generation endpoints with usage tracking
-recipesRouter.post("/generate", authenticateOrGuest, ...withUsageTracking("recipe"));
-recipesRouter.post("/patisserie", authenticateOrGuest, ...withUsageTracking("patisserie"));
-recipesRouter.post("/spirits", authenticateOrGuest, ...withUsageTracking("spirits"));
+recipesRouter.post("/generate", authenticateOrGuest, recipeGenerateRateLimit, ...withUsageTracking("recipe"));
+recipesRouter.post("/patisserie", authenticateOrGuest, recipeGenerateRateLimit, ...withUsageTracking("patisserie"));
+recipesRouter.post("/spirits", authenticateOrGuest, recipeGenerateRateLimit, ...withUsageTracking("spirits"));
 
 // Bulk regenerate images (admin only)
 // Admin-only maintenance jobs — these mutate images/settings across ALL tenants.
@@ -106,9 +113,9 @@ recipesRouter.get("/:id/versions", authenticate, handleGetVersions);
 recipesRouter.get("/:id/versions/:versionId", authenticate, handleGetVersion);
 recipesRouter.post("/:id/versions/:versionId/revert", authenticate, handleRevertVersion);
 recipesRouter.patch("/:id/content", authenticate, handleUpdateRecipeContent);
-recipesRouter.post("/:id/refine", authenticate, handleRefineRecipe);
+recipesRouter.post("/:id/refine", authenticate, recipeRefineRateLimit, handleRefineRecipe);
 recipesRouter.post("/:id/accept-refinement", authenticate, handleAcceptRefinement);
-recipesRouter.post("/:id/regenerate-image", authenticate, handleRegenerateImage);
+recipesRouter.post("/:id/regenerate-image", authenticate, recipeImageRateLimit, handleRegenerateImage);
 
 // Single recipe (public recipes visible to all, private to owner only)
 recipesRouter.get("/:id", authenticateOrGuest, handleGetRecipe);
@@ -116,7 +123,7 @@ recipesRouter.get("/:id", authenticateOrGuest, handleGetRecipe);
 // Update (auth or guest), Archive + Delete (auth required)
 recipesRouter.patch("/:id", authenticateOrGuest, handleUpdateRecipe);
 recipesRouter.post("/:id/archive", authenticate, handleArchiveRecipe);
-recipesRouter.post("/:id/email", authenticateOrGuest, handleEmailRecipe);
+recipesRouter.post("/:id/email", authenticateOrGuest, recipeEmailRateLimit, recipeEmailRecipientRateLimit, handleEmailRecipe);
 recipesRouter.delete("/:id", authenticate, handleDeleteRecipe);
 
 // Ratings & Reviews
