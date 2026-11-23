@@ -61,6 +61,7 @@ export const SERVER_ERROR_CODES = [
   "MFA_ALREADY_ENABLED",
   "FILE_TOO_LARGE",
   "UNSUPPORTED_FILE_TYPE",
+  "UPLOAD_FAILED",
 ] as const;
 export type ServerErrorCode = (typeof SERVER_ERROR_CODES)[number];
 

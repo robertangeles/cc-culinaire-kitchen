@@ -38,13 +38,16 @@ const ALLOWED_MIMES = [
 /** The image filter's refusal, so a route can tell a wrong file type from a malformed upload. */
 export class UnsupportedFileTypeError extends Error {}
 
+/** The largest image `upload` accepts. */
+export const IMAGE_UPLOAD_MAX_BYTES = 10 * 1024 * 1024;
+
 /**
  * Pre-configured multer instance for image uploads.
  * Uses memoryStorage so buffer can be sent to Cloudinary.
  */
 export const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 },
+  limits: { fileSize: IMAGE_UPLOAD_MAX_BYTES },
   fileFilter: (_req, file, cb) => {
     if (ALLOWED_MIMES.includes(file.mimetype)) {
       cb(null, true);

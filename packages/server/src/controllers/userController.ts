@@ -6,6 +6,7 @@
 
 import type { Request, Response, NextFunction } from "express";
 import { z } from "zod";
+import pino from "pino";
 import { eq } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { user } from "../db/schema.js";
@@ -32,6 +33,8 @@ import { AccountDeletionError, deleteOwnAccount } from "../services/accountDelet
 import { clearAuthCookies } from "./authController.js";
 import { AuthError, getSignInTime } from "../services/authService.js";
 import { presentedRefreshToken } from "../utils/presentedRefreshToken.js";
+
+const logger = pino({ name: "userController" });
 
 /** GET /api/users/profile — get current user's profile. */
 export async function handleGetProfile(req: Request, res: Response, next: NextFunction) {
@@ -163,7 +166,20 @@ export async function handleAvatarUpload(req: Request, res: Response, next: Next
 
     const userId = req.user!.sub;
     const { uploadFileBuffer } = await import("../middleware/upload.js");
-    const filePath = await uploadFileBuffer(req.file.buffer, req.file.originalname, "culinaire/profiles");
+    let filePath: string;
+    try {
+      filePath = await uploadFileBuffer(req.file.buffer, req.file.originalname, "culinaire/profiles");
+    } catch (err) {
+      logger.error({ err, userId }, "Profile photo upload failed");
+      // Cloudinary rejects with a plain object; a file it cannot read as an image is 400 "Invalid image file".
+      const { http_code, message } = (err ?? {}) as { http_code?: unknown; message?: unknown };
+      if (http_code === 400 && typeof message === "string" && /invalid image file/i.test(message)) {
+        res.status(400).json({ error: "That file could not be read as an image.", code: "UNSUPPORTED_FILE_TYPE" });
+        return;
+      }
+      res.status(502).json({ error: "The photo could not be uploaded. Try again.", code: "UPLOAD_FAILED" });
+      return;
+    }
 
     await db
       .update(user)
@@ -172,11 +188,6 @@ export async function handleAvatarUpload(req: Request, res: Response, next: Next
 
     res.json({ photoPath: filePath });
   } catch (err) {
-    // Cloudinary refuses a file it cannot read as an image with a plain object carrying http_code 400.
-    if ((err as { http_code?: unknown } | null)?.http_code === 400) {
-      res.status(400).json({ error: "That file could not be read as an image.", code: "UNSUPPORTED_FILE_TYPE" });
-      return;
-    }
     next(err);
   }
 }

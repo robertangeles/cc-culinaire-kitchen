@@ -31,6 +31,7 @@ vi.mock("../db/index.js", () => ({
 const { default: usersRouter } = await import("./users.js");
 const { errorHandler } = await import("../middleware/errorHandler.js");
 const { PasswordChangeError } = await import("../services/userService.js");
+const { IMAGE_UPLOAD_MAX_BYTES } = await import("../middleware/upload.js");
 
 /**
  * The phone shows one plain sentence per refusal, chosen by `code`. These are the profile and account
@@ -115,10 +116,11 @@ describe("POST /api/users/profile/avatar", () => {
     return f;
   };
 
-  it("answers a file over the limit 400 FILE_TOO_LARGE with the sentence the web shows", async () => {
-    const res = await call("POST", "/profile/avatar", form(10 * 1024 * 1024 + 1, "image/jpeg"));
+  it("answers a file over the limit 400 FILE_TOO_LARGE, naming the limit the server enforces", async () => {
+    expect(IMAGE_UPLOAD_MAX_BYTES).toBe(10 * 1024 * 1024);
+    const res = await call("POST", "/profile/avatar", form(IMAGE_UPLOAD_MAX_BYTES + 1, "image/jpeg"));
     expect(res.status).toBe(400);
-    expect(res.body).toEqual({ error: "File too large. Maximum size is 2 MB.", code: "FILE_TOO_LARGE" });
+    expect(res.body).toEqual({ error: "File too large. Maximum size is 10 MB.", code: "FILE_TOO_LARGE" });
     known(res.body.code);
     expect(uploadFileBuffer).not.toHaveBeenCalled();
   });
@@ -130,12 +132,25 @@ describe("POST /api/users/profile/avatar", () => {
     known(res.body.code);
   });
 
-  it("answers an image the photo store refuses as an unsupported file, not a 500", async () => {
+  it("answers an image the photo store cannot read 400 UNSUPPORTED_FILE_TYPE", async () => {
     // Cloudinary rejects a file it cannot read as an image with a plain object, not an Error.
     uploadFileBuffer.mockRejectedValue({ message: "Invalid image file", http_code: 400 });
     const res = await call("POST", "/profile/avatar", form(10, "image/png"));
     expect(res.status).toBe(400);
-    expect(res.body.code).toBe("UNSUPPORTED_FILE_TYPE");
+    expect(res.body).toEqual({ error: "That file could not be read as an image.", code: "UNSUPPORTED_FILE_TYPE" });
+  });
+
+  it.each([
+    ["another 400", { message: "Stale request - reported time is too old", http_code: 400 }],
+    ["a refused key", { message: "Invalid api_key 123", http_code: 401 }],
+    ["a timeout", { message: "Request Timeout", http_code: 499, name: "TimeoutError" }],
+    ["a thrown Error", new Error("ENOSPC: no space left on device")],
+  ])("answers %s from the photo store 502 UPLOAD_FAILED without the store's text", async (_name, failure) => {
+    uploadFileBuffer.mockRejectedValue(failure);
+    const res = await call("POST", "/profile/avatar", form(10, "image/png"));
+    expect(res.status).toBe(502);
+    expect(res.body).toEqual({ error: "The photo could not be uploaded. Try again.", code: "UPLOAD_FAILED" });
+    known(res.body.code);
   });
 
   it("answers a form with no file 400 VALIDATION", async () => {
