@@ -41,13 +41,12 @@ export default function TransferScreen() {
   const [typed, setTyped] = useState<Record<string, string>>({});
   const [error, setError] = useState<{ lineId?: string; message: string } | null>(null);
   const row = snap.rows.find((r) => r.transferId === id);
-  const madeHere = row?.pending === "create" && row.sync !== "synced";
 
   useEffect(() => {
     let live = true;
     (async () => {
       try {
-        const local = madeHere ? await store.localLines(id) : null;
+        const local = await store.localLines(id);
         if (local) return live && setLines(local.map((l, i) => ({ lineId: String(i), ingredientName: l.ingredientName, sentQty: l.sentQty, sentUnit: l.sentUnit, receivedQty: null })));
         const got = await store.detail(id);
         if (!live) return;
@@ -61,7 +60,7 @@ export default function TransferScreen() {
     })();
     return () => void (live = false);
     // Read again once the queue has sent what was waiting (the row's status changes).
-  }, [id, madeHere, row?.status, row?.sync, store]);
+  }, [id, row?.status, row?.sync, store]);
 
   if (state.phase !== "ready") return null;
   const here = state.location.storeLocationId;
