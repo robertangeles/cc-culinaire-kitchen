@@ -9,7 +9,7 @@ import { credentials, freshCode, manager } from "./fixtures";
  * signs out at the end and removes the adb tunnels it added. Needs the dev build installed, Metro on METRO_URL,
  * and the server on E2E_API_URL; the phone reaches both through `adb reverse`.
  */
-const METRO = process.env.METRO_URL ?? "http://localhost:8190";
+const METRO = process.env.METRO_URL ?? "http://localhost:8088";
 const API = "/api/inventory";
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 const tag = `rd${Date.now().toString(36).slice(-5)} `;

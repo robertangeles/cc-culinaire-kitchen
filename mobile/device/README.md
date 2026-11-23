@@ -21,7 +21,7 @@ Rebuild and install the development build first (see "Rebuild and install" below
 
 `device/stockWalk.device.test.ts` is the Usage and Move walk (log usage with signal and in airplane mode, the "that's a move, not usage" question, a move between areas, both screens in landscape). It makes its items and areas through the API as a manager first and saves screenshots to `device/_shots`: `check:device -- device/stockWalk`, with the same Metro, API and `adb reverse` set-up as above.
 
-`device/receiving.device.test.ts` is the receiving walk (sign in, the Receive tab, a perfect delivery, then one with a short line, a wrong price and a rejection, checked on the server). It makes its supplier, items and sent orders through the API as a manager first and changes no system setting: `check:device -- device/receiving`. Its Metro default is port 8190, not 8088: set `METRO_URL` to where Metro runs.
+`device/receiving.device.test.ts` is the receiving walk (sign in, the Receive tab, a perfect delivery, then one with a short line, a wrong price and a rejection, checked on the server). It makes its supplier, items and sent orders through the API as a manager first and changes no system setting: `check:device -- device/receiving`.
 
 ## Rebuild and install the development build (Android, no EAS, no accounts)
 
