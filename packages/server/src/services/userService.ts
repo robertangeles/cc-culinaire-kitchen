@@ -118,7 +118,11 @@ export async function updateUserProfile(
 }
 
 /** A refusal the caller can act on (wrong password, no password set); anything else is a server fault. */
-export class PasswordChangeError extends Error {}
+export class PasswordChangeError extends Error {
+  constructor(message: string, public readonly code: "NOT_FOUND" | "PASSWORD_NOT_SET" | "INVALID_CREDENTIALS") {
+    super(message);
+  }
+}
 
 /**
  * Change password (requires current password verification). Every other sign-in is ended, as a
@@ -135,14 +139,14 @@ export async function changePassword(
     .from(user)
     .where(eq(user.userId, userId));
 
-  if (rows.length === 0) throw new PasswordChangeError("User not found.");
+  if (rows.length === 0) throw new PasswordChangeError("User not found.", "NOT_FOUND");
 
   if (!rows[0].hash) {
-    throw new PasswordChangeError("Account uses OAuth login. Set a password via profile settings.");
+    throw new PasswordChangeError("Account uses OAuth login. Set a password via profile settings.", "PASSWORD_NOT_SET");
   }
 
   const valid = await bcrypt.compare(currentPassword, rows[0].hash);
-  if (!valid) throw new PasswordChangeError("Current password is incorrect.");
+  if (!valid) throw new PasswordChangeError("Current password is incorrect.", "INVALID_CREDENTIALS");
 
   const hash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
   const keepFamily = await refreshTokenFamily(keepRefreshToken, userId);

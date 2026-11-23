@@ -153,7 +153,7 @@ export function ProfilePage() {
         setAvatarError("Session expired. Please refresh the page and try again.");
       } else {
         const data = await res.json().catch(() => ({}));
-        setAvatarError(data.error ?? "Upload failed. Check file size (max 2 MB) and type.");
+        setAvatarError(data.error ?? "Upload failed. Check file size (max 10 MB) and type.");
       }
     } catch {
       setAvatarError("Network error — please try again.");

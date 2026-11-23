@@ -78,6 +78,7 @@ import {
   AuthError,
 } from "../services/authService.js";
 import { getCredentialValueWithFallback } from "../services/credentialService.js";
+import { SERVER_ERROR_CODES } from "@culinaire/shared";
 
 // Every test starts with Turnstile passing; failure cases opt in explicitly.
 beforeEach(() => {
@@ -591,6 +592,7 @@ describe("handleMfaEnable", () => {
     const res = mockRes();
     await handleMfaEnable(req, res, vi.fn());
     expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.json).toHaveBeenCalledWith({ error: "Not authenticated.", code: "UNAUTHENTICATED" });
   });
 
   it("returns 400 when token is missing", async () => {
@@ -598,6 +600,7 @@ describe("handleMfaEnable", () => {
     const res = mockRes();
     await handleMfaEnable(req, res, vi.fn());
     expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ error: "TOTP code is required.", code: "VALIDATION" });
   });
 
   it("returns 400 for INVALID_MFA_CODE", async () => {
@@ -606,7 +609,7 @@ describe("handleMfaEnable", () => {
     const res = mockRes();
     await handleMfaEnable(req, res, vi.fn());
     expect(res.status).toHaveBeenCalledWith(400);
-    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: "Invalid code. Please try again." }));
+    expect(res.json).toHaveBeenCalledWith({ error: "Invalid code. Please try again.", code: "INVALID_MFA_CODE" });
   });
 
   it("returns success on valid TOTP code", async () => {
@@ -630,6 +633,7 @@ describe.each([
     const res = mockRes();
     await handler(mockReq(), res, vi.fn());
     expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.json).toHaveBeenCalledWith({ error: "Not authenticated.", code: "UNAUTHENTICATED" });
     expect(service).not.toHaveBeenCalled();
   });
 
@@ -670,6 +674,7 @@ describe.each([
     await handler(authed(), res, next);
     expect(res.status).toHaveBeenCalledWith(status);
     expect(res.json).toHaveBeenCalledWith({ error: "Say what to do.", code });
+    expect(SERVER_ERROR_CODES).toContain(code);
     expect(next).not.toHaveBeenCalled();
   });
 
@@ -679,7 +684,7 @@ describe.each([
     const next = vi.fn();
     await handler(authed(), res, next);
     expect(res.status).toHaveBeenCalledWith(401);
-    expect(res.json).toHaveBeenCalledWith({ error: "Not authenticated." });
+    expect(res.json).toHaveBeenCalledWith({ error: "Not authenticated.", code: "UNAUTHENTICATED" });
     expect(next).not.toHaveBeenCalled();
   });
 
@@ -700,6 +705,7 @@ describe("handleMfaVerify", () => {
     const res = mockRes();
     await handleMfaVerify(req, res, vi.fn());
     expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ error: "MFA session token and code are required.", code: "VALIDATION" });
   });
 
   it("returns 401 for INVALID_MFA_SESSION", async () => {
@@ -710,7 +716,7 @@ describe("handleMfaVerify", () => {
     const res = mockRes();
     await handleMfaVerify(req, res, vi.fn());
     expect(res.status).toHaveBeenCalledWith(401);
-    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: expect.stringContaining("expired") }));
+    expect(res.json).toHaveBeenCalledWith({ error: "MFA session expired. Please log in again.", code: "INVALID_MFA_SESSION" });
   });
 
   it("returns 400 for INVALID_MFA_CODE", async () => {
@@ -721,7 +727,7 @@ describe("handleMfaVerify", () => {
     const res = mockRes();
     await handleMfaVerify(req, res, vi.fn());
     expect(res.status).toHaveBeenCalledWith(400);
-    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: "Invalid code. Please try again." }));
+    expect(res.json).toHaveBeenCalledWith({ error: "Invalid code. Please try again.", code: "INVALID_MFA_CODE" });
   });
 
   it("returns user and tokens on success", async () => {

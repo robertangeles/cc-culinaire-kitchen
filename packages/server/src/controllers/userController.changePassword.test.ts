@@ -3,7 +3,9 @@ import type { Request, Response } from "express";
 
 vi.mock("../services/userService.js", () => ({
   changePassword: vi.fn(),
-  PasswordChangeError: class PasswordChangeError extends Error {},
+  PasswordChangeError: class PasswordChangeError extends Error {
+    constructor(message: string, public readonly code: string) { super(message); }
+  },
 }));
 vi.mock("../services/userAnonymisationService.js", () => ({ anonymiseUser: vi.fn(), UserAnonymisationError: class extends Error {} }));
 vi.mock("../services/organisationService.js", () => ({}));
@@ -54,12 +56,12 @@ describe("handleChangePassword", () => {
     expect(changePassword).toHaveBeenCalledWith(5, "old-pass", "new-password-1", "raw-cookie");
   });
 
-  it("answers 400 with the message for a refusal the user can act on", async () => {
-    vi.mocked(changePassword).mockRejectedValue(new PasswordChangeError("Current password is incorrect."));
+  it("answers 400 with the message and code for a refusal the user can act on", async () => {
+    vi.mocked(changePassword).mockRejectedValue(new PasswordChangeError("Current password is incorrect.", "INVALID_CREDENTIALS"));
     const { req, res, status, json, next } = run({ currentPassword: "bad", newPassword: "new-password-1" });
     await handleChangePassword(req, res, next);
     expect(status).toHaveBeenCalledWith(400);
-    expect(json).toHaveBeenCalledWith({ error: "Current password is incorrect." });
+    expect(json).toHaveBeenCalledWith({ error: "Current password is incorrect.", code: "INVALID_CREDENTIALS" });
     expect(next).not.toHaveBeenCalled();
   });
 

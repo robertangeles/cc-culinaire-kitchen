@@ -42,7 +42,7 @@ export async function handleMarkAsRead(
 
     const result = await notificationService.markAsRead(notificationId, userId);
     if (!result) {
-      res.status(404).json({ error: "Notification not found" });
+      res.status(404).json({ error: "Notification not found", code: "NOT_FOUND" });
       return;
     }
     res.json(result);
@@ -60,7 +60,7 @@ export async function handleDismiss(
 
     const result = await notificationService.dismiss(notificationId, userId);
     if (!result) {
-      res.status(404).json({ error: "Notification not found" });
+      res.status(404).json({ error: "Notification not found", code: "NOT_FOUND" });
       return;
     }
     res.json(result);

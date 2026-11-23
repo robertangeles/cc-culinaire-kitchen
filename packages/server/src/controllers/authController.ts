@@ -650,14 +650,14 @@ export async function handleMfaSetup(
 ) {
   try {
     const userId = req.user?.sub;
-    if (!userId) { res.status(401).json({ error: "Not authenticated." }); return; }
+    if (!userId) { res.status(401).json({ error: "Not authenticated.", code: "UNAUTHENTICATED" }); return; }
 
     const signedInAt = await getSignInTime(presentedRefreshToken(req), userId);
     const result = await generateMfaSecret(userId, mfaProofFrom(req.body), signedInAt);
     res.json({ secret: result.secret, qrCodeDataUrl: result.qrCodeDataUrl });
   } catch (err) {
     if (isAuthError(err, "USER_NOT_FOUND")) {
-      res.status(401).json({ error: "Not authenticated." });
+      res.status(401).json({ error: "Not authenticated.", code: "UNAUTHENTICATED" });
       return;
     }
     if (isAuthError(err)) {
@@ -676,11 +676,11 @@ export async function handleMfaEnable(
 ) {
   try {
     const userId = req.user?.sub;
-    if (!userId) { res.status(401).json({ error: "Not authenticated." }); return; }
+    if (!userId) { res.status(401).json({ error: "Not authenticated.", code: "UNAUTHENTICATED" }); return; }
 
     const { token } = req.body;
     if (!token || typeof token !== "string") {
-      res.status(400).json({ error: "TOTP code is required." });
+      res.status(400).json({ error: "TOTP code is required.", code: "VALIDATION" });
       return;
     }
 
@@ -688,7 +688,7 @@ export async function handleMfaEnable(
     res.json({ message: "MFA enabled successfully." });
   } catch (err: unknown) {
     if (isAuthError(err, "INVALID_MFA_CODE")) {
-      res.status(400).json({ error: "Invalid code. Please try again." });
+      res.status(400).json({ error: "Invalid code. Please try again.", code: "INVALID_MFA_CODE" });
       return;
     }
     next(err);
@@ -703,14 +703,14 @@ export async function handleMfaDisable(
 ) {
   try {
     const userId = req.user?.sub;
-    if (!userId) { res.status(401).json({ error: "Not authenticated." }); return; }
+    if (!userId) { res.status(401).json({ error: "Not authenticated.", code: "UNAUTHENTICATED" }); return; }
 
     const signedInAt = await getSignInTime(presentedRefreshToken(req), userId);
     await disableMfa(userId, mfaProofFrom(req.body), signedInAt);
     res.json({ message: "MFA disabled." });
   } catch (err) {
     if (isAuthError(err, "USER_NOT_FOUND")) {
-      res.status(401).json({ error: "Not authenticated." });
+      res.status(401).json({ error: "Not authenticated.", code: "UNAUTHENTICATED" });
       return;
     }
     if (isAuthError(err)) {
@@ -730,7 +730,7 @@ export async function handleMfaVerify(
   try {
     const { mfaSessionToken, code } = req.body;
     if (!mfaSessionToken || !code) {
-      res.status(400).json({ error: "MFA session token and code are required." });
+      res.status(400).json({ error: "MFA session token and code are required.", code: "VALIDATION" });
       return;
     }
 
@@ -747,11 +747,11 @@ export async function handleMfaVerify(
   } catch (err: unknown) {
     if (isAuthError(err)) {
       if (isAuthError(err, "INVALID_MFA_SESSION") || isAuthError(err, "USER_NOT_FOUND")) {
-        res.status(401).json({ error: "MFA session expired. Please log in again." });
+        res.status(401).json({ error: "MFA session expired. Please log in again.", code: "INVALID_MFA_SESSION" });
         return;
       }
       if (isAuthError(err, "INVALID_MFA_CODE")) {
-        res.status(400).json({ error: "Invalid code. Please try again." });
+        res.status(400).json({ error: "Invalid code. Please try again.", code: "INVALID_MFA_CODE" });
         return;
       }
     }
