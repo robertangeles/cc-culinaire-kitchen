@@ -1,10 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const eas = JSON.parse(readFileSync(resolve(root, "eas.json"), "utf8")) as { build: Record<string, { developmentClient?: boolean; distribution?: string; env?: Record<string, string>; android?: { buildType?: string } }> };
+type Profile = { developmentClient?: boolean; distribution?: string; channel?: string; environment?: string; autoIncrement?: boolean; env?: Record<string, string>; android?: { buildType?: string } };
+const eas = JSON.parse(readFileSync(resolve(root, "eas.json"), "utf8")) as { cli: { appVersionSource?: string }; build: Record<string, Profile>; submit?: Record<string, { android?: { track?: string } }> };
+const app = JSON.parse(readFileSync(resolve(root, "app.json"), "utf8")).expo as Record<string, any>;
+const pkg = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8")) as { dependencies: Record<string, string> };
 
 describe("EAS build profiles", () => {
   it("development is a dev client an internal tester can install, as an APK", () => {
@@ -24,5 +27,65 @@ describe("EAS build profiles", () => {
     for (const [name, profile] of Object.entries(eas.build)) {
       expect(profile.env?.EXPO_PUBLIC_API_URL, `profile ${name}`).toBeUndefined();
     }
+  });
+});
+
+describe("app identity (both stores)", () => {
+  it("is one app with the same id on iOS and Android, and runs on iPad", () => {
+    expect(app.ios.bundleIdentifier).toBe("com.culinairekitchen.chef");
+    expect(app.android.package).toBe("com.culinairekitchen.chef");
+    expect(app.ios.supportsTablet).toBe(true);
+  });
+
+  it("has a plain semantic version (the server's update rule compares it) and leaves build numbers to EAS", () => {
+    expect(app.version).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(app.ios.buildNumber).toBeUndefined();
+    expect(app.android.versionCode).toBeUndefined();
+    expect(eas.cli.appVersionSource).toBe("remote");
+    expect(eas.build.preview.autoIncrement).toBe(true);
+    expect(eas.build.production.autoIncrement).toBe(true);
+  });
+
+  it("declares that it only uses the standard HTTPS encryption, so no build stops at the export-compliance question", () => {
+    expect(app.ios.infoPlist.ITSAppUsesNonExemptEncryption).toBe(false);
+  });
+
+  it("asks for no permission nothing uses yet (camera, location and the rest arrive with their feature, with their own words)", () => {
+    expect(Object.keys(app.ios.infoPlist).filter((k) => k.endsWith("UsageDescription"))).toEqual([]);
+    expect(app.android.permissions ?? []).toEqual([]);
+  });
+
+  it("has real icons and splash from the brand art, in the paper colour (not Expo's blue template)", () => {
+    for (const f of [app.icon, app.android.adaptiveIcon.foregroundImage, app.android.adaptiveIcon.backgroundImage, app.android.adaptiveIcon.monochromeImage]) {
+      expect(existsSync(resolve(root, f)), f).toBe(true);
+    }
+    expect(app.android.adaptiveIcon.backgroundColor).toBe("#F3EFE4");
+    const splash = app.plugins.find((p: unknown) => Array.isArray(p) && p[0] === "expo-splash-screen");
+    expect(splash[1]).toMatchObject({ image: "./assets/splash-icon.png", backgroundColor: "#F3EFE4", dark: { backgroundColor: "#101418" } });
+    expect(existsSync(resolve(root, splash[1].image))).toBe(true);
+  });
+});
+
+describe("over-the-air updates", () => {
+  it("is installed, and a JS update only ever reaches a build with the same app version (the version the server's update rule reads)", () => {
+    expect(pkg.dependencies["expo-updates"]).toBeTruthy();
+    expect(app.runtimeVersion).toEqual({ policy: "appVersion" });
+  });
+
+  it("goes to one channel per build profile, so an internal test build never receives a production update", () => {
+    const channels = Object.entries(eas.build).map(([name, p]) => [name, p.channel]);
+    expect(channels).toEqual([["development", "development"], ["preview", "preview"], ["production", "production"]]);
+  });
+
+  it("takes each profile's server address from the EAS environment of that name, never from a file in the repo", () => {
+    for (const [name, p] of Object.entries(eas.build)) expect(p.environment, name).toBe(name);
+  });
+});
+
+describe("store submission", () => {
+  it("production is a store build; internal testing goes to the Play internal track", () => {
+    expect(eas.build.production.distribution ?? "store").toBe("store");
+    expect(eas.submit?.internal?.android?.track).toBe("internal");
+    expect(eas.submit?.production?.android?.track).toBe("production");
   });
 });
