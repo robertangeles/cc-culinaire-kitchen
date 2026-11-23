@@ -44,6 +44,16 @@ No schema change and no migration. The phone gets a **Receive** tab (for `purcha
 - **Web.** The notification bell names the six new types (new shift, shift changed, shift cancelled, roster published, document verified, document rejected). `POST /api/auth/logout` answers as before.
 - Deleting an account also deletes the person's push settings.
 
+### Changed (mobile Wave 4, server: roster on the venue's clock)
+
+**Apply migration `0005_staff_availability_unique` by hand on production BEFORE this version deploys** (`pnpm --filter @culinaire/server exec tsx src/scripts/migrate.ts`; run it with `--dry-run` first). It deletes exact duplicate availability windows (keeping the earliest) and then allows one row per window; the migration file holds a read-only query that counts what would be removed. The previous server keeps working afterwards.
+
+- **A date-only roster range is a day on the venue's clock, not UTC's.** `from`/`to` given as `YYYY-MM-DD` on `GET /api/roster/shifts`, `/shifts/calendar`, `/shifts/mine` and on publish are read in the venue's IANA zone, so a 6 am Monday shift in Melbourne (Sunday 20:00 UTC) is on Monday. A full timestamp is still read as an instant. An impossible date (`2026-02-30`) answers `400` with `code: "VALIDATION"`.
+- **`GET /api/roster/shifts/mine`** takes optional `excludeDrafts=true` (leaves out Draft shifts, except one waiting on the caller's public-holiday consent), `from`, `to` and `limit` (1 to 500), and each row now carries `locationName`, `ianaTimezone`, `state` and `isPublicHoliday`. With no parameters it answers as before, Drafts included, which is what the web sends.
+- **Roster 409s carry a `code`** (shared `ApiErrorBody`): assigning answers `SHIFT_NOT_DRAFT`, `ASSIGNMENT_BLOCKED_COMPLIANCE` or `SHIFT_ALREADY_ASSIGNED`; claiming a swap answers `SWAP_CLAIMED_BY_YOU`, `SWAP_CLAIMED_BY_OTHER` or `SWAP_CANCELLED`. A replayed claim used to answer `404`; it is recognised for 7 days.
+- **Adding an availability window twice returns the existing row** instead of a twin; editing one into a copy of another answers `409` with `code: "CONFLICT"`.
+- **The location context lists each venue's `ianaTimezone` and `state`.** Shared `formatShiftRange` and `daysBetweenLocal` take an optional time zone (the device's zone when omitted, as before).
+
 ### Added (waste: the ingredient list for a cook who logs waste but cannot count stock)
 
 - **`GET /api/waste/ingredients`.** A read-only list of the caller's organisation's active ingredients, each `{ ingredientId, ingredientName, baseUnit }` (the kitchen unit) and nothing else: no cost, stock, supplier, category or allergen. Same organisation as `GET /api/inventory/ingredients` (ingredients belong to the organisation, not to a location); removed ingredients are left out; sorted by name. Open to `waste:log` and to `inventory:count` (and Administrators), so a cook who may log waste but not count stock can now search the whole list in the phone's picker. No new permission, no migration, nothing to seed or backfill. Someone in no organisation gets `403` with `code: "FORBIDDEN"`.

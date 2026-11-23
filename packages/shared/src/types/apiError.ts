@@ -50,6 +50,13 @@ export const SERVER_ERROR_CODES = [
   "AI_UNAVAILABLE",
   "AI_TIMEOUT",
   "EMAIL_FAILED",
+  // Roster (Wave 4). Assigning to a shift answers 409 for three different reasons; a swap claim for three more.
+  "ASSIGNMENT_BLOCKED_COMPLIANCE",
+  "SHIFT_ALREADY_ASSIGNED",
+  "SHIFT_NOT_DRAFT",
+  "SWAP_CLAIMED_BY_YOU",
+  "SWAP_CLAIMED_BY_OTHER",
+  "SWAP_CANCELLED",
 ] as const;
 export type ServerErrorCode = (typeof SERVER_ERROR_CODES)[number];
 
