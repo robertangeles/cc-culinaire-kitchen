@@ -25,7 +25,7 @@ Run the screenshot walk (`device/README.md`, "The screenshot walk") after changi
 
 | Folder | What lives there |
 |---|---|
-| `app/` | Screens (expo-router). A module is a route group `app/(app)/(module)/`, plus one entry in `src/shell/tabs.ts` naming the permission that opens it (none when the server asks only for a signed-in person), in the order a line cook uses them (Prep, Waste, Usage, Count, Move, Receive, Ask, Recipes). Past five tab buttons, the fifth is More (`app/(app)/more.tsx`), listing the rest and Account. A tab under More keeps its route and loses only its button: never `href: null`, which expo-router turns into a hidden tab that redirects to the first tab when opened. |
+| `app/` | Screens (expo-router). A module is a route group `app/(app)/(module)/`, plus one entry in `src/shell/tabs.ts` naming the permission that opens it (none when the server asks only for a signed-in person), in the order a line cook uses them (Prep, Waste, Usage, Count, Move, Receive, Ask, Recipes, Transfers, Stock). Past five tab buttons, the fifth is More (`app/(app)/more.tsx`), listing the rest and Account. A tab under More keeps its route and loses only its button: never `href: null`, which expo-router turns into a hidden tab that redirects to the first tab when opened. |
 | `src/api` | The one network client: auth, refresh, coded errors (`ApiError.code`, `serverCode`). |
 | `src/outbox` | The offline queue (below). |
 | `src/ingredients` | The shared ingredient picker's data (below); its component is `src/ui/IngredientPicker.tsx`. |
@@ -307,6 +307,7 @@ Every write goes through the queue (`transfer.create` with a phone-made `transfe
   outside the organisation (404 `NOT_FOUND`), a location the person does not work at (403 `LOCATION_NOT_ALLOWED`), a bad line or quantity (400 `VALIDATION`).
 - A transfer made with no signal can be sent or cancelled before it leaves the phone; a cancel then drops it (the server never hears of it).
 - Receiving needs the transfer's lines: it works with no signal once the transfer was opened with one (`transfers.detail.<user>.<id>` on the phone).
+- A transfer made on the phone shows its lines from the queue for as long as its create has not been accepted, whatever is queued behind it (a send, a cancel); once the server holds it, the page reads the server's copy, so what the destination received shows.
 - The form checks what the server would refuse (a destination, at least one item, each picked from the list with a known unit, an amount above 0, no item twice, on receive 0 or more),
   never stock: ten litres can go with five on the books, as on the server (stock goes negative until the next count).
 
