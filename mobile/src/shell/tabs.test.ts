@@ -31,7 +31,7 @@ describe("which tabs a person sees", () => {
   });
 
   it("shows the Receive tab to someone who holds purchasing:receive, with or without Count", () => {
-    expect(visibleTabs(person({ permissions: ["purchasing:receive"] })).map((t) => t.route)).toEqual(["(receive)"]);
+    expect(gatedTabs(person({ permissions: ["purchasing:receive"] })).map((t) => t.route)).toEqual(["(receive)"]);
     const both = visibleTabs(person({ permissions: ["inventory:count", "purchasing:receive"] })).map((t) => t.route);
     expect(both).toContain("(count)");
     expect(both).toContain("(receive)");
