@@ -21,7 +21,7 @@ export default function Account() {
   const { user, location, locations } = state;
 
   return (
-    <Screen>
+    <Screen align="top">
       <Text variant="title">{user.userName || "Your account"}</Text>
       <Surface>
         <View style={{ padding: space.lg, gap: space.xs }}>

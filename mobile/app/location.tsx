@@ -13,7 +13,7 @@ export default function ChooseLocation() {
   if (state.phase !== "chooseLocation") return null;
 
   return (
-    <Screen>
+    <Screen align="top">
       <Text variant="title">Where are you working?</Text>
       <Surface>
       {state.locations.map((l, index) => (

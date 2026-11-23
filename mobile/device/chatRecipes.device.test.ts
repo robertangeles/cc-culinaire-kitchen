@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, onTestFailed } from "vitest";
-import { adb, back, clearApp, clearField, findAll, has, hideKeyboard, openApp, forceStop, screenshot, setAnimations, setDarkMode, setFontScale, setRotation, swipe, screenSize, tap, tapAt, texts, typeInto, waitFor } from "./adb";
+import { adb, back, clearApp, clearField, findAll, has, hideKeyboard, openApp, openTab, forceStop, screenshot, setAnimations, setDarkMode, setFontScale, setRotation, swipe, screenSize, tap, tapAt, texts, typeInto, waitFor } from "./adb";
 import { credentials, freshCode, manager } from "./fixtures";
 
 /**
@@ -45,7 +45,7 @@ async function launch() {
   if (await has("Go home")) await back();
 }
 
-const tab = (title: string) => tap(new RegExp(`^${title}(,|$)`), 30_000);
+const tab = (title: string) => openTab(title);
 /** One phrase from each line `fakeModel.mjs` streams, in order. */
 const ANSWER_LINES = ["Fake kitchen answer", "Sear the fish skin", "press it flat", "leave it alone", "Pat the skin dry", "Salt just before", "Rest for one minute", "one piece at a time"];
 const scrollDown = () => {
@@ -87,10 +87,12 @@ describe("chat and recipes on a device", () => {
     for (const id of (await conversationIds().catch(() => [])).filter((id) => !conversationsBefore.includes(id))) await m.client.request("DELETE", `/api/conversations/${id}`).catch(() => {});
   });
 
-  it("C1 signs in and shows the Ask and Recipes tabs", async () => {
+  it("C1 signs in and shows Ask and Recipes under More", async () => {
     await signIn();
-    await waitFor(/^Ask(,|$)/, 60_000);
-    expect(await has(/^Recipes(,|$)/)).toBe(true);
+    // The E2E user is an Administrator: more modules than the bar holds, so Ask and Recipes are listed under More.
+    await tap(/^More(,|$)/, 60_000);
+    await waitFor("Ask", 20_000);
+    expect(await has("Recipes")).toBe(true);
     await screenshot("c01-tabs");
   });
 

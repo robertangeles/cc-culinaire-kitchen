@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, onTestFailed } from "vitest";
 import {
   adb, back, clearApp, tapLabel, tapAt, clearField, darkIconsOnStatusBar, dump, fieldText, findAll, find, forceStop, has, hideKeyboard, isEnabled, openApp, screenshot,
-  setAirplane, setAnimations, setDarkMode, setFontScale, setRotation, tap, typeInto, waitFor,
+  openTab, setAirplane, setAnimations, setDarkMode, setFontScale, setRotation, tap, typeInto, waitFor,
 } from "./adb";
 import { credentials, freshCode, seedAreaCount, type AreaFixture } from "./fixtures";
 
@@ -146,12 +146,14 @@ describe("count walk on a device", () => {
     await screenshot("w02-wrong-code");
 
     await enterCode(await freshCode());
+    await openTab("Count");
     await waitFor(row(fx.areas.bar), 40_000);
     await screenshot("w02-signed-in");
   });
 
   it("W2 stays signed in after the app is killed", async () => {
     await launch();
+    await openTab("Count");
     await waitFor(row(fx.areas.bar), 40_000);
   });
 
@@ -254,6 +256,7 @@ describe("count walk on a device", () => {
     forceStop(); // W6: killed with counts unsent
     await openApp(METRO);
     await sleep(6000);
+    await openTab("Count");
     await waitFor(/\d+ waiting to send/, 40_000);
     await waitFor(/You're offline/, 40_000);
     await screenshot("w07-reopened-offline");
@@ -372,7 +375,7 @@ describe("count walk on a device", () => {
 
   it("W11 below the minimum app version the app is asked to update at sign-in, and works again once it is lifted", async () => {
     await fx.api.request("PUT", "/api/settings", { body: { mobile_min_app_version: "9.9.9" } });
-    await tap(/^Account/); // Sign out lives on the Account tab
+    await openTab("Account"); // Sign out lives on the Account tab (under More for this Administrator)
     await waitFor("Sign out", 20_000);
     await tap("Sign out");
     await waitFor("Sign in", 30_000);
@@ -384,6 +387,7 @@ describe("count walk on a device", () => {
     await waitFor("Sign in", 20_000);
     await signIn();
     await enterCode(await freshCode());
+    await openTab("Count");
     await waitFor(row(fx.areas.bar), 40_000);
   });
 });

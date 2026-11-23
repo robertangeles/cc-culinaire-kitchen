@@ -55,6 +55,8 @@ describe("areas list", () => {
   it("shows each area with its progress and which areas share items", async () => {
     await makeHarness();
     render(<Areas />);
+    // Titled by what it is, like every other tab, with the location under it (it was titled with the location name alone).
+    expect(screen.getByRole("heading").textContent).toBe("Count");
     expect(screen.getByText("Main Kitchen")).toBeTruthy();
     expect(screen.getByText("Bar")).toBeTruthy();
     expect(screen.getAllByText("0 of 2").length).toBe(1);
@@ -132,6 +134,14 @@ describe("areas list", () => {
     await makeHarness({ api: { activeSession: vi.fn(async () => null) } });
     render(<Areas />);
     expect(screen.getByText("No stock take is open. Ask your manager to open one on the web.")).toBeTruthy();
+  });
+
+  it("keeps the list in the centred 560 dp column on an iPad, as every other tab does", async () => {
+    await makeHarness();
+    render(<Areas />);
+    const column = screen.getByRole("heading").parentElement as HTMLElement;
+    expect(parseFloat(getComputedStyle(column).maxWidth)).toBe(560);
+    expect(getComputedStyle(column).alignSelf).toBe("center");
   });
 });
 
@@ -399,6 +409,28 @@ describe("continue with Apple", () => {
 });
 
 describe("account tab", () => {
+  it("starts at the top of the page, as the module tabs do, and so does the location picker, while sign-in stays centred; all keep the 560 dp column", () => {
+    const { unmount } = render(<Account />);
+    const column = screen.getByText("Main Kitchen").parentElement!.parentElement!.parentElement as HTMLElement;
+    expect(parseFloat(getComputedStyle(column).maxWidth)).toBe(560);
+    expect(getComputedStyle(column.parentElement as HTMLElement).justifyContent).toBe("flex-start");
+    unmount();
+
+    // Change location is opened from Account, so it starts where Account does.
+    sessionState.current = { state: { phase: "chooseLocation", user: chef, locations: [main], current: main }, busy: false };
+    const picker = render(<ChooseLocation />);
+    let el = screen.getByRole("button", { name: "Main Kitchen, current location" }) as HTMLElement;
+    while (parseFloat(getComputedStyle(el).maxWidth) !== 560) el = el.parentElement as HTMLElement;
+    expect(getComputedStyle(el.parentElement as HTMLElement).justifyContent).toBe("flex-start");
+    picker.unmount();
+
+    sessionState.current = { state: { phase: "signedOut" }, busy: false };
+    render(<SignIn />);
+    el = screen.getByLabelText("Email") as HTMLElement;
+    while (parseFloat(getComputedStyle(el).maxWidth) !== 560) el = el.parentElement as HTMLElement;
+    expect(getComputedStyle(el.parentElement as HTMLElement).justifyContent).toBe("center");
+  });
+
   it("shows who is signed in and where, and signs out", () => {
     render(<Account />);
     expect(screen.getByText("Chef")).toBeTruthy();

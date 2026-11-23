@@ -27,10 +27,10 @@ export default function LinkApple() {
     void accountApi.facts().then(setFacts, () => setFacts("failed"));
   }, []);
 
-  if (facts === null) return <Screen><Text variant="muted">Loading…</Text></Screen>;
+  if (facts === null) return <Screen align="top"><Text variant="muted">Loading…</Text></Screen>;
   if (facts === "failed") {
     return (
-      <Screen>
+      <Screen align="top">
         <Text variant="title">Add Sign in with Apple</Text>
         <Text variant="error">Couldn't load your account. Try again.</Text>
         <Button kind="quiet" label="Back" onPress={() => router.back()} />
@@ -39,7 +39,7 @@ export default function LinkApple() {
   }
   if (facts.hasApple || linked) {
     return (
-      <Screen>
+      <Screen align="top">
         <Text variant="title">Add Sign in with Apple</Text>
         <Text>{linked ? "Sign in with Apple is now on your account." : "Sign in with Apple is already on your account."}</Text>
         <Text variant="muted">Next time you can sign in with Apple. It opens this same account, whatever email Apple shows.</Text>
@@ -76,7 +76,7 @@ export default function LinkApple() {
   }
 
   return (
-    <Screen>
+    <Screen align="top">
       <Text variant="title">Add Sign in with Apple</Text>
       <Text variant="muted">
         Sign in to this account with your Apple ID as well. If you choose Hide My Email, Apple shows us a private address instead of yours: that is fine. It joins this account, not a second one.

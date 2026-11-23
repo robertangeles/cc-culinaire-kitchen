@@ -45,7 +45,7 @@ Run commands from the repository root. `eas` is the Expo build service; use it t
 1. First release only: in the Play Console create an internal testing release and upload the first `.aab` by hand (Play does not let the API create a first release). Build it: `pnpm --dir mobile exec eas build --profile production --platform android`; download the `.aab` from the build page.
 2. After that: `pnpm --dir mobile exec eas submit --platform android --profile internal` (uses the latest production build and the `internal` track).
 3. Add testers (Testing, Internal testing, Testers): an email list. They install from the opt-in link.
-4. Before any production release the Play Console also needs: Data safety form (the app holds name, email, and later identity documents from compliance uploads: declare them), content rating, target audience, the privacy policy URL (use the existing web Privacy URL, `https://<your site>/privacy`), and the **account deletion** answer: in-app path "Account tab, Delete my account", web page `https://<your site>/delete-account`.
+4. Before any production release the Play Console also needs: Data safety form (the app holds name, email, and later identity documents from compliance uploads: declare them), content rating, target audience, the privacy policy URL (use the existing web Privacy URL, `https://<your site>/privacy`), and the **account deletion** answer: in-app path "Account (a tab, or under More), Delete my account", web page `https://<your site>/delete-account`.
 5. Production: `eas submit --platform android --profile production` (the draft goes to the Play Console for you to review and roll out).
 
 ## TestFlight and the App Store
@@ -82,19 +82,19 @@ The script prints the host before it writes anything and never prints the passwo
 
 ### Reviewer notes (paste into App Store Connect "App Review Information" and the Play Console "App access")
 
-> CulinAIre Kitchen is a tool for restaurant and café kitchen teams. Sign in with the demo account below (email and password; no code is needed). It opens straight to a stock count already in progress at "Demo Kitchen": open an area, enter a quantity for each item with the on-screen keypad, and send the area for review. Counts are saved on the phone first and sent when there is a connection, so it also works with no signal.
+> CulinAIre Kitchen is a tool for restaurant and café kitchen teams. Sign in with the demo account below (email and password; no code is needed). A stock count is already in progress at "Demo Kitchen": open the Count tab (under More on a small screen if it is not on the bar), open an area, enter a quantity for each item with the on-screen keypad, and send the area for review. Counts are saved on the phone first and sent when there is a connection, so it also works with no signal.
 >
 > Demo account: <email> / <password>
 >
-> Account deletion: Account tab, "Delete my account" (asks for the password). The demo account may be deleted during review; if it is, please contact us and we will restore it.
+> Account deletion: Account (a tab, or under More), "Delete my account" (asks for the password). The demo account may be deleted during review; if it is, please contact us and we will restore it.
 >
-> Sign in with Google and Sign in with Apple are available on the sign-in screen. There are no in-app purchases and no paid features in this app. The Terms of Service and Privacy Policy are linked from the sign-in screen and the Account tab. Support: <support email>.
+> Sign in with Google and Sign in with Apple are available on the sign-in screen. There are no in-app purchases and no paid features in this app. The Terms of Service and Privacy Policy are linked from the sign-in screen and the Account screen. Support: <support email>.
 
 ## Checks to do on real devices before each release
 
 - iPhone, iPad (portrait and landscape) and the moto g86: sign in, count an area, send it, background and reopen the app.
 - iPad: each screen reads as one centred column, not stretched across the glass (the first-run, update, delete-account, terms and sign-in screens).
 - Sign in on a fresh account that has no organisation: first-run screen, join by key, join a location, reach the count.
-- Delete a test account from the Account tab; confirm the phone returns to sign-in with nothing left on it.
-- Open Terms and Privacy from sign-in (signed out) and from the Account tab.
+- Delete a test account from the Account screen (a tab, or under More); confirm the phone returns to sign-in with nothing left on it.
+- Open Terms and Privacy from sign-in (signed out) and from the Account screen.
 - Set `mobile_min_app_version` above the installed version on a test server: the update screen appears with no link, then (after setting the store link) with the right store's button.

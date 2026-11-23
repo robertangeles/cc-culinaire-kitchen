@@ -12,6 +12,7 @@ const paths = {
   chat: "M5.5 4.5h13A1.5 1.5 0 0 1 20 6v9a1.5 1.5 0 0 1-1.5 1.5H10l-4.5 3.5v-3.5h0A1.5 1.5 0 0 1 4 15V6a1.5 1.5 0 0 1 1.5-1.5zM8 9h8M8 12.5h5",
   recipes: "M6.5 3.5H18a1 1 0 0 1 1 1v15a1 1 0 0 1-1 1H6.5A1.5 1.5 0 0 1 5 19V5a1.5 1.5 0 0 1 1.5-1.5zM8.5 3.5v17M11.5 8h5M11.5 11.5h5",
   account: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4.5 20.5a7.5 7.5 0 0 1 15 0",
+  more: "M4 7h16M4 12h16M4 17h16",
 } as const;
 
 export type TabIconName = keyof typeof paths;

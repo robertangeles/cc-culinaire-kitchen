@@ -25,7 +25,7 @@ export default function Legal() {
 
   const title = known ? (page !== "loading" && page.status === "ok" ? page.title : TITLES[known]) : "Not found";
   return (
-    <Screen>
+    <Screen align="top">
       <Text variant="title">{title}</Text>
       {page === "loading" && known ? <Text variant="muted">Loading…</Text> : null}
       {!known || (page !== "loading" && page.status === "unavailable") ? <Text variant="muted">This page isn't available in the app yet. Please check back soon.</Text> : null}
