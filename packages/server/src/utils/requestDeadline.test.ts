@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { EventEmitter } from "node:events";
 import type { Response } from "express";
 import { requestDeadline, afterDeadline } from "./requestDeadline.js";
+import { AppError } from "./appError.js";
 
 /** A response that has or has not finished when its socket closes. */
 function fakeRes() {
@@ -64,8 +65,14 @@ describe("afterDeadline", () => {
     }
   });
 
-  it("is the error itself when it had nothing to do with the deadline", () => {
-    const boom = new Error("boom");
-    expect(afterDeadline(boom, requestDeadline(fakeRes(), 1000))).toBe(boom);
+  it("is a 503 AI_UNAVAILABLE that does not repeat the provider's words when the model failed", () => {
+    const sent = afterDeadline(new Error("401 Unauthorized: invalid API key sk-live-123"), requestDeadline(fakeRes(), 1000)) as Error;
+    expect(sent).toMatchObject({ statusCode: 503, code: "AI_UNAVAILABLE" });
+    expect(sent.message).not.toMatch(/key|sk-live|401/i);
+  });
+
+  it("keeps an error a service already gave a status and a code", () => {
+    const refused = new AppError(404, "NOT_FOUND", "Recipe not found.");
+    expect(afterDeadline(refused, requestDeadline(fakeRes(), 1000))).toBe(refused);
   });
 });

@@ -107,10 +107,6 @@ export async function handleImageGeneration(
     res.json({ imageUrl: result.url, mimeType: result.mimeType });
     return true;
   } catch (err) {
-    if (!deadline.signal.aborted && err instanceof Error && err.message.includes("not configured")) {
-      res.status(503).json({ error: err.message, code: "AI_UNAVAILABLE" });
-      return false;
-    }
     log.error(err, "Image generation error");
     const toSend = afterDeadline(err, deadline);
     if (toSend) next(toSend);

@@ -558,6 +558,7 @@ export async function handleRefineRecipe(
       changeSummary: result.changeSummary,
     });
   } catch (err) {
+    logger.error({ err }, "handleRefineRecipe: refinement failed");
     const toSend = afterDeadline(err, deadline);
     if (toSend) next(toSend);
   }
@@ -831,6 +832,7 @@ export async function handleRegenerateImage(
     logger.info({ recipeId, title: recipe.title }, "Single recipe image regenerated");
     res.json({ imageUrl: generated.url });
   } catch (err) {
+    logger.error({ err }, "handleRegenerateImage: image regeneration failed");
     const toSend = afterDeadline(err, deadline);
     if (toSend) next(toSend);
   }

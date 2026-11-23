@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { render, screen, fireEvent } from "@testing-library/react";
 
 /**
  * The server refuses PATCH /api/recipes/:id for every guest (403 FORBIDDEN), so the Recipe Lab must not
@@ -52,5 +52,22 @@ describe("RecipeLabPage — public/private control", () => {
     render(<RecipeLabPage domain="recipe" />);
 
     expect(toggle()).toBeInTheDocument();
+  });
+});
+
+describe("RecipeLabPage — a new image that fails", () => {
+  beforeEach(() => sessionStorage.clear());
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("shows the server's message when image generation answers 503 AI_UNAVAILABLE", async () => {
+    const message = "The AI service could not complete that. Please try again.";
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 503, json: async () => ({ error: message, code: "AI_UNAVAILABLE" }) }));
+    sessionStorage.setItem("recipe_lab_recipe_7", JSON.stringify(generated));
+    mockUseAuth.mockReturnValue({ ...auth, user: { userId: 7, userName: "Chef", userPhotoPath: null }, isGuest: false, guestToken: null });
+    render(<RecipeLabPage domain="recipe" />);
+
+    fireEvent.click(screen.getByRole("button", { name: /new image/i }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(message);
   });
 });

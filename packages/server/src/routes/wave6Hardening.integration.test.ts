@@ -210,7 +210,8 @@ describe.skipIf(!RUN)("wave 6 server hardening, over HTTP (real DB)", () => {
     it("a failure costs nothing", async () => {
       generateRecipe.mockRejectedValueOnce(new Error("boom"));
       const before = await freeOf(stranger);
-      expect((await call("POST", "/api/recipes/generate", asUser(stranger), ask)).status).toBe(500);
+      const out = await call("POST", "/api/recipes/generate", asUser(stranger), ask);
+      expect([out.status, out.body.code]).toEqual([503, "AI_UNAVAILABLE"]);
       await settle();
       expect(await freeOf(stranger)).toBe(before);
     });

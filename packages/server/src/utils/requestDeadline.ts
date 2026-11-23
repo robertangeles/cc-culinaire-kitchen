@@ -36,10 +36,12 @@ export function requestDeadline(res: Response, timeoutMs: number): Deadline {
 
 /**
  * What to do with an error thrown while a deadline was running: null when nobody is waiting any more
- * (send nothing, charge nothing), a 504 when the time ran out, otherwise the error unchanged.
+ * (send nothing, charge nothing), a 504 when the time ran out, otherwise a 503 AI_UNAVAILABLE that does not
+ * repeat the provider's message (it can carry configuration detail). An AppError a service chose is kept.
  */
 export function afterDeadline(err: unknown, deadline: Deadline): unknown | null {
   if (deadline.clientGone) return null;
   if (deadline.signal.aborted) return new AppError(504, "AI_TIMEOUT", "That took too long. Please try again.");
-  return err;
+  if (err instanceof AppError) return err;
+  return new AppError(503, "AI_UNAVAILABLE", "The AI service could not complete that. Please try again.");
 }

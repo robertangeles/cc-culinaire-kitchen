@@ -110,7 +110,7 @@ describe("recipeHandler", () => {
     const { req, res, next } = reqRes();
 
     expect(await recipeHandler("recipe")(req, res, next)).toBe(false);
-    expect(next).toHaveBeenCalledWith(boom);
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 503, code: "AI_UNAVAILABLE" }));
   });
 
   it("a malformed request is a 400 and earns no session", async () => {
@@ -166,6 +166,31 @@ describe("every refusal carries a code a phone can branch on", () => {
     expect(res.status).toHaveBeenCalledWith(status);
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: expect.any(String), code }));
     expect(generateImage).not.toHaveBeenCalled();
+  });
+});
+
+describe("a model provider failure is a 503 AI_UNAVAILABLE that never repeats the provider's words", () => {
+  const providerError = new Error("401 Unauthorized: invalid API key sk-live-123");
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getRecipe.mockResolvedValue({ userId: 5, recipeData: { name: "Dish" }, kitchenContext: null });
+  });
+
+  it.each([
+    ["refine", handleRefineRecipe, refineRecipe],
+    ["regenerate image", handleRegenerateImage, generateImage],
+  ] as const)("%s", async (_name, handler, model) => {
+    model.mockRejectedValue(providerError);
+    const { req, res, next } = reqRes();
+
+    await handler(req, res, next);
+
+    const sent = next.mock.calls[0][0] as Error;
+    expect(sent).toMatchObject({ statusCode: 503, code: "AI_UNAVAILABLE" });
+    expect(sent.message).not.toMatch(/key|sk-live|401/i);
+    expect(res.json).not.toHaveBeenCalled();
+    expect(updates).toEqual([]);
   });
 });
 
