@@ -34,6 +34,9 @@ vi.mock("expo-router", async () => {
 });
 
 if (typeof window !== "undefined") {
+  // findBy and waitFor give up after 1 s by default; on a loaded CI runner one role query alone can take longer than that.
+  const { configure } = await import("@testing-library/react");
+  configure({ asyncUtilTimeout: 10_000 });
   // jsdom has no matchMedia; react-native-web reads the reduce-motion setting through it.
   window.matchMedia = (query: string) =>
     ({
