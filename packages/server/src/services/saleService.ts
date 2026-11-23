@@ -627,6 +627,7 @@ export function listSales(orgId: number, locationId: string, limit = 100) {
       source: sale.source,
       soldAt: sale.soldAt,
       voidedAt: sale.voidedAt,
+      createdBy: sale.createdBy,
     })
     .from(sale)
     .innerJoin(menuItem, eq(sale.menuItemId, menuItem.menuItemId))

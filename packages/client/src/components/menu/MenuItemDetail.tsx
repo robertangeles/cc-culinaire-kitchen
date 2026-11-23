@@ -55,6 +55,8 @@ export function MenuItemDetail({ item, onClose, onAddIngredient, onRemoveIngredi
   // No UI sets yield — every add is 100%. A constant, not state.
   const ingYield = "100";
   const [addingIng, setAddingIng] = useState(false);
+  const [ingError, setIngError] = useState("");
+  const canManage = item.canManage !== false;
 
   const cls = CLASS_INFO[item.classification] ?? CLASS_INFO.unclassified;
   const ClsIcon = cls.icon;
@@ -73,6 +75,7 @@ export function MenuItemDetail({ item, onClose, onAddIngredient, onRemoveIngredi
     e.preventDefault();
     if (!ingName.trim() || !ingQty || !ingCost) return;
     setAddingIng(true);
+    setIngError("");
     try {
       await onAddIngredient(item.menuItemId, {
         ingredientName: ingName.trim(),
@@ -84,13 +87,20 @@ export function MenuItemDetail({ item, onClose, onAddIngredient, onRemoveIngredi
       const ings = await getIngredients(item.menuItemId);
       setIngredients(ings);
       setIngName(""); setIngQty(""); setIngCost("");
+    } catch (err) {
+      setIngError(err instanceof Error ? err.message : "Failed to add ingredient");
     } finally {
       setAddingIng(false);
     }
   }
 
   async function handleRemoveIng(id: number) {
-    await onRemoveIngredient(item.menuItemId, id);
+    setIngError("");
+    try {
+      await onRemoveIngredient(item.menuItemId, id);
+    } catch (err) {
+      setIngError(err instanceof Error ? err.message : "Failed to remove ingredient");
+    }
     const ings = await getIngredients(item.menuItemId);
     setIngredients(ings);
   }
@@ -158,16 +168,25 @@ export function MenuItemDetail({ item, onClose, onAddIngredient, onRemoveIngredi
                         </div>
                         <div className="flex items-center gap-2">
                           <span className="text-xs text-dark-600">${ing.lineCost}</span>
-                          <button onClick={() => handleRemoveIng(ing.id)} className="text-dark-500 hover:text-red-400 transition-colors p-1 min-h-[36px] min-w-[36px] flex items-center justify-center">
-                            <Trash2 className="size-3.5" />
-                          </button>
+                          {canManage && (
+                            <button onClick={() => handleRemoveIng(ing.id)} title="Remove ingredient" className="text-dark-500 hover:text-red-400 transition-colors p-1 min-h-[36px] min-w-[36px] flex items-center justify-center">
+                              <Trash2 className="size-3.5" />
+                            </button>
+                          )}
                         </div>
                       </div>
                     ))}
                   </div>
                 )}
 
+                {ingError && (
+                  <div role="alert" className="mb-3 px-4 py-3 bg-red-500/10 border border-red-500/20 rounded-xl text-sm text-red-400">
+                    {ingError}
+                  </div>
+                )}
+
                 {/* Add ingredient form */}
+                {canManage && (
                 <form onSubmit={handleAddIngredient} className="grid grid-cols-6 gap-2">
                   <input type="text" value={ingName} onChange={(e) => setIngName(e.target.value)} placeholder="Ingredient" required
                     className="col-span-2 px-2 py-1.5 text-xs bg-dark border border-dark-200 rounded-lg text-[#FAFAFA] placeholder-dark-500 focus:outline-none focus:ring-1 focus:ring-gold/50 min-h-[36px]" />
@@ -185,6 +204,7 @@ export function MenuItemDetail({ item, onClose, onAddIngredient, onRemoveIngredi
                     {addingIng ? <Loader2 className="size-3 animate-spin" /> : <Plus className="size-3" />}
                   </button>
                 </form>
+                )}
               </>
             )}
           </div>

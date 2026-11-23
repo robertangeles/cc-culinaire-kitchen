@@ -34,7 +34,8 @@ import {
 } from "../services/yieldVarianceService.js";
 import { recordSale, voidSale, listSales, previewSalesCsv, commitSalesCsv, listSellableConsumables, recordConsumableSale, fitsSaleQty } from "../services/saleService.js";
 import { assertLocationAccess } from "../services/locationContextService.js";
-import { resolveMenuScope, type MenuScope } from "../services/menuAccess.js";
+import { resolveMenuScope, canManageMenuItem, type MenuScope } from "../services/menuAccess.js";
+import { hasPermission } from "../middleware/auth.js";
 import { AppError } from "../utils/appError.js";
 
 /** 400 with the machine-readable code the phone's queue branches on. */
@@ -44,6 +45,15 @@ function invalid(res: Response, message: string): void {
 
 /** The caller's menu scope (their organisation, or their own items while they have none). */
 const menuScope = (req: Request) => resolveMenuScope(req.user!.sub);
+
+/**
+ * Adds `canManage` to each item for the client's edit, delete and recipe controls: the caller holds menu:manage and
+ * made the item or administers its organisation. The routes enforce the same rule; this only saves a refused click.
+ */
+function withCanManage<T extends { userId: number; organisationId: number | null }>(req: Request, scope: MenuScope, items: T[]) {
+  const mayEdit = hasPermission(req.user!, "menu:manage");
+  return items.map((item) => ({ ...item, canManage: mayEdit && canManageMenuItem(scope, item) }));
+}
 
 /** The caller's scope for a sale, which always belongs to an organisation. */
 async function saleScope(req: Request): Promise<MenuScope & { organisationId: number }> {
@@ -58,6 +68,19 @@ const saleBodySchema = z.object({
   locationId: z.preprocess((v) => (v === "" ? undefined : v), z.string().uuid("locationId is not a location id").optional()),
   idempotencyKey: z.string().max(120, "The idempotency key is longer than 120 characters").optional(),
 });
+
+/** The rows of POST /sales/import/commit: what the preview returned under `matched`. */
+const csvLinesSchema = z
+  .array(
+    z.object({
+      rowIndex: z.number({ message: "rowIndex must be a whole number" }).int("rowIndex must be a whole number"),
+      name: z.string({ message: "name is required" }).min(1, "name is required"),
+      qtySold: saleBodySchema.shape.qtySold,
+      soldAt: saleBodySchema.shape.soldAt.transform((v) => v || undefined),
+    }),
+    { message: "lines must be a non-empty array" },
+  )
+  .min(1, "lines must be a non-empty array");
 
 /** The sale fields of a request. The idempotency key may come in the `Idempotency-Key` header or the body; if both are sent they must agree. */
 function parseSaleRequest(req: Request, res: Response) {
@@ -103,7 +126,10 @@ export async function handleListSales(req: Request, res: Response, next: NextFun
   try {
     const scope = await saleScope(req);
     const limit = req.query.limit ? Number(req.query.limit) : undefined;
-    res.json(await listSales(scope.organisationId, req.params.locId as string, limit));
+    const mayVoid = hasPermission(req.user!, "menu:manage");
+    const sales = await listSales(scope.organisationId, req.params.locId as string, limit);
+    // canManage: the caller may void this sale (its recorder or an organisation admin, holding menu:manage).
+    res.json(sales.map(({ createdBy, ...row }) => ({ ...row, canManage: mayVoid && (createdBy === scope.userId || scope.isOrgAdmin) })));
   } catch (err) {
     next(err);
   }
@@ -148,12 +174,12 @@ export async function handleSalesCsvPreview(req: Request, res: Response, next: N
 export async function handleSalesCsvCommit(req: Request, res: Response, next: NextFunction) {
   try {
     const scope = await saleScope(req);
-    const lines = req.body?.lines;
-    if (!Array.isArray(lines) || lines.length === 0) {
-      invalid(res, "lines must be a non-empty array");
+    const parsed = csvLinesSchema.safeParse(req.body?.lines);
+    if (!parsed.success) {
+      invalid(res, parsed.error.issues[0].message);
       return;
     }
-    res.json(await commitSalesCsv(scope.organisationId, scope.userId, lines, req.user!));
+    res.json(await commitSalesCsv(scope.organisationId, scope.userId, parsed.data, req.user!));
   } catch (err) {
     next(err);
   }
@@ -189,7 +215,8 @@ export async function handleListMenuItems(req: Request, res: Response, next: Nex
     const category = req.query.category as string | undefined;
     const storeLocationId = req.query.storeLocationId as string | undefined;
     if (storeLocationId) await assertLocationAccess(req.user!, storeLocationId);
-    res.json(await getMenuItems(await menuScope(req), category, storeLocationId));
+    const scope = await menuScope(req);
+    res.json(withCanManage(req, scope, await getMenuItems(scope, category, storeLocationId)));
   } catch (err) { next(err); }
 }
 
@@ -318,7 +345,9 @@ export async function handleGetPandLCost(req: Request, res: Response, next: Next
 export async function handleGetAnalysis(req: Request, res: Response, next: NextFunction) {
   try {
     const category = req.query.category as string | undefined;
-    res.json(await getMenuAnalysis(await menuScope(req), category));
+    const scope = await menuScope(req);
+    const analysis = await getMenuAnalysis(scope, category);
+    res.json({ ...analysis, items: withCanManage(req, scope, analysis.items) });
   } catch (err) { next(err); }
 }
 
