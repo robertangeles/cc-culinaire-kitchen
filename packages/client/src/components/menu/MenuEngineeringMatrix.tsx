@@ -9,6 +9,7 @@
 
 import { useState, useMemo } from "react";
 import { Loader2, BarChart3 } from "lucide-react";
+import { matrixAverages } from "@culinaire/shared";
 import type { MenuItem } from "../../hooks/useMenuItems.js";
 
 /* ---- Dot colors per classification ---- */
@@ -58,20 +59,7 @@ export function MenuEngineeringMatrix({
   }, [classified]);
 
   // Calculate averages and bounds
-  const { avgCM, avgMix, maxCM, maxMix } = useMemo(() => {
-    if (classified.length === 0) {
-      return { avgCM: 0, avgMix: 0, maxCM: 1, maxMix: 1 };
-    }
-    const aCM =
-      classified.reduce((s, i) => s + i.contributionMargin, 0) /
-      classified.length;
-    const aMix =
-      classified.reduce((s, i) => s + i.menuMixPct, 0) / classified.length;
-    const mCM =
-      Math.max(...classified.map((i) => i.contributionMargin)) * 1.2 || 1;
-    const mMix = Math.max(...classified.map((i) => i.menuMixPct)) * 1.2 || 1;
-    return { avgCM: aCM, avgMix: aMix, maxCM: mCM, maxMix: mMix };
-  }, [classified]);
+  const { avgCM, avgMix, maxCM, maxMix } = useMemo(() => matrixAverages(classified), [classified]);
 
   if (loading && items.length === 0) {
     return (

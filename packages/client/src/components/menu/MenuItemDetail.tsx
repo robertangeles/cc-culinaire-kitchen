@@ -7,6 +7,7 @@
 import { useState, useEffect } from "react";
 import { X, Plus, Trash2, Loader2, Sparkles, Star, TrendingDown, HelpCircle, XCircle, ChefHat } from "lucide-react";
 import { useNavigate } from "react-router";
+import { FOOD_COST_ALERT_PCT } from "@culinaire/shared";
 import type { MenuItem, MenuIngredient } from "../../hooks/useMenuItems.js";
 import { useMenuRecommendations } from "../../hooks/useMenuRecommendations.js";
 
@@ -130,7 +131,7 @@ export function MenuItemDetail({ item, onClose, onAddIngredient, onRemoveIngredi
             </div>
             <div className="bg-dark rounded-xl p-3 text-center border border-dark-200">
               <p className="text-xs text-dark-500">Food Cost</p>
-              <p className={`text-lg font-bold ${item.foodCostPct > 35 ? "text-red-400" : "text-[#FAFAFA]"}`}>
+              <p className={`text-lg font-bold ${item.foodCostPct > FOOD_COST_ALERT_PCT ? "text-red-400" : "text-[#FAFAFA]"}`}>
                 {item.foodCostPct.toFixed(1)}%
               </p>
             </div>

@@ -4,25 +4,19 @@
  * Menu engineering calculation engine + CRUD for menu items.
  * Implements the Star/Plowhorse/Puzzle/Dog classification matrix.
  *
- * Formulas:
- *   line_cost = (quantity × unit_cost) / (yield_pct / 100)
- *   food_cost = Σ line_cost for all ingredients
- *   food_cost_pct = (food_cost / selling_price) × 100
- *   contribution_margin = selling_price - food_cost
- *   menu_mix_pct = (units_sold / total_units_sold) × 100
- *
- * Classification:
- *   Star      = CM ≥ avg AND mix ≥ avg
- *   Plowhorse = CM < avg AND mix ≥ avg
- *   Puzzle    = CM ≥ avg AND mix < avg
- *   Dog       = CM < avg AND mix < avg
+ * The costing and classification maths (line cost, food cost per sale, food cost %, contribution margin,
+ * menu mix, Star/Plowhorse/Puzzle/Dog) live in packages/shared/src/utils/menuCosting.ts; this service
+ * resolves units, reads and writes the rows.
  */
 
 import pino from "pino";
 import { db } from "../db/index.js";
 import { menuItem, menuItemIngredient, menuCategorySetting, wasteLog, ingredient, locationIngredient, user } from "../db/schema.js";
 import { eq, and, sql, gte, inArray } from "drizzle-orm";
-import { IncompatibleUnitsError } from "@culinaire/shared";
+import {
+  IncompatibleUnitsError, classifyAgainstWholeMenu, menuMixPct, plateFoodCost, storedItemCosts, storedLineCost,
+  summariseMenuAnalysis,
+} from "@culinaire/shared";
 import { resolveToBase } from "./unitConversionService.js";
 import { recordOpsEvent } from "./brainCaptureService.js";
 import { getUserOrgContext } from "./orgContextService.js";
@@ -217,11 +211,10 @@ export async function resolveUnitCost(
 /**
  * Compute the line cost for a row.
  *
- * line_cost = (qtyInBaseUnit × unitCost) / (yieldPct / 100)
- *
- * Quantity is converted to the ingredient's base unit before multiplication.
- * If `ingredientId` is null (legacy free-text row) or no unit conversion is
- * possible, qty is used as-is and we trust the caller's unit/cost.
+ * The formula is `storedLineCost` in @culinaire/shared. Quantity is converted
+ * to the ingredient's kitchen unit before multiplication. If `ingredientId` is
+ * null (legacy free-text row), qty is used as-is and we trust the caller's
+ * unit/cost; units with no path between them throw.
  */
 async function computeLineCost(
   quantity: string,
@@ -230,33 +223,23 @@ async function computeLineCost(
   yieldPct: string,
   ingredientId: string | null | undefined,
 ): Promise<string> {
-  const qty = parseFloat(quantity);
-  const cost = parseFloat(unitCost);
-  const yld = parseFloat(yieldPct);
-  if (!Number.isFinite(qty) || !Number.isFinite(cost) || !Number.isFinite(yld) || yld === 0) {
-    return "0.00";
-  }
-
-  let qtyInBase = qty;
-  if (ingredientId) {
+  return storedLineCost({ quantity, unitCost, yieldPct }, async (qty) => {
+    if (!ingredientId) return qty;
     // Item-aware resolution to the ingredient's KITCHEN unit: handles the
     // content equivalence ("150 ml of a bottle-counted wine" → 0.2 bottle),
     // purchase packaging, per-item conversion rows, and family math. unitCost
     // is per kitchen unit, so the product is the true line cost.
     try {
       const { baseQty } = await resolveToBase(ingredientId, qty, unit);
-      qtyInBase = baseQty;
+      return baseQty;
     } catch (err) {
       if (err instanceof IncompatibleUnitsError) {
         // Surface the error: cost would be silently wrong otherwise.
         logger.warn({ ingredientId, unit, err: err.message }, "Unit conversion failed in computeLineCost");
-        throw err;
       }
       throw err;
     }
-  }
-
-  return ((qtyInBase * cost) / (yld / 100)).toFixed(2);
+  });
 }
 
 export async function addIngredient(menuItemId: string, data: {
@@ -440,11 +423,7 @@ export async function getPandLFoodCost(menuItemId: string): Promise<number> {
     const cost = li?.wac ?? r.unitCost;
     total += await lineCostFor(r.quantity, r.unit, cost, r.yieldPct, r.ingredientId);
   }
-  const servings = item.servings ?? 1;
-  const perServing = servings > 1 ? total / servings : total;
-  const qFactor = parseFloat(item.qFactorPct ?? "0");
-  const withQ = qFactor > 0 ? perServing * (1 + qFactor / 100) : perServing;
-  return Number(withQ.toFixed(2));
+  return plateFoodCost(total, item.servings, item.qFactorPct);
 }
 
 /** Internal helper: compute a single line cost as a number (vs. computeLineCost which returns string). */
@@ -467,8 +446,6 @@ async function recalculateItemCosts(menuItemId: string) {
   const ingredients = await db.select().from(menuItemIngredient)
     .where(eq(menuItemIngredient.menuItemId, menuItemId));
 
-  const totalIngredientCost = ingredients.reduce((sum, ing) => sum + parseFloat(ing.lineCost ?? "0"), 0);
-
   const [item] = await db.select({
     sellingPrice: menuItem.sellingPrice,
     servings: menuItem.servings,
@@ -478,22 +455,16 @@ async function recalculateItemCosts(menuItemId: string) {
 
   if (!item) return;
 
-  const servings = item.servings ?? 1;
-  const perServing = servings > 1 ? totalIngredientCost / servings : totalIngredientCost;
-  const qFactor = parseFloat(item.qFactorPct ?? "0");
-  const perServingWithQ = qFactor > 0 ? perServing * (1 + qFactor / 100) : perServing;
-  // Yield ≠ sales unit (meez pattern): servings is what the batch MAKES;
-  // servings_per_sale is how many of them one sale (the price) covers.
-  // food_cost is stored per SALE so it always pairs with selling_price.
-  const foodCost = perServingWithQ * (item.servingsPerSale ?? 1);
-  const sellingPrice = parseFloat(item.sellingPrice);
-  const foodCostPct = sellingPrice > 0 ? (foodCost / sellingPrice) * 100 : 0;
-  const contributionMargin = sellingPrice - foodCost;
+  const costs = storedItemCosts({
+    lineCosts: ingredients.map((ing) => ing.lineCost),
+    servings: item.servings,
+    servingsPerSale: item.servingsPerSale,
+    qFactorPct: item.qFactorPct,
+    sellingPrice: item.sellingPrice,
+  });
 
   await db.update(menuItem).set({
-    foodCost: foodCost.toFixed(2),
-    foodCostPct: foodCostPct.toFixed(2),
-    contributionMargin: contributionMargin.toFixed(2),
+    ...costs,
     updatedDttm: new Date(),
   }).where(eq(menuItem.menuItemId, menuItemId));
 }
@@ -519,39 +490,24 @@ export async function recalculateMenu(userId: number, category?: string) {
 
   // Update menu mix percentages
   for (const item of updated) {
-    const mixPct = totalUnitsSold > 0 ? (item.unitsSold / totalUnitsSold) * 100 : 0;
     await db.update(menuItem).set({
-      menuMixPct: mixPct.toFixed(2),
+      menuMixPct: menuMixPct(item.unitsSold, totalUnitsSold).toFixed(2),
     }).where(eq(menuItem.menuItemId, item.menuItemId));
   }
 
   // Re-fetch with mix percentages
   const withMix = await getMenuItems(userId, category);
 
-  // Calculate averages
-  const avgCM = withMix.reduce((sum, i) => sum + parseFloat(i.contributionMargin ?? "0"), 0) / withMix.length;
-  const avgMix = withMix.reduce((sum, i) => sum + parseFloat(i.menuMixPct ?? "0"), 0) / withMix.length;
+  // Classify against the averages of every item in scope
+  const { avgCM, avgMix, classifications } = classifyAgainstWholeMenu(withMix.map((item) => ({
+    unitsSold: item.unitsSold,
+    contributionMargin: parseFloat(item.contributionMargin ?? "0"),
+    menuMixPct: parseFloat(item.menuMixPct ?? "0"),
+  })));
 
-  // Classify
-  for (const item of withMix) {
-    const cm = parseFloat(item.contributionMargin ?? "0");
-    const mix = parseFloat(item.menuMixPct ?? "0");
-
-    let classification: string;
-    if (item.unitsSold === 0) {
-      classification = "unclassified";
-    } else if (cm >= avgCM && mix >= avgMix) {
-      classification = "star";
-    } else if (cm < avgCM && mix >= avgMix) {
-      classification = "plowhorse";
-    } else if (cm >= avgCM && mix < avgMix) {
-      classification = "puzzle";
-    } else {
-      classification = "dog";
-    }
-
+  for (const [i, item] of withMix.entries()) {
     await db.update(menuItem).set({
-      classification,
+      classification: classifications[i],
       updatedDttm: new Date(),
     }).where(eq(menuItem.menuItemId, item.menuItemId));
   }
@@ -568,44 +524,18 @@ export async function getMenuAnalysis(userId: number, category?: string) {
 
   const items = await getMenuItems(userId, category);
 
-  const totalItems = items.length;
-  const classified = items.filter((i) => i.classification !== "unclassified");
-
-  const stars = classified.filter((i) => i.classification === "star").length;
-  const plowhorses = classified.filter((i) => i.classification === "plowhorse").length;
-  const puzzles = classified.filter((i) => i.classification === "puzzle").length;
-  const dogs = classified.filter((i) => i.classification === "dog").length;
-
-  const avgFoodCostPct = totalItems > 0
-    ? items.reduce((sum, i) => sum + parseFloat(i.foodCostPct ?? "0"), 0) / totalItems
-    : 0;
-  const avgContributionMargin = totalItems > 0
-    ? items.reduce((sum, i) => sum + parseFloat(i.contributionMargin ?? "0"), 0) / totalItems
-    : 0;
-
-  const totalRevenue = items.reduce((sum, i) => sum + (parseFloat(i.sellingPrice) * i.unitsSold), 0);
-  const totalFoodCost = items.reduce((sum, i) => sum + (parseFloat(i.foodCost ?? "0") * i.unitsSold), 0);
+  const analysed = items.map((i) => ({
+    ...i,
+    sellingPrice: parseFloat(i.sellingPrice),
+    foodCost: parseFloat(i.foodCost ?? "0"),
+    foodCostPct: parseFloat(i.foodCostPct ?? "0"),
+    contributionMargin: parseFloat(i.contributionMargin ?? "0"),
+    menuMixPct: parseFloat(i.menuMixPct ?? "0"),
+  }));
 
   return {
-    totalItems,
-    stars,
-    plowhorses,
-    puzzles,
-    dogs,
-    unclassified: totalItems - classified.length,
-    avgFoodCostPct: avgFoodCostPct.toFixed(1),
-    avgContributionMargin: avgContributionMargin.toFixed(2),
-    totalRevenue: totalRevenue.toFixed(2),
-    totalFoodCost: totalFoodCost.toFixed(2),
-    overallFoodCostPct: totalRevenue > 0 ? ((totalFoodCost / totalRevenue) * 100).toFixed(1) : "0",
-    items: items.map((i) => ({
-      ...i,
-      sellingPrice: parseFloat(i.sellingPrice),
-      foodCost: parseFloat(i.foodCost ?? "0"),
-      foodCostPct: parseFloat(i.foodCostPct ?? "0"),
-      contributionMargin: parseFloat(i.contributionMargin ?? "0"),
-      menuMixPct: parseFloat(i.menuMixPct ?? "0"),
-    })),
+    ...summariseMenuAnalysis(analysed),
+    items: analysed,
   };
 }
 
