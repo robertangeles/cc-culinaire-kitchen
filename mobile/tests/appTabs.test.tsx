@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   user: null as unknown as AuthUser,
   insets: { top: 24, bottom: 48, left: 0, right: 0 },
   screenOptions: {} as Record<string, unknown>,
+  backBehavior: undefined as string | undefined,
   screens: [] as { name: string; guard: boolean; options: { title?: string; href?: null; tabBarButton?: () => null; tabBarItemStyle?: { display?: string } } }[],
   navigate: vi.fn(),
   tabBar: null as unknown as (props: BarProps) => ReactNode,
@@ -24,8 +25,9 @@ vi.mock("react-native-safe-area-context", () => ({
 }));
 vi.mock("expo-router", () => {
   const Guard = createContext(true);
-  const Tabs = ({ children, screenOptions, tabBar }: { children?: ReactNode; screenOptions: Record<string, unknown>; tabBar: typeof mocks.tabBar }) => {
+  const Tabs = ({ children, screenOptions, tabBar, backBehavior }: { children?: ReactNode; screenOptions: Record<string, unknown>; tabBar: typeof mocks.tabBar; backBehavior?: string }) => {
     mocks.screenOptions = screenOptions;
+    mocks.backBehavior = backBehavior;
     mocks.tabBar = tabBar;
     return <>{children}</>;
   };
@@ -140,6 +142,21 @@ describe("the tab bar", () => {
     // Prevented, so the bar's own handling (which does nothing for the tab it thinks is open) does not also run.
     expect(preventDefault).toHaveBeenCalled();
     expect(mocks.navigate).toHaveBeenCalledWith("more");
+  });
+
+  it("asks the navigator to take Back through the tabs visited, so Back from a screen under More returns to the More list", () => {
+    mocks.user = person({ roles: ["Administrator"] });
+    render(<AppTabs />);
+    // React Navigation's tab router: "history" goes back to the tab last open; its default, "firstRoute", went to Prep.
+    expect(mocks.backBehavior).toBe("history");
+  });
+
+  it("More starts at the top of the page, as the module tabs do, in the 560 dp column", () => {
+    mocks.user = person({ roles: ["Administrator"] });
+    render(<More />);
+    const column = screen.getByText("More").parentElement as HTMLElement;
+    expect(parseFloat(getComputedStyle(column).maxWidth)).toBe(560);
+    expect(getComputedStyle(column.parentElement as HTMLElement).justifyContent).toBe("flex-start");
   });
 
   it("More lists the modules that did not fit, then Account, and opens each", () => {

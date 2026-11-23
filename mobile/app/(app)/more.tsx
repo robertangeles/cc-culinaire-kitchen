@@ -18,7 +18,7 @@ export default function More() {
   const rows: { route: string; title: string; icon: TabIconName }[] = [...tabBar(state.user).more, { route: "account", title: "Account", icon: "account" }];
 
   return (
-    <Screen>
+    <Screen align="top">
       <Text variant="title">More</Text>
       <Surface>
         {rows.map((row, index) => (

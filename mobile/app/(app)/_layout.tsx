@@ -30,6 +30,8 @@ export default function AppTabs() {
 
   return (
     <Tabs
+      // Back retraces the step: from a screen opened under More to the More list, from More to the tab the person was on.
+      backBehavior="history"
       // A screen under More has no button of its own to light up: the bar is told More is the open tab, so More is highlighted.
       tabBar={(props) => {
         const { routes, index } = props.state;

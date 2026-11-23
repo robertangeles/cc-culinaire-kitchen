@@ -409,6 +409,20 @@ describe("continue with Apple", () => {
 });
 
 describe("account tab", () => {
+  it("starts at the top of the page, as the module tabs do, while sign-in stays centred; both keep the 560 dp column", () => {
+    const { unmount } = render(<Account />);
+    const column = screen.getByText("Main Kitchen").parentElement!.parentElement!.parentElement as HTMLElement;
+    expect(parseFloat(getComputedStyle(column).maxWidth)).toBe(560);
+    expect(getComputedStyle(column.parentElement as HTMLElement).justifyContent).toBe("flex-start");
+    unmount();
+
+    sessionState.current = { state: { phase: "signedOut" }, busy: false };
+    render(<SignIn />);
+    let el = screen.getByLabelText("Email") as HTMLElement;
+    while (parseFloat(getComputedStyle(el).maxWidth) !== 560) el = el.parentElement as HTMLElement;
+    expect(getComputedStyle(el.parentElement as HTMLElement).justifyContent).toBe("center");
+  });
+
   it("shows who is signed in and where, and signs out", () => {
     render(<Account />);
     expect(screen.getByText("Chef")).toBeTruthy();

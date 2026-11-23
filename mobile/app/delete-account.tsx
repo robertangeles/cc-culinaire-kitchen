@@ -25,10 +25,10 @@ export default function DeleteAccount() {
     void accountApi.facts().then(setFacts, () => setFacts("failed"));
   }, []);
 
-  if (facts === null) return <Screen><Text variant="muted">Loading…</Text></Screen>;
+  if (facts === null) return <Screen align="top"><Text variant="muted">Loading…</Text></Screen>;
   if (facts === "failed") {
     return (
-      <Screen>
+      <Screen align="top">
         <Text variant="title">Delete your account</Text>
         <Text variant="error">Couldn't load your account. Try again.</Text>
         <Button kind="quiet" label="Back" onPress={() => router.back()} />
@@ -74,7 +74,7 @@ export default function DeleteAccount() {
   }
 
   return (
-    <Screen>
+    <Screen align="top">
       <Text variant="title">Delete your account?</Text>
       <Text variant="muted">
         This cannot be undone. Your name and email are removed and you are signed out straight away. Your chats, saved recipes and preferences are deleted, and any paid plan you have on the web is cancelled. Anything saved on this phone and not yet sent is erased too.
