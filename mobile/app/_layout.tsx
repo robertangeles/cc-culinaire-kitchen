@@ -54,6 +54,7 @@ export default function RootLayout() {
         <Stack.Protected guard={state.phase === "ready"}>
           <Stack.Screen name="(app)" />
           <Stack.Screen name="delete-account" />
+          <Stack.Screen name="link-apple" />
         </Stack.Protected>
       </Stack>
     </SafeAreaProvider>

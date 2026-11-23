@@ -85,6 +85,20 @@ The catalogue download is `GET /api/inventory/ingredients`, which the server all
 Content sits in a centred column of at most 560 dp, `COLUMN_WIDTH` in `src/ui/Screen.tsx` (`Screen` does it for every screen built on it; the waste screens lay themselves out and use `src/ui/Column.tsx`, which reuses the same number).
 Phones fill the width. The count screens are not wrapped yet. jsdom does no layout, so `tests/waste.test.tsx` checks only the column's constraints (full width, 560 dp cap, centred); the look at 390 and 820 wide is for the device walk.
 
+## Add Sign in with Apple (`app/link-apple.tsx`)
+
+Account > "Add Sign in with Apple" (iPhone and iPad only: `appleEnabled`, so Android never sees it) calls `authApi.linkApple` -> `POST /api/auth/apple/link`.
+It asks for a fresh Apple credential (new nonce each time, `appleCredential`) and the proof the server wants for changing two-factor settings: the password when the account has one,
+the authenticator code when MFA is on (also when the server asks for it though the profile did not say). An account with no password sends none; if it signed in more than 10 minutes ago
+the server answers `RECENT_SIGN_IN_REQUIRED` and the screen offers Sign out. Closing Apple's sheet changes nothing and says nothing. An account that already has Apple shows that, with no form.
+
+**Hide My Email.** Someone who registered by email and signs in with Apple while hiding their email gets Apple's private relay address, which never matches by email, so the server makes a second account.
+Linking from the signed-in account avoids that: the server joins Apple's stable id to this account, and every later Apple sign-in opens it. Screen tests cover that the link carries the account's own proof and
+the screen never reads or sends the relay address; that Apple's id then resolves to the same account is the server's (`appleSignInService`). An Apple ID already used by another account answers `APPLE_ALREADY_LINKED`: two accounts that already exist are not merged.
+Not on the phone: unlinking (the web has no such page either).
+
+Compared with the web: the web has no Apple link page at all (Sign in with Apple is phone-only), so there is nothing to mirror; the proof rules are the web's MFA-change rules.
+
 ## Waste (`src/waste`, `app/(app)/(waste)`)
 
 The Waste tab is shown to `waste:log` holders. The screen shows today's entries at the current location (the server's list, kept on the phone, with the queue laid over it),

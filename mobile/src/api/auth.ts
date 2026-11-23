@@ -14,6 +14,12 @@ export interface AppleCredential {
   familyName?: string;
 }
 
+/** What the server asks for before it adds a sign-in method: the password (accounts that have one) and the authenticator code (MFA on). */
+export interface LinkProof {
+  password?: string;
+  mfaCode?: string;
+}
+
 export type SignInResult = { status: "signedIn"; user: AuthUser } | { status: "mfa"; mfaSessionToken: string };
 
 /** Sign-in, session and location calls. Tokens are saved here the moment the server hands them out. */
@@ -45,6 +51,15 @@ export function createAuthApi(client: ApiClient, tokenStore: TokenStore) {
     /** The credential comes from Apple's sign-in sheet; the server checks the token with Apple's keys and answers like a password sign-in. */
     async appleSignIn(credential: AppleCredential): Promise<SignInResult> {
       return result(await client.request("POST", "/api/auth/apple/idtoken", { body: credential, auth: false, schema: LoginReplySchema }));
+    },
+
+    /**
+     * A signed-in person adds Sign in with Apple to this account. The refresh token goes in the body because the server finds when this
+     * sign-in began from it (an account with no password must have signed in within 10 minutes); the web sends the cookie.
+     */
+    async linkApple(credential: AppleCredential, proof: LinkProof): Promise<void> {
+      const tokens = await tokenStore.load();
+      await client.request("POST", "/api/auth/apple/link", { body: { ...credential, ...proof, refreshToken: tokens?.refreshToken } });
     },
 
     /** Creates the account only: nobody is signed in, and the person finishes verifying from the email the server sends. */
@@ -103,3 +118,27 @@ export function createAuthApi(client: ApiClient, tokenStore: TokenStore) {
 }
 
 export type AuthApi = ReturnType<typeof createAuthApi>;
+
+export interface LinkFailure {
+  text: string;
+  /** The server wants an authenticator code, whatever the profile said. */
+  needsMfa?: true;
+  /** Only signing in again will do. */
+  needsFreshSignIn?: true;
+}
+
+/** One plain sentence for a refused or failed link, chosen by the server's code, never its English. */
+export function linkAppleMessage(err: unknown): LinkFailure {
+  if (err instanceof ApiError) {
+    if (err.hasCode("INVALID_CREDENTIALS")) return { text: "That password isn't right." };
+    if (err.hasCode("MFA_REQUIRED")) return { text: "Enter your authenticator code.", needsMfa: true };
+    if (err.hasCode("INVALID_MFA_CODE")) return { text: "That authenticator code isn't valid." };
+    if (err.hasCode("RECENT_SIGN_IN_REQUIRED")) return { text: "For your security, sign out, sign back in, then add Sign in with Apple.", needsFreshSignIn: true };
+    if (err.hasCode("APPLE_ALREADY_LINKED")) return { text: "That Apple ID is already used by another account, or this account already has a different one." };
+    if (err.hasCode("APPLE_TOKEN_INVALID")) return { text: "Apple sign-in didn't work. Try again." };
+    if (err.hasCode("APPLE_NOT_CONFIGURED") || err.hasCode("APPLE_UNAVAILABLE")) return { text: "Sign in with Apple isn't available right now. Try again later." };
+    // The per-account limiter (5 wrong proofs, then 15 minutes) answers 429 with no code, so match the status too.
+    if (err.hasCode("RATE_LIMITED") || err.code === "rate_limited") return { text: "Too many tries. Wait a few minutes and try again." };
+  }
+  return { text: "Couldn't add Sign in with Apple. Try again." };
+}
