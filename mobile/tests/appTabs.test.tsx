@@ -76,12 +76,19 @@ describe("the tab bar", () => {
     expect(buttons()).toEqual(["Waste", "Usage", "Count", "Move", "Account"]);
   });
 
+  it("opens on Account for a person with no module: the navigator starts on its first screen, and More has no button then", () => {
+    mocks.user = person({});
+    render(<AppTabs />);
+    expect(buttons()).toEqual(["Account"]);
+    expect(mocks.screens.filter((s) => s.guard)[0].name).toBe("account");
+  });
+
   it("never shows more than five buttons: four modules and More, with the rest and Account under More", () => {
     mocks.user = person({ roles: ["Administrator"] });
     render(<AppTabs />);
     expect(buttons()).toEqual(["Prep", "Waste", "Usage", "Count", "More"]);
-    // Move and Account stay in the navigator, so More can open them.
-    expect(mocks.screens.filter((s) => s.guard).map((s) => s.name)).toEqual(expect.arrayContaining(["(moves)", "account"]));
+    // Move, Receive and Account stay in the navigator, so More can open them.
+    expect(mocks.screens.filter((s) => s.guard).map((s) => s.name)).toEqual(expect.arrayContaining(["(moves)", "(receive)", "account"]));
     // ...and none is `href: null`: expo-router hides such a tab and sends anyone who opens it to the first tab (More > Move landed on Prep).
     expect(mocks.screens.every((s) => s.options.href === undefined)).toBe(true);
   });
@@ -91,8 +98,10 @@ describe("the tab bar", () => {
     render(<More />);
     fireEvent.click(screen.getByRole("button", { name: "Move" }));
     expect(mocks.navigate).toHaveBeenLastCalledWith("(moves)");
+    fireEvent.click(screen.getByRole("button", { name: "Receive" }));
+    expect(mocks.navigate).toHaveBeenLastCalledWith("(receive)");
     fireEvent.click(screen.getByRole("button", { name: "Account" }));
     expect(mocks.navigate).toHaveBeenLastCalledWith("account");
-    expect(screen.getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual(["Move", "Account"]);
+    expect(screen.getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual(["Move", "Receive", "Account"]);
   });
 });

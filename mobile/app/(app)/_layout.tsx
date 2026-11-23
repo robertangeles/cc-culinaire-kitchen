@@ -42,8 +42,8 @@ export default function AppTabs() {
           <Tabs.Screen name={tab.route} options={{ title: tab.title, ...noButton(more.includes(tab)), tabBarIcon: ({ color }) => <TabIcon name={tab.icon} color={color} /> }} />
         </Tabs.Protected>
       ))}
-      <Tabs.Screen name="more" options={{ title: "More", ...noButton(!overflow), tabBarIcon: ({ color }) => <TabIcon name="more" color={color} /> }} />
       <Tabs.Screen name="account" options={{ title: "Account", ...noButton(overflow), tabBarIcon: ({ color }) => <TabIcon name="account" color={color} /> }} />
+      <Tabs.Screen name="more" options={{ title: "More", ...noButton(!overflow), tabBarIcon: ({ color }) => <TabIcon name="more" color={color} /> }} />
     </Tabs>
   );
 }

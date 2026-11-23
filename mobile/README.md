@@ -23,7 +23,7 @@ Run the screenshot walk (`device/README.md`, "The screenshot walk") after changi
 
 | Folder | What lives there |
 |---|---|
-| `app/` | Screens (expo-router). A module is a route group `app/(app)/(module)/`, plus one entry in `src/shell/tabs.ts` naming the permission that opens it (none when the server asks only for a signed-in person), in the order a line cook uses them (Prep, Waste, Usage, Count, Move). Past five tab buttons, the fifth is More (`app/(app)/more.tsx`), listing the rest and Account. A tab under More keeps its route and loses only its button: never `href: null`, which expo-router turns into a hidden tab that redirects to the first tab when opened. |
+| `app/` | Screens (expo-router). A module is a route group `app/(app)/(module)/`, plus one entry in `src/shell/tabs.ts` naming the permission that opens it (none when the server asks only for a signed-in person), in the order a line cook uses them (Prep, Waste, Usage, Count, Move, Receive, Ask, Recipes). Past five tab buttons, the fifth is More (`app/(app)/more.tsx`), listing the rest and Account. A tab under More keeps its route and loses only its button: never `href: null`, which expo-router turns into a hidden tab that redirects to the first tab when opened. |
 | `src/api` | The one network client: auth, refresh, coded errors (`ApiError.code`, `serverCode`). |
 | `src/outbox` | The offline queue (below). |
 | `src/ingredients` | The shared ingredient picker's data (below); its component is `src/ui/IngredientPicker.tsx`. |

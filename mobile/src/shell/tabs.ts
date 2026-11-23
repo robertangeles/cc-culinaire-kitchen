@@ -17,7 +17,7 @@ export interface ModuleTab {
   anyPermission?: string[];
 }
 
-/** In the order a line cook reaches for them: prep all shift, waste and usage as they happen, counts at stock take, moves now and then. */
+/** In the order a line cook reaches for them: prep all shift, waste and usage as they happen, counts at stock take, moves now and then, deliveries when they arrive. */
 export const moduleTabs: ModuleTab[] = [
   // `prep:read` looks and ticks, `prep:manage` also makes the list: the server lets either tick, for anyone who works at the location (any role can be given them).
   { route: "(prep)", title: "Prep", icon: "prep", anyPermission: ["prep:read", "prep:manage"] },

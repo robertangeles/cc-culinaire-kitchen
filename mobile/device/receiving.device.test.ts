@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, onTestFailed } from "vitest";
-import { adb, back, clearField, find, forceStop, has, hideKeyboard, openApp, screenshot, tap, tapAt, tapLabel, typeInto, waitFor, findAll } from "./adb";
+import { adb, back, clearField, find, forceStop, has, hideKeyboard, openApp, openTab, screenshot, tap, tapAt, tapLabel, typeInto, waitFor, findAll } from "./adb";
 import { credentials, freshCode, manager } from "./fixtures";
 
 /**
@@ -96,23 +96,23 @@ describe("receiving walk on a device", () => {
 
   afterAll(async () => {
     // Leave the phone as it was found: signed out, and without the tunnels this run added.
-    if (await has(/^Account/)) {
-      await tap(/^Account/).catch(() => {});
+    if (await has(/^More(,|$)/)) {
+      await openTab("Account").catch(() => {});
       if (await has("Sign out")) await tap("Sign out").catch(() => {});
     }
     for (const port of tunnels) adb(["reverse", "--remove", `tcp:${port}`]);
   });
 
-  it("R1 signs in and the tab bar offers Receive", async () => {
+  it("R1 signs in and the tab bar offers More, which holds Receive", async () => {
     // A phone that is already signed in (a rerun after a failure) goes straight on.
     await sleep(3000);
-    if (!(await has(/^Receive/))) await signIn();
-    await waitFor(/^Receive/, 60_000);
+    if (!(await has(/^More(,|$)/))) await signIn();
+    await waitFor(/^More(,|$)/, 60_000);
     await screenshot("r01-home");
   });
 
   it("R2 the deliveries queue lists the sent orders, with the supplier and item count", async () => {
-    await tap(/^Receive/);
+    await openTab("Receive");
     await waitFor(new RegExp(`^${supplierName}, order .*, 3 items`), 30_000);
     expect(await has(new RegExp(`^${supplierName}, order .*, 1 item`))).toBe(true);
     await screenshot("r02-queue");

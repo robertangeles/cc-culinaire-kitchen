@@ -49,7 +49,7 @@ async function signIn() {
   await tap("Verify");
 }
 
-/** The tab with this title (a tab is "Usage, tab, 3 of 5" or similar); the E2E user is an Administrator, so Move and Account are under More. */
+/** The tab with this title (a tab is "Usage, tab, 3 of 5" or similar); the E2E user is an Administrator, so Move, Receive and Account are under More. */
 const tab = (title: string) => openTab(title);
 
 describe("usage and moves on a device", () => {
@@ -91,7 +91,7 @@ describe("usage and moves on a device", () => {
     await m.client.request("DELETE", `${API}/ingredients/${itemId}`).catch(() => {});
   });
 
-  it("S1 signs in and shows Prep, Waste, Usage and Count with Move and Account under More", async () => {
+  it("S1 signs in and shows Prep, Waste, Usage and Count with Move, Receive and Account under More", async () => {
     await signIn();
     await waitFor(/^Usage(,|$)/, 60_000);
     for (const t of ["Prep", "Waste", "Usage", "Count", "More"]) expect(await has(new RegExp(`^${t}(,|$)`)), `${t} tab`).toBe(true);
