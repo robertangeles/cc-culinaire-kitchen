@@ -7,7 +7,7 @@
 # Per form factor ("phone", then "tablet") it makes a fresh database `culinaire_storeroom` on the local test cluster
 # (scripts/localIntegrationDb.sh, port 55432; schema, roles and the E2E user with the CI's throwaway credentials), starts the API on a
 # free port against it, and runs device/storeRoom.device.test.ts. Metro runs once, on a free port. Everything it started is stopped by
-# process group; the phone's display size and density are reset. Needs the development build installed (bash device/buildStamp.sh check).
+# process group; the phone's display size and density are reset. STOREROOM_FORMS ("phone tablet") and STOREROOM_TESTS (a test-name filter) narrow a rerun. Needs the development build installed (bash device/buildStamp.sh check).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 [ "${CULINAIRE_DEVICE_LEASE:-}" = 1 ] || { echo "run me through the lease: bash device/lease.sh bash device/storeRoom.sh" >&2; exit 2; }
@@ -71,7 +71,8 @@ mkdir -p "$OUT"
 rc=0
 for form in ${STOREROOM_FORMS:-phone tablet}; do
   fresh_server
-  STOREROOM_OUT=$OUT STOREROOM_FORM=$form npx vitest run --config vitest.device.config.ts device/storeRoom.device.test.ts || rc=1
+  filter=(); [ -z "${STOREROOM_TESTS:-}" ] || filter=(-t "$STOREROOM_TESTS")
+  STOREROOM_OUT=$OUT STOREROOM_FORM=$form npx vitest run --config vitest.device.config.ts device/storeRoom.device.test.ts "${filter[@]}" || rc=1
 done
 npx vitest run --config vitest.e2e.config.ts e2e/storeRoom.e2e.test.ts || rc=1
 exit $rc
