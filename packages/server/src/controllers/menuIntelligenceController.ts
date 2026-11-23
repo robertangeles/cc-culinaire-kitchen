@@ -237,8 +237,9 @@ export async function handleAddIngredient(req: Request, res: Response, next: Nex
     const parsed = ingredientSchema.safeParse(req.body);
     if (!parsed.success) { invalid(res, parsed.error.issues[0].message); return; }
     const menuItemId = req.params.id as string;
-    await requireManageableMenuItem(menuItemId, await menuScope(req));
-    const ing = await addIngredient(menuItemId, parsed.data);
+    const scope = await menuScope(req);
+    await requireManageableMenuItem(menuItemId, scope);
+    const ing = await addIngredient(menuItemId, scope, parsed.data);
     res.status(201).json(ing);
   } catch (err) { next(err); }
 }
@@ -254,8 +255,9 @@ export async function handleListIngredients(req: Request, res: Response, next: N
 export async function handleDeleteIngredient(req: Request, res: Response, next: NextFunction) {
   try {
     const menuItemId = req.params.id as string;
-    await requireManageableMenuItem(menuItemId, await menuScope(req));
-    await deleteIngredient(parseInt(req.params.ingredientId as string, 10), menuItemId);
+    const scope = await menuScope(req);
+    await requireManageableMenuItem(menuItemId, scope);
+    await deleteIngredient(parseInt(req.params.ingredientId as string, 10), menuItemId, scope);
     res.json({ ok: true });
   } catch (err) { next(err); }
 }
@@ -269,9 +271,10 @@ export async function handleDeleteIngredient(req: Request, res: Response, next: 
 export async function handleRefreshCost(req: Request, res: Response, next: NextFunction) {
   try {
     const menuItemId = req.params.id as string;
-    await requireManageableMenuItem(menuItemId, await menuScope(req));
+    const scope = await menuScope(req);
+    await requireManageableMenuItem(menuItemId, scope);
     const rowId = parseInt(req.params.ingredientId as string, 10);
-    const updated = await refreshIngredientCost(rowId, menuItemId);
+    const updated = await refreshIngredientCost(rowId, menuItemId, scope);
     res.json(updated);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);

@@ -67,7 +67,7 @@ describe("refreshIngredientCost — Phase 3", () => {
   it("throws when the menu_item_ingredient row is not found", async () => {
     setRows([]); // first SELECT returns no rows
     const { refreshIngredientCost } = await import("./menuIntelligenceService.js");
-    await expect(refreshIngredientCost(999, "menu-item-1")).rejects.toThrow(
+    await expect(refreshIngredientCost(999, "menu-item-1", { userId: 1, organisationId: null, isOrgAdmin: false })).rejects.toThrow(
       /not found/i,
     );
   });
@@ -75,7 +75,7 @@ describe("refreshIngredientCost — Phase 3", () => {
   it("throws when the row is unlinked (legacy free-text)", async () => {
     setRows([{ id: 1, menuItemId: "menu-item-1", ingredientId: null }]);
     const { refreshIngredientCost } = await import("./menuIntelligenceService.js");
-    await expect(refreshIngredientCost(1, "menu-item-1")).rejects.toThrow(
+    await expect(refreshIngredientCost(1, "menu-item-1", { userId: 1, organisationId: null, isOrgAdmin: false })).rejects.toThrow(
       /unlinked/i,
     );
   });

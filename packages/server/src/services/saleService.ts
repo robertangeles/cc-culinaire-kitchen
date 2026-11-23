@@ -249,6 +249,8 @@ export async function recordSale(orgId: number, userId: number, input: RecordSal
  */
 async function writeSale(orgId: number, userId: number, input: RecordSaleInput): Promise<RecordSaleResult> {
   if (!(input.qtySold > 0)) throw new SaleError("qtySold must be greater than 0", 400);
+  // menu_item.units_sold counts whole sales.
+  if (!Number.isInteger(input.qtySold)) throw new SaleError("qtySold must be a whole number", 400);
   const soldAt = input.soldAt ?? new Date();
   if (soldAt.getTime() > Date.now() + 60_000) throw new SaleError("soldAt cannot be in the future", 400);
   const source = input.source ?? "MANUAL";
