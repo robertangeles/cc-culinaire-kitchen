@@ -9,6 +9,7 @@ import type { Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import pino from "pino";
 import { getUserLocationContext } from "../services/locationContextService.js";
+import { forViewer } from "../utils/costFields.js";
 import {
   createIngredient,
   listIngredients,
@@ -257,7 +258,7 @@ export async function handleListIngredients(
     const itemType = req.query.itemType as string | undefined;
 
     const rows = await listIngredients(orgId, { category, search, itemType });
-    res.json(rows);
+    res.json(rows.map((r) => forViewer(req.user!, r)));
   } catch (err) {
     next(err);
   }
@@ -369,7 +370,7 @@ export async function handleListLocationIngredients(
     if (orgId === null) return;
 
     const rows = await listLocationIngredients(req.params.locId as string, orgId);
-    res.json(rows);
+    res.json(rows.map((r) => forViewer(req.user!, r)));
   } catch (err) {
     next(err);
   }
@@ -493,7 +494,7 @@ export async function handleListIngredientSuppliers(
     if (!ing) { res.status(404).json({ error: "Ingredient not found" }); return; }
 
     const rows = await listIngredientSuppliers(req.params.id as string);
-    res.json(rows);
+    res.json(rows.map((r) => forViewer(req.user!, r)));
   } catch (err) {
     next(err);
   }

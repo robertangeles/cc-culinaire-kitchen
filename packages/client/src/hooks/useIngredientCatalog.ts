@@ -29,7 +29,8 @@ export interface Ingredient {
   /** Kitchen units per purchase package (also the pack-cost helper). */
   packQty: string | null;
   description: string | null;
-  unitCost: string | null;
+  /** Absent for someone without inventory:cost. */
+  unitCost?: string | null;
   parLevel: string | null;
   reorderQty: string | null;
   containsDairyInd: boolean;
@@ -84,8 +85,9 @@ export interface IngredientSupplierLink {
   supplierId: string;
   supplierName: string;
   contactName: string | null;
-  packCost: string | null;
-  costPerUnit: string | null;
+  /** Absent, like `costPerUnit`, for someone without inventory:cost. */
+  packCost?: string | null;
+  costPerUnit?: string | null;
   supplierItemCode: string | null;
   leadTimeDays: number | null;
   minimumOrderQty: string | null;

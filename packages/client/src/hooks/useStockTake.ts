@@ -24,7 +24,8 @@ export interface LocationIngredient {
   purchaseUnit: string | null;
   packQty: string | null;
   description: string | null;
-  orgUnitCost: string | null;
+  /** Absent, like `locationUnitCost` and `currentQty`, for someone without inventory:cost. */
+  orgUnitCost?: string | null;
   orgParLevel: string | null;
   orgReorderQty: string | null;
   // Allergens
@@ -38,7 +39,7 @@ export interface LocationIngredient {
   locationIngredientId: string | null;
   parLevel: string | null;
   reorderQty: string | null;
-  locationUnitCost: string | null;
+  locationUnitCost?: string | null;
   unitOverride: string | null;
   categoryOverride: string | null;
   activeInd: boolean | null;
@@ -48,7 +49,7 @@ export interface LocationIngredient {
   /** The supplier's real minimum order quantity — NOT the internal reorder trigger. */
   supplierMinOrderQty: string | null;
   // Stock
-  currentQty: string | null;
+  currentQty?: string | null;
   lastCountedDttm: string | null;
 }
 

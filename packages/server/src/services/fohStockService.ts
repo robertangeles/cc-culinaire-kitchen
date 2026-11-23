@@ -177,7 +177,9 @@ export async function recountFoh(
       if (existing.lastCountedByUserId === userId && existing.lastCountedDttm?.getTime() === countedAt.getTime()) {
         return { ingredientId, previousQty, countedQty, varianceQty: 0, replay: true };
       }
-      if (existing.updatedDttm > countedAt) {
+      // A phone clock ahead of the server must not make a count look newer than what happened since.
+      const now = new Date();
+      if (existing.updatedDttm > (countedAt > now ? now : countedAt)) {
         throw new FohError("The shelf changed after this count (a sale, restock or waste). Count it again.", 409, "FOH_COUNT_STALE");
       }
     }

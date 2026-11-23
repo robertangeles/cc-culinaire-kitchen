@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { LocationDashboard } from "./LocationDashboard.js";
 import type { DashboardData, LocationIngredient } from "../../hooks/useInventory.js";
 
@@ -51,5 +51,12 @@ describe("LocationDashboard", () => {
     render(<LocationDashboard locationId="loc-1" />);
     expect(screen.queryByText("Value by Category")).toBeNull();
     expect(screen.getByText("Critical — Reorder Now")).toBeTruthy();
+  });
+
+  it("shows a dash, not zero, for a quantity the server leaves out (no inventory:cost)", () => {
+    items = [{ ingredientId: "flour", ingredientName: "flour", ingredientCategory: "dry_goods", baseUnit: "kg", parLevel: "10" }];
+    render(<LocationDashboard locationId="loc-1" />);
+    fireEvent.click(screen.getByText("Critical — Reorder Now"));
+    expect(screen.getByText("— kg / par 10")).toBeTruthy();
   });
 });

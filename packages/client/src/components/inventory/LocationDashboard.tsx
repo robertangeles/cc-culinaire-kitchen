@@ -450,7 +450,7 @@ function StockAlertList({ items }: { items: LocationIngredient[] }) {
             <div className="flex items-center gap-2 min-w-0">
               <span className="text-white truncate">{item.ingredientName}</span>
               <span className="text-[10px] text-dark-500 shrink-0">
-                {qty.toFixed(1)} {item.baseUnit} / par {par}
+                {item.currentQty == null ? "—" : qty.toFixed(1)} {item.baseUnit} / par {par}
               </span>
             </div>
             {atRisk > 0 && (

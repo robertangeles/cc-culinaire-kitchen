@@ -143,16 +143,13 @@ export async function handleCountFoh(req: Request, res: Response, next: NextFunc
       refuse(res, "countedQty must be 0 or greater");
       return;
     }
-    const at = countedAt === undefined ? undefined : new Date(countedAt);
-    if (at && Number.isNaN(at.getTime())) {
+    if (countedAt != null && (typeof countedAt !== "string" || Number.isNaN(Date.parse(countedAt)))) {
       refuse(res, "countedAt must be an ISO date-time when provided");
       return;
     }
-    // A phone clock ahead of the server must not make a count look newer than what happens next.
-    const now = new Date();
 
     res.json(
-      await fohStockService.recountFoh(orgId, locId, ingredientId, Number(countedQty), req.user!.sub, at && (at > now ? now : at)),
+      await fohStockService.recountFoh(orgId, locId, ingredientId, Number(countedQty), req.user!.sub, countedAt == null ? undefined : new Date(countedAt)),
     );
   } catch (err) {
     handleFohError(err, res, next, "handleCountFoh");
