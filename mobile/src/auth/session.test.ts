@@ -199,6 +199,28 @@ describe("MFA, location choice and sign-out", () => {
     expect(state(session)).toEqual({ phase: "signedOut" });
   });
 
+  it("unregisters this phone's push before the sign-out ends the tokens", async () => {
+    const { api } = setup();
+    const order: string[] = [];
+    api.signOut.mockImplementation(async () => void order.push("signOut"));
+    const session = createSession({ api: api as unknown as AuthApi, hasTokens: async () => true, snapshots: { load: async () => null, save: async () => {} }, beforeSignOut: async () => void order.push("unregister") });
+    await session.restore();
+    await session.signOut();
+    expect(order).toEqual(["unregister", "signOut"]);
+  });
+
+  it("reads the person again after they change their name, keeping the location", async () => {
+    const { session, api, snapshots } = setup();
+    await session.restore();
+    api.me.mockResolvedValueOnce({ ...counter, userName: "Chef Rob", userPhotoPath: "https://img/x.jpg" });
+    await session.refreshUser();
+    expect(state(session)).toMatchObject({ phase: "ready", user: { userName: "Chef Rob", userPhotoPath: "https://img/x.jpg" }, location: { storeLocationId: "L1" } });
+    expect(snapshots.save).toHaveBeenLastCalledWith(expect.objectContaining({ user: expect.objectContaining({ userName: "Chef Rob" }) }));
+    api.me.mockRejectedValueOnce(new ApiError("network"));
+    await session.refreshUser();
+    expect(state(session)).toMatchObject({ user: { userName: "Chef Rob" } });
+  });
+
   it("returns to sign-in when the server ends the session mid-use", async () => {
     const { session } = setup();
     await session.restore();

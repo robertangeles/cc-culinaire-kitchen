@@ -47,6 +47,8 @@ export interface SessionDeps {
   wipeLocalData?: () => Promise<void>;
   /** Opens Apple's sign-in sheet and returns what the server verifies, or null when the person closes it. Absent off iOS. */
   appleCredential?: () => Promise<AppleCredential | null>;
+  /** Runs while still signed in, just before signing out (this phone's push token is unregistered). Must not throw. */
+  beforeSignOut?: () => Promise<void>;
 }
 
 const GENERIC = "Something went wrong. Try again.";
@@ -66,7 +68,7 @@ function joinMessage(err: unknown): string {
   return err.message;
 }
 
-export function createSession({ api, hasTokens, snapshots, googleIdToken, appleCredential, wipeLocalData }: SessionDeps) {
+export function createSession({ api, hasTokens, snapshots, googleIdToken, appleCredential, wipeLocalData, beforeSignOut }: SessionDeps) {
   let snapshot: SessionSnapshot = { state: { phase: "restoring" }, busy: false };
   const listeners = new Set<() => void>();
 
@@ -278,10 +280,20 @@ export function createSession({ api, hasTokens, snapshots, googleIdToken, appleC
 
     signOut() {
       return run(async () => {
+        await beforeSignOut?.();
         await api.signOut();
         await snapshots.save(null);
         set({ state: { phase: "signedOut" } });
       });
+    },
+
+    /** After the person changed their name or picture: read them again, so every screen shows the change. A failure keeps what is shown. */
+    async refreshUser(): Promise<void> {
+      if (snapshot.state.phase !== "ready") return;
+      const user = await api.me().catch(() => null);
+      const current = snapshot.state;
+      if (!user || current.phase !== "ready" || user.userId !== current.user.userId) return;
+      await ready(user, current.location, current.locations);
     },
 
     /** The API client calls this when the server refuses the refresh token. */
