@@ -21,6 +21,9 @@ export const moduleTabs: ModuleTab[] = [
   { route: "(waste)", title: "Waste", icon: "waste", anyPermission: ["waste:log"] },
   // `prep:read` looks and ticks, `prep:manage` also makes the list: the server lets either tick, for anyone who works at the location (any role can be given them).
   { route: "(prep)", title: "Prep", icon: "prep", anyPermission: ["prep:read", "prep:manage"] },
+  // The server gates the consumption log and stock movements with `inventory:count` (the web's "Internal Usage" and "Move Between Areas").
+  { route: "(usage)", title: "Usage", icon: "usage", anyPermission: ["inventory:count"] },
+  { route: "(moves)", title: "Move", icon: "move", anyPermission: ["inventory:count"] },
 ];
 
 /** Administrators hold every permission implicitly, as on the web and the server. */

@@ -147,7 +147,7 @@ describe("catalogue schema", () => {
     ]);
     expect(rows).toEqual([
       { ingredientId: "i1", ingredientName: "Flour", baseUnit: "g", ingredientCategory: "Dry", itemType: "KITCHEN_INGREDIENT" },
-      { ingredientId: "i2", ingredientName: "Gin", baseUnit: "L", ingredientCategory: "", itemType: "" },
+      { ingredientId: "i2", ingredientName: "Gin", baseUnit: "L", ingredientCategory: "" },
     ]);
   });
 });

@@ -6,13 +6,18 @@ const person = (over: Partial<AuthUser> = {}): AuthUser => ({ userId: 1, userNam
 
 describe("which tabs a person sees", () => {
   it("shows the Count tab to someone who holds inventory:count", () => {
-    expect(visibleTabs(person({ permissions: ["inventory:count"] })).map((t) => t.route)).toEqual(["(count)"]);
+    expect(visibleTabs(person({ permissions: ["inventory:count"] })).map((t) => t.route)).toContain("(count)");
+  });
+
+  it("shows the Usage and Move tabs to someone who holds inventory:count, the key the server asks for on both, and to no one without it", () => {
+    expect(visibleTabs(person({ permissions: ["inventory:count"] })).map((t) => t.route)).toEqual(["(count)", "(usage)", "(moves)"]);
+    expect(visibleTabs(person({ permissions: ["waste:log", "inventory:manage", "inventory:hq", "inventory:transfer"] })).map((t) => t.route)).toEqual(["(waste)"]);
   });
 
   it("shows the Waste tab to someone who holds waste:log, and only that: waste:read alone is the web's reports, not on the phone", () => {
     expect(visibleTabs(person({ permissions: ["waste:log"] })).map((t) => t.route)).toEqual(["(waste)"]);
     expect(visibleTabs(person({ permissions: ["waste:read"] }))).toEqual([]);
-    expect(visibleTabs(person({ permissions: ["inventory:count", "waste:log"] })).map((t) => t.route)).toEqual(["(count)", "(waste)"]);
+    expect(visibleTabs(person({ permissions: ["inventory:count", "waste:log"] })).map((t) => t.route)).toEqual(["(count)", "(waste)", "(usage)", "(moves)"]);
   });
 
   it("shows the Prep tab to someone who holds prep:read or prep:manage, as the server lets either tick tasks (any role can be given them)", () => {

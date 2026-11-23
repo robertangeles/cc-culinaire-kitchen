@@ -21,6 +21,8 @@ export type ConsumptionRecent = PickedIngredient & { quantity?: number; reason?:
 export interface ConsumptionForm {
   ingredientId: string;
   ingredientName: string;
+  /** From the picker; kept with the recent item so the "move, not usage" question can be asked again. */
+  itemType?: string;
   unit: string;
   quantity: number;
   reason: string;
@@ -126,7 +128,7 @@ export function createConsumptionStore({ api, kv, outbox, recents, viewer, locat
       if (!Number.isFinite(form.quantity) || form.quantity <= 0) throw new Error("Enter a quantity above zero.");
       if (!form.reason) throw new Error("Say what it was used for.");
       const command: ConsumptionLogCommand = { consumptionLogId: newId(), storeLocationId: locationId, ingredientId: form.ingredientId, ingredientName: form.ingredientName, quantity: form.quantity, unit: form.unit, reason: form.reason, shift: form.shift, notes: form.notes?.trim() || null, loggedAt: new Date(now()).toISOString() };
-      await recents.remember({ name: form.ingredientName, ingredientId: form.ingredientId, unit: form.unit, quantity: form.quantity, reason: form.reason });
+      await recents.remember({ name: form.ingredientName, ingredientId: form.ingredientId, itemType: form.itemType, unit: form.unit, quantity: form.quantity, reason: form.reason });
       await enqueue(CONSUMPTION_LOG, command);
     },
 
