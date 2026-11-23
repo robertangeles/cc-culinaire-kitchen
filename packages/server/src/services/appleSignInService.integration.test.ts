@@ -43,13 +43,18 @@ let seq = 0;
 const sub = () => `${tag}.${++seq}`;
 const hashed = (n: string) => crypto.createHash("sha256").update(n).digest("hex");
 
-function appleInput(claims: Record<string, unknown>, extra: Partial<AppleSignInInput> = {}): AppleSignInInput {
+function appleInput(
+  claims: Record<string, unknown>,
+  extra: Partial<AppleSignInInput> = {},
+  signOptions: jwt.SignOptions = {},
+): AppleSignInInput {
   const identityToken = jwt.sign({ nonce: hashed(NONCE), email_verified: "true", ...claims }, privateKey, {
     algorithm: "RS256",
     keyid: "itkey",
     issuer: "https://appleid.apple.com",
     audience: CLIENT_ID,
     expiresIn: "10m",
+    ...signOptions,
   });
   return { identityToken, nonce: NONCE, ...extra };
 }
@@ -357,24 +362,27 @@ describe.skipIf(!RUN)("Sign in with Apple (real DB)", { timeout: 120_000 }, () =
   });
 
   describe("an Apple-only account deleting itself", () => {
-    const signedIn = async (label: string, extra: Record<string, unknown> = {}) => {
+    const signedIn = async (label: string, extra: Partial<AppleSignInInput> = {}) => {
       const s = sub();
-      const authUser = await signInWithApple(appleInput({ sub: s, email: `${tag}-${label}@privaterelay.appleid.com`, is_private_email: "true", ...extra }));
+      const authUser = await signInWithApple(
+        appleInput({ sub: s, email: `${tag}-${label}@privaterelay.appleid.com`, is_private_email: "true" }, extra),
+      );
       track(authUser.userId);
       return { ...authUser, sub: s };
     };
 
     it("is proven by a fresh Apple sign-in, with no typed email and no recent sign-in, and revokes at Apple", async () => {
       withRevocationKey();
-      const a = await signedIn("delapple");
-      const input = appleInput({ sub: a.sub }, { authorizationCode: undefined });
+      const a = await signedIn("delapple", { authorizationCode: "c5" });
+      const input = appleInput({ sub: a.sub });
       await deleteOwnAccount(a.userId, { appleIdentityToken: input.identityToken, appleNonce: input.nonce }, null);
+      expect(revoked).toEqual(["refresh-for-c5"]);
       expect((await db.select({ s: user.userStatus }).from(user).where(eq(user.userId, a.userId)))[0].s).toBe("deleted");
     });
 
     it("is refused for an Apple token issued more than five minutes ago, and deletes nothing", async () => {
       const a = await signedIn("delstale");
-      const stale = appleInput({ sub: a.sub, iat: Math.floor(Date.now() / 1000) - 600 });
+      const stale = appleInput({ sub: a.sub, iat: Math.floor(Date.now() / 1000) - 600 }, {}, { expiresIn: "1h" });
       const err = await refusal(deleteOwnAccount(a.userId, { appleIdentityToken: stale.identityToken, appleNonce: stale.nonce }, null));
       expect(err).toMatchObject({ code: "INVALID_CREDENTIALS", statusCode: 403 });
       expect((await db.select({ s: user.userStatus }).from(user).where(eq(user.userId, a.userId)))[0].s).not.toBe("deleted");
