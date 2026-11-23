@@ -6,6 +6,7 @@
 
 import type { Request, Response, NextFunction } from "express";
 import { z } from "zod";
+import pino from "pino";
 import { eq } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { user } from "../db/schema.js";
@@ -32,6 +33,8 @@ import { AccountDeletionError, deleteOwnAccount } from "../services/accountDelet
 import { clearAuthCookies } from "./authController.js";
 import { AuthError, getSignInTime } from "../services/authService.js";
 import { presentedRefreshToken } from "../utils/presentedRefreshToken.js";
+
+const logger = pino({ name: "userController" });
 
 /** GET /api/users/profile — get current user's profile. */
 export async function handleGetProfile(req: Request, res: Response, next: NextFunction) {
@@ -69,7 +72,7 @@ export async function handleUpdateProfile(req: Request, res: Response, next: Nex
   try {
     const parsed = UpdateProfileSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.flatten() });
+      res.status(400).json({ error: parsed.error.flatten(), code: "VALIDATION" });
       return;
     }
     await updateUserProfile(req.user!.sub, parsed.data);
@@ -91,7 +94,8 @@ export async function handleChangePassword(req: Request, res: Response, next: Ne
   try {
     const parsed = ChangePasswordSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.flatten() });
+      const weak = parsed.error.issues.some((i) => i.path[0] === "newPassword" && i.code === "too_small");
+      res.status(400).json({ error: parsed.error.flatten(), code: weak ? "WEAK_PASSWORD" : "VALIDATION" });
       return;
     }
     await changePassword(
@@ -103,7 +107,7 @@ export async function handleChangePassword(req: Request, res: Response, next: Ne
     res.json({ success: true });
   } catch (err: unknown) {
     if (err instanceof PasswordChangeError) {
-      res.status(400).json({ error: err.message });
+      res.status(400).json({ error: err.message, code: err.code });
       return;
     }
     next(err);
@@ -156,13 +160,26 @@ export async function handleDeleteOwnAccount(req: Request, res: Response, next: 
 export async function handleAvatarUpload(req: Request, res: Response, next: NextFunction) {
   try {
     if (!req.file) {
-      res.status(400).json({ error: "No file provided" });
+      res.status(400).json({ error: "No file provided", code: "VALIDATION" });
       return;
     }
 
     const userId = req.user!.sub;
     const { uploadFileBuffer } = await import("../middleware/upload.js");
-    const filePath = await uploadFileBuffer(req.file.buffer, req.file.originalname, "culinaire/profiles");
+    let filePath: string;
+    try {
+      filePath = await uploadFileBuffer(req.file.buffer, req.file.originalname, "culinaire/profiles");
+    } catch (err) {
+      logger.error({ err, userId }, "Profile photo upload failed");
+      // Cloudinary rejects with a plain object; a file it cannot read as an image is 400 "Invalid image file".
+      const { http_code, message } = (err ?? {}) as { http_code?: unknown; message?: unknown };
+      if (http_code === 400 && typeof message === "string" && /invalid image file/i.test(message)) {
+        res.status(400).json({ error: "That file could not be read as an image.", code: "UNSUPPORTED_FILE_TYPE" });
+        return;
+      }
+      res.status(502).json({ error: "The photo could not be uploaded. Try again.", code: "UPLOAD_FAILED" });
+      return;
+    }
 
     await db
       .update(user)
