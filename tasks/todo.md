@@ -443,7 +443,7 @@ Three items the review deferred rather than built:
   - **`GET /api/roster/shifts/mine` returns Draft shifts** (`listMyShifts` filters only `Cancelled`), so staff see unpublished assignments. Filter to Published, or confirm that is intended.
   - **`POST /api/compliance/documents/upload` has no handler for an oversize file or a wrong field name**: the multer error falls to the generic handler as `500`, not `413`/`400` (`routes/users.ts` shows the `MulterError` pattern to copy). It also has no per-route rate limit although each call hits Cloudinary and runs OCR.
   - **No machine-readable `code`** on compliance or roster errors; mobile can only branch on status.
-  - **Push is not built**: `register-device` stores a token and nothing sends. No notification when a document is verified/rejected or a roster is published. No mobile-friendly roster payload (venue name, timezone, `isPublicHoliday`, date range) and no way for the client to discover which flags are on.
+  - ~~**Push is not built**~~: the server side shipped 2026-11-23 (see "Push (Wave 4 server) follow-ups" above). Still open: no mobile-friendly roster payload (venue name, timezone, `isPublicHoliday`, date range) and no way for the client to discover which flags are on.
   - `api-contracts.md` lacks `/api/inventory/notifications` and `register-device`, and its 401 body text is stale.
 
 ---
