@@ -36,6 +36,7 @@ import { resolveSessionAreaNames } from "./areaSessionService.js";
 
 import {
   ConflictError,
+  ForbiddenError,
   InvalidStateError,
   NotFoundError,
   ValidationError,
@@ -348,14 +349,20 @@ export async function getSessionDetail(sessionId: string, organisationId: number
  * Requires at least one category to be SUBMITTED. Unclaimed (NOT_STARTED)
  * categories are left as-is — this supports partial/cycle counts.
  */
-export async function submitSessionForReview(sessionId: string, orgId: number) {
+export async function submitSessionForReview(sessionId: string, orgId: number, opts: { canFinishOpening: boolean }) {
   const [session] = await db
     .select()
     .from(stockTakeSession)
     .where(and(eq(stockTakeSession.sessionId, sessionId), eq(stockTakeSession.organisationId, orgId)));
 
   if (!session) throw new NotFoundError("Session not found");
-  if (session.sessionStatus !== "OPEN" && session.sessionStatus !== "FLAGGED") {
+  // Finishing an opening count writes the location's first stock levels and turns its inventory on: a manager's call.
+  if (session.sessionType === "OPENING" && !opts.canFinishOpening) {
+    throw new ForbiddenError("Only a manager can finish the opening inventory");
+  }
+  // An opening count left in PENDING_REVIEW by the old auto-advance can still be finished here.
+  const finishable = session.sessionType === "OPENING" ? ["OPEN", "FLAGGED", "PENDING_REVIEW"] : ["OPEN", "FLAGGED"];
+  if (!finishable.includes(session.sessionStatus)) {
     throw new InvalidStateError(
       `Cannot submit for review: session is ${session.sessionStatus}`,
     );
@@ -594,10 +601,79 @@ export async function flagSession(
 
 // ─── Location dashboard data ─────────────────────────────────────
 
-/** Get dashboard data for a location: stock levels, last count info. */
+/** Stock health against par, the same rule the web item table shows: 25% of par or less is critical, 75% or less is low. */
+export function stockStatus(qty: number | null, par: number | null): "healthy" | "low" | "critical" | "unknown" {
+  if (qty === null || !par) return "unknown";
+  const ratio = qty / par;
+  if (ratio <= 0.25) return "critical";
+  if (ratio <= 0.75) return "low";
+  return "healthy";
+}
+
+/** What a quantity is worth here: the location's unit cost, else the catalogue's, else nothing. */
+const valueOf = (qty: number, locationUnitCost: string | null, orgUnitCost: string | null) =>
+  qty * Number(locationUnitCost || orgUnitCost || 0);
+
+/**
+ * The dashboard's figures, worked out once on the server so the web and the phone agree. Over the location's active
+ * items: low and critical are the store-room quantity against par; value counts the store room and the
+ * front-of-house shelf, each once. Value is left out unless `withValue` (the caller holds `inventory:cost`).
+ */
+async function getStockSummary(storeLocationId: string, organisationId: number, withValue: boolean) {
+  const foh = alias(stockLevel, "foh_level");
+  const rows = await db
+    .select({
+      ingredientId: ingredient.ingredientId,
+      category: ingredient.ingredientCategory,
+      bohQty: stockLevel.currentQty,
+      fohQty: foh.currentQty,
+      parLevel: locationIngredient.parLevel,
+      locationUnitCost: locationIngredient.unitCost,
+      orgUnitCost: ingredient.unitCost,
+    })
+    .from(locationIngredient)
+    .innerJoin(ingredient, eq(ingredient.ingredientId, locationIngredient.ingredientId))
+    .leftJoin(
+      stockLevel,
+      and(eq(stockLevel.ingredientId, locationIngredient.ingredientId), eq(stockLevel.storeLocationId, storeLocationId), eq(stockLevel.zone, "BOH")),
+    )
+    .leftJoin(foh, and(eq(foh.ingredientId, locationIngredient.ingredientId), eq(foh.storeLocationId, storeLocationId), eq(foh.zone, "FOH")))
+    .where(
+      and(
+        eq(locationIngredient.storeLocationId, storeLocationId),
+        eq(locationIngredient.activeInd, true),
+        eq(ingredient.organisationId, organisationId),
+      ),
+    );
+
+  const lowIngredientIds: string[] = [];
+  const criticalIngredientIds: string[] = [];
+  const valueByCat = new Map<string, number>();
+  let stockValue = 0;
+  for (const r of rows) {
+    const status = stockStatus(r.bohQty === null ? null : Number(r.bohQty), r.parLevel === null ? null : Number(r.parLevel));
+    if (status === "low") lowIngredientIds.push(r.ingredientId);
+    if (status === "critical") criticalIngredientIds.push(r.ingredientId);
+    const value = valueOf(Number(r.bohQty ?? 0) + Number(r.fohQty ?? 0), r.locationUnitCost, r.orgUnitCost);
+    if (value > 0) {
+      stockValue += value;
+      valueByCat.set(r.category, (valueByCat.get(r.category) ?? 0) + value);
+    }
+  }
+  return {
+    lowCount: lowIngredientIds.length,
+    criticalCount: criticalIngredientIds.length,
+    lowIngredientIds,
+    criticalIngredientIds,
+    ...(withValue && { stockValue, valueByCategory: [...valueByCat].map(([category, value]) => ({ category, value })) }),
+  };
+}
+
+/** Get dashboard data for a location: stock levels, last count info, and the stock summary. */
 export async function getLocationDashboard(
   storeLocationId: string,
   organisationId: number,
+  opts: { withValue: boolean },
 ) {
   // Verify location belongs to this org (prevents cross-org data exposure via req.params.locId)
   const [locVerify] = await db
@@ -635,6 +711,8 @@ export async function getLocationDashboard(
     .where(
       and(
         eq(stockLevel.storeLocationId, storeLocationId),
+        // The store room; the front-of-house shelf has its own row and its own tab.
+        eq(stockLevel.zone, "BOH"),
         eq(ingredient.organisationId, organisationId),
       ),
     );
@@ -697,14 +775,18 @@ export async function getLocationDashboard(
 
   return {
     stockLevels: levels,
+    stockSummary: await getStockSummary(storeLocationId, organisationId, opts.withValue),
     activeSession,
     lastCompletedSession: lastCompleted ?? null,
     setupProgress,
   };
 }
 
-/** Get org-wide dashboard summary — one row per location with stock counts + value. */
-export async function getOrgDashboardSummary(organisationId: number) {
+/**
+ * Get org-wide dashboard summary — one row per location with stock counts + value. Item counts and low/critical
+ * read the store-room row; value counts the store room and the front-of-house shelf, and is left out unless `withValue`.
+ */
+export async function getOrgDashboardSummary(organisationId: number, opts: { withValue: boolean }) {
   // Get all locations in org
   const locations = await db
     .select({
@@ -723,6 +805,7 @@ export async function getOrgDashboardSummary(organisationId: number) {
   const allLevels = await db
     .select({
       storeLocationId: stockLevel.storeLocationId,
+      zone: stockLevel.zone,
       currentQty: stockLevel.currentQty,
       parLevel: locationIngredient.parLevel,
       unitCost: locationIngredient.unitCost,
@@ -777,33 +860,30 @@ export async function getOrgDashboardSummary(organisationId: number) {
 
   return locations.map((loc) => {
     const levels = levelsByLocation.get(loc.storeLocationId) ?? [];
-    let totalItems = levels.length;
+    let totalItems = 0;
     let lowStock = 0;
     let critical = 0;
     let inventoryValue = 0;
 
-      for (const l of levels) {
-        const qty = Number(l.currentQty || 0);
-        const par = Number(l.parLevel || 0);
-        const cost = Number(l.unitCost || l.orgUnitCost || 0);
-        inventoryValue += qty * cost;
-        if (par > 0) {
-          const ratio = qty / par;
-          if (ratio <= 0.25) critical++;
-          else if (ratio <= 0.75) lowStock++;
-        }
-      }
+    for (const l of levels) {
+      inventoryValue += valueOf(Number(l.currentQty || 0), l.unitCost, l.orgUnitCost);
+      if (l.zone !== "BOH") continue;
+      totalItems++;
+      const status = stockStatus(Number(l.currentQty || 0), l.parLevel === null ? null : Number(l.parLevel));
+      if (status === "critical") critical++;
+      else if (status === "low") lowStock++;
+    }
 
-      return {
-        ...loc,
-        inventoryActive: loc.inventoryActive,
-        totalItems,
-        lowStock,
-        critical,
-        inventoryValue,
-        lastCountDttm: lastSessionByLocation.get(loc.storeLocationId) ?? null,
-      };
-    });
+    return {
+      ...loc,
+      inventoryActive: loc.inventoryActive,
+      totalItems,
+      lowStock,
+      critical,
+      ...(opts.withValue && { inventoryValue }),
+      lastCountDttm: lastSessionByLocation.get(loc.storeLocationId) ?? null,
+    };
+  });
 }
 
 // ─── Cross-location review queries ──────────────────────────────
@@ -949,7 +1029,7 @@ async function autoApproveOpeningSession(sessionId: string, storeLocationId: str
         closedDttm: new Date(),
         updatedDttm: new Date(),
       })
-      .where(and(eq(stockTakeSession.sessionId, sessionId), eq(stockTakeSession.sessionStatus, "OPEN")))
+      .where(and(eq(stockTakeSession.sessionId, sessionId), inArray(stockTakeSession.sessionStatus, ["OPEN", "FLAGGED", "PENDING_REVIEW"])))
       .returning();
 
     if (!approvedSession) return; // Concurrent submit already approved — idempotent, skip stock level writes

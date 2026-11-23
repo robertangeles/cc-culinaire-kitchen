@@ -36,6 +36,7 @@ import {
 } from "../services/stockTakeService.js";
 import { hasPermission } from "../middleware/auth.js";
 import { getAreaCountSheets } from "../services/areaSessionService.js";
+import type { TokenPayload } from "../services/authService.js";
 
 const logger = pino({ name: "stockTakeController" });
 
@@ -57,6 +58,17 @@ const FlagSessionSchema = z.object({
 });
 
 // ─── Helpers ──────────────────────────────────────────────────────
+
+/** Line fields that give away the book quantity or what stock is worth: a counter without `inventory:cost` counts blind. */
+const COST_FIELDS = ["expectedQty", "varianceQty", "variancePct", "unitCost"] as const;
+
+/** `line` as this caller may see it: without {@link COST_FIELDS} unless they hold `inventory:cost`. */
+function forViewer<T extends object>(user: TokenPayload, line: T): T {
+  if (hasPermission(user, "inventory:cost")) return line;
+  const copy = { ...line } as Record<string, unknown>;
+  for (const k of COST_FIELDS) delete copy[k];
+  return copy as T;
+}
 
 function handleServiceError(err: unknown, res: Response, next: NextFunction): void {
   // `code` lets the phone's offline queue branch on the kind of refusal; `error` stays the sentence the web shows.
@@ -81,7 +93,7 @@ function handleServiceError(err: unknown, res: Response, next: NextFunction): vo
 async function resolveContext(req: Request, res: Response) {
   const ctx = await getUserLocationContext(req.user!.sub);
   if (ctx.locations.length === 0) {
-    res.status(400).json({ error: "You are not a member of any organisation" });
+    res.status(400).json({ error: "You are not a member of any organisation", code: "FORBIDDEN" });
     return null;
   }
   return {
@@ -101,14 +113,14 @@ export async function handleOpenSession(
     if (!ctx) return;
 
     if (!ctx.selectedLocationId) {
-      res.status(400).json({ error: "No location selected. Please select a location first." });
+      res.status(400).json({ error: "No location selected. Please select a location first.", code: "VALIDATION" });
       return;
     }
 
     const categories = Array.isArray(req.body?.categories) ? req.body.categories : undefined;
     const mode = req.body?.mode ?? "CATEGORY";
     if (mode !== "CATEGORY" && mode !== "AREA") {
-      res.status(400).json({ error: 'mode must be "CATEGORY" or "AREA"' });
+      res.status(400).json({ error: 'mode must be "CATEGORY" or "AREA"', code: "VALIDATION" });
       return;
     }
     const session = await openSession(ctx.selectedLocationId, ctx.orgId, req.user!.sub, categories, mode);
@@ -131,7 +143,7 @@ export async function handleGetActiveSession(
     if (!ctx) return;
 
     if (!ctx.selectedLocationId) {
-      res.status(400).json({ error: "No location selected" });
+      res.status(400).json({ error: "No location selected", code: "VALIDATION" });
       return;
     }
 
@@ -150,9 +162,12 @@ export async function handleGetSessionDetail(
     if (!ctx) return;
 
     const session = await getSessionDetail(req.params.id as string, ctx.orgId);
-    if (!session) { res.status(404).json({ error: "Session not found" }); return; }
+    if (!session) { res.status(404).json({ error: "Session not found", code: "NOT_FOUND" }); return; }
 
-    res.json(session);
+    res.json({
+      ...session,
+      categories: session.categories.map((c) => ({ ...c, lines: c.lines.map((l) => forViewer(req.user!, l)) })),
+    });
   } catch (err) {
     next(err);
   }
@@ -184,7 +199,7 @@ export async function handleClaimCategory(
 
     const sessionId = req.params.id as string;
     const session = await getSessionDetail(sessionId, ctx.orgId);
-    if (!session) { res.status(404).json({ error: "Session not found" }); return; }
+    if (!session) { res.status(404).json({ error: "Session not found", code: "NOT_FOUND" }); return; }
 
     const cat = await claimCategory(sessionId, req.params.cat as string, req.user!.sub);
 
@@ -207,16 +222,16 @@ export async function handleSaveLineItem(
 
     const parsed = SaveLineItemSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: "Validation failed", details: parsed.error.flatten() });
+      res.status(400).json({ error: "Validation failed", code: "VALIDATION", details: parsed.error.flatten() });
       return;
     }
 
     // Resolve category ID from session + category name
     const session = await getSessionDetail(req.params.id as string, ctx.orgId);
-    if (!session) { res.status(404).json({ error: "Session not found" }); return; }
+    if (!session) { res.status(404).json({ error: "Session not found", code: "NOT_FOUND" }); return; }
 
     const cat = session.categories.find((c) => c.categoryName === req.params.cat as string);
-    if (!cat) { res.status(404).json({ error: `Category "${req.params.cat as string}" not found` }); return; }
+    if (!cat) { res.status(404).json({ error: `Category "${req.params.cat as string}" not found`, code: "NOT_FOUND" }); return; }
 
     if (cat.categoryStatus !== "IN_PROGRESS") {
       res.status(400).json({ error: `Cannot count: category is ${cat.categoryStatus}`, code: "STOCK_TAKE_AREA_CLOSED" });
@@ -236,7 +251,7 @@ export async function handleSaveLineItem(
       req.user!.sub,
     );
 
-    res.json(line);
+    res.json(forViewer(req.user!, line));
   } catch (err) {
     handleServiceError(err, res, next);
   }
@@ -250,15 +265,15 @@ export async function handleGetCategoryLines(
     if (!ctx) return;
 
     const session = await getSessionDetail(req.params.id as string, ctx.orgId);
-    if (!session) { res.status(404).json({ error: "Session not found" }); return; }
+    if (!session) { res.status(404).json({ error: "Session not found", code: "NOT_FOUND" }); return; }
 
     const cat = session.categories.find((c) => c.categoryName === req.params.cat as string);
-    if (!cat) { res.status(404).json({ error: `Category "${req.params.cat as string}" not found` }); return; }
+    if (!cat) { res.status(404).json({ error: `Category "${req.params.cat as string}" not found`, code: "NOT_FOUND" }); return; }
 
     const lines = await getCategoryLines(cat.categoryId);
-    res.json(lines);
+    res.json(lines.map((l) => forViewer(req.user!, l)));
   } catch (err) {
-    next(err);
+    handleServiceError(err, res, next);
   }
 }
 
@@ -271,11 +286,11 @@ export async function handleSubmitCategory(
 
     const sessionId = req.params.id as string;
     const session = await getSessionDetail(sessionId, ctx.orgId);
-    if (!session) { res.status(404).json({ error: "Session not found" }); return; }
+    if (!session) { res.status(404).json({ error: "Session not found", code: "NOT_FOUND" }); return; }
 
     const parsed = SubmitCategorySchema.safeParse(req.body ?? {});
     if (!parsed.success) {
-      res.status(400).json({ error: "Validation failed", details: parsed.error.flatten() });
+      res.status(400).json({ error: "Validation failed", code: "VALIDATION", details: parsed.error.flatten() });
       return;
     }
 
@@ -308,7 +323,9 @@ export async function handleSubmitForReview(
     const ctx = await resolveContext(req, res);
     if (!ctx) return;
 
-    const session = await submitSessionForReview(req.params.id as string, ctx.orgId);
+    const session = await submitSessionForReview(req.params.id as string, ctx.orgId, {
+      canFinishOpening: hasPermission(req.user!, "inventory:manage"),
+    });
     logger.info(
       { sessionId: req.params.id as string, userId: req.user!.sub },
       "Stock take session submitted for review",
@@ -346,7 +363,7 @@ export async function handleFlagSession(
   try {
     const parsed = FlagSessionSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: "Validation failed", details: parsed.error.flatten() });
+      res.status(400).json({ error: "Validation failed", code: "VALIDATION", details: parsed.error.flatten() });
       return;
     }
 
@@ -411,14 +428,14 @@ export async function handleGetPreviousLines(
     if (!ctx) return;
 
     if (!ctx.selectedLocationId) {
-      res.status(400).json({ error: "No location selected" });
+      res.status(400).json({ error: "No location selected", code: "VALIDATION" });
       return;
     }
 
     const lines = await getPreviousCountLines(ctx.selectedLocationId, req.params.cat as string);
-    res.json(lines);
+    res.json(lines.map((l) => forViewer(req.user!, l)));
   } catch (err) {
-    next(err);
+    handleServiceError(err, res, next);
   }
 }
 
@@ -431,7 +448,7 @@ export async function handleGetOrgDashboard(
     const ctx = await resolveContext(req, res);
     if (!ctx) return;
 
-    const summary = await getOrgDashboardSummary(ctx.orgId);
+    const summary = await getOrgDashboardSummary(ctx.orgId, { withValue: hasPermission(req.user!, "inventory:cost") });
     res.json(summary);
   } catch (err) {
     next(err);
@@ -447,7 +464,9 @@ export async function handleGetLocationDashboard(
     const ctx = await resolveContext(req, res);
     if (!ctx) return;
 
-    const dashboard = await getLocationDashboard(req.params.locId as string, ctx.orgId);
+    const dashboard = await getLocationDashboard(req.params.locId as string, ctx.orgId, {
+      withValue: hasPermission(req.user!, "inventory:cost"),
+    });
     res.json(dashboard);
   } catch (err) {
     handleServiceError(err, res, next);

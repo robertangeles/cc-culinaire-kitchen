@@ -36,7 +36,7 @@ import { role, permission, rolePermission, userRole, userOrganisation } from "..
 export const OPERATIONS_ADMIN_PERMISSION_KEYS = [
   "chat:access", "chat:unlimited",
   "org:create-organisation", "org:manage-organisation",
-  "inventory:count", "inventory:manage", "inventory:transfer", "inventory:hq",
+  "inventory:count", "inventory:manage", "inventory:transfer", "inventory:hq", "inventory:cost",
   "purchasing:draft", "purchasing:submit", "purchasing:approve", "purchasing:receive", "purchasing:credit",
   "sales:record", "sales:read",
   "menu:read", "waste:read", "waste:log", "prep:manage", "prep:read",
