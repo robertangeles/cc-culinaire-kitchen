@@ -22,12 +22,13 @@ export const client = createApiClient({ baseUrl: apiBaseUrl, tokenStore, appVers
 export const authApi = createAuthApi(client, tokenStore);
 export const accountApi = createAccountApi(client, tokenStore);
 export const legalApi = createLegalApi(client);
-/**
- * Opens Apple's sign-in sheet for a fresh credential, to confirm deleting an Apple-linked account (null when the sheet is closed).
- * Undefined until the Sign in with Apple change provides the sheet (`appleCredential` in auth/appleSignIn.ts: pass it here as
- * `appleEnabled ? async () => { const c = await appleCredential(); return c && { identityToken: c.identityToken, nonce: c.nonce }; } : undefined`).
- */
-export const appleProof: (() => Promise<AppleProof | null>) | undefined = undefined;
+/** Opens Apple's sign-in sheet for a fresh credential, to confirm deleting an Apple-linked account (null when the sheet is closed). */
+export const appleProof: (() => Promise<AppleProof | null>) | undefined = appleEnabled
+  ? async () => {
+      const credential = await appleCredential();
+      return credential && { identityToken: credential.identityToken, nonce: credential.nonce };
+    }
+  : undefined;
 session = createSession({
   api: authApi,
   hasTokens: async () => (await tokenStore.load()) !== null,

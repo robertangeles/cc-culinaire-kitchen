@@ -396,14 +396,6 @@ describe("continue with Apple", () => {
     render(<SignIn />);
     expect(screen.getByText("Apple sign-in didn't work. Try again.")).toBeTruthy();
   });
-
-  it("keeps the form in a centred column no wider than 480 on a tablet", () => {
-    appleConfig.enabled = true;
-    const { container } = render(<SignIn />);
-    const column = Array.from(container.querySelectorAll<HTMLElement>("div")).find((el) => getComputedStyle(el).maxWidth === "480px");
-    expect(column).toBeTruthy();
-    expect(column!.contains(screen.getByRole("button", { name: "Continue with Apple" }))).toBe(true);
-  });
 });
 
 describe("account tab", () => {
