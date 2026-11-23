@@ -141,6 +141,8 @@ export async function listLocationIngredients(
       and(
         eq(stockLevel.ingredientId, ingredient.ingredientId),
         eq(stockLevel.storeLocationId, storeLocationId),
+        // One row per item: the store room. A front-of-house item's shelf row is on the FOH tab.
+        eq(stockLevel.zone, "BOH"),
       ),
     )
     .where(and(...conditions));
@@ -156,6 +158,7 @@ export async function updateLocationIngredient(
   data: Partial<{
     parLevel: string;
     reorderQty: string;
+    fohParLevel: string | null;
     unitCost: string | null;
     supplierId: string | null;
     unitOverride: string | null;
@@ -179,6 +182,7 @@ export async function updateLocationIngredient(
   const updates: Record<string, unknown> = { updatedDttm: new Date() };
   if (data.parLevel !== undefined) updates.parLevel = data.parLevel;
   if (data.reorderQty !== undefined) updates.reorderQty = data.reorderQty;
+  if (data.fohParLevel !== undefined) updates.fohParLevel = data.fohParLevel;
   if (data.unitCost !== undefined) updates.unitCost = data.unitCost;
   if (data.supplierId !== undefined) updates.supplierId = data.supplierId;
   if (data.unitOverride !== undefined) updates.unitOverride = data.unitOverride;
@@ -221,6 +225,7 @@ export async function getIngredientStockAcrossLocations(
       and(
         eq(stockLevel.storeLocationId, storeLocation.storeLocationId),
         eq(stockLevel.ingredientId, ingredientId),
+        eq(stockLevel.zone, "BOH"),
       ),
     )
     .leftJoin(

@@ -24,6 +24,9 @@ import TransferReceiving from "./TransferReceiving.js";
 
 /* ── Status badge colors ──────────────────────────────────────── */
 
+/** Has stock to send; a quantity the server left out (no inventory:cost) is hidden, not zero. */
+const mayHaveStock = (i: LocationIngredient) => i.currentQty === undefined || Number(i.currentQty || 0) > 0;
+
 const STATUS_STYLES: Record<string, string> = {
   INITIATED: "bg-zinc-700/60 text-zinc-300 border-zinc-600/40",
   SENT: "bg-amber-900/40 text-amber-300 border-amber-600/30",
@@ -223,7 +226,7 @@ function TransferRow({
                           className={`px-2 py-0.5 rounded-full text-[10px] font-medium border transition-colors ${!addActiveCat ? "bg-gold/15 text-gold border-gold/30" : "bg-white/[0.03] text-[#888] border-white/5 hover:text-[#ccc]"}`}
                         >All</button>
                         {(() => {
-                          const available = locationItems.filter((i) => i.activeInd !== false && Number(i.currentQty || 0) > 0 && !detail.lines.some((l) => l.ingredientId === i.ingredientId));
+                          const available = locationItems.filter((i) => i.activeInd !== false && mayHaveStock(i) && !detail.lines.some((l) => l.ingredientId === i.ingredientId));
                           const cats = [...new Set(available.map(i => i.ingredientCategory))].sort();
                           return cats.map(cat => {
                             const label = cat.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
@@ -245,7 +248,7 @@ function TransferRow({
                         </div>
                         {(() => {
                           const available = locationItems
-                            .filter((i) => i.activeInd !== false && Number(i.currentQty || 0) > 0)
+                            .filter((i) => i.activeInd !== false && mayHaveStock(i))
                             .filter((i) => !detail.lines.some((l) => l.ingredientId === i.ingredientId))
                             .filter((i) => !addSearchQuery || i.ingredientName.toLowerCase().includes(addSearchQuery.toLowerCase()))
                             .filter((i) => !addActiveCat || i.ingredientCategory === addActiveCat);
@@ -262,7 +265,7 @@ function TransferRow({
                               <div key={cat}>
                                 <div className="px-3 py-1 bg-white/[0.02] text-[9px] text-dark-500 uppercase tracking-wider font-medium border-t border-dark-100">{catLabel}</div>
                                 {items.map(item => {
-                                  const stock = Number(item.currentQty || 0);
+                                  const stock = item.currentQty === undefined ? "—" : Number(item.currentQty || 0).toFixed(1);
                                   return (
                                     <button
                                       key={item.ingredientId}
@@ -283,7 +286,7 @@ function TransferRow({
                                       className="w-full flex items-center justify-between px-3 py-1.5 text-sm text-[#ccc] hover:bg-gold/5 transition-colors"
                                     >
                                       <span>{item.ingredientName}</span>
-                                      <span className="text-[10px] text-[#888] tabular-nums">{stock.toFixed(1)} {item.baseUnit}</span>
+                                      <span className="text-[10px] text-[#888] tabular-nums">{stock} {item.baseUnit}</span>
                                     </button>
                                   );
                                 })}

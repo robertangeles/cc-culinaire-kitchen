@@ -62,7 +62,7 @@ describe("handleApproveRequest catch handlers", () => {
     const next = vi.fn() as unknown as NextFunction;
     await handleApproveRequest(mockReq({ params: { id: "req-1" } }), res, next);
     expect(res.status).toHaveBeenCalledWith(404);
-    expect(res.json).toHaveBeenCalledWith({ error: "Request not found" });
+    expect(res.json).toHaveBeenCalledWith({ error: "Request not found", code: "NOT_FOUND" });
     expect(next).not.toHaveBeenCalled();
   });
 
@@ -74,7 +74,7 @@ describe("handleApproveRequest catch handlers", () => {
     const next = vi.fn() as unknown as NextFunction;
     await handleApproveRequest(mockReq({ params: { id: "req-1" } }), res, next);
     expect(res.status).toHaveBeenCalledWith(409);
-    expect(res.json).toHaveBeenCalledWith({ error: "Request already reviewed" });
+    expect(res.json).toHaveBeenCalledWith({ error: "Request already reviewed", code: "ALREADY_CONFIRMED" });
     expect(next).not.toHaveBeenCalled();
   });
 
@@ -104,7 +104,7 @@ describe("handleRejectRequest catch handlers", () => {
       next,
     );
     expect(res.status).toHaveBeenCalledWith(404);
-    expect(res.json).toHaveBeenCalledWith({ error: "Request not found" });
+    expect(res.json).toHaveBeenCalledWith({ error: "Request not found", code: "NOT_FOUND" });
     expect(next).not.toHaveBeenCalled();
   });
 
@@ -120,7 +120,7 @@ describe("handleRejectRequest catch handlers", () => {
       next,
     );
     expect(res.status).toHaveBeenCalledWith(409);
-    expect(res.json).toHaveBeenCalledWith({ error: "Request already reviewed" });
+    expect(res.json).toHaveBeenCalledWith({ error: "Request already reviewed", code: "ALREADY_CONFIRMED" });
     expect(next).not.toHaveBeenCalled();
   });
 
