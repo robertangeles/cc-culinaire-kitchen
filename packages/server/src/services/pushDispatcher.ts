@@ -17,7 +17,7 @@
  * ticket is removed at once.
  */
 
-import { and, asc, eq, lte, lt } from "drizzle-orm";
+import { and, asc, eq, inArray, lte, lt } from "drizzle-orm";
 import pino from "pino";
 import { pushLink } from "@culinaire/shared/schemas/push";
 import { db } from "../db/index.js";
@@ -199,7 +199,7 @@ export async function processPushReceipts(now: Date = new Date()): Promise<Recei
     run.deadTokens = dead.size;
     // Dead tokens first: deleting a token cascades to its receipt rows.
     await removeDeadTokens([...dead]);
-    for (const id of answered) await db.delete(pushReceipts).where(eq(pushReceipts.id, id));
+    if (answered.length > 0) await db.delete(pushReceipts).where(inArray(pushReceipts.id, answered));
   } catch (err) {
     logger.error({ err }, "Reading push receipts failed");
   }

@@ -395,8 +395,8 @@ export async function generateTokens(authUser: AuthUser, opts: { signedInAt?: Da
       familyId: opts.familyId,
     });
     await tx.delete(refreshToken).where(and(eq(refreshToken.userId, authUser.userId), lt(refreshToken.expiresAtDttm, now)));
-    await removeSignedOutDeviceTokens(authUser.userId, tx);
   });
+  await removeSignedOutDeviceTokens(authUser.userId);
 
   return { accessToken, refreshToken: rawRefreshToken };
 }
@@ -431,14 +431,12 @@ export async function refreshAccessToken(rawToken: string) {
 
     if (stored.expiresAtDttm < now) {
       await tx.delete(refreshToken).where(eq(refreshToken.refreshTokenId, stored.refreshTokenId));
-      await removeSignedOutDeviceTokens(stored.userId, tx);
       return { kind: "expired" };
     }
 
     const [account] = await tx.select({ status: user.userStatus }).from(user).where(eq(user.userId, stored.userId));
     if (account?.status === "suspended" || account?.status === "cancelled") {
       await tx.delete(refreshToken).where(eq(refreshToken.userId, stored.userId));
-      await removeSignedOutDeviceTokens(stored.userId, tx);
       return { kind: account.status };
     }
 
@@ -455,7 +453,6 @@ export async function refreshAccessToken(rawToken: string) {
         signedInAtDttm: signInTimeOf(stored),
       });
       await tx.delete(refreshToken).where(and(eq(refreshToken.userId, stored.userId), lt(refreshToken.expiresAtDttm, now)));
-      await removeSignedOutDeviceTokens(stored.userId, tx);
       return { kind: "ok", userId: stored.userId, refreshToken: childRaw };
     }
 
@@ -467,9 +464,9 @@ export async function refreshAccessToken(rawToken: string) {
     }
 
     await tx.delete(refreshToken).where(eq(refreshToken.familyId, stored.familyId));
-    await removeSignedOutDeviceTokens(stored.userId, tx);
     return { kind: "reused" };
   });
+  await removeSignedOutDeviceTokens(peek.userId);
 
   switch (verdict.kind) {
     case "invalid":
@@ -544,7 +541,8 @@ export async function revokeRefreshToken(rawToken: string): Promise<number | und
  * Ends every sign-in of a user (suspend, cancel, password reset, password change).
  * `keepFamilyId` spares the caller's own sign-in, but only its live token: spent copies of it, which
  * another holder may have, go too. Pass `tx` to make it part of the caller's transaction.
- * The push device tokens of the sign-ins that ended go in the same transaction.
+ * The push device tokens of the sign-ins that ended go once the revoke has committed; a caller that passes `tx`
+ * calls `removeSignedOutDeviceTokens` itself after its transaction commits.
  */
 export async function revokeAllRefreshTokens(userId: number, keepFamilyId?: string, tx?: DbOrTx) {
   const run = async (t: DbOrTx) => {
@@ -556,10 +554,10 @@ export async function revokeAllRefreshTokens(userId: number, keepFamilyId?: stri
           ? and(eq(refreshToken.userId, userId), sql`NOT (${refreshToken.familyId} = ${keepFamilyId} AND ${refreshToken.rotatedAtDttm} IS NULL)`)
           : eq(refreshToken.userId, userId),
       );
-    await removeSignedOutDeviceTokens(userId, t);
   };
-  if (tx) await run(tx);
-  else await db.transaction(run);
+  if (tx) return run(tx);
+  await db.transaction(run);
+  await removeSignedOutDeviceTokens(userId);
 }
 
 /** The family of a refresh token that belongs to this user, if any. */
