@@ -130,6 +130,11 @@ async function signIn() {
   await tapAt(Math.round((field!.x1 + field!.x2) / 2), Math.round((field!.y1 + field!.y2) / 2));
   adb(["shell", "input", "text", await freshCode()]);
   adb(["shell", "input", "keyevent", "KEYCODE_ENTER"]);
+  // A server that has only just started can miss the first verify ("Can't reach the server"): the code was not used, so verify again.
+  for (let i = 0; i < 3 && !(await has(/^Account(,|$)/)); i++) {
+    await sleep(3000);
+    if (await has("Can't reach the server. Try again.")) await tap("Verify");
+  }
   await waitFor(/^Account(,|$)/, 60_000);
   for (let i = 0; i < 6 && (await dismissSavePassword()); i++);
 }
