@@ -44,18 +44,20 @@ export default function KitchenProfile() {
   const [message, setMessage] = useState<{ text: string; error?: true }>();
   const [saving, setSaving] = useState(false);
 
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     void Promise.all([accountApi.kitchenProfile(), accountApi.personalisationOptions(), authApi.locationContext()]).then(
       ([profile, options, ctx]) => setLoaded({ form: toForm(profile), options, isOrgAdmin: ctx.isOrgAdmin }),
       () => setLoaded("failed"),
     );
-  }, []);
+  }, [attempt]);
 
   if (loaded === null || loaded === "failed") {
     return (
       <Screen>
         <Text variant="title">Kitchen profile</Text>
         {loaded === null ? <Text variant="muted">Loading…</Text> : <Text variant="error">Couldn't load your kitchen profile. Check your signal and try again.</Text>}
+        {loaded === "failed" ? <Button kind="ghost" label="Try again" onPress={() => (setLoaded(null), setAttempt((a) => a + 1))} /> : null}
         <Button kind="quiet" label="Back" onPress={() => router.back()} />
       </Screen>
     );

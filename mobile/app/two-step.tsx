@@ -31,9 +31,10 @@ export default function TwoStep() {
   const [success, setSuccess] = useState<string>();
   const [busy, setBusy] = useState(false);
 
+  const [load, setLoad] = useState(0);
   useEffect(() => {
     void accountApi.facts().then(setFacts, () => setFacts("failed"));
-  }, []);
+  }, [load]);
 
   if (facts === null) return <Screen><Text variant="muted">Loading…</Text></Screen>;
   if (facts === "failed") {
@@ -41,6 +42,7 @@ export default function TwoStep() {
       <Screen>
         <Text variant="title">Two-step verification</Text>
         <Text variant="error">Couldn't load your account. Check your signal and try again.</Text>
+        {facts === "failed" ? <Button kind="ghost" label="Try again" onPress={() => (setFacts(null), setLoad((n) => n + 1))} /> : null}
         <Button kind="quiet" label="Back" onPress={() => router.back()} />
       </Screen>
     );

@@ -53,12 +53,13 @@ export default function Profile() {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
 
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     void accountApi.details().then(
       ({ userEmail: _email, userPhotoPath: _photo, ...fields }) => setDetails(fields),
       () => setDetails("failed"),
     );
-  }, []);
+  }, [attempt]);
 
   if (state.phase !== "ready") return null;
   const { user } = state;
@@ -67,6 +68,7 @@ export default function Profile() {
       <Screen>
         <Text variant="title">My details</Text>
         {details === null ? <Text variant="muted">Loading…</Text> : <Text variant="error">Couldn't load your details. Check your signal and try again.</Text>}
+        {details === "failed" ? <Button kind="ghost" label="Try again" onPress={() => (setDetails(null), setAttempt((a) => a + 1))} /> : null}
         <Button kind="quiet" label="Back" onPress={() => router.back()} />
       </Screen>
     );

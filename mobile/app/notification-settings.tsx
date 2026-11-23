@@ -32,6 +32,7 @@ export default function NotificationSettings() {
   const [quiet, setQuiet] = useState({ start: "22:00", end: "07:00" });
   const [quietSaved, setQuietSaved] = useState(false);
 
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     void notificationsApi.preferences().then(
       (p) => {
@@ -40,7 +41,7 @@ export default function NotificationSettings() {
       },
       () => setPrefs("failed"),
     );
-  }, []);
+  }, [attempt]);
 
   async function save(update: Parameters<typeof notificationsApi.savePreferences>[0]) {
     setSaving(true);
@@ -72,6 +73,7 @@ export default function NotificationSettings() {
         <Text variant="title">Notifications</Text>
         {phone}
         {prefs === null ? <Text variant="muted">Loading…</Text> : <Text variant="error">Couldn't load your notification settings. Try again.</Text>}
+        {prefs === "failed" ? <Button kind="ghost" label="Try again" onPress={() => (setPrefs(null), setAttempt((a) => a + 1))} /> : null}
         <Button kind="quiet" label="Back" onPress={() => router.back()} />
       </Screen>
     );

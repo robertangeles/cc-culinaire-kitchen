@@ -268,6 +268,14 @@ describe("kitchen profile", () => {
     await waitFor(() => expect(mocks.accountApi.saveKitchenProfile).toHaveBeenCalledWith(expect.objectContaining({ skillLevel: "sous_chef" })));
   });
 
+  it("loads again with Try again after a failed load", async () => {
+    mocks.authApi.locationContext.mockRejectedValueOnce(new ApiError("network")).mockResolvedValue({ isOrgAdmin: false });
+    render(<KitchenProfile />);
+    await screen.findByText("Try again");
+    click("Try again");
+    expect(await screen.findByRole("radio", { name: "Line cook" })).toBeTruthy();
+  });
+
   it("says when the profile cannot be loaded", async () => {
     mocks.authApi.locationContext.mockRejectedValue(new ApiError("network"));
     render(<KitchenProfile />);

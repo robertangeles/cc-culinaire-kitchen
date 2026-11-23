@@ -22,9 +22,10 @@ export default function ChangePassword() {
   const [error, setError] = useState<string>();
   const [done, setDone] = useState(false);
 
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     void accountApi.facts().then(setFacts, () => setFacts("failed"));
-  }, []);
+  }, [attempt]);
 
   if (facts === null) return <Screen><Text variant="muted">Loading…</Text></Screen>;
   if (facts === "failed" || !facts.hasPassword || done) {
@@ -34,6 +35,7 @@ export default function ChangePassword() {
         {facts === "failed" ? <Text variant="error">Couldn't load your account. Check your signal and try again.</Text> : null}
         {facts !== "failed" && !facts.hasPassword ? <Text>Your account signs in with Google or Apple, so it has no password to change.</Text> : null}
         {done ? <Text>Password changed. You're still signed in here; your other devices will need to sign in again.</Text> : null}
+        {facts === "failed" ? <Button kind="ghost" label="Try again" onPress={() => (setFacts(null), setAttempt((a) => a + 1))} /> : null}
         <Button kind="quiet" label="Back" onPress={() => router.back()} />
       </Screen>
     );
