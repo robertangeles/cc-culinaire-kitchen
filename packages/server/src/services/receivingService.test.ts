@@ -129,6 +129,7 @@ vi.mock("../db/schema.js", () => ({
   locationIngredient: { ingredientId: "ingredient_id", storeLocationId: "store_location_id", parLevel: "par_level" },
   stockLevel: { ingredientId: "ingredient_id", storeLocationId: "store_location_id", currentQty: "current_qty" },
   supplier: {},
+  user: { userId: "user_id", userName: "user_name" },
 }));
 
 const auditLogMock = vi.fn(async () => undefined);
@@ -190,7 +191,7 @@ function withTxRows(rowsByCall: unknown[][]) {
 describe("receivingService — transaction + audit invariants", () => {
   describe("startSession", () => {
     it("wraps writes in db.transaction and writes a 'create' audit row", async () => {
-      const po = { poId: "po-1", status: "SENT", organisationId: 7 };
+      const po = { poId: "po-1", status: "SENT", organisationId: 7, storeLocationId: "loc-1" };
       const session = { sessionId: "session-1", poId: "po-1", storeLocationId: "loc-1", receivedByUserId: 42, status: "ACTIVE" };
 
       withTxRows([
@@ -219,7 +220,7 @@ describe("receivingService — transaction + audit invariants", () => {
     // (cancelSession resets the PO unconditionally). That combination used to
     // throw "already in progress" with no path to the session at all.
     it("resumes an ACTIVE session on a PO still marked SENT instead of throwing", async () => {
-      const po = { poId: "po-1", status: "SENT", organisationId: 7 };
+      const po = { poId: "po-1", status: "SENT", organisationId: 7, storeLocationId: "loc-1" };
       const orphan = { sessionId: "session-orphan", poId: "po-1", status: "ACTIVE" };
       const lines = [{ receivingLineId: "rl-1", ingredientName: "Belicard" }];
 
@@ -235,7 +236,7 @@ describe("receivingService — transaction + audit invariants", () => {
     });
 
     it("rejects a PO in a terminal status when no ACTIVE session exists", async () => {
-      const po = { poId: "po-1", status: "RECEIVED", organisationId: 7 };
+      const po = { poId: "po-1", status: "RECEIVED", organisationId: 7, storeLocationId: "loc-1" };
 
       withTxRows([[po], []]);
 
@@ -257,7 +258,7 @@ describe("receivingService — transaction + audit invariants", () => {
       ]);
 
       const { cancelSession } = await import("./receivingService.js");
-      await cancelSession("session-1");
+      await cancelSession("session-1", 7, 42);
 
       expect(dbTransaction).toHaveBeenCalledTimes(1);
       expect(auditLogMock).toHaveBeenCalledTimes(1);
@@ -304,7 +305,7 @@ describe("receivingService — transaction + audit invariants", () => {
       });
 
       const { confirmReceipt } = await import("./receivingService.js");
-      const result = await confirmReceipt("s-1");
+      const result = await confirmReceipt("s-1", 7, 42);
 
       // Ordering invariant: notify after tx commits.
       expect(callOrder).toEqual(["tx-start", "tx-end", "notify"]);
@@ -345,7 +346,7 @@ describe("receivingService — transaction + audit invariants", () => {
       const { confirmReceipt } = await import("./receivingService.js");
 
       // Should NOT throw — receipt is committed; notification is best-effort.
-      await expect(confirmReceipt("s-2")).resolves.toMatchObject({
+      await expect(confirmReceipt("s-2", 7, 42)).resolves.toMatchObject({
         sessionId: "s-2",
         discrepancyCount: 1,
       });
@@ -366,7 +367,7 @@ describe("receivingService — transaction + audit invariants", () => {
       ]);
 
       const { confirmReceipt } = await import("./receivingService.js");
-      const result = await confirmReceipt("s-3");
+      const result = await confirmReceipt("s-3", 7, 42);
 
       expect(notifyMock).not.toHaveBeenCalled();
       expect(result.isPerfectDelivery).toBe(true);
@@ -393,7 +394,7 @@ describe("receivingService — transaction + audit invariants", () => {
       withTxRows([[session], [po], [line], [priceDisc]]);
 
       const { confirmReceipt } = await import("./receivingService.js");
-      const result = await confirmReceipt("s-5", 7);
+      const result = await confirmReceipt("s-5", 7, 42);
 
       expect(result.poStatus).toBe("RECEIVED");
       // Still a discrepancy worth reporting — it just is not a partial receipt.
@@ -414,7 +415,7 @@ describe("receivingService — transaction + audit invariants", () => {
       withTxRows([[session], [po], [line], [shortDisc]]);
 
       const { confirmReceipt } = await import("./receivingService.js");
-      const result = await confirmReceipt("s-6", 7);
+      const result = await confirmReceipt("s-6", 7, 42);
 
       expect(result.poStatus).toBe("PARTIAL_RECEIVED");
     });
@@ -432,7 +433,7 @@ describe("receivingService — transaction + audit invariants", () => {
       withTxRows([[session], [po], [line], [rejDisc]]);
 
       const { confirmReceipt } = await import("./receivingService.js");
-      const result = await confirmReceipt("s-7", 7);
+      const result = await confirmReceipt("s-7", 7, 42);
 
       expect(result.poStatus).toBe("PARTIAL_RECEIVED");
     });
@@ -460,7 +461,7 @@ describe("receivingService — transaction + audit invariants", () => {
       await actionLine("rl-4", "s-4", {
         status: "REJECTED",
         rejectionReason: "damaged",
-      });
+      }, 7, 42);
 
       expect(dbTransaction).toHaveBeenCalledTimes(1);
       expect(auditLogMock).toHaveBeenCalledTimes(1);

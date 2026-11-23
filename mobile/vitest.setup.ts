@@ -21,8 +21,16 @@ vi.mock("react-native-svg", async () => {
   return { default: ({ children, style }: { children?: ReactNode; style?: object }) => createElement(View, { style }, children), Path: () => null };
 });
 vi.mock("expo-router", async () => {
-  const { routerMock, searchParams } = await import("./testing/mocks");
-  return { useRouter: () => routerMock, useLocalSearchParams: () => searchParams.current };
+  const { routerMock, searchParams, focusEffects } = await import("./testing/mocks");
+  const { useEffect } = await import("react");
+  // As the real hook: the effect runs when the screen is shown, and again each time it regains focus.
+  const useFocusEffect = (effect: () => void) =>
+    useEffect(() => {
+      effect();
+      focusEffects.add(effect);
+      return () => void focusEffects.delete(effect);
+    }, [effect]);
+  return { useRouter: () => routerMock, useLocalSearchParams: () => searchParams.current, useFocusEffect };
 });
 
 if (typeof window !== "undefined") {

@@ -209,3 +209,25 @@ describe("PO send-to-supplier gating", () => {
     expect(runGate(findGate("post", path), [...MANAGER, "purchasing:submit"]).passed).toBe(true);
   });
 });
+
+describe("PO list and detail gating (the receiving queue)", () => {
+  const RECEIVE_ONLY = ["purchasing:receive"]; // a custom BOH role with no inventory:count
+  const routes: Array<[Method, string]> = [
+    ["get", "/purchase-orders"],
+    ["get", "/purchase-orders/:id"],
+  ];
+
+  it.each(routes)("lets a purchasing:receive-only user through on %s %s", (method, path) => {
+    expect(runGate(findGate(method, path), RECEIVE_ONLY).passed).toBe(true);
+  });
+
+  it.each(routes)("still passes an inventory:count user on %s %s", (method, path) => {
+    expect(runGate(findGate(method, path), SUBSCRIBER).passed).toBe(true);
+  });
+
+  it.each(routes)("403s a user with neither inventory:count nor purchasing:receive on %s %s", (method, path) => {
+    const { passed, status } = runGate(findGate(method, path), ["chat:access"]);
+    expect(passed).toBe(false);
+    expect(status).toHaveBeenCalledWith(403);
+  });
+});

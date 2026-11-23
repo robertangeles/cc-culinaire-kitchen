@@ -15,7 +15,7 @@ import {
   organisation,
   purchaseOrderLine,
 } from "../db/schema.js";
-import { sumPOLineTotal, shouldRouteToHQ } from "./poMath.js";
+import { sumPOLineTotal, shouldRouteToHQ, isUnpriced } from "./poMath.js";
 import pino from "pino";
 
 const logger = pino({ name: "thresholdService" });
@@ -69,7 +69,7 @@ async function getThreshold(
  * Calculate PO total value SERVER-SIDE from DB prices.
  * Never trust client-submitted values for threshold calculation.
  */
-async function calculatePOTotal(poId: string): Promise<number> {
+async function calculatePOTotal(poId: string): Promise<{ total: number; hasUnpricedLine: boolean }> {
   const lines = await db
     .select({
       orderedQty: purchaseOrderLine.orderedQty,
@@ -79,12 +79,15 @@ async function calculatePOTotal(poId: string): Promise<number> {
     .from(purchaseOrderLine)
     .where(eq(purchaseOrderLine.poId, poId));
 
-  return sumPOLineTotal(
-    lines.map((line) => ({
-      orderedQty: Number(line.orderedQty),
-      unitCost: line.unitCost ? Number(line.unitCost) : 0,
-    })),
-  );
+  return {
+    total: sumPOLineTotal(
+      lines.map((line) => ({
+        orderedQty: Number(line.orderedQty),
+        unitCost: line.unitCost ? Number(line.unitCost) : 0,
+      })),
+    ),
+    hasUnpricedLine: lines.some((line) => isUnpriced(line.unitCost)),
+  };
 }
 
 /**
@@ -96,7 +99,7 @@ export async function determineRouting(
   orgId: number,
   locationId: string,
 ): Promise<ThresholdResult> {
-  const totalValue = await calculatePOTotal(poId);
+  const { total: totalValue, hasUnpricedLine } = await calculatePOTotal(poId);
   const thresholdAmount = await getThreshold(orgId, locationId);
 
   // No threshold configured → always direct
@@ -105,10 +108,10 @@ export async function determineRouting(
     return { routing: "DIRECT", totalValue, thresholdAmount: null };
   }
 
-  const routing: ThresholdRouting = shouldRouteToHQ(totalValue, thresholdAmount) ? "HQ_APPROVAL" : "DIRECT";
+  const routing: ThresholdRouting = shouldRouteToHQ(totalValue, thresholdAmount, hasUnpricedLine) ? "HQ_APPROVAL" : "DIRECT";
 
   logger.info(
-    { poId, totalValue, thresholdAmount, routing },
+    { poId, totalValue, thresholdAmount, hasUnpricedLine, routing },
     "PO routing determined",
   );
 

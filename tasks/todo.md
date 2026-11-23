@@ -6,7 +6,7 @@ Native iOS/Android chef app (stock count first, then delivery receiving). Plan a
 
 **Where things are** (2026-11-22)
 - Merged to `main`: #192 (EAS profiles, dev client), #191 (PR 3e: update-the-app rule, location switch, card motion, outbox pruning), #193 (route-root fix, shelf order, status bar, the automated Android walk), #194 (the first app's look), #195 (Register, Forgot password, Check your email, Android keyboard fix), #196 (Continue with Google). Main's CI and the Render deploy were checked after each merge (all green, prod health 200). `/qa` on #191: no defects.
-- Nothing mobile is open. Next in the build order: PR 4 receiving, then a demand gate (one real pilot count), then PR 5-8.
+- Open: #213 (PR 4 receiving: the Receive tab and the server fixes it needs; see `CHANGELOG.md` and `mobile/README.md`). Next in the build order after it: a demand gate (one real pilot count), then PR 5-8.
 - Stale local and remote branches to delete once the owner agrees: `feature/ck-web/mobile-old-ui` (pushed), `feature/ck-web/mobile-device-walk` (local only), and the merged `mobile-pr3*` and `mobile-device-testing` branches. The main working tree may still be on `feature/ck-web/mobile-pr3e-finish` (merged): switch it to `main` and pull. A second worktree `~/walk/ck` exists (its `.env` and `packages/client/.env.test` are copies).
 
 **Owner decisions already made**

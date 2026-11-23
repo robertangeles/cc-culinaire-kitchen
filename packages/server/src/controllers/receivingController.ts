@@ -43,10 +43,10 @@ const StartSessionSchema = z.object({
 const ActionLineSchema = z.object({
   status: z.enum(["RECEIVED", "SHORT", "REJECTED", "PRICE_VARIANCE", "SUBSTITUTED"]),
   receivedQty: z.string().refine(
-    (v) => !isNaN(Number(v)) && Number(v) >= 0, "Must be a non-negative number",
+    (v) => v.trim() !== "" && !isNaN(Number(v)) && Number(v) >= 0, "Must be a non-negative number",
   ).optional(),
   actualUnitCost: z.string().refine(
-    (v) => !isNaN(Number(v)) && Number(v) >= 0, "Must be a non-negative number",
+    (v) => v.trim() !== "" && !isNaN(Number(v)) && Number(v) >= 0, "Must be a non-negative number",
   ).optional(),
   rejectionReason: z.enum(["quality", "damaged", "temperature", "expired", "other"]).optional(),
   rejectionNote: z.string().max(500).optional(),
@@ -137,7 +137,7 @@ export async function handleActionLine(
     }
 
     await assertSessionAccess(req, sessionId, orgId);
-    const result = await receivingService.actionLine(receivingLineId, sessionId, parsed.data, orgId);
+    const result = await receivingService.actionLine(receivingLineId, sessionId, parsed.data, orgId, req.user!.sub);
 
     logger.info({ sessionId, receivingLineId, status: parsed.data.status }, "Receiving line actioned");
     res.json(result);
@@ -160,7 +160,7 @@ export async function handleConfirmReceipt(
 
     const sessionId = req.params.sessionId as string;
     await assertSessionAccess(req, sessionId, orgId);
-    const result = await receivingService.confirmReceipt(sessionId, orgId);
+    const result = await receivingService.confirmReceipt(sessionId, orgId, req.user!.sub);
 
     logger.info({ sessionId, poStatus: result.poStatus }, "Receipt confirmed");
     res.json(result);
@@ -183,7 +183,7 @@ export async function handleCancelSession(
 
     const sessionId = req.params.sessionId as string;
     await assertSessionAccess(req, sessionId, orgId);
-    await receivingService.cancelSession(sessionId, orgId);
+    await receivingService.cancelSession(sessionId, orgId, req.user!.sub);
 
     logger.info({ sessionId }, "Receiving session cancelled");
     res.json({ success: true });

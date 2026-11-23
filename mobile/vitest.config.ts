@@ -13,6 +13,8 @@ export default defineConfig({
     env: { EXPO_PUBLIC_API_URL: "http://localhost:3009" },
     include: ["src/**/*.test.ts", "tests/**/*.test.tsx"],
     setupFiles: ["./vitest.setup.ts"],
+    // Screen tests find buttons by role, which is slow in jsdom: a keypad test that takes 2 s here took over 6 s on the CI runner.
+    testTimeout: 30_000,
     server: { deps: { inline: [/react-native-web/] } },
   },
 });

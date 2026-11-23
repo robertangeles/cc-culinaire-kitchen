@@ -276,10 +276,12 @@ router.post("/forecasts/:id/ordered", requirePermission("inventory:manage"), for
 
 // Collection routes first (BEFORE /:id params)
 router.post("/purchase-orders", requirePermission("inventory:manage"), handleCreatePO);
-router.get("/purchase-orders", requirePermission("inventory:count"), handleListPOs);
+// purchasing:receive too: a custom receiving role with no inventory:count must still reach its work queue.
+// The controller confines such a user to SENT and RECEIVING POs.
+router.get("/purchase-orders", requirePermission("inventory:count", "purchasing:receive"), handleListPOs);
 
 // Parameterized PO routes
-router.get("/purchase-orders/:id", requirePermission("inventory:count"), handleGetPODetail);
+router.get("/purchase-orders/:id", requirePermission("inventory:count", "purchasing:receive"), handleGetPODetail);
 router.post("/purchase-orders/:id/submit", requirePermission("purchasing:submit"), handleSubmitPO);
 router.post("/purchase-orders/:id/approve", requirePermission("purchasing:approve"), handleApprovePO);
 router.post("/purchase-orders/:id/send-email", requirePermission("purchasing:submit"), handleEmailPOToSupplier);

@@ -14,7 +14,7 @@
  *      - Updates PO status to RECEIVED / PARTIAL_RECEIVED
  */
 
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, inArray } from "drizzle-orm";
 import { db } from "../db/index.js";
 import {
   receivingSession,
@@ -26,6 +26,7 @@ import {
   ingredient,
   locationIngredient,
   stockLevel,
+  user,
 } from "../db/schema.js";
 import * as fifoService from "./fifoService.js";
 import * as stockService from "./stockService.js";
@@ -34,6 +35,7 @@ import * as auditService from "./auditService.js";
 import type { DbOrTx } from "./auditService.js";
 import * as wacService from "./wacService.js";
 import { resolveToBase } from "./unitConversionService.js";
+import { IncompatibleUnitsError } from "@culinaire/shared";
 import { validateTransition, RECEIVING_SESSION_TRANSITIONS } from "../utils/stateTransition.js";
 import { AppError } from "../utils/appError.js";
 import pino from "pino";
@@ -130,6 +132,15 @@ export async function startSession(
   userId: number,
   orgId: number,
 ) {
+  // Who holds a session: the phone shows "started by <name>" when a second phone resumes it.
+  const startedByOf = async (tx: DbOrTx, session: { receivedByUserId: number }) => {
+    const [starter] = await tx
+      .select({ userId: user.userId, userName: user.userName })
+      .from(user)
+      .where(eq(user.userId, session.receivedByUserId));
+    return starter;
+  };
+
   return db.transaction(async (tx) => {
     // Transaction-scoped, per-PO lock (pg_advisory_xact_lock, auto-releases on
     // commit/rollback — same primitive as utils/advisoryLock.ts, keyed per-PO
@@ -148,6 +159,11 @@ export async function startSession(
       .where(and(eq(purchaseOrder.poId, poId), eq(purchaseOrder.organisationId, orgId)));
 
     if (!po) throw new Error("Purchase order not found");
+
+    // A delivery is received where it was ordered for: the session's location decides whose stock grows.
+    if (po.storeLocationId !== locationId) {
+      throw new AppError(403, "LOCATION_NOT_ALLOWED", "This purchase order belongs to another location");
+    }
 
     // Resume an existing ACTIVE session whatever the PO's status claims, because
     // the two genuinely disagree in both directions and every disagreement used
@@ -173,7 +189,7 @@ export async function startSession(
           .where(eq(purchaseOrder.poId, poId));
       }
       const lines = await selectLinesWithIngredient(activeSession.sessionId, tx);
-      return { session: activeSession, lines };
+      return { session: activeSession, lines, resumed: true, startedBy: await startedByOf(tx, activeSession) };
     }
 
     if (po.status !== "SENT") {
@@ -244,7 +260,7 @@ export async function startSession(
     logger.info({ sessionId: session.sessionId, poId, lineCount: receivingLines.length }, "Receiving session started");
 
     const enrichedLines = await selectLinesWithIngredient(session.sessionId, tx);
-    return { session, lines: enrichedLines };
+    return { session, lines: enrichedLines, resumed: false, startedBy: await startedByOf(tx, session) };
   });
 }
 
@@ -315,6 +331,7 @@ export async function actionLine(
   sessionId: string,
   input: ActionLineInput,
   orgId: number,
+  actorUserId: number,
 ) {
   return db.transaction(async (tx) => {
     // Validate session is ACTIVE
@@ -358,6 +375,25 @@ export async function actionLine(
       .select()
       .from(purchaseOrderLine)
       .where(eq(purchaseOrderLine.lineId, line.poLineId));
+
+    // SHORT means less arrived than was ordered, so it needs the quantity that did, and a
+    // quantity that is not less is a different status. Without this, SHORT with no quantity
+    // computed a shortage of the full order while keeping the full quantity received.
+    if (input.status === "SHORT") {
+      if (input.receivedQty === undefined) {
+        throw new AppError(400, "SHORT_QTY_REQUIRED", "Enter the quantity that arrived");
+      }
+      if (Number(input.receivedQty) >= Number(line.orderedQty)) {
+        throw new AppError(400, 
+          "SHORT_QTY_NOT_LESS",
+          `A short delivery must be less than the ${line.orderedQty} ordered`,
+        );
+      }
+    }
+    // A price change with no new price recorded the new price as 0, i.e. a -100% variance.
+    if (input.status === "PRICE_VARIANCE" && input.actualUnitCost === undefined) {
+      throw new AppError(400, "PRICE_REQUIRED", "Enter the price charged");
+    }
 
     // Update the line
     const updateData: Record<string, unknown> = {
@@ -452,7 +488,7 @@ export async function actionLine(
         entityType: "receiving_line",
         entityId: receivingLineId,
         action: "update",
-        actorUserId: session.receivedByUserId,
+        actorUserId,
         organisationId: po.organisationId,
         beforeValue: { status: line.status, receivedQty: line.receivedQty, actualUnitCost: line.actualUnitCost },
         afterValue: { status: updatedLine.status, receivedQty: updatedLine.receivedQty, actualUnitCost: updatedLine.actualUnitCost },
@@ -484,7 +520,7 @@ export async function actionLine(
  * discrepancies. Notification failure is logged but does NOT roll back the
  * receipt — a failed email shouldn't undo a successful delivery.
  */
-export async function confirmReceipt(sessionId: string, orgId: number) {
+export async function confirmReceipt(sessionId: string, orgId: number, actorUserId: number) {
   // Wrap all DB writes in a single transaction so rollback is automatic on
   // any error (FIFO batch insert, stock update conflict, PO update, etc.).
   const result = await db.transaction(async (tx) => {
@@ -523,6 +559,55 @@ export async function confirmReceipt(sessionId: string, orgId: number) {
       .from(receivingDiscrepancy)
       .where(eq(receivingDiscrepancy.sessionId, sessionId));
 
+    // Convert every line to its base unit BEFORE writing anything. A line whose unit has no
+    // path to the base unit used to throw mid-loop and answer 500; now all such lines are
+    // named in one 400, and rejecting them (a REJECTED line is not converted) unblocks the rest.
+    const conversions = new Map<string, { baseQty: number; batchIngredientId: string }>();
+    const unconvertible: Array<{ ingredientId: string; unit: string }> = [];
+    for (const line of lines) {
+      const receivedQty = Number(line.receivedQty);
+      if (!(receivedQty > 0 && line.status !== "REJECTED")) continue;
+
+      let batchIngredientId = line.ingredientId;
+      if (line.status === "SUBSTITUTED") {
+        // Match on the substituted ingredient, not the type: sessions started before the
+        // type was fixed carry "SUBSTITUTED" rows.
+        const subDisc = discrepancies.find(
+          (d) => d.receivingLineId === line.receivingLineId && d.substitutedIngredientId,
+        );
+        if (subDisc?.substitutedIngredientId) {
+          // Also covers rows stored before actionLine checked the substitute.
+          await assertIngredientInOrg(tx, subDisc.substitutedIngredientId, orgId);
+          batchIngredientId = subDisc.substitutedIngredientId;
+        }
+      }
+      try {
+        const { baseQty } = await resolveToBase(batchIngredientId, receivedQty, line.orderedUnit);
+        conversions.set(line.receivingLineId, { baseQty, batchIngredientId });
+      } catch (err) {
+        if (!(err instanceof IncompatibleUnitsError)) throw err;
+        unconvertible.push({ ingredientId: batchIngredientId, unit: line.orderedUnit });
+      }
+    }
+    if (unconvertible.length > 0) {
+      const names = await tx
+        .select({ id: ingredient.ingredientId, name: ingredient.ingredientName, baseUnit: ingredient.baseUnit })
+        .from(ingredient)
+        .where(inArray(ingredient.ingredientId, unconvertible.map((u) => u.ingredientId)));
+      const detail = unconvertible
+        .map((u) => {
+          const found = names.find((n) => n.id === u.ingredientId);
+          return `${found?.name ?? u.ingredientId} (${u.unit} to ${found?.baseUnit ?? "base unit"})`;
+        })
+        .join(", ");
+      throw new AppError(
+        400,
+        "UNIT_NOT_CONVERTIBLE",
+        `Cannot receive ${detail}: no conversion between the ordered unit and the stock unit. ` +
+          `Reject the line, or ask an admin to add the conversion.`,
+      );
+    }
+
     const processedLines: string[] = [];
     // Track (location, ingredient) pairs whose WAC needs recomputing once
     // FIFO batches are seated. Use a Map keyed by ingredient_id since the
@@ -533,29 +618,10 @@ export async function confirmReceipt(sessionId: string, orgId: number) {
       const receivedQty = Number(line.receivedQty);
 
       if (receivedQty > 0 && line.status !== "REJECTED") {
-        // Determine which ingredient to create the batch for
-        // For substitutions, we'd need the substituted ingredient from the discrepancy
-        let batchIngredientId = line.ingredientId;
-
-        if (line.status === "SUBSTITUTED") {
-          // Match on the substituted ingredient, not the type: sessions started before the
-          // type was fixed carry "SUBSTITUTED" rows.
-          const subDisc = discrepancies.find(
-            (d) => d.receivingLineId === line.receivingLineId && d.substitutedIngredientId,
-          );
-          if (subDisc?.substitutedIngredientId) {
-            // Also covers rows stored before actionLine checked the substitute.
-            await assertIngredientInOrg(tx, subDisc.substitutedIngredientId, orgId);
-            batchIngredientId = subDisc.substitutedIngredientId;
-          }
-        }
-
-        // Convert the received qty AND its unit cost from the entered
-        // (ordered/received) unit to the ingredient's base unit, so both
-        // stock_level and the FIFO/WAC layer stay in base units. For items
-        // whose entered unit == base unit, factor is 1 and nothing changes.
-        const enteredUnit = line.orderedUnit;
-        const { baseQty } = await resolveToBase(batchIngredientId, receivedQty, enteredUnit);
+        const { baseQty, batchIngredientId } = conversions.get(line.receivingLineId)!;
+        // Convert the received qty AND its unit cost from the entered (ordered/received) unit
+        // to the ingredient's base unit, so both stock_level and the FIFO/WAC layer stay in
+        // base units. For items whose entered unit == base unit, factor is 1 and nothing changes.
         const factor = baseQty / receivedQty; // base units per entered unit
         const baseUnitCost =
           line.actualUnitCost != null ? String(Number(line.actualUnitCost) / factor) : line.actualUnitCost;
@@ -595,7 +661,7 @@ export async function confirmReceipt(sessionId: string, orgId: number) {
             Number(line.receivedQty) < Number(line.orderedQty) ? "SHORT" : "RECEIVED"
           ),
           actualUnitCost: line.actualUnitCost,
-          receivedByUserId: session.receivedByUserId,
+          receivedByUserId: actorUserId,
           receivedDttm: new Date(),
           updatedDttm: new Date(),
         })
@@ -638,7 +704,7 @@ export async function confirmReceipt(sessionId: string, orgId: number) {
       await wacService.recompute(
         {
           pairs: Array.from(wacPairs.values()),
-          actorUserId: session.receivedByUserId,
+          actorUserId,
           organisationId: po.organisationId,
           trigger: "receiving",
           triggerEntityId: sessionId,
@@ -652,7 +718,7 @@ export async function confirmReceipt(sessionId: string, orgId: number) {
         entityType: "receiving_session",
         entityId: sessionId,
         action: "complete",
-        actorUserId: session.receivedByUserId,
+        actorUserId,
         organisationId: po.organisationId,
         beforeValue: { status: session.status, completedAt: session.completedAt },
         afterValue: { status: "COMPLETED", completedAt: new Date().toISOString() },
@@ -759,7 +825,7 @@ export async function confirmReceipt(sessionId: string, orgId: number) {
  * built in Phase 1) can identify cancellations regardless of when they
  * happened.
  */
-export async function cancelSession(sessionId: string, orgId: number) {
+export async function cancelSession(sessionId: string, orgId: number, actorUserId: number) {
   return db.transaction(async (tx) => {
     const [session] = await tx
       .select()
@@ -779,6 +845,10 @@ export async function cancelSession(sessionId: string, orgId: number) {
 
     if (!po) throw new Error("Receiving session not found");
 
+    if (session.status === "COMPLETED") {
+      throw new AppError(409, "ALREADY_CONFIRMED", "This delivery has already been confirmed");
+    }
+
     validateTransition(session.status, "CANCELLED", RECEIVING_SESSION_TRANSITIONS, "receiving session");
 
     await tx
@@ -797,7 +867,7 @@ export async function cancelSession(sessionId: string, orgId: number) {
         entityType: "receiving_session",
         entityId: sessionId,
         action: "cancel",
-        actorUserId: session.receivedByUserId,
+        actorUserId,
         organisationId: po.organisationId,
         beforeValue: { status: session.status },
         afterValue: { status: "CANCELLED" },
