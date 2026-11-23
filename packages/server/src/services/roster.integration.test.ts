@@ -1131,8 +1131,6 @@ describe.skipIf(!RUN)("roster service (real DB)", () => {
       userA,
     );
     await assignStaff(orgA, s.shiftId, userA, userA);
-    // A Draft is not on the staff member's roster yet: only a published shift is listed.
-    await db.update(shift).set({ status: "Published" }).where(eq(shift.shiftId, s.shiftId));
 
     const myShifts = await listMyShifts(orgA, userA);
     const mine = myShifts.find((m) => m.shiftId === s.shiftId);
@@ -1155,7 +1153,6 @@ describe.skipIf(!RUN)("roster service (real DB)", () => {
       userA,
     );
     await assignStaff(orgA, s.shiftId, userA, userA);
-    await db.update(shift).set({ status: "Published" }).where(eq(shift.shiftId, s.shiftId));
     expect((await listMyShifts(orgA, userA)).find((m) => m.shiftId === s.shiftId)).toBeDefined();
     await cancelShift(orgA, s.shiftId);
 

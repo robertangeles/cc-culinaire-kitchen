@@ -374,31 +374,34 @@ export async function getWeekCalendar(
 }
 
 export interface MyShiftsFilters {
+  excludeDrafts?: boolean;
   from?: string;
   to?: string;
   limit?: number;
 }
 
-export const MY_SHIFTS_DEFAULT_LOOKBACK_DAYS = 14;
-export const MY_SHIFTS_DEFAULT_LIMIT = 100;
 export const MY_SHIFTS_MAX_LIMIT = 500;
+/** Safety cap on every answer, far above any real person's roster list. */
+const MY_SHIFTS_ROW_CAP = 5000;
 
 /**
  * Shifts the caller is personally assigned to, across every venue in the org, soonest first.
- * Bounded: `from`/`to` are venue-local days (default: the last 14 days onward), at most `limit` rows.
- * A Draft shift is not the caller's roster yet, so it is left out, except where the manager has
- * asked them to consent to a public holiday on it (consent happens before publish, which holds the
- * shift until they answer, so hiding it would deadlock that flow).
+ * With no filters: every non-Cancelled shift, Drafts included (what the web My Shifts page shows).
+ * Each filter applies only when sent: `from`/`to` are venue-local days, `limit` caps the rows, and
+ * `excludeDrafts` leaves out Draft shifts, except where the manager has asked the caller to consent
+ * to a public holiday on one (consent happens before publish, which holds the shift until they
+ * answer, so hiding it would deadlock that flow).
  */
 export async function listMyShifts(orgId: number, userId: number, filters: MyShiftsFilters = {}) {
-  const from = filters.from ?? new Date(Date.now() - MY_SHIFTS_DEFAULT_LOOKBACK_DAYS * DAY_MS).toISOString().slice(0, 10);
   const conditions = [
     eq(shift.organisationId, orgId),
     eq(shiftAssignment.userId, userId),
     ne(shift.status, "Cancelled"),
-    or(ne(shift.status, "Draft"), eq(shiftAssignment.publicHolidayConsent, "Requested")),
-    sql`${shift.startDatetime} >= ${venueBoundSql(from, false)}`,
   ];
+  if (filters.excludeDrafts) {
+    conditions.push(or(ne(shift.status, "Draft"), eq(shiftAssignment.publicHolidayConsent, "Requested"))!);
+  }
+  if (filters.from) conditions.push(sql`${shift.startDatetime} >= ${venueBoundSql(filters.from, false)}`);
   if (filters.to) conditions.push(sql`${shift.startDatetime} < ${venueBoundSql(filters.to, true)}`);
   return db
     .select({
@@ -423,7 +426,7 @@ export async function listMyShifts(orgId: number, userId: number, filters: MyShi
     .innerJoin(storeLocation, eq(storeLocation.storeLocationId, shift.storeLocationId))
     .where(and(...conditions))
     .orderBy(asc(shift.startDatetime))
-    .limit(Math.min(filters.limit ?? MY_SHIFTS_DEFAULT_LIMIT, MY_SHIFTS_MAX_LIMIT));
+    .limit(Math.min(filters.limit ?? MY_SHIFTS_ROW_CAP, MY_SHIFTS_ROW_CAP));
 }
 
 export interface CreateShiftInput {
