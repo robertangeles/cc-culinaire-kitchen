@@ -15,6 +15,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **Owner setup.** Credentials `APPLE_CLIENT_ID` (the iOS bundle id), `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY` (the `.p8`) in Settings → Integrations; the key is needed only to revoke. For Google on iPhone: `GOOGLE_IOS_CLIENT_ID` on the server, and in the phone build `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` plus the EAS variable `GOOGLE_IOS_URL_SCHEME` (see `mobile/.env.example`).
 - **New error codes** (shared `ApiErrorBody`): `APPLE_NOT_CONFIGURED`, `APPLE_UNAVAILABLE` (both 503), `APPLE_TOKEN_INVALID` (401), `APPLE_EMAIL_MISSING`, `APPLE_EMAIL_NOT_VERIFIED` (403), `APPLE_ALREADY_LINKED` (409), `ACCOUNT_EMAIL_UNVERIFIED`, `UNAUTHENTICATED`, `RATE_LIMITED` (the per-IP limiters now carry it).
 
+### Added (mobile Wave 2, phone: the offline queue and waste)
+
+- **A general offline queue.** The phone's outbox now holds typed, versioned commands with a handler per type: client-made ids so a resend is safe, ordered replay per entry, backoff on network and 5xx (with a cap a handler can set), refusals kept visible with the server's code and message (Try again or Discard), "already applied" counted as sent, a session that ended pauses the queue until sign-in. Counts are the first handler and behave as before. Existing phones gain the new `outbox` columns by `ALTER TABLE` on first launch. Documented in `mobile/README.md`.
+- **Waste on the phone.** A Waste tab for `waste:log` holders: log with ingredient autocomplete, quantity, unit, reason and shift, quick buttons for the latest items, edit and delete your own entries, per-unit daily totals, all offline-first. The shared ingredient picker (`src/ui/IngredientPicker.tsx`) is built to be reused by consumption, transfers and orders.
+- **Tablet width.** Screens built on `Screen` and the waste screens sit in a centred column of at most 640 dp.
+- No server route changed: older installed apps keep working. Differences from the web waste page are listed in `mobile/README.md`.
+
 ### Changed (mobile Wave 2, server: the line loop)
 
 **Apply migration `0002_prep_completed_by` by hand on production BEFORE this version deploys** (`pnpm --filter @culinaire/server exec tsx src/scripts/migrate.ts`, then `backfillWastePrepPermissions.ts`). Both new columns are nullable, so the previous server keeps working after the migration. The web behaves as before.
