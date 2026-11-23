@@ -74,5 +74,6 @@ for form in ${STOREROOM_FORMS:-phone tablet}; do
   filter=(); [ -z "${STOREROOM_TESTS:-}" ] || filter=(-t "$STOREROOM_TESTS")
   STOREROOM_OUT=$OUT STOREROOM_FORM=$form npx vitest run --config vitest.device.config.ts device/storeRoom.device.test.ts "${filter[@]}" || rc=1
 done
+[ -n "$server" ] || fresh_server # STOREROOM_FORMS=" " runs the end-to-end test alone
 npx vitest run --config vitest.e2e.config.ts e2e/storeRoom.e2e.test.ts || rc=1
 exit $rc
