@@ -243,7 +243,7 @@ jobs:
       # Mobile Wave 3 (store room, bar, HQ review): retry-safe transfers, front of house and catalogue
       # requests; zone-aware stock reads, blind counts, opening inventory and the recount round.
       - name: Run Wave 3 store room and stock take integration tests
-        run: pnpm --filter @culinaire/server exec vitest run src/services/storeRoomReplay.integration.test.ts src/services/stockTakeWave3.integration.test.ts src/migrations/0007_foh_restocks.integration.test.ts
+        run: pnpm --filter @culinaire/server exec vitest run src/services/storeRoomReplay.integration.test.ts src/services/stockTakeWave3.integration.test.ts src/services/purchasingStockReads.integration.test.ts src/migrations/0007_foh_restocks.integration.test.ts
 
   # Browser E2E (Playwright) against a real app on a throwaway Postgres: pushes
   # the schema, seeds RBAC plus one MFA-enabled E2E user/org/location, starts the

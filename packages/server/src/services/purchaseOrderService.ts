@@ -599,6 +599,7 @@ export async function clonePO(
             and(
               eq(stockLevel.storeLocationId, locationId),
               inArray(stockLevel.ingredientId, lineIngredientIds),
+              eq(stockLevel.zone, "BOH"),
             ),
           ),
         db
@@ -743,6 +744,7 @@ export async function receiveLine(
       and(
         eq(stockLevel.storeLocationId, po.storeLocationId),
         eq(stockLevel.ingredientId, line.ingredientId),
+        eq(stockLevel.zone, "BOH"),
       ),
     );
 

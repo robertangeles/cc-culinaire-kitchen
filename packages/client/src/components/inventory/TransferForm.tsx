@@ -34,8 +34,12 @@ interface TransferLineEntry {
   ingredientName: string;
   sentQty: string;
   sentUnit: string;
-  sourceStock: number;
+  /** Null when the quantity is hidden (no inventory:cost). */
+  sourceStock: number | null;
 }
+
+/** The book quantity, or null when the server left it out (no inventory:cost): hidden is not zero. */
+const stockOf = (item: LocationIngredient): number | null => (item.currentQty === undefined ? null : Number(item.currentQty || 0));
 
 /* ── Component ────────────────────────────────────────────────── */
 
@@ -77,7 +81,7 @@ export default function TransferForm({ onClose, editTransferId, editData }: Tran
       setLines((prev) =>
         prev.map((l) => {
           const found = locationItems.find((i) => i.ingredientId === l.ingredientId);
-          return found ? { ...l, sourceStock: Number(found.currentQty || 0) } : l;
+          return found ? { ...l, sourceStock: stockOf(found) } : l;
         }),
       );
       setStockPopulated(true);
@@ -134,7 +138,7 @@ export default function TransferForm({ onClose, editTransferId, editData }: Tran
       return;
     }
     setError(null);
-    const sourceStock = Number(item.currentQty || 0);
+    const sourceStock = stockOf(item);
     const newIdx = lines.length;
     setLines((prev) => [
       ...prev,
@@ -167,7 +171,7 @@ export default function TransferForm({ onClose, editTransferId, editData }: Tran
   function getDestStock(ingredientId: string): number | null {
     if (!toLocationId || !destItems.length) return null;
     const item = destItems.find((i) => i.ingredientId === ingredientId);
-    return item ? Number(item.currentQty || 0) : 0;
+    return item ? stockOf(item) : 0;
   }
 
   const handleSubmit = useCallback(async (): Promise<boolean> => {
@@ -416,9 +420,9 @@ export default function TransferForm({ onClose, editTransferId, editData }: Tran
                         {catLabel}
                       </div>
                       {items.map(item => {
-                        const stock = Number(item.currentQty || 0);
+                        const stock = stockOf(item);
                         const alreadyAdded = lines.some(l => l.ingredientId === item.ingredientId);
-                        const outOfStock = stock <= 0;
+                        const outOfStock = stock !== null && stock <= 0;
                         const disabled = alreadyAdded || outOfStock;
                         return (
                           <button
@@ -442,7 +446,7 @@ export default function TransferForm({ onClose, editTransferId, editData }: Tran
                               <span className={alreadyAdded || outOfStock ? "line-through" : ""}>{item.ingredientName}</span>
                             </div>
                             <span className={`text-[10px] tabular-nums ${outOfStock ? "text-red-400/60" : "text-[#888]"}`}>
-                              {outOfStock ? "Out of stock" : `${stock.toFixed(1)} ${item.baseUnit}`}
+                              {outOfStock ? "Out of stock" : `${stock === null ? "—" : stock.toFixed(1)} ${item.baseUnit}`}
                             </span>
                           </button>
                         );
@@ -478,7 +482,7 @@ export default function TransferForm({ onClose, editTransferId, editData }: Tran
                       </span>
                       <div className="flex gap-3 mt-1">
                         <span className="text-[10px] text-[#888]">
-                          You have: <span className="text-emerald-400 font-medium">{line.sourceStock.toFixed(1)} {line.sentUnit}</span>
+                          You have: <span className="text-emerald-400 font-medium">{line.sourceStock === null ? "—" : line.sourceStock.toFixed(1)} {line.sentUnit}</span>
                         </span>
                         {destStock !== null && (
                           <span className="text-[10px] text-[#888]">

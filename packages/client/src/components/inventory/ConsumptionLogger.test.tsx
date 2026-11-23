@@ -180,4 +180,25 @@ describe("ConsumptionLogger — move-not-usage guardrail", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(logConsumption).not.toHaveBeenCalled();
   });
+
+  it("lets usage be logged for an item whose quantity the server left out (no inventory:cost)", async () => {
+    const { currentQty: _hidden, ...blind } = item();
+    mockItems = [blind as ReturnType<typeof item>];
+    render(<ConsumptionLogger />);
+    await fillEntry("Kitchen", "Shiraz");
+
+    submit();
+
+    await waitFor(() => expect(logConsumption).toHaveBeenCalledWith(expect.objectContaining({ ingredientId: "ing-1", quantity: 4 })));
+    expect(screen.queryByText("Out of stock")).toBeNull();
+  });
+
+  it("still blocks an item a holder of inventory:cost sees at zero", async () => {
+    mockItems = [item({ currentQty: "0" })];
+    render(<ConsumptionLogger />);
+    fireEvent.click(screen.getByRole("button", { name: "Kitchen" }));
+    fireEvent.change(screen.getByPlaceholderText("Filter items..."), { target: { value: "Shiraz" } });
+
+    expect((await screen.findByRole("button", { name: /Shiraz/ })).hasAttribute("disabled")).toBe(true);
+  });
 });

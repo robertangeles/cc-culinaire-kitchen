@@ -87,6 +87,7 @@ async function selectLinesWithIngredient(sessionId: string, dbOrTx: DbOrTx) {
       and(
         eq(stockLevel.ingredientId, receivingLine.ingredientId),
         eq(stockLevel.storeLocationId, receivingSession.storeLocationId),
+        eq(stockLevel.zone, "BOH"),
       ),
     )
     .where(eq(receivingLine.sessionId, sessionId));
