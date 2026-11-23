@@ -226,18 +226,20 @@ export async function handleSaveMessages(
       return;
     }
 
-    const saved = await saveMessages(id, owner, parsed.data.messages);
-    if (!saved) {
+    const inserted = await saveMessages(id, owner, parsed.data.messages);
+    if (!inserted) {
       res.status(403).json({ error: "You do not have access to this conversation.", code: "FORBIDDEN" });
       return;
     }
 
     // Brain capture (spec T5): remember this chat turn for the authenticated
-    // user. Fired AFTER the message write, as `void` — recordMemory catches
+    // user, only for messages this request inserted (a replayed save after a lost
+    // reply must not record the same turn twice). Fired AFTER the message write, as `void` — recordMemory catches
     // internally and never rejects (spec E2), so a Brain failure can never
     // break message persistence. Guests never record.
     if (req.user) {
-      const turn = [...parsed.data.messages].sort(
+      const newIds = new Set(inserted.map((m) => m.messageId));
+      const turn = parsed.data.messages.filter((m) => newIds.has(m.messageId)).sort(
         (a, b) => a.messageSequence - b.messageSequence,
       );
       // Sanitize each message body BEFORE applying the role label, so the
