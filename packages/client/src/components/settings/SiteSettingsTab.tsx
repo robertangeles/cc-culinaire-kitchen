@@ -56,6 +56,8 @@ export function SiteSettingsTab() {
     default_registered_sessions: "10",
     recipes_per_page: "20",
     mobile_min_app_version: "0.0.0",
+    mobile_store_url_ios: "",
+    mobile_store_url_android: "",
   });
 
   /** Track whether the form has been initialized from settings. */
@@ -77,6 +79,8 @@ export function SiteSettingsTab() {
         default_registered_sessions: settings.default_registered_sessions ?? "10",
         recipes_per_page: settings.recipes_per_page ?? "20",
         mobile_min_app_version: settings.mobile_min_app_version ?? "0.0.0",
+        mobile_store_url_ios: settings.mobile_store_url_ios ?? "",
+        mobile_store_url_android: settings.mobile_store_url_android ?? "",
       });
       initialized.current = true;
     }
@@ -335,6 +339,29 @@ export function SiteSettingsTab() {
               className="w-24 rounded-lg border border-dark-200 bg-dark px-3 py-1.5 text-sm text-[#FAFAFA] text-right focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-transparent"
             />
           </div>
+
+          {/* Where "update the app" sends a phone: the store listings. Empty until a listing exists; the phone then shows no link. */}
+          {([
+            ["mobile_store_url_ios", "App Store link", "https://apps.apple.com/app/…"],
+            ["mobile_store_url_android", "Google Play link", "https://play.google.com/store/apps/details?id=…"],
+          ] as const).map(([key, label, placeholder]) => (
+            <div key={key} className="flex items-center justify-between gap-4 rounded-lg border border-dark-200 bg-dark-50 px-4 py-3">
+              <div>
+                <label htmlFor={key} className="text-sm font-medium text-[#FAFAFA]">
+                  {label}
+                </label>
+                <p className="text-xs text-dark-600 mt-0.5">The address of the listing, starting with https://. Leave empty until the listing exists.</p>
+              </div>
+              <input
+                id={key}
+                type="url"
+                placeholder={placeholder}
+                value={form[key]}
+                onChange={(e) => updateField(key, e.target.value)}
+                className="w-64 rounded-lg border border-dark-200 bg-dark px-3 py-1.5 text-sm text-[#FAFAFA] focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-transparent"
+              />
+            </div>
+          ))}
 
           {/* Recipes per page */}
           <div className="flex items-center justify-between rounded-lg border border-dark-200 bg-dark-50 px-4 py-3">
