@@ -75,6 +75,7 @@ import {
 } from "../controllers/stockTakeController.js";
 import {
   handleRequestNewItem,
+  handleListMyRequests,
   handleListPendingRequests,
   handleApproveRequest,
   handleRejectRequest,
@@ -238,6 +239,7 @@ router.post("/locations/:locId/opening-count", requirePermission("inventory:mana
 // ─── Catalog requests ──────────────────────────────────────────
 
 router.post("/catalog-requests", requirePermission("inventory:count"), handleRequestNewItem);
+router.get("/catalog-requests/mine", requirePermission("inventory:count"), handleListMyRequests);
 router.get("/catalog-requests/pending", requirePermission("inventory:hq"), handleListPendingRequests);
 router.post("/catalog-requests/:id/approve", requirePermission("inventory:hq"), handleApproveRequest);
 router.post("/catalog-requests/:id/reject", requirePermission("inventory:hq"), handleRejectRequest);

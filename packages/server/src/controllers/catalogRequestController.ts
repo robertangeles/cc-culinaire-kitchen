@@ -11,6 +11,7 @@ import pino from "pino";
 import { getUserLocationContext, assertLocationAccess } from "../services/locationContextService.js";
 import {
   requestNewItem,
+  listMyRequests,
   listPendingRequests,
   approveRequest,
   rejectRequest,
@@ -27,6 +28,12 @@ const RequestItemSchema = z.object({
   category: z.string().max(50).optional(),
   baseUnit: z.string().max(20).optional(),
   countedQty: z.number().finite().min(0).optional(),
+});
+
+/** A page of `GET /catalog-requests/mine`. */
+const MineQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+  offset: z.coerce.number().int().min(0).default(0),
 });
 
 /** Resolve the user's org ID from their location context. */
@@ -72,6 +79,31 @@ export async function handleRequestNewItem(
       "Catalog item request submitted",
     );
     res.status(replay ? 200 : 201).json(request);
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ─── The caller's own requests ──────────────────────────────────
+
+/** GET /catalog-requests/mine?limit=&offset=: `{ data, total }`, newest first. */
+export async function handleListMyRequests(
+  req: Request, res: Response, next: NextFunction,
+): Promise<void> {
+  try {
+    const parsed = MineQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      res.status(400).json({
+        error: "limit must be 1 to 100 and offset 0 or more",
+        code: "VALIDATION",
+        details: parsed.error.flatten(),
+      });
+      return;
+    }
+    const orgId = await resolveOrgId(req, res);
+    if (orgId === null) return;
+
+    res.json(await listMyRequests(orgId, req.user!.sub, parsed.data));
   } catch (err) {
     next(err);
   }

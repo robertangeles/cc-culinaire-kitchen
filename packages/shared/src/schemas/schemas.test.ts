@@ -5,6 +5,7 @@ import { AuthUserSchema, LocationContextSchema, LoginReplySchema, RefreshReplySc
 import { ActiveSessionSchema, AreaLinesSchema, CountSheetsSchema, SubmitConflictBodySchema } from "./stockTake.js";
 import { WasteEntrySchema, WasteListSchema, WasteSuggestionsSchema } from "./waste.js";
 import { CatalogueSchema } from "./catalogue.js";
+import { CatalogRequestListSchema } from "./catalogRequest.js";
 import { PrepMenuSchema, PrepSelectionsSchema, PrepTodaySchema } from "./prep.js";
 import { ConsumptionEntrySchema, ConsumptionListSchema } from "./consumption.js";
 import { StockMovementListSchema, StorageAreaListSchema } from "./stockMovement.js";
@@ -269,5 +270,21 @@ describe("recipe schemas", () => {
   it("needs an object to accept from a refinement", () => {
     expect(RefineReplySchema.safeParse({ refinedData: data, changeSummary: "Dairy-free" }).success).toBe(true);
     expect(RefineReplySchema.safeParse({ refinedData: null, changeSummary: "" }).success).toBe(false);
+  });
+});
+
+describe("catalogue request list schema", () => {
+  const row = {
+    requestId: "r1", storeLocationId: "loc-1", itemName: "Sumac", itemType: "KITCHEN_INGREDIENT", category: null, baseUnit: null, countedQty: "2.500",
+    status: "REJECTED", reviewNotes: "We stock it", createdIngredientId: null, createdDttm: "2026-11-20T00:00:00.000Z", updatedDttm: "2026-11-21T00:00:00.000Z",
+  };
+
+  it("reads a row, with the counted quantity as a number and HQ's notes", () => {
+    expect(CatalogRequestListSchema.parse({ data: [row], total: 1 }).data[0]).toMatchObject({ countedQty: 2.5, status: "REJECTED", reviewNotes: "We stock it" });
+  });
+
+  it("keeps a status it does not know, and one bad row does not hide the others", () => {
+    const list = CatalogRequestListSchema.parse({ data: [{ ...row, status: "MERGED" }, { nonsense: true }, { ...row, requestId: "r2", countedQty: null }], total: 3 });
+    expect(list.data.map((r) => [r.requestId, r.status, r.countedQty])).toEqual([["r1", "MERGED", 2.5], ["r2", "REJECTED", null]]);
   });
 });

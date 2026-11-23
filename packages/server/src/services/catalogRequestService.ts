@@ -6,7 +6,7 @@
  * for HQ review. On approval, the item joins the master catalogue.
  */
 
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, count } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { AppError } from "../utils/appError.js";
 import {
@@ -56,6 +56,42 @@ export async function requestNewItem(
     throw new AppError(409, "CONFLICT", "That id is already used by another request");
   }
   return { request: stored, replay: true };
+}
+
+/** The caller's own requests in this organisation, any status, newest first, with HQ's outcome and notes. */
+export async function listMyRequests(
+  organisationId: number,
+  userId: number,
+  page: { limit: number; offset: number },
+) {
+  const mine = and(
+    eq(pendingCatalogRequest.organisationId, organisationId),
+    eq(pendingCatalogRequest.requestedByUserId, userId),
+  );
+  const [data, [{ total }]] = await Promise.all([
+    db
+      .select({
+        requestId: pendingCatalogRequest.requestId,
+        storeLocationId: pendingCatalogRequest.storeLocationId,
+        itemName: pendingCatalogRequest.itemName,
+        itemType: pendingCatalogRequest.itemType,
+        category: pendingCatalogRequest.category,
+        baseUnit: pendingCatalogRequest.baseUnit,
+        countedQty: pendingCatalogRequest.countedQty,
+        status: pendingCatalogRequest.status,
+        reviewNotes: pendingCatalogRequest.reviewNotes,
+        createdIngredientId: pendingCatalogRequest.createdIngredientId,
+        createdDttm: pendingCatalogRequest.createdDttm,
+        updatedDttm: pendingCatalogRequest.updatedDttm,
+      })
+      .from(pendingCatalogRequest)
+      .where(mine)
+      .orderBy(desc(pendingCatalogRequest.createdDttm), desc(pendingCatalogRequest.requestId))
+      .limit(page.limit)
+      .offset(page.offset),
+    db.select({ total: count() }).from(pendingCatalogRequest).where(mine),
+  ]);
+  return { data, total };
 }
 
 /** List pending requests for HQ review */

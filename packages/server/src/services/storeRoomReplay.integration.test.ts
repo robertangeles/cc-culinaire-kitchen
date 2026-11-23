@@ -15,7 +15,8 @@ import {
 } from "../db/schema.js";
 import * as transferController from "../controllers/transferController.js";
 import { handleRecordSales, handleRestockFoh, handleLogFohWaste, handleCountFoh } from "../controllers/fohController.js";
-import { handleRequestNewItem } from "../controllers/catalogRequestController.js";
+import { handleListMyRequests, handleRequestNewItem } from "../controllers/catalogRequestController.js";
+import { CatalogRequestListSchema } from "@culinaire/shared/schemas/catalogRequest";
 import { asUser, callHandler, createLineLoopFx, removeLineLoopFx, type LineLoopFx } from "./lineLoopFixture.js";
 
 /**
@@ -370,5 +371,39 @@ describe.skipIf(!RUN)("store room and bar retries (real DB)", () => {
     expect(await send(fx.cook, { itemName: "Sumac", storeLocationId: other.locA })).toMatchObject({ status: 403, body: { code: "LOCATION_NOT_ALLOWED" } });
     expect(await send(fx.cook, { requestId, itemName: "Sumac", storeLocationId: fx.locA })).toMatchObject({ status: 409, body: { code: "CONFLICT" } });
     expect(await send(fx.cook, { itemName: "x".repeat(201), storeLocationId: fx.locA })).toMatchObject({ status: 400, body: { code: "VALIDATION" } });
+  });
+
+  it("my catalogue requests: only the caller's own in this organisation, any status, newest first, paged", async () => {
+    await db.delete(pendingCatalogRequest).where(eq(pendingCatalogRequest.organisationId, fx.orgId));
+    const at = (day: number) => new Date(Date.UTC(2026, 10, day));
+    const row = (f: LineLoopFx, who: number, itemName: string, day: number, review: object = {}) =>
+      ({ organisationId: f.orgId, storeLocationId: f.locA, requestedByUserId: who, itemName, createdDttm: at(day), ...review });
+    await db.insert(pendingCatalogRequest).values([
+      row(fx, fx.chef, "Sumac", 1, { status: "REJECTED", reviewNotes: "We stock it as Za'atar mix", reviewedByUserId: fx.boss }),
+      row(fx, fx.chef, "Yuzu", 3),
+      row(fx, fx.chef, "Shiso", 2, { status: "APPROVED", reviewedByUserId: fx.boss }),
+      row(fx, fx.cook, "Cook's own", 4),
+      row(other, other.chef, "Other org", 5),
+    ]);
+    const mine = (query: object) => callHandler(handleListMyRequests, asUser(fx.chef, ["inventory:count"]), { query });
+
+    const all = await mine({});
+    expect(all.status).toBe(200);
+    const list = CatalogRequestListSchema.parse(JSON.parse(JSON.stringify(all.body))); // as the phone receives it
+    expect(list.total).toBe(3);
+    expect(list.data.map((r) => r.itemName)).toEqual(["Yuzu", "Shiso", "Sumac"]);
+    expect(list.data[2]).toMatchObject({ status: "REJECTED", reviewNotes: "We stock it as Za'atar mix" });
+    expect(list.data[1]).toMatchObject({ status: "APPROVED", reviewNotes: null });
+    expect(all.body.data[0]).not.toHaveProperty("reviewedByUserId");
+
+    expect((await mine({ limit: "2" })).body).toMatchObject({ total: 3, data: [{ itemName: "Yuzu" }, { itemName: "Shiso" }] });
+    expect((await mine({ limit: "2", offset: "2" })).body).toMatchObject({ total: 3, data: [{ itemName: "Sumac" }] });
+    expect((await callHandler(handleListMyRequests, asUser(fx.roamer, ["inventory:count"]), { query: {} })).body).toEqual({ data: [], total: 0 });
+  });
+
+  it("my catalogue requests: a bad page is 400 VALIDATION", async () => {
+    for (const query of [{ limit: "0" }, { limit: "101" }, { limit: "many" }, { offset: "-1" }]) {
+      expect(await callHandler(handleListMyRequests, asUser(fx.chef, ["inventory:count"]), { query })).toMatchObject({ status: 400, body: { code: "VALIDATION" } });
+    }
   });
 });
