@@ -95,7 +95,7 @@ export default function NotificationSettings() {
         {prefs.types.map((t, index) => (
           <View key={t.type} style={[{ flexDirection: "row", alignItems: "center", gap: space.md, minHeight: size.tap, paddingHorizontal: space.lg, paddingVertical: space.sm }, rowDivider(index, c.border)]}>
             <Text style={{ flex: 1 }}>{t.label}</Text>
-            <Switch accessibilityLabel={t.label} value={t.enabled} disabled={saving} onValueChange={(on) => toggle(t.type, on)} trackColor={{ true: c.buttonFrom, false: c.border }} />
+            <Switch accessibilityLabel={t.label} value={t.enabled} disabled={saving} onValueChange={(on) => toggle(t.type, on)} trackColor={{ true: c.accentText, false: c.border }} thumbColor={t.enabled ? c.buttonTo : c.surface} ios_backgroundColor={c.border} />
           </View>
         ))}
       </Surface>
