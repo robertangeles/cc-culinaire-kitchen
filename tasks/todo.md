@@ -444,10 +444,10 @@ Three items the review deferred rather than built:
 
 - [x] ~~**P2 — Write the mobile compliance contract into `web-needs.md`.**~~ DONE 2026-11-15: entry "Mobile compliance contract" in `../cc-culinaire-shared-context/web-needs.md`, read from the code. Follow-ups it found, all open:
   - **`GET /api/compliance/documents/mine` returns every column** (`listDocumentsForUser` does `select()`), including manager-only `notes`, `verifiedBy` and `storagePublicId`. Return an explicit field list. P1: data exposure to the document's own subject.
-  - **`GET /api/roster/shifts/mine` returns Draft shifts** (`listMyShifts` filters only `Cancelled`), so staff see unpublished assignments. Filter to Published, or confirm that is intended.
+  - ~~**`GET /api/roster/shifts/mine` returns Draft shifts**~~ DECIDED 2026-11-23: intended on the web (a cook can decline before publish); a client that wants them left out sends `excludeDrafts=true`.
   - **`POST /api/compliance/documents/upload` has no handler for an oversize file or a wrong field name**: the multer error falls to the generic handler as `500`, not `413`/`400` (`routes/users.ts` shows the `MulterError` pattern to copy). It also has no per-route rate limit although each call hits Cloudinary and runs OCR.
-  - **No machine-readable `code`** on compliance or roster errors; mobile can only branch on status.
-  - ~~**Push is not built**~~: the server side shipped 2026-11-23 (see "Push (Wave 4 server) follow-ups" above). Still open: no mobile-friendly roster payload (venue name, timezone, `isPublicHoliday`, date range) and no way for the client to discover which flags are on.
+  - **No machine-readable `code`** on compliance errors; mobile can only branch on status. (Roster assignment and swap-claim 409s carry one since 2026-11-23, see `CHANGELOG.md`.)
+  - ~~**Push is not built**~~: the server side shipped 2026-11-23 (see "Push (Wave 4 server) follow-ups" above). Still open: no way for the client to discover which flags are on. (The roster payload gap closed 2026-11-23: `/shifts/mine` carries venue name, timezone and `isPublicHoliday` and takes a date range.)
   - `api-contracts.md` lacks `/api/inventory/notifications` and `register-device`, and its 401 body text is stale.
 
 ---
