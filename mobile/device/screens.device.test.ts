@@ -4,7 +4,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
   adb, back, clearApp, dismissSavePassword, openTab, dump, fieldText, find, isSavePasswordSheet, findAll, forceStop, has, hideKeyboard, openApp, setAirplane, setAnimations, setDarkMode, setFontScale,
-  setRotation, swipe, tap, tapAt, tapLabel, typeInto, waitFor, waitGone,
+  setRotation, swipe, tap as tapNow, tapAt, typeInto, waitFor, waitGone,
 } from "./adb";
 import { credentials, freshCode, manager } from "./fixtures";
 
@@ -51,6 +51,48 @@ function setDisplay(form: string) {
   adb(["shell", "wm", "density", d ? String(d.density) : "reset"]);
 }
 
+/** The display as the app has it: the override when there is one, else the device's own size. */
+const screen = () => /(\d+)x(\d+)/.exec(adb(["shell", "wm", "size"]).trim().split("\n").pop()!)!.slice(1).map(Number) as [number, number];
+/** Scroll the page by a third of the screen: down it (further on) or back up. */
+async function scroll(dir: "down" | "up") {
+  const [w, h] = screen();
+  const [from, to] = dir === "down" ? [0.7, 0.4] : [0.35, 0.65];
+  await swipe(Math.round(w / 2), Math.round(h * from), Math.round(w / 2), Math.round(h * to), 300);
+}
+
+type Node = Awaited<ReturnType<typeof dump>>[number];
+/**
+ * The node once it is well on screen, scrolling down the page for it and then back up: at iPad landscape height a form's lower half starts
+ * below the fold. One that stays at the bottom (the tab bar, a pinned button) is returned where it is.
+ */
+async function reach(pick: (nodes: Node[]) => Node | undefined): Promise<Node | undefined> {
+  const [, h] = screen();
+  let last: Node | undefined;
+  for (const dir of ["down", "down", "down", "down", "down", "down", "up", "up", "up", "up", "up", "up", "up", "up"] as const) {
+    const node = pick(await dump());
+    if (node && (node.y2 < h * 0.84 || (last && last.y1 === node.y1))) return node;
+    last = node;
+    await scroll(dir);
+  }
+  return pick(await dump());
+}
+const tapNode = (n: Node) => tapAt(Math.round((n.x1 + n.x2) / 2), Math.round((n.y1 + n.y2) / 2));
+
+/** Tap the thing with this text or label, waiting for it and then scrolling to it. */
+async function tap(m: string | RegExp, timeoutMs = 20_000) {
+  const is = (v: string) => v !== "" && (typeof m === "string" ? v === m : m.test(v));
+  if (await waitFor(m, 8_000).then(() => true, () => false)) return tapNow(m);
+  const node = await reach((nodes) => nodes.find((n) => is(n.text) || is(n.desc)));
+  return node ? tapNode(node) : tapNow(m, timeoutMs);
+}
+
+/** Tap a control by its accessibility label only, scrolling to it. */
+async function tapLabel(label: string) {
+  const node = await reach((nodes) => nodes.find((n) => n.desc === label));
+  if (!node) throw new Error(`no control labelled ${label}`);
+  await tapNode(node);
+}
+
 /** One statement on the walk's own throwaway database, for what no route makes (a published legal page, a notification). Never any other database. */
 function sql(statement: string): string {
   const url = new URL(process.env.DATABASE_URL ?? "");
@@ -84,7 +126,7 @@ async function launch() {
 /** After `pm clear` the dev client shows its floating Tools button again: switch it off so it is not in the pictures. */
 async function hideDevTools() {
   if (!(await has("Tools"))) return;
-  const [w, h] = /(\d+)x(\d+)/.exec(adb(["shell", "wm", "size"]).trim().split("\n").pop()!)!.slice(1).map(Number);
+  const [w, h] = screen();
   const dpi = Number(/(\d+)\s*$/.exec(adb(["shell", "wm", "density"]).trim())![1]);
   await tap("Tools");
   try {
@@ -94,7 +136,8 @@ async function hideDevTools() {
       const row = await waitFor("Tools button", 10_000).catch(() => null);
       if (!row) break;
       if (row.y2 < h * 0.8) {
-        await tapAt(w - Math.round((67 * dpi) / 160), Math.round((row.y1 + row.y2) / 2)); // the switch's centre is 67 dp in from the right edge
+        // The switch's centre is 67 dp in from the menu's right edge; the menu is at most 640 dp wide, in the middle.
+        await tapAt(Math.min(w, Math.round(w / 2 + (320 * dpi) / 160)) - Math.round((67 * dpi) / 160), Math.round((row.y1 + row.y2) / 2));
         break;
       }
       await swipe(Math.round(w / 2), Math.round(h * 0.7), Math.round(w / 2), Math.round(h * 0.2), 400);
@@ -140,12 +183,11 @@ async function submitSignIn() {
 async function type(label: string, text: string) {
   for (let i = 0; i < 6; i++) {
     await dismissSavePassword();
+    await hideKeyboard(); // a field can be behind the keyboard, where a tap would type a letter
     const field = await find(label, (n) => n.find((x) => x.cls.includes("EditText")));
     if (!field) {
       // Scrolled past it (a long form after its button was pressed): scroll back up.
-      await hideKeyboard();
-      const [w, h] = /(\d+)x(\d+)/.exec(adb(["shell", "wm", "size"]).trim().split("\n").pop()!)!.slice(1).map(Number);
-      await swipe(Math.round(w / 2), Math.round(h * 0.3), Math.round(w / 2), Math.round(h * 0.8), 300);
+      await scroll("up");
       continue;
     }
     await tapAt(Math.round((field.x1 + field.x2) / 2), Math.round((field.y1 + field.y2) / 2));
@@ -158,31 +200,21 @@ async function type(label: string, text: string) {
   throw new Error(`could not type into ${label}`);
 }
 
-/** Tap a button by its label, scrolling down to it: a long form's button starts below the screen, under a title with the same words. */
+/** Tap a button by its label, scrolling to it: a long form's button starts below the screen, under a title with the same words. */
 async function press(label: string) {
-  for (let i = 0; i < 6; i++) {
-    const button = (await dump()).find((n) => n.desc === label && n.clickable);
-    if (button) return tapAt(Math.round((button.x1 + button.x2) / 2), Math.round((button.y1 + button.y2) / 2));
-    await hideKeyboard();
-    const [w, h] = /(\d+)x(\d+)/.exec(adb(["shell", "wm", "size"]).trim().split("\n").pop()!)!.slice(1).map(Number);
-    await swipe(Math.round(w / 2), Math.round(h * 0.7), Math.round(w / 2), Math.round(h * 0.3), 300);
-  }
-  throw new Error(`no button labelled ${label}`);
+  await hideKeyboard();
+  const button = await reach((nodes) => nodes.find((n) => n.desc === label && n.clickable));
+  if (!button) throw new Error(`no button labelled ${label}`);
+  await tapNode(button);
 }
 
 /** Bring a control into view on a long page, then leave it where it is. */
 async function scrollTo(label: string | RegExp) {
-  for (let i = 0; i < 10; i++) {
-    const [w, h] = /(\d+)x(\d+)/.exec(adb(["shell", "wm", "size"]).trim().split("\n").pop()!)!.slice(1).map(Number);
-    const node = await find(label);
-    if (node && node.y2 < h * 0.85) return;
-    await swipe(Math.round(w / 2), Math.round(h * 0.7), Math.round(w / 2), Math.round(h * 0.35), 300);
-  }
-  if (!(await has(label))) throw new Error(`could not scroll to ${String(label)}`);
+  const is = (v: string) => v !== "" && (typeof label === "string" ? v === label : label.test(v));
+  if (!(await reach((nodes) => nodes.find((n) => is(n.text) || is(n.desc))))) throw new Error(`could not scroll to ${String(label)}`);
 }
 const scrollToEnd = async () => {
-  const [w, h] = /(\d+)x(\d+)/.exec(adb(["shell", "wm", "size"]).trim().split("\n").pop()!)!.slice(1).map(Number);
-  for (let i = 0; i < 6; i++) await swipe(Math.round(w / 2), Math.round(h * 0.75), Math.round(w / 2), Math.round(h * 0.2), 200);
+  for (let i = 0; i < 12; i++) await scroll("down");
 };
 
 /** Digits on the app's own keypad. */
@@ -202,7 +234,7 @@ const dayFromNow = (days: number) => new Date(Date.now() + days * 86_400_000).to
 /** Open one of Account's rows. */
 async function accountRow(label: string) {
   await tab("Account");
-  await waitFor("Sign out", 30_000);
+  await waitFor("My details", 30_000);
   await tap(label);
 }
 
@@ -473,7 +505,7 @@ describe.skipIf(!process.env.SCREENS_OUT)(`screens on ${FORM}`, { timeout: 600_0
     await tap("Plan today's prep");
     await waitFor(`More ${NAMES.dish}`, 30_000);
     await tapLabel(`More ${NAMES.dish}`);
-    for (let i = 0; i < 11; i++) await tapLabel(`More ${NAMES.dish}`, 2000).catch(() => {});
+    for (let i = 0; i < 11; i++) await tapLabel(`More ${NAMES.dish}`);
     await type("Expected covers (optional)", "80");
     await hideKeyboard();
     await shot("31-prep-plan");
@@ -749,9 +781,7 @@ describe.skipIf(!process.env.SCREENS_OUT)(`screens on ${FORM}`, { timeout: 600_0
     await shot("88e-recipe-proposal");
     await press("Accept changes");
     await sleep(4000);
-    await tab("Recipes");
-    await back().catch(() => {});
-    if (!(await has("Create a recipe"))) await tab("Recipes");
+    await tap("Back to My Recipes");
     await waitFor("Create a recipe", 30_000);
     await sleep(1500);
     await shot("89-recipes-list");
@@ -863,7 +893,7 @@ describe.skipIf(!process.env.SCREENS_OUT)(`screens on ${FORM}`, { timeout: 600_0
       await shot("61-more");
     }
     await tab("Account");
-    await waitFor("Sign out", 30_000);
+    await waitFor("My details", 30_000);
     await shot("60-account");
     await tap("Change location");
     await waitFor("Where are you working?", 20_000);
