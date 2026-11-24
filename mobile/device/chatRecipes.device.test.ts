@@ -10,7 +10,7 @@ import { credentials, freshCode, manager } from "./fixtures";
  * Needs: the development build installed, Metro on METRO_URL, the server with the fake model on E2E_API_URL, `adb reverse` for
  * both, and the E2E user.
  */
-const METRO = process.env.METRO_URL ?? "http://localhost:8088";
+const METRO = process.env.METRO_URL ?? "http://127.0.0.1:8088";
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 const m = manager();
 /** What the E2E user already had, so the walk deletes only what it made. */

@@ -11,7 +11,7 @@ import { newUuid } from "../src/outbox/uuid";
  * Run it through the lease (`check:device -- device/prep`). Needs the development build, Metro on METRO_URL and the server on
  * E2E_API_URL, with the phone able to reach both (adb reverse): see device/README.md.
  */
-const METRO = process.env.METRO_URL ?? "http://localhost:8088";
+const METRO = process.env.METRO_URL ?? "http://127.0.0.1:8088";
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 let m: ReturnType<typeof manager>;

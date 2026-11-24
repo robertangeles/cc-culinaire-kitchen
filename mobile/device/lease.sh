@@ -2,8 +2,9 @@
 # Device lease: runs "$@" while holding an exclusive lock, so only one worker at a time drives the phone.
 # Usage: bash device/lease.sh <command...>   (use `pnpm --filter @culinaire/mobile run check:device`)
 #
-# The lease covers the adb device (the real phone, serial ZY32MB62DD, and the emulator) AND the fixed ports the
-# scripts use (Metro 8088, API 3009, local DB 55432). Everything else runs in a worktree and needs no lease.
+# The lease covers the adb device (the real phone, serial ZY32MB62DD) AND the fixed ports the scripts use (Metro 8088,
+# API 3009, local DB 55432). Everything else runs in a worktree and needs no lease. The tablet emulator has its own lease,
+# adb server, serial and ports: `eval "$(bash device/emulator.sh env)"` points this script and adb at it.
 # Linux only: it needs util-linux `flock`. The lock is per machine, at a fixed path.
 #
 # DEVICE_LEASE_FILE   lock path (default ${XDG_RUNTIME_DIR:-/tmp}/culinaire-device.lease); tests override it

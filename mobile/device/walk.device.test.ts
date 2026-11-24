@@ -13,7 +13,7 @@ import { credentials, freshCode, seedAreaCount, type AreaFixture } from "./fixtu
  */
 // Metro is reached through `adb reverse` (a tunnel over the debug connection), so airplane mode cannot cut the development
 // build off from its JavaScript when the app is killed and reopened offline. The app's own API calls still go over the network.
-const METRO = process.env.METRO_URL ?? "http://localhost:8088";
+const METRO = process.env.METRO_URL ?? "http://127.0.0.1:8088";
 const API = "/api/inventory";
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -29,6 +29,13 @@ async function launch() {
   if (await has("Go home")) await back();
 }
 
+/** "Sign in" is both the tab and the button; the button is the lower one (on a tablet both are on screen at once). */
+async function tapSignInButton() {
+  const labelled = await findAll("Sign in");
+  const button = labelled[labelled.length - 1];
+  await tapAt(Math.round((button.x1 + button.x2) / 2), Math.round((button.y1 + button.y2) / 2));
+}
+
 async function signIn(password = credentials.password) {
   await waitFor("Sign in", 60_000);
   await clearField("Email");
@@ -36,10 +43,7 @@ async function signIn(password = credentials.password) {
   await clearField("Password");
   await typeInto("Password", password);
   await hideKeyboard();
-  // "Sign in" is both the tab and the button; the button is the lower one.
-  const labelled = await findAll("Sign in");
-  const button = labelled[labelled.length - 1];
-  await tapAt(Math.round((button.x1 + button.x2) / 2), Math.round((button.y1 + button.y2) / 2));
+  await tapSignInButton();
   // A real phone offers to save the password in Google Password Manager. Dismiss it with Back: that neither saves it nor changes a setting.
   await sleep(2500);
   if (await has("Save password to Google Password Manager?")) await back();
@@ -104,7 +108,7 @@ describe("count walk on a device", () => {
 
   beforeAll(async () => {
     adb(["devices"]);
-    adb(["reverse", "tcp:8088", "tcp:8088"]);
+    adb(["reverse", `tcp:${new URL(METRO).port}`, `tcp:${new URL(METRO).port}`]);
     await setAirplane(false);
     setAnimations(true);
     setFontScale(1.0);
@@ -140,7 +144,7 @@ describe("count walk on a device", () => {
     await clearField("Password");
     await typeInto("Password", credentials.password);
     await hideKeyboard();
-    await tap("Sign in");
+    await tapSignInButton();
     await enterCode("000000");
     await waitFor("That code didn't work. Try again.", 30_000);
     await screenshot("w02-wrong-code");
