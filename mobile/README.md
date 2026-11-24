@@ -314,7 +314,7 @@ It is read when the tab opens, when the app wakes, when a push arrives and every
 
 **Push** (`push.ts`, native side in `nativePush.ts`): off until the person taps **Turn on** (the card at the top of the inbox, or Notification settings); the app never asks at launch.
 Turning it on asks the system, gets the Expo push token and registers it with `POST /api/notifications/register-device`, sending the refresh token so the server ties it to this sign-in.
-It is registered again at every sign-in and app start (tokens change), removed with `unregister-device` when turned off, and removed before sign-out (3 s at most; the server also drops it when the sign-in ends).
+It is registered again at every sign-in, app start and return to the foreground (tokens change, and the person may have changed the permission in the phone's settings), removed with `unregister-device` when turned off, and removed before sign-out (3 s at most; the server also drops it when the sign-in ends).
 A refused permission shows **Open settings**. A tapped push opens the screen it is about (and marks it read) or the inbox; one that started the app waits for the session. A push that arrives with the app open shows as a banner and refreshes the inbox.
 **Notification settings** lists the server's kinds with a switch each (`PUT /api/notifications/push-preferences`, `disabledTypes`) and sets quiet hours (24-hour times in the phone's own time zone; a push inside the window is skipped, not saved for later). Neither touches the inbox.
 
