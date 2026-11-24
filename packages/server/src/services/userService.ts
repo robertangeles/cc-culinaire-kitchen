@@ -9,6 +9,7 @@ import { and, eq, ilike, ne, or, desc, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { decryptUserPii } from "./piiService.js";
 import { revokeAllRefreshTokens, refreshTokenFamily } from "./authService.js";
+import { removeSignedOutDeviceTokens } from "./pushDeviceService.js";
 import { encryptPii, hashForLookup } from "../utils/crypto.js";
 import {
   user,
@@ -159,6 +160,7 @@ export async function changePassword(
       .where(eq(user.userId, userId));
     await revokeAllRefreshTokens(userId, keepFamily, tx);
   });
+  await removeSignedOutDeviceTokens(userId);
 }
 
 // ---------------------------------------------------------------------------

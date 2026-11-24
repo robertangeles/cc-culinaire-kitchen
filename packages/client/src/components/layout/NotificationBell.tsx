@@ -18,6 +18,12 @@ const TYPE_CONFIG: Record<string, { icon: typeof Bell; color: string; label: str
   DELIVERY_OVERDUE:  { icon: Clock,          color: "text-red-400",     label: "Delivery overdue" },
   BRAIN_DIGEST:      { icon: Brain,          color: "text-gold",   label: "Brain digest" },
   BRAIN_NUDGE:       { icon: Sparkles,       color: "text-gold",   label: "Nudge" },
+  SHIFT_ASSIGNED:    { icon: Clock,          color: "text-amber-400",   label: "New shift" },
+  SHIFT_CHANGED:     { icon: Clock,          color: "text-orange-400",  label: "Shift changed" },
+  SHIFT_CANCELLED:   { icon: X,              color: "text-red-400",     label: "Shift cancelled" },
+  ROSTER_PUBLISHED:  { icon: Check,          color: "text-emerald-400", label: "Roster published" },
+  DOCUMENT_VERIFIED: { icon: Check,          color: "text-emerald-400", label: "Document verified" },
+  DOCUMENT_REJECTED: { icon: X,              color: "text-red-400",     label: "Document rejected" },
 };
 
 function timeAgo(dateStr: string): string {

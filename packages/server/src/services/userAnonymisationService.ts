@@ -44,6 +44,8 @@ import {
   notification,
   oauthAccount,
   passwordReset,
+  pushOptOuts,
+  pushQuietHours,
   recipe,
   recipeReview,
   refreshToken,
@@ -132,6 +134,8 @@ export const HANDLED_USER_REFERENCES: readonly string[] = [
   "fact_brain_corpus.user_id",
   "fact_brain_recall.user_id",
   "notification.recipient_user_id",
+  "push_opt_outs.user_id",
+  "push_quiet_hours.user_id",
   "staff_availability.user_id",
   "user_location_preference.user_id",
   "user_store_location.user_id",
@@ -295,6 +299,8 @@ export async function anonymiseUser(userId: number, actorUserId: number | null =
 
     // Personal content and preferences.
     await tx.delete(notification).where(eq(notification.recipientUserId, userId));
+    await tx.delete(pushOptOuts).where(eq(pushOptOuts.userId, userId));
+    await tx.delete(pushQuietHours).where(eq(pushQuietHours.userId, userId));
     await tx.delete(kitchenProfile).where(eq(kitchenProfile.userId, userId));
     await tx.delete(brainMemory).where(eq(brainMemory.userId, userId));
     await tx.delete(factBrainCorpus).where(eq(factBrainCorpus.userId, userId));

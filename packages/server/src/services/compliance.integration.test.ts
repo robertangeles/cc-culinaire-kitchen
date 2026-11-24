@@ -114,6 +114,8 @@ describe.skipIf(!RUN)("compliance vault (real DB)", () => {
     afterAll(async () => {
       await db.delete(complianceDocument).where(eq(complianceDocument.organisationId, org1));
       await db.delete(auditLog).where(eq(auditLog.organisationId, org1));
+      // verifyDocument / rejectDocument tell the document's owner.
+      await db.delete(notification).where(eq(notification.organisationId, org1));
       await db.delete(userOrganisation).where(eq(userOrganisation.organisationId, org1));
       await db.delete(organisation).where(inArray(organisation.organisationId, [org1, org2]));
       await db.delete(user).where(inArray(user.userId, [staffA, staffB]));
@@ -417,6 +419,7 @@ describe.skipIf(!RUN)("compliance vault (real DB)", () => {
     afterAll(async () => {
       await db.delete(complianceDocument).where(eq(complianceDocument.organisationId, org3));
       await db.delete(auditLog).where(eq(auditLog.organisationId, org3));
+      await db.delete(notification).where(eq(notification.organisationId, org3));
       await db.delete(organisationRequiredDocument).where(eq(organisationRequiredDocument.organisationId, org3));
       await db.delete(userOrganisation).where(eq(userOrganisation.organisationId, org3));
       await db.delete(organisation).where(eq(organisation.organisationId, org3));

@@ -16,6 +16,7 @@ import {
   userRole,
   userOrganisation,
 } from "../db/schema.js";
+import type { NotificationType } from "@culinaire/shared/schemas/push";
 import { sendDirectEmail } from "./emailService.js";
 import type { DbOrTx } from "./auditService.js";
 import pino from "pino";
@@ -23,21 +24,9 @@ import pino from "pino";
 const logger = pino({ name: "notificationService" });
 
 // ── Notification types ───────────────────────────────────────────────
-export type NotificationType =
-  | "APPROVAL_REQUIRED"
-  | "PO_APPROVED"
-  | "PO_REJECTED"
-  | "DISCREPANCY_ALERT"
-  | "DELIVERY_OVERDUE"
-  | "BRAIN_CAPTURE_ERROR"
-  | "BRAIN_DIGEST"
-  | "BRAIN_NUDGE"
-  | "DOCUMENT_EXPIRY_ALERT"
-  // "PUBLIC_HOLIDAY_..." would exceed `notification.type`'s varchar(30).
-  | "HOLIDAY_CONSENT_REQUESTED"
-  | "HOLIDAY_CONSENT_DECLINED"
-  | "SHIFT_SWAP_CLAIMED"
-  | "COMPLIANCE_DOCUMENT_NUDGE";
+// The list lives in the shared package, which the phone reads too. `notification.type` is varchar(30): a longer name
+// (a "PUBLIC_HOLIDAY_..." one, say) would be refused by the database.
+export type { NotificationType };
 
 export type NotificationChannel = "IN_APP" | "EMAIL";
 
