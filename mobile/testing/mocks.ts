@@ -1,7 +1,7 @@
 import { vi } from "vitest";
 
 /** Shared fakes for the native-only modules, so screen tests can drive and inspect them. */
-export const routerMock = { push: vi.fn(), replace: vi.fn(), back: vi.fn() };
+export const routerMock = { push: vi.fn(), replace: vi.fn(), back: vi.fn(), dismissTo: vi.fn() };
 export const searchParams: { current: Record<string, string> } = { current: {} };
 /** The mounted screens' focus effects. `returnToScreen()` runs them again, as coming back to a screen left mounted does. */
 export const focusEffects = new Set<() => void>();
