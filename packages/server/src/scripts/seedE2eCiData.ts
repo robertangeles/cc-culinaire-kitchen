@@ -7,8 +7,8 @@
  * wizard would otherwise cover every page), one organisation and one HQ location
  * the user is assigned to, and the roster and workforce feature flags switched
  * on (db:seed ships them off, so their routes would 404). Specs create every other row (suppliers, ingredients,
- * pars, orders) through the API themselves. The phone E2E signs in as its own twin of that user (same roles,
- * organisation and location): CI runs it straight after Playwright, and the global rate limit buckets per user.
+ * pars, orders) through the API themselves. The phone E2E signs in as its own twin of that user, with its own
+ * organisation and location: CI runs it straight after Playwright, and the global rate limit buckets per user.
  *
  * Refuses to run against anything but a localhost database, so it can never
  * touch the shared dev or the prod database. Run after `db:push` and `db:seed`:
@@ -29,7 +29,7 @@ applyEnvPrefix();
 
 import { eq } from "drizzle-orm";
 import { db } from "../db/index.js";
-import { kitchenProfile, role, siteSetting, storeLocation, user, userOrganisation, userRole } from "../db/schema.js";
+import { kitchenProfile, role, siteSetting, storeLocation, user, userRole } from "../db/schema.js";
 import { registerUser } from "../services/authService.js";
 import { createOrganisation } from "../services/organisationService.js";
 import { assignStaffToLocation, createStoreLocation } from "../services/storeLocationService.js";
@@ -87,16 +87,16 @@ export async function seedE2eCiData(email: string, password: string, totpSecret:
 }
 
 /**
- * The phone E2E's user: the main E2E user's twin (MFA, Administrator + Operations Admin, admin of the same organisation,
- * assigned to the same location).
+ * The phone E2E's user: the main E2E user's twin (MFA, Administrator + Operations Admin) in an organisation and location
+ * of its own. Not the main organisation: a second approver there would stop the main user approving their own purchase
+ * orders (`hasOtherApprover`), which the purchasing spec relies on.
  */
-export async function seedE2ePhoneUser(email: string, password: string, totpSecret: string, organisationId: number, storeLocationId: string) {
+export async function seedE2ePhoneUser(email: string, password: string, totpSecret: string) {
   const userId = await seedMfaAdministrator("E2E Phone User", email, password, totpSecret);
-  const [opsAdmin] = await db.select({ roleId: role.roleId }).from(role).where(eq(role.roleName, "Operations Admin"));
-  if (!opsAdmin) throw new Error("Operations Admin role not found. Run db:seed first.");
-  await db.insert(userRole).values({ userId, roleId: opsAdmin.roleId });
-  await db.insert(userOrganisation).values({ userId, organisationId, role: "admin" });
-  await assignStaffToLocation(storeLocationId, userId, userId);
+  const org = await createOrganisation(userId, { name: "E2E Phone Kitchen" });
+  const location = await createStoreLocation(org.organisationId, { locationName: "E2E Phone HQ", classification: "hq" }, userId);
+  await assignStaffToLocation(location.storeLocationId, userId, userId);
+  await db.update(storeLocation).set({ inventoryActive: true }).where(eq(storeLocation.storeLocationId, location.storeLocationId));
   return userId;
 }
 
@@ -124,8 +124,6 @@ if (process.argv[1]?.endsWith("seedE2eCiData.ts")) {
       requireEnv("E2E_PHONE_USER_EMAIL"),
       requireEnv("E2E_PHONE_USER_PASSWORD"),
       requireEnv("E2E_PHONE_USER_TOTP_SECRET"),
-      seeded.organisationId,
-      seeded.storeLocationId,
     );
     console.log(`Seeded E2E data: user ${seeded.userId}, organisation ${seeded.organisationId}, location ${seeded.storeLocationId}`);
     process.exit(0);
