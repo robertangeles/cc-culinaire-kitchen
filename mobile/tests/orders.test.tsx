@@ -154,8 +154,11 @@ describe("one order", () => {
     api.submit.mockReturnValue(new Promise((r) => (finish = r)));
     render(<Order />, ordersFor(admin));
     const b = await find("Submit order");
-    fireEvent.click(b);
-    fireEvent.click(b);
+    // Both in one batch, so the second sees the screen as it was before the first.
+    act(() => {
+      b.click();
+      b.click();
+    });
     await act(async () => finish({ poId: "P1", status: "SENT" }));
     expect(api.submit).toHaveBeenCalledTimes(1);
   });
