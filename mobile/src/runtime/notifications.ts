@@ -51,7 +51,11 @@ export function startNotifications(): void {
   };
   session.subscribe(whenReady);
   whenReady();
-  AppState.addEventListener("change", (s) => s === "active" && currentUserId() !== null && void inbox.refresh());
+  AppState.addEventListener("change", (s) => {
+    if (s !== "active" || currentUserId() === null) return;
+    void push.sync();
+    void inbox.refresh();
+  });
   setInterval(() => AppState.currentState === "active" && currentUserId() !== null && void inbox.refresh(), POLL_MS);
   listenForPushes({
     onArrive: () => void inbox.refresh(),
