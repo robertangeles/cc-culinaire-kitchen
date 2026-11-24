@@ -46,9 +46,9 @@ describe("which tabs a person sees", () => {
     expect(visibleTabs(person({ roles: ["Administrator"] }))).toEqual(moduleTabs);
   });
 
-  it("shows Ask and Recipes to everyone signed in, as the server asks for no permission on chat or recipes", () => {
-    expect(visibleTabs(person()).map((t) => t.route)).toEqual(["(chat)", "(recipes)"]);
-    expect(visibleTabs(person({ permissions: ["waste:log"] })).map((t) => t.route)).toEqual(["(waste)", "(chat)", "(recipes)"]);
+  it("shows Ask, Recipes and the Inbox to everyone signed in, as the server asks for no permission on chat, recipes or notifications", () => {
+    expect(visibleTabs(person()).map((t) => t.route)).toEqual(["(chat)", "(recipes)", "(inbox)"]);
+    expect(visibleTabs(person({ permissions: ["waste:log"] })).map((t) => t.route)).toEqual(["(waste)", "(chat)", "(recipes)", "(inbox)"]);
   });
 
   it("opens a tab on any one of its permissions", () => {
@@ -65,15 +65,15 @@ describe("which tabs a person sees", () => {
     expect(new Set(moduleTabs.map((t) => t.route)).size).toBe(moduleTabs.length);
   });
 
-  it("puts the tabs in the order a line cook uses them (prep, waste, usage, count, move, receive), then Ask and Recipes", () => {
-    expect(moduleTabs.map((t) => t.title)).toEqual(["Prep", "Waste", "Usage", "Count", "Move", "Receive", "Ask", "Recipes"]);
+  it("puts the tabs in the order a line cook uses them (prep, waste, usage, count, move, receive), then Ask, Recipes and the Inbox", () => {
+    expect(moduleTabs.map((t) => t.title)).toEqual(["Prep", "Waste", "Usage", "Count", "Move", "Receive", "Ask", "Recipes", "Inbox"]);
   });
 });
 
 describe("the tab bar and More", () => {
   it("keeps every module and Account on the bar when they fit in five buttons", () => {
-    const cook = person({ permissions: ["waste:log", "purchasing:receive"] });
-    expect(tabBar(cook).bar.map((t) => t.title)).toEqual(["Waste", "Receive", "Ask", "Recipes"]);
+    const cook = person({ permissions: ["waste:log"] });
+    expect(tabBar(cook).bar.map((t) => t.title)).toEqual(["Waste", "Ask", "Recipes", "Inbox"]);
     expect(tabBar(cook).more).toEqual([]);
     expect(tabBar(person())).toEqual({ bar: visibleTabs(person()), more: [] });
   });
@@ -81,7 +81,7 @@ describe("the tab bar and More", () => {
   it("shows four modules and More when a person's modules and Account would make more than five buttons", () => {
     const { bar, more } = tabBar(person({ roles: ["Administrator"] }));
     expect(bar.map((t) => t.title)).toEqual(["Prep", "Waste", "Usage", "Count"]);
-    expect(more.map((t) => t.title)).toEqual(["Move", "Receive", "Ask", "Recipes"]);
+    expect(more.map((t) => t.title)).toEqual(["Move", "Receive", "Ask", "Recipes", "Inbox"]);
     expect(bar.length + 1).toBe(MAX_TABS); // the fifth button is More, which also holds Account
   });
 
@@ -99,7 +99,7 @@ describe("the tab bar and More", () => {
       Count: "Count, tab, 4 of 5",
       More: "More, tab, 5 of 5",
     });
-    // No module permission: Ask and Recipes, which everyone gets, then Account; More has no button.
-    expect(tabLabels(person())).toEqual({ Ask: "Ask, tab, 1 of 3", Recipes: "Recipes, tab, 2 of 3", Account: "Account, tab, 3 of 3" });
+    // No module permission: Ask, Recipes and the Inbox, which everyone gets, then Account; More has no button.
+    expect(tabLabels(person())).toEqual({ Ask: "Ask, tab, 1 of 4", Recipes: "Recipes, tab, 2 of 4", Inbox: "Inbox, tab, 3 of 4", Account: "Account, tab, 4 of 4" });
   });
 });

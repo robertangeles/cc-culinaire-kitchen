@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import { formatAuDate, formatAuDateShort, formatShiftRange, durationHours, daysBetweenLocal } from "./dates.js";
 
 describe("formatAuDate", () => {
@@ -89,6 +89,27 @@ describe("daysBetweenLocal", () => {
     process.env.TZ = "Australia/Sydney";
     expect(daysBetweenLocal("2026-09-06T22:00:00Z", "2026-09-13T11:00:00Z")).toBe(6);
   });
+
+  it("counts days in the given zone rather than the device's", () => {
+    process.env.TZ = "America/New_York";
+    // Same instants as the 157h shift: six days in Sydney, seven on a New York device (Sun 6 Sep 6 pm to Sun 13 Sep 7 am).
+    expect(daysBetweenLocal("2026-09-06T22:00:00Z", "2026-09-13T11:00:00Z", "Australia/Sydney")).toBe(6);
+    expect(daysBetweenLocal("2026-09-06T22:00:00Z", "2026-09-13T11:00:00Z")).toBe(7);
+  });
+
+  it("does not depend on how the engine lays out a formatted date string", () => {
+    process.env.TZ = "UTC";
+    // @ts-expect-error the lib types declare `format` as a method; engines expose it as a getter
+    const format = vi.spyOn(Intl.DateTimeFormat.prototype, "format", "get").mockReturnValue(() => "13/09/2026");
+    try {
+      expect(daysBetweenLocal("2026-09-06T22:00:00Z", "2026-09-13T11:00:00Z", "Australia/Sydney")).toBe(6);
+      expect(formatShiftRange("2026-06-08T00:30:00Z", "2026-06-08T09:30:00Z", "Australia/Perth")).toBe(
+        "Mon, 8 June, 8:30 am–5:30 pm",
+      );
+    } finally {
+      format.mockRestore();
+    }
+  });
 });
 
 describe("formatShiftRange", () => {
@@ -124,4 +145,43 @@ describe("formatShiftRange", () => {
       "Mon, 31 Aug, 9:00 am – Sat, 5 Sept, 6:00 pm",
     );
   });
+
+  describe("with a venue time zone", () => {
+    it("reads the shift in the venue's zone, not the device's: a 6 am Monday Melbourne shift on a New York phone", () => {
+      process.env.TZ = "America/New_York";
+      expect(formatShiftRange("2026-06-07T20:00:00Z", "2026-06-08T04:00:00Z", "Australia/Melbourne")).toBe(
+        "Mon, 8 June, 6:00 am–2:00 pm",
+      );
+    });
+
+    it("keeps a same-venue-day shift on one line even when the device sees two days", () => {
+      process.env.TZ = "America/New_York";
+      expect(formatShiftRange("2026-06-08T00:30:00Z", "2026-06-08T09:30:00Z", "Australia/Perth")).toBe(
+        "Mon, 8 June, 8:30 am–5:30 pm",
+      );
+    });
+
+    it("shows both days for an overnight venue shift", () => {
+      process.env.TZ = "UTC";
+      expect(formatShiftRange("2026-06-08T12:00:00Z", "2026-06-08T17:00:00Z", "Australia/Sydney")).toBe(
+        "Mon, 8 June, 10:00 pm – Tue, 9 June, 3:00 am",
+      );
+    });
+
+    it("is right on the day daylight saving starts (Sydney, Sun 4 Oct 2026: 2 am becomes 3 am)", () => {
+      process.env.TZ = "UTC";
+      // 22:00 Sat 3 Oct AEST to 08:00 Sun 4 Oct AEDT: 9 real hours across the missing hour, two venue days.
+      expect(formatShiftRange("2026-10-03T12:00:00Z", "2026-10-03T21:00:00Z", "Australia/Sydney")).toBe(
+        "Sat, 3 Oct, 10:00 pm – Sun, 4 Oct, 8:00 am",
+      );
+    });
+
+    it("is right on the day daylight saving ends (Sydney, Sun 5 Apr 2026: 3 am becomes 2 am)", () => {
+      process.env.TZ = "UTC";
+      expect(formatShiftRange("2026-04-04T12:00:00Z", "2026-04-04T22:00:00Z", "Australia/Sydney")).toBe(
+        "Sat, 4 Apr, 11:00 pm – Sun, 5 Apr, 8:00 am",
+      );
+    });
+  });
 });
+

@@ -5,6 +5,16 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added (mobile Wave 4, phone: inbox, push, profile and account)
+
+No server change, no migration. Uses the Wave 4 push server (migration `0004_push_dispatch`) for push registration and settings, and the error codes on the profile and account routes; the inbox and profile screens use routes that already exist. **The phone's development build must be rebuilt**: `expo-notifications` and `expo-image-picker` are new native modules (`mobile/device/README.md`).
+
+- **Inbox tab** for every signed-in person, with the unread count on its button (or on More, and the Inbox row of the More list, when the Inbox is under More): every notification type has its own heading and sentence, Mark read works with no signal (queued command `notification.read`), Open goes where the phone has the screen (an overdue delivery: Receive). Kept on the phone for a start with no signal.
+- **Push on the phone.** Off until the person taps Turn on (never asked at launch); the token is registered with the sign-in it belongs to, registered again at each start and return to the foreground, removed when turned off and before sign-out. A tapped push opens its screen or the inbox. **Notification settings**: a switch per kind and quiet hours, through the server's push-preference routes. Real pushes need the owner's Expo project id, FCM and APNs credentials (checklist in `mobile/README.md`); until then the screen says the build cannot receive pushes.
+- **Profile and account.** The Account tab is a hub: My details (picture from the library or camera, name, bio, address, social links; an emptied field is cleared), Kitchen profile (skill level for everyone; the kitchen, restaurant and menu answers for organisation admins, as on the web), Password (this phone stays signed in), Two-step verification set-up (key, "Open in authenticator app", QR) and removal. Delete my account and Add Sign in with Apple stay where they were.
+- **No location yet.** The join screen also says what to do without a key, shows who is signed in, and keeps the legal pages and Delete my account reachable.
+- Every difference from the web bell and profile pages is listed in `mobile/README.md`.
+
 ### Changed (error codes on the profile and account routes, before the phone shows them)
 
 No migration, no new route, nothing to seed or backfill. Every refusal below keeps the status and the `error` the web shows today and adds `code` (shared `ApiErrorBody`), so older installed apps and the web keep working. Two behaviour changes, both on the profile photo upload: a failure at the photo store no longer answers 500, and the "file too large" sentence now states the real limit (10 MB; it said 2 MB).
@@ -79,6 +89,16 @@ No schema change and no migration. The phone gets a **Receive** tab (for `purcha
 - **Device tokens.** `POST /api/notifications/unregister-device` `{ deviceToken }` removes the caller's own token; a repeat is safe. `POST /api/notifications/register-device` now ties the token to the sign-in whose refresh token the request presents (cookie, or `refreshToken` in the body), and the server removes it when that sign-in ends: logout, password change, expiry or a revoke. A token registered with no refresh token is removed once the person has no sign-in left. A token Expo reports as dead is removed, at the send or by a receipt job that runs every 15 minutes. Only Expo push tokens are sent to; a raw APNs or FCM token is skipped.
 - **Web.** The notification bell names the six new types (new shift, shift changed, shift cancelled, roster published, document verified, document rejected). `POST /api/auth/logout` answers as before.
 - Deleting an account also deletes the person's push settings.
+
+### Changed (mobile Wave 4, server: roster on the venue's clock)
+
+**Apply migration `0005_staff_availability_unique` by hand on production BEFORE this version deploys** (`pnpm --filter @culinaire/server exec tsx src/scripts/migrate.ts`; run it with `--dry-run` first). It deletes exact duplicate availability windows (keeping the earliest) and then allows one row per window; the migration file holds a read-only query that counts what would be removed. The previous server keeps working afterwards.
+
+- **A date-only roster range is a day on the venue's clock, not UTC's.** `from`/`to` given as `YYYY-MM-DD` on `GET /api/roster/shifts`, `/shifts/calendar`, `/shifts/mine` and on publish are read in the venue's IANA zone, so a 6 am Monday shift in Melbourne (Sunday 20:00 UTC) is on Monday. A full timestamp is still read as an instant. An impossible date (`2026-02-30`) answers `400` with `code: "VALIDATION"`.
+- **`GET /api/roster/shifts/mine`** takes optional `excludeDrafts=true` (leaves out Draft shifts, except one waiting on the caller's public-holiday consent), `from`, `to` and `limit` (1 to 500), and each row now carries `locationName`, `ianaTimezone`, `state` and `isPublicHoliday`. With no parameters it answers as before, Drafts included, which is what the web sends.
+- **Roster 409s carry a `code`** (shared `ApiErrorBody`): assigning answers `SHIFT_NOT_DRAFT`, `ASSIGNMENT_BLOCKED_COMPLIANCE` or `SHIFT_ALREADY_ASSIGNED`; claiming a swap answers `SWAP_CLAIMED_BY_YOU`, `SWAP_CLAIMED_BY_OTHER` or `SWAP_CANCELLED`. A replayed claim used to answer `404`; it is recognised for 7 days.
+- **Adding an availability window twice returns the existing row** instead of a twin; editing one into a copy of another answers `409` with `code: "CONFLICT"`.
+- **The location context lists each venue's `ianaTimezone` and `state`.** Shared `formatShiftRange` and `daysBetweenLocal` take an optional time zone (the device's zone when omitted, as before).
 
 ### Added (waste: the ingredient list for a cook who logs waste but cannot count stock)
 

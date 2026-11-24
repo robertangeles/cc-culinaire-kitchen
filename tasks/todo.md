@@ -41,7 +41,11 @@ Hooked to push: roster published, a Published shift cancelled, document verified
 - [ ] Kitchen Brain digest, nudge, capture error.
 - [ ] Not yet notifications at all: transfer, stock take flagged, Bench mention, a person removed from a shift (`removeAssignment`), a venue's bulk undo (`undoGeneration`).
 - [ ] Quiet hours drop a push (the inbox keeps it). If the owner wants it held until quiet hours end, that needs a queue table.
-- [ ] Phone: register an Expo push token (not a raw FCM/APNs token; the dispatcher skips those), send `refreshToken` in the `register-device` body (ties the push token to that sign-in, so the server removes it when the sign-in ends; without it the token is only removed once the person has no sign-in left; logout removes the tokens registered under the signing-out sign-in, the phone sends nothing extra), call `unregister-device` when notifications are turned off, send the phone's IANA time zone with quiet hours, route `data.link` (`pushLink` in `@culinaire/shared/schemas/push`; `/notifications` until a screen exists).
+- [x] Phone (2026-11-24, Wave 4 phone PR): register an Expo push token (not a raw FCM/APNs token; the dispatcher skips those), send `refreshToken` in the `register-device` body (ties the push token to that sign-in, so the server removes it when the sign-in ends; without it the token is only removed once the person has no sign-in left; logout removes the tokens registered under the signing-out sign-in, the phone sends nothing extra), call `unregister-device` when notifications are turned off, send the phone's IANA time zone with quiet hours, route `data.link` (`pushLink` in `@culinaire/shared/schemas/push`; `/notifications` until a screen exists).
+- [x] Phone: the inbox's unread count on the More button and its More row when the Inbox sits under More (done on the rebase onto main, 2026-11-24).
+- [ ] Owner, before push reaches a phone: `eas init` (Expo project id), FCM credentials and `google-services.json`, APNs key, then `EXPO_PUSH_ENABLED=true` (checklist in `mobile/README.md`, "Inbox and push").
+- [x] Server: machine-readable `code` on the profile, password, avatar, MFA, kitchen-profile and notification refusals (on main); the phone reads them (`mobile/README.md`, "Profile and account").
+- [ ] Server: notification read history and "mark all read" (the list holds unread rows only).
 
 ## MFA follow-ups (2026-10-26)
 
@@ -440,10 +444,10 @@ Three items the review deferred rather than built:
 
 - [x] ~~**P2 — Write the mobile compliance contract into `web-needs.md`.**~~ DONE 2026-11-15: entry "Mobile compliance contract" in `../cc-culinaire-shared-context/web-needs.md`, read from the code. Follow-ups it found, all open:
   - **`GET /api/compliance/documents/mine` returns every column** (`listDocumentsForUser` does `select()`), including manager-only `notes`, `verifiedBy` and `storagePublicId`. Return an explicit field list. P1: data exposure to the document's own subject.
-  - **`GET /api/roster/shifts/mine` returns Draft shifts** (`listMyShifts` filters only `Cancelled`), so staff see unpublished assignments. Filter to Published, or confirm that is intended.
+  - ~~**`GET /api/roster/shifts/mine` returns Draft shifts**~~ DECIDED 2026-11-23: intended on the web (a cook can decline before publish); a client that wants them left out sends `excludeDrafts=true`.
   - **`POST /api/compliance/documents/upload` has no handler for an oversize file or a wrong field name**: the multer error falls to the generic handler as `500`, not `413`/`400` (`routes/users.ts` shows the `MulterError` pattern to copy). It also has no per-route rate limit although each call hits Cloudinary and runs OCR.
-  - **No machine-readable `code`** on compliance or roster errors; mobile can only branch on status.
-  - ~~**Push is not built**~~: the server side shipped 2026-11-23 (see "Push (Wave 4 server) follow-ups" above). Still open: no mobile-friendly roster payload (venue name, timezone, `isPublicHoliday`, date range) and no way for the client to discover which flags are on.
+  - **No machine-readable `code`** on compliance errors; mobile can only branch on status. (Roster assignment and swap-claim 409s carry one since 2026-11-23, see `CHANGELOG.md`.)
+  - ~~**Push is not built**~~: the server side shipped 2026-11-23 (see "Push (Wave 4 server) follow-ups" above). Still open: no way for the client to discover which flags are on. (The roster payload gap closed 2026-11-23: `/shifts/mine` carries venue name, timezone and `isPublicHoliday` and takes a date range.)
   - `api-contracts.md` lacks `/api/inventory/notifications` and `register-device`, and its 401 body text is stale.
 
 ---

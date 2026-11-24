@@ -4,6 +4,9 @@ import { createApiClient } from "../api/client";
 import { createAuthApi } from "../api/auth";
 import { createAccountApi, type AppleProof } from "../api/account";
 import { createLegalApi } from "../legal/legalApi";
+import { createNotificationsApi } from "../notifications/notificationsApi";
+import { createPush } from "../notifications/push";
+import { nativePush } from "../notifications/nativePush";
 import { createSession, type Session } from "../auth/session";
 import { createSecureTokenStore } from "../auth/secureTokenStore";
 import { createSnapshotStore } from "../auth/snapshotStore";
@@ -22,6 +25,13 @@ export const client = createApiClient({ baseUrl: apiBaseUrl, tokenStore, appVers
 export const authApi = createAuthApi(client, tokenStore);
 export const accountApi = createAccountApi(client, tokenStore);
 export const legalApi = createLegalApi(client);
+export const notificationsApi = createNotificationsApi(client, tokenStore);
+const signedInUserId = () => {
+  const s = session.getSnapshot().state;
+  return s.phase === "ready" ? s.user.userId : null;
+};
+/** Push on this phone: off until the person turns it on (the inbox or Notification settings); see `src/notifications/push.ts`. */
+export const push = createPush({ native: nativePush, api: notificationsApi, kv: sqliteKv, getUserId: signedInUserId });
 /** Opens Apple's sign-in sheet for a fresh credential, to confirm deleting an Apple-linked account (null when the sheet is closed). */
 export const appleProof: (() => Promise<AppleProof | null>) | undefined = appleEnabled
   ? async () => {
@@ -36,6 +46,7 @@ session = createSession({
   googleIdToken: googleEnabled ? googleIdToken : undefined,
   wipeLocalData,
   appleCredential: appleEnabled ? appleCredential : undefined,
+  beforeSignOut: () => push.beforeSignOut(),
 });
 
 export { session, googleEnabled, appleEnabled, appleCredential };
@@ -43,4 +54,9 @@ export { session, googleEnabled, appleEnabled, appleCredential };
 /** The current screen state and busy flag, re-rendering when either changes. */
 export function useSession() {
   return useSyncExternalStore(session.subscribe, session.getSnapshot);
+}
+
+/** Push on this phone: off, on, blocked or unavailable. */
+export function usePushStatus() {
+  return useSyncExternalStore(push.subscribe, push.getStatus);
 }

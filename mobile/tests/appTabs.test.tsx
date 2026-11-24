@@ -12,14 +12,17 @@ const mocks = vi.hoisted(() => ({
   insets: { top: 24, bottom: 48, left: 0, right: 0 },
   screenOptions: {} as Record<string, unknown>,
   backBehavior: undefined as string | undefined,
-  screens: [] as { name: string; guard: boolean; options: { title?: string; href?: null; tabBarAccessibilityLabel?: string; tabBarButton?: () => null; tabBarItemStyle?: { display?: string } } }[],
+  screens: [] as { name: string; guard: boolean; options: { title?: string; href?: null; tabBarAccessibilityLabel?: string; tabBarBadge?: string | number; tabBarButton?: () => null; tabBarItemStyle?: { display?: string } } }[],
   navigate: vi.fn(),
   tabBar: null as unknown as (props: BarProps) => ReactNode,
   barState: null as unknown as BarProps["state"],
+  unread: 0,
   listeners: {} as Record<string, (arg: { navigation: { navigate: (route: string) => void } }) => { tabPress: (e: { preventDefault: () => void }) => void }>,
 }));
 type BarProps = { state: { index: number; routes: { key: string; name: string }[] } };
 vi.mock("../src/runtime/appContext", () => ({ useSession: () => ({ state: { phase: "ready", user: mocks.user } }) }));
+// The inbox's unread count (its real store needs the native SQLite and notification modules).
+vi.mock("../src/runtime/notifications", () => ({ useInbox: () => ({ unread: mocks.unread }) }));
 vi.mock("react-native-safe-area-context", () => ({
   useSafeAreaInsets: () => mocks.insets,
   SafeAreaView: ({ children }: { children?: ReactNode }) => children,
@@ -55,6 +58,7 @@ afterEach(() => {
   cleanup();
   mocks.screens.length = 0;
   mocks.navigate.mockReset();
+  mocks.unread = 0;
 });
 
 const person = (over: Partial<AuthUser>): AuthUser => ({ userId: 1, userName: "A", userEmail: "a@x.test", mfaEnabled: false, roles: [], permissions: [], ...over });
@@ -87,16 +91,16 @@ describe("the tab bar", () => {
   );
 
   it("shows a cook's modules and Account, with no More, when they fit in five buttons", () => {
-    mocks.user = person({ permissions: ["waste:log", "purchasing:receive"] });
+    mocks.user = person({ permissions: ["waste:log"] });
     render(<AppTabs />);
-    expect(buttons()).toEqual(["Waste", "Receive", "Ask", "Recipes", "Account"]);
+    expect(buttons()).toEqual(["Waste", "Ask", "Recipes", "Inbox", "Account"]);
   });
 
-  it("gives a person with no permission Ask, Recipes and Account, with Account ahead of More, which has no button then", () => {
+  it("gives a person with no permission Ask, Recipes, the Inbox and Account, with Account ahead of More, which has no button then", () => {
     mocks.user = person({});
     render(<AppTabs />);
-    expect(buttons()).toEqual(["Ask", "Recipes", "Account"]);
-    expect(mocks.screens.filter((s) => s.guard).map((s) => s.name)).toEqual(["(chat)", "(recipes)", "account", "more"]);
+    expect(buttons()).toEqual(["Ask", "Recipes", "Inbox", "Account"]);
+    expect(mocks.screens.filter((s) => s.guard).map((s) => s.name)).toEqual(["(chat)", "(recipes)", "(inbox)", "account", "more"]);
   });
 
   it("on an iPhone or iPad each button is read with its place among the buttons that show; elsewhere the label is left to the library", () => {
@@ -188,6 +192,33 @@ describe("the tab bar", () => {
     expect(mocks.navigate).toHaveBeenLastCalledWith("(receive)");
     fireEvent.click(screen.getByRole("button", { name: "Account" }));
     expect(mocks.navigate).toHaveBeenLastCalledWith("account");
-    expect(screen.getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual(["Move", "Receive", "Ask", "Recipes", "Account"]);
+    expect(screen.getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual(["Move", "Receive", "Ask", "Recipes", "Inbox", "Account"]);
+  });
+});
+
+describe("the inbox's unread count", () => {
+  const badgeOf = (name: string) => mocks.screens.find((s) => s.name === name)?.options.tabBarBadge;
+
+  it("is on the Inbox button when the Inbox is on the bar, and nowhere when nothing is unread", () => {
+    mocks.user = person({ permissions: ["waste:log"] });
+    mocks.unread = 3;
+    render(<AppTabs />);
+    expect(badgeOf("(inbox)")).toBe(3);
+    expect(badgeOf("more")).toBeUndefined();
+    cleanup();
+    mocks.screens.length = 0;
+    mocks.unread = 0;
+    render(<AppTabs />);
+    expect(badgeOf("(inbox)")).toBeUndefined();
+  });
+
+  it("is on More, and on the Inbox row of the More list, when the Inbox is under More", () => {
+    mocks.user = person({ roles: ["Administrator"] });
+    mocks.unread = 120;
+    render(<AppTabs />);
+    expect(badgeOf("more")).toBe("99+");
+    render(<More />);
+    expect(screen.getByRole("button", { name: "Inbox, 120 unread" })).toBeTruthy();
+    expect(screen.getByText("99+ unread")).toBeTruthy();
   });
 });

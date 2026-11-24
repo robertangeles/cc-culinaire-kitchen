@@ -1,5 +1,5 @@
 import { AppState } from "react-native";
-import { client, session } from "./appContext";
+import { client, notificationsApi, session } from "./appContext";
 import { createOutbox } from "../outbox/outbox";
 import { createRunner } from "../outbox/runner";
 import { createSendSaveLine } from "../outbox/sendSaveLine";
@@ -8,6 +8,7 @@ import { prepHandlers } from "../prep/prepCommands";
 import { consumptionHandlers } from "../consumption/consumptionCommands";
 import { movementHandlers } from "../movements/movementCommands";
 import { wasteHandlers } from "../waste/wasteCommands";
+import { notificationHandlers } from "../notifications/notificationCommands";
 
 /** The signed-in chef's id, or null (counts stay on the phone and wait for a sign-in). */
 export function currentUserId(): number | null {
@@ -19,7 +20,7 @@ export const outbox = createOutbox({
   store: sqliteOutboxStore,
   send: createSendSaveLine(client),
   // Every other module's commands: add its handlers here (see the "Offline queue" section of mobile/README.md).
-  handlers: [...wasteHandlers(client), ...prepHandlers(client), ...consumptionHandlers(client), ...movementHandlers(client)],
+  handlers: [...wasteHandlers(client), ...prepHandlers(client), ...consumptionHandlers(client), ...movementHandlers(client), ...notificationHandlers(notificationsApi)],
   now: Date.now,
   newId: () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
   getUserId: currentUserId,
