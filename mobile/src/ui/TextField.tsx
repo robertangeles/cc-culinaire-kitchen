@@ -13,7 +13,7 @@ export function TextField({ label, trailing, ...input }: TextInputProps & { labe
   const [focused, setFocused] = useState(false);
   return (
     <View style={styles.wrap}>
-      <Text style={[styles.label, { color: c.accentText }]}>{label}</Text>
+      <Text variant="label">{label}</Text>
       <View style={[styles.row, { backgroundColor: c.field, borderColor: focused ? c.buttonFrom : c.border }]}>
         <TextInput
           accessibilityLabel={label}
@@ -37,7 +37,6 @@ export function TextField({ label, trailing, ...input }: TextInputProps & { labe
 
 const styles = StyleSheet.create({
   wrap: { gap: space.xs },
-  label: { fontFamily: fontFamily.uiStrong, fontSize: 12, letterSpacing: 1.8, textTransform: "uppercase" },
   row: { flexDirection: "row", alignItems: "center", gap: space.md, minHeight: size.tap, borderWidth: 1, borderRadius: radius.banner, paddingHorizontal: space.lg },
   input: { flex: 1, minHeight: size.tap, fontFamily: fontFamily.ui, fontSize: fontSize.body, paddingVertical: 0 },
 });

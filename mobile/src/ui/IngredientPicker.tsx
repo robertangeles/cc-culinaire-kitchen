@@ -86,7 +86,7 @@ export function IngredientPicker({ label, value, onChangeText, onPick, source, p
       ) : null}
       {!value.trim() && recent.length > 0 ? (
         <View style={styles.recent}>
-          <Text style={[styles.caps, { color: c.accentText }]}>Recent</Text>
+          <Text variant="label">Recent</Text>
           <View style={styles.chips}>
             {recent.slice(0, 6).map((r) => (
               <Pressable key={r.name} accessibilityRole="button" accessibilityLabel={`Use ${r.name}`} hitSlop={4} onPress={() => choose(r)} style={[styles.chip, { backgroundColor: c.field, borderColor: c.border }]}>
@@ -104,7 +104,6 @@ const styles = StyleSheet.create({
   wrap: { gap: space.sm },
   row: { minHeight: size.tap, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: space.md, paddingHorizontal: space.lg },
   recent: { gap: space.xs },
-  caps: { fontFamily: fontFamily.uiStrong, fontSize: 12, letterSpacing: 1.8, textTransform: "uppercase" },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: space.sm },
   chip: { minHeight: 48, borderRadius: 999, borderWidth: 1, paddingHorizontal: space.lg, alignItems: "center", justifyContent: "center" },
 });
