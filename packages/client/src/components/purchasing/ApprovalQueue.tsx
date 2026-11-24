@@ -97,7 +97,7 @@ export default function ApprovalQueue() {
                   hover:border-dark-300 transition-all"
                 style={{ animationDelay: `${idx * 40}ms` }}
               >
-                <div className="flex items-center gap-4 px-4 py-4">
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-3 px-4 py-4">
                   {/* Wait indicator */}
                   <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${
                     waitHours && waitHours > 48 ? "bg-red-500/15" :
@@ -111,11 +111,11 @@ export default function ApprovalQueue() {
                   </div>
 
                   {/* PO info */}
-                  <div className="flex-1 min-w-0">
+                  <div className="flex-1 min-w-[14rem]">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-mono font-medium text-white">{po.poNumber}</span>
+                      <span className="text-sm font-mono font-medium text-white whitespace-nowrap">{po.poNumber}</span>
                     </div>
-                    <div className="flex items-center gap-3 mt-0.5 text-xs text-dark-600">
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-0.5 text-xs text-dark-600">
                       <span>{po.supplierName}</span>
                       <span className="text-[#333]">|</span>
                       <span>{po.locationName}</span>
@@ -132,7 +132,7 @@ export default function ApprovalQueue() {
                   </div>
 
                   {/* Amount + actions */}
-                  <div className="flex items-center gap-3 shrink-0">
+                  <div className="flex items-center gap-3 shrink-0 ml-auto">
                     {po.totalValue && (
                       <div className="text-sm font-semibold text-white mr-2">
                         ${Number(po.totalValue).toFixed(2)}
