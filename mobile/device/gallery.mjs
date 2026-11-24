@@ -25,12 +25,16 @@ const WEB = [
   [/^61/, "none: the web's sidebar holds every page; More is the phone's overflow tab"],
   [/^62/, `${C}/components/location/LocationSwitcher.tsx`],
   [/^6[3-4]/, `${C}/components/profile/DeleteAccountSection.tsx (/profile)`],
+  [/^65/, `${C}/pages/ProfilePage.tsx (/profile, Account Details)`],
+  [/^66/, `${C}/pages/ProfilePage.tsx (/profile, Kitchen Profile)`],
+  [/^6[78]/, `${C}/pages/ProfilePage.tsx (/profile, Security)`],
   [/^7/, `${C}/components/profile/OrgTab.tsx (join by key)`],
   [/^8[0-4]/, `${C}/pages/ChatPage.tsx (/chat)`],
   [/^8[5-9]/, `${C}/pages/MyShelfPage.tsx, RecipeLabPage.tsx (/my-shelf, /recipes)`],
   [/^9[0-4]/, `${C}/pages/PurchasingPage.tsx (receiving)`],
   [/^o/, `${C}/pages/PurchasingPage.tsx (/purchasing: Orders, Approvals; credit notes have no web page)`],
-  [/^9[5-9]/, `${C}/components/layout/NotificationBell.tsx (the bell)`],
+  [/^97/, "none: the web has no notification settings page (phone only)"],
+  [/^9[56]/, `${C}/components/layout/NotificationBell.tsx (the bell)`],
 ];
 
 const [dirArg, beforeArg] = argv.slice(2);
@@ -68,7 +72,7 @@ table{border-collapse:collapse}th,td{border-top:1px solid #C9C2B3;padding:8px;ve
 th{width:220px}.web{font-weight:400;color:#696D74;margin-top:4px}td.none{color:#696D74}
 figure{display:inline-block;margin:0 8px 0 0}img{max-height:520px;max-width:420px;border:1px solid #C9C2B3}figcaption{color:#956134;font-weight:600}
 </style>
-<h1>Phone screens</h1><p>${names.length} screens. Generated ${new Date().toISOString()} by mobile/device/gallery.mjs. Tablet-width images come from the moto g86 with its display set to iPad sizes (wm size and density), or from the tablet emulator, which is walked in the phone form, so its iPad-width images land in the phone column. A round gear at the top right, where it shows, is the development build's menu button, not the app: release builds do not have it.</p>
+<h1>Phone screens</h1><p>${names.length} screens. Generated ${new Date().toISOString()} by mobile/device/gallery.mjs. Tablet-width images come from the moto g86 with its display set to iPad sizes (wm size and density), or from the tablet emulator (device/emulator.sh). A round gear at the top right, where it shows, is the development build's menu button, not the app: release builds do not have it.</p>
 ${notes}
 <table><tr><th>Screen / web page</th>${FORMS.map((f) => `<th>${f}</th>`).join("")}</tr>${rows.join("\n")}</table>\n`,
 );
