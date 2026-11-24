@@ -36,6 +36,10 @@ export E2E_USER_PASSWORD=${E2E_USER_PASSWORD:-E2e-Ci-Throwaway-Pass-1!}
 export E2E_USER_TOTP_SECRET=${E2E_USER_TOTP_SECRET:-JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP}
 export E2E_DELETE_USER_EMAIL=${E2E_DELETE_USER_EMAIL:-e2e-delete-ci@culinaire.test}
 export E2E_DELETE_USER_PASSWORD=${E2E_DELETE_USER_PASSWORD:-E2e-Delete-Throwaway-Pass-1!}
+# The seed also makes the phone E2E user (CI's own account, so the walk and CI never share a sign-in limit): the CI throwaway values.
+export E2E_PHONE_USER_EMAIL=${E2E_PHONE_USER_EMAIL:-e2e-phone-ci@culinaire.test}
+export E2E_PHONE_USER_PASSWORD=${E2E_PHONE_USER_PASSWORD:-E2e-Phone-Throwaway-Pass-1!}
+export E2E_PHONE_USER_TOTP_SECRET=${E2E_PHONE_USER_TOTP_SECRET:-KRSXG5CTMVRXEZLUKRSXG5CTMVRXEZLU}
 export E2E_API_URL=http://127.0.0.1:$PORT METRO_URL=http://$APP_HOST:$METRO_PORT
 
 set -m # each background job gets its own process group, so `kill -- -<pid>` stops npx/pnpm and what they started, nothing else
