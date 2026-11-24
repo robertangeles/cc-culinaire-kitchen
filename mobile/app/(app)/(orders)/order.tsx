@@ -34,7 +34,7 @@ function Fact({ label, value }: { label: string; value: string | null }) {
 
 /** One purchase order: what was ordered, what it costs where the server says, and what this person may do with it now. */
 export default function Order() {
-  const params = useLocalSearchParams<{ poId?: string; notice?: string; from?: string }>();
+  const params = useLocalSearchParams<{ poId?: string; notice?: string; info?: string; from?: string }>();
   const poId = asText(params.poId);
   const { state } = useSession();
   const { api, rights, known } = useOrders();
@@ -46,11 +46,12 @@ export default function Order() {
   const [reason, setReason] = useState("");
   const [toCredit, setToCredit] = useState<Discrepancy[]>([]);
 
-  // What the screen was opened to say (a draft that was saved but not submitted).
-  const opened = asText(params.notice);
+  // What the screen was opened to say: what went wrong (a draft saved but not submitted), or what to know (items a reorder left out).
+  const bad = asText(params.notice);
+  const said = bad || asText(params.info);
   useEffect(() => {
-    if (opened) setNotice({ text: opened, bad: true });
-  }, [opened, setNotice]);
+    if (said) setNotice({ text: said, bad: bad !== "" });
+  }, [said, bad, setNotice]);
 
   const supplierId = detail?.supplierId;
   const received = detail?.status === "RECEIVED" || detail?.status === "PARTIAL_RECEIVED";
@@ -123,13 +124,11 @@ export default function Order() {
   };
   const cancel = () => confirmThen(`Cancel ${order.poNumber}?`, "The order is closed and can't be brought back.", "Cancel order", () => act("cancel", "Cancelling an order", async () => { await api.cancel(poId); return "Order cancelled."; }), true);
   const reorder = async () => {
-    let made = "";
-    const done = await act("reorder", "Reordering", async () => {
-      const copy = await api.clone(poId, state.location.storeLocationId);
-      made = copy.poId;
-      if (copy.skippedItems.length > 0) return `${itemCount(copy.skippedItems.length)} left out: already at or above par.`;
-    });
-    if (done && made) router.push({ pathname: "/order", params: { poId: made } });
+    const copies: { poId: string; skippedItems: string[] }[] = [];
+    if (!(await act("reorder", "Reordering", async () => void copies.push(await api.clone(poId, state.location.storeLocationId))))) return;
+    const [copy] = copies;
+    const left = copy.skippedItems.length;
+    router.push({ pathname: "/order", params: { poId: copy.poId, ...(left > 0 ? { info: `${itemCount(left)} left out: already at or above par.` } : {}) } });
   };
 
   return (

@@ -25,11 +25,11 @@ Run the screenshot walk (`device/README.md`, "The screenshot walk") after changi
 
 | Folder | What lives there |
 |---|---|
-| `app/` | Screens (expo-router). A module is a route group `app/(app)/(module)/`, plus one entry in `src/shell/tabs.ts` naming the permission that opens it (none when the server asks only for a signed-in person), in the order a line cook uses them (Prep, Waste, Usage, Count, Move, Receive, Ask, Recipes, Inbox, Transfers, Stock). Past five tab buttons, the fifth is More (`app/(app)/more.tsx`), listing the rest and Account. A tab under More keeps its route and loses only its button: never `href: null`, which expo-router turns into a hidden tab that redirects to the first tab when opened. |
+| `app/` | Screens (expo-router). A module is a route group `app/(app)/(module)/`, plus one entry in `src/shell/tabs.ts` naming the permission that opens it (none when the server asks only for a signed-in person), in the order a line cook uses them (Prep, Waste, Usage, Count, Move, Receive, Orders, Ask, Recipes, Inbox, Transfers, Stock). Past five tab buttons, the fifth is More (`app/(app)/more.tsx`), listing the rest and Account. A tab under More keeps its route and loses only its button: never `href: null`, which expo-router turns into a hidden tab that redirects to the first tab when opened. |
 | `src/api` | The one network client: auth, refresh, coded errors (`ApiError.code`, `serverCode`). |
 | `src/outbox` | The offline queue (below). |
 | `src/ingredients` | The shared ingredient picker's data (below); its component is `src/ui/IngredientPicker.tsx`. |
-| `src/count`, `src/waste`, `src/prep`, `src/consumption`, `src/movements`, `src/chat`, `src/recipes`, `src/notifications`, `src/transfers`, `src/stock` | One folder per module: API calls, store (screen state), pure view functions, commands. |
+| `src/count`, `src/waste`, `src/prep`, `src/consumption`, `src/movements`, `src/chat`, `src/recipes`, `src/notifications`, `src/transfers`, `src/stock`, `src/orders` | One folder per module: API calls, store (screen state), pure view functions, commands. |
 | `src/profile` | The photo picker and the kitchen profile form's rules. |
 | `src/ui` | Components shared by every module, `Column` (the tablet column) among them. |
 | `packages/shared/src/schemas` | The zod schemas of what the server sends, parsed leniently at the boundary (`lenient.ts`). |
@@ -370,6 +370,7 @@ Differences from the web (`LocationDashboard.tsx`, `IngredientCatalog.tsx`, `Cat
 
 The Receive tab is shown to `purchasing:receive` holders. It is the web's receiving (`components/purchasing/ReceiveQueue.tsx`, `ReceivingChecklist.tsx`) and uses the same routes.
 **Online-only**: nothing is written to the outbox. Every tap waits for the server and the screen shows what the server saved; a refused change stays on its line with the server's words (the web swallowed a failed line save and confirmed anyway).
+"See the order" opens the delivery's order in the Orders tab, for people who have it.
 The queue is the SENT and RECEIVING purchase orders at the current location, soonest expected first (the server filters and sorts), read again whenever the screen comes back into view and on pull-to-refresh.
 A row says "In progress" for a delivery you have open and names a colleague who has it open. The expected day is the order's UTC calendar day (the server stores the day typed on the web as UTC midnight) compared with the phone's own today.
 Opening a delivery starts its session, or resumes the open one (a banner names whoever started it on another phone; both phones change the same delivery). Every line starts as received in full, so a perfect delivery is: open, Confirm.
@@ -378,6 +379,55 @@ While a keypad or reject panel is open only that line shows and Confirm is hidde
 "Back to deliveries" leaves the delivery open; "Cancel receiving" asks first, discards it (nothing reaches stock) and puts the order back in the queue.
 A delivery another phone already confirmed (`ALREADY_CONFIRMED`) or cancelled (`INVALID_STATE`) says so and offers the queue. A unit with no path to the kitchen unit (`UNIT_NOT_CONVERTIBLE`) names the item and leaves the delivery open: reject that line to go on.
 
+## Orders (`src/orders`, `app/(app)/(orders)`)
+
+The Orders tab is the web's Purchasing page: the orders list, one order, a new order (and changing a draft), the approvals queue and credit notes. It is shown to anyone who holds
+`purchasing:draft`, `purchasing:submit`, `purchasing:approve` or `purchasing:credit`; someone with `purchasing:receive` alone has Receive, the only orders the server lists for them.
+Inside it every button follows the key its route asks for (`orderRights`, `orderActions` in `orderView.ts`): New order, Change and Cancel `inventory:manage`, Submit and Email
+`purchasing:submit`, Approve and Reject `purchasing:approve`, Reorder and guides `purchasing:draft`, Receive `purchasing:receive`, credit notes `purchasing:credit`.
+
+**Online for every write.** Nothing here goes to the outbox: a write waits for the server, says it needs a connection when there is none, and the order is read again after it. A write whose
+reply was lost counts as done only when the order shows it (`useOrder`). Lists are kept on the phone (`cachedList`: first page per filter, person and location), so they open with no signal with a banner
+saying from when; an order opened with no signal shows what its list row knows, without items or buttons. A refusal (a permission taken away) clears the kept copy.
+
+**The order being written** (`draft.ts`, `draftStore.ts`) is kept on the phone as it is typed, so leaving or closing the app loses nothing and the list offers "Continue your order"; it is not on the
+server until it is saved. Saving carries an id made on the phone (`poId`): the same save again answers the first order, and if the order was changed after a save that did land, the server's 409 `CONFLICT`
+turns the save into an edit of it. Save and submit that only failed to submit opens the saved draft and says so. Changing a saved draft uses the same form, at the order's own location, and is not kept on the phone.
+
+**Costs.** A price, total, stock or par the server leaves out is not shown, never zero (`figure` in `packages/shared/src/schemas/purchasing.ts`). The form adds up only the prices on it and says how many items have none.
+
+**Approvals.** Where the server says `canApprove: false` (an order the approver raised or changed while someone else can approve it) the reason is shown instead of Approve; Reject stays. Whether an order needs
+approval at all (the spending limit, an unpriced line) is the server's answer to Submit. There is **no app lock on approvals yet**: the biometric lock for approval holders is its own task before the first store release.
+
+**Credit notes** are raised from a discrepancy of a confirmed delivery, one per discrepancy, for no more than the server says it is worth; the form's id makes a repeat safe. One with no price is listed and explained, not opened.
+
+**Links.** A sent order opens its delivery; a delivery (while receiving and once done) opens its order; a received order lists what can be claimed from it. An order opened from outside its tab (`from=link`) goes back to the list,
+because the tab may hold nothing else.
+
+Differences from the web (`PurchaseOrderList.tsx`, `PurchaseOrderForm.tsx`, `ApprovalQueue.tsx`), found while comparing:
+
+| Web | Phone | Why |
+|---|---|---|
+| A draft cannot be changed (a rejected order is told to "amend and resubmit", but only Cancel is offered) | Change order | The server route is new (PR 229). **The web still needs it.** |
+| New PO is shown to everyone on the page; a person without `inventory:manage` gets a 403 on save | Only to holders | The phone offers what the server allows. |
+| Submit, Cancel, Receive, Send to supplier and Reorder are shown whatever the person holds | Only to holders | Same. |
+| Orders are the newest 50, filtered on the phone's side of the wire; an older pending or sent one is not found | The server filters by status, with Show more | An old pending order must not vanish from the approvals queue. |
+| Received lists fully received orders only; part-received ones are found only under All | Received lists both | |
+| Approve and Reject are on the approvals row | On the order, under its items; the row opens it | Approving money from a list row is one stray tap; the items are read first. |
+| Approve and Reject show the raw server sentence in an alert | On the screen, under the order; an order someone else already decided is read again and shown as it stands | |
+| "Another approver must approve your order" | "You raised or changed this order, so another approver must approve it." | Since PR 229 an editor waits for another approver too. **The web sentence is now incomplete.** |
+| Save & Submit that fails to submit stays on the form: a second tap makes a second draft | Opens the saved draft and says it was not submitted | Web bug, flagged. |
+| A lost reply on save: a second tap makes a second order (no `poId`) | Safe to repeat | **The web does not send `poId` yet.** |
+| The form is lost when the page is left | Kept on the phone | |
+| A supplier with no linked items leaves nothing to search | Every item is offered | |
+| Picking a guide replaces the items without asking | Asks first when there are items | |
+| Stock and Par beside each line of an existing order, and a guide row's stock on the form | On the form only (what is ordered, against par, is where it helps); not on an existing order | It needs the location's whole item list for each order opened. |
+| Expected delivery is a date picker | A week of days to tap, then Later days | No date picker on the phone, no new dependency. |
+| PDF download | Not on the phone | Needs a file share sheet (a new native dependency); emailing the supplier is there. Follow-up. |
+| Suggestions, Guides editor, Suppliers, Spend thresholds tabs | Not on the phone | Not in this wave's list; guides can be used, not edited. |
+| Emailing is offered only in the list's row, where the ordering method is known | The same; an order opened from a notification offers it and the server answers for a supplier that does not take email | The detail route does not send the ordering method. |
+| Credit notes have no page | To claim and Raised | The routes had no screen anywhere. `GET /credit-notes` sends no item, supplier or order name, so Raised shows the reference, amount, date and notes. |
+
 ## Inbox and push (`src/notifications`, `app/(app)/(inbox)`, `app/notification-settings.tsx`)
 
 The **Inbox** tab is everyone's (an entry in `src/shell/tabs.ts` with no permission: the server's notification routes need only a sign-in), with the unread count on its button, or on More and the Inbox row of the More list when the Inbox is under More.
@@ -385,7 +435,7 @@ It lists the server's unread notifications (`GET /api/inventory/notifications?li
 (`notificationView.ts`; every type in `NOTIFICATION_TYPES` has its own words, a type this build does not know reads "Notification"). The list is kept on the phone, so it opens with no signal.
 It is read when the tab opens, when the app wakes, when a push arrives and every minute while the app is open. **Mark read** is the queued command `notification.read`
 (a 404 counts as done), so it works offline and the row stays gone if a refresh lands before the server has it. **Open** shows only where the phone has the screen the notification is about
-(today an overdue delivery opens the Receive list); the server's link (`pushLink`) names routes for shifts, documents and orders that come in later waves.
+(an overdue delivery opens the Receive list; an approval, its answer or a discrepancy opens its order, for someone with the Orders tab); the server's link (`pushLink`) names routes for shifts and documents that come in later waves.
 
 **Push** (`push.ts`, native side in `nativePush.ts`): off until the person taps **Turn on** (the card at the top of the inbox, or Notification settings); the app never asks at launch.
 Turning it on asks the system, gets the Expo push token and registers it with `POST /api/notifications/register-device`, sending the refresh token so the server ties it to this sign-in.
@@ -439,5 +489,5 @@ The web's "create your first location" link for an admin is a sentence here: mak
 ## Tests
 
 `check:test` runs the logic tests (`src/**`) and the screen tests (`tests/*.test.tsx`); `check:e2e` runs the real client and queue against a server
-(`e2e/phoneFlow`, `e2e/wasteQueue`, `e2e/prepQueue`, `e2e/stockQueue`, `e2e/chatRecipes`, `e2e/storeRoom`; `e2e/receiving` uses the client alone, receiving has no queue; `e2e/accountNotifications`
+(`e2e/phoneFlow`, `e2e/wasteQueue`, `e2e/prepQueue`, `e2e/stockQueue`, `e2e/chatRecipes`, `e2e/storeRoom`; `e2e/receiving` uses the client alone, receiving has no queue; `e2e/orders` uses the client, lists and order form, which have none either; `e2e/accountNotifications`
 covers details, kitchen profile, password, two-step, the inbox read queue and push settings with a just-registered person; set `E2E_NOTIFICATION_ID` to a notification made for that person to check a real row, as the suite cannot make one through the API). See `device/README.md`.

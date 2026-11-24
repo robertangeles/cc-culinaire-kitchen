@@ -40,6 +40,9 @@ NODE_OPTIONS="--import $PWD/mobile/device/fakeModel.mjs" OPENROUTER_API_KEY=fake
 The database also needs the `recipePrompt` and `recipeRefinementPrompt` rows (`prompt` table, `default_ind = false`): they are authored in the admin UI and not seeded.
 Then `check:device -- device/chatRecipes`, with Metro on 8088 and `adb reverse` for 8088 and 3009. It deletes only the recipes and conversations it made.
 
+`device/orders.device.test.ts` is the purchasing walk: every Orders screen, written from a guide, submitted, rejected, approved, received short and credited, with no signal and on its side, photographed. It runs
+through the screenshot walk's own set-up: `SCREENS_FILE=device/orders.device.test.ts SCREENS_FORMS=phone bash device/lease.sh bash device/screens.sh <out-dir>` (with the emulator's env for iPad width).
+
 ## The screenshot walk (look at every screen)
 
 Every screen and its main states (empty, filled, error, offline or queued, long text), photographed on the phone and again at iPad widths,
