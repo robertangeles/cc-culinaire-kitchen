@@ -9,7 +9,7 @@ import { OfflineBanner } from "../../../src/ui/Banner";
 import { Button } from "../../../src/ui/Button";
 import { Column } from "../../../src/ui/Column";
 import { Text } from "../../../src/ui/Text";
-import { TextField } from "../../../src/ui/TextField";
+import { TextField, caret } from "../../../src/ui/TextField";
 import { Surface, rowDivider } from "../../../src/ui/Surface";
 import { fontFamily, size, space } from "../../../src/theme";
 import { useColors } from "../../../src/ui/theme";
@@ -116,6 +116,7 @@ export default function PrepPlan() {
                           <Text style={{ fontSize: 28, color: c.accentText }}>−</Text>
                         </Pressable>
                         <TextInput
+                          {...caret(c)}
                           accessibilityLabel={`Portions of ${d.name}`}
                           keyboardType="number-pad"
                           value={String(n)}

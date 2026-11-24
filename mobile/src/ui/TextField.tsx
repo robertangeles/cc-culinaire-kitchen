@@ -1,8 +1,11 @@
 import { useState, type ReactNode } from "react";
-import { StyleSheet, TextInput, View, type TextInputProps } from "react-native";
-import { fontFamily, fontSize, radius, size, space } from "../theme";
+import { Platform, StyleSheet, TextInput, View, type TextInputProps } from "react-native";
+import { fontFamily, fontSize, radius, size, space, type Palette } from "../theme";
 import { Text } from "./Text";
 import { useColors } from "./theme";
+
+/** A field's cursor, handles and selection in copper: the system's own are teal on Android and blue on iOS (where the tint is also the cursor, so it stays solid). */
+export const caret = (c: Palette) => ({ cursorColor: c.accentText, selectionHandleColor: c.accentText, selectionColor: Platform.OS === "ios" ? c.accentText : `${c.accentText}55` });
 
 /**
  * A labelled field in the first app's style: small copper capitals over a sunk paper field whose border turns copper on focus,
@@ -16,6 +19,7 @@ export function TextField({ label, trailing, ...input }: TextInputProps & { labe
       <Text variant="label">{label}</Text>
       <View style={[styles.row, { backgroundColor: c.field, borderColor: focused ? c.buttonFrom : c.border }]}>
         <TextInput
+          {...caret(c)}
           accessibilityLabel={label}
           placeholderTextColor="#A8A39A"
           {...input}

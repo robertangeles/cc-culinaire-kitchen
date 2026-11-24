@@ -98,7 +98,7 @@ describe("conversation list", () => {
     press("Delete Hollandaise rescue");
     expect(Alert.alert).toHaveBeenCalled();
     await waitFor(() => expect(chat.api.remove).toHaveBeenCalledWith("c1"));
-    await waitFor(() => expect(screen.getByText(/No saved conversations yet/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("No conversations yet")).toBeTruthy());
   });
 
   it("says plainly when the list cannot be read", async () => {

@@ -11,7 +11,7 @@ export function Segmented<T extends string>({ options, value, onChange }: { opti
       {options.map((o) => {
         const selected = o.value === value;
         return (
-          <Pressable key={o.value} accessibilityRole="tab" accessibilityLabel={o.label} accessibilityState={{ selected }} onPress={() => onChange(o.value)} style={[styles.item, selected && { backgroundColor: c.text }]}>
+          <Pressable key={o.value} accessibilityRole="tab" accessibilityLabel={o.label} accessibilityState={{ selected }} hitSlop={{ top: 6, bottom: 6 }} onPress={() => onChange(o.value)} style={[styles.item, selected && { backgroundColor: c.text }]}>
             <Text style={{ fontFamily: fontFamily.uiStrong, fontSize: 14, color: selected ? c.bg : c.text }}>{o.label}</Text>
           </Pressable>
         );

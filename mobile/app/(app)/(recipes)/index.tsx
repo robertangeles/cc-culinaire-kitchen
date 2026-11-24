@@ -62,8 +62,9 @@ export default function MyRecipes() {
                   key={t.label}
                   accessibilityRole="tab"
                   accessibilityState={{ selected }}
+                  hitSlop={4}
                   onPress={() => void store.setDomain(t.domain)}
-                  style={{ minHeight: 44, borderRadius: 999, borderWidth: 1, borderColor: selected ? c.text : c.border, backgroundColor: selected ? c.text : c.field, paddingHorizontal: space.lg, justifyContent: "center" }}
+                  style={{ minHeight: 48, borderRadius: 999, borderWidth: 1, borderColor: selected ? c.text : c.border, backgroundColor: selected ? c.text : c.field, paddingHorizontal: space.lg, justifyContent: "center" }}
                 >
                   <Text style={{ fontFamily: fontFamily.uiStrong, color: selected ? c.bg : c.text }}>{t.label}</Text>
                 </Pressable>

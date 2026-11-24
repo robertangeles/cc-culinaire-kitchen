@@ -7,6 +7,7 @@ import type { RecipeRequest } from "../../../src/recipes/recipeApi";
 import { Button } from "../../../src/ui/Button";
 import { Column } from "../../../src/ui/Column";
 import { Markdown } from "../../../src/ui/Markdown";
+import { ScreenHeader } from "../../../src/ui/ScreenHeader";
 import { Text } from "../../../src/ui/Text";
 import { TextField } from "../../../src/ui/TextField";
 import { Surface } from "../../../src/ui/Surface";
@@ -60,7 +61,7 @@ function Waiting({ startedAt, onStop }: { startedAt: number; onStop: () => void 
   return (
     <Surface>
       <View style={{ padding: space.lg, gap: space.md }}>
-        <Text accessibilityLiveRegion="polite" style={{ fontFamily: fontFamily.title, fontSize: 22 }}>Writing your recipe…</Text>
+        <Text accessibilityLiveRegion="polite" variant="heading">Writing your recipe…</Text>
         <Text variant="meta" accessibilityLabel={`${Math.floor(elapsed / 1000)} seconds so far`}>{clock(elapsed)}</Text>
         <View style={{ height: 6, borderRadius: 3, backgroundColor: c.border, overflow: "hidden" }}>
           <View style={{ width: `${Math.min(95, (elapsed / 90_000) * 100)}%`, height: 6, backgroundColor: c.accentText }} />
@@ -120,8 +121,7 @@ export default function RecipeLab() {
             <Pressable accessibilityRole="button" accessibilityLabel="Back to My Recipes" hitSlop={8} onPress={() => router.back()} style={{ minHeight: size.tap, justifyContent: "center", alignSelf: "flex-start" }}>
               <Text style={{ fontFamily: fontFamily.uiStrong, color: c.accentText }}>‹ My Recipes</Text>
             </Pressable>
-            <Text variant="label">Recipe Lab</Text>
-            <Text variant="title">Create a recipe</Text>
+            <ScreenHeader label="Recipe Lab" title="Create a recipe" />
 
             {snap.phase === "generating" && snap.startedAt ? <Waiting startedAt={snap.startedAt} onStop={store.stop} /> : null}
 

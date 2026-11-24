@@ -10,6 +10,7 @@ import { Column } from "../../../src/ui/Column";
 import { Grounded } from "../../../src/ui/Grounded";
 import { Markdown } from "../../../src/ui/Markdown";
 import { Text } from "../../../src/ui/Text";
+import { caret } from "../../../src/ui/TextField";
 import { fontFamily, fontSize, radius, size, space } from "../../../src/theme";
 import { useColors } from "../../../src/ui/theme";
 
@@ -61,11 +62,13 @@ export default function Conversation() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: c.bg }} edges={["top", "left", "right"]}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
-        <Column style={{ paddingHorizontal: space.xl, paddingTop: space.sm, flexDirection: "row", alignItems: "center", gap: space.md }}>
-          <Pressable accessibilityRole="button" accessibilityLabel="Back to conversations" hitSlop={8} onPress={() => router.back()} style={{ minHeight: size.tap, justifyContent: "center" }}>
-            <Text style={{ fontFamily: fontFamily.uiStrong, color: c.accentText }}>‹ Conversations</Text>
-          </Pressable>
-        </Column>
+        <View style={{ paddingHorizontal: space.xl, paddingTop: space.sm }}>
+          <Column>
+            <Pressable accessibilityRole="button" accessibilityLabel="Back to conversations" hitSlop={8} onPress={() => router.back()} style={{ minHeight: size.tap, justifyContent: "center", alignSelf: "flex-start" }}>
+              <Text style={{ fontFamily: fontFamily.uiStrong, color: c.accentText }}>‹ Conversations</Text>
+            </Pressable>
+          </Column>
+        </View>
         <ScrollView ref={scroll} contentContainerStyle={{ padding: space.xl, paddingTop: space.sm }} onContentSizeChange={() => scroll.current?.scrollToEnd({ animated: true })} keyboardShouldPersistTaps="handled">
           <Column style={{ gap: space.lg }}>
             {snap.title ? <Text variant="title" style={{ fontSize: 26 }}>{snap.title}</Text> : null}
@@ -114,9 +117,10 @@ export default function Conversation() {
         </ScrollView>
 
         {snap.phase !== "loading" && snap.phase !== "error" ? (
-          <View style={{ borderTopWidth: 1, borderTopColor: c.border, backgroundColor: c.surface }}>
-            <Column style={{ flexDirection: "row", alignItems: "flex-end", gap: space.sm, padding: space.md }}>
+          <View style={{ borderTopWidth: 1, borderTopColor: c.border, backgroundColor: c.surface, paddingVertical: space.md, paddingHorizontal: space.xl }}>
+            <Column style={{ flexDirection: "row", alignItems: "flex-end", gap: space.sm }}>
               <TextInput
+                {...caret(c)}
                 accessibilityLabel="Your question"
                 placeholder="Ask about techniques, troubleshooting, ingredients…"
                 placeholderTextColor={c.textMuted}
