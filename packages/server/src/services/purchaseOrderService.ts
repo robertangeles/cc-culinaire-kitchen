@@ -590,7 +590,7 @@ async function lockPendingPO(tx: DbOrTx, poId: string, orgId: number, verb: "app
 export async function approvePO(poId: string, orgId: number, userId: number) {
   const { po, updated, selfApproval } = await db.transaction(async (tx) => {
     const po = await lockPendingPO(tx, poId, orgId, "approve");
-    const authors = authorsFor(po, await editorsOf([poId], tx), userId);
+    const authors = authorsFor(po, await editorsOf([po.poId], tx), userId);
     const selfApproval = authors !== null;
     if (authors && (await hasOtherApprover(orgId, authors, tx))) {
       const did = po.createdByUserId === userId ? "created" : "edited";

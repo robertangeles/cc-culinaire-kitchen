@@ -301,6 +301,8 @@ describe.skipIf(!RUN)("purchase order edit and idempotent create (real DB)", () 
       const poId = await edited();
       expect((await detail(poId, fx.cook)).body.canApprove).toBe(false);
       expect(await approve(poId, fx.cook)).toMatchObject({ status: 403, body: { code: "SELF_APPROVAL_NOT_ALLOWED" } });
+      // Postgres reads an id in capitals as the same order; so must the check on who edited it.
+      expect(await approve(poId.toUpperCase(), fx.cook)).toMatchObject({ status: 403, body: { code: "SELF_APPROVAL_NOT_ALLOWED" } });
       expect((await detail(poId, fx.roamer)).body.canApprove).toBe(true);
       expect(await approve(poId, fx.roamer)).toMatchObject({ status: 200, body: { status: "SENT", selfApproval: false } });
     });
