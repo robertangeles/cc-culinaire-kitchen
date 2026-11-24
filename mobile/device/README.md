@@ -60,9 +60,9 @@ SCREENS_FORMS=phone SCREENS_TESTS="forgot|waste" bash device/lease.sh bash devic
 3009 and 8088), then `device/screens.device.test.ts` once per form and `device/gallery.mjs`, which writes `<out-dir>/index.html` (screen name,
 phone, iPad portrait, iPad landscape, the web page it mirrors; opens from disk). With a `<before-dir>` from an earlier run, a changed image is
 shown next to its earlier version. Forms (`SCREENS_FORMS`): `phone` (the moto g86 as it is), `tablet` (820 x 1180 dp) and `tablet-landscape`
-(1180 x 820 dp). The tablet forms set the phone's own display with `wm size` and `wm density` (reset afterwards, also when the walk
-dies): the real Android runtime lays the app out at iPad width. On the tablet emulator (below) run the `phone` form: the emulator as
-it is is iPad portrait.
+(1180 x 820 dp). On the phone the tablet forms set the phone's own display with `wm size` and `wm density` (reset afterwards, also when the walk
+dies): the real Android runtime lays the app out at iPad width. On the tablet emulator (below) run the two tablet forms: it is already
+iPad portrait, and `tablet-landscape` turns its display on its side at full resolution.
 
 Each test starts on its own from a cleared app (`pm clear` of `com.culinairekitchen.chef` only, relaunch, sign in through the shared helper),
 so a failed test never leaves the next one on the wrong screen; a failed test saves `FAILED-<name>.png`. It needs the development build
@@ -112,7 +112,7 @@ its own ports, and `env` also sets `DEVICE_HOST_IP=10.0.2.2` and its own databas
 beside a phone walk:
 
 ```bash
-SCREENS_FORMS=phone bash device/lease.sh bash device/screens.sh <out-dir>     # with the emulator's env loaded
+SCREENS_FORMS="tablet tablet-landscape" bash device/lease.sh bash device/screens.sh <out-dir>     # with the emulator's env loaded
 ```
 
 It stops itself after 15 minutes with nobody holding its lease (`EMULATOR_IDLE_S`), so it never sits on 3 GB for nothing; start
