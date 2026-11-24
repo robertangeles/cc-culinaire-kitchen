@@ -10,10 +10,11 @@ checks every call anyway.
 Run the screenshot walk (`device/README.md`, "The screenshot walk") after changing a screen, open its gallery and go down this list for the phone and both iPad widths:
 
 - Light paper background (`bg`), never white; cards and grouped rows on the sunk paper `Surface` with hairline dividers.
-- Section and field labels in copper capitals (Inter semibold 12, letter-spaced, `accentText`); titles and sentences in Fraunces; buttons, chips, numbers and short facts in Inter. Nothing below 16 pt except those labels.
-- A tab's title says what it is ("Waste", "Count"), with the location under it in Inter; an empty tab shows its state in a card (copper label, one sentence), never a bare line.
+- Section and field labels in copper capitals (`Text variant="label"`: Inter semibold 12, letter-spaced, `accentText`); titles and sentences in Fraunces; a card's or a row's name is `variant="heading"` (Fraunces 20); buttons, chips, numbers and short facts in Inter. Nothing below 16 pt except those labels and the tab bar's. No screen writes these styles out by hand.
+- Every tab starts with `ScreenHeader`: the location in copper capitals held close over the title that says what the tab is ("Waste", "Count"); Ask and Recipes, which no location owns, name their part instead ("Kitchen AI", "Recipe book"). An empty tab shows its state in a card (one heading, one sentence), never a bare line.
+- The signed-in app opens on the first button of the person's bar (`homeHref`): Prep for a cook who preps, Waste for one who only logs waste, Ask for someone with no module. Never on a tab under More.
 - Nothing clipped or overlapping: tab labels fully above the system navigation bar, long item names wrap, buttons fit their words.
-- At most five tab buttons; more modules go under More (`src/shell/tabs.ts`, `tabBar`), and Account is always reachable.
+- At most five tab buttons; more modules go under More (`src/shell/tabs.ts`, `tabBar`), and Account is always reachable. The bar is quiet: fine grey line icons with a short Inter 12 label each, one line, never cut; the open tab (More for a screen under it) is the only one in copper, on a sunk-paper pill.
 - On a tablet the content sits in the centred 560 dp column (`Screen` or `Column`), with equal paper on both sides.
 - A signed-in screen, the location choice and Terms and Privacy start at the top (`Screen` with `align="top"`); only sign-in, forgot password, check email, the two-step code, first run, update required and account deleted sit centred down the page.
 - The primary action is the copper gradient button; quiet actions are copper text; destructive ones outlined in ember. Offline is the saffron banner, waiting rows say "Waiting to send".

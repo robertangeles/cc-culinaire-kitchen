@@ -4,7 +4,7 @@ import { Screen } from "../src/ui/Screen";
 import { Text } from "../src/ui/Text";
 import { Button } from "../src/ui/Button";
 import { Surface, rowDivider } from "../src/ui/Surface";
-import { fontFamily, size, space } from "../src/theme";
+import { size, space } from "../src/theme";
 import { useColors } from "../src/ui/theme";
 
 export default function ChooseLocation() {
@@ -25,7 +25,7 @@ export default function ChooseLocation() {
           onPress={() => void session.chooseLocation(l.storeLocationId)}
           style={[{ minHeight: size.tap + 8, justifyContent: "center", paddingHorizontal: space.lg, paddingVertical: space.sm, opacity: busy ? 0.5 : 1 }, rowDivider(index, c.border)]}
         >
-          <Text style={{ fontFamily: fontFamily.title, fontSize: 20 }}>{l.locationName}</Text>
+          <Text variant="heading">{l.locationName}</Text>
           {l.storeLocationId === state.current?.storeLocationId ? <Text variant="meta">Current location</Text> : null}
         </Pressable>
       ))}

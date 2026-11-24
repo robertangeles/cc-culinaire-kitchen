@@ -32,7 +32,7 @@ function Bubble({ message, streaming }: { message: ChatMessage; streaming: boole
   }
   return (
     <View style={{ alignSelf: "stretch", gap: space.sm, backgroundColor: c.surface, borderColor: c.border, borderWidth: 1, borderRadius: radius.key, padding: space.lg }}>
-      <Text style={{ fontFamily: fontFamily.uiStrong, fontSize: 12, letterSpacing: 1.8, textTransform: "uppercase", color: c.accentText }}>Antoine</Text>
+      <Text variant="label">Antoine</Text>
       {message.grounded?.length ? <Grounded titles={message.grounded} /> : null}
       {message.text ? <Markdown text={message.text} /> : <Text variant="muted" accessibilityLiveRegion="polite">{streaming ? "Antoine is thinking…" : ""}</Text>}
     </View>

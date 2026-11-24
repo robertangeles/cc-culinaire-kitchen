@@ -20,15 +20,9 @@ import { useColors } from "../../../src/ui/theme";
 const QUICK = ["Make dairy-free", "Scale to 50 portions", "Reduce food cost", "Simplify technique", "Make gluten-free", "Add vegetarian option"];
 const DIFFICULTY: Record<string, string> = { beginner: "Home cook", intermediate: "Skilled home cook", advanced: "Professional", expert: "Master level" };
 
-function useCaps() {
-  const c = useColors();
-  return { fontFamily: fontFamily.uiStrong, fontSize: 12, letterSpacing: 1.8, textTransform: "uppercase", color: c.accentText } as const;
-}
-
 /** The recipe itself: facts, ingredients, method, tips. Used for the saved recipe and for a refinement's proposal. */
 function RecipeBody({ data }: { data: RecipeData }) {
   const c = useColors();
-  const caps = useCaps();
   const facts = [
     ["Yield", data.yield],
     ["Prep", data.prepTime],
@@ -41,7 +35,7 @@ function RecipeBody({ data }: { data: RecipeData }) {
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.lg }}>
           {facts.map(([k, v]) => (
             <View key={k} style={{ gap: 2, minWidth: 96 }}>
-              <Text style={caps}>{k}</Text>
+              <Text variant="label">{k}</Text>
               <Text style={{ fontFamily: fontFamily.uiStrong }}>{v}</Text>
             </View>
           ))}
@@ -51,7 +45,7 @@ function RecipeBody({ data }: { data: RecipeData }) {
 
       {data.ingredients.length ? (
         <View style={{ gap: space.xs }}>
-          <Text style={caps}>Ingredients</Text>
+          <Text variant="label">Ingredients</Text>
           <Surface>
             {data.ingredients.map((ing, i) => (
               <View key={i} style={[{ flexDirection: "row", gap: space.md, paddingVertical: space.md, paddingHorizontal: space.lg }, rowDivider(i, c.border)]}>
@@ -65,7 +59,7 @@ function RecipeBody({ data }: { data: RecipeData }) {
 
       {data.steps.length ? (
         <View style={{ gap: space.md }}>
-          <Text style={caps}>Method</Text>
+          <Text variant="label">Method</Text>
           {data.steps.map((s, i) => (
             <View key={i} style={{ flexDirection: "row", gap: space.md }}>
               <Text style={{ fontFamily: fontFamily.title, fontSize: 22, color: c.accentText, minWidth: 28 }}>{s.step || i + 1}</Text>
@@ -77,19 +71,19 @@ function RecipeBody({ data }: { data: RecipeData }) {
 
       {data.proTips.length ? (
         <View style={{ gap: space.xs }}>
-          <Text style={caps}>Pro tips</Text>
+          <Text variant="label">Pro tips</Text>
           {data.proTips.map((t, i) => <Text key={i}>{`• ${t}`}</Text>)}
         </View>
       ) : null}
       {data.whyThisWorks ? (
         <View style={{ gap: space.xs }}>
-          <Text style={caps}>Why this works</Text>
+          <Text variant="label">Why this works</Text>
           <Text>{data.whyThisWorks}</Text>
         </View>
       ) : null}
       {data.allergenNote ? (
         <View style={{ gap: space.xs }}>
-          <Text style={caps}>Allergens</Text>
+          <Text variant="label">Allergens</Text>
           <Text>{data.allergenNote}</Text>
         </View>
       ) : null}
@@ -102,7 +96,6 @@ function RecipeBody({ data }: { data: RecipeData }) {
 export default function RecipeView() {
   const router = useRouter();
   const c = useColors();
-  const caps = useCaps();
   const { state } = useSession();
   const { id } = useLocalSearchParams<{ id?: string }>();
   const { store, snap } = useRecipe(id ?? "", state.phase === "ready" ? state.user.userId : -1);
@@ -133,14 +126,14 @@ export default function RecipeView() {
             {recipe && data ? (
               <>
                 {recipe.imageUrl ? <Image source={{ uri: recipe.imageUrl }} accessibilityLabel={`Photo of ${recipe.title}`} style={{ width: "100%", aspectRatio: 1, borderRadius: radius.key, backgroundColor: c.surface }} /> : null}
-                <Text style={caps}>{recipe.domain === "patisserie" ? "Patisserie" : recipe.domain === "spirits" ? "Spirits" : "Culinary"}</Text>
+                <Text variant="label">{recipe.domain === "patisserie" ? "Patisserie" : recipe.domain === "spirits" ? "Spirits" : "Culinary"}</Text>
                 <Text variant="title">{recipe.title}</Text>
                 {grounded.length ? <Grounded titles={grounded} /> : null}
                 {recipe.description || data.description ? <Text variant="muted">{recipe.description || data.description}</Text> : null}
 
                 {snap.isOwner ? (
                   <View style={{ gap: space.xs }}>
-                    <Text style={caps}>Who can see it</Text>
+                    <Text variant="label">Who can see it</Text>
                     <View style={{ alignSelf: "flex-start" }}>
                       <Segmented options={[{ value: "private", label: "Only me" }, { value: "public", label: "Public" }]} value={recipe.isPublicInd ? "public" : "private"} onChange={(v) => void store.setPublic(v === "public")} />
                     </View>
@@ -153,7 +146,7 @@ export default function RecipeView() {
 
                 {snap.isOwner ? (
                   <View style={{ gap: space.md, borderTopWidth: 1, borderTopColor: c.border, paddingTop: space.lg }}>
-                    <Text style={caps}>Refine with Antoine</Text>
+                    <Text variant="label">Refine with Antoine</Text>
                     {snap.error ? <Text variant="error" accessibilityLiveRegion="polite">{snap.error}</Text> : null}
                     {refine.phase === "idle" ? (
                       <>
@@ -172,7 +165,7 @@ export default function RecipeView() {
                     ) : null}
                     {refine.phase === "refining" ? (
                       <View style={{ gap: space.md }} accessibilityLiveRegion="polite">
-                        <Text style={{ fontFamily: fontFamily.title, fontSize: 20 }}>Antoine is refining your recipe…</Text>
+                        <Text variant="heading">Antoine is refining your recipe…</Text>
                         <Text variant="muted">Usually under a minute. Nothing changes until you accept.</Text>
                         <Button kind="danger" label="Stop" onPress={store.stopRefine} />
                       </View>
@@ -181,7 +174,7 @@ export default function RecipeView() {
                       <View style={{ gap: space.lg }}>
                         <Surface>
                           <View style={{ padding: space.lg, gap: space.xs }}>
-                            <Text style={caps}>What changed</Text>
+                            <Text variant="label">What changed</Text>
                             <Text>{refine.changeSummary || "Antoine did not describe the change."}</Text>
                           </View>
                         </Surface>

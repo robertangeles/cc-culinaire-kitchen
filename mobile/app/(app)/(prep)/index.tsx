@@ -10,12 +10,12 @@ import { OfflineBanner } from "../../../src/ui/Banner";
 import { Button } from "../../../src/ui/Button";
 import { Column } from "../../../src/ui/Column";
 import { Text } from "../../../src/ui/Text";
+import { ScreenHeader } from "../../../src/ui/ScreenHeader";
 import { Chip, Surface, rowDivider } from "../../../src/ui/Surface";
 import { fontFamily, size, space } from "../../../src/theme";
 import { useColors } from "../../../src/ui/theme";
 
 const timeOf = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-const caps = { fontFamily: fontFamily.uiStrong, fontSize: 12, letterSpacing: 1.8, textTransform: "uppercase" } as const;
 
 /** Today's prep at this location: progress, then the tasks from "start with these" to "can wait", each one a tap to tick. */
 export default function Prep() {
@@ -44,8 +44,7 @@ export default function Prep() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await store.refresh(); setRefreshing(false); }} />}
       >
         <Column style={{ gap: space.lg }}>
-          <Text variant="title">Prep</Text>
-          <Text variant="meta">{state.location.locationName}</Text>
+          <ScreenHeader label={state.location.locationName} title="Prep" />
           {snap.offline ? <OfflineBanner text="You're offline. Ticks are saved on this phone and sent when you're back." /> : null}
           {snap.waiting > 0 ? <Text variant="muted" accessibilityLiveRegion="polite">{snap.waiting} waiting to send</Text> : null}
           {snap.attention > 0 ? <Text variant="error">⚠ {snap.attention} {snap.attention === 1 ? "task needs" : "tasks need"} attention</Text> : null}
@@ -75,7 +74,8 @@ export default function Prep() {
 
           {snap.phase === "ready" && !list.plan && progress.total === 0 ? (
             <Surface>
-              <View style={{ padding: space.lg, gap: space.md }}>
+              <View style={{ padding: space.lg, gap: space.sm }}>
+                <Text variant="label">Today</Text>
                 <Text>Nothing planned for today yet.</Text>
                 {canPlan ? <Button label="Plan today's prep" onPress={() => router.push("/plan")} /> : <Text variant="muted">Ask a manager to plan today's prep.</Text>}
               </View>
@@ -85,7 +85,7 @@ export default function Prep() {
           {progress.total > 0 ? (
             <Surface>
               <View style={{ padding: space.lg, gap: space.sm }}>
-                <Text style={[caps, { color: c.accentText }]}>Today</Text>
+                <Text variant="label">Today</Text>
                 <Text style={{ fontFamily: fontFamily.title, fontSize: 24 }}>{progress.done} of {progress.total} done</Text>
                 <View accessibilityRole="progressbar" aria-valuemin={0} aria-valuemax={progress.total} aria-valuenow={progress.done} style={{ height: 8, borderRadius: 4, backgroundColor: c.border, overflow: "hidden" }}>
                   <View style={{ height: 8, width: `${Math.round((progress.done / progress.total) * 100)}%`, backgroundColor: c.success }} />
@@ -97,7 +97,7 @@ export default function Prep() {
 
           {groupByTier(list.rows).map((group) => (
             <View key={group.title} style={{ gap: space.xs }}>
-              <Text style={[caps, { color: c.accentText }]}>{group.title} · {group.done}/{group.rows.length}</Text>
+              <Text variant="label">{group.title} · {group.done}/{group.rows.length}</Text>
               <Surface>
                 {group.rows.map((row, index) => {
                   const done = row.status === "completed";
@@ -120,7 +120,7 @@ export default function Prep() {
                         </View>
                         <View style={{ flex: 1, gap: 2 }}>
                           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: space.md }}>
-                            <Text style={{ fontFamily: fontFamily.title, fontSize: 20, flexShrink: 1, textDecorationLine: done ? "line-through" : "none" }}>{row.ingredientName}</Text>
+                            <Text variant="heading" style={{ flexShrink: 1, textDecorationLine: done ? "line-through" : "none" }}>{row.ingredientName}</Text>
                             <Text style={{ fontFamily: fontFamily.uiStrong }}>{quantityText(row.quantityNeeded, row.unit)}</Text>
                           </View>
                           {stock ? <Text variant="meta">{stock}</Text> : null}

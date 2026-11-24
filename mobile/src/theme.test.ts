@@ -34,8 +34,10 @@ describe.each(Object.entries(palettes))("%s theme contrast", (_name, palette) =>
 });
 
 describe("size rules", () => {
-  it("keeps text at 16pt or more and taps at 56dp or more", () => {
-    expect(Math.min(...Object.values(fontSize))).toBeGreaterThanOrEqual(16);
+  it("keeps text at 16pt or more, but for the copper capitals label, and taps at 56dp or more", () => {
+    const { label, ...text } = fontSize;
+    expect(Math.min(...Object.values(text))).toBeGreaterThanOrEqual(16);
+    expect(label).toBe(12);
     expect(size.tap).toBeGreaterThanOrEqual(56);
     expect(size.key).toBeGreaterThanOrEqual(72);
   });

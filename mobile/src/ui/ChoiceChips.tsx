@@ -11,7 +11,7 @@ export function ChoiceChips<T extends string>({ label, options, value, onChange,
   const c = useColors();
   return (
     <View style={styles.wrap}>
-      <Text style={[styles.label, { color: c.accentText }]}>{label}</Text>
+      <Text variant="label">{label}</Text>
       <View accessibilityRole="radiogroup" accessibilityLabel={label} style={styles.row}>
         {options.map((o) => {
           const selected = o === value;
@@ -36,7 +36,6 @@ export function ChoiceChips<T extends string>({ label, options, value, onChange,
 
 const styles = StyleSheet.create({
   wrap: { gap: space.xs },
-  label: { fontFamily: fontFamily.uiStrong, fontSize: 12, letterSpacing: 1.8, textTransform: "uppercase" },
   row: { flexDirection: "row", flexWrap: "wrap", gap: space.sm },
   chip: { minHeight: 48, borderRadius: 999, borderWidth: 1, paddingHorizontal: space.lg, alignItems: "center", justifyContent: "center" },
 });

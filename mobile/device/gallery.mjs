@@ -15,6 +15,7 @@ const WEB = [
   [/^04/, `/terms and /privacy (PublicPage, surface mobile)`],
   [/^05/, "none: the web has no update screen"],
   [/^06/, `${C}/pages/LoginPage.tsx (MFA step)`],
+  [/^07/, "the first tab after sign-in (the web opens on its own home page)"],
   [/^1/, `${C}/components/inventory/StockTakeSession.tsx, CategoryCounter.tsx (/inventory)`],
   [/^2/, `${C}/pages/WasteIntelligencePage.tsx, components/waste (/waste-intelligence)`],
   [/^3/, `${C}/pages/KitchenCopilotPage.tsx, components/copilot (/kitchen-copilot)`],
@@ -25,6 +26,10 @@ const WEB = [
   [/^62/, `${C}/components/location/LocationSwitcher.tsx`],
   [/^6[3-4]/, `${C}/components/profile/DeleteAccountSection.tsx (/profile)`],
   [/^7/, `${C}/components/profile/OrgTab.tsx (join by key)`],
+  [/^8[0-4]/, `${C}/pages/ChatPage.tsx (/chat)`],
+  [/^8[5-9]/, `${C}/pages/MyShelfPage.tsx, RecipeLabPage.tsx (/my-shelf, /recipes)`],
+  [/^9[0-4]/, `${C}/pages/PurchasingPage.tsx (receiving)`],
+  [/^9[5-9]/, `${C}/components/layout/NotificationBell.tsx (the bell)`],
 ];
 
 const [dirArg, beforeArg] = argv.slice(2);

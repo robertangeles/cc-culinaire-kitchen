@@ -5,6 +5,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Changed (phone: a quieter tab bar, a real home, one header on every tab)
+
+Phone app only; no server change, no permission change.
+
+- **Home:** the signed-in app opened on Ask, a tab under More, for anyone who has Prep (every module's list is `index`, so "/" opened the route group that sorts first). It now opens on the first button of the person's own bar: Prep for a cook who preps, Waste for one who only logs waste, Ask for someone with no module (`homeHref` in `mobile/src/shell/tabs.ts`, a one-time redirect in `app/(app)/_layout.tsx` before the tabs exist, so Ask is not left in the Back history).
+- **Tab bar:** labels 12 pt Inter (were 16 pt), one line, growing with the phone's text size only to 1.3x; 22 dp icons with a finer stroke; the open tab is the only one in copper, on a sunk-paper pill; the bar is 64 dp above the system navigation bar (was 68). Order, More and every permission rule are unchanged.
+- **One header and one set of text styles:** every tab opens with `ScreenHeader` (the location in copper capitals over the title; Ask and Recipes keep "Kitchen AI" and "Recipe book"). The copper capitals label and the Fraunces 20 card heading are `Text` variants (`label`, `heading`) instead of styles copied into each screen. More's icons are grey, as the first app's lists.
+- **Screenshot walk:** also photographs the first screen after sign-in, Ask, a new conversation, My Recipes, the Recipe Lab and Receive.
+
 ### Added (mobile Wave 4, phone: inbox, push, profile and account)
 
 No server change, no migration. Uses the Wave 4 push server (migration `0004_push_dispatch`) for push registration and settings, and the error codes on the profile and account routes; the inbox and profile screens use routes that already exist. **The phone's development build must be rebuilt**: `expo-notifications` and `expo-image-picker` are new native modules (`mobile/device/README.md`).

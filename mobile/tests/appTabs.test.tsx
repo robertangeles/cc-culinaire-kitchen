@@ -18,9 +18,13 @@ const mocks = vi.hoisted(() => ({
   barState: null as unknown as BarProps["state"],
   unread: 0,
   listeners: {} as Record<string, (arg: { navigation: { navigate: (route: string) => void } }) => { tabPress: (e: { preventDefault: () => void }) => void }>,
+  // Where the navigator is, as expo-router reports it. Account by default, a page no landing redirect touches; the landing tests set "/".
+  pathname: "/account",
+  segments: ["(app)", "account"] as string[],
+  redirect: null as string | null,
 }));
 type BarProps = { state: { index: number; routes: { key: string; name: string }[] } };
-vi.mock("../src/runtime/appContext", () => ({ useSession: () => ({ state: { phase: "ready", user: mocks.user } }) }));
+vi.mock("../src/runtime/appContext", () => ({ useSession: () => ({ state: { phase: "ready", user: mocks.user, location: { storeLocationId: "loc-1", locationName: "Main Kitchen" } } }) }));
 // The inbox's unread count (its real store needs the native SQLite and notification modules).
 vi.mock("../src/runtime/notifications", () => ({ useInbox: () => ({ unread: mocks.unread }) }));
 vi.mock("react-native-safe-area-context", () => ({
@@ -41,7 +45,11 @@ vi.mock("expo-router", () => {
     return null;
   };
   Tabs.Protected = ({ guard, children }: { guard: boolean; children?: ReactNode }) => <Guard value={guard}>{Children.toArray(children)}</Guard>;
-  return { Tabs, useNavigation: () => ({ navigate: mocks.navigate }) };
+  const Redirect = ({ href }: { href: string }) => {
+    mocks.redirect = href;
+    return null;
+  };
+  return { Tabs, Redirect, usePathname: () => mocks.pathname, useSegments: () => mocks.segments, useNavigation: () => ({ navigate: mocks.navigate }) };
 });
 // The library's own bar, which draws the tab at `state.index` as the open one: this records the state the layout hands it.
 vi.mock("expo-router/tabs", () => ({
@@ -59,6 +67,9 @@ afterEach(() => {
   mocks.screens.length = 0;
   mocks.navigate.mockReset();
   mocks.unread = 0;
+  mocks.pathname = "/account";
+  mocks.segments = ["(app)", "account"];
+  mocks.redirect = null;
 });
 
 const person = (over: Partial<AuthUser>): AuthUser => ({ userId: 1, userName: "A", userEmail: "a@x.test", mfaEnabled: false, roles: [], permissions: [], ...over });
@@ -81,14 +92,58 @@ describe("the tab bar", () => {
       mocks.user = person({ permissions: ["waste:log"] });
       render(<AppTabs />);
       const style = mocks.screenOptions.tabBarStyle as { height: number; paddingTop: number; paddingBottom: number };
-      const label = mocks.screenOptions.tabBarLabelStyle as { lineHeight: number };
-      expect(style.height).toBe(68 + bottom);
+      const icon = mocks.screenOptions.tabBarIconStyle as { height: number };
+      expect(style.height).toBe(64 + bottom);
       expect(style.paddingBottom).toBeGreaterThanOrEqual(bottom);
-      // A tab is the library's 5 dp padding, a 25 dp icon, the label's line and 5 dp again: it must fit inside the bar's own padding,
-      // or the label is cut off at the bottom (the library's default 49 dp clipped the 16pt labels on the moto g86).
-      expect(style.height - bottom - style.paddingTop - (style.paddingBottom - bottom)).toBeGreaterThanOrEqual(5 + 25 + label.lineHeight + 5);
+      // A tab is the library's 5 dp padding, the icon's pill, 2 dp, the label's 16 dp line and 5 dp again: it must fit inside the bar's own
+      // padding, or the label is cut off at the bottom (the library's default 49 dp clipped the labels on the moto g86).
+      expect(style.height - bottom - style.paddingTop - (style.paddingBottom - bottom)).toBeGreaterThanOrEqual(5 + icon.height + 2 + 16 + 5);
     },
   );
+
+  it("labels each button in one short line of 12 pt Inter that grows with the phone's text size only up to 1.3x, so no label wraps or is cut", () => {
+    mocks.user = person({ roles: ["Administrator"] });
+    render(<AppTabs />);
+    const Label = mocks.screenOptions.tabBarLabel as (p: { color: string; children: string; position: string }) => ReactNode;
+    cleanup();
+    render(<>{Label({ color: "#956134", children: "Receive", position: "below-icon" })}</>);
+    const label = screen.getByText("Receive");
+    expect(getComputedStyle(label).fontSize).toBe("12px");
+    // react-native-web draws numberOfLines={1} as one clipped line; the 1.3x cap is a native-only prop, so it is checked on the element's props.
+    expect(getComputedStyle(label).whiteSpace).toBe("nowrap");
+  });
+
+  it.each([
+    ["an Administrator", person({ roles: ["Administrator"] }), "/(prep)"],
+    ["a cook who only logs waste", person({ permissions: ["waste:log"] }), "/(waste)"],
+  ])("sends %s who lands on Ask, the group a bare / opens, to the first button on their bar", (_who, user, home) => {
+    mocks.user = user;
+    mocks.pathname = "/";
+    mocks.segments = ["(app)", "(chat)"];
+    render(<AppTabs />);
+    expect(mocks.redirect).toBe(home);
+    expect(mocks.screens).toEqual([]);
+  });
+
+  it("does not move a person who lands on their own first tab, nor one who opens Ask after landing", () => {
+    mocks.user = person({ roles: ["Administrator"] });
+    mocks.pathname = "/";
+    mocks.segments = ["(app)", "(prep)"];
+    const { rerender } = render(<AppTabs />);
+    expect(mocks.redirect).toBeNull();
+    expect(buttons()).toEqual(["Prep", "Waste", "Usage", "Count", "More"]);
+    mocks.segments = ["(app)", "(chat)"];
+    rerender(<AppTabs />);
+    expect(mocks.redirect).toBeNull();
+  });
+
+  it("gives everyone without a module Ask as their first tab, so a landing on Ask stays there", () => {
+    mocks.user = person({});
+    mocks.pathname = "/";
+    mocks.segments = ["(app)", "(chat)"];
+    render(<AppTabs />);
+    expect(mocks.redirect).toBeNull();
+  });
 
   it("shows a cook's modules and Account, with no More, when they fit in five buttons", () => {
     mocks.user = person({ permissions: ["waste:log"] });
@@ -178,7 +233,8 @@ describe("the tab bar", () => {
   it("More starts at the top of the page, as the module tabs do, in the 560 dp column", () => {
     mocks.user = person({ roles: ["Administrator"] });
     render(<More />);
-    const column = screen.getByText("More").parentElement as HTMLElement;
+    // More heads itself as every tab does: the location over its title, in the column.
+    const column = screen.getByText("More").parentElement?.parentElement as HTMLElement;
     expect(parseFloat(getComputedStyle(column).maxWidth)).toBe(560);
     expect(getComputedStyle(column.parentElement as HTMLElement).justifyContent).toBe("flex-start");
   });

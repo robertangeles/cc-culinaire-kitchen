@@ -7,9 +7,10 @@ import { useCount } from "../../../src/count/CountProvider";
 import { summarizeArea } from "../../../src/count/countFlow";
 import { OfflineBanner } from "../../../src/ui/Banner";
 import { Text } from "../../../src/ui/Text";
+import { ScreenHeader } from "../../../src/ui/ScreenHeader";
 import { Button } from "../../../src/ui/Button";
 import { Chip, Surface, rowDivider } from "../../../src/ui/Surface";
-import { fontFamily, size, space } from "../../../src/theme";
+import { size, space } from "../../../src/theme";
 import { useColors } from "../../../src/ui/theme";
 import { Column } from "../../../src/ui/Column";
 
@@ -52,8 +53,7 @@ export default function Areas() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await store.refresh(); setRefreshing(false); }} />}
       >
         <Column style={{ gap: space.lg }}>
-          <Text variant="title">Count</Text>
-          <Text variant="meta">{state.location.locationName}</Text>
+          <ScreenHeader label={state.location.locationName} title="Count" />
           {snap.offline ? <OfflineBanner text="You're offline. Counts are saved on this phone and sent when you're back." /> : null}
           {attention > 0 ? (
             <Pressable accessibilityRole="button" accessibilityLabel={attentionText} onPress={() => router.push("/attention")} style={{ minHeight: size.tap, justifyContent: "center" }}>
@@ -72,7 +72,7 @@ export default function Areas() {
             // The same card as Waste's "Today": a copper label over one sentence, so an empty tab is not a bare line of text.
             <Surface>
               <View style={{ padding: space.lg, gap: space.xs }}>
-                <Text style={{ fontFamily: fontFamily.uiStrong, fontSize: 12, letterSpacing: 1.8, textTransform: "uppercase", color: c.accentText }}>Stock take</Text>
+                <Text variant="label">Stock take</Text>
                 <Text variant="muted">
                   {snap.phase === "loading"
                     ? "Loading the stock take…"
@@ -108,7 +108,7 @@ export default function Areas() {
                     style={[{ minHeight: size.tap + 14, justifyContent: "center", paddingVertical: space.md, paddingHorizontal: space.lg, gap: space.xs }, rowDivider(index, c.border)]}
                   >
                     <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: space.md }}>
-                      <Text style={{ fontFamily: fontFamily.title, fontSize: 20, flexShrink: 1 }}>{area.name}</Text>
+                      <Text variant="heading" style={{ flexShrink: 1 }}>{area.name}</Text>
                       <Chip label={done ? "Sent for review" : `${area.counted} of ${area.total}`} />
                     </View>
                     {area.sharesWith.length > 0 ? <Text variant="meta">Shares items with {area.sharesWith.join(", ")}</Text> : null}

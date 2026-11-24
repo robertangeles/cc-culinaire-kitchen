@@ -109,7 +109,7 @@ export default function PrepPlan() {
                     return (
                       <View key={d.key} style={[{ paddingVertical: space.sm, paddingHorizontal: space.lg, flexDirection: "row", alignItems: "center", gap: space.md }, rowDivider(index, c.border)]}>
                         <View style={{ flex: 1 }}>
-                          <Text style={{ fontFamily: fontFamily.title, fontSize: 20 }}>{d.name}</Text>
+                          <Text variant="heading">{d.name}</Text>
                           {d.category ? <Text variant="meta">{d.category}</Text> : null}
                         </View>
                         <Pressable accessibilityRole="button" accessibilityLabel={`Fewer ${d.name}`} onPress={() => set(d.key, n - 1)} style={{ width: size.tap, height: size.tap, alignItems: "center", justifyContent: "center" }}>

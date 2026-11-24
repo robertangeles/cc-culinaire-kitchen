@@ -89,7 +89,6 @@ export default function RecipeLab() {
   const [cuisine, setCuisine] = useState("");
   const [ingredients, setIngredients] = useState("");
   const [occasion, setOccasion] = useState("");
-  const caps = { fontFamily: fontFamily.uiStrong, fontSize: 12, letterSpacing: 1.8, textTransform: "uppercase", color: c.accentText } as const;
 
   // A recipe that was just made opens straight away (the lab keeps it, for the marker on its page, until My Recipes opens the lab again).
   // Only while this screen is in view: made while the person is on another tab, it opens when they come back.
@@ -121,7 +120,7 @@ export default function RecipeLab() {
             <Pressable accessibilityRole="button" accessibilityLabel="Back to My Recipes" hitSlop={8} onPress={() => router.back()} style={{ minHeight: size.tap, justifyContent: "center", alignSelf: "flex-start" }}>
               <Text style={{ fontFamily: fontFamily.uiStrong, color: c.accentText }}>‹ My Recipes</Text>
             </Pressable>
-            <Text style={caps}>Recipe Lab</Text>
+            <Text variant="label">Recipe Lab</Text>
             <Text variant="title">Create a recipe</Text>
 
             {snap.phase === "generating" && snap.startedAt ? <Waiting startedAt={snap.startedAt} onStop={store.stop} /> : null}
@@ -131,7 +130,7 @@ export default function RecipeLab() {
             {snap.phase === "pending" ? (
               <Surface>
                 <View style={{ padding: space.lg, gap: space.md }} accessibilityLiveRegion="polite">
-                  <Text style={{ fontFamily: fontFamily.title, fontSize: 20 }}>Your recipe may still be on its way</Text>
+                  <Text variant="heading">Your recipe may still be on its way</Text>
                   <Text variant="muted">The connection dropped while Antoine was writing, and he may still be at it. The phone looks in My Recipes every few seconds, so do not make it again yet.</Text>
                   <Button label="Check now" onPress={() => void store.checkAgain()} />
                 </View>
@@ -141,7 +140,7 @@ export default function RecipeLab() {
             {snap.phase === "found" && snap.found ? (
               <Surface>
                 <View style={{ padding: space.lg, gap: space.md }} accessibilityLiveRegion="polite">
-                  <Text style={{ fontFamily: fontFamily.title, fontSize: 20 }}>A new recipe appeared. Is it this one?</Text>
+                  <Text variant="heading">A new recipe appeared. Is it this one?</Text>
                   <Text variant="muted">{`The answer did not reach the phone, but "${snap.found.title}" was saved to My Recipes while you waited. Open it before making the recipe again.`}</Text>
                   <Button label="Open it" onPress={() => { const id = snap.found!.recipeId; store.reset(); router.replace({ pathname: "/recipe", params: { id } }); }} />
                   <Button kind="quiet" label="It's another recipe: make mine again" onPress={() => void store.retry()} />
@@ -152,7 +151,7 @@ export default function RecipeLab() {
             {snap.phase === "prose" && snap.prose ? (
               <Surface>
                 <View style={{ padding: space.lg, gap: space.md }}>
-                  <Text style={{ fontFamily: fontFamily.title, fontSize: 20 }}>Antoine answered in words</Text>
+                  <Text variant="heading">Antoine answered in words</Text>
                   <Markdown text={snap.prose} />
                   <Text variant="meta">Nothing was saved, and no session was used.</Text>
                   <Button kind="ghost" label="Change the request" onPress={store.reset} />
@@ -177,7 +176,7 @@ export default function RecipeLab() {
                 <TextField label="Key ingredients" value={ingredients} onChangeText={setIngredients} placeholder="e.g. chicken, cider, shallots" autoCapitalize="none" />
 
                 <View style={{ gap: space.xs }}>
-                  <Text style={caps}>Servings</Text>
+                  <Text variant="label">Servings</Text>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: space.md }}>
                     <Pressable accessibilityRole="button" accessibilityLabel="Fewer servings" disabled={servings <= 1} onPress={() => setServings(servings - 1)} style={{ width: size.tap, height: size.tap, borderRadius: radius.button, borderWidth: 1, borderColor: c.border, backgroundColor: c.field, alignItems: "center", justifyContent: "center", opacity: servings <= 1 ? 0.5 : 1 }}>
                       <Text style={{ fontFamily: fontFamily.uiStrong, fontSize: 22 }}>−</Text>
@@ -190,7 +189,7 @@ export default function RecipeLab() {
                 </View>
 
                 <View style={{ gap: space.xs }}>
-                  <Text style={caps}>Difficulty</Text>
+                  <Text variant="label">Difficulty</Text>
                   <View accessibilityRole="radiogroup" accessibilityLabel="Difficulty" style={{ flexDirection: "row", flexWrap: "wrap", gap: space.sm }}>
                     <Pill role="radio" label="Any" selected={!difficulty} onPress={() => setDifficulty(undefined)} />
                     {DIFFICULTY.map((d) => <Pill key={d.value} role="radio" label={d.label} selected={difficulty === d.value} onPress={() => setDifficulty(d.value)} />)}
@@ -200,7 +199,7 @@ export default function RecipeLab() {
                 <TextField label="Occasion (optional)" value={occasion} onChangeText={setOccasion} placeholder="e.g. dinner party, weeknight, holiday" maxLength={100} />
 
                 <View style={{ gap: space.xs }}>
-                  <Text style={caps}>Dietary restrictions</Text>
+                  <Text variant="label">Dietary restrictions</Text>
                   <View accessibilityLabel="Dietary restrictions" style={{ flexDirection: "row", flexWrap: "wrap", gap: space.sm }}>
                     {DIETARY.map((d) => {
                       const on = dietary.includes(d);

@@ -7,6 +7,7 @@ import { useLab, useShelf } from "../../../src/recipes/RecipesProvider";
 import { Button } from "../../../src/ui/Button";
 import { Column } from "../../../src/ui/Column";
 import { Text } from "../../../src/ui/Text";
+import { ScreenHeader } from "../../../src/ui/ScreenHeader";
 import { TextField } from "../../../src/ui/TextField";
 import { Chip, Surface, rowDivider } from "../../../src/ui/Surface";
 import { fontFamily, radius, size, space } from "../../../src/theme";
@@ -38,7 +39,6 @@ export default function MyRecipes() {
     if (lab.phase === "made") labStore.reset();
     router.push("/recipe-lab");
   }
-  const caps = { fontFamily: fontFamily.uiStrong, fontSize: 12, letterSpacing: 1.8, textTransform: "uppercase", color: c.accentText } as const;
   // As on the web, the search looks through the recipes already loaded.
   const q = search.trim().toLowerCase();
   const shown = q ? snap.recipes.filter((r) => `${r.title} ${r.description ?? ""}`.toLowerCase().includes(q)) : snap.recipes;
@@ -51,8 +51,7 @@ export default function MyRecipes() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await store.refresh(); setRefreshing(false); }} />}
       >
         <Column style={{ gap: space.lg }}>
-          <Text style={caps}>Recipe book</Text>
-          <Text variant="title">My Recipes</Text>
+          <ScreenHeader label="Recipe book" title="My Recipes" />
           <Button label={lab.phase === "generating" ? "Recipe Lab: making your recipe…" : "Create a recipe"} onPress={openLab} />
 
           <View accessibilityRole="tablist" style={{ flexDirection: "row", flexWrap: "wrap", gap: space.sm }}>
@@ -79,7 +78,7 @@ export default function MyRecipes() {
           {snap.phase === "ready" && snap.recipes.length === 0 ? (
             <Surface>
               <View style={{ padding: space.lg, gap: space.xs }}>
-                <Text style={{ fontFamily: fontFamily.title, fontSize: 20 }}>No recipes yet</Text>
+                <Text variant="heading">No recipes yet</Text>
                 <Text variant="muted">Recipes you make in the Recipe Lab, here or on the web, are kept here.</Text>
               </View>
             </Surface>
@@ -102,7 +101,7 @@ export default function MyRecipes() {
                       <View style={{ width: 64, height: 64, borderRadius: radius.banner, backgroundColor: c.surface, borderWidth: 1, borderColor: c.border }} />
                     )}
                     <View style={{ flex: 1, gap: 2 }}>
-                      <Text numberOfLines={2} style={{ fontFamily: fontFamily.title, fontSize: 18 }}>{r.title}</Text>
+                      <Text numberOfLines={2} variant="heading">{r.title}</Text>
                       {r.description ? <Text variant="muted" numberOfLines={2}>{r.description}</Text> : null}
                       <View style={{ flexDirection: "row", marginTop: space.xs }}>
                         <Chip label={r.isPublicInd ? "Public" : "Private"} />

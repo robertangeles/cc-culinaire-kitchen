@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { AuthUser } from "../api/auth";
-import { canOpen, hasAnyPermission, MAX_TABS, moduleTabs, tabBar, tabLabels, visibleTabs } from "./tabs";
+import { canOpen, hasAnyPermission, homeHref, MAX_TABS, moduleTabs, tabBar, tabLabels, visibleTabs } from "./tabs";
 
 /** The tabs a permission opens, leaving out those every signed-in person gets. */
 const gatedTabs = (user: AuthUser) => visibleTabs(user).filter((t) => t.anyPermission);
@@ -101,5 +101,12 @@ describe("the tab bar and More", () => {
     });
     // No module permission: Ask, Recipes and the Inbox, which everyone gets, then Account; More has no button.
     expect(tabLabels(person())).toEqual({ Ask: "Ask, tab, 1 of 4", Recipes: "Recipes, tab, 2 of 4", Inbox: "Inbox, tab, 3 of 4", Account: "Account, tab, 4 of 4" });
+  });
+
+  it("opens the signed-in app on the first button of the person's bar, named with its group so a bare / cannot open Ask instead", () => {
+    expect(homeHref(person({ roles: ["Administrator"] }))).toBe("/(prep)");
+    expect(homeHref(person({ permissions: ["waste:log", "inventory:count"] }))).toBe("/(waste)");
+    expect(homeHref(person({ permissions: ["purchasing:receive"] }))).toBe("/(receive)");
+    expect(homeHref(person())).toBe("/(chat)");
   });
 });

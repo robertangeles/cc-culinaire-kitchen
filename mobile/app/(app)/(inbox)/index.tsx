@@ -7,6 +7,7 @@ import { notificationText, routeFor, timeAgo } from "../../../src/notifications/
 import { Screen } from "../../../src/ui/Screen";
 import { Text } from "../../../src/ui/Text";
 import { SectionLabel } from "../../../src/ui/SectionLabel";
+import { ScreenHeader } from "../../../src/ui/ScreenHeader";
 import { Button } from "../../../src/ui/Button";
 import { OfflineBanner } from "../../../src/ui/Banner";
 import { Surface, rowDivider } from "../../../src/ui/Surface";
@@ -24,8 +25,8 @@ export default function Inbox() {
   if (state.phase !== "ready") return null;
 
   return (
-    <Screen>
-      <Text variant="title">Inbox</Text>
+    <Screen align="top">
+      <ScreenHeader label={state.location.locationName} title="Inbox" />
       {snap.offline && snap.phase === "ready" ? <OfflineBanner text="No signal. Showing what was here last time." /> : null}
       <PushCard status={status} />
       {snap.phase === "loading" ? <Text variant="muted">Loading…</Text> : null}
@@ -36,10 +37,12 @@ export default function Inbox() {
         </>
       ) : null}
       {snap.phase === "ready" && snap.items.length === 0 ? (
-        <View style={{ gap: space.xs }}>
-          <Text style={{ fontFamily: fontFamily.title, fontSize: 22 }}>You're all caught up</Text>
-          <Text variant="muted">New shifts, orders and documents that need you will show here.</Text>
-        </View>
+        <Surface>
+          <View style={{ padding: space.lg, gap: space.xs }}>
+            <Text variant="heading">You're all caught up</Text>
+            <Text variant="muted">New shifts, orders and documents that need you will show here.</Text>
+          </View>
+        </Surface>
       ) : null}
       {snap.items.length > 0 ? (
         <>

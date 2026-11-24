@@ -11,7 +11,7 @@ import { Text } from "../src/ui/Text";
 import { TextField } from "../src/ui/TextField";
 import { Button } from "../src/ui/Button";
 import { OptionChips, type Option } from "../src/ui/OptionChips";
-import { fontFamily, space } from "../src/theme";
+import { space } from "../src/theme";
 
 interface Loaded {
   form: KitchenForm;
@@ -142,7 +142,7 @@ export default function KitchenProfile() {
 function Heading({ children }: { children: string }) {
   return (
     <View style={{ paddingTop: space.md }}>
-      <Text style={{ fontFamily: fontFamily.title, fontSize: 22 }}>{children}</Text>
+      <Text variant="heading">{children}</Text>
     </View>
   );
 }

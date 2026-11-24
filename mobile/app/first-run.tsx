@@ -9,7 +9,7 @@ import { Surface } from "../src/ui/Surface";
 import { LegalLinks } from "../src/ui/LegalLinks";
 import { useRouter } from "expo-router";
 import { View } from "react-native";
-import { fontFamily, space } from "../src/theme";
+import { space } from "../src/theme";
 
 /** A signed-in person with no location yet: join the organisation by its key, then a location by its key. Both keys come from the manager. */
 export default function FirstRun() {
@@ -54,7 +54,7 @@ function JoinStep({ needsOrganisation, error, email }: { needsOrganisation: bool
       <Button label={busy ? "Joining…" : "Join"} disabled={!canSubmit} onPress={submit} />
       <Surface>
         <View style={{ padding: space.lg, gap: space.xs }}>
-          <Text style={{ fontFamily: fontFamily.title, fontSize: 18 }}>No key?</Text>
+          <Text variant="heading">No key?</Text>
           <Text variant="muted">
             {needsOrganisation
               ? "Your manager can also invite you from the organisation's settings on the web."

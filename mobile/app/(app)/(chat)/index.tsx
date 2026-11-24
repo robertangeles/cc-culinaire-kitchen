@@ -6,6 +6,7 @@ import { useConversations } from "../../../src/chat/ChatProvider";
 import { Button } from "../../../src/ui/Button";
 import { Column } from "../../../src/ui/Column";
 import { Text } from "../../../src/ui/Text";
+import { ScreenHeader } from "../../../src/ui/ScreenHeader";
 import { Surface, rowDivider } from "../../../src/ui/Surface";
 import { fontFamily, size, space } from "../../../src/theme";
 import { useColors } from "../../../src/ui/theme";
@@ -19,7 +20,6 @@ export default function Conversations() {
   const { list, refresh, remove } = useConversations();
   const [refreshing, setRefreshing] = useState(false);
   useFocusEffect(useCallback(() => void refresh(), [refresh]));
-  const caps = { fontFamily: fontFamily.uiStrong, fontSize: 12, letterSpacing: 1.8, textTransform: "uppercase", color: c.accentText } as const;
 
   function confirmDelete(id: string, title: string) {
     Alert.alert(`Delete “${title}”?`, "The conversation is deleted for good, on the web too.", [
@@ -35,8 +35,7 @@ export default function Conversations() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await refresh(); setRefreshing(false); }} />}
       >
         <Column style={{ gap: space.lg }}>
-          <Text style={caps}>Kitchen AI</Text>
-          <Text variant="title">Ask Antoine</Text>
+          <ScreenHeader label="Kitchen AI" title="Ask Antoine" />
           <Text variant="muted">Techniques, troubleshooting, ingredients: ask the way you would ask your sous chef.</Text>
           <Button label="New conversation" onPress={() => router.push("/conversation")} />
 
@@ -50,7 +49,7 @@ export default function Conversations() {
 
           {list.phase === "ready" ? (
             <View style={{ gap: space.xs }}>
-              <Text style={caps}>Your conversations</Text>
+              <Text variant="label">Your conversations</Text>
               {list.items.length === 0 ? (
                 <Text variant="muted">No saved conversations yet. They appear here, and on the web, after the first answer.</Text>
               ) : (
@@ -63,7 +62,7 @@ export default function Conversations() {
                         onPress={() => router.push({ pathname: "/conversation", params: { id: item.conversationId } })}
                         style={({ pressed }) => ({ flex: 1, minHeight: size.tap + 8, justifyContent: "center", paddingVertical: space.md, paddingLeft: space.lg, gap: 2, opacity: pressed ? 0.6 : 1 })}
                       >
-                        <Text numberOfLines={2} style={{ fontFamily: fontFamily.title, fontSize: 18 }}>{item.conversationTitle}</Text>
+                        <Text numberOfLines={2} variant="heading">{item.conversationTitle}</Text>
                         <Text variant="meta">{dayOf(item.updatedDttm)}</Text>
                       </Pressable>
                       <Pressable

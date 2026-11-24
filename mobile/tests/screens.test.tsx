@@ -139,7 +139,8 @@ describe("areas list", () => {
   it("keeps the list in the centred 560 dp column on an iPad, as every other tab does", async () => {
     await makeHarness();
     render(<Areas />);
-    const column = screen.getByRole("heading").parentElement as HTMLElement;
+    // The title sits in the header block, which sits in the column.
+    const column = screen.getByRole("heading").parentElement?.parentElement as HTMLElement;
     expect(parseFloat(getComputedStyle(column).maxWidth)).toBe(560);
     expect(getComputedStyle(column).alignSelf).toBe("center");
   });
