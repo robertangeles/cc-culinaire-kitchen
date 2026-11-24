@@ -7,7 +7,7 @@
 import { generate } from "otplib";
 import { createApiClient, type Tokens } from "../src/api/client";
 
-const baseUrl = () => process.env.E2E_API_URL ?? "http://localhost:3009";
+const baseUrl = () => process.env.E2E_API_URL ?? "http://127.0.0.1:3009";
 const API = "/api/inventory";
 
 /** Read when used, not when imported, so a script can load .env.test first. */

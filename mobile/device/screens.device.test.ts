@@ -17,8 +17,8 @@ import { credentials, freshCode, manager } from "./fixtures";
  * set the phone's display size and density with `wm`, so the real Android runtime lays the app out at iPad width; both are reset afterwards.
  * Images go to SCREENS_OUT/<form>/<name>.png.
  */
-const METRO = process.env.METRO_URL ?? "http://localhost:8088";
-const API_URL = process.env.E2E_API_URL ?? "http://localhost:3009";
+const METRO = process.env.METRO_URL ?? "http://127.0.0.1:8088";
+const API_URL = process.env.E2E_API_URL ?? "http://127.0.0.1:3009";
 const FORM = process.env.SCREENS_FORM ?? "phone";
 const OUT = resolve(process.env.SCREENS_OUT ?? "device/_shots/screens", FORM);
 const INV = "/api/inventory";

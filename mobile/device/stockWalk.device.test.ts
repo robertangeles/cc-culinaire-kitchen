@@ -11,7 +11,7 @@ import { credentials, freshCode, manager } from "./fixtures";
  * record a move, and look at both screens in landscape (the width of a small tablet). Each step saves a screenshot to device/_shots.
  * Needs: the development build installed, Metro on METRO_URL, the server on E2E_API_URL, `adb reverse` for both, and the E2E user.
  */
-const METRO = process.env.METRO_URL ?? "http://localhost:8088";
+const METRO = process.env.METRO_URL ?? "http://127.0.0.1:8088";
 const API = "/api/inventory";
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
