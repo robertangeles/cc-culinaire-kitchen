@@ -36,6 +36,14 @@ describe("count screen", () => {
     expect(screen.getByText("Also in Stock Room")).toBeTruthy();
   });
 
+  it("keeps the keypad in the centred 560 dp column, so it does not stretch across an iPad", async () => {
+    await makeHarness();
+    render(<AreaCount />);
+    let column = screen.getByLabelText("Number keypad") as HTMLElement | null;
+    while (column && parseFloat(getComputedStyle(column).maxWidth) !== 560) column = column.parentElement;
+    expect(column && getComputedStyle(column).alignSelf).toBe("center");
+  });
+
   it("types a number on the keypad and only enables Save once something is typed", async () => {
     await makeHarness();
     render(<AreaCount />);

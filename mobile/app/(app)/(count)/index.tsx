@@ -113,7 +113,7 @@ export default function Areas() {
                     </View>
                     {area.sharesWith.length > 0 ? <Text variant="meta">Shares items with {area.sharesWith.join(", ")}</Text> : null}
                     {area.heldBy ? <Text variant="meta">{area.heldBy} is counting this</Text> : null}
-                    {area.needsAttention > 0 ? <Text variant="error">⚠ {area.needsAttention} need attention</Text> : null}
+                    {area.needsAttention > 0 ? <Text variant="error">⚠ {area.needsAttention} {area.needsAttention === 1 ? "needs" : "need"} attention</Text> : null}
                   </Pressable>
                 );
               })}

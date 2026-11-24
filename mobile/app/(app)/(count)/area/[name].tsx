@@ -9,6 +9,7 @@ import { CardTransition } from "../../../../src/ui/CardTransition";
 import { Keypad } from "../../../../src/ui/Keypad";
 import { OfflineBanner } from "../../../../src/ui/Banner";
 import { Button } from "../../../../src/ui/Button";
+import { Column } from "../../../../src/ui/Column";
 import { Text } from "../../../../src/ui/Text";
 import { Surface, rowDivider } from "../../../../src/ui/Surface";
 import { fontFamily, fontSize, size, space } from "../../../../src/theme";
@@ -58,10 +59,12 @@ export default function AreaCount() {
 
   if (items.length === 0) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: c.bg, padding: space.xl, gap: space.lg }}>
-        <Text variant="title">{name}</Text>
-        <Text>There is nothing on this area's sheet yet.</Text>
-        <Button label="Back to areas" onPress={() => router.back()} />
+      <SafeAreaView style={{ flex: 1, backgroundColor: c.bg, padding: space.xl }}>
+        <Column style={{ gap: space.lg }}>
+          <Text variant="title">{name}</Text>
+          <Text>There is nothing on this area's sheet yet.</Text>
+          <Button label="Back to areas" onPress={() => router.back()} />
+        </Column>
       </SafeAreaView>
     );
   }
@@ -88,27 +91,29 @@ export default function AreaCount() {
 
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: c.bg }}>
-        <ScrollView contentContainerStyle={{ padding: space.xl, gap: space.md }}>
-          <Text variant="title">Review {name}</Text>
-          {snap.offline ? <OfflineBanner text="You're offline. Counts are saved on this phone." /> : null}
-          <Surface>
-          {rows.map((r, i) => (
-            <Pressable
-              key={r.ingredientId}
-              accessibilityRole="button"
-              accessibilityLabel={`${r.name}: ${rowText(r.kind, r.answer, r.alsoIn)}`}
-              onPress={() => goTo(i)}
-              style={[{ minHeight: size.tap + 8, justifyContent: "center", paddingVertical: space.sm, paddingHorizontal: space.lg }, rowDivider(i, c.border)]}
-            >
-              <Text variant="heading">{r.name}</Text>
-              <Text variant={r.kind === "needs_attention" || r.kind === "shared_gap" ? "error" : "muted"}>{rowText(r.kind, r.answer, r.alsoIn)}</Text>
-            </Pressable>
-          ))}
-          </Surface>
-          {blockers.map((b) => <Text key={b as string} variant="muted">{b}</Text>)}
-          {message ? <Text variant="error" accessibilityLiveRegion="polite">{message}</Text> : null}
-          <Button label={busy ? "Submitting…" : "Submit area"} disabled={!check.ok || busy} onPress={() => void submit()} />
-          <Button kind="quiet" label="Back to areas" onPress={() => router.back()} />
+        <ScrollView contentContainerStyle={{ padding: space.xl }}>
+          <Column style={{ gap: space.md }}>
+            <Text variant="title">Review {name}</Text>
+            {snap.offline ? <OfflineBanner text="You're offline. Counts are saved on this phone." /> : null}
+            <Surface>
+            {rows.map((r, i) => (
+              <Pressable
+                key={r.ingredientId}
+                accessibilityRole="button"
+                accessibilityLabel={`${r.name}: ${rowText(r.kind, r.answer, r.alsoIn)}`}
+                onPress={() => goTo(i)}
+                style={[{ minHeight: size.tap + 8, justifyContent: "center", paddingVertical: space.sm, paddingHorizontal: space.lg }, rowDivider(i, c.border)]}
+              >
+                <Text variant="heading">{r.name}</Text>
+                <Text variant={r.kind === "needs_attention" || r.kind === "shared_gap" ? "error" : "muted"}>{rowText(r.kind, r.answer, r.alsoIn)}</Text>
+              </Pressable>
+            ))}
+            </Surface>
+            {blockers.map((b) => <Text key={b as string} variant="muted">{b}</Text>)}
+            {message ? <Text variant="error" accessibilityLiveRegion="polite">{message}</Text> : null}
+            <Button label={busy ? "Submitting…" : "Submit area"} disabled={!check.ok || busy} onPress={() => void submit()} />
+            <Button kind="quiet" label="Back to areas" onPress={() => router.back()} />
+          </Column>
         </ScrollView>
       </SafeAreaView>
     );
@@ -138,37 +143,39 @@ export default function AreaCount() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: c.bg }}>
-      <ScrollView contentContainerStyle={{ padding: space.xl, gap: space.lg }} keyboardShouldPersistTaps="handled">
-        <Text variant="meta">{name} · item {view.index + 1} of {items.length}</Text>
-        {snap.offline ? <OfflineBanner text="You're offline. Counts are saved on this phone." /> : null}
-        <CardTransition itemKey={item.ingredientId}>
-          <Text variant="title" style={{ fontSize: fontSize.item }}>{item.ingredientName}</Text>
-          {item.alsoIn.length > 0 ? <Text variant="meta">Also in {item.alsoIn.join(", ")}</Text> : null}
-          <Text variant="meta">Count in {item.countUnit}</Text>
-          <Text
-            accessibilityLiveRegion="polite"
-            accessibilityLabel={`${item.ingredientName}, ${item.countUnit}, ${entry === "" ? "nothing typed" : entry}`}
-            style={{ fontFamily: fontFamily.uiStrong, fontSize: fontSize.number, fontVariant: ["tabular-nums"] }}
-          >
-            {entry === "" ? "–" : entry}
-          </Text>
-          {current ? <Text variant={current.saveState === "needs_attention" ? "error" : "muted"}>{SAVE_LABEL[current.saveState]}</Text> : null}
-        </CardTransition>
-        {message ? <Text variant="error" accessibilityLiveRegion="polite">{message}</Text> : null}
+      <ScrollView contentContainerStyle={{ padding: space.xl }} keyboardShouldPersistTaps="handled">
+        <Column style={{ gap: space.lg }}>
+          <Text variant="meta">{name} · item {view.index + 1} of {items.length}</Text>
+          {snap.offline ? <OfflineBanner text="You're offline. Counts are saved on this phone." /> : null}
+          <CardTransition itemKey={item.ingredientId}>
+            <Text variant="title" style={{ fontSize: fontSize.item }}>{item.ingredientName}</Text>
+            {item.alsoIn.length > 0 ? <Text variant="meta">Also in {item.alsoIn.join(", ")}</Text> : null}
+            <Text variant="meta">Count in {item.countUnit}</Text>
+            <Text
+              accessibilityLiveRegion="polite"
+              accessibilityLabel={`${item.ingredientName}, ${item.countUnit}, ${entry === "" ? "nothing typed" : entry}`}
+              style={{ fontFamily: fontFamily.uiStrong, fontSize: fontSize.number, fontVariant: ["tabular-nums"] }}
+            >
+              {entry === "" ? "–" : entry}
+            </Text>
+            {current ? <Text variant={current.saveState === "needs_attention" ? "error" : "muted"}>{SAVE_LABEL[current.saveState]}</Text> : null}
+          </CardTransition>
+          {message ? <Text variant="error" accessibilityLiveRegion="polite">{message}</Text> : null}
 
-        <Keypad entry={entry} onKey={onKey} />
-        <Button label={busy ? "Saving…" : "Save and next"} disabled={value === null || busy} onPress={() => void save()} />
-        <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-          <Button kind="quiet" label="Previous" disabled={view.index === 0} onPress={() => leave(() => goTo(view.index - 1))} />
-          <Button kind="quiet" label="Skip" onPress={() => leave(() => advance(view.index))} />
-          <Button kind="quiet" label="Review" onPress={() => leave(() => setView({ mode: "review", index: 0 }))} />
-        </View>
+          <Keypad entry={entry} onKey={onKey} />
+          <Button label={busy ? "Saving…" : "Save and next"} disabled={value === null || busy} onPress={() => void save()} />
+          <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+            <Button kind="quiet" label="Previous" disabled={view.index === 0} onPress={() => leave(() => goTo(view.index - 1))} />
+            <Button kind="quiet" label="Skip" onPress={() => leave(() => advance(view.index))} />
+            <Button kind="quiet" label="Review" onPress={() => leave(() => setView({ mode: "review", index: 0 }))} />
+          </View>
 
-        {items.slice(view.index + 1, view.index + 3).map((next, i) => (
-          <Pressable key={next.ingredientId} accessibilityRole="button" accessibilityLabel={`Jump to ${next.ingredientName}`} onPress={() => leave(() => goTo(view.index + 1 + i))} style={{ minHeight: size.tap, justifyContent: "center" }}>
-            <Text variant="muted">{next.ingredientName}</Text>
-          </Pressable>
-        ))}
+          {items.slice(view.index + 1, view.index + 3).map((next, i) => (
+            <Pressable key={next.ingredientId} accessibilityRole="button" accessibilityLabel={`Jump to ${next.ingredientName}`} onPress={() => leave(() => goTo(view.index + 1 + i))} style={{ minHeight: size.tap, justifyContent: "center" }}>
+              <Text variant="muted">{next.ingredientName}</Text>
+            </Pressable>
+          ))}
+        </Column>
       </ScrollView>
     </SafeAreaView>
   );
