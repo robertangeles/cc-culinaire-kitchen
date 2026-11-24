@@ -124,7 +124,7 @@ emulator insists on 4 GB, hence 240 dpi). Delete it all with
 `rm -rf ~/.android/avd/culinaire-tablet.avd ~/.android/avd/culinaire-tablet.ini`; `start` makes it again.
 
 Measured on this machine (20 cores, 30 GB): cold boot 14 to 18 s, the x86_64 build 64 to 93 s, the count walk's sign-in screen 4.2 s
-(5.2 s on the phone), the whole screenshot walk 38 minutes (13 of 14 tests, 47 images; about 15 minutes a form on the phone): slower
+(5.2 s on the phone), the whole screenshot walk 38 minutes (13 of 14 tests, 47 images, measured before the home, Ask, Recipes, Receive and Inbox test was added; about 15 minutes a form on the phone): slower
 per walk than the phone, but it never waits for the phone's lease. The emulator is not the phone: with its airplane mode on, the app still opened an area that needs the server
 (count walk W5 and W6, cause not yet found), so use the phone for offline steps. At tablet width the walks
 written for the phone also meet screens the phone never shows at once (the Sign in tab and button are both on screen).
