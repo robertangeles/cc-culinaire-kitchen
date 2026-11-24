@@ -119,12 +119,13 @@ adb server started on 5038 by a later adb call would take the phone's USB too (`
 The emulator needs its own development build: x86_64, where the phone's is arm64. Same steps as below, with
 `-PreactNativeArchitectures=x86_64` (or `arm64-v8a,x86_64` for one APK that installs on both), and install and stamp with the
 emulator's `env` loaded. Cost on this machine: the emulator and the Android 15 image take 2.6 GB in `~/android-sdk`, the AVD
-about 0.5 to 1 GB in `~/.android/avd`; while running it holds about 3.2 to 3.7 GB of memory (3 GB of guest RAM: at 320 dpi the
+about 0.9 GB in `~/.android/avd`; while running it holds about 2.5 to 3.7 GB of memory (3 GB of guest RAM: at 320 dpi the
 emulator insists on 4 GB, hence 240 dpi). Delete it all with
 `rm -rf ~/.android/avd/culinaire-tablet.avd ~/.android/avd/culinaire-tablet.ini`; `start` makes it again.
 
-Measured on this machine (20 cores, 30 GB): cold boot 14 to 18 s, the x86_64 build 93 s, the count walk's sign-in screen 4.2 s
-(5.2 s on the phone). The emulator is not the phone: with its airplane mode on, the app still opened an area that needs the server
+Measured on this machine (20 cores, 30 GB): cold boot 14 to 18 s, the x86_64 build 64 to 93 s, the count walk's sign-in screen 4.2 s
+(5.2 s on the phone), the whole screenshot walk 38 minutes (13 of 14 tests, 47 images; about 15 minutes a form on the phone): slower
+per walk than the phone, but it never waits for the phone's lease. The emulator is not the phone: with its airplane mode on, the app still opened an area that needs the server
 (count walk W5 and W6, cause not yet found), so use the phone for offline steps. At tablet width the walks
 written for the phone also meet screens the phone never shows at once (the Sign in tab and button are both on screen).
 
