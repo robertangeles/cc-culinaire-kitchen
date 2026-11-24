@@ -28,7 +28,8 @@ Run the screenshot walk (`device/README.md`, "The screenshot walk") after changi
 | `src/api` | The one network client: auth, refresh, coded errors (`ApiError.code`, `serverCode`). |
 | `src/outbox` | The offline queue (below). |
 | `src/ingredients` | The shared ingredient picker's data (below); its component is `src/ui/IngredientPicker.tsx`. |
-| `src/count`, `src/waste`, `src/prep`, `src/consumption`, `src/movements`, `src/chat`, `src/recipes` | One folder per module: API calls, store (screen state), pure view functions, commands. |
+| `src/count`, `src/waste`, `src/prep`, `src/consumption`, `src/movements`, `src/chat`, `src/recipes`, `src/notifications` | One folder per module: API calls, store (screen state), pure view functions, commands. |
+| `src/profile` | The photo picker and the kitchen profile form's rules. |
 | `src/ui` | Components shared by every module, `Column` (the tablet column) among them. |
 | `packages/shared/src/schemas` | The zod schemas of what the server sends, parsed leniently at the boundary (`lenient.ts`). |
 | `packages/shared/src/utils/menuCosting.ts` | Menu and recipe costing (line cost, food cost %, margin, plate P&L cost, classification, the 35% alert and 30% category target). The phone imports costing from `@culinaire/shared`, never its own copy; the server and the web import the same functions. Where the web editor and the server round or guard differently each keeps its own named function (`previewLineCost`, `editorItemCosts` for a live preview; `storedLineCost`, `storedItemCosts` for what the server saves): a phone editor uses the preview ones, and the differences are listed in `menuCosting.test.ts`. |
@@ -302,7 +303,66 @@ While a keypad or reject panel is open only that line shows and Confirm is hidde
 "Back to deliveries" leaves the delivery open; "Cancel receiving" asks first, discards it (nothing reaches stock) and puts the order back in the queue.
 A delivery another phone already confirmed (`ALREADY_CONFIRMED`) or cancelled (`INVALID_STATE`) says so and offers the queue. A unit with no path to the kitchen unit (`UNIT_NOT_CONVERTIBLE`) names the item and leaves the delivery open: reject that line to go on.
 
+## Inbox and push (`src/notifications`, `app/(app)/(inbox)`, `app/notification-settings.tsx`)
+
+The **Inbox** tab is everyone's (an entry in `src/shell/tabs.ts` with no permission: the server's notification routes need only a sign-in), with the unread count on its button, or on More and the Inbox row of the More list when the Inbox is under More.
+It lists the server's unread notifications (`GET /api/inventory/notifications?limit=50`, the count from `/count`), newest first, each with a heading and a sentence for its type
+(`notificationView.ts`; every type in `NOTIFICATION_TYPES` has its own words, a type this build does not know reads "Notification"). The list is kept on the phone, so it opens with no signal.
+It is read when the tab opens, when the app wakes, when a push arrives and every minute while the app is open. **Mark read** is the queued command `notification.read`
+(a 404 counts as done), so it works offline and the row stays gone if a refresh lands before the server has it. **Open** shows only where the phone has the screen the notification is about
+(today an overdue delivery opens the Receive list); the server's link (`pushLink`) names routes for shifts, documents and orders that come in later waves.
+
+**Push** (`push.ts`, native side in `nativePush.ts`): off until the person taps **Turn on** (the card at the top of the inbox, or Notification settings); the app never asks at launch.
+Turning it on asks the system, gets the Expo push token and registers it with `POST /api/notifications/register-device`, sending the refresh token so the server ties it to this sign-in.
+It is registered again at every sign-in, app start and return to the foreground (tokens change, and the person may have changed the permission in the phone's settings), removed with `unregister-device` when turned off, and removed before sign-out (3 s at most; the server also drops it when the sign-in ends).
+A refused permission shows **Open settings**. A tapped push opens the screen it is about (and marks it read) or the inbox; one that started the app waits for the session. A push that arrives with the app open shows as a banner and refreshes the inbox.
+**Notification settings** lists the server's kinds with a switch each (`PUT /api/notifications/push-preferences`, `disabledTypes`) and sets quiet hours (24-hour times in the phone's own time zone; a push inside the window is skipped, not saved for later). Neither touches the inbox.
+
+**Before push works on a phone** (owner, needs credentials): `eas init` (writes `extra.eas.projectId` into the app config), FCM credentials in the Expo project and `google-services.json` for Android, an APNs key for iOS,
+then `EXPO_PUSH_ENABLED=true` in Settings > Integrations. Until then **Turn on** ends at "This version of the app can't receive pushes yet", and the inbox works as before. `expo-notifications` is a native module: rebuild the development build (`device/README.md`).
+
+Differences from the web bell (`components/layout/NotificationBell.tsx`), found while comparing:
+
+| Web | Phone | Why |
+|---|---|---|
+| A bell in the header; the 20 newest unread | A tab with a badge; the 50 newest unread; the count from the server, so it can be more than the list | |
+| Thirteen types have a label; the other six (Brain problems, document expiring, holiday shift asked or declined, swap picked up, document to review) show "Approval needed" | Every type has its own heading and sentence | The web fallback is wrong for them. |
+| Text: `body`, `summary`, else the order number, reason and supplier | The same, plus the document and whose it is, the holiday shift's date, the Brain error count; a plain sentence when the payload has nothing | |
+| A click marks it read and opens Purchasing for an order; any other type opens nothing | **Open** only where the phone has the screen; **Mark read** always | Shifts, documents and orders are later waves. |
+| X dismisses | Not on the phone: Mark read takes it off the list the same way | The dismiss route stays on the web. |
+| A failed read is silent | Queued; works with no signal; a refusal stays in the Account sync list | |
+| No read history, no "mark all read" | The same | **The server keeps only unread rows**; history and mark-all need server routes. |
+| No push, no settings page | Push and Notification settings | Phone only. |
+
+## Profile and account (`app/(app)/account.tsx`, `app/profile.tsx`, `app/change-password.tsx`, `app/two-step.tsx`, `app/kitchen-profile.tsx`)
+
+The Account tab is the hub: picture, name, email and location, then **My details**, **Kitchen profile**, **Password**, **Two-step verification** and **Notifications**, then the sync list, change location, Add Sign in with Apple (iPhone and iPad), sign out, the legal pages and Delete my account.
+A change of name, picture or two-step setting reads the person again (`session.refreshUser`), so every screen shows it at once. The picture is picked with `expo-image-picker` (`src/profile/pickImage.ts`, a native module: rebuild the development build), cropped square on the phone and uploaded as multipart `file`.
+
+Differences from the web profile (`pages/ProfilePage.tsx`, `components/profile`), found while comparing:
+
+| Web | Phone | Why |
+|---|---|---|
+| Account Details: name, bio (300), address, five social links; Save, and an autosave when leaving the tab | The same fields; Save only | A phone screen has no tab switch to hang an autosave on. |
+| An emptied field is sent as nothing, so it cannot be cleared (and clearing every address field leaves the old address) | Every field is sent, an emptied one as `""`, which clears it; the six address fields always go together (the server writes them as one) | |
+| Picture: a file, then a crop window | Choose photo or Take photo, the system's square crop, compressed; HEIC is refused on the phone with a plain sentence | The server takes PNG, JPEG and WebP. |
+| Change password shows the form to an account with no password; the server answers "Account uses OAuth login" | Says there is no password to change | |
+| Change password does not send the refresh token in the body (the cookie does it) | Sends it, so this phone stays signed in while every other sign-in ends | |
+| Two-step set-up: a QR and the key | The key with **Open in authenticator app** (an `otpauth:` link) and the QR for an authenticator on another device | Scanning a QR on the phone that shows it is not possible. The server does not send its `otpauth` URL, so the phone builds it with the server's issuer ("CulinAIre Kitchen") and the account's email. |
+| A sign-in that is too old for a change (no-password account) shows the server's sentence | Says so and offers Sign out | |
+| Kitchen profile: accordion sections; a non-admin sees only the skill level and Save sends the whole form | Flat sections; a non-admin sees the skill level and Save sends only the skill level | Never overwrites the organisation's answers from a cook's phone. |
+| Skill levels, cuisines, dietary needs and equipment come from the admin-managed list; when it is empty the form shows no choices | The same lists; an empty skill-level list falls back to the six levels the server accepts, and an empty list is hidden | Otherwise nobody can set a skill level until an admin fills the list. |
+| Organisation tab (members, keys, locations), My Documents | Not on the phone | Organisation admin is Wave 8; documents are the compliance staff side (Wave 8). |
+| Onboarding wizard | Not on the phone | Out of scope (the kitchen profile covers its answers). |
+
+**No location yet** (`app/first-run.tsx`, the web's `NoLocationScreen`): never empty tabs. A person with no location gets the join screen: the organisation's key first if they are in no organisation, then the location's key.
+It also says what to do without a key (an admin can add them from the organisation's settings on the web), who is signed in, and keeps sign out, the legal pages and Delete my account reachable (App Store 5.1.1(v)).
+The web's "create your first location" link for an admin is a sentence here: making locations is organisation admin, Wave 8.
+
+**Refusals are read by the server's code** (`ApiError.hasCode`): `INVALID_CREDENTIALS`, `WEAK_PASSWORD` and `PASSWORD_NOT_SET` on a password change; `FILE_TOO_LARGE`, `UNSUPPORTED_FILE_TYPE` and `UPLOAD_FAILED` on a picture; `INVALID_MFA_CODE`, `MFA_REQUIRED`, `RECENT_SIGN_IN_REQUIRED` and `MFA_ALREADY_ENABLED` on two-step; `VALIDATION` on the kitchen profile; `NOT_FOUND` on a notification read (done). The HTTP status and the server's sentence are the fallback for a server without codes (`passwordChangeMessage`, `avatarMessage`, `mfaMessage` in `src/api/account.ts`).
+
 ## Tests
 
 `check:test` runs the logic tests (`src/**`) and the screen tests (`tests/*.test.tsx`); `check:e2e` runs the real client and queue against a server
-(`e2e/phoneFlow`, `e2e/wasteQueue`, `e2e/prepQueue`, `e2e/stockQueue`, `e2e/chatRecipes`; `e2e/receiving` uses the client alone, receiving has no queue). See `device/README.md`.
+(`e2e/phoneFlow`, `e2e/wasteQueue`, `e2e/prepQueue`, `e2e/stockQueue`, `e2e/chatRecipes`; `e2e/receiving` uses the client alone, receiving has no queue; `e2e/accountNotifications`
+covers details, kitchen profile, password, two-step, the inbox read queue and push settings with a just-registered person; set `E2E_NOTIFICATION_ID` to a notification made for that person to check a real row, as the suite cannot make one through the API). See `device/README.md`.

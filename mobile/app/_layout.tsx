@@ -7,6 +7,7 @@ import { Inter_400Regular, Inter_600SemiBold } from "@expo-google-fonts/inter";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { session, useSession } from "../src/runtime/appContext";
 import { startOutbox } from "../src/runtime/appOutbox";
+import { startNotifications } from "../src/runtime/notifications";
 
 void SplashScreen.preventAutoHideAsync();
 
@@ -19,6 +20,7 @@ export default function RootLayout() {
 
   useEffect(() => {
     startOutbox();
+    startNotifications();
     void session.restore();
   }, []);
 
@@ -56,8 +58,16 @@ export default function RootLayout() {
         </Stack.Protected>
         <Stack.Protected redirectTo={HOME[state.phase]} guard={state.phase === "ready"}>
           <Stack.Screen name="(app)" />
-          <Stack.Screen name="delete-account" />
           <Stack.Screen name="link-apple" />
+          <Stack.Screen name="profile" />
+          <Stack.Screen name="change-password" />
+          <Stack.Screen name="two-step" />
+          <Stack.Screen name="kitchen-profile" />
+          <Stack.Screen name="notification-settings" />
+        </Stack.Protected>
+        {/* Reachable before a location is joined too: a person who cannot join must still be able to delete the account (App Store 5.1.1(v)). */}
+        <Stack.Protected redirectTo={HOME[state.phase]} guard={state.phase === "ready" || state.phase === "firstRun"}>
+          <Stack.Screen name="delete-account" />
         </Stack.Protected>
       </Stack>
     </SafeAreaProvider>

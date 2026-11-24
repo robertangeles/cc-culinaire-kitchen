@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
 }));
 vi.mock("../src/runtime/appContext", () => ({ session: { restore: vi.fn() }, useSession: () => ({ state: { phase: mocks.phase.current } }) }));
 vi.mock("../src/runtime/appOutbox", () => ({ startOutbox: vi.fn() }));
+vi.mock("../src/runtime/notifications", () => ({ startNotifications: vi.fn() }));
 vi.mock("expo-splash-screen", () => ({ preventAutoHideAsync: async () => {}, hideAsync: async () => {} }));
 vi.mock("expo-status-bar", () => ({ StatusBar: () => null }));
 vi.mock("@expo-google-fonts/fraunces", () => ({ useFonts: () => [true], Fraunces_400Regular: 1, Fraunces_600SemiBold: 1 }));

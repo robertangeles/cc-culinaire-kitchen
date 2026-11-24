@@ -5,17 +5,24 @@ import { Screen } from "../src/ui/Screen";
 import { Text } from "../src/ui/Text";
 import { TextField } from "../src/ui/TextField";
 import { Button } from "../src/ui/Button";
+import { Surface } from "../src/ui/Surface";
+import { LegalLinks } from "../src/ui/LegalLinks";
+import { useRouter } from "expo-router";
+import { View } from "react-native";
+import { fontFamily, space } from "../src/theme";
 
 /** A signed-in person with no location yet: join the organisation by its key, then a location by its key. Both keys come from the manager. */
 export default function FirstRun() {
   const { state } = useSession();
   if (state.phase !== "firstRun") return null;
   const needsOrganisation = state.organisationId === null;
-  return <JoinStep key={needsOrganisation ? "organisation" : "location"} needsOrganisation={needsOrganisation} error={state.error} />;
+  return <JoinStep key={needsOrganisation ? "organisation" : "location"} needsOrganisation={needsOrganisation} error={state.error} email={state.user.userEmail} />;
 }
 
-function JoinStep({ needsOrganisation, error }: { needsOrganisation: boolean; error?: string }) {
+/** The web's "Run the Kitchen" screen for someone with no location: a key to enter, and what to do without one. Never empty tabs. */
+function JoinStep({ needsOrganisation, error, email }: { needsOrganisation: boolean; error?: string; email: string }) {
   const { busy } = useSession();
+  const router = useRouter();
   const [key, setKey] = useState("");
   const submit = () => void (needsOrganisation ? session.joinOrganisation(key) : session.joinLocation(key));
   const canSubmit = key.trim().length > 0 && !busy;
@@ -45,7 +52,20 @@ function JoinStep({ needsOrganisation, error }: { needsOrganisation: boolean; er
         </Text>
       ) : null}
       <Button label={busy ? "Joining…" : "Join"} disabled={!canSubmit} onPress={submit} />
+      <Surface>
+        <View style={{ padding: space.lg, gap: space.xs }}>
+          <Text style={{ fontFamily: fontFamily.title, fontSize: 18 }}>No key?</Text>
+          <Text variant="muted">
+            {needsOrganisation
+              ? "Your manager can also invite you from the organisation's settings on the web."
+              : "Your organisation's admin can add you to a location directly from the organisation's settings on the web. No key needed."}
+          </Text>
+        </View>
+      </Surface>
+      {email ? <Text variant="meta">Signed in as {email}</Text> : null}
       <Button kind="quiet" label="Sign out" onPress={() => void session.signOut()} />
+      <LegalLinks />
+      <Button kind="danger" label="Delete my account" onPress={() => router.push("/delete-account")} />
     </Screen>
   );
 }

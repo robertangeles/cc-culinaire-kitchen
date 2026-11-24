@@ -6,6 +6,8 @@ export const AuthUserSchema = z.object({
   userName: z.string().catch(""),
   userEmail: z.string().catch(""),
   mfaEnabled: z.boolean().catch(false),
+  /** The profile picture's address; absent or null when there is none. */
+  userPhotoPath: z.string().nullable().optional().catch(undefined),
   roles: z.array(z.string()).catch([]),
   permissions: z.array(z.string()).catch([]),
 });

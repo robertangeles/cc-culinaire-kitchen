@@ -31,6 +31,8 @@ export const moduleTabs: ModuleTab[] = [
   // Chat, saved conversations and recipes check only that someone is signed in (`authenticate`/`authenticateOrGuest`, no permission key).
   { route: "(chat)", title: "Ask", icon: "chat" },
   { route: "(recipes)", title: "Recipes", icon: "recipes" },
+  // Everyone's notifications (the web bell's routes ask only for a sign-in), with the unread count on its button or on More.
+  { route: "(inbox)", title: "Inbox", icon: "inbox" },
 ];
 
 /** Administrators hold every permission implicitly, as on the web and the server. */

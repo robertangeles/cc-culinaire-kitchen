@@ -1,4 +1,14 @@
-import { ProfileFactsReplySchema } from "@culinaire/shared/schemas/account";
+import {
+  AvatarReplySchema,
+  KitchenProfileSchema,
+  MfaSetupReplySchema,
+  PersonalisationOptionsSchema,
+  ProfileDetailsReplySchema,
+  ProfileFactsReplySchema,
+  type KitchenProfile,
+  type PersonalisationOptions,
+  type ProfileDetails,
+} from "@culinaire/shared/schemas/account";
 import { ApiError, type ApiClient, type TokenStore } from "./client";
 
 export interface AccountFacts {
@@ -23,9 +33,74 @@ export interface DeleteProof {
   mfaCode?: string;
 }
 
+/** A picture from the phone's library or camera, ready to upload. */
+export interface PickedImage {
+  uri: string;
+  mimeType: string;
+}
+
+/** The proof the server asks for before two-step verification is set up or removed: the password (accounts that have one), and the current code to remove it. */
+export interface MfaProof {
+  password?: string;
+  mfaCode?: string;
+}
+
 /** Calls behind the account screens. */
 export function createAccountApi(client: ApiClient, tokenStore: TokenStore) {
+  /** The refresh token goes with proof-of-identity calls: the server reads when this sign-in began from it (the web sends the cookie). */
+  const withRefresh = async <T extends object>(body: T) => ({ ...body, refreshToken: (await tokenStore.load())?.refreshToken });
+
   return {
+    async details(): Promise<ProfileDetails & { userEmail: string; userPhotoPath: string | null }> {
+      return (await client.request("GET", "/api/users/profile", { schema: ProfileDetailsReplySchema })).profile;
+    },
+
+    /** Every field is sent, an empty one as "" (which clears it): the server writes the six address fields together. */
+    async saveDetails(details: ProfileDetails): Promise<void> {
+      await client.request("PATCH", "/api/users/profile", { body: details });
+    },
+
+    /** Multipart `file`, as the web's crop sends it. The server takes PNG, JPEG and WebP up to 2 MB. */
+    async uploadAvatar(image: PickedImage): Promise<string> {
+      const form = new FormData();
+      const ext = image.mimeType === "image/png" ? "png" : image.mimeType === "image/webp" ? "webp" : "jpg";
+      // React Native's FormData takes a file as { uri, name, type }.
+      form.append("file", { uri: image.uri, name: `avatar.${ext}`, type: image.mimeType } as unknown as Blob);
+      return (await client.request("POST", "/api/users/profile/avatar", { body: form, schema: AvatarReplySchema })).photoPath;
+    },
+
+    /** Ends every other sign-in; this one stays (its refresh token goes in the body). */
+    async changePassword(currentPassword: string, newPassword: string): Promise<void> {
+      await client.request("POST", "/api/users/change-password", { body: await withRefresh({ currentPassword, newPassword }) });
+    },
+
+    /** Starts set-up: a new secret, not yet switched on. */
+    async mfaSetup(proof: MfaProof): Promise<{ secret: string; qrCodeDataUrl: string }> {
+      return client.request("POST", "/api/auth/mfa/setup", { body: await withRefresh(proof), schema: MfaSetupReplySchema });
+    },
+
+    /** Switches it on with the first code the authenticator shows. */
+    async mfaEnable(code: string): Promise<void> {
+      await client.request("POST", "/api/auth/mfa/enable", { body: { token: code } });
+    },
+
+    async mfaDisable(proof: MfaProof): Promise<void> {
+      await client.request("POST", "/api/auth/mfa/disable", { body: await withRefresh(proof) });
+    },
+
+    kitchenProfile(): Promise<KitchenProfile> {
+      return client.request("GET", "/api/users/kitchen-profile", { schema: KitchenProfileSchema });
+    },
+
+    /** A partial update: only the fields given change. */
+    async saveKitchenProfile(changes: Record<string, unknown>): Promise<void> {
+      await client.request("PUT", "/api/users/kitchen-profile", { body: changes });
+    },
+
+    personalisationOptions(): Promise<PersonalisationOptions> {
+      return client.request("GET", "/api/personalisation-options", { schema: PersonalisationOptionsSchema });
+    },
+
     async facts(): Promise<AccountFacts> {
       const { profile } = await client.request("GET", "/api/users/profile", { schema: ProfileFactsReplySchema });
       return { hasPassword: profile.hasPassword, hasApple: profile.hasApple, mfaEnabled: profile.mfaEnabledInd, email: profile.userEmail };
@@ -65,4 +140,48 @@ export function deleteAccountMessage(err: unknown, proof: "password" | "email" |
   if (err.hasCode("RECENT_SIGN_IN_REQUIRED")) return { text: "For your security, sign out, sign back in, then delete your account.", needsFreshSignIn: true };
   // The blocked-by-ownership answers say which organisation and what to do first, so the server's sentence is the useful one.
   return { text: err.message };
+}
+
+/** One plain sentence for a refused change to two-step verification, chosen by the server's code. */
+export function mfaMessage(err: unknown): { text: string; needsMfa?: true; needsFreshSignIn?: true } {
+  if (err instanceof ApiError) {
+    if (err.hasCode("INVALID_CREDENTIALS")) return { text: "That password isn't right." };
+    if (err.hasCode("MFA_REQUIRED")) return { text: "Enter your authenticator code.", needsMfa: true };
+    if (err.hasCode("INVALID_MFA_CODE")) return { text: "That authenticator code isn't valid." };
+    if (err.hasCode("RECENT_SIGN_IN_REQUIRED")) return { text: "For your security, sign out, sign back in, then try again.", needsFreshSignIn: true };
+    if (err.hasCode("MFA_ALREADY_ENABLED")) return { text: "Two-step verification is already on." };
+    if (err.hasCode("RATE_LIMITED") || err.code === "rate_limited") return { text: "Too many tries. Wait a few minutes and try again." };
+    // Enabling answers a wrong first code with a plain 400 and no code.
+    if (err.code === "bad_request") return { text: "That code didn't work. Check the time on your phone and try the newest code." };
+    if (err.code === "network" || err.code === "timeout") return { text: err.message };
+  }
+  return { text: "Something went wrong. Try again." };
+}
+
+/** The `otpauth:` link an authenticator app opens; the same issuer and label the server put in its QR code (`generateMfaSecret`). */
+export function authenticatorLink(secret: string, email: string): string {
+  return `otpauth://totp/${encodeURIComponent(`CulinAIre Kitchen:${email}`)}?secret=${encodeURIComponent(secret)}&issuer=${encodeURIComponent("CulinAIre Kitchen")}`;
+}
+
+/** One plain sentence for a refused password change, by the server's code (the status and its sentence for a server without codes). */
+export function passwordChangeMessage(err: unknown): string {
+  if (err instanceof ApiError) {
+    if (err.hasCode("INVALID_CREDENTIALS")) return "Your current password isn't right.";
+    if (err.hasCode("WEAK_PASSWORD")) return "The new password needs at least 8 characters.";
+    if (err.hasCode("PASSWORD_NOT_SET")) return "Your account signs in with Google or Apple, so it has no password to change.";
+    if (err.hasCode("RATE_LIMITED") || err.code === "rate_limited") return "Too many tries. Wait a few minutes and try again.";
+    if (err.code === "bad_request" || err.code === "network" || err.code === "timeout") return err.message;
+  }
+  return "Couldn't change the password. Try again.";
+}
+
+/** One plain sentence for a refused picture upload, by the server's code. */
+export function avatarMessage(err: unknown): string {
+  if (err instanceof ApiError) {
+    if (err.hasCode("FILE_TOO_LARGE")) return "That picture is too big. Choose a smaller one.";
+    if (err.hasCode("UNSUPPORTED_FILE_TYPE")) return "That picture's format can't be used. Choose a JPEG or PNG photo.";
+    if (err.hasCode("UPLOAD_FAILED")) return "The picture couldn't be saved. Try again.";
+    if (err.code === "bad_request") return err.message;
+  }
+  return "Couldn't upload the picture. Check your signal and try again.";
 }
