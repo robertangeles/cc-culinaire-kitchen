@@ -17,6 +17,9 @@ import { useColors } from "../../../src/ui/theme";
 
 const timeOf = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 
+/** The tick box's side, in dp; the row's facts line up with the name beside it. */
+const TICK = 32;
+
 /** Today's prep at this location: progress, then the tasks from "start with these" to "can wait", each one a tap to tick. */
 export default function Prep() {
   const { state } = useSession();
@@ -115,7 +118,7 @@ export default function Prep() {
                         onPress={() => void store.setStatus(row.prepTaskId, done ? "pending" : "completed")}
                         style={{ minHeight: size.tap, flexDirection: "row", alignItems: "center", gap: space.md }}
                       >
-                        <View style={{ width: 32, height: 32, borderRadius: 8, borderWidth: 2, borderColor: done ? c.success : c.border, backgroundColor: done ? c.success : c.surface, alignItems: "center", justifyContent: "center" }}>
+                        <View style={{ width: TICK, height: TICK, borderRadius: 8, borderWidth: 2, borderColor: done ? c.success : c.border, backgroundColor: done ? c.success : c.surface, alignItems: "center", justifyContent: "center" }}>
                           {done ? <Text style={{ color: c.buttonText, fontFamily: fontFamily.uiStrong }}>✓</Text> : null}
                         </View>
                         <View style={{ flex: 1, gap: 2 }}>
@@ -126,24 +129,29 @@ export default function Prep() {
                           {stock ? <Text variant="meta">{stock}</Text> : null}
                         </View>
                       </Pressable>
-                      {facts ? <Text variant="meta">{facts}</Text> : null}
-                      {dishes ? <Text variant="meta">For {dishes}</Text> : null}
-                      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: space.md }}>
-                        <Text variant="meta" style={{ flexShrink: 1 }}>
-                          {done ? `Done by ${who(row)}${row.completedAt ? ` · ${timeOf(row.completedAt)}` : ""}` : skipped ? "Skipped" : ""}
-                        </Text>
-                        {row.sync === "waiting" ? <Chip label="Waiting to send" /> : null}
+                      {/* Under the name, not under the tick box. */}
+                      <View style={{ paddingLeft: TICK + space.md, gap: space.xs }}>
+                        {facts ? <Text variant="meta">{facts}</Text> : null}
+                        {dishes ? <Text variant="meta">For {dishes}</Text> : null}
+                        {done || skipped || row.sync === "waiting" ? (
+                          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: space.md }}>
+                            <Text variant="meta" style={{ flexShrink: 1 }}>
+                              {done ? `Done by ${who(row)}${row.completedAt ? ` · ${timeOf(row.completedAt)}` : ""}` : skipped ? "Skipped" : ""}
+                            </Text>
+                            {row.sync === "waiting" ? <Chip label="Waiting to send" /> : null}
+                          </View>
+                        ) : null}
+                        {!done ? (
+                          <Pressable
+                            accessibilityRole="button"
+                            accessibilityLabel={skipped ? `Undo skip ${row.ingredientName}` : `Skip ${row.ingredientName}`}
+                            onPress={() => void store.setStatus(row.prepTaskId, skipped ? "pending" : "skipped")}
+                            style={{ minHeight: size.tap, justifyContent: "center", alignSelf: "flex-start" }}
+                          >
+                            <Text style={{ color: c.accentText, fontFamily: fontFamily.uiStrong }}>{skipped ? "Undo skip" : "Skip"}</Text>
+                          </Pressable>
+                        ) : null}
                       </View>
-                      {!done ? (
-                        <Pressable
-                          accessibilityRole="button"
-                          accessibilityLabel={skipped ? `Undo skip ${row.ingredientName}` : `Skip ${row.ingredientName}`}
-                          onPress={() => void store.setStatus(row.prepTaskId, skipped ? "pending" : "skipped")}
-                          style={{ minHeight: size.tap, justifyContent: "center", alignSelf: "flex-start" }}
-                        >
-                          <Text style={{ color: c.accentText, fontFamily: fontFamily.uiStrong }}>{skipped ? "Undo skip" : "Skip"}</Text>
-                        </Pressable>
-                      ) : null}
                       {row.sync === "attention" && row.entryId ? (
                         <>
                           <Text variant="error">⚠ {attentionSentence("rejected", row.attentionMessage)}</Text>

@@ -11,7 +11,7 @@ import { ScreenHeader } from "../../../src/ui/ScreenHeader";
 import { Button } from "../../../src/ui/Button";
 import { OfflineBanner } from "../../../src/ui/Banner";
 import { Surface, rowDivider } from "../../../src/ui/Surface";
-import { fontFamily, space } from "../../../src/theme";
+import { space } from "../../../src/theme";
 import { useColors } from "../../../src/ui/theme";
 
 /** Unread notifications, newest first. Reading one takes it off the list (the server keeps no read history). */
@@ -86,7 +86,7 @@ function PushCard({ status }: { status: string }) {
   return (
     <Surface>
       <View style={{ padding: space.lg, gap: space.sm }}>
-        <Text style={{ fontFamily: fontFamily.title, fontSize: 20 }}>{status === "off" ? "Get a push when something needs you" : "Notifications are off in your phone's settings"}</Text>
+        <Text variant="heading">{status === "off" ? "Get a push when something needs you" : "Notifications are off in your phone's settings"}</Text>
         <Text variant="muted">
           {status === "off" ? "A new shift, an order to approve, a document checked. The lock screen never shows names or details." : "Turn them on for CulinAIre Kitchen in Settings to get a push."}
         </Text>

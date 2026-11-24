@@ -81,7 +81,7 @@ export default function Moves() {
                     accessibilityLabel={`Move ${r.name} again`}
                     hitSlop={4}
                     onPress={() => router.push({ pathname: "/move-entry", params: { name: r.name, ingredientId: r.ingredientId ?? "", unit: r.unit ?? "", quantity: r.quantity === undefined ? "" : String(r.quantity), from: r.fromStorageAreaId ?? "", to: r.toStorageAreaId ?? "" } })}
-                    style={{ minHeight: 48, borderRadius: 999, borderWidth: 1, borderColor: c.border, backgroundColor: c.field, paddingHorizontal: space.lg, alignItems: "center", justifyContent: "center" }}
+                    style={{ minHeight: 48, borderRadius: 999, borderWidth: 1, borderColor: c.border, backgroundColor: c.field, paddingHorizontal: space.lg, paddingVertical: space.sm, alignItems: "center", justifyContent: "center" }}
                   >
                     <Text style={{ fontFamily: fontFamily.uiStrong }}>{r.name}</Text>
                   </Pressable>
@@ -90,11 +90,15 @@ export default function Moves() {
             </View>
           ) : null}
 
-          {snap.phase === "ready" ? (
+          {snap.phase === "ready" && (canMove || snap.rows.length > 0) ? (
             <View style={{ gap: space.xs }}>
               <Text variant="label">Recent moves</Text>
               {snap.rows.length === 0 ? (
-                <Text variant="muted">Nothing moved yet.</Text>
+                <Surface>
+                  <View style={{ padding: space.lg }}>
+                    <Text variant="muted">Nothing moved yet.</Text>
+                  </View>
+                </Surface>
               ) : (
                 <Surface>
                   {snap.rows.map((row, index) => (

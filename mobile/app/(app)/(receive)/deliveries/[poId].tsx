@@ -38,8 +38,8 @@ export default function ReceiveDelivery() {
 
   if (r.phase.kind === "loading") {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: c.bg }}>
-        <Column style={{ padding: space.xl }}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: c.bg, padding: space.xl }}>
+        <Column>
           <Text variant="muted">Opening the delivery…</Text>
         </Column>
       </SafeAreaView>
@@ -48,8 +48,8 @@ export default function ReceiveDelivery() {
   if (r.phase.kind === "error" || r.phase.kind === "gone") {
     const gone = r.phase.kind === "gone";
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: c.bg }}>
-        <Column style={{ padding: space.xl, gap: space.lg }}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: c.bg, padding: space.xl }}>
+        <Column style={{ gap: space.lg }}>
           <Text variant="title">{r.phase.kind === "gone" ? r.phase.title : "Couldn't open this delivery"}</Text>
           <Text>{r.phase.message}</Text>
           {gone ? null : <Button label="Try again" onPress={() => void r.reload()} />}
@@ -61,8 +61,8 @@ export default function ReceiveDelivery() {
   if (r.phase.kind === "done") {
     const done = confirmedMessage(r.phase.result);
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: c.bg, justifyContent: "center" }}>
-        <Column style={{ padding: space.xl, gap: space.lg }}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: c.bg, padding: space.xl }}>
+        <Column style={{ gap: space.lg }}>
           <Text variant="title" accessibilityLiveRegion="polite">{done.title}</Text>
           <Text>{r.po?.supplierName ? `${r.po.supplierName}, ` : ""}order {r.po?.poNumber}</Text>
           <Text variant="muted">{done.detail}</Text>
@@ -126,7 +126,7 @@ export default function ReceiveDelivery() {
       {/* Pinned, as on the web: Confirm is always under the thumb, however long the delivery. Hidden while a
           keypad or reject panel is open, so a stray tap cannot confirm a delivery that is half way through a line. */}
       {panelOpen ? null : (
-      <View style={{ padding: space.lg, borderTopWidth: 1, borderTopColor: c.border, backgroundColor: c.bg }}>
+      <View style={{ paddingVertical: space.lg, paddingHorizontal: space.xl, borderTopWidth: 1, borderTopColor: c.border, backgroundColor: c.bg }}>
         <Column style={{ gap: space.sm }}>
         {r.confirmError ? <Text variant="error" accessibilityLiveRegion="polite">{r.confirmError}</Text> : null}
         <Button
