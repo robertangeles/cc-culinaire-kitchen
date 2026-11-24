@@ -35,7 +35,6 @@ our_pid() {
   pid=$(cat "$PIDFILE" 2>/dev/null) || return 1
   tr '\0' ' ' <"/proc/$pid/cmdline" 2>/dev/null | grep -q -- "-avd $AVD " && echo "$pid"
 }
-booted() { [ "$("$ADB" -s "$SERIAL" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = 1 ]; }
 under_lease() { DEVICE_LEASE_FILE=$LOCK bash lease.sh "$@"; }
 
 # The emulator's adb server stays up after stop: a later adb call with this port set would otherwise start a plain
@@ -47,6 +46,7 @@ adb_server() {
   fi
   "$ADB" start-server --one-device "$SERIAL" >/dev/null 2>&1
 }
+booted() { adb_server; [ "$("$ADB" -s "$SERIAL" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = 1 ]; }
 
 make_avd() {
   local cfg=$HOME/.android/avd/$AVD.avd/config.ini
@@ -103,6 +103,7 @@ watch() {
 kill_it() {
   local pid
   pid=$(our_pid) || { rm -f "$PIDFILE"; return 0; }
+  adb_server
   "$ADB" -s "$SERIAL" emu kill >/dev/null 2>&1
   for _ in $(seq 1 30); do kill -0 "$pid" 2>/dev/null || break; sleep 1; done
   kill -- "-$pid" 2>/dev/null
