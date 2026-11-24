@@ -74,7 +74,8 @@ export default function Prep() {
 
           {snap.phase === "ready" && !list.plan && progress.total === 0 ? (
             <Surface>
-              <View style={{ padding: space.lg, gap: space.md }}>
+              <View style={{ padding: space.lg, gap: space.sm }}>
+                <Text variant="label">Today</Text>
                 <Text>Nothing planned for today yet.</Text>
                 {canPlan ? <Button label="Plan today's prep" onPress={() => router.push("/plan")} /> : <Text variant="muted">Ask a manager to plan today's prep.</Text>}
               </View>

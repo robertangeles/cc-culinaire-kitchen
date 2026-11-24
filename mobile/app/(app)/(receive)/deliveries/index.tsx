@@ -61,10 +61,12 @@ export default function ReceiveQueue() {
         ) : null}
         {items === null && !error ? <Text variant="muted">Loading deliveries…</Text> : null}
         {items?.length === 0 ? (
-          <View style={{ gap: space.sm }}>
-            <Text variant="heading">No deliveries waiting</Text>
-            <Text variant="muted">Purchase orders that have been sent to a supplier appear here until they are received.</Text>
-          </View>
+          <Surface>
+            <View style={{ padding: space.lg, gap: space.xs }}>
+              <Text variant="heading">No deliveries waiting</Text>
+              <Text variant="muted">Purchase orders that have been sent to a supplier appear here until they are received.</Text>
+            </View>
+          </Surface>
         ) : null}
 
         {items && items.length > 0 ? (
