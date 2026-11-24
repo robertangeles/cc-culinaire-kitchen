@@ -7,10 +7,13 @@
 import type { Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import pino from "pino";
+import { CreatePurchaseOrderSchema, PurchaseOrderInputSchema, type PurchaseOrderInput } from "@culinaire/shared/schemas/purchaseOrder";
 import { getUserLocationContext, assertLocationAccess } from "../services/locationContextService.js";
 import { hasPermission } from "../middleware/auth.js";
 import {
   createPO,
+  updatePO,
+  getPOLocationId,
   listPOs,
   getPODetail,
   submitPO,
@@ -29,25 +32,6 @@ import { recordOpsEvent } from "../services/brainCaptureService.js";
 const logger = pino({ name: "purchaseOrderController" });
 
 // ─── Schemas ──────────────────────────────────────────────────────
-
-const CreatePOLineSchema = z.object({
-  ingredientId: z.string().uuid(),
-  orderedQty: z.string().refine(
-    (v) => !isNaN(Number(v)) && Number(v) > 0, "Must be a positive number",
-  ),
-  orderedUnit: z.string().min(1).max(20),
-  unitCost: z.string().refine(
-    (v) => !isNaN(Number(v)) && Number(v) >= 0, "Must be a non-negative number",
-  ).optional(),
-});
-
-const CreatePOSchema = z.object({
-  storeLocationId: z.string().uuid(),
-  supplierId: z.string().uuid(),
-  lines: z.array(CreatePOLineSchema).min(1, "At least one line item is required"),
-  notes: z.string().max(2000).optional(),
-  expectedDeliveryDate: z.string().optional(),
-});
 
 /** The only POs a user holding `purchasing:receive` but not `inventory:count` may see. */
 const RECEIVING_QUEUE = ["SENT", "RECEIVING"];
@@ -100,6 +84,16 @@ function sendValidation(res: Response, error: z.ZodError): void {
   res.status(400).json({ error: error.issues[0]?.message ?? "Validation failed", code: "VALIDATION", details: error.flatten() });
 }
 
+const toPOInput = (body: PurchaseOrderInput, orgId: number, userId: number) => ({
+  orgId,
+  locationId: body.storeLocationId,
+  supplierId: body.supplierId,
+  userId,
+  lines: body.lines,
+  notes: body.notes,
+  expectedDate: body.expectedDeliveryDate,
+});
+
 /** An approver sees, on each order waiting for approval, whether they may approve it (not their own while someone else can). */
 const canApproveOrders = (req: Request) => hasPermission(req.user!, "purchasing:approve");
 
@@ -112,33 +106,57 @@ export async function handleCreatePO(
     const orgId = await resolveOrgId(req, res);
     if (orgId === null) return;
 
-    const parsed = CreatePOSchema.safeParse(req.body);
+    const parsed = CreatePurchaseOrderSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: "Validation failed", details: parsed.error.flatten() });
+      res.status(400).json({ error: "Validation failed", code: "VALIDATION", details: parsed.error.flatten() });
       return;
     }
 
     await assertLocationAccess(req.user!, parsed.data.storeLocationId);
 
     const userId = req.user!.sub;
-    const result = await createPO({
-      orgId,
-      locationId: parsed.data.storeLocationId,
-      supplierId: parsed.data.supplierId,
-      userId,
-      lines: parsed.data.lines,
-      notes: parsed.data.notes,
-      expectedDate: parsed.data.expectedDeliveryDate,
+    const { replay, ...result } = await createPO({
+      poId: parsed.data.poId,
+      ...toPOInput(parsed.data, orgId, userId),
     });
 
-    logger.info({ poId: result.poId, userId }, "Purchase order created");
-    res.status(201).json(result);
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (msg.endsWith("not found")) {
-      res.status(400).json({ error: msg });
+    logger.info({ poId: result.poId, userId, replay }, "Purchase order created");
+    res.status(replay ? 200 : 201).json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/** Replaces a draft. The caller must be able to use the order's location and the one it moves to. */
+export async function handleUpdatePO(
+  req: Request, res: Response, next: NextFunction,
+): Promise<void> {
+  try {
+    const orgId = await resolveOrgId(req, res);
+    if (orgId === null) return;
+
+    const id = z.string().uuid("Purchase order id must be a UUID").safeParse(req.params.id);
+    if (!id.success) {
+      sendValidation(res, id.error);
       return;
     }
+    const parsed = PurchaseOrderInputSchema.safeParse(req.body);
+    if (!parsed.success) {
+      sendValidation(res, parsed.error);
+      return;
+    }
+
+    // Unknown orders are left to the service to report.
+    const currentLocationId = await getPOLocationId(id.data, orgId);
+    if (currentLocationId) await assertLocationAccess(req.user!, currentLocationId);
+    await assertLocationAccess(req.user!, parsed.data.storeLocationId);
+
+    const userId = req.user!.sub;
+    const result = await updatePO(id.data, toPOInput(parsed.data, orgId, userId));
+
+    logger.info({ poId: result.poId, userId }, "Purchase order edited");
+    res.json(result);
+  } catch (err) {
     next(err);
   }
 }

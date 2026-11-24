@@ -234,6 +234,20 @@ describe("Wave 5 purchasing routes", () => {
   });
 });
 
+describe("PO create and edit gating", () => {
+  const routes: Array<[Method, string]> = [
+    ["post", "/purchase-orders"],
+    ["put", "/purchase-orders/:id"],
+  ];
+
+  it.each(routes)("needs inventory:manage on %s %s", (method, path) => {
+    const { passed, status } = runGate(findGate(method, path), SUBSCRIBER);
+    expect(passed).toBe(false);
+    expect(status).toHaveBeenCalledWith(403);
+    expect(runGate(findGate(method, path), MANAGER).passed).toBe(true);
+  });
+});
+
 describe("PO list and detail gating (the receiving queue)", () => {
   const RECEIVE_ONLY = ["purchasing:receive"]; // a custom BOH role with no inventory:count
   const routes: Array<[Method, string]> = [
