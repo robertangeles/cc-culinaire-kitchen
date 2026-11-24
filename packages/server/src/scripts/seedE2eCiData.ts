@@ -88,12 +88,9 @@ export async function seedE2eCiData(email: string, password: string, totpSecret:
 
 /**
  * The phone E2E's user: the main E2E user's twin (MFA, Administrator + Operations Admin, admin of the same organisation,
- * assigned to the same location). Idempotent: an existing account with this email is left as it is.
+ * assigned to the same location).
  */
 export async function seedE2ePhoneUser(email: string, password: string, totpSecret: string, organisationId: number, storeLocationId: string) {
-  const [existing] = await db.select({ userId: user.userId }).from(user).where(eq(user.userEmail, email.toLowerCase()));
-  if (existing) return existing.userId;
-
   const userId = await seedMfaAdministrator("E2E Phone User", email, password, totpSecret);
   const [opsAdmin] = await db.select({ roleId: role.roleId }).from(role).where(eq(role.roleName, "Operations Admin"));
   if (!opsAdmin) throw new Error("Operations Admin role not found. Run db:seed first.");
