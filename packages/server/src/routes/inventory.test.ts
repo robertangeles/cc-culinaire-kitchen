@@ -52,7 +52,7 @@ function runGate(gate: Gate, permissions: string[]) {
   const res = { status, json } as unknown as Response;
   const next = vi.fn();
   gate(req, res, next);
-  return { passed: next.mock.calls.length > 0, status };
+  return { passed: next.mock.calls.length > 0, status, json };
 }
 
 describe("supplier read-gating", () => {
@@ -231,6 +231,21 @@ describe("Wave 5 purchasing routes", () => {
     const gate = findGate("get", "/credit-notes/unresolved-discrepancies");
     expect(runGate(gate, MANAGER).passed).toBe(false);
     expect(runGate(gate, ["purchasing:credit"]).passed).toBe(true);
+  });
+});
+
+describe("PO create and edit gating", () => {
+  const routes: Array<[Method, string]> = [
+    ["post", "/purchase-orders"],
+    ["put", "/purchase-orders/:id"],
+  ];
+
+  it.each(routes)("needs inventory:manage on %s %s", (method, path) => {
+    const { passed, status, json } = runGate(findGate(method, path), SUBSCRIBER);
+    expect(passed).toBe(false);
+    expect(status).toHaveBeenCalledWith(403);
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({ code: "FORBIDDEN" }));
+    expect(runGate(findGate(method, path), MANAGER).passed).toBe(true);
   });
 });
 

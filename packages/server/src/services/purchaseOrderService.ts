@@ -10,10 +10,12 @@
  * Receiving (stock, FIFO batches, WAC) is receivingService's.
  */
 
-import { eq, and, desc, sql, inArray, ne, or, isNull, lt, notExists } from "drizzle-orm";
+import { isDeepStrictEqual } from "node:util";
+import { eq, and, desc, sql, inArray, notInArray, or, isNull, lt, notExists } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "../db/index.js";
 import {
+  auditLog,
   purchaseOrder,
   purchaseOrderLine,
   stockLevel,
@@ -54,6 +56,8 @@ export interface CreatePOLineInput {
 }
 
 export interface CreatePOInput {
+  /** Client-made id: a repeat with the same id and body answers the order it made the first time. */
+  poId?: string;
   orgId: number;
   locationId: string;
   supplierId: string;
@@ -99,61 +103,175 @@ const beingReceivedBy = sql<{ userId: number; userName: string } | null>`(
  * a bare foreign key only proves the row exists somewhere, so without this a PO could be
  * written against another tenant's records by UUID. Also guards clonePO, which creates through here.
  */
-async function assertOwnedByOrg(input: CreatePOInput) {
-  const [loc] = await db
+async function assertOwnedByOrg(input: CreatePOInput, tx: DbOrTx) {
+  const [loc] = await tx
     .select({ id: storeLocation.storeLocationId })
     .from(storeLocation)
     .where(and(eq(storeLocation.storeLocationId, input.locationId), eq(storeLocation.organisationId, input.orgId)));
-  if (!loc) throw new Error("Location not found");
+  if (!loc) throw new AppError(400, "VALIDATION", "Location not found");
 
-  const [sup] = await db
+  const [sup] = await tx
     .select({ id: supplier.supplierId })
     .from(supplier)
     .where(and(eq(supplier.supplierId, input.supplierId), eq(supplier.organisationId, input.orgId)));
-  if (!sup) throw new Error("Supplier not found");
+  if (!sup) throw new AppError(400, "VALIDATION", "Supplier not found");
 
   const ingredientIds = [...new Set(input.lines.map((l) => l.ingredientId))];
-  const owned = await db
+  const owned = await tx
     .select({ id: ingredient.ingredientId })
     .from(ingredient)
     .where(and(inArray(ingredient.ingredientId, ingredientIds), eq(ingredient.organisationId, input.orgId)));
-  if (owned.length !== ingredientIds.length) throw new Error("Ingredient not found");
+  if (owned.length !== ingredientIds.length) throw new AppError(400, "VALIDATION", "Ingredient not found");
 }
 
-export async function createPO(input: CreatePOInput) {
-  await assertOwnedByOrg(input);
+const headerOf = (input: CreatePOInput) => ({
+  storeLocationId: input.locationId,
+  supplierId: input.supplierId,
+  notes: input.notes ?? null,
+  expectedDeliveryDate: input.expectedDate ? new Date(input.expectedDate) : null,
+});
 
-  const poNumber = `PO-${Date.now().toString(36).toUpperCase()}`;
-
-  const [po] = await db
-    .insert(purchaseOrder)
-    .values({
-      organisationId: input.orgId,
-      storeLocationId: input.locationId,
-      supplierId: input.supplierId,
-      poNumber,
-      status: "DRAFT",
-      createdByUserId: input.userId,
-      notes: input.notes ?? null,
-      expectedDeliveryDate: input.expectedDate ? new Date(input.expectedDate) : null,
-    })
-    .returning();
-
-  const lineRows = input.lines.map((l) => ({
-    poId: po.poId,
-    ingredientId: l.ingredientId,
-    orderedQty: l.orderedQty,
-    orderedUnit: l.orderedUnit,
-    unitCost: l.unitCost ?? null,
-    lineStatus: "PENDING",
-  }));
-
-  const insertedLines = await db
+const insertLines = (tx: DbOrTx, poId: string, lines: CreatePOLineInput[]) =>
+  tx
     .insert(purchaseOrderLine)
-    .values(lineRows)
+    .values(
+      lines.map((l) => ({
+        poId,
+        ingredientId: l.ingredientId,
+        orderedQty: l.orderedQty,
+        orderedUnit: l.orderedUnit,
+        unitCost: l.unitCost ?? null,
+        lineStatus: "PENDING",
+      })),
+    )
     .returning();
 
-  return { ...po, lines: insertedLines };
+/** What the client asked for, as JSON keeps it (a field that was not sent is absent). */
+const requestOf = ({ locationId, supplierId, lines, notes, expectedDate }: CreatePOInput): Record<string, unknown> =>
+  JSON.parse(JSON.stringify({ locationId, supplierId, lines, notes, expectedDate }));
+
+/**
+ * The order `input.poId` already made, or undefined when the id is new. The body is compared with the one kept in
+ * the create's audit row, not with the order: the order may have been edited since, and a late repeat must still find it.
+ * Another body, or an order of someone else, is a 409 CONFLICT.
+ */
+async function findReplay(input: CreatePOInput, tx: DbOrTx) {
+  if (!input.poId) return undefined;
+  const [po] = await tx.select().from(purchaseOrder).where(eq(purchaseOrder.poId, input.poId));
+  if (!po) return undefined;
+
+  const [made] = await tx
+    .select({ request: auditLog.afterValue })
+    .from(auditLog)
+    .where(and(eq(auditLog.entityType, "purchase_order"), eq(auditLog.entityId, po.poId), eq(auditLog.action, "create")));
+  if (
+    po.organisationId !== input.orgId ||
+    po.createdByUserId !== input.userId ||
+    !isDeepStrictEqual(made?.request, requestOf(input))
+  ) {
+    throw new AppError(409, "CONFLICT", "That id is already used by another purchase order");
+  }
+  const lines = await tx.select().from(purchaseOrderLine).where(eq(purchaseOrderLine.poId, po.poId));
+  return { ...po, lines, replay: true };
+}
+
+/** Create a draft. `replay: true` means the client-made id had already made this order: nothing was written. */
+export async function createPO(input: CreatePOInput) {
+  return db.transaction(async (tx) => {
+    const replayed = await findReplay(input, tx);
+    if (replayed) return replayed;
+
+    await assertOwnedByOrg(input, tx);
+
+    const poNumber = `PO-${Date.now().toString(36).toUpperCase()}`;
+
+    const [po] = await tx
+      .insert(purchaseOrder)
+      .values({
+        ...headerOf(input),
+        ...(input.poId ? { poId: input.poId } : {}),
+        organisationId: input.orgId,
+        poNumber,
+        status: "DRAFT",
+        createdByUserId: input.userId,
+      })
+      .onConflictDoNothing({ target: purchaseOrder.poId })
+      .returning();
+    // The same create, sent twice at once: the other one got there first and has now committed.
+    if (!po) return (await findReplay(input, tx))!;
+
+    const lines = await insertLines(tx, po.poId, input.lines);
+    if (input.poId) {
+      await auditService.log(
+        {
+          entityType: "purchase_order",
+          entityId: po.poId,
+          action: "create",
+          actorUserId: input.userId,
+          organisationId: input.orgId,
+          afterValue: requestOf(input),
+        },
+        tx,
+      );
+    }
+    return { ...po, lines, replay: false };
+  });
+}
+
+// ─── updatePO ─────────────────────────────────────────────────────
+
+/** The location an order of this organisation is for. */
+export async function getPOLocationId(poId: string, orgId: number): Promise<string> {
+  const [po] = await db
+    .select({ storeLocationId: purchaseOrder.storeLocationId })
+    .from(purchaseOrder)
+    .where(and(eq(purchaseOrder.poId, poId), eq(purchaseOrder.organisationId, orgId)));
+  if (!po) throw new AppError(404, "NOT_FOUND", "Purchase order not found");
+  return po.storeLocationId;
+}
+
+/**
+ * Replace a draft's header and lines. The row is locked, as in submitPO, so an order cannot change while it is being
+ * submitted. A total left by an earlier submission (a rejected order) no longer fits the lines and is cleared.
+ * `fromLocationId` is the location the caller was checked against: an order moved elsewhere since is refused.
+ */
+export async function updatePO(poId: string, fromLocationId: string, input: CreatePOInput) {
+  return db.transaction(async (tx) => {
+    const [po] = await tx
+      .select()
+      .from(purchaseOrder)
+      .where(and(eq(purchaseOrder.poId, poId), eq(purchaseOrder.organisationId, input.orgId)))
+      .for("update");
+    if (!po) throw new AppError(404, "NOT_FOUND", "Purchase order not found");
+    if (po.status !== "DRAFT") throw new AppError(409, "INVALID_STATE", `Cannot edit PO with status ${po.status}`);
+    if (po.storeLocationId !== fromLocationId) {
+      throw new AppError(409, "CONFLICT", "This order was just moved to another location. Open it again.");
+    }
+
+    await assertOwnedByOrg(input, tx);
+
+    const oldLines = await tx.delete(purchaseOrderLine).where(eq(purchaseOrderLine.poId, po.poId)).returning();
+    const lines = await insertLines(tx, po.poId, input.lines);
+    const [updated] = await tx
+      .update(purchaseOrder)
+      .set({ ...headerOf(input), totalValue: null, updatedDttm: new Date() })
+      .where(eq(purchaseOrder.poId, po.poId))
+      .returning();
+
+    await auditService.log(
+      {
+        entityType: "purchase_order",
+        entityId: po.poId,
+        action: "update",
+        actorUserId: input.userId,
+        organisationId: input.orgId,
+        beforeValue: { ...po, lines: oldLines },
+        afterValue: { ...updated, lines },
+      },
+      tx,
+    );
+    return { ...updated, lines };
+  });
 }
 
 // ─── listPOs ──────────────────────────────────────────────────────
@@ -284,37 +402,45 @@ export async function getPODetail(poId: string, orgId: number) {
 
 // ─── submitPO (threshold-routed) ─────────────────────────────────
 
+/** The row is locked until its status changes, so the total that decides the routing is the total that is sent (see updatePO). */
 export async function submitPO(poId: string, orgId: number, userId: number) {
-  const [po] = await db
-    .select()
-    .from(purchaseOrder)
-    .where(and(eq(purchaseOrder.poId, poId), eq(purchaseOrder.organisationId, orgId)));
+  const { po, updated, routing, totalValue, thresholdAmount } = await db.transaction(async (tx) => {
+    const [po] = await tx
+      .select()
+      .from(purchaseOrder)
+      .where(and(eq(purchaseOrder.poId, poId), eq(purchaseOrder.organisationId, orgId)))
+      .for("update");
 
-  if (!po) throw new Error("Purchase order not found");
-  validateTransition(po.status, "SENT", PO_TRANSITIONS, "purchase order");
+    if (!po) throw new Error("Purchase order not found");
+    validateTransition(po.status, "SENT", PO_TRANSITIONS, "purchase order");
 
-  // Calculate total server-side and determine routing
-  const { routing, totalValue, thresholdAmount } = await thresholdService.determineRouting(
-    poId,
-    orgId,
-    po.storeLocationId,
-  );
+    // Calculate total server-side and determine routing
+    const { routing, totalValue, thresholdAmount } = await thresholdService.determineRouting(
+      poId,
+      orgId,
+      po.storeLocationId,
+      tx,
+    );
 
-  const now = new Date();
+    const now = new Date();
 
-  if (routing === "HQ_APPROVAL") {
-    // Above threshold → route to HQ
-    const [updated] = await db
+    // Above threshold → route to HQ. Below threshold → send directly.
+    const [updated] = await tx
       .update(purchaseOrder)
       .set({
-        status: "PENDING_APPROVAL",
         totalValue: String(totalValue),
         submittedAt: now,
         updatedDttm: now,
+        ...(routing === "HQ_APPROVAL"
+          ? { status: "PENDING_APPROVAL" }
+          : { status: "SENT", sentAt: now, approvedByUserId: userId }),
       })
       .where(eq(purchaseOrder.poId, poId))
       .returning();
+    return { po, updated, routing, totalValue, thresholdAmount };
+  });
 
+  if (routing === "HQ_APPROVAL") {
     // Notify HQ admins
     await notificationService.notifyHQAdmins(
       orgId,
@@ -347,20 +473,6 @@ export async function submitPO(poId: string, orgId: number, userId: number) {
     return { ...updated, routing };
   }
 
-  // Below threshold → send directly
-  const [updated] = await db
-    .update(purchaseOrder)
-    .set({
-      status: "SENT",
-      totalValue: String(totalValue),
-      submittedAt: now,
-      sentAt: now,
-      approvedByUserId: userId,
-      updatedDttm: now,
-    })
-    .where(eq(purchaseOrder.poId, poId))
-    .returning();
-
   logger.info({ poId, totalValue, routing }, "PO submitted — sent directly (below threshold)");
   return { ...updated, routing };
 }
@@ -368,11 +480,11 @@ export async function submitPO(poId: string, orgId: number, userId: number) {
 // ─── approvePO ───────────────────────────────────────────────────
 
 /**
- * Whether anyone in the organisation besides `userId` can approve purchase orders: an active member who holds
+ * Whether anyone in the organisation besides `userIds` can approve purchase orders: an active member who holds
  * `purchasing:approve` through a role, or an Administrator (who bypasses permission checks). A user only acts in their
  * earliest organisation (`getUserLocationContext`), so a member whose earliest membership is elsewhere does not count.
  */
-async function hasOtherApprover(orgId: number, userId: number, tx: DbOrTx = db): Promise<boolean> {
+async function hasOtherApprover(orgId: number, userIds: number[], tx: DbOrTx): Promise<boolean> {
   const earlier = alias(userOrganisation, "earlier_membership");
   const rows = await tx
     .select({ userId: user.userId })
@@ -396,7 +508,7 @@ async function hasOtherApprover(orgId: number, userId: number, tx: DbOrTx = db):
               ),
             ),
         ),
-        ne(user.userId, userId),
+        notInArray(user.userId, userIds),
         eq(user.userStatus, "active"),
         or(eq(role.roleName, "Administrator"), eq(permission.permissionKey, "purchasing:approve")),
       ),
@@ -405,20 +517,56 @@ async function hasOtherApprover(orgId: number, userId: number, tx: DbOrTx = db):
   return rows.length > 0;
 }
 
+/** Everyone who edited each of these orders (updatePO's audit rows). */
+async function editorsOf(poIds: string[], tx: DbOrTx): Promise<Map<string, number[]>> {
+  const editors = new Map<string, number[]>();
+  if (poIds.length === 0) return editors;
+  const rows = await tx
+    .selectDistinct({ poId: auditLog.entityId, userId: auditLog.actorUserId })
+    .from(auditLog)
+    .where(and(eq(auditLog.entityType, "purchase_order"), inArray(auditLog.entityId, poIds), eq(auditLog.action, "update")));
+  for (const r of rows) {
+    if (r.userId !== null) editors.set(r.poId, [...(editors.get(r.poId) ?? []), r.userId]);
+  }
+  return editors;
+}
+
 /**
- * `canApprove` on every order waiting for approval, for an approver's list or detail: false on their own order
- * while someone else in the organisation can approve it. Other rows are returned unchanged.
+ * The people the approval must come from outside of, when this approver wrote the order; null when they did not.
+ * The creator waits for anyone else. An editor waits for someone who wrote none of it: if the only other approvers
+ * wrote it too, the editor may approve (or the order could never be approved).
  */
-export async function withApprovalRights<T extends { status: string; createdByUserId: number }>(
+function authorsFor(po: { poId: string; createdByUserId: number }, editors: Map<string, number[]>, userId: number): number[] | null {
+  if (po.createdByUserId === userId) return [userId];
+  const edited = editors.get(po.poId) ?? [];
+  return edited.includes(userId) ? [po.createdByUserId, ...edited] : null;
+}
+
+/**
+ * `canApprove` on every order waiting for approval, for an approver's list or detail: false on an order they created
+ * or edited while someone else in the organisation can approve it. Other rows are returned unchanged.
+ */
+export async function withApprovalRights<T extends { poId: string; status: string; createdByUserId: number }>(
   rows: T[],
   orgId: number,
   userId: number,
 ): Promise<Array<T & { canApprove?: boolean }>> {
-  const ownWaiting = rows.some((r) => r.status === "PENDING_APPROVAL" && r.createdByUserId === userId);
-  const soleApprover = ownWaiting ? !(await hasOtherApprover(orgId, userId)) : true;
-  return rows.map((r) =>
-    r.status === "PENDING_APPROVAL" ? { ...r, canApprove: r.createdByUserId !== userId || soleApprover } : r,
-  );
+  const waiting = rows.filter((r) => r.status === "PENDING_APPROVAL");
+  const editors = await editorsOf(waiting.map((r) => r.poId), db);
+  // Most rows share the same authors, so each set is looked up once.
+  const mustWait = new Map<string, boolean>();
+  const out: Array<T & { canApprove?: boolean }> = [];
+  for (const r of rows) {
+    if (r.status !== "PENDING_APPROVAL") {
+      out.push(r);
+      continue;
+    }
+    const authors = authorsFor(r, editors, userId);
+    const key = authors?.join() ?? "";
+    if (authors && !mustWait.has(key)) mustWait.set(key, await hasOtherApprover(orgId, authors, db));
+    out.push({ ...r, canApprove: !mustWait.get(key) });
+  }
+  return out;
 }
 
 /** Lock a waiting order of this organisation for an approver's decision, or refuse. */
@@ -436,15 +584,17 @@ async function lockPendingPO(tx: DbOrTx, poId: string, orgId: number, verb: "app
 }
 
 /**
- * Approve a waiting order. The row is locked, so two approvers racing cannot both approve it. The creator may not
- * approve their own order unless nobody else in the organisation can; that case is allowed and audited as a self-approval.
+ * Approve a waiting order. The row is locked, so two approvers racing cannot both approve it. Whoever created or edited
+ * the order may not approve it unless nobody else in the organisation can; that case is allowed and audited as a self-approval.
  */
 export async function approvePO(poId: string, orgId: number, userId: number) {
   const { po, updated, selfApproval } = await db.transaction(async (tx) => {
     const po = await lockPendingPO(tx, poId, orgId, "approve");
-    const selfApproval = po.createdByUserId === userId;
-    if (selfApproval && (await hasOtherApprover(orgId, userId, tx))) {
-      throw new AppError(403, "SELF_APPROVAL_NOT_ALLOWED", "You created this purchase order, so another approver must approve it.");
+    const authors = authorsFor(po, await editorsOf([po.poId], tx), userId);
+    const selfApproval = authors !== null;
+    if (authors && (await hasOtherApprover(orgId, authors, tx))) {
+      const did = po.createdByUserId === userId ? "created" : "edited";
+      throw new AppError(403, "SELF_APPROVAL_NOT_ALLOWED", `You ${did} this purchase order, so another approver must approve it.`);
     }
 
     const now = new Date();
@@ -776,7 +926,7 @@ export async function clonePO(
   }
 
   // Create the new draft PO
-  const newPO = await createPO({
+  const { replay: _replay, ...newPO } = await createPO({
     orgId,
     locationId,
     supplierId: source.supplierId,

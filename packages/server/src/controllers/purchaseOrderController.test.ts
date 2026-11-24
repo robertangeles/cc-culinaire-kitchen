@@ -16,6 +16,8 @@ vi.mock("../services/locationContextService.js", () => ({
 
 vi.mock("../services/purchaseOrderService.js", () => ({
   createPO: vi.fn(),
+  updatePO: vi.fn(),
+  getPOLocationId: vi.fn(),
   listPOs: vi.fn(),
   getPODetail: vi.fn(),
   submitPO: vi.fn(),

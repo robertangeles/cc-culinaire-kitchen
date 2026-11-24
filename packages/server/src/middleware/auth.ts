@@ -154,7 +154,7 @@ export function requirePermission(...perms: string[]) {
     }
 
     if (!hasPermission(req.user, ...perms)) {
-      res.status(403).json({ error: "Insufficient permissions." });
+      res.status(403).json({ error: "Insufficient permissions.", code: "FORBIDDEN" });
       return;
     }
 

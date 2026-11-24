@@ -40,9 +40,10 @@ export interface ThresholdResult {
 async function getThreshold(
   orgId: number,
   locationId: string,
+  tx: DbOrTx,
 ): Promise<number | null> {
   // Check location-specific override
-  const [locationOverride] = await db
+  const [locationOverride] = await tx
     .select()
     .from(spendThreshold)
     .where(
@@ -57,7 +58,7 @@ async function getThreshold(
   }
 
   // Fall back to org default
-  const [org] = await db
+  const [org] = await tx
     .select({ defaultSpendThreshold: organisation.defaultSpendThreshold })
     .from(organisation)
     .where(eq(organisation.organisationId, orgId));
@@ -73,8 +74,8 @@ async function getThreshold(
  * Calculate PO total value SERVER-SIDE from DB prices.
  * Never trust client-submitted values for threshold calculation.
  */
-async function calculatePOTotal(poId: string): Promise<{ total: number; hasUnpricedLine: boolean }> {
-  const lines = await db
+async function calculatePOTotal(poId: string, tx: DbOrTx): Promise<{ total: number; hasUnpricedLine: boolean }> {
+  const lines = await tx
     .select({
       orderedQty: purchaseOrderLine.orderedQty,
       unitCost: purchaseOrderLine.unitCost,
@@ -102,9 +103,10 @@ export async function determineRouting(
   poId: string,
   orgId: number,
   locationId: string,
+  tx: DbOrTx,
 ): Promise<ThresholdResult> {
-  const { total: totalValue, hasUnpricedLine } = await calculatePOTotal(poId);
-  const thresholdAmount = await getThreshold(orgId, locationId);
+  const { total: totalValue, hasUnpricedLine } = await calculatePOTotal(poId, tx);
+  const thresholdAmount = await getThreshold(orgId, locationId, tx);
 
   // No threshold configured → always direct
   if (thresholdAmount === null) {

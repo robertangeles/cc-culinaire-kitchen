@@ -85,6 +85,7 @@ import * as transferController from "../controllers/transferController.js";
 import * as forecastController from "../controllers/forecastController.js";
 import {
   handleCreatePO,
+  handleUpdatePO,
   handleListPOs,
   handleGetPODetail,
   handleSubmitPO,
@@ -282,6 +283,7 @@ router.get("/purchase-orders", requirePermission("inventory:count", "purchasing:
 
 // Parameterized PO routes
 router.get("/purchase-orders/:id", requirePermission("inventory:count", "purchasing:receive"), handleGetPODetail);
+router.put("/purchase-orders/:id", requirePermission("inventory:manage"), handleUpdatePO);
 router.post("/purchase-orders/:id/submit", requirePermission("purchasing:submit"), handleSubmitPO);
 router.post("/purchase-orders/:id/approve", requirePermission("purchasing:approve"), handleApprovePO);
 router.post("/purchase-orders/:id/send-email", requirePermission("purchasing:submit"), poPdfRateLimit, handleEmailPOToSupplier);

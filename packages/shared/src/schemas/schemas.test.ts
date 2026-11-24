@@ -5,6 +5,7 @@ import { AuthUserSchema, LocationContextSchema, LoginReplySchema, RefreshReplySc
 import { ActiveSessionSchema, AreaLinesSchema, CountSheetsSchema, SubmitConflictBodySchema } from "./stockTake.js";
 import { WasteEntrySchema, WasteListSchema, WasteSuggestionsSchema } from "./waste.js";
 import { CatalogueSchema } from "./catalogue.js";
+import { CreatePurchaseOrderSchema, PurchaseOrderInputSchema, PurchaseOrderSchema } from "./purchaseOrder.js";
 import { PrepMenuSchema, PrepSelectionsSchema, PrepTodaySchema } from "./prep.js";
 import { ConsumptionEntrySchema, ConsumptionListSchema } from "./consumption.js";
 import { StockMovementListSchema, StorageAreaListSchema } from "./stockMovement.js";
@@ -290,5 +291,35 @@ describe("notification and profile schemas", () => {
     expect(KitchenProfileSchema.parse({ pricePoint: null })).toMatchObject({ skillLevel: "home_cook", servingsDefault: 4, pricePoint: "" });
     expect(MfaSetupReplySchema.parse({ secret: "S" })).toEqual({ secret: "S", qrCodeDataUrl: "" });
     expect(PersonalisationOptionsSchema.parse({ skill_level: "broken" }).skill_level).toEqual([]);
+  });
+});
+
+describe("purchase order schemas", () => {
+  const id = "6f1c2a9e-0b7d-4c55-9b0e-2f6a1d3c4b5a";
+  const line = { ingredientId: id, orderedQty: "2", orderedUnit: "kg", unitCost: "0" };
+  const input = { storeLocationId: id, supplierId: id, lines: [line] };
+
+  it("takes the body older web versions send, and leaves the id to create", () => {
+    expect(CreatePurchaseOrderSchema.parse({ ...input, notes: "x", expectedDeliveryDate: "2026-12-01" })).not.toHaveProperty("poId");
+    expect(CreatePurchaseOrderSchema.parse({ ...input, poId: id }).poId).toBe(id);
+    expect(PurchaseOrderInputSchema.parse({ ...input, poId: id })).not.toHaveProperty("poId");
+    expect(PurchaseOrderInputSchema.safeParse({ ...input, expectedDeliveryDate: "" }).success).toBe(true);
+  });
+
+  it.each([
+    [{ lines: [] }],
+    [{ lines: [{ ...line, orderedQty: "0" }] }],
+    [{ lines: [{ ...line, orderedQty: "Infinity" }] }],
+    [{ lines: [{ ...line, unitCost: " " }] }],
+    [{ lines: [{ ...line, unitCost: "-1" }] }],
+    [{ expectedDeliveryDate: "soon" }],
+    [{ poId: "po-1" }],
+  ])("refuses %j", (over) => {
+    expect(CreatePurchaseOrderSchema.safeParse({ ...input, ...over }).success).toBe(false);
+  });
+
+  it("reads the order the server answers, tolerating a field it does not know or a missing one", () => {
+    const po = PurchaseOrderSchema.parse({ poId: "p1", status: "NEW_STATUS", storeLocationId: "l1", supplierId: "s1", totalValue: null, lines: [{ lineId: "x", ingredientId: "i1", orderedQty: "7.50", orderedUnit: "kg", unitCost: null, lineStatus: "PENDING" }] });
+    expect(po).toMatchObject({ poNumber: "", status: "NEW_STATUS", notes: null, expectedDeliveryDate: null, lines: [{ orderedQty: 7.5, unitCost: null }] });
   });
 });
