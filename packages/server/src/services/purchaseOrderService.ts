@@ -11,7 +11,7 @@
  */
 
 import { isDeepStrictEqual } from "node:util";
-import { eq, and, desc, sql, inArray, ne, or, isNull, lt, notExists } from "drizzle-orm";
+import { eq, and, desc, sql, inArray, notInArray, or, isNull, lt, notExists } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "../db/index.js";
 import {
@@ -220,20 +220,22 @@ export async function createPO(input: CreatePOInput) {
 
 // ─── updatePO ─────────────────────────────────────────────────────
 
-/** Where an order of this organisation is for, or null when there is no such order. */
-export async function getPOLocationId(poId: string, orgId: number): Promise<string | null> {
+/** The location an order of this organisation is for. */
+export async function getPOLocationId(poId: string, orgId: number): Promise<string> {
   const [po] = await db
     .select({ storeLocationId: purchaseOrder.storeLocationId })
     .from(purchaseOrder)
     .where(and(eq(purchaseOrder.poId, poId), eq(purchaseOrder.organisationId, orgId)));
-  return po?.storeLocationId ?? null;
+  if (!po) throw new AppError(404, "NOT_FOUND", "Purchase order not found");
+  return po.storeLocationId;
 }
 
 /**
  * Replace a draft's header and lines. The row is locked, as in submitPO, so an order cannot change while it is being
  * submitted. A total left by an earlier submission (a rejected order) no longer fits the lines and is cleared.
+ * `fromLocationId` is the location the caller was checked against: an order moved elsewhere since is refused.
  */
-export async function updatePO(poId: string, input: CreatePOInput) {
+export async function updatePO(poId: string, fromLocationId: string, input: CreatePOInput) {
   return db.transaction(async (tx) => {
     const [po] = await tx
       .select()
@@ -242,6 +244,9 @@ export async function updatePO(poId: string, input: CreatePOInput) {
       .for("update");
     if (!po) throw new AppError(404, "NOT_FOUND", "Purchase order not found");
     if (po.status !== "DRAFT") throw new AppError(409, "INVALID_STATE", `Cannot edit PO with status ${po.status}`);
+    if (po.storeLocationId !== fromLocationId) {
+      throw new AppError(409, "CONFLICT", "This order was just moved to another location. Open it again.");
+    }
 
     await assertOwnedByOrg(input, tx);
 
@@ -475,11 +480,11 @@ export async function submitPO(poId: string, orgId: number, userId: number) {
 // ─── approvePO ───────────────────────────────────────────────────
 
 /**
- * Whether anyone in the organisation besides `userId` can approve purchase orders: an active member who holds
+ * Whether anyone in the organisation besides `userIds` can approve purchase orders: an active member who holds
  * `purchasing:approve` through a role, or an Administrator (who bypasses permission checks). A user only acts in their
  * earliest organisation (`getUserLocationContext`), so a member whose earliest membership is elsewhere does not count.
  */
-async function hasOtherApprover(orgId: number, userId: number, tx: DbOrTx = db): Promise<boolean> {
+async function hasOtherApprover(orgId: number, userIds: number[], tx: DbOrTx): Promise<boolean> {
   const earlier = alias(userOrganisation, "earlier_membership");
   const rows = await tx
     .select({ userId: user.userId })
@@ -503,7 +508,7 @@ async function hasOtherApprover(orgId: number, userId: number, tx: DbOrTx = db):
               ),
             ),
         ),
-        ne(user.userId, userId),
+        notInArray(user.userId, userIds),
         eq(user.userStatus, "active"),
         or(eq(role.roleName, "Administrator"), eq(permission.permissionKey, "purchasing:approve")),
       ),
@@ -512,20 +517,56 @@ async function hasOtherApprover(orgId: number, userId: number, tx: DbOrTx = db):
   return rows.length > 0;
 }
 
+/** Everyone who edited each of these orders (updatePO's audit rows). */
+async function editorsOf(poIds: string[], tx: DbOrTx): Promise<Map<string, number[]>> {
+  const editors = new Map<string, number[]>();
+  if (poIds.length === 0) return editors;
+  const rows = await tx
+    .selectDistinct({ poId: auditLog.entityId, userId: auditLog.actorUserId })
+    .from(auditLog)
+    .where(and(eq(auditLog.entityType, "purchase_order"), inArray(auditLog.entityId, poIds), eq(auditLog.action, "update")));
+  for (const r of rows) {
+    if (r.userId !== null) editors.set(r.poId, [...(editors.get(r.poId) ?? []), r.userId]);
+  }
+  return editors;
+}
+
 /**
- * `canApprove` on every order waiting for approval, for an approver's list or detail: false on their own order
- * while someone else in the organisation can approve it. Other rows are returned unchanged.
+ * The people the approval must come from outside of, when this approver wrote the order; null when they did not.
+ * The creator waits for anyone else. An editor waits for someone who wrote none of it: if the only other approvers
+ * wrote it too, the editor may approve (or the order could never be approved).
  */
-export async function withApprovalRights<T extends { status: string; createdByUserId: number }>(
+function authorsFor(po: { poId: string; createdByUserId: number }, editors: Map<string, number[]>, userId: number): number[] | null {
+  if (po.createdByUserId === userId) return [userId];
+  const edited = editors.get(po.poId) ?? [];
+  return edited.includes(userId) ? [po.createdByUserId, ...edited] : null;
+}
+
+/**
+ * `canApprove` on every order waiting for approval, for an approver's list or detail: false on an order they created
+ * or edited while someone else in the organisation can approve it. Other rows are returned unchanged.
+ */
+export async function withApprovalRights<T extends { poId: string; status: string; createdByUserId: number }>(
   rows: T[],
   orgId: number,
   userId: number,
 ): Promise<Array<T & { canApprove?: boolean }>> {
-  const ownWaiting = rows.some((r) => r.status === "PENDING_APPROVAL" && r.createdByUserId === userId);
-  const soleApprover = ownWaiting ? !(await hasOtherApprover(orgId, userId)) : true;
-  return rows.map((r) =>
-    r.status === "PENDING_APPROVAL" ? { ...r, canApprove: r.createdByUserId !== userId || soleApprover } : r,
-  );
+  const waiting = rows.filter((r) => r.status === "PENDING_APPROVAL");
+  const editors = await editorsOf(waiting.map((r) => r.poId), db);
+  // Most rows share the same authors, so each set is looked up once.
+  const mustWait = new Map<string, boolean>();
+  const out: Array<T & { canApprove?: boolean }> = [];
+  for (const r of rows) {
+    if (r.status !== "PENDING_APPROVAL") {
+      out.push(r);
+      continue;
+    }
+    const authors = authorsFor(r, editors, userId);
+    const key = authors?.join() ?? "";
+    if (authors && !mustWait.has(key)) mustWait.set(key, await hasOtherApprover(orgId, authors, db));
+    out.push({ ...r, canApprove: !mustWait.get(key) });
+  }
+  return out;
 }
 
 /** Lock a waiting order of this organisation for an approver's decision, or refuse. */
@@ -543,15 +584,17 @@ async function lockPendingPO(tx: DbOrTx, poId: string, orgId: number, verb: "app
 }
 
 /**
- * Approve a waiting order. The row is locked, so two approvers racing cannot both approve it. The creator may not
- * approve their own order unless nobody else in the organisation can; that case is allowed and audited as a self-approval.
+ * Approve a waiting order. The row is locked, so two approvers racing cannot both approve it. Whoever created or edited
+ * the order may not approve it unless nobody else in the organisation can; that case is allowed and audited as a self-approval.
  */
 export async function approvePO(poId: string, orgId: number, userId: number) {
   const { po, updated, selfApproval } = await db.transaction(async (tx) => {
     const po = await lockPendingPO(tx, poId, orgId, "approve");
-    const selfApproval = po.createdByUserId === userId;
-    if (selfApproval && (await hasOtherApprover(orgId, userId, tx))) {
-      throw new AppError(403, "SELF_APPROVAL_NOT_ALLOWED", "You created this purchase order, so another approver must approve it.");
+    const authors = authorsFor(po, await editorsOf([poId], tx), userId);
+    const selfApproval = authors !== null;
+    if (authors && (await hasOtherApprover(orgId, authors, tx))) {
+      const did = po.createdByUserId === userId ? "created" : "edited";
+      throw new AppError(403, "SELF_APPROVAL_NOT_ALLOWED", `You ${did} this purchase order, so another approver must approve it.`);
     }
 
     const now = new Date();

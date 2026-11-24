@@ -146,13 +146,12 @@ export async function handleUpdatePO(
       return;
     }
 
-    // Unknown orders are left to the service to report.
-    const currentLocationId = await getPOLocationId(id.data, orgId);
-    if (currentLocationId) await assertLocationAccess(req.user!, currentLocationId);
+    const fromLocationId = await getPOLocationId(id.data, orgId);
+    await assertLocationAccess(req.user!, fromLocationId);
     await assertLocationAccess(req.user!, parsed.data.storeLocationId);
 
     const userId = req.user!.sub;
-    const result = await updatePO(id.data, toPOInput(parsed.data, orgId, userId));
+    const result = await updatePO(id.data, fromLocationId, toPOInput(parsed.data, orgId, userId));
 
     logger.info({ poId: result.poId, userId }, "Purchase order edited");
     res.json(result);

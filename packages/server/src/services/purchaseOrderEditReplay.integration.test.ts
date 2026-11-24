@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, afterEach } from "vitest";
 import { config } from "dotenv";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -10,8 +10,8 @@ config({ path: resolve(dirname(fileURLToPath(import.meta.url)), "../../../../.en
 applyEnvPrefix();
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "../db/index.js";
-import { auditLog, notification, organisation, purchaseOrder, purchaseOrderLine, supplier } from "../db/schema.js";
-import { handleCreatePO, handleUpdatePO } from "../controllers/purchaseOrderController.js";
+import { auditLog, notification, organisation, purchaseOrder, purchaseOrderLine, role, supplier, userRole } from "../db/schema.js";
+import { handleApprovePO, handleCreatePO, handleGetPODetail, handleUpdatePO } from "../controllers/purchaseOrderController.js";
 import { submitPO } from "./purchaseOrderService.js";
 import { asUser, callHandler, createLineLoopFx, removeLineLoopFx, type LineLoopFx } from "./lineLoopFixture.js";
 
@@ -279,7 +279,65 @@ describe.skipIf(!RUN)("purchase order edit and idempotent create (real DB)", () 
     });
   });
 
-  describe("an edit and a submit at the same moment", () => {
+  describe("who may approve an edited order", () => {
+    const APPROVE = [...MANAGE, "purchasing:approve"];
+    const approve = (id: string, sub: number) => callHandler(handleApprovePO, asUser(sub, APPROVE), { params: { id } });
+    const detail = (id: string, sub: number) => callHandler(handleGetPODetail, asUser(sub, APPROVE), { params: { id } });
+    const grant = async (...ids: number[]) => {
+      const [ops] = await db.select({ roleId: role.roleId }).from(role).where(eq(role.roleName, "Operations Admin"));
+      await db.insert(userRole).values(ids.map((userId) => ({ userId, roleId: ops.roleId })));
+    };
+    /** Created by chef, edited by cook, waiting for approval. */
+    const edited = async () => {
+      const poId = (await create(body())).body.poId as string;
+      expect((await edit(poId, body({ notes: "Edited" }), fx.cook)).status).toBe(200);
+      await setStatus(poId, "PENDING_APPROVAL");
+      return poId;
+    };
+    afterEach(() => db.delete(userRole).where(inArray(userRole.userId, [fx.chef, fx.cook, fx.roamer])));
+
+    it("refuses whoever edited it while someone who did not can approve, and lets that person", async () => {
+      await grant(fx.cook, fx.roamer);
+      const poId = await edited();
+      expect((await detail(poId, fx.cook)).body.canApprove).toBe(false);
+      expect(await approve(poId, fx.cook)).toMatchObject({ status: 403, body: { code: "SELF_APPROVAL_NOT_ALLOWED" } });
+      expect((await detail(poId, fx.roamer)).body.canApprove).toBe(true);
+      expect(await approve(poId, fx.roamer)).toMatchObject({ status: 200, body: { status: "SENT", selfApproval: false } });
+    });
+
+    it("lets the editor approve, as a self-approval, when the only other approver created it; the creator still may not", async () => {
+      await grant(fx.chef, fx.cook);
+      const poId = await edited();
+      expect((await detail(poId, fx.chef)).body.canApprove).toBe(false);
+      expect(await approve(poId, fx.chef)).toMatchObject({ status: 403, body: { code: "SELF_APPROVAL_NOT_ALLOWED" } });
+      expect((await detail(poId, fx.cook)).body.canApprove).toBe(true);
+      expect(await approve(poId, fx.cook)).toMatchObject({ status: 200, body: { selfApproval: true } });
+      expect((await auditOf(poId, "approve"))[0].metadata).toMatchObject({ selfApproval: true });
+    });
+
+    it("leaves an order nobody edited as before: any approver but the creator", async () => {
+      await grant(fx.chef, fx.cook);
+      const poId = (await create(body())).body.poId as string;
+      await setStatus(poId, "PENDING_APPROVAL");
+      expect(await approve(poId, fx.chef)).toMatchObject({ status: 403 });
+      expect(await approve(poId, fx.cook)).toMatchObject({ status: 200, body: { selfApproval: false } });
+    });
+  });
+
+  describe("an edit and another change at the same moment", () => {
+    it("an edit that waited for a move finds the order elsewhere, and is refused", async () => {
+      const poId = (await create(body())).body.poId;
+      let editing!: ReturnType<typeof edit>;
+      await db.transaction(async (tx) => {
+        await tx.select().from(purchaseOrder).where(eq(purchaseOrder.poId, poId)).for("update");
+        editing = edit(poId, body());
+        await wait(200);
+        await tx.update(purchaseOrder).set({ storeLocationId: fx.locB }).where(eq(purchaseOrder.poId, poId));
+      });
+      expect(await editing).toMatchObject({ status: 409, body: { code: "CONFLICT" } });
+      expect((await row(poId)).storeLocationId).toBe(fx.locB);
+    });
+
     it("an edit that waited for a submit finds the order sent, and is refused", async () => {
       const poId = (await create(body())).body.poId;
       let editing!: ReturnType<typeof edit>;
