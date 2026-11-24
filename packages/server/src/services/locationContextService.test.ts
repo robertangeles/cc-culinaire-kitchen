@@ -155,6 +155,35 @@ describe("locationContextService", () => {
     });
   });
 
+  describe("getUserLocationContext venue time", () => {
+    it("carries each location's IANA zone and state, for an assigned member and for an org admin", async () => {
+      const dbModule = await import("../db/index.js");
+      const stubMemberships = (role: string) => {
+        let callCount = 0;
+        (dbModule.db.select as any).mockImplementation(() => ({
+          from: vi.fn(() => ({
+            where: vi.fn(() => {
+              callCount++;
+              if (callCount === 1) return Object.assign([{ organisationId: 1, role }], { orderBy: () => [{ organisationId: 1, role }] });
+              return [{ selectedLocationId: null }];
+            }),
+          })),
+        }));
+      };
+      const venue = { storeLocationId: "mel", organisationId: 1, locationName: "Mel", classification: "hq", colorAccent: null, photoPath: null, ianaTimezone: "Australia/Perth", state: "WA" };
+      const storeLocations = await import("./storeLocationService.js");
+      (storeLocations.getUserStoreLocations as any).mockResolvedValue([venue]);
+      (storeLocations.getOrgStoreLocations as any).mockResolvedValue([venue]);
+      const { getUserLocationContext } = await import("./locationContextService.js");
+
+      for (const role of ["member", "admin"]) {
+        stubMemberships(role);
+        const ctx = await getUserLocationContext(1);
+        expect(ctx.locations[0]).toMatchObject({ ianaTimezone: "Australia/Perth", state: "WA" });
+      }
+    });
+  });
+
   describe("resolveSelectedLocation", () => {
     it("returns null when no preference and no global selection", async () => {
       const dbModule = await import("../db/index.js");
