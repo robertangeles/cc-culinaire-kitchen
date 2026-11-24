@@ -21,20 +21,12 @@ import {
   type OrderSummary,
   type SupplierOption,
 } from "@culinaire/shared/schemas/purchasing";
+import type { CreatePurchaseOrder, PurchaseOrderInput } from "@culinaire/shared/schemas/purchaseOrder";
 import type { ApiClient } from "../api/client";
 
 const INV = "/api/inventory";
 /** The server's most rows a page. */
 export const PAGE = 50;
-
-export interface OrderBody {
-  storeLocationId: string;
-  supplierId: string;
-  lines: Array<{ ingredientId: string; orderedQty: string; orderedUnit: string; unitCost?: string }>;
-  notes?: string;
-  /** A calendar day, YYYY-MM-DD. */
-  expectedDeliveryDate?: string;
-}
 
 export interface CreditBody {
   /** Made on the phone, so a repeat after a lost reply answers the note it made the first time. */
@@ -58,8 +50,13 @@ export function createOrdersApi(client: ApiClient) {
     detail(poId: string): Promise<OrderDetail> {
       return client.request("GET", `${INV}/purchase-orders/${poId}`, { schema: OrderDetailSchema });
     },
-    create(body: OrderBody) {
+    /** `poId` is made on the phone: the same body again answers the order it made the first time, another body is 409 CONFLICT. */
+    create(body: CreatePurchaseOrder) {
       return client.request("POST", `${INV}/purchase-orders`, { body, schema: OrderWriteReplySchema });
+    },
+    /** Replaces a draft, header and lines. */
+    update(poId: string, body: PurchaseOrderInput) {
+      return client.request("PUT", `${INV}/purchase-orders/${poId}`, { body, schema: OrderWriteReplySchema });
     },
     submit(poId: string) {
       return client.request("POST", `${INV}/purchase-orders/${poId}/submit`, { schema: OrderSubmitReplySchema });

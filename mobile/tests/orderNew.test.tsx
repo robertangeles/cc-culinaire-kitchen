@@ -2,10 +2,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { Alert } from "react-native";
-import { routerMock } from "../testing/mocks";
+import { routerMock, searchParams } from "../testing/mocks";
 import { ApiError } from "../src/api/client";
 import { COLUMN_WIDTH } from "../src/ui/Screen";
-import { admin, api, memoryKv, ordersFor, person, resetApi } from "./ordersHarness";
+import { admin, api, detail, memoryKv, ordersFor, person, resetApi } from "./ordersHarness";
 
 vi.mock("../src/runtime/appContext", async () => {
   const { sessionState } = await import("../testing/mocks");
@@ -13,6 +13,7 @@ vi.mock("../src/runtime/appContext", async () => {
 });
 vi.mock("../src/storage/kv", () => ({ sqliteKv: {} }));
 
+import OrderEdit from "../app/(app)/(orders)/order-edit";
 import OrderNew from "../app/(app)/(orders)/order-new";
 import Orders from "../app/(app)/(orders)/index";
 
@@ -41,7 +42,7 @@ describe("writing an order", () => {
     expect(screen.getAllByText("$35.00").length).toBeGreaterThan(0);
     fireEvent.click(button("Save as draft"));
     await waitFor(() => expect(routerMock.replace).toHaveBeenCalledWith({ pathname: "/order", params: { poId: "P9" } }));
-    expect(api.create).toHaveBeenCalledWith({ storeLocationId: "L1", supplierId: "s1", lines: [{ ingredientId: "i1", orderedQty: "2", orderedUnit: "bag", unitCost: "17.5" }] });
+    expect(api.create).toHaveBeenCalledWith({ storeLocationId: "L1", supplierId: "s1", lines: [{ ingredientId: "i1", orderedQty: "2", orderedUnit: "bag", unitCost: "17.5" }], poId: expect.stringMatching(/^[0-9a-f-]{36}$/) });
     expect(api.submit).not.toHaveBeenCalled();
   });
 
@@ -142,7 +143,7 @@ describe("writing an order", () => {
     await new Promise((r) => setTimeout(r));
     api.items.mockRejectedValue(new ApiError("network"));
     render(<OrderNew />, ordersFor(admin, kv));
-    expect(await screen.findByText("Can't reach the server. Try again. Writing an order needs a connection. What you have so far is kept on this phone.")).toBeTruthy();
+    expect(await screen.findByText("Can't reach the server. Writing an order needs a connection. What you have so far is kept on this phone.")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Save as draft" })).toBeNull();
   });
 
@@ -172,5 +173,33 @@ describe("writing an order", () => {
     let el: HTMLElement | null = button(/^Flour, 1 bag/);
     while (el && el.style.maxWidth !== `${COLUMN_WIDTH}px`) el = el.parentElement;
     expect(el).not.toBeNull();
+  });
+});
+
+describe("changing a saved draft", () => {
+  beforeEach(() => {
+    searchParams.current = { poId: "P1" };
+    api.detail.mockResolvedValue(detail({ expectedDeliveryDate: "2030-05-06T00:00:00.000Z" }));
+  });
+
+  it("opens on what it holds, saves the change and goes back to the order", async () => {
+    render(<OrderEdit />, ordersFor(admin));
+    expect(await screen.findByText("Change order")).toBeTruthy();
+    fireEvent.click(await find(/^Flour, 2 bag, \$35\.00/));
+    type("Order", "3");
+    fireEvent.click(button("Clear the date")); // a day further off than the week shown
+    fireEvent.click(button("Save changes"));
+    await waitFor(() => expect(routerMock.back).toHaveBeenCalled());
+    expect(api.update).toHaveBeenCalledWith("P1", { storeLocationId: "L1", supplierId: "s1", lines: [{ ingredientId: "i1", orderedQty: "3", orderedUnit: "bag", unitCost: "17.5" }] });
+    expect(api.create).not.toHaveBeenCalled();
+  });
+
+  it("says so when it is no longer a draft, and never offers to discard it", async () => {
+    api.detail.mockResolvedValue(detail({ status: "SENT" }));
+    render(<OrderEdit />, ordersFor(admin));
+    expect(await screen.findByText("This order is no longer a draft, so it can't be changed.")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Discard this order" })).toBeNull();
+    fireEvent.click(button("Back without saving"));
+    expect(routerMock.back).toHaveBeenCalled();
   });
 });

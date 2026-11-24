@@ -4,9 +4,9 @@
  */
 
 import { costForOrderedUnit } from "@culinaire/shared";
-import type { OrderGuideItem, OrderItem } from "@culinaire/shared/schemas/purchasing";
+import type { PurchaseOrderInput } from "@culinaire/shared/schemas/purchaseOrder";
+import type { OrderDetail, OrderGuideItem, OrderItem } from "@culinaire/shared/schemas/purchasing";
 import { formatQty } from "../receiving/receivingFlow";
-import type { OrderBody } from "./ordersApi";
 
 export interface DraftLine {
   ingredientId: string;
@@ -26,11 +26,11 @@ export interface Draft {
   /** YYYY-MM-DD. */
   expectedDate: string | null;
   notes: string;
-  /** A save whose answer was lost: the drafts that existed before it and what was sent, to tell whether it landed. */
-  pending: { known: string[]; sent: string } | null;
+  /** The order's id, made on the phone at the first save, so a save sent again after a lost reply finds the same order. */
+  poId: string | null;
 }
 
-export const emptyDraft: Draft = { supplierId: null, supplierName: "", guideId: null, lines: [], expectedDate: null, notes: "", pending: null };
+export const emptyDraft: Draft = { supplierId: null, supplierName: "", guideId: null, lines: [], expectedDate: null, notes: "", poId: null };
 export const isEmpty = (d: Draft) => d.supplierId === null && d.lines.length === 0 && d.notes === "" && d.expectedDate === null;
 
 /** A number as the person would type it, a comma for the decimal point included; null when it is not one. */
@@ -95,7 +95,7 @@ export function draftProblem(d: Draft): string | null {
   return null;
 }
 
-export function toBody(d: Draft, storeLocationId: string): OrderBody {
+export function toBody(d: Draft, storeLocationId: string): PurchaseOrderInput {
   return {
     storeLocationId,
     supplierId: d.supplierId!,
@@ -105,6 +105,20 @@ export function toBody(d: Draft, storeLocationId: string): OrderBody {
     }),
     ...(d.notes.trim() ? { notes: d.notes.trim() } : {}),
     ...(d.expectedDate ? { expectedDeliveryDate: d.expectedDate } : {}),
+  };
+}
+
+/** A saved draft, to change. The server sends prices to everyone with the Orders tab, so one missing here is missing there too and saving loses none. */
+export function draftFromOrder(o: OrderDetail): Draft {
+  return {
+    ...emptyDraft,
+    poId: o.poId,
+    supplierId: o.supplierId,
+    supplierName: o.supplierName ?? "",
+    // The server keeps the chosen day as UTC midnight.
+    expectedDate: o.expectedDeliveryDate?.slice(0, 10) ?? null,
+    notes: o.notes ?? "",
+    lines: o.lines.map((l) => ({ ingredientId: l.ingredientId, ingredientName: l.ingredientName ?? "Item", qty: String(l.orderedQty), unit: l.orderedUnit, cost: l.unitCost === null ? "" : String(l.unitCost) })),
   };
 }
 

@@ -7,7 +7,7 @@ import { useSession } from "../../../src/runtime/appContext";
 import { DiscrepancyRows } from "../../../src/orders/DiscrepancyRows";
 import { WaitBadge } from "../../../src/orders/OrderRow";
 import { useOrders } from "../../../src/orders/OrdersProvider";
-import { calendarDay, dayLabel, itemCount, lineFacts, money, orderActions, receipt, statusLabel } from "../../../src/orders/orderView";
+import { APPROVE_BLOCKED, calendarDay, dayLabel, itemCount, lineFacts, money, orderActions, receipt, statusLabel } from "../../../src/orders/orderView";
 import { useOrder } from "../../../src/orders/useOrder";
 import { OfflineBanner } from "../../../src/ui/Banner";
 import { Button } from "../../../src/ui/Button";
@@ -224,8 +224,9 @@ export default function Order() {
             ) : can ? (
               <View style={{ gap: space.md }}>
                 {can.submit ? <Button label={busy === "submit" ? "Submitting…" : "Submit order"} disabled={busy !== null} onPress={() => void submit()} /> : null}
+                {can.edit ? <Button kind="ghost" label="Change order" disabled={busy !== null} onPress={() => router.push({ pathname: "/order-edit", params: { poId } })} /> : null}
                 {can.approve ? <Button label={busy === "approve" ? "Approving…" : "Approve"} disabled={busy !== null} onPress={approve} /> : null}
-                {can.approveBlocked ? <Text variant="muted">Another approver must approve your order.</Text> : null}
+                {can.approveBlocked ? <Text variant="muted">{APPROVE_BLOCKED}</Text> : null}
                 {can.reject ? <Button kind="ghost" label="Reject" disabled={busy !== null} onPress={() => setRejecting(true)} /> : null}
                 {can.receive ? <Button label="Receive delivery" disabled={busy !== null} onPress={() => router.push({ pathname: "/deliveries/[poId]", params: { poId } })} /> : null}
                 {can.email ? <Button kind="ghost" label={busy === "email" ? "Emailing…" : order.supplierEmailedAt ? "Email supplier again" : "Email to supplier"} disabled={busy !== null} onPress={() => void email()} /> : null}

@@ -3,6 +3,7 @@ import type { AuthUser } from "../api/auth";
 import { client } from "../runtime/appContext";
 import { sqliteKv } from "../storage/kv";
 import type { CachedList } from "./cachedList";
+import type { DraftStore } from "./draftStore";
 import { createOrders, type OrdersCtx } from "./orders";
 import { createOrdersApi } from "./ordersApi";
 
@@ -32,7 +33,6 @@ export function useList<T>(list: CachedList<T>) {
   return useSyncExternalStore(list.subscribe, list.getSnapshot);
 }
 
-export function useDraft() {
-  const { draft } = useOrders();
-  return { store: draft, snap: useSyncExternalStore(draft.subscribe, draft.getSnapshot) };
+export function useDraft(store: DraftStore) {
+  return useSyncExternalStore(store.subscribe, store.getSnapshot);
 }

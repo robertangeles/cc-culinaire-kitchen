@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from "vitest";
-import { OrderGuideItemSchema, OrderItemSchema, OrderSummarySchema, type OrderSummary } from "@culinaire/shared/schemas/purchasing";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { OrderDetailSchema, OrderGuideItemSchema, OrderItemSchema } from "@culinaire/shared/schemas/purchasing";
 import type { KvStore } from "../storage/kv";
 import { ApiError } from "../api/client";
 import { createDraftStore } from "./draftStore";
@@ -12,21 +12,26 @@ const memoryKv = (): KvStore & { data: Map<string, string> } => {
 const flour = OrderItemSchema.parse({ ingredientId: "i1", ingredientName: "Flour", baseUnit: "kg", purchaseUnit: "bag", packQty: "12.5", orgUnitCost: "1.40" });
 const gin = OrderItemSchema.parse({ ingredientId: "i2", ingredientName: "Gin", baseUnit: "bottle" });
 const farms = { supplierId: "s1", supplierName: "Fresh Farms" };
-const order = (over: object = {}): OrderSummary => OrderSummarySchema.parse({ poId: "new", poNumber: "PO-9", status: "DRAFT", storeLocationId: "L1", supplierId: "s1", createdByUserId: 7, lineCount: 1, ...over });
+let ids = 0;
+beforeEach(() => void (ids = 0));
+/** A draft the server has, raised for another location. */
+const saved = (over: object = {}) =>
+  OrderDetailSchema.parse({ poId: "P1", poNumber: "PO-100", status: "DRAFT", storeLocationId: "L2", supplierId: "s1", supplierName: "Fresh Farms", notes: "Back door", expectedDeliveryDate: "2026-12-04T00:00:00.000Z", lines: [{ lineId: "l1", ingredientId: "i1", ingredientName: "Flour", orderedQty: "2.0000", orderedUnit: "bag", unitCost: "17.5000" }], ...over });
 
-function setup(over: Partial<Record<keyof OrdersApi, unknown>> = {}, kv = memoryKv()) {
+function setup(over: Partial<Record<keyof OrdersApi, unknown>> = {}, kv = memoryKv(), editing?: string) {
   const api = {
+    detail: vi.fn(async () => saved()),
+    update: vi.fn(async () => ({ poId: "P1", poNumber: "PO-100", skippedItems: [] })),
     suppliers: vi.fn(async () => [{ supplierId: "s2", supplierName: "Wine Co" }, farms]),
     items: vi.fn(async () => [flour, gin]),
     guides: vi.fn(async () => [{ orderGuideId: "g1", name: "Weekly dry", supplierId: "s1", supplierName: "Fresh Farms", itemCount: 1 }]),
     guideItems: vi.fn(async () => [OrderGuideItemSchema.parse({ ingredientId: "i1", ingredientName: "Flour", baseUnit: "kg", purchaseUnit: "bag", suggestedPackages: 2, unitCost: 1.4, packUnitCost: 17.5 })]),
     supplierItemIds: vi.fn(async () => ["i1"]),
-    list: vi.fn(async () => [] as OrderSummary[]),
     create: vi.fn(async () => ({ poId: "new", poNumber: "PO-9", skippedItems: [] })),
     submit: vi.fn(async () => ({ poId: "new", status: "SENT" })),
     ...over,
   };
-  return { api, kv, store: createDraftStore({ api: api as unknown as OrdersApi, kv, key: "d", locationId: "L1", userId: 7, guidesAllowed: true }) };
+  return { api, kv, store: createDraftStore({ api: api as unknown as OrdersApi, kv, key: "d", locationId: "L1", newId: () => "id-" + ++ids, guidesAllowed: true, editing }) };
 }
 async function written(over: Parameters<typeof setup>[0] = {}, kv = memoryKv()) {
   const s = setup(over, kv);
@@ -50,7 +55,7 @@ describe("writing an order", () => {
     await new Promise((r) => setTimeout(r));
     const { store } = setup({ items: async () => { throw new ApiError("network"); } }, kv);
     await store.load();
-    expect(store.getSnapshot()).toMatchObject({ phase: "error", error: "Can't reach the server. Try again." });
+    expect(store.getSnapshot()).toMatchObject({ phase: "error", error: "Can't reach the server. Writing an order needs a connection." });
     expect(store.getSnapshot().draft.lines).toHaveLength(1);
   });
 
@@ -72,7 +77,7 @@ describe("writing an order", () => {
     await store.load();
     expect(store.getSnapshot()).toMatchObject({ phase: "ready", guides: [] });
     const api = setup().api;
-    const noKey = createDraftStore({ api: api as unknown as OrdersApi, kv: memoryKv(), key: "d", locationId: "L1", userId: 7, guidesAllowed: false });
+    const noKey = createDraftStore({ api: api as unknown as OrdersApi, kv: memoryKv(), key: "d", locationId: "L1", newId: () => "x", guidesAllowed: false });
     await noKey.load();
     expect(api.guides).not.toHaveBeenCalled();
   });
@@ -109,13 +114,21 @@ describe("writing an order", () => {
 });
 
 describe("saving an order", () => {
-  it("as a draft sends it once and clears the phone's copy", async () => {
+  const body = { storeLocationId: "L1", supplierId: "s1", lines: [{ ingredientId: "i1", orderedQty: "1", orderedUnit: "bag", unitCost: "17.5" }] };
+  const conflict = new ApiError("conflict", "That id is already used by another purchase order", 409, undefined, "CONFLICT");
+
+  it("as a draft sends it once, with an id made on the phone, and clears the phone's copy", async () => {
     const { store, api, kv } = await written();
     expect(await store.save(false)).toEqual({ poId: "new", notSubmitted: null });
-    expect(api.create).toHaveBeenCalledWith({ storeLocationId: "L1", supplierId: "s1", lines: [{ ingredientId: "i1", orderedQty: "1", orderedUnit: "bag", unitCost: "17.5" }] });
+    expect(api.create).toHaveBeenCalledWith({ ...body, poId: "id-1" });
     expect(api.submit).not.toHaveBeenCalled();
     await new Promise((r) => setTimeout(r));
-    expect(JSON.parse(kv.data.get("d")!).lines).toEqual([]);
+    expect(JSON.parse(kv.data.get("d")!)).toMatchObject({ lines: [], poId: null });
+    // The next order is another one.
+    store.chooseSupplier(farms);
+    store.add("i1");
+    await store.save(false);
+    expect(api.create).toHaveBeenLastCalledWith({ ...body, poId: "id-2" });
   });
 
   it("stops at what is missing, without a call", async () => {
@@ -123,7 +136,7 @@ describe("saving an order", () => {
     await store.load();
     expect(await store.save(true)).toBeNull();
     expect(store.getSnapshot().saveError).toBe("Choose a supplier.");
-    expect(api.list).not.toHaveBeenCalled();
+    expect(api.create).not.toHaveBeenCalled();
   });
 
   it("and submitting: a submit that fails leaves one saved draft, not an order to save again", async () => {
@@ -133,57 +146,91 @@ describe("saving an order", () => {
     expect(api.create).toHaveBeenCalledTimes(1);
   });
 
-  it("with no signal keeps the order on the phone and says it needs a connection", async () => {
-    const { store, api } = await written({ list: vi.fn(async () => { throw new ApiError("network"); }) });
-    expect(await store.save(true)).toBeNull();
-    expect(store.getSnapshot()).toMatchObject({ saving: false });
-    expect(store.getSnapshot().saveError).toMatch(/^Can't reach the server\. Saving an order needs a connection\./);
-    expect(store.getSnapshot().draft.lines).toHaveLength(1);
-    expect(api.create).not.toHaveBeenCalled();
-  });
-
-  it("whose answer was lost finds the order on the server instead of making a second", async () => {
-    const list = vi.fn().mockResolvedValueOnce([order({ poId: "older" })]).mockResolvedValueOnce([order(), order({ poId: "older" })]);
-    const { store, api } = await written({ list, create: vi.fn(async () => { throw lost; }) });
-    expect(await store.save(false)).toEqual({ poId: "new", notSubmitted: null });
-    expect(api.create).toHaveBeenCalledTimes(1);
-  });
-
-  it("whose answer was lost, with the server still out of reach, looks first on the next try, also after a restart", async () => {
-    const list = vi.fn().mockResolvedValueOnce([]).mockRejectedValueOnce(new ApiError("network"));
-    const { store, kv } = await written({ list, create: vi.fn(async () => { throw lost; }) });
+  it("again after a lost reply carries the same id and body, also after a restart, so the server answers the first order", async () => {
+    const { store, api, kv } = await written({ create: vi.fn(async () => { throw lost; }) });
     expect(await store.save(false)).toBeNull();
-    expect(store.getSnapshot().saveError).toContain("saving again first checks");
-    await new Promise((r) => setTimeout(r));
-    const later = setup({ list: vi.fn(async () => [order()]) }, kv);
+    expect(store.getSnapshot()).toMatchObject({ saving: false, saveError: "The server took too long to answer. Your order is kept on this phone, and it is safe to save again: it can't be made twice." });
+    expect(store.getSnapshot().draft.lines).toHaveLength(1);
+    const later = setup({}, kv);
     await later.store.load();
     expect(await later.store.save(false)).toEqual({ poId: "new", notSubmitted: null });
-    expect(later.api.create).not.toHaveBeenCalled();
+    const calls = (f: unknown) => (f as ReturnType<typeof vi.fn>).mock.calls;
+    expect(calls(later.api.create)).toEqual(calls(api.create));
   });
 
-  it("does not take someone else's draft, another supplier's or another length for its own", async () => {
-    const others = [order({ poId: "a", createdByUserId: 8 }), order({ poId: "b", supplierId: "s2" }), order({ poId: "c", lineCount: 2 })];
-    const list = vi.fn().mockResolvedValueOnce([]).mockResolvedValueOnce(others).mockResolvedValue(others);
-    const create = vi.fn().mockRejectedValueOnce(lost).mockResolvedValueOnce({ poId: "second", poNumber: "PO-10", skippedItems: [] });
-    const { store } = await written({ list, create });
-    expect(await store.save(false)).toBeNull();
-    expect(await store.save(false)).toEqual({ poId: "second", notSubmitted: null });
-  });
-
-  it("changed after a lost save that did land says so instead of saving both", async () => {
-    const list = vi.fn().mockResolvedValueOnce([]).mockRejectedValueOnce(new ApiError("network")).mockResolvedValue([order()]);
-    const { store, api } = await written({ list, create: vi.fn(async () => { throw lost; }) });
+  it("changed after a lost save that did land brings that order up to date instead of making a second", async () => {
+    const create = vi.fn().mockRejectedValueOnce(lost).mockRejectedValueOnce(conflict);
+    const { store, api } = await written({ create });
     await store.save(false);
     store.setLine({ ...store.getSnapshot().draft.lines[0], qty: "9" });
+    expect(await store.save(false)).toEqual({ poId: "P1", notSubmitted: null });
+    expect(api.update).toHaveBeenCalledWith("id-1", { ...body, lines: [{ ...body.lines[0], orderedQty: "9" }] });
+  });
+
+  it("and if someone has submitted that order by then, says so and keeps what was written", async () => {
+    const create = vi.fn().mockRejectedValueOnce(lost).mockRejectedValueOnce(conflict);
+    const update = vi.fn().mockRejectedValue(new ApiError("conflict", "Cannot edit PO with status SENT", 409, undefined, "INVALID_STATE"));
+    const { store } = await written({ create, update });
+    await store.save(false);
+    store.update({ notes: "x" });
     expect(await store.save(false)).toBeNull();
-    expect(store.getSnapshot().saveError).toMatch(/saved before you changed it/);
-    expect(api.create).toHaveBeenCalledTimes(1);
+    expect(store.getSnapshot().saveError).toMatch(/already saved and is no longer a draft/);
+    expect(store.getSnapshot().draft.lines).toHaveLength(1);
   });
 
   it("refused by the server shows its reason and keeps the order", async () => {
-    const { store } = await written({ create: vi.fn(async () => { throw new ApiError("bad_request", "Supplier not found", 400); }) });
+    const { store } = await written({ create: vi.fn(async () => { throw new ApiError("bad_request", "Supplier not found", 400, undefined, "VALIDATION"); }) });
     expect(await store.save(false)).toBeNull();
     expect(store.getSnapshot().saveError).toBe("Supplier not found");
-    expect(store.getSnapshot().draft.pending).toBeNull();
+    expect(store.getSnapshot().draft.lines).toHaveLength(1);
+  });
+
+  it("once, however fast it is tapped", async () => {
+    const { store, api } = await written();
+    await Promise.all([store.save(false), store.save(false)]);
+    expect(api.create).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("changing a saved draft", () => {
+  it("starts from what the server has, at the order's own location, and replaces it", async () => {
+    const { store, api, kv } = setup({}, memoryKv(), "P1");
+    await store.load();
+    expect(api.items).toHaveBeenCalledWith("L2");
+    expect(store.getSnapshot()).toMatchObject({ phase: "ready", draft: { supplierId: "s1", supplierName: "Fresh Farms", notes: "Back door", expectedDate: "2026-12-04", lines: [{ qty: "2", unit: "bag", cost: "17.5" }] } });
+    store.setLine({ ...store.getSnapshot().draft.lines[0], qty: "3" });
+    expect(await store.save(false)).toEqual({ poId: "P1", notSubmitted: null });
+    expect(api.update).toHaveBeenCalledWith("P1", { storeLocationId: "L2", supplierId: "s1", lines: [{ ingredientId: "i1", orderedQty: "3", orderedUnit: "bag", unitCost: "17.5" }], notes: "Back door", expectedDeliveryDate: "2026-12-04" });
+    expect(api.create).not.toHaveBeenCalled();
+    await new Promise((r) => setTimeout(r));
+    expect(kv.data.size).toBe(0); // never over the new order being written on this phone
+  });
+
+  it("is refused before it starts when it is no longer a draft, and when it stops being one meanwhile", async () => {
+    const gone = setup({ detail: vi.fn(async () => saved({ status: "SENT" })) }, memoryKv(), "P1").store;
+    await gone.load();
+    expect(gone.getSnapshot()).toMatchObject({ phase: "error", error: "This order is no longer a draft, so it can't be changed." });
+    const { store } = setup({ update: vi.fn(async () => { throw new ApiError("conflict", "x", 409, undefined, "INVALID_STATE"); }) }, memoryKv(), "P1");
+    await store.load();
+    expect(await store.save(false)).toBeNull();
+    expect(store.getSnapshot().saveError).toBe("This order is no longer a draft, so it can't be changed.");
+  });
+
+  it("keeps what was typed when the form is opened again, and after a save that did not go through", async () => {
+    const { store, api } = setup({ update: vi.fn(async () => { throw new ApiError("network"); }) }, memoryKv(), "P1");
+    await store.load();
+    store.update({ notes: "Front door" });
+    await store.load();
+    expect(await store.save(false)).toBeNull();
+    expect(store.getSnapshot().saveError).toBe("Can't reach the server. Saving an order needs a connection. It is safe to save again.");
+    expect(store.getSnapshot().draft.notes).toBe("Front door");
+    expect(api.detail).toHaveBeenCalledTimes(1);
+  });
+
+  it("and submitting it", async () => {
+    const { store, api } = setup({}, memoryKv(), "P1");
+    await store.load();
+    expect(await store.save(true)).toEqual({ poId: "P1", notSubmitted: null });
+    expect(api.submit).toHaveBeenCalledWith("P1");
   });
 });

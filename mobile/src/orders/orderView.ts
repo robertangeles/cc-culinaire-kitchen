@@ -61,10 +61,11 @@ export function orderRights(user: AuthUser): OrderRights {
 }
 
 export interface OrderActions {
+  edit: boolean;
   submit: boolean;
   cancel: boolean;
   approve: boolean;
-  /** An approver's own order while someone else can approve it: the server refuses it, so the reason is shown instead of the button. */
+  /** An order the approver raised or changed while someone else can approve it: the server refuses it, so the reason is shown instead of the button. */
   approveBlocked: boolean;
   reject: boolean;
   receive: boolean;
@@ -77,6 +78,7 @@ export function orderActions(order: OrderSummary, rights: OrderRights, now: numb
   const pending = order.status === "PENDING_APPROVAL" && rights.approve;
   const received = order.status === "RECEIVED" || order.status === "PARTIAL_RECEIVED";
   return {
+    edit: order.status === "DRAFT" && rights.create,
     submit: order.status === "DRAFT" && rights.submit,
     cancel: order.status === "DRAFT" && rights.create,
     approve: pending && order.canApprove !== false,
@@ -184,9 +186,12 @@ export function orderFailure(err: unknown, doing: string): OrderFailure {
   if (err.code === "network") return { message: `Can't reach the server. ${doing} needs a connection.`, unsure: true, moved: false };
   if (err.code === "timeout") return { message: "The server took too long to answer. Check the order before trying again.", unsure: true, moved: false };
   if (err.hasCode("INVALID_STATE")) return { message: "This order has changed since you opened it. Here is how it stands now.", unsure: false, moved: true };
-  if (err.code === "forbidden" && !err.serverCode) return { message: "You don't have permission for that.", unsure: false, moved: false };
+  if (err.code === "forbidden" && (!err.serverCode || err.hasCode("FORBIDDEN"))) return { message: "You don't have permission for that.", unsure: false, moved: false };
   return { message: err.message, unsure: err.code === "server" && !err.serverCode, moved: false };
 }
+
+/** Why an approver is not offered Approve (`canApprove: false`). */
+export const APPROVE_BLOCKED = "You raised or changed this order, so another approver must approve it.";
 
 /** A list that could not be loaded. */
 export const loadMessage = (err: unknown) => (err instanceof ApiError ? err.message : "Something went wrong. Try again.");

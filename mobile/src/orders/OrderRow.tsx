@@ -5,7 +5,7 @@ import { fontFamily, radius, size, space } from "../theme";
 import { Chip, rowDivider } from "../ui/Surface";
 import { Text } from "../ui/Text";
 import { useColors } from "../ui/theme";
-import { dayLabel, itemCount, money, statusLabel, waiting } from "./orderView";
+import { APPROVE_BLOCKED, dayLabel, itemCount, money, statusLabel, waiting } from "./orderView";
 
 /** How long an order has waited for approval: saffron over a day, ember over two. The words say it too. */
 export function WaitBadge({ submittedAt, now }: { submittedAt: string | null; now: number }) {
@@ -47,7 +47,7 @@ export function OrderRow({ order, index, now, queue, onPress }: { order: OrderSu
       </View>
       {second ? <Text variant={when === "Overdue" ? "error" : "meta"}>{second}</Text> : null}
       {wait ? <WaitBadge submittedAt={order.submittedAt} now={now} /> : null}
-      {queue && order.canApprove === false ? <Text variant="muted">Another approver must approve your order.</Text> : null}
+      {queue && order.canApprove === false ? <Text variant="muted">{APPROVE_BLOCKED}</Text> : null}
     </Pressable>
   );
 }

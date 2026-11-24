@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { generate } from "otplib";
-import { createApiClient, type Tokens } from "../src/api/client";
+import { ApiError, createApiClient, type Tokens } from "../src/api/client";
 import { createAuthApi } from "../src/api/auth";
 import { createSession } from "../src/auth/session";
 import { newUuid } from "../src/outbox/uuid";
@@ -102,21 +102,51 @@ describe.skipIf(!process.env.CI && (!email || !password || !totpSecret))("orders
     expect((await api.detail(poId)).status).toBe("CANCELLED");
   });
 
-  it("a save whose reply was lost finds the order it made and makes no second", async () => {
+  it("a save whose reply was lost, saved again, is one order; changed first, that order is brought up to date", async () => {
     const before = (await api.list(locationId, ["DRAFT"])).length;
+    let drop = true;
     const draft = await written("1", {
       create: async (body) => {
-        await api.create(body);
-        const { ApiError } = await import("../src/api/client");
-        throw new ApiError("timeout");
+        const made = await api.create(body);
+        if (drop) throw new ApiError("timeout");
+        return made;
       },
     });
-    const out = await draft.save(false);
-    expect(out?.notSubmitted).toBeNull();
-    const after = await api.list(locationId, ["DRAFT"]);
-    expect(after).toHaveLength(before + 1);
-    expect(after[0].poId).toBe(out!.poId);
+    expect(await draft.save(false)).toBeNull();
+    drop = false;
+    const again = await draft.save(false);
+    expect(again?.notSubmitted).toBeNull();
+    expect(await api.list(locationId, ["DRAFT"])).toHaveLength(before + 1);
+    await api.cancel(again!.poId);
+
+    drop = true;
+    const changed = await written("1", { create: async (body) => { const made = await api.create(body); if (drop) throw new ApiError("timeout"); return made; } });
+    expect(await changed.save(false)).toBeNull();
+    drop = false;
+    changed.setLine({ ...changed.getSnapshot().draft.lines[0], qty: "3" });
+    const out = await changed.save(false);
+    expect((await api.detail(out!.poId)).lines[0].orderedQty).toBe(3);
+    expect(await api.list(locationId, ["DRAFT"])).toHaveLength(before + 1);
     await api.cancel(out!.poId);
+  });
+
+  it("a saved draft is changed, and a sent order refuses it with a code", async () => {
+    const poId = await saved("2", false);
+    const edit = ctx.editDraft(poId);
+    await edit.load();
+    expect(edit.getSnapshot().draft).toMatchObject({ expectedDate: "2030-05-06", notes: `${tag}note`, lines: [{ qty: "2", unit: "bag", cost: "17.5" }] });
+    edit.setLine({ ...edit.getSnapshot().draft.lines[0], qty: "4" });
+    edit.update({ notes: "", expectedDate: "2030-05-07" });
+    expect(await edit.save(false)).toEqual({ poId, notSubmitted: null });
+    const order = await api.detail(poId);
+    expect(order).toMatchObject({ status: "DRAFT", notes: null });
+    expect(order.lines).toHaveLength(1);
+    expect(order.lines[0]).toMatchObject({ orderedQty: 4, unitCost: 17.5 });
+    expect(order.expectedDeliveryDate).toMatch(/^2030-05-07T00:00/);
+    await api.submit(poId);
+    expect(await edit.save(false)).toBeNull();
+    expect(edit.getSnapshot().saveError).toBe("This order is no longer a draft, so it can't be changed.");
+    await api.cancel(poId);
   });
 
   it("a small order goes straight to sent; submitting it again is refused as already moved on", async () => {

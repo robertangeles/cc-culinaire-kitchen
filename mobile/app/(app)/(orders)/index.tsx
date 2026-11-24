@@ -22,8 +22,8 @@ const FILTER_LABELS = FILTERS.map((f) => f.label);
 /** This location's purchase orders, with the way in to approvals and credit notes for the people who hold them. */
 export default function Orders() {
   const { state } = useSession();
-  const { list: listFor, approvals, discrepancies, rights } = useOrders();
-  const { snap: draftSnap } = useDraft();
+  const { list: listFor, approvals, discrepancies, draft, rights } = useOrders();
+  const draftSnap = useDraft(draft);
   const router = useRouter();
   const c = useColors();
   const [filter, setFilter] = useState<FilterLabel>("All");

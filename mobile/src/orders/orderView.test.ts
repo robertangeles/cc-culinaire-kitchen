@@ -24,7 +24,7 @@ describe("the buttons an order offers", () => {
   const on = (o: OrderSummary, rights = all) => Object.entries(orderActions(o, rights, NOW)).filter(([, v]) => v).map(([k]) => k);
 
   it("are the web's, by status", () => {
-    expect(on(order())).toEqual(["submit", "cancel"]);
+    expect(on(order())).toEqual(["edit", "submit", "cancel"]);
     expect(on(order({ status: "PENDING_APPROVAL", canApprove: true }))).toEqual(["approve", "reject"]);
     expect(on(order({ status: "SENT", supplierOrderingMethod: "email" }))).toEqual(["receive", "email"]);
     expect(on(order({ status: "RECEIVING" }))).toEqual(["receive"]);
@@ -121,6 +121,7 @@ describe("what went wrong", () => {
     expect(orderFailure(new ApiError("forbidden", "You created this purchase order, so another approver must approve it.", 403, undefined, "SELF_APPROVAL_NOT_ALLOWED"), "x").message).toContain("another approver");
     expect(orderFailure(new ApiError("conflict", "This order was just emailed to the supplier.", 409, undefined, "ALREADY_EMAILED"), "x").message).toContain("just emailed");
     expect(orderFailure(new ApiError("forbidden", "Insufficient permissions", 403), "x").message).toBe("You don't have permission for that.");
+    expect(orderFailure(new ApiError("forbidden", "Insufficient permissions", 403, undefined, "FORBIDDEN"), "x").message).toBe("You don't have permission for that.");
   });
 
   it("a mail provider's failure is certain (nothing was sent); a bare 5xx is not", () => {

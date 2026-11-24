@@ -32,7 +32,7 @@ export const discrepancy = (over: object = {}) =>
   DiscrepancySchema.parse({ discrepancyId: "d1", type: "SHORT", poId: "P1", poNumber: "PO-100", locationName: "Main Kitchen", supplierId: "s1", supplierName: "Fresh Farms", ingredientName: "Flour", orderedQty: "5", orderedUnit: "kg", receivedQty: "3", shortageQty: "2", createdAt: "2026-11-20T01:00:00Z", maxCreditAmount: 8, ...over });
 
 export const api = {
-  list: vi.fn(), detail: vi.fn(), create: vi.fn(), submit: vi.fn(), cancel: vi.fn(), approve: vi.fn(), reject: vi.fn(), email: vi.fn(), clone: vi.fn(),
+  list: vi.fn(), detail: vi.fn(), create: vi.fn(), update: vi.fn(), submit: vi.fn(), cancel: vi.fn(), approve: vi.fn(), reject: vi.fn(), email: vi.fn(), clone: vi.fn(),
   suppliers: vi.fn(), supplierItemIds: vi.fn(), items: vi.fn(), guides: vi.fn(), guideItems: vi.fn(), discrepancies: vi.fn(), creditNotes: vi.fn(), credit: vi.fn(),
 } satisfies Record<keyof OrdersApi, ReturnType<typeof vi.fn>>;
 
@@ -42,6 +42,7 @@ export function resetApi() {
   api.list.mockResolvedValue([order()]);
   api.detail.mockResolvedValue(detail());
   api.create.mockResolvedValue({ poId: "P9", poNumber: "PO-900", skippedItems: [] });
+  api.update.mockResolvedValue({ poId: "P1", poNumber: "PO-100", skippedItems: [] });
   api.submit.mockResolvedValue({ poId: "P1", status: "SENT" });
   api.email.mockResolvedValue({ emailed: true, to: "orders@farms.test", message: null });
   api.clone.mockResolvedValue({ poId: "P9", poNumber: "PO-900", skippedItems: [] });

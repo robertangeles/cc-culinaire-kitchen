@@ -188,6 +188,12 @@ describe("one order", () => {
     expect(screen.getByText("Cancelled")).toBeTruthy();
   });
 
+  it("that is a draft can be changed", async () => {
+    render(<Order />, ordersFor(admin));
+    fireEvent.click(await find("Change order"));
+    expect(routerMock.push).toHaveBeenCalledWith({ pathname: "/order-edit", params: { poId: "P1" } });
+  });
+
   it("is cancelled only after a yes", async () => {
     render(<Order />, ordersFor(admin));
     answer("Go back");
@@ -297,7 +303,7 @@ describe("approving", () => {
     expect(rows.map((r) => r.getAttribute("aria-label"))).toEqual([expect.stringContaining("PO-OLD"), expect.stringContaining("PO-NEW")]);
     expect(rows[0].getAttribute("aria-label")).toContain("Waiting 50 h");
     expect(screen.getAllByText("By Chef")).toHaveLength(2);
-    expect(screen.getByText("Another approver must approve your order.")).toBeTruthy();
+    expect(screen.getByText("You raised or changed this order, so another approver must approve it.")).toBeTruthy();
     expect(api.list).toHaveBeenCalledWith("L1", ["PENDING_APPROVAL"], 0);
     expect(cappedColumn(screen.getByText("Dairy Co"))).toBe(true);
   });
@@ -327,7 +333,7 @@ describe("approving", () => {
   it("offers no Approve on the approver's own order while the server says someone else must, but does offer Reject", async () => {
     api.detail.mockResolvedValue(detail({ status: "PENDING_APPROVAL", canApprove: false }));
     render(<Order />, ordersFor(admin));
-    expect(await screen.findByText("Another approver must approve your order.")).toBeTruthy();
+    expect(await screen.findByText("You raised or changed this order, so another approver must approve it.")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Approve" })).toBeNull();
     expect(button("Reject")).toBeTruthy();
   });
