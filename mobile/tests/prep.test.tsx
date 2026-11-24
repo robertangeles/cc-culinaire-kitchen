@@ -257,7 +257,8 @@ describe("tablet width", () => {
     window.innerHeight = height;
     await makePrepHarness({ today: todayOf(tasks) });
     render(<Prep />);
-    const column = screen.getByText("Main Kitchen").parentElement as HTMLElement;
+    // The location is the header's label: the header sits in the column.
+    const column = screen.getByText("Main Kitchen").parentElement?.parentElement as HTMLElement;
     expect(widthOf(column)).toBe(560);
     expect(getComputedStyle(column).width).toBe("100%");
     expect(getComputedStyle(column).alignSelf).toBe("center");

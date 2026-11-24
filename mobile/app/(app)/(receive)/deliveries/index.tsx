@@ -10,7 +10,8 @@ import { Button } from "../../../../src/ui/Button";
 import { Column } from "../../../../src/ui/Column";
 import { Chip, Surface, rowDivider } from "../../../../src/ui/Surface";
 import { Text } from "../../../../src/ui/Text";
-import { fontFamily, size, space } from "../../../../src/theme";
+import { ScreenHeader } from "../../../../src/ui/ScreenHeader";
+import { size, space } from "../../../../src/theme";
 import { useColors } from "../../../../src/ui/theme";
 
 /** Deliveries waiting at this location, soonest expected first. Tap one to receive it. */
@@ -50,10 +51,7 @@ export default function ReceiveQueue() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }} />}
       >
         <Column style={{ gap: space.lg }}>
-        <View style={{ gap: space.xs }}>
-          <Text variant="title">Deliveries</Text>
-          <Text variant="meta">{state.location.locationName}</Text>
-        </View>
+        <ScreenHeader label={state.location.locationName} title="Deliveries" />
 
         {error ? (
           <>
@@ -64,7 +62,7 @@ export default function ReceiveQueue() {
         {items === null && !error ? <Text variant="muted">Loading deliveries…</Text> : null}
         {items?.length === 0 ? (
           <View style={{ gap: space.sm }}>
-            <Text style={{ fontFamily: fontFamily.title, fontSize: 20 }}>No deliveries waiting</Text>
+            <Text variant="heading">No deliveries waiting</Text>
             <Text variant="muted">Purchase orders that have been sent to a supplier appear here until they are received.</Text>
           </View>
         ) : null}
@@ -84,7 +82,7 @@ export default function ReceiveQueue() {
                   style={[{ minHeight: size.tap + 14, justifyContent: "center", paddingVertical: space.md, paddingHorizontal: space.lg, gap: space.xs }, rowDivider(index, c.border)]}
                 >
                   <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: space.md }}>
-                    <Text style={{ fontFamily: fontFamily.title, fontSize: 20, flexShrink: 1 }}>{item.supplierName ?? "Supplier"}</Text>
+                    <Text variant="heading" style={{ flexShrink: 1 }}>{item.supplierName ?? "Supplier"}</Text>
                     {mine ? <Chip label="In progress" /> : null}
                   </View>
                   <Text variant="meta">

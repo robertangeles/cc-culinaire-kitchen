@@ -8,7 +8,7 @@ import { Text } from "../../src/ui/Text";
 import { Chip, Surface, rowDivider } from "../../src/ui/Surface";
 import { TabIcon, type TabIconName } from "../../src/ui/TabIcon";
 import { useColors } from "../../src/ui/theme";
-import { fontFamily, size, space } from "../../src/theme";
+import { size, space } from "../../src/theme";
 
 /** The fifth tab when a person has more modules than the tab bar holds: the modules that did not fit, then Account. */
 export default function More() {
@@ -31,9 +31,9 @@ export default function More() {
             onPress={() => navigation.navigate(row.route)}
             style={[{ minHeight: size.tap + 8, flexDirection: "row", alignItems: "center", gap: space.md, paddingHorizontal: space.lg }, rowDivider(index, c.border)]}
           >
-            <TabIcon name={row.icon} color={c.accentText} />
+            <TabIcon name={row.icon} color={c.textMuted} />
             <View style={{ flex: 1 }}>
-              <Text style={{ fontFamily: fontFamily.title, fontSize: 20 }}>{row.title}</Text>
+              <Text variant="heading">{row.title}</Text>
             </View>
             {row.route === "(inbox)" && unread > 0 ? <Chip label={`${unread > 99 ? "99+" : unread} unread`} /> : null}
           </Pressable>

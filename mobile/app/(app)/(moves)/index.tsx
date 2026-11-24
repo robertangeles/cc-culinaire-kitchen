@@ -10,6 +10,7 @@ import { OfflineBanner } from "../../../src/ui/Banner";
 import { Button } from "../../../src/ui/Button";
 import { Column } from "../../../src/ui/Column";
 import { Text } from "../../../src/ui/Text";
+import { ScreenHeader } from "../../../src/ui/ScreenHeader";
 import { Chip, Surface, rowDivider } from "../../../src/ui/Surface";
 import { fontFamily, size, space } from "../../../src/theme";
 import { useColors } from "../../../src/ui/theme";
@@ -24,7 +25,6 @@ export default function Moves() {
   const c = useColors();
   const [refreshing, setRefreshing] = useState(false);
   if (state.phase !== "ready") return null;
-  const caps = { fontFamily: fontFamily.uiStrong, fontSize: 12, letterSpacing: 1.8, textTransform: "uppercase", color: c.accentText } as const;
   const canMove = snap.areas.length >= 2;
 
   function discard(row: MovementRow) {
@@ -41,8 +41,7 @@ export default function Moves() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await store.refresh(); setRefreshing(false); }} />}
       >
         <Column style={{ gap: space.lg }}>
-          <Text variant="title">Move between areas</Text>
-          <Text variant="meta">{state.location.locationName}</Text>
+          <ScreenHeader label={state.location.locationName} title="Move between areas" />
           {snap.offline ? <OfflineBanner text="You're offline. Moves are saved on this phone and sent when you're back." /> : null}
           {snap.waiting > 0 ? <Text variant="muted" accessibilityLiveRegion="polite">{snap.waiting} waiting to send</Text> : null}
           {snap.attention > 0 ? <Text variant="error">⚠ {snap.attention} {snap.attention === 1 ? "move needs" : "moves need"} attention</Text> : null}
@@ -56,7 +55,7 @@ export default function Moves() {
           {snap.phase === "ready" && !canMove ? (
             <Surface>
               <View style={{ padding: space.lg, gap: space.xs }}>
-                <Text style={{ fontFamily: fontFamily.title, fontSize: 20 }}>{snap.areas.length === 0 ? "No areas yet" : "You need a second area"}</Text>
+                <Text variant="heading">{snap.areas.length === 0 ? "No areas yet" : "You need a second area"}</Text>
                 <Text variant="muted">
                   {snap.offline
                     ? "The areas have not been downloaded to this phone yet. Open this tab once with a signal."
@@ -73,7 +72,7 @@ export default function Moves() {
 
           {canMove && snap.recents.length > 0 ? (
             <View style={{ gap: space.xs }}>
-              <Text style={caps}>Move again</Text>
+              <Text variant="label">Move again</Text>
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.sm }}>
                 {snap.recents.map((r) => (
                   <Pressable
@@ -93,7 +92,7 @@ export default function Moves() {
 
           {snap.phase === "ready" ? (
             <View style={{ gap: space.xs }}>
-              <Text style={caps}>Recent moves</Text>
+              <Text variant="label">Recent moves</Text>
               {snap.rows.length === 0 ? (
                 <Text variant="muted">Nothing moved yet.</Text>
               ) : (
@@ -102,7 +101,7 @@ export default function Moves() {
                     <View key={row.stockMovementId} style={[{ paddingVertical: space.md, paddingHorizontal: space.lg, gap: space.xs }, rowDivider(index, c.border)]}>
                       <View accessible accessibilityLabel={`${row.ingredientName}, ${row.quantity} ${row.unit}, ${row.fromAreaName} to ${row.toAreaName}, ${row.sync === "synced" ? "sent" : row.sync === "waiting" ? "waiting to send" : "needs attention"}`} style={{ minHeight: size.tap, justifyContent: "center", gap: space.xs }}>
                         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: space.md }}>
-                          <Text style={{ fontFamily: fontFamily.title, fontSize: 20, flexShrink: 1 }}>{row.ingredientName}</Text>
+                          <Text variant="heading" style={{ flexShrink: 1 }}>{row.ingredientName}</Text>
                           <Text style={{ fontFamily: fontFamily.uiStrong }}>{row.quantity} {row.unit}</Text>
                         </View>
                         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: space.md }}>

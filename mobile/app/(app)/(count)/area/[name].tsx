@@ -100,7 +100,7 @@ export default function AreaCount() {
               onPress={() => goTo(i)}
               style={[{ minHeight: size.tap + 8, justifyContent: "center", paddingVertical: space.sm, paddingHorizontal: space.lg }, rowDivider(i, c.border)]}
             >
-              <Text style={{ fontFamily: fontFamily.title, fontSize: 20 }}>{r.name}</Text>
+              <Text variant="heading">{r.name}</Text>
               <Text variant={r.kind === "needs_attention" || r.kind === "shared_gap" ? "error" : "muted"}>{rowText(r.kind, r.answer, r.alsoIn)}</Text>
             </Pressable>
           ))}

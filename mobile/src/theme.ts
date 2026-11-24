@@ -74,13 +74,13 @@ export const space = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 } as const;
 export const radius = { key: 16, button: 14, banner: 12 } as const;
 
 /**
- * dp. Taps are at least 56; keypad keys 72 with 8 gaps; the primary button 64. The tab bar is 68 above the system navigation bar's inset:
- * a tab is 5 + a 25 icon + a 20 label line + 5, and the bar's own padding is 4 above and below.
+ * dp. Taps are at least 56; keypad keys 72 with 8 gaps; the primary button 64. The tab bar is 64 above the system navigation bar's inset:
+ * a tab is 5 + the 28 pill (a 22 icon) + 2 + a 16 label line + 5, and the bar's own padding is 4 above and below. The whole tab is the tap target.
  */
-export const size = { tap: 56, key: 72, keyGap: 8, primaryButton: 64, tabBar: 68 } as const;
+export const size = { tap: 56, key: 72, keyGap: 8, primaryButton: 64, tabBar: 64, tabIcon: 22, tabPill: 56 } as const;
 
-/** pt. Nothing below 16; everything must scale to 200% without clipping the typed number. */
-export const fontSize = { title: 32, item: 28, number: 72, body: 16 } as const;
+/** pt. Nothing below 16 but the copper capitals label (and the tab bar's labels); everything must scale to 200% without clipping the typed number. */
+export const fontSize = { title: 32, item: 28, heading: 20, number: 72, body: 16, label: 12 } as const;
 
 /** Loaded in app/_layout.tsx. Fraunces for titles, item names and sentences (as in the first app), Inter for buttons, labels, short facts and tabular numerals. */
 export const fontFamily = {

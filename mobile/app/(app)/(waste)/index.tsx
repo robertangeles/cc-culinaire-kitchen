@@ -10,6 +10,7 @@ import { OfflineBanner } from "../../../src/ui/Banner";
 import { Button } from "../../../src/ui/Button";
 import { Column } from "../../../src/ui/Column";
 import { Text } from "../../../src/ui/Text";
+import { ScreenHeader } from "../../../src/ui/ScreenHeader";
 import { Chip, Surface, rowDivider } from "../../../src/ui/Surface";
 import { fontFamily, size, space } from "../../../src/theme";
 import { useColors } from "../../../src/ui/theme";
@@ -40,8 +41,7 @@ export default function Waste() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await store.refresh(); setRefreshing(false); }} />}
       >
         <Column style={{ gap: space.lg }}>
-          <Text variant="title">Waste</Text>
-          <Text variant="meta">{state.location.locationName}</Text>
+          <ScreenHeader label={state.location.locationName} title="Waste" />
           {snap.offline ? <OfflineBanner text="You're offline. Waste is saved on this phone and sent when you're back." /> : null}
           {snap.waiting > 0 ? <Text variant="muted" accessibilityLiveRegion="polite">{snap.waiting} waiting to send</Text> : null}
           {snap.attention > 0 ? <Text variant="error">⚠ {snap.attention} {snap.attention === 1 ? "entry needs" : "entries need"} attention</Text> : null}
@@ -56,7 +56,7 @@ export default function Waste() {
 
           {snap.recents.length > 0 ? (
             <View style={{ gap: space.xs }}>
-              <Text style={{ fontFamily: fontFamily.uiStrong, fontSize: 12, letterSpacing: 1.8, textTransform: "uppercase", color: c.accentText }}>Log again</Text>
+              <Text variant="label">Log again</Text>
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.sm }}>
                 {snap.recents.map((r) => (
                   <Pressable
@@ -77,7 +77,7 @@ export default function Waste() {
           {snap.phase === "ready" ? (
             <Surface>
               <View style={{ padding: space.lg, gap: space.xs }} accessibilityLabel="Today's waste">
-                <Text style={{ fontFamily: fontFamily.uiStrong, fontSize: 12, letterSpacing: 1.8, textTransform: "uppercase", color: c.accentText }}>Today</Text>
+                <Text variant="label">Today</Text>
                 {snap.totals.entries === 0 ? (
                   <Text variant="muted">Nothing logged today.</Text>
                 ) : (
@@ -104,7 +104,7 @@ export default function Waste() {
                     style={{ minHeight: size.tap, justifyContent: "center", gap: space.xs }}
                   >
                     <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: space.md }}>
-                      <Text style={{ fontFamily: fontFamily.title, fontSize: 20, flexShrink: 1 }}>{row.ingredientName}</Text>
+                      <Text variant="heading" style={{ flexShrink: 1 }}>{row.ingredientName}</Text>
                       <Text style={{ fontFamily: fontFamily.uiStrong }}>{row.quantity} {row.unit}</Text>
                     </View>
                     <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: space.md }}>

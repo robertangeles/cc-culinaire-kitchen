@@ -59,6 +59,13 @@ export function tabBar(user: AuthUser): { bar: ModuleTab[]; more: ModuleTab[] } 
 }
 
 /**
+ * Where the signed-in app opens: the first button on the person's bar, the module they reach for most (Prep for a cook who preps, Waste for one
+ * who only logs waste, Ask for someone with no module). Group-qualified, because every module's list is `index` and a bare "/" would open
+ * whichever route group sorts first (Ask).
+ */
+export const homeHref = (user: AuthUser) => `/${tabBar(user).bar[0].route}`;
+
+/**
  * What VoiceOver reads for each button on the bar, by title: its place among the buttons that show. The library counts every route in the
  * navigator, the ones under More too, so an Administrator's More would be read as "10 of 10".
  */
