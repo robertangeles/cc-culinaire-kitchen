@@ -67,9 +67,20 @@ async function launch() {
   await openApp(METRO);
   await sleep(6000);
 }
+/** After `pm clear` the dev client opens its menu over the app and shows a floating Tools button: switch the button off and close the menu. */
+async function closeDevMenu() {
+  for (let i = 0; i < 60 && !(await has("Tools button")) && !(await has("Tools")); i++) await sleep(2000);
+  if (!(await has("Tools button"))) await tap("Tools");
+  const row = await waitFor("Tools button", 20_000).catch(() => null);
+  const [w] = screenSize();
+  if (row) await tapAt(Math.round(w * 0.92), Math.round((row.y1 + row.y2) / 2));
+  for (let i = 0; i < 3 && (await has("Toggle performance monitor")); i++) await back();
+  await sleep(800);
+}
 async function signIn() {
   clearApp();
   await launch();
+  await closeDevMenu();
   await waitFor("Welcome back to the line.", 240_000);
   for (let i = 0; i < 3; i++) {
     await dismissSavePassword();
@@ -211,6 +222,8 @@ describe.skipIf(!process.env.SCREENS_OUT)("purchasing walk", { timeout: 600_000 
     const org = `(select organisation_id from store_location where store_location_id = '${locationId}')`;
     const phone = `(select user_id from "user" where user_name = 'E2E Phone User')`;
     sql(`update user_organisation set organisation_id = ${org} where user_id = ${phone}`);
+    const alone = () => sql(`update user_organisation set organisation_id = (select organisation_id from organisation where organisation_name = 'E2E Phone Kitchen') where user_id = ${phone}`);
+    onTestFailed(alone);
     await ordersHome();
     await press(/^Approvals, 1 waiting/);
     await waitFor(/another approver must approve it/, 30_000);
@@ -218,7 +231,7 @@ describe.skipIf(!process.env.SCREENS_OUT)("purchasing walk", { timeout: 600_000 
     await press(/^Fresh Farms, order/);
     await waitFor("Reject", 30_000);
     await shot("o17-order-own-pending");
-    sql(`update user_organisation set organisation_id = (select organisation_id from organisation where organisation_name = 'E2E Phone Kitchen') where user_id = ${phone}`);
+    alone();
     await scroll(true);
     await back();
     await press(/^Fresh Farms, order/);
