@@ -2,7 +2,7 @@ import { useRef } from "react";
 import { Platform, View, type ColorValue } from "react-native";
 import { Redirect, Tabs, usePathname, useSegments } from "expo-router";
 import { BottomTabBar } from "expo-router/tabs";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useSession } from "../../src/runtime/appContext";
 import { useInbox } from "../../src/runtime/notifications";
 import { canOpen, homeHref, moduleTabs, tabBar, tabLabels } from "../../src/shell/tabs";
@@ -85,7 +85,11 @@ export default function AppTabs() {
         tabBarStyle: { backgroundColor: c.surface, borderTopColor: c.border, height: size.tabBar + insets.bottom, paddingTop: space.xs, paddingBottom: space.xs + insets.bottom },
         tabBarIconStyle: { width: size.tabPill, height: size.tabIcon + 6 },
         tabBarLabel: BarLabel,
+        tabBarBadgeStyle: { backgroundColor: c.danger, color: c.buttonText, fontFamily: fontFamily.uiStrong },
       }}
+      // Each screen ends where the bar starts, and the bar already stands clear of the system navigation bar: a provider of its own measures
+      // that, so a screen's SafeAreaView does not leave the same inset again as a dead strip above the bar.
+      screenLayout={({ children }) => <SafeAreaProvider>{children}</SafeAreaProvider>}
     >
       {moduleTabs.map((tab) => (
         // A tab the person cannot open is not in the navigator at all, so a link or a back press cannot reach it. One under More has no button.
