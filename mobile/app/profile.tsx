@@ -11,7 +11,6 @@ import { Text } from "../src/ui/Text";
 import { TextField } from "../src/ui/TextField";
 import { Button } from "../src/ui/Button";
 import { Avatar } from "../src/ui/Avatar";
-import { SectionLabel } from "../src/ui/SectionLabel";
 import { space } from "../src/theme";
 
 /** The fields in the order the web's Account Details tab shows them, with the server's limits. */
@@ -66,7 +65,7 @@ export default function Profile() {
   const { user } = state;
   if (details === null || details === "failed") {
     return (
-      <Screen>
+      <Screen align="top">
         <Text variant="title">My details</Text>
         {details === null ? <Text variant="muted">Loading…</Text> : <Text variant="error">Couldn't load your details. Check your signal and try again.</Text>}
         {details === "failed" ? <Button kind="ghost" label="Try again" onPress={() => (setDetails(null), setAttempt((a) => a + 1))} /> : null}
@@ -109,7 +108,7 @@ export default function Profile() {
   }
 
   return (
-    <Screen>
+    <Screen align="top">
       <Text variant="title">My details</Text>
       <Text variant="meta">{user.userEmail}</Text>
       <View style={{ flexDirection: "row", alignItems: "center", gap: space.xl }}>
@@ -122,7 +121,7 @@ export default function Profile() {
       </View>
       {SECTIONS.map((section) => (
         <View key={section.title} style={{ gap: space.md }}>
-          <SectionLabel>{section.title}</SectionLabel>
+          <Text variant="heading">{section.title}</Text>
           {section.fields.map((f) => (
             <TextField
               key={f.key}

@@ -3,6 +3,7 @@ import { useRouter } from "expo-router";
 import { accountApi } from "../src/runtime/appContext";
 import { passwordChangeMessage, type AccountFacts } from "../src/api/account";
 import { Screen } from "../src/ui/Screen";
+import { ShowPassword } from "../src/ui/ShowPassword";
 import { Text } from "../src/ui/Text";
 import { TextField } from "../src/ui/TextField";
 import { Button } from "../src/ui/Button";
@@ -26,10 +27,10 @@ export default function ChangePassword() {
     void accountApi.facts().then(setFacts, () => setFacts("failed"));
   }, [attempt]);
 
-  if (facts === null) return <Screen><Text variant="muted">Loading…</Text></Screen>;
+  if (facts === null) return <Screen align="top"><Text variant="muted">Loading…</Text></Screen>;
   if (facts === "failed" || !facts.hasPassword || done) {
     return (
-      <Screen>
+      <Screen align="top">
         <Text variant="title">Password</Text>
         {facts === "failed" ? <Text variant="error">Couldn't load your account. Check your signal and try again.</Text> : null}
         {facts !== "failed" && !facts.hasPassword ? <Text>Your account signs in with Google or Apple, so it has no password to change.</Text> : null}
@@ -53,10 +54,10 @@ export default function ChangePassword() {
       setBusy(false);
     }
   }
-  const toggle = <Button kind="quiet" label={show ? "HIDE" : "SHOW"} onPress={() => setShow(!show)} />;
+  const toggle = <ShowPassword shown={show} onToggle={() => setShow(!show)} />;
 
   return (
-    <Screen>
+    <Screen align="top">
       <Text variant="title">Change password</Text>
       <TextField label="Current password" value={current} onChangeText={setCurrent} secureTextEntry={!show} autoComplete="current-password" textContentType="password" autoCapitalize="none" trailing={toggle} />
       <TextField label="New password" value={next} onChangeText={setNext} secureTextEntry={!show} autoComplete="new-password" textContentType="newPassword" autoCapitalize="none" />

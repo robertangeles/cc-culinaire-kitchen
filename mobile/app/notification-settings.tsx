@@ -69,7 +69,7 @@ export default function NotificationSettings() {
 
   if (prefs === null || prefs === "failed") {
     return (
-      <Screen>
+      <Screen align="top">
         <Text variant="title">Notifications</Text>
         {phone}
         {prefs === null ? <Text variant="muted">Loading…</Text> : <Text variant="error">Couldn't load your notification settings. Try again.</Text>}
@@ -88,7 +88,7 @@ export default function NotificationSettings() {
   };
 
   return (
-    <Screen>
+    <Screen align="top">
       <Text variant="title">Notifications</Text>
       {phone}
       <SectionLabel>What to push</SectionLabel>
