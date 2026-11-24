@@ -314,7 +314,7 @@ describe.skipIf(!process.env.SCREENS_OUT)(`screens on ${FORM}`, { timeout: 600_0
     await waitFor(/^More(,|$)|^Account(,|$)/, 60_000);
   });
 
-  it("home, ask, recipes, receive", async () => {
+  it("home, ask, recipes, receive, inbox", async () => {
     await signedIn();
     await sleep(2500);
     await shot("07-home");
@@ -333,6 +333,9 @@ describe.skipIf(!process.env.SCREENS_OUT)(`screens on ${FORM}`, { timeout: 600_0
     await tab("Receive");
     await waitFor("No deliveries waiting", 30_000);
     await shot("90-receive-empty");
+    await tab("Inbox");
+    await waitFor("You're all caught up", 30_000);
+    await shot("95-inbox-empty");
   });
 
   it("count with no stock take open", async () => {

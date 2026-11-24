@@ -28,7 +28,8 @@ const WEB = [
   [/^7/, `${C}/components/profile/OrgTab.tsx (join by key)`],
   [/^8[0-4]/, `${C}/pages/ChatPage.tsx (/chat)`],
   [/^8[5-9]/, `${C}/pages/MyShelfPage.tsx, RecipeLabPage.tsx (/my-shelf, /recipes)`],
-  [/^9/, `${C}/pages/PurchasingPage.tsx (receiving)`],
+  [/^9[0-4]/, `${C}/pages/PurchasingPage.tsx (receiving)`],
+  [/^9[5-9]/, `${C}/components/layout/NotificationBell.tsx (the bell)`],
 ];
 
 const [dirArg, beforeArg] = argv.slice(2);
