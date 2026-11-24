@@ -24,7 +24,7 @@ const mocks = vi.hoisted(() => ({
   redirect: null as string | null,
 }));
 type BarProps = { state: { index: number; routes: { key: string; name: string }[] } };
-vi.mock("../src/runtime/appContext", () => ({ useSession: () => ({ state: { phase: "ready", user: mocks.user } }) }));
+vi.mock("../src/runtime/appContext", () => ({ useSession: () => ({ state: { phase: "ready", user: mocks.user, location: { storeLocationId: "loc-1", locationName: "Main Kitchen" } } }) }));
 // The inbox's unread count (its real store needs the native SQLite and notification modules).
 vi.mock("../src/runtime/notifications", () => ({ useInbox: () => ({ unread: mocks.unread }) }));
 vi.mock("react-native-safe-area-context", () => ({
@@ -233,7 +233,8 @@ describe("the tab bar", () => {
   it("More starts at the top of the page, as the module tabs do, in the 560 dp column", () => {
     mocks.user = person({ roles: ["Administrator"] });
     render(<More />);
-    const column = screen.getByText("More").parentElement as HTMLElement;
+    // More heads itself as every tab does: the location over its title, in the column.
+    const column = screen.getByText("More").parentElement?.parentElement as HTMLElement;
     expect(parseFloat(getComputedStyle(column).maxWidth)).toBe(560);
     expect(getComputedStyle(column.parentElement as HTMLElement).justifyContent).toBe("flex-start");
   });
