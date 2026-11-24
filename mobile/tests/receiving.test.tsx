@@ -162,6 +162,21 @@ describe("receiving a delivery", () => {
     expect(api.actionLine).not.toHaveBeenCalled();
   });
 
+  it("leads to its order, while receiving and once done, for someone who has the Orders tab, and for no one else", async () => {
+    const first = render(<ReceiveDelivery />);
+    await screen.findByText("Flour");
+    expect(screen.queryByRole("button", { name: "See the order" })).toBeNull();
+    first.unmount();
+    sessionState.current = { state: { phase: "ready", user: { ...chef, permissions: ["purchasing:receive", "purchasing:credit"] }, location: main, locations: [main] }, busy: false };
+    render(<ReceiveDelivery />);
+    await screen.findByText("Flour");
+    fireEvent.click(screen.getByRole("button", { name: "See the order" }));
+    expect(routerMock.push).toHaveBeenLastCalledWith({ pathname: "/order", params: { poId: "P1", from: "link" } });
+    fireEvent.click(screen.getByRole("button", { name: "Confirm delivery" }));
+    await screen.findByText("Delivery received");
+    expect(screen.getByRole("button", { name: "See the order" })).toBeTruthy();
+  });
+
   it("marks a line short through the keypad and shows what the server saved", async () => {
     render(<ReceiveDelivery />);
     await open("Flour");

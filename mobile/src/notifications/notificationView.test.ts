@@ -56,8 +56,18 @@ describe("where a notification opens", () => {
     expect(routeFor(n("DELIVERY_OVERDUE"), user(["inventory:count"]))).toBeNull();
   });
 
-  it("has no phone screen yet for approvals, shifts, documents or Brain", () => {
-    for (const type of ["APPROVAL_REQUIRED", "PO_REJECTED", "SHIFT_ASSIGNED", "DOCUMENT_VERIFIED", "BRAIN_NUDGE"]) {
+  it("opens the order an approval, an answer or a discrepancy is about, for someone who has the Orders tab and may list orders", () => {
+    const id = "11111111-1111-4111-8111-111111111111";
+    for (const type of ["APPROVAL_REQUIRED", "PO_APPROVED", "PO_REJECTED", "DISCREPANCY_ALERT"]) {
+      expect(routeFor(n(type), user(["inventory:count", "purchasing:approve"]))).toBe(`/(app)/(orders)/order?poId=${id}&from=link`);
+      expect(routeFor(n(type), user(["purchasing:approve"]))).toBeNull(); // the server would refuse the order itself
+      expect(routeFor(n(type), user(["inventory:count"]))).toBeNull();
+    }
+    expect(routeFor(n("DISCREPANCY_ALERT", "receiving_session"), user([], ["Administrator"]))).toBe("/(app)/(orders)"); // it names a delivery, not an order
+  });
+
+  it("has no phone screen yet for shifts, documents or Brain", () => {
+    for (const type of ["SHIFT_ASSIGNED", "DOCUMENT_VERIFIED", "BRAIN_NUDGE"]) {
       expect(routeFor(n(type, null), user([], ["Administrator"]))).toBeNull();
     }
   });

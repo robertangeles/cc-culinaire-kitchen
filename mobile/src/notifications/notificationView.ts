@@ -6,7 +6,8 @@
 import { pushLink } from "@culinaire/shared/schemas/push";
 import type { AppNotification } from "@culinaire/shared/schemas/notifications";
 import type { AuthUser } from "../api/auth";
-import { hasAnyPermission } from "../shell/tabs";
+import { orderRights } from "../orders/orderView";
+import { hasAnyPermission, moduleTabs } from "../shell/tabs";
 
 /** A heading per type, and the sentence used when the payload has nothing better. Every type the server writes is here. */
 const COPY: Record<string, { title: string; body: string }> = {
@@ -89,13 +90,21 @@ export function timeAgo(iso: string, now: number): string {
   return days === 1 ? "1 day ago" : `${days} days ago`;
 }
 
+const ORDER_TYPES = ["APPROVAL_REQUIRED", "PO_APPROVED", "PO_REJECTED", "DISCREPANCY_ALERT"];
+const ORDERS_TAB = moduleTabs.find((t) => t.route === "(orders)")!.anyPermission!;
+
 /**
  * The phone screen a notification opens, or null when the phone has none for it yet (the inbox shows the text instead).
- * The server's link (`pushLink`) names the web-shaped route; only the ones the phone has a screen for are mapped. Shifts, compliance and
- * order screens come in later waves. An overdue delivery is still in the Receive list; opening the delivery itself would start receiving it.
+ * The server's link (`pushLink`) names the web-shaped route; only the ones the phone has a screen for are mapped. Shifts and compliance
+ * screens come in later waves. An overdue delivery is still in the Receive list; opening the delivery itself would start receiving it.
  */
 export function phoneRoute(type: string, link: string, user: AuthUser): string | null {
   if (type === "DELIVERY_OVERDUE" && link.startsWith("/purchasing") && hasAnyPermission(user, ["purchasing:receive"])) return "/(app)/(receive)";
+  if (ORDER_TYPES.includes(type) && link.startsWith("/purchasing") && hasAnyPermission(user, ORDERS_TAB) && orderRights(user).list) {
+    // `from` tells the order it was opened from outside its tab, so its way back is the list.
+    const poId = /^\/purchasing\/orders\/([0-9a-f-]+)$/i.exec(link)?.[1];
+    return poId ? `/(app)/(orders)/order?poId=${poId}&from=link` : "/(app)/(orders)";
+  }
   return null;
 }
 
