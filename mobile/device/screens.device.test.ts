@@ -318,6 +318,13 @@ describe.skipIf(!process.env.SCREENS_OUT)(`screens on ${FORM}`, { timeout: 600_0
     await signedIn();
     await sleep(2500);
     await shot("07-home");
+    // The landing was replaced, not stacked: Back from the first screen leaves the app instead of opening Ask.
+    await back();
+    await sleep(2000);
+    if (await has("Ask Antoine")) throw new Error("Back from the first screen opened Ask");
+    // A cold start while signed in lands on the same first tab (the E2E Administrator's is Prep, empty here).
+    await launch();
+    await waitFor("Plan today's prep", 60_000);
     await tab("Ask");
     await waitFor("New conversation", 30_000);
     await shot("80-ask");
