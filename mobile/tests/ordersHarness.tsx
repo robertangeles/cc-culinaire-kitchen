@@ -3,7 +3,8 @@ import type { ReactNode } from "react";
 import { DiscrepancySchema, OrderDetailSchema, OrderGuideItemSchema, OrderItemSchema, OrderSummarySchema } from "@culinaire/shared/schemas/purchasing";
 import type { AuthUser } from "../src/api/auth";
 import type { OrdersApi } from "../src/orders/ordersApi";
-import { createOrders, OrdersContextProvider } from "../src/orders/OrdersProvider";
+import { createOrders } from "../src/orders/orders";
+import { OrdersContextProvider } from "../src/orders/OrdersProvider";
 import type { KvStore } from "../src/storage/kv";
 import { sessionState } from "../testing/mocks";
 
