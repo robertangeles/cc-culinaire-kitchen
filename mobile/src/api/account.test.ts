@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { authenticatorLink, createAccountApi, deleteAccountMessage, mfaMessage } from "./account";
+import { authenticatorLink, avatarMessage, createAccountApi, deleteAccountMessage, mfaMessage, passwordChangeMessage } from "./account";
 import { ApiError, type ApiClient, type TokenStore } from "./client";
 
 function setup(replies: unknown[], tokens: { accessToken: string; refreshToken: string } | null = { accessToken: "A", refreshToken: "R" }) {
@@ -142,5 +142,29 @@ describe("kitchen profile", () => {
   it("drops an option row it cannot read instead of failing the list", async () => {
     const { api } = setup([{ skill_level: [{ optionValue: "line_cook", optionLabel: "Line cook", optionDescription: null }, { broken: true }], cuisine: [], dietary: [], equipment: [] }]);
     expect((await api.personalisationOptions()).skill_level).toEqual([{ optionValue: "line_cook", optionLabel: "Line cook", optionDescription: null }]);
+  });
+});
+
+describe("refusals by the server's code", () => {
+  const coded = (code: string, status = 400) => new ApiError(status === 429 ? "rate_limited" : status >= 500 ? "server" : "bad_request", "English", status, { code }, code);
+
+  it("explains a refused password change", () => {
+    expect(passwordChangeMessage(coded("INVALID_CREDENTIALS"))).toBe("Your current password isn't right.");
+    expect(passwordChangeMessage(coded("WEAK_PASSWORD"))).toMatch(/at least 8/);
+    expect(passwordChangeMessage(coded("PASSWORD_NOT_SET"))).toMatch(/no password to change/);
+    expect(passwordChangeMessage(coded("RATE_LIMITED", 429))).toMatch(/Too many tries/);
+    // A server without codes: its own sentence.
+    expect(passwordChangeMessage(new ApiError("bad_request", "Current password is incorrect.", 400))).toBe("Current password is incorrect.");
+  });
+
+  it("explains a refused picture", () => {
+    expect(avatarMessage(coded("FILE_TOO_LARGE"))).toMatch(/too big/);
+    expect(avatarMessage(coded("UNSUPPORTED_FILE_TYPE"))).toMatch(/format/);
+    expect(avatarMessage(coded("UPLOAD_FAILED", 502))).toMatch(/couldn't be saved/);
+    expect(avatarMessage(new ApiError("network"))).toMatch(/signal/);
+  });
+
+  it("reads a wrong first two-step code by its code", () => {
+    expect(mfaMessage(coded("INVALID_MFA_CODE")).text).toBe("That authenticator code isn't valid.");
   });
 });

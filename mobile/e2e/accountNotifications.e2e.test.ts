@@ -65,7 +65,8 @@ describe.skipIf(!process.env.CI && !process.env.E2E_USER_EMAIL)("profile, securi
   });
 
   it("changes the password: this sign-in keeps working, the old password no longer signs in", async () => {
-    await expect(accountApi.changePassword("not-it", SECOND_PASSWORD)).rejects.toMatchObject({ code: "bad_request" });
+    await expect(accountApi.changePassword("not-it", SECOND_PASSWORD)).rejects.toMatchObject({ code: "bad_request", serverCode: "INVALID_CREDENTIALS" });
+    await expect(accountApi.changePassword(FIRST_PASSWORD, "short")).rejects.toMatchObject({ serverCode: "WEAK_PASSWORD" });
     await accountApi.changePassword(FIRST_PASSWORD, SECOND_PASSWORD);
     password = SECOND_PASSWORD;
     expect((await authApi.me()).userEmail).toBe(newEmail);
@@ -76,7 +77,7 @@ describe.skipIf(!process.env.CI && !process.env.E2E_USER_EMAIL)("profile, securi
     await expect(accountApi.mfaSetup({ password: "wrong" })).rejects.toMatchObject({ serverCode: "INVALID_CREDENTIALS" });
     const { secret, qrCodeDataUrl } = await accountApi.mfaSetup({ password });
     expect(qrCodeDataUrl).toMatch(/^data:image\/png/);
-    await expect(accountApi.mfaEnable("000000")).rejects.toMatchObject({ code: "bad_request" });
+    await expect(accountApi.mfaEnable("000000")).rejects.toMatchObject({ code: "bad_request", serverCode: "INVALID_MFA_CODE" });
     await accountApi.mfaEnable(await generate({ secret }));
     expect(await accountApi.facts()).toMatchObject({ mfaEnabled: true });
     await expect(accountApi.mfaDisable({ password })).rejects.toMatchObject({ serverCode: "MFA_REQUIRED" });

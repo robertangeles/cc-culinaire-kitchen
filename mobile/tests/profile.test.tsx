@@ -118,13 +118,13 @@ describe("my details", () => {
     expect(mocks.accountApi.uploadAvatar).not.toHaveBeenCalled();
   });
 
-  it("shows the server's words for a refused upload", async () => {
+  it("explains a refused upload by the server's code", async () => {
     mocks.pickImage.mockResolvedValue({ kind: "picked", image: { uri: "file:///a.png", mimeType: "image/png" } });
-    mocks.accountApi.uploadAvatar.mockRejectedValue(new ApiError("bad_request", "File too large. Maximum size is 2 MB.", 400));
+    mocks.accountApi.uploadAvatar.mockRejectedValue(new ApiError("bad_request", "File too large. Maximum size is 10 MB.", 400, {}, "FILE_TOO_LARGE"));
     render(<Profile />);
     await screen.findByDisplayValue("Chef");
     click("Choose photo");
-    expect(await screen.findByText("File too large. Maximum size is 2 MB.")).toBeTruthy();
+    expect(await screen.findByText("That picture is too big. Choose a smaller one.")).toBeTruthy();
   });
 });
 
@@ -142,14 +142,14 @@ describe("change password", () => {
     expect(await screen.findByText(/You're still signed in here/)).toBeTruthy();
   });
 
-  it("shows the server's sentence for a wrong current password", async () => {
-    mocks.accountApi.changePassword.mockRejectedValue(new ApiError("bad_request", "Current password is incorrect.", 400));
+  it("says a wrong current password is wrong, by the server's code", async () => {
+    mocks.accountApi.changePassword.mockRejectedValue(new ApiError("bad_request", "Current password is incorrect.", 400, {}, "INVALID_CREDENTIALS"));
     render(<ChangePassword />);
     await screen.findByLabelText("Current password");
     fill("Current password", "wrong");
     fill("New password", "a-long-new-one");
     click("Change password");
-    expect(await screen.findByText("Current password is incorrect.")).toBeTruthy();
+    expect(await screen.findByText("Your current password isn't right.")).toBeTruthy();
   });
 
   it("explains that a Google or Apple account has no password", async () => {

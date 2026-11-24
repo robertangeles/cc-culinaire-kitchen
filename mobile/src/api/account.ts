@@ -162,3 +162,26 @@ export function mfaMessage(err: unknown): { text: string; needsMfa?: true; needs
 export function authenticatorLink(secret: string, email: string): string {
   return `otpauth://totp/${encodeURIComponent(`CulinAIre Kitchen:${email}`)}?secret=${encodeURIComponent(secret)}&issuer=${encodeURIComponent("CulinAIre Kitchen")}`;
 }
+
+/** One plain sentence for a refused password change, by the server's code (the status and its sentence for a server without codes). */
+export function passwordChangeMessage(err: unknown): string {
+  if (err instanceof ApiError) {
+    if (err.hasCode("INVALID_CREDENTIALS")) return "Your current password isn't right.";
+    if (err.hasCode("WEAK_PASSWORD")) return "The new password needs at least 8 characters.";
+    if (err.hasCode("PASSWORD_NOT_SET")) return "Your account signs in with Google or Apple, so it has no password to change.";
+    if (err.hasCode("RATE_LIMITED") || err.code === "rate_limited") return "Too many tries. Wait a few minutes and try again.";
+    if (err.code === "bad_request" || err.code === "network" || err.code === "timeout") return err.message;
+  }
+  return "Couldn't change the password. Try again.";
+}
+
+/** One plain sentence for a refused picture upload, by the server's code. */
+export function avatarMessage(err: unknown): string {
+  if (err instanceof ApiError) {
+    if (err.hasCode("FILE_TOO_LARGE")) return "That picture is too big. Choose a smaller one.";
+    if (err.hasCode("UNSUPPORTED_FILE_TYPE")) return "That picture's format can't be used. Choose a JPEG or PNG photo.";
+    if (err.hasCode("UPLOAD_FAILED")) return "The picture couldn't be saved. Try again.";
+    if (err.code === "bad_request") return err.message;
+  }
+  return "Couldn't upload the picture. Check your signal and try again.";
+}

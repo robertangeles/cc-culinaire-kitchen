@@ -4,6 +4,7 @@ import { useRouter } from "expo-router";
 import { ESTABLISHMENT_TYPES, KITCHEN_CONSTRAINTS_OPTIONS, MENU_NEEDS, PLATING_STYLES, PRICE_POINTS, SOURCING_VALUES } from "@culinaire/shared";
 import type { PersonalisationOptions } from "@culinaire/shared/schemas/account";
 import { accountApi, authApi } from "../src/runtime/appContext";
+import { ApiError } from "../src/api/client";
 import { servings, toChanges, toForm, type KitchenForm } from "../src/profile/kitchenProfile";
 import { Screen } from "../src/ui/Screen";
 import { Text } from "../src/ui/Text";
@@ -77,8 +78,9 @@ export default function KitchenProfile() {
     try {
       await accountApi.saveKitchenProfile(toChanges(form, isOrgAdmin));
       setMessage({ text: "Kitchen profile saved." });
-    } catch {
-      setMessage({ text: "Couldn't save your kitchen profile. Check your signal and try again.", error: true });
+    } catch (err) {
+      const refused = err instanceof ApiError && err.hasCode("VALIDATION");
+      setMessage({ text: refused ? "Some answers weren't accepted. Check them and save again." : "Couldn't save your kitchen profile. Check your signal and try again.", error: true });
     } finally {
       setSaving(false);
     }

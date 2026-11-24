@@ -4,6 +4,7 @@ import { useRouter } from "expo-router";
 import type { ProfileDetailField, ProfileDetails } from "@culinaire/shared/schemas/account";
 import { accountApi, session, useSession } from "../src/runtime/appContext";
 import { ApiError } from "../src/api/client";
+import { avatarMessage } from "../src/api/account";
 import { pickImage } from "../src/profile/pickImage";
 import { Screen } from "../src/ui/Screen";
 import { Text } from "../src/ui/Text";
@@ -85,7 +86,7 @@ export default function Profile() {
       await session.refreshUser();
       setMessage({ text: "Picture updated." });
     } catch (err) {
-      setMessage({ text: err instanceof ApiError && err.code === "bad_request" ? err.message : "Couldn't upload the picture. Check your signal and try again.", error: true });
+      setMessage({ text: avatarMessage(err), error: true });
     } finally {
       setUploading(false);
     }

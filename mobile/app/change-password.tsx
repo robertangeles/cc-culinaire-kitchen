@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "expo-router";
 import { accountApi } from "../src/runtime/appContext";
-import { ApiError } from "../src/api/client";
-import type { AccountFacts } from "../src/api/account";
+import { passwordChangeMessage, type AccountFacts } from "../src/api/account";
 import { Screen } from "../src/ui/Screen";
 import { Text } from "../src/ui/Text";
 import { TextField } from "../src/ui/TextField";
@@ -49,8 +48,7 @@ export default function ChangePassword() {
       await accountApi.changePassword(current, next);
       setDone(true);
     } catch (err) {
-      // The server's sentence ("Current password is incorrect.") is the useful one; it sends no code on this route.
-      setError(err instanceof ApiError && err.code === "bad_request" ? err.message : err instanceof ApiError && err.code === "rate_limited" ? "Too many tries. Wait a few minutes and try again." : err instanceof ApiError ? err.message : "Couldn't change the password. Try again.");
+      setError(passwordChangeMessage(err));
     } finally {
       setBusy(false);
     }

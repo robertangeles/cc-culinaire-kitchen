@@ -305,7 +305,7 @@ A delivery another phone already confirmed (`ALREADY_CONFIRMED`) or cancelled (`
 
 ## Inbox and push (`src/notifications`, `app/(app)/(inbox)`, `app/notification-settings.tsx`)
 
-The **Inbox** tab is everyone's (an entry in `src/shell/tabs.ts` with no permission: the server's notification routes need only a sign-in), with the unread count on its button.
+The **Inbox** tab is everyone's (an entry in `src/shell/tabs.ts` with no permission: the server's notification routes need only a sign-in), with the unread count on its button, or on More and the Inbox row of the More list when the Inbox is under More.
 It lists the server's unread notifications (`GET /api/inventory/notifications?limit=50`, the count from `/count`), newest first, each with a heading and a sentence for its type
 (`notificationView.ts`; every type in `NOTIFICATION_TYPES` has its own words, a type this build does not know reads "Notification"). The list is kept on the phone, so it opens with no signal.
 It is read when the tab opens, when the app wakes, when a push arrives and every minute while the app is open. **Mark read** is the queued command `notification.read`
@@ -359,8 +359,7 @@ Differences from the web profile (`pages/ProfilePage.tsx`, `components/profile`)
 It also says what to do without a key (an admin can add them from the organisation's settings on the web), who is signed in, and keeps sign out, the legal pages and Delete my account reachable (App Store 5.1.1(v)).
 The web's "create your first location" link for an admin is a sentence here: making locations is organisation admin, Wave 8.
 
-**Server answers without a machine-readable code** (a separate server PR adds codes; until it is on main the phone reads the HTTP status and shows the server's sentence for a 400, and switches to the codes once they exist):
-`PATCH /api/users/profile` (400 with `error` as a field object), `POST /api/users/change-password` (400), `POST /api/users/profile/avatar` (400; its size message says 2 MB while the limit is 10 MB), `POST /api/auth/mfa/enable` (400), `PUT /api/users/kitchen-profile` (400), and the notification read route (404).
+**Refusals are read by the server's code** (`ApiError.hasCode`): `INVALID_CREDENTIALS`, `WEAK_PASSWORD` and `PASSWORD_NOT_SET` on a password change; `FILE_TOO_LARGE`, `UNSUPPORTED_FILE_TYPE` and `UPLOAD_FAILED` on a picture; `INVALID_MFA_CODE`, `MFA_REQUIRED`, `RECENT_SIGN_IN_REQUIRED` and `MFA_ALREADY_ENABLED` on two-step; `VALIDATION` on the kitchen profile; `NOT_FOUND` on a notification read (done). The HTTP status and the server's sentence are the fallback for a server without codes (`passwordChangeMessage`, `avatarMessage`, `mfaMessage` in `src/api/account.ts`).
 
 ## Tests
 
