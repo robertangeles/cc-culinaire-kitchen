@@ -288,6 +288,11 @@ jobs:
       E2E_USER_TOTP_SECRET: JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP
       E2E_DELETE_USER_EMAIL: e2e-delete-ci@culinaire.test
       E2E_DELETE_USER_PASSWORD: E2e-Delete-Throwaway-Pass-1!
+      # The phone steps sign in as this twin of the E2E user: the global rate limit buckets per user, and the phone
+      # files start seconds after Playwright, so sharing one user put them over its 300 requests a minute (429s).
+      E2E_PHONE_USER_EMAIL: e2e-phone-ci@culinaire.test
+      E2E_PHONE_USER_PASSWORD: E2e-Phone-Throwaway-Pass-1!
+      E2E_PHONE_USER_TOTP_SECRET: KRSXG5CTMVRXEZLUKRSXG5CTMVRXEZLU
 
     steps:
       - name: Checkout
@@ -347,11 +352,19 @@ jobs:
       # with no signal, reconnect, submit. No emulator, no UI; the screens are covered by the mobile job.
       - name: Run phone flow end-to-end test
         run: pnpm --filter @culinaire/mobile run check:e2e
+        env:
+          E2E_USER_EMAIL: ${{ env.E2E_PHONE_USER_EMAIL }}
+          E2E_USER_PASSWORD: ${{ env.E2E_PHONE_USER_PASSWORD }}
+          E2E_USER_TOTP_SECRET: ${{ env.E2E_PHONE_USER_TOTP_SECRET }}
 
       # The same flow again with the zod schemas of the last store release (tag mobile-v*), so a server change
       # cannot break the app people already have. Passes while no release tag exists. See the script header.
       - name: Check the released phone schemas against this server
         run: bash scripts/check-released-schemas.sh
+        env:
+          E2E_USER_EMAIL: ${{ env.E2E_PHONE_USER_EMAIL }}
+          E2E_USER_PASSWORD: ${{ env.E2E_PHONE_USER_PASSWORD }}
+          E2E_USER_TOTP_SECRET: ${{ env.E2E_PHONE_USER_TOTP_SECRET }}
 
       - name: Show server log on failure
         if: always()
