@@ -16,6 +16,8 @@ interface Props {
   onPick: (picked: PickedIngredient) => void;
   source: IngredientSource;
   placeholder?: string;
+  /** The field opens with its item already chosen (an entry being changed): no list over it until the person types. */
+  chosen?: boolean;
 }
 
 const MORE_DELAY_MS = 300;
@@ -25,12 +27,12 @@ const MORE_DELAY_MS = 300;
  * (downloaded catalogue and recent items) and, a moment later, names the server suggests. Works with no signal. Waste uses it
  * now; consumption, transfers and orders use the same component with their own `IngredientSource`.
  */
-export function IngredientPicker({ label, value, onChangeText, onPick, source, placeholder }: Props) {
+export function IngredientPicker({ label, value, onChangeText, onPick, source, placeholder, chosen = false }: Props) {
   const c = useColors();
   const [recent, setRecent] = useState<PickedIngredient[]>([]);
   const [matches, setMatches] = useState<PickedIngredient[]>([]);
   /** Set when something was picked, until the person types again, so the list does not reopen over the finished field. */
-  const [picked, setPicked] = useState(false);
+  const [picked, setPicked] = useState(chosen);
   const latest = useRef(0);
 
   useEffect(() => {

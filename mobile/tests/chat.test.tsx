@@ -14,6 +14,7 @@ vi.mock("../src/runtime/appContext", async () => {
   return { client: {}, useSession: () => sessionState.current };
 });
 
+import { Markdown } from "../src/ui/Markdown";
 import Conversations from "../app/(app)/(chat)/index";
 import Conversation from "../app/(app)/(chat)/conversation";
 
@@ -167,6 +168,14 @@ describe("a conversation", () => {
     expect(screen.getByText("You've used all your free sessions.")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
     expect(screen.queryByText(/upgrade|pricing|subscribe/i)).toBeNull();
+  });
+
+  it("shows a heading in an answer as a heading: its words keep the heading's size and font", () => {
+    render(<Markdown text={"## Bring it back\n\nWhisk in **cold** water."} />);
+    expect(screen.getByRole("heading").style.fontSize).toBe("22px");
+    // The words set no size or font of their own, so they take the heading's.
+    const words = screen.getByText("Bring it back").style;
+    expect([words.fontSize, words.fontFamily]).toEqual(["", ""]);
   });
 
   it("opens a saved conversation with its answer rendered as Markdown", async () => {

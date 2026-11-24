@@ -63,6 +63,7 @@ export default function MoveEntry() {
               value={name}
               placeholder="Search the item"
               source={source}
+              chosen={!!ingredientId}
               onChangeText={(t) => {
                 setName(t);
                 setIngredientId("");
