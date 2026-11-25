@@ -1549,7 +1549,7 @@ builds all tables with CHECKs enforcing. Stop it again when done.
 ## 2026-11-26 — A picked photo carries its place and leaves copies behind
 
 - **Problem**: The phone's certificate upload was described as leaving location out and keeping no photo on the phone; neither was true. `expo-image-picker` on Android copies every EXIF tag, GPS included, into the compressed photo (`exif: false` only keeps it out of the JavaScript answer), leaves the camera's original and the copy in its cache, and React Native's HTTP client keeps a disk cache.
-- **Fix**: The photo is rewritten without metadata before it is sent and refused when that fails (`photoMetadata.ts`), the picker's cache is emptied as soon as the photo is read and at start (`photoFiles.ts`), and the stored photo is read with `no-store` into memory.
+- **Fix**: The photo is rewritten without metadata before it is sent and refused when that fails (`photoMetadata.ts`; the EXIF Orientation tag alone is written back, because on iPhone the photo library path keeps the rotation only in that tag; not checked on an iPhone or iPad, no Mac), the picker's cache is emptied as soon as the photo is read and at start (`photoFiles.ts`), and the stored photo is read with `no-store` into memory.
 - **Rule**: A claim about what a native module does not keep or send is read in its source, on both platforms, before it is written in a comment.
 
 ## 2026-11-26 — Expo's global fetch refuses React Native file uploads
