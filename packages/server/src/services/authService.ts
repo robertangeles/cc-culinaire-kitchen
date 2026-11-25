@@ -1041,8 +1041,6 @@ export async function generateMfaSecret(userId: number, proof: MfaChangeProof, s
  * phone whose clock is a little slow. Never a future step.
  */
 export async function verifyMfaToken(userId: number, token: string): Promise<boolean> {
-  // otplib throws on anything that is not six digits; to the person that is just a wrong code.
-  if (typeof token !== "string" || !/^\d{6}$/.test(token)) return false;
   const [row] = await db.select().from(user).where(eq(user.userId, userId));
   if (!row || !row.mfaSecret) return false;
   const result = await otpVerify({ token, secret: row.mfaSecret, epochTolerance: [30, 0] });

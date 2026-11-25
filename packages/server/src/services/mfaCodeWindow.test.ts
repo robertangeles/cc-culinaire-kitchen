@@ -68,13 +68,19 @@ describe.each([
 });
 
 describe("verifyMfaToken: garbage", () => {
-  it.each(["", "abcdef", "12345", "1234567", "12 456", "-12345", "１２３４５６"])("refuses %j", async (token) => {
-    expect(await verifyMfaToken(1, token)).toBe(false);
+  const accepted = (token: unknown) => verifyMfaToken(1, token as string).then((ok) => ok, () => false);
+
+  it("refuses a well-formed but wrong code", async () => {
+    const wrong = (await codeOf(STEP_START)) === "000000" ? "000001" : "000000";
+    expect(await verifyMfaToken(1, wrong)).toBe(false);
   });
 
-  it("refuses a value that is not a string", async () => {
-    for (const token of [123456, null, {}, ["123456"]]) expect(await verifyMfaToken(1, token as unknown as string)).toBe(false);
-  });
+  it.each(["", "abcdef", "12345", "1234567", "12 456", "-12345", "１２３４５６", 123456, null, {}, ["123456"]])(
+    "never accepts %j",
+    async (token) => {
+      expect(await accepted(token)).toBe(false);
+    },
+  );
 
   it("refuses every code for an account with no secret", async () => {
     state.row.mfaSecret = null;
