@@ -1,5 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { generate } from "otplib";
+import { describe, it, expect, beforeAll, afterAll, inject } from "vitest";
 import { PrepTodaySchema } from "@culinaire/shared/schemas/prep";
 import { createApiClient, type Tokens } from "../src/api/client";
 import { createAuthApi } from "../src/api/auth";
@@ -25,11 +24,10 @@ const totpSecret = process.env.E2E_USER_TOTP_SECRET;
 const baseUrl = process.env.E2E_API_URL ?? "http://localhost:3009";
 
 const tag = `pq${Date.now().toString(36)}-`;
-const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 describe.skipIf(!process.env.CI && (!email || !password || !totpSecret))("prep queue against the real server", () => {
   let airplane = false;
-  let tokens: Tokens | null = null;
+  let tokens = inject("phoneTokens");
   const tokenStore = { load: async () => tokens, save: async (t: Tokens) => void (tokens = t), clear: async () => void (tokens = null) };
   const offlineAwareFetch: typeof fetch = (input, init) => (airplane ? Promise.reject(new TypeError("Network request failed")) : fetch(input, init));
   const client = createApiClient({ baseUrl, tokenStore, appVersion: "0.1.0-e2e", fetchFn: offlineAwareFetch, timeoutMs: 20_000 });
@@ -63,13 +61,7 @@ describe.skipIf(!process.env.CI && (!email || !password || !totpSecret))("prep q
   };
 
   beforeAll(async () => {
-    await session.signIn(email!, password!);
-    expect(session.getSnapshot().state.phase).toBe("mfa");
-    await session.submitCode(await generate({ secret: totpSecret! }));
-    if (session.getSnapshot().state.phase === "mfa") {
-      await wait(31_000); // that code's window was already used (the other phone tests sign in too)
-      await session.submitCode(await generate({ secret: totpSecret! }));
-    }
+    await session.restore();
     const state = session.getSnapshot().state;
     expect(state.phase).toBe("ready");
     if (state.phase === "ready") userId = state.user.userId;

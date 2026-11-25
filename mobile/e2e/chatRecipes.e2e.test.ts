@@ -1,5 +1,4 @@
-import { describe, it, expect, beforeAll } from "vitest";
-import { generate } from "otplib";
+import { describe, it, expect, beforeAll, inject } from "vitest";
 import { ApiError, createApiClient, type Tokens } from "../src/api/client";
 import { createAuthApi } from "../src/api/auth";
 import { createSession, type Snapshot } from "../src/auth/session";
@@ -17,7 +16,6 @@ const email = process.env.E2E_USER_EMAIL;
 const password = process.env.E2E_USER_PASSWORD;
 const totpSecret = process.env.E2E_USER_TOTP_SECRET;
 const baseUrl = process.env.E2E_API_URL ?? "http://localhost:3009";
-const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 async function refusal(p: Promise<unknown>): Promise<ApiError> {
   const err = await p.then(() => null, (e: unknown) => e);
@@ -26,7 +24,7 @@ async function refusal(p: Promise<unknown>): Promise<ApiError> {
 }
 
 describe.skipIf(!process.env.CI && (!email || !password || !totpSecret))("chat conversations and my recipes against the real server", () => {
-  let tokens: Tokens | null = null;
+  let tokens = inject("phoneTokens");
   const tokenStore = { load: async () => tokens, save: async (t: Tokens) => void (tokens = t), clear: async () => void (tokens = null) };
   const client = createApiClient({ baseUrl, tokenStore, appVersion: "0.1.0-e2e", timeoutMs: 20_000 });
   const authApi = createAuthApi(client, tokenStore);
@@ -36,12 +34,7 @@ describe.skipIf(!process.env.CI && (!email || !password || !totpSecret))("chat c
   const recipes = createRecipeApi(client);
 
   beforeAll(async () => {
-    await session.signIn(email!, password!);
-    await session.submitCode(await generate({ secret: totpSecret! }));
-    if (session.getSnapshot().state.phase === "mfa") {
-      await wait(31_000); // that code's window was already used (the other phone tests sign in too)
-      await session.submitCode(await generate({ secret: totpSecret! }));
-    }
+    await session.restore();
     expect(session.getSnapshot().state.phase).toBe("ready");
   });
 

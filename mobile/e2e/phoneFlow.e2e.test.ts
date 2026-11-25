@@ -1,5 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { generate } from "otplib";
+import { describe, it, expect, beforeAll, afterAll, inject } from "vitest";
 import { createApiClient, type Tokens } from "../src/api/client";
 import { createAuthApi } from "../src/api/auth";
 import { createSession, type Snapshot } from "../src/auth/session";
@@ -22,13 +21,12 @@ const baseUrl = process.env.E2E_API_URL ?? "http://localhost:3009";
 
 const tag = `ph${Date.now().toString(36)}-`;
 const API = "/api/inventory";
-const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // Locally it skips without credentials; in CI a missing credential must fail the run, not skip it silently.
 describe.skipIf(!process.env.CI && (!email || !password || !totpSecret))("phone flow against the real server", () => {
   // The phone's pieces, wired the way appContext wires them, with memory storage and a fetch we can cut.
   let airplane = false;
-  let tokens: Tokens | null = null;
+  let tokens = inject("phoneTokens");
   const tokenStore = { load: async () => tokens, save: async (t: Tokens) => void (tokens = t), clear: async () => void (tokens = null) };
   const offlineAwareFetch: typeof fetch = (input, init) => (airplane ? Promise.reject(new TypeError("Network request failed")) : fetch(input, init));
   const client = createApiClient({ baseUrl, tokenStore, appVersion: "0.1.0-e2e", fetchFn: offlineAwareFetch, timeoutMs: 20_000 });
@@ -51,15 +49,8 @@ describe.skipIf(!process.env.CI && (!email || !password || !totpSecret))("phone 
   let sessionId = "";
 
   beforeAll(async () => {
-    // Sign in the way a chef does: password, then the code. A code can only be used once per 30s window, so a
-    // rejected first code (the Playwright setup may have just used this window) gets one retry on the next window.
-    await session.signIn(email!, password!);
-    expect(session.getSnapshot().state.phase).toBe("mfa");
-    await session.submitCode(await generate({ secret: totpSecret! }));
-    if (session.getSnapshot().state.phase === "mfa") {
-      await wait(31_000);
-      await session.submitCode(await generate({ secret: totpSecret! }));
-    }
+    // Already signed in, with password and code, by signIn.ts: the app starts with its saved tokens.
+    await session.restore();
     const state = session.getSnapshot().state;
     expect(state.phase).toBe("ready");
     if (state.phase === "ready") userId = state.user.userId;

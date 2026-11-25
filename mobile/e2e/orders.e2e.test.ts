@@ -1,5 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { generate } from "otplib";
+import { describe, it, expect, beforeAll, afterAll, inject } from "vitest";
 import { ApiError, createApiClient, type Tokens } from "../src/api/client";
 import { createAuthApi } from "../src/api/auth";
 import { createSession } from "../src/auth/session";
@@ -25,7 +24,7 @@ const API = "/api/inventory";
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 describe.skipIf(!process.env.CI && (!email || !password || !totpSecret))("orders against the real server", () => {
-  let tokens: Tokens | null = null;
+  let tokens = inject("phoneTokens");
   const tokenStore = { load: async () => tokens, save: async (t: Tokens) => void (tokens = t), clear: async () => void (tokens = null) };
   const client = createApiClient({ baseUrl, tokenStore, appVersion: "0.1.0-e2e", timeoutMs: 20_000 });
   const authApi = createAuthApi(client, tokenStore);
@@ -66,13 +65,7 @@ describe.skipIf(!process.env.CI && (!email || !password || !totpSecret))("orders
   };
 
   beforeAll(async () => {
-    await session.signIn(email!, password!);
-    expect(session.getSnapshot().state.phase).toBe("mfa");
-    await session.submitCode(await generate({ secret: totpSecret! }));
-    if (session.getSnapshot().state.phase === "mfa") {
-      await wait(31_000);
-      await session.submitCode(await generate({ secret: totpSecret! }));
-    }
+    await session.restore();
     expect(session.getSnapshot().state.phase).toBe("ready");
     locationId = (await authApi.locationContext()).selectedLocationId!;
 

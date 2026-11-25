@@ -1,5 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { generate } from "otplib";
+import { describe, it, expect, beforeAll, afterAll, inject } from "vitest";
 import { createApiClient, type Tokens } from "../src/api/client";
 import { createAuthApi } from "../src/api/auth";
 import { createSession, type Snapshot } from "../src/auth/session";
@@ -23,10 +22,9 @@ const baseUrl = process.env.E2E_API_URL ?? "http://localhost:3009";
 
 const tag = `mn${Date.now().toString(36)}-`;
 const INV = "/api/inventory";
-const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 describe.skipIf(!process.env.CI && (!email || !password || !totpSecret))("the menu against the real server", () => {
-  let tokens: Tokens | null = null;
+  let tokens = inject("phoneTokens");
   /** The next request whose path matches reaches the server, and its reply is lost. */
   let loseReplyTo: RegExp | null = null;
   const tokenStore = { load: async () => tokens, save: async (t: Tokens) => void (tokens = t), clear: async () => void (tokens = null) };
@@ -62,13 +60,7 @@ describe.skipIf(!process.env.CI && (!email || !password || !totpSecret))("the me
   };
 
   beforeAll(async () => {
-    await session.signIn(email!, password!);
-    expect(session.getSnapshot().state.phase).toBe("mfa");
-    await session.submitCode(await generate({ secret: totpSecret! }));
-    if (session.getSnapshot().state.phase === "mfa") {
-      await wait(31_000); // that code's window was already used (the other phone tests sign in too)
-      await session.submitCode(await generate({ secret: totpSecret! }));
-    }
+    await session.restore();
     const state = session.getSnapshot().state;
     expect(state.phase).toBe("ready");
     if (state.phase === "ready") userId = state.user.userId;
