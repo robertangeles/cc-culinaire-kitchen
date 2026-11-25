@@ -50,6 +50,7 @@ const open = async (name: string) => fireEvent.click(await screen.findByRole("bu
 
 beforeEach(() => {
   vi.clearAllMocks();
+  api.actionLine.mockReset(); // clearAllMocks keeps queued Once answers, so a test that stops early would feed the next one
   sessionState.current = { state: { phase: "ready", user: chef, location: main, locations: [main] }, busy: false };
   searchParams.current = { poId: "P1" };
   api.queue.mockResolvedValue([queueItem()]);

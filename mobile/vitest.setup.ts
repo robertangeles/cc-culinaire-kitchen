@@ -3,9 +3,10 @@ import { createElement, type ReactNode } from "react";
 import { configure } from "@testing-library/react";
 import { reduceMotion as reduceMotionState, screenFocus as screenFocusState } from "./testing/mocks";
 
-// `findBy*` and `waitFor` give up after 1 s by default, but one re-render of a screen through react-native-web in jsdom takes
-// 200-300 ms here (the receiving delivery screen after a line is saved) and about five times that on the loaded CI runner, where
-// two receiving tests timed out at 1 s. The test timeout in vitest.config.ts was raised for the same reason; this is its per-wait twin.
+// `findBy*` and `waitFor` give up after 1 s by default, but one `getByRole` search in jsdom costs 200-300 ms here (most of it
+// jsdom's getComputedStyle; the receiving delivery screen after a line is saved) and about five times that on the loaded CI runner.
+// Each search blocks the thread, so the polls use up the wait and two receiving tests timed out at 1 s. A re-render itself takes 4-25 ms.
+// The test timeout in vitest.config.ts was raised for the same reason; this is its per-wait twin.
 configure({ asyncUtilTimeout: 10_000 });
 
 // Screen tests render the real screens with react-native-web in jsdom. Only native-only modules are faked here.

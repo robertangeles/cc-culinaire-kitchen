@@ -54,8 +54,9 @@ test.describe("Public Holidays — jurisdiction+year filter", () => {
     await expect(async () => {
       await ntTab.click();
       await expect(ntTab).toHaveAttribute("aria-selected", "true", { timeout: 1_000 });
+      // Inside the retry too: a reset landing after the click above would otherwise flip NT back with nothing to retry it.
+      await expect(page.getByRole("tab", { name: "NSW", exact: true })).toHaveAttribute("aria-selected", "false", { timeout: 1_000 });
     }).toPass({ timeout: 15_000 });
-    await expect(page.getByRole("tab", { name: "NSW", exact: true })).toHaveAttribute("aria-selected", "false");
   });
 
   test("CRITICAL: saving a holiday for a different jurisdiction than the active filter switches the filter to match, and the new holiday is visible", async ({
