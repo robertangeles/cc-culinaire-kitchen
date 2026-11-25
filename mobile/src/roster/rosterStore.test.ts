@@ -173,6 +173,14 @@ describe("swaps", () => {
     expect(t.store.getSnapshot().notice?.text).toBe("The shift is yours.");
   });
 
+  it("answers a replay of a claim I already won with the same good news, though the shift is already mine", async () => {
+    const t = setup({ shifts: [shift({ shiftId: "s9", assignmentStatus: "Confirmed" })], swaps: [swap()] });
+    await t.store.refresh();
+    t.api.claim.mockRejectedValueOnce(err("conflict", 409, undefined, "SWAP_CLAIMED_BY_YOU"));
+    expect(await t.store.claim(swap())).toBe(true);
+    expect(t.store.getSnapshot().notice).toMatchObject({ bad: false, text: "The shift is yours." });
+  });
+
   it("does not call a claim made when the shift was already mine", async () => {
     const t = setup({ shifts: [shift({ shiftId: "s9", assignmentStatus: "Confirmed" })], swaps: [swap()] });
     await t.store.refresh();

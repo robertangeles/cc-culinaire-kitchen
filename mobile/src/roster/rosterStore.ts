@@ -128,7 +128,7 @@ export function createRosterStore({ api, now }: { api: RosterApi; now: () => num
     },
     claim(swap: OpenSwap) {
       const worked = worksShift(snapshot.shifts, swap.shiftId);
-      return act(swap.swapRequestId, () => api.claim(swap.swapRequestId), () => !worked && snapshot.shifts.some((s) => s.shiftId === swap.shiftId && s.assignmentStatus === "Confirmed"), () => "The shift is yours.", claimMessage);
+      return act(swap.swapRequestId, () => api.claim(swap.swapRequestId).catch((err) => { if (!(err instanceof ApiError && err.hasCode(SWAP_CODES.claimedByYou))) throw err; }), () => !worked && snapshot.shifts.some((s) => s.shiftId === swap.shiftId && s.assignmentStatus === "Confirmed"), () => "The shift is yours.", claimMessage);
     },
   };
 }
