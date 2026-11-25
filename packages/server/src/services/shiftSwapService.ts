@@ -23,7 +23,7 @@
 
 import { eq, and, asc, gte, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
-import { shift, shiftAssignment, shiftSwapRequest, rosterRole, user, auditLog } from "../db/schema.js";
+import { shift, shiftAssignment, shiftSwapRequest, rosterRole, storeLocation, user, auditLog } from "../db/schema.js";
 import {
   RosterError,
   AssignmentBlockedError,
@@ -144,7 +144,10 @@ export async function offerSwap(orgId: number, assignmentId: string, callerUserI
   }
 }
 
-/** Every open swap at the org, across every venue — the browse/claim list. */
+/**
+ * Every open swap at the org, across every venue — the browse/claim list. Swaps of Draft and Cancelled shifts
+ * are listed too; `shiftStatus` lets a client hide them, `ianaTimezone` and `locationName` let it show venue time.
+ */
 export async function listOpenSwaps(orgId: number) {
   return db
     .select({
@@ -158,10 +161,14 @@ export async function listOpenSwaps(orgId: number) {
       rosterRoleId: shift.rosterRoleId,
       roleName: rosterRole.roleName,
       storeLocationId: shift.storeLocationId,
+      shiftStatus: shift.status,
+      locationName: storeLocation.locationName,
+      ianaTimezone: storeLocation.ianaTimezone,
     })
     .from(shiftSwapRequest)
     .innerJoin(shift, eq(shift.shiftId, shiftSwapRequest.shiftId))
     .innerJoin(rosterRole, eq(rosterRole.rosterRoleId, shift.rosterRoleId))
+    .innerJoin(storeLocation, eq(storeLocation.storeLocationId, shift.storeLocationId))
     .innerJoin(user, eq(user.userId, shiftSwapRequest.fromUserId))
     .where(and(eq(shift.organisationId, orgId), eq(shiftSwapRequest.status, "Open")))
     .orderBy(asc(shift.startDatetime));

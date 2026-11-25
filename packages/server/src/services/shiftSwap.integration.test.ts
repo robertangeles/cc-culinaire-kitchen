@@ -8,6 +8,7 @@ config({ path: resolve(dirname(fileURLToPath(import.meta.url)), "../../../../.en
 applyEnvPrefix();
 
 import { eq, inArray } from "drizzle-orm";
+import type { Request, Response } from "express";
 import { db } from "../db/index.js";
 import {
   organisation,
@@ -26,6 +27,7 @@ import {
 } from "../db/schema.js";
 import { offerSwap, listOpenSwaps, claimSwap, cancelSwap } from "./shiftSwapService.js";
 import { refusalMessage } from "./rosterService.js";
+import { handleListOpenSwaps } from "../controllers/workforceController.js";
 
 /**
  * Real-database behaviour of shiftSwapService (Phase 3, Slice 3).
@@ -53,6 +55,7 @@ describe.skipIf(!RUN)("shiftSwapService (real DB)", () => {
   let userD: number; // second compliant claimer, for the race
   let userOrgB: number; // orgB-only, for the tenant-isolation check
   let locA: string;
+  let locPerth: string; // userA's org, but nobody's home venue
   let roleId: string;
   let publicHolidayId: string;
   const shiftIds: string[] = [];
@@ -89,6 +92,18 @@ describe.skipIf(!RUN)("shiftSwapService (real DB)", () => {
         storeKey: `${tag}-ska`.slice(0, 25),
         createdBy: userA,
         state: "VIC",
+      })
+      .returning({ id: storeLocation.storeLocationId });
+
+    [{ id: locPerth }] = await db
+      .insert(storeLocation)
+      .values({
+        organisationId: orgA,
+        locationName: `${tag}-perth`,
+        storeKey: `${tag}-skp`.slice(0, 25),
+        createdBy: userA,
+        state: "WA",
+        ianaTimezone: "Australia/Perth",
       })
       .returning({ id: storeLocation.storeLocationId });
 
@@ -181,6 +196,7 @@ describe.skipIf(!RUN)("shiftSwapService (real DB)", () => {
       await db.delete(rosterRole).where(eq(rosterRole.rosterRoleId, roleId));
     }
     if (locA) await db.delete(storeLocation).where(eq(storeLocation.storeLocationId, locA));
+    if (locPerth) await db.delete(storeLocation).where(eq(storeLocation.storeLocationId, locPerth));
     if (orgA && orgB) await db.delete(auditLog).where(inArray(auditLog.organisationId, [orgA, orgB]));
     // claimSwap/requestConsent create in-app notifications (SHIFT_SWAP_CLAIMED,
     // HOLIDAY_CONSENT_REQUESTED) — clean those up before deleting the
@@ -330,5 +346,76 @@ describe.skipIf(!RUN)("shiftSwapService (real DB)", () => {
       statusCode: 404,
     });
     await cancelSwap(orgA, created.swapRequestId, userA);
+  });
+
+  describe("GET /swaps: the shift's status and the venue's zone and name", () => {
+    async function listAs(userId: number) {
+      let body: unknown;
+      const res = { status: () => res, json: (b: unknown) => ((body = b), res) } as unknown as Response;
+      await handleListOpenSwaps({ user: { sub: userId } } as unknown as Request, res, (err) => {
+        throw err;
+      });
+      return body as Awaited<ReturnType<typeof listOpenSwaps>>;
+    }
+
+    async function offerShift(dayOffset: number, storeLocationId: string, status: "Draft" | "Published" | "Cancelled") {
+      const day = addDays(TODAY, dayOffset);
+      const [{ id: shiftId }] = await db
+        .insert(shift)
+        .values({
+          organisationId: orgA,
+          storeLocationId,
+          rosterRoleId: roleId,
+          startDatetime: new Date(`${day}T01:00:00Z`),
+          endDatetime: new Date(`${day}T05:00:00Z`),
+          status,
+          createdBy: userA,
+        })
+        .returning({ id: shift.shiftId });
+      shiftIds.push(shiftId);
+      const [{ id: assignmentId }] = await db
+        .insert(shiftAssignment)
+        .values({ shiftId, userId: userA, status: "Confirmed" })
+        .returning({ id: shiftAssignment.assignmentId });
+      return (await offerSwap(orgA, assignmentId, userA)).swapRequestId;
+    }
+
+    it.each(["Published", "Draft", "Cancelled"] as const)("a swap of a %s shift is still listed, and says so", async (status) => {
+      const id = await offerShift(12, locA, status);
+      expect((await listAs(userB)).find((s) => s.swapRequestId === id)).toMatchObject({
+        shiftStatus: status,
+        ianaTimezone: "Australia/Melbourne",
+        locationName: `${tag}-locA`,
+      });
+    });
+
+    it("a venue in another timezone comes with its own zone and name, for someone who does not work there, and nothing else about it", async () => {
+      const id = await offerShift(13, locPerth, "Published");
+      const row = (await listAs(userB)).find((s) => s.swapRequestId === id)!;
+      expect(row).toMatchObject({ storeLocationId: locPerth, shiftStatus: "Published", ianaTimezone: "Australia/Perth", locationName: `${tag}-perth` });
+      expect(Object.keys(row).sort()).toEqual([
+        "endDatetime",
+        "fromAssignmentId",
+        "fromUserId",
+        "fromUserName",
+        "ianaTimezone",
+        "locationName",
+        "roleName",
+        "rosterRoleId",
+        "shiftId",
+        "shiftStatus",
+        "startDatetime",
+        "storeLocationId",
+        "swapRequestId",
+      ]);
+    });
+
+    it("another organisation still sees none of them, and a withdrawn offer takes its venue with it", async () => {
+      const id = await offerShift(14, locPerth, "Published");
+      expect(await listAs(userOrgB)).toEqual([]);
+
+      await cancelSwap(orgA, id, userA);
+      expect((await listAs(userB)).some((s) => s.swapRequestId === id)).toBe(false);
+    });
   });
 });
