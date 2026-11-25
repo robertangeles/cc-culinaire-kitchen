@@ -8,6 +8,7 @@
 import type { Socket } from "socket.io";
 import pino from "pino";
 import { z } from "zod";
+import { BenchPostIdSchema } from "@culinaire/shared/schemas/bench";
 
 const logger = pino({ name: "benchSocket" });
 
@@ -36,15 +37,17 @@ const schemas = {
     body: z.string(),
     messageType: z.enum(["text", "recipe_share"]).nullish(),
     recipeId: z.string().uuid().nullish(),
+    messageId: BenchPostIdSchema,
   }),
   "bench:typing": z.object({ channelKey }),
   "bench:reaction:add": reaction,
   "bench:reaction:remove": reaction,
   "bench:message:delete": z.object({ messageId }),
   "bench:message:edit": z.object({ messageId, newBody: z.string() }),
-  "bench:dm:send": z.object({ recipientId: id, body: z.string() }),
+  "bench:dm:send": z.object({ recipientId: id, body: z.string(), messageId: BenchPostIdSchema }),
   "bench:dm:typing": z.object({ recipientId: id }),
   "bench:presence:heartbeat": z.unknown(),
+  disconnecting: z.unknown(),
   disconnect: z.unknown(),
 } satisfies Record<string, z.ZodTypeAny>;
 

@@ -248,11 +248,11 @@ describe("posting", () => {
     const t = setup();
     await t.store.open(KITCHEN);
     t.store.post("  Heard  ");
-    expect(t.sent).toContainEqual(["bench:message", { channelKey: "org_5", body: "Heard" }]);
+    expect(t.sent).toContainEqual(["bench:message", { channelKey: "org_5", body: "Heard", messageId: "p1" }]);
     expect(t.pending()).toEqual([["Heard", "sending"]]);
-    t.arrive("bench:message:new", msg(3, { userId: 7, messageBody: "Heard" }));
+    t.arrive("bench:message:new", msg(3, { messageId: "p1", userId: 7, messageBody: "Heard" }));
     expect(t.pending()).toEqual([]);
-    expect(t.ids()).toEqual(["m1", "m2", "m3"]);
+    expect(t.ids()).toEqual(["m1", "m2", "p1"]);
   });
 
   it("sends a direct message to the other person", async () => {
@@ -260,8 +260,8 @@ describe("posting", () => {
     t.server.rows = [];
     await t.store.open(DM);
     t.store.post("Morning");
-    expect(t.sent).toContainEqual(["bench:dm:send", { recipientId: 8, body: "Morning" }]);
-    t.arrive("bench:dm:new", msg(3, { channelId: null, dmThreadId: 3, userId: 7, messageBody: "Morning" }));
+    expect(t.sent).toContainEqual(["bench:dm:send", { recipientId: 8, body: "Morning", messageId: "p1" }]);
+    t.arrive("bench:dm:new", msg(3, { messageId: "p1", channelId: null, dmThreadId: 3, userId: 7, messageBody: "Morning" }));
     expect(t.pending()).toEqual([]);
   });
 
@@ -289,10 +289,10 @@ describe("posting", () => {
     const t = setup();
     await t.store.open(KITCHEN);
     t.store.post("Heard");
-    t.server.rows.push(msg(3, { userId: 7, messageBody: "Heard" }));
+    t.server.rows.push(msg(3, { messageId: "p1", userId: 7, messageBody: "Heard" }));
     await t.tick(10_500);
     expect(t.pending()).toEqual([]);
-    expect(t.ids()).toEqual(["m1", "m2", "m3"]);
+    expect(t.ids()).toEqual(["m1", "m2", "p1"]);
   });
 
   it("is not sent when the server's list, read after ten seconds, does not have it", async () => {
@@ -312,50 +312,25 @@ describe("posting", () => {
     await t.tick(60_000);
     expect(t.pending()).toEqual([["Heard", "sending"]]);
     t.api.messages.mockReset();
-    t.api.messages.mockImplementation(async () => [msg(1), msg(2), msg(3, { userId: 7, messageBody: "Heard" })]);
+    t.api.messages.mockImplementation(async () => [msg(1), msg(2), msg(3, { messageId: "p1", userId: 7, messageBody: "Heard" })]);
     t.back();
     await t.tick();
     expect(t.pending()).toEqual([]);
   });
 
-  it("an earlier message with the same words does not count as this one", async () => {
+  it("only its own id settles a post: not the same words posted before, from another device or twice", async () => {
     const t = setup();
     t.server.rows = [msg(1, { userId: 7, messageBody: "Heard" }), msg(2)];
     await t.store.open(KITCHEN);
     t.store.post("Heard");
+    t.store.post("Heard");
+    t.arrive("bench:message:new", msg(3, { userId: 7, messageBody: "Heard" }));
+    expect(t.pending()).toEqual([["Heard", "sending"], ["Heard", "sending"]]);
+    // The second one's answer first, and again: the first is still on its way.
+    for (let i = 0; i < 2; i++) t.arrive("bench:message:new", msg(4, { messageId: "p2", userId: 7, messageBody: "Heard" }));
+    expect(t.room().pending).toEqual([{ id: "p1", body: "Heard", status: "sending" }]);
     await t.tick(10_500);
     expect(t.pending()).toEqual([["Heard", "failed"]]);
-  });
-
-  it("nor does an older one with the same words loaded from the history", async () => {
-    const t = setup();
-    t.server.rows = [msg(1, { userId: 7, messageBody: "Heard" }), ...Array.from({ length: PAGE }, (_, i) => msg(i + 2))];
-    await t.store.open(KITCHEN);
-    t.store.post("Heard");
-    await t.store.loadOlder();
-    expect(t.pending()).toEqual([["Heard", "sending"]]);
-  });
-
-  it("the same words posted twice need two echoes", async () => {
-    const t = setup();
-    await t.store.open(KITCHEN);
-    t.store.post("Heard");
-    t.store.post("Heard");
-    t.arrive("bench:message:new", msg(3, { userId: 7, messageBody: "Heard" }));
-    expect(t.pending()).toEqual([["Heard", "sending"]]);
-    // The same echo again (the list has it too) settles nothing more.
-    t.arrive("bench:message:new", msg(3, { userId: 7, messageBody: "Heard" }));
-    expect(t.pending()).toEqual([["Heard", "sending"]]);
-    t.arrive("bench:message:new", msg(4, { userId: 7, messageBody: "Heard" }));
-    expect(t.pending()).toEqual([]);
-  });
-
-  it("someone else's message with the same words is not this one", async () => {
-    const t = setup();
-    await t.store.open(KITCHEN);
-    t.store.post("Heard");
-    t.arrive("bench:message:new", msg(3, { messageBody: "Heard" }));
-    expect(t.pending()).toEqual([["Heard", "sending"]]);
   });
 
   it("an echo that comes after it was called not sent still settles it", async () => {
@@ -363,7 +338,7 @@ describe("posting", () => {
     await t.store.open(KITCHEN);
     t.store.post("Heard");
     await t.tick(10_500);
-    t.arrive("bench:message:new", msg(3, { userId: 7, messageBody: "Heard" }));
+    t.arrive("bench:message:new", msg(3, { messageId: "p1", userId: 7, messageBody: "Heard" }));
     expect(t.pending()).toEqual([]);
   });
 
@@ -373,7 +348,7 @@ describe("posting", () => {
     t.store.post("Heard");
     await t.tick(10_500);
     const posts = () => t.sent.filter(([e]) => e === "bench:message").length;
-    t.server.rows.push(msg(3, { userId: 7, messageBody: "Heard" }));
+    t.server.rows.push(msg(3, { messageId: "p1", userId: 7, messageBody: "Heard" }));
     await t.store.retry("p1");
     expect(posts()).toBe(1);
     expect(t.pending()).toEqual([]);
@@ -382,6 +357,34 @@ describe("posting", () => {
     await t.store.retry("p2");
     expect(posts()).toBe(3);
     expect(t.pending()).toEqual([["Again", "sending"]]);
+    // Under the same id: the server answers with the first one if it had it after all.
+    expect(t.sent.filter(([, p]) => p.body === "Again").map(([, p]) => p.messageId)).toEqual(["p2", "p2"]);
+  });
+
+  it("Try again on a post that was deleted meanwhile takes it away: it stays deleted", async () => {
+    const t = setup();
+    await t.store.open(KITCHEN);
+    t.store.post("Heard");
+    await t.tick(10_500);
+    await t.store.retry("p1");
+    t.arrive("bench:message:deleted", { messageId: "p1" });
+    expect(t.pending()).toEqual([]);
+    expect(t.ids()).toEqual(["m1", "m2"]);
+  });
+
+  it("Try again answered with a post from before the page loaded leaves no hole in the history", async () => {
+    const t = setup();
+    await t.store.open(KITCHEN);
+    t.store.post("Heard");
+    await t.tick(10_500);
+    const mine = msg(3, { messageId: "p1", userId: 7, messageBody: "Heard" });
+    t.server.rows = [msg(1), msg(2), mine, ...Array.from({ length: PAGE + 5 }, (_, i) => msg(i + 4))];
+    await t.store.retry("p1");
+    t.arrive("bench:message:new", mine);
+    expect(t.pending()).toEqual([]);
+    expect(t.ids()[0]).toBe("m9");
+    await t.store.loadOlder();
+    expect(t.ids().slice(0, 4)).toEqual(["m1", "m2", "p1", "m4"]);
   });
 
   it("Try again without a connection, or when the list could not be read, posts nothing", async () => {

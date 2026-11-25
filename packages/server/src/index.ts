@@ -375,7 +375,7 @@ hydrateEnvFromCredentials().then(() => {
     })
     .then(() => {
     const httpServer = createServer(app);
-    initBenchSocket(httpServer);
+    const closeBench = initBenchSocket(httpServer);
     httpServer.listen(port, () => {
       log.info(`CulinAIre Kitchen server running on http://localhost:${port}`);
       log.info(`AI Model: ${process.env.AI_MODEL ?? "anthropic/claude-sonnet-4-20250514"} (via OpenRouter)`);
@@ -387,7 +387,7 @@ hydrateEnvFromCredentials().then(() => {
 
       const stopScheduler = startScheduler(log);
 
-      // Graceful shutdown: stop background jobs, close server, release port
+      // Graceful shutdown: stop background jobs, close server and its live connections, release port
       function shutdown(signal: string) {
         log.info(`${signal} received — shutting down`);
         stopScheduler();
@@ -395,6 +395,7 @@ hydrateEnvFromCredentials().then(() => {
           log.info("Server closed");
           process.exit(0);
         });
+        closeBench();
         // Force exit if close takes too long
         setTimeout(() => process.exit(1), 5000);
       }

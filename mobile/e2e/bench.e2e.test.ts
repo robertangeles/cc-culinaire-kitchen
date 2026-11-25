@@ -6,6 +6,7 @@ import { createAccountApi } from "../src/api/account";
 import { createBenchApi } from "../src/bench/benchApi";
 import { createBenchLive } from "../src/bench/benchLive";
 import { createBenchStore } from "../src/bench/benchStore";
+import { newUuid } from "../src/outbox/uuid";
 import { manager } from "../device/fixtures";
 
 /**
@@ -32,8 +33,7 @@ async function person(name: string) {
   const api = createBenchApi(client);
   const live = createBenchLive({ socket, renew: () => api.channels() });
   const userId = signedIn.user.userId;
-  let n = 0;
-  const store = createBenchStore({ api, live, userId, now: Date.now, newId: () => `${name}-${++n}` });
+  const store = createBenchStore({ api, live, userId, now: Date.now, newId: newUuid });
   return {
     name, userId, client, api, live, store, socket,
     room: () => store.getSnapshot().room,
@@ -77,6 +77,15 @@ describe.skipIf(!process.env.CI && !process.env.E2E_USER_EMAIL)("the Bench again
     await soon(() => expect(bo.texts()).toContain(`Fish is in ${tag}`));
     await soon(() => expect(ann.room()!.pending).toEqual([]));
     expect(ann.texts().filter((t) => t === `Fish is in ${tag}`)).toHaveLength(1);
+  });
+
+  it("a post sent twice under one id is one message", async () => {
+    const post = { channelKey: key, body: `Once ${tag}`, messageId: newUuid() };
+    ann.live.send("bench:message", post);
+    ann.live.send("bench:message", post);
+    await soon(() => expect(bo.texts()).toContain(post.body));
+    expect((await bo.api.messages({ kind: "channel", key })).filter((m) => m.messageBody === post.body).map((m) => m.messageId)).toEqual([post.messageId]);
+    expect(ann.room()!.notice).toBeNull();
   });
 
   it("reactions, edits, pins and search reach the other phone", async () => {

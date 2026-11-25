@@ -11,7 +11,7 @@ import { ApiError } from "../api/client";
 import { PAGE, type BenchApi, type Room } from "./benchApi";
 import type { BenchLive } from "./benchLive";
 
-/** A post of one's own the server has not been seen to have. */
+/** A post of one's own the server has not been seen to have. The server stores it under `id`, so sending it again never makes a second one. */
 export interface PendingPost {
   id: string;
   body: string;
@@ -19,9 +19,6 @@ export interface PendingPost {
 }
 
 interface Pending extends PendingPost {
-  /** The messages on screen when it was posted, and the newest one's time (the server's clock): the post is none of them and not before. */
-  known: Set<string>;
-  after: string;
   /** Not sent if a list read from now on does not have it. */
   due: number;
 }
@@ -93,7 +90,6 @@ export function createBenchStore({ api, live, userId, now, newId }: { api: Bench
   }
   let visit: Visit | null = null;
   const pendingOf = new Map<string, Pending[]>();
-  const claimedOf = new Map<string, Set<string>>();
   /** People met in a kitchen's own channel. */
   const colleagues = new Set<number>();
   const typingTimers = new Map<number, ReturnType<typeof setTimeout>>();
@@ -125,17 +121,10 @@ export function createBenchStore({ api, live, userId, now, newId }: { api: Bench
     if (isKitchen(room)) for (const m of messages) if (m.userId !== userId) colleagues.add(m.userId);
   }
 
-  /** Takes each post of one's own that these messages show the server has out of the waiting list: oldest post first, one message for one post. */
-  function settle(room: Room, messages: BenchMessage[]) {
+  /** Takes the posts with these ids out of the waiting list: the server has them, or had them and they were deleted since. */
+  function settle(room: Room, ids: unknown[]) {
     const waiting = pendings(room);
-    if (waiting.length === 0) return;
-    const claimed = claimedOf.get(nameOf(room)) ?? new Set<string>();
-    claimedOf.set(nameOf(room), claimed);
-    const left = waiting.filter((p) => {
-      const copy = messages.find((m) => m.userId === userId && m.messageBody === p.body && !p.known.has(m.messageId) && !claimed.has(m.messageId) && Date.parse(m.createdDttm) >= Date.parse(p.after));
-      if (copy) claimed.add(copy.messageId);
-      return !copy;
-    });
+    const left = waiting.filter((p) => !ids.includes(p.id));
     if (left.length < waiting.length) setPendings(room, left);
   }
 
@@ -169,7 +158,7 @@ export function createBenchStore({ api, live, userId, now, newId }: { api: Bench
       const messages = replay.reduce((all, apply) => apply(all), merged.messages);
       meet(v.room, messages);
       setRoom({ phase: "ready", error: null, hasOlder: merged.hasOlder, messages });
-      settle(v.room, messages);
+      settle(v.room, messages.map((m) => m.messageId));
       const waiting = pendings(v.room);
       if (waiting.some((p) => p.status === "sending" && p.due <= startedAt)) setPendings(v.room, waiting.map((p) => (p.status === "sending" && p.due <= startedAt ? { ...p, status: "failed" } : p)));
       return true;
@@ -261,9 +250,11 @@ export function createBenchStore({ api, live, userId, now, newId }: { api: Bench
   function arrived(m: BenchMessage) {
     if (!visit || !belongs(visit, m)) return;
     meet(visit.room, [m]);
-    change(adding(m));
+    const first = snapshot.room?.messages[0];
+    // The answer to a post sent again can be older than what is loaded. It is in the history; here it would hide what lies between.
+    if (!snapshot.room?.hasOlder || !first || inOrder(m, first) > 0) change(adding(m));
     stopTyping(m.userId);
-    settle(visit.room, [m]);
+    settle(visit.room, [m.messageId]);
   }
 
   function stopTyping(id: number) {
@@ -290,6 +281,7 @@ export function createBenchStore({ api, live, userId, now, newId }: { api: Bench
   live.on("bench:message:deleted", (p) => {
     const { messageId } = obj(p);
     change((all) => all.filter((m) => m.messageId !== messageId));
+    if (visit) settle(visit.room, [messageId]);
   });
   live.on("bench:message:edited", (p) => {
     const { messageId, newBody } = obj(p);
@@ -330,8 +322,8 @@ export function createBenchStore({ api, live, userId, now, newId }: { api: Bench
     return sent;
   }
 
-  function emitPost(v: Visit, body: string): boolean {
-    return v.room.kind === "dm" ? live.send("bench:dm:send", { recipientId: v.otherUserId, body }) : live.send("bench:message", { channelKey: v.room.key, body });
+  function emitPost(v: Visit, messageId: string, body: string): boolean {
+    return v.room.kind === "dm" ? live.send("bench:dm:send", { recipientId: v.otherUserId, body, messageId }) : live.send("bench:message", { channelKey: v.room.key, body, messageId });
   }
 
   return {
@@ -395,11 +387,9 @@ export function createBenchStore({ api, live, userId, now, newId }: { api: Bench
       const v = visit;
       const body = text.trim();
       if (!v || !snapshot.room || !body || body.length > MAX_BODY) return false;
-      const shown = snapshot.room.messages;
       const id = newId();
-      const sent = emitPost(v, body);
-      const after = shown.length ? shown[shown.length - 1].createdDttm : new Date(0).toISOString();
-      setPendings(v.room, [...pendings(v.room), { id, body, status: sent ? "sending" : "failed", known: new Set(shown.map((m) => m.messageId)), after, due: now() + CONFIRM_MS }]);
+      const sent = emitPost(v, id, body);
+      setPendings(v.room, [...pendings(v.room), { id, body, status: sent ? "sending" : "failed", due: now() + CONFIRM_MS }]);
       if (sent) confirmLater(v, id);
       return true;
     },
@@ -409,7 +399,7 @@ export function createBenchStore({ api, live, userId, now, newId }: { api: Bench
       const v = visit;
       if (!v || live.getStatus() !== "online" || !(await resync()) || visit !== v) return;
       const post = pendings(v.room).find((p) => p.id === id && p.status === "failed");
-      if (!post || !emitPost(v, post.body)) return;
+      if (!post || !emitPost(v, id, post.body)) return;
       setPendings(v.room, pendings(v.room).map((p) => (p.id === id ? { ...p, status: "sending", due: now() + CONFIRM_MS } : p)));
       confirmLater(v, id);
     },

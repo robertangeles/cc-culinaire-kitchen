@@ -8,6 +8,7 @@ import pino from "pino";
 import { db } from "../db/index.js";
 import { benchDmThread, benchMessage, user } from "../db/schema.js";
 import { eq, and, or, desc, lt } from "drizzle-orm";
+import { insertPost } from "./benchService.js";
 
 const logger = pino({ name: "benchDmService" });
 
@@ -167,22 +168,23 @@ export async function createDmMessage(
   threadId: number,
   userId: number,
   body: string,
-): Promise<DmMessage> {
-  const [msg] = await db
-    .insert(benchMessage)
-    .values({
-      dmThreadId: threadId,
-      userId,
-      messageBody: body,
-      messageType: "text",
-    })
-    .returning();
+  messageId?: string,
+): Promise<DmMessage & { replay: boolean }> {
+  const { row: msg, replay } = await insertPost({
+    messageId,
+    dmThreadId: threadId,
+    userId,
+    messageBody: body,
+    messageType: "text",
+  });
 
   // Update thread's last_message_at
-  await db
-    .update(benchDmThread)
-    .set({ lastMessageAt: new Date() })
-    .where(eq(benchDmThread.dmThreadId, threadId));
+  if (!replay) {
+    await db
+      .update(benchDmThread)
+      .set({ lastMessageAt: new Date() })
+      .where(eq(benchDmThread.dmThreadId, threadId));
+  }
 
   const [u] = await db
     .select({ userName: user.userName, userPhotoPath: user.userPhotoPath })
@@ -200,6 +202,7 @@ export async function createDmMessage(
     editedInd: msg.editedInd,
     deletedInd: msg.deletedInd,
     createdDttm: msg.createdDttm,
+    replay,
   };
 }
 

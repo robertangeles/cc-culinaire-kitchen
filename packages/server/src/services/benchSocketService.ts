@@ -13,12 +13,14 @@
  */
 
 import { Server as HttpServer } from "http";
+import type { Duplex } from "stream";
 import { CLIENT_URL } from "../utils/env.js";
 import { Server, Socket } from "socket.io";
 import pino from "pino";
 import { onBenchEvent } from "./benchSocketGuard.js";
 import { extractHandshakeToken } from "../middleware/socketAuth.js";
 import { verifyAccessToken } from "./authService.js";
+import { AppError } from "../utils/appError.js";
 import {
   createMessage,
   getChannelByKey,
@@ -57,8 +59,10 @@ const typingMap = new Map<string, Map<number, { userName: string; timeout: Retur
 
 let io: Server;
 
-function addUserSocket(userId: number, profile: UserProfile) {
-  userProfiles.set(userId, profile);
+const CLOSE_GRACE_MS = 1_000;
+const SERVER_STOPPING = "server shutting down"; // socket.io's own disconnect reason
+
+function addUserSocket(userId: number) {
   userSocketCount.set(userId, (userSocketCount.get(userId) ?? 0) + 1);
 }
 
@@ -72,6 +76,33 @@ function removeUserSocket(userId: number): boolean {
   }
   userSocketCount.set(userId, count);
   return false;
+}
+
+/** Reads who this is, then shows them to everyone and to the kitchens they have joined meanwhile. */
+async function announce(socket: Socket, userId: number) {
+  const profile: UserProfile = { userId, userName: "Chef", userPhotoPath: null };
+  try {
+    const [u] = await db
+      .select({ userName: userTable.userName, userPhotoPath: userTable.userPhotoPath })
+      .from(userTable)
+      .where(eq(userTable.userId, userId))
+      .limit(1);
+    if (u) {
+      profile.userName = u.userName;
+      profile.userPhotoPath = u.userPhotoPath;
+    }
+  } catch {
+    // Use defaults
+  }
+  if (!userSocketCount.has(userId)) return; // gone before the read came back
+  userProfiles.set(userId, profile);
+  broadcastPresence("everyone");
+  for (const channelKey of kitchensOf(socket)) broadcastPresence(channelKey);
+}
+
+/** The kitchens' own channels this socket is in */
+function kitchensOf(socket: Socket): string[] {
+  return [...socket.rooms].filter((room) => room.startsWith("bench:org_")).map((room) => room.slice("bench:".length));
 }
 
 /** Get all online users — simply returns everyone in userProfiles map */
@@ -118,14 +149,24 @@ async function canJoin(channelKey: string, userId: number): Promise<boolean> {
 /**
  * Initialize Socket.io on the given HTTP server.
  * Called once from index.ts during startup.
+ *
+ * Returns the function that ends every connection, so the HTTP server can finish closing. A client sees a dropped
+ * connection and comes back by itself; one that does not answer is cut off after {@link CLOSE_GRACE_MS}.
  */
-export function initBenchSocket(httpServer: HttpServer): void {
+export function initBenchSocket(httpServer: HttpServer): () => void {
   io = new Server(httpServer, {
     cors: {
       origin: CLIENT_URL,
       credentials: true,
     },
     path: "/socket.io",
+  });
+
+  // Once upgraded, a connection is no longer one the HTTP server closes itself.
+  const upgraded = new Set<Duplex>();
+  httpServer.on("upgrade", (_req, socket) => {
+    upgraded.add(socket);
+    socket.once("close", () => upgraded.delete(socket));
   });
 
   // ── Auth middleware ────────────────────────────────────────
@@ -143,34 +184,20 @@ export function initBenchSocket(httpServer: HttpServer): void {
   });
 
   // ── Connection handler ────────────────────────────────────
-  io.on("connection", async (socket: Socket) => {
+  io.on("connection", (socket: Socket) => {
     const userId = socket.data.user.sub as number;
     logger.info({ userId, socketId: socket.id }, "Bench: user connected");
-
-    // Look up user profile for display name and photo
-    let userName = "Chef";
-    let userPhotoPath: string | null = null;
-    try {
-      const [u] = await db
-        .select({ userName: userTable.userName, userPhotoPath: userTable.userPhotoPath })
-        .from(userTable)
-        .where(eq(userTable.userId, userId))
-        .limit(1);
-      if (u) {
-        userName = u.userName;
-        userPhotoPath = u.userPhotoPath;
-      }
-    } catch {
-      // Use defaults
-    }
+    const userName = () => userProfiles.get(userId)?.userName ?? "Chef";
 
     // Register user (ref-counted — multiple sockets per user are fine)
-    addUserSocket(userId, { userId, userName, userPhotoPath });
+    addUserSocket(userId);
 
     // Auto-join the "everyone" room and personal DM room
     socket.join("bench:everyone");
     socket.join(`bench:user_${userId}`);
-    broadcastPresence("everyone");
+
+    // Nothing may be awaited before the handlers below: what a client sends as it connects would find none.
+    void announce(socket, userId);
 
     // ── Join channel ──────────────────────────────────────
     onBenchEvent(socket, "bench:join", async ({ channelKey }) => {
@@ -213,24 +240,38 @@ export function initBenchSocket(httpServer: HttpServer): void {
           if (!channel.organisationId || !userOrgIds.includes(channel.organisationId)) return;
         }
 
-        const message = await createMessage(
+        const { replay, ...message } = await createMessage(
           channel.channelId,
           userId,
           data.body.trim(),
           data.messageType ?? "text",
           data.recipeId ?? undefined,
+          data.messageId,
         );
+        const sent = { ...message, channelKey: data.channelKey };
+        if (replay) return answerReplay("bench:message:new", sent);
 
         // Broadcast to the channel room
-        io.to(`bench:${data.channelKey}`).emit("bench:message:new", message);
+        io.to(`bench:${data.channelKey}`).emit("bench:message:new", sent);
 
         // Clear typing indicator
         clearTyping(data.channelKey, userId);
       } catch (err) {
         logger.error({ err, userId }, "Bench: message send failed");
-        socket.emit("bench:error", { error: "Failed to send message" });
+        answerNotSent(err);
       }
     });
+
+    // ── Helpers: what the sender of a post is told ────────
+    /** The server already has the post: only its sender is told, and what was deleted since stays deleted. */
+    function answerReplay(event: "bench:message:new" | "bench:dm:new", message: { messageId: string; deletedInd: boolean }) {
+      if (message.deletedInd) socket.emit("bench:message:deleted", { messageId: message.messageId });
+      else socket.emit(event, message);
+    }
+
+    function answerNotSent(err: unknown) {
+      socket.emit("bench:error", err instanceof AppError ? { error: err.message, code: err.code } : { error: "Failed to send message" });
+    }
 
     // ── Typing indicator ──────────────────────────────────
     onBenchEvent(socket, "bench:typing", async ({ channelKey }) => {
@@ -241,8 +282,8 @@ export function initBenchSocket(httpServer: HttpServer): void {
         const userOrgIds = await getUserOrganisationIds(userId);
         if (!userOrgIds.includes(orgId)) return;
       }
-      setTyping(channelKey, userId, userName);
-      socket.to(`bench:${channelKey}`).emit("bench:typing", { channelKey, userId, userName });
+      setTyping(channelKey, userId, userName());
+      socket.to(`bench:${channelKey}`).emit("bench:typing", { channelKey, userId, userName: userName() });
     });
 
     // ── Reactions ─────────────────────────────────────────
@@ -310,22 +351,23 @@ export function initBenchSocket(httpServer: HttpServer): void {
     });
 
     // ── Direct Messages ────────────────────────────────────
-    onBenchEvent(socket, "bench:dm:send", async ({ recipientId, body }) => {
+    onBenchEvent(socket, "bench:dm:send", async ({ recipientId, body, messageId }) => {
       try {
         if (!body.trim() || body.length > 5000) return;
         const thread = await getOrCreateThread(userId, recipientId);
-        const message = await createDmMessage(thread.dmThreadId, userId, body.trim());
+        const { replay, ...message } = await createDmMessage(thread.dmThreadId, userId, body.trim(), messageId);
+        if (replay) return answerReplay("bench:dm:new", message);
         // Send to both sender and recipient
         io.to(`bench:user_${userId}`).emit("bench:dm:new", message);
         io.to(`bench:user_${recipientId}`).emit("bench:dm:new", message);
       } catch (err) {
         logger.error({ err, userId, recipientId }, "Bench: DM send failed");
-        socket.emit("bench:error", { error: "Failed to send message" });
+        answerNotSent(err);
       }
     });
 
     onBenchEvent(socket, "bench:dm:typing", ({ recipientId }) => {
-      io.to(`bench:user_${recipientId}`).emit("bench:dm:typing", { userId, userName });
+      io.to(`bench:user_${recipientId}`).emit("bench:dm:typing", { userId, userName: userName() });
     });
 
     // ── Presence heartbeat (triggers a fresh broadcast) ───
@@ -334,14 +376,20 @@ export function initBenchSocket(httpServer: HttpServer): void {
     });
 
     // ── Disconnect ────────────────────────────────────────
-    onBenchEvent(socket, "disconnect", () => {
+    let left: string[] = [];
+    onBenchEvent(socket, "disconnecting", () => {
+      left = kitchensOf(socket); // "disconnect" comes after it has left every room
+    });
+
+    onBenchEvent(socket, "disconnect", (reason) => {
       logger.info({ userId, socketId: socket.id }, "Bench: user disconnected");
       const fullyGone = removeUserSocket(userId);
       // Only broadcast presence change if user has NO remaining sockets.
       // During transport upgrades (polling → websocket), the old socket
       // disconnects but a new one connects immediately — count stays > 0.
-      if (fullyGone) {
-        broadcastPresence("everyone");
+      if (reason !== SERVER_STOPPING) {
+        if (fullyGone) broadcastPresence("everyone");
+        for (const channelKey of left) broadcastPresence(channelKey);
       }
       // Clear typing
       for (const [channelKey] of typingMap) {
@@ -351,6 +399,14 @@ export function initBenchSocket(httpServer: HttpServer): void {
   });
 
   logger.info("The Bench Socket.io initialized");
+
+  return () => {
+    void io.close();
+    setTimeout(() => {
+      for (const socket of upgraded) socket.destroy();
+      httpServer.closeIdleConnections(); // kept alive after an answer that was still on its way
+    }, CLOSE_GRACE_MS).unref();
+  };
 }
 
 // ── Typing helpers ────────────────────────────────────────────

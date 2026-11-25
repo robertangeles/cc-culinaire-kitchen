@@ -42,6 +42,12 @@ export const BenchMessageSchema = z
   .refine((m) => m.channelId !== null || m.dmThreadId !== null);
 export type BenchMessage = z.infer<typeof BenchMessageSchema>;
 
+/**
+ * `messageId` of a post (`bench:message`, `bench:dm:send`), made by the client: the same post again under it answers the first one (a deleted one
+ * with `bench:message:deleted`), anything else under it is refused with `CONFLICT`. Older apps send none.
+ */
+export const BenchPostIdSchema = z.string().uuid().optional();
+
 /** `GET /api/bench/channels/:key/messages` and `GET /api/bench/dm/threads/:id/messages`, oldest first. */
 export const BenchMessagePageSchema = z.object({ messages: rows(BenchMessageSchema) }).transform((p) => p.messages);
 

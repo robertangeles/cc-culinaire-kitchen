@@ -452,10 +452,10 @@ Nothing of the Bench is kept on the phone (messages are private: memory only) an
 - **Connected** only while the tab is in view and the app is in front. Background disconnects; coming back connects and reads what was missed. `inactive` (the app switcher, the lock's prompt) is left alone. A token the server refuses is renewed by one ordinary request, then it connects again.
 - **The open room is kept right by reading its latest page again** (`benchStore.ts`), since the server acknowledges neither a join nor a post: after every connect, a moment later once more, and ten seconds after a post that has not come back.
   What arrives while a page is on its way is laid over it; what is inside the page's window and not in it was deleted; a gap longer than a page starts again from the latest page.
-  A join is sent twice, 1.5 s apart, since neither is acknowledged (server connection-time handling is tracked as a follow-up). Order is the server's, never that of arrival.
-- **A post** is "Sending…" until the server's copy is seen: an own message with exactly those words that was not there when it was posted, not before it by the server's own clock, one message for one post. A list read after ten seconds without it makes it "Not sent"; with no connection it stays undecided.
+  A join is sent twice, 1.5 s apart, since neither is acknowledged (a server from before 2026-11-26 dropped a join sent as the connection opened). Order is the server's, never that of arrival.
+- **A post** carries an id made on the phone (`messageId`), which the server stores it under. It is "Sending…" until the message with that id is seen. A list read after ten seconds without it makes it "Not sent"; with no connection it stays undecided.
   Try again looks on the server first. Every emit is volatile: the socket library otherwise keeps what it could not send and posts it at the next connect, after the person gave up on it.
-  Known limit: the server takes no id for a post, so one that reaches it after Try again looked can, rarely, be posted twice.
+  Try again sends the same id, so a post that reached the server after all is not posted twice: the server answers with the one it has.
 - **Privacy rules** (until the owner decides who may see who is online in Everyone and whom a direct message may reach): presence is shown in a kitchen's own channel only; a direct message can be started only with someone met in a kitchen's channel (who is in it, who wrote in it) or in a thread there already is. The server scopes each room; the phone filters nothing.
 - **Pictures**: only the site's own uploads and Cloudinary are loaded (`whole` in `benchApi.ts`), as the web's content policy allows; a person with any other address shows their initial.
 
@@ -464,7 +464,6 @@ Differences from the web, found while comparing:
 | Web | Phone | Why |
 |---|---|---|
 | A guest sees the page (an empty list and a sign-in prompt) | Signed-in people only | The server has no guest access. |
-| Everyone's messages also appear in My Kitchen while it is open (`useBenchMessages` adds every message that arrives) | A message shows only in the room it names | Web bug, not fixed here. |
 | The first kitchen only | Every kitchen the person belongs to | The server lists them all. |
 | Who is online is shown in Everyone too | A kitchen's own room only | Privacy rule above. The phone asks for the list again every 30 s while the room is open. |
 | Any name starts a direct message, in Everyone too | Only people of one's kitchens or an existing thread | Privacy rule above. |

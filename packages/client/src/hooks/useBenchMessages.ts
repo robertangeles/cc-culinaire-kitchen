@@ -34,6 +34,7 @@ export function useBenchMessages(channelKey: string) {
   const [loading, setLoading] = useState(true);
   const [hasMore, setHasMore] = useState(true);
   const joinedRef = useRef(false);
+  const channelRef = useRef(channelKey);
 
   // Initial fetch via REST
   const fetchMessages = useCallback(async (before?: string) => {
@@ -45,6 +46,8 @@ export function useBenchMessages(channelKey: string) {
       });
       if (!res.ok) return;
       const data = await res.json();
+      // The answer may come after a switch to another channel
+      if (channelRef.current !== channelKey) return;
       const msgs = data.messages as BenchMessage[];
 
       if (before) {
@@ -57,12 +60,13 @@ export function useBenchMessages(channelKey: string) {
     } catch {
       // silent
     } finally {
-      setLoading(false);
+      if (channelRef.current === channelKey) setLoading(false);
     }
   }, [channelKey]);
 
   // Load initial messages and join socket room
   useEffect(() => {
+    channelRef.current = channelKey;
     setMessages([]);
     setLoading(true);
     setHasMore(true);
@@ -98,8 +102,9 @@ export function useBenchMessages(channelKey: string) {
   useEffect(() => {
     if (!socket) return;
 
-    function onNewMessage(msg: BenchMessage) {
-      // Only add if it belongs to our channel
+    function onNewMessage(msg: BenchMessage & { channelKey: string }) {
+      // Only add if it belongs to our channel (Everyone's also arrive while My Kitchen is open)
+      if (msg.channelKey !== channelKey) return;
       setMessages((prev) => {
         if (prev.some((m) => m.messageId === msg.messageId)) return prev;
         return [...prev, msg];
@@ -133,7 +138,7 @@ export function useBenchMessages(channelKey: string) {
       socket.off("bench:reaction:updated", onReactionUpdated);
       socket.off("bench:message:edited", onEditedMessage);
     };
-  }, [socket]);
+  }, [socket, channelKey]);
 
   const sendMessage = useCallback(
     (body: string, messageType?: string, recipeId?: string) => {

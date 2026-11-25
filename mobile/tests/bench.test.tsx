@@ -149,10 +149,11 @@ describe("a kitchen's channel", () => {
     await room();
     write("  Fish is in  ");
     press("Send");
-    expect(sent).toContainEqual(["bench:message", { channelKey: "org_5", body: "Fish is in" }]);
+    expect(sent).toContainEqual(["bench:message", { channelKey: "org_5", body: "Fish is in", messageId: expect.any(String) }]);
+    const { messageId } = sent.find(([e]) => e === "bench:message")![1] as { messageId: string };
     expect(screen.getByText("Sending…")).toBeTruthy();
     expect((screen.getByLabelText("Your message") as HTMLInputElement).value).toBe("");
-    await arrive("bench:message:new", msg(3, { userId: 7, userName: "Ana", messageBody: "Fish is in" }));
+    await arrive("bench:message:new", msg(3, { messageId, userId: 7, userName: "Ana", messageBody: "Fish is in" }));
     expect(screen.queryByText("Sending…")).toBeNull();
     expect(screen.getByText("Fish is in")).toBeTruthy();
   });
@@ -169,7 +170,7 @@ describe("a kitchen's channel", () => {
     await connect();
     expect(sent.filter(([e]) => e === "bench:message")).toEqual([]);
     press("Try again");
-    await waitFor(() => expect(sent).toContainEqual(["bench:message", { channelKey: "org_5", body: "Fish is in" }]));
+    await waitFor(() => expect(sent).toContainEqual(["bench:message", { channelKey: "org_5", body: "Fish is in", messageId: expect.any(String) }]));
   });
 
   it("shows who is writing, and tells the others when this person is", async () => {
@@ -288,7 +289,7 @@ describe("direct messages", () => {
     expect(screen.getAllByText("Cy").length).toBeGreaterThan(0);
     write("On my way");
     press("Send");
-    expect(sent).toContainEqual(["bench:dm:send", { recipientId: 9, body: "On my way" }]);
+    expect(sent).toContainEqual(["bench:dm:send", { recipientId: 9, body: "On my way", messageId: expect.any(String) }]);
     press(/^Cy, .*Message 1$/);
     expect(screen.queryByRole("button", { name: "React Fire" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Search" })).toBeNull();
