@@ -11,7 +11,7 @@ import { Button } from "../../../src/ui/Button";
 import { Column } from "../../../src/ui/Column";
 import { Text } from "../../../src/ui/Text";
 import { Chip, Surface, rowDivider } from "../../../src/ui/Surface";
-import { fontFamily, space } from "../../../src/theme";
+import { space } from "../../../src/theme";
 import { useColors } from "../../../src/ui/theme";
 
 const STATE: Record<RequestRow["state"], string> = { waiting: "Waiting to send", attention: "Needs attention", sent: "Sent for review", discarded: "Discarded", approved: "Added to the catalogue", rejected: "Not added" };
@@ -47,7 +47,7 @@ export default function Requests() {
                 <View key={r.requestId} style={[{ padding: space.lg, gap: space.xs }, rowDivider(index, c.border)]}>
                   <View accessible accessibilityLabel={`${r.itemName}, ${STATE[r.state]}`} style={{ gap: space.xs }}>
                     <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: space.md }}>
-                      <Text style={{ fontFamily: fontFamily.title, fontSize: 20, flexShrink: 1 }}>{r.itemName}</Text>
+                      <Text variant="heading" style={{ flexShrink: 1 }}>{r.itemName}</Text>
                       <Chip label={STATE[r.state]} />
                     </View>
                     <Text variant="meta">{[r.category ? categoryLabel(r.category) : null, r.countedQty !== null ? `${qtyText(r.countedQty, r.baseUnit ?? "")} on hand` : null, dayAndTime(r.requestedAt)].filter(Boolean).join(" · ")}</Text>

@@ -10,6 +10,7 @@ import { OfflineBanner } from "../../../src/ui/Banner";
 import { Button } from "../../../src/ui/Button";
 import { Column } from "../../../src/ui/Column";
 import { Text } from "../../../src/ui/Text";
+import { ScreenHeader } from "../../../src/ui/ScreenHeader";
 import { Surface, rowDivider } from "../../../src/ui/Surface";
 import { fontFamily, size, space } from "../../../src/theme";
 import { useColors } from "../../../src/ui/theme";
@@ -34,7 +35,6 @@ export default function StockHome() {
     }, [store]),
   );
   if (state.phase !== "ready") return null;
-  const caps = { fontFamily: fontFamily.uiStrong, fontSize: 12, letterSpacing: 1.8, textTransform: "uppercase", color: c.accentText } as const;
   const d = snap.dashboard;
   const alerts = d ? alertLists(d, snap.items) : { critical: [], low: [] };
   const value = d ? valueRows(d) : null;
@@ -50,7 +50,7 @@ export default function StockHome() {
         style={{ minHeight: size.tap, padding: space.lg, flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: space.md }}
       >
         <View style={{ flexShrink: 1, gap: 2 }}>
-          <Text style={{ fontFamily: fontFamily.title, fontSize: 20, color: tone }}>{title}</Text>
+          <Text variant="heading" style={{ color: tone }}>{title}</Text>
           <Text variant="meta">{hint}</Text>
         </View>
         <Text style={{ fontFamily: fontFamily.title, fontSize: 28, color: tone }}>{items.length}</Text>
@@ -79,8 +79,7 @@ export default function StockHome() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await store.refresh(); setRefreshing(false); }} />}
       >
         <Column style={{ gap: space.lg }}>
-          <Text variant="title">Stock</Text>
-          <Text variant="meta">{state.location.locationName}</Text>
+          <ScreenHeader label={state.location.locationName} title="Stock" />
           {snap.offline ? <OfflineBanner text={snap.savedAt ? `You're offline. These are the figures from ${dayAndTime(new Date(snap.savedAt).toISOString())}.` : "You're offline, and the stock figures have not been downloaded to this phone yet. Open this tab once with a signal."} /> : null}
           {snap.phase === "error" ? (
             <>
@@ -97,7 +96,7 @@ export default function StockHome() {
 
               {value ? (
                 <View style={{ gap: space.xs }}>
-                  <Text style={caps}>Stock value</Text>
+                  <Text variant="label">Stock value</Text>
                   <Surface>
                     <View style={{ padding: space.lg, gap: space.md }}>
                       <Text style={{ fontFamily: fontFamily.title, fontSize: 28 }}>{value.total}</Text>
@@ -122,7 +121,7 @@ export default function StockHome() {
               {d.stockLevels.length === 0 && alerts.critical.length === 0 && alerts.low.length === 0 ? (
                 <Surface>
                   <View style={{ padding: space.lg, gap: space.xs }}>
-                    <Text style={{ fontFamily: fontFamily.title, fontSize: 20 }}>No stock figures yet</Text>
+                    <Text variant="heading">No stock figures yet</Text>
                     <Text variant="muted">Run your first stock take to see figures here.</Text>
                   </View>
                 </Surface>

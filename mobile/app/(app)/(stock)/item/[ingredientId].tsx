@@ -41,7 +41,6 @@ export default function ItemScreen() {
   }, [canManage, id, store]);
 
   if (state.phase !== "ready") return null;
-  const caps = { fontFamily: fontFamily.uiStrong, fontSize: 12, letterSpacing: 1.8, textTransform: "uppercase", color: c.accentText } as const;
   const item = snap.items.find((i) => i.ingredientId === id);
   const level = snap.dashboard?.stockLevels.find((l) => l.ingredientId === id);
   const name = item?.ingredientName ?? level?.ingredientName;
@@ -82,7 +81,7 @@ export default function ItemScreen() {
           </View>
 
           <View style={{ gap: space.xs }}>
-            <Text style={caps}>{`Store room, ${state.location.locationName}`}</Text>
+            <Text variant="label">{`Store room, ${state.location.locationName}`}</Text>
             <Surface>
               <View style={{ padding: space.lg, gap: space.sm }}>
                 {fact("On hand", qtyText(item ? item.currentQty : level?.currentQty, unit))}
@@ -95,7 +94,7 @@ export default function ItemScreen() {
           </View>
 
           <View style={{ gap: space.xs }}>
-            <Text style={caps}>Kept in</Text>
+            <Text variant="label">Kept in</Text>
             {areas.length > 0 ? (
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.sm }}>{areas.map((a) => <Chip key={a} label={a} />)}</View>
             ) : (
@@ -106,7 +105,7 @@ export default function ItemScreen() {
 
           {canManage ? (
             <View style={{ gap: space.xs }}>
-              <Text style={caps}>At every location</Text>
+              <Text variant="label">At every location</Text>
               {elsewhereError ? <Text variant="muted">{elsewhereError}</Text> : null}
               {elsewhere ? (
                 <Surface>

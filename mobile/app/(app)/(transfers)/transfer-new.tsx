@@ -14,7 +14,7 @@ import { IngredientPicker } from "../../../src/ui/IngredientPicker";
 import { Text } from "../../../src/ui/Text";
 import { TextField } from "../../../src/ui/TextField";
 import { Surface, rowDivider } from "../../../src/ui/Surface";
-import { fontFamily, space } from "../../../src/theme";
+import { space } from "../../../src/theme";
 import { useColors } from "../../../src/ui/theme";
 
 type Line = TransferForm["lines"][number];
@@ -102,7 +102,7 @@ export default function TransferNew() {
                 {lines.map((line, index) => (
                   <View key={line.ingredientId} style={[{ padding: space.lg, gap: space.sm }, rowDivider(index, c.border)]}>
                     <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: space.md }}>
-                      <Text style={{ fontFamily: fontFamily.title, fontSize: 20, flexShrink: 1 }}>{line.ingredientName}</Text>
+                      <Text variant="heading" style={{ flexShrink: 1 }}>{line.ingredientName}</Text>
                       <Text variant="meta">You have {qtyText(snap.onHand[line.ingredientId], line.unit)}</Text>
                     </View>
                     <TextField label={`How much ${line.ingredientName}, in ${line.unit}`} value={line.quantity} onChangeText={(t) => setQty(line.ingredientId, t)} keyboardType="decimal-pad" placeholder="0" returnKeyType="done" />

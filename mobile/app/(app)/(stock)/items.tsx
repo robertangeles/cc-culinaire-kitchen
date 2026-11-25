@@ -41,7 +41,7 @@ export default function Items() {
                   style={[{ minHeight: size.tap, paddingVertical: space.md, paddingHorizontal: space.lg, gap: 2 }, rowDivider(index, c.border)]}
                 >
                   <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: space.md }}>
-                    <Text style={{ fontFamily: fontFamily.title, fontSize: 20, flexShrink: 1 }}>{item.ingredientName}</Text>
+                    <Text variant="heading" style={{ flexShrink: 1 }}>{item.ingredientName}</Text>
                     <Text style={{ fontFamily: fontFamily.uiStrong }}>{qtyText(item.currentQty, item.baseUnit)}</Text>
                   </View>
                   <Text variant="meta">{`${categoryLabel(item.ingredientCategory)}${item.activeInd ? "" : " · not used here"}`}</Text>

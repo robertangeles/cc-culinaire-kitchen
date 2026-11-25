@@ -65,7 +65,6 @@ export default function TransferScreen() {
   if (state.phase !== "ready") return null;
   const here = state.location.storeLocationId;
   const canManage = hasAnyPermission(state.user, ["inventory:manage"]);
-  const caps = { fontFamily: fontFamily.uiStrong, fontSize: 12, letterSpacing: 1.8, textTransform: "uppercase", color: c.accentText } as const;
   const status = row?.status ?? detail?.status ?? "";
   const from = row?.fromLocationName ?? detail?.fromLocationName ?? "Another location";
   const to = row?.toLocationName ?? detail?.toLocationName ?? "Another location";
@@ -124,14 +123,14 @@ export default function TransferScreen() {
             ) : null}
             {lines ? (
               <View style={{ gap: space.xs }}>
-                <Text style={caps}>{canReceive ? "What arrived" : "Items"}</Text>
+                <Text variant="label">{canReceive ? "What arrived" : "Items"}</Text>
                 <Surface>
                   {lines.map((line, index) => {
                     const diff = differs.get(line.lineId);
                     return (
                       <View key={line.lineId} style={[{ padding: space.lg, gap: space.sm }, rowDivider(index, c.border)]}>
                         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: space.md }}>
-                          <Text style={{ fontFamily: fontFamily.title, fontSize: 20, flexShrink: 1 }}>{line.ingredientName || "An item no longer in the catalogue"}</Text>
+                          <Text variant="heading" style={{ flexShrink: 1 }}>{line.ingredientName || "An item no longer in the catalogue"}</Text>
                           <Text style={{ fontFamily: fontFamily.uiStrong }}>Sent {qtyText(line.sentQty, line.sentUnit)}</Text>
                         </View>
                         {canReceive ? (

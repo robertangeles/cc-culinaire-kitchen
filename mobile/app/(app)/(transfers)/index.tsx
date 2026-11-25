@@ -11,8 +11,9 @@ import { OfflineBanner } from "../../../src/ui/Banner";
 import { Button } from "../../../src/ui/Button";
 import { Column } from "../../../src/ui/Column";
 import { Text } from "../../../src/ui/Text";
+import { ScreenHeader } from "../../../src/ui/ScreenHeader";
 import { Chip, Surface, rowDivider } from "../../../src/ui/Surface";
-import { fontFamily, size, space } from "../../../src/theme";
+import { size, space } from "../../../src/theme";
 import { useColors } from "../../../src/ui/theme";
 
 /**
@@ -34,7 +35,6 @@ export default function Transfers() {
     }, [store]),
   );
   if (state.phase !== "ready") return null;
-  const caps = { fontFamily: fontFamily.uiStrong, fontSize: 12, letterSpacing: 1.8, textTransform: "uppercase", color: c.accentText } as const;
   const canManage = hasAnyPermission(state.user, ["inventory:manage"]);
   const groups = groupTransfers(snap.rows, state.location.storeLocationId);
 
@@ -47,7 +47,7 @@ export default function Transfers() {
 
   const section = (title: string, rows: TransferRow[], empty: string) => (
     <View style={{ gap: space.xs }}>
-      <Text style={caps}>{title}</Text>
+      <Text variant="label">{title}</Text>
       {rows.length === 0 ? (
         <Text variant="muted">{empty}</Text>
       ) : (
@@ -64,7 +64,7 @@ export default function Transfers() {
                   onPress={() => router.push({ pathname: "/transfer/[transferId]", params: { transferId: row.transferId } })}
                   style={{ minHeight: size.tap, justifyContent: "center", gap: space.xs }}
                 >
-                  <Text style={{ fontFamily: fontFamily.title, fontSize: 20 }}>{incoming ? `From ${other}` : `To ${other}`}</Text>
+                  <Text variant="heading">{incoming ? `From ${other}` : `To ${other}`}</Text>
                   <Text variant="meta">{`${items} · ${dayAndTime(row.createdDttm)}${row.initiatorName ? ` · ${row.initiatorName}` : ""}`}</Text>
                   {/* The status on its own line: a long one beside the name squeezed the name onto three lines. */}
                   <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.sm }}>
@@ -94,8 +94,7 @@ export default function Transfers() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await store.refresh(); setRefreshing(false); }} />}
       >
         <Column style={{ gap: space.lg }}>
-          <Text variant="title">Transfers</Text>
-          <Text variant="meta">{state.location.locationName}</Text>
+          <ScreenHeader label={state.location.locationName} title="Transfers" />
           {snap.offline ? <OfflineBanner text="You're offline. This is the list as last downloaded; changes are saved on this phone and sent when you're back." /> : null}
           {snap.waiting > 0 ? <Text variant="muted" accessibilityLiveRegion="polite">{snap.waiting} waiting to send</Text> : null}
           {snap.attention > 0 ? <Text variant="error">⚠ {snap.attention} {snap.attention === 1 ? "change needs" : "changes need"} attention</Text> : null}
