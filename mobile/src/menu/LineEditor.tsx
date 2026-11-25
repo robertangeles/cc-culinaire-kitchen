@@ -44,7 +44,7 @@ export function LineEditor({ line, conversions, open, onToggle, onChange, onPick
           <Text variant="heading" style={{ flexShrink: 1 }}>{name}</Text>
           {costText ? <Text style={{ fontFamily: fontFamily.uiStrong }}>{costText}</Text> : null}
         </View>
-        <Text variant="meta">{`${line.quantity || "How much?"} ${line.unit}${line.yieldPct !== "100" && line.yieldPct !== "" ? ` · ${line.yieldPct}% yield` : ""}${line.ingredientId ? "" : " · not linked to the catalogue"}`}</Text>
+        <Text variant="meta">{`${line.quantity ? `${line.quantity} ${line.unit}` : "How much?"}${line.yieldPct !== "100" && line.yieldPct !== "" ? ` · ${line.yieldPct}% yield` : ""}${line.ingredientId ? "" : " · not linked to the catalogue"}`}</Text>
       </Pressable>
       {mismatch ? <Text variant="error">{`${line.unit} cannot become ${line.baseUnit}, the unit ${name} is kept in. Choose another unit.`}</Text> : null}
       {line.note ? <Text variant="muted">{line.note}</Text> : null}

@@ -213,7 +213,7 @@ export default function MenuEdit() {
       <TextField label="Selling price, in $" value={draft.sellingPrice} onChangeText={set("sellingPrice")} keyboardType="decimal-pad" placeholder="0.00" returnKeyType="done" />
       <TextField label="Servings the price covers" value={draft.servingsPerSale} onChangeText={set("servingsPerSale")} keyboardType="number-pad" returnKeyType="done" />
       <TextField label="Servings the recipe makes" value={draft.servings} onChangeText={set("servings")} keyboardType="number-pad" returnKeyType="done" />
-      <TextField label="Q factor, in % (waste, condiments, disposables)" value={draft.qFactorPct} onChangeText={set("qFactorPct")} keyboardType="decimal-pad" placeholder="0" returnKeyType="done" />
+      <TextField label="Q factor (small extras), in %" value={draft.qFactorPct} onChangeText={set("qFactorPct")} keyboardType="decimal-pad" placeholder="0" returnKeyType="done" />
       {id ? <TextField label="Units sold" value={draft.unitsSold} onChangeText={set("unitsSold")} keyboardType="number-pad" returnKeyType="done" /> : null}
 
       <View style={{ gap: space.xs }}>

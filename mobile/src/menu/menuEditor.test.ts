@@ -84,11 +84,12 @@ describe("the live preview, with the shared web editor's costing", () => {
     expect(unitsFor({ ...pickInto(blankLine(), wine), unit: "bunch" }, [])[0]).toBe("bunch");
   });
 
-  it("costs a line in its kitchen unit, says when a unit has no path, and shows no cost for a linked item without one", () => {
+  it("costs a line in its kitchen unit, says when a unit has no path, and shows no cost for a line without one, linked or typed, rather than $0", () => {
     const glass = { ...pickInto(blankLine(), wine), quantity: "150" };
     expect(linePreview(glass, [])).toEqual({ cost: 3.6, mismatch: false });
     expect(linePreview({ ...glass, unit: "kg" }, [])).toEqual({ cost: 0, mismatch: true });
     expect(linePreview({ ...glass, unitCost: "" }, [])).toEqual({ cost: null, mismatch: false });
+    expect(linePreview({ ...blankLine(), ingredientName: "Salt", quantity: "1" }, [])).toEqual({ cost: null, mismatch: false });
     expect(linePreview({ ...glass, quantity: "150,0", yieldPct: "50" }, [])).toEqual({ cost: 7.2, mismatch: false });
   });
 

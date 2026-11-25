@@ -398,6 +398,7 @@ Differences from the web (`components/menu`, `components/menu-intelligence/Recor
 | Waste column, dashboard, engineering matrix, AI recommendations, replacement recipe, sales CSV import, Recalculate | Not on the phone | Later slices; the web keeps them. |
 | The item's panel opens only from the matrix | A row opens the item | |
 | A line reads "@ $14/g" when the cost is per kg (the cost is per kitchen unit, the label is the line's unit) | "$14.00 per kg" | The web label is wrong when the line's unit is not the kitchen unit. |
+| A typed ingredient with no cost shows $0.00 in the form | "No cost yet" (it still adds nothing to the preview) | |
 | Deleting an item asks nothing | Asks first | |
 | An edit sends every field, units sold among them, so a sale recorded while the form is open is taken out of the count again | Sends only what changed | |
 | An edit removes every line and adds them all again; a failure in between loses lines, a prep sub-recipe line becomes a plain one, and the costs of untouched lines are worked out anew | Untouched lines are left alone; a changed line is added before the old one goes | A prep line that is itself changed still becomes a plain one: the route does not send or take its prep link. |
