@@ -392,7 +392,7 @@ Differences from the web (`components/menu`, `components/menu-intelligence/Recor
 
 | Web | Phone | Why |
 |---|---|---|
-| Costs shown to everyone with `menu:read` | Only with `inventory:cost` | The server does not hide menu costs or a sale's on-hand figures yet (owner decision); the phone follows the cost permission. |
+| Costs, margins, line costs and a sale's on-hand stock shown to everyone with `menu:read` | Only with `inventory:cost` | Open for the owner. The server sends them to every `menu:read` holder (`GET /api/menu/items`, `/analysis`, `/items/:id/ingredients`, `/items/:id/pandl-cost`, `POST /items/:id/sales` and `/consumables/:id/sales`; `menuIntelligenceService.ts`, `saleService.ts`, no `forViewer` from `utils/costFields.ts`) and the web shows them (`MenuItemList.tsx`, `MenuItemDetail.tsx`, `MenuDashboard.tsx`, `MenuItemFormModal.tsx`, `CategorySettings.tsx`, `RecordSaleModal.tsx`). The phone takes the safer side. |
 | Add Menu Item and Save target shown to everyone with `menu:read` (a 403 without `menu:manage`) | Hidden without `menu:manage` | The server's gate. |
 | Nine-column table, sortable by any column | One row per item, A to Z; search, category and class filters | |
 | Waste column, dashboard, engineering matrix, AI recommendations, replacement recipe, sales CSV import, Recalculate | Not on the phone | Later slices; the web keeps them. |
