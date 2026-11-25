@@ -30,6 +30,7 @@ Run the screenshot walk (`device/README.md`, "The screenshot walk") after changi
 | `src/outbox` | The offline queue (below). |
 | `src/ingredients` | The shared ingredient picker's data (below); its component is `src/ui/IngredientPicker.tsx`. |
 | `src/count`, `src/waste`, `src/prep`, `src/consumption`, `src/movements`, `src/chat`, `src/recipes`, `src/notifications`, `src/transfers`, `src/stock`, `src/orders`, `src/menu` | One folder per module: API calls, store (screen state), pure view functions, commands. |
+| `src/lock` | The app lock (below): its state (`appLock.ts`, no React), the lock screen, the system prompt, and `useAppLock().confirm(reason)` for guarded actions. |
 | `src/profile` | The photo picker and the kitchen profile form's rules. |
 | `src/ui` | Components shared by every module, `Column` (the tablet column) among them. |
 | `packages/shared/src/schemas` | The zod schemas of what the server sends, parsed leniently at the boundary (`lenient.ts`). |
@@ -448,7 +449,7 @@ turns the save into an edit of it. Save and submit that only failed to submit op
 **Costs.** A price, total, stock or par the server leaves out is not shown, never zero (`figure` in `packages/shared/src/schemas/purchasing.ts`). The form adds up only the prices on it and says how many items have none.
 
 **Approvals.** Where the server says `canApprove: false` (an order the approver raised or changed while someone else can approve it) the reason is shown instead of Approve; Reject stays. Whether an order needs
-approval at all (the spending limit, an unpriced line) is the server's answer to Submit. There is **no app lock on approvals yet**: the biometric lock for approval holders is its own task before the first store release.
+approval at all (the spending limit, an unpriced line) is the server's answer to Submit. Approve and Reject ask the app lock first (below): someone who unlocked more than two minutes ago is asked again, and a prompt that does not go through sends nothing.
 
 **Credit notes** are raised from a discrepancy of a confirmed delivery, one per discrepancy, for no more than the server says it is worth; the form's id makes a repeat safe. One with no price is listed and explained, not opened.
 
@@ -479,6 +480,26 @@ Differences from the web (`PurchaseOrderList.tsx`, `PurchaseOrderForm.tsx`, `App
 | Reorder (the server's `clonePO`) writes par less stock in each line's own unit, rounded up to whole units. A line whose unit cannot be converted keeps its last quantity, and the alert says which to check (`reorderCheckLine`) | The same server answer, opened as a draft to check and change before it is submitted; the check line is shown with the notice | Same behaviour. The bug that wrote 62.5 kg below par of an item bought in 12.5 kg bags as 62.5 bags is fixed on the server. |
 | Emailing is offered only in the list's row, where the ordering method is known | The same; an order opened from a notification offers it and the server answers for a supplier that does not take email | The detail route does not send the ordering method. |
 | Credit notes have no page | To claim and Raised | The routes had no screen anywhere. `GET /credit-notes` sends no item, supplier or order name, so Raised shows the reference, amount, date and notes. |
+
+## App lock (`src/lock`)
+
+On for anyone who holds `purchasing:approve`, a roster permission beyond their own shifts (`roster:read-all`, `roster:manage`, `roster:publish`, `roster:manage-award-rules`) or a compliance permission beyond
+their own documents (`compliance:read-all`, `compliance:verify`, `compliance:manage-rules`), and for Administrators; read from the permissions the server already sends (`LOCK_PERMISSIONS`). It cannot be switched off.
+Nobody else sees a lock or a setting. `LockProvider` is around every screen (`app/_layout.tsx`), so the location choice and first run are behind it too, with no signal as well.
+
+- **Locked** at a cold start, at a sign-in, and when the app was in the background for more than 60 seconds (`GRACE_MS`). Elapsed time is read from the phone's clock and from the app's own running time, whichever is longer; a clock that went backwards locks.
+- **The lock screen** says nothing of the kitchen: Unlock and Sign out. The screens stay mounted under it (what was typed is there after an unlock), behind an opaque page and hidden from screen readers; Back does nothing.
+  While the app is not in front a blank page covers it, so the way back shows nothing, nor the app switcher on iPhone and iPad. Android takes its app switcher picture before the page is drawn, so there the app asks for no picture at all
+  (`hideFromRecents` in `app.config.ts`, Android 13 and later, for everyone; ordinary screenshots still work). On Android 12 and earlier the app switcher can still show the last screen.
+- **Unlock** is the system's own prompt: Face ID, Touch ID or Android biometrics, with the device passcode as the fallback (`nativeAuth.ts`, `expo-local-authentication`). A cancelled prompt, five failed tries or a lockout leave it locked; nothing but Sign out signs out.
+- **No passcode and no biometrics on the device:** the screen says to set one up or sign out. The app does not open for that person until then.
+- **Guarded actions** call `confirm(reason)` right before the request: Approve, Reject and Raise credit note today, and any later approval (a compliance document verified or rejected, a roster published) should. Asked again when the last unlock is more than two minutes old (`RECENT_MS`);
+  a prompt that does not go through sends nothing and locks the app. A person without the lock (someone who may only raise credit notes) is asked nothing.
+- It is in front of the session, not part of it: the server still checks every call. A tapped push or a link opens its screen under the lock.
+- **Native questions** (`Alert`) sit above any screen of ours and cannot be closed from JavaScript: one left open when the app locks stays readable, but its buttons do nothing until the app is unlocked (`alerts.ts`).
+- **Device walks** run with the lock off (`EXPO_PUBLIC_APP_LOCK=off`, read only in development builds: `__DEV__` is false in a release). `device/appLock.device.test.ts` is the lock's own walk, on the tablet emulator.
+
+Compared with the web: the web has no app lock and asks nothing before Approve or Reject; the lock exists because a phone is picked up and lost. No other difference.
 
 ## Inbox and push (`src/notifications`, `app/(app)/(inbox)`, `app/notification-settings.tsx`)
 

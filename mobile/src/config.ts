@@ -17,3 +17,9 @@ export const googleEnabled = googleWebClientId !== "";
 
 /** The Google "iOS" OAuth client ID, for sign-in on iPhone and iPad. Its reversed form is the iOS URL scheme (see app.config.ts). Empty on Android builds. */
 export const googleIosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID ?? "";
+
+/**
+ * The device walks (mobile/device) run on the owner's phone, whose fingerprint they do not have. Development builds only: `__DEV__` is false in
+ * every release build, so there the lock cannot be switched off.
+ */
+export const appLockOff = process.env.EXPO_PUBLIC_APP_LOCK === "off" && __DEV__;

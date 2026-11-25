@@ -49,6 +49,12 @@
         }
       ],
       [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "CulinAIre Kitchen uses Face ID to unlock the app and to confirm approvals."
+        }
+      ],
+      [
         "expo-splash-screen",
         {
           "image": "./assets/splash-icon.png",

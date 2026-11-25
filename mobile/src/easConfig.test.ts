@@ -63,6 +63,12 @@ describe("app identity (both stores)", () => {
     expect(app.plugins.some((p: unknown) => Array.isArray(p) && p[0] === "expo-notifications")).toBe(true);
   });
 
+  it("says in its own words why it uses Face ID for the app lock (iOS refuses Face ID without it)", () => {
+    expect(pkg.dependencies["expo-local-authentication"]).toBeTruthy();
+    const lock = app.plugins.find((p: unknown) => Array.isArray(p) && p[0] === "expo-local-authentication");
+    expect(lock[1].faceIDPermission).toMatch(/CulinAIre Kitchen uses Face ID/);
+  });
+
   it("has real icons and splash from the brand art, in the paper colour (not Expo's blue template)", () => {
     for (const f of [app.icon, app.android.adaptiveIcon.foregroundImage, app.android.adaptiveIcon.backgroundImage, app.android.adaptiveIcon.monochromeImage]) {
       expect(existsSync(resolve(root, f)), f).toBe(true);
@@ -95,6 +101,25 @@ describe("store submission", () => {
     expect(eas.build.production.distribution ?? "store").toBe("store");
     expect(eas.submit?.internal?.android?.track).toBe("internal");
     expect(eas.submit?.production?.android?.track).toBe("production");
+  });
+});
+
+describe("the app lock on Android", () => {
+  const activity = "class MainActivity : ReactActivity() {\n  override fun onCreate(savedInstanceState: Bundle?) {\n    super.onCreate(null)\n  }\n}\n";
+
+  it("keeps the app's picture out of the app switcher, which Android takes before the app can cover itself", async () => {
+    const { default: appConfig, hideFromRecents } = await import("../app.config");
+    expect(hideFromRecents(activity)).toMatch(/super\.onCreate\(null\)\n.*VERSION_CODES\.TIRAMISU\) \{\n +setRecentsScreenshotEnabled\(false\)/);
+    // Android's blank page in its place is the paper colour.
+    expect(hideFromRecents(activity)).toContain("setBackgroundColor(0xFFF3EFE4.toInt())");
+    expect(hideFromRecents(hideFromRecents(activity))).toBe(hideFromRecents(activity));
+    const config = appConfig({ config: app as never, projectRoot: root, staticConfigPath: null, packageJsonPath: null }) as { mods?: { android?: { mainActivity?: unknown } } };
+    expect(config.mods?.android?.mainActivity).toBeTruthy();
+  });
+
+  it("stops the build rather than leaving it out when Expo's template changes", async () => {
+    const { hideFromRecents } = await import("../app.config");
+    expect(() => hideFromRecents("class MainActivity")).toThrow(/MainActivity/);
   });
 });
 

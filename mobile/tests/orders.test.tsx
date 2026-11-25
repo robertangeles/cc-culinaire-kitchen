@@ -5,7 +5,7 @@ import { Alert } from "react-native";
 import { returnToScreen, routerMock, searchParams } from "../testing/mocks";
 import { ApiError } from "../src/api/client";
 import { COLUMN_WIDTH } from "../src/ui/Screen";
-import { admin, api, detail, discrepancy, main, memoryKv, order, ordersFor, person, resetApi } from "./ordersHarness";
+import { admin, api, confirm, detail, discrepancy, main, memoryKv, order, ordersFor, person, resetApi } from "./ordersHarness";
 
 vi.mock("../src/runtime/appContext", async () => {
   const { sessionState } = await import("../testing/mocks");
@@ -378,6 +378,55 @@ describe("approving", () => {
     expect((screen.getByLabelText("Why is it not approved?") as HTMLInputElement).value).toBe("Too much");
   });
 
+  it("approves only once the app lock says yes, after the yes to the question", async () => {
+    api.detail.mockResolvedValue(detail({ status: "PENDING_APPROVAL", canApprove: true }));
+    let say!: (ok: boolean) => void;
+    confirm.mockImplementationOnce(() => new Promise((r) => (say = r)));
+    answer("Approve");
+    render(<Order />, ordersFor(admin));
+    fireEvent.click(await find("Approve"));
+    expect(confirm).toHaveBeenCalledWith("Approve PO-100");
+    expect(api.approve).not.toHaveBeenCalled();
+    await act(async () => say(true));
+    expect(api.approve).toHaveBeenCalledTimes(1);
+  });
+
+  it("does nothing when the app lock says no, and can be tried again", async () => {
+    api.detail.mockResolvedValue(detail({ status: "PENDING_APPROVAL", canApprove: true }));
+    confirm.mockResolvedValueOnce(false);
+    answer("Approve");
+    render(<Order />, ordersFor(admin));
+    fireEvent.click(await find("Approve"));
+    await waitFor(() => expect(confirm).toHaveBeenCalled());
+    expect(api.approve).not.toHaveBeenCalled();
+    answer("Approve");
+    fireEvent.click(await find("Approve"));
+    await waitFor(() => expect(api.approve).toHaveBeenCalledTimes(1));
+  });
+
+  it("rejects only once the app lock says yes, and keeps the typed reason when it says no", async () => {
+    api.detail.mockResolvedValue(detail({ status: "PENDING_APPROVAL", canApprove: true }));
+    confirm.mockResolvedValueOnce(false);
+    render(<Order />, ordersFor(admin));
+    fireEvent.click(await find("Reject"));
+    expect(confirm).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText("Why is it not approved?"), { target: { value: "Too much" } });
+    fireEvent.click(button("Reject order"));
+    await waitFor(() => expect(confirm).toHaveBeenCalledWith("Reject PO-100"));
+    expect(api.reject).not.toHaveBeenCalled();
+    expect((screen.getByLabelText("Why is it not approved?") as HTMLInputElement).value).toBe("Too much");
+    fireEvent.click(button("Reject order"));
+    await waitFor(() => expect(api.reject).toHaveBeenCalledWith("P1", "Too much"));
+  });
+
+  it("asks the app lock for nothing else: submitting goes straight on", async () => {
+    api.detail.mockResolvedValue(detail({ status: "DRAFT" }));
+    render(<Order />, ordersFor(admin));
+    fireEvent.click(await find("Submit order"));
+    await waitFor(() => expect(api.submit).toHaveBeenCalled());
+    expect(confirm).not.toHaveBeenCalled();
+  });
+
   it("shows neither button to someone who does not approve", async () => {
     render(<Order />, ordersFor(person(["inventory:count", "purchasing:submit"])));
     await screen.findByText("Flour");
@@ -464,6 +513,24 @@ describe("credit notes", () => {
       api.discrepancies.mockResolvedValue([]);
       render(<CreditNoteEntry />, ordersFor(admin));
       expect(await screen.findByText("This was not found. It may already have a credit note.")).toBeTruthy();
+    });
+
+    it("is sent only once the app lock says yes, with what was typed kept when it says no", async () => {
+      confirm.mockResolvedValueOnce(false);
+      render(<CreditNoteEntry />, ordersFor(admin));
+      fireEvent.click(await find("Raise credit note"));
+      await waitFor(() => expect(confirm).toHaveBeenCalledWith("Raise a credit note"));
+      expect(api.credit).not.toHaveBeenCalled();
+      expect((screen.getByLabelText("Amount credited") as HTMLInputElement).value).toBe("8.00");
+      fireEvent.click(await find("Raise credit note"));
+      await waitFor(() => expect(api.credit).toHaveBeenCalledTimes(1));
+    });
+
+    it("is not sent to the app lock while the amount is wrong", async () => {
+      render(<CreditNoteEntry />, ordersFor(admin));
+      fireEvent.change(await screen.findByLabelText("Amount credited"), { target: { value: "900" } });
+      fireEvent.click(button("Raise credit note"));
+      expect(confirm).not.toHaveBeenCalled();
     });
 
     it("links to its order", async () => {

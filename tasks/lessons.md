@@ -1507,3 +1507,9 @@ builds all tables with CHECKs enforcing. Stop it again when done.
 - **Problem**: Reorder (`clonePO`) wrote the par shortfall (kitchen unit, kg) as the quantity of a line ordered in bags: 62.5 kg short of a 12.5 kg bag became 62.5 bags. The only test used an item ordered in its kitchen unit, where the bug cannot show. The order guide had the same hole for an item with a package but no pack size.
 - **Fix**: `poMath.reorderQty` reads the line's unit with the resolver receiving uses (`resolveQtyToKitchen`) and rounds up to whole units; with no conversion the last quantity is kept and the answer says so (`quantityWarnings`). The guide offers an item of unknown pack size in its kitchen unit.
 - **Rule**: Any test of a quantity must include an item whose order unit differs from its kitchen unit, and one whose pack size is missing.
+
+## 2026-11-26 — A screen hidden by JavaScript is still in pictures the system takes itself
+
+- **Problem**: The app lock covered the app as soon as it left the front, and every screen test passed, yet Android's app switcher still showed the open order: Android takes that picture as the app leaves, before React Native draws the cover, and shows it again for a moment on the way back. The walk's first check was also wrong the other way: a plain `uiautomator dump` lists views hidden from screen readers.
+- **Fix**: `hideFromRecents` (`mobile/app.config.ts`) turns the picture off natively on Android 13 and later; the walk photographs the app switcher from the home screen, films the way back, and reads the screen with `uiautomator dump --compressed` (what a person can reach).
+- **Rule**: A claim that something is never shown is checked on a device, in the app switcher and in a film of the return, not only in the component tree.
