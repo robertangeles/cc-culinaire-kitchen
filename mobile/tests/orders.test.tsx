@@ -356,6 +356,7 @@ describe("approving", () => {
     render(<Order />, ordersFor(admin));
     fireEvent.click(await find("Reject"));
     expect(button("Reject order").getAttribute("aria-disabled")).toBe("true");
+    expect(screen.queryByRole("button", { name: "Back" })).toBeNull(); // "Go back" is the one way out of the reason
     fireEvent.change(screen.getByLabelText("Why is it not approved?"), { target: { value: "  Too much flour " } });
     api.detail.mockResolvedValue(detail({ status: "DRAFT", rejectedReason: "Too much flour" }));
     fireEvent.click(button("Reject order"));

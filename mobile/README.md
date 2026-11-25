@@ -425,6 +425,7 @@ Differences from the web (`PurchaseOrderList.tsx`, `PurchaseOrderForm.tsx`, `App
 | Expected delivery is a date picker | A week of days to tap, then Later days | No date picker on the phone, no new dependency. |
 | PDF download | Not on the phone | Needs a file share sheet (a new native dependency); emailing the supplier is there. Follow-up. |
 | Suggestions, Guides editor, Suppliers, Spend thresholds tabs | Not on the phone | Not in this wave's list; guides can be used, not edited. |
+| Reorder (the server's `clonePO`): par less stock, which are in the item's base unit, is written as the quantity in the order's unit, so 62.5 kg below par of an item bought in 12.5 kg bags is reordered as 62.5 bags | The same server answer, opened as a draft to check and change before it is submitted | **Server bug, not fixed here** (no server change in this slice). |
 | Emailing is offered only in the list's row, where the ordering method is known | The same; an order opened from a notification offers it and the server answers for a supplier that does not take email | The detail route does not send the ordering method. |
 | Credit notes have no page | To claim and Raised | The routes had no screen anywhere. `GET /credit-notes` sends no item, supplier or order name, so Raised shows the reference, amount, date and notes. |
 

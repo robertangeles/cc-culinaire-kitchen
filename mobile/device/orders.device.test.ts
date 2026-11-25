@@ -306,6 +306,59 @@ describe.skipIf(!process.env.SCREENS_OUT)("purchasing walk", { timeout: 600_000 
     await back();
   });
 
+  it("the questions, the item search, the keyboard up, a reorder, and the way in from More and the Inbox", async () => {
+    await ordersHome();
+    await scroll(true);
+    await press("New order");
+    await waitFor("Start from a guide", 30_000);
+    await press(`Order from ${LONG}`);
+    await typeInto("Add an item", "oil");
+    await waitFor(/^Use Extra virgin/, 30_000);
+    await shot("o60-item-search");
+    await hideKeyboard();
+    await press(/^Use Extra virgin/);
+    await waitFor(/^Extra virgin olive oil.*, 1 tin/, 30_000);
+    await typeInto("Order", "0");
+    await shot("o61-line-keyboard-up");
+    await hideKeyboard();
+    await press("Discard this order");
+    await waitFor("Discard this order?");
+    await shot("o62-discard-question");
+    await tap(/^DISCARD$|^Discard$/);
+    await waitFor("New order", 30_000);
+    await press("Draft");
+    await sleep(1500);
+    await press(/^Fresh Farms, order/);
+    await press("Cancel order");
+    await waitFor(/^Cancel PO-/);
+    await shot("o63-cancel-question");
+    await tap(/^GO BACK$|^Go back$/);
+    await back();
+    // Below par again, or the server has nothing to reorder.
+    sql(`update location_ingredient set par_level = 100 where ingredient_id = '${ids.flour}'`);
+    await press("Received");
+    await sleep(1500);
+    await press(/^Fresh Farms, order/);
+    await press("Reorder");
+    await waitFor(/Submit order/, 30_000);
+    await scroll(true);
+    await shot("o64-reordered-draft");
+    await back();
+    await back();
+    await tap(/^More(,|$)/);
+    await waitFor("Orders", 30_000);
+    await shot("o65-more");
+    await tap("Inbox");
+    await waitFor("Open", 30_000);
+    await shot("o66-inbox");
+    await press("Open");
+    await waitFor("All orders", 30_000);
+    await scroll(true);
+    await shot("o67-order-from-inbox");
+    await press("All orders");
+    await waitFor("New order", 30_000);
+  });
+
   it("with no signal", async () => {
     await ordersHome();
     await press("All");

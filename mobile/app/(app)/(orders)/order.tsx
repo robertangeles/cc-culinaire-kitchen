@@ -235,7 +235,7 @@ export default function Order() {
               </View>
             ) : null}
             {/* Opened from the inbox or a delivery, this tab may hold nothing but this order: its way out is the list. */}
-            {asText(params.from) ? <Button kind="quiet" label="All orders" onPress={() => router.dismissTo("/(app)/(orders)")} /> : <Button kind="quiet" label="Back" onPress={() => router.back()} />}
+            {rejecting ? null : asText(params.from) ? <Button kind="quiet" label="All orders" onPress={() => router.dismissTo("/(app)/(orders)")} /> : <Button kind="quiet" label="Back" onPress={() => router.back()} />}
           </Column>
         </ScrollView>
       </KeyboardAvoidingView>

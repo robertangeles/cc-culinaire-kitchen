@@ -29,7 +29,7 @@ export function DraftLineCard({ line, item, guide, open, onToggle, onChange, onR
   const belowPar = par !== null && stock !== null && par > 0 && stock < par;
   const facts = [
     stock === null ? null : `In stock ${formatQty(stock)} ${base}`,
-    par === null || par <= 0 ? null : `par ${formatQty(par)} ${base}`,
+    par === null || par <= 0 ? null : `${stock === null ? "Par" : "par"} ${formatQty(par)} ${base}`,
     belowPar ? "below par" : null,
   ].filter(Boolean).join(", ");
   const units = item ? unitsOf(item) : [line.unit];
