@@ -115,6 +115,8 @@ interface IngredientsSectionProps {
   ingredients: IngredientRow[];
   expandedCostRow: number | null;
   editItem: MenuItem | null;
+  /** False for someone without inventory:cost: no cost, line cost or cost refresh. */
+  showCosts: boolean;
   onRefreshIngredientCost?: (itemId: string, rowId: number) => Promise<MenuIngredient>;
   setIngredients: Dispatch<SetStateAction<IngredientRow[]>>;
   setExpandedCostRow: (id: number | null) => void;
@@ -131,6 +133,7 @@ export function IngredientsSection({
   ingredients,
   expandedCostRow,
   editItem,
+  showCosts,
   onRefreshIngredientCost,
   setIngredients,
   setExpandedCostRow,
@@ -142,6 +145,7 @@ export function IngredientsSection({
   onRemove,
   onUpdate,
 }: IngredientsSectionProps) {
+  const gridTemplateColumns = showCosts ? "1fr 80px 70px 85px 65px 80px 36px" : "1fr 80px 70px 65px 36px";
   return (
     <div>
       <div className="flex items-center justify-between mb-3">
@@ -160,14 +164,14 @@ export function IngredientsSection({
         <div className="space-y-2">
           <div
             className="grid gap-2 text-[10px] uppercase text-dark-500 font-medium px-1"
-            style={{ gridTemplateColumns: "1fr 80px 70px 85px 65px 80px 36px" }}
+            style={{ gridTemplateColumns }}
           >
             <div>Name</div>
             <div>Qty</div>
             <div>Unit</div>
-            <div>Cost</div>
+            {showCosts && <div>Cost</div>}
             <div>Yield %</div>
-            <div className="text-right">Line Cost</div>
+            {showCosts && <div className="text-right">Line Cost</div>}
             <div />
           </div>
 
@@ -203,13 +207,13 @@ export function IngredientsSection({
               <div key={row.tempId}>
                 <div
                   className="grid gap-2 items-start"
-                  style={{ gridTemplateColumns: "1fr 80px 70px 85px 65px 80px 36px" }}
+                  style={{ gridTemplateColumns }}
                 >
                   <div className="min-w-0">
                     <IngredientPickerInline
                       linkedId={row.ingredientId}
                       displayName={row.ingredientName}
-                      costStale={row.costStaleInd}
+                      costStale={showCosts && row.costStaleInd}
                       onRefresh={
                         row.existingId && onRefreshIngredientCost && editItem
                           ? async () => {
@@ -221,7 +225,7 @@ export function IngredientsSection({
                                 setIngredients((prev) =>
                                   prev.map((r) =>
                                     r.tempId === row.tempId
-                                      ? { ...r, unitCost: updated.unitCost, costStaleInd: false }
+                                      ? { ...r, unitCost: updated.unitCost ?? r.unitCost, costStaleInd: false }
                                       : r,
                                   ),
                                 );
@@ -295,6 +299,7 @@ export function IngredientsSection({
                       </option>
                     )}
                   </select>
+                  {showCosts && (
                   <div className="relative">
                     <input
                       type="number"
@@ -306,6 +311,7 @@ export function IngredientsSection({
                       className="w-full px-2 py-2 text-xs bg-dark border border-dark-200 rounded-lg text-[#FAFAFA] placeholder-dark-500 focus:outline-none focus:ring-1 focus:ring-gold/50 min-h-[36px]"
                     />
                   </div>
+                  )}
                   <input
                     type="number"
                     step="1"
@@ -323,6 +329,7 @@ export function IngredientsSection({
                     }}
                     className="w-full px-1.5 py-2 text-xs bg-dark border border-dark-200 rounded-lg text-[#FAFAFA] focus:outline-none focus:ring-1 focus:ring-gold/50 min-h-[36px] text-center"
                   />
+                  {showCosts && (
                   <button
                     type="button"
                     onClick={() =>
@@ -339,6 +346,7 @@ export function IngredientsSection({
                   >
                     {noCost ? "—" : `$${lineCost.toFixed(2)}`}
                   </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => onRemove(row.tempId)}
@@ -352,8 +360,8 @@ export function IngredientsSection({
                 )}
                 {unitMismatch && (
                   <div className="px-2 pb-1 text-[10px] text-red-400">
-                    Unit mismatch: {row.unit} cannot convert to {row.baseUnit}. Change the unit to
-                    calculate cost.
+                    Unit mismatch: {row.unit} cannot convert to {row.baseUnit}. Change the unit
+                    {showCosts ? " to calculate cost." : "."}
                   </div>
                 )}
               </div>
@@ -364,7 +372,7 @@ export function IngredientsSection({
 
       {ingredients.length === 0 && (
         <p className="text-xs text-dark-500 py-4 text-center">
-          No ingredients added yet. Click "Add Ingredient" to build the cost breakdown.
+          No ingredients added yet. Click "Add Ingredient" to build the {showCosts ? "cost breakdown" : "recipe"}.
         </p>
       )}
     </div>

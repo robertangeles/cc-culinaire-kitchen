@@ -90,6 +90,7 @@ const HIDDEN = [
   "theoretical", "actual", "variance", "variancePct", "threshold",
 ];
 
+const omit = (row: object, ...keys: string[]) => Object.fromEntries(Object.entries(row).filter(([k]) => !keys.includes(k)));
 /** Every key anywhere in a JSON body. */
 const keysOf = (v: unknown): string[] =>
   Array.isArray(v) ? v.flatMap(keysOf) : v && typeof v === "object" ? Object.entries(v).flatMap(([k, x]) => [k, ...keysOf(x)]) : [];
@@ -183,8 +184,7 @@ describe("menu figures are for holders of inventory:cost", () => {
 
 describe("everyone with menu:read keeps the rest of the menu", () => {
   it("items: price, servings, sales, mix and class", async () => {
-    const { foodCost, foodCostPct, contributionMargin, ...rest } = ITEM;
-    expect((await other("GET", "/api/menu/items")).body).toEqual([{ ...rest, canManage: true }]);
+    expect((await other("GET", "/api/menu/items")).body).toEqual([{ ...omit(ITEM, "foodCost", "foodCostPct", "contributionMargin"), canManage: true }]);
   });
 
   it("analysis: class counts, revenue and the items", async () => {
@@ -193,13 +193,11 @@ describe("everyone with menu:read keeps the rest of the menu", () => {
   });
 
   it("recipe lines: ingredient, quantity, unit, yield and packaging", async () => {
-    const { unitCost, lineCost, catalogUnitCost, ...rest } = LINE;
-    expect((await other("GET", "/api/menu/items/x/ingredients")).body).toEqual([rest]);
+    expect((await other("GET", "/api/menu/items/x/ingredients")).body).toEqual([omit(LINE, "unitCost", "lineCost", "catalogUnitCost")]);
   });
 
   it("a sale: what was used and that it ran over, without what is left", async () => {
-    const { fohOnHand, ...used } = SALE.depleted[0];
-    expect((await other("POST", "/api/menu/items/x/sales", { qtySold: 1 })).body).toEqual({ ...SALE, depleted: [used] });
+    expect((await other("POST", "/api/menu/items/x/sales", { qtySold: 1 })).body).toEqual({ ...SALE, depleted: [omit(SALE.depleted[0], "fohOnHand")] });
   });
 });
 

@@ -16,7 +16,8 @@ import {
   Settings2,
 } from "lucide-react";
 import { DEFAULT_CATEGORY_TARGET_PCT, categoryActualFoodCostPct } from "@culinaire/shared";
-import type { MenuItem } from "../../hooks/useMenuItems.js";
+import { costsHidden, type MenuItem } from "../../hooks/useMenuItems.js";
+import { CostsHiddenNote } from "./CostsHiddenNote.js";
 
 const API = import.meta.env.VITE_API_URL ?? "";
 
@@ -39,6 +40,7 @@ export function CategorySettings({
   const [expanded, setExpanded] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const hideCosts = costsHidden(items);
 
   // Fetch saved settings
   useEffect(() => {
@@ -66,7 +68,7 @@ export function CategorySettings({
   const categoryActuals = useMemo(() => {
     const result: Record<string, number> = {};
     for (const cat of categories) {
-      result[cat] = categoryActualFoodCostPct(items.filter((i) => i.category === cat));
+      result[cat] = categoryActualFoodCostPct(items.filter((i): i is MenuItem & { foodCostPct: number } => i.category === cat && i.foodCostPct !== undefined));
     }
     return result;
   }, [categories, items]);
@@ -77,7 +79,7 @@ export function CategorySettings({
     for (const cat of categories) {
       const target = parseFloat(settings[cat] ?? String(DEFAULT_CATEGORY_TARGET_PCT));
       result[cat] = items.filter(
-        (i) => i.category === cat && i.foodCostPct > target
+        (i) => i.category === cat && i.foodCostPct !== undefined && i.foodCostPct > target
       );
     }
     return result;
@@ -136,6 +138,8 @@ export function CategorySettings({
         </div>
       )}
 
+      {hideCosts && <CostsHiddenNote detail="You can see and set targets, but not what each category actually costs." />}
+
       <div className="bg-dark-50 rounded-2xl border border-dark-200 overflow-hidden">
         <div className="px-6 py-4 border-b border-dark-200">
           <h3 className="text-sm font-semibold text-[#FAFAFA]">
@@ -191,6 +195,7 @@ export function CategorySettings({
                   </div>
 
                   {/* Actual % */}
+                  {!hideCosts && (
                   <div className="text-right w-20">
                     <p className="text-xs text-dark-500">Actual:</p>
                     <p
@@ -201,6 +206,7 @@ export function CategorySettings({
                       {actual.toFixed(1)}%
                     </p>
                   </div>
+                  )}
 
                   {/* Save button */}
                   <button
@@ -249,7 +255,7 @@ export function CategorySettings({
                         >
                           <span className="text-[#FAFAFA]">{item.name}</span>
                           <span className="text-red-400 font-medium">
-                            {item.foodCostPct.toFixed(1)}%
+                            {item.foodCostPct?.toFixed(1)}%
                           </span>
                         </div>
                       ))}

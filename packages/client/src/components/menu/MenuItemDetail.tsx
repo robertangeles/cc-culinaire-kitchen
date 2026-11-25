@@ -10,6 +10,7 @@ import { useNavigate } from "react-router";
 import { FOOD_COST_ALERT_PCT } from "@culinaire/shared";
 import type { MenuItem, MenuIngredient } from "../../hooks/useMenuItems.js";
 import { useMenuRecommendations } from "../../hooks/useMenuRecommendations.js";
+import { CostsHiddenNote } from "./CostsHiddenNote.js";
 
 
 const CLASS_INFO: Record<string, { label: string; bg: string; text: string; icon: typeof Star; desc: string }> = {
@@ -36,7 +37,7 @@ const ACTION_LABELS: Record<string, string> = {
 interface MenuItemDetailProps {
   item: MenuItem;
   onClose: () => void;
-  onAddIngredient: (itemId: string, data: { ingredientName: string; quantity: string; unit: string; unitCost: string; yieldPct?: string }) => Promise<void>;
+  onAddIngredient: (itemId: string, data: { ingredientName: string; quantity: string; unit: string; unitCost?: string; yieldPct?: string }) => Promise<void>;
   onRemoveIngredient: (itemId: string, ingredientId: number) => Promise<void>;
   getIngredients: (itemId: string) => Promise<MenuIngredient[]>;
 }
@@ -57,6 +58,8 @@ export function MenuItemDetail({ item, onClose, onAddIngredient, onRemoveIngredi
   const [addingIng, setAddingIng] = useState(false);
   const [ingError, setIngError] = useState("");
   const canManage = item.canManage !== false;
+  // The server left the costs out: no inventory:cost.
+  const hideCosts = item.foodCostPct === undefined;
 
   const cls = CLASS_INFO[item.classification] ?? CLASS_INFO.unclassified;
   const ClsIcon = cls.icon;
@@ -73,7 +76,7 @@ export function MenuItemDetail({ item, onClose, onAddIngredient, onRemoveIngredi
 
   async function handleAddIngredient(e: React.FormEvent) {
     e.preventDefault();
-    if (!ingName.trim() || !ingQty || !ingCost) return;
+    if (!ingName.trim() || !ingQty || (!hideCosts && !ingCost)) return;
     setAddingIng(true);
     setIngError("");
     try {
@@ -81,7 +84,7 @@ export function MenuItemDetail({ item, onClose, onAddIngredient, onRemoveIngredi
         ingredientName: ingName.trim(),
         quantity: ingQty,
         unit: ingUnit,
-        unitCost: ingCost,
+        unitCost: ingCost || undefined,
         yieldPct: ingYield,
       });
       const ings = await getIngredients(item.menuItemId);
@@ -139,6 +142,9 @@ export function MenuItemDetail({ item, onClose, onAddIngredient, onRemoveIngredi
               <p className="text-xs text-dark-500">Selling Price</p>
               <p className="text-lg font-bold text-[#FAFAFA]">${item.sellingPrice.toFixed(2)}</p>
             </div>
+            {item.foodCostPct === undefined ? (
+              <CostsHiddenNote className="col-span-2" detail="Ask an administrator for access to costs." />
+            ) : (<>
             <div className="bg-dark rounded-xl p-3 text-center border border-dark-200">
               <p className="text-xs text-dark-500">Food Cost</p>
               <p className={`text-lg font-bold ${item.foodCostPct > FOOD_COST_ALERT_PCT ? "text-red-400" : "text-[#FAFAFA]"}`}>
@@ -147,8 +153,9 @@ export function MenuItemDetail({ item, onClose, onAddIngredient, onRemoveIngredi
             </div>
             <div className="bg-dark rounded-xl p-3 text-center border border-dark-200">
               <p className="text-xs text-dark-500">CM</p>
-              <p className="text-lg font-bold text-[#FAFAFA]">${item.contributionMargin.toFixed(2)}</p>
+              <p className="text-lg font-bold text-[#FAFAFA]">${item.contributionMargin?.toFixed(2)}</p>
             </div>
+            </>)}
           </div>
 
           {/* Ingredients */}
@@ -164,10 +171,10 @@ export function MenuItemDetail({ item, onClose, onAddIngredient, onRemoveIngredi
                       <div key={ing.id} className="flex items-center justify-between text-sm bg-dark border border-dark-200 rounded-lg px-3 py-2">
                         <div>
                           <span className="font-medium text-[#FAFAFA]">{ing.ingredientName}</span>
-                          <span className="text-dark-500 ml-2">{ing.quantity} {ing.unit} @ ${ing.unitCost}/{ing.unit}</span>
+                          <span className="text-dark-500 ml-2">{ing.quantity} {ing.unit}{ing.unitCost !== undefined && ` @ $${ing.unitCost}/${ing.unit}`}</span>
                         </div>
                         <div className="flex items-center gap-2">
-                          <span className="text-xs text-dark-600">${ing.lineCost}</span>
+                          {ing.lineCost !== undefined && <span className="text-xs text-dark-600">${ing.lineCost}</span>}
                           {canManage && (
                             <button onClick={() => handleRemoveIng(ing.id)} title="Remove ingredient" className="text-dark-500 hover:text-red-400 transition-colors p-1 min-h-[36px] min-w-[36px] flex items-center justify-center">
                               <Trash2 className="size-3.5" />
@@ -189,7 +196,7 @@ export function MenuItemDetail({ item, onClose, onAddIngredient, onRemoveIngredi
                 {canManage && (
                 <form onSubmit={handleAddIngredient} className="grid grid-cols-6 gap-2">
                   <input type="text" value={ingName} onChange={(e) => setIngName(e.target.value)} placeholder="Ingredient" required
-                    className="col-span-2 px-2 py-1.5 text-xs bg-dark border border-dark-200 rounded-lg text-[#FAFAFA] placeholder-dark-500 focus:outline-none focus:ring-1 focus:ring-gold/50 min-h-[36px]" />
+                    className={`${hideCosts ? "col-span-3" : "col-span-2"} px-2 py-1.5 text-xs bg-dark border border-dark-200 rounded-lg text-[#FAFAFA] placeholder-dark-500 focus:outline-none focus:ring-1 focus:ring-gold/50 min-h-[36px]`} />
                   <input type="number" step="0.001" value={ingQty} onChange={(e) => setIngQty(e.target.value)} placeholder="Qty" required
                     className="px-2 py-1.5 text-xs bg-dark border border-dark-200 rounded-lg text-[#FAFAFA] placeholder-dark-500 focus:outline-none focus:ring-1 focus:ring-gold/50 min-h-[36px]" />
                   <select value={ingUnit} onChange={(e) => setIngUnit(e.target.value)}
@@ -197,8 +204,10 @@ export function MenuItemDetail({ item, onClose, onAddIngredient, onRemoveIngredi
                     <option value="kg">kg</option><option value="g">g</option><option value="l">l</option>
                     <option value="ml">ml</option><option value="each">each</option><option value="bunch">bunch</option>
                   </select>
+                  {!hideCosts && (
                   <input type="number" step="any" value={ingCost} onChange={(e) => setIngCost(e.target.value)} placeholder="$/unit" required
                     className="px-2 py-1.5 text-xs bg-dark border border-dark-200 rounded-lg text-[#FAFAFA] placeholder-dark-500 focus:outline-none focus:ring-1 focus:ring-gold/50 min-h-[36px]" />
+                  )}
                   <button type="submit" disabled={addingIng}
                     className="flex items-center justify-center px-2 py-1.5 text-xs bg-gold text-white rounded-lg hover:bg-gold-hover disabled:opacity-50 transition-colors min-h-[36px]">
                     {addingIng ? <Loader2 className="size-3 animate-spin" /> : <Plus className="size-3" />}

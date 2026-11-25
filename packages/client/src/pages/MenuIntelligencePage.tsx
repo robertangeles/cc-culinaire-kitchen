@@ -13,6 +13,7 @@ import { BarChart3, LogIn, RefreshCw, ShoppingCart } from "lucide-react";
 import { Link } from "react-router";
 import { useAuth } from "../context/AuthContext.js";
 import { useLocation } from "../context/LocationContext.js";
+import { useHasPermission } from "../hooks/useHasPermission.js";
 import { RecordSaleModal } from "../components/menu-intelligence/RecordSaleModal.js";
 import { useMenuItems, type MenuItem, type MenuIngredient } from "../hooks/useMenuItems.js";
 import { useMenuAnalysis } from "../hooks/useMenuAnalysis.js";
@@ -23,6 +24,7 @@ import { MenuEngineeringMatrix } from "../components/menu/MenuEngineeringMatrix.
 import { CategorySettings } from "../components/menu/CategorySettings.js";
 import { MenuItemDetail } from "../components/menu/MenuItemDetail.js";
 import { MenuCsvUpload } from "../components/menu/MenuCsvUpload.js";
+import { planHiddenCostSave, type LineToSave } from "../components/menu/hiddenCostLines.js";
 
 /* ---- Tab config ---- */
 
@@ -64,6 +66,7 @@ export function MenuIntelligencePage() {
   } = useMenuAnalysis();
 
   const { selectedLocationId } = useLocation();
+  const canSeeCost = useHasPermission()("inventory:cost");
 
   // Modal state
   const [formOpen, setFormOpen] = useState(false);
@@ -189,22 +192,20 @@ export function MenuIntelligencePage() {
   const handleSaveIngredients = useCallback(
     async (
       itemId: string,
-      ingredients: {
-        ingredientId?: string | null;
-        ingredientName: string;
-        note?: string | null;
-        quantity: string;
-        unit: string;
-        unitCost?: string;
-        yieldPct: string;
-      }[]
+      ingredients: LineToSave[]
     ) => {
-      // Remove old ingredients first, then add new ones
       const existing = await getIngredients(itemId);
+      if (existing.some((ing) => ing.unitCost === undefined)) {
+        const { add, remove } = planHiddenCostSave(ingredients, existing);
+        for (const { existingId: _read, ...ing } of add) await addIngredient(itemId, ing);
+        for (const id of remove) await removeIngredient(itemId, id);
+        return;
+      }
+      // Remove old ingredients first, then add new ones
       for (const ing of existing) {
         await removeIngredient(itemId, ing.id);
       }
-      for (const ing of ingredients) {
+      for (const { existingId: _read, ...ing } of ingredients) {
         await addIngredient(itemId, ing);
       }
     },
@@ -363,6 +364,7 @@ export function MenuIntelligencePage() {
           editItem={editItem}
           existingIngredients={editIngredients}
           categories={categories}
+          canSeeCost={canSeeCost}
           onSave={handleSaveItem}
           onSaveIngredients={handleSaveIngredients}
           onRefreshIngredientCost={refreshIngredientCost}

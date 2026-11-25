@@ -11,6 +11,8 @@ import { X, Loader2 } from "lucide-react";
 import type { MenuItem, MenuIngredient } from "../../hooks/useMenuItems.js";
 import { editorItemCosts, type CustomConversion } from "@culinaire/shared";
 import { CostSummary } from "./CostSummary.js";
+import { CostsHiddenNote } from "./CostsHiddenNote.js";
+import type { LineToSave } from "./hiddenCostLines.js";
 import { RecipeImportPanel, type ImportRecipe } from "./RecipeImportPanel.js";
 import { IngredientsSection, type IngredientRow, calcLineCost } from "./IngredientsSection.js";
 
@@ -78,6 +80,8 @@ interface MenuItemFormModalProps {
   editItem: MenuItem | null;
   existingIngredients: MenuIngredient[];
   categories: string[];
+  /** Holds inventory:cost. */
+  canSeeCost: boolean;
   onSave: (data: {
     name: string;
     category: string;
@@ -87,18 +91,7 @@ interface MenuItemFormModalProps {
     qFactorPct: string;
     unitsSold: number;
   }) => Promise<string | void>;
-  onSaveIngredients: (
-    itemId: string,
-    ingredients: {
-      ingredientId?: string | null;
-      ingredientName: string;
-      note?: string | null;
-      quantity: string;
-      unit: string;
-      unitCost?: string;
-      yieldPct: string;
-    }[]
-  ) => Promise<void>;
+  onSaveIngredients: (itemId: string, ingredients: LineToSave[]) => Promise<void>;
   onRefreshIngredientCost?: (itemId: string, rowId: number) => Promise<MenuIngredient>;
   onClose: () => void;
 }
@@ -109,12 +102,15 @@ export function MenuItemFormModal({
   editItem,
   existingIngredients,
   categories,
+  canSeeCost,
   onSave,
   onSaveIngredients,
   onRefreshIngredientCost,
   onClose,
 }: MenuItemFormModalProps) {
   const isEdit = !!editItem;
+  // The lines of an edit say what the server let this person see, also while their session is older than their role.
+  const showCosts = canSeeCost && existingIngredients.every((i) => i.unitCost !== undefined);
 
   // Mode toggle: "import" or "scratch"
   const [mode, setMode] = useState<"import" | "scratch">(isEdit ? "scratch" : "import");
@@ -211,11 +207,11 @@ export function MenuItemFormModal({
           // A linked row with a stored cost of 0 means "no override yet" —
           // show the catalog's current cost instead of a frozen $0.
           unitCost:
-            (parseFloat(ing.unitCost) || 0) > 0
-              ? ing.unitCost
+            (parseFloat(ing.unitCost ?? "") || 0) > 0
+              ? ing.unitCost!
               : ing.ingredientId && ing.catalogUnitCost
                 ? ing.catalogUnitCost
-                : ing.unitCost,
+                : ing.unitCost ?? "",
           yieldPct: ing.yieldPct ? String(parseFloat(ing.yieldPct)) : "100",
           costStaleInd: ing.costStaleInd ?? false,
         }))
@@ -381,6 +377,7 @@ export function MenuItemFormModal({
         await onSaveIngredients(
           savedItemId,
           validIngredients.map((r) => ({
+            existingId: r.existingId,
             ingredientId: r.ingredientId ?? null,
             ingredientName: r.ingredientName.trim(),
             note: r.note ?? null,
@@ -592,6 +589,7 @@ export function MenuItemFormModal({
                 ingredients={ingredients}
                 expandedCostRow={expandedCostRow}
                 editItem={editItem}
+                showCosts={showCosts}
                 onRefreshIngredientCost={onRefreshIngredientCost}
                 setIngredients={setIngredients}
                 setExpandedCostRow={setExpandedCostRow}
@@ -604,17 +602,21 @@ export function MenuItemFormModal({
                 onUpdate={updateIngredient}
               />
 
-              <CostSummary
-                totalBatchCost={totalBatchCost}
-                ingredientCount={ingredients.length}
-                servings={servings}
-                qPct={qPct}
-                foodCostWithQ={foodCostWithQ}
-                salePack={salePack}
-                foodCostPerSale={foodCostPerSale}
-                foodCostPct={foodCostPct}
-                contributionMargin={contributionMargin}
-              />
+              {showCosts ? (
+                <CostSummary
+                  totalBatchCost={totalBatchCost}
+                  ingredientCount={ingredients.length}
+                  servings={servings}
+                  qPct={qPct}
+                  foodCostWithQ={foodCostWithQ}
+                  salePack={salePack}
+                  foodCostPerSale={foodCostPerSale}
+                  foodCostPct={foodCostPct}
+                  contributionMargin={contributionMargin}
+                />
+              ) : (
+                <CostsHiddenNote detail="Costs are kept when you change a quantity; a new catalogue ingredient takes the catalogue's cost." />
+              )}
 
               {/* Actions */}
               <div className="flex items-center justify-end gap-3 pt-2">

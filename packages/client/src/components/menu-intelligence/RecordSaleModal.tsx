@@ -108,7 +108,7 @@ function ManualTab({ items, locationId, onDone }: { items: MenuItem[]; locationI
           <p className="text-xs text-dark-600">Skipped {result.skipped.length} line(s): {result.skipped.map((s) => s.ingredientName).join(", ")}</p>
         )}
         <ul className="text-xs text-[#ccc] list-disc ml-4">
-          {result.depleted.map((d) => <li key={d.ingredientId}>{d.ingredientName}: −{d.baseQty} {d.baseUnit} (on hand {d.fohOnHand})</li>)}
+          {result.depleted.map((d) => <li key={d.ingredientId}>{d.ingredientName}: −{d.baseQty} {d.baseUnit}{d.fohOnHand !== undefined && ` (on hand ${d.fohOnHand})`}</li>)}
         </ul>
         <div className="flex justify-end"><button onClick={() => setResult(null)} className="px-3 py-1.5 text-xs rounded-lg bg-gold text-black font-medium">Record another</button></div>
       </div>

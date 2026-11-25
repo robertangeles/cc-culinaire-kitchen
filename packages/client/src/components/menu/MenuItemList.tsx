@@ -23,7 +23,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { DEFAULT_CATEGORY_TARGET_PCT } from "@culinaire/shared";
-import type { MenuItem } from "../../hooks/useMenuItems.js";
+import { costsHidden, type MenuItem } from "../../hooks/useMenuItems.js";
 import { AllergenBadges } from "./AllergenBadges.js";
 
 /* ---- Classification badge config ---- */
@@ -198,13 +198,17 @@ export function MenuItemList({
     );
   }
 
+  const hideCosts = costsHidden(items);
+  const COST_COLUMNS: [SortKey, string][] = [
+    ["foodCost", "Food Cost"],
+    ["foodCostPct", "FC %"],
+    ["contributionMargin", "CM"],
+  ];
   const COLUMNS: [SortKey, string][] = [
     ["name", "Name"],
     ["category", "Category"],
     ["sellingPrice", "Price"],
-    ["foodCost", "Food Cost"],
-    ["foodCostPct", "FC %"],
-    ["contributionMargin", "CM"],
+    ...(hideCosts ? [] : COST_COLUMNS),
     ["unitsSold", "Units Sold"],
     ["classification", "Class"],
   ];
@@ -334,7 +338,7 @@ export function MenuItemList({
                 const BadgeIcon = badge.icon;
                 const target = categoryTargets[item.category];
                 const exceedsTarget =
-                  target !== undefined && item.foodCostPct > target;
+                  target !== undefined && item.foodCostPct !== undefined && item.foodCostPct > target;
 
                 return (
                   <tr
@@ -351,8 +355,9 @@ export function MenuItemList({
                     <td className="px-4 py-3 text-[#FAFAFA]">
                       ${item.sellingPrice.toFixed(2)}
                     </td>
+                    {!hideCosts && (<>
                     <td className="px-4 py-3 text-[#FAFAFA]">
-                      ${item.foodCost.toFixed(2)}
+                      ${item.foodCost?.toFixed(2)}
                     </td>
                     <td className="px-4 py-3">
                       <span
@@ -362,7 +367,7 @@ export function MenuItemList({
                             : "text-[#FAFAFA]"
                         }
                       >
-                        {item.foodCostPct.toFixed(1)}%
+                        {item.foodCostPct?.toFixed(1)}%
                         {exceedsTarget && (
                           <span className="ml-1 text-[10px]" title={`Exceeds ${target}% target`}>
                             !
@@ -371,8 +376,9 @@ export function MenuItemList({
                       </span>
                     </td>
                     <td className="px-4 py-3 text-[#FAFAFA]">
-                      ${item.contributionMargin.toFixed(2)}
+                      ${item.contributionMargin?.toFixed(2)}
                     </td>
+                    </>)}
                     <td className="px-4 py-3 text-dark-600">
                       {item.unitsSold}
                     </td>
@@ -462,7 +468,7 @@ export function MenuItemList({
               {filtered.length === 0 && (
                 <tr>
                   <td
-                    colSpan={hasWasteData ? 11 : 10}
+                    colSpan={COLUMNS.length + (hasWasteData ? 2 : 1)}
                     className="px-4 py-12 text-center text-dark-500"
                   >
                     {items.length === 0
