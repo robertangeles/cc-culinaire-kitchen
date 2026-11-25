@@ -385,7 +385,7 @@ queued: every write waits for the server, and says when it needs a connection.
   about the try before it, so the key stays until an answer or the person settles it. No second sale starts meanwhile.
 - **Saving an item is several requests without keys** (the item, then its lines; no route changes a line). `SaveSession` (`menuEditor.ts`) makes Save again safe: it reads the menu before a create and finds the item a
   lost reply left behind (same creator, same fields, not there before), sends only fields that changed, adds only lines that are not on the server yet, adds a changed line's new version before removing the old one,
-  and never removes a line it did not start from.
+  and removes only a line it started from or one of its own earlier tries that the form no longer wants (a colleague's new line stays).
 - A void of a sale already voided, and a delete of an item already gone, count as done. A delete refused because the item has sales or prep history (409 `CONFLICT`) shows the server's words.
 
 Differences from the web (`components/menu`, `components/menu-intelligence/RecordSaleModal.tsx`), found while comparing:
