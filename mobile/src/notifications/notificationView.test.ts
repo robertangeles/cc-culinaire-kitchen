@@ -70,8 +70,26 @@ describe("where a notification opens", () => {
     expect(routeFor(delivery, user([], ["Administrator"]))).toBe("/(app)/(orders)");
   });
 
-  it("has no phone screen yet for shifts, documents or Brain", () => {
-    for (const type of ["SHIFT_ASSIGNED", "DOCUMENT_VERIFIED", "BRAIN_NUDGE"]) {
+  it("opens the person's own shift, or My shifts when the notification names none", () => {
+    const id = "11111111-1111-4111-8111-111111111111";
+    const cook = user(["roster:read-own"]);
+    for (const type of ["SHIFT_ASSIGNED", "SHIFT_CHANGED"]) expect(routeFor(n(type, "shift"), cook)).toBe(`/(app)/(roster)/shift?shiftId=${id}&from=link`);
+    for (const type of ["SHIFT_CANCELLED", "ROSTER_PUBLISHED", "SHIFT_SWAP_CLAIMED", "HOLIDAY_CONSENT_REQUESTED"]) expect(routeFor(n(type, "shift_assignment"), cook)).toBe("/(app)/(roster)");
+    expect(routeFor(n("SHIFT_ASSIGNED", "shift"), user(["roster:manage"]))).toBeNull();
+    expect(phoneRoute("SHIFT_ASSIGNED", "/shifts/../orders", cook)).toBe("/(app)/(roster)");
+  });
+
+  it("opens the person's own document", () => {
+    const id = "11111111-1111-4111-8111-111111111111";
+    for (const type of ["DOCUMENT_VERIFIED", "DOCUMENT_REJECTED", "DOCUMENT_EXPIRY_ALERT"]) {
+      expect(routeFor(n(type, "compliance_document"), user(["compliance:read-own"]))).toBe(`/(app)/(documents)/document?id=${id}&from=link`);
+      expect(routeFor(n(type, "compliance_document"), user(["compliance:verify"]))).toBeNull();
+    }
+    expect(routeFor(n("DOCUMENT_VERIFIED", null), user(["compliance:read-own"]))).toBe("/(app)/(documents)");
+  });
+
+  it("has no phone screen for a manager's side of the roster or documents, or for Brain", () => {
+    for (const type of ["HOLIDAY_CONSENT_DECLINED", "COMPLIANCE_DOCUMENT_NUDGE", "BRAIN_NUDGE"]) {
       expect(routeFor(n(type, null), user([], ["Administrator"]))).toBeNull();
     }
   });

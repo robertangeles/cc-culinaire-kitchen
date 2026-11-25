@@ -17,6 +17,8 @@ export interface ModuleTab {
   anyPermission?: string[];
   /** A build-time switch: the module is in no tab list, bar or More unless this says so. */
   buildFlag?: () => boolean;
+  /** Never a button of its own: always listed under More, so the bar stays as it is (owner). */
+  underMore?: true;
 }
 
 // Metro inlines `process.env.EXPO_PUBLIC_*` only when written out by name.
@@ -50,6 +52,9 @@ export const moduleTabs: ModuleTab[] = [
   { route: "(brain)", title: "Brain", icon: "brain", anyPermission: ["brain:read"] },
   // Team chat: the server asks only for a sign-in and checks each room (a kitchen's members, a thread's two people). Only in a build made with EXPO_PUBLIC_BENCH=on: a store build waits for report and block (App Store 1.2).
   { route: "(bench)", title: "Bench", icon: "bench", buildFlag: benchBuild },
+  // The staff side of the web's Roster page and of Profile > My Documents: the person's own shifts and their own documents.
+  { route: "(roster)", title: "Roster", icon: "roster", anyPermission: ["roster:read-own"], underMore: true },
+  { route: "(documents)", title: "Documents", icon: "documents", anyPermission: ["compliance:read-own"], underMore: true },
 ];
 
 /** Administrators hold every permission implicitly, as on the web and the server. */
@@ -67,12 +72,14 @@ export const MAX_TABS = 5;
 
 /**
  * What goes on the tab bar and what goes under More. Up to five buttons: the person's modules, then Account. When that is more than five,
- * the first four modules stay on the bar and the fifth button is More, which lists the rest and Account.
+ * the first four modules stay on the bar and the fifth button is More, which lists the rest and Account. A module marked `underMore` is
+ * only ever listed there, so a person who has one gets More as their last button instead of Account.
  */
 export function tabBar(user: AuthUser): { bar: ModuleTab[]; more: ModuleTab[] } {
   const tabs = visibleTabs(user);
-  if (tabs.length + 1 <= MAX_TABS) return { bar: tabs, more: [] };
-  return { bar: tabs.slice(0, MAX_TABS - 1), more: tabs.slice(MAX_TABS - 1) };
+  const buttons = tabs.filter((t) => !t.underMore);
+  const bar = buttons.length + 1 <= MAX_TABS ? buttons : buttons.slice(0, MAX_TABS - 1);
+  return { bar, more: tabs.filter((t) => !bar.includes(t)) };
 }
 
 /**

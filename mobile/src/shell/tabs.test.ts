@@ -93,8 +93,14 @@ describe("which tabs a person sees", () => {
     expect(new Set(moduleTabs.map((t) => t.route)).size).toBe(moduleTabs.length);
   });
 
-  it("puts the tabs in the order a line cook uses them (prep, waste, usage, count, move, receive, orders), then Ask, Recipes and the Inbox, then the weekly store-room Transfers and Stock, then the Menu, then the Brain and the Bench", () => {
-    expect(moduleTabs.map((t) => t.title)).toEqual(["Prep", "Waste", "Usage", "Count", "Move", "Receive", "Orders", "Ask", "Recipes", "Inbox", "Transfers", "Stock", "Menu", "Brain", "Bench"]);
+  it("puts the tabs in the order a line cook uses them (prep, waste, usage, count, move, receive, orders), then Ask, Recipes and the Inbox, then the weekly store-room Transfers and Stock, then the Menu, then the Brain and the Bench, then the person's own Roster and Documents", () => {
+    expect(moduleTabs.map((t) => t.title)).toEqual(["Prep", "Waste", "Usage", "Count", "Move", "Receive", "Orders", "Ask", "Recipes", "Inbox", "Transfers", "Stock", "Menu", "Brain", "Bench", "Roster", "Documents"]);
+  });
+
+  it("shows Roster to someone who sees their own shifts and Documents to someone who keeps their own documents, and to no one with only a manager's key", () => {
+    expect(gatedTabs(person({ permissions: ["roster:read-own"] })).map((t) => t.route)).toEqual(["(roster)"]);
+    expect(gatedTabs(person({ permissions: ["compliance:read-own"] })).map((t) => t.route)).toEqual(["(documents)"]);
+    expect(gatedTabs(person({ permissions: ["roster:read-all", "roster:manage", "roster:publish", "compliance:read-all", "compliance:verify"] }))).toEqual([]);
   });
 });
 
@@ -110,8 +116,20 @@ describe("the tab bar and More", () => {
   it("shows four modules and More when a person's modules and Account would make more than five buttons", () => {
     const { bar, more } = tabBar(person({ roles: ["Administrator"] }));
     expect(bar.map((t) => t.title)).toEqual(["Prep", "Waste", "Usage", "Count"]);
-    expect(more.map((t) => t.title)).toEqual(["Move", "Receive", "Orders", "Ask", "Recipes", "Inbox", "Transfers", "Stock", "Menu", "Brain", "Bench"]);
+    expect(more.map((t) => t.title)).toEqual(["Move", "Receive", "Orders", "Ask", "Recipes", "Inbox", "Transfers", "Stock", "Menu", "Brain", "Bench", "Roster", "Documents"]);
     expect(bar.length + 1).toBe(MAX_TABS); // the fifth button is More, which also holds Account
+  });
+
+  it("lists Roster and Documents under More whatever else the person has, and leaves the rest of the bar as it was", () => {
+    const own = ["roster:read-own", "compliance:read-own"];
+    for (const permissions of [[], ["waste:log"], ["waste:log", "prep:read"], ["inventory:count", "waste:log", "prep:read"]]) {
+      const before = tabBar(person({ permissions }));
+      const after = tabBar(person({ permissions: [...permissions, ...own] }));
+      expect(after.bar).toEqual(before.bar);
+      expect(after.more.map((t) => t.title)).toEqual([...before.more.map((t) => t.title), "Roster", "Documents"]);
+      expect(after.bar.length + 1).toBeLessThanOrEqual(MAX_TABS);
+    }
+    expect(Object.keys(tabLabels(person({ permissions: own })))).toEqual(["Ask", "Recipes", "Inbox", "More"]);
   });
 
   it("never puts a module the person cannot open under More", () => {

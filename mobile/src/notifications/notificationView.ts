@@ -91,12 +91,16 @@ export function timeAgo(iso: string, now: number): string {
 }
 
 const ORDER_TYPES = ["APPROVAL_REQUIRED", "PO_APPROVED", "PO_REJECTED", "DISCREPANCY_ALERT"];
+/** About the person's own shifts. Not HOLIDAY_CONSENT_DECLINED: that one tells a manager about someone else's. */
+const SHIFT_TYPES = ["SHIFT_ASSIGNED", "SHIFT_CHANGED", "SHIFT_CANCELLED", "ROSTER_PUBLISHED", "SHIFT_SWAP_CLAIMED", "HOLIDAY_CONSENT_REQUESTED"];
+/** About the person's own document. Not COMPLIANCE_DOCUMENT_NUDGE: that one asks a verifier. An expiry alert reaches both; the page says so when the document is not theirs. */
+const DOCUMENT_TYPES = ["DOCUMENT_VERIFIED", "DOCUMENT_REJECTED", "DOCUMENT_EXPIRY_ALERT"];
 const ORDERS_TAB = moduleTabs.find((t) => t.route === "(orders)")!.anyPermission!;
 
 /**
  * The phone screen a notification opens, or null when the phone has none for it yet (the inbox shows the text instead).
- * The server's link (`pushLink`) names the web-shaped route; only the ones the phone has a screen for are mapped. Shifts and compliance
- * screens come in later waves. An overdue delivery is still in the Receive list; opening the delivery itself would start receiving it.
+ * The server's link (`pushLink`) names the web-shaped route; only the ones the phone has a screen for are mapped. A manager's notifications
+ * about someone else's shift or document stay in the inbox: those are answered on the web. An overdue delivery is still in the Receive list; opening the delivery itself would start receiving it.
  */
 export function phoneRoute(type: string, link: string, user: AuthUser): string | null {
   if (type === "DELIVERY_OVERDUE" && link.startsWith("/purchasing") && hasAnyPermission(user, ["purchasing:receive"])) return "/(app)/(receive)";
@@ -104,6 +108,14 @@ export function phoneRoute(type: string, link: string, user: AuthUser): string |
     // `from` tells the order it was opened from outside its tab, so its way back is the list.
     const poId = /^\/purchasing\/orders\/([0-9a-f-]+)$/i.exec(link)?.[1];
     return poId ? `/(app)/(orders)/order?poId=${poId}&from=link` : "/(app)/(orders)";
+  }
+  if (SHIFT_TYPES.includes(type) && link.startsWith("/shifts") && hasAnyPermission(user, ["roster:read-own"])) {
+    const shiftId = /^\/shifts\/([0-9a-f-]+)$/i.exec(link)?.[1];
+    return shiftId ? `/(app)/(roster)/shift?shiftId=${shiftId}&from=link` : "/(app)/(roster)";
+  }
+  if (DOCUMENT_TYPES.includes(type) && link.startsWith("/compliance") && hasAnyPermission(user, ["compliance:read-own"])) {
+    const id = /^\/compliance\/documents\/([0-9a-f-]+)$/i.exec(link)?.[1];
+    return id ? `/(app)/(documents)/document?id=${id}&from=link` : "/(app)/(documents)";
   }
   return null;
 }
