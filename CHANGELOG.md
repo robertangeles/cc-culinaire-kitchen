@@ -5,6 +5,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added (open swaps say the shift's status and the venue's zone and name)
+
+Server only, additive. No migration, no permission change, no change to who sees which swaps.
+
+- **`GET /api/workforce/swaps`:** each swap also carries `shiftStatus` (`Draft`, `Published` or `Cancelled`), and its venue's `ianaTimezone` and `locationName`, so a client can hide swaps of shifts that are not published and show venue time for a venue the person does not work at. The list itself is unchanged: swaps of draft and cancelled shifts are still in it.
+
 ### Added (mobile Wave 7, phone: the menu)
 
 Phone app only; no server change, no migration, no new permission. Uses the Wave 7 menu server (organisation-owned menu items, `menu:manage`, keyed sales) and the shared costing.
