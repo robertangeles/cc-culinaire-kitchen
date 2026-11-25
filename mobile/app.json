@@ -43,8 +43,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "CulinAIre Kitchen uses your photos when you choose a profile picture.",
-          "cameraPermission": "CulinAIre Kitchen uses the camera when you take a profile picture.",
+          "photosPermission": "CulinAIre Kitchen uses your photos when you choose a profile picture or a photo of a certificate.",
+          "cameraPermission": "CulinAIre Kitchen uses the camera when you take a profile picture or a photo of a certificate.",
           "microphonePermission": false
         }
       ],
