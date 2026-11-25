@@ -236,4 +236,73 @@ describe("saving", () => {
     await saveMenuItem(s.api, session, two, 4);
     expect(s.calls).toEqual(["create", "add Potato 0.5", "add Flour 0.1"]);
   });
+
+  describe("saving again after the form changed between a failed save and the retry", () => {
+    const basil = (over: Partial<MenuLine> = {}) => line({ id: 1, ingredientId: null, baseUnit: null, ingredientName: "Basil", quantity: 1, unit: "kg", unitCost: undefined, lineCost: undefined, catalogUnitCost: undefined, ...over });
+    const row = (d: MenuDraft, i: number, over: Partial<DraftLine>): DraftLine => ({ ...d.lines[i], ...over });
+    const salt = { ...blankLine(), ingredientName: "Salt", quantity: "1", unit: "kg" };
+    const contents = (lines: MenuLine[]) => lines.map((l) => `${l.ingredientName} ${l.quantity}`).sort();
+    const saltDown = (s: ReturnType<typeof server>) => {
+      const add = s.api.addLine.getMockImplementation()!;
+      const down = { on: true };
+      s.api.addLine.mockImplementation(async (id, l) => {
+        if (down.on && l.ingredientName === "Salt") throw lost;
+        return add(id, l);
+      });
+      return down;
+    };
+
+    it("removes the copy this save added, so the recipe does not hold both versions of an edited line", async () => {
+      const start = [basil()];
+      const s = server([item()], [...start]);
+      const session = saveSession(item(), start);
+      const d = draftOf(item(), start);
+      const down = saltDown(s);
+      await expect(saveMenuItem(s.api, session, ok({ ...d, lines: [row(d, 0, { quantity: "2" }), salt] }), 4)).rejects.toBe(lost);
+      expect(contents(s.lines)).toEqual(["Basil 1", "Basil 2"]);
+      down.on = false;
+      await saveMenuItem(s.api, session, ok({ ...d, lines: [row(d, 0, { quantity: "3" }), salt] }), 4);
+      expect(contents(s.lines)).toEqual(["Basil 3", "Salt 1"]);
+    });
+
+    it("does the same after a create whose first line landed and second did not", async () => {
+      const s = server();
+      const session = saveSession();
+      const two = (q: string) => fresh({ lines: [{ ...blankLine(), ingredientName: "Basil", quantity: q, unit: "kg" }, salt] });
+      const down = saltDown(s);
+      await expect(saveMenuItem(s.api, session, two("2"), 4)).rejects.toBe(lost);
+      down.on = false;
+      await saveMenuItem(s.api, session, two("3"), 4);
+      expect(contents(s.lines)).toEqual(["Basil 3", "Salt 1"]);
+      expect(s.api.create).toHaveBeenCalledTimes(1);
+    });
+
+    it("removes a line whose add landed but whose reply was lost", async () => {
+      const start = [basil()];
+      const s = server([item()], [...start]);
+      const session = saveSession(item(), start);
+      const d = draftOf(item(), start);
+      const add = s.api.addLine.getMockImplementation()!;
+      s.api.addLine.mockImplementationOnce(async (id, l) => { await add(id, l); throw lost; });
+      await expect(saveMenuItem(s.api, session, ok({ ...d, lines: [row(d, 0, { quantity: "2" })] }), 4)).rejects.toBe(lost);
+      await saveMenuItem(s.api, session, ok({ ...d, lines: [row(d, 0, { quantity: "3" })] }), 4);
+      expect(contents(s.lines)).toEqual(["Basil 3"]);
+    });
+
+    it("keeps a colleague's line, even one with the content of a line this save added and gave up", async () => {
+      const start = [basil()];
+      const s = server([item()], [...start, basil({ id: 50, quantity: 2 })]);
+      const session = saveSession(item(), start);
+      const d = draftOf(item(), start);
+      const down = saltDown(s);
+      const both = (q: string) => ok({ ...d, lines: [row(d, 0, { quantity: q }), { ...row(d, 0, { quantity: q }), key: "second", existingId: undefined }, salt] });
+      await expect(saveMenuItem(s.api, session, both("2"), 4)).rejects.toBe(lost);
+      expect(s.lines.filter((l) => l.quantity === 2)).toHaveLength(2);
+      down.on = false;
+      await saveMenuItem(s.api, session, both("3"), 4);
+      expect(s.lines.find((l) => l.id === 50)).toBeDefined();
+      expect(contents(s.lines)).toEqual(["Basil 2", "Basil 3", "Basil 3", "Salt 1"]);
+    });
+  });
+  });
 });

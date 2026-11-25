@@ -275,9 +275,10 @@ function sameLine(d: DraftLine, row: MenuLine): boolean {
 /**
  * The lines to add and the rows to remove. There is no route that changes a line, so a changed one is added anew and its old row removed;
  * an untouched one is left alone. A row that is not in `baseline` (what this person started from) is someone else's, or a line of an
- * earlier try of this save: never removed, and taken as the draft line with the same content.
+ * earlier try of this save: taken as the draft line with the same content, and never removed unless the draft no longer wants it and it
+ * is one of the `tried` lines this save sent (at most one row per line sent), and was not on the server when the save began (`known`).
  */
-export function planLines(draft: DraftLine[], baseline: MenuLine[], server: MenuLine[]): { add: DraftLine[]; remove: number[] } {
+export function planLines(draft: DraftLine[], baseline: MenuLine[], server: MenuLine[], tried: DraftLine[] = [], known: Set<number> = new Set()): { add: DraftLine[]; remove: number[] } {
   const started = new Map(baseline.map((r) => [r.id, r]));
   const landed = server.filter((r) => !started.has(r.id));
   const keep = new Set<number>();
@@ -292,7 +293,13 @@ export function planLines(draft: DraftLine[], baseline: MenuLine[], server: Menu
     if (i >= 0) landed.splice(i, 1);
     else add.push(d);
   }
-  return { add, remove: server.filter((r) => started.has(r.id) && !keep.has(r.id)).map((r) => r.id) };
+  const sent = [...tried];
+  const leftovers = landed.filter((r) => {
+    const i = known.has(r.id) ? -1 : sent.findIndex((t) => sameLine(t, r));
+    if (i >= 0) sent.splice(i, 1);
+    return i >= 0;
+  });
+  return { add, remove: [...server.filter((r) => started.has(r.id) && !keep.has(r.id)), ...leftovers].map((r) => r.id) };
 }
 
 /** What one open editor knows is on the server. The screen keeps it for as long as the form is open. */
@@ -300,13 +307,16 @@ export interface SaveSession {
   itemId: string | null;
   item: ItemBody | null;
   lines: MenuLine[];
+  /** The lines this save has sent to be added (recorded before sending: a lost reply may still have landed), and the rows on the server before the first. */
+  tried: DraftLine[];
+  known: Set<number> | null;
   /** A create whose reply was lost: what was sent, and the items there were before it. */
   attempt: { body: ItemBody; known: Set<string> } | null;
 }
 
 const bodyOf = (i: MenuItem): ItemBody => ({ name: i.name, category: i.category, sellingPrice: i.sellingPrice.toFixed(2), servings: i.servings, servingsPerSale: i.servingsPerSale, qFactorPct: String(i.qFactorPct), unitsSold: i.unitsSold });
 
-export const saveSession = (item?: MenuItem, lines: MenuLine[] = []): SaveSession => ({ itemId: item?.menuItemId ?? null, item: item ? bodyOf(item) : null, lines, attempt: null });
+export const saveSession = (item?: MenuItem, lines: MenuLine[] = []): SaveSession => ({ itemId: item?.menuItemId ?? null, item: item ? bodyOf(item) : null, lines, tried: [], known: null, attempt: null });
 
 export interface EditorApi {
   items(): Promise<MenuItem[]>;
@@ -354,9 +364,14 @@ export async function saveMenuItem(api: EditorApi, session: SaveSession, { item,
   }
 
   if (lines.length > 0 || session.lines.length > 0) {
-    const { add, remove } = planLines(lines, session.lines, await api.lines(itemId));
+    const onServer = await api.lines(itemId);
+    const { add, remove } = planLines(lines, session.lines, onServer, session.tried, session.known ?? new Set());
+    if (add.length > 0) session.known ??= new Set(onServer.map((r) => r.id));
     // Added before the old ones go: a failure in between leaves a line twice, which shows, and never loses one.
-    for (const l of add) await api.addLine(itemId, lineBody(l));
+    for (const l of add) {
+      session.tried.push(l);
+      await api.addLine(itemId, lineBody(l));
+    }
     for (const id of remove) await api.removeLine(itemId, id);
   }
   return itemId;
