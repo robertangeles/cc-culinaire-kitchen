@@ -20,6 +20,8 @@ import {
   recipe,
 } from "../db/schema.js";
 import { eq, and, desc, sql, lt, inArray } from "drizzle-orm";
+import { AppError } from "../utils/appError.js";
+import { insertOnce } from "../utils/retrySafe.js";
 
 const logger = pino({ name: "benchService" });
 
@@ -136,23 +138,41 @@ export interface BenchMessageWithUser {
   reactions: { emoji: string; count: number; userIds: number[] }[];
 }
 
+/**
+ * Store a post. A client-made id makes it safe to send again: the same post (same room and content, whatever was
+ * edited or deleted since) finds its own row and is a `replay`; any other post under that id is a 409 CONFLICT.
+ */
+export async function insertPost(post: typeof benchMessage.$inferInsert) {
+  const { row, replay } = await insertOnce(
+    post.userId,
+    () => db.insert(benchMessage).values(post).onConflictDoNothing({ target: benchMessage.messageId }).returning(),
+    async () => (await db.select().from(benchMessage).where(eq(benchMessage.messageId, post.messageId!)).limit(1))[0],
+  );
+  const same =
+    row.channelId === (post.channelId ?? null) &&
+    row.dmThreadId === (post.dmThreadId ?? null) &&
+    row.recipeId === (post.recipeId ?? null) &&
+    (row.editedInd || row.messageBody === post.messageBody);
+  if (!same) throw new AppError(409, "CONFLICT", "That id is already used by another message");
+  return { row, replay };
+}
+
 export async function createMessage(
   channelId: number,
   userId: number,
   body: string,
   messageType: "text" | "recipe_share" = "text",
   recipeId?: string,
-): Promise<BenchMessageWithUser> {
-  const [msg] = await db
-    .insert(benchMessage)
-    .values({
-      channelId,
-      userId,
-      messageBody: body,
-      messageType,
-      recipeId: recipeId ?? null,
-    })
-    .returning();
+  messageId?: string,
+): Promise<BenchMessageWithUser & { replay: boolean }> {
+  const { row: msg, replay } = await insertPost({
+    messageId,
+    channelId,
+    userId,
+    messageBody: body,
+    messageType,
+    recipeId: recipeId ?? null,
+  });
 
   // Fetch user info for the response
   const [u] = await db
@@ -187,7 +207,8 @@ export async function createMessage(
     editedInd: msg.editedInd,
     deletedInd: msg.deletedInd,
     createdDttm: msg.createdDttm,
-    reactions: [],
+    reactions: replay ? await getReactions(msg.messageId) : [],
+    replay,
   };
 }
 

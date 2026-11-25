@@ -1532,3 +1532,9 @@ builds all tables with CHECKs enforcing. Stop it again when done.
 - **Fix**: `verifyMfaToken` accepts the current step and the one before it, never a future one. `mfaCodeWindow.test.ts` runs the real library at both ends of a step with a fixed clock.
 - **Reuse, checked**: We checked whether a code that has already been used is refused. It is not: `verifyMfaToken` stores nothing, so a used code can be used again within its window. That was so before this change, which widens that window from about 30 to about 60 seconds. Refusing a used code is tracked separately.
 - **Rule**: When a test needs a retry around a time limit, ask whether a person meets the same limit, and fix it there. Test a time window at its boundaries with a fixed clock, never a sleep.
+
+## 2026-11-26 — A socket's handlers must be attached before the first await
+
+- **Problem**: The Bench's connection handler read the person's profile from the database before it attached any event handler. What a client sent as it connected (the phone's and the web's join) arrived during that read and was dropped with no error, and a disconnect during the read was never counted. Stopping the server also waited on open WebSocket and kept-alive connections, which `httpServer.close()` does not end.
+- **Fix**: `initBenchSocket` joins the rooms and attaches every handler synchronously, then reads the profile (`announce`) and lists the person only if they are still connected. It returns the function the shutdown path calls: `io.close()`, then after a second it destroys upgraded sockets and idle connections. Posts take a client-made id (`insertPost`, as `insertOnce` elsewhere), so a resend finds its own row.
+- **Rule**: In a socket.io `connection` handler, attach every handler before any `await`. Test connect-time events with a database read held open, and test shutdown with a connected client and a timer.

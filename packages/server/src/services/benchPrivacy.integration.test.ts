@@ -64,7 +64,7 @@ describe.skipIf(!RUN)("bench privacy — real sockets, real DB", () => {
     open.push(socket);
     const got: Event[] = [];
     socket.onAny((name, payload) => got.push({ name, payload }));
-    // The server attaches its handlers just before this first broadcast.
+    // The first broadcast comes once the server has read who this is.
     await new Promise<void>((ok, fail) => {
       socket.once("bench:presence:update", () => ok());
       socket.once("connect_error", fail);

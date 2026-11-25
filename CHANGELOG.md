@@ -5,6 +5,17 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Fixed (Bench connection handling and post-once)
+
+Server, web and phone. No migration, no permission change, no change to the Bench's HTTP routes; who may message, pin or see presence is unchanged.
+
+- **Connecting:** the server takes a client's Bench events from the moment it is connected. Before, what a client sent while its profile was still being read was dropped, so a kitchen's room could stay silent until the page was reloaded, and someone gone before that read could stay listed as online.
+- **Leaving:** a kitchen's room is told when someone's connection ends, not only when they leave the room.
+- **Web, My Kitchen:** shows only its own channel's new messages, and a list that arrives after switching tabs is dropped.
+- **Stopping the server** ends the Bench's live connections and idle kept-alive ones within about a second, instead of waiting for them. Clients reconnect by themselves as after any drop.
+- **Posting once:** `bench:message` and `bench:dm:send` take an optional client-made `messageId` (`BenchPostIdSchema` in `@culinaire/shared`). The same post sent again under it is stored once: only the sender is answered, with the message as it is now (`bench:message:deleted` if it was deleted since), and any other post under that id is refused with `CONFLICT`. Apps that send no id work as before. Channel messages on the live channel now also carry their `channelKey`.
+- **Phone:** each post carries its own id, so Try again can no longer post twice, and a post is matched to the server's message by that id rather than by its words.
+
 ### Fixed (an authenticator code typed just before the 30-second step changed was refused)
 
 Server only. No migration, no permission change.
