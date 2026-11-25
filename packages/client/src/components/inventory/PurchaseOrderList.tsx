@@ -465,15 +465,17 @@ export default function PurchaseOrderList({ focusPoId }: { focusPoId?: string | 
                           <tbody>
                             {detailCache[po.poId].lines!.map((line) => {
                               const ing = ingMap.get(line.ingredientId);
+                              // A quantity the server left out (no inventory:cost) is unknown, not zero.
+                              const stockHidden = ing !== undefined && ing.currentQty === undefined;
                               const stock = Number(ing?.currentQty ?? 0);
                               const par = Number(ing?.parLevel ?? ing?.orgParLevel ?? 0);
-                              const isLow = par > 0 && stock < par;
+                              const isLow = !stockHidden && par > 0 && stock < par;
                               return (
                               <tr key={line.lineId} className="border-b border-[#1A1A1A]/50">
                                 <td className="py-2 text-white">{line.ingredientName}</td>
                                 <td className="py-2 text-center text-xs text-dark-500">{line.baseUnit ?? line.orderedUnit}</td>
                                 <td className={`py-2 text-right text-xs ${isLow ? "text-amber-400 font-medium" : "text-dark-500"}`}>
-                                  {stock.toFixed(1)}
+                                  {stockHidden ? "—" : stock.toFixed(1)}
                                 </td>
                                 <td className="py-2 text-right text-xs text-[#555]">
                                   {par > 0 ? par.toFixed(1) : "—"}

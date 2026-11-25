@@ -176,7 +176,7 @@ export default function StockMovementForm({
                   >
                     <span>{i.ingredientName}</span>
                     <span className="text-[10px] text-dark-500">
-                      {Number(i.currentQty ?? 0).toFixed(1)} {i.unitOverride || i.baseUnit} on site
+                      {i.currentQty === undefined ? "—" : Number(i.currentQty ?? 0).toFixed(1)} {i.unitOverride || i.baseUnit} on site
                     </span>
                   </button>
                 ))}

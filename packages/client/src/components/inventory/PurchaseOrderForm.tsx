@@ -495,7 +495,7 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
             {visibleIngredients.map((ing) => {
               const stock = Number(ing.currentQty ?? 0);
               const par = Number(ing.parLevel ?? ing.orgParLevel ?? 0);
-              const isLow = par > 0 && stock < par;
+              const isLow = ing.currentQty !== undefined && par > 0 && stock < par;
               return (
                 <button
                   key={ing.ingredientId}
@@ -512,7 +512,7 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
                   </div>
                   <div className="w-14 text-right text-xs shrink-0">
                     <span className={isLow ? "text-amber-400 font-medium" : "text-dark-600"}>
-                      {stock.toFixed(1)}
+                      {ing.currentQty === undefined ? "—" : stock.toFixed(1)}
                     </span>
                   </div>
                   <div className="w-14 text-right text-xs text-[#555] shrink-0">
@@ -563,6 +563,8 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
               // (the server resolved loc -> org fallback already), so prefer it
               // and don't render a second copy of the same two numbers below.
               const gLine = guideItemById.get(line.ingredientId);
+              // No figure at all (a catalogue line whose quantity the server left out, no inventory:cost) is hidden, not zero.
+              const stockHidden = gLine?.onHand === undefined && ing !== undefined && ing.currentQty === undefined;
               const stock = Number(gLine?.onHand ?? ing?.currentQty ?? 0);
               const par = Number(gLine?.parLevel ?? ing?.parLevel ?? ing?.orgParLevel ?? 0);
 
@@ -576,13 +578,13 @@ export default function PurchaseOrderForm({ onBack, onCreated }: Props) {
                     <div>
                       <div className="text-sm font-medium text-white">{line.ingredientName}</div>
                       <div className="flex items-center gap-3 mt-0.5 text-xs">
-                        <span className={stock < par && par > 0 ? "text-amber-400" : "text-dark-500"}>
-                          In stock: {stock.toFixed(1)} {ing?.baseUnit ?? ""}
+                        <span className={!stockHidden && stock < par && par > 0 ? "text-amber-400" : "text-dark-500"}>
+                          In stock: {stockHidden ? "—" : stock.toFixed(1)} {ing?.baseUnit ?? ""}
                         </span>
                         {par > 0 && (
                           <span className="text-dark-500">Par: {par.toFixed(1)}</span>
                         )}
-                        {par > 0 && stock < par && (
+                        {par > 0 && !stockHidden && stock < par && (
                           <span className="text-gold">below par</span>
                         )}
                       </div>

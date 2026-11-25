@@ -24,7 +24,8 @@ export interface LocationIngredient {
   purchaseUnit: string | null;
   packQty: string | null;
   description: string | null;
-  orgUnitCost: string | null;
+  /** Absent, like `locationUnitCost` and `currentQty`, for someone without inventory:cost. */
+  orgUnitCost?: string | null;
   orgParLevel: string | null;
   orgReorderQty: string | null;
   // Allergens
@@ -38,7 +39,7 @@ export interface LocationIngredient {
   locationIngredientId: string | null;
   parLevel: string | null;
   reorderQty: string | null;
-  locationUnitCost: string | null;
+  locationUnitCost?: string | null;
   unitOverride: string | null;
   categoryOverride: string | null;
   activeInd: boolean | null;
@@ -48,7 +49,7 @@ export interface LocationIngredient {
   /** The supplier's real minimum order quantity — NOT the internal reorder trigger. */
   supplierMinOrderQty: string | null;
   // Stock
-  currentQty: string | null;
+  currentQty?: string | null;
   lastCountedDttm: string | null;
 }
 
@@ -117,8 +118,19 @@ export interface SetupProgress {
   inventoryActive: boolean;
 }
 
+/** The dashboard's figures, worked out on the server. Value is absent without `inventory:cost`. */
+export interface StockSummary {
+  lowCount: number;
+  criticalCount: number;
+  lowIngredientIds: string[];
+  criticalIngredientIds: string[];
+  stockValue?: number;
+  valueByCategory?: Array<{ category: string; value: number }>;
+}
+
 export interface DashboardData {
   stockLevels: LocationIngredient[];
+  stockSummary: StockSummary;
   activeSession: StockTakeSession | null;
   lastCompletedSession: StockTakeSession | null;
   setupProgress?: SetupProgress;
@@ -145,7 +157,8 @@ export interface OrgLocationSummary {
   totalItems: number;
   lowStock: number;
   critical: number;
-  inventoryValue: number;
+  /** Absent without `inventory:cost`. */
+  inventoryValue?: number;
   lastCountDttm: string | null;
 }
 

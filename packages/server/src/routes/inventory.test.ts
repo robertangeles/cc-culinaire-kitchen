@@ -270,3 +270,15 @@ describe("PO list and detail gating (the receiving queue)", () => {
     expect(status).toHaveBeenCalledWith(403);
   });
 });
+
+describe("GET /catalog-requests/mine gating", () => {
+  it("passes anyone who may make a request (inventory:count)", () => {
+    expect(runGate(findGate("get", "/catalog-requests/mine"), ["inventory:count"]).passed).toBe(true);
+  });
+
+  it("403s a user without inventory:count", () => {
+    const { passed, status } = runGate(findGate("get", "/catalog-requests/mine"), ["chat:access"]);
+    expect(passed).toBe(false);
+    expect(status).toHaveBeenCalledWith(403);
+  });
+});

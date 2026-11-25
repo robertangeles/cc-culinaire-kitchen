@@ -78,6 +78,8 @@ export function IngredientCatalog() {
       if (search && !i.ingredientName.toLowerCase().includes(search.toLowerCase())) return false;
       if (statusFilter) {
         const loc = locMap.get(i.ingredientId);
+        // A quantity the server left out (no inventory:cost) is unknown, not zero: no status.
+        if (loc && loc.currentQty === undefined) return false;
         const qty = Number(loc?.currentQty || 0);
         const par = Number(loc?.parLevel || i.parLevel || 0);
         const ratio = par > 0 ? qty / par : 1;
@@ -98,7 +100,7 @@ export function IngredientCatalog() {
       const loc = locMap.get(item.ingredientId);
       const qty = Number(loc?.currentQty || 0);
       const par = Number(loc?.parLevel || item.parLevel || 0);
-      if (par > 0) {
+      if (par > 0 && !(loc && loc.currentQty === undefined)) {
         const ratio = qty / par;
         if (ratio <= 0.25) counts[cat].critical++;
         else if (ratio <= 0.75) counts[cat].low++;
@@ -219,7 +221,7 @@ export function IngredientCatalog() {
 
 // ─── Edit Modal ──────────────────────────────────────────────────
 
-function EditIngredientModal({
+export function EditIngredientModal({
   ingredient, onSave, onDelete, onCheckUsage, onClose,
 }: {
   ingredient: Ingredient;
@@ -693,9 +695,11 @@ function EditIngredientModal({
                     <div key={l.storeLocationId} className="flex items-center justify-between px-3 py-1.5 text-xs">
                       <span className="text-white">{l.locationName}</span>
                       <span className={`tabular-nums ${isLow ? "text-red-400" : hasStock ? "text-[#E5E5E5]" : "text-dark-500"}`}>
-                        {hasStock
-                          ? `${qty % 1 === 0 ? qty.toString() : qty.toFixed(1)} ${unit}`
-                          : "Not counted yet"}
+                        {l.currentQty === undefined
+                          ? "—"
+                          : hasStock
+                            ? `${qty % 1 === 0 ? qty.toString() : qty.toFixed(1)} ${unit}`
+                            : "Not counted yet"}
                         {hasStock && parQty != null && (
                           <span className="text-dark-500 ml-1.5">(par: {parQty % 1 === 0 ? parQty.toString() : parQty.toFixed(1)})</span>
                         )}
@@ -776,7 +780,8 @@ function EditIngredientModal({
                   purchaseUnit: purchaseUnit || null,
                   packQty: purchaseUnit ? editPackQty || null : null,
                   description: desc || null,
-                  unitCost: derivedUnitCost || null,
+                  // A cost the server left out (no inventory:cost) is unknown here, not empty: only a typed price is saved.
+                  ...(ingredient.unitCost === undefined && !cost ? {} : { unitCost: derivedUnitCost || null }),
                   parLevel: toKitchen(par, parEntryUnit),
                   itemType: editItemType,
                   fifoApplicable: editFifo,
