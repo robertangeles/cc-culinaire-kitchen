@@ -60,6 +60,7 @@ import { cancelSubscriptionNow, deleteCustomer } from "./stripeService.js";
 import { deleteProfilePhoto, profilePhotoPublicId } from "../middleware/upload.js";
 import * as auditService from "./auditService.js";
 import { appleLinkOf, revokeAppleAfterDeletion } from "./appleSignInService.js";
+import { evictFromOrganisationRoom } from "./benchSocketService.js";
 
 const logger = pino({ name: "userAnonymisationService" });
 
@@ -272,7 +273,7 @@ export async function anonymiseUser(userId: number, actorUserId: number | null =
   // Read before the transaction deletes the oauth_account row that holds Apple's token.
   const appleLink = await appleLinkOf(userId);
 
-  await db.transaction(async (tx) => {
+  const memberships = await db.transaction(async (tx) => {
     // Conversations and their messages.
     const conversations = await tx
       .select({ conversationId: conversation.conversationId })
@@ -294,7 +295,10 @@ export async function anonymiseUser(userId: number, actorUserId: number | null =
 
     // Access: roles, organisation and location membership, selections.
     await tx.delete(userRole).where(eq(userRole.userId, userId));
-    await tx.delete(userOrganisation).where(eq(userOrganisation.userId, userId));
+    const left = await tx
+      .delete(userOrganisation)
+      .where(eq(userOrganisation.userId, userId))
+      .returning({ organisationId: userOrganisation.organisationId });
     await tx.delete(userStoreLocation).where(eq(userStoreLocation.userId, userId));
     await tx.delete(userLocationPreference).where(eq(userLocationPreference.userId, userId));
 
@@ -332,7 +336,9 @@ export async function anonymiseUser(userId: number, actorUserId: number | null =
       { entityType: "user", entityId: String(userId), action: "anonymised", actorUserId },
       tx,
     );
+    return left;
   });
 
+  for (const { organisationId } of memberships) evictFromOrganisationRoom(userId, organisationId);
   if (appleLink) await revokeAppleAfterDeletion(userId, appleLink);
 }

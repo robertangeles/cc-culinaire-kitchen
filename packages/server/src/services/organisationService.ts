@@ -12,6 +12,7 @@ import { organisation, userOrganisation, user, role, userRole } from "../db/sche
 import { encryptOrgPii, decryptOrgPii, decryptUserPii } from "./piiService.js";
 import { JoinError } from "./joinErrors.js";
 import { claimMenuItems } from "./menuAccess.js";
+import { evictFromOrganisationRoom } from "./benchSocketService.js";
 
 /** Generate a short random join key. */
 function generateJoinKey(): string {
@@ -199,6 +200,7 @@ export async function leaveOrganisation(userId: number, organisationId: number) 
         eq(userOrganisation.organisationId, organisationId)
       )
     );
+  evictFromOrganisationRoom(userId, organisationId);
   await revokeOperationsAdminRoleIfNoLongerAdmin(userId);
 }
 
@@ -451,6 +453,7 @@ export async function removeMember(organisationId: number, targetUserId: number)
     throw new Error("Member not found in this organisation.");
   }
 
+  evictFromOrganisationRoom(targetUserId, organisationId);
   await revokeOperationsAdminRoleIfNoLongerAdmin(targetUserId);
 }
 
