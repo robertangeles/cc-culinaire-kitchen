@@ -292,7 +292,7 @@ describe("one order", () => {
     await waitFor(() => expect(routerMock.push).toHaveBeenLastCalledWith({ pathname: "/order", params: { poId: "P9", info: "1 item left out: already at or above par." } }));
     api.clone.mockResolvedValue({ poId: "P9", poNumber: "PO-900", skippedItems: [], quantityWarnings: [{ ingredientName: "Rye" }] });
     fireEvent.click(button("Reorder"));
-    await waitFor(() => expect(routerMock.push).toHaveBeenLastCalledWith({ pathname: "/order", params: { poId: "P9", info: "Check the quantity of Rye: it could not be fully worked out from the last order." } }));
+    await waitFor(() => expect(routerMock.push).toHaveBeenLastCalledWith({ pathname: "/order", params: { poId: "P9", info: "Check the quantity of Rye: a unit could not be converted, so the last order's quantity may have been kept." } }));
   });
 });
 

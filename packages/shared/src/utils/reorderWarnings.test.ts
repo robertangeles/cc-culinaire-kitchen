@@ -8,7 +8,7 @@ describe("reorderCheckLine", () => {
 
   it("names each item to check, and an item with no name as an item", () => {
     expect(reorderCheckLine([{ ingredientName: "Rye" }, { ingredientName: null }])).toBe(
-      "Check the quantity of Rye, an item: it could not be fully worked out from the last order.",
+      "Check the quantity of Rye, an item: a unit could not be converted, so the last order's quantity may have been kept.",
     );
   });
 });

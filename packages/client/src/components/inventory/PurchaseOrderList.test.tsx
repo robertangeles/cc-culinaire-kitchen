@@ -80,13 +80,13 @@ describe("PurchaseOrderList, reorder", () => {
 
   it("says which quantities to check when nothing was left out", async () => {
     await reorder({ skippedItems: [], quantityWarnings: [{ ingredientName: "Rye" }] });
-    await waitFor(() => expect(alertSpy).toHaveBeenCalledWith("Check the quantity of Rye: it could not be fully worked out from the last order."));
+    await waitFor(() => expect(alertSpy).toHaveBeenCalledWith("Check the quantity of Rye: a unit could not be converted, so the last order's quantity may have been kept."));
   });
 
   it("says both what was left out and what to check", async () => {
     await reorder({ skippedItems: ["Salt"], quantityWarnings: [{ ingredientName: "Rye" }] });
     await waitFor(() =>
-      expect(alertSpy).toHaveBeenCalledWith("PO cloned. 1 item(s) skipped (at or above par level). Check the quantity of Rye: it could not be fully worked out from the last order."),
+      expect(alertSpy).toHaveBeenCalledWith("PO cloned. 1 item(s) skipped (at or above par level). Check the quantity of Rye: a unit could not be converted, so the last order's quantity may have been kept."),
     );
   });
 
