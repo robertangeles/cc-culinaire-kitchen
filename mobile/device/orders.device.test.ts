@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
-  adb, back, clearApp, clearField, dismissSavePassword, dump, findAll, forceStop, has, hideKeyboard, openApp, openTab, screenSize, setAnimations, setRotation, swipe, tap, tapAt, typeInto, waitFor,
+  adb, back, clearApp, clearField, dismissSavePassword, dump, findAll, forceStop, has, hideKeyboard, openApp, openTab, screenSize, setAnimations, setRotation, swipe, tap, tapAt, typeInto, waitFor as waitForExact,
 } from "./adb";
 import { credentials, freshCode, manager } from "./fixtures";
 
@@ -37,6 +37,8 @@ function sql(statement: string) {
   execFileSync("psql", [url, "-qc", statement]);
 }
 
+/** Copper capitals labels reach the screen dump in capitals ("START FROM A GUIDE"), so plain words are matched whatever their case. */
+const waitFor = (m: string | RegExp, ms?: number) => waitForExact(typeof m === "string" ? new RegExp(`^${m.replace(/[.?]/g, "\\$&")}$`, "i") : m, ms);
 const scroll = async (up = false) => {
   const [w, h] = screenSize();
   await swipe(Math.round(w / 2), Math.round(h * (up ? 0.3 : 0.7)), Math.round(w / 2), Math.round(h * (up ? 0.7 : 0.3)), 300);

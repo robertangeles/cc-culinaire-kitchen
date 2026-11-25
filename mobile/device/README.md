@@ -6,7 +6,8 @@ All commands: `pnpm --filter @culinaire/mobile run <script> [-- <path filter>]`.
 - `check:test`: logic plus screen tests (`tests/*.test.tsx`, react-native-web in jsdom). Needs no env var.
   One module: `check:test -- src/count`.
 - `check:e2e`: the phone's real client, session, count store and outbox against a server on :3009 and the seeded
-  E2E user (credentials from `packages/client/.env.test`).
+  E2E user (credentials from `packages/client/.env.test`). Start that server with `RATE_LIMIT_PER_MINUTE=1000`, as CI does: all the files
+  together make more than the 300 requests a minute one person gets.
 - `check:device`: walks the real phone or emulator through adb. It always runs through `device/lease.sh`, which takes
   a machine-wide lock (`flock`, Linux only), waits up to 15 min (`DEVICE_LEASE_WAIT_S`) and shows who holds it.
   `adb()` refuses to run without the lease, so never call adb on the phone by hand while someone else holds it.

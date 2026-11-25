@@ -298,6 +298,8 @@ jobs:
       E2E_PHONE_USER_EMAIL: e2e-phone-ci@culinaire.test
       E2E_PHONE_USER_PASSWORD: E2e-Phone-Throwaway-Pass-1!
       E2E_PHONE_USER_TOTP_SECRET: KRSXG5CTMVRXEZLUKRSXG5CTMVRXEZLU
+      # The phone files run back to back as one user, over 300 requests in their first minute. No test here checks the default.
+      RATE_LIMIT_PER_MINUTE: "1000"
 
     steps:
       - name: Checkout
