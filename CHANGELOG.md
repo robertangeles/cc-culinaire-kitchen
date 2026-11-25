@@ -12,6 +12,14 @@ Server only. No migration, no permission change.
 - **Sign-in, changing two-step settings, linking a sign-in method and deleting an account** now accept an authenticator code in its own 30-second step and the one before it, never a future step. A code typed as the step changes, or from a phone whose clock is a little slow, is no longer refused.
 - **Used codes:** we checked whether a code that has already been used is refused. It is not: `verifyMfaToken` stores nothing, so a used code can be used again within its window. That was so before this change; this change widens that window from about 30 to about 60 seconds. Refusing a used code is tracked separately.
 
+### Added (mobile Wave 9, phone: the Bench)
+
+Phone app only; no server change, no migration, no new permission. New dependency in the phone app: `socket.io-client`, the version the web already uses. **Not for a store build until the server has report and block** (App Store 1.2).
+
+- **Bench tab** for everyone signed in, last in the tab order: Everyone, each kitchen's own channel and direct messages, with reactions, mentions, edit, delete, pins and search. On a tablet the list sits beside the open room.
+- **Live** over the Bearer socket while the tab is in view and the app is in front; a drop or the background reconnects and reads what was missed. Messages are kept in memory only. A post made with no connection says Not sent and never sends itself later.
+- Presence shows in a kitchen's own channel only, and direct messages go to people of one's kitchens or existing threads, pending the owner's decisions.
+
 ### Fixed (the Bench's live channel followed the client's room names, not the person's membership)
 
 Server only. No migration, no permission change, no change to the Bench's HTTP routes.

@@ -6,6 +6,7 @@ import {
   adb, back, clearApp, dismissSavePassword, openTab, dump, fieldText, find, isSavePasswordSheet, findAll, forceStop, has, hideKeyboard, openApp, setAirplane, setAnimations, setDarkMode, setFontScale,
   setRotation, swipe, tap as tapNow, tapAt, typeInto, waitFor, waitGone,
 } from "./adb";
+import { io, type Socket } from "socket.io-client";
 import { createApiClient, type Tokens } from "../src/api/client";
 import { credentials, freshCode, manager } from "./fixtures";
 
@@ -1123,6 +1124,112 @@ describe.skipIf(!process.env.SCREENS_OUT)(`screens on ${FORM}`, { timeout: 600_0
       await shot("b6-brain-offline");
     } finally {
       await setAirplane(false);
+    }
+  });
+
+  it("bench: list, a kitchen's channel, a message open, mention, people, pins, search, edit, everyone, a direct message, not sent", async () => {
+    const ctx = await m.client.request<{ organisationId: number }>("GET", "/api/users/location-context");
+    const { organisation } = await m.client.request<{ organisation: { joinKey: string } }>("GET", "/api/organisations/mine");
+    const me = Number((await m.client.request<{ userId?: number; user?: { userId: number } }>("GET", "/api/auth/me").then((r) => r.userId ?? r.user!.userId)));
+    const key = `org_${Number(ctx.organisationId)}`;
+    // A colleague who writes back: their own sign-in and their own live connection. The Everyone channel is not seeded.
+    let theirs: Tokens | null = null;
+    const colleague = createApiClient({ baseUrl: API_URL, appVersion: "0.1.0-device", tokenStore: { load: async () => theirs, save: async (t) => void (theirs = t), clear: async () => void (theirs = null) } });
+    const email = `walk-bench-${FORM}-${Date.now().toString(36)}@culinaire.test`;
+    await colleague.request("POST", "/api/auth/register", { auth: false, body: { name: "Bo Li", email, password: "Walk-Bench-Pass-1!" } });
+    const login = await colleague.request<{ tokens: Tokens; user: { userId: number } }>("POST", "/api/auth/login", { auth: false, body: { email, password: "Walk-Bench-Pass-1!" } });
+    theirs = login.tokens;
+    const bo = Number(login.user.userId);
+    await colleague.request("POST", "/api/organisations/join", { body: { joinKey: organisation.joinKey } });
+    await colleague.request("GET", "/api/bench/channels");
+    sql(`insert into bench_channel (channel_key, channel_name, channel_type) values ('everyone', 'Everyone', 'global') on conflict do nothing`);
+    const line = (channel: string, who: number, body: string, ago: string) => sql(`insert into bench_message (channel_id, user_id, message_body, created_dttm) select channel_id, ${who}, '${body}', now() - interval '${ago}' from bench_channel where channel_key = '${channel}'`);
+    for (const day of ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]) line(key, me, `Order kingfish for ${day}, two boxes and the trim for staff lunch`, "4 days");
+    line(key, bo, "Morning. Two boxes of kingfish came in, one is short by 800 g. I have set it aside with the docket so Receiving can weigh it again before the driver leaves.", "1 day 2 hours");
+    line(key, me, "Thanks. I will call them.", "1 day 1 hour");
+    line(key, bo, "Walk-in is at 6 degrees, the compressor has been told off.", "40 minutes");
+    line("everyone", bo, "Anyone in Melbourne with a spare dough divider for Saturday?", "3 hours");
+    let socket: Socket | null = null;
+    try {
+      socket = io(API_URL, { transports: ["websocket"], auth: { token: login.tokens.accessToken } });
+      // A moment after connecting: a join is not acknowledged.
+      socket.on("connect", () => setTimeout(() => socket!.emit("bench:join", { channelKey: key }), 1_500));
+      await signedIn();
+      await tab("Bench");
+      await waitFor("The Bench", 30_000);
+      await waitFor(/^Everyone/, 30_000);
+      await shot("c0-bench-list");
+      const kitchenName = sql(`select channel_name from bench_channel where channel_key = '${key}'`);
+      await tap(kitchenName);
+      await waitFor(/compressor has been told off/, 30_000);
+      await shot("c1-kitchen");
+      socket.emit("bench:typing", { channelKey: key });
+      await waitFor("Bo Li is writing…", 5_000).catch(() => null);
+      await shot("c1b-kitchen-writing");
+      await tap(/compressor has been told off/);
+      await waitFor("React Fire", 20_000);
+      await shot("c2-message-open");
+      await tap("React Fire");
+      await sleep(1500);
+      await tap(/compressor has been told off/);
+      await tap("Pin");
+      await sleep(1500);
+      await tapNow("Pinned");
+      await waitFor(/^Unpin Bo Li/, 20_000);
+      await shot("c3-pinned");
+      await tapNow("Pinned");
+      await tapNow(/on the pass$/);
+      await waitFor("Message Bo Li", 20_000);
+      await shot("c4-people");
+      await tapNow(/on the pass$/);
+      await tapNow("Search");
+      await type("Search this channel", "kingfish");
+      await sleep(1500);
+      await shot("c5-search-keyboard");
+      await hideKeyboard();
+      await tapNow("Search");
+      await type("Your message", "Ask @b");
+      await waitFor("Mention Bo Li", 20_000);
+      await shot("c6-mention-keyboard");
+      await tapNow("Mention Bo Li");
+      await hideKeyboard();
+      await tapNow("Send");
+      await waitFor(/^Ask @Bo Li/, 20_000);
+      await sleep(1500);
+      await shot("c7-posted");
+      await tap(/Ask @Bo Li/);
+      await tap("Edit");
+      await waitFor("Edit your message", 20_000);
+      await hideKeyboard();
+      await shot("c7b-edit");
+      await tapNow("Cancel");
+      await setAirplane(true);
+      try {
+        await waitFor(/^Not connected/, 90_000);
+        await type("Your message", "On my way down");
+        await hideKeyboard();
+        await tapNow("Send");
+        await waitFor("Not sent.", 20_000);
+        await shot("c8-not-sent");
+      } finally {
+        await setAirplane(false);
+      }
+      await waitGone(/^Not connected/, 90_000);
+      await tapNow("Discard");
+      if (await has("Back to the Bench")) await tapNow("Back to the Bench");
+      await tap(/^Everyone/);
+      await waitFor(/dough divider/, 30_000);
+      await shot("c9-everyone");
+      if (await has("Back to the Bench")) await tapNow("Back to the Bench");
+      socket.emit("bench:dm:send", { recipientId: me, body: "Can you cover the pass from two?" });
+      await waitFor("Bo Li, new message", 30_000);
+      await shot("c10-list-new-message");
+      await tap("Bo Li, new message");
+      await waitFor(/cover the pass/, 30_000);
+      await shot("c11-direct-message");
+    } finally {
+      socket?.disconnect();
+      forceStop(); // the next form starts a server and a database of its own
     }
   });
 

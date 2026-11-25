@@ -11,11 +11,11 @@ Run the screenshot walk (`device/README.md`, "The screenshot walk") after changi
 
 - Light paper background (`bg`), never white; cards and grouped rows on the sunk paper `Surface` with hairline dividers.
 - Section and field labels in copper capitals (`Text variant="label"`: Inter semibold 12, letter-spaced, `accentText`); titles and sentences in Fraunces; a card's or a row's name is `variant="heading"` (Fraunces 20); buttons, chips, numbers and short facts in Inter. Nothing below 16 pt except those labels and the tab bar's. No screen writes these styles out by hand.
-- Every tab starts with `ScreenHeader`: the location in copper capitals held close over the title that says what the tab is ("Waste", "Count"); Ask, Brain, Recipes and Menu, which no location owns, name their part instead ("Kitchen AI" for Ask and Brain, "Recipe book", "Menu & costing"). An empty tab (or an empty list on it) shows its state in a card, never a bare line.
+- Every tab starts with `ScreenHeader`: the location in copper capitals held close over the title that says what the tab is ("Waste", "Count"); Ask, Brain, Recipes, Menu and Bench, which no location owns, name their part instead ("Kitchen AI" for Ask and Brain, "Recipe book", "Menu & costing", "Where the kitchen talks"). An empty tab (or an empty list on it) shows its state in a card, never a bare line.
 - The signed-in app opens on the first button of the person's bar (`homeHref`): Prep for a cook who preps, Waste for one who only logs waste, Ask for someone with no module. Never on a tab under More.
 - Nothing clipped or overlapping: lists scroll right up to the tab bar (each tab screen has a safe area of its own, `app/(app)/_layout.tsx`, so no paper strip is left above it), tab labels fully above the system navigation bar, long item names wrap, buttons fit their words.
 - At most five tab buttons; more modules go under More (`src/shell/tabs.ts`, `tabBar`), and Account is always reachable. The bar is quiet: fine grey line icons with a short Inter 12 label each, one line, never cut; the open tab (More for a screen under it) is the only one in copper, on a sunk-paper pill.
-- On a tablet the content sits in the centred 560 dp column (`Screen` or `Column`), with equal paper on both sides.
+- On a tablet the content sits in the centred 560 dp column (`Screen` or `Column`), with equal paper on both sides. The Bench is the one two-pane screen: its list (320 dp) beside the open room, whose messages keep the column.
 - A signed-in screen, the location choice and Terms and Privacy start at the top (`Screen` with `align="top"`); the account screens (details, kitchen profile, password, two-step, notifications) too; only sign-in, forgot password, check email, the two-step code, first run, update required and account deleted sit centred down the page.
 - The primary action is the copper gradient button; quiet actions are copper text; destructive ones outlined in ember. Offline is the saffron banner, waiting rows say "Waiting to send".
 - With the keyboard up, the field being typed in stays visible; a form's button may need a scroll but is never unreachable.
@@ -25,11 +25,11 @@ Run the screenshot walk (`device/README.md`, "The screenshot walk") after changi
 
 | Folder | What lives there |
 |---|---|
-| `app/` | Screens (expo-router). A module is a route group `app/(app)/(module)/`, plus one entry in `src/shell/tabs.ts` naming the permission that opens it (none when the server asks only for a signed-in person), in the order a line cook uses them (Prep, Waste, Usage, Count, Move, Receive, Orders, Ask, Recipes, Inbox, Transfers, Stock, Menu, Brain). Past five tab buttons, the fifth is More (`app/(app)/more.tsx`), listing the rest and Account. A tab under More keeps its route and loses only its button: never `href: null`, which expo-router turns into a hidden tab that redirects to the first tab when opened. |
+| `app/` | Screens (expo-router). A module is a route group `app/(app)/(module)/`, plus one entry in `src/shell/tabs.ts` naming the permission that opens it (none when the server asks only for a signed-in person), in the order a line cook uses them (Prep, Waste, Usage, Count, Move, Receive, Orders, Ask, Recipes, Inbox, Transfers, Stock, Menu, Brain, Bench). Past five tab buttons, the fifth is More (`app/(app)/more.tsx`), listing the rest and Account. A tab under More keeps its route and loses only its button: never `href: null`, which expo-router turns into a hidden tab that redirects to the first tab when opened. |
 | `src/api` | The one network client: auth, refresh, coded errors (`ApiError.code`, `serverCode`). |
 | `src/outbox` | The offline queue (below). |
 | `src/ingredients` | The shared ingredient picker's data (below); its component is `src/ui/IngredientPicker.tsx`. |
-| `src/count`, `src/waste`, `src/prep`, `src/consumption`, `src/movements`, `src/chat`, `src/recipes`, `src/notifications`, `src/transfers`, `src/stock`, `src/orders`, `src/menu`, `src/brain` | One folder per module: API calls, store (screen state), pure view functions, commands. |
+| `src/count`, `src/waste`, `src/prep`, `src/consumption`, `src/movements`, `src/chat`, `src/recipes`, `src/notifications`, `src/transfers`, `src/stock`, `src/orders`, `src/menu`, `src/brain`, `src/bench` | One folder per module: API calls, store (screen state), pure view functions, commands. |
 | `src/lock` | The app lock (below): its state (`appLock.ts`, no React), the lock screen, the system prompt, and `useAppLock().confirm(reason)` for guarded actions. |
 | `src/profile` | The photo picker and the kitchen profile form's rules. |
 | `src/ui` | Components shared by every module, `Column` (the tablet column) among them. |
@@ -440,6 +440,46 @@ Differences from the web, found while comparing:
 | Nudges: when the setting cannot be read the switch shows off; a failed save only slips back | No switch until the choice is known, and it says why; a failed save says so | Off may be wrong. |
 | Not gated by the admin's Brain switch (an empty or old list when it is off) | The same | The routes check permissions only. |
 
+## The Bench (`src/bench`, `app/(app)/(bench)`)
+
+The Bench tab is the web's The Bench page (`BenchPage.tsx`), for everyone signed in: Everyone, each kitchen's own channel, and direct messages. Lists, history, pins and search are REST
+(`benchApi.ts`); posts, edits, deletes, reactions, typing and presence go over the server's Socket.IO channel with the sign-in's access token (`benchLive.ts`, `nativeLive.ts`; `socket.io-client`, the version the web uses, JavaScript only).
+
+**It must not be in a store build until people can report a message and block a person** (App Store 1.2, user-generated content; Google Play asks the same). The server has neither yet.
+
+Nothing of the Bench is kept on the phone (messages are private: memory only) and nothing is ever queued: a post either goes out now or says "Not sent" with Try again and Discard.
+
+- **Connected** only while the tab is in view and the app is in front. Background disconnects; coming back connects and reads what was missed. `inactive` (the app switcher, the lock's prompt) is left alone. A token the server refuses is renewed by one ordinary request, then it connects again.
+- **The open room is kept right by reading its latest page again** (`benchStore.ts`), since the server acknowledges neither a join nor a post: after every connect, a moment later once more, and ten seconds after a post that has not come back.
+  What arrives while a page is on its way is laid over it; what is inside the page's window and not in it was deleted; a gap longer than a page starts again from the latest page.
+  A join is sent twice, 1.5 s apart, since neither is acknowledged (server connection-time handling is tracked as a follow-up). Order is the server's, never that of arrival.
+- **A post** is "Sending…" until the server's copy is seen: an own message with exactly those words that was not there when it was posted, not before it by the server's own clock, one message for one post. A list read after ten seconds without it makes it "Not sent"; with no connection it stays undecided.
+  Try again looks on the server first. Every emit is volatile: the socket library otherwise keeps what it could not send and posts it at the next connect, after the person gave up on it.
+  Known limit: the server takes no id for a post, so one that reaches it after Try again looked can, rarely, be posted twice.
+- **Privacy rules** (until the owner decides who may see who is online in Everyone and whom a direct message may reach): presence is shown in a kitchen's own channel only; a direct message can be started only with someone met in a kitchen's channel (who is in it, who wrote in it) or in a thread there already is. The server scopes each room; the phone filters nothing.
+
+Differences from the web, found while comparing:
+
+| Web | Phone | Why |
+|---|---|---|
+| A guest sees the page (an empty list and a sign-in prompt) | Signed-in people only | The server has no guest access. |
+| Everyone's messages also appear in My Kitchen while it is open (`useBenchMessages` adds every message that arrives) | A message shows only in the room it names | Web bug, not fixed here. |
+| The first kitchen only | Every kitchen the person belongs to | The server lists them all. |
+| Who is online is shown in Everyone too | A kitchen's own room only | Privacy rule above. The phone asks for the list again every 30 s while the room is open. |
+| Any name starts a direct message, in Everyone too | Only people of one's kitchens or an existing thread | Privacy rule above. |
+| @ suggests everyone online | @ suggests who is in the kitchen's room and who wrote what is on screen; one's own @name is in copper | The name is plain text on both: nothing stores a mention, so there is no unread count and no push. |
+| Reconnects at most ten times; a post made offline is dropped silently | Reconnects until left; says Not sent | |
+| No pins and no search on the web (the server has both) | Pinned and Search in each channel. Pin and Unpin in a kitchen's channel for its members; in Everyone for Administrators only | Pins in Everyone are for its moderators. |
+| Search | The newest five, no jump to the message | Follow-up. |
+| Reactions can be added in direct messages but never show (the list does not return them) | No reactions in direct messages | |
+| Direct messages: no typing sign, a toast when one arrives on another tab | No typing sign; "New" on the thread, kept until it is opened | In memory only: the server keeps no unread state. |
+| Edit and delete buttons on hover; Delete does not ask | Tap a message for what can be done with it; Delete asks first | |
+| A shared recipe opens its public page | Named, does not open | Follow-up; no screen on either can share one. |
+| The banner texts come from the site settings | The channel's own banner, or the web's default words | The site settings are not read by the phone. |
+| Attachments | None | Same. |
+
+The Bench is open to everyone, so a person with one module of their own now has more than five tabs: their first four stay where they were, and the Bench and Account are under More.
+
 ## Receive (`src/receiving`, `app/(app)/(receive)`)
 
 The Receive tab is shown to `purchasing:receive` holders. It is the web's receiving (`components/purchasing/ReceiveQueue.tsx`, `ReceivingChecklist.tsx`) and uses the same routes.
@@ -584,5 +624,5 @@ The web's "create your first location" link for an admin is a sentence here: mak
 ## Tests
 
 `check:test` runs the logic tests (`src/**`) and the screen tests (`tests/*.test.tsx`); `check:e2e` runs the real client and queue against a server
-(`e2e/phoneFlow`, `e2e/wasteQueue`, `e2e/prepQueue`, `e2e/stockQueue`, `e2e/chatRecipes`, `e2e/storeRoom`; `e2e/brain` (Your Brain, no queue); `e2e/receiving` uses the client alone, receiving has no queue; `e2e/orders` uses the client, lists and order form, which have none either; `e2e/accountNotifications`
+(`e2e/phoneFlow`, `e2e/wasteQueue`, `e2e/prepQueue`, `e2e/stockQueue`, `e2e/chatRecipes`, `e2e/storeRoom`; `e2e/brain` (Your Brain, no queue); `e2e/bench` (two colleagues and an outsider over real sockets, no queue); `e2e/receiving` uses the client alone, receiving has no queue; `e2e/orders` uses the client, lists and order form, which have none either; `e2e/accountNotifications`
 covers details, kitchen profile, password, two-step, the inbox read queue and push settings with a just-registered person; set `E2E_NOTIFICATION_ID` to a notification made for that person to check a real row, as the suite cannot make one through the API). See `device/README.md`.
