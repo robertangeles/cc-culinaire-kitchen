@@ -241,7 +241,7 @@ jobs:
         run: pnpm --filter @culinaire/server exec vitest run src/services/menuCosting.integration.test.ts
 
       - name: Run orders, approvals and credit notes integration tests (and migration 0008)
-        run: pnpm --filter @culinaire/server exec vitest run src/services/purchasingWave5.integration.test.ts src/services/purchaseOrderEditReplay.integration.test.ts src/migrations/0008_credit_note_one_per_discrepancy.integration.test.ts
+        run: pnpm --filter @culinaire/server exec vitest run src/services/purchasingWave5.integration.test.ts src/services/purchaseOrderEditReplay.integration.test.ts src/services/purchaseOrderReorderUnits.integration.test.ts src/migrations/0008_credit_note_one_per_discrepancy.integration.test.ts
 
       # Mobile Wave 3 (store room, bar, HQ review): retry-safe transfers, front of house and catalogue
       # requests; zone-aware stock reads, blind counts, opening inventory and the recount round.

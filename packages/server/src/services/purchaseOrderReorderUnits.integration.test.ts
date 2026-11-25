@@ -63,7 +63,7 @@ async function orderOf(lines: Line[], createdDttm = new Date()) {
 const reorder = (poId: string) => callHandler(handleClonePO, asUser(fx.chef, ["purchasing:draft"]), { params: { id: poId }, body: { storeLocationId: fx.locA } });
 
 /** What was reordered, in the order the ingredients were ordered in (the rows come back in no set order). */
-const quantities = (body: Record<string, any>, ingredientIds: string[]) => // eslint-disable-line @typescript-eslint/no-explicit-any
+const quantities = (body: Record<string, any>, ingredientIds: string[]) =>
   ingredientIds.map((id) => {
     const l = body.lines.find((x: { ingredientId: string }) => x.ingredientId === id);
     return `${l.orderedQty} ${l.orderedUnit}`;
