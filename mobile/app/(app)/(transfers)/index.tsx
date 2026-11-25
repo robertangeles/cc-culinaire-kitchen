@@ -49,7 +49,11 @@ export default function Transfers() {
     <View style={{ gap: space.xs }}>
       <Text variant="label">{title}</Text>
       {rows.length === 0 ? (
-        <Text variant="muted">{empty}</Text>
+        <Surface>
+          <View style={{ padding: space.lg }}>
+            <Text variant="muted">{empty}</Text>
+          </View>
+        </Surface>
       ) : (
         <Surface>
           {rows.map((row, index) => {
