@@ -3,6 +3,7 @@ import {
   sumPOLineTotal,
   suggestedOrderQty,
   toPurchasePackages,
+  reorderQty,
   estimatedLineCost,
   shouldRouteToHQ,
   isUnpriced,
@@ -183,6 +184,84 @@ describe("Formula F-PO-04: toPurchasePackages", () => {
         const packs = toPurchasePackages(qty, pack, "case")!;
         expect(packs * pack - qty).toBeLessThan(pack);
       }
+    });
+  });
+});
+
+describe("Formula F-PO-05: reorderQty", () => {
+  const flour = { baseUnit: "kg", purchaseUnit: "bag", packQty: "12.5" };
+  const wine = { baseUnit: "bottle", purchaseUnit: "case", packQty: "12" };
+  const eggs = { baseUnit: "each", purchaseUnit: null, packQty: null };
+
+  describe("Forward reconciliation", () => {
+    it("the live bug: 62.5 kg below par of a 12.5 kg bag is 5 bags, not 62.5", () => {
+      expect(reorderQty(62.5, "bag", flour, [], null)).toEqual({ qty: 5, isConverted: true });
+    });
+
+    it("5 bottles below par, ordered by the case of 12, is 1 case", () => {
+      expect(reorderQty(5, "case", wine, [], null).qty).toBe(1);
+    });
+
+    it("reads an operator's own conversion (a carton of 30 eggs) and a standard one (dozen)", () => {
+      expect(reorderQty(61, "carton", eggs, [{ fromUnit: "carton", toBaseFactor: "30" }], null).qty).toBe(3);
+      expect(reorderQty(25, "dozen", eggs, [], null).qty).toBe(3);
+    });
+
+    it("matches the unit whatever its case", () => {
+      expect(reorderQty(62.5, "Bag", flour, [], null).qty).toBe(5);
+    });
+  });
+
+  describe("A line already in the kitchen unit stays exact", () => {
+    it.each([
+      ["kg", flour, 1.875],
+      ["kg", flour, 62.5],
+      ["each", eggs, 7],
+    ])("%s", (unit, ing, shortfall) => {
+      expect(reorderQty(shortfall, unit, ing, [], null).qty).toBe(shortfall);
+    });
+
+    it("drops subtraction noise: par 12 less 9.7 is 2.3", () => {
+      expect(reorderQty(12 - 9.7, "kg", flour, [], null).qty).toBe(2.3);
+    });
+  });
+
+  describe("Boundary conditions", () => {
+    it("does not buy a spare pack for floating-point noise (4.9 / 0.7 = 7.000000000000001)", () => {
+      expect(reorderQty(4.9, "tub", { baseUnit: "kg", purchaseUnit: "tub", packQty: "0.7" }, [], null).qty).toBe(7);
+    });
+
+    it("rounds up to whole order units", () => {
+      expect(reorderQty(12.6, "bag", flour, [], null).qty).toBe(2);
+    });
+  });
+
+  describe("Supplier minimum (in the unit the item is bought in)", () => {
+    it("lifts the line to the minimum, and leaves it alone above", () => {
+      expect(reorderQty(5, "bag", flour, [], 3).qty).toBe(3);
+      expect(reorderQty(62.5, "bag", flour, [], 3).qty).toBe(5);
+    });
+
+    it("converts the minimum when the line is in the kitchen unit: 2 bags is 25 kg", () => {
+      expect(reorderQty(5, "kg", flour, [], 2).qty).toBe(25);
+    });
+
+    it("is in the kitchen unit for an item without packaging", () => {
+      expect(reorderQty(5, "each", eggs, [], 12).qty).toBe(12);
+    });
+  });
+
+  describe("No conversion: never a guess", () => {
+    it.each([
+      ["a missing pack size", { baseUnit: "kg", purchaseUnit: "bag", packQty: null }],
+      ["a zero pack size", { baseUnit: "kg", purchaseUnit: "bag", packQty: "0" }],
+      ["a unit the item no longer has", { baseUnit: "kg", purchaseUnit: "sack", packQty: "25" }],
+    ])("%s", (_name, ing) => {
+      expect(reorderQty(62.5, "bag", ing, [], 3)).toEqual({ qty: null, isConverted: false });
+    });
+
+    it("keeps an exact kitchen-unit line, but says the minimum could not be checked", () => {
+      expect(reorderQty(5, "kg", { baseUnit: "kg", purchaseUnit: "bag", packQty: null }, [], 2)).toEqual({ qty: 5, isConverted: false });
     });
   });
 });

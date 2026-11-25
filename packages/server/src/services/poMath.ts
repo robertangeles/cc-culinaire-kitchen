@@ -10,7 +10,16 @@
  *   F-PO-02  suggestedOrderQty  — max(par - current, reorderQty ?? 0)
  *   F-PO-03  estimatedLineCost  — suggestedQty × preferredUnitCost
  *   F-PO-04  shouldRouteToHQ    — totalValue >= threshold (null = DIRECT)
+ *   F-PO-05  reorderQty         — shortfall ÷ kitchen units per ordered unit, whole, ≥ supplier minimum
  */
+
+import {
+  IncompatibleUnitsError,
+  resolveQtyToKitchen,
+  toPurchasePackages,
+  type CustomConversion,
+  type ResolvableIngredient,
+} from "@culinaire/shared";
 
 /**
  * Sum the total value of PO lines: SUM(orderedQty × unitCost).
@@ -52,6 +61,46 @@ export function suggestedOrderQty(parLevel: number, currentQty: number): number 
  * next to suggestedOrderQty. See utils/packaging.ts for why.
  */
 export { toPurchasePackages, toPackCost, costForOrderedUnit } from "@culinaire/shared";
+
+/**
+ * A par shortfall (kitchen units, above zero) as the quantity of an order line in the line's own unit: whole order
+ * units, exact when the line is already in the kitchen unit, never below the supplier's minimum (which is kept in the
+ * unit the item is bought in). The unit reads as it will at receiving (resolveQtyToKitchen).
+ *
+ * `qty` is null when the item has no conversion for that unit. `isConverted` is false then, and also when the quantity
+ * is known but the minimum could not be compared with it.
+ */
+export function reorderQty(
+  shortfall: number,
+  orderedUnit: string,
+  ing: ResolvableIngredient,
+  conversions: CustomConversion[],
+  minimumOrderQty: number | null,
+): { qty: number | null; isConverted: boolean } {
+  const kitchenUnitsPer = (unit: string): number | null => {
+    try {
+      return resolveQtyToKitchen(ing, 1, unit, conversions);
+    } catch (err) {
+      if (err instanceof IncompatibleUnitsError) return null;
+      throw err;
+    }
+  };
+  const toOrderedUnit = (kitchenQty: number): number | null =>
+    orderedUnit.trim().toLowerCase() === ing.baseUnit.toLowerCase()
+      ? Number(kitchenQty.toFixed(6))
+      : toPurchasePackages(kitchenQty, kitchenUnitsPer(orderedUnit), orderedUnit);
+
+  const qty = toOrderedUnit(shortfall);
+  let minimum: number | null = 0;
+  if (minimumOrderQty) {
+    const perMinimumUnit = kitchenUnitsPer(ing.purchaseUnit || ing.baseUnit);
+    minimum = perMinimumUnit === null ? null : toOrderedUnit(minimumOrderQty * perMinimumUnit);
+  }
+  return {
+    qty: qty === null ? null : Math.max(qty, minimum ?? 0),
+    isConverted: qty !== null && minimum !== null,
+  };
+}
 
 /**
  * Estimate the line cost for a suggested order.

@@ -389,12 +389,17 @@ export async function handleClonePO(
     const orgId = await resolveOrgId(req, res);
     if (orgId === null) return;
 
-    const sourcePOId = req.params.id as string;
+    const id = z.string().uuid("Purchase order id must be a UUID").safeParse(req.params.id);
+    if (!id.success) {
+      sendValidation(res, id.error);
+      return;
+    }
+    const sourcePOId = id.data;
     const userId = req.user!.sub;
 
     const parsed = ClonePOSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: "Validation failed", details: parsed.error.flatten() });
+      sendValidation(res, parsed.error);
       return;
     }
 
@@ -403,12 +408,7 @@ export async function handleClonePO(
     const result = await clonePO(sourcePOId, orgId, parsed.data.storeLocationId, userId);
     logger.info({ sourcePOId, newPOId: result.poId, userId }, "Purchase order cloned");
     res.status(201).json(result);
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (msg.includes("not found") || msg.includes("inactive") || msg.includes("No items")) {
-      res.status(400).json({ error: msg });
-      return;
-    }
+  } catch (err) {
     next(err);
   }
 }

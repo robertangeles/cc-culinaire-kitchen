@@ -277,7 +277,8 @@ export async function getGuideItems(
       ingredientId: r.ingredientId,
       ingredientName: r.ingredientName,
       baseUnit: r.baseUnit,
-      purchaseUnit: r.purchaseUnit,
+      /** A package of unknown size cannot be ordered to par: without one the item is offered in its kitchen unit. */
+      purchaseUnit: packQty != null && packQty > 0 ? r.purchaseUnit : null,
       packQty,
       onHand,
       parLevel,

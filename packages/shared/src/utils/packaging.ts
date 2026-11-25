@@ -37,7 +37,8 @@ export function toPurchasePackages(
   purchaseUnit: string | null,
 ): number | null {
   if (!purchaseUnit || packQty == null || packQty <= 0) return null;
-  return Math.ceil(qty / packQty);
+  // 9 decimals drops float noise (4.9 / 0.7 = 7.000000000000001), which would buy a spare package.
+  return Math.ceil(Number((qty / packQty).toFixed(9)));
 }
 
 /**
