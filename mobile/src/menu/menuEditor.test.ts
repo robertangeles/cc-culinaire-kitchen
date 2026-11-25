@@ -304,5 +304,4 @@ describe("saving", () => {
       expect(contents(s.lines)).toEqual(["Basil 2", "Basil 3", "Basil 3", "Salt 1"]);
     });
   });
-  });
 });
