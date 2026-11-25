@@ -6,6 +6,7 @@ import type { RecipeDomain } from "@culinaire/shared/schemas/recipe";
 import { useLab, useShelf } from "../../../src/recipes/RecipesProvider";
 import { Button } from "../../../src/ui/Button";
 import { Column } from "../../../src/ui/Column";
+import { TabIcon } from "../../../src/ui/TabIcon";
 import { Text } from "../../../src/ui/Text";
 import { ScreenHeader } from "../../../src/ui/ScreenHeader";
 import { TextField } from "../../../src/ui/TextField";
@@ -62,8 +63,9 @@ export default function MyRecipes() {
                   key={t.label}
                   accessibilityRole="tab"
                   accessibilityState={{ selected }}
+                  hitSlop={4}
                   onPress={() => void store.setDomain(t.domain)}
-                  style={{ minHeight: 44, borderRadius: 999, borderWidth: 1, borderColor: selected ? c.text : c.border, backgroundColor: selected ? c.text : c.field, paddingHorizontal: space.lg, justifyContent: "center" }}
+                  style={{ minHeight: 48, borderRadius: 999, borderWidth: 1, borderColor: selected ? c.text : c.border, backgroundColor: selected ? c.text : c.field, paddingHorizontal: space.lg, justifyContent: "center" }}
                 >
                   <Text style={{ fontFamily: fontFamily.uiStrong, color: selected ? c.bg : c.text }}>{t.label}</Text>
                 </Pressable>
@@ -98,7 +100,9 @@ export default function MyRecipes() {
                     {r.imageUrl ? (
                       <Image source={{ uri: r.imageUrl }} accessibilityIgnoresInvertColors style={{ width: 64, height: 64, borderRadius: radius.banner, backgroundColor: c.surface }} />
                     ) : (
-                      <View style={{ width: 64, height: 64, borderRadius: radius.banner, backgroundColor: c.surface, borderWidth: 1, borderColor: c.border }} />
+                      <View style={{ width: 64, height: 64, borderRadius: radius.banner, backgroundColor: c.surface, borderWidth: 1, borderColor: c.border, alignItems: "center", justifyContent: "center" }}>
+                        <TabIcon name="recipes" color={c.textMuted} />
+                      </View>
                     )}
                     <View style={{ flex: 1, gap: 2 }}>
                       <Text numberOfLines={2} variant="heading">{r.title}</Text>

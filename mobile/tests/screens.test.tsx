@@ -192,7 +192,10 @@ describe("needs attention", () => {
     await h.outbox.drain();
     await h.counts.refresh();
     render(<Attention />);
-    expect(screen.getByText("Rum · Cellar")).toBeTruthy();
+    // The area in copper capitals over the item's name, in the centred 560 dp column like every other screen.
+    expect(screen.getByText("Cellar")).toBeTruthy();
+    let column = screen.getByText("Rum") as HTMLElement;
+    while (parseFloat(getComputedStyle(column).maxWidth) !== 560) column = column.parentElement as HTMLElement;
     expect(screen.queryByRole("button", { name: "Enter it again" })).toBeNull();
     expect(screen.getByRole("button", { name: "Discard this count" })).toBeTruthy();
   });

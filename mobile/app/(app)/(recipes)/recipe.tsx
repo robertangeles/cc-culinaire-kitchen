@@ -9,6 +9,7 @@ import { INSTRUCTION_MAX, INSTRUCTION_MIN } from "../../../src/recipes/recipeSto
 import { Button } from "../../../src/ui/Button";
 import { Column } from "../../../src/ui/Column";
 import { Grounded } from "../../../src/ui/Grounded";
+import { ScreenHeader } from "../../../src/ui/ScreenHeader";
 import { Segmented } from "../../../src/ui/Segmented";
 import { Text } from "../../../src/ui/Text";
 import { TextField } from "../../../src/ui/TextField";
@@ -61,8 +62,8 @@ function RecipeBody({ data }: { data: RecipeData }) {
         <View style={{ gap: space.md }}>
           <Text variant="label">Method</Text>
           {data.steps.map((s, i) => (
-            <View key={i} style={{ flexDirection: "row", gap: space.md }}>
-              <Text style={{ fontFamily: fontFamily.title, fontSize: 22, color: c.accentText, minWidth: 28 }}>{s.step || i + 1}</Text>
+            <View key={i} style={{ flexDirection: "row", alignItems: "baseline", gap: space.md }}>
+              <Text variant="heading" style={{ color: c.accentText, minWidth: 28 }}>{s.step || i + 1}</Text>
               <Text style={{ flex: 1 }}>{s.instruction}</Text>
             </View>
           ))}
@@ -126,8 +127,7 @@ export default function RecipeView() {
             {recipe && data ? (
               <>
                 {recipe.imageUrl ? <Image source={{ uri: recipe.imageUrl }} accessibilityLabel={`Photo of ${recipe.title}`} style={{ width: "100%", aspectRatio: 1, borderRadius: radius.key, backgroundColor: c.surface }} /> : null}
-                <Text variant="label">{recipe.domain === "patisserie" ? "Patisserie" : recipe.domain === "spirits" ? "Spirits" : "Culinary"}</Text>
-                <Text variant="title">{recipe.title}</Text>
+                <ScreenHeader label={recipe.domain === "patisserie" ? "Patisserie" : recipe.domain === "spirits" ? "Spirits" : "Culinary"} title={recipe.title} />
                 {grounded.length ? <Grounded titles={grounded} /> : null}
                 {recipe.description || data.description ? <Text variant="muted">{recipe.description || data.description}</Text> : null}
 
@@ -152,7 +152,7 @@ export default function RecipeView() {
                       <>
                         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.sm }}>
                           {QUICK.map((q) => (
-                            <Pressable key={q} accessibilityRole="button" onPress={() => setInstruction(q)} style={{ minHeight: 44, borderRadius: 999, borderWidth: 1, borderColor: c.border, backgroundColor: c.field, paddingHorizontal: space.lg, justifyContent: "center" }}>
+                            <Pressable key={q} accessibilityRole="button" hitSlop={4} onPress={() => setInstruction(q)} style={{ minHeight: 48, borderRadius: 999, borderWidth: 1, borderColor: c.border, backgroundColor: c.field, paddingHorizontal: space.lg, justifyContent: "center" }}>
                               <Text style={{ fontFamily: fontFamily.uiStrong }}>{q}</Text>
                             </Pressable>
                           ))}
@@ -178,7 +178,7 @@ export default function RecipeView() {
                             <Text>{refine.changeSummary || "Antoine did not describe the change."}</Text>
                           </View>
                         </Surface>
-                        <Text style={{ fontFamily: fontFamily.title, fontSize: 22 }}>{parseRecipeData(refine.refinedData).name || recipe.title}</Text>
+                        <Text variant="heading">{parseRecipeData(refine.refinedData).name || recipe.title}</Text>
                         <RecipeBody data={parseRecipeData(refine.refinedData)} />
                         {refine.phase === "proposal" && refine.failure ? <Text variant="error">{refine.failure.message}</Text> : null}
                         <Button label={refine.phase === "accepting" ? "Saving…" : "Accept changes"} disabled={refine.phase === "accepting"} onPress={() => void store.accept()} />

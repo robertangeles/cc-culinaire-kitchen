@@ -1,22 +1,23 @@
-import { Linking, View } from "react-native";
+import { Linking, Text as RNText, View } from "react-native";
 import { parseMarkdown, type Block, type Span } from "../legal/markdown";
 import { fontFamily, space } from "../theme";
 import { Text } from "./Text";
 import { useColors } from "./theme";
 
+/** Pieces of a line, in the size and font of the line they are in (React Native's own Text: ours sets its own, and a heading's words came out as body text). */
 function Spans({ spans }: { spans: Span[] }) {
   const c = useColors();
   return (
     <>
       {spans.map((s, i) => (
-        <Text
+        <RNText
           key={i}
           accessibilityRole={s.href ? "link" : undefined}
           onPress={s.href ? () => void Linking.openURL(s.href!).catch(() => undefined) : undefined}
           style={[s.bold && { fontFamily: fontFamily.title }, s.italic && { fontStyle: "italic" }, s.href && { color: c.accentText, textDecorationLine: "underline" }]}
         >
           {s.text}
-        </Text>
+        </RNText>
       ))}
     </>
   );

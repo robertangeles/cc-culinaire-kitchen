@@ -55,7 +55,7 @@ export default function KitchenProfile() {
 
   if (loaded === null || loaded === "failed") {
     return (
-      <Screen>
+      <Screen align="top">
         <Text variant="title">Kitchen profile</Text>
         {loaded === null ? <Text variant="muted">Loading…</Text> : <Text variant="error">Couldn't load your kitchen profile. Check your signal and try again.</Text>}
         {loaded === "failed" ? <Button kind="ghost" label="Try again" onPress={() => (setLoaded(null), setAttempt((a) => a + 1))} /> : null}
@@ -90,7 +90,7 @@ export default function KitchenProfile() {
   const describe = options.skill_level.find((o) => o.optionValue === form.skillLevel)?.optionDescription;
 
   return (
-    <Screen>
+    <Screen align="top">
       <Text variant="title">Kitchen profile</Text>
       <Text variant="muted">These answers shape every AI conversation and recipe.</Text>
 

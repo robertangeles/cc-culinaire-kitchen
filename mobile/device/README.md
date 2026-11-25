@@ -57,16 +57,17 @@ SCREENS_FORMS=phone SCREENS_TESTS="forgot|waste" bash device/lease.sh bash devic
 
 `device/screens.sh` does all of it and stops what it started: a fresh throwaway database (`SCREENS_DB`, default `culinaire_screens`) on the local test cluster
 (`scripts/localIntegrationDb.sh`, made per form so every pass starts empty), the API and Metro on free ports (other worktrees leave theirs on
-3009 and 8088), then `device/screens.device.test.ts` once per form and `device/gallery.mjs`, which writes `<out-dir>/index.html` (screen name,
+3009 and 8088), then `device/screens.device.test.ts` once per form, the purchasing walk once (as the first form) and `device/gallery.mjs`, which writes `<out-dir>/index.html` (screen name,
 phone, iPad portrait, iPad landscape, the web page it mirrors; opens from disk). With a `<before-dir>` from an earlier run, a changed image is
 shown next to its earlier version. Forms (`SCREENS_FORMS`): `phone` (the moto g86 as it is), `tablet` (820 x 1180 dp) and `tablet-landscape`
-(1180 x 820 dp). The tablet forms set the phone's own display with `wm size` and `wm density` (reset afterwards, also when the walk
-dies): the real Android runtime lays the app out at iPad width. On the tablet emulator (below) run the `phone` form: the emulator as
-it is is iPad portrait.
+(1180 x 820 dp). On the phone the tablet forms set the phone's own display with `wm size` and `wm density` (reset afterwards, also when the walk
+dies): the real Android runtime lays the app out at iPad width. On the tablet emulator (below) run the two tablet forms: it is already
+iPad portrait, and `tablet-landscape` turns its display on its side at full resolution.
 
 Each test starts on its own from a cleared app (`pm clear` of `com.culinairekitchen.chef` only, relaunch, sign in through the shared helper),
-so a failed test never leaves the next one on the wrong screen; a failed test saves `FAILED-<name>.png`. It needs the development build
-(`buildStamp.sh check`) and takes about 15 minutes a form. The round gear at the top right of a development build is the dev menu's
+so a failed test never leaves the next one on the wrong screen; a failed test saves `FAILED-<name>.png`. The count test uses the
+storage areas the move test makes, so a filter for it names both (`SCREENS_TESTS="move:|count: areas"`). It needs the development build
+(`buildStamp.sh check`) and takes over an hour a form (68 minutes on the tablet emulator before Transfers and Stock were added). The round gear at the top right of a development build is the dev menu's
 Tools button; the walk switches it off after each clear (when the dev menu is slow to open, the gear stays in the picture and the walk
 goes on), and release builds never show it. Only `screens.sh` runs this walk: a plain `check:device` skips it (no `SCREENS_OUT`), because
 its last test deletes the E2E user's account.
@@ -112,7 +113,7 @@ its own ports, and `env` also sets `DEVICE_HOST_IP=10.0.2.2` and its own databas
 beside a phone walk:
 
 ```bash
-SCREENS_FORMS=phone bash device/lease.sh bash device/screens.sh <out-dir>     # with the emulator's env loaded
+SCREENS_FORMS="tablet tablet-landscape" bash device/lease.sh bash device/screens.sh <out-dir>     # with the emulator's env loaded
 ```
 
 It stops itself after 15 minutes with nobody holding its lease (`EMULATOR_IDLE_S`), so it never sits on 3 GB for nothing; start
@@ -128,7 +129,7 @@ emulator insists on 4 GB, hence 240 dpi). Delete it all with
 `rm -rf ~/.android/avd/culinaire-tablet.avd ~/.android/avd/culinaire-tablet.ini`; `start` makes it again.
 
 Measured on this machine (20 cores, 30 GB): cold boot 14 to 18 s, the x86_64 build 64 to 93 s, the count walk's sign-in screen 4.2 s
-(5.2 s on the phone), the whole screenshot walk 38 minutes (13 of 14 tests, 47 images, measured before the home, Ask, Recipes, Receive and Inbox test was added; about 15 minutes a form on the phone): slower
+(5.2 s on the phone), the whole screenshot walk 68 minutes a form (when it had 20 tests and 106 images; 22 and 125 now, and the purchasing walk adds 10 minutes): slower
 per walk than the phone, but it never waits for the phone's lease. The emulator is not the phone: with its airplane mode on, the app still opened an area that needs the server
 (count walk W5 and W6, cause not yet found), so use the phone for offline steps. At tablet width the walks
 written for the phone also meet screens the phone never shows at once (the Sign in tab and button are both on screen).

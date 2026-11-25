@@ -51,7 +51,12 @@ export default function Conversations() {
             <View style={{ gap: space.xs }}>
               <Text variant="label">Your conversations</Text>
               {list.items.length === 0 ? (
-                <Text variant="muted">No saved conversations yet. They appear here, and on the web, after the first answer.</Text>
+                <Surface>
+                  <View style={{ padding: space.lg, gap: space.xs }}>
+                    <Text variant="heading">No conversations yet</Text>
+                    <Text variant="muted">They appear here, and on the web, after the first answer.</Text>
+                  </View>
+                </Surface>
               ) : (
                 <Surface>
                   {list.items.map((item, index) => (
@@ -70,7 +75,7 @@ export default function Conversations() {
                         accessibilityLabel={`Delete ${item.conversationTitle}`}
                         hitSlop={4}
                         onPress={() => confirmDelete(item.conversationId, item.conversationTitle)}
-                        style={{ minWidth: size.tap, minHeight: size.tap, alignItems: "center", justifyContent: "center" }}
+                        style={{ minWidth: size.tap, minHeight: size.tap, alignItems: "center", justifyContent: "center", paddingHorizontal: space.lg }}
                       >
                         <Text style={{ fontFamily: fontFamily.uiStrong, color: c.textMuted }}>Delete</Text>
                       </Pressable>

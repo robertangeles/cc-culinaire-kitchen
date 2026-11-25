@@ -208,6 +208,8 @@ describe("changing and deleting", () => {
     searchParams.current = { id: "w1" };
     render(<WasteEntry />);
     expect(screen.getByText("Change waste entry")).toBeTruthy();
+    // The item is already chosen: no list of suggestions opens over it.
+    expect(screen.queryByRole("button", { name: /^Use / })).toBeNull();
     expect((screen.getByLabelText("How much") as HTMLInputElement).value).toBe("1");
     type("How much", "3");
     press("Save changes");

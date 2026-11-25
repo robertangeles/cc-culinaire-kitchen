@@ -7,10 +7,12 @@
 # It makes everything it needs and stops everything it started, by process group:
 #   - per form factor, a fresh database (SCREENS_DB, default `culinaire_screens`) on the local test cluster (scripts/localIntegrationDb.sh, port 55432):
 #     schema, roles, the E2E user (MFA) and a plain user with no organisation (first run). The CI throwaway credentials are the defaults;
+#   - the prompts the Recipe Lab needs (authored in the admin UI, so not seeded) and the fake model (device/fakeModel.mjs, no paid call) in place of the real one;
 #   - the API on SCREENS_API_PORT (default: a free port picked at start, so a server another worktree runs on 3009 is never in the way) against that database,
 #     and Metro on SCREENS_METRO_PORT (default: a free port too; other worktrees leave Metro on 8088) with EXPO_PUBLIC_API_URL pointing at the API;
 #   - `vitest run device/screens.device.test.ts` once per form factor (SCREENS_FORMS, default "phone tablet tablet-landscape"),
-#     (SCREENS_TESTS="forgot|waste" runs only the tests whose names match; SCREENS_FILE=device/orders.device.test.ts runs the purchasing walk instead), then `node device/gallery.mjs <out-dir> [before-dir]` (with a before-dir, changed images are shown next to their earlier version).
+#     then the purchasing walk (device/orders.device.test.ts) once, on the device as it is (SCREENS_TESTS="forgot|waste" runs only the tests whose names match;
+#     SCREENS_FILE=device/orders.device.test.ts runs the purchasing walk alone), then `node device/gallery.mjs <out-dir> [before-dir]` (with a before-dir, changed images are shown next to their earlier version).
 # Needs the development build installed (bash device/buildStamp.sh check) and the cluster's binaries (see localIntegrationDb.sh).
 # Every address on this machine is 127.0.0.1, never localhost (it can resolve to an IPv6 ::1 that hangs). The app reaches this machine at
 # DEVICE_HOST_IP: 127.0.0.1 through `adb reverse` on the phone (the default), 10.0.2.2 on the emulator (device/emulator.sh env sets it).
@@ -86,7 +88,8 @@ fresh_server() {
   "${PSQL[@]}" -d $DB -c "create extension if not exists vector"
   (cd "$ROOT" && pnpm --filter @culinaire/server db:push >"$LOGS/push.log" 2>&1 && pnpm --filter @culinaire/server db:seed >"$LOGS/seed.log" 2>&1 \
     && pnpm --filter @culinaire/server exec tsx src/scripts/seedE2eCiData.ts)
-  (cd "$ROOT" && exec pnpm --filter @culinaire/server exec tsx src/index.ts) >>"$LOGS/server.log" 2>&1 </dev/null &
+  "${PSQL[@]}" -d $DB -c "insert into prompt (prompt_name, prompt_key, prompt_body, default_ind) values ('recipePrompt', 'walk-recipe', 'Write a recipe.', false), ('recipeRefinementPrompt', 'walk-refine', 'Refine the recipe.', false)"
+  (cd "$ROOT" && NODE_OPTIONS="--import $ROOT/mobile/device/fakeModel.mjs" OPENROUTER_API_KEY=fake FAKE_MODEL_DELAY_MS=2000 FAKE_RECIPE_MS=30000 exec pnpm --filter @culinaire/server exec tsx src/index.ts) >>"$LOGS/server.log" 2>&1 </dev/null &
   server=$!
   # A health answer from someone else's server on the same port is not ours: ours must still be running.
   { wait_up "$E2E_API_URL/api/health" && kill -0 "$server" 2>/dev/null; } || { echo "the API did not come up"; tail -20 "$LOGS/server.log"; exit 1; }
@@ -96,10 +99,13 @@ fresh_server() {
 
 mkdir -p "$OUT"
 rc=0
-for form in $FORMS; do
+walk() { # <test file> <form>
   fresh_server
-  filter=(); [ -z "${SCREENS_TESTS:-}" ] || filter=(-t "$SCREENS_TESTS")
-  SCREENS_OUT=$OUT SCREENS_FORM=$form npx vitest run --config vitest.device.config.ts "${SCREENS_FILE:-device/screens.device.test.ts}" "${filter[@]}" || rc=1
-done
+  local filter=(); [ -z "${SCREENS_TESTS:-}" ] || filter=(-t "$SCREENS_TESTS")
+  SCREENS_OUT=$OUT SCREENS_FORM=$2 npx vitest run --config vitest.device.config.ts "$1" "${filter[@]}" || rc=1
+}
+for form in $FORMS; do walk "${SCREENS_FILE:-device/screens.device.test.ts}" "$form"; done
+# The purchasing walk turns the device itself and does not set its display, so it runs once, as the first form.
+[ -n "${SCREENS_FILE:-}${SCREENS_TESTS:-}" ] || walk device/orders.device.test.ts "${FORMS%% *}"
 node device/gallery.mjs "$OUT" $BEFORE
 exit $rc

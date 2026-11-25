@@ -65,7 +65,7 @@ export default function Waste() {
                     accessibilityLabel={`Log ${r.name} again`}
                     hitSlop={4}
                     onPress={() => router.push({ pathname: "/waste-entry", params: { name: r.name, unit: r.unit ?? "", quantity: r.quantity === undefined ? "" : String(r.quantity) } })}
-                    style={{ minHeight: 48, borderRadius: 999, borderWidth: 1, borderColor: c.border, backgroundColor: c.field, paddingHorizontal: space.lg, alignItems: "center", justifyContent: "center" }}
+                    style={{ minHeight: 48, borderRadius: 999, borderWidth: 1, borderColor: c.border, backgroundColor: c.field, paddingHorizontal: space.lg, paddingVertical: space.sm, alignItems: "center", justifyContent: "center" }}
                   >
                     <Text style={{ fontFamily: fontFamily.uiStrong }}>{r.name}</Text>
                   </Pressable>

@@ -40,7 +40,11 @@ export default function Requests() {
           <Text variant="title">My requests</Text>
           <Button label="Ask for a new item" onPress={() => router.push("/request-new")} />
           {snap.requests.length === 0 ? (
-            <Text variant="muted">You haven't asked for a new item yet.</Text>
+            <Surface>
+              <View style={{ padding: space.lg }}>
+                <Text variant="muted">You haven't asked for a new item yet.</Text>
+              </View>
+            </Surface>
           ) : (
             <Surface>
               {snap.requests.map((r, index) => (

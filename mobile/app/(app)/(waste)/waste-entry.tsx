@@ -87,6 +87,7 @@ export default function WasteEntry() {
               value={name}
               placeholder="Chicken trim, leftover risotto, wilted herbs"
               source={source}
+              chosen={!!editing}
               onChangeText={(t) => {
                 setName(t);
                 setIngredientId(undefined);
@@ -105,7 +106,7 @@ export default function WasteEntry() {
             <TextField label="Notes (optional)" value={notes} onChangeText={setNotes} multiline />
             {error ? <Text variant="error" accessibilityLiveRegion="polite">{error}</Text> : null}
             <Button label={editing ? "Save changes" : "Log waste"} onPress={() => void save()} disabled={saving} />
-            {editing ? <Button kind="quiet" label="Delete this entry" onPress={remove} /> : null}
+            {editing ? <Button kind="danger" label="Delete this entry" onPress={remove} /> : null}
             <Button kind="quiet" label="Cancel" onPress={() => router.back()} />
           </Column>
         </ScrollView>

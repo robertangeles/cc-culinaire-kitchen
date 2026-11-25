@@ -7,11 +7,13 @@ import { Brand } from "../src/ui/Brand";
 import { GoogleMark } from "../src/ui/GoogleMark";
 import { Screen } from "../src/ui/Screen";
 import { Segmented } from "../src/ui/Segmented";
+import { ShowPassword } from "../src/ui/ShowPassword";
 import { Text } from "../src/ui/Text";
 import { TextField } from "../src/ui/TextField";
 import { Button } from "../src/ui/Button";
 import { LegalLinks } from "../src/ui/LegalLinks";
 import { useColors } from "../src/ui/theme";
+import { size } from "../src/theme";
 
 type Mode = "signin" | "register";
 
@@ -68,13 +70,7 @@ export default function SignIn() {
         autoCorrect={false}
         spellCheck={false}
         keyboardType={showPassword ? "visible-password" : "default"}
-        trailing={
-          <Pressable accessibilityRole="button" accessibilityLabel={showPassword ? "Hide password" : "Show password"} hitSlop={8} onPress={() => setShowPassword((v) => !v)}>
-            <Text style={{ fontFamily: "Inter_600SemiBold", fontSize: 12, letterSpacing: 1.4, textTransform: "uppercase", color: c.textMuted }} accessibilityElementsHidden>
-              {showPassword ? "Hide" : "Show"}
-            </Text>
-          </Pressable>
-        }
+        trailing={<ShowPassword shown={showPassword} onToggle={() => setShowPassword((v) => !v)} />}
         autoCapitalize="none"
         autoComplete={register ? "new-password" : "current-password"}
         textContentType={register ? "newPassword" : "password"}
@@ -82,7 +78,7 @@ export default function SignIn() {
         onSubmitEditing={() => canSubmit && submit()}
       />
       {!register ? (
-        <Pressable accessibilityRole="link" accessibilityLabel="Forgot password" onPress={() => router.push("/forgot-password")} style={{ alignSelf: "flex-end", minHeight: 44, justifyContent: "center" }}>
+        <Pressable accessibilityRole="link" accessibilityLabel="Forgot password" onPress={() => router.push("/forgot-password")} style={{ alignSelf: "flex-end", minHeight: size.tap, justifyContent: "center" }}>
           <Text style={{ fontFamily: "Inter_600SemiBold", color: c.accentText }}>Forgot password</Text>
         </Pressable>
       ) : null}

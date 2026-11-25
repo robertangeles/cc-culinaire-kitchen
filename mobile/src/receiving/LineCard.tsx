@@ -93,7 +93,7 @@ export function LineCard({ line, orderUnitCost, open, saving, error, onToggle, o
         style={{ minHeight: size.tap + 14, justifyContent: "center", paddingVertical: space.md, paddingHorizontal: space.lg, gap: space.xs }}
       >
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: space.md }}>
-          <Text style={{ fontFamily: fontFamily.title, fontSize: 20, flexShrink: 1 }}>{name}</Text>
+          <Text variant="heading" style={{ flexShrink: 1 }}>{name}</Text>
           <Chip label={saving ? "Saving…" : STATUS_LABEL[line.status]} />
         </View>
         <Text variant={line.status === "REJECTED" || isShort(line) ? "error" : "meta"}>{lineSummary(line, orderUnitCost)}</Text>

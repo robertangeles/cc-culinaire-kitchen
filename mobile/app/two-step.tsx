@@ -8,7 +8,6 @@ import { Text } from "../src/ui/Text";
 import { TextField } from "../src/ui/TextField";
 import { Button } from "../src/ui/Button";
 import { Surface } from "../src/ui/Surface";
-import { SectionLabel } from "../src/ui/SectionLabel";
 import { fontFamily, space } from "../src/theme";
 
 type Step = { kind: "idle" } | { kind: "proof"; action: "setup" | "disable" } | { kind: "scan"; secret: string; qr: string };
@@ -36,10 +35,10 @@ export default function TwoStep() {
     void accountApi.facts().then(setFacts, () => setFacts("failed"));
   }, [load]);
 
-  if (facts === null) return <Screen><Text variant="muted">Loading…</Text></Screen>;
+  if (facts === null) return <Screen align="top"><Text variant="muted">Loading…</Text></Screen>;
   if (facts === "failed") {
     return (
-      <Screen>
+      <Screen align="top">
         <Text variant="title">Two-step verification</Text>
         <Text variant="error">Couldn't load your account. Check your signal and try again.</Text>
         {facts === "failed" ? <Button kind="ghost" label="Try again" onPress={() => (setFacts(null), setLoad((n) => n + 1))} /> : null}
@@ -101,7 +100,7 @@ export default function TwoStep() {
   ) : null;
 
   return (
-    <Screen>
+    <Screen align="top">
       <Text variant="title">Two-step verification</Text>
       <Text variant="muted">A code from an authenticator app (such as Google Authenticator or Authy) as well as your password when you sign in.</Text>
       <Surface>
@@ -131,7 +130,7 @@ export default function TwoStep() {
 
       {step.kind === "scan" ? (
         <>
-          <SectionLabel>1. Add it to your authenticator</SectionLabel>
+          <Text variant="heading">1. Add it to your authenticator</Text>
           <Button kind="ghost" label="Open in authenticator app" onPress={() => void Linking.openURL(authenticatorLink(step.secret, account.email)).catch(() => setFailure({ text: "No authenticator app took the link. Type the key below into it instead." }))} />
           <Text variant="muted">Or type this key into it:</Text>
           <Text selectable style={{ fontFamily: fontFamily.uiStrong, fontSize: 18, letterSpacing: 2 }}>
@@ -143,7 +142,7 @@ export default function TwoStep() {
               <Text variant="meta">To use an authenticator on another device, scan this.</Text>
             </View>
           ) : null}
-          <SectionLabel>2. Enter the code it shows</SectionLabel>
+          <Text variant="heading">2. Enter the code it shows</Text>
           {codeField("6-digit code")}
           {errorLine}
           <Button label={busy ? "Turning on…" : "Turn on"} disabled={busy || code.length !== 6} onPress={() => void finish()} />
@@ -151,7 +150,7 @@ export default function TwoStep() {
         </>
       ) : null}
       {failure?.needsFreshSignIn ? <Button kind="ghost" label="Sign out" onPress={() => void session.signOut()} /> : null}
-      <Button kind="quiet" label="Back" onPress={() => router.back()} />
+      {step.kind === "idle" ? <Button kind="quiet" label="Back" onPress={() => router.back()} /> : null}
     </Screen>
   );
 }

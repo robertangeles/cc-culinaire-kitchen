@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   insets: { top: 24, bottom: 48, left: 0, right: 0 },
   screenOptions: {} as Record<string, unknown>,
   backBehavior: undefined as string | undefined,
+  screenLayout: undefined as ((p: { children: ReactNode }) => ReactNode) | undefined,
   screens: [] as { name: string; guard: boolean; options: { title?: string; href?: null; tabBarAccessibilityLabel?: string; tabBarBadge?: string | number; tabBarButton?: () => null; tabBarItemStyle?: { display?: string } } }[],
   navigate: vi.fn(),
   tabBar: null as unknown as (props: BarProps) => ReactNode,
@@ -30,10 +31,12 @@ vi.mock("../src/runtime/notifications", () => ({ useInbox: () => ({ unread: mock
 vi.mock("react-native-safe-area-context", () => ({
   useSafeAreaInsets: () => mocks.insets,
   SafeAreaView: ({ children }: { children?: ReactNode }) => children,
+  SafeAreaProvider: ({ children }: { children?: ReactNode }) => <div data-testid="own-safe-area">{children}</div>,
 }));
 vi.mock("expo-router", () => {
   const Guard = createContext(true);
-  const Tabs = ({ children, screenOptions, tabBar, backBehavior }: { children?: ReactNode; screenOptions: Record<string, unknown>; tabBar: typeof mocks.tabBar; backBehavior?: string }) => {
+  const Tabs = ({ children, screenOptions, tabBar, backBehavior, screenLayout }: { children?: ReactNode; screenOptions: Record<string, unknown>; tabBar: typeof mocks.tabBar; backBehavior?: string; screenLayout?: typeof mocks.screenLayout }) => {
+    mocks.screenLayout = screenLayout;
     mocks.screenOptions = screenOptions;
     mocks.backBehavior = backBehavior;
     mocks.tabBar = tabBar;
@@ -100,6 +103,14 @@ describe("the tab bar", () => {
       expect(style.height - bottom - style.paddingTop - (style.paddingBottom - bottom)).toBeGreaterThanOrEqual(5 + icon.height + 2 + 16 + 5);
     },
   );
+
+  it("gives each screen a safe area of its own, so the system bar's inset the tab bar already stands clear of is not left again above it", () => {
+    mocks.user = person({ roles: ["Administrator"] });
+    render(<AppTabs />);
+    cleanup();
+    render(<>{mocks.screenLayout!({ children: "a screen" })}</>);
+    expect(screen.getByTestId("own-safe-area").textContent).toBe("a screen");
+  });
 
   it("labels each button in one short line of 12 pt Inter that grows with the phone's text size only up to 1.3x, so no label wraps or is cut", () => {
     mocks.user = person({ roles: ["Administrator"] });

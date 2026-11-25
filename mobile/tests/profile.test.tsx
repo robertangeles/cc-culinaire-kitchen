@@ -69,6 +69,21 @@ describe("the account hub", () => {
   });
 });
 
+describe("the account screens", () => {
+  it.each([
+    ["My details", Profile],
+    ["Change password", ChangePassword],
+    ["Two-step verification", TwoStep],
+  ])("%s starts at the top of the page, as Account it is opened from does", async (title, ScreenUnderTest) => {
+    render(<ScreenUnderTest />);
+    // Wait for the loaded screen, not its loading state, which has the same title.
+    await waitFor(() => expect(screen.queryByText("Loading…")).toBeNull());
+    let el = screen.getAllByText(title)[0] as HTMLElement;
+    while (parseFloat(getComputedStyle(el).maxWidth) !== 560) el = el.parentElement as HTMLElement;
+    expect(getComputedStyle(el.parentElement as HTMLElement).justifyContent).toBe("flex-start");
+  });
+});
+
 describe("my details", () => {
   it("saves every field, an emptied one as blank, then reads the person again", async () => {
     mocks.accountApi.details.mockResolvedValue({ ...blank, userSuburb: "Fitzroy", userEmail: "c@x.test", userPhotoPath: null });

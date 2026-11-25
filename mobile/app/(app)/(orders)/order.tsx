@@ -231,7 +231,7 @@ export default function Order() {
                 {can.email ? <Button kind="ghost" label={busy === "email" ? "Emailing…" : order.supplierEmailedAt ? "Email supplier again" : "Email to supplier"} disabled={busy !== null} onPress={() => void email()} /> : null}
                 {can.reorder ? <Button kind="ghost" label={busy === "reorder" ? "Reordering…" : "Reorder"} disabled={busy !== null} onPress={() => void reorder()} /> : null}
                 {order.supplierPhone && (order.status === "SENT" || order.status === "RECEIVING") ? <Button kind="quiet" label={`Call ${supplier}`} onPress={() => void Linking.openURL(`tel:${order.supplierPhone}`)} /> : null}
-                {can.cancel ? <Button kind="quiet" label="Cancel order" disabled={busy !== null} onPress={cancel} /> : null}
+                {can.cancel ? <Button kind="danger" label="Cancel order" disabled={busy !== null} onPress={cancel} /> : null}
               </View>
             ) : null}
             {/* Opened from the inbox or a delivery, this tab may hold nothing but this order: its way out is the list. */}

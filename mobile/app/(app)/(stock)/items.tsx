@@ -29,7 +29,11 @@ export default function Items() {
           {snap.offline ? <OfflineBanner text="You're offline. This is the catalogue as last downloaded." /> : null}
           <TextField label="Search the catalogue" value={query} onChangeText={setQuery} placeholder="Item name" autoCorrect={false} returnKeyType="search" />
           {found.length === 0 ? (
-            <Text variant="muted">{query.trim() ? `Nothing in the catalogue matches "${query.trim()}".` : snap.items.length === 0 ? "The catalogue has not been downloaded to this phone yet." : "No items are in use at this location yet."}</Text>
+            <Surface>
+              <View style={{ padding: space.lg }}>
+                <Text variant="muted">{query.trim() ? `Nothing in the catalogue matches "${query.trim()}".` : snap.items.length === 0 ? "The catalogue has not been downloaded to this phone yet." : "No items are in use at this location yet."}</Text>
+              </View>
+            </Surface>
           ) : (
             <Surface>
               {found.map((item, index) => (
