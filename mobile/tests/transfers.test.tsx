@@ -73,7 +73,7 @@ describe("the transfer list", () => {
     await makeStoreRoom();
     render(<Transfers />);
     expect(screen.queryByRole("button", { name: "New transfer" })).toBeNull();
-    expect(screen.getByText("No transfers sent from here yet.")).toBeTruthy();
+    expect(screen.getByText("No transfers yet")).toBeTruthy();
   });
 
   it("keeps a refused change on its transfer with the server's words, Try again and Discard", async () => {

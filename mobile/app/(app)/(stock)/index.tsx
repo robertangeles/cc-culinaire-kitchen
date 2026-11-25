@@ -92,7 +92,14 @@ export default function StockHome() {
             <>
               {alerts.critical.length > 0 ? alertGroup("critical", "Critical, reorder now", "At or under a quarter of par", alerts.critical, c.danger) : null}
               {alerts.low.length > 0 ? alertGroup("low", "Low stock, keep an eye on it", "At or under three quarters of par", alerts.low, c.accentText) : null}
-              {alerts.critical.length === 0 && alerts.low.length === 0 ? <Text variant="muted">Nothing is low or critical against its par.</Text> : null}
+              {alerts.critical.length === 0 && alerts.low.length === 0 && d.stockLevels.length > 0 ? (
+                <Surface>
+                  <View style={{ padding: space.lg, gap: space.xs }}>
+                    <Text variant="heading">Nothing is running low</Text>
+                    <Text variant="muted">No item is low or critical against its par.</Text>
+                  </View>
+                </Surface>
+              ) : null}
 
               {value ? (
                 <View style={{ gap: space.xs }}>

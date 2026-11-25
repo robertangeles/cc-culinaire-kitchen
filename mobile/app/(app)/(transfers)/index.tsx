@@ -105,7 +105,15 @@ export default function Transfers() {
             </>
           ) : null}
           {canManage ? <Button label="New transfer" onPress={() => router.push("/transfer-new")} /> : null}
-          {snap.phase === "ready" ? (
+          {snap.phase === "ready" && snap.rows.length === 0 ? (
+            <Surface>
+              <View style={{ padding: space.lg, gap: space.xs }}>
+                <Text variant="heading">No transfers yet</Text>
+                <Text variant="muted">Stock sent from here to another location, or on its way here, shows in this list.</Text>
+              </View>
+            </Surface>
+          ) : null}
+          {snap.phase === "ready" && snap.rows.length > 0 ? (
             <>
               {groups.toReceive.length > 0 ? section("To receive", groups.toReceive, "") : null}
               {section("Sent from here", groups.outgoing, "No transfers sent from here yet.")}

@@ -75,10 +75,17 @@ describe("the stock dashboard", () => {
     expect(screen.queryByText(/\$/)).toBeNull();
   });
 
-  it("says when nothing is low and nothing has been counted yet", async () => {
+  it("says when nothing is low", async () => {
+    await makeStoreRoom({ dashboard: dashboard({}, { criticalIngredientIds: [] }) });
+    render(<StockHome />);
+    expect(screen.getByText("Nothing is running low")).toBeTruthy();
+    expect(screen.queryByText("No stock figures yet")).toBeNull();
+  });
+
+  it("says when nothing has been counted yet, and only that", async () => {
     await makeStoreRoom({ dashboard: dashboard({ stockLevels: [] }, { criticalIngredientIds: [] }) });
     render(<StockHome />);
-    expect(screen.getByText("Nothing is low or critical against its par.")).toBeTruthy();
+    expect(screen.queryByText("Nothing is running low")).toBeNull();
     expect(screen.getByText("No stock figures yet")).toBeTruthy();
   });
 
@@ -112,6 +119,8 @@ describe("item lookup", () => {
     expect(screen.getByText('Nothing in the catalogue matches "yuzu".')).toBeTruthy();
     press("Not in the catalogue? Ask for it");
     expect(routerMock.push).toHaveBeenCalledWith({ pathname: "/request-new", params: { name: "yuzu" } });
+    press("Back");
+    expect(routerMock.back).toHaveBeenCalled();
   });
 
   it("shows an item's stock here against par, the server's flag, where it is kept and, for a manager, every location", async () => {
@@ -176,7 +185,7 @@ describe("catalogue requests", () => {
   it("says when there are no requests yet", async () => {
     await makeStoreRoom();
     render(<Requests />);
-    expect(screen.getByText("You haven't asked for a new item from this phone.")).toBeTruthy();
+    expect(screen.getByText("You haven't asked for a new item yet.")).toBeTruthy();
   });
 });
 

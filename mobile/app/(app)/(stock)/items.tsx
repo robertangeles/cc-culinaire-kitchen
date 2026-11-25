@@ -50,6 +50,7 @@ export default function Items() {
             </Surface>
           )}
           <Button kind="quiet" label="Not in the catalogue? Ask for it" onPress={() => router.push({ pathname: "/request-new", params: { name: query.trim() } })} />
+          <Button kind="quiet" label="Back" onPress={() => router.back()} />
         </Column>
       </ScrollView>
     </SafeAreaView>
