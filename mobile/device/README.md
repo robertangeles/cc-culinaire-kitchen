@@ -65,7 +65,8 @@ dies): the real Android runtime lays the app out at iPad width. On the tablet em
 iPad portrait, and `tablet-landscape` turns its display on its side at full resolution.
 
 Each test starts on its own from a cleared app (`pm clear` of `com.culinairekitchen.chef` only, relaunch, sign in through the shared helper),
-so a failed test never leaves the next one on the wrong screen; a failed test saves `FAILED-<name>.png`. It needs the development build
+so a failed test never leaves the next one on the wrong screen; a failed test saves `FAILED-<name>.png`. The count test uses the
+storage areas the move test makes, so a filter for it names both (`SCREENS_TESTS="move:|count: areas"`). It needs the development build
 (`buildStamp.sh check`) and takes over an hour a form (68 minutes on the tablet emulator). The round gear at the top right of a development build is the dev menu's
 Tools button; the walk switches it off after each clear (when the dev menu is slow to open, the gear stays in the picture and the walk
 goes on), and release builds never show it. Only `screens.sh` runs this walk: a plain `check:device` skips it (no `SCREENS_OUT`), because

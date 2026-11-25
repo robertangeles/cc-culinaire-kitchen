@@ -292,6 +292,7 @@ describe.skipIf(!process.env.SCREENS_OUT)(`screens on ${FORM}`, { timeout: 600_0
       // Said at once, so a walk that is stopped early still shows why its tests failed.
       process.stderr.write(`FAILED ${task.name}: ${task.result?.errors?.[0]?.message ?? "?"}\n`);
       await shot(`FAILED-${ctx.task.name.slice(0, 40).replace(/[^a-z0-9]+/gi, "-")}`).catch(() => {});
+      await setAirplane(false); // a test that died offline must not take the next one's Metro away
     });
   });
 
