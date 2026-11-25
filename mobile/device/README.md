@@ -49,6 +49,10 @@ the grace period, the app switcher and a cold start. Android keeps its own PIN p
 `device/orders.device.test.ts` is the purchasing walk: every Orders screen, written from a guide, submitted, rejected, approved, received short and credited, with no signal and on its side, photographed. It runs
 through the screenshot walk's own set-up: `SCREENS_FILE=device/orders.device.test.ts SCREENS_FORMS=phone bash device/lease.sh bash device/screens.sh <out-dir>` (with the emulator's env for iPad width).
 
+`device/rosterDocuments.device.test.ts` is the roster and documents walk: my shifts at a venue in Perth, a shift answered, offered and taken, availability, and a certificate added with the system's camera question
+and photo picker. It runs through the same set-up, which puts a fake file store (`device/fakeStorage.mjs`) in place of Cloudinary: `SCREENS_FILE=device/rosterDocuments.device.test.ts SCREENS_FORMS="tablet tablet-landscape" bash device/lease.sh bash device/screens.sh <out-dir>`
+with the emulator's env loaded. `WALK_PHOTO=<a jpeg>` is the photo it picks (without it the walk stops at the camera); `FAKE_STORAGE_DIR=<dir>` keeps what the phone sent.
+
 ## The screenshot walk (look at every screen)
 
 Every screen and its main states (empty, filled, error, offline or queued, long text), photographed on the phone and again at iPad widths,
