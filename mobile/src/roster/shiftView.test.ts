@@ -99,6 +99,12 @@ describe("the zone of a shift offered for swap", () => {
     expect(swapZone(swap, [loc("L1", "Australia/Perth"), loc("L2")], [shift()])).toBeNull();
   });
 
+  it("leaves out an offer of a shift the person already works, and does not count it, but not one they declined", () => {
+    const work = (assignmentStatus: string) => shownSwaps([{ ...swap, ianaTimezone: "Australia/Perth" }], 1, [], [shift({ shiftId: "s9", assignmentId: "a1", assignmentStatus })], NOW);
+    for (const status of ["Confirmed", "Pending"]) expect(work(status)).toEqual({ shown: [], hidden: 0 });
+    expect(work("Declined").shown).toHaveLength(1);
+  });
+
   it("shows a colleague's offers that have not started where the zone is known, and counts the rest", () => {
     const all = [swap, { ...swap, swapRequestId: "other", storeLocationId: "L9" }, { ...swap, swapRequestId: "mine", fromUserId: 1 }, { ...swap, swapRequestId: "begun", startDatetime: "2026-11-25T22:00:00Z" }];
     const { shown, hidden } = shownSwaps(all, 1, [loc("L2", "Australia/Perth")], [], NOW);

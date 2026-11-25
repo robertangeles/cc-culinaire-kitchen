@@ -102,9 +102,12 @@ export type ShownSwap = OpenSwap & { ianaTimezone: string; locationName: string 
 /** Statuses staff never see. A server that sends none (an older one) cannot say, and its swaps are shown. */
 const HIDDEN_STATUS = ["Draft", "Cancelled"];
 
-/** The offers a person can be shown: a colleague's, of a published shift that has not started, at a venue whose zone is known. `hidden` is how many had to be left out for that last reason. */
+/** True when the person holds the shift, confirmed or not yet answered (a declined one can be taken again). */
+export const worksShift = (shifts: MyShift[], shiftId: string) => shifts.some((s) => s.shiftId === shiftId && s.assignmentStatus !== "Declined");
+
+/** The offers a person can be shown: a colleague's, of a published shift that has not started and is not already theirs, at a venue whose zone is known. `hidden` is how many had to be left out for that last reason. */
 export function shownSwaps(swaps: OpenSwap[], userId: number, locations: StoreLocation[], shifts: MyShift[], now: number): { shown: ShownSwap[]; hidden: number } {
-  const open = swaps.filter((s) => s.fromUserId !== userId && !hasStarted(s, now) && !HIDDEN_STATUS.includes(s.shiftStatus ?? ""));
+  const open = swaps.filter((s) => s.fromUserId !== userId && !hasStarted(s, now) && !HIDDEN_STATUS.includes(s.shiftStatus ?? "") && !worksShift(shifts, s.shiftId));
   const shown = open.flatMap((s) => {
     const venue = swapZone(s, locations, shifts);
     return venue ? [{ ...s, ianaTimezone: venue.zone, locationName: venue.locationName }] : [];

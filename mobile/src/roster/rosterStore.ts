@@ -10,6 +10,7 @@ import { formatAuDate } from "@culinaire/shared";
 import { ApiError } from "../api/client";
 import { answerLost, readMessage } from "../api/onlineWrite";
 import type { RosterApi } from "./rosterApi";
+import { worksShift } from "./shiftView";
 
 export interface RosterSnapshot {
   phase: "loading" | "ready" | "failed";
@@ -126,7 +127,8 @@ export function createRosterStore({ api, now }: { api: RosterApi; now: () => num
       return act(assignmentId, () => api.cancelSwap(swap.swapRequestId), () => shiftOf(assignmentId) !== undefined && mySwap(assignmentId) === undefined, () => "Your offer is taken back. The shift is still yours.", (err) => (shiftOf(assignmentId) ? err.message : "Someone has already taken this shift."));
     },
     claim(swap: OpenSwap) {
-      return act(swap.swapRequestId, () => api.claim(swap.swapRequestId), () => snapshot.shifts.some((s) => s.shiftId === swap.shiftId && s.assignmentStatus === "Confirmed"), () => "The shift is yours.", claimMessage);
+      const worked = worksShift(snapshot.shifts, swap.shiftId);
+      return act(swap.swapRequestId, () => api.claim(swap.swapRequestId), () => !worked && snapshot.shifts.some((s) => s.shiftId === swap.shiftId && s.assignmentStatus === "Confirmed"), () => "The shift is yours.", claimMessage);
     },
   };
 }

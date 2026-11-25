@@ -173,6 +173,25 @@ describe("swaps", () => {
     expect(t.store.getSnapshot().notice?.text).toBe("The shift is yours.");
   });
 
+  it("does not call a claim made when the shift was already mine", async () => {
+    const t = setup({ shifts: [shift({ shiftId: "s9", assignmentStatus: "Confirmed" })], swaps: [swap()] });
+    await t.store.refresh();
+    t.api.claim.mockRejectedValueOnce(err("conflict", 409, undefined, "SHIFT_ALREADY_ASSIGNED"));
+    expect(await t.store.claim(swap())).toBe(false);
+    expect(t.store.getSnapshot().notice).toMatchObject({ bad: true, text: "You already work this shift." });
+  });
+
+  it("claims a shift I had declined", async () => {
+    const t = setup({ shifts: [shift({ shiftId: "s9", assignmentStatus: "Declined" })], swaps: [swap()] });
+    await t.store.refresh();
+    t.api.claim.mockImplementationOnce(async () => {
+      t.server.shifts = [shift({ shiftId: "s9", assignmentStatus: "Confirmed" })];
+      t.server.swaps = [];
+    });
+    expect(await t.store.claim(swap())).toBe(true);
+    expect(t.store.getSnapshot().notice?.text).toBe("The shift is yours.");
+  });
+
   it("says in plain words why a claim was refused", async () => {
     const blocked = (b: object) => err("conflict", 409, { error: "Cannot assign. Sam…", blocked: b }, "ASSIGNMENT_BLOCKED_COMPLIANCE");
     const cases: [ApiError, string][] = [
