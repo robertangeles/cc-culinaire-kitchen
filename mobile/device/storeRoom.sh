@@ -4,7 +4,7 @@
 #
 #   bash device/lease.sh bash device/storeRoom.sh [out-dir]    # default out-dir: device/_shots/storeRoom
 #
-# Per form factor ("phone", then "tablet") it makes a fresh database `culinaire_storeroom` on the local test cluster
+# Per form factor ("phone", then "tablet") it makes a fresh database (STOREROOM_DB, default `culinaire_storeroom`) on the local test cluster
 # (scripts/localIntegrationDb.sh, port 55432; schema, roles and the E2E user with the CI's throwaway credentials), starts the API on a
 # free port against it, and runs device/storeRoom.device.test.ts. Metro runs once, on a free port. Everything it started is stopped by
 # process group; the phone's display size and density are reset. STOREROOM_FORMS ("phone tablet") and STOREROOM_TESTS (a test-name filter) narrow a rerun. Needs the development build installed (bash device/buildStamp.sh check).
@@ -18,7 +18,8 @@ PORT=$(free_port)
 METRO_PORT=$(free_port)
 ROOT=$(cd .. && pwd)
 LOGS=$(mktemp -d)
-DB=culinaire_storeroom
+DB=${STOREROOM_DB:-culinaire_storeroom}
+APP_HOST=${DEVICE_HOST_IP:-127.0.0.1} # 10.0.2.2 on the emulator (device/emulator.sh env sets it)
 PSQL=(psql -h 127.0.0.1 -p 55432 -U ci -qAt)
 ADB=${ADB:-${ANDROID_HOME:-$HOME/android-sdk}/platform-tools/adb}
 # The moto g86 (device/README.md): an emulator another lane left running must not make every adb call ambiguous.
@@ -29,7 +30,10 @@ export E2E_USER_PASSWORD=${E2E_USER_PASSWORD:-E2e-Ci-Throwaway-Pass-1!}
 export E2E_USER_TOTP_SECRET=${E2E_USER_TOTP_SECRET:-JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP}
 export E2E_DELETE_USER_EMAIL=${E2E_DELETE_USER_EMAIL:-e2e-delete-ci@culinaire.test}
 export E2E_DELETE_USER_PASSWORD=${E2E_DELETE_USER_PASSWORD:-E2e-Delete-Throwaway-Pass-1!}
-export E2E_API_URL=http://localhost:$PORT METRO_URL=http://localhost:$METRO_PORT
+export E2E_PHONE_USER_EMAIL=${E2E_PHONE_USER_EMAIL:-e2e-phone-ci@culinaire.test}
+export E2E_PHONE_USER_PASSWORD=${E2E_PHONE_USER_PASSWORD:-E2e-Phone-Throwaway-Pass-1!}
+export E2E_PHONE_USER_TOTP_SECRET=${E2E_PHONE_USER_TOTP_SECRET:-KRSXG5CTMVRXEZLUKRSXG5CTMVRXEZLU}
+export E2E_API_URL=http://127.0.0.1:$PORT METRO_URL=http://$APP_HOST:$METRO_PORT
 
 set -m # each background job gets its own process group, so `kill -- -<pid>` stops npx/pnpm and what they started, nothing else
 server=""
@@ -46,10 +50,10 @@ trap stop EXIT
 
 "${PSQL[@]}" -d postgres -c "select 1" >/dev/null 2>&1 || bash "$ROOT/scripts/localIntegrationDb.sh" start
 eval "$(bash "$ROOT/scripts/localIntegrationDb.sh" env)"
-export PORT DATABASE_URL=postgresql://ci@127.0.0.1:55432/$DB DEV_DATABASE_URL=postgresql://ci@127.0.0.1:55432/$DB CLIENT_URL=http://localhost:5179
+export PORT DATABASE_URL=postgresql://ci@127.0.0.1:55432/$DB DEV_DATABASE_URL=postgresql://ci@127.0.0.1:55432/$DB CLIENT_URL=http://127.0.0.1:5179
 (cd "$ROOT" && pnpm --filter @culinaire/shared build >/dev/null)
 
-EXPO_PUBLIC_API_URL=$E2E_API_URL npx expo start --dev-client --port "$METRO_PORT" >"$LOGS/metro.log" 2>&1 </dev/null &
+EXPO_PUBLIC_API_URL=http://$APP_HOST:$PORT npx expo start --dev-client --port "$METRO_PORT" >"$LOGS/metro.log" 2>&1 </dev/null &
 metro=$!
 
 fresh_server() {
@@ -60,12 +64,12 @@ fresh_server() {
     && pnpm --filter @culinaire/server exec tsx src/scripts/seedE2eCiData.ts)
   (cd "$ROOT" && exec pnpm --filter @culinaire/server exec tsx src/index.ts) >>"$LOGS/server.log" 2>&1 </dev/null &
   server=$!
-  for _ in $(seq 1 90); do curl -sf "$E2E_API_URL/api/health" >/dev/null && break; sleep 2; done
-  { curl -sf "$E2E_API_URL/api/health" >/dev/null && kill -0 "$server" 2>/dev/null; } || { echo "the API did not come up"; tail -20 "$LOGS/server.log"; exit 1; }
+  for _ in $(seq 1 90); do curl -sf -m 10 "$E2E_API_URL/api/health" >/dev/null && break; sleep 2; done
+  { curl -sf -m 10 "$E2E_API_URL/api/health" >/dev/null && kill -0 "$server" 2>/dev/null; } || { echo "the API did not come up"; tail -20 "$LOGS/server.log"; exit 1; }
 }
 
-for _ in $(seq 1 90); do curl -sf "$METRO_URL/status" >/dev/null && break; sleep 2; done
-{ curl -sf "$METRO_URL/status" >/dev/null && kill -0 "$metro" 2>/dev/null; } || { echo "Metro did not come up"; tail -20 "$LOGS/metro.log"; exit 1; }
+for _ in $(seq 1 90); do curl -sf -m 10 "http://127.0.0.1:$METRO_PORT/status" >/dev/null && break; sleep 2; done
+{ curl -sf -m 10 "http://127.0.0.1:$METRO_PORT/status" >/dev/null && kill -0 "$metro" 2>/dev/null; } || { echo "Metro did not come up"; tail -20 "$LOGS/metro.log"; exit 1; }
 
 mkdir -p "$OUT"
 rc=0

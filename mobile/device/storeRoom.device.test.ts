@@ -2,7 +2,8 @@ import { describe, it, beforeAll, afterAll, beforeEach, onTestFailed } from "vit
 import { mkdirSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
-import { adb, back, clearApp, dump, fieldText, find, forceStop, has, hideKeyboard, openApp, setAirplane, setAnimations, setDarkMode, setFontScale, setRotation, swipe, tap, tapAt, typeInto, waitFor } from "./adb";
+import { adb, back, clearApp, dismissSavePassword, dump, fieldText, find, forceStop, has, hideKeyboard, isSavePasswordSheet, openApp, openTab, setAirplane, setAnimations, setDarkMode, setFontScale, setRotation, swipe, tap, tapAt, typeInto, waitFor } from "./adb";
+import { createApiClient, type Tokens } from "../src/api/client";
 import { credentials, freshCode, manager } from "./fixtures";
 
 /**
@@ -12,34 +13,27 @@ import { credentials, freshCode, manager } from "./fixtures";
  * Run by `device/storeRoom.sh` through the lease, once per form: STOREROOM_FORM "phone" (the device as it is) or "tablet" (iPad portrait,
  * 820 dp wide, by `wm size`/`wm density`, reset afterwards). Pictures go to STOREROOM_OUT.
  */
-const METRO = process.env.METRO_URL ?? "http://localhost:8088";
-const API_URL = process.env.E2E_API_URL ?? "http://localhost:3009";
+const METRO = process.env.METRO_URL ?? "http://127.0.0.1:8088";
+const API_URL = process.env.E2E_API_URL ?? "http://127.0.0.1:3009";
 const OUT = process.env.STOREROOM_OUT ?? resolve(process.cwd(), "device/_shots/storeRoom");
 const FORM = process.env.STOREROOM_FORM ?? "phone";
 const INV = "/api/inventory";
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 const sdk = process.env.ANDROID_HOME ?? `${process.env.HOME}/android-sdk`;
-/** iPad portrait on the moto g86's 1220 px width: density = 1220 * 160 / 820. */
+/** iPad portrait on the moto g86's 1220 px width: density = 1220 * 160 / 820. The emulator is iPad portrait as it is. */
 const TABLET = { size: "1220x1755", density: 238 };
+const resized = FORM === "tablet" && !process.env.ANDROID_SERIAL?.startsWith("emulator-");
 
 const m = manager();
 const ids: Record<string, string> = {};
 let here = "";
 let there = "";
 
-const SAVE_PASSWORD = /Save password|Google Password Manager/i;
-async function dismissSavePassword() {
-  if (!(await has(SAVE_PASSWORD))) return false;
-  await back();
-  await sleep(600);
-  return true;
-}
-
 async function shot(name: string) {
   await sleep(900);
   // Never photograph the save-password sheet: it shows the phone owner's Google account.
   for (let i = 0; i < 3 && (await dismissSavePassword()); i++);
-  if (await has(SAVE_PASSWORD)) throw new Error(`not photographing ${name}: the save-password sheet is still up`);
+  if (isSavePasswordSheet(await dump())) throw new Error(`not photographing ${name}: the save-password sheet is still up`);
   mkdirSync(OUT, { recursive: true });
   writeFileSync(resolve(OUT, `${FORM}-${name}.png`), execFileSync(process.env.ADB ?? `${sdk}/platform-tools/adb`, ["exec-out", "screencap", "-p"], { maxBuffer: 1 << 26 }));
 }
@@ -108,9 +102,7 @@ async function hideDevTools() {
   }
 }
 
-const tab = (title: string) => tap(new RegExp(`^${title}(,|$)`), 30_000);
-
-async function signIn() {
+async function toCode(email: string, password: string) {
   forceStop();
   clearApp();
   await openApp(METRO);
@@ -118,27 +110,33 @@ async function signIn() {
   if (await has("Go home")) await back();
   await hideDevTools();
   await waitFor("Welcome back to the line.", 240_000);
-  await type("Email", credentials.email);
-  await type("Password", credentials.password);
+  await type("Email", email);
+  await type("Password", password);
   await hideKeyboard();
   const all = (await dump()).filter((n) => n.desc === "Sign in" && n.clickable);
   const button = all[all.length - 1];
   await tapAt(Math.round((button.x1 + button.x2) / 2), Math.round((button.y1 + button.y2) / 2));
-  for (let i = 0; i < 6 && !(await has("Enter your 6-digit code")); i++) {
-    await dismissSavePassword();
+  for (let i = 0; i < 6; i++) {
+    if (await dismissSavePassword()) break;
     await sleep(800);
   }
+}
+
+const SIGNED_IN = /^More(,|$)|^Account(,|$)/;
+
+async function signIn() {
+  await toCode(credentials.email, credentials.password);
   await waitFor("Enter your 6-digit code", 30_000);
   const field = await find("Code", (n) => n.find((x) => x.cls.includes("EditText")));
   await tapAt(Math.round((field!.x1 + field!.x2) / 2), Math.round((field!.y1 + field!.y2) / 2));
   adb(["shell", "input", "text", await freshCode()]);
   adb(["shell", "input", "keyevent", "KEYCODE_ENTER"]);
   // A server that has only just started can miss the first verify ("Can't reach the server"): the code was not used, so verify again.
-  for (let i = 0; i < 3 && !(await has(/^Account(,|$)/)); i++) {
+  for (let i = 0; i < 3 && !(await has(SIGNED_IN)); i++) {
     await sleep(3000);
     if (await has("Can't reach the server. Try again.")) await tap("Verify");
   }
-  await waitFor(/^Account(,|$)/, 60_000);
+  await waitFor(SIGNED_IN, 60_000);
   for (let i = 0; i < 6 && (await dismissSavePassword()); i++);
 }
 
@@ -168,8 +166,8 @@ describe.skipIf(!process.env.STOREROOM_OUT)(`store room screens on ${FORM}`, () 
     setFontScale(1.0);
     setDarkMode(false);
     await setRotation(false);
-    adb(["shell", "wm", "size", FORM === "tablet" ? TABLET.size : "reset"]);
-    adb(["shell", "wm", "density", FORM === "tablet" ? String(TABLET.density) : "reset"]);
+    adb(["shell", "wm", "size", resized ? TABLET.size : "reset"]);
+    adb(["shell", "wm", "density", resized ? String(TABLET.density) : "reset"]);
 
     await m.signIn();
     const ctx = await m.client.request<{ selectedLocationId: string; organisationId: number }>("GET", "/api/users/location-context");
@@ -198,7 +196,7 @@ describe.skipIf(!process.env.STOREROOM_OUT)(`store room screens on ${FORM}`, () 
   });
 
   it("transfers: the list, a receive with a short line, a new transfer", async () => {
-    await tab("Transfers");
+    await openTab("Transfers");
     await waitFor(/^to receive$/i, 30_000);
     await shot("transfers-list");
     await press(/^From Harbour St kitchen, 2 items, On its way/);
@@ -220,7 +218,7 @@ describe.skipIf(!process.env.STOREROOM_OUT)(`store room screens on ${FORM}`, () 
   });
 
   it("stock: the dashboard, the critical list, an item, the lookup", async () => {
-    await tab("Stock");
+    await openTab("Stock");
     await waitFor(/^Critical, reorder now/, 30_000);
     await shot("stock-dashboard");
     await press(/^Critical, reorder now/);
@@ -233,10 +231,11 @@ describe.skipIf(!process.env.STOREROOM_OUT)(`store room screens on ${FORM}`, () 
     await type("Search the catalogue", "le");
     await hideKeyboard();
     await shot("stock-lookup");
+    await press("Back"); // a tab under More keeps its screens: leave it on the dashboard for the next test
   });
 
   it("stock: a new-item request and my requests", async () => {
-    await tab("Stock");
+    await openTab("Stock");
     await press("Look up an item");
     await type("Search the catalogue", "yuzu");
     await press("Not in the catalogue? Ask for it");
@@ -251,5 +250,37 @@ describe.skipIf(!process.env.STOREROOM_OUT)(`store room screens on ${FORM}`, () 
     await waitFor("My requests", 30_000);
     await sleep(3000); // the queue sends it: "Sent for review"
     await shot("stock-requests");
+  });
+
+  // Last: it takes inventory:cost off every role of the throwaway database, then signs in a person who may count but not see costs.
+  it("blind count: dashes where the server hides quantity and cost", async () => {
+    const [email, password] = [process.env.E2E_DELETE_USER_EMAIL ?? "", process.env.E2E_DELETE_USER_PASSWORD ?? ""];
+    const { permissions } = await m.client.request<{ permissions: { permissionId: number; permissionKey: string }[] }>("GET", "/api/permissions");
+    const count = permissions.find((p) => p.permissionKey === "inventory:count")!.permissionId;
+    const cost = permissions.find((p) => p.permissionKey === "inventory:cost")!.permissionId;
+    const { roles } = await m.client.request<{ roles: { roleId: number; roleName: string; permissions: { permissionId: number }[] }[] }>("GET", "/api/roles");
+    for (const r of roles.filter((x) => x.roleName !== "Administrator")) {
+      const kept = r.permissions.map((p) => p.permissionId).filter((id) => id !== cost && id !== count);
+      await m.client.request("PUT", `/api/roles/${r.roleId}/permissions`, { body: { permissionIds: r.roleName === "Subscriber" ? [...kept, count] : kept } });
+    }
+    const { organisation } = await m.client.request<{ organisation: { joinKey: string } }>("GET", "/api/organisations/mine");
+    const cook = await m.client.request<{ user: { userId: number }; tokens: Tokens }>("POST", "/api/auth/login", { auth: false, body: { email, password } });
+    const asCook = createApiClient({ baseUrl: API_URL, appVersion: "0.1.0-device", tokenStore: { load: async () => cook.tokens, save: async () => {}, clear: async () => {} } });
+    await asCook.request("POST", "/api/organisations/join", { body: { joinKey: organisation.joinKey } });
+    await m.client.request("POST", `/api/store-locations/${here}/staff`, { body: { userId: cook.user.userId } });
+
+    await toCode(email, password);
+    await waitFor(SIGNED_IN, 60_000);
+    await openTab("Stock");
+    await waitFor(/^Critical, reorder now/, 30_000);
+    await press(/^Critical, reorder now/);
+    await shot("blind-stock-dashboard");
+    await press(/^London dry gin, on hand/);
+    await waitFor(/^kept in$/i);
+    await shot("blind-stock-item");
+    await press("Back");
+    await openTab("Transfers");
+    await waitFor(/^to receive$/i, 30_000);
+    await shot("blind-transfers-list");
   });
 });
