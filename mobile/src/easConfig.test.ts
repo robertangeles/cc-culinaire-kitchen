@@ -63,6 +63,12 @@ describe("app identity (both stores)", () => {
     expect(app.plugins.some((p: unknown) => Array.isArray(p) && p[0] === "expo-notifications")).toBe(true);
   });
 
+  it("says in its own words why it uses Face ID for the app lock (iOS refuses Face ID without it)", () => {
+    expect(pkg.dependencies["expo-local-authentication"]).toBeTruthy();
+    const lock = app.plugins.find((p: unknown) => Array.isArray(p) && p[0] === "expo-local-authentication");
+    expect(lock[1].faceIDPermission).toMatch(/CulinAIre Kitchen uses Face ID/);
+  });
+
   it("has real icons and splash from the brand art, in the paper colour (not Expo's blue template)", () => {
     for (const f of [app.icon, app.android.adaptiveIcon.foregroundImage, app.android.adaptiveIcon.backgroundImage, app.android.adaptiveIcon.monochromeImage]) {
       expect(existsSync(resolve(root, f)), f).toBe(true);
