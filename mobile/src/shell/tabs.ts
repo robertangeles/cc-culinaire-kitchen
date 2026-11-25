@@ -43,6 +43,8 @@ export const moduleTabs: ModuleTab[] = [
   { route: "(menu)", title: "Menu", icon: "menu", anyPermission: ["menu:read"] },
   // What CulinAIre remembers for this person; removing a memory is `brain:manage` on the server.
   { route: "(brain)", title: "Brain", icon: "brain", anyPermission: ["brain:read"] },
+  // Team chat: the server asks only for a sign-in and checks each room (a kitchen's members, a thread's two people).
+  { route: "(bench)", title: "Bench", icon: "bench" },
 ];
 
 /** Administrators hold every permission implicitly, as on the web and the server. */

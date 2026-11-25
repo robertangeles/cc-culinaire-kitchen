@@ -17,7 +17,7 @@ import { appleCredential, appleEnabled } from "../auth/appleSignIn";
 import { apiBaseUrl, appVersion, googleEnabled } from "../config";
 
 // One of each for the whole app. The client's "session ended" callback reaches the session through this binding.
-const tokenStore = createSecureTokenStore();
+export const tokenStore = createSecureTokenStore();
 // eslint-disable-next-line prefer-const -- assigned after the client that calls into it
 let session: Session;
 // The built-in fetch buffers a whole response; `expo/fetch` hands the body over as it arrives (chat answers stream).

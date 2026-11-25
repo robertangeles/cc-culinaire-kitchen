@@ -51,9 +51,9 @@ describe("which tabs a person sees", () => {
     expect(visibleTabs(person({ roles: ["Administrator"] }))).toEqual(moduleTabs);
   });
 
-  it("shows Ask, Recipes and the Inbox to everyone signed in, as the server asks for no permission on chat, recipes or notifications", () => {
-    expect(visibleTabs(person()).map((t) => t.route)).toEqual(["(chat)", "(recipes)", "(inbox)"]);
-    expect(visibleTabs(person({ permissions: ["waste:log"] })).map((t) => t.route)).toEqual(["(waste)", "(chat)", "(recipes)", "(inbox)"]);
+  it("shows Ask, Recipes, the Inbox and the Bench to everyone signed in, as the server asks for no permission on chat, recipes, notifications or the Bench", () => {
+    expect(visibleTabs(person()).map((t) => t.route)).toEqual(["(chat)", "(recipes)", "(inbox)", "(bench)"]);
+    expect(visibleTabs(person({ permissions: ["waste:log"] })).map((t) => t.route)).toEqual(["(waste)", "(chat)", "(recipes)", "(inbox)", "(bench)"]);
   });
 
   it("opens a tab on any one of its permissions", () => {
@@ -85,23 +85,24 @@ describe("which tabs a person sees", () => {
     expect(new Set(moduleTabs.map((t) => t.route)).size).toBe(moduleTabs.length);
   });
 
-  it("puts the tabs in the order a line cook uses them (prep, waste, usage, count, move, receive, orders), then Ask, Recipes and the Inbox, then the weekly store-room Transfers and Stock, then the Menu, then the Brain", () => {
-    expect(moduleTabs.map((t) => t.title)).toEqual(["Prep", "Waste", "Usage", "Count", "Move", "Receive", "Orders", "Ask", "Recipes", "Inbox", "Transfers", "Stock", "Menu", "Brain"]);
+  it("puts the tabs in the order a line cook uses them (prep, waste, usage, count, move, receive, orders), then Ask, Recipes and the Inbox, then the weekly store-room Transfers and Stock, then the Menu, then the Brain and the Bench", () => {
+    expect(moduleTabs.map((t) => t.title)).toEqual(["Prep", "Waste", "Usage", "Count", "Move", "Receive", "Orders", "Ask", "Recipes", "Inbox", "Transfers", "Stock", "Menu", "Brain", "Bench"]);
   });
 });
 
 describe("the tab bar and More", () => {
   it("keeps every module and Account on the bar when they fit in five buttons", () => {
+    // One module of their own takes a person past five: the first four stay where they were, the Bench and Account go under More.
     const cook = person({ permissions: ["waste:log"] });
     expect(tabBar(cook).bar.map((t) => t.title)).toEqual(["Waste", "Ask", "Recipes", "Inbox"]);
-    expect(tabBar(cook).more).toEqual([]);
+    expect(tabBar(cook).more.map((t) => t.title)).toEqual(["Bench"]);
     expect(tabBar(person())).toEqual({ bar: visibleTabs(person()), more: [] });
   });
 
   it("shows four modules and More when a person's modules and Account would make more than five buttons", () => {
     const { bar, more } = tabBar(person({ roles: ["Administrator"] }));
     expect(bar.map((t) => t.title)).toEqual(["Prep", "Waste", "Usage", "Count"]);
-    expect(more.map((t) => t.title)).toEqual(["Move", "Receive", "Orders", "Ask", "Recipes", "Inbox", "Transfers", "Stock", "Menu", "Brain"]);
+    expect(more.map((t) => t.title)).toEqual(["Move", "Receive", "Orders", "Ask", "Recipes", "Inbox", "Transfers", "Stock", "Menu", "Brain", "Bench"]);
     expect(bar.length + 1).toBe(MAX_TABS); // the fifth button is More, which also holds Account
   });
 
@@ -119,8 +120,8 @@ describe("the tab bar and More", () => {
       Count: "Count, tab, 4 of 5",
       More: "More, tab, 5 of 5",
     });
-    // No module permission: Ask, Recipes and the Inbox, which everyone gets, then Account; More has no button.
-    expect(tabLabels(person())).toEqual({ Ask: "Ask, tab, 1 of 4", Recipes: "Recipes, tab, 2 of 4", Inbox: "Inbox, tab, 3 of 4", Account: "Account, tab, 4 of 4" });
+    // No module permission: Ask, Recipes, the Inbox and the Bench, which everyone gets, then Account; More has no button.
+    expect(tabLabels(person())).toEqual({ Ask: "Ask, tab, 1 of 5", Recipes: "Recipes, tab, 2 of 5", Inbox: "Inbox, tab, 3 of 5", Bench: "Bench, tab, 4 of 5", Account: "Account, tab, 5 of 5" });
   });
 
   it("opens the signed-in app on the first button of the person's bar, named with its group so a bare / cannot open Ask instead", () => {

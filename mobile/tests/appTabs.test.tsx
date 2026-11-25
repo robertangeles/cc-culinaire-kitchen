@@ -156,17 +156,17 @@ describe("the tab bar", () => {
     expect(mocks.redirect).toBeNull();
   });
 
-  it("shows a cook's modules and Account, with no More, when they fit in five buttons", () => {
+  it("gives a cook with one module of their own the same four buttons as before, with the Bench and Account under More", () => {
     mocks.user = person({ permissions: ["waste:log"] });
     render(<AppTabs />);
-    expect(buttons()).toEqual(["Waste", "Ask", "Recipes", "Inbox", "Account"]);
+    expect(buttons()).toEqual(["Waste", "Ask", "Recipes", "Inbox", "More"]);
   });
 
-  it("gives a person with no permission Ask, Recipes, the Inbox and Account, with Account ahead of More, which has no button then", () => {
+  it("gives a person with no permission Ask, Recipes, the Inbox, the Bench and Account, with Account ahead of More, which has no button then", () => {
     mocks.user = person({});
     render(<AppTabs />);
-    expect(buttons()).toEqual(["Ask", "Recipes", "Inbox", "Account"]);
-    expect(mocks.screens.filter((s) => s.guard).map((s) => s.name)).toEqual(["(chat)", "(recipes)", "(inbox)", "account", "more"]);
+    expect(buttons()).toEqual(["Ask", "Recipes", "Inbox", "Bench", "Account"]);
+    expect(mocks.screens.filter((s) => s.guard).map((s) => s.name)).toEqual(["(chat)", "(recipes)", "(inbox)", "(bench)", "account", "more"]);
   });
 
   it("on an iPhone or iPad each button is read with its place among the buttons that show; elsewhere the label is left to the library", () => {
@@ -219,7 +219,7 @@ describe("the tab bar", () => {
     cleanup();
     mocks.screens.length = 0;
     // With no overflow Account has its own button, so it is not handed to More.
-    mocks.user = person({ permissions: ["waste:log"] });
+    mocks.user = person({});
     render(<AppTabs />);
     expect(highlighted("account")).toBe("account");
   });
@@ -261,7 +261,7 @@ describe("the tab bar", () => {
     expect(mocks.navigate).toHaveBeenLastCalledWith("(transfers)");
     fireEvent.click(screen.getByRole("button", { name: "Account" }));
     expect(mocks.navigate).toHaveBeenLastCalledWith("account");
-    expect(screen.getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual(["Move", "Receive", "Orders", "Ask", "Recipes", "Inbox", "Transfers", "Stock", "Menu", "Brain", "Account"]);
+    expect(screen.getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual(["Move", "Receive", "Orders", "Ask", "Recipes", "Inbox", "Transfers", "Stock", "Menu", "Brain", "Bench", "Account"]);
   });
 });
 
