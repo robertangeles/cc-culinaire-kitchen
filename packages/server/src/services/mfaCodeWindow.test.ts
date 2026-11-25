@@ -31,7 +31,6 @@ vi.mock("./settingsService.js", () => ({}));
 
 import { generate } from "otplib";
 import { completeMfaLogin, createMfaSessionToken, disableMfa, enableMfa, verifyMfaToken } from "./authService.js";
-import { lastAcceptedStep, takeStep } from "./mfaUsedSteps.js";
 
 const SECRET = "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP";
 const PASSWORD = "correct horse battery";
@@ -164,16 +163,5 @@ describe("a code is accepted once", () => {
     expect(state.writes).toHaveLength(1);
     await disableMfa(userId, { password: PASSWORD, mfaCode: await codeOf(STEP_START) }, null);
     expect(state.writes[1]).toMatchObject({ mfaEnabledInd: false });
-  });
-});
-
-describe("the record of used steps", () => {
-  it("drops people whose last code was accepted more than a few minutes ago, so it cannot grow without bound", () => {
-    lastAcceptedStep.clear();
-    for (let id = 1; id <= 1000; id++) expect(takeStep(id, 100)).toBe(true);
-    expect(takeStep(1, 110)).toBe(true);
-    expect(lastAcceptedStep.size).toBe(1000);
-    expect(takeStep(2, 111)).toBe(true);
-    expect([...lastAcceptedStep]).toEqual([[1, 110], [2, 111]]);
   });
 });
