@@ -1075,6 +1075,10 @@ describe.skipIf(!process.env.SCREENS_OUT)(`screens on ${FORM}`, { timeout: 600_0
       (null, 'user', 'chat', null, 'Antoine suggested toasting the flour for the roux so it never tastes raw, even on a short cook.', 'pending', false, '2 minutes'),
       (null, 'user', 'prep', 'Saturday prep', 'Onions for the soup take one cook a full hour.', 'ready', false, '5 days'),
       (${organisationId}, 'org', 'waste', 'Herbs thrown out on Mondays', 'Three Mondays running, coriander and dill were binned after the weekend delivery.', 'ready', false, '1 day')) v(o, s, t, n, b, st, p, a)`);
+    await tap(/^More(,|$)/);
+    await waitFor("Brain", 20_000);
+    await scrollToEnd();
+    await shot("b1a-more");
     await tab("Inbox");
     await tab("Brain");
     await waitFor("4 memories", 30_000);
@@ -1088,6 +1092,7 @@ describe.skipIf(!process.env.SCREENS_OUT)(`screens on ${FORM}`, { timeout: 600_0
     await waitFor(/^keep it$/i, 20_000);
     await shot("b2b-remove-asked");
     await tap(/^keep it$/i);
+    await choose(/^Salt fish overnight/); // closed again: one Remove on screen
     await choose(/^Saturday prep/);
     await choose("Remove");
     await tap(/^remove$/i);
@@ -1101,15 +1106,20 @@ describe.skipIf(!process.env.SCREENS_OUT)(`screens on ${FORM}`, { timeout: 600_0
     await waitFor("Herbs thrown out on Mondays", 30_000);
     await shot("b4-shared");
     await choose("Private to you");
+    await waitFor("3 memories", 30_000);
     await type("Search", "truffle");
     await hideKeyboard();
     await waitFor("No memories match", 30_000);
     await shot("b5-no-match");
+    await launch();
+    await tab("Brain");
+    await waitFor("3 memories", 60_000);
     await setAirplane(true);
     try {
-      await launch();
-      await tab("Brain");
+      await tab("Inbox");
+      await tab("Brain"); // reads the memories again when it comes into view
       await waitFor(/^Can't reach the server/, 60_000);
+      for (let i = 0; i < 6; i++) await scroll("up");
       await shot("b6-brain-offline");
     } finally {
       await setAirplane(false);

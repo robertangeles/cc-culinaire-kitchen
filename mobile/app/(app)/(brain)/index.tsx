@@ -117,7 +117,7 @@ function MemoryRow({ memory, removable, onRemove }: { memory: Memory; removable:
     setRemoving(false);
   }
   const confirm = () =>
-    Alert.alert("Remove this memory?", memory.scope === "org" ? "CulinAIre forgets it for good, for your whole kitchen, on the web too." : "CulinAIre forgets it for good, on the web too.", [
+    Alert.alert(`Remove “${label}”?`, memory.scope === "org" ? "CulinAIre forgets it for good, for your whole kitchen, on the web too." : "CulinAIre forgets it for good, on the web too.", [
       { text: "Keep it", style: "cancel" },
       { text: "Remove", style: "destructive", onPress: () => void remove() },
     ]);

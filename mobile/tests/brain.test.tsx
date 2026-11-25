@@ -97,7 +97,7 @@ describe("Your Brain", () => {
     expand(/^Memory b/);
     const kept = answer("Keep it");
     fireEvent.click(screen.getByRole("button", { name: "Remove" }));
-    expect(kept).toHaveBeenCalled();
+    expect(kept.mock.calls[0].slice(0, 2)).toEqual(["Remove “Memory b”?", "CulinAIre forgets it for good, on the web too."]);
     expect(api.remove).not.toHaveBeenCalled();
     answer("Remove");
     api.remove.mockRejectedValueOnce(new ApiError("network"));
