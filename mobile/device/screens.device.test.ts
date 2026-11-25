@@ -537,8 +537,9 @@ describe.skipIf(!process.env.SCREENS_OUT)(`screens on ${FORM}`, { timeout: 600_0
     const [w, h] = /(\d+)x(\d+)/.exec(adb(["shell", "wm", "size"]).trim().split("\n").pop()!)!.slice(1).map(Number);
     let lastY = -1;
     for (let i = 0; i < 14; i++) {
-      const node = (await dump()).find((n) => n.clickable && (typeof label === "string" ? n.desc === label : label.test(n.desc)));
-      if (node && (node.y2 < h * 0.84 || node.y1 === lastY)) return tapAt(Math.round((node.x1 + node.x2) / 2), Math.round((node.y1 + node.y2) / 2));
+      // A control under the fold is listed with what shows of it, or with no height at all: not one to tap.
+      const node = (await dump()).find((n) => n.clickable && n.y2 - n.y1 > h * 0.02 && (typeof label === "string" ? n.desc === label : label.test(n.desc)));
+      if (node && (node.y2 < h * 0.8 || node.y1 === lastY)) return tapAt(Math.round((node.x1 + node.x2) / 2), Math.round((node.y1 + node.y2) / 2));
       lastY = node ? node.y1 : -1;
       await hideKeyboard();
       const [from, to] = i < 7 ? [0.7, 0.4] : [0.35, 0.65]; // down the page, then back up
