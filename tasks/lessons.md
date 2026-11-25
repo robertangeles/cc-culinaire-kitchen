@@ -1525,3 +1525,10 @@ builds all tables with CHECKs enforcing. Stop it again when done.
 - **Problem**: Each Bench socket handler checked its own payload, and not evenly.
 - **Fix**: `onBenchEvent` (`benchSocketGuard.ts`) validates every event against its schema and logs handler errors; handlers receive typed data.
 - **Rule**: Register a new Bench event with `onBenchEvent` and a schema, never with `socket.on`, and add it to `benchSocketValidation.integration.test.ts`.
+
+## 2026-11-26 — A code that is valid only until the clock ticks is refused while we are still checking it
+
+- **Problem**: A two-step code was accepted only in its own 30-second step. Changing two-step settings checks the password first (bcrypt, about 0.25 s in CI), so a code sent just before a step change was refused, and the phone end-to-end run failed on main about once in a hundred runs. The integration tests had met this and wrapped it in retries.
+- **Fix**: `verifyMfaToken` accepts the current step and the one before it, never a future one. `mfaCodeWindow.test.ts` runs the real library at both ends of a step with a fixed clock.
+- **Reuse, checked**: We checked whether a code that has already been used is refused. It is not: `verifyMfaToken` stores nothing, so a used code can be used again within its window. That was so before this change, which widens that window from about 30 to about 60 seconds. Refusing a used code is tracked separately.
+- **Rule**: When a test needs a retry around a time limit, ask whether a person meets the same limit, and fix it there. Test a time window at its boundaries with a fixed clock, never a sleep.

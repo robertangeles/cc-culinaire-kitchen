@@ -5,6 +5,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Fixed (an authenticator code typed just before the 30-second step changed was refused)
+
+Server only. No migration, no permission change.
+
+- **Sign-in, changing two-step settings, linking a sign-in method and deleting an account** now accept an authenticator code in its own 30-second step and the one before it, never a future step. A code typed as the step changes, or from a phone whose clock is a little slow, is no longer refused.
+- **Used codes:** we checked whether a code that has already been used is refused. It is not: `verifyMfaToken` stores nothing, so a used code can be used again within its window. That was so before this change; this change widens that window from about 30 to about 60 seconds. Refusing a used code is tracked separately.
+
 ### Fixed (the Bench's live channel followed the client's room names, not the person's membership)
 
 Server only. No migration, no permission change, no change to the Bench's HTTP routes.

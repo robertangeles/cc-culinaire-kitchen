@@ -1034,12 +1034,16 @@ export async function generateMfaSecret(userId: number, proof: MfaChangeProof, s
 }
 
 /**
- * Verifies a TOTP code against the user's stored MFA secret.
+ * Verifies a TOTP code against the user's stored MFA secret. The one check behind sign-in, changing two-factor
+ * settings, linking a sign-in method and deleting an account.
+ *
+ * Accepts the code of the current 30-second step and of the one before it, for a code typed as the step changes or a
+ * phone whose clock is a little slow. Never a future step.
  */
 export async function verifyMfaToken(userId: number, token: string): Promise<boolean> {
   const [row] = await db.select().from(user).where(eq(user.userId, userId));
   if (!row || !row.mfaSecret) return false;
-  const result = await otpVerify({ token, secret: row.mfaSecret });
+  const result = await otpVerify({ token, secret: row.mfaSecret, epochTolerance: [30, 0] });
   return result.valid;
 }
 
