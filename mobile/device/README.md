@@ -57,7 +57,7 @@ SCREENS_FORMS=phone SCREENS_TESTS="forgot|waste" bash device/lease.sh bash devic
 
 `device/screens.sh` does all of it and stops what it started: a fresh throwaway database (`SCREENS_DB`, default `culinaire_screens`) on the local test cluster
 (`scripts/localIntegrationDb.sh`, made per form so every pass starts empty), the API and Metro on free ports (other worktrees leave theirs on
-3009 and 8088), then `device/screens.device.test.ts` once per form and `device/gallery.mjs`, which writes `<out-dir>/index.html` (screen name,
+3009 and 8088), then `device/screens.device.test.ts` once per form, the purchasing walk once (as the first form) and `device/gallery.mjs`, which writes `<out-dir>/index.html` (screen name,
 phone, iPad portrait, iPad landscape, the web page it mirrors; opens from disk). With a `<before-dir>` from an earlier run, a changed image is
 shown next to its earlier version. Forms (`SCREENS_FORMS`): `phone` (the moto g86 as it is), `tablet` (820 x 1180 dp) and `tablet-landscape`
 (1180 x 820 dp). On the phone the tablet forms set the phone's own display with `wm size` and `wm density` (reset afterwards, also when the walk
