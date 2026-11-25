@@ -43,7 +43,6 @@ import { modelOptionsRouter } from "./routes/modelOptions.js";
 import { recoverStaleDocuments } from "./services/knowledgeManagementService.js";
 import { hydrateEnvFromCredentials } from "./services/credentialService.js";
 import { ensureEncryptionKey, ensurePiiKeys } from "./utils/crypto.js";
-import { handleProcessErrors } from "./utils/processErrors.js";
 import { brainRouter } from "./routes/brain.js";
 import { startScheduler } from "./scheduler.js";
 
@@ -389,20 +388,18 @@ hydrateEnvFromCredentials().then(() => {
       const stopScheduler = startScheduler(log);
 
       // Graceful shutdown: stop background jobs, close server, release port
-      function shutdown(signal: string, exitCode = 0) {
+      function shutdown(signal: string) {
         log.info(`${signal} received — shutting down`);
         stopScheduler();
         httpServer.close(() => {
           log.info("Server closed");
-          process.exit(exitCode);
+          process.exit(0);
         });
         // Force exit if close takes too long
         setTimeout(() => process.exit(1), 5000);
       }
       process.on("SIGINT", () => shutdown("SIGINT"));
       process.on("SIGTERM", () => shutdown("SIGTERM"));
-      // Only once listening: an error during start-up still stops the start.
-      handleProcessErrors(log, shutdown);
     });
   });
 });

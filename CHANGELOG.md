@@ -30,7 +30,6 @@ Phone app only; no server change, no migration, no new permission.
 Server only. No migration, no permission change, no change in the web client.
 
 - **Bench socket input validation hardening:** every Bench socket event is checked before it is handled; malformed events are dropped and the sender gets `bench:error` with code `VALIDATION`. A typing notice is accepted only for a room the sender has joined.
-- **Server error logging:** last-resort error logging with context.
 
 ### Added (open swaps say the shift's status and the venue's zone and name)
 
