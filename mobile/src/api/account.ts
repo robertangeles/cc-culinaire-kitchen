@@ -10,6 +10,7 @@ import {
   type ProfileDetails,
 } from "@culinaire/shared/schemas/account";
 import { ApiError, type ApiClient, type TokenStore } from "./client";
+import { photoForm, type Photo } from "./photo";
 
 export interface AccountFacts {
   hasPassword: boolean;
@@ -33,12 +34,6 @@ export interface DeleteProof {
   mfaCode?: string;
 }
 
-/** A picture from the phone's library or camera, ready to upload. */
-export interface PickedImage {
-  uri: string;
-  mimeType: string;
-}
-
 /** The proof the server asks for before two-step verification is set up or removed: the password (accounts that have one), and the current code to remove it. */
 export interface MfaProof {
   password?: string;
@@ -60,13 +55,9 @@ export function createAccountApi(client: ApiClient, tokenStore: TokenStore) {
       await client.request("PATCH", "/api/users/profile", { body: details });
     },
 
-    /** Multipart `file`, as the web's crop sends it. The server takes PNG, JPEG and WebP up to 2 MB. */
-    async uploadAvatar(image: PickedImage): Promise<string> {
-      const form = new FormData();
-      const ext = image.mimeType === "image/png" ? "png" : image.mimeType === "image/webp" ? "webp" : "jpg";
-      // React Native's FormData takes a file as { uri, name, type }.
-      form.append("file", { uri: image.uri, name: `avatar.${ext}`, type: image.mimeType } as unknown as Blob);
-      return (await client.request("POST", "/api/users/profile/avatar", { body: form, schema: AvatarReplySchema })).photoPath;
+    /** As the web's crop sends it. The server takes PNG and JPEG (and WebP, which the phone's picker turns into one of them) up to 2 MB. */
+    async uploadAvatar(photo: Photo): Promise<string> {
+      return (await client.request("POST", "/api/users/profile/avatar", { body: photoForm(photo, "avatar"), schema: AvatarReplySchema })).photoPath;
     },
 
     /** Ends every other sign-in; this one stays (its refresh token goes in the body). */

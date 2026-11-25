@@ -5,6 +5,7 @@ import { Linking } from "react-native";
 import { ApiError } from "../src/api/client";
 import { routerMock } from "../testing/mocks";
 
+const PHOTO = { bytes: new Uint8Array([0xff, 0xd8]), mimeType: "image/jpeg" };
 // Profile and account: the real screens through react-native-web; only the server calls and the photo picker are faked.
 const mocks = vi.hoisted(() => ({
   state: { current: { state: { phase: "signedOut" } as unknown, busy: false } },
@@ -108,12 +109,12 @@ describe("my details", () => {
   });
 
   it("uploads a chosen photo and shows the new picture", async () => {
-    mocks.pickImage.mockResolvedValue({ kind: "picked", image: { uri: "file:///a.jpg", mimeType: "image/jpeg" } });
+    mocks.pickImage.mockResolvedValue({ kind: "picked", photo: PHOTO });
     mocks.accountApi.uploadAvatar.mockResolvedValue("https://img/a.jpg");
     render(<Profile />);
     await screen.findByDisplayValue("Chef");
     click("Choose photo");
-    await waitFor(() => expect(mocks.accountApi.uploadAvatar).toHaveBeenCalledWith({ uri: "file:///a.jpg", mimeType: "image/jpeg" }));
+    await waitFor(() => expect(mocks.accountApi.uploadAvatar).toHaveBeenCalledWith(PHOTO));
     expect(mocks.pickImage).toHaveBeenCalledWith("library");
     expect(mocks.session.refreshUser).toHaveBeenCalled();
     expect(await screen.findByText("Picture updated.")).toBeTruthy();
@@ -134,7 +135,7 @@ describe("my details", () => {
   });
 
   it("explains a refused upload by the server's code", async () => {
-    mocks.pickImage.mockResolvedValue({ kind: "picked", image: { uri: "file:///a.png", mimeType: "image/png" } });
+    mocks.pickImage.mockResolvedValue({ kind: "picked", photo: PHOTO });
     mocks.accountApi.uploadAvatar.mockRejectedValue(new ApiError("bad_request", "File too large. Maximum size is 10 MB.", 400, {}, "FILE_TOO_LARGE"));
     render(<Profile />);
     await screen.findByDisplayValue("Chef");

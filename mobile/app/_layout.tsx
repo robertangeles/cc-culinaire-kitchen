@@ -11,6 +11,7 @@ import { session, useSession } from "../src/runtime/appContext";
 import { appLock } from "../src/runtime/appLock";
 import { startOutbox } from "../src/runtime/appOutbox";
 import { startNotifications } from "../src/runtime/notifications";
+import { clearPickedPhotos } from "../src/photos/photoFiles";
 
 void SplashScreen.preventAutoHideAsync();
 
@@ -38,6 +39,8 @@ export default function RootLayout() {
   useEffect(() => {
     startOutbox();
     startNotifications();
+    // A photo left behind when the app was closed partway through a form.
+    clearPickedPhotos();
     void session.restore();
   }, []);
 

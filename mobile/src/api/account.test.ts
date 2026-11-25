@@ -94,7 +94,7 @@ describe("profile details", () => {
 
   it("uploads a picture as multipart `file` and answers where it is", async () => {
     const { api, request } = setup([{ photoPath: "https://img/a.jpg" }]);
-    expect(await api.uploadAvatar({ uri: "file:///a.jpg", mimeType: "image/jpeg" })).toBe("https://img/a.jpg");
+    expect(await api.uploadAvatar({ bytes: new Uint8Array([1]), mimeType: "image/jpeg" })).toBe("https://img/a.jpg");
     const [method, path, options] = request.mock.calls[0] as unknown as [string, string, { body: FormData }];
     expect([method, path]).toEqual(["POST", "/api/users/profile/avatar"]);
     expect(options.body).toBeInstanceOf(FormData);
