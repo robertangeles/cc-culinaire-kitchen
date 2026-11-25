@@ -14,8 +14,8 @@ const line: MenuLine = { id: 1, ingredientId: "i1", ingredientName: "Mozzarella"
 const recorded: SaleResult = { saleId: "s1", alreadyExists: false, voided: false, depleted: [{ ingredientId: "i1", ingredientName: "Mozzarella", baseQty: 0.24, baseUnit: "kg", fohOnHand: 3 }], skipped: [], oversold: [] };
 const dish = { kind: "dish" as const, id: "m1", name: "Margherita" };
 
-function setup(over: { canSeeCost?: boolean } = {}) {
-  const kvMap = new Map<string, string>();
+function setup(over: { canSeeCost?: boolean; kvMap?: Map<string, string> } = {}) {
+  const kvMap = over.kvMap ?? new Map<string, string>();
   const kv: KvStore = { get: async (k) => kvMap.get(k) ?? null, set: async (k, v) => void kvMap.set(k, v), delete: async (k) => void kvMap.delete(k) };
   const api = {
     items: vi.fn(async () => [item()]),
@@ -81,6 +81,23 @@ describe("the menu list", () => {
     expect(s.getSnapshot().items[0]).toMatchObject({ foodCost: undefined, foodCostPct: undefined, contributionMargin: undefined });
     expect(s.getSnapshot().lines.m1[0]).toMatchObject({ unitCost: undefined, lineCost: undefined, catalogUnitCost: undefined, costStaleInd: false });
     expect([...t.kvMap.values()].join()).not.toMatch(/6\.1|17\.9|1\.68/);
+  });
+});
+
+describe("someone who may no longer see costs", () => {
+  it("does not read them from what was kept on the phone while they could", async () => {
+    const before = setup();
+    const s = before.make();
+    await s.refresh();
+    await s.loadLines("m1");
+    const after = setup({ canSeeCost: false, kvMap: before.kvMap });
+    after.api.items.mockRejectedValue(new ApiError("network"));
+    after.api.lines.mockRejectedValue(new ApiError("network"));
+    const blind = after.make();
+    await blind.refresh();
+    await blind.loadLines("m1");
+    expect(blind.getSnapshot().items[0]).toMatchObject({ name: "Margherita", foodCost: undefined, foodCostPct: undefined, contributionMargin: undefined });
+    expect(blind.getSnapshot().lines.m1[0]).toMatchObject({ ingredientName: "Mozzarella", unitCost: undefined, lineCost: undefined, catalogUnitCost: undefined });
   });
 });
 
@@ -181,6 +198,48 @@ describe("recording a sale", () => {
     await expect(s.sell(dish, 3)).rejects.toThrow(/not confirmed/);
     await s.forgetSale();
     expect(s.getSnapshot().pendingSale).toBeNull();
+  });
+
+  it("keeps the key when sending again is refused: the first try may be recorded, so only an answer or the person settles it", async () => {
+    const t = setup();
+    const s = t.make();
+    t.api.sell.mockRejectedValueOnce(new ApiError("timeout"));
+    await expect(s.sell(dish, 2)).rejects.toMatchObject({ code: "timeout" });
+    for (const refusal of [new ApiError("rate_limited"), new ApiError("unauthorized"), new ApiError("forbidden", "Not your location", 403)]) {
+      t.api.sell.mockRejectedValueOnce(refusal);
+      await expect(s.retrySale()).rejects.toBe(refusal);
+      expect(s.getSnapshot().pendingSale).toMatchObject({ key: "key1" });
+    }
+    const restarted = t.make();
+    await restarted.refresh();
+    t.api.sell.mockRejectedValueOnce(new ApiError("rate_limited"));
+    await expect(restarted.retrySale()).rejects.toMatchObject({ code: "rate_limited" });
+    expect(restarted.getSnapshot().pendingSale).toMatchObject({ key: "key1" });
+  });
+
+  it("sends one sale when the button is pressed twice, and does not forget a sale that is being sent", async () => {
+    const t = setup();
+    const s = t.make();
+    const [first, second] = await Promise.allSettled([s.sell(dish, 2), s.sell(dish, 2)]);
+    expect([first.status, second.status]).toEqual(["fulfilled", "rejected"]);
+    expect(t.api.sell).toHaveBeenCalledTimes(1);
+
+    t.api.sell.mockRejectedValueOnce(new ApiError("timeout"));
+    await expect(s.sell(dish, 1)).rejects.toMatchObject({ code: "timeout" });
+    const [again, twice, forgotten] = await Promise.allSettled([s.retrySale(), s.retrySale(), s.forgetSale()]);
+    expect([again.status, twice.status, forgotten.status]).toEqual(["fulfilled", "rejected", "rejected"]);
+    expect(t.api.sell).toHaveBeenCalledTimes(3);
+  });
+
+  it("reads a sale left before a restart once, for a sale pressed while the menu is still being read too", async () => {
+    const t = setup();
+    t.api.sell.mockRejectedValueOnce(new ApiError("timeout"));
+    await expect(t.make().sell(dish, 2)).rejects.toMatchObject({ code: "timeout" });
+    const s = t.make();
+    const reading = s.refresh();
+    await expect(s.sell(dish, 5)).rejects.toThrow(/not confirmed/);
+    await reading;
+    expect(t.api.sell).toHaveBeenCalledTimes(1);
   });
 
   it("refuses a quantity the server would: none, zero, more than three decimals", async () => {
